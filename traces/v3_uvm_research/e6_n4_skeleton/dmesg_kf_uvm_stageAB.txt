@@ -1,0 +1,20 @@
+[ 1129.748586] kf_uvm: ==== E6/N4 skeleton init (do_stage_c=0) ====
+[ 1129.748595] kf_uvm: STAGE A: parsed UUID bb1957de-dcb0-ee8a-0e5a-ad4e904ef3d5
+[ 1129.748618] kf_uvm: STAGE A: RegisterUvmCallbacks -> 0x0 (OK: sole UVM registrant -- no other UVM present)
+[ 1129.748626] kf_uvm: init OK. Trigger GPU stages: hold /dev/nvidia0 open, then write /proc/kf_uvm_trigger
+[ 1131.414217] kf_uvm: ==== trigger: running stages (do_stage_c=0) ====
+[ 1131.414243] kf_uvm: STAGE A: SessionCreate -> 0x0 ats=0 cc=0
+[ 1131.414250] kf_uvm: STAGE A: RegisterGpu -> 0x0 pci_dev=ffff8f5641970000 dma=[0..7fffffffffff]
+[ 1131.415466] kf_uvm: STAGE A: GetGpuInfo -> 0x0 name='NVIDIA GeForce RTX 3070' arch=0x170 impl=0x4 host=0xc56f ce=0xc7b5 compute=0xc7c0 smc=0
+[ 1131.416264] kf_uvm: STAGE A: DeviceCreate -> 0x0 device=ffff8f572bbd1a08
+[ 1131.417147] kf_uvm: STAGE A: AddressSpaceCreate -> 0x0 vaSpace=ffff8f572b1a7e08 bigPageSize=65536 ats=0
+[ 1131.417150] kf_uvm: STAGE A: PASS (sole-owner takeover complete)
+[ 1131.434354] kf_uvm: STAGE B: InitFaultInfo -> 0x0
+[ 1131.434357] kf_uvm: STAGE B: replayable.bufferAddress=ffffb1a180c79000 (non-NULL=1) bufferSize=200704
+[ 1131.434359] kf_uvm: STAGE B: pFaultBufferGet=ffffb1a188b83028 (non-NULL=1) pFaultBufferPut=ffffb1a188b8302c (non-NULL=1)
+[ 1131.434361] kf_uvm: STAGE B: replayableFaultMask=0x1 pPmcIntrEnSet=ffffb1a188b81208 pPmcIntrEnClear=ffffb1a188b81408 pPrefetchCtrl=ffffb1a188b83070
+[ 1131.434364] kf_uvm: STAGE B: *GET=0 *PUT=0
+[ 1131.434370] kf_uvm: STAGE B: OwnPageFaultIntr(TRUE) -> 0x0 (OK: module owns replayable fault interrupt)
+[ 1131.434372] kf_uvm: STAGE B: PASS (fault-plane ownership: HW fault buffer obtained, nvidia-uvm absent)
+[ 1131.434373] kf_uvm: STAGE C: skipped (echo 1 > /sys/module/kf_uvm_probe/parameters/do_stage_c then re-trigger, or load with do_stage_c=1)
+[ 1131.434374] kf_uvm: ==== stages done; module stays loaded (rmmod to clean up) ====

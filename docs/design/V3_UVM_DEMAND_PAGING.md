@@ -596,7 +596,9 @@ most of the kf3-side risk lives.
   value and no error** (the silent case). After the §6 fix: `gpuwrite` and `downgrade` → 719.
   After b3: all four ok.
 - **E5 (done, §12.2): managed-memory attributes guest vs bare metal** — identical, both `1`.
-- **E6 (§12.3): N4 skeleton** with nvidia-uvm unloaded, staged A/B/C.
+- **E6 (§12.3): N4 skeleton** with nvidia-uvm unloaded — Stages **A/B PASS** (sole owner + hardware
+  fault buffer + interrupt on stock nvidia.ko); Stage **C not passed** (replayable packet needs a
+  userspace-created faulting VAS + a shader launch, §12.3.1). **E6′** finishes it.
 - **E4: guest `uvm_disable_hmm=1`** against the five C-class apps and `um_probe pageable`. It
   separates the HMM-keyed failures from the managed ones. ⊘ Not a fix for clpeak: clpeak takes
   zero demand faults on bare metal (§1.2); its guest fault is a separate kf3 mapping defect.
@@ -673,6 +675,14 @@ ends at channel scheduling.
   compiled against the exported header rather than nvidia-uvm's private structs. Estimate
   2–4 kLoC `[inf]`.
 - Both share the guest-side fault plane (§5) and the READ_ONLY hygiene (§6). Rank 2 is unchanged.
+> ⊘ **RESULTS + CORRECTION, 2026-09-26 — see §12.2 and §12.3 (measured).** E5 needed no box: the guest
+> value was already in `v3-appfix` traces — guest and bare metal both `1/1/1` (§12.2; F30 corrected).
+> E6 ran: the module **did** take sole ownership and the hardware fault buffer + interrupt with
+> nvidia.ko stock (Stages A/B **PASS**), but the line below describes the module creating the
+> *"externally owned faulting VAS"* itself — ⊘ **it cannot**: the exported interface only *adopts*
+> one that **userspace** created (`DupAddressSpace`), and only a **shader** access is replayable
+> (§12.3.1 (1)-(2)). Stage C (the replayable packet) is not yet shown.
+
 - **Experiments added**: E5 — `um_probe` attributes inside a kf3 guest (fold into E4).
   E6 — N4 skeleton on a rented box with nvidia-uvm unloaded: register callbacks, externally owned
   faulting VAS, own PDB, `BindChannelResources`, `cup8` byte-exact, then an unmapped touch yields a
@@ -699,6 +709,9 @@ strengthens N4, the two experiments (E5, E6), and a side-by-side for the owner's
   clear/enable path (`:935-949`).
 - `pPrefetchCtrl` — fault-on-prefetch toggle (`:945-946`).
 - a `nonReplayable` shadow buffer + context for CE/host faults (`:971-999`).
+
+✔ **MEASURED by E6 (§12.3, Stage B):** on stock nvidia.ko with nvidia-uvm absent, `InitFaultInfo` returned
+a non-NULL `bufferAddress` (200 704 B) and GET/PUT mapped at exactly the replayable-buffer registers.
 
 ⇒ N4 is not "reimplement UVM's fault decode from scratch". It is: take the same exported
 interface nvidia-uvm takes, get the same pointers, and parse the same `clc369` packets kf3
@@ -741,6 +754,11 @@ so a partial result is still decisive:
 - **B. Fault-plane ownership.** `nvUvmInterfaceInitFaultInfo` + `OwnPageFaultIntr(TRUE)` return the
   `UvmGpuFaultInfo` pointers of §12.1. Proves Wall 1 is passed: the module holds the buffer and the
   interrupt.
+> ⊘ **CORRECTED by E6 (see §12.3.1 (1)-(2) below, measured):** the Stage C plan beneath assumed the
+> module can *create* the faulting VAS and that *"a single CE or GR access"* raises a replayable
+> fault. Both are wrong: the faulting VAS must be created by **userspace** and adopted via
+> `DupAddressSpace`, and only a **shader** (TEX/GCC) access is replayable — a CE fault is not.
+
 - **C. Externally-owned faulting VAS + bound channel + a real fault.** Create the VAS
   (`ENABLE_FAULTING | IS_EXTERNALLY_OWNED`), `SetPageDirectory` to module-owned tables,
   allocate a channel, `BindChannelResources` (the F8/F9 wall), push one access to a **deliberately
@@ -753,7 +771,98 @@ Every object is one the module created; nothing hooks another module. Full cup8 
 **not** required for the decision — the owner's question is whether the record arrives, the replay
 completes and the cancel is scoped, which Stage C answers with a one-access kernel.
 
-RESULT (filled from the run): __E6_RESULT__
+**MEASURED 2026-09-26** — RTX 3070 (GA104, arch `0x170`), **stock open nvidia.ko 580.159.04**
+(verified by content: *"Open Kernel Module … 580.159.04"*), **nvidia-uvm unloaded** throughout.
+Module source, Kbuild and raw dmesg: `traces/v3_uvm_research/e6_n4_skeleton/`
+(`kf_uvm_probe.c` uses **only** exported `nvUvmInterface*` symbols).
+
+| stage | result | evidence (`dmesg_kf_uvm_stage{AB,C}.txt`) |
+|---|---|---|
+| **A** sole-owner takeover | ✔ **PASS** | `RegisterUvmCallbacks` `0x0` (**not** `NV_ERR_IN_USE`: no other UVM registrant); `SessionCreate`, `RegisterGpu`, `GetGpuInfo` (RTX 3070, host `0xc56f` ce `0xc7b5` compute `0xc7c0`), `DeviceCreate`, `AddressSpaceCreate` — all `0x0` |
+| **B** fault-plane ownership | ✔ **PASS — the crux** | `InitFaultInfo` `0x0`; `bufferAddress` non-NULL, `bufferSize` = 200 704; `pFaultBufferGet`/`Put` mapped at BAR0 `…3028`/`…302c` — ★ **exactly** the replayable-buffer `GET(1)`/`PUT(1)` = `0xB83028`/`0xB8302C` that `resume_from_fault.md` §2.2 cites, an independent cross-check that the module got the right registers; `replayableFaultMask` `0x1`; `OwnPageFaultIntr(TRUE)` `0x0`. Clean `rmmod` returned interrupt ownership to RM — **reversible** |
+| **C** a replayable fault | ⊘ **NOT PASSED** (partial) | `TsgAllocate`, `ChannelAllocate` (chid 4), `MemoryAllocFB`, `MemoryCpuMap` all `0x0`. A CE copy from an unmapped VA was submitted and **executed on hardware** (`Xid 39 … channel 0x4 … c7b5`, ~0.98 ms after the doorbell), but the replayable `PUT` **stayed 0 for 3 000 ms**. GPU then `Xid 154` (Node Reboot Required; throwaway box) |
+
+**What E6 proves.** A third-party module on **stock** nvidia.ko, with nvidia-uvm absent, becomes the
+sole UVM registrant and **owns the real hardware replayable fault buffer and its interrupt**,
+reversibly. Wall 1 of §11.1 is passed **on hardware**, not only in source. N4's core takeover is
+de-risked.
+
+**What E6 does NOT prove.** No replayable fault packet arrived, so **fault-to-module latency was NOT
+measured.** ⊘ The ~0.98 ms above is RM's **non-replayable** RC-report path (doorbell → `Xid 39`), a
+different path owned by RM — it must not be read as fault-to-module latency.
+
+**Why Stage C did not pass — root-caused, and it is three design corrections, below (§12.3.1).**
+
+#### 12.3.1 ⊘ Design corrections from E6 (each folded here with its measurement)
+
+⊘ **(1) CORRECTED — "a single CE or GR access is enough to raise a replayable fault" (the Stage C
+text above) is WRONG for CE.** Only **shader** memory accesses are replayable: the instance block
+carries replay-enable bits for exactly two units, `FAULT_REPLAY_TEX` and `FAULT_REPLAY_GCC`, both
+SM/GR (`src/nvidia/src/kernel/gpu/mmu/arch/volta/kern_gmmu_gv100.c:373-377`,
+`…/pascal/kern_gmmu_gp100.c:160-164`). A CE (or host/PBDMA) fault is non-replayable. `[meas]` E6:
+CE fault → `Xid 39` RC, replayable `PUT` unmoved. ⇒ A replayable fault needs a **running shader**,
+so the full Stage C needs a **compute launch** — see (4).
+
+⊘ **(2) CORRECTED — N4 is NOT a kernel-only module; the faulting VAS must be created in userspace
+and ADOPTED by the module.** `nvGpuOpsAddressSpaceCreate` sets only `SHARED_MANAGEMENT` or `NONE`
+(+ optional NVLINK_ATS) and **never** `ENABLE_FAULTING`/`IS_EXTERNALLY_OWNED`
+(`src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:2508-2543`) — so E6's `AddressSpaceCreate` VAS was
+RM-managed, replay bits off, and even a shader fault there would have been non-replayable + RC.
+The exported interface offers **no way to create** a fault-capable VAS, only to **adopt** one:
+`nvUvmInterfaceDupAddressSpace` requires an externally owned VAS (`nv_gpu_ops.c:2689-2693`).
+And **unprivileged userspace may create it**: the flags are translated with no privilege gate
+(`src/nvidia/src/kernel/gpu/mem_mgr/vaspace_api.c:611-619`); the only constraints are
+faulting ⇒ externally owned (`:688-689`) and not with `SET_MIRRORED` (`:654`); the one
+kernel-privilege check there (`:172-179`) is for the `GPU_HOST` index, unrelated. ★ This is
+exactly **nvidia-uvm's own architecture** — `UVM_REGISTER_GPU_VASPACE` dups a userspace VAS
+(`kernel-open/nvidia-uvm/uvm_va_space.c:1531`) — and it **fits kayfabe with no new component**:
+the VMM is already the unprivileged RM client that creates the twin. Corrected N4 flow:
+1. the **VMM** (unprivileged) allocates the twin VAS with `ENABLE_FAULTING | IS_EXTERNALLY_OWNED`
+   and the twin GR channel in it;
+2. the VMM passes the handles to kf-uvm.ko (an ioctl shaped like `UVM_REGISTER_GPU_VASPACE`);
+3. the module `DupAddressSpace` + `SetPageDirectory` (module-owned page tables), then
+   `RetainChannel` + `BindChannelResources` (sets `bIsContextBound`, F9) and records
+   `instance_ptr → VM` — **the attribution table (§12.5's isolation-critical piece)**;
+4. shader accesses now fault **replayably** into the buffer the module owns (Stage B).
+★ Isolation gain: the module adopts only VAS/channel handles the **calling VMM's own RM client**
+created — `Dup`/`Retain` validate the `hClient` — so "scope every operation to objects that VM's
+own process created" is enforced by RM, not by convention.
+
+⊘ **(3) NEW CONSTRAINT — N4's GPU operations must run in a process that holds the GPU's fd.**
+`nv_is_gpu_accessible` walks `current->files` for an open fd to that GPU's device node
+(`kernel-open/nvidia/nv.c`), and it gates `GetGpuInfo` (`nv_gpu_ops.c:7570`) and device
+construction (`src/nvidia/src/kernel/gpu/device.c:142`). `[meas]` E6 could not pass
+`GetGpuInfo`/`DeviceCreate` from `module_init`; it needed the stages driven from a `/proc` trigger
+written by a helper holding `/dev/nvidia0` open. ⇒ In N4 every GPU operation is driven from the
+**VMM's ioctl context** (which holds `/dev/nvidia*`), never from a bare kernel thread — also a
+natural isolation property (GPU ops are tied to a process with legitimate access to that GPU).
+
+⊘ **(4) COUPLING — completing Stage C needs a compute launch, and that is the same work as moving
+the walker (§12.4).** With nvidia-uvm absent, `libcuda`'s `cuInit` fails (it needs
+`/dev/nvidia-uvm`), so a host-only test cannot use libcuda to generate the shader fault; it needs a
+**raw QMD compute launch** — exactly §12.4's walker prerequisite. ⇒ In N4 the raw-RM launcher is
+**on the critical path twice** (the walker and the host-only fault proof), not deferrable N4 work.
+★ One nuance keeps it bounded: in the **integrated** product the shader that faults is authored by
+the **guest's own libcuda** and executed on the twin, so kayfabe needs no QMD builder *for guest
+faults* — only for its own walker and for a host-only proof.
+
+**Operational findings (for whoever reruns this):**
+- ⊘ **A plain vast CUDA container cannot run E6.** It is an unprivileged Docker container
+  (`CapEff` lacks `CAP_SYS_MODULE`/`CAP_SYS_ADMIN`; `delete_module` → `EPERM`), so `rmmod
+  nvidia_uvm`/`insmod` are impossible, and vast has no flag to grant them. `[meas]` Use the
+  **`vastai/kvm` template** (a full VM with the GPU passed through by VFIO, full caps) — the E6 prompt
+  said the opposite and was wrong.
+- The `.run --dkms` install cleans its build tree; with `CONFIG_MODVERSIONS=y` the out-of-tree link
+  needs nvidia's `Module.symvers` (76 `nvUvm*` CRCs), regenerated by
+  `dkms build nvidia/580.159.04 --force`.
+
+**Next experiment to finish Stage C (E6′).** Either (a) **host-only**: a userspace RM client creates
+an `ENABLE_FAULTING | IS_EXTERNALLY_OWNED` VAS + GR compute channel, the module adopts them per (2),
+and a **raw QMD launch** runs a one-load kernel against an unmapped VA — pass = a packet in the owned
+buffer, decoded VA correct, **fault-to-module latency measured**, map + replay completes the load
+with correct data, a VAS-scoped cancel leaves a second channel alive; or (b) **integrated**: the same
+module wired into kf3, the fault raised by a real guest `cudaMallocManaged` first touch — no QMD
+builder needed. (a) is the smaller, decisive step and also builds the walker's launcher.
 
 ### 12.4 Moving the walker off libcuda to raw RM — estimate (N4 removes host CUDA)
 
@@ -795,9 +904,10 @@ module built against nvidia.ko's exported, documented interface, with nvidia.ko 
 | **what the host gives up** | nothing functional — host CUDA and every other UVM user keep working | **host CUDA on that GPU** (sole fault-buffer owner / callback registrant, F12); kayfabe's own walker moves off libcuda (§12.4) |
 | **blast radius of a bug** | the patched module also serves **every non-kayfabe host CUDA process** and shares one fault buffer and batch loop with them — an EFS bug can reach unrelated host CUDA | the module is the **only** UVM client on that GPU — a bug reaches the kayfabe VMs on it, but there is no non-kayfabe CUDA workload to harm; in exchange it owns the whole plane |
 | **isolation between VMs** | ★ fault **attribution** (packet → instance pointer → channel → va_space) is nvidia-uvm's existing, battle-tested code (`uvm_gpu.c:3534-3570`); kayfabe's new code only copies records out of an **already-attributed** va_space. VM-to-VM separation rests on mature NVIDIA code | ⚠ the module does the attribution **itself** — one buffer holds every VM's faults — so VM-to-VM separation rests on **new kayfabe code**. The isolation-critical step moves from NVIDIA's code to ours. Mis-attribute one fault and VM A's fault reaches VM B |
-| **isolation from a compromised VMM** | must not trust it: every request names only kernel-issued ids for objects that VM's own process created; cancels use kernel-stored instance pointer / PDB; a kernel timeout bounds parked faults | same discipline, **plus** N4 owns replay and must rate-limit it itself (in b3, UVM's replay policy already exists) |
-| twin page tables | RM-owned; published through UVM external-map ioctls ⇒ RM map executor, kind-override question, per-map TLB cost | the module writes them **directly** — those three kf3 questions vanish |
-| code | ~0.5–1 kLoC patch + kf3 publish-executor swap | ~2–4 kLoC module + ~1–2 kLoC raw-RM walker |
+| **isolation from a compromised VMM** | must not trust it: every request names only kernel-issued ids for objects that VM's own process created; cancels use kernel-stored instance pointer / PDB; a kernel timeout bounds parked faults | same discipline, **plus** N4 owns replay and must rate-limit it itself (in b3, UVM's replay policy already exists). ★ Two structural helps, measured/sourced in E6: the module adopts only VAS/channel handles the **calling VMM's own RM client** created (`Dup`/`Retain` validate `hClient`), and every GPU op requires the caller to hold that GPU's fd (§12.3.1 (2)-(3)) |
+| twin page tables | RM-owned; published through UVM external-map ioctls ⇒ RM map executor, kind-override question, per-map TLB cost | the **VMM** creates the faulting VAS (unprivileged, as every CUDA process does); the module **adopts** it (`DupAddressSpace` + `SetPageDirectory`) and writes the page tables **directly** — those three kf3 questions vanish (§12.3.1 (2)) |
+| code | ~0.5–1 kLoC patch + kf3 publish-executor swap | ~2–4 kLoC module + ~1–2 kLoC raw-RM launcher — ⚠ the launcher is on the critical path **twice** (the walker **and** any host-only fault proof, §12.3.1 (4)) |
+| **measured feasibility (2026-09-26)** | not built; feasible from source (§4.4) | ✔ **core takeover measured**: sole UVM registrant + hardware fault buffer + interrupt on stock nvidia.ko (E6 Stages A/B). ⊘ replayable packet not yet shown (Stage C, E6′) |
 | shared by both | guest fault plane (§5); READ_ONLY hygiene (§6, done on `v3-roperm`) | same |
 
 **Recommendation, in those terms.** Both are feasible; the choice is which maintenance cost to
@@ -810,6 +920,10 @@ carry, and the table above is the ledger for it.
   per-arch fault decode and the VM-attribution code ourselves. N4 removes three kf3 questions (RM
   map executor, kind-override, per-map TLB) at the price of one (the raw-RM walker) plus that
   attribution code.
+- ★ **E6 changes the risk picture, not the ranking.** N4's feasibility is no longer only a source
+  reading: its core takeover is **measured** on stock nvidia.ko (§12.3). What remains unproven for
+  N4 is the replayable path end to end (E6′), and E6 showed that path needs the raw QMD launcher —
+  so if N4 is chosen, **build the launcher first**: it unblocks both the walker and the fault proof.
 - ⚠ **If N4 is chosen, its fault-attribution path is the single most security-critical piece of
   kayfabe** (it is the only thing standing between two VMs' faults) and must be the first thing
   fuzzed: a corpus of fault packets across instance pointers, VEIDs and subcontexts, asserting each

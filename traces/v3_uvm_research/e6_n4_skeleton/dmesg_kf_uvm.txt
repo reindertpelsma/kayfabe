@@ -1,0 +1,39 @@
+[ 1195.923099] kf_uvm: ==== E6/N4 skeleton init (do_stage_c=1) ====
+[ 1195.923106] kf_uvm: STAGE A: parsed UUID bb1957de-dcb0-ee8a-0e5a-ad4e904ef3d5
+[ 1195.923110] kf_uvm: STAGE A: RegisterUvmCallbacks -> 0x0 (OK: sole UVM registrant -- no other UVM present)
+[ 1195.923116] kf_uvm: init OK. Trigger GPU stages: hold /dev/nvidia0 open, then write /proc/kf_uvm_trigger
+[ 1197.612820] kf_uvm: ==== trigger: running stages (do_stage_c=1) ====
+[ 1197.612853] kf_uvm: STAGE A: SessionCreate -> 0x0 ats=0 cc=0
+[ 1197.612862] kf_uvm: STAGE A: RegisterGpu -> 0x0 pci_dev=ffff8f5641970000 dma=[0..7fffffffffff]
+[ 1197.614194] kf_uvm: STAGE A: GetGpuInfo -> 0x0 name='NVIDIA GeForce RTX 3070' arch=0x170 impl=0x4 host=0xc56f ce=0xc7b5 compute=0xc7c0 smc=0
+[ 1197.614974] kf_uvm: STAGE A: DeviceCreate -> 0x0 device=ffff8f572bd5c808
+[ 1197.615845] kf_uvm: STAGE A: AddressSpaceCreate -> 0x0 vaSpace=ffff8f5742541208 bigPageSize=65536 ats=0
+[ 1197.615848] kf_uvm: STAGE A: PASS (sole-owner takeover complete)
+[ 1197.633030] kf_uvm: STAGE B: InitFaultInfo -> 0x0
+[ 1197.633034] kf_uvm: STAGE B: replayable.bufferAddress=ffffb1a180c79000 (non-NULL=1) bufferSize=200704
+[ 1197.633036] kf_uvm: STAGE B: pFaultBufferGet=ffffb1a188b83028 (non-NULL=1) pFaultBufferPut=ffffb1a188b8302c (non-NULL=1)
+[ 1197.633038] kf_uvm: STAGE B: replayableFaultMask=0x1 pPmcIntrEnSet=ffffb1a188b81208 pPmcIntrEnClear=ffffb1a188b81408 pPrefetchCtrl=ffffb1a188b83070
+[ 1197.633041] kf_uvm: STAGE B: *GET=0 *PUT=0
+[ 1197.633048] kf_uvm: STAGE B: OwnPageFaultIntr(TRUE) -> 0x0 (OK: module owns replayable fault interrupt)
+[ 1197.633049] kf_uvm: STAGE B: PASS (fault-plane ownership: HW fault buffer obtained, nvidia-uvm absent)
+[ 1197.633050] kf_uvm: STAGE C: begin (CE fault generator) ceClass=0xc7b5
+[ 1197.633861] kf_uvm: STAGE C: TsgAllocate(CE,0) -> 0x0 tsg=ffff8f570a8f0d88
+[ 1197.635732] kf_uvm: STAGE C: ChannelAllocate -> 0x0 channel=ffff8f5660cb6308 class=0xc56f hwRunlist=0 hwChid=4
+[ 1197.635735] kf_uvm: STAGE C: gpFifoEntries=ffff8f5660cb5000 gpPut=ffff8f5660cb208c numGpFifo=32 workSubmitOff=ffffb1a188bb0090 pWorkToken=ffff8f5660cb3018 token=0x4
+[ 1197.635779] kf_uvm: STAGE C: MemoryAllocFB(128k) -> 0x0 gpuVa=0x120040000 pageSize=0
+[ 1197.635810] kf_uvm: STAGE C: MemoryCpuMap -> 0x0 cpu=ffffb1a180ec0000
+[ 1197.635816] kf_uvm: STAGE C: GPFIFO=0x20050000 0x00003001 methods_gpu=0x120050000 dwords=12
+[ 1197.635820] kf_uvm: STAGE C: fault PUT before submit=0  (*GET=0)
+[ 1197.635821] kf_uvm: STAGE C: doorbell rung token=0x4
+[ 1197.636797] NVRM: GPU at PCI:0000:00:07: GPU-bb1957de-dcb0-ee8a-0e5a-ad4e904ef3d5
+[ 1197.636804] NVRM: Xid (PCI:0000:00:07): 39, pid=69520, name=trig, CCMDs channel 0x00000004 0000c7b5
+[ 1197.638407] NVRM: Xid (PCI:0000:00:07): 154, GPU recovery action changed from 0x0 (None) to 0x2 (Node Reboot Required)
+[ 1200.638447] kf_uvm: STAGE C: fault PUT after poll=0 (was 0) after ~3000 ms
+[ 1200.638453] kf_uvm: STAGE C: no fault packet observed (PUT did not advance)
+[ 1200.638454] kf_uvm: ==== stages done; module stays loaded (rmmod to clean up) ====
+
+--- teardown (rmmod kf_uvm_probe; rc=0) ---
+kf_uvm: ==== exit: unwinding ====
+kf_uvm: cleanup: returned fault-intr ownership to RM
+kf_uvm: ==== exit done ====
+(module unloaded cleanly: /proc/modules count 0; fault-intr ownership returned to RM)

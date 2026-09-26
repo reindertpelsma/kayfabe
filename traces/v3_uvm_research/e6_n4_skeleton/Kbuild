@@ -1,0 +1,9 @@
+# Kbuild for kf_uvm_probe: out-of-tree module linking against nvidia.ko's
+# exported nvUvmInterface* symbols.
+#
+# NV_SYMVERS must point at the Module.symvers produced by the nvidia.ko build
+# (contains CRCs for nvUvmInterfaceRegisterGpu etc). Passed in from Makefile.
+obj-m := kf_uvm_probe.o
+ccflags-y += -I$(src)/inc
+# resolve nvUvmInterface* externs against nvidia.ko
+KBUILD_EXTRA_SYMBOLS += $(NV_SYMVERS)
