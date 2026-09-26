@@ -162,6 +162,11 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             Ok(Mapped::HeldByHost) => {
                 out.held += 1;
                 out.codes[i] = KFWR_ACK_HELD;
+                // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
+                static HELD_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                if HELD_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
+                    eprintln!("kf-mem: HELD-BY-HOST guest row {:#x}+{:#x} (ram={}) — host RM already maps that VA", d.va, d.len, d.ram);
+                }
             }
             Err(e) => out.refuse(i, e),
         }
