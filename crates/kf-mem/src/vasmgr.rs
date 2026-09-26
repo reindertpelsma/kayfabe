@@ -1079,7 +1079,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
-            self.stats.timing.apply_ns += ns_since(t_apply);
+            let apply_ns = ns_since(t_apply);
+            self.stats.timing.apply_ns += apply_ns;
+            // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
+            // each ONE host map call on the guest-RAM object) — named, it is the next budget.
+            if a.mapped + a.unmapped >= 1000 {
+                eprintln!(
+                    "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms ({} us per host call)",
+                    a.mapped,
+                    a.unmapped,
+                    apply_ns / 1_000_000,
+                    apply_ns / 1000 / (a.mapped + a.unmapped).max(1) as u64
+                );
+            }
             for (i, &c) in a.codes.iter().enumerate() {
                 if let Some(slot) = codes.get_mut(e.first + i) {
                     *slot = c;
