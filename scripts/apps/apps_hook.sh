@@ -21,6 +21,10 @@ $G 'test -d /opt/apps/bundle/cuda/include' || tar -C /workspace/apps/bundle -czf
 for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
 $G 'sudo rm -rf /opt/apps/out/guest'
 echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,driver_version,persistence_mode --format=csv,noheader' 2>&1 | head -1)"
+# ⊘ boot_capture.sh reloads ONLY `nvidia`; the host has nvidia_modeset + nvidia_drm loaded, and the
+# EGL device platform / Vulkan ICD need them (measured r1: eglInitialize failed, "No vulkan device").
+# Load them so both sides run the same experiment; APPS_GUEST_DRM=0 reproduces the bare state.
+[ "${APPS_GUEST_DRM:-1}" = 1 ] && echo "APPS_GUEST_DRM $($G 'sudo modprobe nvidia_drm; echo rc=$?; lsmod | grep -c ^nvidia' 2>&1 | tr '\n' ' ')"
 [ "${APPS_GUEST_PM:-0}" = 1 ] && echo "APPS_GUEST_PM=$($G 'sudo nvidia-smi -pm 1 2>&1 | tail -1')"
 for app in $APPS; do
   q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
@@ -39,7 +43,7 @@ for app in $APPS; do
   fi
   tail -n +"$((q0+1))" "$QLOG" 2>/dev/null | tail -3000 > "$OUT/$app.kf3.log"
   nx=$(grep -c 'Xid' "$OUT/$app.guest_dmesg.log" 2>/dev/null); nx=${nx:-0}
-  nr=$(grep -ciE 'refus' "$OUT/$app.kf3.log" 2>/dev/null); nr=${nr:-0}
+  nr=$(grep -v 'kf3: family=' "$OUT/$app.kf3.log" 2>/dev/null | grep -ciE 'refus'); nr=${nr:-0}
   nk=$(wc -l < "$OUT/$app.kf3.log")
   echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr" | tee -a "$OUT/guest.res"
   grep -a '^APPDIG ' <<<"$res" | tee -a "$OUT/guest.dig"
