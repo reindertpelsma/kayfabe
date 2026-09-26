@@ -180,6 +180,49 @@ The lane is `scripts/bench/video_lane.sh` (md5 `e58fe71f`). It uses one static f
 
 [M vid12] Repeated processes (decode, encode, decode, encode) in one guest give the same md5s each time.
 
+★ **Guest persistence mode decides whether the whole lane survives** (boots at the rebased code
+`353ff44a` / `0bbd9b1f`, which differ in bench scripts and docs only). The lane is about 12 GPU
+processes, counting the two traced ones.
+
+| boot | guest config | result |
+|---|---|---|
+| `vid13` | default | full lane passes, identical to host |
+| `vidF` | default | UVM's CE channel dies (`slot N is full … RUN_CAP`) on the 3rd–4th GPU process; `hevc_nvenc` hangs |
+| `vidC1` | default + `VIDEO_COMPACT=1` (drop caches and compact before each step) | the same wall, earlier ⇒ **guest memory fragmentation is NOT the cause** |
+| `vidP1`, `vidP2` | `VIDEO_PM=1` (`nvidia-smi -pm 1`) | full lane passes twice, **every md5/PSNR identical to host**, no run-cap refusal, no host-held leaf; 1080p NVENC 165 / 187 fps |
+
+This is master's open wall (`V3_BUILD.md`, "without guest persistence mode, UVM's CE channel dies on
+the 5th CUDA process"). It is a memory-plane defect, not a video one: each process re-initialises the
+guest adapter, and placements for UVM's re-created VA space accumulate. The video lane just reaches
+it sooner, because it runs more processes. Results files are in `traces/video_ga106/`.
+
+**Regression bar**, on the same box and the same host driver (files in `traces/video_ga106/`):
+
+| revision | `v3_gates.sh` | fast suite (`KF_DEVICE=kf3`) | CUDA ladder in the fat guest |
+|---|---|---|---|
+| `486ab7c6` (pre-rebase) | 9/9 PASS | 30/30 PASS | `cup3` 43, `cup8` BAD=0 MAXERR=0 |
+| `353ff44a` (rebased on `origin/master` `ce623b3f`; the pushed head `0bbd9b1f`+ adds bench scripts and docs only) | 9/9 PASS | 30/30 PASS | `cup3` 43, `cup8` BAD=0 MAXERR=0 |
+
+- ⊘ Without `KF_DEVICE=kf3`, the suite runs the old nvkvm device and reports 30 NOTRUN.
+- The CUDA ladder was re-checked because §2.2 changes every CUDA context's host topology.
+- Crate tests pass for `kf-abi`, `kf-chip`, `kf-rm`, `kf-chan`, `kf-host`, `kf-mem` and `kf-qemu` at both revisions.
+
+★ **Guest persistence mode decides whether the whole lane survives** (boots at the rebased code
+`353ff44a` / `0bbd9b1f`, which differ in bench scripts and docs only). The lane is about 12 GPU
+processes, counting the two traced ones.
+
+| boot | guest config | result |
+|---|---|---|
+| `vid13` | default | full lane passes, identical to host |
+| `vidF` | default | UVM's CE channel dies (`slot N is full … RUN_CAP`) on the 3rd–4th GPU process; `hevc_nvenc` hangs |
+| `vidC1` | default + `VIDEO_COMPACT=1` (drop caches and compact before each step) | the same wall, earlier ⇒ **guest memory fragmentation is NOT the cause** |
+| `vidP1`, `vidP2` | `VIDEO_PM=1` (`nvidia-smi -pm 1`) | full lane passes twice, **every md5/PSNR identical to host**, no run-cap refusal, no host-held leaf; 1080p NVENC 165 / 187 fps |
+
+This is master's open wall (`V3_BUILD.md`, "without guest persistence mode, UVM's CE channel dies on
+the 5th CUDA process"). It is a memory-plane defect, not a video one: each process re-initialises the
+guest adapter, and placements for UVM's re-created VA space accumulate. The video lane just reaches
+it sooner, because it runs more processes. Results files are in `traces/video_ga106/`.
+
 **Regression bar at the same revision `486ab7c6`, same box** (files in `traces/video_ga106/`):
 
 - `v3_gates.sh`: **9/9 PASS**.
@@ -199,7 +242,8 @@ The lane is `scripts/bench/video_lane.sh` (md5 `e58fe71f`). It uses one static f
 - **Not advertised**: NVJPG, OFA and SEC2. Their `classify_engine` arms return `None` by design.
 - **`0x2080a028`**: only the NVD and GPC clock domains are asked of the host. A library asking another domain is refused, as before.
 - **The steer (§2.1) is falcon-specific.** Any other host-RM internal allocation in a mirrored VA space has the same two-allocator hazard. A GR collision would show as a `HELD BY HOST` leaf, and none has been seen.
-- **Unconfirmed walk overflow.** Earlier, pre-fix boots (vid5, vid8) hit `slot N is full … raise WalkCfg::runs_per_pdb` (the 16 384-run slot cap) in a later ffmpeg process. It has not recurred since §2.1/§2.2. It is recorded because guest sysmem fragmentation could reach the cap in a long-lived guest. Master's LLM lane
-  independently reports a "no-PM 5th-process UVM RUN_CAP wall" (`2b80c1c7`), which is likely the same limit.
+- **The no-persistence-mode RUN_CAP wall** (§5) is master's open memory-plane defect. Without guest
+  persistence mode, a multi-process video workload fails after a few processes, which is **not
+  parity**. Fragmentation is ruled out (`vidC1`). The fix belongs to the walk/placement owner.
 - **`0x20808165`** is still refused in the guest (it answers OK on the host). No library behaviour depends on it in the lane.
 - **NVENC session-cap accounting** assumes one encoder-session slot per acquire, as measured. Concurrent guest and host encoders beyond the cap are refused with the host's own `0x69`.
