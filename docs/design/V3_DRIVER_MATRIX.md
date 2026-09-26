@@ -264,7 +264,20 @@ cup8bench, every timed iteration verified).
 | 580.159.04 | 580.105.08 | `283a5304` (master) | — | — | 29/30 → **30/30** | — | the one red was the harness (a half-written initrd from a killed build booted `Failed to execute /init`; fixed: `guest_walk.sh` builds atomically); the arm re-run PASS |
 | 580.159.04 | 580.159.04 | `67e7eadb` | 9/9 | 801 (+1 stale test, fixed in `0d3ce125`) | **30/30** | **4/4** | cup2 `0xabcd1234`, cup3 `43`, cup8 `bad=0 maxerr=0`, cup8bench verified |
 | 580.159.04 | 580.105.08 | `67e7eadb` | — | — | **30/30** | 0/4 → *staging fault* | the overlay was staged without the seed ISO; fixed in `f72f9a58` |
-| 580.159.04 | (all) | `f72f9a58` (rebased on master `e05ff74d`) | **9/9** | **1512 / 0** | *running* | *running* | first arm of the 580.105.08 suite red: guest `RmInitAdapter 0x25:0x65` — the PMA scrubber's CE token never forwarded (`fwd=0 put=0`); the next 6 arms PASS — flake under investigation, not a version effect (the 580.x layouts are identical; `pre_fn1_surface_differs` = none) |
+| 580.159.04 | 580.159.04 | `f72f9a58` (rebased on master `e05ff74d`) | **9/9** | **1512 / 0** | *not run* (harness: the default initrd was built without the musl client ⇒ NOTRUN=30; re-run at `47348e3b`) | **4/4** | cup2 `0xabcd1234`, cup3 `43`, cup8 `bad=0 maxerr=0`, cup8bench verified |
+| 580.159.04 | 580.105.08 | `f72f9a58` | — | — | **29/30** | **4/4** | the fat guest re-staged with the seed ISO (`f72f9a58`); ladder identical to the default guest's. The one thin red is an **adapter-init flake**, see below |
+
+★ **The 580.105.08 red at `f72f9a58`, measured.** Arm 1 (`--timer`): guest `RmInitAdapter failed!
+(0x25:0x65:1236)` after `memmgrMemSet … NV_ERR_TIMEOUT` (`mem_mgr.c:463`) and
+`pCeUtils->lastCompletedPayload == lastSubmittedPayload` (`ce_utils.c:349`). The QEMU log names the
+mechanism: CeUtils channel token `0x2`'s FIRST submission was forwarded and executed on the host
+(`forwarded=1`, `GP_GET=1`, one host `CE2` non-stall observed), the guest never observed its
+completion, so its second submission never came (a passing arm shows `forwarded=2`). Count on this
+box: **1 adapter-init failure in 149 thin boots** — 0/60 at 580.159.04, 1/89 at 580.105.08, which
+this sample cannot separate. Every consumed layout and the whole pre-fn-1 surface are identical
+between the two 580.x versions, so nothing version-specific is on that path: it is recorded as a
+**channel/completion-plane race**, handed off, and every later boot of the walk is counted for it
+(`q3`: `INITFLAKE boots=… adapter_failures=…`).
 
 ## 7. Gaps per version (consumed items that differ from 580.159.04)
 
