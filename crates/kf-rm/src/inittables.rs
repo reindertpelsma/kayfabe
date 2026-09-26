@@ -1607,6 +1607,18 @@ fn transcode_reviewed_paths(want: WantedTable) -> Option<&'static [&'static str]
         // neither (no C2C fabric: `kf_abi::c2cinfo`), so nothing is dropped; a non-zero one
         // would be named by the transcoder.
         WantedTable::C2cInfo => Some(&[]),
+        // `[matrix]` deviceInfoTable[] entries are 36 bytes (≤555), 44 (560: + ginTargetId,
+        // deviceBroadcastPriBase) and 48 (565+: + groupLocalInstanceId); capacity 88 / 256 / 256 /
+        // 512. Every field present at both versions keeps its offset in the entry and its meaning:
+        // the values are the PTOP device-info fields the HOST read from hardware (typeEnum is the
+        // hardware NV_PTOP_DEVICE_INFO2_DEV_TYPE_ENUM, not a driver enum). The newer fields do not
+        // exist for an older guest RM, which computes its own; a GA10x table (~25 rows) fits 88.
+        WantedTable::InternalDeviceInfo => Some(&[]),
+        // `[matrix]` 8204 bytes up to 595.84, 20492 at 610: compressedData grows 4096 → 16384
+        // (the max compressed size) and profilingRanges moves with it; the four scalars keep their
+        // meaning. The compressed map this encoder emits fits 4096 (it does at the bench), so a 610
+        // guest decompresses exactly the bytes a 580 guest does.
+        WantedTable::UserRegisterAccessMap => Some(&[]),
         _ => None,
     }
 }
