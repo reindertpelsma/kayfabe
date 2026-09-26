@@ -420,19 +420,54 @@ static void t_flags_decoded(void)
 
 static void t_dual_pde_both_halves(void)
 {
-    /* Both sub-tables of one PD0 slot populated. Both must come back, and the
-     * order must be (va asc, page size desc). */
+    /* Both sub-tables of one PD0 slot populated, in DIFFERENT 64 KiB slots. Both must come
+     * back, in VA order.
+     * ⊘ v3-mapfix: this test used to put the 64 KiB page and the 4 KiB pages in the SAME
+     * slot and demand both — encoding the defect t_valid_big_pte_hides_stale_4k refutes (a
+     * valid big PTE owns its slot; the MMU never reads the 4 KiB PTEs under it). */
     Fix f(8u << 20, cfg_default());
     Tree t(f.g);
-    t.map64k(VBASE, 0x400000ull);
+    t.map64k(VBASE + 0x10000ull, 0x400000ull);
     t.map4k(VBASE, 0x500000ull);
     t.map4k(VBASE + 0x1000ull, 0x501000ull);
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
     expect(f, {
         {VBASE,             0x500000ull, 2ull * 4096ull, F4K, KFWR_OP_MAP},
-        {VBASE,             0x400000ull, 64ull << 10, F64K, KFWR_OP_MAP},
+        {VBASE + 0x10000ull, 0x400000ull, 64ull << 10, F64K, KFWR_OP_MAP},
     });
+}
+
+static void t_valid_big_pte_hides_stale_4k(void)
+{
+    /* ★ v3-mapfix — UVM's 4 KiB -> 64 KiB merge (uvm_va_block.c:6444-6512): UNMAPPED big
+     * PTE, invalidate, then a VALID big PTE, with the sixteen 4 KiB PTEs under it never
+     * rewritten. The MMU uses the big PTE and never reads them (mmu_trace.c: sublevel 0
+     * first, done on the first valid translation). `[measured 670bd310 UnifiedMemoryStreams]`
+     * reporting both put two host mappings over one VA: the host refused the second
+     * (NV_ERR_INVALID_ARGUMENT, gpu_vaspace.c:4761). Slot 1 is the control: a 4 KiB leaf
+     * under an INVALID (zero) big PTE is live and must survive. */
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 16u; i++)
+        t.map4k(VBASE + (uint64_t)i * 4096ull, 0x300000ull + (uint64_t)i * 4096ull);
+    t.map4k(VBASE + 0x10000ull, 0x310000ull);
+    t.map64k(VBASE, 0x600000ull);               /* the merge's last write: slot 0 VALID big */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    /* Exactly two leaves, whatever the per-class order: the big page, and the control. */
+    CHECK_EQ(f.hdr.run_count, 2u);
+    bool big = false, ctl = false;
+    for (uint32_t i = 0; i < f.hdr.run_count && i < 2u; i++) {
+        const KfMapRun &r = f.rn[i];
+        CHECK_M(r.op == KFWR_OP_MAP, "every leaf is a MAP");
+        if (r.va == VBASE && r.gpga == 0x600000ull && r.len == (64ull << 10) && r.flags == F64K) big = true;
+        if (r.va == VBASE + 0x10000ull && r.gpga == 0x310000ull && r.len == 4096ull && r.flags == F4K) ctl = true;
+    }
+    CHECK_M(big, "the VALID big PTE must be reported");
+    CHECK_M(ctl, "the control (4 KiB under an INVALID big PTE) must survive");
+    if (g_fails_here) dump(f);
 }
 
 static void t_dual_pde_mixed_slots_live_w826(void)
@@ -2290,6 +2325,7 @@ static const Case CASES[] = {
     { "correctness/sparse_and_invalid_skipped", t_sparse_and_invalid_skipped },
     { "correctness/flags_decoded",              t_flags_decoded },
     { "correctness/dual_pde_both_halves",       t_dual_pde_both_halves },
+    { "correctness/valid_big_pte_hides_stale_4k", t_valid_big_pte_hides_stale_4k },
     { "correctness/dual_pde_mixed_slots_live_w826", t_dual_pde_mixed_slots_live_w826 },
     { "correctness/multiple_pdbs",              t_multiple_pdbs },
 

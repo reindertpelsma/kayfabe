@@ -59,8 +59,14 @@ int main(int argc, char **argv)
       t.map512m(VB + (1ull << 29), 0x20000000ull);
       emit("all_page_sizes", 1, g, t.root); }
 
+    /* ⊘ v3-mapfix: the 64 KiB pages sit in slots 2..9, BESIDE the 4 KiB pages (slots 0..1),
+     * never over them. The image used to overlap the two halves in slots 0..1, where the
+     * walk kernel now reports only the valid big PTE (a valid big PTE owns its slot —
+     * kf_walk.cu kf_big_pte_owns_slot) and this old Rust decoder (kayfabe-mmu, v2, not
+     * edited: v3 never cuts into the old tree) still reports both. Same-slot overlap is
+     * asserted by the kernel suite's own correctness/valid_big_pte_hides_stale_4k. */
     { IMG(1u << 20);
-      for (uint32_t i = 0; i < 8; i++)  t.map64k(VB + (uint64_t)i * 65536ull, 0x100000ull + (uint64_t)i * 65536ull);
+      for (uint32_t i = 0; i < 8; i++)  t.map64k(VB + (uint64_t)(i + 2) * 65536ull, 0x100000ull + (uint64_t)i * 65536ull);
       for (uint32_t i = 0; i < 32; i++) t.map4k(VB + (uint64_t)i * 4096ull, 0x300000ull + (uint64_t)i * 4096ull);
       emit("dual_pde_both_halves", 1, g, t.root); }
 
