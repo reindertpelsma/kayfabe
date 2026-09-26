@@ -371,6 +371,142 @@ pub fn encode_intr_kernel_table(
     Ok(params)
 }
 
+/// Why an interrupt table could not be carried to a guest version's layout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IntrAtError {
+    /// The version (or the struct at it) was never measured.
+    Layout(crate::matrix::LayoutError),
+    /// The generic carry of `tableLen`/`table[]` refused.
+    Transcode(crate::matrix::TranscodeError),
+    /// A category's subtree mask is not ONE contiguous run, which the guest's
+    /// `{subtreeStart, subtreeEnd}` form cannot say.
+    NonContiguousSubtree {
+        /// The category (`NV2080_INTR_CATEGORY_*`).
+        category: usize,
+        /// The mask.
+        mask: u64,
+    },
+    /// A table row's `MC_ENGINE_IDX` value has no name at the bench version, or its name has
+    /// no value (or two different ones) at the guest version.
+    EngineIdx {
+        /// The value in the bench numbering.
+        bench: u16,
+    },
+}
+
+impl core::fmt::Display for IntrAtError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Layout(e) => write!(f, "{e}"),
+            Self::Transcode(e) => write!(f, "{e}"),
+            Self::NonContiguousSubtree { category, mask } => write!(
+                f,
+                "interrupt category {category}'s subtree mask {mask:#x} is not one contiguous run; \
+                 the guest's {{subtreeStart, subtreeEnd}} cannot express it"
+            ),
+            Self::EngineIdx { bench } => write!(
+                f,
+                "MC_ENGINE_IDX {bench:#x} (bench numbering) has no single equivalent at the guest's version"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for IntrAtError {}
+
+/// `NV2080_INTR_INVALID_SUBTREE` = `NV_U8_MAX` (`ogkm-580.159.04: ctrl2080mc.h:340`) — what RM
+/// initialises every category to before filling it (`ogkm-575.57.08: intr.c:825-826`).
+pub const INTR_INVALID_SUBTREE: u8 = 0xFF;
+
+/// ★★ Carry an `INTERNAL_INTR_GET_KERNEL_TABLE` body encoded at the bench layout
+/// ([`encode_intr_kernel_table`]) to the guest version's MEASURED layout
+/// (`docs/design/V3_DRIVER_MATRIX.md` §8.1) — the one served control whose change across versions
+/// is a change of MEANING, not only of offsets:
+///
+/// - `subtreeMap[]` is `{NvU64 subtreeMask}` from 580.65.06 and `{NvU8 subtreeStart, subtreeEnd}`
+///   at every earlier tag. A mask becomes its `[lowest, highest]` set bit; an empty mask becomes
+///   `INVALID_SUBTREE` on both ends (RM's own initial value); a non-contiguous mask refuses.
+/// - `table[].engineIdx` is an `MC_ENGINE_IDX_*` value, and that numbering is per version (lower
+///   at 535/545). Each value is translated BY NAME through the measured `mc_engine_idx` values.
+///
+/// Everything else (`tableLen`, the vectors, `pmcIntrMask`) is carried by the generic transcoder.
+///
+/// # Errors
+/// [`IntrAtError`].
+pub fn intr_kernel_table_at(bench_body: &[u8], version: crate::DriverVersion) -> Result<Vec<u8>, IntrAtError> {
+    use crate::generated::matrix as m;
+    use crate::matrix::{Resolved, transcode};
+    let runs = &m::NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS;
+    let bench = Resolved::of(runs, crate::versions::BENCH_DRIVER).map_err(IntrAtError::Layout)?;
+    let guest = Resolved::of(runs, version).map_err(IntrAtError::Layout)?;
+    let (mut out, _dropped) = transcode(&bench, &guest, bench_body, &[]).map_err(IntrAtError::Transcode)?;
+
+    // engineIdx by name.
+    let names = |v: crate::DriverVersion| -> Vec<(&'static str, u64)> {
+        m::ALL_VALUES
+            .iter()
+            .filter(|r| r.name.starts_with("mc_engine_idx:"))
+            .filter_map(|r| r.at(v).ok().flatten().map(|x| (r.name, x)))
+            .collect()
+    };
+    let (bn, gn) = (names(crate::versions::BENCH_DRIVER), names(version));
+    let need = |p: &'static str| guest.need(p).map_err(IntrAtError::Layout);
+    let len_f = need("tableLen")?;
+    let len = u32::from_le_bytes(out[len_f.off()..len_f.off() + 4].try_into().unwrap_or([0; 4])) as usize;
+    let (el0, idx_f) = (need("table[]")?, need("table[].engineIdx")?);
+    let stride = el0.bytes().unwrap_or(0);
+    if bn != gn {
+        for i in 0..len {
+            let o = idx_f.off() + i * stride;
+            let b = u16::from_le_bytes([out[o], out[o + 1]]);
+            let mut target: Option<u64> = None;
+            for (name, _) in bn.iter().filter(|(_, v)| *v == u64::from(b)) {
+                let g = gn.iter().find(|(n, _)| n == name).map(|(_, v)| *v);
+                match (target, g) {
+                    (_, None) => {}
+                    (None, Some(g)) => target = Some(g),
+                    (Some(t), Some(g)) if t == g => {}
+                    _ => return Err(IntrAtError::EngineIdx { bench: b }),
+                }
+            }
+            let t = target.and_then(|t| u16::try_from(t).ok()).ok_or(IntrAtError::EngineIdx { bench: b })?;
+            out[o..o + 2].copy_from_slice(&t.to_le_bytes());
+        }
+    }
+
+    // subtreeMap by meaning.
+    if let (Some(start), Some(end)) = (guest.maybe("subtreeMap[].subtreeStart"), guest.maybe("subtreeMap[].subtreeEnd")) {
+        let (b_arr, b_el) = (
+            bench.need("subtreeMap").map_err(IntrAtError::Layout)?,
+            bench.need("subtreeMap[].subtreeMask").map_err(IntrAtError::Layout)?,
+        );
+        let g_el0 = need("subtreeMap[]")?;
+        let g_stride = g_el0.bytes().unwrap_or(0);
+        let n = b_arr.bytes().unwrap_or(0) / 8;
+        for cat in 0..n {
+            let o = b_el.off() + cat * 8;
+            let mask = u64::from_le_bytes(bench_body[o..o + 8].try_into().unwrap_or([0; 8]));
+            let (s, e) = if mask == 0 {
+                (INTR_INVALID_SUBTREE, INTR_INVALID_SUBTREE)
+            } else {
+                let lo = mask.trailing_zeros();
+                let hi = 63 - mask.leading_zeros();
+                let run = if hi - lo == 63 { u64::MAX } else { ((1u64 << (hi - lo + 1)) - 1) << lo };
+                if run != mask {
+                    return Err(IntrAtError::NonContiguousSubtree { category: cat, mask });
+                }
+                (lo as u8, hi as u8)
+            };
+            let go = cat * g_stride;
+            if start.off() + go < out.len() && end.off() + go < out.len() {
+                out[start.off() + go] = s;
+                out[end.off() + go] = e;
+            }
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

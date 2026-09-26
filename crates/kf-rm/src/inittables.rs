@@ -1561,7 +1561,26 @@ fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
 /// the same thing at every measured version where the field exists — only array capacities and
 /// the set of fields differ. Each entry names what was checked. A control whose layout differs
 /// at the guest's version and is NOT here stays refused as `unported-at-version`.
-fn transcode_reviewed(want: WantedTable) -> Option<&'static [&'static str]> {
+/// How a reviewed control is carried to another version's layout.
+#[derive(Debug, Clone, Copy)]
+enum Carry {
+    /// The generic by-name transcoder, with these array paths declared truncatable.
+    Generic(&'static [&'static str]),
+    /// `INTR_GET_KERNEL_TABLE`: a change of MEANING (subtree mask → start/end, engine indices by
+    /// name) — `kf_abi::inittables::intr_kernel_table_at`.
+    Intr,
+}
+
+fn transcode_reviewed(want: WantedTable) -> Option<Carry> {
+    transcode_reviewed_paths(want).map(Carry::Generic).or(match want {
+        // subtreeMap is {subtreeMask} from 580.65.06 and {subtreeStart, subtreeEnd} before;
+        // engineIdx is an MC_ENGINE_IDX value whose numbering is per version.
+        WantedTable::IntrKernelTable => Some(Carry::Intr),
+        _ => None,
+    })
+}
+
+fn transcode_reviewed_paths(want: WantedTable) -> Option<&'static [&'static str]> {
     match want {
         // Per-GPC arrays (tpcMask/zcullMask/tpcCount/numPesPerGpc/mmuPerGpc/tpcToPesMap) sized by
         // NV2080_CTRL_GR_MAX_GPC (12 through 575.x, 16 from 580.65.06); same meaning per GPC.
@@ -1591,7 +1610,7 @@ impl InitTablePolicy {
         cmd: &RpcCommand,
         req: &kf_abi::view::RpcControlReq,
         ct: &'static str,
-        truncatable: &[&str],
+        carry: Carry,
     ) -> Option<Reply> {
         let v = self.driver.driver_version();
         let runs = kf_abi::generated::matrix::ALL_STRUCTS.iter().find(|r| r.name == ct)?;
@@ -1636,14 +1655,21 @@ impl InitTablePolicy {
         if reply.rpc_result != NV_OK || reply.body.len() < at + bench.size() {
             return Some(reply);
         }
-        let (down, dropped) =
-            match kf_abi::matrix::transcode(&bench, &guest, &reply.body[at..at + bench.size()], truncatable) {
-                Ok(x) => x,
-                Err(e) => {
-                    eprintln!("W349REFUSE cmd={:#010x} why=transcode-down struct={ct} guest_driver={v}: {e}", req.cmd);
-                    return refuse();
-                }
-            };
+        let bench_reply = &reply.body[at..at + bench.size()];
+        let carried = match carry {
+            Carry::Generic(truncatable) => kf_abi::matrix::transcode(&bench, &guest, bench_reply, truncatable)
+                .map_err(|e| e.to_string()),
+            Carry::Intr => kf_abi::inittables::intr_kernel_table_at(bench_reply, v)
+                .map(|b| (b, Vec::new()))
+                .map_err(|e| e.to_string()),
+        };
+        let (down, dropped) = match carried {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("W349REFUSE cmd={:#010x} why=transcode-down struct={ct} guest_driver={v}: {e}", req.cmd);
+                return refuse();
+            }
+        };
         if !dropped.is_empty() {
             eprintln!(
                 "kf-rm: {ct} carried to driver {v}: fields the guest's version does not have were dropped: {dropped:?}"
@@ -1892,8 +1918,8 @@ impl CommandPolicy for InitTablePolicy {
             && !self.in_transcode
             && let Some(guest_size) = layout_differs_from_bench(ct, self.driver.driver_version())
         {
-            if let Some(truncatable) = transcode_reviewed(want) {
-                return self.respond_transcoded(cmd, &req, ct, truncatable);
+            if let Some(carry) = transcode_reviewed(want) {
+                return self.respond_transcoded(cmd, &req, ct, carry);
             }
             eprintln!(
                 "W349REFUSE cmd={:#010x} why=unported-at-version struct={ct} guest_driver={} \
