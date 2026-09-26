@@ -231,9 +231,15 @@ fn the_class_sets_match_what_the_c_compiler_says_each_chip_lists() {
         "Turing" => Family::Turing, "Ampere" => Family::Ampere, "Ada" => Family::Ada,
         "Hopper" => Family::Hopper, "Blackwell" => Family::Blackwell, o => panic!("unknown family {o}"),
     };
+    // The generator also emits kinds this crate's table does not model (v3 `kf-chip` added
+    // twod / inline_to_memory / video_encoder / video_decoder, 2026-09-26): those rows are not
+    // this table's to check, so they are skipped by name — an unknown NAME still panics.
+    const NOT_MODELLED_HERE: &[&str] = &["twod", "inline_to_memory", "video_encoder", "video_decoder"];
     let kind = |s: &str| match s {
-        "channel_gpfifo" => Kind::ChannelGpfifo, "compute" => Kind::Compute, "dma_copy" => Kind::DmaCopy,
-        "usermode" => Kind::Usermode, "threed" => Kind::ThreeD, o => panic!("unknown kind {o}"),
+        "channel_gpfifo" => Some(Kind::ChannelGpfifo), "compute" => Some(Kind::Compute), "dma_copy" => Some(Kind::DmaCopy),
+        "usermode" => Some(Kind::Usermode), "threed" => Some(Kind::ThreeD),
+        o if NOT_MODELLED_HERE.contains(&o) => None,
+        o => panic!("unknown kind {o}"),
     };
     let mut derived: std::collections::BTreeMap<(Family, Kind), BTreeSet<u32>> = Default::default();
     let mut chips: std::collections::BTreeMap<Family, BTreeSet<String>> = Default::default();
@@ -242,8 +248,9 @@ fn the_class_sets_match_what_the_c_compiler_says_each_chip_lists() {
         let t: Vec<&str> = l.split_whitespace().collect();
         match t.first() {
             Some(&"CLASS") => {
+                let Some(k) = kind(t[2]) else { continue };
                 let id = u32::from_str_radix(t[3].trim_start_matches("0x"), 16).unwrap();
-                derived.entry((fam(t[1]), kind(t[2]))).or_default().insert(id);
+                derived.entry((fam(t[1]), k)).or_default().insert(id);
                 n += 1;
             }
             Some(&"FAMILY") => {
