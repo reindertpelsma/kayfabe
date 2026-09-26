@@ -262,8 +262,17 @@ impl Device {
             kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
             kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
         };
+        // ★★★ v3-roperm: the permission policy — ONE value for the walker's diff key and the host
+        // map. ATOMIC_DISABLE is carried only under `KF3_CARRY_ATOMIC_DISABLE=1`: enable it once
+        // replayable-fault delivery exists (`kf_mem::apply::PermPolicy`).
+        let perm = kf_mem::apply::PermPolicy { carry_atomic_disable: std::env::var("KF3_CARRY_ATOMIC_DISABLE").is_ok_and(|v| v == "1") };
+        eprintln!(
+            "kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE {} (key_perm={:#x})",
+            if perm.carry_atomic_disable { "CARRIED (KF3_CARRY_ATOMIC_DISABLE=1)" } else { "not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists)" },
+            perm.key_perm()
+        );
         let mut kernel = kf_cuda::walk::WalkKernel::bring_up_on(
-            kf_cuda::walk::WalkCfg::default(),
+            kf_cuda::walk::WalkCfg { key_perm: perm.key_perm(), ..kf_cuda::walk::WalkCfg::default() },
             fmt,
             kf_cuda::walk::WalkDevice::PciBusId(&bdf),
         )
@@ -452,7 +461,7 @@ impl Device {
             inbox,
             mirrors,
         )?;
-        let walker = kf_mem::vasmgr::GpuWalker { kernel };
+        let walker = kf_mem::vasmgr::GpuWalker { kernel, perm };
         // ★ 2026-09-26 (`V3_BAR1_DOORBELL.md` §7 T1's NEGATIVE CONTROL, `V3_FAMILY_PORT_BLACKWELL.md`):
         // `KF3_NEGCTL_NO_BAR1_DOORBELL=1` runs a Hopper+ family WITHOUT the BAR1 usermode-view
         // classification — the pre-`v3-bar1db` behaviour, where the view's leaf maps guest RAM at
@@ -1351,7 +1360,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -1364,6 +1373,8 @@ impl Device {
             va.clipped_bytes,
             va.held,
             va.vmm_overlaps,
+            va.priv_withheld,
+            va.priv_withheld_bytes,
             mc.bar_pdes.load(o),
             mc.roots.load(o),
             mc.root_moves.load(o),

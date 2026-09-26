@@ -168,6 +168,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         ("KfArgs", "pdbs"),
         ("KfArgs", "slots"),
         ("KfArgs", "npdb"),
+        ("KfArgs", "key_perm"),
         ("KfArgs", "ack"),
         ("KfArgs", "ack_code"),
         ("KfArgs", "scratch"),
@@ -299,6 +300,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     off!(KfArgs, pdbs, "off KfArgs.pdbs");
     off!(KfArgs, slots, "off KfArgs.slots");
     off!(KfArgs, npdb, "off KfArgs.npdb");
+    off!(KfArgs, key_perm, "off KfArgs.key_perm");
     off!(KfArgs, ack, "off KfArgs.ack");
     off!(KfArgs, ack_code, "off KfArgs.ack_code");
     off!(KfArgs, scratch, "off KfArgs.scratch");
@@ -617,15 +619,26 @@ fn the_report_constants_match_the_header() {
     assert_eq!(parse("KFWR_RF_ATOMIC_DISABLE"), u64::from(kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE));
     assert_eq!(parse("KFWR_RF_VOLATILE"), u64::from(kf_cuda::abi::KFWR_RF_VOLATILE));
     assert_eq!(parse("KFWR_RF_PRIVILEGE"), u64::from(kf_cuda::abi::KFWR_RF_PRIVILEGE));
-    // ★ v3-roperm: the header spells the carried set as an OR of the three names.
+    // ★ v3-roperm: the header spells the key sets as ORs of the names; each must be the same set
+    // abi.rs builds.
+    let or_of = |name: &str| -> u32 {
+        let mut body = extract_define(&h, name);
+        // `KFWR_RF_KEY_PERM_ALL` is continued on the next line (`\` + newline).
+        if body.trim_end().ends_with('\\') {
+            let at = h.find(&format!("#define {name} ")).expect("the define");
+            let rest = &h[at..];
+            let second = rest.lines().nth(1).expect("the continuation line");
+            body = format!("{}{}", body.trim_end().trim_end_matches('\\'), second);
+        }
+        let body = body.trim().trim_start_matches('(').trim_end_matches(')');
+        body.split('|').map(|n| u32::try_from(parse(n.trim())).expect("a flag")).fold(0, |a, b| a | b)
+    };
+    assert_eq!(or_of("KFWR_RF_KEY_PERM_ALL"), kf_cuda::abi::KFWR_RF_KEY_PERM_ALL, "KFWR_RF_KEY_PERM_ALL differs");
+    assert_eq!(or_of("KFWR_RF_KEY_PERM_DEFAULT"), kf_cuda::abi::KFWR_RF_KEY_PERM_DEFAULT, "KFWR_RF_KEY_PERM_DEFAULT differs");
     assert_eq!(
-        extract_define(&h, "KFWR_RF_HOST_PERM").trim(),
-        "(KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE)",
-        "the permission set the diff key and the host map carry differs between the .h and abi.rs"
-    );
-    assert_eq!(
-        kf_cuda::abi::KFWR_RF_HOST_PERM,
-        kf_cuda::abi::KFWR_RF_READ_ONLY | kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE | kf_cuda::abi::KFWR_RF_VOLATILE
+        kf_cuda::abi::KFWR_RF_KEY_PERM_DEFAULT & kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE,
+        0,
+        "ATOMIC_DISABLE joins the key only under KF3_CARRY_ATOMIC_DISABLE"
     );
     assert_eq!(parse("KFWR_V_PARTIAL"), u64::from(kf_cuda::abi::KFWR_V_PARTIAL));
     assert_eq!(parse("KFWR_V_OVERFLOW"), u64::from(kf_cuda::abi::KFWR_V_OVERFLOW));

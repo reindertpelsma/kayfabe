@@ -1971,6 +1971,12 @@ impl ChanPlane {
         }
         let entries = a.entries.max(1);
         mirror.live.fetch_add(1, Ordering::AcqRel);
+        // ★★★ v3-roperm: a guest-KERNEL channel lives here (`kernel_channel`: facts guest
+        // userspace cannot produce), so this space is the kernel's and mirrors privileged leaves
+        // from its next walk on. Set NOW, in statement order, before the channel can run.
+        if !mirror.kernel_vas.swap(true, Ordering::AcqRel) {
+            eprintln!("kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here", a.client, a.handle);
+        }
         self.defer(
             "birth translated",
             Box::new(move |me: &ChanPlane| {

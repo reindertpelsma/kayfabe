@@ -23,7 +23,8 @@ pub struct Desired {
     /// ★ v3-gfx: the host PTE kind (uncompressed; `crate::apply::host_pte_kind`). 0 = PITCH.
     pub kind: u8,
     /// ★★★ v3-roperm: the guest leaf's permissions, carried to the host map
-    /// (`crate::apply::host_perm`). ⊘ Dropping them mapped every guest read-only leaf read-write.
+    /// (`crate::apply::PermPolicy::host_perm`). ⊘ Dropping them mapped every guest read-only leaf
+    /// read-write.
     pub perm: kf_host::MapPerm,
 }
 
@@ -246,6 +247,15 @@ pub trait MapTarget {
     /// nine guest maps "succeeded" onto OUR ring.
     fn reserved(&self) -> Vec<(u64, u64)> {
         Vec::new()
+    }
+
+    /// ★★★ v3-roperm: this target is a USER twin — a host space where unprivileged guest channels
+    /// run — so a guest leaf marked PRIVILEGED is withheld rather than mapped (the host cannot
+    /// express the bit; mapping it would hand user code what the guest kernel marked privileged).
+    /// ⊘ Default `false`: CPU windows and kernel spaces mirror privileged leaves as before. A
+    /// wrapping target must FORWARD this (a default here would silently mirror them).
+    fn withholds_privileged(&self) -> bool {
+        false
     }
 }
 

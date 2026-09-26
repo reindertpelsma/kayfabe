@@ -34,7 +34,7 @@
 //! from it in place of the guest's tables, and a stale entry can only cost an extra diff line,
 //! never a wrong translation.
 
-use crate::abi::{KfMapRun, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KFWR_RF_HOST_PERM};
+use crate::abi::{KfMapRun, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KFWR_RF_KEY_PERM_ALL, KFWR_RF_KEY_PERM_DEFAULT};
 
 /// Page-size classes.
 pub const CLASSES: usize = 4;
@@ -49,21 +49,26 @@ pub fn class_of(flags: u32) -> usize {
 /// guest RAM (both system apertures — the host maps one guest-RAM object either way), `2` any
 /// other aperture (peer; the walker refuses it, so it never matches anything) — ★ v3-gfx: plus the
 /// PTE KIND in bits `2..10`, because the host mapping now carries it (`kf_mem::apply::host_pte_kind`)
-/// and a page re-kinded at the same backing must be re-mapped — ★★★ v3-roperm: plus the host
-/// PERMISSIONS ([`KFWR_RF_HOST_PERM`]: read-only, atomic-disable, volatile) in bits `10..13`,
-/// because the host mapping carries them too (`kf_host::MapPerm`). ⊘ Without them a guest RW→RO
-/// downgrade over the same backing was KEPT: the host twin stayed read-write and a GPU write to a
-/// UVM read-duplicate landed silently in a stale copy (`V3_UVM_DEMAND_PAGING.md` §6). Page size
-/// and `PRIVILEGE` (no unprivileged host verb can place it) are not part of what the host places.
-/// Mirrors `kf_hkey` (`cuda/walk/kf_walk.cu`).
+/// and a page re-kinded at the same backing must be re-mapped — ★★★ v3-roperm: plus the
+/// permission bits the host's policy keys on (`key_perm`, a subset of [`KFWR_RF_KEY_PERM_ALL`]) in
+/// bits `10..14`. ⊘ Without them a guest RW→RO downgrade over the same backing was KEPT: the host
+/// twin stayed read-write and a GPU write to a UVM read-duplicate landed silently in a stale copy
+/// (`V3_UVM_DEMAND_PAGING.md` §6). Page size is not part of what the host places. Mirrors
+/// `kf_hkey` (`cuda/walk/kf_walk.cu`), whose `kp` is `KfArgs::key_perm`.
 #[must_use]
-pub fn host_key(flags: u32) -> u32 {
+pub fn host_key_with(flags: u32, key_perm: u32) -> u32 {
     let ap = match flags & 0x7 {
         0 => 0,
         2 | 3 => 1,
         _ => 2,
     };
-    ap | (((flags >> 16) & 0xff) << 2) | (((flags & KFWR_RF_HOST_PERM) >> 3) << 10)
+    ap | (((flags >> 16) & 0xff) << 2) | (((flags & key_perm & KFWR_RF_KEY_PERM_ALL) >> 3) << 10)
+}
+
+/// [`host_key_with`] under the default policy ([`KFWR_RF_KEY_PERM_DEFAULT`]).
+#[must_use]
+pub fn host_key(flags: u32) -> u32 {
+    host_key_with(flags, KFWR_RF_KEY_PERM_DEFAULT)
 }
 
 /// One host verdict on one report run.
@@ -124,7 +129,7 @@ fn walk_class(walk: &[KfMapRun], c: usize) -> Vec<KfMapRun> {
 
 /// Whether `w` backs `p` byte for byte: same host ground truth, same linear offset, no hole.
 /// `w` is one class's walk runs, sorted and disjoint.
-fn covered(p: &KfMapRun, w: &[KfMapRun]) -> bool {
+fn covered(p: &KfMapRun, w: &[KfMapRun], key_perm: u32) -> bool {
     let Some(end) = p.va.checked_add(p.len) else {
         return false;
     };
@@ -135,11 +140,11 @@ fn covered(p: &KfMapRun, w: &[KfMapRun]) -> bool {
     }
     i -= 1;
     let mut at = p.va;
-    let key = host_key(p.flags);
+    let key = host_key_with(p.flags, key_perm);
     while i < w.len() {
         let r = &w[i];
         let rend = r.va.saturating_add(r.len);
-        if !(r.va <= at && at < rend) || host_key(r.flags) != key {
+        if !(r.va <= at && at < rend) || host_key_with(r.flags, key_perm) != key {
             return false;
         }
         if r.gpga.wrapping_add(at - r.va) != p.gpga.wrapping_add(at - p.va) {
@@ -160,6 +165,12 @@ fn covered(p: &KfMapRun, w: &[KfMapRun]) -> bool {
 /// [`EntryDiff::overflow`].
 #[must_use]
 pub fn diff(com: &Committed, walk: &[KfMapRun], cap: usize) -> EntryDiff {
+    diff_with(com, walk, cap, KFWR_RF_KEY_PERM_DEFAULT)
+}
+
+/// [`diff`] under an explicit key policy (`key_perm`, as the kernel's `KfArgs::key_perm`).
+#[must_use]
+pub fn diff_with(com: &Committed, walk: &[KfMapRun], cap: usize, key_perm: u32) -> EntryDiff {
     let mut unmaps: [Vec<KfMapRun>; CLASSES] = Default::default();
     let mut maps: [Vec<KfMapRun>; CLASSES] = Default::default();
     for c in 0..CLASSES {
@@ -167,7 +178,7 @@ pub fn diff(com: &Committed, walk: &[KfMapRun], cap: usize) -> EntryDiff {
         let p = &com.cls[c];
         let mut kept: Vec<&KfMapRun> = Vec::new();
         for x in p {
-            if covered(x, &w) {
+            if covered(x, &w, key_perm) {
                 kept.push(x);
             } else {
                 unmaps[c].push(KfMapRun { op: KFWR_OP_UNMAP, pdb_index: 0, ..*x });
@@ -268,12 +279,18 @@ pub fn commit(com: &Committed, runs: &[KfMapRun], codes: &[AckCode]) -> Committe
 /// walk (closure).
 #[must_use]
 pub fn coverage(runs: &[KfMapRun]) -> [Vec<(u64, u64, u32, u64)>; CLASSES] {
+    coverage_with(runs, KFWR_RF_KEY_PERM_DEFAULT)
+}
+
+/// [`coverage`] under an explicit key policy.
+#[must_use]
+pub fn coverage_with(runs: &[KfMapRun], key_perm: u32) -> [Vec<(u64, u64, u32, u64)>; CLASSES] {
     let mut out: [Vec<(u64, u64, u32, u64)>; CLASSES] = Default::default();
     for (c, slot) in out.iter_mut().enumerate() {
         let mut v: Vec<(u64, u64, u32, u64)> = runs
             .iter()
             .filter(|r| class_of(r.flags) == c)
-            .map(|r| (r.va, r.len, host_key(r.flags), r.gpga))
+            .map(|r| (r.va, r.len, host_key_with(r.flags, key_perm), r.gpga))
             .collect();
         v.sort_unstable();
         let mut m: Vec<(u64, u64, u32, u64)> = Vec::new();
@@ -296,7 +313,7 @@ pub fn coverage(runs: &[KfMapRun]) -> [Vec<(u64, u64, u32, u64)>; CLASSES] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
+    use crate::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_KEY_PERM_ALL, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
 
     const PAGE: u64 = 0x1000;
 
@@ -428,19 +445,24 @@ mod tests {
         assert_eq!(diff(&c2, &[ro], 64).runs, vec![ro], "and the RO map is retried");
     }
 
-    /// Every carried permission is part of the key — and `PRIVILEGE`, which no unprivileged host
-    /// verb can place, is not (keying on it would only churn the host).
+    /// ★ The DEFAULT key: READ_ONLY and VOLATILE (carried to the host map) and PRIVILEGE (a user
+    /// twin withholds a privileged leaf, so its flip re-decides the placement) each re-map;
+    /// ATOMIC_DISABLE is keyed only when the host carries it (`KF3_CARRY_ATOMIC_DISABLE`), so by
+    /// default its flip is quiet — and under [`KFWR_RF_KEY_PERM_ALL`] it re-maps too.
     #[test]
-    fn each_carried_permission_is_part_of_the_key_and_privilege_is_not() {
+    fn the_key_is_the_hosts_policy() {
         let base = run(0, 0x40_0000, 2 * PAGE, 0);
         let c = settle(&Committed::default(), &[base]);
-        for bit in [KFWR_RF_READ_ONLY, KFWR_RF_ATOMIC_DISABLE, KFWR_RF_VOLATILE] {
+        for bit in [KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE, KFWR_RF_PRIVILEGE] {
             let w = KfMapRun { flags: base.flags | bit, ..base };
             assert_eq!(diff(&c, &[w], 64).runs.len(), 2, "flag {bit:#x} must re-map");
             assert_ne!(host_key(w.flags), host_key(base.flags));
         }
-        let w = KfMapRun { flags: base.flags | KFWR_RF_PRIVILEGE, ..base };
-        assert!(diff(&c, &[w], 64).runs.is_empty(), "PRIVILEGE is not placed by the host");
+        let ad = KfMapRun { flags: base.flags | KFWR_RF_ATOMIC_DISABLE, ..base };
+        assert!(diff(&c, &[ad], 64).runs.is_empty(), "ATOMIC_DISABLE is not keyed by default");
+        assert_eq!(diff_with(&c, &[ad], 64, KFWR_RF_KEY_PERM_ALL).runs.len(), 2, "…and is when the host carries it");
+        // A bit outside the permission set never joins the key, whatever the policy says.
+        assert_eq!(host_key_with(base.flags | KFWR_RF_HELD, u32::MAX), host_key_with(base.flags, u32::MAX));
     }
 
     /// A downgrade of PART of a placement retires the whole placement (the host unmaps by the VA

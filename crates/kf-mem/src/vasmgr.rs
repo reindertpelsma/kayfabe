@@ -337,6 +337,10 @@ pub trait Walker {
 pub struct GpuWalker {
     /// The walk kernel (owns its CUDA context, its completion fd and the store).
     pub kernel: kf_cuda::WalkKernel,
+    /// ★★★ v3-roperm: the host's permission policy — the SAME value whose
+    /// [`crate::apply::PermPolicy::key_perm`] the kernel was brought up with
+    /// ([`kf_cuda::walk::WalkCfg::key_perm`]), so the key and the host map never disagree.
+    pub perm: crate::apply::PermPolicy,
 }
 
 impl Walker for GpuWalker {
@@ -411,16 +415,7 @@ impl Walker for GpuWalker {
                 let first = p.first_run as usize;
                 let runs = r.runs[first..first + p.run_count as usize]
                     .iter()
-                    .map(|m| DiffRun {
-                        unmap: m.op == kf_cuda::abi::KFWR_OP_UNMAP,
-                        va: m.va,
-                        len: m.len,
-                        at: m.gpga,
-                        ap: m.aperture(),
-                        held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
-                        kind: ((m.flags >> 16) & 0xff) as u8,
-                        perm: crate::apply::host_perm(m.flags),
-                    })
+                    .map(|m| self.perm.diff_run(m))
                     .collect();
                 EntryDiff {
                     pdb: p.pdb,
@@ -640,6 +635,11 @@ pub struct VaStats {
     /// diff applied except for refused MAPs / walk-refused leaves, which stay absent (and stay a
     /// difference the next diff retries). The channel proceeds; see [`VaManager::on_walk_ready`].
     pub splits_unsettled: u64,
+    /// ★★★ v3-roperm: PRIVILEGED map runs withheld from user twins (per walk they appear in: a
+    /// withheld run is re-emitted by every diff until the guest drops it) and their bytes.
+    pub priv_withheld: u64,
+    /// Bytes of [`VaStats::priv_withheld`].
+    pub priv_withheld_bytes: u64,
 }
 
 /// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
@@ -1238,6 +1238,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.usermode_trapped += a.usermode_trapped as u64;
             self.stats.usermode_unmirrored += a.usermode_unmirrored as u64;
             self.stats.clipped_bytes += a.clipped_bytes;
+            self.stats.priv_withheld += a.priv_withheld as u64;
+            self.stats.priv_withheld_bytes += a.priv_withheld_bytes;
             if a.refused > 0 {
                 failed.insert(key);
                 if a.refusals_are_absence() {
@@ -1360,7 +1362,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 mod tests {
     use super::*;
     use crate::ledger::{Desired, Mapped};
-    use kf_cuda::abi::{KFWR_OP_UNMAP, KfMapRun};
+    use kf_cuda::abi::KfMapRun;
     use kf_cuda::diffmodel::{self, AckCode, Committed};
     use kf_trap::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite};
     use std::cell::RefCell;
@@ -1491,16 +1493,7 @@ mod tests {
                 let runs: Vec<DiffRun> = d
                     .runs
                     .iter()
-                    .map(|m| DiffRun {
-                        unmap: m.op == KFWR_OP_UNMAP,
-                        va: m.va,
-                        len: m.len,
-                        at: m.gpga,
-                        ap: m.aperture(),
-                        held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
-                        kind: ((m.flags >> 16) & 0xff) as u8,
-                        perm: crate::apply::host_perm(m.flags),
-                    })
+                    .map(|m| crate::apply::PermPolicy::default().diff_run(m))
                     .collect();
                 let refused = if self.refuse_in == Some(e.pdb) { 0x2000 } else { 0 };
                 entries.push(EntryDiff { pdb: e.pdb, slot: e.slot, first, runs, partial: d.partial, overflow: d.overflow, refused });
@@ -1545,11 +1538,16 @@ mod tests {
         reserved: Vec<(u64, u64)>,
         /// ★ What `settle` answers — an async target (the BAR1 doorbell overlay) in miniature.
         settle: Rc<RefCell<Settle>>,
+        /// ★ v3-roperm: a USER twin (withholds privileged leaves) until the test flips it.
+        user_twin: Rc<std::cell::Cell<bool>>,
     }
 
     impl MapTarget for FakeHost {
         fn settle(&self) -> Settle {
             self.settle.borrow().clone()
+        }
+        fn withholds_privileged(&self) -> bool {
+            self.user_twin.get()
         }
         fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
             if *self.refuse_map_at.borrow() == Some(d.va) {
@@ -1593,6 +1591,7 @@ mod tests {
             held_at,
             reserved,
             settle: Rc::new(RefCell::new(Settle::Live)),
+            user_twin: Rc::new(std::cell::Cell::new(false)),
         }
     }
 
@@ -1847,7 +1846,7 @@ mod tests {
     /// (The fake walker's fourth tuple element is the run's low flags byte: aperture + permissions.)
     #[test]
     fn a_rw_to_ro_downgrade_reaches_the_host_as_a_read_only_remap() {
-        use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY};
+        use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_READ_ONLY};
         const RO: u8 = KFWR_RF_READ_ONLY as u8;
         let mut r = rig();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2)]);
@@ -1864,16 +1863,89 @@ mod tests {
         let ro = kf_host::MapPerm { read_only: true, ..kf_host::MapPerm::READ_WRITE };
         assert_eq!(*r.perms.borrow(), vec![(0x1000_0000, ro)], "the host map is READ-ONLY");
         assert!(!busy(&r.port));
-        // Quiet once landed; PRIVILEGE (not placeable by the host) stays quiet too.
+        // Quiet once landed; ATOMIC_DISABLE is neither carried nor keyed by default
+        // (`PermPolicy`: off until fault delivery exists), so its flip costs the host nothing.
         r.ops.borrow_mut().clear();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2 | RO | KFWR_RF_PRIVILEGE as u8)]);
-        settle(&mut r, PDB_A);
-        assert!(ops(&r).is_empty(), "no host work for a change the host cannot express");
-        // Atomics disabled on top: remapped again, carrying both.
-        r.perms.borrow_mut().clear();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2 | RO | KFWR_RF_ATOMIC_DISABLE as u8)]);
         settle(&mut r, PDB_A);
-        assert_eq!(*r.perms.borrow(), vec![(0x1000_0000, kf_host::MapPerm { atomic_disable: true, ..ro })]);
+        assert!(ops(&r).is_empty(), "ATOMIC_DISABLE is off by default: no host work");
+    }
+
+    /// ★★★ v3-roperm — **A PRIVILEGED LEAF NEVER REACHES A USER TWIN**, and withholding it does not
+    /// cost the guest its invalidate. RM marks its GR context buffers privileged
+    /// (`MEMDESC_FLAGS_GPU_PRIVILEGED`, `kernel_graphics_context.c:1127,1277`) and maps them into
+    /// the USER channel's VA space; the host cannot express the bit, so mapping them would hand an
+    /// unprivileged guest channel what the guest kernel fenced off. Withheld → counted → named;
+    /// acknowledged FAILED (never committed), so every diff re-emits it until the guest drops it,
+    /// and a kernel space (which mirrors privileged leaves) or a PRIV→user flip places it.
+    #[test]
+    fn a_privileged_leaf_is_withheld_from_a_user_twin_and_the_invalidate_still_clears() {
+        use kf_cuda::abi::KFWR_RF_PRIVILEGE;
+        const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
+        let mut r = rig();
+        let user = r.m.table.target(K_A).map(|t| t.user_twin.clone()).expect("the rig's space");
+        user.set(true);
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 2), (0x2000_0000, 0x0300_0000, 0x2000, PRIV)]);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1);
+        assert!(!busy(&r.port), "withholding is not a failure: the guest's invalidate clears");
+        assert_eq!(ops(&r), vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate], "the privileged leaf never reached the host");
+        assert_eq!((r.m.stats.priv_withheld, r.m.stats.priv_withheld_bytes), (1, 0x2000));
+        assert!(r.m.stats.refusals.is_empty(), "not a refusal: {:?}", r.m.stats.refusals);
+        // Re-emitted (never committed) and withheld again; nothing else happens.
+        r.ops.borrow_mut().clear();
+        settle(&mut r, PDB_A);
+        assert!(ops(&r).is_empty());
+        assert_eq!(r.m.stats.priv_withheld, 2);
+        // The guest drops the privileged leaf: nothing to unmap (it was never ours).
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 2)]);
+        settle(&mut r, PDB_A);
+        assert!(ops(&r).is_empty());
+        assert_eq!(r.m.stats.priv_withheld, 2);
+    }
+
+    /// ★★★ v3-roperm: a user mapping the guest turns PRIVILEGED in place (same VA, same page) is
+    /// taken away from the user twin; turned back, it is placed again.
+    #[test]
+    fn a_privilege_flip_takes_the_page_away_from_a_user_twin_and_gives_it_back() {
+        use kf_cuda::abi::KFWR_RF_PRIVILEGE;
+        const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
+        let mut r = rig();
+        let user = r.m.table.target(K_A).map(|t| t.user_twin.clone()).expect("the rig's space");
+        user.set(true);
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        r.ops.borrow_mut().clear();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, PRIV)]);
+        settle(&mut r, PDB_A);
+        assert_eq!(ops(&r), vec![Op::Unmap(0x1000_0000), Op::Invalidate], "user access withdrawn, nothing mapped in its place");
+        assert_eq!(r.m.stats.priv_withheld, 1);
+        r.ops.borrow_mut().clear();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        assert_eq!(ops(&r), vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate]);
+    }
+
+    /// ★★★ v3-roperm: a KERNEL space (Translated channels only) mirrors privileged leaves as
+    /// before — and a space that turns kernel after a privileged leaf was withheld places it at
+    /// its next walk, because a withheld leaf was never committed.
+    #[test]
+    fn a_kernel_space_mirrors_privileged_leaves_even_ones_it_withheld_before_it_turned_kernel() {
+        use kf_cuda::abi::KFWR_RF_PRIVILEGE;
+        const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
+        let mut r = rig();
+        let user = r.m.table.target(K_A).map(|t| t.user_twin.clone()).expect("the rig's space");
+        user.set(true);
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x2000_0000, 0x0300_0000, 0x2000, PRIV)]);
+        settle(&mut r, PDB_A);
+        assert!(ops(&r).is_empty());
+        user.set(false); // its first Translated (guest-kernel) channel was born
+        settle(&mut r, PDB_A);
+        assert_eq!(ops(&r), vec![Op::Map(0x2000_0000, 0x0300_0000, 0x2000), Op::Invalidate]);
+        assert_eq!(r.m.stats.priv_withheld, 1, "withheld once, then placed");
+        r.ops.borrow_mut().clear();
+        settle(&mut r, PDB_A);
+        assert!(ops(&r).is_empty(), "committed now: quiet");
     }
 
     #[test]

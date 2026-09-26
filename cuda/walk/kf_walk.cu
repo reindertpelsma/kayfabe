@@ -212,6 +212,10 @@ struct KfArgs {
     const uint64_t *pdbs;        /* per entry: the root walked */
     const uint32_t *slots;       /* per entry: the slot it is diffed against */
     uint32_t npdb;
+    /* ★ v3-roperm: the permission bits that join the diff key (a subset of
+     * KFWR_RF_KEY_PERM_ALL) — the host's policy, so the PTX carries none. Fills the
+     * padding after `npdb`: KfArgs' size is unchanged. */
+    uint32_t key_perm;
     const KfAck *ack;            /* the host's verdict on the PREVIOUS report */
     const uint8_t *ack_code;     /* one KFWR_ACK_* per previous report run */
     KfMapRun *scratch;
@@ -802,18 +806,18 @@ __global__ void kf_walk_kernel(KfArgs a)
 __device__ __forceinline__ uint32_t kf_pcls(uint32_t flags) { return (flags >> KFWR_RF_PS_SHIFT) & 3u; }
 /* The ground truth the HOST maps: store, guest RAM, or nothing it will match — and, v3-gfx, the
  * PTE KIND the host mapping carries (a re-kinded page must be re-mapped: the host PTE's kind is
- * part of what we place) — and, v3-roperm, the PERMISSIONS the host mapping carries
- * (KFWR_RF_HOST_PERM: read-only, atomic-disable, volatile). ⊘ Without them a guest RW→RO
- * downgrade over the same backing was "kept", so the host twin stayed READ-WRITE and a GPU write
- * to a UVM read-duplicate landed silently in a stale copy (V3_UVM_DEMAND_PAGING.md §6). A
- * permission change is a change: the placement is UNMAPPED and the piece MAPPED again with the
- * new permissions. Mirrored by kf_cuda::diffmodel::host_key. */
-__device__ __forceinline__ uint32_t kf_hkey(uint32_t flags)
+ * part of what we place) — and, v3-roperm, the PERMISSION bits the host's policy keys on (`kp`,
+ * KfArgs::key_perm: by default read-only, volatile and privilege; see kf_walk.h). ⊘ Without them
+ * a guest RW→RO downgrade over the same backing was "kept", so the host twin stayed READ-WRITE and
+ * a GPU write to a UVM read-duplicate landed silently in a stale copy (V3_UVM_DEMAND_PAGING.md
+ * §6). A keyed permission change is a change: the placement is UNMAPPED and the piece MAPPED
+ * again. Mirrored by kf_cuda::diffmodel::host_key_with. */
+__device__ __forceinline__ uint32_t kf_hkey(uint32_t flags, uint32_t kp)
 {
     const uint32_t ap = flags & KFWR_RF_AP_MASK;
     const uint32_t k = ap == KFWR_AP_VIDMEM ? 0u : (ap == KFWR_AP_SYSCOH || ap == KFWR_AP_SYSNONCOH) ? 1u : 2u;
     return k | (((flags >> KFWR_RF_KIND_SHIFT) & KFWR_RF_KIND_MASK) << 2)
-             | (((flags & KFWR_RF_HOST_PERM) >> 3) << 10);
+             | (((flags & kp & KFWR_RF_KEY_PERM_ALL) >> 3) << 10);
 }
 __device__ __forceinline__ uint64_t kf_end(const KfMapRun &r) { return r.va + r.len; }
 
@@ -877,7 +881,7 @@ __device__ __forceinline__ bool kf_holds(const KfMapRun &r, uint64_t va) { retur
  * a few pages added or dropped) — tried with its two neighbours before the
  * binary search, so an unchanged space costs one coalesced load per placement.
  * The loop advances one run per step and stops at `n`. */
-__device__ bool kf_covered(const KfMapRun &p, const KfMapRun *w, uint32_t n, uint32_t hint, uint32_t *last)
+__device__ bool kf_covered(const KfMapRun &p, const KfMapRun *w, uint32_t n, uint32_t hint, uint32_t kp, uint32_t *last)
 {
     const uint64_t end = p.va + p.len;
     if (end < p.va || n == 0u) return false;
@@ -891,11 +895,11 @@ __device__ bool kf_covered(const KfMapRun &p, const KfMapRun *w, uint32_t n, uin
         i = j - 1u;
     }
     uint64_t at = p.va;
-    const uint32_t key = kf_hkey(p.flags);
+    const uint32_t key = kf_hkey(p.flags, kp);
     for (; i < n; i++) {
         const KfMapRun r = w[i];
         const uint64_t rend = kf_end(r);
-        if (!(r.va <= at && at < rend) || kf_hkey(r.flags) != key) return false;
+        if (!(r.va <= at && at < rend) || kf_hkey(r.flags, kp) != key) return false;
         if (r.gpga + (at - r.va) != p.gpga + (at - p.va)) return false;
         at = rend;
         if (at >= end) { *last = i; return true; }
@@ -1021,7 +1025,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
                 const uint32_t i = base + threadIdx.x;
                 const bool valid = i < pn[c];
                 uint32_t lastw = 0u;
-                const bool kept = valid && kf_covered(P[i], Wc, wn[c], i, &lastw);
+                const bool kept = valid && kf_covered(P[i], Wc, wn[c], i, a.key_perm, &lastw);
                 if (valid) kf[po[c] + i] = kept ? 1u : 0u;
                 uint32_t tot;
                 const uint32_t ex = kf_bscan<uint32_t>(kept ? 1u : 0u, &tot, sh32);
@@ -2289,6 +2293,11 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     }
     if (w->cfg.max_pdbs == 0u || w->cfg.max_pdbs > KF_MAX_PDB) w->cfg.max_pdbs = KF_MAX_PDB;
     if (w->cfg.max_slots == 0u) w->cfg.max_slots = KF_MAX_PDB;
+    if (w->cfg.key_perm & ~(uint32_t)KFWR_RF_KEY_PERM_ALL) {
+        fprintf(stderr, "kf_create: key_perm %#x names bits outside KFWR_RF_KEY_PERM_ALL\n", w->cfg.key_perm);
+        free(w);
+        return NULL;
+    }
     if (w->cfg.max_slots > KF_MAX_SLOTS) {
         fprintf(stderr, "kf_create: max_slots %u > KF_MAX_SLOTS %u\n", w->cfg.max_slots, KF_MAX_SLOTS);
         free(w);
@@ -2524,6 +2533,7 @@ extern "C" int kf_refresh(KfWalk *w,
     a.dev = w->dev;
     a.walk = w->walk; a.com = w->com; a.slot = w->slot;
     a.pdbs = w->pdbs; a.slots = w->slots; a.npdb = npdb;
+    a.key_perm = w->cfg.key_perm;
     a.ack = w->ack; a.ack_code = w->ack_code;
     a.scratch = w->par.runstage; a.iscratch = w->iscratch;
     a.hdr = w->hdr; a.rpdb = w->rpdb; a.rrun = w->rrun; a.lay = w->lay;

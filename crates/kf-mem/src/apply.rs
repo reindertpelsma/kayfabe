@@ -33,9 +33,14 @@ pub struct DiffRun {
     /// ★ v3-gfx: the guest PTE's KIND (run flags bits 16..23, `KFWR_RF_KIND_SHIFT`) — part of run
     /// identity in the walker, carried to the host map as its UNCOMPRESSED equivalent.
     pub kind: u8,
-    /// ★★★ v3-roperm: the guest leaf's permissions ([`host_perm`] of the run flags) — part of the
-    /// diff key in the walker (`kf_hkey`), carried to the host map.
+    /// ★★★ v3-roperm: the guest leaf's permissions as the host carries them
+    /// ([`PermPolicy::host_perm`] of the run flags) — keyed in the walker (`kf_hkey`), placed by
+    /// the host map.
     pub perm: kf_host::MapPerm,
+    /// ★★★ v3-roperm: the guest leaf is PRIVILEGED. No unprivileged host verb can place that bit,
+    /// so a user twin WITHHOLDS the leaf ([`MapTarget::withholds_privileged`]) rather than map it
+    /// where an unprivileged channel could reach it.
+    pub privileged: bool,
 }
 
 /// How one entry's runs are turned into host rows.
@@ -68,6 +73,12 @@ pub struct Applied {
     pub refused: usize,
     /// The first refusal, by name.
     pub first_refusal: Option<String>,
+    /// ★★★ v3-roperm: PRIVILEGED map runs withheld from a user twin — acknowledged FAILED (never
+    /// committed, so the next diff re-emits them and a later PRIV→user flip is placed), and NOT
+    /// counted in `refused`: withholding is the policy doing its job, not a host failure.
+    pub priv_withheld: usize,
+    /// Their bytes.
+    pub priv_withheld_bytes: u64,
     /// ★ v3-mapfix: of `refused`, the UNMAPs the host refused — a placement that may still be
     /// live on the host after the guest dropped it (the one refusal that is not mere absence).
     pub unmap_refused: usize,
@@ -118,6 +129,20 @@ impl Applied {
         self.codes[i] = KFWR_ACK_FAILED;
         self.refused += 1;
         self.first_refusal.get_or_insert(why);
+    }
+
+    /// ★★★ v3-roperm: withhold a privileged map run from a user twin, by name (bounded log).
+    fn withhold_privileged(&mut self, i: usize, r: &DiffRun) {
+        self.codes[i] = KFWR_ACK_FAILED;
+        self.priv_withheld += 1;
+        self.priv_withheld_bytes = self.priv_withheld_bytes.saturating_add(r.len);
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
+            eprintln!(
+                "kf-mem: PRIVILEGED leaf {:#x}+{:#x} (ap={} at={:#x} kind={:#x}) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it",
+                r.va, r.len, r.ap, r.at, r.kind
+            );
+        }
     }
 
     fn fallback(&mut self, why: String) {
@@ -179,18 +204,65 @@ pub fn host_pte_kind(guest: u8, ram: bool) -> u8 {
     }
 }
 
-/// ★★★ v3-roperm — **the permissions a host row carries**, decoded from a walk run's flags
-/// (`KFWR_RF_HOST_PERM`, `cuda/walk/kf_walk.h`). The walker decodes them per family off the format
-/// descriptor (VER2 PTE bits 6/7/3; VER3 PCF bits 5/6/3 — `kf_cuda::abi::kf_format_ver2`/`_ver3`),
-/// so this is family-free. ⊘ `KFWR_RF_PRIVILEGE` is not carried: no unprivileged host verb can
-/// place it (`kf_host::MapPerm`).
-#[must_use]
-pub fn host_perm(flags: u32) -> kf_host::MapPerm {
-    use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
-    kf_host::MapPerm {
-        read_only: flags & KFWR_RF_READ_ONLY != 0,
-        atomic_disable: flags & KFWR_RF_ATOMIC_DISABLE != 0,
-        volatile: flags & KFWR_RF_VOLATILE != 0,
+/// ★★★★★ v3-roperm — **THE HOST'S PERMISSION POLICY: which guest PTE permissions the host twin
+/// carries, and so which of them the walker keys a placement on.** ONE value, so the diff key
+/// (`kf_hkey`, [`kf_cuda::walk::WalkCfg::key_perm`]) and the host map ([`PermPolicy::host_perm`])
+/// can never disagree — a bit keyed but not carried only churns; a bit carried but not keyed
+/// would leave the host holding a stale permission.
+///
+/// | guest bit | host | why |
+/// |---|---|---|
+/// | READ_ONLY | carried (`ACCESS_READ_ONLY`) | a GPU write to a read-only UVM duplicate must fault, never land in a stale copy (`traces/v3_roperm/`) |
+/// | VOLATILE | carried (`GPU_CACHEABLE_NO`) | the guest asked for uncached; `volatile: false` keeps the host object's default |
+/// | PRIVILEGE | keyed, NOT placeable | RM takes it from the memory descriptor; a user twin WITHHOLDS the leaf instead ([`MapTarget::withholds_privileged`]) |
+/// | ATOMIC_DISABLE | **OFF by default**; `carry_atomic_disable` (`KF3_CARRY_ATOMIC_DISABLE=1`) | see below |
+///
+/// ⊘ **ATOMIC_DISABLE stays off until replayable-fault delivery exists.** Guest UVM sets it on a
+/// GPU mapping of a sysmem-resident managed page so a GPU atomic FAULTS and UVM migrates the page.
+/// kf3 delivers no replayable fault, so carrying the bit turns that into a host RC and a 719 —
+/// where executing the atomic on the sysmem page (the authoritative copy; the pre-roperm
+/// behaviour) gives the right value. Enable it once fault delivery exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PermPolicy {
+    /// Carry (and key on) ATOMIC_DISABLE. `KF3_CARRY_ATOMIC_DISABLE=1`; default OFF.
+    pub carry_atomic_disable: bool,
+}
+
+impl PermPolicy {
+    /// The permission bits the walker keys a placement on (`KfArgs::key_perm`).
+    #[must_use]
+    pub const fn key_perm(self) -> u32 {
+        kf_cuda::abi::KFWR_RF_KEY_PERM_DEFAULT
+            | if self.carry_atomic_disable { kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE } else { 0 }
+    }
+
+    /// The permissions a host row carries, decoded from a walk run's flags. The walker decodes
+    /// them per family off the format descriptor (VER2 PTE bits 6/7/3; VER3 PCF bits 5/6/3 —
+    /// `kf_cuda::abi::kf_format_ver2`/`_ver3`), so this is family-free.
+    #[must_use]
+    pub const fn host_perm(self, flags: u32) -> kf_host::MapPerm {
+        use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
+        kf_host::MapPerm {
+            read_only: flags & KFWR_RF_READ_ONLY != 0,
+            atomic_disable: self.carry_atomic_disable && flags & KFWR_RF_ATOMIC_DISABLE != 0,
+            volatile: flags & KFWR_RF_VOLATILE != 0,
+        }
+    }
+
+    /// One walk-report run → one [`DiffRun`].
+    #[must_use]
+    pub fn diff_run(self, m: &kf_cuda::abi::KfMapRun) -> DiffRun {
+        DiffRun {
+            unmap: m.op == kf_cuda::abi::KFWR_OP_UNMAP,
+            va: m.va,
+            len: m.len,
+            at: m.gpga,
+            ap: m.aperture(),
+            held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
+            kind: ((m.flags >> 16) & 0xff) as u8,
+            perm: self.host_perm(m.flags),
+            privileged: m.flags & kf_cuda::abi::KFWR_RF_PRIVILEGE != 0,
+        }
     }
 }
 
@@ -247,11 +319,19 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     }
     let extent = target.va_extent();
     let reserved = target.reserved();
+    let withhold_privileged = target.withholds_privileged();
     let mut pending: Vec<(usize, Desired)> = Vec::new();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
         // ★★★ Hopper+ internal MMIO FIRST: a usermode-page view is never a memory row.
         if let Some(leaf) = cfg.usermode.and_then(|u| u.classify(r.ap, r.kind, r.at, r.len)) {
             apply_usermode(target, r, leaf, extent, &reserved, &failed_unmaps, i, &mut out);
+            continue;
+        }
+        // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
+        // isolation: an unprivileged guest channel must not reach what the guest kernel marked
+        // privileged, and the host cannot express the bit). Withheld, counted, named.
+        if r.privileged && withhold_privileged {
+            out.withhold_privileged(i, r);
             continue;
         }
         let mut d = match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
@@ -463,8 +543,13 @@ mod tests {
         /// ★ Batch: `Some(refuse_at)` = batches and range unmaps supported; a batch containing
         /// `refuse_at` (or a range containing it) is refused (nothing placed / removed).
         batching: Option<Option<u64>>,
+        /// ★ v3-roperm: a user twin (withholds privileged leaves).
+        withhold_priv: bool,
     }
     impl MapTarget for Rec {
+        fn withholds_privileged(&self) -> bool {
+            self.withhold_priv
+        }
         fn map_batch(&self, rows: &[Desired], _: bool) -> Result<(), String> {
             let Some(refuse) = self.batching else { return Err(crate::ledger::NOT_BATCHED.into()) };
             if rows.iter().any(|d| Some(d.va) == refuse) {
@@ -530,10 +615,10 @@ mod tests {
         ApplyCfg { store_bytes: 1 << 30, grain: 0x1000, ram_offset: &|gpa, _| Some(gpa), usermode: None }
     }
     fn m(va: u64, at: u64, len: u64) -> DiffRun {
-        DiffRun { unmap: false, va, len, at, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE }
+        DiffRun { unmap: false, va, len, at, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE, privileged: false }
     }
     fn u(va: u64, len: u64) -> DiffRun {
-        DiffRun { unmap: true, va, len, at: 0, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE }
+        DiffRun { unmap: true, va, len, at: 0, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE, privileged: false }
     }
 
     fn ram(va: u64, gpa: u64, len: u64) -> DiffRun {
@@ -632,15 +717,46 @@ mod tests {
                 "inval"
             ]
         );
-        // The same bits, decoded off a walk run's flags (KFWR_RF_*), family-free.
-        use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
-        assert_eq!(host_perm(2 | (0x06 << 16) | (1 << 8)), MapPerm::READ_WRITE);
-        assert_eq!(host_perm(KFWR_RF_READ_ONLY), ro);
-        assert_eq!(host_perm(KFWR_RF_PRIVILEGE), MapPerm::READ_WRITE, "PRIVILEGE is not carried");
-        assert_eq!(
-            host_perm(KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE),
-            MapPerm { read_only: true, atomic_disable: true, volatile: true }
-        );
+        // The same bits, decoded off a walk run's flags (KFWR_RF_*), family-free — under the
+        // default policy (ATOMIC_DISABLE OFF) and with `KF3_CARRY_ATOMIC_DISABLE`.
+        use kf_cuda::abi::{
+            KFWR_RF_ATOMIC_DISABLE, KFWR_RF_KEY_PERM_DEFAULT, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE,
+        };
+        let off = PermPolicy::default();
+        let on = PermPolicy { carry_atomic_disable: true };
+        assert_eq!(off.host_perm(2 | (0x06 << 16) | (1 << 8)), MapPerm::READ_WRITE);
+        assert_eq!(off.host_perm(KFWR_RF_READ_ONLY), ro);
+        assert_eq!(off.host_perm(KFWR_RF_PRIVILEGE), MapPerm::READ_WRITE, "PRIVILEGE is never placeable");
+        let all = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE;
+        assert_eq!(off.host_perm(all), MapPerm { read_only: true, atomic_disable: false, volatile: true }, "ATOMIC_DISABLE off by default");
+        assert_eq!(on.host_perm(all), MapPerm { read_only: true, atomic_disable: true, volatile: true });
+        // ONE value decides both the key and the map: a bit carried is a bit keyed.
+        assert_eq!(off.key_perm(), KFWR_RF_KEY_PERM_DEFAULT);
+        assert_eq!(on.key_perm(), KFWR_RF_KEY_PERM_DEFAULT | KFWR_RF_ATOMIC_DISABLE);
+        assert_eq!(off.key_perm() & KFWR_RF_ATOMIC_DISABLE, 0);
+    }
+
+    /// ★★★ v3-roperm: a user twin WITHHOLDS a privileged memory leaf — never a host call, FAILED
+    /// (so never committed, re-emitted by the next diff), counted, and NOT a refusal; the rest of
+    /// the entry applies. A kernel target (the default) maps it as before.
+    #[test]
+    fn a_user_twin_withholds_privileged_leaves_and_a_kernel_target_maps_them() {
+        let priv_leaf = DiffRun { privileged: true, ..m(0x2_0000_4000, 0x40_0000, 0x3000) };
+        let runs = [m(0x2_0000_0000, 0x10_0000, 0x1000), priv_leaf];
+        let user = Rec { withhold_priv: true, ..Rec::default() };
+        let a = apply_entry(&user, &runs, &cfg());
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_FAILED]);
+        assert_eq!((a.priv_withheld, a.priv_withheld_bytes, a.refused, a.mapped), (1, 0x3000, 0, 1));
+        assert!(a.refusals_are_absence() && a.first_refusal.is_none());
+        assert_eq!(*user.ops.borrow(), vec!["map 0x200000000+0x1000", "inval"]);
+        let kernel = Rec::default();
+        let a = apply_entry(&kernel, &runs, &cfg());
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; 2]);
+        assert_eq!(a.priv_withheld, 0);
+        assert_eq!(*kernel.ops.borrow(), vec!["map 0x200000000+0x1000", "map 0x200004000+0x3000", "inval"]);
+        // An UNMAP of a (kernel-era) privileged placement still goes to the host.
+        let a = apply_entry(&user, &[DiffRun { unmap: true, privileged: true, ..u(0x2_0000_4000, 0x3000) }], &cfg());
+        assert_eq!((a.unmapped, a.priv_withheld), (1, 0));
     }
 
     /// ★★★ A refused batch placed NOTHING, so its runs go one by one — and each gets its own
@@ -734,7 +850,7 @@ mod tests {
     // SYS_COHERENT (2), kind SMSKED_MESSAGE (0xF), address = NV_VIRTUAL_FUNCTION base 0x30000.
     const GH100_DB_VA: u64 = 0x0123_0000;
     fn gh100_db_leaf() -> DiffRun {
-        DiffRun { unmap: false, va: GH100_DB_VA, len: 0x1_0000, at: 0x3_0000, ap: 2, held: false, kind: 0x0F, perm: kf_host::MapPerm::READ_WRITE }
+        DiffRun { unmap: false, va: GH100_DB_VA, len: 0x1_0000, at: 0x3_0000, ap: 2, held: false, kind: 0x0F, perm: kf_host::MapPerm::READ_WRITE, privileged: false }
     }
     fn hopper() -> ApplyCfg<'static> {
         ApplyCfg { usermode: kf_chip::Family::Hopper.usermode_mmio(), ..cfg() }

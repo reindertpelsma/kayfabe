@@ -49,8 +49,9 @@ pub const KF_MAX_SCOPE: usize = 256;
 ///
 /// ⚠ A host/PTX skew must fail **loudly at launch** rather than decode garbage field offsets
 /// and look like a page-table bug (`THE_CONSTRAINTS.md` §21). Mirrors `KF_ABI_VERSION`.
-/// ★ 5 (v3-roperm): the host permissions ([`KFWR_RF_HOST_PERM`]) joined the diff key, so a PTX
-/// built before it would keep a guest RW→RO downgrade as "same" while this crate's model re-maps.
+/// ★ 5 (v3-roperm): permission bits joined the diff key, selected per launch by
+/// [`KfArgs::key_perm`] — a PTX built before it would keep a guest RW→RO downgrade as "same" while
+/// this crate's model re-maps, and would read the field as padding.
 pub const KF_ABI_VERSION: u32 = 5;
 
 /// `KFWR_OP_UNMAP` — the run names a VA being RETIRED, so it carries no `gpga` and is exempt
@@ -91,14 +92,19 @@ pub const KFWR_RF_READ_ONLY: u32 = 1 << 3;
 pub const KFWR_RF_ATOMIC_DISABLE: u32 = 1 << 4;
 /// A leaf's `VOLATILE` bit (VER3: PCF `UNCACHED`). Mirrors `KFWR_RF_VOLATILE`.
 pub const KFWR_RF_VOLATILE: u32 = 1 << 5;
-/// A leaf's `PRIVILEGE` bit. ⊘ Decoded but NOT carried: no unprivileged host map verb can place it
-/// (RM takes it from the memory descriptor, `ogkm-580 virt_mem_allocator_gm107.c:2849-2850`).
-/// Mirrors `KFWR_RF_PRIVILEGE`.
+/// A leaf's `PRIVILEGE` bit. ⊘ Not placeable on the host (RM takes it from the memory descriptor,
+/// `ogkm-580 virt_mem_allocator_gm107.c:2849-2850`): a privileged leaf is WITHHELD from a user twin
+/// instead (`kf_mem::apply`). Mirrors `KFWR_RF_PRIVILEGE`.
 pub const KFWR_RF_PRIVILEGE: u32 = 1 << 6;
-/// ★★★ v3-roperm: the permissions the HOST map carries — part of a placement's identity in the
-/// diff (`kf_hkey` / [`crate::diffmodel::host_key`]) and turned into `NVOS46` flags by the host
-/// (`kf_host::MapPerm`). Mirrors `KFWR_RF_HOST_PERM`.
-pub const KFWR_RF_HOST_PERM: u32 = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE;
+/// ★★★ v3-roperm: the permission bits that MAY join the diff key (`kf_hkey` /
+/// [`crate::diffmodel::host_key_with`]); which of them do is the host's policy, passed per launch
+/// in [`KfArgs::key_perm`]. Mirrors `KFWR_RF_KEY_PERM_ALL`.
+pub const KFWR_RF_KEY_PERM_ALL: u32 = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE;
+/// ★★★ v3-roperm: the default key — what the host carries by default (read-only, volatile) plus
+/// PRIVILEGE (whose flip re-decides whether a user twin may hold the leaf at all). ATOMIC_DISABLE
+/// joins only with `KF3_CARRY_ATOMIC_DISABLE=1` (`kf_mem::apply::PermPolicy`). Mirrors
+/// `KFWR_RF_KEY_PERM_DEFAULT`.
+pub const KFWR_RF_KEY_PERM_DEFAULT: u32 = KFWR_RF_READ_ONLY | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE;
 /// `KFWR_R_RUN_CAP`: out of run capacity (a walk region, a slot, or the report).
 pub const KFWR_R_RUN_CAP: u32 = 1 << 4;
 /// `KFWR_R_BUDGET`: the walk's entry budget stopped it.
@@ -430,6 +436,9 @@ pub struct KfArgs {
     pub slots: u64,
     /// How many entries.
     pub npdb: u32,
+    /// ★ v3-roperm: the permission bits that join the diff key — a subset of
+    /// [`KFWR_RF_KEY_PERM_ALL`], the host's policy. Occupies what was padding after `npdb`.
+    pub key_perm: u32,
     /// The host's verdict on the PREVIOUS report ([`KfAck`]); `0` = none.
     pub ack: u64,
     /// One `KFWR_ACK_*` byte per previous report run.
