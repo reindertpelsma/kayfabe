@@ -89,7 +89,7 @@
 //!
 //! | type | `[IN] gpcId` | measured |
 //! |---|---|---|
-//! | `CHIPLET_GPC_MAP` | **logical** | `1,2,3,4,5` for `gpcMask = 0x3e`; `gpcId >= 5` → per-query `0x1f` `NV_ERR_INVALID_ARGUMENT` |
+//! | `CHIPLET_GPC_MAP` | **logical** | `1,2,3,4,5` for `gpcMask = 0x3e`; `gpcId >= 5` → per-query `0x1f` `NV_ERR_INVALID_ARGUMENT`. (An RTX 4070, `0x1d`: `0,2,3,4`, the same `0x1f` and syspipe words — `traces/real_ad104/`.) |
 //! | `TPC_MASK` | **logical** | the PHYSICAL TPC mask of that GPC: `e,f,f,f,f` (`tpcMask[]` is `0,e,f,f,f,f`); `>= 5` → `0x1f` |
 //! | `PPC_MASK` / `ROP_MASK` | **logical** | `3` each; `>= 5` → `0x1f` |
 //! | `GPC_COUNT` / `CHIPLET_SYSPIPE_MASK` / `CHIPLET_GRAPHICS_SYSPIPE_MASK` | — | `5` / `1` / **`0`** |

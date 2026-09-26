@@ -13,7 +13,7 @@
 | host | vast.ai instance `52739422` (a KVM-template box; the card is passed through to the box's VM) |
 | driver | NVIDIA **open** kernel modules 580.159.04 — the version the guest runs |
 | date | 2026-09-26 |
-| method | `scripts/bench/probes/grfs_probe.c` at `25edb757`, an **unprivileged** RM client (root client → device → subdevice, read-only controls), stock driver untouched |
+| method | `scripts/bench/probes/grfs_probe.c` at `25edb757`, a plain RM client (root client → device → subdevice, read-only controls), run as root on the box (so it also holds CAP_SYS_ADMIN), stock driver untouched |
 
 ## `grfs_probe_real_ga104_3060ti.txt`
 
@@ -27,7 +27,7 @@ What it says, in short (the tables are in `kf_abi::grstatic` and `kf_abi::grfsin
 
 | fact | value |
 |---|---|
-| `GR_GET_GPC_MASK` / `PHYS_GPC_MASK` / `physGfxGpcMask` | `0x3e` (physical GPC 0 fused) |
+| `GR_GET_GPC_MASK` / `PHYS_GPC_MASK` / `physGfxGpcMask` | `0x3e` (physical GPC 0 fused). ⚠ `PHYS_GPC_MASK` answered only because this client was root WITH CAP_SYS_ADMIN — the control is PRIVILEGED (`traces/real_ad104/`: `0x1b` to a client without it), and kayfabe no longer asks it |
 | `GR_GET_TPC_MASK(g)` — `g` **physical** | `0, e, f, f, f, f, 0` for `g` 0..6 (`LITTER_NUM_GPCS = 7`); 0 with `NV_OK` past it |
 | `GR_GET_NUM_TPCS_FOR_GPC(l)` — `l` **logical** | `3, 4, 4, 4, 4`; `0x1f` past 5 |
 | `GR_GET_ZCULL_MASK(g)` — physical | `0, f, f, f, f, f, 0`; `0x1f` past 7 |

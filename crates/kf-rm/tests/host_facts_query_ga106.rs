@@ -287,8 +287,8 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     assert_eq!(got.intr_subtree_map, f.intr_subtree_map);
     assert_eq!(got.memory_system, f.memory_system);
     // gr_static: GPC mask, TPC masks, the logical→physical map (libcuda's own GRMGR batch), SM
-    // order and caps from real replies; zcull, tpcCount, PES, the phys/gfx masks and the GR
-    // litters from the completion; FECS / per-subctx AUTHORED — all equal. The optional GRMGR
+    // order and caps from real replies; zcull, tpcCount, PES, the gfx mask and the GR litters
+    // from the completion; FECS / per-subctx AUTHORED — all equal. The optional GRMGR
     // batch (PPC/ROP/syspipe) has no capture: `None`, as the fixture states.
     assert_eq!(got.gr_static.gpcs, f.gr_static.gpcs);
     assert_eq!(got.gr_static.gfx_gpc_mask, f.gr_static.gfx_gpc_mask);
@@ -441,11 +441,6 @@ impl HostControls for CompletedGa106 {
                 Ok(())
             }
             // ★ v3-gpcmask: the per-index floorsweeping controls the fixture's rows answer.
-            // GR_GET_PHYS_GPC_MASK (syspipe 0).
-            0x2080_1232 => {
-                put(p, 4, f.gr_static.gpc_mask().expect("fixture"));
-                Ok(())
-            }
             // GR_GET_NUM_TPCS_FOR_GPC — LOGICAL gpcId.
             0x2080_1234 => {
                 let gpc = u32::from_le_bytes(p[0..4].try_into().expect("4")) as usize;

@@ -605,10 +605,13 @@ pub fn derive_chiplet_gpc_map(tpc_masks: &[(u32, u32)], tpc_counts: &[u32]) -> O
 /// then the logical facts, then the SM order and caps — so a host that cannot answer
 /// `GR_GET_ZCULL_MASK` is refused on THAT control, by name.
 ///
+/// ★ Every control asked is NON_PRIVILEGED (the host side's rule: a rootless VMM must be able to
+/// ask it) — see the `physGpcMask` note in the body for the one that is not, and is not asked.
+///
 /// # Errors
 /// [`FieldCause`]; every cross-check between two host statements of one fact is a refusal,
-/// never a pick: `physGpcMask` against `gpcMask`, the map against both count tables, SMs per
-/// TPC against `gr_info`, the TPC total against the SM order.
+/// never a pick: the map against both count tables, SMs per TPC against `gr_info`, the TPC
+/// total against the SM order and against `tpcCount`.
 pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoProfile>) -> Result<GrGeometry, FieldCause> {
     use kf_abi::grfsinfo::{self as fs, GrFsQuery, query_type};
     let gpc_mask = hostfacts::derive_gpc_mask(&ask(
@@ -636,16 +639,11 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
             Err(refused) => return Err(FieldCause::Host { cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_MASK, refused }),
         });
     }
-    // `physGpcMask` is written from `gpcMask` (`kf_abi::grstatic::GrStaticProfile::gpc_mask`);
-    // the host's own word must be the same, or that one statement would be wrong.
-    let phys = hostfacts::derive_phys_gpc_mask(&ask(
-        host,
-        hostfacts::NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK,
-        zeroed(hostfacts::GR_PHYS_GPC_MASK_PARAMS_SIZE),
-    )?)?;
-    if phys != gpc_mask {
-        return Err(unservable(hostfacts::NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK, "physGpcMask differs from gpcMask (a MIG-shaped host)"));
-    }
+    // ⊘ `physGpcMask` is NOT asked: `GR_GET_PHYS_GPC_MASK` (0x20801232) is PRIVILEGED (export
+    // flags 0x14, `g_subdevice_nvoc.c`) — `[measured 2026-09-26]` refused `0x1b` to a client
+    // without CAP_SYS_ADMIN on an RTX 4070 while a root client on the 3060 Ti box got 0x3e.
+    // It is written from `gpcMask` (`GrStaticProfile::gpc_mask`), which it equals outside MIG on
+    // every die measured (GA106 ×2, GA102, AD102 replies; GA104 host).
     let n = gpc_mask.count_ones();
     // ── the LOGICAL facts, one per logical id ──
     let mut tpc_counts = Vec::new();

@@ -206,7 +206,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     // ★ v3-gpcmask (2026-09-26): one row per LOGICAL GPC naming its PHYSICAL GPC — no contiguity
     // assumed. Physical-indexed facts per set bit of the GPC mask, logical-indexed per logical id,
     // the map from the host's own GRMGR answer (kf_abi::grstatic's floorswept-parts section).
-    ("gr_static", Source::HostControl { cmd: 0x2080_122a, name: "GR_GET_GPC_MASK 0x2080122a (physical, any shape) + per physical GPC GR_GET_TPC_MASK 0x2080122b / GR_GET_ZCULL_MASK 0x20801237; GR_GET_PHYS_GPC_MASK 0x20801232 (must equal it); logical->physical map = GRMGR_GET_GR_FS_INFO CHIPLET_GPC_MAP 0x20803801 (refused => the lowest unused enabled physical GPC of the logical GPC's TPC count); per logical GPC GR_GET_NUM_TPCS_FOR_GPC 0x20801234 + GPU_GET_PES_INFO 0x20800168 (numPes, tpcToPesMap; host NOT_SUPPORTED => GR info litter + authored::tpc_to_pes_map); GR_GET_GFX_GPC_AND_TPC_INFO 0x20801239; GR_GET_GLOBAL_SM_ORDER 0x2080121b (every per-TPC field); GR_GET_CAPS_V2 0x20801227; GRMGR PPC_MASK/ROP_MASK + syspipe words (optional); mmuPerGpc = GR_GET_INFO_V2 LITTER_NUM_GPCMMU_PER_GPC per logical GPC (no release-build control reads it); FECS record size, per-subctx header authored (authored.rs)" }),
+    ("gr_static", Source::HostControl { cmd: 0x2080_122a, name: "GR_GET_GPC_MASK 0x2080122a (physical, any shape) + per physical GPC GR_GET_TPC_MASK 0x2080122b / GR_GET_ZCULL_MASK 0x20801237 (physGpcMask = gpcMask: GR_GET_PHYS_GPC_MASK is PRIVILEGED, never asked); logical->physical map = GRMGR_GET_GR_FS_INFO CHIPLET_GPC_MAP 0x20803801 (refused => the lowest unused enabled physical GPC of the logical GPC's TPC count); per logical GPC GR_GET_NUM_TPCS_FOR_GPC 0x20801234 + GPU_GET_PES_INFO 0x20800168 (numPes, tpcToPesMap; host NOT_SUPPORTED => GR info litter + authored::tpc_to_pes_map); GR_GET_GFX_GPC_AND_TPC_INFO 0x20801239; GR_GET_GLOBAL_SM_ORDER 0x2080121b (every per-TPC field); GR_GET_CAPS_V2 0x20801227; GRMGR PPC_MASK/ROP_MASK + syspipe words (optional); mmuPerGpc = GR_GET_INFO_V2 LITTER_NUM_GPCMMU_PER_GPC per logical GPC (no release-build control reads it); FECS record size, per-subctx header authored (authored.rs)" }),
     ("gr_info", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2" }),
     ("gr_context_buffers", Source::HostControl { cmd: 0x2080_122d, name: "GR_GET_ENGINE_CONTEXT_PROPERTIES" }),
     ("gr_zcull_info", Source::HostControl { cmd: 0x2080_1206, name: "GR_GET_ZCULL_INFO (host NOT_SUPPORTED = no zcull on the die)" }),
@@ -666,12 +666,13 @@ pub const GR_CONTEXT_PROPERTIES_PARAMS_SIZE: usize = 32;
 // serves each from ITS copy of the GSP's `FLOORSWEEPING_MASKS` reply, index for index, so
 // asking them is reading that struct back — the physical/logical index space of each field is
 // the host's, not a reading this port has to get right (`kf_abi::grstatic`'s floorswept-parts
-// section). All NON_PRIVILEGED; `[measured]` answered by an unprivileged client on an RTX 3060 Ti.
+// section). All NON_PRIVILEGED (export flags carry 0x8); `[measured]` answered to a client
+// without CAP_SYS_ADMIN on an RTX 4070 (`traces/real_ad104/`).
 
-/// `NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK` (`ogkm-580: ctrl2080gr.h:1807`).
+/// `NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK` (`ogkm-580: ctrl2080gr.h:1807`). ⊘ **PRIVILEGED** (export
+/// flags `0x14`): never asked at realize — `[measured]` refused `0x1b` to a client without
+/// CAP_SYS_ADMIN (RTX 4070, `traces/real_ad104/`). Named so that stays a decision.
 pub const NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK: u32 = 0x2080_1232;
-/// `sizeof(NV2080_CTRL_GR_GET_PHYS_GPC_MASK_PARAMS)` — `physSyspipeId`, `gpcMask`.
-pub const GR_PHYS_GPC_MASK_PARAMS_SIZE: usize = 8;
 /// `NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC` (`ogkm-580: ctrl2080gr.h:1845`) — `tpcCount[gpcId]`,
 /// `gpcId` LOGICAL (`kernel_graphics.c:3555-3562`).
 pub const NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC: u32 = 0x2080_1234;
@@ -686,16 +687,6 @@ pub const GR_GFX_GPC_AND_TPC_INFO_PARAMS_SIZE: usize = GR_ROUTE_INFO_SIZE + 8;
 pub const NV2080_CTRL_CMD_GPU_GET_PES_INFO: u32 = 0x2080_0168;
 /// `sizeof(NV2080_CTRL_GPU_GET_PES_INFO_PARAMS)` — four words and `tpcToPesMap[10]`.
 pub const GPU_PES_INFO_PARAMS_SIZE: usize = 16 + 4 * kf_abi::grstatic::MAX_TPC_PER_GPC;
-
-/// `physGpcMask` from `GR_GET_PHYS_GPC_MASK` (asked for syspipe 0).
-///
-/// # Errors
-/// [`FactRefusal::ShortReply`].
-pub fn derive_phys_gpc_mask(reply: &[u8]) -> Result<u32, FactRefusal> {
-    let cmd = NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK;
-    need(cmd, reply, GR_PHYS_GPC_MASK_PARAMS_SIZE)?;
-    Ok(le32(reply, 4).unwrap_or(0))
-}
 
 /// `numTpcs` for LOGICAL GPC `gpc` from `GR_GET_NUM_TPCS_FOR_GPC`, checking the echo.
 ///

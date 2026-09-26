@@ -170,7 +170,8 @@
 //! |---|---|---|---|---|---|
 //! | AD102, RTX 4090 (`traces/ad102_boot1.bin`, 575.51.03) | `0xffe` | `0, 3e, 3e, 3f×9` | `5, 5, 6×9, 0` | `1×11, 0` / `3×11, 0` | `0, f×11` |
 //! | GA106, RTX 3060 (`traces/rpctrace_ga106_boot1.bin`, 580.159.04) | `0x7` | `1f, 1b, 1f` | **`4, 5, 5`** | `1, 1, 1` / `3, 3, 3` | `f, f, f` |
-//! | GA104, RTX 3060 Ti (host controls, `v3-gpcmask` probe, 580.159.04) | `0x3e` | `0, e, f, f, f, f, 0` | `3, 4, 4, 4, 4` | — / `2, 2, 2, 2, 2` | `0, f, f, f, f, f, 0` |
+//! | GA104, RTX 3060 Ti (host controls, `traces/real_ga104/`, 580.159.04) | `0x3e` | `0, e, f, f, f, f, 0` | `3, 4, 4, 4, 4` | — / `2, 2, 2, 2, 2` | `0, f, f, f, f, f, 0` |
+//! | AD104, RTX 4070 (host controls, `traces/real_ad104/`, 580.159.04) | `0x1d` | `3e, 0, 3f, 3f, 3f` | `5, 6, 6, 6` | — / `3, 3, 3, 3` | `f, 0, f, f, f` |
 //!
 //! ★★ The GA106 row is the one that matters most and it is **not** floorswept at the GPC
 //! level: physical GPC 1 has four TPCs, and logical GPC 0 is the four-TPC GPC — so
@@ -618,8 +619,8 @@ pub const GA106_GR_STATIC: GrStaticProfile = GrStaticProfile {
 
 impl GrStaticProfile {
     /// The `gpcMask` this profile publishes — the OR of the rows' physical GPC bits — and the
-    /// same value for `physGpcMask` (equal outside MIG: `[measured]` on GA106, GA104, GA102 and
-    /// AD102, and the host's own `GR_GET_PHYS_GPC_MASK` is checked against it at realize).
+    /// same value for `physGpcMask` (equal outside MIG: `[measured]` on GA106 ×2, GA104, GA102
+    /// and AD102; the host's `GR_GET_PHYS_GPC_MASK` is PRIVILEGED, so it is not asked).
     ///
     /// ⊘ **Not** `(1 << rows) - 1`: that was this accessor until 2026-09-26, and it states a
     /// contiguous mask from GPC 0 for every part. A 3060 Ti is `0x3e`, a 4090 `0xffe`.

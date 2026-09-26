@@ -9,7 +9,12 @@
 // against the die's OWN answers. Every `CTRL` line below is replayable: the kf-rm test
 // `gr_static_floorswept.rs` answers `query_gr_geometry` from them by exact request bytes, so the
 // requests issued here are EXACTLY the shapes kayfabe issues (zeroed buffers, inputs set), plus
-// an exploratory sweep past the GPC count that records the out-of-range statuses.
+// an exploratory sweep past the GPC count that records the out-of-range statuses. Run it as the
+// VMM would run (ideally without CAP_SYS_ADMIN): a control it cannot ask is a finding.
+//
+// ⚠ The traces under `traces/real_ga104/` and `traces/real_ad104/` were taken at 25edb757 /
+// 0376ddb6, when `GR_GET_PHYS_GPC_MASK` still sat in the kayfabe-shaped section; it moved to the
+// exploratory one when realize stopped asking it (it is PRIVILEGED).
 //
 // Output: human-readable lines, and one `CTRL cmd=0x… status=0x… size=N in=<hex> out=<hex>` line
 // per control (`out` is the buffer after the call, whatever the status).
@@ -134,8 +139,6 @@ int main(int argc, char **argv) {
         memset(b, 0, sizeof b); wr32(b, 0, g); st = ctrl(0x20801237, b, 8);
         printf("phys gpc %u: ZCULL_MASK st=%#x %#x\n", g, st, rd32(b, 4));
     }
-    memset(b, 0, sizeof b); st = ctrl(0x20801232, b, 8);
-    printf("GR_GET_PHYS_GPC_MASK st=%#x physGpcMask=%#x\n", st, rd32(b, 4));
     for (int l = 0; l < n; l++) {
         memset(b, 0, sizeof b); wr32(b, 0, l); st = ctrl(0x20801234, b, 8);
         printf("logical gpc %d: NUM_TPCS st=%#x %u\n", l, st, rd32(b, 4));
@@ -174,6 +177,10 @@ int main(int argc, char **argv) {
     }
 
     /* ── exploratory: every per-index control past the counts, to record the out-of-range answers ── */
+    /* GR_GET_PHYS_GPC_MASK is PRIVILEGED (export flags 0x14) and NOT asked by kayfabe: recorded so
+     * the answer to THIS client is on file (0x1b without CAP_SYS_ADMIN, measured on an RTX 4070). */
+    memset(b, 0, sizeof b); st = ctrl(0x20801232, b, 8);
+    printf("GR_GET_PHYS_GPC_MASK st=%#x physGpcMask=%#x (PRIVILEGED)\n", st, rd32(b, 4));
     printf("litter_num_gpcs=%u\n", litter_gpcs);
     for (uint32_t g = 0; g < 16; g++) {
         uint32_t s1, s2, s3, s4, s5, tpc, ntp, zc, ppc, npes;
