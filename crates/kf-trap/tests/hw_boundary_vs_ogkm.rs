@@ -403,3 +403,39 @@ fn the_fsp_emem_channel_is_each_fsp_die_groups_header() {
         }
     }
 }
+
+/// ★★★ Security (2026-09-26): the do-nothing userspace arm covers the WHOLE window a guest user
+/// client maps — `DRF_SIZE(NV_VIRTUAL_FUNCTION)` = `NVC361_NV_USERMODE__SIZE` — on every die group,
+/// and no register of that window lies past its first page, so widening the arm swallows nothing a
+/// stock driver writes.
+#[test]
+fn usermode_window_is_the_whole_mappable_window_and_holds_no_register_past_page_0() {
+    use kf_chip::hwref::HwValue;
+    use kf_chip::hwref::expect::class_val;
+    for g in DieGroup::ALL {
+        assert_eq!(memmap::VF_USERMODE_LEN, len(g, "NV_VIRTUAL_FUNCTION"), "{g:?}");
+    }
+    assert_eq!(memmap::VF_USERMODE_LEN, class_val("NVC361_NV_USERMODE__SIZE"));
+    let (lo, hi) = (0x3_0000u64, 0x4_0000u64);
+    let mut seen = 0;
+    for line in kf_chip::hwref::TABLE.lines().filter(|l| !l.starts_with('#')) {
+        let f: Vec<&str> = line.split('\t').collect();
+        let (name, dir) = (f[2], f[0]);
+        if !name.starts_with("NV_VIRTUAL_FUNCTION_") || name.starts_with("NV_VIRTUAL_FUNCTION_PRIV") {
+            continue;
+        }
+        if let Some(HwValue::Val(v)) = table().in_dir(dir, name) {
+            if (lo..hi).contains(&v) {
+                seen += 1;
+                assert!(v < lo + memmap::PAGE, "{dir} {name} = {v:#x} lies past the window's first page");
+            }
+        }
+    }
+    assert!(seen >= 4, "the scan must see the window's own registers (TIME_0/1, DOORBELL, …): saw {seen}");
+    // The predicate the trap uses.
+    assert!(memmap::in_usermode_window(memmap::VF_USERMODE_PAGE));
+    assert!(memmap::in_usermode_window(memmap::VF_USERMODE_PAGE + 0x1000), "page 1 is userspace-mappable");
+    assert!(memmap::in_usermode_window(memmap::VF_USERMODE_PAGE + memmap::VF_USERMODE_LEN - 4));
+    assert!(!memmap::in_usermode_window(memmap::VF_USERMODE_PAGE + memmap::VF_USERMODE_LEN));
+    assert!(!memmap::in_usermode_window(memmap::VF_USERMODE_PAGE - 4), "the PRIV block below is guest root's");
+}
