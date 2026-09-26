@@ -1216,15 +1216,18 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     // ★ Our placements in this space, from the space's own row record (what we PLACED, never a
     // copy of the guest's tables); the walker's slot for it is released by `m.remove`.
     let rows: Vec<u64> = g.rows.read().map(|r| r.keys().copied().collect()).unwrap_or_default();
+    let t_unmap = std::time::Instant::now();
     let mut refused = 0usize;
     for va in &rows {
         if g.unmap(*va, true).is_err() {
             refused += 1;
         }
     }
+    let host_calls = rows.len() + usize::from(!rows.is_empty());
     if !rows.is_empty() && g.invalidate().is_err() {
         refused += 1;
     }
+    let unmap_us = t_unmap.elapsed().as_micros();
     let spare = mirror.map(|mi| Spare { space: mi.space, fb_base: mi.fb_base, ram: mi.ram, ram_obj: mi.ram_obj, rings: mi.rings });
     let recycled = match (spare, refused) {
         (Some(sp), 0) => plane.spares.lock().ok().filter(|v| v.len() < SPARES_MAX).map(|mut v| v.push(sp)).is_some(),
@@ -1235,7 +1238,7 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         rm.free_vaspace(g.vas.space);
     }
     format!(
-        "retire {key:?}: {} row(s) unmapped ({refused} refused), host space {:#x} {}",
+        "retire {key:?}: {} row(s) unmapped ({refused} refused) in {unmap_us} us, {host_calls} host call(s), host space {:#x} {}",
         rows.len(),
         g.vas.space.space,
         if recycled { "kept as a spare" } else { "freed" }
