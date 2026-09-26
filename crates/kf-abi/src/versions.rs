@@ -1643,12 +1643,21 @@ impl DriverAbiTable {
     #[must_use]
     pub fn video_caps_layout(&self, cmd: u32) -> Option<crate::videocaps::CapsLayout> {
         use crate::generated::matrix as m;
-        let runs = match cmd {
-            crate::videocaps::MSENC_GET_CAPS_V2 => &m::NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS,
-            crate::videocaps::BSP_GET_CAPS_V2 => &m::NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2,
+        // ⊘ `[matrix]` renamed at 610.43.02: the MSENC/BSP names survive only as `#define`
+        // aliases of NVENC/NVDEC (`ctrl0080nvenc.h:96`, `ctrl0080nvdec.h`), which DWARF cannot
+        // see — the layout is the old name's where it exists, the new name's after.
+        let (runs, renamed) = match cmd {
+            crate::videocaps::MSENC_GET_CAPS_V2 => {
+                (&m::NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS, &m::NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS)
+            }
+            crate::videocaps::BSP_GET_CAPS_V2 => {
+                (&m::NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2, &m::NV0080_CTRL_NVDEC_GET_CAPS_PARAMS_V2)
+            }
             _ => return None,
         };
-        let l = crate::matrix::Resolved::of(runs, self.version).ok()?;
+        let l = crate::matrix::Resolved::of(runs, self.version)
+            .or_else(|_| crate::matrix::Resolved::of(renamed, self.version))
+            .ok()?;
         Some(crate::videocaps::CapsLayout {
             params_size: l.size(),
             caps_len: l.maybe("capsTbl")?.bytes()?,
