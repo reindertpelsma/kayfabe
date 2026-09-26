@@ -66,10 +66,17 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
     - The research is `docs/design/V3_UVM_DEMAND_PAGING.md`, on branch `v3-uvm-research`
       (RESEARCH, no code). Its recommendation is a patch to the host's open nvidia-uvm that
       diverts a VA space's faults to kayfabe, which then replays or cancels them.
-    - ⚠ The same document reports, from source reading, that the walker **drops the guest PTE's
-      READ_ONLY bit**, so a read-only duplicate is mapped read-write on the host. Its predicted
-      consequence, a silent stale read under `cudaMemAdviseSetReadMostly`, is **inferred, not
-      measured**.
+    - ⊘ **MEASURED AND FIXED 2026-09-26 (branch `v3-roperm`) — this bullet used to say
+      "inferred, not measured".** The same document reported, from source reading, that the
+      walker **drops the guest PTE's READ_ONLY bit**, so a read-only duplicate was mapped
+      read-write on the host. Measured on master `283a5304` (vast 52732498, GA106):
+      `readmostly_probe gpuwrite` and `downgrade` returned **`bad=1048576` — every value wrong —
+      with no CUDA error and no Xid**. At `v3-roperm` `a1a82903` READ_ONLY / ATOMIC_DISABLE /
+      VOLATILE join the walker's diff key and the host map (`NVOS46` `ACCESS_READ_ONLY` /
+      `TLB_LOCK_ENABLE` / `GPU_CACHEABLE_NO`): both modes now fail **loudly** (719 + host Xid 31
+      `FAULT_RO_VIOLATION`), never with a wrong value. They pass on bare metal only because the
+      write fault is replayable there, which is fault delivery (class C above). Evidence:
+      `traces/v3_roperm/`.
   - **C′, a refused host map (1 app):** `UnifiedMemoryStreams`. kf3 logs `1 run(s) not applied:
     map … Other(31)`, and the host then reports Xid 31 `FAULT_PTE` inside that range. Without
     persistence mode the boot stays wedged afterwards. Branch `v3-mapfix` is working on it; it

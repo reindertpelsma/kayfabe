@@ -228,6 +228,19 @@ fat guest, kf3 binaries `kf3-bins/<rev>`).** The three guest-only failures of `V
   EXTERNALLY_OWNED (`ogkm-580 vaspace_api.c:678-690`, i.e. UVM-owned page tables), and the fault
   buffer class is `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`resource_list.h`, `MMU_FAULT_BUFFER`). An owner
   decision (a host fault channel, or a sanctioned eager-mapping policy) — `THE_OPEN_QUESTIONS.md` §4.
+- **R — guest read-only PTEs were read-write on the host (FIXED on `v3-roperm`, `a1a82903`;
+  box vast 52732498, GA106).** Found by source review in `V3_UVM_DEMAND_PAGING.md` §6 (branch
+  `v3-uvm-research`): the walker decoded READ_ONLY / ATOMIC_DISABLE / VOLATILE per leaf, then
+  keyed a placement on aperture + kind only (`kf_hkey`, `diffmodel::host_key`) and mapped every
+  twin read-write. Measured on master `283a5304`: `readmostly_probe gpuwrite` and `downgrade`
+  (`cudaMemAdviseSetReadMostly`, then a GPU write) returned **`bad=1048576` with no CUDA error
+  and no Xid**. Fix: `KFWR_RF_HOST_PERM` joins the diff key (a permission change on a kept
+  placement is UNMAP + MAP; `KF_ABI_VERSION` 4 → 5), `kf_host::MapPerm` maps it to `NVOS46`
+  `ACCESS_READ_ONLY` / `TLB_LOCK_ENABLE` (RM writes that to `ATOMIC_DISABLE` / PCF `NO_ATOMIC`) /
+  `GPU_CACHEABLE_NO`, and batches group only same-permission rows. PRIVILEGE is not carried: RM
+  takes it from the memory descriptor, and no unprivileged map verb sets it. After: both modes fail
+  **loudly** (719 + host Xid 31 `FAULT_RO_VIOLATION ACCESS_TYPE_VIRT_WRITE`); `reprefetch` passes.
+  Correct values need replayable-fault delivery (C). Evidence: `traces/v3_roperm/`.
 - **Matrix re-run, single-stream + UVM rows (`fix1`, one app per boot, kf3 `f372f63f`):** host
   **43/43**, guest **38/43** (the same 43 rows were 36/43 at `79848341`: `gpu_burn` G and `cupy` B now
   PASS). Remaining: `conjugateGradientUM` and `torch_ai_bench` (C, above); `UnifiedMemoryPerf`,
