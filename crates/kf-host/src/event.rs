@@ -166,7 +166,7 @@ impl HostRm {
         params[12..16].copy_from_slice(&notify_index.to_le_bytes());
         params[16..24].copy_from_slice(&u64::from(ev.key).to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc_via(&ev.node, source, want, NV01_EVENT_OS_EVENT, &mut params)?;
+        let h = self.raw_alloc_via(&ev.node, source, want, NV01_EVENT_OS_EVENT, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV0005_ALLOC_PARAMETERS)), &mut params)?;
         self.remember(h, source);
         Ok(h)
     }

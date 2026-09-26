@@ -89,6 +89,10 @@ pub const NOT_IN_THIS_OBJECT: u32 = 0x4B47;
 pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
 /// A FIXED map at a VA that is already mapped.
 pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
+/// ★ The host driver's measured layout cannot carry this request (`kf_abi::hostabi`): a field the
+/// host's version does not have, a control with no row, a struct absent at that version. The
+/// reason is printed once per refusal (`kf-host: HOST-ABI REFUSED …`) — the status is only the class.
+pub const HOST_ABI_REFUSED: u32 = 0x4B6A;
 /// The store reservation and which form RM granted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reservation {
@@ -155,9 +159,54 @@ fn ioctl_error(e: &RawError) -> RmError {
     }
 }
 
-fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
-    kf_abi::host_driver::check(reported).map_err(|r| r.to_string())?;
-    Ok(reported.unwrap_or_default().to_string())
+/// ★★★ R2 — the host driver version, and the MEASURED layouts that follow from it
+/// (`docs/design/V3_DRIVER_MATRIX.md` §8.3). ⊘ No longer the pinned interval `[580.65.06, 581)`:
+/// every struct kf-host sends is either carried to the host's own measured layout
+/// ([`kf_abi::hostabi`]) or listed in [`PASSED_THROUGH`] and required here to have the bench's
+/// layout at this host. Unreadable / unparsable / unmeasured are refusals by name, never a default.
+fn host_abi_gate(reported: Option<&str>) -> Result<(String, kf_abi::hostabi::HostAbi), String> {
+    use kf_abi::host_driver::{HostDriverRefusal, HostDriverVersion};
+    let Some(r) = reported else { return Err(HostDriverRefusal::Unreadable.to_string()) };
+    let v = HostDriverVersion::parse(r).ok_or_else(|| HostDriverRefusal::Unparsable { reported: r.to_string() }.to_string())?;
+    let abi = kf_abi::hostabi::HostAbi::for_host(v).map_err(|e| e.to_string())?;
+    for runs in PASSED_THROUGH {
+        match abi.carry(runs) {
+            Ok(kf_abi::hostabi::Carry::Same { .. }) => {}
+            Ok(kf_abi::hostabi::Carry::Carried { .. }) => {
+                return Err(format!(
+                    "host driver {v}: {} differs from the layout kf-host sends without a carry — \
+                     refusing rather than sending the bench's bytes",
+                    runs.name
+                ));
+            }
+            Err(e) => return Err(format!("host driver {v}: {e}")),
+        }
+    }
+    Ok((r.to_string(), abi))
+}
+
+/// ★ The escape wrappers kf-host sends WITHOUT a carry (their bodies are built by typed encoders at
+/// the bench layout): [`host_abi_gate`] refuses a host where any of them has another layout.
+/// `[matrix]` all identical at every measured tag 535.309.01 … 615.71.09 today.
+const PASSED_THROUGH: &[&kf_abi::matrix::StructRuns] = &[
+    &kf_abi::generated::matrix::NVOS00_PARAMETERS,
+    &kf_abi::generated::matrix::NVOS02_PARAMETERS,
+    &kf_abi::generated::matrix::NVOS21_PARAMETERS,
+    &kf_abi::generated::matrix::NVOS33_PARAMETERS,
+    &kf_abi::generated::matrix::NVOS34_PARAMETERS,
+    &kf_abi::generated::matrix::NVOS54_PARAMETERS,
+    &kf_abi::generated::matrix::NV_IOCTL_NVOS02_PARAMETERS_WITH_FD,
+    &kf_abi::generated::matrix::NV_IOCTL_NVOS33_PARAMETERS_WITH_FD,
+    &kf_abi::generated::matrix::NV_IOCTL_REGISTER_FD_T,
+    &kf_abi::generated::matrix::NV_IOCTL_CARD_INFO_T,
+    &kf_abi::generated::matrix::NV_IOCTL_ALLOC_OS_EVENT_T,
+    &kf_abi::generated::matrix::NV_IOCTL_RM_API_VERSION_T,
+];
+
+/// Print a host-ABI refusal once, by name, and turn it into the status class callers see.
+fn abi_refused(what: &str, e: &kf_abi::hostabi::HostAbiError) -> RmError {
+    eprintln!("kf-host: HOST-ABI REFUSED {what}: {e}");
+    RmError::Other(HOST_ABI_REFUSED)
 }
 
 fn read_version(ctl: &CharDevice) -> Option<String> {
@@ -300,6 +349,8 @@ pub struct HostRm {
     device: u32,
     subdevice: u32,
     version: String,
+    /// ★ The host driver's measured layouts (`kf_abi::hostabi`): every carried struct goes through it.
+    abi: kf_abi::hostabi::HostAbi,
     objects: Mutex<Objects>,
     /// Subdevice notifiers this session has armed REPEAT — arming is per SUBDEVICE and legal only
     /// from `DISABLE` (`subdevice_ctrl_event_kernel.c:123-130`), so it is done once, here.
@@ -356,8 +407,8 @@ impl HostRm {
         // filling the string in, which the open driver enforces
         // (`C: src/qemu/virtio_nvgpu.c:1157-1170`). See [`host_version_gate`] for why the
         // rung changed and why the answer is a refusal rather than a table.
-        let version =
-            host_version_gate(read_version(&ctl).as_deref()).map_err(|detail| BringUpError {
+        let (version, abi) =
+            host_abi_gate(read_version(&ctl).as_deref()).map_err(|detail| BringUpError {
                 rung: "R2 host driver version",
                 detail,
             })?;
@@ -395,6 +446,7 @@ impl HostRm {
             device: 0,
             subdevice: 0,
             version,
+            abi,
             classes,
             armed: Mutex::new(std::collections::BTreeSet::new()),
             arch_info: (0, 0, 0),
@@ -455,7 +507,7 @@ impl HostRm {
         )?;
         let device = rung(
             "R5 NV01_DEVICE_0",
-            conn.raw_alloc(client.raw(), FIRST_HANDLE, NV01_DEVICE_0, &mut dev_params),
+            conn.raw_alloc(client.raw(), FIRST_HANDLE, NV01_DEVICE_0, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV0080_ALLOC_PARAMETERS)), &mut dev_params),
         )?;
 
         // R6 — the subdevice.
@@ -466,7 +518,7 @@ impl HostRm {
         )?;
         let subdevice = rung(
             "R6 NV20_SUBDEVICE_0",
-            conn.raw_alloc(device, FIRST_HANDLE + 1, NV20_SUBDEVICE_0, &mut sub_params),
+            conn.raw_alloc(device, FIRST_HANDLE + 1, NV20_SUBDEVICE_0, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV2080_ALLOC_PARAMETERS)), &mut sub_params),
         )?;
 
         {
@@ -576,7 +628,7 @@ impl HostRm {
 
     fn open_usermode(&self, class: UsermodeClass) -> Result<UsermodeWindow, RmError> {
         let want = self.mint();
-        let object = self.raw_alloc(self.subdevice, want, class.usermode_id().0, &mut [])?;
+        let object = self.raw_alloc(self.subdevice, want, class.usermode_id().0, None, &mut [])?;
         self.remember(object, self.subdevice);
         let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::WriteBack)?;
         Ok(UsermodeWindow {
@@ -641,8 +693,51 @@ impl HostRm {
         parent: u32,
         want: u32,
         class: u32,
+        strukt: Option<kf_abi::hostabi::HostParams>,
         params: &mut [u8],
     ) -> Result<u32, RmError> {
+        self.carried_alloc(class, strukt, params, |p| self.raw_alloc_exact(parent, want, class, p))
+    }
+
+    /// ★ The host-driver axis for allocations: `params` (bench layout) carried to the host's
+    /// measured layout of `strukt` and back. `None` = the class takes no parameter block.
+    fn carried_alloc(
+        &self,
+        class: u32,
+        strukt: Option<kf_abi::hostabi::HostParams>,
+        params: &mut [u8],
+        issue: impl FnOnce(&mut [u8]) -> Result<u32, RmError>,
+    ) -> Result<u32, RmError> {
+        use kf_abi::hostabi::{Carry, HostParams};
+        let what = format!("alloc class {class:#06x}");
+        let (name, carry) = match strukt {
+            None if params.is_empty() => return issue(params),
+            None => {
+                eprintln!("kf-host: HOST-ABI REFUSED {what}: a parameter block with no named struct");
+                return Err(RmError::Other(HOST_ABI_REFUSED));
+            }
+            Some(HostParams::Measured(r)) => (r.name, self.abi.carry(r)),
+            Some(HostParams::Renamed { before, after }) => (before.name, self.abi.carry_renamed(before, after)),
+            Some(HostParams::NoHeader { .. }) => {
+                eprintln!("kf-host: HOST-ABI REFUSED {what}: allocation params with no header");
+                return Err(RmError::Other(HOST_ABI_REFUSED));
+            }
+        };
+        let carry = carry.map_err(|e| abi_refused(&what, &e))?;
+        match carry {
+            Carry::Same { .. } => issue(params),
+            c @ Carry::Carried { .. } => {
+                let mut host = self.abi.carry_out(name, &c, params).map_err(|e| abi_refused(&what, &e))?;
+                let h = issue(&mut host)?;
+                let back = self.abi.carry_in(name, &c, &host).map_err(|e| abi_refused(&format!("{what} reply"), &e))?;
+                params.copy_from_slice(&back);
+                Ok(h)
+            }
+        }
+    }
+
+    /// The allocation ioctl with `params` exactly as given (already at the host's layout).
+    fn raw_alloc_exact(&self, parent: u32, want: u32, class: u32, params: &mut [u8]) -> Result<u32, RmError> {
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
             h_root: self.client.raw(),
@@ -678,6 +773,18 @@ impl HostRm {
     /// # Errors
     /// The host's refusal.
     pub fn raw_alloc_via(
+        &self,
+        node: &CharDevice,
+        parent: u32,
+        want: u32,
+        class: u32,
+        strukt: Option<kf_abi::hostabi::HostParams>,
+        params: &mut [u8],
+    ) -> Result<u32, RmError> {
+        self.carried_alloc(class, strukt, params, |p| self.raw_alloc_via_exact(node, parent, want, class, p))
+    }
+
+    fn raw_alloc_via_exact(
         &self,
         node: &CharDevice,
         parent: u32,
@@ -739,6 +846,17 @@ impl HostRm {
         inner_at: usize,
         inner: &mut [u8],
     ) -> Result<u32, RmError> {
+        // ⊘ The nested pointer is patched in place, so this block cannot be carried: it is sent
+        // at the bench layout, which is only known correct on the interval the encoders were
+        // written for. (No caller today — `NV_MEMORY_LIST_ALLOCATION_PARAMS`.)
+        if !self.abi.in_encoded_interval() {
+            eprintln!(
+                "kf-host: HOST-ABI REFUSED nested alloc class {class:#06x}: not carried, and host driver {} is \
+                 outside the interval its bench layout is known for",
+                self.abi.version()
+            );
+            return Err(RmError::Other(HOST_ABI_REFUSED));
+        }
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
             h_root: self.client.raw(),
@@ -789,6 +907,30 @@ impl HostRm {
     /// # Errors
     /// The host's status, by name.
     pub fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
+        // ★ The host-driver axis: the payload is the bench layout; carry it to the host's own
+        // measured layout and back (`kf_abi::hostabi::HOST_CONTROLS`). Same layout ⇒ untouched.
+        let carry = self.abi.control_carry(cmd).map_err(|e| abi_refused(&format!("control {cmd:#010x}"), &e))?;
+        match carry {
+            Some(c @ kf_abi::hostabi::Carry::Carried { .. }) => {
+                let name = kf_abi::hostabi::host_control(cmd).map_or("?", |r| r.name);
+                let mut host = self
+                    .abi
+                    .carry_out(name, &c, payload)
+                    .map_err(|e| abi_refused(&format!("control {cmd:#010x} ({name})"), &e))?;
+                self.raw_control_exact(object, cmd, &mut host)?;
+                let back = self
+                    .abi
+                    .carry_in(name, &c, &host)
+                    .map_err(|e| abi_refused(&format!("control {cmd:#010x} ({name}) reply"), &e))?;
+                payload.copy_from_slice(&back);
+                Ok(())
+            }
+            _ => self.raw_control_exact(object, cmd, payload),
+        }
+    }
+
+    /// The control ioctl with `payload` exactly as given (already at the host's layout).
+    fn raw_control_exact(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos54Parameters::SIZE];
         Nvos54Parameters {
             h_client: self.client.raw(),
@@ -882,11 +1024,15 @@ impl HostRm {
         }
         .encode_into(&mut arg)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
+        // ★ The host-driver axis: NVOS46 is 56 bytes below 580.65.06 (no flags2 / kindOverride).
+        let runs = &kf_abi::generated::matrix::NVOS46_PARAMETERS;
+        let mut host = self.abi.to_host(runs, &arg).map_err(|e| abi_refused("NVOS46 map", &e))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, host.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
-            .ioctl(req, &mut arg, &mut [])
+            .ioctl(req, &mut host, &mut [])
             .map_err(|e| ioctl_error(&e))?;
+        let arg = self.abi.from_host(runs, &host).map_err(|e| abi_refused("NVOS46 map reply", &e))?;
         let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         // ★★★★★ w755d — see [`VA_ALREADY_MAPPED`]. `0x51` on a FIXED map is ADDRESS
         // OCCUPANCY, not capacity, and `status_check` would report it as `NoMemory`.
@@ -966,11 +1112,16 @@ impl HostRm {
         }
         .encode_into(&mut arg)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
+        // ★ The host-driver axis: NVOS47 has no `size` (range unmap) at 535/545 — a range unmap
+        // there is refused by name, a whole-mapping unmap carries.
+        let runs = &kf_abi::generated::matrix::NVOS47_PARAMETERS;
+        let mut host = self.abi.to_host(runs, &arg).map_err(|e| abi_refused("NVOS47 unmap", &e))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, host.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
-            .ioctl(req, &mut arg, &mut [])
+            .ioctl(req, &mut host, &mut [])
             .map_err(|e| ioctl_error(&e))?;
+        let arg = self.abi.from_host(runs, &host).map_err(|e| abi_refused("NVOS47 unmap reply", &e))?;
         let out = Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)
     }
@@ -1426,7 +1577,7 @@ impl HostRm {
         }
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        if let Ok(h) = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params) {
+        if let Ok(h) = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS)), &mut params) {
             self.remember(h, self.device);
             return Ok(Reservation { handle: h, contiguous_aligned: true });
         }
@@ -1443,7 +1594,7 @@ impl HostRm {
         }
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
+        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS)), &mut params)?;
         self.remember(h, self.device);
         Ok(Reservation { handle: h, contiguous_aligned: false })
     }
@@ -1464,7 +1615,7 @@ impl HostRm {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
+        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS)), &mut params)?;
         self.remember(h, self.device);
         Ok(h)
     }
@@ -1593,6 +1744,12 @@ impl HostRm {
     #[must_use]
     pub fn driver_version(&self) -> &str {
         &self.version
+    }
+
+    /// The host driver's measured ABI (`kf_abi::hostabi`).
+    #[must_use]
+    pub fn host_abi(&self) -> kf_abi::hostabi::HostAbi {
+        self.abi
     }
 
     fn parent_of(&self, child: u32) -> Option<u32> {

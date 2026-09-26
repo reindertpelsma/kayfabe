@@ -7865,6 +7865,40 @@ pub const NV_MSENC_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
     ],
 };
 
+const NV_NVDEC_ALLOCATION_PARAMETERS_L0: Layout = Layout {
+    size: 12,
+    fields: &[
+        f("engineInstance", 8, 4, 0),
+        f("prohibitMultipleInstances", 4, 4, 0),
+        f("size", 0, 4, 0),
+    ],
+};
+/// `NV_NVDEC_ALLOCATION_PARAMETERS` — 1 distinct consumed layout(s) over 2 run(s).
+pub const NV_NVDEC_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
+    name: "NV_NVDEC_ALLOCATION_PARAMETERS",
+    runs: &[
+        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(610, 43, 2), v(615, 71, 9), Some(&NV_NVDEC_ALLOCATION_PARAMETERS_L0)), // 610.43.02 … 615.71.09
+    ],
+};
+
+const NV_NVENC_ALLOCATION_PARAMETERS_L0: Layout = Layout {
+    size: 12,
+    fields: &[
+        f("engineInstance", 8, 4, 0),
+        f("prohibitMultipleInstances", 4, 4, 0),
+        f("size", 0, 4, 0),
+    ],
+};
+/// `NV_NVENC_ALLOCATION_PARAMETERS` — 1 distinct consumed layout(s) over 2 run(s).
+pub const NV_NVENC_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
+    name: "NV_NVENC_ALLOCATION_PARAMETERS",
+    runs: &[
+        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(610, 43, 2), v(615, 71, 9), Some(&NV_NVENC_ALLOCATION_PARAMETERS_L0)), // 610.43.02 … 615.71.09
+    ],
+};
+
 const NV_OS_DESC_MEMORY_ALLOCATION_PARAMS_L0: Layout = Layout {
     size: 40,
     fields: &[
@@ -29957,6 +29991,8 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV_MEMORY_ALLOCATION_PARAMS,
     &NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS,
     &NV_MSENC_ALLOCATION_PARAMETERS,
+    &NV_NVDEC_ALLOCATION_PARAMETERS,
+    &NV_NVENC_ALLOCATION_PARAMETERS,
     &NV_OS_DESC_MEMORY_ALLOCATION_PARAMS,
     &NV_SEMAPHORE_SURFACE_ALLOC_PARAMETERS,
     &NV_VASPACE_ALLOCATION_PARAMETERS,
