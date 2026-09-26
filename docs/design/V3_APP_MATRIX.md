@@ -204,7 +204,7 @@ is ranked 2 only because the per-boot matrix isolates it. With guest persistence
 `0x7d09_ac200000`, a UVM managed range). `torch_ai_bench` hit the same fault class on the 3060 (the
 3070 run died earlier, on A).
 
-## 4. Open items (not blocking the matrix)
+## 4. Persistence mode, and what is still open
 
 - ★ **Persistence mode removes B's per-boot budget.** `seqpm` (3060, `nvidia-smi -pm 1` in the guest,
   then `stream_created` + 9× `vectorAdd` in ONE boot): **all 9 vectorAdd PASS** (without PM: 6 then
