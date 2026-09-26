@@ -376,8 +376,20 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
    needs ISA > 8.2: stop and report which.
    ⇒ **DONE (2026-09-26):** NVRTC 12.2 compiles `kf_walk.cu` unchanged — no feature needs ISA > 8.2.
    The generator pins the floor (`PTX_ISA_REFUSED` on a newer NVRTC; checked against 12.9's 8.8).
-   Hardware verification: gates 7–9 + the 30-arm suite on GA102/580.159.04 (§6); Ada/Blackwell
-   JIT-forward check pending a box.
+   Hardware verification (bare metal, `scripts/bench/v3_gates.sh`, logs in
+   `traces/driver_matrix/ptx82/`), 2026-09-26:
+
+   | GPU (die, sm) | host driver | revision | walker gates 7–9 | all gates | control at ISA 8.8 (`2d40da64`) |
+   |---|---|---|---|---|---|
+   | RTX 3090 (GA102, sm_86) | 580.159.04 | `47348e3b` | PASS | **9/9** | 9/9 (`f72f9a58`); gate 9 walk p50 @13 000 rows **413 µs at both ISAs** |
+   | RTX 5080 (GB203, sm_120) | 580.173.02 | `3855338c` | PASS | **9/9** | — |
+   | RTX 4070 (AD104, sm_89) | 580.159.04 | `3855338c` | PASS | 7/9 | **7/9, the same two** |
+
+   ⚠ The Ada box's gates 3 and 4 fail **identically with the 8.8 PTX**, so they are not the ISA:
+   every check that has a copy engine read or write GUEST-RAM (sysmem) pages fails
+   (`sysmem_to_fb_by_engine`, `fb_to_sysmem_by_engine`, a release semaphore in guest RAM reads 0)
+   while every vidmem check passes. It was a container box (no `dmesg`, so an IOMMU fault could
+   not be seen) — recorded as an open environment-or-Ada question, not a PTX result.
 5. **535/545 capability allowlist.** **RULED: port nvproxy's 535.104.05 / 545.23.06 blocks as a
    separate, clearly marked commit**, list every entry that differs from the 580 allowlist here —
    ⊘ **a security-policy change: explicit owner review before it merges.**
