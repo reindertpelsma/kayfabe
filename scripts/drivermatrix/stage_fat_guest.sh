@@ -79,7 +79,15 @@ GSL "sudo /usr/bin/nvidia-uninstall --silent >/dev/null 2>&1; \
 MOD=$(GS 'modinfo -F version nvidia 2>/dev/null' | tr -d '\r')
 CUDA=$(GS 'ls /usr/lib/x86_64-linux-gnu/libcuda.so.* 2>/dev/null | grep -oE "[0-9]+\.[0-9]+(\.[0-9]+)?$" | sort -V | tail -1' | tr -d '\r')
 say "guest modinfo=$MOD libcuda=$CUDA"
-[ "$MOD" = "$V" ] || die "the guest's nvidia.ko is '$MOD', not $V — see /var/log/nvidia-installer.log in the guest"
+if [ "$MOD" != "$V" ]; then
+    # ⊘ The installer's own log is the only statement of WHY (a build error against this image's
+    # kernel reads nothing like a download or a lock failure) — print its errors before the overlay
+    # is abandoned, so the reason survives the box.
+    GS "sudo grep -a -n -E 'error|ERROR|Error' /var/log/nvidia-installer.log | head -25; \
+        sudo grep -a -n -E -A3 'make\[[0-9]+\]: \*\*\*|conftest' /var/log/nvidia-installer.log | head -25; \
+        uname -r" 2>/dev/null | sed "s/^/  installer.log: /"
+    die "the guest's nvidia.ko is '$MOD', not $V — installer errors above"
+fi
 [ "$CUDA" = "$V" ] || die "the guest's libcuda is '$CUDA', not $V"
 GS "sudo rm -f /var/tmp/nv-$V.run; sudo sync" >/dev/null 2>&1
 power_off() {

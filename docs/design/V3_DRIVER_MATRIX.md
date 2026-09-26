@@ -322,9 +322,9 @@ the fat-guest CUDA ladder (cup2 / cup3 / cup8 / cup8bench).
 | 575.51.03 | INTR wall at `47348e3b`; re-run queued | — |
 | 570.148.08 | init ✔ (the FIRST `RmInitAdapter` of every boot); **ladder 0/4** at `ee35ca4a`, `cuInit` → 999: every adapter **RE-init** fails at `memmgrInitCeUtils` (`memmgrMemCopy` TIMEOUT, `0x25:0x65:1128`). The reborn CeUtils channel (same token, same host channel, same GPFIFO VA, a new VA space) retires `forwarded=1 submissions=0`: the ring reader fetched the guest's entry and produced NO words, while the completion tail still retired it (host CE2 non-stall 1→2→3, `GP_GET=1`) — the guest's copy and its `finishPayload` release never ran. Deterministic here because 570's CeUtils self-test OPENS with the sysmem copy (575+ first memsets vidmem). The adapter-init flake's mechanism, reproducible — handed to `v3-initrace` (coordinator, 2026-09-26); re-run when its fix lands | `ee35ca4a` |
 | 570.124.06 | INTR wall at `47348e3b`; re-run queued | — |
-| 565.57.01 | init ✔ (BIF refused, carried since), ladder queued | `6de22590` |
-| 550.54.14 | device-info wall at `6de22590` → carried; re-run queued | — |
-| 610.57.04 | register-map wall at `47348e3b` → carried + large RPCs; re-run queued | — |
+| 565.57.01 | init ✔ (BIF refused, carried since); **ladder 0/4** at `ee35ca4a` — the same adapter RE-init wall as 570 (first init passes; the reborn CeUtils channel retires `forwarded=1 submissions=0`; `v3-initrace`) | `ee35ca4a` |
+| 550.54.14 | device-info wall at `6de22590` → carried; failure point re-run queued. Fat guest **unstaged**: the 550.54.14 `.run` does not install on the fat image's kernel (6.8.0-139; the thin guest's 6.8.0-59 builds it) — `stage_fat_guest.sh` now prints the installer's errors | — |
+| 610.57.04 | init ✔; the **large RPC on hardware**: `GET_GLOBAL_SM_ORDER` (73 800 B) joined from 2 fragments and answered in 2 replies (`rpc_result 0`, ruling 2). **Ladder 0/4** at `ee35ca4a`: `cuInit` → 3 — the user channel's alloc refused `0x1a` (`OverDeclaredCap`): a 610 guest allocates chids PER RUNLIST on Ampere (`bUsePerRunlistChram`, GA10x from 610.43.02) and its chid 1 collided with CeUtils' on the chid-indexed token table. Fixed at `84967e3a` (the device indexes by `(runlist, chid)` on every family); ladder re-run queued. Also seen: the 610 guest logs `GSP RM heartbeat timed out` (our GSP publishes no heartbeat) — not fatal so far | `ee35ca4a` |
 | 545.23.08 | needs a ≤ 6.6 guest kernel (harness built) + capability row (owner review) | — |
 | 535.309.01 | capability row (owner review, `567942c1`) | — |
 
@@ -332,7 +332,7 @@ Host axis, guest **580.159.04** (box 2, RTX 3080 Ti):
 
 | host | result | rev |
 |---|---|---|
-| 575.57.08 | gates **9/9** (the measured host axis: every host struct carried, the Ampere subtree-map rule standing in for the control 575 lacks); bare-metal cup2 PASS (nvdiff 798 records). Thin **0/30**, ladder 0/4: every kinded map refused — the host has no per-map PTE kind (§2.2 H3 correction). Fixed on the branch; re-walk queued | `9339ee6b` |
+| **575.57.08** | at `ee35ca4a`: gates **9/9**, thin **30/30**, ladder **4/4** (guest 580.159.04); mixed pairs: guest **590.48.01 ladder 4/4**, guest **575.57.08 ladder 4/4**. Refused by name, as designed: `MC_GET_INTR_CATEGORY_SUBTREE_MAP` (absent at 575 — the Ampere family rule answers, ruling 3) and the four GSS-legacy clock rows (no public header, unmeasured below 580 — §7). Before the per-map-kind fix (`9339ee6b`): gates 9/9 but thin **0/30**, ladder 0/4 — every kinded map refused (§2.2 H3 correction) | `ee35ca4a` (`9339ee6b`) |
 | 570.148.08 / 565.57.01 / 550.54.14 / 580.95.05 / 580.65.06 | queued behind the fix (the walk was stopped: each sub-580 host would have timed out 30 arms the same way) | — |
 
 ★ Every row carries its source revision. Box: vast `52746206`, RTX 3090 (GA102 `0x2204`), Xeon
@@ -443,6 +443,16 @@ from "the view was stale".
 | 590.48.01 | 6 | 28 | static info 1808, KGR_GET_INFO 3776, MSENC caps, VGX 0x2C/0x07 |
 | 595.84 | 11 | 46 | static info 1592, nine-field init args, KGR info/floorsweeping, GPU name 68, `rpc_run_cpu_sequencer_v` |
 | 610.x | 18 | 72 | 16-byte MCTP element (encoded), static info 1600, `USER_REGISTER_ACCESS_MAP` 20492, SM order 73760 (> 64 KiB element max), GPU info 580, … |
+
+**Host axis — what a sub-580 host cannot be asked, measured on host 575.57.08 (all refused by
+name, none silent):**
+
+| gap | hosts | effect in the guest | path to close |
+|---|---|---|---|
+| per-map PTE kind (`NVOS46` `kindOverride`) | < 580.65.06 | none for compute: PITCH/GENERIC map with the memory's own kind (the pre-v3-gfx mapping); a depth/stencil kind is refused by name (graphics on such a host: Z surfaces unmapped) | a per-kind virtual range (`PAGE_KIND_VIRTUAL`) — only if graphics on an old host is wanted |
+| `MC_GET_INTR_CATEGORY_SUBTREE_MAP` | < 580.65.06 | none — the family rule answers (ruling 3) | — |
+| GSS-legacy clock rows `0x20809064` / `0x2080a028` / `0x2080a084` / `0x2080a026` | outside [580.65.06, 581) | `cudaDevAttrClockRate` falls back to `cudartinit`'s constant; NVENC's clock query refused ("unsupported device") | probe each host version's answers (the rows are asked with requests WE author) and widen the interval per measured version |
+| host 545.x | — | not measurable on these boxes: the 545 kernel module does not build on the hosts' Linux 6.8 (same conftest gap as the guest, §5) | a ≤ 6.6 host kernel |
 
 ### 7.1 Index-keyed lists: append-only, with one exception (measured)
 
