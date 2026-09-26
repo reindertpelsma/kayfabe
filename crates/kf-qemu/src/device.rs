@@ -409,7 +409,7 @@ impl Device {
             },
         );
         let model: std::sync::Arc<dyn GspModel> =
-            std::sync::Arc::from(family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?);
+            std::sync::Arc::from(family.gsp_model(implementation, cfg.fb_mb).map_err(|e| format!("{e:?}"))?);
         let store_model = model.clone();
         crate::prof::init();
         let qhead_off = match model.at(GspReg::GspQueueHead(0)) {

@@ -5,6 +5,10 @@
 //! core HALTED (`kgspTeardown_GH100`, `kernel_gsp_gh100.c:995-1004`).
 use kf_arch::gsp::{AfterSuspend, BootPhase, GspModel, GspObservation, GspReg};
 
+/// A discrete die's `MC_GET_ARCH_INFO` implementation (GA106/AD106/TU106 = 6): the `_GA102` group on
+/// Ampere, where GA100 (0) is a different one (`kf_chip::Family::gsp_model`).
+const DISCRETE_IMPL: u32 = 0x6;
+
 fn obs(stage: BootPhase, suspended: bool) -> GspObservation {
     GspObservation { stage, wpr2_up: stage.wpr2_up(), riscv_active: stage.wpr2_up(), suspended, ..GspObservation::default() }
 }
@@ -16,7 +20,7 @@ fn wpr2_hi(m: &dyn GspModel, o: &GspObservation) -> u64 {
 #[test]
 fn the_falcon_regime_waits_for_its_teardown_ucode() {
     for f in [kf_chip::Family::Ampere, kf_chip::Family::Ada] {
-        let m = f.gsp_model(8192).unwrap();
+        let m = f.gsp_model(DISCRETE_IMPL, 8192).unwrap();
         assert_eq!(m.boot_sequence().after_suspend(), AfterSuspend::AwaitsTeardownUcode, "{f:?}");
         let susp = obs(BootPhase::Suspending, true);
         assert_eq!(m.encode(GspReg::GspFalconMailbox0, &susp), Some(0x8000_0000), "{f:?}: the sentinel, whole");
@@ -28,7 +32,7 @@ fn the_falcon_regime_waits_for_its_teardown_ucode() {
 #[test]
 fn the_fsp_regime_halts_itself_and_reads_as_the_driver_waits_for() {
     for f in [kf_chip::Family::Hopper, kf_chip::Family::Blackwell] {
-        let m = f.gsp_model(8192).unwrap();
+        let m = f.gsp_model(DISCRETE_IMPL, 8192).unwrap();
         assert_eq!(m.boot_sequence().after_suspend(), AfterSuspend::FirmwareHalts, "{f:?}");
         // What the FSM shows after E9 → E13 (`kf_gsp` a_life_ends_and_the_next_one_boots).
         let done = obs(BootPhase::Halted, true);

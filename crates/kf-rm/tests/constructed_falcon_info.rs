@@ -299,7 +299,7 @@ fn no_falcon_the_oracle_names_has_a_register_model_this_port_could_serve() {
     // the board's framebuffer — not a `gsp_model` fn pointer on a chip row.
     let model = chip()
         .family
-        .gsp_model(ga106::board().fb_length >> 20)
+        .gsp_model(0x6 /* GA106 */, ga106::board().fb_length >> 20)
         .expect("the Ampere GSP model is built");
     // The published `NV_PFALCON_FALCON_*` block, `0x000..=0x130`
     // (`ogkm-580: dev_falcon_v4.h`), at dword steps.

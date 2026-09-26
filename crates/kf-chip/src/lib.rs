@@ -95,6 +95,9 @@ pub mod arch {
     pub const GB100: u32 = 0x1A0;
     /// Blackwell consumer.
     pub const GB200: u32 = 0x1B0;
+    /// `NV2080_CTRL_MC_ARCH_INFO_IMPLEMENTATION_GA100` (`ctrl2080mc.h:106`) — the one Ampere die
+    /// on the `_TU102` falcon HALs.
+    pub const IMPL_GA100: u32 = 0x0;
 }
 
 /// Why no family was chosen — named, never a default.
@@ -173,20 +176,32 @@ impl Family {
         DerivedHostClasses::choose(self, host_classlist)
     }
 
-    /// ★ This family's GSP register model, for a framebuffer of `fb_size_mb` — the size the store
-    /// actually holds (constraint 15), never a per-die constant.
+    /// ★ This family's GSP register model for the die the host reported (`implementation` from
+    /// `MC_GET_ARCH_INFO`), for a framebuffer of `fb_size_mb` — the size the store actually holds
+    /// (constraint 15), never a per-die constant.
+    ///
+    /// The falcon regime has two die groups, and ogkm's own HAL table draws the line
+    /// (`g_kernel_falcon_nvoc.c`, `g_kernel_gsp_nvoc.c`): **Turing and GA100** bind the `_TU102`
+    /// RISC-V HALs ([`falcon_gsp::RiscvLayout::Tu102`]); GA102+ and Ada the `_GA102` ones.
     ///
     /// # Errors
-    /// [`RowUnbuilt`] while a family's model is still being ported (named, with what remains).
-    pub fn gsp_model(self, fb_size_mb: u64) -> Result<Box<dyn kf_arch::gsp::GspModel>, RowUnbuilt> {
+    /// [`RowUnbuilt`] while a die group's model is still being ported (named, with what remains).
+    pub fn gsp_model(self, implementation: u32, fb_size_mb: u64) -> Result<Box<dyn kf_arch::gsp::GspModel>, RowUnbuilt> {
+        use falcon_gsp::{FalconGspModel, RiscvLayout};
         match self {
             // Ada's GSP boot HAL dispatches to the `_TU102`/`_GA102` bodies for the whole sequence;
             // every `GspReg` is at the same offset with the same encoding (old kayfabe-chips/ad10x.rs).
-            Family::Ampere | Family::Ada => Ok(Box::new(falcon_gsp::FalconGspModel::with_fb_size_mb(fb_size_mb))),
-            Family::Turing => Err(RowUnbuilt {
+            Family::Ampere if implementation == arch::IMPL_GA100 => Err(RowUnbuilt {
                 family: self,
-                what: "GSP model: _TU102 boot has no FWSEC-FRTS; the WPR2 derivation must be re-checked",
+                what: "GSP model for GA100: it binds the _TU102 RISC-V HALs (RiscvLayout::Tu102) AND has no \
+                       FWSEC-FRTS (kgspGetFrtsSize_4a4dee = 0, kgspPrepareForFwsecFrts_5baef9, \
+                       g_kernel_gsp_nvoc.c), so kgspBootstrap_TU102 goes straight to the SEC2 Booter and the \
+                       shared FalconSecureBooterBoot FSM (FWSEC first) does not describe its boot",
             }),
+            Family::Ampere | Family::Ada => Ok(Box::new(FalconGspModel::with_layout(RiscvLayout::Ga102, fb_size_mb))),
+            // ★ 2026-09-26: Turing runs the SAME boot as GA10x (kgspBootstrap_TU102, FWSEC-FRTS —
+            // kgspGetFrtsSize_TU102 = 1 MiB —, the SEC2 Booter); only the RISC-V block differs.
+            Family::Turing => Ok(Box::new(FalconGspModel::with_layout(RiscvLayout::Tu102, fb_size_mb))),
             Family::Hopper => Ok(Box::new(fsp_gsp::FspGspModel::new(fsp_gsp::FspRow::HOPPER, fb_size_mb))),
             Family::Blackwell => Ok(Box::new(fsp_gsp::FspGspModel::new(fsp_gsp::FspRow::BLACKWELL, fb_size_mb))),
         }

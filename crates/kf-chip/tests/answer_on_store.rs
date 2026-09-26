@@ -3,6 +3,10 @@
 //! afterwards, whatever state the FSM is in — and it must never answer a completion edge.
 use kf_arch::gsp::{BootPhase, GspModel, GspObservation, GspReg};
 
+/// A discrete die's `MC_GET_ARCH_INFO` implementation (GA106/AD106/TU106 = 6): the `_GA102` group on
+/// Ampere, where GA100 (0) is a different one (`kf_chip::Family::gsp_model`).
+const DISCRETE_IMPL: u32 = 0x6;
+
 const STAGES: [BootPhase; 6] = [
     BootPhase::Cold,
     BootPhase::ProtectedRegionUp,
@@ -76,6 +80,6 @@ fn a_store_answer_is_what_the_drainer_would_publish_in_every_state() {
         (kf_chip::Family::Hopper, "Hopper"),
         (kf_chip::Family::Blackwell, "Blackwell"),
     ] {
-        check(&*f.gsp_model(8192).unwrap(), name);
+        check(&*f.gsp_model(DISCRETE_IMPL, 8192).unwrap(), name);
     }
 }

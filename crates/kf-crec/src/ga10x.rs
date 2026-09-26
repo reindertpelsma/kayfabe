@@ -11,11 +11,15 @@ use kf_arch::gsp::GspModel;
 /// build its model at the same size to be comparable.
 pub const CAPTURE_FB_SIZE_MB: u64 = 12288;
 
+/// `NV2080_CTRL_MC_ARCH_INFO_IMPLEMENTATION_GA106` (`ctrl2080mc.h:112`) — the die the capture is
+/// of, which selects the `_GA102` falcon HAL group (`kf_chip::Family::gsp_model`).
+pub const CAPTURE_IMPLEMENTATION: u32 = 0x6;
+
 /// The Ampere (falcon) GSP model at the capture's size — the capture is of a GA106.
 ///
 /// # Panics
 /// Never: GA10x's row is built (`kf_chip::Family::gsp_model`).
 #[must_use]
 pub fn gsp_model() -> Box<dyn GspModel> {
-    kf_chip::Family::Ampere.gsp_model(CAPTURE_FB_SIZE_MB).expect("the Ampere model is built")
+    kf_chip::Family::Ampere.gsp_model(CAPTURE_IMPLEMENTATION, CAPTURE_FB_SIZE_MB).expect("the Ampere model is built")
 }
