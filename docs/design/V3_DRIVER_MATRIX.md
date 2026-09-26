@@ -1,11 +1,17 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
-**STATUS: LIVE (in progress), 2026-09-26, branch `v3-drivers`.** The two-axis model, the
-inventory, the derivation pipeline and the generated-table design are built on BOTH axes; the guest
-axis is being walked on hardware (§6 is the running matrix) and the host axis is wired (kf-host
-carries every host struct to the host's measured layout, §2.2). Boxes: vast `52746206` (RTX 3090
-GA102, Xeon E5-2673 v4) and `52788835` (RTX 3080 Ti GA102, 38 cores), host driver **580.159.04
-open** on both.
+**STATUS: LIVE (in progress), 2026-09-27, branch `v3-drivers`** (the 535/545 capability commit is
+always the LAST one — owner review; everything below it is mergeable). Both axes are built and
+walked on hardware; §6.0 is the running grid, DERIVED from `traces/driver_matrix/walk/`.
+**Guest axis (host 580.159.04):** every 580.x thin 27–30/30 (the reds are the adapter-init flake);
+CUDA ladder **4/4 for 580.159.04, 580.105.08, 590.48.01, 595.84, 575.57.08 and 610.57.04**;
+570.148.08 / 565.57.01 initialise but every adapter RE-init fails at CeUtils (the flake's mechanism,
+deterministic — handed to `v3-initrace`); 550.54.14 initialises (fat image unstaged: its `.run`
+does not build on the image's kernel); 535.309.01 / 545.23.08 (the latter on a staged 6.5 guest
+kernel) reach `_gpuInitChipInfo`, carried since. **Host axis (guest 580.159.04):** 575.57.08,
+580.95.05, 580.65.06 — gates 9/9, thin 30/30, ladder 4/4, mixed pairs (590 / 575 guests) 4/4; the
+first sub-580 host needed the per-map-kind fix (§2.2 H3). 570/565/550/535/590/595/610 hosts in the
+third walk. Boxes: vast `52746206` (RTX 3090 GA102) and `52788835` (RTX 3080 Ti GA102).
 
 > Owner roadmap item (2026-09-26): kayfabe v3 must support the NVIDIA driver range nvkvm-pv
 > supports — 535 → 610 — on BOTH axes, with per-version values **derived from source into
@@ -22,7 +28,7 @@ open** on both.
 | who chooses it | the operator, inside the VM | the operator, on the host |
 | what varies | the GSP firmware interface our fake GSP must speak: queue element, init args, RPC numbers and payloads, static info, every RM control the guest's CPU-RM forwards | the RM ioctl ABI kf-host authors: NVOS escape bodies, control params, alloc params, plus the PTX ISA the host's libcuda JITs |
 | selected by | `guest-driver=` (defaults to the host's), **cross-checked** against the guest's own `NV_VERSION_STRING` at fn 1 | the host RM's own `NV_ESC_CHECK_VERSION_STR` |
-| state 2026-09-26 | table assembled from **measured** per-tag layouts; 580.x walked (thin 30/30 + ladder 4/4); **590.48.01 and 595.84 initialize** (grader is 580-only); 575/570/565 past the INTR wall at head; 550 → device-info carry; 610 → register-map carry; 535/545 need the capability rows (§6, §7) | R2 gates on **measurement**; every host struct carried by name (`kf_abi::hostabi`, 53 controls pinned to the matrix); subtree map authored per family below 580.65.06 (ruling 3); walker PTX at ISA 8.2 (ruling 4) |
+| state 2026-09-27 | table assembled from **measured** per-tag layouts; CUDA ladder 4/4 for 580.159.04 / 580.105.08 / 590.48.01 / 595.84 / 575.57.08 / 610.57.04 guests; ≤575 guests needed the fn 54/79 page-directory carrier (G11), 610 the `(runlist, chid)` token index and the large RPC; 570/565 blocked by adapter re-init (`v3-initrace`); 535/545 reach chip-info (carried) — capability rows under owner review | R2 gates on **measurement**; every host struct carried by name (`kf_abi::hostabi`, 53 controls pinned to the matrix); subtree map authored per family below 580.65.06 (ruling 3); walker PTX at ISA 8.2 (ruling 4); per-map PTE kind only from 580.65.06 (H3 correction); hosts 575.57.08 / 580.95.05 / 580.65.06 green on thin + ladder + mixed pairs |
 
 ★ **The finding that shapes everything:** NVIDIA moves ABI **inside** a branch. Measured:
 `GspSystemInfo` gains a field at 580.95.05 and another at 580.105.08, `NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS`
@@ -349,7 +355,7 @@ backticks). Regenerate after every refresh of the walk evidence.
 | 550.54.14 |  |  |  | ladder unstaged |
 | 565.57.01 |  |  |  | ladder 0/4 `ee35ca4a` |
 | 570.148.08 |  |  |  | ladder 0/4 `ee35ca4a` |
-| 575.57.08 | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` |
+| 575.57.08 | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `1837166d` |
 | 580.65.06 |  |  |  | thin 28/30 `47348e3b` |
 | 580.95.05 |  |  |  | thin 29/30 `47348e3b` |
 | 580.105.08 |  |  |  | thin 30/30, ladder 4/4 `47348e3b` |
@@ -357,7 +363,7 @@ backticks). Regenerate after every refresh of the walk evidence.
 | 580.159.04 | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `1837166d` |
 | 580.173.02 |  |  |  | thin 30/30 `47348e3b` |
 | 580.178.04 |  |  |  | thin 27/30 `47348e3b` |
-| 590.48.01 | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `6de22590` |
+| 590.48.01 | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `1837166d` |
 | 595.84 |  |  |  | ladder 4/4 `6de22590` |
 | 610.57.04 |  |  |  | ladder 4/4 `1837166d` |
 
