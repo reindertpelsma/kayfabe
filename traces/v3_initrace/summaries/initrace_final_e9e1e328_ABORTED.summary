@@ -1,0 +1,18 @@
+FINAL_START 2026-09-26T21:04:31+00:00 rev=e9e1e328 dirty=0 master=59cc98a9 base_ok=yes
+ladder rc=0
+ladder_musl rc=0
+build_kf3 rc=101 warning: build failed, waiting for other jobs to finish...
+fastguest rc=0
+fastguest(nvreg) rc=0
+build_kf3 nob rc=0 1 patch
+f_A_nat bin=e9e1e328 rc=2 secs=0 verdict=[]  tok2=[] retired2=[] wpr2=[] fwsec_fail=[] rminit_failed= probe_bad=
+f_A_inj bin=e9e1e328 rc=2 secs=0 verdict=[]  tok2=[] retired2=[] wpr2=[] fwsec_fail=[] rminit_failed= probe_bad=
+f_B_fix_always bin=e9e1e328 rc=2 secs=0 verdict=[]  tok2=[] retired2=[] wpr2=[] fwsec_fail=[] rminit_failed= probe_bad=
+f_B_nob_always bin=e9e1e328-dirty rc=1 secs=23 verdict=[FAST_VERDICT=FAIL]  tok2=[] retired2=[] wpr2=[] fwsec_fail=[      1 failed to execute FWSEC for FRTS: WPR2 initialized at an unexpected location ] rminit_failed=1 probe_bad=0
+f_B_fix_retry_cyc bin=e9e1e328 rc=2 secs=0 verdict=[]  tok2=[] retired2=[] wpr2=[] fwsec_fail=[] rminit_failed= probe_bad=
+f_B_nob_retry_cyc bin=e9e1e328-dirty rc=1 secs=25 verdict=[FAST_VERDICT=FAIL] FASTGUEST: CYCLES_DONE n=5 fails=5 first_fail=1 at 13.74s tok2=[] retired2=[] wpr2=[] fwsec_fail=[      2 failed to execute FWSEC for FRTS: WPR2 initialized at an unexpected location       2 failed to execute FWSEC for FRTS: no initialized WPR2 found ] rminit_failed=10 probe_bad=0
+crate_tests rc=0 passed=1597 failed=0
+gates V3_GATES_SUMMARY pass=9 fail=0
+fast_suite rc=2 FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=30 ARMS=30 rev=e9e1e328
+FINAL_EXIT 2026-09-26T21:08:48+00:00
+hunt fastguest-580.65.06 rc=0

@@ -1,0 +1,7 @@
+BATCH1_START 2026-09-26T18:31:34+00:00 rev=555e56e6
+b1_before_nat bin=626afea1 rc=0 secs=525 verdict=[FAST_VERDICT=PASS] FASTGUEST: CYCLES_DONE n=300 fails=0 first_fail=0 at 513.76s tok2_births=300 tok2_stale_at_birth=299 guest_rminit_failed=0
+b1_master_nat bin=02b27c2a rc=0 secs=525 verdict=[FAST_VERDICT=PASS] FASTGUEST: CYCLES_DONE n=300 fails=0 first_fail=0 at 512.86s tok2_births=300 tok2_stale_at_birth=0 guest_rminit_failed=0
+b1_before_inj bin=626afea1 rc=1 secs=213 verdict=[FAST_VERDICT=FAIL] FASTGUEST: CYCLES_DONE n=20 fails=20 first_fail=1 at 201.10s tok2_births=20 tok2_stale_at_birth=19 guest_rminit_failed=40
+b1_after_nat bin=555e56e6 rc=0 secs=526 verdict=[FAST_VERDICT=PASS] FASTGUEST: CYCLES_DONE n=300 fails=0 first_fail=0 at 514.51s tok2_births=300 tok2_stale_at_birth=299 guest_rminit_failed=0
+b1_after_inj bin=555e56e6 rc=0 secs=524 verdict=[FAST_VERDICT=PASS] FASTGUEST: CYCLES_DONE n=300 fails=0 first_fail=0 at 512.49s tok2_births=300 tok2_stale_at_birth=299 guest_rminit_failed=0
+BATCH1_EXIT 2026-09-26T19:10:07+00:00
