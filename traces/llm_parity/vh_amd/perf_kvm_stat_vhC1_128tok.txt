@@ -1,0 +1,20 @@
+Warning: Permanently added '[184.144.154.180]:43946' (ED25519) to the list of known hosts.
+
+
+Analyze events for all VMs, all VCPUs:
+
+                                 VM-EXIT    Samples  Samples%     Time%    Min Time    Max Time         Avg time 
+
+                                     npf     304194    70.44%     4.40%      5.66us   1932.73us     18.48us ( +-   0.06% )
+                               interrupt      63001    14.59%     0.61%      3.31us   1181.84us     12.29us ( +-   0.46% )
+                                     msr      51135    11.84%     0.28%      3.28us    718.18us      7.05us ( +-   0.33% )
+                                     hlt       7891     1.83%    94.69%      1.99us 1259861.91us  15334.31us ( +-   4.34% )
+                                   vintr       2827     0.65%     0.01%      2.27us     38.79us      3.64us ( +-   1.12% )
+                                   cpuid       2290     0.53%     0.01%      1.69us     43.92us      4.13us ( +-   1.69% )
+                               write_cr4        336     0.08%     0.00%      3.69us     42.28us      9.97us ( +-   2.85% )
+                                      io        176     0.04%     0.00%      9.72us     60.55us     12.65us ( +-   4.38% )
+                               hypercall         19     0.00%     0.00%      6.68us     27.48us     14.48us ( +-  10.93% )
+                                   pause          9     0.00%     0.00%      2.90us     16.41us      6.20us ( +-  21.34% )
+
+Total Samples:431878, Total events handled time:127785068.80us.
+

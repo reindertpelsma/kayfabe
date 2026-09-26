@@ -122,6 +122,8 @@ pub mod grstatic;
 pub mod gspfeatures;
 pub mod gspstaticinfo;
 pub mod gsslegacy;
+pub mod gssreplay;
+pub mod videocaps;
 pub mod guest_os;
 pub mod guestsysinfo;
 pub mod gvaspacepdes;
@@ -145,6 +147,7 @@ pub mod vbios;
 pub mod versions;
 pub mod view;
 pub mod wire;
+pub mod zbc;
 
 pub use guest_os::{
     ClientKindRule, ClientKindRuleUnknown, GUEST_OS_CONFIG_NAMES, GuestOs, UnknownGuestOsName,

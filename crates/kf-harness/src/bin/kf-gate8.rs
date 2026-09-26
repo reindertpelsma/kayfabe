@@ -301,7 +301,7 @@ fn round(
 
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     l.measure("store", format!("store {:#x} {} MiB contiguous_aligned={}", res.handle, STORE_BYTES >> 20, res.contiguous_aligned));
     phase(l, &rm, res.handle, "ver2", kf_format_ver2(), false)?;
@@ -312,7 +312,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
 #[allow(clippy::too_many_lines)]
 fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: bool) -> Result<(), String> {
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("{tag} export: {e:?}"))?;
-    let mut kernel = WalkKernel::bring_up(WalkCfg::default(), fmt).map_err(|e| format!("{tag}: {e}"))?;
+    let mut kernel = WalkKernel::bring_up_on(WalkCfg::default(), fmt, kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf())).map_err(|e| format!("{tag}: {e}"))?;
     kernel.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| format!("{tag}: {e}"))?;
     let sync0 = kernel.ctx_sync_calls();
 

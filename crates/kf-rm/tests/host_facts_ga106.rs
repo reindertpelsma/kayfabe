@@ -67,9 +67,33 @@ fn the_ce_geometry_from_the_engine_rows_names_the_lces_the_real_ga106_reports_pr
     reply.resize(kf_abi::cecaps::CE_GET_ALL_CAPS_PARAMS_SIZE, 0);
     reply[kf_abi::cecaps::PRESENT_OFF] = 0x0f;
     let host_present = hostfacts::derive_ce_present_mask(&reply).expect("136 bytes");
-    let geometry = kf_abi::cecaps::CeGeometry::from_engines(&ga106::host_facts().engines).expect("engines decode");
+    let caps = hostfacts::derive_ce_caps(&reply).expect("136 bytes");
+    let geometry = kf_abi::cecaps::CeGeometry::from_engines(&ga106::host_facts().engines, &caps).expect("engines decode");
     assert_eq!(host_present, 0x0f);
     assert_eq!(geometry.present, host_present);
+    // ★ The GRCE set the engine table lays out is the host's own: {LCE0, LCE1} on a GA106 —
+    // the GA10x constant it replaced, reproduced (the oracle), not assumed.
+    assert_eq!(caps.grce_mask(), kf_abi::cecaps::GA10X_GRCE_LCE_MASK);
+    assert_eq!(caps, ga106::ce_caps());
+}
+
+/// A `BIOS_GET_INFO_V2` reply asked `[REVISION, OEM_REVISION]` decodes to the ROM's version pair;
+/// a reply missing an index is named.
+#[test]
+fn the_vbios_version_is_read_from_the_hosts_bios_info() {
+    let mut r = vec![0u8; hostfacts::BIOS_GET_INFO_V2_PARAMS_SIZE];
+    let put = |r: &mut Vec<u8>, at: usize, v: u32| r[at..at + 4].copy_from_slice(&v.to_le_bytes());
+    put(&mut r, 0, 2);
+    put(&mut r, 4, 0);
+    put(&mut r, 8, 0x9406_1d00);
+    put(&mut r, 12, 1);
+    put(&mut r, 16, 0x28);
+    assert_eq!(hostfacts::derive_vbios_version(&r), Ok((0x9406_1d00, 0x28)));
+    put(&mut r, 0, 1);
+    assert_eq!(
+        hostfacts::derive_vbios_version(&r),
+        Err(FactRefusal::Missing { cmd: 0x2080_0810, index: 1 })
+    );
 }
 
 /// `cuinit_ioctl_trace_real_ga106.txt`: `0x20803601` out word 0 = `0x00000001`.
@@ -141,6 +165,7 @@ fn every_host_fact_states_where_it_comes_from() {
     let HostFacts {
         family: _,
         has_c2c: _,
+        ce_caps: _,
         engines: _,
         lce_pce_masks: _,
         intr_table: _,
@@ -157,20 +182,30 @@ fn every_host_fact_states_where_it_comes_from() {
         gr_static: _,
         gr_info: _,
         gr_context_buffers: _,
+        gr_zcull_info: _,
+        zbc_table_sizes: _,
+        forwarded_fb_extra: _,
+        gpu_cache_info: _,
         forwarded_gpu_info: _,
+        forwarded_fb_info: _,
         smc_mode: _,
         pcie_max_gen: _,
         ce_fault_method_buffer_size: _,
         gsp_features: _,
         gpu_name: _,
         gpu_short_name: _,
+        vbios_version: _,
+        perf_level_info_v2: _,
+        gss_replay: _,
+        video_caps: _,
     } = ga106::host_facts();
     let fields = [
-        "family", "has_c2c", "engines", "lce_pce_masks", "intr_table", "intr_subtree_map",
+        "family", "has_c2c", "ce_caps", "engines", "lce_pce_masks", "intr_table", "intr_subtree_map",
         "chip_info", "user_register_access_map", "constructed_falcons", "memory_system",
         "device_info", "conf_compute", "bif_static", "fifo_channels", "gmmu_static", "gr_static",
-        "gr_info", "gr_context_buffers", "forwarded_gpu_info", "smc_mode", "pcie_max_gen",
+        "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes", "forwarded_fb_extra", "gpu_cache_info", "forwarded_gpu_info", "forwarded_fb_info", "smc_mode", "pcie_max_gen",
         "ce_fault_method_buffer_size", "gsp_features", "gpu_name", "gpu_short_name",
+        "vbios_version", "perf_level_info_v2", "gss_replay", "video_caps",
     ];
     for f in fields {
         let n = hostfacts::PROVENANCE.iter().filter(|(name, _)| *name == f).count();

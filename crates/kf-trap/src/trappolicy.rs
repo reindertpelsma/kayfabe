@@ -32,7 +32,7 @@
 //! | **BAR0**, except PRAMIN | ⊘ never trapped | ★ **trap allowed** — this is the privileged arm |
 //! | **BAR0 / PRAMIN** | ⊘ never | ⊘ **never.** It is a bring-up aperture, not a running path |
 //! | **BAR1**, except the doorbell page | ⊘ never | ⊘ **never** |
-//! | **BAR1 / the doorbell page** | ⊘ never | ★ allowed **iff** the doorbell is mapped in BAR1 (Hopper+), and **only that one page** |
+//! | **BAR1 / the doorbell page** | ⊘ never | ★ allowed **iff** the guest mapped a usermode view in BAR1 (Hopper+), and **only those pages** — placed at runtime from the guest's BAR1 PTEs (`crate::bar1db`, 2026-09-26) |
 //! | **BAR2** | ⊘ never | ⊘ **never** |
 //!
 //! ## ⊘⊘⊘ "NO READ TRAP ANYWHERE" SUPERSEDES §5's READ-TRAP ALLOWLIST
@@ -74,13 +74,51 @@ use crate::vmm::Bar;
 pub const PRAMIN_BASE: u64 = 0x0070_0000;
 pub const PRAMIN_LEN: u64 = 0x0010_0000;
 
-/// Where the doorbell lives. ⊘ §5: *"generated per die/arch; **Hopper+ maps it over BAR1**"*.
+/// Where the doorbell lives.
+///
+/// ⊘⊘⊘ **CORRECTED 2026-09-26 (`V3_BAR1_DOORBELL.md`).** This was `Bar1 { page_base: 0x9_0000 }`
+/// for Hopper/Blackwell — a FIXED BAR1 page with no source in any ogkm header, carved out of BAR1
+/// at setup. Two defects, both read out of ogkm-580:
+/// 1. **The BAR1 view is where the guest RM's own BAR1 allocator put it**, per mapping
+///    (`usermode_api.c:94-98` → `kbusMapFbAperture_GM107`, `kern_bus_gm107.c:3018`), and only when
+///    the client set `bBar1Mapping`. It is learned at runtime from the guest's BAR1 PTEs
+///    ([`crate::bar1db`]), never assumed.
+/// 2. **The BAR0 doorbell stays live on Hopper+.** RM rings kernel channels through its own BAR0
+///    register mapping (`kfifoRingChannelDoorBell_GA100` → `GPU_VREG_WR32`, used by GH100 via the
+///    GV100 routine, `kernel_fifo_gh100.c:578-586`), and a client that does not set `bBar1Mapping`
+///    gets the BAR0 view (`usermode_api.c:47,94`). The old variant made that BAR0 write
+///    unrecognised as a doorbell on Hopper.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DoorbellPlacement {
-    /// Pre-Hopper: the doorbell is a BAR0 register, so BAR1 is never trapped at all.
-    Bar0 { offset: u64 },
-    /// Hopper+: one 64 KiB page of BAR1. ★ The **only** page of BAR1 that may ever trap.
-    Bar1 { page_base: u64 },
+    /// Turing … Ada: the doorbell is `offset` into the BAR0 usermode page; BAR1 never traps.
+    Bar0 {
+        /// `NVC361_NOTIFY_CHANNEL_PENDING`.
+        offset: u64,
+    },
+    /// ★ Hopper+: the BAR0 usermode page as above, AND every BAR1 view the guest's own BAR1 PTEs
+    /// place ([`crate::bar1db::Bar1Doorbells`], installed at runtime by the VA-manager thread as a
+    /// write-trapped overlay). ⊘ No BAR1 page traps at SETUP — BAR1 is one whole memslot
+    /// (`THE_CONSTRAINTS.md` §23).
+    Bar0AndGuestBar1 {
+        /// `NVC361_NOTIFY_CHANNEL_PENDING`.
+        offset: u64,
+    },
+}
+
+impl DoorbellPlacement {
+    /// The doorbell's offset inside the usermode page — the same register through either BAR.
+    #[must_use]
+    pub const fn offset(self) -> u64 {
+        match self {
+            DoorbellPlacement::Bar0 { offset } | DoorbellPlacement::Bar0AndGuestBar1 { offset } => offset,
+        }
+    }
+
+    /// Whether the guest can place BAR1 views of the usermode page on this family.
+    #[must_use]
+    pub const fn follows_guest_bar1(self) -> bool {
+        matches!(self, DoorbellPlacement::Bar0AndGuestBar1 { .. })
+    }
 }
 
 /// ★★★ May a WRITE at `(bar, offset)` be trapped?
@@ -94,14 +132,13 @@ pub fn may_trap_write(bar: Bar, offset: u64, doorbell: DoorbellPlacement) -> boo
             // ⊘ PRAMIN is carved out of BAR0's otherwise-trappable space.
             !(PRAMIN_BASE..PRAMIN_BASE + PRAMIN_LEN).contains(&offset)
         }
-        1 => match doorbell {
-            // ⊘ The doorbell is elsewhere ⇒ BAR1 carries no trap at all.
-            DoorbellPlacement::Bar0 { .. } => false,
-            // ★ Exactly one page, and only because the doorbell is in it.
-            DoorbellPlacement::Bar1 { page_base } => {
-                (page_base..page_base + 0x1_0000).contains(&offset)
-            }
-        },
+        // ⊘ No STATIC BAR1 trap on any family. A Hopper+ BAR1 doorbell view is a runtime overlay
+        // whose writes are decoded as the VF register they name and enter as that register's BAR0
+        // alias; the BAR1 gate for it is [`crate::bar1db::Bar1Doorbells::may_trap_write`].
+        1 => {
+            let _ = (offset, doorbell);
+            false
+        }
         // ⊘ BAR2 is mapped, never trapped and never served — §6.2. Trapping it would put a
         // page-table fill through the privileged ring and overflow it on one large map.
         _ => false,
@@ -116,13 +153,16 @@ pub fn may_trap_write(bar: Bar, offset: u64, doorbell: DoorbellPlacement) -> boo
 /// subsequent READ of the data port advances a hardware cursor — and ogkm then **asserts the
 /// cursor moved** (`_kfspReadPacket_GH100`), so no shadow can satisfy it.
 ///
+/// ⊘⊘ **And CORRECTED w828: the PIO port is not the only one.** Hopper+'s memop token registers
+/// START an L2 flush / invalidate / sysmembar on a READ (`crate::cacheop::token_registers`).
+///
 /// ★★★ **The honest answer is family-scoped, and for the current product target it is still NO:**
 ///
 /// | family | read exits |
 /// |---|---|
 /// | Turing · Ampere · Ada (the bench, the target) | **none** |
-/// | Hopper | one page — FSP boot handshake |
-/// | Blackwell | two — FSP (discrete) and SEC2 (integrated) |
+/// | Hopper | three pages — FSP boot handshake; the two memop token pages (w828) |
+/// | Blackwell | four — FSP (discrete), SEC2 (integrated), the two memop token pages (w828) |
 ///
 /// ⊘ **The authority is [`crate::memmap::holes_for`], not this function.** A read exit is the
 /// absence of a memslot, so the map is where it is decided; this predicate merely reads the map,
@@ -174,10 +214,8 @@ pub fn trap_regions(doorbell: DoorbellPlacement, bar0_bytes: u64) -> Vec<TrapReg
     if bar0_bytes > after {
         v.push(TrapRegion { bar: Bar(0), base: after, len: bar0_bytes - after });
     }
-    // BAR1: the doorbell page, and nothing else, and only when the doorbell is there at all.
-    if let DoorbellPlacement::Bar1 { page_base } = doorbell {
-        v.push(TrapRegion { bar: Bar(1), base: page_base, len: 0x1_0000 });
-    }
+    // BAR1: nothing at setup, on every family — a Hopper+ doorbell view is placed at runtime
+    // (`crate::bar1db`), where the guest's BAR1 PTEs put it.
     // ⊘ BAR2 contributes no region, in any configuration.
     debug_assert!(v.iter().all(|r| {
         (r.base..r.base + r.len).step_by(0x1000).all(|o| may_trap_write(r.bar, o, doorbell))
@@ -190,8 +228,9 @@ pub fn trap_regions(doorbell: DoorbellPlacement, bar0_bytes: u64) -> Vec<TrapReg
 pub fn doorbell_for(family: kf_chip::Family) -> DoorbellPlacement {
     use kf_chip::Family::*;
     match family {
-        // ⊘ §5: "generated per die/arch; Hopper+ maps it over BAR1".
-        Hopper | Blackwell => DoorbellPlacement::Bar1 { page_base: 0x9_0000 },
+        // ★ `kf_chip::Family::usermode_mmio` is the data: Some ⇔ the GH100 memdesc HAL builds a
+        // BAR1-mappable usermode page (`g_kernel_fifo_nvoc.c:520-528`).
+        Hopper | Blackwell => DoorbellPlacement::Bar0AndGuestBar1 { offset: 0x90 },
         Turing | Ampere | Ada => DoorbellPlacement::Bar0 { offset: 0x90 },
     }
 }

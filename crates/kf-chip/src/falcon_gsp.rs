@@ -1,4 +1,5 @@
-//! Axis B, for real: the **GA10x** register model.
+//! Axis B, for real: the **falcon-regime** register model — GA10x/AD10x, and (2026-09-26) the
+//! TU102-style RISC-V block Turing and GA100 carry ([`RiscvLayout`]).
 //!
 //! `kayfabe-gsp` contains no offset, no bit position and no generation name — that is
 //! CLAUDE.md rule 1 and the reason `GspModel` exists. This module is where those numbers
@@ -98,6 +99,44 @@ const GSP_RISCV_IRQDEST: u64 = 0x0011_152c;
 const GSP_RISCV_BCR_CTRL: u64 = 0x0011_1668;
 /// `NV_PRISCV_RISCV_BCR_CTRL_VALID_TRUE` (0:0, `dev_riscv_pri.h:56-57`).
 const BCR_CTRL_VALID: u64 = 1;
+/// ★ 2026-09-26 — the **TU102-style** RISC-V block, bound for `TU102…TU117` **and GA100**
+/// (`ogkm-580: g_kernel_falcon_nvoc.c`: `kflcnIsRiscvActive_TU102`, `kflcnRiscvReadIntrStatus_TU102`,
+/// `kflcnRiscvProgramBcr_f2d351`, `kflcnSwitchToFalcon_TU102` for those chips; `_GA102` for GA102+).
+/// Offsets from `ogkm-580: swref/published/turing/tu102/dev_riscv_pri.h:27-33` (identical in
+/// `ampere/ga100/dev_riscv_pri.h`):
+///
+/// - `NV_PRISCV_RISCV_CORE_SWITCH_RISCV_STATUS` (`+0x240`, `ACTIVE_STAT` `0:0`) is what
+///   `kflcnIsRiscvActive_TU102` polls (`kernel_falcon_tu102.c:139-150`) — in place of GA102's
+///   `RISCV_CPUCTL.ACTIVE_STAT` (`7:7`);
+/// - `NV_PRISCV_RISCV_IRQMASK` / `_IRQDEST` at `+0x2b4` / `+0x2b8` (`kflcnRiscvReadIntrStatus_TU102`,
+///   `:384-393`) — GA102 has them at `+0x528` / `+0x52c`;
+/// - there is **no** `BCR_CTRL` and no core switch (`kflcnSwitchToFalcon_TU102` only updates
+///   software state, `:219-230`), so the register is not decoded at all.
+const TU102_RISCV_CORE_SWITCH_STATUS: u64 = 0x0011_1240;
+/// `NV_PRISCV_RISCV_CORE_SWITCH_RISCV_STATUS_ACTIVE_STAT_ACTIVE` at `0:0`.
+const TU102_RISCV_ACTIVE: u64 = 0x1;
+/// `NV_FALCON2_GSP_BASE + NV_PRISCV_RISCV_IRQMASK` on TU102/GA100.
+const TU102_RISCV_IRQMASK: u64 = 0x0011_12b4;
+/// `NV_FALCON2_GSP_BASE + NV_PRISCV_RISCV_IRQDEST` on TU102/GA100.
+const TU102_RISCV_IRQDEST: u64 = 0x0011_12b8;
+
+/// Which RISC-V register block a falcon-regime GSP carries — the one difference in the register
+/// vocabulary between the `_TU102` and `_GA102` falcon HALs. Every falcon (`NV_PFALCON_*`), queue,
+/// GFW-boot and WPR2 offset is the same in both (`tu102` vs `ga102` `dev_falcon_v4.h`, `dev_gsp.h`,
+/// `dev_fb.h`), and both run `kgspBootstrap_TU102` / FWSEC-FRTS / the SEC2 Booter.
+///
+/// ⚠ The HS-ucode LOAD differs too — `kgspExecuteHsFalcon_TU102` copies IMEM/DMEM by PIO
+/// (`IMEMC`/`IMEMD`/`DMEMC`/`DMEMD` writes, `kernel_gsp_falcon_tu102.c:48-150`) where GA102 DMAs and
+/// polls `DMATRFCMD` — but those are data-port WRITES with nothing to read back (§53.6), and the
+/// one read on that path, `DMACTL`'s scrubbing bits, is `DONE == 0` in the shadow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RiscvLayout {
+    /// `TU102…TU117`, GA100.
+    Tu102,
+    /// GA102…GA107, AD10x.
+    Ga102,
+}
+
 /// `NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_PRIV_LEVEL_MASK`.
 const GFW_BOOT_PLM: u64 = 0x0011_8128;
 /// `NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_0_GFW_BOOT`.
@@ -257,6 +296,8 @@ pub const RMARGS_ID: u64 = 0x0000_524d_4152_4753;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FalconGspModel {
     boot: FalconSecureBooterBoot,
+    /// ★ Which RISC-V register block this die group carries ([`RiscvLayout`]).
+    riscv: RiscvLayout,
     /// ★★★★★ **The advertised framebuffer size this model answers WPR2 for — w696h.**
     ///
     /// ⊘ `Wpr2AddrLo`/`Wpr2AddrHi` are served by [`GspModel::encode`], not from
@@ -277,16 +318,38 @@ impl FalconGspModel {
     /// answering the compile-time constant.
     #[must_use]
     pub fn with_fb_size_mb(fb_size_mb: u64) -> FalconGspModel {
+        Self::with_layout(RiscvLayout::Ga102, fb_size_mb)
+    }
+
+    /// ★ The model for a die group's RISC-V block ([`RiscvLayout`]).
+    #[must_use]
+    pub fn with_layout(riscv: RiscvLayout, fb_size_mb: u64) -> FalconGspModel {
         FalconGspModel {
             boot: FalconSecureBooterBoot::new(),
+            riscv,
             fb_size_mb,
         }
     }
 
-    /// Where this model puts a register, so a harness can address one without knowing the
-    /// encoding. `None` for a register with no offset on this generation.
+    /// Where the GA102-layout model puts a register (the GA10x/AD10x map) — see [`Self::reg_in`].
     #[must_use]
     pub fn reg_at(reg: GspReg) -> Option<(u8, u64)> {
+        Self::reg_in(RiscvLayout::Ga102, reg)
+    }
+
+    /// Where a model of `layout` puts a register, so a harness can address one without knowing
+    /// the encoding. `None` for a register with no offset on this die group.
+    #[must_use]
+    pub fn reg_in(layout: RiscvLayout, reg: GspReg) -> Option<(u8, u64)> {
+        if layout == RiscvLayout::Tu102 {
+            match reg {
+                GspReg::GspRiscvCpuctl => return Some((0, TU102_RISCV_CORE_SWITCH_STATUS)),
+                GspReg::GspRiscvIrqmask => return Some((0, TU102_RISCV_IRQMASK)),
+                GspReg::GspRiscvIrqdest => return Some((0, TU102_RISCV_IRQDEST)),
+                GspReg::GspRiscvBcrCtrl => return None,
+                _ => {}
+            }
+        }
         let off = match reg {
             GspReg::GfwBootProgress => GFW_BOOT_PROGRESS,
             GspReg::GfwBootPlm => GFW_BOOT_PLM,
@@ -319,12 +382,22 @@ impl FalconGspModel {
 
 impl GspModel for FalconGspModel {
     fn at(&self, reg: GspReg) -> Option<(u8, u64)> {
-        FalconGspModel::reg_at(reg)
+        FalconGspModel::reg_in(self.riscv, reg)
     }
 
     fn decode_reg(&self, bar: u8, off: u64) -> Option<GspReg> {
         if bar != 0 {
             return None;
+        }
+        if self.riscv == RiscvLayout::Tu102 {
+            match off {
+                TU102_RISCV_CORE_SWITCH_STATUS => return Some(GspReg::GspRiscvCpuctl),
+                TU102_RISCV_IRQMASK => return Some(GspReg::GspRiscvIrqmask),
+                TU102_RISCV_IRQDEST => return Some(GspReg::GspRiscvIrqdest),
+                // GA102's offsets are not registers of this block.
+                GSP_RISCV_CPUCTL | GSP_RISCV_IRQMASK | GSP_RISCV_IRQDEST | GSP_RISCV_BCR_CTRL => return None,
+                _ => {}
+            }
         }
         if (QUEUE_HEAD0..QUEUE_HEAD0 + QUEUE_HEAD_COUNT * 8).contains(&off)
             && (off - QUEUE_HEAD0).is_multiple_of(8)
@@ -407,12 +480,16 @@ impl GspModel for FalconGspModel {
             GspReg::GspFalconIrqsclr => 0,
             // ★ w827: the core the guest last selected, VALID (`kf_arch::gsp::GspReg::GspRiscvBcrCtrl`);
             // never written = the reset value (FALCON, not VALID).
+            GspReg::GspRiscvBcrCtrl if self.riscv == RiscvLayout::Tu102 => return None,
             GspReg::GspRiscvBcrCtrl => obs.riscv_bcr_ctrl.map_or(0, |v| u64::from(v) | BCR_CTRL_VALID),
             GspReg::GspRiscvCpuctl => {
-                if obs.riscv_active {
-                    RISCV_CPUCTL_ACTIVE
-                } else {
+                if !obs.riscv_active {
                     0
+                } else if self.riscv == RiscvLayout::Tu102 {
+                    // `CORE_SWITCH_RISCV_STATUS.ACTIVE_STAT` (`0:0`).
+                    TU102_RISCV_ACTIVE
+                } else {
+                    RISCV_CPUCTL_ACTIVE
                 }
             }
             // Derived from THIS MODEL'S size (`FalconGspModel::fb_size_mb`) — there is no other.
@@ -435,6 +512,27 @@ impl GspModel for FalconGspModel {
             GspReg::Sec2FalconMailbox0 => 0,
             GspReg::GspQueueHead(_) => 0,
         })
+    }
+
+    /// ★★★ w828 — the two registers whose read-back the WRITE decides and which order no FSM
+    /// effect (see [`GspModel::answer_on_store`] for the rule and the boot it cost):
+    ///
+    /// - `DMATRFCMD` (GSP and SEC2): `IDLE=TRUE|FULL=FALSE` whatever was written — there is no
+    ///   ucode, so the "DMA" the command asks for has always already finished. The guest polls
+    ///   `IDLE` right after writing the command (`s_dmaTransfer_GA102`, `ogkm-580: src/nvidia/src/
+    ///   kernel/gpu/gsp/arch/ampere/kernel_gsp_falcon_ga102.c:140-144`).
+    /// - `BCR_CTRL`: the core just selected, `VALID` — `kflcnSwitchToFalcon_GA102` writes
+    ///   `CORE_SELECT_FALCON` and spins on `VALID` (`ogkm-580: .../falcon/arch/ampere/
+    ///   kernel_falcon_ga102.c:140-161`).
+    ///
+    /// ⊘ NOT `CPUCTL`: its `HALTED` is the completion edge that orders WPR2 behind it.
+    fn answer_on_store(&self, reg: GspReg, written: u64) -> Option<u64> {
+        match reg {
+            GspReg::GspFalconDmatrfcmd | GspReg::Sec2FalconDmatrfcmd => Some(DMATRFCMD_IDLE),
+            #[allow(clippy::cast_possible_truncation)]
+            GspReg::GspRiscvBcrCtrl if self.riscv == RiscvLayout::Ga102 => Some(u64::from(written as u32) | BCR_CTRL_VALID),
+            _ => None,
+        }
     }
 
     /// ★ This generation is inside the falcon/secure-booter regime: NVIDIA's own

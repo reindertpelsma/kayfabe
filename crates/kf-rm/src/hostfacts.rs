@@ -60,6 +60,10 @@ pub struct HostFacts {
     pub family: Family,
     /// Whether a chip-to-chip link exists (`BUS_GET_C2C_INFO`).
     pub has_c2c: bool,
+    /// ★ The host die's own copy-engine caps (`CE_GET_ALL_CAPS` `0x20802a0a`, NON_PRIVILEGED):
+    /// the per-LCE caps the three CE-caps controls serve and the GRCE set the engine table lays
+    /// out. ⊘ Replaces `GA10X_LCE_BASE_CAPS` / `GA10X_GRCE_LCE_MASK` (GB20x has four GRCEs).
+    pub ce_caps: kf_abi::cecaps::HostCeCaps,
     /// The FIFO engine list (`GET_ENGINES_V2` + `GET_HW_ENGINE_ID` + family device-info rules).
     /// Served by `DeviceInfo`, `InternalDeviceInfo` and the three CE-caps controls.
     pub engines: Vec<FifoDeviceEntry>,
@@ -94,8 +98,25 @@ pub struct HostFacts {
     pub gr_info: GrInfoProfile,
     /// GR context buffer sizes (`GR_GET_ENGINE_CONTEXT_PROPERTIES`).
     pub gr_context_buffers: [ContextBuffer; CONTEXT_BUFFER_ID_COUNT],
+    /// ★ v3-gfx: GR zcull geometry (`GR_GET_ZCULL_INFO`); `None` = the host die has none.
+    pub gr_zcull_info: Option<[u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS]>,
+    /// ★ v3-gfx: the ZBC table index ranges `(start, end)` for color / depth / stencil
+    /// (`GET_ZBC_CLEAR_TABLE_SIZE` on a host ZBC object); `None` = the die has no ZBC table.
+    pub zbc_table_sizes: Option<[(u32, u32); 3]>,
+    /// ★ v3-gfx: `FB_GET_INFO_V2` geometry indices the guest kernel forwards and `kf_abi::fbinfo`
+    /// does not derive (`PARTITION_COUNT`/`_MASK`, `LTC_MASK`), each the host's own answer;
+    /// an index the host refuses is absent (and the guest's request for it refused, as before).
+    pub forwarded_fb_extra: Vec<(u32, u32)>,
+    /// ★ v3-gfx: `FB_GET_GPU_CACHE_INFO` (`0x20801315`) — the host's L2 state words
+    /// `{powerState, writeMode, bypassMode, rcmState}`; `None` = refused on the host.
+    pub gpu_cache_info: Option<[u32; 4]>,
     /// `GPU_GET_INFO_V2` indices answered from the host's own reply.
     pub forwarded_gpu_info: Vec<(u32, u32)>,
+    /// ★ `FB_GET_INFO_V2` indices answered from the host's own reply (bus width, RAM type, FBP
+    /// count/mask, L2 size, LTC/LTS counts). ⊘ Replaces the GA10x ratio projections
+    /// (`kf_abi::fbinfo::GA10X_*`): an AD106 has a 128-bit bus and a 32 MiB L2 that no Ampere
+    /// ratio reproduces — the host states the die's own words, unprivileged.
+    pub forwarded_fb_info: Vec<(u32, u32)>,
     /// SMC (MIG) mode (`GPU_GET_INFO_V2[GPU_SMC_MODE]`; ⚠ the INTERNAL `GET_SMC_MODE` is
     /// kernel-only).
     pub smc_mode: SmcMode,
@@ -112,6 +133,25 @@ pub struct HostFacts {
     pub gpu_name: Option<GpuName>,
     /// The short name (`GPU_GET_SHORT_NAME_STRING` `0x20800111`), e.g. `GA106-A`.
     pub gpu_short_name: Option<GpuName>,
+    /// ★ The host's VBIOS version `(REVISION, OEM_REVISION)` (`BIOS_GET_INFO_V2` `0x20800810`,
+    /// NON_PRIVILEGED) — what the synthetic ROM declares (`kf_chip::bar0::vbios_profile`) and what
+    /// the guest's own `BIOS_GET_INFO_V2` is answered with (`nvidia-smi`'s VBIOS column).
+    /// ⊘ Replaces the GA106 row's `0x9418_0000` on every die.
+    /// `None` = the host did not answer: **cosmetic, so never a realize failure** — the ROM carries
+    /// `kf_abi::vbios::NEUTRAL_VBIOS_VERSION` and the guest's ask is refused, as before.
+    pub vbios_version: Option<(u32, u8)>,
+    /// ★ The host's reply to libcudart's `PERF_GET_LEVEL_INFO_V2` question
+    /// (`kf_abi::cudartinit::perf_level_info_v2_request`, `0x2080200b`, NON_PRIVILEGED), asked
+    /// once at realize. `None` = the host refused it, and the guest's identical ask is refused
+    /// likewise (the guest sees what host userspace sees). ⊘ Replaces the GA106 clock words.
+    pub perf_level_info_v2: Option<Vec<u8>>,
+    /// ★ The host's answers to the GSS-legacy requests of `kf_abi::gssreplay::ROWS` (the clock
+    /// listing / clock query `libnvidia-encode` gates a session on), asked at realize with requests
+    /// we author. A row the host refused is absent (the guest's is then answered as before).
+    pub gss_replay: Vec<kf_abi::gssreplay::Answer>,
+    /// ★ The host's `MSENC_GET_CAPS_V2` / `BSP_GET_CAPS_V2` tables for the advertised video
+    /// engines (`kf_abi::videocaps`).
+    pub video_caps: Vec<kf_abi::videocaps::CapsAnswer>,
 }
 
 /// Where a fact comes from.
@@ -142,6 +182,7 @@ pub enum Source {
 pub const PROVENANCE: &[(&str, Source)] = &[
     ("family", Source::HostControl { cmd: 0x2080_1701, name: "MC_GET_ARCH_INFO" }),
     ("has_c2c", Source::HostControl { cmd: 0x2080_182b, name: "BUS_GET_C2C_INFO" }),
+    ("ce_caps", Source::HostControl { cmd: 0x2080_2a0a, name: "CE_GET_ALL_CAPS (per-LCE caps + GRCE bits; the three kernel-OR-able bits stripped, kf_abi::cecaps::KERNEL_OR_CAPS)" }),
     // ★ w827 ruling: "WE ARE THE GSP". The host supplies the engine TYPES and COUNTS; every
     // slot of each row describes OUR device (guest channels are re-born on host twins), authored
     // per family in `crate::authored::engine_table` (ogkm constants + a stated layout). The
@@ -153,9 +194,9 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("intr_subtree_map", Source::HostControl { cmd: 0x2080_170f, name: "MC_GET_INTR_CATEGORY_SUBTREE_MAP" }),
     ("chip_info", Source::FamilyRule("USERMODE base = DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET) + NV_VIRTUAL_FUNCTION (ogkm dev_vm.h); sub-rev from MC_GET_ARCH_INFO; isCmpSku from GPU_GET_INFO_V2[CMP_SKU 0x3c]")),
     ("user_register_access_map", Source::Authored("accessmap.rs")),
-    ("constructed_falcons", Source::Authored("none constructed")),
+    ("constructed_falcons", Source::HostControl { cmd: 0x2080_01b0, name: "GPU_GET_CONSTRUCTED_FALCON_INFO, kept to the engDescs of the advertised VIDEO engines (NVENC/NVDEC); empty when the host lists none (hostquery::query_video_falcons)" }),
     ("memory_system", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 (L2 size, RAM type, LTC count) + GR_GET_INFO_V2[LITTER_NUM_SLICES_PER_LTC]; comptag policy, compression page and flags authored" }),
-    ("device_info", Source::FamilyRule("PRI bases: GR = NV_PGRAPH 0x400000, LCE = the NV_CE block 0x104000 (ogkm dev_ce.h), SW = not a device; over the GPU_GET_ENGINES_V2 list")),
+    ("device_info", Source::FamilyRule("PRI bases: GR = NV_PGRAPH 0x400000, LCE = the NV_CE block 0x104000 (ogkm dev_ce.h), NVENC/NVDEC = the host falcon table's registerBase for the same engDesc, SW = not a device; over the GPU_GET_ENGINES_V2 list")),
     ("conf_compute", Source::Authored("CC off, fabricated so ogkm accepts it")),
     ("bif_static", Source::Authored("fabricated so ogkm accepts it (no C2C, single function)")),
     ("fifo_channels", Source::Authored("the channel count is ours to set")),
@@ -165,7 +206,12 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gr_static", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2 (SMs per TPC) + GR_GET_GPC_MASK 0x2080122a / GR_GET_TPC_MASK 0x2080122b / GR_GET_GLOBAL_SM_ORDER 0x2080121b / GR_GET_CAPS_V2 0x20801227; + GR_GET_ZCULL_MASK 0x20801237; mmu-per-GPC / PES per GPC from GR info litters; TPC-to-PES map, FECS record size, per-subctx header authored (authored.rs)" }),
     ("gr_info", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2" }),
     ("gr_context_buffers", Source::HostControl { cmd: 0x2080_122d, name: "GR_GET_ENGINE_CONTEXT_PROPERTIES" }),
+    ("gr_zcull_info", Source::HostControl { cmd: 0x2080_1206, name: "GR_GET_ZCULL_INFO (host NOT_SUPPORTED = no zcull on the die)" }),
+    ("zbc_table_sizes", Source::HostControl { cmd: 0x9096_0106, name: "GET_ZBC_CLEAR_TABLE_SIZE on a host GF100_ZBC_CLEAR object (ranges only; the table itself is per-VM, kf_rm::zbc)" }),
+    ("forwarded_fb_extra", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 [PARTITION_COUNT 0x04, PARTITION_MASK 0x14/0x37, LTC_MASK 0x2b/0x38], each index asked alone" }),
+    ("gpu_cache_info", Source::HostControl { cmd: 0x2080_1315, name: "FB_GET_GPU_CACHE_INFO" }),
     ("forwarded_gpu_info", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2" }),
+    ("forwarded_fb_info", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 (the seven indices libcuda forwards; host words verbatim)" }),
     // ⊘ w827 CORRECTED from `GPU_GET_PARTITIONS 0x20800175` "(no partitions => SMC
     // unsupported)": an inference, and wrong for a MIG-capable part with MIG off (A100 is
     // DISABLED, not UNSUPPORTED). `GPU_GET_INFO_V2[GPU_SMC_MODE]` returns the mode word itself
@@ -178,6 +224,10 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gsp_features", Source::HostControl { cmd: 0x2080_3601, name: "GSP_GET_FEATURES" }),
     ("gpu_name", Source::HostControl { cmd: 0x2080_0110, name: "GPU_GET_NAME_STRING (ASCII)" }),
     ("gpu_short_name", Source::HostControl { cmd: 0x2080_0111, name: "GPU_GET_SHORT_NAME_STRING" }),
+    ("vbios_version", Source::HostControl { cmd: 0x2080_0810, name: "BIOS_GET_INFO_V2 [REVISION 0x0, OEM_REVISION 0x1] (a host that does not answer = None: cosmetic, never a realize failure)" }),
+    ("perf_level_info_v2", Source::HostControl { cmd: 0x2080_200b, name: "PERF_GET_LEVEL_INFO_V2 (libcudart's question, asked once; a host refusal is kept and relayed)" }),
+    ("video_caps", Source::HostControl { cmd: 0x0080_1c02, name: "MSENC_GET_CAPS_V2 0x801b02 / BSP_GET_CAPS_V2 0x801c02 on the host DEVICE, per advertised instance (kf_abi::videocaps)" }),
+    ("gss_replay", Source::HostControl { cmd: 0x2080_a028, name: "GSS-legacy 0x20809064 / 0x2080a028 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author; the bytes the host wrote" }),
 ];
 
 /// Why a host reply could not become a fact — by name, never a zero.
@@ -256,6 +306,45 @@ pub fn derive_ce_present_mask(reply: &[u8]) -> Result<u64, FactRefusal> {
     let mut b = [0u8; 8];
     b.copy_from_slice(w);
     Ok(u64::from_le_bytes(b))
+}
+
+/// ★ `ce_caps` from the host's `CE_GET_ALL_CAPS` (`0x20802a0a`) reply.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`]; [`FactRefusal::NoCopyEngine`] when the host marks none present.
+pub fn derive_ce_caps(reply: &[u8]) -> Result<kf_abi::cecaps::HostCeCaps, FactRefusal> {
+    let c = kf_abi::cecaps::HostCeCaps::decode(reply).map_err(|_| FactRefusal::ShortReply {
+        cmd: kf_abi::cecaps::NV2080_CTRL_CMD_CE_GET_ALL_CAPS,
+        len: reply.len(),
+    })?;
+    if c.present == 0 {
+        return Err(FactRefusal::NoCopyEngine);
+    }
+    Ok(c)
+}
+
+pub use kf_abi::vbios::{
+    BIOS_GET_INFO_V2_PARAMS_SIZE, BIOS_INFO_INDEX_OEM_REVISION, BIOS_INFO_INDEX_REVISION,
+    NV2080_CTRL_CMD_BIOS_GET_INFO_V2,
+};
+
+/// ★ `vbios_version` from a `BIOS_GET_INFO_V2` reply asked `[REVISION, OEM_REVISION]`.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`], [`FactRefusal::Missing`] naming an absent index, or
+/// [`FactRefusal::Unservable`] for an OEM revision wider than the ROM's byte.
+pub fn derive_vbios_version(reply: &[u8]) -> Result<(u32, u8), FactRefusal> {
+    let cmd = NV2080_CTRL_CMD_BIOS_GET_INFO_V2;
+    if reply.len() < BIOS_GET_INFO_V2_PARAMS_SIZE {
+        return Err(FactRefusal::ShortReply { cmd, len: reply.len() });
+    }
+    let w = |o: usize| u32::from_le_bytes([reply[o], reply[o + 1], reply[o + 2], reply[o + 3]]);
+    let n = (w(0) as usize).min(15);
+    let find = |index: u32| (0..n).find(|&i| w(4 + 8 * i) == index).map(|i| w(8 + 8 * i));
+    let rev = find(BIOS_INFO_INDEX_REVISION).ok_or(FactRefusal::Missing { cmd, index: BIOS_INFO_INDEX_REVISION })?;
+    let oem = find(BIOS_INFO_INDEX_OEM_REVISION).ok_or(FactRefusal::Missing { cmd, index: BIOS_INFO_INDEX_OEM_REVISION })?;
+    let oem = u8::try_from(oem).map_err(|_| FactRefusal::Unservable { cmd, why: "OEM revision wider than the ROM's byte" })?;
+    Ok((rev, oem))
 }
 
 /// ★ The GSP feature mask from the host's `GSP_GET_FEATURES` reply (word 0).

@@ -113,3 +113,50 @@ impl BackendFd {
         unsafe { std::os::fd::BorrowedFd::borrow_raw(self.0) }
     }
 }
+
+/// ★ The C device's BAR1 overlay verb (`V3_BAR1_DOORBELL.md` §3.1): QUEUE change `seq` — `op` 1 =
+/// show usermode-page bytes `[vf_rel, vf_rel+len)` write-trapped at BAR1 `[base, base+len)`; `op` 0
+/// = remove the overlay at `base`. ⊘ Never waits (ruling 2026-09-26 (5)): it enqueues and schedules
+/// a main-loop bottom half, which applies the changes in FIFO order under the BQL and reports each
+/// through `kf3_bar1_overlay_done(seq, rc)`. Returns 0 once queued, or a negative errno. Called only
+/// from the VA-manager thread.
+pub type OverlayFn =
+    unsafe extern "C" fn(opaque: *mut core::ffi::c_void, seq: u64, op: u32, base: u64, len: u64, vf_rel: u64) -> i32;
+
+/// The registered overlay verb and its opaque device pointer.
+#[derive(Debug, Clone, Copy)]
+pub struct OverlayHook {
+    f: OverlayFn,
+    opaque: *mut core::ffi::c_void,
+}
+
+// SAFETY: `opaque` is the C device's state, which lives for the process (the device is never
+// freed — `kf3_unrealize` only stops threads); the verb only takes the C queue's own mutex and
+// schedules a bottom half, both thread-safe.
+unsafe impl Send for OverlayHook {}
+// SAFETY: as above.
+unsafe impl Sync for OverlayHook {}
+
+impl OverlayHook {
+    /// Adopt the C device's verb.
+    ///
+    /// # Safety
+    /// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime, and
+    /// must not block.
+    #[must_use]
+    pub unsafe fn adopt(f: OverlayFn, opaque: *mut core::ffi::c_void) -> OverlayHook {
+        OverlayHook { f, opaque }
+    }
+
+    /// Queue change `seq`. `Err` carries the C device's negative errno (nothing was queued).
+    ///
+    /// # Errors
+    /// The C device's refusal.
+    pub fn submit(&self, seq: u64, op: u32, base: u64, len: u64, vf_rel: u64) -> Result<(), i32> {
+        // SAFETY: the contract `adopt` was given.
+        match unsafe { (self.f)(self.opaque, seq, op, base, len, vf_rel) } {
+            0 => Ok(()),
+            e => Err(e),
+        }
+    }
+}

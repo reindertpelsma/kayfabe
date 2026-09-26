@@ -45,6 +45,17 @@ nothing — if the virtio device does not initialise or kayfabe is not detected,
 that it is inert. ⇒ Harmless on bare metal and under any other VMM. A **Windows** version is an
 end-stage goal (feasibility to be established then).
 
+⊘ **Windows — researched 2026-09-26, answer: NOT possible as a legitimate driver today; possibly not
+needed.** Sourced: under WDDM, CUDA submission goes through the OS to the KMD
+(`DxgkDdiSubmitCommandToHwQueue`) even with HAGS, so the doorbell is rung by nvlddmkm's own kernel
+mapping, not from user mode; there is no supported WDDM miniport filter model, and redirecting
+another driver's mapping needs kernel hooking (PatchGuard/HVCI/signing forbid it). WDDM's user-mode
+work submission (24H2) would reopen the question but is "under development" with no NVIDIA adoption
+found. Inferred: Windows batches submissions, so doorbells/token may be far below Linux's ~1,008.
+⇒ Measure first on a Windows guest (GSP forced on, HAGS on/off): doorbells per token and the guest
+CPL at each trapped doorbell. Meanwhile, the cross-OS lever is a cheaper exit (in-kernel doorbell
+handling + coalescing), not a guest module. Full write-up with sources: `V3_WINDOWS_DOORBELL_RESEARCH.md`.
+
 ### Lifecycle and the BAR1 doorbell (owner, 2026-09-26)
 
 **Guest-visible resources** (exposed by kayfabe, discovered over virtio): a BAR holding (a) the host
@@ -119,6 +130,14 @@ To be verified against ogkm's unmap ordering before implementation.
   (`:966-995`) → `kfifoUpdateUsermodeDoorbell_GA100` (`:153-165`) → `GPU_VREG_WR32`; GH100 uses the
   GV100 routine (`arch/hopper/kernel_fifo_gh100.c:578-586`). Those never pass through the module's
   userspace page. (UVM's ring path: not yet checked.)
+- ★ **RESOLVED IN SOURCE 2026-09-26 → `V3_BAR1_DOORBELL.md`** (hardware-unverified). The bullet below
+  is right about the mechanism; the answers: the BAR1 VA comes from the guest RM's own BAR1 allocator
+  per mapping (`kbusMapFbAperture_GM107` → `dmaAllocMapping_HAL`), UVM ALWAYS sets `bBar1Mapping` on
+  Hopper+ and rings its channels through that view (`nv_gpu_ops.c:5548,5625`), nvidia-push sets it
+  too, libcuda is closed (measured by that doc's T0). kayfabe now overlays a write trap wherever the
+  guest's BAR1 PTEs put the view (`kf_trap::bar1db`) and removes it on unmap; the fixed `0x9_0000`
+  page is gone. The GPU-VA mapping is UVM-under-CC only in ogkm; kayfabe answers CC off and does not
+  mirror such a view (counted). The module's BAR1 replay set is `Bar1Target::views()`.
 - **Hopper+ BAR1 doorbell is opt-in**: `usrmodeConstruct_IMPL` (`usermode_api.c`) maps BAR0 unless
   the client sets `bBar1Mapping`; the BAR1 view is an RM-allocated mapping, not a fixed offset. The
   same flag enables a GPU-VA ("internal MMIO") mapping of the doorbell page, i.e. GPU-originated
@@ -170,5 +189,6 @@ gap), projecting roughly 0.7–0.9× bare metal there. On a non-nested host the 
 
 ## 8. Open
 
-UVM's doorbell path; Hopper `bBar1Mapping` and GPU-originated rings; hook maintenance per driver
+UVM's doorbell path and Hopper `bBar1Mapping` / GPU-originated rings: answered from source in
+`V3_BAR1_DOORBELL.md` (2026-09-26; UVM rings through its BAR1 view on Hopper+). Still open: hook maintenance per driver
 release; a non-nested baseline to decide priority.

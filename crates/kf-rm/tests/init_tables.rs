@@ -466,7 +466,14 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // `0x20802a07` it needs no derivation either, because EVERY field is `[input]`. The
     // reply is the guest's own facts re-encoded from what the decoder accepted; this port
     // states no number of its own anywhere in it. See `kf_abi::fmbpromote`.
-    assert_eq!(WantedTable::ALL.len(), 47, "the served universe\'s size");
+    // ★ 47 -> 48 at v3-gfx: `0x20800a2c` INTERNAL_STATIC_KGR_GET_ZCULL_INFO, from the host's
+    // unprivileged GR_GET_ZCULL_INFO. Boot never needed it (its status is clobbered,
+    // `kernel_graphics.c:1360`); graphics does — the guest serves the client zcull query from
+    // this cache alone (`V3_HEADLESS_GRAPHICS.md` §1.2).
+    // ★ 48 -> 49 at v3-gfx: `0x20801315` FB_GET_GPU_CACHE_INFO, the host's L2 state verbatim.
+    // ★ 49 -> 50 at v3-gfx: `0x00801707` FIFO_GET_ENGINE_CONTEXT_PROPERTIES from the host's
+    // context-buffer table (the Vulkan UMD asks GRAPHICS_ZCULL after its 3D object).
+    assert_eq!(WantedTable::ALL.len(), 51, "the served universe\'s size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();
@@ -676,4 +683,35 @@ fn both_ids_of_the_page_directory_publication_answer_identically() {
         let r = policy().respond(&c).expect("refused, not ignored");
         assert_ne!(r.rpc_result, 0, "cmd {cmd:#x} accepted a misaligned range");
     }
+}
+
+/// ★ 2026-09-26: the guest's own `BIOS_GET_INFO_V2` (`0x20800810`) is answered from the HOST's VBIOS
+/// version (so guest `nvidia-smi` shows the real VBIOS), and refused when the host gave none — never
+/// a zero version, and never an index the header does not define.
+#[test]
+fn bios_get_info_v2_is_the_hosts_version_or_refused() {
+    let size = kf_abi::vbios::BIOS_GET_INFO_V2_PARAMS_SIZE;
+    let ask = |indices: &[u32]| {
+        let mut c = command(kf_abi::vbios::NV2080_CTRL_CMD_BIOS_GET_INFO_V2, size);
+        c.payload[40..44].copy_from_slice(&(indices.len() as u32).to_le_bytes());
+        for (i, ix) in indices.iter().enumerate() {
+            c.payload[44 + 8 * i..48 + 8 * i].copy_from_slice(&ix.to_le_bytes());
+        }
+        c
+    };
+    let word = |b: &[u8], o: usize| u32::from_le_bytes(b[o..o + 4].try_into().unwrap());
+
+    let mut host = ga106::host_facts();
+    host.vbios_version = Some((0x9406_1d00, 0x28));
+    let abi = kf_rm::abi::gsp_abi_for(kf_abi::versions::BENCH_DRIVER).expect("wire table");
+    let mut p = InitTablePolicy::new(ga106::board(), std::sync::Arc::new(host.clone()), abi.driver);
+    let r = p.respond(&ask(&[1, 0])).expect("answered");
+    assert_eq!(r.rpc_result, 0);
+    assert_eq!((word(&r.body, 44), word(&r.body, 48)), (1, 0x28), "OEM_REVISION");
+    assert_eq!((word(&r.body, 52), word(&r.body, 56)), (0, 0x9406_1d00), "REVISION");
+    assert_ne!(p.respond(&ask(&[2])).expect("answered").rpc_result, 0, "an undefined index is refused");
+
+    host.vbios_version = None;
+    let mut p = InitTablePolicy::new(ga106::board(), std::sync::Arc::new(host), abi.driver);
+    assert_ne!(p.respond(&ask(&[0])).expect("answered").rpc_result, 0, "no host version: refused as before");
 }

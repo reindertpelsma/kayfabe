@@ -47,17 +47,24 @@ fn the_current_product_target_has_no_read_exits_at_all() {
 #[test]
 fn hopper_and_blackwell_have_a_read_exit_and_each_one_is_NAMED() {
     // ⊘ The exception §52 was forced to concede. It is bounded, and the bound is what matters:
-    // one page per family (two for Blackwell, which is split by die group), each boot-only.
+    // the boot handshake page (two for Blackwell, which is split by die group), plus — w828 — the
+    // two memop token pages, whose READ starts an L2 flush / invalidate / sysmembar
+    // (`kf_trap::cacheop::token_registers`; the "PIO auto-increment is the only read side effect"
+    // claim this test used to rest on was wrong).
     // ⚠ Contradicted by: an unnamed hole, or a hole count that grows without a source citation.
-    assert_eq!(map_for(Family::Hopper).read_exit_pages(), 1);
-    assert_eq!(map_for(Family::Blackwell).read_exit_pages(), 2);
+    assert_eq!(map_for(Family::Hopper).read_exit_pages(), 3);
+    assert_eq!(map_for(Family::Blackwell).read_exit_pages(), 4);
 
     for f in [Family::Hopper, Family::Blackwell] {
         for r in map_for(f).read_exit_regions() {
             let Disposition::Hole { why } = r.how else { unreachable!() };
             // A hole must say WHICH register dragged the page in — the page costs 4 KiB of
             // implementation, so a reader must never have to guess what bought it.
-            assert!(why.contains("EMEMD"), "{f:?}: hole at {:#x} is not named: {why:?}", r.base);
+            assert!(
+                why.contains("EMEMD") || why.contains("a READ starts the memop"),
+                "{f:?}: hole at {:#x} is not named: {why:?}",
+                r.base
+            );
             assert_eq!(r.len, PAGE, "a hole is exactly one page");
             assert_eq!(r.base % PAGE, 0, "a hole must be page-aligned or KVM cannot express it");
         }
@@ -97,7 +104,7 @@ fn the_counter_page_is_a_host_mapping_and_it_is_the_only_one() {
 }
 
 #[test]
-fn bar2_never_exits_and_bar1_exits_only_on_the_doorbell_page() {
+fn bar2_never_exits_and_bar1_never_exits_at_setup() {
     // `[owner]` "no traps for bar1/2 (except doorbell in bar1)".
     for f in FAMILIES {
         let m = map_for(f);
@@ -106,17 +113,18 @@ fn bar2_never_exits_and_bar1_exits_only_on_the_doorbell_page() {
         }
         let exiting: Vec<_> =
             m.regions.iter().filter(|r| r.bar == Bar(1) && r.how.write_exits()).collect();
-        match doorbell_for(f) {
-            kf_trap::trappolicy::DoorbellPlacement::Bar0 { .. } => {
-                assert!(exiting.is_empty(), "{f:?}: BAR1 must not exit with a BAR0 doorbell");
-            }
-            kf_trap::trappolicy::DoorbellPlacement::Bar1 { page_base } => {
-                assert_eq!(exiting.len(), 1, "{f:?}");
-                assert_eq!((exiting[0].base, exiting[0].len), (page_base, 0x1_0000));
-                // ⊘ Writes only — the doorbell is rung by a write. Reads of that page stay free.
-                assert!(!exiting[0].how.read_exits(), "{f:?}: the doorbell page must not read-exit");
-            }
-        }
+        // ⊘⊘⊘ 2026-09-26 (`V3_BAR1_DOORBELL.md`): no family carves a BAR1 page at SETUP. The
+        // Hopper+ view is where the guest's BAR1 PTEs put it and is overlaid at runtime
+        // (`kf_trap::bar1db`); the old fixed `0x9_0000` page had no ogkm source.
+        assert!(exiting.is_empty(), "{f:?}: BAR1 must not exit at setup");
+        let bar1: Vec<_> = m.regions.iter().filter(|r| r.bar == Bar(1)).collect();
+        assert_eq!(bar1.len(), 1, "{f:?}: BAR1 is ONE memslot (THE_CONSTRAINTS §23)");
+        assert_eq!(
+            doorbell_for(f).follows_guest_bar1(),
+            matches!(f, kf_chip::Family::Hopper | kf_chip::Family::Blackwell),
+            "{f:?}"
+        );
+        assert_eq!(doorbell_for(f).offset(), 0x90, "{f:?}: NVC361_NOTIFY_CHANNEL_PENDING, both BARs");
         // ★ No BAR1/BAR2 region may EVER read-exit, under any family.
         assert!(
             m.regions.iter().filter(|r| r.bar != Bar(0)).all(|r| !r.how.read_exits()),

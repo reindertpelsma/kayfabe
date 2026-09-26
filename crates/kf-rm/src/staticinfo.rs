@@ -62,6 +62,7 @@ pub struct StaticInfoPolicy {
     gid: GpuGid,
     name: Option<GpuName>,
     short_name: Option<GpuName>,
+    engine_caps: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
 }
 
 impl StaticInfoPolicy {
@@ -94,7 +95,17 @@ impl StaticInfoPolicy {
             gid,
             name: None,
             short_name: None,
+            engine_caps: [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
         }
+    }
+
+    /// ★ `engineCaps[]` — the NV2080-indexed engine bitmask, from the SAME engine table the FIFO
+    /// device-info reply is built from ([`crate::authored::engine_caps`]), so the two statements
+    /// of "which engines exist" cannot disagree.
+    #[must_use]
+    pub fn with_engine_caps(mut self, caps: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS]) -> StaticInfoPolicy {
+        self.engine_caps = caps;
+        self
     }
 
     /// ★★★ **The door the model name comes through** — and it is deliberately the only
@@ -179,6 +190,7 @@ impl StaticInfoPolicy {
                 // ★★★★ P4: OUR BAR2 root — the page every BAR2 invalidate will name, and the
                 // one fn 70 writes the guest's `PDE3[0]` into.
                 bar2_pde_base: self.board.bar2_pde_base,
+                engine_caps: self.engine_caps,
             },
             self.driver.gsp_static_info_wire(),
         )

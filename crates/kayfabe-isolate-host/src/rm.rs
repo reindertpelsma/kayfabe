@@ -95,6 +95,7 @@ use kayfabe_abi::bringup::{
     NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
     NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
+    CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
 };
 // ★★ #156 — the three ARCH-VARYING class ids that used to be imported here
 // (`AMPERE_CHANNEL_GPFIFO_A`, `AMPERE_USERMODE_A`, `AMPERE_DMA_COPY_B`) are gone. They
@@ -1088,16 +1089,23 @@ mod birth_conn {
             // `gpu_index` is the connection's own answer to which device. Both are read
             // rather than assumed, for constraint 12's reason: a per-die fact must be
             // derived, never hardcoded.
+            // ⊘⊘ `gpu_index` is the MINOR, not the RM device instance (V3_MULTI_GPU_AUDIT §2
+            // blocker 2) — resolved on B's own control node, never assumed equal.
+            let (_card, id) = super::resolve_device_instance(&conn.ctl, handed.root(), gpu_index)
+                .map_err(|(rung, detail)| {
+                    eprintln!("BirthConn: {rung}: {detail}");
+                    RmError::Other(ABI_ENCODE_FAILED)
+                })?;
             let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
             Nv0080AllocParameters {
-                device_id: gpu_index,
+                device_id: id.device_instance,
                 ..Default::default()
             }
             .encode_into(&mut dev_params)
             .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let device = conn.alloc(handed.root(), NV01_DEVICE_0, &mut dev_params)?;
             let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
-            Nv2080AllocParameters { sub_device_id: 0 }
+            Nv2080AllocParameters { sub_device_id: id.sub_device_instance }
                 .encode_into(&mut sub_params)
                 .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let subdevice = conn.alloc(device, NV20_SUBDEVICE_0, &mut sub_params)?;
@@ -1808,6 +1816,10 @@ pub struct RmConnection {
     ///   "unimplemented", which is the difference between *"the sandbox blocked the BAR
     ///   mapping"* and *"nobody wrote this yet"*.
     usermode: Result<UsermodeWindow, RmError>,
+    /// ★ The host GPU (`CARD_INFO` for our minor) and the RM device instance resolved from it
+    /// (`GET_ID_INFO_V2`) — never `deviceId = minor` (V3_MULTI_GPU_AUDIT §2 blocker 2).
+    card: CardInfo,
+    device_instance: u32,
     /// ★★★ **The host GPU's class profile** (`#156`) — the three class ids whose correct
     /// value depends on which generation the *host* board is, supplied once at
     /// [`RmConnection::open`] and immutable afterwards.
@@ -1817,6 +1829,11 @@ pub struct RmConnection {
     /// a Hopper host and are still *allocatable* there under the Ampere name, so the
     /// wrong one would have been served rather than refused. See
     /// [`kayfabe_arch::HostClasses`] for the table and the sourcing.
+    ///
+    /// ⊘⊘ **CORRECTED 2026-09-26 — it is a PROBE now** at every in-tree caller:
+    /// [`RmConnection::open_on_host`] reads the device's `GET_CLASSLIST_V2` and derives the
+    /// profile (`kayfabe_chips::DerivedHostClasses`). [`RmConnection::open`] still takes a pin
+    /// for a caller that has one. The paragraph below is the pre-probe state.
     ///
     /// ⊘ It is a **pin, not a probe.** Nothing here asks the device what it is; the
     /// caller passes a profile and today every caller passes the same one
@@ -3214,6 +3231,69 @@ impl ViewAccess {
     }
 }
 
+/// ★★ **Which RM device instance is `/dev/nvidia<minor>`** — the twin of the resolution in
+/// `kf_host::HostRm::open`, for every raw-client path that allocates an `NV01_DEVICE_0`.
+///
+/// `NV0080_ALLOC_PARAMETERS.deviceId` is RM's *device instance*, assigned at attach, lowest
+/// free first; the minor is a Linux chardev number. They diverge whenever a lower-numbered
+/// GPU is not attached (V3_MULTI_GPU_AUDIT §2 blocker 2 — measured in a two-GPU guest: minor 1
+/// got instance 0, `deviceId=1` → `Other(34)` and *"deviceInstance 0x1 does not exist"*).
+/// ⇒ minor → `gpuId` from the frontend's own table (`NV_ESC_CARD_INFO`, on `ctl`), then
+/// `gpuId` → instance from RM (`NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2` on `h_client`), which
+/// answers only for an ATTACHED GPU — so call it after the per-GPU node is open and bound.
+///
+/// # Errors
+/// `(rung, detail)`, naming the step that refused.
+pub fn resolve_device_instance(
+    ctl: &CharDevice,
+    h_client: u32,
+    minor: u32,
+) -> Result<(CardInfo, GpuIdInfoV2), (&'static str, String)> {
+    let mut ci = vec![0u8; CardInfo::SIZE * CardInfo::MAX_ENTRIES];
+    let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_CARD_INFO, ci.len())
+        .map_err(|e| ("R4b CARD_INFO request", format!("{e:?}")))?;
+    ctl.ioctl(req, &mut ci, &mut []).map_err(|e| ("R4b CARD_INFO", format!("{e:?}")))?;
+    let cards = CardInfo::decode_all(&ci).map_err(|e| ("R4b CARD_INFO decode", format!("{e:?}")))?;
+    let card = cards.iter().copied().find(|c| c.minor == minor).ok_or_else(|| {
+        (
+            "R4b CARD_INFO minor",
+            format!(
+                "no probed GPU has minor {minor} (the frontend lists minors {:?}) — refused by name",
+                cards.iter().map(|c| c.minor).collect::<Vec<_>>()
+            ),
+        )
+    })?;
+    let mut idinfo = [0u8; GpuIdInfoV2::SIZE];
+    GpuIdInfoV2::encode_request(card.gpu_id, &mut idinfo)
+        .map_err(|e| ("R4c GET_ID_INFO_V2 encode", format!("{e:?}")))?;
+    let mut arg = [0u8; Nvos54Parameters::SIZE];
+    Nvos54Parameters {
+        h_client,
+        h_object: h_client,
+        cmd: NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
+        flags: 0,
+        params: 0,
+        params_size: GpuIdInfoV2::SIZE as u32,
+        status: 0,
+    }
+    .encode_into(&mut arg)
+    .map_err(|e| ("R4c GET_ID_INFO_V2 encode", format!("{e:?}")))?;
+    let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_CONTROL as u8, arg.len())
+        .map_err(|e| ("R4c GET_ID_INFO_V2 request", format!("{e:?}")))?;
+    let mut patches = vec![Indirect::new(16, &mut idinfo)];
+    ctl.ioctl(req, &mut arg, &mut patches).map_err(|e| ("R4c GET_ID_INFO_V2", format!("{e:?}")))?;
+    drop(patches);
+    let out = Nvos54Parameters::decode(&arg).map_err(|e| ("R4c GET_ID_INFO_V2 decode", format!("{e:?}")))?;
+    if out.status != 0 {
+        return Err((
+            "R4c GET_ID_INFO_V2",
+            format!("RM status {:#x} for gpuId {:#x} (minor {minor}, {})", out.status, card.gpu_id, card.bdf()),
+        ));
+    }
+    let id = GpuIdInfoV2::decode(&idinfo).map_err(|e| ("R4c GET_ID_INFO_V2 decode", format!("{e:?}")))?;
+    Ok((card, id))
+}
+
 impl RmConnection {
     /// Walk the bring-up ladder against the real driver.
     ///
@@ -3229,6 +3309,41 @@ impl RmConnection {
         gpu: GpuId,
         classes: &'static dyn HostClasses,
     ) -> Result<Self, BringUpError> {
+        Self::open_with(dev, gpu, Some(classes))
+    }
+
+    /// ★★★ **Walk the bring-up ladder and ASK THE HOST which classes its die takes** — the
+    /// replacement for `open(.., kayfabe_chips::pinned_host_classes())` at every raw-client
+    /// call site (2026-09-26, `v3-families`). After R6 the device's own
+    /// `NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2` (NON_PRIVILEGED) is read and
+    /// [`kayfabe_chips::DerivedHostClasses::from_host_list`] picks the newest class per role, so
+    /// an AD106 gets `ADA_COMPUTE_A 0xC9C0` (the pin's `0xC7C0` is refused `NV_ERR_INVALID_CLASS`
+    /// there, measured 2026-09-26), a GB202 the `BLACKWELL_*_B` set, a GA100 the `_A` set. On a
+    /// GA10x host it reproduces the pin exactly (`kayfabe-chips` `derived_tests`).
+    ///
+    /// # Errors
+    /// [`BringUpError`], naming the rung — `R6a` when the host's class list cannot be read or
+    /// carries no class of a required role.
+    pub fn open_on_host(dev: &DevDir, gpu: GpuId) -> Result<Self, BringUpError> {
+        Self::open_with(dev, gpu, None)
+    }
+
+    /// The class profile this connection allocates with — the caller's pin, or the one derived
+    /// from the host's class list ([`RmConnection::open_on_host`]).
+    #[must_use]
+    pub fn host_classes(&self) -> &'static dyn HostClasses {
+        self.classes
+    }
+
+    fn open_with(
+        dev: &DevDir,
+        gpu: GpuId,
+        pinned: Option<&'static dyn HostClasses>,
+    ) -> Result<Self, BringUpError> {
+        // ⊘ A derived profile is only known after R6 (the class list is a DEVICE control); until
+        // then the field holds the GA10x pin, and NOTHING reads it before it is replaced below —
+        // the first reader is R6b's usermode open, which runs after the replacement.
+        let classes = pinned.unwrap_or_else(kayfabe_chips::pinned_host_classes);
         // R0/R1 — the two nodes, by name, relative to the granted directory. The naming is
         // the C's `dev_id_to_path`: the control node is the literal `nvidiactl`, NOT
         // `nvidia` with an index (`C: src/stub/nvkvm_stub.c:1544-1563`).
@@ -3305,7 +3420,15 @@ impl RmConnection {
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
             // Filled in below, once there is a subdevice to parent it to.
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
+            card: CardInfo::default(),
+            device_instance: 0,
         };
+
+        // ★★ R4b/R4c — which RM device instance IS our minor ([`resolve_device_instance`]).
+        let (card, id) = resolve_device_instance(&conn.ctl, conn.client.raw(), gpu.0).map_err(|(rung, detail)| {
+            BringUpError { rung, detail }
+        })?;
+        let conn = RmConnection { card, device_instance: id.device_instance, ..conn };
 
         // R5 — the device. The parameters are NOT optional: without them RM does not
         // associate the device with a physical GPU and every later control answers
@@ -3314,7 +3437,7 @@ impl RmConnection {
         rung(
             "R5 NV0080 encode",
             Nv0080AllocParameters {
-                device_id: gpu.0,
+                device_id: id.device_instance,
                 ..Default::default()
             }
             .encode_into(&mut dev_params),
@@ -3328,7 +3451,7 @@ impl RmConnection {
         let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
         rung(
             "R6 NV2080 encode",
-            Nv2080AllocParameters { sub_device_id: 0 }.encode_into(&mut sub_params),
+            Nv2080AllocParameters { sub_device_id: id.sub_device_instance }.encode_into(&mut sub_params),
         )?;
         let subdevice = rung(
             "R6 NV20_SUBDEVICE_0",
@@ -3348,6 +3471,25 @@ impl RmConnection {
             device,
             subdevice,
             ..conn
+        };
+        // ★ R6a — the host die's own class list, when no pin was passed ([`Self::open_on_host`]).
+        let conn = if pinned.is_none() {
+            let mut list = [0u8; kayfabe_chips::host_classes::CLASSLIST_V2_SIZE];
+            conn.raw_control(conn.device, kayfabe_chips::host_classes::NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2, &mut list)
+                .map_err(|e| BringUpError { rung: "R6a host class list", detail: format!("{e:?}") })?;
+            let ids = kayfabe_chips::host_classes::decode_classlist(&list).ok_or(BringUpError {
+                rung: "R6a host class list",
+                detail: "numClasses exceeds NV0080_CTRL_GPU_CLASSLIST_MAX_SIZE".to_string(),
+            })?;
+            let derived = kayfabe_chips::DerivedHostClasses::from_host_list(&ids).map_err(|e| BringUpError {
+                rung: "R6a host class list",
+                detail: format!("the host lists no class of a required role: {e:?}"),
+            })?;
+            // One small immutable profile per connection, for the connection's `'static` seam.
+            let classes: &'static dyn HostClasses = Box::leak(Box::new(derived));
+            RmConnection { classes, ..conn }
+        } else {
+            conn
         };
         let usermode = conn.open_usermode(conn.classes.usermode());
         Ok(RmConnection { usermode, ..conn })
@@ -4310,6 +4452,18 @@ impl RmConnection {
     /// Split out of [`RmBackend::control`] because the channel verbs issue controls on
     /// objects the *port* never sees — a channel group is an implementation detail of
     /// `alloc_channel`, and there is no [`HostHandle`] for it to narrow.
+    /// ★ The host GPU this connection is bound to (`CARD_INFO` for our minor).
+    #[must_use]
+    pub fn card(&self) -> CardInfo {
+        self.card
+    }
+
+    /// The RM device instance our `NV01_DEVICE_0` was allocated with — resolved, not assumed.
+    #[must_use]
+    pub fn device_instance(&self) -> u32 {
+        self.device_instance
+    }
+
     fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos54Parameters::SIZE];
         Nvos54Parameters {
@@ -10316,6 +10470,25 @@ impl HostRmBackend {
         // ★ `pdbAddr` returned alongside: it names WHICH tree answered, so the caller can
         // check the reply against the VAS it believes it asked about rather than trust it.
         Ok((out.page_table(), out.pdb_addr))
+    }
+
+    /// ★ The class profile this backend's connection allocates with — derived from the host's
+    /// own class list when it was opened with [`RmConnection::open_on_host`].
+    #[must_use]
+    pub fn host_classes(&self) -> &'static dyn HostClasses {
+        self.conn.host_classes()
+    }
+
+    /// ★ `NV2080_CTRL_CMD_MC_GET_ARCH_INFO` (`0x20801701`, NON_PRIVILEGED) on this connection's
+    /// subdevice → the host's `architecture` (`0x170` Ampere, `0x190` Ada, …) — what a client
+    /// chooses its generation's classes by, instead of a build-time pin.
+    ///
+    /// # Errors
+    /// Whatever RM refused.
+    pub fn host_architecture(&self) -> Result<u32, RmError> {
+        let mut p = [0u8; 16];
+        self.conn.raw_control(self.conn.subdevice, 0x2080_1701, &mut p)?;
+        Ok(u32::from_le_bytes([p[0], p[1], p[2], p[3]]))
     }
 
     /// ★★ **Issue one raw `NV_ESC_RM_CONTROL` on the DEVICE — for the in-band census's

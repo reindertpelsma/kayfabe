@@ -617,7 +617,7 @@ fn cross_client(rm: &mut HostRmBackend, gpu: u32, parent: HostHandle, slice: Hos
         println!("⊘     W747 cross-client   = /dev could not be opened; the rows never ran");
         return;
     };
-    let conn_b = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+    let conn_b = match RmConnection::open_on_host(&dev, GpuId(gpu)) {
         Ok(c) => c,
         Err(e) => {
             println!(

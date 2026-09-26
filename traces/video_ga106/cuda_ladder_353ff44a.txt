@@ -1,0 +1,2 @@
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10523 ledger=[0x00000002:e0f2 0x00000001:e0f0 0x00000
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10683 ledger=[0x00000002:e0

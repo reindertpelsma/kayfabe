@@ -57,6 +57,10 @@ const NV_ERR_INSUFFICIENT_PERMISSIONS: u32 = 0x1b;
 /// `GT200_DEBUGGER` (`ogkm-580: resource_list.h:186-196`, parent `Device`,
 /// `NV83DE_ALLOC_PARAMETERS` required).
 pub const GT200_DEBUGGER: u32 = 0x83de;
+/// `GF100_ZBC_CLEAR` (`ogkm-580: resource_list.h:820-830`, parent `Subdevice`, no params).
+pub const GF100_ZBC_CLEAR: u32 = 0x9096;
+/// `GF100_DISP_SW` (`ogkm-580: resource_list.h:1502-1511`, parent `KernelChannel`).
+pub const GF100_DISP_SW: u32 = 0x9072;
 /// `NV83DE_ALLOCATION_PARAMETERS` size: `{hDebuggerClient_Obsolete, hAppClient, hClass3dObject}`
 /// (`ogkm-580: class/cl83de.h:51-55`).
 const NV83DE_ALLOC_PARAMS_SIZE: usize = 12;
@@ -65,6 +69,11 @@ const NV83DE_ALLOC_PARAMS_SIZE: usize = 12;
 pub const DEBUG_SET_EXCEPTION_MASK: u32 = 0x83de_0309;
 /// `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` (`ctrl2080gr.h:818-826`), 32 bytes, all `[IN]`.
 pub const GR_SET_CTXSW_PREEMPTION_MODE: u32 = 0x2080_1210;
+/// ★ v3-gfx: `NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND` (`ctrl2080gr.h:603-608`) —
+/// `{hClient, hChannel, NvU64 vMemPtr, zcullMode}`, 24 bytes, all `[IN]`.
+pub const GR_CTXSW_ZCULL_BIND: u32 = 0x2080_1208;
+/// `NV2080_CTRL_CTXSW_ZCULL_MODE_SEPARATE_BUFFER` — the highest mode (`ctrl2080gr.h:453-455`).
+const ZCULL_MODE_MAX: u32 = 2;
 /// `NVA06C_CTRL_CMD_SET_TIMESLICE` (`ctrla06c.h:146-152`): `{NvU64 timesliceUs}`.
 pub const TSG_SET_TIMESLICE: u32 = 0xa06c_0103;
 /// `NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL` (`ctrl0080internal.h:76`) — the guest
@@ -124,6 +133,11 @@ pub struct ChannelAlloc {
     /// device-default VAS RM creates lazily — the PMA scrubber's, `hVASpace = 0`). `None` when
     /// neither is known (refused by name at birth).
     pub vaspace: Option<u32>,
+    /// ★ v3-gfx: the client whose namespace holds [`Self::vaspace`] — the channel's own, unless
+    /// the VA space it names is a `DUP_OBJECT` alias, in which case the ORIGINAL's (the one the
+    /// page-directory statement named). `[measured vgfx 2026-09-26]` the Vulkan UMD allocs the VA
+    /// space in a probe client and dups it into its device; its context share names the dup.
+    pub vaspace_client: u32,
     /// ★ The guest's own channel id, off `flags` `USERD_INDEX` ([`decode_userd_index_chid`]).
     pub chid: Option<u32>,
     /// `flags` (`NVOS04_FLAGS_*`).
@@ -149,6 +163,11 @@ pub struct ChannelAlloc {
     /// ★ P5b: the channel group it was allocated under (`hParent`), when that is a TSG this link
     /// saw allocated — the group `GPFIFO_SCHEDULE` names.
     pub tsg: Option<u32>,
+    /// ★ v3-int: `hContextShare` as declared (0 = none: the group's legacy subcontext). The
+    /// channel plane mirrors a guest TSG as one host group PER CONTEXT SHARE: CUDA's TSG is one
+    /// ctxshare (all members share one GR context), a Vulkan TSG carries a graphics and an
+    /// async-compute ctxshare (distinct subcontexts, which one legacy host subcontext cannot be).
+    pub ctx_share: u32,
     /// ★ v3-promote: the DEVICE the channel hangs off (its parent, or its group's parent) — a
     /// guest free of the device takes the channel with it, so the plane must match it.
     pub device: u32,
@@ -236,6 +255,20 @@ pub enum ChanStatement {
         /// `cilpPreemptMode`.
         cilp: u32,
     },
+    /// ★ v3-gfx: `GR_CTXSW_ZCULL_BIND` for the guest's GR channel (or every GR channel of its
+    /// TSG) — the zcull context-switch mode and, for `SEPARATE_BUFFER`, the zcull buffer's GPU VA
+    /// in the channel's VA space, which the twin shares (VA identity). `[measured vgfx 2026-09-26]`
+    /// the host's own Vulkan run binds `mode=2` on every 3D channel.
+    ZcullBind {
+        /// `hClient` (the envelope's; the params' must equal it).
+        client: u32,
+        /// `hChannel`.
+        channel: u32,
+        /// `vMemPtr`.
+        va: u64,
+        /// `zcullMode` (`0..=2`).
+        mode: u32,
+    },
     /// ★ w827: `SET_TIMESLICE` on a TSG (`[measured ctx_r1 i=427]`: 2048 µs).
     Timeslice {
         /// `hClient`.
@@ -285,6 +318,9 @@ pub enum ChanStatement {
         with_va: u32,
         /// Entries decoded.
         entries: u32,
+        /// ★ v3-video: a video FALCON promote's `(virtAddress, size)` — where the guest's CPU-RM
+        /// mapped its own (never-executed) falcon context buffer. `None` for every GR promote.
+        falcon_ctx: Option<(u64, u64)>,
     },
     /// `GPU_EVICT_CTX` (`0x2080012c`) — the unbind counterpart (`nvGpuOpsStopChannel`).
     EvictCtx {
@@ -330,6 +366,15 @@ pub enum ChanStatement {
         object: u32,
         /// `bWait` as the guest asked (the host verb always waits: the held reply IS the preempt).
         wait: bool,
+    },
+    /// ★ v3-video: acquire (`0x20808163`) / release (`0x20808164`) one GPU-wide NVENC session slot
+    /// (`kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE`) — carried to OUR host client, never answered
+    /// from a table: the slot is host state.
+    EncoderSession {
+        /// `hClient` of the call (the guest process's client).
+        client: u32,
+        /// Acquire (`true`) or release.
+        acquire: bool,
     },
     /// An object was freed (maybe one of ours).
     Free {
@@ -387,6 +432,12 @@ pub struct ChannelPolicy {
     tsgs: std::collections::BTreeMap<(u32, u32), (u32, u32, u32)>,
     /// ★ P5b: `(hClient, hCtxShare)` → its `hVASpace`.
     ctxshares: std::collections::BTreeMap<(u32, u32), u32>,
+    /// ★ v3-gfx: every VA-space object seen (alloc'd, or named by a page-directory statement).
+    vas_objects: std::collections::BTreeSet<(u32, u32)>,
+    /// ★ v3-gfx: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
+    /// ORIGINAL — the same relation `barpde::PageDirPolicy` keeps, needed here because a channel
+    /// (via its context share) may name the alias while the root was stated for the original.
+    vas_aliases: std::collections::BTreeMap<(u32, u32), (u32, u32)>,
     /// The deferred outcome of the command last carried (`CommandPolicy::defers`).
     pending: Option<kf_gsp::Deferred>,
     /// Statements carried.
@@ -408,6 +459,8 @@ impl ChannelPolicy {
             vas_stated: Default::default(),
             tsgs: Default::default(),
             ctxshares: Default::default(),
+            vas_objects: Default::default(),
+            vas_aliases: Default::default(),
             pending: None,
             carried: 0,
             refused: 0,
@@ -469,6 +522,7 @@ impl ChannelPolicy {
         }
         match alloc_shape(&self.abi, h.class) {
             Some(AllocParams::VaSpace) => {
+                self.vas_objects.insert((h.client, h.handle));
                 let first = *self.vas_under.entry((h.client, h.parent)).or_insert(h.handle);
                 eprintln!(
                     "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x})",
@@ -492,7 +546,15 @@ impl ChannelPolicy {
             Some(AllocParams::NoDeclaredFacts)
                 if matches!(
                     engine_class_kind(h.class),
-                    Some(kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::DmaCopy | kf_chip::classes::Kind::ThreeD)
+                    Some(
+                        kf_chip::classes::Kind::Compute
+                            | kf_chip::classes::Kind::DmaCopy
+                            | kf_chip::classes::Kind::ThreeD
+                            | kf_chip::classes::Kind::TwoD
+                            | kf_chip::classes::Kind::InlineToMemory
+                            | kf_chip::classes::Kind::VideoEncoder
+                            | kf_chip::classes::Kind::VideoDecoder
+                    )
                 ) =>
             {
                 self.carried += 1;
@@ -542,6 +604,14 @@ impl ChannelPolicy {
             e => e,
         };
         let privilege = self.abi.decode_channel_privilege(params).ok().flatten();
+        // ★ v3-gfx: a dup'd VA space is the ORIGINAL object (`DUP_OBJECT` aliases, it does not copy).
+        let (vaspace_client, vaspace) = match vaspace {
+            Some(v) => {
+                let (c, v) = self.vas_canonical(h.client, v);
+                (c, Some(v))
+            }
+            None => (h.client, None),
+        };
         let st = ChannelAlloc {
             client: h.client,
             parent: h.parent,
@@ -551,6 +621,7 @@ impl ChannelPolicy {
             entries: f.gp_fifo_entries,
             h_vaspace: f.h_vaspace,
             vaspace,
+            vaspace_client,
             chid: decode_userd_index_chid(f.flags),
             flags: f.flags,
             engine_type,
@@ -566,6 +637,7 @@ impl ChannelPolicy {
             privilege,
             declared_kernel_pid: self.kernel_clients.contains(&h.client),
             tsg: tsg.map(|_| h.parent),
+            ctx_share: f.h_ctx_share,
             device,
             error_notifier: self.abi.decode_channel_error_notifier(params).ok().flatten(),
         };
@@ -599,6 +671,7 @@ impl ChannelPolicy {
         {
             // Observed only: the memory plane's link answers these.
             self.vas_stated.entry(st.client.0).or_default().insert(st.vaspace.0);
+            self.vas_objects.insert((st.client.0, st.vaspace.0));
             return None;
         }
         let Some(params) = h.params_at.checked_add(h.params_size as usize).and_then(|e| cmd.payload.get(h.params_at..e)) else {
@@ -619,6 +692,13 @@ impl ChannelPolicy {
                 ChanStatement::Schedule { client: h.client, object: h.object, enable: params.first().is_some_and(|&b| b != 0) }
             }
             GET_WORK_SUBMIT_TOKEN => ChanStatement::Token { client: h.client, object: h.object },
+            // ★ v3-video: exactly the measured shape (4 zero bytes) is carried; anything else stays
+            // unserviced, refused as before.
+            kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE | kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE
+                if params.len() == kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE && params.iter().all(|b| *b == 0) =>
+            {
+                ChanStatement::EncoderSession { client: h.client, acquire: h.cmd == kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE }
+            }
             GR_SET_CTXSW_PREEMPTION_MODE => {
                 if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
                     return None;
@@ -633,6 +713,24 @@ impl ChannelPolicy {
                     return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, "SET_CTXSW_PREEMPTION_MODE with a grRouteInfo (MIG routing) is not served", cmd));
                 }
                 ChanStatement::CtxswPreemption { client: h.client, channel: w(1)?, flags: w(0)?, gfxp: w(2)?, cilp: w(3)? }
+            }
+            GR_CTXSW_ZCULL_BIND => {
+                if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
+                    return None;
+                }
+                if params.len() != 24 {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("ZCULL_BIND params are {} bytes, not 24", params.len()), cmd));
+                }
+                let w = |i: usize| u32::from_le_bytes([params[4 * i], params[4 * i + 1], params[4 * i + 2], params[4 * i + 3]]);
+                // ⊘ Another client's channel is refused by name (as DISABLE_CHANNELS refuses one):
+                // the twin is looked up in THIS client's namespace only.
+                if w(0) != h.client {
+                    return Some(Self::refusal(NV_ERR_INSUFFICIENT_PERMISSIONS, &format!("ZCULL_BIND names client {:#x} from client {:#x}", w(0), h.client), cmd));
+                }
+                if w(4) > ZCULL_MODE_MAX {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("ZCULL_BIND mode {} is not a zcull mode", w(4)), cmd));
+                }
+                ChanStatement::ZcullBind { client: h.client, channel: w(1), va: u64::from(w(2)) | (u64::from(w(3)) << 32), mode: w(4) }
             }
             TSG_SET_TIMESLICE => {
                 if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
@@ -679,6 +777,15 @@ impl ChannelPolicy {
                 }
                 let p = match self.abi.decode_promote_ctx(params) {
                     Ok(p) => p,
+                    // ★ v3-video: a video falcon's context promote (`kernel_falcon.c:184-276`) —
+                    // no entries, the buffer's VA only. Satisfied by the twin (host RM promoted its
+                    // own falcon context with the engine object); carried with no entries.
+                    Err(kf_abi::wire::AbiError::PromoteLegacyShape { .. }) if self.abi.decode_falcon_promote(params).is_ok() => {
+                        let (engine_type, chan_client, object, va, size) = self.abi.decode_falcon_promote(params).ok()?;
+                        eprintln!("kf-rm: chanlink: falcon ctx promote {chan_client:#x}:{object:#x} engine {engine_type:#x} guest ctx buffer VA {va:#x}+{size:#x}");
+                        let st = ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize: 0, with_va: 0, entries: 0, falcon_ctx: Some((va, size)) };
+                        return self.carry_control_statement(st, cmd, &h);
+                    }
                     Err(e) => return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("GPU_PROMOTE_CTX undecodable: {e:?}"), cmd)),
                 };
                 let (mut initialize, mut with_va, mut entries) = (0u32, 0u32, 0u32);
@@ -701,6 +808,7 @@ impl ChannelPolicy {
                     initialize,
                     with_va,
                     entries,
+                    falcon_ctx: None,
                 }
             }
             EVICT_CTX => {
@@ -779,6 +887,11 @@ impl ChannelPolicy {
             }
             _ => return None,
         };
+        self.carry_control_statement(st, cmd, &h)
+    }
+
+    /// Carry a control statement to the sink and build the guest's reply from its answer.
+    fn carry_control_statement(&mut self, st: ChanStatement, cmd: &RpcCommand, h: &kf_abi::view::RpcControlReq) -> Option<Reply> {
         self.carried += 1;
         match (self.sink)(st) {
             ChanAnswer::NotOurs => None,
@@ -806,9 +919,32 @@ impl ChannelPolicy {
         }
     }
 
+    /// ★ v3-gfx: the VA-space object `(client, handle)` names — itself, or the original a dup aliases.
+    fn vas_canonical(&self, client: u32, handle: u32) -> (u32, u32) {
+        self.vas_aliases.get(&(client, handle)).copied().unwrap_or((client, handle))
+    }
+
+    /// ★ v3-gfx: a `DUP_OBJECT` of a VA-space object we know becomes an alias of the original.
+    fn on_dup(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let d = self.abi.decode_dup(&cmd.payload).ok()?;
+        let src = self.vas_canonical(d.src_client, d.src_handle);
+        if self.vas_objects.contains(&src) {
+            self.vas_aliases.insert((d.dst_client, d.dst_handle), src);
+        }
+        None
+    }
+
     fn on_free(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let f = self.abi.decode_free(&cmd.payload).ok()?;
         let (client, object) = (f.client, f.handle);
+        // ★ v3-gfx: an alias's (or its client's) free drops the NAME. The original's own free
+        // keeps its aliases: RM refcounts the object, and the dup still holds it.
+        self.vas_aliases.retain(|&(c, h), _| !(c == client && (object == client || h == object)));
+        if client == object {
+            self.vas_objects.retain(|k| k.0 != client || self.vas_aliases.values().any(|o| o == k));
+        } else if !self.vas_aliases.values().any(|o| *o == (client, object)) {
+            self.vas_objects.remove(&(client, object));
+        }
         if client == object {
             self.kernel_clients.remove(&client);
             self.vas_under.retain(|k, _| k.0 != client);
@@ -851,16 +987,34 @@ pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
     if class == GT200_DEBUGGER {
         return Some(AllocParams::NoDeclaredFacts);
     }
+    // ★ v3-gfx: two graphics classes that are graph nodes with NO host counterpart, both
+    // `RS_FLAGS_ALLOC_RPC_TO_ALL` (the guest's CPU-RM makes its own object, then asks "GSP"):
+    //  - `GF100_ZBC_CLEAR` (`0x9096`, under a subdevice): its controls are answered from the per-VM
+    //    table (`crate::zbc`); the host's GPU-global table is never touched.
+    //  - `GF100_DISP_SW` (`0x9072`, under a channel): display software methods (flip/semaphore
+    //    helpers). This device has no display engine; a headless UMD allocates it on every 3D
+    //    channel and never methods it. ⊘ NOT twinned: host RM's dispsw acts on HOST display heads,
+    //    so a guest's methods must never reach it. A guest that does method it faults its own
+    //    twin (contained, `gpu_fault_is_contained`).
+    //  `[measured vgfx 2026-09-26]` the host's own Vulkan/EGL run allocs 0x9072 ×12, 0x9096 ×3.
+    if class == GF100_ZBC_CLEAR || class == GF100_DISP_SW {
+        return Some(AllocParams::NoDeclaredFacts);
+    }
     abi.alloc_params(kf_arch::ids::ClassId(class)).or_else(|| match engine_class_kind(class)? {
         kf_chip::classes::Kind::ChannelGpfifo => Some(AllocParams::Channel),
-        kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::DmaCopy | kf_chip::classes::Kind::ThreeD => {
-            Some(AllocParams::NoDeclaredFacts)
-        }
+        kf_chip::classes::Kind::Compute
+        | kf_chip::classes::Kind::DmaCopy
+        | kf_chip::classes::Kind::ThreeD
+        | kf_chip::classes::Kind::TwoD
+        | kf_chip::classes::Kind::InlineToMemory
+        | kf_chip::classes::Kind::VideoEncoder
+        | kf_chip::classes::Kind::VideoDecoder => Some(AllocParams::NoDeclaredFacts),
         kf_chip::classes::Kind::Usermode => None,
     })
 }
 
-/// The engine-class kind of `class` on ANY family (generated sets; ids are unique across them).
+/// The engine-class kind of `class` on ANY family (generated sets). ⚠ An id may appear in several
+/// families (`FERMI_TWOD_A` is in all five) — always with the SAME kind, which a test pins.
 #[must_use]
 pub fn engine_class_kind(class: u32) -> Option<kf_chip::classes::Kind> {
     kf_chip::classes::FAMILIES.iter().find_map(|f| f.kind_of(class))
@@ -938,6 +1092,7 @@ impl CommandPolicy for ChannelPolicy {
             RpcFunction::RmAlloc => self.on_alloc(cmd),
             RpcFunction::RmControl => self.on_control(cmd),
             RpcFunction::Free => self.on_free(cmd),
+            RpcFunction::DupObject => self.on_dup(cmd),
             _ => None,
         }
     }
@@ -1032,7 +1187,8 @@ mod tests {
                 engine_type: 1,
                 initialize: 1 << 0,
                 with_va: 1 << 2,
-                entries: 2
+                entries: 2,
+                falcon_ctx: None
             })
         );
         // A channel the plane does not own: declined (the FSM's named refusal answers it).
@@ -1054,6 +1210,98 @@ mod tests {
             seen.lock().unwrap().last().copied(),
             Some(ChanStatement::EvictCtx { chan_client: 0xc1d0_000b, object: 0xcafe_0013, engine_type: 1 })
         );
+    }
+
+    /// ★ v3-gfx: `GR_CTXSW_ZCULL_BIND` reaches the plane decoded (VA across two words, the mode);
+    /// a bind naming ANOTHER client, a mode past `SEPARATE_BUFFER`, or a wrong size is refused by
+    /// the link before the plane is asked; a channel the plane does not own is declined.
+    #[test]
+    fn zcull_bind_is_carried_and_a_foreign_client_or_bad_mode_is_refused() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let seen: Arc<Mutex<Vec<ChanStatement>>> = Arc::default();
+        let s2 = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            s2.lock().unwrap().push(st);
+            match st {
+                ChanStatement::ZcullBind { channel: 0xbeef_0100, .. } => ChanAnswer::Done,
+                _ => ChanAnswer::NotOurs,
+            }
+        });
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink);
+        let ctl = |client: u32, p: &[u8]| {
+            let mut b = vec![0u8; 40];
+            b[0..4].copy_from_slice(&client.to_le_bytes());
+            b[4..8].copy_from_slice(&0xbeef_0004u32.to_le_bytes());
+            b[8..12].copy_from_slice(&GR_CTXSW_ZCULL_BIND.to_le_bytes());
+            b[16..20].copy_from_slice(&(p.len() as u32).to_le_bytes());
+            b.extend_from_slice(p);
+            RpcCommand { function: RpcFunction::RmControl, code: 76, sequence: 1, payload: b, elements: 1, delivered: Vec::new() }
+        };
+        // `[measured vgfx 2026-09-26]` the host UMD's own bytes: client, channel 0xbeef0100,
+        // vMemPtr 0x4280000, mode 2.
+        let bind = |client: u32, channel: u32, va: u64, mode: u32| {
+            let mut p = vec![0u8; 24];
+            p[0..4].copy_from_slice(&client.to_le_bytes());
+            p[4..8].copy_from_slice(&channel.to_le_bytes());
+            p[8..16].copy_from_slice(&va.to_le_bytes());
+            p[16..20].copy_from_slice(&mode.to_le_bytes());
+            p
+        };
+        let c = 0xc1d0_015c;
+        let r = link.respond(&ctl(c, &bind(c, 0xbeef_0100, 0x1_0428_0000, 2))).expect("answered");
+        assert_eq!(r.rpc_result, NV_OK);
+        assert_eq!(
+            seen.lock().unwrap().last().copied(),
+            Some(ChanStatement::ZcullBind { client: c, channel: 0xbeef_0100, va: 0x1_0428_0000, mode: 2 })
+        );
+        let n = seen.lock().unwrap().len();
+        assert_eq!(link.respond(&ctl(c, &bind(0xc1d0_0999, 0xbeef_0100, 0, 2))).expect("refused").rpc_result, NV_ERR_INSUFFICIENT_PERMISSIONS);
+        assert_eq!(link.respond(&ctl(c, &bind(c, 0xbeef_0100, 0, 3))).expect("refused").rpc_result, NV_ERR_INVALID_ARGUMENT);
+        assert_eq!(link.respond(&ctl(c, &bind(c, 0xbeef_0100, 0, 2)[..20])).expect("refused").rpc_result, NV_ERR_INVALID_ARGUMENT);
+        assert_eq!(seen.lock().unwrap().len(), n, "a refused bind never reaches the plane");
+        // A channel the plane does not own (a Translated/kernel one): declined.
+        assert!(link.respond(&ctl(c, &bind(c, 0xdead_0001, 0, 2))).is_none());
+    }
+
+    /// ★ v3-gfx: a VA space `DUP_OBJECT`'d into another client resolves to its ORIGINAL (the
+    /// Vulkan UMD's shape, `[measured vgfx 2026-09-26]`: probe client's VAS dup'd into its device);
+    /// the original's own free keeps the alias alive (RM refcounts), the alias's free drops it.
+    #[test]
+    fn a_dupd_va_space_resolves_to_its_original_until_the_alias_goes() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let sink: ChanSink = std::sync::Arc::new(|_| ChanAnswer::NotOurs);
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink);
+        let rpc = |function: RpcFunction, payload: Vec<u8>| RpcCommand { function, code: 0, sequence: 1, payload, elements: 1, delivered: Vec::new() };
+        let words = |w: &[u32]| w.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+        let (orig, alias) = ((0xc1d0_0016, 0xfade_0003), (0xc1d0_001a, 0xbeef_0300));
+        link.vas_objects.insert(orig);
+        // NVOS55: hClient hParent hObject hClientSrc hObjectSrc flags status
+        assert!(link.respond(&rpc(RpcFunction::DupObject, words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0]))).is_none());
+        assert_eq!(link.vas_canonical(alias.0, alias.1), orig);
+        // A dup of something that is not a known VA space is not an alias.
+        link.respond(&rpc(RpcFunction::DupObject, words(&[alias.0, 0xbeef_0003, 0xbeef_0400, orig.0, 0x1234, 0, 0])));
+        assert_eq!(link.vas_canonical(alias.0, 0xbeef_0400), (alias.0, 0xbeef_0400));
+        // The ORIGINAL's client goes (the UMD frees its probe client): the alias still resolves.
+        link.respond(&rpc(RpcFunction::Free, words(&[orig.0, 0, orig.0, 0])));
+        assert_eq!(link.vas_canonical(alias.0, alias.1), orig, "RM refcounts: the dup keeps the object");
+        assert!(link.vas_objects.contains(&orig));
+        // The alias's own free drops the name, and with it the last reference.
+        link.respond(&rpc(RpcFunction::Free, words(&[alias.0, 0xbeef_0003, alias.1, 0])));
+        assert_eq!(link.vas_canonical(alias.0, alias.1), alias);
+    }
+
+    /// ★ v3-gfx: `GF100_ZBC_CLEAR` and `GF100_DISP_SW` are graph nodes (no host twin); 2D and
+    /// inline-to-memory are engine objects carried to the twin like 3D.
+    #[test]
+    fn graphics_classes_have_a_shape() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        for c in [GF100_ZBC_CLEAR, GF100_DISP_SW, 0x902d, 0xa140, 0xcd40, 0xc797] {
+            assert_eq!(alloc_shape(&abi, c), Some(AllocParams::NoDeclaredFacts), "{c:#x}");
+        }
+        assert_eq!(engine_class_kind(0x902d), Some(kf_chip::classes::Kind::TwoD));
+        assert_eq!(engine_class_kind(0xa140), Some(kf_chip::classes::Kind::InlineToMemory));
+        assert_eq!(engine_class_kind(GF100_DISP_SW), None, "DISP_SW is not an engine object: it is never twinned");
     }
 
     /// ★ v3-chanctl: STOP_CHANNEL / PREEMPT / DISABLE_CHANNELS reach the plane decoded; a

@@ -79,6 +79,19 @@
 //! post-processing. That is the property, and it is why an OR-only post-pass is benign
 //! where an assignment would not be.
 //!
+//! ## ⊘⊘ CORRECTED 2026-09-26 (`v3-families`) — the caps are the HOST's now, not GA10x constants
+//!
+//! The section below describes the GA10x-constant construction this module shipped with:
+//! [`GA10X_LCE_BASE_CAPS`] for eleven bits and [`GA10X_GRCE_LCE_MASK`] (`0x03`) for `GRCE`, on
+//! **every** family. Both are GA10x facts: GB20x allows four GRCEs (`kernel_ce_gb202.c:36`,
+//! `0x0F`, and computes its GRCE set at runtime), Turing binds a different GRCE HAL, and the base
+//! caps were one GA106 measurement. ⇒ Production now serves [`HostCeCaps`] — the host die's own
+//! `CE_GET_ALL_CAPS` (`0x20802a0a`, `NON_PRIVILEGED`, §50 level 1), with the three kernel-OR-able
+//! bits ([`KERNEL_OR_CAPS`]) removed so the guest's own kernel recomputes them. On a GA106 host
+//! the served bytes are unchanged (the measured reply has those three bits clear). The two
+//! `GA10X_*` constants remain as the **test oracle** for that equality and are read by no
+//! production path. `present` is still the engine list's projection, exactly as below.
+//!
 //! ## ★★★ What is served, and every bit's source
 //!
 //! `NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS` (`ogkm-580: ctrl2080ce.h:331-334`) is
@@ -269,6 +282,9 @@ impl CeCaps {
 ///
 /// ⚠ Named `GA10X_` because the value is an architecture's, and the day a Hopper profile
 /// appears this constant must not silently answer for it.
+///
+/// ⊘ **Test oracle only since 2026-09-26** — production serves [`HostCeCaps`]; this constant is
+/// what a GA106 host's answer must equal.
 pub const GA10X_LCE_BASE_CAPS: CeCaps = CeCaps::NONE
     .with(cap::SHARED)
     .with(cap::SYSMEM)
@@ -283,6 +299,10 @@ pub const GA10X_LCE_BASE_CAPS: CeCaps = CeCaps::NONE
 ///
 /// ⚠ This is the mask of LCEs *allowed* to be a GRCE. It is intersected with what the chip
 /// actually exposes, never used on its own — see [`GA10X_EXPOSED_LCE_MASK_IS_NOT_A_SOURCE`].
+///
+/// ⊘ **Test oracle only since 2026-09-26** — it was applied to every family, and GB20x allows
+/// `0x0F` (`kernel_ce_gb202.c:36`). Production reads the host's own `GRCE` bits
+/// ([`HostCeCaps::grce_mask`]); on a GA106 host they equal this.
 pub const GA10X_GRCE_LCE_MASK: u64 = 0x03;
 
 /// ⊘⊘ **A constant that exists to be refused.** `NV_CE_MAX_LCE_MASK = 0x1F`
@@ -293,6 +313,102 @@ pub const GA10X_GRCE_LCE_MASK: u64 = 0x03;
 /// contradiction is pinned rather than rediscovered.
 pub const GA10X_EXPOSED_LCE_MASK_IS_NOT_A_SOURCE: u64 = 0x1f;
 
+/// ★ The three caps bits the guest kernel ORs in **itself**, after our reply, from its own
+/// state: `kceAssignCeCaps_GP100` (Turing/Ampere/Ada/GH100, `kernel_ce_gp100.c:311-323`) adds them
+/// from `kceGetNvlinkCaps` only when `GPU_GET_KERNEL_NVLINK != NULL`; `kceAssignCeCaps_GB100`
+/// (every GB die, `kernel_ce_gb100.c:1592-1620`) adds `SYSMEM_READ`/`SYSMEM_WRITE` from its own
+/// PCE→LCE state and `NVLINK_P2P` under NVLink (`g_kernel_ce_nvoc.c:413-427` binds the HALs).
+///
+/// ⊘ So on the HOST's `CE_GET_ALL_CAPS` (the kernel-composed answer) these three describe the
+/// HOST kernel's NVLink/PCE topology, not the silicon — and the guest's kernel recomputes its
+/// own. [`HostCeCaps::physical`] strips them so the guest's own OR decides, exactly as it would
+/// over a real GSP. `[measured]` all three are clear on a real GA106, so stripping is a no-op
+/// there (see `the_three_kernel_or_able_bits_are_clear_on_every_present_ce`).
+pub const KERNEL_OR_CAPS: [(usize, u8); 3] = [cap::SYSMEM_READ, cap::SYSMEM_WRITE, cap::NVLINK_P2P];
+
+/// ★★★ **The host die's own copy-engine caps** — `NV2080_CTRL_CMD_CE_GET_ALL_CAPS`
+/// (`0x20802a0a`), which carries `NON_PRIVILEGED` and so is asked of the HOST once at realize
+/// (§50 level 1). Replaces the two GA10x statements this module used to serve for every family:
+/// [`GA10X_LCE_BASE_CAPS`] (a GA106 measurement) and [`GA10X_GRCE_LCE_MASK`] (`0x03`, which is
+/// wrong for GB20x — `NV_CE_GRCE_ALLOWED_LCE_MASK 0x0F`, `kernel_ce_gb202.c:36`, and whose GRCE
+/// set is computed at runtime by `kceGetGrceSupportedLceMask_GB202` from `ceIsCeGrce`;
+/// Turing binds `kceGetGrceSupportedLceMask_4a4dee` — `g_kernel_ce_nvoc.c:804-821`).
+///
+/// ★ Why the caller-visible reply is the right source for a PHYSICAL answer: the host kernel's
+/// post-pass over the physical reply is OR-only (module header, "What is served"), and the only
+/// bits it can add are [`KERNEL_OR_CAPS`], which [`Self::physical`] removes. What remains is the
+/// physical reply the host's GSP gave — including the per-CE `GRCE` bit, so the GRCE set of the
+/// device we present is the host die's, whatever its family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostCeCaps {
+    /// The host's `present` mask.
+    pub present: u64,
+    /// The host's `capsTbl`, as answered (kernel-OR bits included).
+    pub caps: [CeCaps; MAX_CES],
+}
+
+impl HostCeCaps {
+    /// Decode the host's 136-byte `CE_GET_ALL_CAPS` reply.
+    ///
+    /// # Errors
+    /// [`CeCapsDecodeError::ShortParams`].
+    pub fn decode(reply: &[u8]) -> Result<Self, CeCapsDecodeError> {
+        let (present, tbl) = decode_ce_get_all_physical_caps(reply)?;
+        let mut caps = [CeCaps::NONE; MAX_CES];
+        caps.copy_from_slice(&tbl);
+        Ok(Self { present, caps })
+    }
+
+    /// The physical caps of LCE `index`: the host's entry minus [`KERNEL_OR_CAPS`], or
+    /// [`CeCaps::NONE`] for an index the host does not mark present.
+    #[must_use]
+    pub fn physical(&self, index: usize) -> CeCaps {
+        if index >= MAX_CES || self.present & (1u64 << index) == 0 {
+            return CeCaps::NONE;
+        }
+        let mut c = self.caps[index];
+        for (byte, mask) in KERNEL_OR_CAPS {
+            c.0[byte] &= !mask;
+        }
+        c
+    }
+
+    /// The LCEs the host marks `GRCE` (present ones only).
+    #[must_use]
+    pub fn grce_mask(&self) -> u64 {
+        (0..MAX_CES)
+            .filter(|&i| self.physical(i).has(cap::GRCE))
+            .fold(0u64, |m, i| m | (1u64 << i))
+    }
+}
+
+/// ★ `present` projected out of an engine list — `BIT64(INSTANCE_ID)` over every
+/// `DEV_TYPE_ENUM_LCE` row. See [`CeGeometry::from_engines`].
+///
+/// # Errors
+/// [`CeCapsError::NoCopyEngines`] / [`CeCapsError::InstanceOutOfRange`].
+pub fn present_of(engines: &[FifoDeviceEntry]) -> Result<u64, CeCapsError> {
+    let mut present = 0u64;
+    for e in engines {
+        if e.engine_data[engine_info_type::DEV_TYPE_ENUM] != DEV_TYPE_ENUM_LCE {
+            continue;
+        }
+        let instance = e.engine_data[engine_info_type::INSTANCE_ID];
+        if instance as usize >= MAX_CES {
+            return Err(CeCapsError::InstanceOutOfRange {
+                engine: e.name,
+                instance,
+                max: MAX_CES,
+            });
+        }
+        present |= 1u64 << instance;
+    }
+    if present == 0 {
+        return Err(CeCapsError::NoCopyEngines);
+    }
+    Ok(present)
+}
+
 /// The per-CE facts this reply is built from — all of them projections, none of them new
 /// numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -300,70 +416,60 @@ pub struct CeGeometry {
     /// `present`: which LCE instances this device advertises. Built by
     /// [`CeGeometry::from_engines`] from the chip's `FifoDeviceEntry` slice.
     pub present: u64,
-    /// Which of those are graphics copy engines. [`GA10X_GRCE_LCE_MASK`] ∩ `present`.
+    /// Which of those are graphics copy engines — the host's own `GRCE` bits
+    /// ([`HostCeCaps::grce_mask`]) ∩ `present`.
     pub grce: u64,
-    /// The caps every present LCE carries before [`cap::GRCE`] is applied.
-    pub base: CeCaps,
+    /// Every LCE's caps: the host's physical entry ([`HostCeCaps::physical`]) for a present
+    /// LCE, [`CeCaps::NONE`] otherwise.
+    pub caps: [CeCaps; MAX_CES],
 }
 
 impl CeGeometry {
-    /// Project a geometry out of the engine list this device already advertises.
+    /// Project a geometry out of the engine list this device already advertises, with each
+    /// LCE's caps taken from the host die's own answer.
     ///
-    /// ★ The whole point: `present` is not stated here, it is **read off the same slice**
-    /// `FIFO_GET_DEVICE_INFO_TABLE` and `INTERNAL_DEVICE_INFO` serve, using the same
-    /// `DEV_TYPE_ENUM == `[`DEV_TYPE_ENUM_LCE`] test `encode_internal_device_info_table`
-    /// uses to find the copy-engine fault-id range. One silicon, one description.
+    /// ★ `present` is not stated here, it is **read off the same slice**
+    /// `FIFO_GET_DEVICE_INFO_TABLE` and `INTERNAL_DEVICE_INFO` serve ([`present_of`]). One
+    /// silicon, one description. The caps are the host's ([`HostCeCaps`]); no family constant.
     ///
     /// # Errors
     ///
-    /// [`CeCapsError::NoCopyEngines`] if the chip row advertises none — RM's own
-    /// `kgmmuInitCeMmuFaultIdRange_GA100` already refuses to boot such a table, so a zero
-    /// `present` here would be a second symptom of a fault the device-info encoder catches
-    /// first; and [`CeCapsError::InstanceOutOfRange`] for an instance id past
-    /// [`MAX_CES`], which has no slot in `capsTbl` and no bit in `present`.
-    pub fn from_engines(engines: &[FifoDeviceEntry]) -> Result<Self, CeCapsError> {
-        let mut present = 0u64;
-        for e in engines {
-            if e.engine_data[engine_info_type::DEV_TYPE_ENUM] != DEV_TYPE_ENUM_LCE {
+    /// [`CeCapsError::NoCopyEngines`] / [`CeCapsError::InstanceOutOfRange`] as
+    /// [`present_of`]; [`CeCapsError::NotOnHost`] for an LCE the engine list advertises that
+    /// the host's caps reply does not mark present — two descriptions of one die disagreeing,
+    /// refused rather than answered with an empty caps row (which would positively claim a CE
+    /// that can do nothing).
+    pub fn from_engines(engines: &[FifoDeviceEntry], host: &HostCeCaps) -> Result<Self, CeCapsError> {
+        let present = present_of(engines)?;
+        let mut caps = [CeCaps::NONE; MAX_CES];
+        for (i, c) in caps.iter_mut().enumerate() {
+            if present & (1u64 << i) == 0 {
                 continue;
             }
-            let instance = e.engine_data[engine_info_type::INSTANCE_ID];
-            if instance as usize >= MAX_CES {
-                return Err(CeCapsError::InstanceOutOfRange {
-                    engine: e.name,
-                    instance,
-                    max: MAX_CES,
-                });
+            if host.present & (1u64 << i) == 0 {
+                return Err(CeCapsError::NotOnHost { instance: i as u32, host_present: host.present });
             }
-            present |= 1u64 << instance;
-        }
-        if present == 0 {
-            return Err(CeCapsError::NoCopyEngines);
+            *c = host.physical(i);
         }
         Ok(Self {
             present,
-            grce: present & GA10X_GRCE_LCE_MASK,
-            base: GA10X_LCE_BASE_CAPS,
+            grce: host.grce_mask() & present,
+            caps,
         })
     }
 
     /// The caps entry for one CE index: [`CeCaps::NONE`] unless the index is present.
     ///
-    /// ⊘ An absent CE gets all-zero rather than the base caps, because the header defines
-    /// `present` as the qualifier — *"If a CE is not marked present, its caps bits should be
-    /// ignored"* (`ogkm-580: ctrl2080ce.h:319-322`) — and a table whose ignored rows still
-    /// claim `SYSMEM | P2P` is a table that lies to anything that stops honouring the
-    /// qualifier.
+    /// ⊘ An absent CE gets all-zero, because the header defines `present` as the qualifier —
+    /// *"If a CE is not marked present, its caps bits should be ignored"*
+    /// (`ogkm-580: ctrl2080ce.h:319-322`) — and a table whose ignored rows still claim
+    /// capabilities is a table that lies to anything that stops honouring the qualifier.
     #[must_use]
     pub fn caps_for(&self, index: usize) -> CeCaps {
         if index >= MAX_CES || self.present & (1u64 << index) == 0 {
             return CeCaps::NONE;
         }
-        if self.grce & (1u64 << index) == 0 {
-            self.base
-        } else {
-            self.base.with(cap::GRCE)
-        }
+        self.caps[index]
     }
 }
 
@@ -384,6 +490,13 @@ pub enum CeCapsError {
         /// [`MAX_CES`].
         max: usize,
     },
+    /// The engine list advertises an LCE the host's `CE_GET_ALL_CAPS` does not mark present.
+    NotOnHost {
+        /// The LCE index.
+        instance: u32,
+        /// The host's `present`.
+        host_present: u64,
+    },
 }
 
 impl core::fmt::Display for CeCapsError {
@@ -402,6 +515,11 @@ impl core::fmt::Display for CeCapsError {
                 f,
                 "engine {engine} has INSTANCE_ID {instance}, past NV2080_CTRL_MAX_CES {max}: \
                  no capsTbl slot and no present bit exist for it"
+            ),
+            Self::NotOnHost { instance, host_present } => write!(
+                f,
+                "the engine list advertises LCE{instance} but the host's CE_GET_ALL_CAPS marks \
+                 present={host_present:#x}: two descriptions of one die disagree"
             ),
         }
     }
@@ -701,14 +819,21 @@ mod tests {
         e
     }
 
+    fn ga106_host() -> HostCeCaps {
+        HostCeCaps::decode(&real_ga106_reply()).expect("136 bytes")
+    }
+
     fn ga106() -> CeGeometry {
-        CeGeometry::from_engines(&[
-            gr_row(),
-            lce_row("CE0", 0),
-            lce_row("CE1", 1),
-            lce_row("CE2", 2),
-            lce_row("CE3", 3),
-        ])
+        CeGeometry::from_engines(
+            &[
+                gr_row(),
+                lce_row("CE0", 0),
+                lce_row("CE1", 1),
+                lce_row("CE2", 2),
+                lce_row("CE3", 3),
+            ],
+            &ga106_host(),
+        )
         .expect("four LCE rows project")
     }
 
@@ -817,19 +942,16 @@ mod tests {
     #[test]
     fn no_copy_engines_refuses() {
         assert_eq!(
-            CeGeometry::from_engines(&[gr_row()]),
+            CeGeometry::from_engines(&[gr_row()], &ga106_host()),
             Err(CeCapsError::NoCopyEngines)
         );
-        assert_eq!(
-            CeGeometry::from_engines(&[]),
-            Err(CeCapsError::NoCopyEngines)
-        );
+        assert_eq!(present_of(&[]), Err(CeCapsError::NoCopyEngines));
     }
 
     /// ⊘ An instance id with no slot refuses rather than wrapping into another CE's row.
     #[test]
     fn instance_past_the_array_refuses() {
-        let e = CeGeometry::from_engines(&[lce_row("CE64", 64)]);
+        let e = present_of(&[lce_row("CE64", 64)]);
         assert!(matches!(
             e,
             Err(CeCapsError::InstanceOutOfRange {
@@ -838,19 +960,62 @@ mod tests {
                 ..
             })
         ));
-        assert!(CeGeometry::from_engines(&[lce_row("CE63", 63)]).is_ok());
+        assert_eq!(present_of(&[lce_row("CE63", 63)]), Ok(1u64 << 63));
     }
 
-    /// A sparse engine list projects a sparse `present`, and the GRCE intersection follows
-    /// it rather than asserting `0x03` unconditionally.
+    /// ★ The GA10x constants are the ORACLE: a GA106 host's own reply must reproduce them
+    /// exactly, which is what makes serving the host's answer a no-op on the bench part.
     #[test]
-    fn grce_is_intersected_with_what_is_actually_exposed() {
-        let g = CeGeometry::from_engines(&[lce_row("CE1", 1), lce_row("CE5", 5)])
-            .expect("two LCE rows project");
-        assert_eq!(g.present, 0b10_0010);
-        assert_eq!(g.grce, 0b10, "only CE1 is both allowed-GRCE and exposed");
-        assert!(g.caps_for(1).has(cap::GRCE));
-        assert!(!g.caps_for(5).has(cap::GRCE));
+    fn a_ga106_hosts_answer_equals_the_ga10x_oracle() {
+        let g = ga106();
+        assert_eq!(g.grce, GA10X_GRCE_LCE_MASK);
+        for i in 0..4 {
+            let want = if GA10X_GRCE_LCE_MASK & (1 << i) != 0 {
+                GA10X_LCE_BASE_CAPS.with(cap::GRCE)
+            } else {
+                GA10X_LCE_BASE_CAPS
+            };
+            assert_eq!(g.caps_for(i), want, "CE{i}");
+        }
+    }
+
+    /// ★★ GB20x: four GRCEs (`NV_CE_GRCE_ALLOWED_LCE_MASK 0x0F`, `kernel_ce_gb202.c:36`). The
+    /// GRCE set follows the HOST's bits, never a GA10x `0x03`.
+    #[test]
+    fn the_grce_set_is_the_hosts_not_a_ga10x_mask() {
+        let mut reply = vec![0u8; CE_GET_ALL_CAPS_PARAMS_SIZE];
+        for i in 0..6 {
+            let c = if i < 4 { 0x03e3u16 } else { 0x03e2 };
+            reply[i * 2..i * 2 + 2].copy_from_slice(&c.to_le_bytes());
+        }
+        reply[PRESENT_OFF..].copy_from_slice(&0x3f_u64.to_le_bytes());
+        let host = HostCeCaps::decode(&reply).expect("136 bytes");
+        assert_eq!(host.grce_mask(), 0x0f);
+        let rows: Vec<_> = (0..6).map(|i| lce_row("CE", i)).collect();
+        let g = CeGeometry::from_engines(&rows, &host).expect("six LCEs");
+        assert_eq!(g.grce, 0x0f);
+        assert!(g.caps_for(3).has(cap::GRCE) && !g.caps_for(4).has(cap::GRCE));
+    }
+
+    /// ⊘ The three kernel-OR-able bits describe the HOST kernel's topology; the guest's own
+    /// kernel ORs its own. Stripped from what we serve.
+    #[test]
+    fn kernel_or_bits_on_the_host_are_not_served() {
+        let mut reply = real_ga106_reply();
+        reply[0] |= 0x04 | 0x08 | 0x10;
+        let host = HostCeCaps::decode(&reply).expect("136 bytes");
+        assert_eq!(host.physical(0).as_u16(), 0x03e3);
+        assert_eq!(host.physical(4), CeCaps::NONE, "absent on the host");
+    }
+
+    /// ⊘ An LCE the engine list advertises and the host's caps reply does not is refused.
+    #[test]
+    fn an_lce_the_host_does_not_mark_present_refuses() {
+        let e = CeGeometry::from_engines(&[lce_row("CE1", 1), lce_row("CE5", 5)], &ga106_host());
+        assert_eq!(e, Err(CeCapsError::NotOnHost { instance: 5, host_present: 0x0f }));
+        let g = CeGeometry::from_engines(&[lce_row("CE1", 1)], &ga106_host()).expect("CE1 is present");
+        assert_eq!(g.present, 0b10);
+        assert_eq!(g.grce, 0b10);
         assert_eq!(g.caps_for(0), CeCaps::NONE);
     }
 

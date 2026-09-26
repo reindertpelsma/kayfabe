@@ -135,6 +135,7 @@ version = "0.1.0"
 dependencies = [
  "kayfabe-abi",
  "kayfabe-arch",
+ "kayfabe-doorbell",
  "kayfabe-gsp",
  "kayfabe-mocks",
  "kayfabe-util",
@@ -545,6 +546,7 @@ dependencies = [
 name = "kf-mem"
 version = "0.1.0"
 dependencies = [
+ "kf-chip",
  "kf-cuda",
  "kf-host",
  "kf-trap",

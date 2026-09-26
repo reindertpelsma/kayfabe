@@ -37,7 +37,7 @@ use crate::raw_unsafe::{BackendFd, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, SharedRam};
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
-use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped};
+use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, Settle, UsermodeRow};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey};
 use kf_rm::barpde::{BarAperture, MemStatement};
 use kf_trap::pramin::{GRANULE, SLOTS, Target as WinTarget, WindowReg};
@@ -289,6 +289,9 @@ impl ViewOps for WindowOps {
 pub enum Target {
     /// A guest BAR aperture.
     Window(CpuWindow<WindowOps>),
+    /// ★ The Hopper+ BAR1 aperture: the window, plus the guest's usermode (doorbell) views
+    /// (`V3_BAR1_DOORBELL.md`). Turing … Ada use [`Target::Window`] for BAR1, unchanged.
+    Bar1(Bar1Target),
     /// A host GPU VA space mirroring a guest one (the Translated plane's target).
     Gpu(GpuMirror),
 }
@@ -361,6 +364,112 @@ pub struct GpuMirror {
     pub rows: PlacedRows,
     /// ★ P6b: OUR VMM placements in this space — the two windows and the ring region.
     pub reserved: Vec<(u64, u64)>,
+    /// ★ `V3_BATCHED_MAP.md`: guest RAM as QEMU registered it — the memfd a batch is stitched from
+    /// (`None`: this mirror never batches).
+    pub ram: Option<&'static RamMap>,
+    /// ★ `V3_BATCHED_MAP.md` §5: the same space, placing batches and booking their objects.
+    pub bv: kf_mem::batch::BatchedVas<'static>,
+    /// ★ Host RM calls this space has cost, for the retire line (per CUDA process).
+    pub calls: SpaceCalls,
+}
+
+/// ★ `V3_BATCHED_MAP.md`: what one mirrored space cost in host RM calls over its life — the
+/// per-process instrument the retire line prints.
+#[derive(Debug, Default)]
+pub struct SpaceCalls {
+    /// Per-run `NV_ESC_RM_MAP_MEMORY_DMA`.
+    pub maps: AtomicU64,
+    /// Batches placed (each = ONE `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` + ONE map).
+    pub batches: AtomicU64,
+    /// Runs those batches carried.
+    pub batched_runs: AtomicU64,
+    /// Batches refused (their runs then went one by one).
+    pub batch_refused: AtomicU64,
+    /// `NV_ESC_RM_UNMAP_MEMORY_DMA` calls — per-run or range.
+    pub unmaps: AtomicU64,
+    /// Of which ranges.
+    pub ranges: AtomicU64,
+    /// ns inside map verbs (per-run + batch).
+    pub map_ns: AtomicU64,
+    /// ns inside unmap verbs (incl. the frees they trigger).
+    pub unmap_ns: AtomicU64,
+}
+
+impl SpaceCalls {
+    fn line(&self, frees: u64) -> String {
+        let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        format!(
+            "host RM over its life: {} map call(s) ({} per-run, {} batch(es) x2 carrying {} runs, {} batch(es) refused) in {} ms; {} unmap call(s) ({} range(s)) + {} free(s) in {} ms",
+            g(&self.maps) + 2 * g(&self.batches),
+            g(&self.maps),
+            g(&self.batches),
+            g(&self.batched_runs),
+            g(&self.batch_refused),
+            g(&self.map_ns) / 1_000_000,
+            g(&self.unmaps),
+            g(&self.ranges),
+            frees,
+            g(&self.unmap_ns) / 1_000_000
+        )
+    }
+}
+
+/// ★ `KF3_NO_BATCHED_MAP=1` turns batched maps and range unmaps off (the per-run path, as before
+/// `V3_BATCHED_MAP.md`) — for A/B measurement. Read once.
+fn batching_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NO_BATCHED_MAP").is_none())
+}
+
+fn ns_since(t: std::time::Instant) -> u64 {
+    u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
+}
+
+impl GpuMirror {
+    /// A mirror over `vas`, batching through `ram`'s memfd when it has one.
+    #[must_use]
+    pub fn new(vas: HostVas<'static>, rows: PlacedRows, reserved: Vec<(u64, u64)>, ram: Option<&'static RamMap>) -> Self {
+        GpuMirror { vas, rows, reserved, ram, bv: kf_mem::batch::BatchedVas::new(vas), calls: SpaceCalls::default() }
+    }
+
+    /// Batch objects freed so far.
+    fn frees(&self) -> u64 {
+        self.bv.frees.load(Ordering::Relaxed)
+    }
+
+    /// The retire line's cost summary.
+    pub fn calls_line(&self) -> String {
+        self.calls.line(self.frees())
+    }
+
+    /// ★ Retire-time teardown: every row, as few ranges as are VA-contiguous; then every batch
+    /// object. Returns `(rows, refused, host calls)`.
+    fn unmap_all_rows(&self) -> (usize, usize, u64) {
+        let rows: Vec<(u64, u64)> = self.rows.read().map(|r| r.iter().map(|(&va, &(len, _, _))| (va, len)).collect()).unwrap_or_default();
+        let before = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
+        let mut refused = 0usize;
+        let mut k = 0;
+        while k < rows.len() {
+            let mut j = k + 1;
+            while j < rows.len() && rows[j - 1].0.checked_add(rows[j - 1].1) == Some(rows[j].0) {
+                j += 1;
+            }
+            let (va, end) = (rows[k].0, rows[j - 1].0 + rows[j - 1].1);
+            if j - k < 2 || self.unmap_range(va, end - va, true).is_err() {
+                for &(va, _) in &rows[k..j] {
+                    if self.unmap(va, true).is_err() {
+                        refused += 1;
+                    }
+                }
+            }
+            k = j;
+        }
+        // Whatever batch objects remain (a refused unmap left a piece): freeing one unmaps its
+        // pieces (`rs_client.c:1342-1395`) — the space is being retired, nothing may keep them.
+        let _ = self.bv.drain();
+        let after = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
+        (rows.len(), refused, after - before)
+    }
 }
 
 /// The VMM ranges of a space whose windows are at `fb` and `ram` (`(base, len)`).
@@ -373,7 +482,11 @@ pub fn vmm_ranges(fb: Option<(u64, u64)>, ram: Option<(u64, u64)>) -> Vec<(u64, 
 
 impl MapTarget for GpuMirror {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let m = self.vas.map(d, defer)?;
+        let t = std::time::Instant::now();
+        let m = self.vas.map(d, defer);
+        self.calls.maps.fetch_add(1, Ordering::Relaxed);
+        self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        let m = m?;
         // ★ P6b ruling (a): only a mapping WE placed is a row a reader may resolve through.
         if m == Mapped::Placed
             && let Ok(mut r) = self.rows.write()
@@ -382,15 +495,83 @@ impl MapTarget for GpuMirror {
         }
         Ok(m)
     }
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        let (Some(ram), true) = (self.ram, batching_enabled()) else {
+            return Err(kf_mem::ledger::NOT_BATCHED.into());
+        };
+        let fd = ram.backing_fd().ok_or("no fd-backed guest RAM to stitch a batch from")?;
+        let t = std::time::Instant::now();
+        let placed = self.bv.place(fd.borrow(), rows, defer);
+        self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        if let Err(e) = placed {
+            self.calls.batch_refused.fetch_add(1, Ordering::Relaxed);
+            return Err(e);
+        }
+        self.calls.batches.fetch_add(1, Ordering::Relaxed);
+        self.calls.batched_runs.fetch_add(rows.len() as u64, Ordering::Relaxed);
+        if let Ok(mut r) = self.rows.write() {
+            for d in rows {
+                r.insert(d.va, (d.len, d.off, d.ram));
+            }
+        }
+        Ok(())
+    }
     fn reserved(&self) -> Vec<(u64, u64)> {
         self.reserved.clone()
     }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
         // ⊘ Forget the row FIRST: a reader must never resolve through a mapping being torn down.
-        if let Ok(mut r) = self.rows.write() {
-            r.remove(&va);
+        // ★ v3-video: NO row = nothing of OURS is mapped there — a leaf the host held (host RM's
+        // own buffer) or one the channel plane handed to host RM (a steered falcon context). A
+        // host unmap there would name host RM's mapping, which is not ours to remove (`[measured
+        // vvid vid11]` refused `Other(87)`, leaving the space unsettled): answered with no host call.
+        let row = match self.rows.write() {
+            Ok(mut r) => match r.remove(&va) {
+                Some(row) => row,
+                None => {
+                    eprintln!("kf3: mem unmap {va:#x}: no placement of ours there (host-held or handed to host RM) — no host call");
+                    return Ok(());
+                }
+            },
+            Err(_) => return Err(format!("unmap {va:#x}: placement rows poisoned")),
+        };
+        let t = std::time::Instant::now();
+        let r = self.bv.unmap_run(va, Some(row.0), defer);
+        self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
+        self.calls.unmap_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        r
+    }
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        if !batching_enabled() {
+            return Err(kf_mem::ledger::NOT_BATCHED.into());
         }
-        self.vas.unmap(va, defer)
+        let end = va.checked_add(len).ok_or("unmap range overflows")?;
+        // ⊘ Belt and braces: RM removes EVERY mapping of ours in the range, so it must never reach
+        // one of our VMM placements (a guest row over one is refused at map time — this re-checks).
+        if let Some(&(a, b)) = self.reserved.iter().find(|&&(a, b)| va < b && a < end) {
+            return Err(format!("unmap range {va:#x}+{len:#x} reaches OUR placement [{a:#x}, {b:#x}) — refused"));
+        }
+        // ⊘ Forget the rows FIRST (as `unmap`); put them back if the host refuses, so the per-run
+        // fallback still knows each run's length.
+        let removed: Vec<(u64, (u64, u64, bool))> = self
+            .rows
+            .write()
+            .map(|mut r| {
+                let keys: Vec<u64> = r.range(va..end).map(|(&k, _)| k).collect();
+                keys.into_iter().filter_map(|k| r.remove(&k).map(|v| (k, v))).collect()
+            })
+            .unwrap_or_default();
+        let t = std::time::Instant::now();
+        let r = self.bv.unmap_range(va, len, defer);
+        self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
+        self.calls.ranges.fetch_add(1, Ordering::Relaxed);
+        if r.is_err()
+            && let Ok(mut rows) = self.rows.write()
+        {
+            rows.extend(removed);
+        }
+        self.calls.unmap_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        r
     }
     fn invalidate(&self) -> Result<(), String> {
         self.vas.invalidate()
@@ -456,31 +637,286 @@ impl MapTarget for Target {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         match self {
             Target::Window(w) => w.map(d, defer),
+            Target::Bar1(b) => b.map(d, defer),
             Target::Gpu(g) => g.map(d, defer),
+        }
+    }
+    // ★ `V3_BATCHED_MAP.md`: forwarded EXPLICITLY — a trait default here would silently answer
+    // `NOT_BATCHED` for every space (`[measured bm1]`: 3 groups formed, 0 batched, 12 291 verbs).
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        match self {
+            Target::Window(w) => w.map_batch(rows, defer),
+            Target::Bar1(b) => b.win.map_batch(rows, defer),
+            Target::Gpu(g) => g.map_batch(rows, defer),
+        }
+    }
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        match self {
+            Target::Window(w) => w.unmap_range(va, len, defer),
+            Target::Bar1(b) => b.win.unmap_range(va, len, defer),
+            Target::Gpu(g) => g.unmap_range(va, len, defer),
         }
     }
     fn reserved(&self) -> Vec<(u64, u64)> {
         match self {
             Target::Window(w) => w.reserved(),
+            Target::Bar1(b) => b.win.reserved(),
             Target::Gpu(g) => g.reserved(),
         }
     }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
         match self {
             Target::Window(w) => w.unmap(va, defer),
+            Target::Bar1(b) => b.unmap(va, defer),
             Target::Gpu(g) => g.unmap(va, defer),
         }
     }
     fn invalidate(&self) -> Result<(), String> {
         match self {
             Target::Window(w) => w.invalidate(),
+            Target::Bar1(b) => b.win.invalidate(),
             Target::Gpu(g) => g.invalidate(),
         }
     }
     fn va_extent(&self) -> Option<u64> {
         match self {
             Target::Window(w) => w.va_extent(),
+            Target::Bar1(b) => b.win.va_extent(),
             Target::Gpu(g) => g.va_extent(),
+        }
+    }
+    fn settle(&self) -> Settle {
+        match self {
+            Target::Bar1(b) => b.settle(),
+            Target::Window(_) | Target::Gpu(_) => Settle::Live,
+        }
+    }
+    fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
+        match self {
+            // ⊘ BAR2 is RM's own kernel aperture; a usermode view there has no reader. The trait
+            // default (not mirrored, satisfied) is the answer, as for a GPU VA space.
+            Target::Window(w) => w.map_usermode(u),
+            Target::Bar1(b) => b.map_usermode(u),
+            // ★ A GPU VA view of the doorbell: NOT MIRRORED (the trait default, `V3_BAR1_DOORBELL.md` §5).
+            Target::Gpu(g) => g.map_usermode(u),
+        }
+    }
+}
+
+/// ★ The default BAR1 doorbell-overlay pool (the C device's `bar1-overlays` property, which
+/// overrides it at registration). ⊘ User CPU maps are `ALLOW_DISCONTIG` ⇒ never reused
+/// (`mapping_cpu.c:484`, `kern_bus_gm107.c:3043-3047`), so this is roughly one per guest process
+/// holding a CUDA context, plus UVM's one kernel view. One more is refused by name.
+pub const BAR1_OVERLAY_SLOTS: usize = 64;
+
+/// ★ The BAR1 overlay verb the C device registered, its pool size, the completions its main-loop
+/// bottom half posts back, and the counters.
+#[derive(Debug)]
+pub struct Bar1Overlay {
+    hook: std::sync::OnceLock<crate::raw_unsafe::OverlayHook>,
+    /// The C device's pool size.
+    pub cap: std::sync::atomic::AtomicUsize,
+    /// `(seq, rc)` posted by the main loop, drained by the VA thread in [`Bar1Target`]'s settle.
+    /// ⊘ Held only for a push or a `take` — never across a wait, never by a vCPU.
+    done: Mutex<Vec<(u64, i32)>>,
+    /// Overlays installed (confirmed live by the main loop).
+    pub installed: AtomicU64,
+    /// Overlays removed (confirmed).
+    pub removed: AtomicU64,
+    /// Views refused (by the tracker or the C device), each named in the VA stats.
+    pub refused: AtomicU64,
+}
+
+impl Default for Bar1Overlay {
+    fn default() -> Self {
+        Bar1Overlay {
+            hook: std::sync::OnceLock::new(),
+            cap: std::sync::atomic::AtomicUsize::new(BAR1_OVERLAY_SLOTS),
+            done: Mutex::new(Vec::new()),
+            installed: AtomicU64::new(0),
+            removed: AtomicU64::new(0),
+            refused: AtomicU64::new(0),
+        }
+    }
+}
+
+impl Bar1Overlay {
+    /// Register the C device's verb and its pool size (once).
+    pub fn set(&self, h: crate::raw_unsafe::OverlayHook, cap: usize) -> bool {
+        if self.hook.set(h).is_err() {
+            return false;
+        }
+        self.cap.store(cap, Ordering::Release);
+        true
+    }
+
+    /// ★ The main loop reports change `seq` applied with `rc` (0 = live/removed). The caller then
+    /// wakes the VA thread; this never blocks beyond one uncontended push.
+    pub fn post(&self, seq: u64, rc: i32) {
+        if let Ok(mut d) = self.done.lock() {
+            d.push((seq, rc));
+        }
+    }
+
+    fn take(&self) -> Vec<(u64, i32)> {
+        self.done.lock().map(|mut d| std::mem::take(&mut *d)).unwrap_or_default()
+    }
+}
+
+/// One queued overlay change.
+#[derive(Debug, Clone, Copy)]
+struct InFlight {
+    install: bool,
+    view: kf_trap::bar1db::Bar1View,
+}
+
+/// ★★★ **The Hopper+ BAR1 target** (`V3_BAR1_DOORBELL.md` §3): ordinary leaves go to the window; a
+/// usermode-page view becomes a write-trapped overlay at exactly the BAR1 offset the guest's own
+/// PTEs put it, and is removed when its UNMAP arrives. VA-manager thread only.
+///
+/// ★ **Asynchronous (ruling 2026-09-26 (5))**: the verb QUEUES the change for QEMU's main loop and
+/// returns; [`MapTarget::settle`] answers `Pending` until the main loop posts it back, and the VA
+/// manager defers only the clears of the invalidates that named BAR1. ⇒ the overlay is live before
+/// the clear on map, and gone before the clear on unmap — with no thread ever waiting on the BQL.
+pub struct Bar1Target {
+    /// The BAR1 window.
+    pub win: CpuWindow<WindowOps>,
+    /// Views live or being installed (a removed view leaves at once — its removal is in flight).
+    db: std::cell::RefCell<kf_trap::bar1db::Bar1Doorbells>,
+    overlay: std::sync::Arc<Bar1Overlay>,
+    inflight: std::cell::RefCell<std::collections::BTreeMap<u64, InFlight>>,
+    next_seq: std::cell::Cell<u64>,
+    /// Bases whose install failed after its run was acknowledged: their UNMAP retires quietly.
+    dead: std::cell::RefCell<std::collections::BTreeSet<u64>>,
+}
+
+impl Bar1Target {
+    /// The window, a tracker over `bar1_bytes` and a `usermode_len`-byte page, and the verb.
+    #[must_use]
+    pub fn new(win: CpuWindow<WindowOps>, bar1_bytes: u64, usermode_len: u64, overlay: std::sync::Arc<Bar1Overlay>) -> Bar1Target {
+        Bar1Target {
+            win,
+            db: std::cell::RefCell::new(kf_trap::bar1db::Bar1Doorbells::new(bar1_bytes, usermode_len, BAR1_OVERLAY_SLOTS)),
+            overlay,
+            inflight: std::cell::RefCell::new(std::collections::BTreeMap::new()),
+            next_seq: std::cell::Cell::new(1),
+            dead: std::cell::RefCell::new(std::collections::BTreeSet::new()),
+        }
+    }
+
+    /// The views currently trapped or being installed (the guest doorbell module's replay set).
+    #[must_use]
+    pub fn views(&self) -> Vec<kf_trap::bar1db::Bar1View> {
+        self.db.borrow().views().copied().collect()
+    }
+
+    fn refuse<T>(&self, why: String) -> Result<T, String> {
+        self.overlay.refused.fetch_add(1, Ordering::Relaxed);
+        Err(why)
+    }
+
+    fn submit(&self, install: bool, v: kf_trap::bar1db::Bar1View) -> Result<(), String> {
+        let Some(hook) = self.overlay.hook.get() else {
+            return Err(format!(
+                "BAR1 doorbell view {:#x}+{:#x}: the C device registered no overlay verb — the view cannot trap, and it is NEVER backed by guest RAM",
+                v.base, v.len
+            ));
+        };
+        let seq = self.next_seq.get();
+        hook.submit(seq, u32::from(install), v.base, v.len, v.vf_rel).map_err(|e| {
+            format!("BAR1 doorbell view {:#x}+{:#x}: the C device refused to queue the change (errno {e})", v.base, v.len)
+        })?;
+        self.next_seq.set(seq + 1);
+        self.inflight.borrow_mut().insert(seq, InFlight { install, view: v });
+        Ok(())
+    }
+
+    /// An ordinary BAR1 leaf. ⊘ Refused by name under a live (or installing) doorbell view: the
+    /// overlay would shadow it and turn the guest's stores to that memory into doorbell writes.
+    /// Under a view whose REMOVAL is in flight it is placed: it becomes visible when the removal
+    /// lands, which is before the invalidate that states it clears.
+    fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
+        let end = d.va.saturating_add(d.len);
+        if let Some(v) = self.db.borrow().views().find(|v| v.base < end && d.va < v.base + v.len) {
+            return self.refuse(format!(
+                "BAR1 leaf {:#x}+{:#x} lies under the live doorbell view {:#x}+{:#x}; refused until that view is unmapped",
+                d.va, d.len, v.base, v.len
+            ));
+        }
+        self.win.map(d, defer)
+    }
+
+    fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
+        let v = kf_trap::bar1db::Bar1View { base: u.va, len: u.len, vf_rel: u.vf_rel };
+        {
+            let mut db = self.db.borrow_mut();
+            db.set_cap(self.overlay.cap.load(Ordering::Acquire));
+            if let Err(e) = db.place(v) {
+                drop(db);
+                return self.refuse(format!("BAR1 doorbell view refused: {e:?}"));
+            }
+        }
+        if let Err(e) = self.submit(true, v) {
+            self.db.borrow_mut().remove(v.base);
+            return self.refuse(e);
+        }
+        self.dead.borrow_mut().remove(&v.base);
+        Ok(Mapped::Placed)
+    }
+
+    fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
+        if self.dead.borrow_mut().remove(&va) {
+            return Ok(()); // its install failed (named then): nothing of ours is there
+        }
+        let Some(v) = self.db.borrow().at_base(va) else {
+            return self.win.unmap(va, defer);
+        };
+        // ⊘ Unmap may not complete while anything routes through the view: the removal is queued
+        // here, and `settle` holds the invalidate's clear until the main loop confirms it.
+        if let Err(e) = self.submit(false, v) {
+            return self.refuse(e);
+        }
+        self.db.borrow_mut().remove(va);
+        Ok(())
+    }
+
+    /// Drain the main loop's completions; `Pending` while any change is still queued.
+    fn settle(&self) -> Settle {
+        let mut failures = Vec::new();
+        for (seq, rc) in self.overlay.take() {
+            let Some(f) = self.inflight.borrow_mut().remove(&seq) else { continue };
+            match (f.install, rc) {
+                (true, 0) => {
+                    self.overlay.installed.fetch_add(1, Ordering::Relaxed);
+                }
+                (false, 0) => {
+                    self.overlay.removed.fetch_add(1, Ordering::Relaxed);
+                }
+                (true, e) => {
+                    // ⊘ Its run was already acknowledged APPLIED: the view is retired here and its
+                    // later UNMAP retires quietly (`dead`). Named; the invalidate stays armed.
+                    if self.db.borrow().at_base(f.view.base) == Some(f.view) {
+                        self.db.borrow_mut().remove(f.view.base);
+                    }
+                    self.dead.borrow_mut().insert(f.view.base);
+                    self.overlay.refused.fetch_add(1, Ordering::Relaxed);
+                    failures.push(format!(
+                        "BAR1 doorbell overlay {:#x}+{:#x} (page {:#x}): install FAILED in QEMU (errno {e}) — the view does not trap",
+                        f.view.base, f.view.len, f.view.vf_rel
+                    ));
+                }
+                (false, e) => {
+                    self.overlay.refused.fetch_add(1, Ordering::Relaxed);
+                    failures.push(format!("BAR1 doorbell overlay {:#x}: removal FAILED in QEMU (errno {e})", f.view.base));
+                }
+            }
+        }
+        if !failures.is_empty() {
+            Settle::Failed(failures.join("; "))
+        } else if self.inflight.borrow().is_empty() {
+            Settle::Live
+        } else {
+            Settle::Pending
         }
     }
 }
@@ -497,7 +933,11 @@ pub struct Inbox {
     /// ★ w827: guest L2 cache-op requests per [`kf_trap::cacheop::CacheOp`] — bumped by the vCPU
     /// (lock-free) after it stores the busy word; the VA thread performs the host op and publishes
     /// idle. See `ChanDevice::serve_cache_ops`.
-    pub cache_req: [AtomicU64; 3],
+    pub cache_req: [AtomicU64; kf_trap::cacheop::CacheOp::COUNT],
+    /// ★ w828: per op, the request count the host has FINISHED — stored by the VA thread after the
+    /// host verb returned (a completion is a host event), read by the vCPU to answer a Hopper+
+    /// `…_COMPLETED` token register (`kf_trap::cacheop::completed_word`).
+    pub cache_done: [AtomicU64; kf_trap::cacheop::CacheOp::COUNT],
     q: Mutex<Vec<MemStatement>>,
     received: AtomicU64,
     settled: AtomicU64,
@@ -519,7 +959,8 @@ impl Inbox {
     /// No eventfd.
     pub fn new() -> Result<Inbox, String> {
         Ok(Inbox {
-            cache_req: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
+            cache_req: std::array::from_fn(|_| AtomicU64::new(0)),
+            cache_done: std::array::from_fn(|_| AtomicU64::new(0)),
             q: Mutex::new(Vec::new()),
             received: AtomicU64::new(0),
             settled: AtomicU64::new(0),
@@ -889,7 +1330,7 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
         space.space,
         ns / 1000
     );
-    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved }));
+    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved, Some(plane.ram))));
     Ok(())
 }
 
@@ -943,8 +1384,7 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
             Some(format!("prewarm: spare host space {:#x} ready before the guest runs — {line} (total {} us)", space.space, t0.elapsed().as_micros()))
         }
         (fb, ram) => {
-            let _ = rm.free(space.range);
-            let _ = rm.free(space.space);
+            rm.free_vaspace(space);
             Some(format!("prewarm: windows refused fb={fb:?} ram={ram:?} — no spare; {line}"))
         }
     }
@@ -969,16 +1409,14 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     }
     // ★ Our placements in this space, from the space's own row record (what we PLACED, never a
     // copy of the guest's tables); the walker's slot for it is released by `m.remove`.
-    let rows: Vec<u64> = g.rows.read().map(|r| r.keys().copied().collect()).unwrap_or_default();
-    let mut refused = 0usize;
-    for va in &rows {
-        if g.unmap(*va, true).is_err() {
-            refused += 1;
-        }
-    }
-    if !rows.is_empty() && g.invalidate().is_err() {
+    // ★ V3_BATCHED_MAP: VA-contiguous rows go as one range each; every batch object is freed.
+    let t_unmap = std::time::Instant::now();
+    let (nrows, mut refused, calls) = g.unmap_all_rows();
+    let host_calls = calls + u64::from(nrows > 0);
+    if nrows > 0 && g.invalidate().is_err() {
         refused += 1;
     }
+    let unmap_us = t_unmap.elapsed().as_micros();
     let spare = mirror.map(|mi| Spare { space: mi.space, fb_base: mi.fb_base, ram: mi.ram, ram_obj: mi.ram_obj, rings: mi.rings });
     let recycled = match (spare, refused) {
         (Some(sp), 0) => plane.spares.lock().ok().filter(|v| v.len() < SPARES_MAX).map(|mut v| v.push(sp)).is_some(),
@@ -986,15 +1424,28 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     };
     if !recycled {
         // The windows go with the space; a refused unmap means the space is not clean — freed.
-        let _ = rm.free(g.vas.space.range);
-        let _ = rm.free(g.vas.space.space);
+        rm.free_vaspace(g.vas.space);
     }
     format!(
-        "retire {key:?}: {} row(s) unmapped ({refused} refused), host space {:#x} {}",
-        rows.len(),
+        "retire {key:?}: {nrows} row(s) unmapped ({refused} refused) in {unmap_us} us, {host_calls} host call(s), host space {:#x} {} — {}",
         g.vas.space.space,
-        if recycled { "kept as a spare" } else { "freed" }
+        if recycled { "kept as a spare" } else { "freed" },
+        g.calls_line()
     )
+}
+
+/// Diagnostics: every VA-space object the plane holds, `key=slot@root:rows`.
+fn vas_census(m: &Manager) -> String {
+    let objs = m.table.objects();
+    let mut out = format!("{} objects:", objs.len());
+    for (k, root, slot) in objs {
+        let rows = match m.table.target(k) {
+            Some(Target::Gpu(g)) => g.rows.read().map_or(usize::MAX, |r| r.len()),
+            _ => 0,
+        };
+        out.push_str(&format!(" {:#x}=s{}@{}:{rows}", k.0, slot.map_or(-1, i64::from), root.map_or("-".to_string(), |r| format!("{r:#x}"))));
+    }
+    out
 }
 
 /// ★ Apply one statement on the VA thread. Returns a line for the boot log.
@@ -1029,7 +1480,11 @@ pub fn apply_statement(
             format!("fn70 {:?} entry={:#x} shift={} -> our root @{root:#x}, walk scheduled", p.bar, p.entry, p.level_shift)
         }
         MemStatement::Retire { client, vaspace } => {
-            retire_mirror(m, plane, rm, VasKey((u64::from(client) << 32) | u64::from(vaspace)))
+            let line = retire_mirror(m, plane, rm, VasKey((u64::from(client) << 32) | u64::from(vaspace)));
+            if std::env::var_os("KF_VAS_CENSUS").is_some() {
+                eprintln!("kf3: census {line}");
+            }
+            line
         }
         MemStatement::PageDir(s) => {
             let key = VasKey((u64::from(s.client.0) << 32) | u64::from(s.vaspace.0));
@@ -1054,7 +1509,7 @@ pub fn apply_statement(
                         );
                     }
                     plane.counters.mirrors_reused.fetch_add(1, Ordering::Relaxed);
-                    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows, reserved }));
+                    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows, reserved, Some(plane.ram))));
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
                 }
@@ -1070,6 +1525,9 @@ pub fn apply_statement(
                     }
                     if let kf_mem::vasmgr::RootChange::Moved { .. } = change {
                         plane.counters.root_moves.fetch_add(1, Ordering::Relaxed);
+                    }
+                    if change.walk_now() && std::env::var_os("KF_VAS_CENSUS").is_some() {
+                        eprintln!("kf3: census at {key:?} First: {}", vas_census(m));
                     }
                     format!("pagedir {key:?} root={:#x} {change:x?}", s.pdb.0)
                 }

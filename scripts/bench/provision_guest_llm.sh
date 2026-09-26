@@ -60,7 +60,7 @@ $GS "python3 -m venv /home/ubuntu/llmvenv 2>/dev/null; /home/ubuntu/llmvenv/bin/
 # a parity ratio must run the same runtime, and "latest on this index" drifts independently at each
 # site. w720 measured a 2x error in the flattering direction from exactly this.
 $GS "/home/ubuntu/llmvenv/bin/pip -q install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124" 2>&1 | tail -3
-$GS "/home/ubuntu/llmvenv/bin/pip -q install transformers accelerate" 2>&1 | tail -3
+$GS "/home/ubuntu/llmvenv/bin/pip -q install transformers==${LLM_TRANSFORMERS:-5.17.0} accelerate" 2>&1 | tail -3
 
 # ⚠ ASSERT THE IMPORT, not the pip exit status. `pip -q install` through `| tail -3` loses its
 # status to the pipe ([[a_check_that_reports_is_not_a_check_that_gates]]), and a wheel that

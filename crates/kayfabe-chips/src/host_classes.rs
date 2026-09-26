@@ -320,6 +320,151 @@ impl HostClasses for Gb20xHostClasses {
     }
 }
 
+/// ★ The host classes for the GENERATION the host reports (`MC_GET_ARCH_INFO.architecture`),
+/// or `None` for one this tree has no profile for. ⊘ What a client runs against is the
+/// device's family, never the build's pin: on an AD106 the pinned GA10x compute class
+/// (`0xc7c0`) is refused `NV_ERR_INVALID_CLASS` (measured 2026-09-26, RTX 4060 Ti, `--uvm-mean` P3).
+#[must_use]
+pub fn host_classes_for_arch(architecture: u32) -> Option<&'static dyn HostClasses> {
+    match architecture {
+        0x170 => Some(&Ga10xHostClasses),
+        0x190 => Some(&Ad10xHostClasses),
+        0x180 => Some(&Gh100HostClasses),
+        0x1B0 => Some(&Gb20xHostClasses),
+        _ => None,
+    }
+}
+
+/// `NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2` (`ogkm-580: ctrl0080gpu.h:506`) — NON_PRIVILEGED
+/// (`g_device_nvoc.c:333`, flags `0x1010b`), issued on the DEVICE.
+pub const NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2: u32 = 0x0080_0292;
+/// `NV0080_CTRL_GPU_CLASSLIST_MAX_SIZE` (`ctrl0080gpu.h:504`).
+pub const CLASSLIST_MAX: usize = 200;
+/// `sizeof(NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS)` — `{numClasses, classList[200]}`.
+pub const CLASSLIST_V2_SIZE: usize = 4 + 4 * CLASSLIST_MAX;
+
+/// Decode a `GET_CLASSLIST_V2` reply. `None` if `numClasses` exceeds the array.
+#[must_use]
+pub fn decode_classlist(buf: &[u8]) -> Option<Vec<u32>> {
+    let w = |o: usize| buf.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let n = w(0)? as usize;
+    if n > CLASSLIST_MAX {
+        return None;
+    }
+    (0..n).map(|i| w(4 + 4 * i)).collect()
+}
+
+/// ★★★ **The host classes of THIS die, asked of the host** — the old tree's answer to
+/// `pinned_host_classes()` (2026-09-26, `v3-families`; same rule as v3's
+/// `kf_chip::host_classes::DerivedHostClasses`).
+///
+/// Per kind, the NEWEST id that is both an engine class of that kind on some family
+/// (`kayfabe_doorbell::classgen::FAMILIES`, GENERATED from ogkm's `g_gpu_class_list.c` — §50
+/// level 2) and on the host's own `GET_CLASSLIST_V2` (§50 level 1). "Newest" is RM's own rule:
+/// `findDeviceClasses` picks the numerically largest member of each family
+/// (`ogkm-580: nv_gpu_ops.c:8630-8699`).
+///
+/// ⊘ Needs no family and no pin: the host list only names classes its die accepts, so the
+/// largest of a kind IS the die's own (GA100 → `AMPERE_COMPUTE_A 0xC6C0`, GA10x → `_B 0xC7C0`,
+/// AD10x → `ADA_COMPUTE_A 0xC9C0`, GB20x → `BLACKWELL_COMPUTE_B 0xCEC0`, …). A kind the host
+/// lists none of is refused by name — never a guessed id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DerivedHostClasses {
+    channel: u32,
+    usermode: u32,
+    ce: u32,
+    compute: Option<u32>,
+}
+
+/// A required kind the host's class list carries none of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostLacksKind(pub kayfabe_doorbell::classgen::Kind);
+
+impl DerivedHostClasses {
+    /// Choose from the host's own class list.
+    ///
+    /// # Errors
+    /// [`HostLacksKind`] for a required kind (channel, usermode, CE) the host lists none of.
+    /// Compute is optional (a CE-only host still runs the copy planes; the caller that needs it
+    /// refuses by name).
+    pub fn from_host_list(host: &[u32]) -> Result<Self, HostLacksKind> {
+        use kayfabe_doorbell::classgen::{FAMILIES, Kind};
+        let newest = |k: Kind| {
+            FAMILIES.iter().flat_map(|f| f.of_kind(k).iter().copied()).filter(|c| host.contains(c)).max()
+        };
+        let need = |k: Kind| newest(k).ok_or(HostLacksKind(k));
+        Ok(Self {
+            channel: need(Kind::ChannelGpfifo)?,
+            usermode: need(Kind::Usermode)?,
+            ce: need(Kind::DmaCopy)?,
+            compute: newest(Kind::Compute),
+        })
+    }
+}
+
+impl HostClasses for DerivedHostClasses {
+    fn name(&self) -> &'static str {
+        "derived (host GET_CLASSLIST_V2 ∩ generated engine classes, newest per kind)"
+    }
+    fn gpfifo_channel(&self) -> ChannelClass {
+        ChannelClass::new(ClassId(self.channel))
+    }
+    fn usermode(&self) -> UsermodeClass {
+        UsermodeClass::new(ClassId(self.usermode))
+    }
+    fn ce_object(&self) -> CeObjectClass {
+        CeObjectClass::new(ClassId(self.ce))
+    }
+    fn compute_object(&self) -> Option<ComputeObjectClass> {
+        self.compute.map(|c| ComputeObjectClass::new(ClassId(c)))
+    }
+}
+
+#[cfg(test)]
+mod derived_tests {
+    use super::*;
+    use kayfabe_doorbell::classgen::{FAMILIES, Family};
+
+    /// ★ Over each family's generated list (the widest a die of it could answer), the derived
+    /// profile names the family's newest classes — and on the GA10x list it reproduces the pin.
+    #[test]
+    fn the_derived_profile_is_the_newest_per_kind_of_the_hosts_list() {
+        let ga10x: Vec<u32> = [0xC56F, 0xC561, 0xC7B5, 0xC7C0, 0xC46F, 0xC461, 0xC36F, 0xC361].to_vec();
+        let d = DerivedHostClasses::from_host_list(&ga10x).expect("GA10x");
+        let pin = pinned_host_classes();
+        assert_eq!(d.gpfifo_channel(), pin.gpfifo_channel());
+        assert_eq!(d.usermode(), pin.usermode());
+        assert_eq!(d.ce_object(), pin.ce_object());
+        assert_eq!(d.compute_object(), pin.compute_object());
+        // GA100: the _A classes.
+        let ga100 = [0xC56F, 0xC561, 0xC6B5, 0xC6C0];
+        let d = DerivedHostClasses::from_host_list(&ga100).expect("GA100");
+        assert_eq!(d.compute_object().map(|c| c.compute_object_id().0), Some(0xC6C0));
+        assert_eq!(d.ce_object().ce_object_id().0, 0xC6B5);
+        for f in FAMILIES {
+            let all: Vec<u32> = [f.channel_gpfifo, f.usermode, f.dma_copy, f.compute].concat();
+            let d = DerivedHostClasses::from_host_list(&all).unwrap_or_else(|e| panic!("{:?}: {e:?}", f.family));
+            assert_eq!(d.usermode().usermode_id().0, *f.usermode.iter().max().unwrap(), "{:?}", f.family);
+            assert_eq!(d.compute_object().map(|c| c.compute_object_id().0), f.compute.iter().max().copied());
+        }
+        let ada = FAMILIES.iter().find(|f| f.family == Family::Ada).unwrap();
+        let d = DerivedHostClasses::from_host_list(&[ada.channel_gpfifo, ada.usermode, ada.dma_copy, ada.compute].concat()).unwrap();
+        assert_eq!(d.compute_object().map(|c| c.compute_object_id().0), Some(0xC9C0), "not the pinned 0xC7C0");
+    }
+
+    #[test]
+    fn a_host_list_without_a_required_kind_is_refused_by_name() {
+        assert!(DerivedHostClasses::from_host_list(&[0xC56F, 0xC561]).is_err());
+        assert_eq!(decode_classlist(&[1, 0, 0, 0, 0x6f, 0xc5, 0, 0]), Some(vec![0xC56F]));
+        assert_eq!(decode_classlist(&[201, 0, 0, 0]), None);
+    }
+}
+
+/// ⊘⊘ **SUPERSEDED at every in-tree connection, 2026-09-26 (`v3-families`)**: the raw client and
+/// the isolate host now open with `RmConnection::open_on_host`, which asks the device's own class
+/// list ([`DerivedHostClasses`]). This pin survives as the placeholder `open_with` holds for the
+/// few lines before R6a replaces it, and as the oracle the derived profile must equal on GA10x.
+///
 /// ★★★ **The profile the host isolate is PINNED to** — and the word is `pinned`, not
 /// `default`, because nothing probes the host and calling it a default would imply
 /// something else was chosen against.

@@ -111,3 +111,79 @@ greedy, `scripts/bench/run_llm.py` = the guest's own runner): **`HOST_LLM_TOK_PE
 (`generate()` wall, COLD — the basis the guest hook reports). ⊘ The line this replaces said "never
 recorded"; w720 had measured one on another box (0.20× parity). A denominator belongs to ITS box:
 re-record on the box the guest number comes from.
+
+★★★ **LLM lane measured on kf3, w828 (branch `v3-llm`, device built at `53c2bc20` = master `f8cfe8d7`
++ the cache-op fix `8dd2bbdf`).** Fat guest (`boot_capture.sh`, `KF_DEVICE=kf3`, 8 GiB, 4 vCPU) on
+`vh3` (itself a KVM guest — nested), the same box's host, and `vc` (non-KVM container, bare metal).
+Matrix `scripts/bench/llm_parity.sh`, tables `llm_parity_summary.py`, raw output `traces/llm_parity/`.
+Each cell mean of 3 processes.
+
+| tok/s | guest (kf3) | vh3 host | vc bare | guest/vh3 | guest/vc |
+|---|---|---|---|---|---|
+| short 16-tok cold (recorded basis) | 3.10 | 8.94 | 13.40 | 0.35 | 0.23 |
+| 512 steady decode (warm) | 5.89 | 19.33 | 28.28 | 0.30 | 0.21 |
+| 2048 steady decode (warm) | 6.02 | 19.50 | 28.26 | 0.31 | 0.21 |
+
+- ⊘ **Long runs do NOT amortize the gap: it is per TOKEN, not per process.** Guest text == host text
+  for 16/512/2048 tokens (sha256). Ledger: every token `emulated=0`; every passthrough token
+  `forwarded>0`. **~1080 doorbells per decoded token** (eager HF decode = ~1000 kernel launches), and
+  doorbells are 99.7% of all trapped exits (16.79M of 16.84M in llm_g1): ≈106 µs of guest time per
+  doorbell on this nested box. 0.8× would need ≤~8 µs per doorbell — no trapped exit reaches that
+  here. ⇒ parity for eager decode needs an EXIT-FREE doorbell (owner decision), not setup work.
+- Per-process fixed cost: guest persistence mode (`nvidia-smi -pm 1`) removes the per-process
+  emulated-GSP unload/reboot (11 → 1 `UnloadingGuestDriver`) and ~3-4 s per process.
+- ★ **CORRECTED 2026-09-26 (branch `v3-video`, `614fbc7e`): the root cause named below is FIXED.** One host
+  channel group per guest TSG (`HostRm::birth_group`/`birth_member`; members share the legacy
+  subcontext, and the group is scheduled once and freed with its last member). `[measured vvid]` a
+  local-memory kernel on a second CUDA stream now passes in the guest (it failed with `sync 719`), and
+  ffmpeg's CUDA contexts no longer raise the Xid. `cup3`/`cup8` and the fast suite still pass. ⊘ The
+  CUDA-graph LLM arm has NOT been re-measured. See `V3_VIDEO_ENGINES.md` §2.2.
+- ⊘ **WALL: any kernel on a non-default CUDA stream faults** — host `Xid 13 SKEDCHECK05_LOCAL_MEMORY_
+  TOTAL_SIZE failed` on the second GR twin (bisect `llm_graph_probe.py`: default stream incl.
+  StaticCache passes; `x*2+1` on a side stream fails). Every twin is born in its OWN host TSG
+  (`kf-host/src/channel.rs` `birth_channel`), so TSG-scoped GR state the guest programmed through its
+  first channel is absent from the second's context (`CtxBind initialized: 0` vs `3591`). Blocks the
+  CUDA-graph arm (`run_llm_graph.py`: bare 169.6 tok/s, host 165.6, 6x eager) and any multi-stream app.
+
+★★★ **Same matrix on AMD, w828b (`vh`: EPYC 7452 KVM guest, RTX 3060, 580.159.04; device `e5ff45ff`
+= the above + the sysmem-containment fix `f4813205`).** Raw: `traces/llm_parity/vh_amd/`.
+
+| tok/s | guest (kf3) | guest + PM | vh host | vc bare (Xeon) | guest+PM/vh | guest+PM/vc |
+|---|---|---|---|---|---|---|
+| short 16-tok cold | 4.80 | 5.81 | 17.19 | 13.40 | 0.34 | 0.43 |
+| 512 steady decode | 12.62 | 12.58 | 43.98 | 28.28 | 0.29 | 0.45 |
+| 2048 steady decode | 13.04 | 12.69 | 43.53 | 28.26 | 0.29 | 0.45 |
+
+- Exits are ~2x cheaper than on vh3's Intel, but the EPYC host is also 2.2x faster, so the ratio is
+  unchanged (0.29x vs 0.31x). Per 2048-token process (PM lane): **1084.5 doorbells and 1303 KVM
+  exits per token** (5.34M exits, 4.44M ledger doorbells). Excess per token 55.8 ms ⇒ **~51 µs of
+  guest time per doorbell** (42.8 µs per exit on average). `perf kvm stat` in the box (L1): npf
+  (the doorbell MMIO write) is 70% of exits at 18.5 µs average L1 handling; the rest is L0 nesting.
+  0.8x needs ≤ ~5 µs per doorbell.
+- ⊘ **Fixed: sysmem walk runs were bounded by the vidmem store span** (`f4813205`): UVM's CE channel
+  died on a valid guest page above 8 GiB GPA in any 8 GiB guest. ⊘ **Open: without guest persistence
+  mode, UVM's CE channel dies on the 5th CUDA process of a boot** (both boots, `vhA_g`/`vhB_g`):
+  `split walk (pdb 0x201000): walk report TRUNCATED (flags=0x85, refuse_mask=0x10 RUN_CAP)` — each
+  process re-inits the adapter; with PM (one init) 9 processes ran clean. Looks like placements for
+  UVM's re-created VAS accumulating across adapter cycles; not fixed.
+  ⊘⊘ **CORRECTED + FIXED w829 (`v3-uvmwall`) — the reading above was WRONG: not an accumulation,
+  not a leak.** The refusing entry is the CUDA process's OWN space (root `0x201000`, a fresh slot;
+  table 7 objects, 121 free slots). Census (`KF_VAS_CENSUS=1`, `uw4`): 16 366 of its 16 384 runs
+  are 4 KiB sys-coherent pages, a VA-contiguous ~56 MiB at `0x2_0000_0000` + ~2 k at the CPU-mirrored
+  VA; of 16 378 VA-contiguous neighbours **0** are GPA-contiguous (kind/flags split nothing). The run
+  count follows guest-RAM fragmentation, which grows every process (faster with a re-init per
+  process): died at proc 6/4 on `ce623b3f`, 1/2/3 on `v3-mc3` — variance, not a regression. The
+  uniform `runs_per_pdb = 16 384` (walk slice AND slot) was the wall; the re-init agent's `ro_R2`
+  "slot N is full" is the same space through the diff's slot bound. **Fix:** the walker's capacity
+  is pooled and host-managed (`kf-cuda::capacity`, `KfLayout`, `KF_ABI_VERSION 4`): per-entry walk
+  regions and per-slot committed regions carved from a 1 Mi-run walk pool and a 2 Mi-run slot pool
+  (same device memory as before), the kernel reports each space's need, and `WalkKernel` grows a
+  slot (stream-ordered DtoD copy) and re-walks on the collecting (VA) thread. One space may now hold
+  1 Mi runs. Verified: 24/24 no-PM and 24/24 PM torch processes per boot (`vf1`), gate9's growth arm.
+  ⚠ Follow-up: each scattered 4 KiB run is ONE host map call on the guest-RAM object (~12.6 k per
+  fragmented process) — a batched verb (e.g. a page-list object mapped once) is the next budget.
+  ✔ **ANSWERED 2026-09-26 (`v3-batchmap`, `V3_BATCHED_MAP.md`):** VA-contiguous guest-RAM runs are
+  ONE `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over a stitched view, mapped once; VA-adjacent unmaps are
+  ONE `NVOS47` range. A 12 288-run space: 3 map + 1 unmap verbs (was 24 576); exit unmap 1 256 →
+  7 ms (the per-run unmap was O(mappings): RM walks the whole inter-mapping list per call); no-PM
+  process 4.7 → 4.3 s mean on `vh`. The map half is slower (265 → 352 ms: stitch `mmap`s).

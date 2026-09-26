@@ -6,6 +6,10 @@
 //! on a line above the block (the crate's house rule) — none has a precondition a caller
 //! is trusted to have met.
 //!
+//! ★ 2026-09-26 (`V3_BATCHED_MAP.md`): [`MappedRegion::stitch`] adds one `MAP_FIXED` `mmap`,
+//! one address computation and one `munmap` of a stray result — the same shape, and the same
+//! argument, as [`Reservation::map_fixed_in`].
+//!
 //! The one invariant that cannot be re-derived per call is [`Mapping`]'s: *its base is
 //! valid for its length*. It is documented on that type and established by its **two**
 //! constructors, both of which are `mmap` return values in this file, so the audit for it
@@ -490,6 +494,106 @@ impl MappedRegion {
     ) -> Result<Self, RawError> {
         cache::require_attainable(cache, backing.attainable_cache_policy(), backing.describe())?;
         let map = Mapping::anywhere(len, prot.bits(), 0, backing, page, "mapping length")?;
+        Ok(MappedRegion { map, prot, cache })
+    }
+
+    /// ★★★ **One CONTIGUOUS host view of SCATTERED file pieces** — `pieces` are `(file offset,
+    /// length)` of `fd`, laid out back to back in the order given (`V3_BATCHED_MAP.md` §3).
+    ///
+    /// It exists for exactly one consumer: an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the view
+    /// (`kf_host::HostRm::alloc_os_descriptor`) is ONE host object whose page `i` is the file's
+    /// page at `pieces`' `i`-th page — so N scattered guest-RAM runs become one object that one
+    /// `NV_ESC_RM_MAP_MEMORY_DMA` places at N VA-contiguous guest VAs. RM pins the PAGES
+    /// (`pin_user_pages`, `ogkm-580 kernel-open/nvidia/os-mlock.c:216-254`) and never keeps the
+    /// address, so the view may be dropped as soon as the descriptor exists.
+    ///
+    /// Shape: a `PROT_NONE` reservation at a KERNEL-CHOSEN address ([`Mapping::anywhere`], which
+    /// cannot displace anything), then one `MAP_FIXED | MAP_SHARED` per piece strictly INSIDE it,
+    /// at a cursor that only advances — so the pieces tile the reservation exactly, cannot overlap
+    /// each other and cannot leave a `PROT_NONE` hole (the sum of the lengths IS the reservation's
+    /// length). On any refusal the whole range is released by the reservation's own drop.
+    ///
+    /// ⊘ A `MAP_FIXED` here is the same breakout surface [`Reservation::map_fixed_in`] names; the
+    /// argument is the same (we own the range) and is repeated at the block. [`Reservation`] is not
+    /// reused because its per-placement overlap scan is O(placements), i.e. O(N²) for a batch —
+    /// here overlap is impossible by construction (a monotone cursor), not checked.
+    ///
+    /// # Errors
+    /// [`RawError::ZeroLength`] (no pieces, or a zero-length piece), [`RawError::Misaligned`]
+    /// (a length or file offset that is not whole host pages), [`RawError::LengthOverflow`],
+    /// [`RawError::TooLargeForHost`], [`RawError::CachePolicyUnattainable`], [`RawError::Syscall`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn stitch(
+        fd: BorrowedFd<'_>,
+        pieces: &[(u64, u64)],
+        prot: HostProt,
+        cache: CachePolicy,
+        page: HostPageSize,
+    ) -> Result<Self, RawError> {
+        let backing = Backing::SharedFile { fd, offset: 0 };
+        cache::require_attainable(cache, backing.attainable_cache_policy(), backing.describe())?;
+        let mut total = 0u64;
+        for &(off, len) in pieces {
+            if len == 0 {
+                return Err(RawError::ZeroLength { what: "stitched piece length" });
+            }
+            geometry::require_aligned(len, page, "stitched piece length")?;
+            geometry::require_aligned(off, page, "stitched piece file offset")?;
+            total = total.checked_add(len).ok_or(RawError::LengthOverflow { offset: total, len })?;
+        }
+        // The reservation: kernel-chosen address, `PROT_NONE`, released on every early return.
+        let map = Mapping::anywhere(
+            total,
+            libc::PROT_NONE,
+            libc::MAP_NORESERVE,
+            Backing::PrivateAnonymous,
+            page,
+            "stitched view length",
+        )?;
+        lockwitness::assert_lock_free("mmap MAP_FIXED (stitching a view)");
+        let mut cursor = 0u64;
+        for &(off, len) in pieces {
+            let (start, len_host) =
+                bounds::checked_span(map.len_bytes(), HostOffset::new(cursor), len, "stitched piece length")?;
+            let (fdn, file_offset, share_flags) =
+                decode_backing(Backing::SharedFile { fd, offset: off }, page)?;
+            // SAFETY: the `MAP_FIXED` target is strictly inside a range this process owns and
+            // still holds: (a) `map` was created two statements up by `Mapping::anywhere`, i.e. at
+            // a KERNEL-CHOSEN address, so it displaced nothing and its type invariant says it is
+            // live for `map.len` bytes; (b) `checked_span` just proved `start + len_host <=
+            // map.len` with overflow checked first, so `base.add(start)` is in bounds (the
+            // precondition of `add`) and the placement cannot reach past the reservation — never
+            // the VMM's heap, our stack or our text; (c) `cursor` only advances by each piece's
+            // length, so this piece overlaps no earlier one and nothing else refers to this range
+            // (the region is not returned until every piece is placed); (d) lengths and file
+            // offsets are host-page-aligned (checked above / by `decode_backing`).
+            let target = unsafe { map.base.as_ptr().add(start).cast::<libc::c_void>() };
+            // SAFETY: as argued in (a)-(d) directly above.
+            let ret = unsafe {
+                libc::mmap(target, len_host, prot.bits(), share_flags | libc::MAP_FIXED, fdn, file_offset)
+            };
+            if ret == libc::MAP_FAILED {
+                // `map` drops here and `munmap`s the whole range, placed pieces included.
+                return Err(last_syscall_error("mmap"));
+            }
+            if !std::ptr::eq(ret, target) {
+                // `MAP_FIXED`'s contract is violated; the stray mapping is not ours to keep.
+                // SAFETY: `ret` is a live mapping of exactly `len_host` bytes created by the call
+                // above; nothing refers to it.
+                unsafe { libc::munmap(ret, len_host) };
+                return Err(RawError::Unsupported {
+                    what: "a kernel that did not honour MAP_FIXED",
+                    detail: "mmap(MAP_FIXED) returned an address other than the one requested while stitching a view",
+                });
+            }
+            cursor += len;
+        }
+        // ★ The type invariant holds for the whole range: every byte of `[base, base+total)` is now
+        // a live `MAP_SHARED` file mapping (the pieces tile it — `cursor == total`), and the single
+        // `OwnedMunmap` releases all of them in one `munmap`.
+        debug_assert_eq!(cursor, total);
         Ok(MappedRegion { map, prot, cache })
     }
 
@@ -1402,6 +1506,53 @@ mod tests {
             .expect("size the file");
         std::fs::remove_file(&path).expect("unlink");
         f
+    }
+
+    /// ★ `stitch` lays scattered file pages back to back, in the order given, and every byte of
+    /// the view IS the file's byte (a write through the view lands in the file — `MAP_SHARED`,
+    /// never a private copy). Degenerate inputs are refused before any mapping exists.
+    #[test]
+    fn a_stitched_view_is_the_file_pages_in_the_order_given() {
+        let p = page();
+        let pg = p.bytes();
+        let f = shared_file(8 * pg);
+        let file = MappedRegion::map(
+            Backing::SharedFile { fd: std::os::fd::AsFd::as_fd(&f), offset: 0 },
+            8 * pg,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            p,
+        )
+        .expect("file view");
+        for i in 0..8u64 {
+            file.write_from(HostOffset::new(i * pg), &vec![i as u8 + 1; pg as usize]).expect("seed");
+        }
+        // Pages 5, 1-2 (one two-page piece), 7 — out of order and discontiguous.
+        let pieces = [(5 * pg, pg), (pg, 2 * pg), (7 * pg, pg)];
+        let s = MappedRegion::stitch(std::os::fd::AsFd::as_fd(&f), &pieces, HostProt::ReadWrite, CachePolicy::WriteBack, p)
+            .expect("stitch");
+        assert_eq!(s.len_bytes(), 4 * pg);
+        let mut b = [0u8; 1];
+        for (i, want) in [6u8, 2, 3, 8].iter().enumerate() {
+            s.read_into(HostOffset::new(i as u64 * pg + 17), &mut b).expect("read");
+            assert_eq!(b[0], *want, "view page {i}");
+        }
+        s.write_from(HostOffset::new(3 * pg), &[0xEE]).expect("write through the view");
+        file.read_into(HostOffset::new(7 * pg), &mut b).expect("read file");
+        assert_eq!(b[0], 0xEE, "the view is the file's own page, not a copy");
+        let fd = std::os::fd::AsFd::as_fd(&f);
+        assert!(matches!(
+            MappedRegion::stitch(fd, &[], HostProt::ReadOnly, CachePolicy::WriteBack, p),
+            Err(RawError::ZeroLength { .. })
+        ));
+        assert!(matches!(
+            MappedRegion::stitch(fd, &[(pg, 0)], HostProt::ReadOnly, CachePolicy::WriteBack, p),
+            Err(RawError::ZeroLength { .. })
+        ));
+        assert!(matches!(
+            MappedRegion::stitch(fd, &[(17, pg)], HostProt::ReadOnly, CachePolicy::WriteBack, p),
+            Err(RawError::Misaligned { .. })
+        ));
     }
 
     #[test]

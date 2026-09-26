@@ -215,6 +215,11 @@ pub struct PageDirPolicy {
     /// the root landed on `0xc1d00001:0xcaf00036` and the user's channel in `0xc1d0000b:0xcafe0010`
     /// was refused *"has no mirror"*. So a statement through an alias is carried for the original.
     aliases: std::collections::BTreeMap<(u32, u32), (u32, u32)>,
+    /// ★ v3-gfx: originals whose own name was freed while a dup still referenced them — RM keeps
+    /// the object (refcounted), so the mirror stays until the LAST alias goes. `[measured vgfx
+    /// 2026-09-26]` the Vulkan UMD frees its probe client (the original) and keeps rendering in the
+    /// dup.
+    orphans: std::collections::BTreeSet<(u32, u32)>,
     /// Statements carried.
     pub carried: u64,
     /// ★ P5c: retirements carried.
@@ -225,7 +230,7 @@ impl PageDirPolicy {
     /// A link for one guest driver's wire.
     #[must_use]
     pub fn new(abi: kf_abi::versions::DriverAbiTable, guest_os: kf_abi::GuestOs, sink: MemSink) -> PageDirPolicy {
-        PageDirPolicy { abi, guest_os, sink, held_last: false, vas: Default::default(), aliases: Default::default(), carried: 0, retired: 0 }
+        PageDirPolicy { abi, guest_os, sink, held_last: false, vas: Default::default(), aliases: Default::default(), orphans: Default::default(), carried: 0, retired: 0 }
     }
 
     /// ★ P5c: observe a VA-space alloc (its parent device and whether it is only a reference to
@@ -276,7 +281,17 @@ impl PageDirPolicy {
             .collect();
         for (c, v) in dying {
             self.vas.remove(&(c, v));
-            self.aliases.retain(|_, orig| *orig != (c, v));
+            // ★ v3-gfx: still referenced by a dup ⇒ the object lives on; retire it with its last alias.
+            if self.aliases.values().any(|orig| *orig == (c, v)) {
+                self.orphans.insert((c, v));
+                continue;
+            }
+            (self.sink)(MemStatement::Retire { client: c, vaspace: v });
+            self.retired += 1;
+        }
+        let gone: Vec<(u32, u32)> = self.orphans.iter().filter(|o| !self.aliases.values().any(|a| a == *o)).copied().collect();
+        for (c, v) in gone {
+            self.orphans.remove(&(c, v));
             (self.sink)(MemStatement::Retire { client: c, vaspace: v });
             self.retired += 1;
         }
@@ -374,5 +389,24 @@ mod tests {
         assert!(!p.holds_for_refresh(&bad), "a refusal holds nothing — a held reply nobody releases is a hang");
         assert_eq!(got.lock().unwrap().len(), 1);
         assert!(p.respond(&cmd(RpcFunction::RmAlloc, vec![])).is_none(), "declines everything else");
+    }
+
+    /// ★ v3-gfx: the original VA space's free does NOT retire its mirror while a dup still names
+    /// it; the last alias's free does.
+    #[test]
+    fn an_original_freed_under_a_live_dup_retires_with_its_last_alias() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let seen: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
+        let s2 = seen.clone();
+        let mut p = PageDirPolicy::new(abi, kf_abi::GuestOs::Linux, Arc::new(move |st| s2.lock().unwrap().push(st)));
+        let words = |w: &[u32]| w.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+        let (orig, alias) = ((0xc1d0_0016u32, 0xfade_0003u32), (0xc1d0_001au32, 0xbeef_0300u32));
+        p.vas.insert(orig, (0xfade_0001, false));
+        p.respond(&cmd(RpcFunction::DupObject, words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0])));
+        assert_eq!(p.canonical(alias.0, alias.1), orig);
+        p.respond(&cmd(RpcFunction::Free, words(&[orig.0, 0, orig.0, 0])));
+        assert!(seen.lock().unwrap().is_empty(), "retired under a live dup: {:?}", seen.lock().unwrap());
+        p.respond(&cmd(RpcFunction::Free, words(&[alias.0, 0xbeef_0003, alias.1, 0])));
+        assert_eq!(seen.lock().unwrap().as_slice(), &[MemStatement::Retire { client: orig.0, vaspace: orig.1 }]);
     }
 }

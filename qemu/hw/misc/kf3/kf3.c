@@ -12,7 +12,10 @@
  *    created and never unmaps (kf3_bar_ram), registered as a ram_device region — one memslot, no
  *    exit either way. What each page shows (a store view, guest RAM, or per-BAR scratch — never a
  *    hole) is re-pointed inside it by Rust with mmap(MAP_FIXED); QEMU never learns of a re-point.
- *    The only trapped piece left in BAR1 is the Hopper+ doorbell page (counted until P5).
+ *    ⊘ No BAR1 page traps at setup. Hopper+ BAR1 usermode (doorbell) views are placed where the
+ *    guest's own BAR1 PTEs put them: Rust's VA thread asks for a write-trapped overlay at that
+ *    offset (kf3_bar1_overlay, a main-loop bottom half) before the guest's invalidate clears
+ *    (docs/design/V3_BAR1_DOORBELL.md).
  *  - MSI-X lives in its own BAR. Interrupts (P5, V3_P5_PORT_MAP.md §2.7): Rust owns one eventfd
  *    per vector (kf3_irq_fd); this device registers each as a KVM irqfd on the vector's MSI route
  *    when the guest unmasks it (msix vector notifiers, virtio-pci's pattern). A raise is then one
@@ -34,6 +37,8 @@
 #include "system/address-spaces.h"
 #include "system/kvm.h"
 #include "qemu/event_notifier.h"
+#include "qemu/main-loop.h"
+#include "qemu/thread.h"
 #include "kf3.h"
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
@@ -46,6 +51,9 @@ OBJECT_DECLARE_SIMPLE_TYPE(Kf3State, KF3)
 #define KF3_MAX_PIECES 64
 #define KF3_MSIX_BAR 5
 #define KF3_MAX_VECTORS 32
+/* Hopper+ BAR1 usermode-view overlays: the `bar1-overlays` property's default
+ * (crates/kf-qemu mem.rs BAR1_OVERLAY_SLOTS). */
+#define KF3_BAR1_OVERLAYS_DEFAULT 64
 
 typedef struct Kf3Vec {
     EventNotifier e;   /* wraps the Rust-owned eventfd (never closed here) */
@@ -58,6 +66,15 @@ typedef struct Kf3Piece {
     uint64_t base;
     MemoryRegion mr;
 } Kf3Piece;
+
+/* One BAR1 usermode-view overlay: an ALIAS of the 64 KiB usermode ROM device, re-pointed and
+ * (un)mapped at runtime. ⊘ Created once at realize and never destroyed (docs/devel/memory.rst:
+ * do not create or destroy regions during a device's lifetime) — only added/removed. */
+typedef struct Kf3Bar1Ov {
+    MemoryRegion alias;
+    bool live;
+    uint64_t base, len, vf_rel;
+} Kf3Bar1Ov;
 
 struct Kf3State {
     PCIDevice parent_obj;
@@ -77,6 +94,16 @@ struct Kf3State {
     Kf3Piece bar_pieces[2][4];
     unsigned n_bar_pieces[2];
     uint64_t bar12_reads, bar12_writes;
+    /* Hopper+: the usermode page as a ROM device (reads = the host's live usermode window, writes
+     * trap lockless to kf3_bar1_usermode_write), and the alias pool that places it in BAR1. */
+    Kf3Piece bar1_um;
+    uint64_t bar1_um_len;
+    uint32_t bar1_overlays;          /* property: the alias pool's size */
+    Kf3Bar1Ov *bar1_ov;              /* bar1_overlays slots, allocated once at realize */
+    QemuMutex bar1_q_lock;           /* guards bar1_q only; never held across anything else */
+    GQueue bar1_q;                   /* Kf3OvReq, FIFO: applied in submission order */
+    QEMUBH *bar1_bh;
+    uint64_t bar1_ov_applied, bar1_ov_failed;
     MemoryListener listener;
     Kf3Vec vec[KF3_MAX_VECTORS];
     uint64_t irq_routes, irq_route_fail;
@@ -92,8 +119,10 @@ struct Kf3State {
 static uint64_t kf3_piece_read(void *opaque, hwaddr addr, unsigned size)
 {
     /* A ROM device in romd mode serves reads from its RAM; this is reached only for a HOLE piece
-     * (a PIO data port whose read must exit — none on Turing..Ada). */
-    return 0;
+     * (a register whose READ has a side effect — none on Turing..Ada). ★ w828: Rust serves it —
+     * the Hopper+ memop token registers, and every other register on the page from its shadow. */
+    Kf3Piece *p = opaque;
+    return kf3_bar0_read(p->s->h, p->base + addr, size);
 }
 
 static void kf3_piece_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
@@ -119,7 +148,8 @@ static void kf3_host_rom_free(MemoryRegion *mr)
     qemu_ram_free(mr->ram_block);
 }
 
-static bool kf3_host_rom(Kf3State *s, Kf3Piece *p, const char *name, uint64_t len, Error **errp)
+static bool kf3_host_rom_ops(Kf3State *s, Kf3Piece *p, const char *name, uint64_t len,
+                             const MemoryRegionOps *ops, void *opaque, Error **errp)
 {
     void *host = NULL;
     uint64_t have = 0;
@@ -131,8 +161,8 @@ static bool kf3_host_rom(Kf3State *s, Kf3Piece *p, const char *name, uint64_t le
         return false;
     }
     memory_region_init(&p->mr, OBJECT(s), name, len);
-    p->mr.ops = &kf3_piece_ops;
-    p->mr.opaque = p;
+    p->mr.ops = ops;
+    p->mr.opaque = opaque;
     p->mr.terminates = true;
     p->mr.rom_device = true;
     p->mr.destructor = kf3_host_rom_free;
@@ -142,6 +172,11 @@ static bool kf3_host_rom(Kf3State *s, Kf3Piece *p, const char *name, uint64_t le
         return false;
     }
     return true;
+}
+
+static bool kf3_host_rom(Kf3State *s, Kf3Piece *p, const char *name, uint64_t len, Error **errp)
+{
+    return kf3_host_rom_ops(s, p, name, len, &kf3_piece_ops, p, errp);
 }
 
 static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
@@ -237,8 +272,8 @@ static const MemoryRegionOps kf3_dummy_ops = {
 };
 
 /* ── BAR1 / BAR2 ──────────────────────────────────────────────────────────────────────────
- * Plain RAM (Rust's windows). The ops below serve only a TRAPPED page (the Hopper+ BAR1
- * doorbell), counted until P5 wires it. */
+ * Plain RAM (Rust's windows). The ops below would serve a trapped piece; the memory map has none
+ * for BAR1/BAR2 on any family (the Hopper+ doorbell views are runtime overlays, below). */
 
 static uint64_t kf3_bar12_read(void *opaque, hwaddr addr, unsigned size)
 {
@@ -297,6 +332,170 @@ static bool kf3_bar_build(Kf3State *s, unsigned bar, MemoryRegion *mr, uint64_t 
             memory_region_init_io(&p->mr, OBJECT(s), &kf3_bar12_ops, s, name, r->len);
         }
         memory_region_add_subregion(mr, r->base, &p->mr);
+    }
+    return true;
+}
+
+/* ── Hopper+ BAR1 usermode views (docs/design/V3_BAR1_DOORBELL.md §4) ─────────────────────
+ * The guest RM maps the usermode page into BAR1 wherever ITS BAR1 allocator chooses (bBar1Mapping,
+ * usermode_api.c:94-98 → kbusMapFbAperture_GM107). Rust learns the place from the walked BAR1 PTE
+ * (SYS_COH + SMSKED_MESSAGE kind, address = the VF register offset) and calls kf3_bar1_overlay from
+ * its VA thread; the change is made by a main-loop bottom half (the BQL owner) and the VA thread
+ * waits for it, bounded, so the guest's BAR1 invalidate clears only once KVM traps the view. */
+
+static uint64_t kf3_bar1_um_read(void *opaque, hwaddr addr, unsigned size)
+{
+    return 0; /* romd: reads are served from the host window's RAM and never reach here */
+}
+
+static void kf3_bar1_um_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    Kf3State *s = opaque;
+    /* addr is the offset inside the usermode page: the alias carries the view's vf_rel. */
+    kf3_bar1_usermode_write(s->h, addr, val, size);
+}
+
+static const MemoryRegionOps kf3_bar1_um_ops = {
+    .read = kf3_bar1_um_read,
+    .write = kf3_bar1_um_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid = { .min_access_size = 1, .max_access_size = 8 },
+    .impl = { .min_access_size = 1, .max_access_size = 8 },
+};
+
+typedef struct Kf3OvReq {
+    uint64_t seq;
+    uint32_t op;
+    uint64_t base, len, vf_rel;
+} Kf3OvReq;
+
+/* Main loop, BQL held. Idempotent both ways. */
+static int32_t kf3_ov_apply(Kf3State *s, uint32_t op, uint64_t base, uint64_t len, uint64_t vf_rel)
+{
+    Kf3Bar1Ov *hit = NULL, *free_slot = NULL;
+    unsigned i;
+
+    for (i = 0; i < s->bar1_overlays; i++) {
+        Kf3Bar1Ov *o = &s->bar1_ov[i];
+        if (o->live && o->base == base) {
+            hit = o;
+        } else if (!o->live && !free_slot) {
+            free_slot = o;
+        }
+    }
+    if (op == 0) {
+        if (hit) {
+            memory_region_del_subregion(&s->bar1, &hit->alias);
+            hit->live = false;
+        }
+        return 0;
+    }
+    if (hit) {
+        return (hit->len == len && hit->vf_rel == vf_rel) ? 0 : -EEXIST;
+    }
+    if (!free_slot) {
+        return -ENOSPC;
+    }
+    if (len == 0 || vf_rel + len > s->bar1_um_len || base + len > s->bar1_size ||
+        ((base | len | vf_rel) & 0xfff)) {
+        return -EINVAL;
+    }
+    memory_region_transaction_begin();
+    memory_region_set_alias_offset(&free_slot->alias, vf_rel);
+    memory_region_set_size(&free_slot->alias, len);
+    /* Priority 1: above the BAR1 window's plain-RAM piece, which keeps its own pages beneath. */
+    memory_region_add_subregion_overlap(&s->bar1, base, &free_slot->alias, 1);
+    memory_region_transaction_commit();
+    free_slot->live = true;
+    free_slot->base = base;
+    free_slot->len = len;
+    free_slot->vf_rel = vf_rel;
+    return 0;
+}
+
+/* Main loop, BQL held: drain the queue in FIFO order (an unmap queued before a re-map of the same
+ * BAR1 VA is applied first), then post each result back to Rust, which wakes its VA thread. */
+static void kf3_ov_bh(void *opaque)
+{
+    Kf3State *s = opaque;
+    for (;;) {
+        Kf3OvReq *r;
+        int32_t rc;
+        qemu_mutex_lock(&s->bar1_q_lock);
+        r = g_queue_pop_head(&s->bar1_q);
+        qemu_mutex_unlock(&s->bar1_q_lock);
+        if (!r) {
+            return;
+        }
+        rc = kf3_ov_apply(s, r->op, r->base, r->len, r->vf_rel);
+        if (rc == 0) {
+            s->bar1_ov_applied++;
+        } else {
+            s->bar1_ov_failed++;
+        }
+        kf3_bar1_overlay_done(s->h, r->seq, rc);
+        g_free(r);
+    }
+}
+
+/* Rust's OverlayFn — the VA-manager thread, never a vCPU. ⊘ NEVER WAITS (ruling 2026-09-26 (5)):
+ * a thread blocking on the BQL holder is the deadlock class the blocking invariants forbid. It
+ * queues and schedules the bottom half; Rust holds only that invalidate's clear until
+ * kf3_bar1_overlay_done reports the change. */
+static int32_t kf3_bar1_overlay(void *opaque, uint64_t seq, uint32_t op, uint64_t base, uint64_t len,
+                                uint64_t vf_rel)
+{
+    Kf3State *s = opaque;
+    Kf3OvReq *r = g_new0(Kf3OvReq, 1);
+
+    r->seq = seq;
+    r->op = op;
+    r->base = base;
+    r->len = len;
+    r->vf_rel = vf_rel;
+    qemu_mutex_lock(&s->bar1_q_lock);
+    g_queue_push_tail(&s->bar1_q, r);
+    qemu_mutex_unlock(&s->bar1_q_lock);
+    qemu_bh_schedule(s->bar1_bh);
+    return 0;
+}
+
+static bool kf3_bar1_views_build(Kf3State *s, Error **errp)
+{
+    void *host = NULL;
+    uint64_t have = 0;
+    unsigned i;
+
+    if (kf3_bar1_follows_guest(s->h) != 1) {
+        return true; /* Turing … Ada: no BAR1 usermode view exists */
+    }
+    if (kf3_usermode_view(s->h, &host, &have) != 0 || have < 0x10000) {
+        error_setg(errp, "kf3: the host usermode window is %" PRIu64 " bytes; a BAR1 view needs 64 KiB", have);
+        return false;
+    }
+    s->bar1_um_len = 0x10000;
+    s->bar1_um.s = s;
+    if (!kf3_host_rom_ops(s, &s->bar1_um, "kf3-bar1-usermode", s->bar1_um_len, &kf3_bar1_um_ops, s, errp)) {
+        return false;
+    }
+    memory_region_enable_lockless_io(&s->bar1_um.mr);
+    if (s->bar1_overlays == 0) {
+        error_setg(errp, "kf3: bar1-overlays must be at least 1 on a family with BAR1 doorbell views");
+        return false;
+    }
+    /* Allocated once and never freed: the device lives for the process, and its regions may not
+     * be destroyed during its lifetime (docs/devel/memory.rst). */
+    s->bar1_ov = g_new0(Kf3Bar1Ov, s->bar1_overlays);
+    for (i = 0; i < s->bar1_overlays; i++) {
+        g_autofree char *name = g_strdup_printf("kf3-bar1-doorbell-view%u", i);
+        memory_region_init_alias(&s->bar1_ov[i].alias, OBJECT(s), name, &s->bar1_um.mr, 0, 0x1000);
+    }
+    qemu_mutex_init(&s->bar1_q_lock);
+    g_queue_init(&s->bar1_q);
+    s->bar1_bh = qemu_bh_new(kf3_ov_bh, s);
+    if (kf3_set_bar1_overlay(s->h, kf3_bar1_overlay, s, s->bar1_overlays) != 0) {
+        error_setg(errp, "kf3: Rust refused the BAR1 overlay verb");
+        return false;
     }
     return true;
 }
@@ -433,6 +632,9 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         !kf3_bar_build(s, 2, &s->bar2, s->bar2_size, errp)) {
         return;
     }
+    if (!kf3_bar1_views_build(s, errp)) {
+        return;
+    }
     pci_register_bar(pci, 1, PCI_BASE_ADDRESS_SPACE_MEMORY | PCI_BASE_ADDRESS_MEM_TYPE_64 |
                      PCI_BASE_ADDRESS_MEM_PREFETCH, &s->bar1);
     pci_register_bar(pci, 3, PCI_BASE_ADDRESS_SPACE_MEMORY | PCI_BASE_ADDRESS_MEM_TYPE_64 |
@@ -501,9 +703,9 @@ static void kf3_dev_exit(PCIDevice *pci)
     if (s->h) {
         kf3_status(s->h, st, sizeof(st));
         info_report("%s bar12_reads=%" PRIu64 " bar12_writes=%" PRIu64 " irq_routes=%" PRIu64
-                    " irq_route_fail=%" PRIu64, st,
+                    " irq_route_fail=%" PRIu64 " bar1_ov_applied=%" PRIu64 " bar1_ov_failed=%" PRIu64, st,
                     qatomic_read(&s->bar12_reads), qatomic_read(&s->bar12_writes),
-                    s->irq_routes, s->irq_route_fail);
+                    s->irq_routes, s->irq_route_fail, s->bar1_ov_applied, s->bar1_ov_failed);
         memory_listener_unregister(&s->listener);
         kf3_unrealize(s->h);
     }
@@ -517,6 +719,8 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_UINT32("gpu-minor", Kf3State, gpu_minor, 0),
     DEFINE_PROP_UINT64("fb-mb", Kf3State, fb_mb, 8192),
     DEFINE_PROP_UINT64("bar1-size", Kf3State, bar1_size, 256 * MiB),
+    /* Hopper+ only: how many BAR1 doorbell views can be trapped at once (~1 per CUDA process). */
+    DEFINE_PROP_UINT32("bar1-overlays", Kf3State, bar1_overlays, KF3_BAR1_OVERLAYS_DEFAULT),
     DEFINE_PROP_UINT64("bar2-size", Kf3State, bar2_size, 32 * MiB),
     DEFINE_PROP_UINT32("msix-vectors", Kf3State, msix_vectors, 32),
     DEFINE_PROP_STRING("guest-driver", Kf3State, guest_driver),

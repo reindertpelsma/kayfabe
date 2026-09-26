@@ -89,7 +89,7 @@ const TRUNCATED: u32 = u32::MAX;
 
 /// The controls whose params carry no `[IN]` field this replay needs to match: any capture of
 /// the command answers them (libcuda seeds `GET_ENGINES_V2`'s count with `0x54`; RM overwrites it).
-const OUT_ONLY: &[u32] = &[0x2080_1701, 0x2080_182b, 0x2080_0170, 0x2080_0110, 0x2080_0111, 0x2080_3601, 0x2080_122a, 0x2080_1227, 0x2080_121b];
+const OUT_ONLY: &[u32] = &[0x2080_2a0a, 0x2080_1701, 0x2080_182b, 0x2080_0170, 0x2080_0110, 0x2080_0111, 0x2080_3601, 0x2080_122a, 0x2080_1227, 0x2080_121b];
 
 impl Ga106Replay {
     fn load() -> Ga106Replay {
@@ -213,10 +213,16 @@ fn over_the_real_ga106_the_query_refuses_only_the_uncaptured() {
     assert!(no_capture("gr_info", 0x2080_1228), "{refused}");
     assert!(no_capture("gr_context_buffers", 0x2080_122d), "{refused}");
     assert!(no_capture("gr_static", 0x2080_1237), "GR_GET_ZCULL_MASK was never captured: {refused}");
+    assert!(no_capture("gr_zcull_info", 0x2080_1206), "GR_GET_ZCULL_INFO was never captured: {refused}");
+    assert!(no_capture("zbc_table_sizes", 0x9096_0106), "GET_ZBC_CLEAR_TABLE_SIZE was never captured: {refused}");
+    // ⊘ BIOS_GET_INFO_V2 was never captured — and a host that does not answer it is NOT a refused
+    // field: the version is cosmetic (coordinator, 2026-09-26). It is asked, and `None`.
+    assert!(host.asked.contains(&0x2080_0810));
+    assert!(!refused.fields().contains(&"vbios_version"));
     assert_eq!(by_field.get("memory_system"), Some(&&FieldCause::DependsOn("gr_info")));
     assert_eq!(
         refused.fields(),
-        ["intr_table", "intr_subtree_map", "memory_system", "gr_static", "gr_info", "gr_context_buffers"],
+        ["intr_table", "intr_subtree_map", "memory_system", "gr_static", "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes"],
         "{refused}"
     );
     assert!(!refused.refusals.iter().any(|r| matches!(r.cause, FieldCause::Unsourced(_))));
@@ -225,6 +231,18 @@ fn over_the_real_ga106_the_query_refuses_only_the_uncaptured() {
     assert!(order.windows(2).all(|w| w[0] < w[1]), "{order:?}");
     // ⊘ The kernel-only control is no longer asked at all.
     assert!(!host.asked.contains(&0x2080_2a08));
+    // ★ CE_GET_ALL_CAPS IS captured (R18 / cuInit): `ce_caps` fills from the real reply, and a
+    // PERF_GET_LEVEL_INFO_V2 the host does not answer is a VALUE (relayed), not a field refusal.
+    assert!(host.asked.contains(&0x2080_2a0a) && host.asked.contains(&0x2080_200b));
+}
+
+/// ★ `ce_caps` from the REAL GA106's `CE_GET_ALL_CAPS` equals the fixture, and its GRCE set is
+/// GA10x's `{LCE0, LCE1}` — the constant it replaced, reproduced on the part it was measured on.
+#[test]
+fn ce_caps_from_the_real_ga106_equal_the_captured_row() {
+    let got = hostquery::query_ce_caps(&mut Ga106Replay::load()).expect("captured");
+    assert_eq!(got, ga106::ce_caps());
+    assert_eq!(got.grce_mask(), kf_abi::cecaps::GA10X_GRCE_LCE_MASK);
 }
 
 /// ★★★ **Realize succeeds on a GA106**: the replay, completed for the controls no capture holds
@@ -248,6 +266,10 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     assert_eq!(got.pcie_max_gen, f.pcie_max_gen);
     assert_eq!(got.gsp_features, f.gsp_features);
     assert_eq!(got.gpu_name.map(|n| n.as_str()), Some("NVIDIA GeForce RTX 3060"));
+    assert_eq!(got.ce_caps, f.ce_caps);
+    // Layout round-trips through the completed controls (BIOS info / PERF level info):
+    assert_eq!(got.vbios_version, f.vbios_version);
+    assert_eq!(got.perf_level_info_v2, f.perf_level_info_v2);
     // Authored, and equal to what a stock GA106 GSP states (by choice — see authored.rs):
     assert_eq!(got.gmmu_static, f.gmmu_static);
     assert_eq!(got.ce_fault_method_buffer_size, f.ce_fault_method_buffer_size);
@@ -260,6 +282,8 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     // Layout round-trips through the completed controls (GR info / context props / subtree map):
     assert_eq!(got.gr_info.data, f.gr_info.data);
     assert_eq!(got.gr_context_buffers, f.gr_context_buffers);
+    assert_eq!(got.gr_zcull_info, f.gr_zcull_info);
+    assert_eq!(got.zbc_table_sizes, f.zbc_table_sizes);
     assert_eq!(got.intr_subtree_map, f.intr_subtree_map);
     assert_eq!(got.memory_system, f.memory_system);
     // gr_static: GPC mask, TPC masks, SM order and caps from real replies; zcull and the GR
@@ -353,14 +377,18 @@ fn assert_engine_rows_match_except_stated(got: &[kf_abi::inittables::FifoDeviceE
 #[test]
 fn the_authored_engine_table_over_the_real_engine_list_equals_the_captured_rows_except_stated() {
     let f = ga106::host_facts();
-    let kinds = hostquery::query_engine_list(&mut Ga106Replay::load()).expect("captured");
+    let all = hostquery::query_engine_list(&mut Ga106Replay::load()).expect("captured");
+    println!("host engine list: {:?}", all.iter().map(|k| k.name()).collect::<Vec<_>>());
+    // ★ The captured old row predates the video engines (it advertised none): compare the
+    // non-video subset, and the video rows separately (`the_video_rows_...`).
+    let kinds: Vec<_> = all.iter().copied().filter(|k| hostquery::video_eng_desc(*k).is_none()).collect();
     assert_eq!(kinds.iter().map(|k| k.name()).collect::<Vec<_>>(), ["GR0", "CE0", "CE1", "CE2", "CE3", "SOFTWARE"]);
-    let rows = kf_rm::authored::engine_table(Family::Ampere, &kinds).expect("Ampere has every constant");
+    let rows = kf_rm::authored::engine_table(Family::Ampere, &kinds, f.ce_caps.grce_mask()).expect("Ampere has every constant");
     assert_engine_rows_match_except_stated(&rows, &f.engines);
-    assert_eq!(hostquery::device_info_rule(&kinds), f.device_info);
+    assert_eq!(hostquery::device_info_rule(&kinds, &[]), f.device_info);
     // ★ And the served CE geometry derived from the authored rows names the LCEs the real GA106
     // reports present (R18 CE_GET_ALL_CAPS: 0x0f).
-    assert_eq!(kf_abi::cecaps::CeGeometry::from_engines(&rows).expect("LCE rows").present, 0x0f);
+    assert_eq!(kf_abi::cecaps::CeGeometry::from_engines(&rows, &f.ce_caps).expect("LCE rows").present, 0x0f);
 }
 
 /// A host of another family than realize chose is refused by name.
@@ -415,6 +443,26 @@ impl HostControls for CompletedGa106 {
                 p[at + 2..at + 4].copy_from_slice(&tpcs.to_le_bytes());
                 Ok(())
             }
+            // ★ v3-gfx: GR_GET_ZCULL_INFO — the fixture's row, or RM's "no zcull" (0x56).
+            0x2080_1206 => match f.gr_zcull_info {
+                Some(row) => {
+                    for (i, w) in row.iter().enumerate() {
+                        put(p, 4 * i, *w);
+                    }
+                    Ok(())
+                }
+                None => Err(HostRefusal { status: Some(0x56), detail: "no zcull".into() }),
+            },
+            // ★ v3-gfx: the fixture states no ZBC ranges ⇒ RM's own "no table" (0x56).
+            0x9096_0106 => match f.zbc_table_sizes {
+                Some(s) => {
+                    let t = u32::from_le_bytes(p[8..12].try_into().expect("4")) as usize;
+                    put(p, 0, s[t - 1].0);
+                    put(p, 4, s[t - 1].1);
+                    Ok(())
+                }
+                None => Err(HostRefusal { status: Some(0x56), detail: "no zbc".into() }),
+            },
             0x2080_122d => {
                 let id = u32::from_le_bytes(p[16..20].try_into().expect("4")) as usize;
                 let b = f.gr_context_buffers[id];
@@ -461,6 +509,19 @@ impl HostControls for CompletedGa106 {
                     put(p, 4 + 8 * i, *t);
                     put(p, 8 + 8 * i, *v);
                 }
+                Ok(())
+            }
+            // BIOS_GET_INFO_V2 [REVISION, OEM_REVISION] — the fixture's pair.
+            0x2080_0810 => {
+                let v = f.vbios_version.expect("the fixture answers it");
+                put(p, 8, v.0);
+                put(p, 16, u32::from(v.1));
+                Ok(())
+            }
+            // PERF_GET_LEVEL_INFO_V2 — the fixture's reply (the GA106 oracle words).
+            0x2080_200b => {
+                let r = f.perf_level_info_v2.expect("the fixture answers it");
+                p.copy_from_slice(&r);
                 Ok(())
             }
             _ => self.0.control(cmd, p),
@@ -653,7 +714,11 @@ fn the_family_rules_cover_what_a_ga106_does_not_have() {
     assert_eq!(hostquery::USERMODE_REG_BASE, 0x00BB_0000, "tu102/gb100 dev_vm.h: 0xB80000 + 0x30000");
     assert_eq!(hostquery::classify_engine(0x34), Some((kf_rm::authored::EngineKind::Copy(10), 0x13)), "COPY10: NV2080 0x34, RM 0x13");
     assert_eq!(hostquery::classify_engine(0x3d), Some((kf_rm::authored::EngineKind::Copy(19), 0x1c)));
-    assert_eq!(hostquery::classify_engine(0x13), None, "NV2080 0x13 is NVDEC0, not a copy engine");
+    assert_eq!(
+        hostquery::classify_engine(0x13),
+        Some((kf_rm::authored::EngineKind::VideoDecode(0), 0x1d)),
+        "NV2080 0x13 is NVDEC0 (RM 0x1d), not a copy engine"
+    );
     assert_eq!(hostquery::classify_engine(0x08), Some((kf_rm::authored::EngineKind::Graphics(7), 0x08)), "GR7 (MIG parts)");
     assert_eq!(hostfacts::mc_engine_idx_of_engine_type(0x3d), Some(34), "CE19 = MC_ENGINE_IDX_CE19");
 }
@@ -680,7 +745,7 @@ fn the_engine_layout_answers_every_family_or_refuses_one_by_name() {
     use kf_rm::authored::{EngineKind as K, engine_table, slot};
     let list = [K::Graphics(0), K::Copy(0), K::Copy(1), K::Copy(2), K::Copy(12), K::Software];
     for fam in [Family::Turing, Family::Ampere, Family::Ada, Family::Blackwell] {
-        let rows = engine_table(fam, &list).unwrap_or_else(|e| panic!("{fam:?}: {e:?}"));
+        let rows = engine_table(fam, &list, 0x3).unwrap_or_else(|e| panic!("{fam:?}: {e:?}"));
         let resets: Vec<u32> = rows[..5].iter().map(|r| r.engine_data[slot::RESET]).collect();
         let mut uniq = resets.clone();
         uniq.sort_unstable();
@@ -688,16 +753,40 @@ fn the_engine_layout_answers_every_family_or_refuses_one_by_name() {
         assert_eq!(uniq.len(), resets.len(), "{fam:?}: reset bits collide: {resets:?}");
         assert!(resets.iter().all(|&b| b < 32));
     }
-    let bw = engine_table(Family::Blackwell, &list).expect("Blackwell");
+    let bw = engine_table(Family::Blackwell, &list, 0x3).expect("Blackwell");
     assert_eq!(bw[0].engine_data[slot::MMU_FAULT_ID], 384);
     assert_eq!(bw[4].engine_data[slot::MMU_FAULT_ID], 65 + 12);
     assert_eq!(bw[0].pbdma_fault_ids, [85, 86]);
-    let tu = engine_table(Family::Turing, &list).expect("Turing");
+    let tu = engine_table(Family::Turing, &list, 0x3).expect("Turing");
     assert_eq!(tu[3].engine_data[slot::RUNLIST_PRI_BASE], 0, "RUNLIST_PRI_BASE is valid only on Ampere+");
     assert_eq!(tu[3].engine_data[slot::RUNLIST], 1);
-    let hopper = engine_table(Family::Hopper, &list).expect_err("no HOST0");
+    let hopper = engine_table(Family::Hopper, &list, 0x3).expect_err("no HOST0");
     assert!(hopper.missing.contains("HOST0"));
-    assert!(engine_table(Family::Ampere, &[K::Graphics(0), K::Graphics(1), K::Copy(0)]).is_err(), "MIG");
+    assert!(engine_table(Family::Ampere, &[K::Graphics(0), K::Graphics(1), K::Copy(0)], 0x3).is_err(), "MIG");
+}
+
+/// ★★ GB20x: four GRCEs (`kernel_ce_gb202.c:36`, `NV_CE_GRCE_ALLOWED_LCE_MASK 0x0F`). With the
+/// host's GRCE bits on LCE0..3, all four share runlist 0 on GR's two PBDMAs (k mod 2) and the async
+/// LCEs keep distinct runlists and PBDMAs — no PBDMA is shared between a GRCE and an async CE, and
+/// the GRCEs get no non-stall row of their own (they notify through GR0).
+#[test]
+fn a_gb20x_host_with_four_grces_lays_them_all_on_runlist_zero() {
+    use kf_rm::authored::{EngineKind as K, engine_notification_rows, engine_table, slot};
+    let list = [K::Graphics(0), K::Copy(0), K::Copy(1), K::Copy(2), K::Copy(3), K::Copy(4), K::Copy(5), K::Software];
+    let rows = engine_table(Family::Blackwell, &list, 0x0f).expect("Blackwell");
+    for (i, r) in rows[1..5].iter().enumerate() {
+        assert_eq!(r.engine_data[slot::RUNLIST], 0, "GRCE{i}");
+        assert_eq!(r.engine_data[slot::RUNLIST_ENGINE_ID], i as u32 + 1, "GRCE{i}");
+        assert_eq!(r.pbdma_ids[0], i as u32 % 2, "GRCE{i} rides GR's PBDMA");
+    }
+    assert_eq!((rows[5].engine_data[slot::RUNLIST], rows[5].pbdma_ids[0]), (1, 2));
+    assert_eq!((rows[6].engine_data[slot::RUNLIST], rows[6].pbdma_ids[0]), (2, 3));
+    let ns = engine_notification_rows(&list, 0x0f);
+    assert_eq!(ns.len(), 3, "GR0 + the two async CEs: {ns:?}");
+    // And with GA10x's two GRCEs the same list keeps its old shape.
+    let ga = engine_table(Family::Ampere, &list, 0x03).expect("Ampere");
+    assert_eq!(ga[3].engine_data[slot::RUNLIST], 1);
+    assert_eq!(ga[3].pbdma_ids[0], 2);
 }
 
 /// The GSP/DISP rows are refused, never doubled, if a host row already sits on either vector.
@@ -708,4 +797,56 @@ fn the_gsp_and_disp_rows_refuse_a_host_vector_collision() {
     assert_eq!(kf_rm::authored::with_gsp_and_disp_rows(clash), Err(0x9b));
     let rows = kf_rm::authored::with_gsp_and_disp_rows(Vec::new()).expect("no clash");
     assert_eq!(rows.iter().map(|e| (e.engine_idx, e.vector_stall)).collect::<Vec<_>>(), [(50, 0x9b), (2, 0x9a)]);
+}
+
+/// ★ v3-gfx: `gr_zcull_info` is the host's `GR_GET_ZCULL_INFO` reply word for word; the host's
+/// `NV_ERR_NOT_SUPPORTED` is `None` (no zcull on the die), and any OTHER refusal is a field
+/// refusal by name — never a default row.
+#[test]
+fn gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none() {
+    struct H(Result<[u32; 10], u32>);
+    impl HostControls for H {
+        fn control(&mut self, cmd: u32, p: &mut [u8]) -> Result<(), HostRefusal> {
+            assert_eq!(cmd, 0x2080_1206);
+            assert_eq!(p.len(), 40, "NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS is ten NvU32");
+            match self.0 {
+                Ok(row) => {
+                    for (i, w) in row.iter().enumerate() {
+                        p[4 * i..4 * i + 4].copy_from_slice(&w.to_le_bytes());
+                    }
+                    Ok(())
+                }
+                Err(st) => Err(HostRefusal { status: Some(st), detail: "refused".into() }),
+            }
+        }
+    }
+    let row = [32, 16, 1024, 2048, 64, 16, 32, 16, 256, 128];
+    assert_eq!(hostquery::query_gr_zcull_info(&mut H(Ok(row))).expect("served"), Some(row));
+    assert_eq!(hostquery::query_gr_zcull_info(&mut H(Err(0x56))).expect("no zcull"), None);
+    assert!(matches!(hostquery::query_gr_zcull_info(&mut H(Err(0x1b))), Err(FieldCause::Host { cmd: 0x2080_1206, .. })));
+    // …and the internal control's reply carries it as engine 0, every other engine zero.
+    let enc = kf_abi::grstatic::encode_zcull_info(&row);
+    assert_eq!(enc.len(), 320);
+    for (i, w) in row.iter().enumerate() {
+        assert_eq!(u32::from_le_bytes(enc[4 * i..4 * i + 4].try_into().expect("4")), *w);
+    }
+    assert!(enc[40..].iter().all(|&b| b == 0));
+}
+
+/// ★ A host that refuses `BIOS_GET_INFO_V2` still realizes: `vbios_version` is `None`, not a
+/// refused field (cosmetic — coordinator, 2026-09-26).
+#[test]
+fn a_host_refusing_bios_info_still_fills_every_field_with_no_vbios_version() {
+    struct NoBios(CompletedGa106);
+    impl HostControls for NoBios {
+        fn control(&mut self, cmd: u32, p: &mut [u8]) -> Result<(), HostRefusal> {
+            if cmd == 0x2080_0810 {
+                return Err(HostRefusal { status: Some(0x56), detail: "refused".into() });
+            }
+            self.0.control(cmd, p)
+        }
+    }
+    let got = hostquery::query_host_facts(&mut NoBios(CompletedGa106(Ga106Replay::load())), Family::Ampere)
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(got.vbios_version, None);
 }

@@ -94,5 +94,6 @@ pub use ga10x::{
 pub use gb20x::{Gb20xArch, Gb20xFspBoot, Gb20xGspModel};
 pub use gh100::{Gh100Arch, Gh100GspModel};
 pub use host_classes::{
-    Ad10xHostClasses, Ga10xHostClasses, Gb20xHostClasses, Gh100HostClasses, pinned_host_classes,
+    Ad10xHostClasses, DerivedHostClasses, Ga10xHostClasses, Gb20xHostClasses, Gh100HostClasses, HostLacksKind,
+    pinned_host_classes, host_classes_for_arch,
 };

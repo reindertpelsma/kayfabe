@@ -182,11 +182,7 @@ pub fn cuda_store_probe(gpu: u32) -> i32 {
         println!("CS_RESULT=UNMEASURED:no-devdir");
         return 1;
     };
-    let conn = match crate::rm::RmConnection::open(
-        &dev,
-        kayfabe_arch::ids::GpuId(gpu),
-        kayfabe_chips::pinned_host_classes(),
-    ) {
+    let conn = match crate::rm::RmConnection::open_on_host(&dev, kayfabe_arch::ids::GpuId(gpu)) {
         Ok(c) => c,
         Err(e) => {
             println!("CS_RESULT=UNMEASURED:rm-open:{e}");

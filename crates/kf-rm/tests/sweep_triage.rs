@@ -49,10 +49,13 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
     // and it moved for the third time this class has been read wrong the same way — the
     // CALL SITE tolerating a refusal is not a statement about the CONSUMER. Boot `fmb1` at
     // `93191ee` named the consumer: `kernel_fifo.c:2789`, twenty-one engines away.
+    // ⚠ 14 -> 15 at v3-gfx: `0x20800a2c` moved here from `AmputationIntended` — the same
+    // misreading a fourth time: boot tolerates the refusal, but the guest's client zcull query
+    // (graphics) is served from the cache the refusal leaves NULL.
     assert_eq!(
         must.len(),
-        14,
-        "eleven unsurvivable amputations and three silent fail-opens"
+        15,
+        "eleven unsurvivable amputations and four silent fail-opens"
     );
     let cmds: Vec<u32> = must.iter().map(|c| c.cmd).collect();
     assert_eq!(
@@ -69,6 +72,7 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             0x2080_0a2a,
             0x2080_0a26,
             0x2080_0a22,
+            0x2080_0a2c,
             0x2080_0a3d,
             0x2080_0a48,
             0x2080_0a32,
@@ -85,6 +89,7 @@ fn the_gate_is_not_vacuous_because_the_must_serve_classes_are_not_empty() {
             "KernelCE",
             "KernelGmmu",
             "OBJGVASPACE",
+            "KernelGraphics",
             "KernelGraphics",
             "KernelGraphics",
             "KernelGraphics",

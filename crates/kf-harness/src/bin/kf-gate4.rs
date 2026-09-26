@@ -25,7 +25,7 @@ use kf_harness::Ledger as Checks;
 use kf_harness::tables::Tree;
 use kf_host::HostRm;
 use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset as At, HostPageSize, Notifier, Poller, VolatileRegion};
-use kf_harness::publish::{Recorded, publish};
+use kf_harness::publish::{Batching, Recorded, publish};
 use kf_mem::ledger::HostVas;
 use kf_trap::{Action, Class, Route};
 use std::sync::Mutex;
@@ -83,11 +83,18 @@ fn src(c: u32) -> u64 {
 fn dst(c: u32, k: u32) -> u64 {
     DST + u64::from(c) * 0x10_0000 + u64::from(k) * COPY
 }
-fn ch(c: u32) -> u64 {
-    R_CH + u64::from(c) * CH_STRIDE
-}
 fn va(c: u32) -> u64 {
     VA_K + u64::from(c) * CH_STRIDE
+}
+/// ★ `V3_BATCHED_MAP.md`: channel `c`'s byte `off` lives in guest RAM at a SCATTERED page — the
+/// channels' pages in REVERSE order across the whole channel region — so the guest's VA-contiguous
+/// sysmem mapping is GPA-discontiguous at every page (the shape of a fragmented CUDA process),
+/// and the host must place it as a batch whose page ORDER is right: the engine's semaphore
+/// release lands in guest RAM only through that order.
+fn gpa(c: u32, off: u64) -> u64 {
+    let pages = u64::from(CHANNELS) * CH_STRIDE / 4096;
+    let g = u64::from(c) * (CH_STRIDE / 4096) + off / 4096;
+    R_CH + (pages - 1 - g) * 4096 + off % 4096
 }
 fn pattern(seed: u32) -> Vec<u8> {
     (0..(COPY / 4) as u32).flat_map(|i| (seed ^ i).to_le_bytes()).collect()
@@ -98,7 +105,7 @@ fn pattern(seed: u32) -> Vec<u8> {
 struct Mm<'a> {
     walk: WalkKernel,
     /// The host space, recording the rows WE placed (the reader resolves through them).
-    target: Recorded<HostVas<'a>>,
+    target: Recorded<Batching<'a>>,
     walks: Vec<Option<u64>>,
 }
 
@@ -110,7 +117,7 @@ struct Shared<'a> {
 }
 
 impl Shared<'_> {
-    fn publish(&self, tag: &str) -> Result<(usize, usize), String> {
+    fn publish(&self, tag: &str) -> Result<kf_mem::apply::Applied, String> {
         let mut g = self.mm.lock().map_err(|_| "mm poisoned")?;
         g.walk.make_current().map_err(|e| e.to_string())?;
         let layout = |gpa: u64, len: u64| gpa.checked_add(len).filter(|&e| e <= RAM_BYTES).map(|_| gpa);
@@ -120,7 +127,7 @@ impl Shared<'_> {
         if a.refused > 0 {
             return Err(format!("{tag}: {} refused, first {:?}", a.refused, a.first_refusal));
         }
-        Ok((a.mapped, a.unmapped))
+        Ok(a)
     }
 }
 
@@ -151,10 +158,10 @@ impl GuestMemory for Io<'_, '_> {
 }
 impl GuestUserd for Io<'_, '_> {
     fn gp_put(&mut self) -> Result<u32, String> {
-        self.s.ram.load_u32(At::new(ch(self.c) + USERD + USERD_GP_PUT)).map_err(|e| format!("{e:?}"))
+        self.s.ram.load_u32(At::new(gpa(self.c, USERD + USERD_GP_PUT))).map_err(|e| format!("{e:?}"))
     }
     fn set_gp_get(&mut self, v: u32) -> Result<(), String> {
-        self.s.ram.store_u32(At::new(ch(self.c) + USERD + USERD_GP_GET), v).map_err(|e| format!("{e:?}"))
+        self.s.ram.store_u32(At::new(gpa(self.c, USERD + USERD_GP_GET)), v).map_err(|e| format!("{e:?}"))
     }
 }
 impl Publisher for Io<'_, '_> {
@@ -260,12 +267,12 @@ impl Channels<'_, '_> {
 #[allow(clippy::too_many_lines)]
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     let ce_class = rm.ce_class_id();
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("export: {e:?}"))?;
-    let mut walk = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
+    let mut walk = WalkKernel::bring_up_on(WalkCfg::default(), kf_format_ver2(), kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf())).map_err(|e| e.to_string())?;
     walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
     let fb_base = rm.map_window(space, store, STORE_BYTES, true).map_err(|e| format!("identity window: {e:?}"))?;
@@ -286,7 +293,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let mut tree = Tree::new(PT_BASE, PT_BYTES);
     for c in 0..CHANNELS {
         for p in 0..CH_STRIDE / 4096 {
-            tree.map4k_sys(va(c) + p * 4096, ch(c) + p * 4096);
+            tree.map4k_sys(va(c) + p * 4096, gpa(c, p * 4096));
         }
     }
     let w = |off: u64, b: &[u8]| walk.write_store(off, b).map_err(|e| e.to_string());
@@ -301,7 +308,9 @@ fn run(l: &mut Checks) -> Result<(), String> {
     for c in 0..CHANNELS {
         w(src(c), &pattern(0xC000_0000 | (c << 20)))?;
         w(DST + u64::from(c) * 0x10_0000, &vec![0u8; (u64::from(PER_CHANNEL) * COPY) as usize])?;
-        put(ch(c), &vec![0u32; (SEGS / 4) as usize])?;
+        for p in 0..CH_STRIDE / 4096 {
+            put(gpa(c, p * 4096), &[0u32; 1024])?;
+        }
         let pitch = ce::LAUNCH_SRC_PITCH | ce::LAUNCH_DST_PITCH;
         for k in 0..PER_CHANNEL {
             let mut seg = if k == 0 { m(4, SET_OBJECT, &[ce_class]) } else { Vec::new() };
@@ -319,17 +328,23 @@ fn run(l: &mut Checks) -> Result<(), String> {
                 | ce::LAUNCH_DST_PHYSICAL
                 | pitch]));
             let at = SEGS + u64::from(k) * SEG_STRIDE;
-            put(ch(c) + at, &seg)?;
+            put(gpa(c, at), &seg)?;
             let e = gp_entry(va(c) + at, 4 * seg.len() as u64).ok_or("gp entry")?;
-            put(ch(c) + GPFIFO + 8 * u64::from(k), &[e as u32, (e >> 32) as u32])?;
+            put(gpa(c, GPFIFO + 8 * u64::from(k)), &[e as u32, (e >> 32) as u32])?;
         }
     }
 
-    let target = Recorded::new(HostVas { rm: &rm, space, store, ram_obj: Some(ram_desc) });
+    let target = Recorded::new(Batching::new(HostVas { rm: &rm, space, store, ram_obj: Some(ram_desc) }, ram_fd.as_backing_fd()));
     let mm = Mutex::new(Mm { walk, target, walks: Vec::new() });
     let shared = Shared { rm: &rm, ram: &ram, mm: &mm, root };
-    let (mapped, _) = shared.publish("boot")?;
-    l.check("kernel_vas_published_as_sysmem", mapped >= 1, format!("{mapped} runs (sysmem rows)"));
+    let boot = shared.publish("boot")?;
+    let pages = (u64::from(CHANNELS) * CH_STRIDE / 4096) as usize;
+    l.check("kernel_vas_published_as_sysmem", boot.mapped == pages, format!("{} runs (sysmem rows), want {pages}", boot.mapped));
+    l.check(
+        "scattered_sysmem_rows_placed_as_one_batch",
+        boot.batches == 1 && boot.batched_runs == pages && boot.map_calls == 1 && boot.batch_fallbacks == 0,
+        format!("batches={} batched_runs={} map_verbs={} fallbacks={} {:?}", boot.batches, boot.batched_runs, boot.map_calls, boot.batch_fallbacks, boot.first_batch_fallback),
+    );
     mm.lock().map_err(|_| "poisoned")?.walks.clear();
 
     // ── the doorbell plane: kf_core::Plane, for the host's family ─────────────────────────
@@ -378,7 +393,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
             sc.spawn(move || {
                 let mut x = 0x9E37_79B9u32 ^ c;
                 for k in 0..PER_CHANNEL {
-                    let _ = ram.store_u32(At::new(ch(c) + USERD + USERD_GP_PUT), k + 1);
+                    let _ = ram.store_u32(At::new(gpa(c, USERD + USERD_GP_PUT)), k + 1);
                     kf_linux_raw::release_fence();
                     if plane.trap_write(Class::Doorbell, 0, 0x90, u64::from(c + 1), 4) == Action::WakeWorker {
                         wakes_signalled.fetch_add(1, Ordering::Relaxed);
@@ -411,7 +426,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         let deadline = t0 + std::time::Duration::from_secs(15);
         loop {
             let done = (0..CHANNELS).all(|c| {
-                ram.load_u32(At::new(ch(c) + USERD + USERD_GP_GET)).is_ok_and(|g| g == PER_CHANNEL)
+                ram.load_u32(At::new(gpa(c, USERD + USERD_GP_GET))).is_ok_and(|g| g == PER_CHANNEL)
             });
             let dead = channels.chans.iter().any(|(_, s)| s.try_lock().is_ok_and(|g| g.1.is_some()));
             if done || dead || std::time::Instant::now() > deadline {
@@ -465,11 +480,54 @@ fn run(l: &mut Checks) -> Result<(), String> {
     }
     l.check("every_copy_landed", bad.is_empty(), format!("{} of {} wrong {:?}", bad.len(), CHANNELS * PER_CHANNEL, bad.iter().take(6).collect::<Vec<_>>()));
     for c in 0..CHANNELS {
-        let gp_get = ram.load_u32(At::new(ch(c) + USERD + USERD_GP_GET)).map_err(|e| format!("{e:?}"))?;
-        let sem = ram.load_u32(At::new(ch(c) + SEM)).map_err(|e| format!("{e:?}"))?;
+        let gp_get = ram.load_u32(At::new(gpa(c, USERD + USERD_GP_GET))).map_err(|e| format!("{e:?}"))?;
+        let sem = ram.load_u32(At::new(gpa(c, SEM))).map_err(|e| format!("{e:?}"))?;
         let ok = gp_get == PER_CHANNEL && sem == PER_CHANNEL;
-        l.check("channel_retired_and_released", ok, format!("ch{c}: GP_GET={gp_get} sem={sem} (in guest RAM, written by the engine)"));
+        l.check("channel_retired_and_released", ok, format!("ch{c}: GP_GET={gp_get} sem={sem} (in guest RAM at the SCATTERED page, written by the engine through the batch)"));
     }
     l.check("split_walked_once_on_a_worker", g.walks == vec![Some(root)], format!("walks={:x?}", g.walks));
+    drop(g);
+
+    // ── one PIECE of the batch: a single page in the middle goes, the batch object stays ─────────
+    let hole = va(1) + 5 * 4096;
+    tree.unmap4k(hole);
+    {
+        let g = mm.lock().map_err(|_| "poisoned")?;
+        g.walk.make_current().map_err(|e| e.to_string())?;
+        g.walk.write_store(PT_BASE, &tree.img.mem).map_err(|e| e.to_string())?;
+    }
+    let piece = shared.publish("piece")?;
+    {
+        let g = mm.lock().map_err(|_| "poisoned")?;
+        let booked = g.target.inner.bv.book.lock().map(|b| b.len()).unwrap_or(usize::MAX);
+        let frees = g.target.inner.bv.frees.load(Ordering::Relaxed);
+        l.check(
+            "a_piece_of_a_batch_unmaps_alone",
+            piece.unmapped == 1 && piece.unmap_calls == 1 && booked == 1 && frees == 0 && g.target.resolve(hole, 4).is_none() && g.target.resolve(hole + 4096, 4).is_some(),
+            format!("unmapped={} unmap_verbs={} booked={booked} frees={frees}", piece.unmapped, piece.unmap_calls),
+        );
+    }
+
+    // ── teardown: the guest unmaps the rest — one range per VA-contiguous stretch (2, around the
+    // hole), and the batch object freed once its last page is gone ─────────────────────────────
+    for c in 0..CHANNELS {
+        for p in 0..CH_STRIDE / 4096 {
+            tree.unmap4k(va(c) + p * 4096);
+        }
+    }
+    {
+        let g = mm.lock().map_err(|_| "poisoned")?;
+        g.walk.make_current().map_err(|e| e.to_string())?;
+        g.walk.write_store(PT_BASE, &tree.img.mem).map_err(|e| e.to_string())?;
+    }
+    let torn = shared.publish("teardown")?;
+    let g = mm.lock().map_err(|_| "poisoned")?;
+    let booked = g.target.inner.bv.book.lock().map(|b| b.len()).unwrap_or(usize::MAX);
+    let frees = g.target.inner.bv.frees.load(Ordering::Relaxed);
+    l.check(
+        "teardown_is_ranges_and_frees_the_batch",
+        torn.unmapped == pages - 1 && torn.range_unmaps == 2 && torn.unmap_calls == 2 && booked == 0 && frees == 1 && g.target.is_empty(),
+        format!("unmapped={} ranges={} unmap_verbs={} booked={booked} frees={frees} rows_left={}", torn.unmapped, torn.range_unmaps, torn.unmap_calls, g.target.len()),
+    );
     Ok(())
 }

@@ -3265,6 +3265,22 @@ refuse, the refusal is attributable to a line. ⊘ A proprietary refusal is a st
 
 ## §52 — READ TRAPS: ONE REGISTER FAMILY, AND MY FIRST ANSWER WAS WRONG. Added 2026-09-21 (w824).
 
+> ### ⊘⊘⊘ CORRECTED AGAIN 2026-09-25 (w828) — **"EXACTLY ONE REGISTER FAMILY" IS WRONG: THERE ARE TWO.**
+>
+> The block below says the falcon PIO auto-increment data port is the *only* register family with
+> a genuine read side effect. ⊘ **Hopper+ has a second, on the runtime path:** the **memop token
+> registers**, whose READ *starts* an L2 flush, an L2 sysmem/peermem invalidate or a sysmembar and
+> returns the op's token (`kbusSendSysmembarSingle_GH100`, `ogkm-580: src/nvidia/src/kernel/gpu/
+> bus/arch/hopper/kern_bus_gh100.c:2898-2903`: *"To trigger a memop, SW issues a read of the
+> register as opposed to write"*; `kmemsysDoCacheOp_GH100`, `…/mem_sys/arch/hopper/
+> kern_mem_sys_gh100.c:45-215`). Unlike the PIO port the guest does NOT verify the side effect —
+> a shadow read returns token `0`, `_COMPLETED` reads `IDLE`, and the op is **silently never
+> performed**. That is exactly why the w824 sweep (which looked for *verified* cursor advances)
+> could not see it. Full table and the serving design: `THE_BAR0_DISPOSITION_MAP.md` §1's w828
+> correction. ⇒ Hopper has three hole pages, Blackwell four; Turing/Ampere/Ada still **zero**.
+> ★ The lesson is the sweep's, not the hardware's: *"a read side effect the guest verifies"* and
+> *"a read side effect"* are different predicates, and only the first was searched.
+
 > ### ⊘⊘⊘ CORRECTED WITHIN THE HOUR, BY `[fable w824]`, AND THE CORRECTION IS THE WHOLE SECTION
 >
 > **STATUS: LIVE, as corrected.** The title below used to read *"NO READ TRAP, ON THE NON-GSP PATH

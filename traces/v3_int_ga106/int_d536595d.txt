@@ -1,0 +1,101 @@
+INT_START 2026-09-26T04:16:57+00:00 rev=d536595d dirty=0
+REFRESH 2026-09-26T04:16:08+00:00 rev=d536595d
+KF3_BUILT /workspace/bench/kf3-bins/d536595d/qemu-system-x86_64 rev=d536595d mtime=2026-09-26 04:16:23.064673219 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+KF3_RC=0
+FG_RC=0
+-rwxr-xr-x 1 root root 96351360 Sep 26 04:16 /workspace/bench/kf3-bins/d536595d/qemu-system-x86_64
+STEP A_crate_tests 2026-09-26T04:16:57+00:00
+CRATES rc=0
+CRATES passed=1448 failed=0 ignored=0 suites=112
+STEP B_gates 2026-09-26T04:17:30+00:00
+GATES rc=0
+GATE1_VERDICT=PASS
+GATE2_VERDICT=PASS
+GATE3_VERDICT=PASS
+GATE4_VERDICT=PASS
+GATE5_VERDICT=PASS
+GATE6_VERDICT=PASS
+GATE7_VERDICT=PASS
+GATE8_VERDICT=PASS
+GATE9_VERDICT=PASS
+V3_GATES_EXIT pass=9 fail=0 2026-09-26T04:18:07+00:00
+STEP C_fast_suite 2026-09-26T04:18:07+00:00
+SUITE rc=0
+FAST_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=20 client_ms=5959
+--cross-client-leak          PASS      17s   17s
+FAST_CELL_ARM arm=cross-client-leak verdict=PASS secs=17 client_ms=2340
+--rpc-mixed-allocs           PASS      16s   16s
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=16 client_ms=3219
+
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+FAST_SUITE_STARTED=2026-09-26T04:18:07+00:00 arms=30 budget=180s
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+STEP D_cuda_ladder_pm 2026-09-26T04:30:56+00:00
+cup3 boot rc=0
+PM_SET: All done. Enabled 
+CUP3_VAL=43
+cup8 boot rc=0
+PM_SET: All done. Enabled 
+CUP8_BAD=0
+CUP8_MAXERR=0
+STEP E_video 2026-09-26T04:33:48+00:00
+VIDEO_HOST rc=0
+VIDEO_BOOT rc=0
+src rc=0 secs=1.59 enc_h264 rc=0 secs=5.37 swdec_h264 rc=0 secs=1.30 enc_hevc rc=0 secs=2.00 swdec_hevc rc=0 secs=1.33 enc_x264 rc=0 secs=3.85 swdec_x264 rc=0 secs=1.23 hwdec_h264 rc=0 secs=2.92 cuvid_h264 rc=0 secs=3.01 hwdec_hevc rc=0 secs=2.69 cuvid_hevc rc=0 secs=2.55 hwdec_x264 rc=0 secs=2.76 cuvid_x264 rc=0 secs=2.87 perf_nvenc_1080p rc=0 secs=3.22 VIDEO_LANE_END rc=0 2026-09-26T04:36:06+00:00 LANE_EXIT=0 
+VIDEO_VS_HOST IDENTICAL lines=15
+hwdec_h264.yuv md5=5382f3c9b1723a149dcaa44f43d17d66 bitexact_vs_sw=YES
+cuvid_h264.yuv md5=5382f3c9b1723a149dcaa44f43d17d66 bitexact_vs_sw=YES
+hwdec_hevc.yuv md5=cc5f1138ef1bf2002c99320f83085d8f bitexact_vs_sw=YES
+cuvid_hevc.yuv md5=cc5f1138ef1bf2002c99320f83085d8f bitexact_vs_sw=YES
+hwdec_x264.yuv md5=0b3eaa0f159c2ff6f4a4bf4708e189cb bitexact_vs_sw=YES
+cuvid_x264.yuv md5=0b3eaa0f159c2ff6f4a4bf4708e189cb bitexact_vs_sw=YES
+perf_nvenc_1080p rc=0 secs=3.22
+perf_nvenc_1080p fps=118 
+VIDEO_STEER_LINES=9
+kf3: chan 0xc1d00018:0x80000015 falcon ctx G=0x12002d000+0x1000 is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered
+kf3: chan 0xc1d0001d:0x80000015 falcon ctx G=0x12002d000+0x1000 is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered
+kf3: chan 0xc1d00023:0x80000013 falcon ctx G=0x12002a000+0x1000 is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered
+kf3: chan 0xc1d0002b:0x80000013 falcon ctx G=0x12002a000+0x1000 is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered
+kf3: chan 0xc1d00031:0x80000013 falcon ctx G=0x12002a000+0x1000 is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered
+STEP F_gfx 2026-09-26T04:36:16+00:00
+host GFX_S2=PASS
+host GFX_S3=PASS
+host GFX_S4=PASS
+host GFX_S5=PASS
+GFX_BOOT rc=0
+PM_SET: All done. Enabled 
+GFX_S1=PASS
+GFX_S2=PASS
+GFX_S3=PASS
+GFX_S4=PASS
+GFX_S5=PASS
+GFX_CMP_VKC_HASH=MATCH 9ef8f95225b2291f
+GFX_CMP_VKR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_VKR_HASH_Z=MATCH 0f85f96d2be8e557
+GFX_CMP_VKR_HASH_B=MATCH a74a7e3fdf3af27b
+GFX_CMP_EGLR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_EGLR_HASH_Z=MATCH d26f0e8bbed2b9bf
+GFX_CMP_EGLR_HASH_B=MATCH 238bd6f6f74e5280
+GFX_CMP_GLXR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_GLXR_HASH_Z=MATCH d26f0e8bbed2b9bf
+GFX_CMP_GLXR_HASH_B=MATCH 238bd6f6f74e5280
+GFX steps=5/5 hashes=10/10
+STEP G_nopm_loop 2026-09-26T04:38:08+00:00
+NOPM_BOOT rc=0
+URL_PM=Disabled
+URL proc=1 verdict=PASS rc=0 ms=13780 sum=2097152 dead_lines=0
+URL proc=2 verdict=PASS rc=0 ms=6648 sum=2097152 dead_lines=0
+URL proc=3 verdict=PASS rc=0 ms=6966 sum=2097152 dead_lines=0
+URL proc=4 verdict=PASS rc=0 ms=6079 sum=2097152 dead_lines=0
+URL proc=5 verdict=PASS rc=0 ms=7595 sum=2097152 dead_lines=0
+URL proc=6 verdict=PASS rc=0 ms=7107 sum=2097152 dead_lines=0
+URL proc=7 verdict=PASS rc=0 ms=5083 sum=2097152 dead_lines=0
+URL proc=8 verdict=PASS rc=0 ms=7852 sum=2097152 dead_lines=0
+URL proc=9 verdict=PASS rc=0 ms=4866 sum=2097152 dead_lines=0
+URL proc=10 verdict=PASS rc=0 ms=5205 sum=2097152 dead_lines=0
+URL proc=11 verdict=PASS rc=0 ms=7076 sum=2097152 dead_lines=0
+URL proc=12 verdict=PASS rc=0 ms=7361 sum=2097152 dead_lines=0
+URL_OUTCOME=pass=12 fail=0 of 12
+INT_END 2026-09-26T04:40:27+00:00

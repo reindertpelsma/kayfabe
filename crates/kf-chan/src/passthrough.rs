@@ -75,26 +75,36 @@ pub fn copy_engine_type(i: u32) -> Option<u32> {
 /// ★ The host engine IS the guest's `engineType`: the device's engine list is the host's
 /// (`kf_rm::hostfacts` `engines`), so the guest's COPY`n` names host COPY`n` — including a GRCE,
 /// whose subchannel routing the guest's own pushbuffer already honours, exactly as on bare metal.
-/// Only a copy engine or GR0 is expressible here; anything else is refused by name.
+/// Only a copy engine, GR0 or a video engine (NVENC/NVDEC: its own runlist, no subchannel sharing,
+/// the same GPFIFO/USERD shape) is expressible here; anything else is refused by name.
 ///
 /// # Errors
 /// The host's refusal, by name.
 pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channel, String> {
-    if !is_copy_engine(g.engine) && g.engine != ENGINE_TYPE_GRAPHICS {
-        return Err(format!("engine type {:#x}: only a copy engine or GR0 has a passthrough twin", g.engine));
+    birth_twin_in(rm, space, g, None)
+}
+
+/// ★ [`birth_twin`] INTO a host group: `join = Some(tsg)` makes the twin a member of the host group
+/// already standing for the guest channel's own TSG; `None` births a new group with this twin as
+/// its first member (its handle is `Channel::tsg`, which the caller may then share). The guest's
+/// TSG membership is mirrored because members share ONE GR context on hardware — state one channel
+/// sets (CUDA's local-memory window) is what the others launch against.
+///
+/// # Errors
+/// The host's refusal, by name.
+pub fn birth_twin_in(rm: &HostRm, space: VaSpace, g: GuestChannel, join: Option<u32>) -> Result<Channel, String> {
+    if !is_copy_engine(g.engine) && g.engine != ENGINE_TYPE_GRAPHICS && !kf_abi::submit::is_video_engine_type(g.engine) {
+        return Err(format!("engine type {:#x}: only a copy engine, GR0 or a video engine has a passthrough twin", g.engine));
     }
     let (userd_memory, userd_offset) = match g.userd {
         UserdAt::Store { store, off } => (store, off),
         UserdAt::Ram { ram, off } => (ram, off),
     };
-    rm.birth_channel(space, g.engine, RingSpec {
-        gp_fifo_va: g.gpfifo_va,
-        gp_fifo_entries: g.entries,
-        userd_memory,
-        userd_offset,
-        err_notifier: g.err_ctx,
-    })
-    .map_err(|e| format!("birth: {e:?}"))
+    let ring = RingSpec { gp_fifo_va: g.gpfifo_va, gp_fifo_entries: g.entries, userd_memory, userd_offset, err_notifier: g.err_ctx };
+    match join {
+        Some(tsg) => rm.birth_member(tsg, g.engine, ring, false).map_err(|e| format!("birth into group {tsg:#x}: {e:?}")),
+        None => rm.birth_channel(space, g.engine, ring).map_err(|e| format!("birth: {e:?}")),
+    }
 }
 
 /// ★ The engine object the guest allocated on its channel, allocated on the twin with the guest's
@@ -128,7 +138,19 @@ pub fn engine_object(
             Some(ce) if is_copy_engine(ce) => Some(ce),
             _ => return Err(format!("class {class:#x} (DmaCopy) on a GR twin declares no copy engine ({declared_copy:?})")),
         },
-        Kind::Compute | Kind::ThreeD if engine == ENGINE_TYPE_GRAPHICS => None,
+        // ★ v3-gfx: 2D and inline-to-memory are GR-engine objects too (graphics UMDs put them on
+        // their 3D channel); same authored `NV_GR_ALLOCATION_PARAMETERS` (`resource_list.h:2125-2140`).
+        Kind::Compute | Kind::ThreeD | Kind::TwoD | Kind::InlineToMemory if engine == ENGINE_TYPE_GRAPHICS => None,
+        // ★ A video class on a twin of ITS engine: the instance is the twin's (never the guest's
+        // params), so a class that does not match the twin's engine is refused here, by name.
+        Kind::VideoEncoder if kf_abi::submit::nvenc_index_of_engine_type(engine).is_some() => {
+            let i = kf_abi::submit::nvenc_index_of_engine_type(engine).unwrap_or(0);
+            return rm.alloc_video_object(chan, class, i).map_err(|e| format!("video encoder object {class:#x}: {e:?}"));
+        }
+        Kind::VideoDecoder if kf_abi::submit::nvdec_index_of_engine_type(engine).is_some() => {
+            let i = kf_abi::submit::nvdec_index_of_engine_type(engine).unwrap_or(0);
+            return rm.alloc_video_object(chan, class, i).map_err(|e| format!("video decoder object {class:#x}: {e:?}"));
+        }
         k => return Err(format!("class {class:#x} ({k:?}) on a twin of engine {engine:#x}")),
     };
     rm.alloc_engine_object(chan, class, copy).map_err(|e| format!("engine object {class:#x}: {e:?}"))

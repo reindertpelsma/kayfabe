@@ -43,7 +43,7 @@
 //! again at once, after its unmaps landed — its invalidate clears on that walk.
 
 use crate::apply::{ApplyCfg, Applied, DiffRun, apply_entry};
-use crate::ledger::MapTarget;
+use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
 use std::collections::{BTreeMap, BTreeSet};
@@ -242,6 +242,12 @@ impl<T: MapTarget> VasTable<T> {
         self.spaces.iter().filter(|(_, s)| s.root.is_some()).map(|(&k, _)| k).collect()
     }
 
+    /// Every object held: `(key, root, slot)`, in key order (diagnostics).
+    #[must_use]
+    pub fn objects(&self) -> Vec<(VasKey, Option<u64>, Option<u32>)> {
+        self.spaces.iter().map(|(&k, s)| (k, s.root, s.slot)).collect()
+    }
+
     /// Objects held.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -339,18 +345,52 @@ impl Walker for GpuWalker {
     }
 
     fn poll(&mut self) -> Result<Option<WalkDone>, String> {
-        let Some(c) = self.kernel.try_collect().map_err(|e| e.to_string())? else {
+        let got = self.kernel.try_collect().map_err(|e| e.to_string());
+        // ★ w829: capacity growth / re-walks / ceilings are named in the log as they happen.
+        for ev in self.kernel.take_capacity_events() {
+            eprintln!("kf3: walk {ev}");
+        }
+        let Some(c) = got? else {
             return Ok(None);
         };
         let r = &c.report;
         r.validate().map_err(|e| format!("walk report refused: {e}"))?;
         r.require_diff().map_err(|e| format!("walk report refused: {e}"))?;
         if r.truncated() {
+            // ★ Which entries refused: `reserved2` carries each entry's own `KFWR_R_*` bits.
+            let refusing: Vec<String> = r
+                .pdbs
+                .iter()
+                .filter(|p| p.refused_bits() != 0)
+                .map(|p| format!("pdb {:#x} slot {} refuse {:#x} need {}", p.pdb, p.reserved, p.refused_bits(), p.need()))
+                .collect();
+            if std::env::var_os("KF_VAS_CENSUS").is_some() {
+                for (i, p) in r.pdbs.iter().enumerate() {
+                    if p.refused_bits() != 0
+                        && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
+                    {
+                        eprintln!("kf3: census walk entry {i} pdb {:#x}: {}", p.pdb, run_census(&runs));
+                    }
+                }
+            }
             return Err(format!(
-                "walk report TRUNCATED (flags={:#x}, refuse_mask={:#x}, runs {} of {}): nothing \
-                 of it is applied, nothing committed",
-                r.header.flags, r.header.refuse_mask, r.runs.len(), r.header.run_count
+                "walk report TRUNCATED (flags={:#x}, refuse_mask={:#x}, runs {} of {}; refusing entries: [{}]): \
+                 nothing of it is applied, nothing committed",
+                r.header.flags,
+                r.header.refuse_mask,
+                r.runs.len(),
+                r.header.run_count,
+                refusing.join(", ")
             ));
+        }
+        if std::env::var_os("KF_VAS_CENSUS").is_some() {
+            for (i, p) in r.pdbs.iter().enumerate() {
+                if p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0
+                    && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
+                {
+                    eprintln!("kf3: census overflow entry {i} pdb {:#x} slot {}: {}", p.pdb, p.reserved, run_census(&runs));
+                }
+            }
         }
         if r.header.refusals > 0 {
             // ★ P6b: a refusal inside a report is named — a walk that refused a table reports
@@ -378,6 +418,7 @@ impl Walker for GpuWalker {
                         at: m.gpga,
                         ap: m.aperture(),
                         held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
+                        kind: ((m.flags >> 16) & 0xff) as u8,
                     })
                     .collect();
                 EntryDiff {
@@ -388,7 +429,7 @@ impl Walker for GpuWalker {
                     partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,
                     overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
                     refused: if p.vas_flags & kf_cuda::abi::KFWR_V_REFUSED != 0 {
-                        u32::try_from(p.reserved2).unwrap_or(u32::MAX).max(1)
+                        p.refused_bits().max(1)
                     } else {
                         0
                     },
@@ -409,6 +450,53 @@ impl Walker for GpuWalker {
     fn slots(&self) -> u32 {
         self.kernel.max_slots()
     }
+}
+
+/// Diagnostics: a walk table slice summarised — per aperture, per page size, per 1 GiB of VA,
+/// and a sample of runs.
+fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
+    let mut ap: BTreeMap<u8, usize> = BTreeMap::new();
+    let mut lens: BTreeMap<u64, usize> = BTreeMap::new();
+    let mut gib: BTreeMap<u64, (usize, u64, u64)> = BTreeMap::new();
+    for m in runs {
+        *ap.entry(m.aperture()).or_default() += 1;
+        *lens.entry(m.len).or_default() += 1;
+        let g = gib.entry(m.va >> 30).or_insert((0, u64::MAX, 0));
+        g.0 += 1;
+        g.1 = g.1.min(m.gpga);
+        g.2 = g.2.max(m.gpga);
+    }
+    // ★ Why neighbours did NOT coalesce: VA-contiguous pairs, split by address or only by flags.
+    let (mut va_contig, mut flag_split, mut xor) = (0usize, 0usize, 0u32);
+    for w in runs.windows(2) {
+        if w[0].va + w[0].len == w[1].va {
+            va_contig += 1;
+            if w[0].gpga + w[0].len == w[1].gpga && w[0].aperture() == w[1].aperture() {
+                flag_split += 1;
+                xor |= w[0].flags ^ w[1].flags;
+            }
+        }
+    }
+    let mut flags: BTreeMap<u32, usize> = BTreeMap::new();
+    for m in runs {
+        *flags.entry(m.flags).or_default() += 1;
+    }
+    let mut top_lens: Vec<(u64, usize)> = lens.into_iter().collect();
+    top_lens.sort_by(|a, b| b.1.cmp(&a.1));
+    top_lens.truncate(6);
+    let gib: Vec<String> =
+        gib.iter().map(|(g, (n, lo, hi))| format!("va{:#x}G:{n}(gpga {lo:#x}..{hi:#x})", g)).collect();
+    let sample: Vec<String> = runs
+        .iter()
+        .step_by((runs.len() / 12).max(1))
+        .map(|m| format!("{:#x}->{:#x}+{:#x}/f{:#x}", m.va, m.gpga, m.len, m.flags))
+        .collect();
+    format!(
+        "{} runs; ap {ap:?}; flags {flags:x?}; va-contiguous pairs {va_contig}, of which gpga-contiguous (split by flags only) {flag_split} xor {xor:#x}; lens {top_lens:x?}; by-GiB [{}]; sample [{}]",
+        runs.len(),
+        gib.join(" "),
+        sample.join(" ")
+    )
 }
 
 /// The default coverage grain: 4 KiB, the smallest GMMU page on every family this tree models.
@@ -463,6 +551,14 @@ pub struct VaStats {
     pub mapped: u64,
     /// Host maps removed.
     pub unmapped: u64,
+    /// ★ `V3_BATCHED_MAP.md`: batched maps placed, and the runs they carried (in `mapped`).
+    pub batches: u64,
+    /// Runs placed by batches.
+    pub batched_runs: u64,
+    /// Range unmaps performed.
+    pub range_unmaps: u64,
+    /// Batches / ranges the target refused (their runs then went one by one).
+    pub batch_fallbacks: u64,
     /// Host TLB invalidates issued (ONE per space per applied diff that changed anything).
     pub host_invalidates: u64,
     /// Triggers cleared by us.
@@ -493,6 +589,12 @@ pub struct VaStats {
     pub held: u64,
     /// ★ P6b: walked leaves refused because they overlap one of OUR VMM placements.
     pub vmm_overlaps: u64,
+    /// ★ Invalidate clears deferred because a target's accepted work was not live yet.
+    pub deferred_clears: u64,
+    /// ★ Hopper+ usermode-page views a target placed a trap for (BAR1, `V3_BAR1_DOORBELL.md`).
+    pub usermode_trapped: u64,
+    /// ★ Hopper+ usermode-page views satisfied with NO host mapping (a GPU VA view).
+    pub usermode_unmirrored: u64,
     /// ★ Diffs whose maps were withheld for slot capacity (walked again at once).
     pub partial: u64,
     /// ★ Objects walked with no slot left (refused by name).
@@ -588,8 +690,14 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
+    /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
+    /// live yet ([`Settle::Pending`]) — cleared by [`VaManager::on_targets`], never waited for.
+    awaiting: Vec<(InvalidateRequest, Vec<VasKey>, std::time::Instant)>,
     /// ★ P6b (b): the coverage grain — the family's smallest GMMU page ([`VaManager::with_page_grain`]).
     page_grain: u64,
+    /// ★ The family's internal-MMIO usermode page ([`VaManager::with_usermode_mmio`]); `None`
+    /// (Turing … Ada) leaves every leaf on the memory path.
+    usermode: Option<kf_chip::usermode::UsermodeMmio>,
     /// Counters and named refusals.
     pub stats: VaStats,
 }
@@ -607,9 +715,20 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pending: Vec::new(),
             inflight: None,
             splits_done: Vec::new(),
+            awaiting: Vec::new(),
             page_grain: SMALL_PAGE,
+            usermode: None,
             stats: VaStats::default(),
         }
+    }
+
+    /// ★ Hopper+: classify walked internal-MMIO leaves against the family's usermode page
+    /// (`kf_chip::Family::usermode_mmio`) — a doorbell view is handed to its target's
+    /// [`MapTarget::map_usermode`] instead of becoming a memory row (`V3_BAR1_DOORBELL.md` §4).
+    #[must_use]
+    pub fn with_usermode_mmio(mut self, u: Option<kf_chip::usermode::UsermodeMmio>) -> Self {
+        self.usermode = u;
+        self
     }
 
     /// ★ P6b (b): the coverage grain — the smallest page the family's GMMU format maps (the
@@ -643,6 +762,70 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     #[must_use]
     pub fn pending(&self) -> usize {
         self.pending.len()
+    }
+
+    /// ★ Invalidates applied but held un-cleared until a target's asynchronous work is live.
+    #[must_use]
+    pub fn awaiting(&self) -> usize {
+        self.awaiting.len()
+    }
+
+    /// The combined [`Settle`] of `keys`' targets, asking each target once per pass (`seen`).
+    fn settle_keys(&self, keys: &[VasKey], seen: &mut BTreeMap<VasKey, Settle>) -> Settle {
+        let mut acc = Settle::Live;
+        for k in keys {
+            let s = match seen.get(k) {
+                Some(s) => s.clone(),
+                None => {
+                    // An object removed meanwhile has nothing of ours left in flight.
+                    let s = self.table.spaces.get(k).map_or(Settle::Live, |sp| sp.target.settle());
+                    seen.insert(*k, s.clone());
+                    s
+                }
+            };
+            match s {
+                Settle::Failed(e) => return Settle::Failed(format!("{k:?}: {e}")),
+                Settle::Pending => acc = Settle::Pending,
+                Settle::Live => {}
+            }
+        }
+        acc
+    }
+
+    fn complete_invalidate(&mut self, r: InvalidateRequest, at: std::time::Instant, trigger: &Trigger, out: &mut Reconciled) {
+        let o = trigger.complete(r.seq);
+        self.stats.outcome(o);
+        let ns = ns_since(at);
+        let tm = &mut self.stats.timing;
+        tm.invals += 1;
+        tm.inval_ns += ns;
+        tm.inval_ns_max = tm.inval_ns_max.max(ns);
+        out.completed.push((r.seq, o));
+    }
+
+    /// ★★★ **A target's asynchronous work landed** (ruling 2026-09-26 (5)): clear every deferred
+    /// invalidate whose spaces are now all [`Settle::Live`]; one whose target reports
+    /// [`Settle::Failed`] stays armed (named, counted unreconciled). Never blocks — call it on
+    /// every wake; with nothing deferred it asks no target anything.
+    pub fn on_targets(&mut self, trigger: &Trigger) -> Reconciled {
+        let mut out = Reconciled::default();
+        if self.awaiting.is_empty() {
+            return out;
+        }
+        let mut seen = BTreeMap::new();
+        let waiting = std::mem::take(&mut self.awaiting);
+        for (r, keys, at) in waiting {
+            match self.settle_keys(&keys, &mut seen) {
+                Settle::Live => self.complete_invalidate(r, at, trigger, &mut out),
+                Settle::Pending => self.awaiting.push((r, keys, at)),
+                Settle::Failed(e) => {
+                    self.stats.unreconciled += 1;
+                    self.stats.refuse(format!("invalidate seq {}: target work failed after apply: {e}", r.seq));
+                    out.unreconciled.push(r.seq);
+                }
+            }
+        }
+        out
     }
 
     /// ★ Forget an object (its VA space is gone), returning its target so the caller can tear
@@ -791,6 +974,20 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
     }
 
+    /// The batch's objects (`key=slot@root`) and the table's size — for a refusal's name.
+    fn batch_census(&self, b: &Batch) -> String {
+        let walked: Vec<String> =
+            b.walked.iter().map(|(k, (s, r))| format!("{:#x}=s{s}@{r:#x}", k.0)).collect();
+        format!(
+            "walked {}: {}; table {} objects, {} rooted, {} free slots",
+            walked.len(),
+            walked.join(" "),
+            self.table.len(),
+            self.table.rooted().len(),
+            self.table.free_slots.len()
+        )
+    }
+
     /// Every invalidate in `batch` stays armed; counted and named.
     fn refuse_batch(&mut self, batch: &Batch, why: String) {
         for (w, _, _) in &batch.wants {
@@ -816,6 +1013,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             Ok(Some(d)) => d,
             Err(e) => {
                 self.stats.walks_refused += 1;
+                // ★ Name WHAT was walked: a refused report is about the batch, and a batch can
+                // carry objects the refusing want never named (ALL_PDB, or several objects under
+                // one root). Without this the refusal names only the root that asked.
+                let e = match &self.inflight {
+                    Some(b) => format!("{e} [{}]", self.batch_census(b)),
+                    None => e,
+                };
                 if let Some(b) = self.inflight.take() {
                     for (w, _, _) in &b.wants {
                         if let Want::Invalidate(r, _) = w {
@@ -849,7 +1053,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; done.nrun];
         let mut failed: BTreeSet<VasKey> = BTreeSet::new();
         let mut partial: BTreeSet<VasKey> = BTreeSet::new();
-        let cfg = ApplyCfg { store_bytes: self.store_bytes, grain: self.page_grain, ram_offset: &*self.ram_offset };
+        let cfg = ApplyCfg {
+            store_bytes: self.store_bytes,
+            grain: self.page_grain,
+            ram_offset: &*self.ram_offset,
+            usermode: self.usermode,
+        };
         for (&key, &(slot, walked_root)) in &batch.walked {
             let Some(space) = self.table.spaces.get(&key) else {
                 continue; // removed while the walk ran: its slot is released, nothing to apply
@@ -878,18 +1087,46 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
-            self.stats.timing.apply_ns += ns_since(t_apply);
+            let apply_ns = ns_since(t_apply);
+            self.stats.timing.apply_ns += apply_ns;
+            // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
+            // each ONE host map call on the guest-RAM object) — named, it is the next budget.
+            // ★ V3_BATCHED_MAP: runs vs the verbs they cost (a batch / a range is ONE verb).
+            if a.mapped + a.unmapped >= 1000 {
+                eprintln!(
+                    "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms — {} map verb(s) ({} batch(es) carrying {} runs), {} unmap verb(s) ({} range(s) carrying {} runs), {} fallback(s){}",
+                    a.mapped,
+                    a.unmapped,
+                    apply_ns / 1_000_000,
+                    a.map_calls,
+                    a.batches,
+                    a.batched_runs,
+                    a.unmap_calls,
+                    a.range_unmaps,
+                    a.range_unmapped_runs,
+                    a.batch_fallbacks,
+                    a.first_batch_fallback.as_deref().map(|w| format!(" (first: {w})")).unwrap_or_default()
+                );
+            } else if let Some(w) = &a.first_batch_fallback {
+                eprintln!("kf3: mem batch fallback {key:?}: {w}");
+            }
             for (i, &c) in a.codes.iter().enumerate() {
                 if let Some(slot) = codes.get_mut(e.first + i) {
                     *slot = c;
                 }
             }
-            self.stats.timing.host_calls += (a.mapped + a.unmapped) as u64 + u64::from(a.invalidated);
+            self.stats.timing.host_calls += (a.map_calls + a.unmap_calls) as u64 + u64::from(a.invalidated);
+            self.stats.batches += a.batches as u64;
+            self.stats.batched_runs += a.batched_runs as u64;
+            self.stats.range_unmaps += a.range_unmaps as u64;
+            self.stats.batch_fallbacks += a.batch_fallbacks as u64;
             self.stats.mapped += a.mapped as u64;
             self.stats.unmapped += a.unmapped as u64;
             self.stats.host_invalidates += u64::from(a.invalidated);
             self.stats.held += a.held as u64;
             self.stats.vmm_overlaps += a.vmm_overlaps as u64;
+            self.stats.usermode_trapped += a.usermode_trapped as u64;
+            self.stats.usermode_unmirrored += a.usermode_unmirrored as u64;
             self.stats.clipped_bytes += a.clipped_bytes;
             if a.refused > 0 {
                 failed.insert(key);
@@ -925,6 +1162,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
         let mut requeue: Vec<(Want, std::time::Instant)> = Vec::new();
+        let mut settled: BTreeMap<VasKey, Settle> = BTreeMap::new();
         for (w, keys, at) in &batch.wants {
             let bad = keys.iter().find(|k| failed.contains(k));
             let again = keys.iter().any(|k| partial.contains(k));
@@ -949,14 +1187,21 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // ★ Its maps were withheld (slot capacity): the unmaps landed, walk again now.
                 requeue.push((*w, *at));
             } else {
-                let o = trigger.complete(r.seq);
-                self.stats.outcome(o);
-                let ns = ns_since(*at);
-                let tm = &mut self.stats.timing;
-                tm.invals += 1;
-                tm.inval_ns += ns;
-                tm.inval_ns_max = tm.inval_ns_max.max(ns);
-                out.completed.push((r.seq, o));
+                // ★ Ruling 2026-09-26 (5): a target whose accepted work is still in flight (the
+                // BAR1 doorbell overlay) defers THIS clear only — the guest keeps polling, which is
+                // legal; [`VaManager::on_targets`] clears it when the work is live.
+                match self.settle_keys(keys, &mut settled) {
+                    Settle::Live => self.complete_invalidate(*r, *at, trigger, &mut out),
+                    Settle::Pending => {
+                        self.stats.deferred_clears += 1;
+                        self.awaiting.push((*r, keys.clone(), *at));
+                    }
+                    Settle::Failed(e) => {
+                        self.stats.unreconciled += 1;
+                        self.stats.refuse(format!("invalidate seq {}: target work failed after apply: {e}", r.seq));
+                        out.unreconciled.push(r.seq);
+                    }
+                }
             }
         }
         for (w, at) in requeue.into_iter().rev() {
@@ -1113,6 +1358,7 @@ mod tests {
                         at: m.gpga,
                         ap: m.aperture(),
                         held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
+                        kind: ((m.flags >> 16) & 0xff) as u8,
                     })
                     .collect();
                 let refused = if self.refuse_in == Some(e.pdb) { 0x2000 } else { 0 };
@@ -1153,9 +1399,14 @@ mod tests {
         refuse_map_at: RefCell<Option<u64>>,
         held_at: Option<u64>,
         reserved: Vec<(u64, u64)>,
+        /// ★ What `settle` answers — an async target (the BAR1 doorbell overlay) in miniature.
+        settle: Rc<RefCell<Settle>>,
     }
 
     impl MapTarget for FakeHost {
+        fn settle(&self) -> Settle {
+            self.settle.borrow().clone()
+        }
         fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
             if *self.refuse_map_at.borrow() == Some(d.va) {
                 return Err(format!("map {:#x}: refused (fake)", d.va));
@@ -1184,7 +1435,14 @@ mod tests {
     }
 
     fn host(r: &Rig, held_at: Option<u64>, reserved: Vec<(u64, u64)>) -> FakeHost {
-        FakeHost { ops: r.ops.clone(), port: r.port.clone(), refuse_map_at: RefCell::new(None), held_at, reserved }
+        FakeHost {
+            ops: r.ops.clone(),
+            port: r.port.clone(),
+            refuse_map_at: RefCell::new(None),
+            held_at,
+            reserved,
+            settle: Rc::new(RefCell::new(Settle::Live)),
+        }
     }
 
     fn rig() -> Rig {
@@ -1268,6 +1526,56 @@ mod tests {
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1);
         assert!(ops(&r).is_empty(), "unchanged tables: nothing to do");
+    }
+
+    /// ★★★ Ruling 2026-09-26 (5): a target whose accepted work is still in flight (the BAR1
+    /// doorbell overlay, made by QEMU's main loop) defers ONLY the clear of the invalidate that
+    /// named it; nothing waits; the clear happens on the completion event, after the work is live.
+    #[test]
+    fn an_async_target_defers_only_its_own_invalidates_clear() {
+        let mut r = rig();
+        let pending = Rc::new(RefCell::new(Settle::Pending));
+        let mut h = host(&r, None, Vec::new());
+        h.settle = pending.clone();
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        let a = settle(&mut r, PDB_A);
+        assert!(a.completed.is_empty() && a.unreconciled.is_empty(), "applied, not cleared");
+        assert!(busy(&r.port), "the guest keeps polling — legal");
+        assert_eq!((r.m.awaiting(), r.m.stats.deferred_clears), (1, 1));
+        // A wake with the work still in flight changes nothing.
+        assert!(r.m.on_targets(r.port.trigger()).completed.is_empty());
+        assert!(busy(&r.port));
+        // The completion event: the work is live ⇒ THEN the clear.
+        *pending.borrow_mut() = Settle::Live;
+        let out = r.m.on_targets(r.port.trigger());
+        assert_eq!(out.completed.len(), 1);
+        assert!(!busy(&r.port));
+        assert_eq!(r.m.awaiting(), 0);
+        // Another space's invalidate is never held behind it.
+        *pending.borrow_mut() = Settle::Pending;
+        r.tables.borrow_mut().insert(PDB_B, vec![(0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        let b = settle(&mut r, PDB_B);
+        assert_eq!(b.completed.len(), 1, "B's target is live: cleared at once");
+    }
+
+    #[test]
+    fn async_work_that_fails_after_apply_leaves_the_invalidate_armed_and_named() {
+        let mut r = rig();
+        let st = Rc::new(RefCell::new(Settle::Pending));
+        let mut h = host(&r, None, Vec::new());
+        h.settle = st.clone();
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        *st.borrow_mut() = Settle::Failed("overlay install refused (fake)".into());
+        let out = r.m.on_targets(r.port.trigger());
+        assert_eq!(out.unreconciled.len(), 1);
+        assert!(busy(&r.port), "never cleared over work that did not land");
+        assert!(r.m.stats.refusals.iter().any(|w| w.contains("overlay install refused")));
+        assert_eq!(r.m.awaiting(), 0);
     }
 
     #[test]

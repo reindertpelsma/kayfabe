@@ -20,6 +20,8 @@ pub struct Desired {
     pub off: u64,
     /// Which ground truth.
     pub ram: bool,
+    /// ★ v3-gfx: the host PTE kind (uncompressed; `crate::apply::host_pte_kind`). 0 = PITCH.
+    pub kind: u8,
 }
 
 /// A walked leaf's aperture, as the walk kernel reports it (`KFWR_RF_AP_*`, `cuda/walk/kf_walk.h:92-97`).
@@ -80,10 +82,10 @@ pub fn desired_from_leaves(
             AP_VIDMEM => at
                 .checked_add(len)
                 .filter(|&e| e <= store_bytes)
-                .map(|_| Desired { va, len, off: at, ram: false })
+                .map(|_| Desired { va, len, off: at, ram: false, kind: 0 })
                 .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len }),
             AP_SYS_COHERENT | AP_SYS_NONCOHERENT => ram_offset(at, len)
-                .map(|off| Desired { va, len, off, ram: true })
+                .map(|off| Desired { va, len, off, ram: true, kind: 0 })
                 .ok_or(LeafRefusal::NotGuestRam { va, gpa: at, len }),
             _ => Err(LeafRefusal::Aperture { va, ap }),
         })
@@ -106,6 +108,35 @@ pub enum Mapped {
     /// here: [`MapTarget::reserved`] makes the VA manager refuse such a row by name BEFORE the
     /// host is asked (a guest VA may never alias a VMM address).
     HeldByHost,
+}
+
+/// ★★★ **A walked leaf that is a view of the usermode (doorbell) page, not memory** — Hopper+
+/// internal MMIO: aperture SYS_COHERENT + kind SMSKED_MESSAGE, address = the VF register offset
+/// (`kf_chip::usermode`, `V3_BAR1_DOORBELL.md`). ⊘ Never a [`Desired`] row: its "address" is a
+/// register offset, and turning it into guest RAM maps guest-physical `0x30000` where the guest
+/// expects its doorbell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UsermodeRow {
+    /// Guest VA (a BAR1 offset for the BAR1 window).
+    pub va: u64,
+    /// Bytes.
+    pub len: u64,
+    /// Offset of `va` inside the 64 KiB usermode page (`+0x90` is the doorbell).
+    pub vf_rel: u64,
+}
+
+/// ★★★ **Whether a target's accepted work is live yet** (ruling 2026-09-26 (5),
+/// `V3_BAR1_DOORBELL.md` §3.1). A target whose verb only QUEUES the change (the Hopper+ BAR1
+/// doorbell overlay, made by QEMU's main loop) answers [`Settle::Pending`] until it lands; the VA
+/// manager then defers ONLY the clears of the invalidates that named that space — it never waits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Settle {
+    /// Everything this target accepted is visible to the guest.
+    Live,
+    /// Accepted work is still in flight: do not clear yet.
+    Pending,
+    /// Accepted work failed after it was acknowledged: named; the invalidate stays armed.
+    Failed(String),
 }
 
 /// ★★★ **Where a diff's operations land** — `V3_P4_PORT_MAP.md` §2.3(b).
@@ -136,6 +167,65 @@ pub trait MapTarget {
     /// The host's refusal, by name.
     fn invalidate(&self) -> Result<(), String>;
 
+    /// ★★★ Satisfy a [`UsermodeRow`] (Hopper+; `V3_BAR1_DOORBELL.md` §4).
+    ///
+    /// [`Mapped::Placed`]: the target installed something of its OWN for the view (the BAR1
+    /// window: a write-trapped overlay) — its later UNMAP reaches [`MapTarget::unmap`] at `u.va`.
+    ///
+    /// ★ **The default is the GPU-VA-space policy: NOT MIRRORED, answered [`Mapped::HeldByHost`].**
+    /// A GPU VA view of the usermode page lets the GPU ring doorbells by its own writes
+    /// (`usrmodeGetMemInterMapParams_IMPL`, `usermode_api.c:112-135`; ogkm's only user is UVM under
+    /// Confidential Computing, `nv_gpu_ops.c:5649-5676` → `uvm_channel.c:1232-1234`). Such a write
+    /// never traps, and the value it writes is a GUEST-computed token, so forwarding it to the host's
+    /// real doorbell would ring an arbitrary host channel. ⇒ No host mapping is made: the guest's
+    /// statement is satisfied (its invalidate clears, nothing wedges), and a GPU-originated ring
+    /// through that VA faults on the host twin — contained and visible — instead of landing
+    /// anywhere. Counted by name ([`crate::apply::Applied::usermode_unmirrored`]).
+    ///
+    /// # Errors
+    /// The target's refusal, by name.
+    fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
+        let _ = u;
+        Ok(Mapped::HeldByHost)
+    }
+
+    /// ★★★ **Place VA-contiguous guest-RAM rows with ONE host placement** (`V3_BATCHED_MAP.md`).
+    ///
+    /// `rows` are whole pages, `ram`, one `kind`, each starting where the previous ends. ⇒ `Ok`
+    /// ONLY when the host placed EVERY row (each is then OUR mapping, acknowledged APPLIED);
+    /// `Err` ONLY when it placed NONE of them — the caller then maps them one by one, so each gets
+    /// its own verdict (a `HeldByHost` VA inside a batch is found that way, never guessed).
+    ///
+    /// The default is `Err`: a target that cannot batch (a CPU window, the harness) keeps the
+    /// per-run path, byte for byte.
+    ///
+    /// # Errors
+    /// Why the batch was not placed, by name.
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        let _ = (rows, defer);
+        Err(NOT_BATCHED.into())
+    }
+
+    /// ★★★ **Unmap every placement of OURS inside `[va, va+len)` in one host call**
+    /// (`V3_BATCHED_MAP.md` §4). `Ok` ⇔ nothing of ours is mapped there any more. The caller
+    /// passes only a range that is exactly the union of committed placements it is unmapping.
+    ///
+    /// The default is `Err`: the caller then unmaps run by run ([`MapTarget::unmap`]).
+    ///
+    /// # Errors
+    /// The host's refusal, by name (some placements in the range may be gone — the per-run
+    /// fallback states exactly which).
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        let _ = (va, len, defer);
+        Err(NOT_BATCHED.into())
+    }
+
+    /// ★ Drain this target's asynchronous completions and say whether its accepted work is live
+    /// ([`Settle`]). Every synchronous target is always [`Settle::Live`].
+    fn settle(&self) -> Settle {
+        Settle::Live
+    }
+
     /// ★ P4: the VA extent `[0, extent)` this target can express, or `None` for a whole GPU VA
     /// space. A CPU window (the guest's BAR2 aperture) shows only the VAs its PCI BAR decodes:
     /// a walked leaf above that is real in the guest's tables but has no CPU address, so the VA
@@ -155,6 +245,9 @@ pub trait MapTarget {
         Vec::new()
     }
 }
+
+/// What a target that cannot batch answers [`MapTarget::map_batch`] / [`MapTarget::unmap_range`].
+pub const NOT_BATCHED: &str = "this target does not batch";
 
 /// ★ Cut walked leaves `(va, at, len, ap)` to `[0, extent)`: a leaf wholly above is dropped, a
 /// leaf crossing the end is shortened (its backing offset is unchanged — it starts at the same
@@ -190,6 +283,35 @@ pub struct HostVas<'rm> {
     pub ram_obj: Option<u32>,
 }
 
+impl HostVas<'_> {
+    /// ★★★ Place VA-contiguous guest-RAM `rows` through ONE host object stitched from `ram_fd`
+    /// (the guest memfd; `Desired::off` is a memfd offset) — [`kf_host::HostRm::map_scattered`].
+    /// Returns the object's handle, which the caller must track and free (`crate::batch`).
+    ///
+    /// # Errors
+    /// Rows that are not one VA-contiguous, same-kind guest-RAM range (refused before any call),
+    /// or the host's refusal. Either way nothing of ours is placed.
+    pub fn map_scattered(&self, ram_fd: std::os::fd::BorrowedFd<'_>, rows: &[Desired], defer: bool) -> Result<u32, String> {
+        let first = rows.first().ok_or("empty batch")?;
+        let mut next = first.va;
+        let mut pieces: Vec<(u64, u64)> = Vec::with_capacity(rows.len());
+        for d in rows {
+            if !d.ram || d.kind != first.kind || d.va != next {
+                return Err(format!("batch row {:#x}+{:#x} is not a VA-contiguous same-kind guest-RAM row", d.va, d.len));
+            }
+            next = d.va.checked_add(d.len).ok_or("batch VA overflows")?;
+            // Coalesce pieces that are also file-contiguous: fewer mappings to stitch.
+            match pieces.last_mut() {
+                Some((o, l)) if o.checked_add(*l) == Some(d.off) => *l += d.len,
+                _ => pieces.push((d.off, d.len)),
+            }
+        }
+        self.rm
+            .map_scattered(self.space, ram_fd, &pieces, first.va, defer, first.kind)
+            .map_err(|e| format!("batch {:#x}+{:#x} ({} rows, {} pieces): {e:?}", first.va, next - first.va, rows.len(), pieces.len()))
+    }
+}
+
 impl MapTarget for HostVas<'_> {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let obj = if d.ram {
@@ -198,7 +320,7 @@ impl MapTarget for HostVas<'_> {
         } else {
             self.store
         };
-        match self.rm.map(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer) {
+        match self.rm.map_kind(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer, d.kind) {
             Ok(_) => Ok(Mapped::Placed),
             // ★ P6: a FIXED map onto a VA host RM already holds satisfies the guest's statement —
             // the C's semantic (`nvkvm_gpu_emul.c:7935-7938`) — rather than stranding its
@@ -219,5 +341,11 @@ impl MapTarget for HostVas<'_> {
         self.rm
             .invalidate_tlb(self.space)
             .map_err(|e| format!("invalidate: {e:?}"))
+    }
+
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        self.rm
+            .unmap_range(self.space, va, len, defer)
+            .map_err(|e| format!("unmap range {va:#x}+{len:#x}: {e:?}"))
     }
 }

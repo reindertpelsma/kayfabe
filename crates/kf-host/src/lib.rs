@@ -12,13 +12,14 @@
 pub mod channel;
 pub mod event;
 pub use event::EventFd;
-pub use channel::{Channel, MapBacking, RingSpec, VaSpace};
+pub use channel::{Channel, MapBacking, RingSpec, ScatterError, VaSpace};
 
 use kf_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
     NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV20_SUBDEVICE_0,
     NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
     NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
+    CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
     Nv2080AllocParameters, Nvos02ParametersWithFd, RegisterFd,
 };
 use kf_abi::generated::classes::{
@@ -308,6 +309,12 @@ pub struct HostRm {
     classes: Box<dyn HostClasses>,
     /// `MC_GET_ARCH_INFO` as the host answered it: `(architecture, implementation, revision)`.
     arch_info: (u32, u32, u32),
+    /// ★ The host GPU this session is bound to, as the frontend's `CARD_INFO` states it for
+    /// our minor: its PCI address and RM `gpuId`. The one identity every other per-GPU choice
+    /// (the RM device instance, the CUDA device) is resolved from — never an ordinal.
+    card: CardInfo,
+    /// The RM device instance `GET_ID_INFO_V2` returned for [`HostRm::card`]'s `gpuId`.
+    device_instance: u32,
 }
 
 impl HostRm {
@@ -386,6 +393,8 @@ impl HostRm {
             classes,
             armed: Mutex::new(std::collections::BTreeSet::new()),
             arch_info: (0, 0, 0),
+            card: CardInfo::default(),
+            device_instance: 0,
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
@@ -395,6 +404,37 @@ impl HostRm {
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
         };
 
+        // ★★ R4b/R4c — WHICH RM DEVICE IS OUR MINOR. `deviceId` is RM's *device instance*,
+        // assigned at attach, lowest free first; the minor is a Linux chardev number. They
+        // diverge whenever a lower-numbered GPU is not attached (V3_MULTI_GPU_AUDIT §2 blocker
+        // 2, measured: minor 1 got instance 0, `deviceId=1` → `Other(34)` + RM's
+        // *"deviceInstance 0x1 does not exist"*). ⇒ minor → gpuId from the frontend's own
+        // table (`CARD_INFO`), gpuId → instance from RM (`GET_ID_INFO_V2`, answered only for
+        // an attached GPU — the per-GPU open + `REGISTER_FD` above attached it).
+        let mut ci = vec![0u8; CardInfo::SIZE * CardInfo::MAX_ENTRIES];
+        let req = rung(
+            "R4b CARD_INFO request",
+            ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_CARD_INFO, ci.len()),
+        )?;
+        rung("R4b CARD_INFO", conn.ctl.ioctl(req, &mut ci, &mut []))?;
+        let cards = rung("R4b CARD_INFO decode", CardInfo::decode_all(&ci))?;
+        let card = cards.iter().copied().find(|c| c.minor == gpu.0).ok_or_else(|| BringUpError {
+            rung: "R4b CARD_INFO minor",
+            detail: format!(
+                "no probed GPU has minor {} (the frontend lists minors {:?}) — refused by name",
+                gpu.0,
+                cards.iter().map(|c| c.minor).collect::<Vec<_>>()
+            ),
+        })?;
+        let mut idinfo = [0u8; GpuIdInfoV2::SIZE];
+        rung("R4c GET_ID_INFO_V2 encode", GpuIdInfoV2::encode_request(card.gpu_id, &mut idinfo))?;
+        rung(
+            "R4c GET_ID_INFO_V2",
+            conn.raw_control(conn.client.raw(), NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2, &mut idinfo),
+        )?;
+        let id = rung("R4c GET_ID_INFO_V2 decode", GpuIdInfoV2::decode(&idinfo))?;
+        let conn = HostRm { card, device_instance: id.device_instance, ..conn };
+
         // R5 — the device. The parameters are NOT optional: without them RM does not
         // associate the device with a physical GPU and every later control answers
         // NOT_SUPPORTED (`C: tests/integration/test_ioctl_fwd.c:657-668`).
@@ -402,7 +442,7 @@ impl HostRm {
         rung(
             "R5 NV0080 encode",
             Nv0080AllocParameters {
-                device_id: gpu.0,
+                device_id: id.device_instance,
                 ..Default::default()
             }
             .encode_into(&mut dev_params),
@@ -416,7 +456,7 @@ impl HostRm {
         let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
         rung(
             "R6 NV2080 encode",
-            Nv2080AllocParameters { sub_device_id: 0 }.encode_into(&mut sub_params),
+            Nv2080AllocParameters { sub_device_id: id.sub_device_instance }.encode_into(&mut sub_params),
         )?;
         let subdevice = rung(
             "R6 NV20_SUBDEVICE_0",
@@ -512,6 +552,20 @@ impl HostRm {
     pub fn usermode_view(&self) -> Result<kf_linux_raw::HostSpan, RmError> {
         let w = self.usermode.as_ref().map_err(|e| *e)?;
         Ok(w.region.host_span())
+    }
+
+    /// ★ The host GPU this session is bound to (`CARD_INFO` for our minor): PCI address and
+    /// RM `gpuId`. Select any other per-GPU resource (the CUDA device) by THIS, never by an
+    /// ordinal or the minor.
+    #[must_use]
+    pub fn card(&self) -> CardInfo {
+        self.card
+    }
+
+    /// The RM device instance our `NV01_DEVICE_0` was allocated with (resolved, not assumed).
+    #[must_use]
+    pub fn device_instance(&self) -> u32 {
+        self.device_instance
     }
 
     fn open_usermode(&self, class: UsermodeClass) -> Result<UsermodeWindow, RmError> {
@@ -777,6 +831,7 @@ impl HostRm {
         at: Option<u64>,
         extra: u32,
         is_shared_slice: bool,
+        kind: u32,
     ) -> Result<u64, RmError> {
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
@@ -814,7 +869,8 @@ impl HostRm {
                     0
                 },
             flags2: 0,
-            kind_override: 0,
+            // ★ v3-gfx: applied only with `NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES` in `extra`.
+            kind_override: kind,
             dma_offset: at.unwrap_or(0),
             status: 0,
         }
@@ -872,6 +928,25 @@ impl HostRm {
         gpu_va: u64,
         flags: u32,
     ) -> Result<(), RmError> {
+        self.raw_unmap_dma_range(h_dma, gpu_va, 0, flags)
+    }
+
+    /// ★★★ `NV_ESC_RM_UNMAP_MEMORY_DMA` over a VA RANGE (`V3_BATCHED_MAP.md` §4): `size != 0`
+    /// unmaps **every** mapping in `h_dma` that intersects `[gpu_va, gpu_va+size)`, splitting one
+    /// that straddles an edge (`ogkm-580 rs_server.c:2365-2427` `serverInterUnmapInternal`;
+    /// `virtual_mem.c:1681-1790`, `virtmemIsPartialUnmapSupported` = `NV_TRUE`). A range that
+    /// intersects nothing is `NV_OK` — the post-condition "nothing of ours is mapped there" holds.
+    /// `size == 0` is the legacy whole-mapping unmap keyed by the EXACT start.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn raw_unmap_dma_range(
+        &self,
+        h_dma: u32,
+        gpu_va: u64,
+        size: u64,
+        flags: u32,
+    ) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos47Parameters::SIZE];
         Nvos47Parameters {
             h_client: self.client.raw(),
@@ -880,7 +955,7 @@ impl HostRm {
             h_memory: 0,
             flags,
             dma_offset: gpu_va,
-            size: 0,
+            size,
             status: 0,
         }
         .encode_into(&mut arg)

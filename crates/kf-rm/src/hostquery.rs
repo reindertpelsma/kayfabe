@@ -28,7 +28,7 @@ use kf_abi::bifstatic::BifStaticRow;
 use kf_abi::chipinfo::{ChipInfoRow, RegBaseRow, reg_base};
 use kf_abi::confcompute::ConfComputeRow;
 use kf_abi::deviceinfo::{DeviceInfoRow, DevicePriBase, EnginePriBase};
-use kf_abi::falconinfo::FalconInventoryRow;
+use kf_abi::falconinfo::{ConstructedFalcon, FalconInventoryRow};
 use kf_abi::fifochannels::FifoChannelsRow;
 use kf_abi::grinfo::GrInfoProfile;
 use kf_abi::grstatic::{CONTEXT_BUFFER_ID_COUNT, ContextBuffer, TpcRow};
@@ -59,6 +59,15 @@ pub trait HostControls {
     /// # Errors
     /// [`HostRefusal`] — the host's own refusal.
     fn control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal>;
+
+    /// Issue an `NV0080` control on the host DEVICE object. Default: refused (a test double that
+    /// answers only subdevice controls).
+    ///
+    /// # Errors
+    /// [`HostRefusal`].
+    fn device_control(&mut self, cmd: u32, _params: &mut [u8]) -> Result<(), HostRefusal> {
+        Err(HostRefusal { status: None, detail: format!("{cmd:#x}: no device-level controls on this session") })
+    }
 }
 
 /// Why one field could not be filled.
@@ -192,16 +201,24 @@ pub fn query_arch(host: &mut dyn HostControls) -> Result<(Family, u8), FieldCaus
 
 /// Classify an `NV2080_ENGINE_TYPE`, and give its `RM_ENGINE_TYPE`. `None` = not advertised.
 ///
-/// ★ **Authored**: the served engine list is GR, the copy engines and RM's `SW` pseudo-engine
-/// — the old tree's decision (`kf_abi::deviceinfo`: *"an engine we advertise is an engine RM
-/// goes on to USE"*, and no plane drives NVDEC/NVENC/NVJPG/OFA). The host's other engines are
-/// read and deliberately not advertised. The RM space is contiguous where the NV2080 space is
+/// ★ **Authored**: the served engine list is GR, the copy engines, the VIDEO engines (NVENC /
+/// NVDEC, w-video 2026-09-26 — the passthrough plane now drives them on host twins) and RM's `SW`
+/// pseudo-engine. *"An engine we advertise is an engine RM goes on to USE"* (`kf_abi::deviceinfo`)
+/// still holds for the rest: NVJPG, OFA and SEC2 are read and deliberately not advertised. ⊘ The
+/// video set is the HOST's — an H100 lists no NVENC, so its guest gets none. A video engine is
+/// advertised only when the host's falcon table also names it ([`query_video_falcons`]). The RM space is contiguous where the NV2080 space is
 /// not (`kf_abi::submit`'s two inverses): `RM_ENGINE_TYPE_COPY(i) = 0x09 + i` for all twenty,
 /// `GR(i) = 0x01 + i`, `SW = 0x2d` (`ogkm-580: gpu_engine_type.h:34-139`).
 #[must_use]
 pub fn classify_engine(nv2080_engine_type: u32) -> Option<(EngineKind, u32)> {
     if let Some(ce) = kf_abi::submit::copy_index_of_engine_type(nv2080_engine_type) {
         return Some((EngineKind::Copy(ce), kf_abi::submit::RM_ENGINE_TYPE_COPY0 + ce));
+    }
+    if let Some(i) = kf_abi::submit::nvenc_index_of_engine_type(nv2080_engine_type) {
+        return Some((EngineKind::VideoEncode(i), kf_abi::submit::RM_ENGINE_TYPE_NVENC0 + i));
+    }
+    if let Some(i) = kf_abi::submit::nvdec_index_of_engine_type(nv2080_engine_type) {
+        return Some((EngineKind::VideoDecode(i), kf_abi::submit::RM_ENGINE_TYPE_NVDEC0 + i));
     }
     match nv2080_engine_type {
         0x01..=0x08 => Some((EngineKind::Graphics(nv2080_engine_type - 1), nv2080_engine_type)),
@@ -237,7 +254,7 @@ pub fn query_engine_list(host: &mut dyn HostControls) -> Result<Vec<EngineKind>,
 ///
 /// Leaks the row once (`DeviceInfoRow` holds `&'static`) — call at realize, once per device.
 #[must_use]
-pub fn device_info_rule(engines: &[EngineKind]) -> DeviceInfoRow {
+pub fn device_info_rule(engines: &[EngineKind], falcons: &[ConstructedFalcon]) -> DeviceInfoRow {
     const NV_PGRAPH: u32 = 0x0040_0000;
     const NV_CE_BLOCK: u32 = 0x0010_4000;
     let rows: Vec<EnginePriBase> = engines
@@ -247,11 +264,99 @@ pub fn device_info_rule(engines: &[EngineKind]) -> DeviceInfoRow {
             pri_base: match k {
                 EngineKind::Graphics(_) => DevicePriBase::At(NV_PGRAPH),
                 EngineKind::Copy(_) => DevicePriBase::At(NV_CE_BLOCK),
+                // ★ A video engine's PRI block is its falcon's: the host's own `registerBase` for
+                // the same `engDesc` ([`query_video_falcons`]; `[measured]` GA106 NVENC0 `0x1c8000`,
+                // NVDEC0 `0x848000`). A kind with no falcon never reaches here — filtered at query.
+                EngineKind::VideoEncode(_) | EngineKind::VideoDecode(_) => falcons
+                    .iter()
+                    .find(|f| Some(f.eng_desc) == video_eng_desc(k))
+                    .map_or(DevicePriBase::NotADevice, |f| DevicePriBase::At(f.register_base)),
                 EngineKind::Software => DevicePriBase::NotADevice,
             },
         })
         .collect();
     DeviceInfoRow { pri_bases: Box::leak(rows.into_boxed_slice()) }
+}
+
+/// `ENG_NVENC(i)` / `ENG_NVDEC(i)` — `(NVOC classId << 8) | i` (`OBJMSENC 0xe97b6c`, `OBJBSP
+/// 0x8f99e1`, `ogkm-580: g_eng_desc_nvoc.h:1273,833`); `None` for a non-video kind.
+#[must_use]
+pub fn video_eng_desc(k: EngineKind) -> Option<u32> {
+    match k {
+        EngineKind::VideoEncode(i) => Some(0x00e9_7b6c << 8 | i),
+        EngineKind::VideoDecode(i) => Some(0x008f_99e1 << 8 | i),
+        _ => None,
+    }
+}
+
+/// ★★ **The video falcons, from the HOST's own falcon table** —
+/// `NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO` (`0x208001b0`, `NON_PRIVILEGED`,
+/// `ogkm-580: g_subdevice_nvoc.c`), kept to the `engDesc`s of the video kinds in `kinds`.
+///
+/// Why only those: an entry is an instruction to construct a `GenericKernelFalcon`, and for a
+/// video `engDesc` RM then registers its NON-STALL service keyed by the FIFO table's MC index
+/// (`kernel_falcon.c:362-397`, asserting the row exists) — nothing else. ⊘ No BAR0 register of the
+/// falcon is ever read by a GSP-client guest: `gkflcnResetHw` refuses (`:356-360`), the register
+/// HALs are reached only from KernelGsp (`kernel_gsp.c:2280`), and a generic falcon has no
+/// engstate hooks. So `registerBase` is served as the host states it (and becomes the device-info
+/// PRI base), and no register model is needed. FECS/GPCCS/PMU/SEC2/OFA rows are dropped: SEC2
+/// would register an interrupt service keyed by an engine this device does not list.
+///
+/// `ctxBufferSize`/`ctxAttr`/`addrSpaceList` are the host's: the guest sizes the (never-executed)
+/// context buffer it promotes with them — the twin's real one is host RM's.
+///
+/// # Errors
+/// [`FieldCause`] — the host's refusal, or a reply whose count overruns the table.
+pub fn query_video_falcons(host: &mut dyn HostControls, kinds: &[EngineKind]) -> Result<Vec<ConstructedFalcon>, FieldCause> {
+    use kf_abi::falconinfo as fi;
+    let cmd = fi::NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO;
+    let r = ask(host, cmd, zeroed(fi::FALCON_INFO_PARAMS_SIZE))?;
+    let rows = fi::decode_constructed_falcon_info(&r)
+        .map_err(|_| FieldCause::Reply(FactRefusal::Unservable { cmd, why: "falcon count overruns constructedFalconsTable[]" }))?;
+    let wanted: Vec<u32> = kinds.iter().filter_map(|&k| video_eng_desc(k)).collect();
+    Ok(rows.into_iter().filter(|f| wanted.contains(&f.eng_desc)).collect())
+}
+
+/// ★ `gss_replay` — ask the host every `kf_abi::gssreplay::ROWS` request (authored: zero but the
+/// named input words) and keep what it wrote. A refused row is left out: never fatal.
+pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::Answer> {
+    let mut out = Vec::new();
+    for row in kf_abi::gssreplay::ROWS {
+        let mut p = row.request();
+        match host.control(row.cmd, &mut p) {
+            Ok(()) => out.push(kf_abi::gssreplay::Answer::from_host(*row, &p)),
+            Err(e) => eprintln!("kf3: host facts: GSS {:#010x} {:x?} refused by the host ({e:?}) — not served", row.cmd, row.inputs),
+        }
+    }
+    out
+}
+
+/// ★ `video_caps` — the host's `MSENC_GET_CAPS_V2` (instance 0; the id is documented ignored) and
+/// `BSP_GET_CAPS_V2` for every advertised decoder instance, asked on the host DEVICE with requests
+/// we author (`kf_abi::videocaps`). A refused one is left out (the guest's is then refused).
+pub fn query_video_caps(host: &mut dyn HostControls, kinds: &[EngineKind]) -> Vec<kf_abi::videocaps::CapsAnswer> {
+    use kf_abi::videocaps as vc;
+    let mut asks: Vec<(u32, u32)> = Vec::new();
+    if kinds.iter().any(|k| matches!(k, EngineKind::VideoEncode(_))) {
+        asks.push((vc::MSENC_GET_CAPS_V2, 0));
+    }
+    for k in kinds {
+        if let EngineKind::VideoDecode(i) = k {
+            asks.push((vc::BSP_GET_CAPS_V2, *i));
+        }
+    }
+    let mut out = Vec::new();
+    for (cmd, instance) in asks {
+        let mut p = vc::host_request(instance);
+        match host.device_control(cmd, &mut p) {
+            Ok(()) => {
+                let n = vc::caps_len(cmd).unwrap_or(0);
+                out.push(vc::CapsAnswer { cmd, instance, caps: p[..n].to_vec() });
+            }
+            Err(e) => eprintln!("kf3: host facts: {cmd:#x} instance {instance} refused by the host ({e:?}) — not served"),
+        }
+    }
+    out
 }
 
 /// `lce_pce_masks` — `CE_GET_CE_PCE_MASK` for LCE 0, 1, … until the host refuses one (an absent
@@ -297,11 +402,12 @@ pub fn query_lce_pce_masks(host: &mut dyn HostControls) -> Result<Vec<u32>, Fiel
 pub fn query_intr_table(
     host: &mut dyn HostControls,
     kinds: Result<&[authored::EngineKind], &FieldCause>,
+    grce_mask: u64,
 ) -> Result<Vec<kf_abi::inittables::IntrTableEntry>, FieldCause> {
     let s = ask(host, hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE, zeroed(hostfacts::MC_STATIC_INTR_TABLE_PARAMS_SIZE))?;
     let kinds = kinds.map_err(|_| FieldCause::DependsOn("engines"))?;
     let mut table = hostfacts::derive_static_intr_table(&s)?;
-    table.extend(authored::engine_notification_rows(kinds));
+    table.extend(authored::engine_notification_rows(kinds, grce_mask));
     authored::with_gsp_and_disp_rows(table).map_err(|_| {
         FieldCause::Reply(FactRefusal::Unservable {
             cmd: hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE,
@@ -491,6 +597,102 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
     Ok(GrGeometry { gpc_mask, tpc_masks, zcull_masks, tpcs, sms_per_tpc, caps })
 }
 
+/// ★ v3-gfx: `zbc_table_sizes` — `GET_ZBC_CLEAR_TABLE_SIZE` for each table type. The composition
+/// root routes `0x9096xxxx` to a host `GF100_ZBC_CLEAR` object (`kf-qemu` `rmfacts.rs`); the host's
+/// `NV_ERR_NOT_SUPPORTED` means the die has none (`None`).
+///
+/// # Errors
+/// [`FieldCause`] — any other refusal, or an empty/inverted range.
+pub fn query_zbc_table_sizes(host: &mut dyn HostControls) -> Result<Option<[(u32, u32); 3]>, FieldCause> {
+    use kf_abi::zbc as z;
+    let mut out = [(0, 0); 3];
+    for t in z::TableType::ALL {
+        let mut p = zeroed(z::GET_SIZE_PARAMS_SIZE);
+        z::put(&mut p, 2, t.wire());
+        match host.control(z::GET_ZBC_CLEAR_TABLE_SIZE, &mut p) {
+            Ok(()) => {}
+            Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => return Ok(None),
+            Err(refused) => return Err(FieldCause::Host { cmd: z::GET_ZBC_CLEAR_TABLE_SIZE, refused }),
+        }
+        let (start, end) = (z::word(&p, 0).unwrap_or(0), z::word(&p, 1).unwrap_or(0));
+        if start == 0 || end < start {
+            return Err(FieldCause::Reply(FactRefusal::Unservable {
+                cmd: z::GET_ZBC_CLEAR_TABLE_SIZE,
+                why: "an empty or inverted ZBC index range (index 0 is reserved by RM)",
+            }));
+        }
+        out[t.wire() as usize - 1] = (start, end);
+    }
+    Ok(Some(out))
+}
+
+/// ★ v3-gfx: the extra `FB_GET_INFO_V2` indices [`HostFacts::forwarded_fb_extra`] carries.
+pub const FORWARDED_FB_EXTRA_INDICES: [u32; 5] = [0x04, 0x14, 0x37, 0x2b, 0x38];
+
+/// ★ v3-gfx: `forwarded_fb_extra` — each of [`FORWARDED_FB_EXTRA_INDICES`] asked ALONE (one refused index
+/// must not take the others with it); a refused index is simply absent.
+///
+/// # Errors
+/// Never today — kept fallible so a decode failure can become a named refusal.
+pub fn query_forwarded_fb_extra(host: &mut dyn HostControls) -> Result<Vec<(u32, u32)>, FieldCause> {
+    use kf_abi::fbinfo as fb;
+    let mut out = Vec::new();
+    for idx in FORWARDED_FB_EXTRA_INDICES {
+        let mut req = info_list_request(fb::FB_GET_INFO_V2_PARAMS_SIZE, &[idx]);
+        if host.control(fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, &mut req).is_ok()
+            && let Ok(pairs) = fb::decode_fb_info_pairs(&req)
+            && let Some(&(i, d)) = pairs.first()
+            && i == idx
+        {
+            out.push((i, d));
+        }
+    }
+    Ok(out)
+}
+
+/// `NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO` (flags `0x40148`: NON_PRIVILEGED, ROUTE_TO_PHYSICAL).
+pub const NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO: u32 = 0x2080_1315;
+
+/// ★ v3-gfx: `gpu_cache_info` — the host's four L2 state words; any refusal is `None`.
+///
+/// # Errors
+/// Never today.
+pub fn query_gpu_cache_info(host: &mut dyn HostControls) -> Result<Option<[u32; 4]>, FieldCause> {
+    let mut p = zeroed(16);
+    Ok(host.control(NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO, &mut p).ok().map(|()| {
+        let w = |i: usize| u32::from_le_bytes([p[4 * i], p[4 * i + 1], p[4 * i + 2], p[4 * i + 3]]);
+        [w(0), w(1), w(2), w(3)]
+    }))
+}
+
+/// `NV2080_CTRL_CMD_GR_GET_ZCULL_INFO` — the unprivileged client control (flags `0x10109`,
+/// `g_subdevice_nvoc.c`), 40 bytes, all `[OUT]`.
+pub const NV2080_CTRL_CMD_GR_GET_ZCULL_INFO: u32 = 0x2080_1206;
+
+/// ★ v3-gfx: `gr_zcull_info` — the host's own zcull geometry (`GR_GET_ZCULL_INFO`). The host's
+/// `NV_ERR_NOT_SUPPORTED` — RM's answer when its cache is empty (`kernel_graphics.c:3862-3863`),
+/// i.e. a die with no zcull — is carried as `None`, and the guest's internal control is then
+/// refused exactly as that die's own GSP would.
+///
+/// # Errors
+/// [`FieldCause`] — any other refusal.
+pub fn query_gr_zcull_info(
+    host: &mut dyn HostControls,
+) -> Result<Option<[u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS]>, FieldCause> {
+    let mut z = zeroed(4 * kf_abi::grstatic::ZCULL_INFO_ROW_WORDS);
+    match host.control(NV2080_CTRL_CMD_GR_GET_ZCULL_INFO, &mut z) {
+        Ok(()) => {
+            let mut row = [0u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS];
+            for (i, w) in row.iter_mut().enumerate() {
+                *w = u32::from_le_bytes([z[4 * i], z[4 * i + 1], z[4 * i + 2], z[4 * i + 3]]);
+            }
+            Ok(Some(row))
+        }
+        Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => Ok(None),
+        Err(refused) => Err(FieldCause::Host { cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_INFO, refused }),
+    }
+}
+
 /// ★★ `gr_static` from the host geometry, the host's GR litters, and the authored members:
 ///
 /// | member | source |
@@ -593,6 +795,41 @@ pub fn query_forwarded_gpu_info(host: &mut dyn HostControls) -> Result<Vec<(u32,
     Ok(out)
 }
 
+/// ★ The `FB_GET_INFO_V2` indices a guest's `FB_GET_INFO_V2` RPC may carry
+/// (`kf_abi::fbinfo::answer_fb_get_info_v2`'s set), asked of the host in one call.
+pub const FORWARDED_FB_INFO_INDICES: &[u32] = &[
+    kf_abi::fbinfo::FB_INFO_INDEX_BUS_WIDTH,
+    kf_abi::fbinfo::FB_INFO_INDEX_RAM_TYPE,
+    kf_abi::fbinfo::FB_INFO_INDEX_FBP_COUNT,
+    kf_abi::fbinfo::FB_INFO_INDEX_FBP_MASK,
+    kf_abi::fbinfo::FB_INFO_INDEX_L2CACHE_SIZE,
+    kf_abi::fbinfo::FB_INFO_INDEX_LTC_COUNT,
+    kf_abi::fbinfo::FB_INFO_INDEX_LTS_COUNT,
+];
+
+/// `forwarded_fb_info` — the host's own words for [`FORWARDED_FB_INFO_INDICES`]. ⊘ Every index
+/// must be answered: a missing one is refused by name, never a zero.
+///
+/// # Errors
+/// [`FieldCause`].
+pub fn query_forwarded_fb_info(host: &mut dyn HostControls) -> Result<Vec<(u32, u32)>, FieldCause> {
+    use kf_abi::fbinfo as fb;
+    let req = info_list_request(fb::FB_GET_INFO_V2_PARAMS_SIZE, FORWARDED_FB_INFO_INDICES);
+    let r = ask(host, fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, req)?;
+    let pairs = fb::decode_fb_info_pairs(&r)
+        .map_err(|_| FactRefusal::ShortReply { cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, len: r.len() })?;
+    let mut out = Vec::new();
+    for &index in FORWARDED_FB_INFO_INDICES {
+        let d = pairs
+            .iter()
+            .find(|(i, _)| *i == index)
+            .map(|(_, d)| *d)
+            .ok_or(FactRefusal::Missing { cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, index })?;
+        out.push((index, d));
+    }
+    Ok(out)
+}
+
 /// `smc_mode`.
 ///
 /// # Errors
@@ -660,6 +897,52 @@ pub fn query_has_c2c(host: &mut dyn HostControls) -> Result<bool, FieldCause> {
     Ok(hostfacts::derive_has_c2c(&r)?)
 }
 
+/// ★ `ce_caps` — the host die's own `CE_GET_ALL_CAPS` (`0x20802a0a`, NON_PRIVILEGED; `[OUT]`
+/// only, so a zeroed request).
+///
+/// # Errors
+/// [`FieldCause`].
+pub fn query_ce_caps(host: &mut dyn HostControls) -> Result<kf_abi::cecaps::HostCeCaps, FieldCause> {
+    use kf_abi::cecaps as c;
+    let r = ask(host, c::NV2080_CTRL_CMD_CE_GET_ALL_CAPS, zeroed(c::CE_GET_ALL_CAPS_PARAMS_SIZE))?;
+    Ok(hostfacts::derive_ce_caps(&r)?)
+}
+
+/// ★ `vbios_version` — `BIOS_GET_INFO_V2 [REVISION, OEM_REVISION]` (`0x20800810`, NON_PRIVILEGED).
+///
+/// ⊘ **Cosmetic, so it never refuses realize** (coordinator, 2026-09-26): a host refusal OR a reply
+/// that does not decode is `None` — the ROM then declares `kf_abi::vbios::NEUTRAL_VBIOS_VERSION` and
+/// the guest's own ask is refused. The composition root logs the `None` by name.
+///
+/// # Errors
+/// None today; the `Result` keeps the query's shape.
+pub fn query_vbios_version(host: &mut dyn HostControls) -> Result<Option<(u32, u8)>, FieldCause> {
+    let req = info_list_request(
+        hostfacts::BIOS_GET_INFO_V2_PARAMS_SIZE,
+        &[hostfacts::BIOS_INFO_INDEX_REVISION, hostfacts::BIOS_INFO_INDEX_OEM_REVISION],
+    );
+    Ok(ask(host, hostfacts::NV2080_CTRL_CMD_BIOS_GET_INFO_V2, req)
+        .ok()
+        .and_then(|r| hostfacts::derive_vbios_version(&r).ok()))
+}
+
+/// ★ `perf_level_info_v2` — libcudart's `PERF_GET_LEVEL_INFO_V2` question, asked of the host
+/// once (`0x2080200b`, NON_PRIVILEGED). ⊘ A host REFUSAL is a value here (`None`), not a realize
+/// failure: it is exactly what host userspace would be told, and the guest's identical ask is
+/// then refused the same way. Only a reply that does not decode is a refusal of the field.
+///
+/// # Errors
+/// [`FieldCause::Reply`] for a reply of the wrong length.
+pub fn query_perf_level_info_v2(host: &mut dyn HostControls) -> Result<Option<Vec<u8>>, FieldCause> {
+    use kf_abi::cudartinit as c;
+    match ask(host, c::PERF_GET_LEVEL_INFO_V2, c::perf_level_info_v2_request()) {
+        Ok(r) if r.len() == c::PERF_GET_LEVEL_INFO_V2_PARAMS_SIZE => Ok(Some(r)),
+        Ok(r) => Err(FieldCause::Reply(FactRefusal::ShortReply { cmd: c::PERF_GET_LEVEL_INFO_V2, len: r.len() })),
+        Err(FieldCause::Host { .. }) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 // =====================================================================================
 // Authored
 // =====================================================================================
@@ -698,13 +981,36 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         Err(e) => Err(e.clone()),
     };
     let has_c2c = query_has_c2c(host);
+    let ce_caps = query_ce_caps(host);
+    let grce = ce_caps.as_ref().map(kf_abi::cecaps::HostCeCaps::grce_mask);
     let kinds = query_engine_list(host);
-    let engines = match &kinds {
-        Ok(k) => authored::engine_table(asked, k).map_err(FieldCause::FamilyLayout),
-        Err(e) => Err(e.clone()),
+    // ★ The video falcons, then the list kept to the video engines the host's falcon table names.
+    // A refused falcon query is not fatal to the device: it advertises no video engine, loudly.
+    let video_falcons: Vec<ConstructedFalcon> = match &kinds {
+        Ok(k) if k.iter().any(|k| video_eng_desc(*k).is_some()) => match query_video_falcons(host, k) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("kf3: host facts: video engines NOT advertised — the host falcon table was refused: {e:?}");
+                Vec::new()
+            }
+        },
+        _ => Vec::new(),
+    };
+    let kinds = kinds.map(|k| {
+        k.into_iter()
+            .filter(|&k| video_eng_desc(k).is_none_or(|d| video_falcons.iter().any(|f| f.eng_desc == d)))
+            .collect::<Vec<_>>()
+    });
+    let engines = match (&kinds, &grce) {
+        (Ok(k), Ok(g)) => authored::engine_table(asked, k, *g).map_err(FieldCause::FamilyLayout),
+        (Err(e), _) => Err(e.clone()),
+        (Ok(_), Err(_)) => Err(FieldCause::DependsOn("ce_caps")),
     };
     let lce_pce_masks = query_lce_pce_masks(host);
-    let intr_table = query_intr_table(host, kinds.as_deref().map_err(|e| e));
+    let intr_table = match &grce {
+        Ok(g) => query_intr_table(host, kinds.as_deref().map_err(|e| e), *g),
+        Err(_) => Err(FieldCause::DependsOn("ce_caps")),
+    };
     let intr_subtree_map = query_intr_subtree_map(host);
     let chip_info = match &arch {
         Ok((_, sub)) => query_chip_info(host, *sub),
@@ -713,7 +1019,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gr_info = query_gr_info(host);
     let memory_system = query_memory_system(host, gr_info.as_ref().ok());
     let device_info = match &kinds {
-        Ok(k) => Ok(device_info_rule(k)),
+        Ok(k) => Ok(device_info_rule(k, &video_falcons)),
         Err(_) => Err(FieldCause::DependsOn("engines")),
     };
     let gmmu_static: Result<kf_abi::gmmustatic::GmmuStaticRow, FieldCause> = Ok(authored::GMMU_STATIC);
@@ -723,13 +1029,22 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         (Ok(_), Err(_)) => Err(FieldCause::DependsOn("gr_info")),
     };
     let gr_context_buffers = query_gr_context_buffers(host);
+    let gr_zcull_info = query_gr_zcull_info(host);
+    let zbc_table_sizes = query_zbc_table_sizes(host);
+    let forwarded_fb_extra = query_forwarded_fb_extra(host);
+    let gpu_cache_info = query_gpu_cache_info(host);
     let forwarded_gpu_info = query_forwarded_gpu_info(host);
+    let forwarded_fb_info = query_forwarded_fb_info(host);
     let smc_mode = query_smc_mode(host);
     let pcie_max_gen = query_pcie_max_gen(host);
     let ce_fault_method_buffer_size: Result<u32, FieldCause> = Ok(authored::CE_FAULT_METHOD_BUFFER_SIZE);
     let gsp_features = query_gsp_features(host);
     let gpu_name = query_gpu_name(host);
     let gpu_short_name = query_gpu_short_name(host);
+    let vbios_version = query_vbios_version(host);
+    let perf_level_info_v2 = query_perf_level_info_v2(host);
+    let gss_replay = query_gss_replay(host);
+    let video_caps = kinds.as_deref().map(|k| query_video_caps(host, k)).unwrap_or_default();
 
     let mut refusals = Vec::new();
     macro_rules! take {
@@ -746,6 +1061,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     // ★ PROVENANCE order, so the refusal list reads like the table.
     let family = take!(family);
     let has_c2c = take!(has_c2c);
+    let ce_caps = take!(ce_caps);
     let engines = take!(engines);
     let lce_pce_masks = take!(lce_pce_masks);
     let intr_table = take!(intr_table);
@@ -757,17 +1073,25 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gr_static = take!(gr_static);
     let gr_info = take!(gr_info);
     let gr_context_buffers = take!(gr_context_buffers);
+    let gr_zcull_info = take!(gr_zcull_info);
+    let zbc_table_sizes = take!(zbc_table_sizes);
+    let forwarded_fb_extra = take!(forwarded_fb_extra);
+    let gpu_cache_info = take!(gpu_cache_info);
     let forwarded_gpu_info = take!(forwarded_gpu_info);
+    let forwarded_fb_info = take!(forwarded_fb_info);
     let smc_mode = take!(smc_mode);
     let pcie_max_gen = take!(pcie_max_gen);
     let ce_fault_method_buffer_size = take!(ce_fault_method_buffer_size);
     let gsp_features = take!(gsp_features);
     let gpu_name = take!(gpu_name);
     let gpu_short_name = take!(gpu_short_name);
+    let vbios_version = take!(vbios_version);
+    let perf_level_info_v2 = take!(perf_level_info_v2);
 
     match (
         family,
         has_c2c,
+        ce_caps,
         engines,
         lce_pce_masks,
         intr_table,
@@ -779,17 +1103,25 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         gr_static,
         gr_info,
         gr_context_buffers,
+        gr_zcull_info,
+        zbc_table_sizes,
+        forwarded_fb_extra,
+        gpu_cache_info,
         forwarded_gpu_info,
+        forwarded_fb_info,
         smc_mode,
         pcie_max_gen,
         ce_fault_method_buffer_size,
         gsp_features,
         gpu_name,
         gpu_short_name,
+        vbios_version,
+        perf_level_info_v2,
     ) {
         (
             Some(family),
             Some(has_c2c),
+            Some(ce_caps),
             Some(engines),
             Some(lce_pce_masks),
             Some(intr_table),
@@ -801,23 +1133,35 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             Some(gr_static),
             Some(gr_info),
             Some(gr_context_buffers),
+            Some(gr_zcull_info),
+            Some(zbc_table_sizes),
+            Some(forwarded_fb_extra),
+            Some(gpu_cache_info),
             Some(forwarded_gpu_info),
+            Some(forwarded_fb_info),
             Some(smc_mode),
             Some(pcie_max_gen),
             Some(ce_fault_method_buffer_size),
             Some(gsp_features),
             Some(gpu_name),
             Some(gpu_short_name),
+            Some(vbios_version),
+            Some(perf_level_info_v2),
         ) if refusals.is_empty() => Ok(HostFacts {
             family,
             has_c2c,
+            ce_caps,
             engines,
             lce_pce_masks,
             intr_table,
             intr_subtree_map,
             chip_info,
             user_register_access_map: RegisterAccessMapRow::NOT_PUBLISHED,
-            constructed_falcons: FalconInventoryRow::NONE,
+            constructed_falcons: if video_falcons.is_empty() {
+                FalconInventoryRow::NONE
+            } else {
+                FalconInventoryRow { falcons: Box::leak(video_falcons.into_boxed_slice()) }
+            },
             memory_system,
             device_info,
             conf_compute: AUTHORED_CONF_COMPUTE,
@@ -827,13 +1171,22 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             gr_static,
             gr_info,
             gr_context_buffers,
+            gr_zcull_info,
+            zbc_table_sizes,
+            forwarded_fb_extra,
+            gpu_cache_info,
             forwarded_gpu_info,
+            forwarded_fb_info,
             smc_mode,
             pcie_max_gen,
             ce_fault_method_buffer_size,
             gsp_features,
             gpu_name: Some(gpu_name),
             gpu_short_name: Some(gpu_short_name),
+            vbios_version,
+            perf_level_info_v2,
+            gss_replay,
+            video_caps,
         }),
         _ => Err(HostFactsRefused { refusals }),
     }

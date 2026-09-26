@@ -8,6 +8,34 @@ pub mod tables;
 
 use kf_abi::submit::{SET_OBJECT, ce, method_header_inc};
 
+/// ★ The host GPU a gate runs on: `KF_GATE_GPU=<minor>` (default 0). ⊘ A MINOR, never a CUDA
+/// ordinal: each gate opens `HostRm` on it and brings its walker up on the SAME GPU by PCI
+/// address ([`kf_host::HostRm::card`]) — on a multi-GPU box, minor 0 and CUDA ordinal 0 are not
+/// the same GPU in general (V3_MULTI_GPU_AUDIT §2 blocker 1).
+#[must_use]
+pub fn gate_gpu() -> kf_arch::ids::GpuId {
+    let minor = std::env::var("KF_GATE_GPU").ok().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+    kf_arch::ids::GpuId(minor)
+}
+
+/// The PCI address of [`gate_gpu`], for a gate that brings CUDA up without an RM session
+/// (the pure-walker gates). Read from the driver's own procfs `Device Minor:` line.
+///
+/// # Errors
+/// No GPU with that minor.
+pub fn gate_bdf() -> Result<String, String> {
+    let minor = gate_gpu().0;
+    let root = std::path::Path::new("/proc/driver/nvidia/gpus");
+    for e in std::fs::read_dir(root).map_err(|e| format!("{}: {e}", root.display()))?.flatten() {
+        let info = std::fs::read_to_string(e.path().join("information")).unwrap_or_default();
+        let m = info.lines().find_map(|l| l.strip_prefix("Device Minor:")).and_then(|v| v.trim().parse::<u32>().ok());
+        if m == Some(minor) {
+            return Ok(e.file_name().to_string_lossy().to_lowercase());
+        }
+    }
+    Err(format!("no GPU with device minor {minor} under {}", root.display()))
+}
+
 /// The CE subchannel every harness push uses.
 pub const CE_SUBCHANNEL: u32 = 4;
 

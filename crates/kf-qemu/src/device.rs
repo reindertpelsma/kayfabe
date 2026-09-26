@@ -58,10 +58,30 @@ struct Piece {
     mem: RawRegion,
 }
 
+/// ★ w828: one `Disposition::Hole` page's register shadow (4 KiB of 32-bit words).
+struct HoleShadow {
+    base: u64,
+    words: Box<[std::sync::atomic::AtomicU32]>,
+}
+
+impl HoleShadow {
+    fn new(base: u64, boot: &[BootReg]) -> HoleShadow {
+        let words: Box<[std::sync::atomic::AtomicU32]> =
+            (0..kf_trap::memmap::PAGE / 4).map(|_| std::sync::atomic::AtomicU32::new(0)).collect();
+        for r in boot.iter().filter(|r| (base..base + kf_trap::memmap::PAGE).contains(&r.off)) {
+            words[((r.off - base) / 4) as usize].store(r.value, Ordering::Relaxed);
+        }
+        HoleShadow { base, words }
+    }
+    fn word(&self, off: u64) -> Option<&std::sync::atomic::AtomicU32> {
+        off.checked_sub(self.base).and_then(|r| self.words.get((r / 4) as usize))
+    }
+}
+
 /// The GSP side the drainer owns.
 struct Gsp {
     fsm: GspFsm,
-    model: Box<dyn GspModel>,
+    model: std::sync::Arc<dyn GspModel>,
     policy: Box<dyn CommandPolicy>,
     /// The value last PUBLISHED per BAR0 offset — [`Device::publish`] stores only what changed.
     published: std::collections::HashMap<u64, u64>,
@@ -78,6 +98,8 @@ pub struct Counters {
     pub ram_refused: AtomicU64,
     /// Writes to a BAR0 offset with no shadow piece (P4 regions, or outside the aperture).
     pub unshadowed_writes: AtomicU64,
+    /// ★ w828: BAR0 read exits served (`Hole` pages only).
+    pub read_exits: AtomicU64,
     /// Every BAR0 write the vCPU delivered (before classification).
     pub trapped: AtomicU64,
     /// Writes the plane refused by name or answered with poison.
@@ -133,8 +155,16 @@ pub struct Device {
     pub census: kf_rm::census::ControlCensusLog,
     pieces: OnceLock<Vec<Piece>>,
     staged: Mutex<Vec<Piece>>,
+    /// ★ w828: the BAR0 `Hole` pages' own shadows — a hole has no memory behind it, so every
+    /// register on the page that is NOT a read side effect is served from here by the read exit,
+    /// with the read-back-what-was-written semantics a `B` page has.
+    holes: Vec<HoleShadow>,
     ram: &'static crate::mem::RamMap,
     gsp: Mutex<Gsp>,
+    /// ★ w828: the SAME register model the drainer's FSM answers from, shared lock-free with the
+    /// vCPU for ONE question — [`GspModel::answer_on_store`] (what a register reads back the
+    /// instant the guest's write lands, when the write alone decides it).
+    store_model: std::sync::Arc<dyn GspModel>,
     boot: Vec<BootReg>,
     vbios: Vec<u8>,
     worker_efd: &'static Notifier,
@@ -157,6 +187,8 @@ pub struct Device {
     vat_prev: Mutex<kf_mem::vasmgr::VaTiming>,
     /// ★ w827: the attribution instruments (`KF3_PROF=1`; off = one relaxed load per hook).
     pub prof: Box<crate::prof::Prof>,
+    /// ★ Hopper+: the C device's BAR1 overlay verb and its counters (`V3_BAR1_DOORBELL.md`).
+    pub bar1_overlay: std::sync::Arc<crate::mem::Bar1Overlay>,
     /// The GSP command-queue head (the RPC doorbell) as a BAR0 offset — for [`crate::prof`].
     qhead_off: u64,
     /// Held replies' queue-head stamps, oldest first (drainer only) — for [`crate::prof`].
@@ -189,8 +221,29 @@ impl Device {
         let host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
+        // ★ ONE identity for the host GPU: the PCI address the frontend's `CARD_INFO` states
+        // for our minor (`HostRm::card`). The RM device instance was resolved from it; the
+        // sysfs facts and the CUDA device below are selected by it too — never by ordinal.
+        let card = rm.card();
+        let bdf = card.bdf();
         let sysfs = crate::hostfacts::sysfs_dir_for_minor(cfg.gpu_minor)?;
+        if sysfs.file_name().and_then(|n| n.to_str()) != Some(bdf.as_str()) {
+            return Err(format!(
+                "host GPU identity disagrees: CARD_INFO puts minor {} at {bdf}, procfs at {} — \
+                 refused by name, never a guess",
+                cfg.gpu_minor,
+                sysfs.display()
+            ));
+        }
         let pci = crate::hostfacts::read_host_pci(&sysfs)?;
+        // ★ The per-host-card budget, summed over this process's kf3 devices on the same card —
+        // before anything is reserved, so the refusal costs nothing (`crate::cardbudget`).
+        let (store_neighbours, n_neighbours) = crate::cardbudget::store_held(&bdf);
+        crate::cardbudget::admit(
+            &bdf,
+            pci.bar1_bytes,
+            crate::cardbudget::Demand::of(cfg.bar1_bytes, cfg.bar2_bytes, cfg.fb_mb << 20),
+        )?;
 
         let fb_length = cfg.fb_mb << 20;
         let layout = fb_layout(fb_length).ok_or(format!("a {} MiB store cannot hold the firmware carve-out", cfg.fb_mb))?;
@@ -201,15 +254,35 @@ impl Device {
             kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
             kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
         };
-        let mut kernel = kf_cuda::walk::WalkKernel::bring_up(kf_cuda::walk::WalkCfg::default(), fmt)
-            .map_err(|e| format!("GPU walker bring-up: {e}"))?;
-        let store = rm.reserve_gpga(fb_length).map_err(|e| format!("store of {} MiB refused: {e:?}", cfg.fb_mb))?;
+        let mut kernel = kf_cuda::walk::WalkKernel::bring_up_on(
+            kf_cuda::walk::WalkCfg::default(),
+            fmt,
+            kf_cuda::walk::WalkDevice::PciBusId(&bdf),
+        )
+        .map_err(|e| format!("GPU walker bring-up on {bdf}: {e}"))?;
+        let store = rm.reserve_gpga(fb_length).map_err(|e| {
+            format!(
+                "store of {} MiB refused: {e:?} (host card {bdf}: {n_neighbours} other kf3 device(s) \
+                 of this process already hold {} MiB of store on it)",
+                cfg.fb_mb,
+                store_neighbours >> 20
+            )
+        })?;
         let export = rm.export_to_new_fd(store.handle).map_err(|e| format!("store export: {e:?}"))?;
         kernel
             .import_store(export.fd_number(), fb_length)
             .map_err(|e| format!("store import into the walker: {e}"))?;
         // The export node stays open for the process (CUDA holds the import).
         std::mem::forget(export);
+        // ★ The identity line a multi-GPU run is graded on: minor → PCI → RM instance → CUDA.
+        eprintln!(
+            "kf3: host GPU minor={} bdf={bdf} gpuId={:#x} rm_device_instance={} cuda_device={:?} store={} MiB",
+            cfg.gpu_minor,
+            card.gpu_id,
+            rm.device_instance(),
+            kernel.device_name,
+            cfg.fb_mb
+        );
         // ★ Our two roots, zeroed on the GPU (the pages are ours: no CPU read, no guest table).
         let zero = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
         for root in [layout.bar1_pde_base, layout.bar2_pde_base] {
@@ -223,7 +296,8 @@ impl Device {
             implementation,
             revision,
             fb_mb: cfg.fb_mb,
-            pcie_link_caps: pcie_link_caps(pci.max_gen),
+            pcie_link_caps: pcie_link_caps(pci.max_gen, pci.max_width)
+                .ok_or(format!("host link width x{} is not a PCIe width", pci.max_width))?,
         };
         let boot = boot_regs(family, &facts);
 
@@ -240,7 +314,17 @@ impl Device {
             device: pci.device,
             class: [(pci.class & 0xFF) as u8, ((pci.class >> 8) & 0xFF) as u8, ((pci.class >> 16) & 0xFF) as u8],
         };
-        let vbios = vbios_profile(family, id)
+        // ★ Cosmetic: a host that did not answer BIOS_GET_INFO_V2 does not stop the VM — the ROM
+        // declares the named neutral version and the guest's own ask is refused. Said by name.
+        let vbios_version = host.vbios_version.unwrap_or_else(|| {
+            eprintln!(
+                "kf3: host BIOS_GET_INFO_V2 (0x20800810) not answered: synthetic ROM declares \
+                 NEUTRAL_VBIOS_VERSION {:?}; the guest's BIOS_GET_INFO_V2 will be refused",
+                kf_abi::vbios::NEUTRAL_VBIOS_VERSION
+            );
+            kf_abi::vbios::NEUTRAL_VBIOS_VERSION
+        });
+        let vbios = vbios_profile(family, id, vbios_version)
             .map_err(|e| format!("{e:?}"))
             .and_then(|p| kf_abi::vbios::build(&p, table.vbios_wire()).map_err(|e| format!("VBIOS: {e:?}")))?;
 
@@ -334,7 +418,9 @@ impl Device {
                 channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
             },
         );
-        let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
+        let model: std::sync::Arc<dyn GspModel> =
+            std::sync::Arc::from(family.gsp_model(implementation, cfg.fb_mb).map_err(|e| format!("{e:?}"))?);
+        let store_model = model.clone();
         crate::prof::init();
         let qhead_off = match model.at(GspReg::GspQueueHead(0)) {
             Some((0, off)) => off,
@@ -363,7 +449,10 @@ impl Device {
             fb_length,
             Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
         )
-        .with_page_grain(family.mmu_format().small_page_bytes());
+        .with_page_grain(family.mmu_format().small_page_bytes())
+        // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM
+        // (`V3_BAR1_DOORBELL.md`). `None` on Turing … Ada: unchanged.
+        .with_usermode_mmio(family.usermode_mmio());
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -373,16 +462,30 @@ impl Device {
             .map_err(|e| format!("our BAR2 root: {e:?}"))?;
         // ★ P5 (P4 row 6): BAR1 is walked from OUR BAR1 root like BAR2 — the guest writes its BAR1
         // PDEs straight into that page (no RPC) and invalidates it; the walk places store views.
+        let bar1_overlay = std::sync::Arc::new(crate::mem::Bar1Overlay::default());
+        let bar1_win = kf_mem::cpuwin::CpuWindow::new(bar1_ops, cfg.bar1_bytes);
         va.table.insert(
             crate::mem::K_BAR1,
-            crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar1_ops, cfg.bar1_bytes)),
+            // ★ Hopper+: the guest places BAR1 usermode views where ITS allocator chooses; they
+            // become write-trapped overlays there (`V3_BAR1_DOORBELL.md` §4).
+            match family.usermode_mmio() {
+                Some(u) => crate::mem::Target::Bar1(crate::mem::Bar1Target::new(
+                    bar1_win,
+                    cfg.bar1_bytes,
+                    u.vf_len,
+                    bar1_overlay.clone(),
+                )),
+                None => crate::mem::Target::Window(bar1_win),
+            },
         );
         va.table
             .set_root(crate::mem::K_BAR1, layout.bar1_pde_base, kf_trap::PdbAperture::Vidmem)
             .map_err(|e| format!("our BAR1 root: {e:?}"))?;
         eprintln!(
-            "kf3: P4 memory plane: store {} MiB (imported into the walker), roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
+            "kf3: P4 memory plane: store {} MiB (imported into the walker), walker pools {} MiB of host GPU memory ({}), roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
             cfg.fb_mb,
+            va.walker().kernel.pool_bytes() >> 20,
+            va.walker().kernel.capacity_census(),
             layout.bar1_pde_base,
             layout.bar2_pde_base,
             mem.port.regs().trigger,
@@ -405,6 +508,8 @@ impl Device {
             staged: Mutex::new(Vec::new()),
             ram,
             gsp: Mutex::new(gsp),
+            store_model,
+            holes: kf_trap::memmap::holes_for(family).iter().map(|(p, _)| HoleShadow::new(*p, &boot)).collect(),
             boot,
             vbios,
             worker_efd,
@@ -421,6 +526,7 @@ impl Device {
             counters: Counters::default(),
             vat_prev: Mutex::new(kf_mem::vasmgr::VaTiming::default()),
             prof: Box::default(),
+            bar1_overlay,
             qhead_off,
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
         })
@@ -493,8 +599,86 @@ impl Device {
                 p.mem.store(rel, val, width);
             }
             None => {
-                self.counters.unshadowed_writes.fetch_add(1, Ordering::Relaxed);
+                if !self.hole_store(off, val, width) {
+                    self.counters.unshadowed_writes.fetch_add(1, Ordering::Relaxed);
+                }
             }
+        }
+    }
+
+    /// ★ w828: a store into a `Hole` page's shadow (sub-word widths merge into the word).
+    fn hole_store(&self, off: u64, val: u64, width: u8) -> bool {
+        let Some(h) = self.holes.iter().find(|h| (h.base..h.base + kf_trap::memmap::PAGE).contains(&off)) else {
+            return false;
+        };
+        let aligned = off & !3;
+        let shift = ((off & 3) * 8) as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        let (mask, v) = match width {
+            1 => (0xffu32 << shift, ((val as u32) & 0xff) << shift),
+            2 => (0xffffu32 << shift, ((val as u32) & 0xffff) << shift),
+            _ => (u32::MAX, val as u32),
+        };
+        if let Some(w) = h.word(aligned) {
+            let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| Some((old & !mask) | v));
+        }
+        if width == 8
+            && let Some(w) = h.word(aligned + 4)
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            w.store((val >> 32) as u32, Ordering::Release);
+        }
+        true
+    }
+
+    /// ★★★ w828 — **THE vCPU PATH for a BAR0 READ EXIT.** Reached only for a `Hole` page
+    /// (`kf_trap::memmap::holes_for`): a register whose read has a side effect, and the other
+    /// registers that share its page. Lock-free: atomics and at most one eventfd write.
+    ///
+    /// - a Hopper+ memop START register (`kf_trap::cacheop::TokenRead::Start`): the op is issued —
+    ///   its request counter moves and the VA thread is woken to run the host verb — and the read
+    ///   returns the op's token;
+    /// - its `…_COMPLETED` register: `BUSY` until the VA thread has stored the host verb's return
+    ///   (`cache_done`), then `IDLE` — ⊘ never on the read itself: a completion is a host event;
+    /// - anything else on the page: the page shadow (what was last written, or the boot value).
+    ///
+    /// ⊘ The FSP/SEC2 EMEM ports that are the other holes are NOT served here beyond the shadow —
+    /// their auto-increment needs the boot sequence's state, which lives under the GSP lock a vCPU
+    /// may not take (named open item, unchanged by w828).
+    pub fn bar0_read(&self, off: u64, width: u8) -> u64 {
+        use kf_trap::cacheop::{TokenRead, completed_word, start_token, token_read};
+        self.counters.read_exits.fetch_add(1, Ordering::Relaxed);
+        if width == 4 {
+            match token_read(self.family, off) {
+                Some(TokenRead::Start(op)) => {
+                    let n = self.mem.inbox.cache_req[op.index()].fetch_add(1, Ordering::AcqRel) + 1;
+                    let _ = self.mem.inbox.wake.signal();
+                    return u64::from(start_token(n));
+                }
+                Some(TokenRead::Completed(op)) => {
+                    // `done` first: it only ever trails `req`, so a later `req` can only say BUSY.
+                    let done = self.mem.inbox.cache_done[op.index()].load(Ordering::Acquire);
+                    let req = self.mem.inbox.cache_req[op.index()].load(Ordering::Acquire);
+                    return u64::from(completed_word(req, done));
+                }
+                None => {}
+            }
+        }
+        let Some(h) = self.holes.iter().find(|h| (h.base..h.base + kf_trap::memmap::PAGE).contains(&off)) else {
+            return 0;
+        };
+        let aligned = off & !3;
+        let lo = h.word(aligned).map_or(0, |w| w.load(Ordering::Acquire));
+        let v = if width == 8 {
+            u64::from(lo) | (u64::from(h.word(aligned + 4).map_or(0, |w| w.load(Ordering::Acquire))) << 32)
+        } else {
+            u64::from(lo >> ((off & 3) * 8))
+        };
+        match width {
+            1 => v & 0xff,
+            2 => v & 0xffff,
+            4 => v & 0xffff_ffff,
+            _ => v,
         }
     }
 
@@ -530,9 +714,7 @@ impl Device {
         if (0x0011_0c00..0x0011_0c40).contains(&off) {
             return "GSP_QUEUE_HEAD/TAIL(n)";
         }
-        if let kf_trap::trappolicy::DoorbellPlacement::Bar0 { offset } = self.plane.doorbell
-            && off == kf_trap::memmap::VF_USERMODE_PAGE + offset
-        {
+        if off == kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset() {
             return "USERMODE_DOORBELL";
         }
         if off == self.mem.pramin_reg.offset {
@@ -556,12 +738,11 @@ impl Device {
     fn bar0_write_inner(&self, off: u64, val: u64, width: u8) {
         self.counters.trapped.fetch_add(1, Ordering::Relaxed);
         self.counters.last_off.store(off, Ordering::Relaxed);
-        let doorbell = match self.plane.doorbell {
-            kf_trap::trappolicy::DoorbellPlacement::Bar0 { offset } => {
-                off == kf_trap::memmap::VF_USERMODE_PAGE + u64::from(offset)
-            }
-            kf_trap::trappolicy::DoorbellPlacement::Bar1 { .. } => false,
-        };
+        // ★ The BAR0 doorbell is live on EVERY family — on Hopper+ too: RM rings kernel channels
+        // through its own BAR0 mapping (`kfifoRingChannelDoorBell_GH100` → GV100 →
+        // `GPU_VREG_WR32`), and a client without `bBar1Mapping` gets the BAR0 view
+        // (`V3_BAR1_DOORBELL.md` §1). ⊘ Before 2026-09-26 Hopper+ never recognised it here.
+        let doorbell = off == kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset();
         let in_usermode = (kf_trap::memmap::VF_USERMODE_PAGE..kf_trap::memmap::VF_USERMODE_PAGE + kf_trap::memmap::PAGE)
             .contains(&off);
         // ★ P4: the three MMU_INVALIDATE registers. The port arms FIRST, then the shadow takes the
@@ -602,7 +783,17 @@ impl Device {
         } else if in_usermode {
             Class::UserspaceMappable
         } else {
-            self.shadow_store(off, val, width);
+            // ★★★ w828: a register whose read-back the write alone decides answers NOW, not
+            // after the drainer — `[measured 8dd2bbdf]` a guest that had spent its poll budget
+            // read its own `DMATRFCMD` word twice, FWSEC-SB and Booter Unload never started, and
+            // WPR2 outlived the adapter (`kf_arch::gsp::GspModel::answer_on_store`). Pure, no
+            // lock: a decode and a match on the shared model.
+            let shown = self
+                .store_model
+                .decode_reg(0, off)
+                .and_then(|r| self.store_model.answer_on_store(r, val))
+                .unwrap_or(val);
+            self.shadow_store(off, shown, width);
             // ★ P4: the PRAMIN window base — re-pointed HERE, synchronously, from pre-armed views
             // (§53.1: the register is B, the window A). The word also goes on to the plane.
             if off == self.mem.pramin_reg.offset && width == 4 {
@@ -636,6 +827,31 @@ impl Device {
             }
             Action::None => {}
         }
+    }
+
+    /// ★ The main loop applied BAR1 overlay change `seq` (`rc` 0 = done): post it and wake the VA
+    /// thread, which releases the invalidate clear it was holding (ruling 2026-09-26 (5)).
+    /// Main-loop thread; never blocks beyond one uncontended push and one eventfd write.
+    pub fn bar1_overlay_done(&self, seq: u64, rc: i32) {
+        self.bar1_overlay.post(seq, rc);
+        let _ = self.mem.inbox.wake.signal();
+    }
+
+    /// ★★★ **A write into a Hopper+ BAR1 usermode view** (`V3_BAR1_DOORBELL.md` §3) — the vCPU
+    /// path, from the C device's overlay; `vf_rel` is the offset inside the 64 KiB usermode page,
+    /// decoded by the overlay itself (no lookup, no lock).
+    ///
+    /// The GMMU routes a write through such a PTE to the VF register at `vf_rel` — the SAME
+    /// register the BAR0 usermode page exposes — so page 0 enters exactly as that BAR0 write:
+    /// `+0x90` is the doorbell (token → our table, never the trap's identity), every other
+    /// offset is `Class::UserspaceMappable` and does nothing. ⊘ Pages 1..15 of the view do
+    /// nothing either: they are never routed onto BAR0's privileged path (a BAR1 view is an
+    /// unprivileged client's).
+    pub fn bar1_usermode_write(&self, vf_rel: u64, val: u64, width: u8) {
+        if !self.plane.doorbell.follows_guest_bar1() || vf_rel >= kf_trap::memmap::PAGE {
+            return;
+        }
+        self.bar0_write(kf_trap::memmap::VF_USERMODE_PAGE + vf_rel, val, width);
     }
 
     /// ★ Send what a tree write or latch asked for: ONE eventfd write on MSI-X vector 0 (RM reads
@@ -719,7 +935,12 @@ impl Device {
     /// arrives after our idle store re-stores busy and bumps the counter, and is served next pass.
     /// A refused host op is NAMED and the register still goes idle — the guest's alternative is a
     /// 4 s spin to `NV_ERR_TIMEOUT` with the same (unflushed) outcome.
-    fn serve_cache_ops(&self, done: &mut [u64; 3]) {
+    ///
+    /// ★ w828: the same pass serves the Hopper+ READ-started ops (`kf_trap::cacheop::token_registers`):
+    /// `cache_req` is then the tokens a vCPU's read exit issued, and `cache_done` — stored here, after
+    /// the host verb returned — is what their `…_COMPLETED` register reports. The sysmembar
+    /// (`FbFlush`) exists only there.
+    fn serve_cache_ops(&self, done: &mut [u64; kf_trap::cacheop::CacheOp::COUNT]) {
         use kf_trap::cacheop::{CacheOp, registers};
         for op in CacheOp::ALL {
             let i = op.index();
@@ -727,13 +948,13 @@ impl Device {
             if want == done[i] {
                 continue;
             }
-            let (aperture, wb, inv) = match op {
-                CacheOp::FlushDirty => (1, true, false),
-                CacheOp::SysmemInvalidate => (1, false, true),
-                CacheOp::PeermemInvalidate => (2, false, true),
-            };
             let t = std::time::Instant::now();
-            let r = self.rm.flush_gpu_cache(aperture, wb, inv);
+            let r = match op {
+                CacheOp::FlushDirty => self.rm.flush_gpu_cache(1, true, false),
+                CacheOp::SysmemInvalidate => self.rm.flush_gpu_cache(1, false, true),
+                CacheOp::PeermemInvalidate => self.rm.flush_gpu_cache(2, false, true),
+                CacheOp::FbFlush => self.rm.fb_flush(),
+            };
             self.mem.counters.cache_ops.fetch_add(1, Ordering::Relaxed);
             if let Err(e) = &r {
                 eprintln!("kf3: L2 cache op {op:?} REFUSED by the host: {e:?} — the register is released anyway");
@@ -741,6 +962,8 @@ impl Device {
                 eprintln!("kf3: L2 cache op {op:?} served by host FB_FLUSH_GPU_CACHE in {} us (first of this op)", t.elapsed().as_micros());
             }
             done[i] = want;
+            // ★ w828: the completion edge of a read-started op — AFTER the host verb returned.
+            self.mem.inbox.cache_done[i].store(want, Ordering::Release);
             for (o, _) in registers(self.family).iter().filter(|(_, x)| *x == op) {
                 self.shadow_store(u64::from(*o), 0, 4);
             }
@@ -778,7 +1001,7 @@ impl Device {
         // object) — never while a statement, a walk or an armed invalidate is waiting on us.
         let mut prewarmed = 0u64;
         let mut va_busy_from = crate::prof::now_ns();
-        let mut cache_done = [0u64; 3];
+        let mut cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
         while !self.stop.load(Ordering::Acquire) {
             if prewarmed < crate::mem::PREWARM_SPARES
                 && (prewarmed == 0
@@ -824,6 +1047,19 @@ impl Device {
                 m.on_split(pdb, ticket, trigger);
             }
             let r = m.on_walk_ready(trigger);
+            // ★ Ruling 2026-09-26 (5): a BAR1 doorbell overlay the main loop has now made live (or
+            // removed) releases the invalidate clear it was holding. Never a wait: with nothing
+            // deferred this asks no target anything.
+            let t = m.on_targets(trigger);
+            if (!t.completed.is_empty() || !t.unreconciled.is_empty()) && logged < 256 {
+                logged += 1;
+                eprintln!(
+                    "kf3: mem t={:.3}s deferred clears released completed={:?} unreconciled={:?}",
+                    self.born.elapsed().as_secs_f64(),
+                    t.completed,
+                    t.unreconciled
+                );
+            }
             for (ticket, res) in m.take_splits() {
                 if let Err(e) = &res {
                     eprintln!("kf3: mem t={:.3}s split ticket {ticket} REFUSED: {e}", self.born.elapsed().as_secs_f64());
@@ -1067,7 +1303,22 @@ impl Device {
             self.mem.pramin_trap.inline_opens.load(o),
             self.mem.pramin_trap.reaped.load(o),
             mc.cache_ops.load(o),
-        ) + &timing;
+        ) + &timing
+            // ★ Hopper+ only (Turing … Ada's line is unchanged): the BAR1 doorbell views.
+            + &if self.plane.doorbell.follows_guest_bar1() {
+                let b = &self.bar1_overlay;
+                format!(
+                    " bar1db[trapped={} unmirrored={} deferred_clears={} installed={} removed={} refused={}]",
+                    va.usermode_trapped,
+                    va.usermode_unmirrored,
+                    va.deferred_clears,
+                    b.installed.load(o),
+                    b.removed.load(o),
+                    b.refused.load(o)
+                )
+            } else {
+                String::new()
+            };
         let ws = &self.worker_stats;
         let toks: Vec<String> = self
             .chans
@@ -1125,7 +1376,7 @@ impl Device {
             ic.out_of_range.load(o)
         );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -1133,6 +1384,7 @@ impl Device {
             c.serviced.load(o),
             c.ram_refused.load(o),
             c.unshadowed_writes.load(o),
+            c.read_exits.load(o),
             c.last_off.load(o),
             unserviced.join(","),
         )

@@ -65,6 +65,20 @@ pub const fn notifier_ce(n: u32) -> u32 {
     if n < 10 { NV2080_NOTIFIERS_CE0 + n } else { NV2080_NOTIFIERS_CE10 + n - 10 }
 }
 
+/// `NV2080_NOTIFIERS_NVENC(x)` — `NVENC0..2` = 38..40, `NVENC3` = 183
+/// (`ogkm-580: class/cl2080_notification.h:75-78,224,253`).
+#[must_use]
+pub const fn notifier_nvenc(n: u32) -> u32 {
+    if n < 3 { 38 + n } else { 183 + n - 3 }
+}
+
+/// `NV2080_NOTIFIERS_NVDEC(x)` — `NVDEC0` (= `_VLD`) = 14, then contiguous
+/// (`cl2080_notification.h:50-58,258`).
+#[must_use]
+pub const fn notifier_nvdec(n: u32) -> u32 {
+    14 + n
+}
+
 /// ★ A pollable host event source: register [`EventFd::as_fd`] with the worker's `epoll`.
 /// Readiness is a coalesced WAKE; the caller must read its semaphore to learn what completed.
 #[derive(Debug)]
@@ -175,6 +189,12 @@ impl HostRm {
         self.set_notification(notify_index, kf_abi::eventnotify::ACTION_REPEAT)?;
         armed.insert(notify_index);
         Ok(())
+    }
+
+    /// The session's device handle (`NV01_DEVICE_0` — the object `NV0080` controls address).
+    #[must_use]
+    pub fn device(&self) -> u32 {
+        self.device
     }
 
     /// The session's subdevice handle (the parent of engine notifiers).

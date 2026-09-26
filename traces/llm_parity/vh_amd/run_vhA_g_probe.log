@@ -1,0 +1,129 @@
+=== boot_capture tag=vhA_g at 2026-09-25T22:41:55+00:00 ===
+=== source revision: d7741675 ===
+=== qemu binary: -rwxr-xr-x 1 root root 95798888 Sep 25 19:07 /workspace/bench/kf3-bins/8dd2bbdf/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:da0419de682e0104d66e6c38e9d0e8b6bbbe7f2e 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kf-llm2/scripts/bench/boot_nvkvm.sh  sha256=7454bf433c1d9212
+    used: /root/kf-llm2/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Sep 25 22:42:03 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 25 22:42 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 25 22:42 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 25 22:41 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 25 22:41 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 25 22:42 .
+drwxr-xr-x 18 root root   4000 Sep 25 22:42 ..
+cr--------  1 root root 240, 1 Sep 25 22:42 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 25 22:42 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kf-llm2/scripts/bench/llm_parity_hook.sh at 2026-09-25T22:42:09+00:00 ===
+LP_GUEST_SMI=NVIDIA GeForce RTX 3060, 580.159.04
+LP_GUEST_NPROC=4 LP_GUEST_MEM=7941
+LP_START lane=guest date=2026-09-25T22:42:17+00:00 model=Qwen/Qwen2-0.5B-Instruct snapshot=[c540970f9e29518b1d8f06ab8b24cba66ad77b6d] short=3 long=512,2048 x3 warm=1
+LP lane=guest kind=short ntok=16 proc=1 LLM_KVM_EXITS=1267300
+LP lane=guest kind=short ntok=16 proc=1 LLM_DOORBELLS=26752
+LP lane=guest kind=short ntok=16 proc=1 LLM_DEVICE=cuda
+LP lane=guest kind=short ntok=16 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=guest kind=short ntok=16 proc=1 TORCH_DEV_COUNT=1
+LP lane=guest kind=short ntok=16 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=guest kind=short ntok=16 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=guest kind=short ntok=16 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest kind=short ntok=16 proc=1 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest kind=short ntok=16 proc=1 LLM_OK=1
+LP lane=guest kind=short ntok=16 proc=1 LLM_TOKENS=16
+LP lane=guest kind=short ntok=16 proc=1 LLM_MS=8097.6
+LP lane=guest kind=short ntok=16 proc=1 LLM_RC=0
+LP_EXT lane=guest kind=short ntok=16 proc=1 ext_ms=61830 rc=0
+LP lane=guest kind=short ntok=16 proc=2 LLM_KVM_EXITS=116811
+LP lane=guest kind=short ntok=16 proc=2 LLM_DOORBELLS=30848
+LP lane=guest kind=short ntok=16 proc=2 LLM_DEVICE=cuda
+LP lane=guest kind=short ntok=16 proc=2 TORCH_CUDA_AVAILABLE=True
+LP lane=guest kind=short ntok=16 proc=2 TORCH_DEV_COUNT=1
+LP lane=guest kind=short ntok=16 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=guest kind=short ntok=16 proc=2 LLM_RATIO_ELIGIBLE=1
+LP lane=guest kind=short ntok=16 proc=2 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest kind=short ntok=16 proc=2 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest kind=short ntok=16 proc=2 LLM_OK=1
+LP lane=guest kind=short ntok=16 proc=2 LLM_TOKENS=16
+LP lane=guest kind=short ntok=16 proc=2 LLM_MS=2408.8
+LP lane=guest kind=short ntok=16 proc=2 LLM_RC=0
+LP_EXT lane=guest kind=short ntok=16 proc=2 ext_ms=15523 rc=0
+LP lane=guest kind=short ntok=16 proc=3 LLM_KVM_EXITS=128302
+LP lane=guest kind=short ntok=16 proc=3 LLM_DOORBELLS=30825
+LP lane=guest kind=short ntok=16 proc=3 LLM_DEVICE=cuda
+LP lane=guest kind=short ntok=16 proc=3 TORCH_CUDA_AVAILABLE=True
+LP lane=guest kind=short ntok=16 proc=3 TORCH_DEV_COUNT=1
+LP lane=guest kind=short ntok=16 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=guest kind=short ntok=16 proc=3 LLM_RATIO_ELIGIBLE=1
+LP lane=guest kind=short ntok=16 proc=3 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest kind=short ntok=16 proc=3 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest kind=short ntok=16 proc=3 LLM_OK=1
+LP lane=guest kind=short ntok=16 proc=3 LLM_TOKENS=16
+LP lane=guest kind=short ntok=16 proc=3 LLM_MS=3345.8
+LP lane=guest kind=short ntok=16 proc=3 LLM_RC=0
+LP_EXT lane=guest kind=short ntok=16 proc=3 ext_ms=16019 rc=0
+LP lane=guest kind=long ntok=512 proc=1 LLM_KVM_EXITS=1387990
+LP lane=guest kind=long ntok=512 proc=1 LLM_DOORBELLS=1114128
+LP lane=guest kind=long ntok=512 proc=1 LLM_DEVICE=cuda
+LP lane=guest kind=long ntok=512 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=guest kind=long ntok=512 proc=1 TORCH_DEV_COUNT=1
+LP lane=guest kind=long ntok=512 proc=1 LLM_T_IMPORT_MS=4525.8
+LP lane=guest kind=long ntok=512 proc=1 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=guest kind=long ntok=512 proc=1 LLM_T_CUINIT_MS=387.4
+LP lane=guest kind=long ntok=512 proc=1 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=guest kind=long ntok=512 proc=1 LLM_T_LOAD_MS=1515.3
+LP lane=guest kind=long ntok=512 proc=1 LLM_T_TODEV_MS=339.7
+LP lane=guest kind=long ntok=512 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=guest kind=long ntok=512 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=guest kind=long ntok=512 proc=1 LLM_RUN 0 cold ntok=512 ms=40488.4 tok_s=12.646 ttft_ms=837.6 decode_tok_s=12.888 same_text=1
+LP lane=guest kind=long ntok=512 proc=1 LLM_RUN 1 warm ntok=512 ms=39579.9 tok_s=12.936 ttft_ms=82.5 decode_tok_s=12.938 same_text=1
+LP lane=guest kind=long ntok=512 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算机病毒可以通过读写磁盘或网络等方式进行传播 D. 计算机病毒发作时会破坏硬盘上的数据 答案: C  以下关于Windows 7操作系统说法不正确的是______。 A. Windows 7操作系统可以安装在多个型号的CPU上 B. Windows 7操作系统可以安装在多种类型的主板上 C. Windows 7操作系统可以安装在多种类型的内存上 D. Windows 7操作系统可以安装在多种类型的硬盘上 答案: C  在Windows中，如果要查找文件名的第2个字符为“a”的所有文件，其正确的搜索路径是______。 A. C:\Documents and Settings\用户名\My Documents\aa B. C:\Documents and Settings\用户名\My Documents\aa C. C:\Documents and Settings\用户名\My Documents\aa D. C:\Documents and Settings\用户名\My Documents\aa 答案: A  在Windows中，若要同时改变窗口的高度和宽度，应该采用的操作是______。 A. 改变鼠标操作中的缩放比例 B. 改变水平滚动条的显示位置 C. 使用组合键Alt+Tab D. 使用菜单栏中的“属性”命令 答案: A  在Windows中，为了防止他人修改注册表，应采取的措施是______。 A. 在注册表编辑器中禁用对注册表项的修改 B. 在注册表编辑器中禁用对注册表项的删除 C. 在注册表编辑器中禁用对注册表项的添加 D. 在注册表编辑器中禁用对注册表项的查询 答案: A  在Windows中，用户可以使用键盘上的______键来移动窗口的位置。 A. Ctrl+Up B. Ctrl
+LP lane=guest kind=long ntok=512 proc=1 LLM_TEXT_SHA256=3f2387f2ff8e28f57f05a78ffd35dcc9c5c4c74e192eaecfb1bb558bdcae1512
+LP lane=guest kind=long ntok=512 proc=1 LLM_T_PROC_MS=86839.9
+LP lane=guest kind=long ntok=512 proc=1 LLM_OK=1
+LP lane=guest kind=long ntok=512 proc=1 LLM_TOKENS=512
+LP lane=guest kind=long ntok=512 proc=1 LLM_MS=40488.4
+LP lane=guest kind=long ntok=512 proc=1 LLM_RC=0
+LP_EXT lane=guest kind=long ntok=512 proc=1 ext_ms=93218 rc=0
+Terminated
+HOOK_RC=143
+=== GUEST dmesg AFTER the workload (phase 3b captured 38 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=248
+GUEST_DMESG_AFTER_NVRM=245
+GUEST_DMESG_WORKLOAD_DELTA=210
+=== HOST dmesg delta for this boot (watermark 1183 → 1183) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

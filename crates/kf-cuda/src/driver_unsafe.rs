@@ -123,6 +123,11 @@ pub struct Cuda {
     pub(crate) cuDeviceGet: unsafe extern "C" fn(*mut c_int, c_int) -> CUresult,
     pub(crate) cuDeviceGetCount: unsafe extern "C" fn(*mut c_int) -> CUresult,
     pub(crate) cuDeviceGetName: unsafe extern "C" fn(*mut c_char, c_int, c_int) -> CUresult,
+    /// ★ `cuDeviceGetByPCIBusId(CUdevice*, const char*)` — select the device by the host GPU's
+    /// PCI address, never by ordinal (V3_MULTI_GPU_AUDIT §2 blocker 1: ordinals are
+    /// fastest-first and `CUDA_VISIBLE_DEVICES` reorders them). Present since CUDA 4.1, so a
+    /// missing symbol refuses the binding by name.
+    pub(crate) cuDeviceGetByPCIBusId: unsafe extern "C" fn(*mut c_int, *const c_char) -> CUresult,
     pub(crate) cuCtxCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint, c_int) -> CUresult,
     pub(crate) cuCtxDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
     pub(crate) cuCtxSynchronize: unsafe extern "C" fn() -> CUresult,
@@ -364,6 +369,7 @@ impl Cuda {
             cuDeviceGet: sym!("cuDeviceGet"),
             cuDeviceGetCount: sym!("cuDeviceGetCount"),
             cuDeviceGetName: sym!("cuDeviceGetName"),
+            cuDeviceGetByPCIBusId: sym!("cuDeviceGetByPCIBusId"),
             cuCtxCreate: sym!("cuCtxCreate_v2"),
             cuCtxDestroy: sym!("cuCtxDestroy_v2"),
             cuCtxSynchronize: sym!("cuCtxSynchronize"),
@@ -493,6 +499,27 @@ impl Cuda {
         // SAFETY: as `device_count` — one live out-pointer, no aliasing.
         self.check("cuDeviceGet", unsafe {
             (self.cuDeviceGet)(&raw mut d, ord)
+        })?;
+        Ok(d)
+    }
+
+    /// ★ `cuDeviceGetByPCIBusId` — the CUDA device at PCI address `bdf`
+    /// (`[domain]:[bus]:[device].[function]`, hex, as `CardInfo::bdf` spells it).
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`] — including `CUDA_ERROR_INVALID_DEVICE` when this process's CUDA
+    /// cannot see that GPU (e.g. `CUDA_VISIBLE_DEVICES` excludes it): refused, never an
+    /// ordinal fallback.
+    pub fn device_by_pci_bus_id(&self, bdf: &str) -> Result<i32, CudaError> {
+        let c = CString::new(bdf).map_err(|_| CudaError::Refused {
+            what: "cuDeviceGetByPCIBusId",
+            code: 0,
+            name: format!("the PCI bus id {bdf:?} contains a NUL"),
+        })?;
+        let mut d: c_int = 0;
+        // SAFETY: one live out-pointer and a NUL-terminated string that outlives the call.
+        self.check("cuDeviceGetByPCIBusId", unsafe {
+            (self.cuDeviceGetByPCIBusId)(&raw mut d, c.as_ptr())
         })?;
         Ok(d)
     }

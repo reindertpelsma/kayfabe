@@ -663,6 +663,23 @@ pub enum WantedTable {
     /// (`kernel_graphics.c:1521`). It is the last mandatory one, so it is the one that
     /// decides whether GR has static info at all.
     GrPdbProperties,
+    /// ★ v3-gfx: `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO` — 320 bytes, engine 0 from
+    /// the host's unprivileged `GR_GET_ZCULL_INFO` (`kf_abi::grstatic::encode_zcull_info`). Boot
+    /// survives its refusal (the status is clobbered, `kernel_graphics.c:1360`), but the guest's
+    /// client `GR_GET_ZCULL_INFO` is served ONLY from this cache — refused, every GL/Vulkan zcull
+    /// query answers `NV_ERR_NOT_SUPPORTED` (`V3_HEADLESS_GRAPHICS.md` §1.2).
+    GrZcullInfo,
+    /// ★ v3-gfx: `NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO` — 16 bytes, the host's L2 state words
+    /// verbatim (`HostFacts::gpu_cache_info`). `[measured vgfx 2026-09-26]` the GL/Vulkan UMD
+    /// aborts device init when it is refused.
+    FbGetGpuCacheInfo,
+    /// ★ v3-gfx: `NV0080_CTRL_CMD_FIFO_GET_ENGINE_CONTEXT_PROPERTIES` (`0x00801707`, flags
+    /// `0x50148`: ROUTE_TO_PHYSICAL) — `{engineId [IN], alignment, size}`. Answered from the
+    /// host-sourced context-buffer table (`HostFacts::gr_context_buffers`) with RM's own rule
+    /// (`kernel_fifo_ctrl.c:1036-1053`: the eight GR ids, `size`/`alignment` floored at 0 / 4 KiB,
+    /// anything else NOT_SUPPORTED). `[measured vgfx 2026-09-26]` the Vulkan UMD asks id 8
+    /// (GRAPHICS_ZCULL) right after its 3D object and tears the device down on a refusal.
+    FifoGetEngineContextProperties,
     /// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER` — ★★★
     /// the only control this port serves in which the guest is **telling us** something
     /// rather than asking: the physical addresses of the page-directory levels it reserved
@@ -1057,6 +1074,10 @@ pub enum WantedTable {
     /// and the first SPLICED row (the request carries content, so a constant body would
     /// clobber it). See [`kf_abi::cudartinit::SPLICED`].
     CudartPerfLevelInfoV2,
+    /// `0x20800810` `BIOS_GET_INFO_V2` — routed to physical RM (export flags `0x60048`); answered
+    /// from the HOST's VBIOS version (`HostFacts::vbios_version`) so guest `nvidia-smi` shows the
+    /// real VBIOS. Refused when the host did not answer (2026-09-26).
+    BiosGetInfoV2,
 }
 
 impl WantedTable {
@@ -1087,7 +1108,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 47] = [
+    pub const ALL: [WantedTable; 51] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1112,6 +1133,9 @@ impl WantedTable {
         Self::GrGlobalSmOrder,
         Self::GrFecsRecordSize,
         Self::GrPdbProperties,
+        Self::GrZcullInfo,
+        Self::FbGetGpuCacheInfo,
+        Self::FifoGetEngineContextProperties,
         Self::GvaspaceServerReservedPdes,
         Self::GvaspaceServerReservedPdesClient,
         Self::GrContextBuffersInfo,
@@ -1135,6 +1159,7 @@ impl WantedTable {
         Self::CudartInit9064,
         Self::CudartInit9A001,
         Self::CudartPerfLevelInfoV2,
+        Self::BiosGetInfoV2,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -1192,6 +1217,9 @@ impl WantedTable {
             Self::GrPdbProperties => {
                 grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES
             }
+            Self::GrZcullInfo => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO,
+            Self::FbGetGpuCacheInfo => crate::hostquery::NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO,
+            Self::FifoGetEngineContextProperties => 0x0080_1707,
             Self::GvaspaceServerReservedPdes => {
                 gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER
             }
@@ -1225,6 +1253,7 @@ impl WantedTable {
             Self::CudartInit9064 => kf_abi::cudartinit::CUDART_INIT_0X9064,
             Self::CudartInit9A001 => kf_abi::cudartinit::CUDART_INIT_0XA001,
             Self::CudartPerfLevelInfoV2 => kf_abi::cudartinit::PERF_GET_LEVEL_INFO_V2,
+            Self::BiosGetInfoV2 => kf_abi::vbios::NV2080_CTRL_CMD_BIOS_GET_INFO_V2,
             Self::C2cInfo => kf_abi::c2cinfo::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
             Self::PromoteFaultMethodBuffers => {
                 kf_abi::fmbpromote::NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS
@@ -1270,6 +1299,9 @@ impl WantedTable {
             Self::GrGlobalSmOrder => grstatic::SM_ORDER_PARAMS_SIZE,
             Self::GrFecsRecordSize => grstatic::FECS_RECORD_SIZE_PARAMS_SIZE,
             Self::GrPdbProperties => grstatic::PDB_PROPERTIES_PARAMS_SIZE,
+            Self::GrZcullInfo => grstatic::ZCULL_INFO_PARAMS_SIZE,
+            Self::FbGetGpuCacheInfo => 16,
+            Self::FifoGetEngineContextProperties => 12,
             Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
                 gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE
             }
@@ -1296,6 +1328,7 @@ impl WantedTable {
             Self::CudartInit9064 => 520,
             Self::CudartInit9A001 => 16,
             Self::CudartPerfLevelInfoV2 => 780,
+            Self::BiosGetInfoV2 => kf_abi::vbios::BIOS_GET_INFO_V2_PARAMS_SIZE,
             Self::C2cInfo => kf_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
             Self::PromoteFaultMethodBuffers => {
                 kf_abi::fmbpromote::PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE
@@ -1581,6 +1614,37 @@ impl CommandPolicy for InitTablePolicy {
             });
         }
 
+        // ★ v3-video: the GSS-legacy requests libnvidia-encode gates a session on, answered with
+        // what the HOST wrote for the identical authored request at realize
+        // (`kf_abi::gssreplay`); anything else falls through to what answered it before.
+        if !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+            let ps = req.params_size as usize;
+            if cmd.payload.len() >= req.params_at + ps {
+                let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
+                if kf_abi::gssreplay::answer(&self.host.gss_replay, req.cmd, &mut params) {
+                    eprintln!("kf3: GSS {:#010x} answered from the host's realize-time reply", req.cmd);
+                    let mut body = cmd.payload.clone();
+                    body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                    body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+                    return Some(Reply { rpc_result: NV_OK, body });
+                }
+            }
+        }
+        if kf_abi::videocaps::caps_len(req.cmd).is_some() && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+            let ps = req.params_size as usize;
+            if cmd.payload.len() >= req.params_at + ps {
+                let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
+                match kf_abi::videocaps::answer(&self.host.video_caps, req.cmd, &mut params) {
+                    Ok(()) => {
+                        let mut body = cmd.payload.clone();
+                        body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                        body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+                        return Some(Reply { rpc_result: NV_OK, body });
+                    }
+                    Err(why) => eprintln!("kf3: video caps {:#010x} not answered: {why:?}", req.cmd),
+                }
+            }
+        }
         let want = WantedTable::from_cmd(req.cmd)?;
 
         // A FINN-serialized payload is not the flat struct these encoders produce. Neither
@@ -2113,6 +2177,32 @@ impl CommandPolicy for InitTablePolicy {
                     Err(_) => return refuse(),
                 }
             }
+            // ⊘ A host die with no zcull (`None`) is refused exactly as its own GSP would.
+            WantedTable::GrZcullInfo => match &self.host.gr_zcull_info {
+                Some(row) => grstatic::encode_zcull_info(row),
+                None => return refuse(),
+            },
+            WantedTable::FifoGetEngineContextProperties => {
+                let at = req.params_at;
+                let id = u32::from_le_bytes([cmd.payload[at], cmd.payload[at + 1], cmd.payload[at + 2], cmd.payload[at + 3]]) & 0x1f;
+                // `NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_*` GRAPHICS, _ZCULL,
+                // _PREEMPT, _SPILL, _PAGEPOOL, _BETACB, _RTV, _SETUP — RM's own list.
+                if ![0x00, 0x08, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x19].contains(&id) {
+                    return refuse();
+                }
+                let b = self.host.gr_context_buffers[id as usize];
+                if b.size == grstatic::CONTEXT_BUFFER_ABSENT {
+                    return refuse();
+                }
+                let mut p = cmd.payload[at..at + 12].to_vec();
+                p[4..8].copy_from_slice(&b.alignment.max(0x1000).to_le_bytes());
+                p[8..12].copy_from_slice(&b.size.to_le_bytes());
+                p
+            }
+            WantedTable::FbGetGpuCacheInfo => match self.host.gpu_cache_info {
+                Some(w) => w.iter().flat_map(|v| v.to_le_bytes()).collect(),
+                None => return refuse(),
+            },
             // ★★★ The publication arm — the one control here whose reply is a function of
             // the REQUEST rather than of the chip. It is decoded, validated against
             // `ctrl90f1.h`'s own stated rules, and re-encoded from the decoded fields; an
@@ -2256,14 +2346,17 @@ impl CommandPolicy for InitTablePolicy {
             // control zero means "no L2", "unknown RAM" or "no FB partitions", never blank.
             WantedTable::FbGetInfoV2 => {
                 let at = req.params_at;
-                let geometry = kf_abi::fbinfo::FbGeometry {
-                    l2_cache_size: self.host.memory_system.l2_cache_size,
-                    ram_type: self.host.memory_system.ram_type,
-                    ltc_count: self.host.memory_system.ltc_count,
-                };
-                let Ok(answers) = geometry.forwarded_answers() else {
-                    return refuse();
-                };
+                // ★ Family port (AD106, 2026-09-26): the host's own words, not the GA10x ratio
+                // projections of `ltcCount` (`kf_abi::fbinfo::GA10X_*`), which state a 256-bit
+                // bus for a 128-bit AD106. `forwarded_fb_info` is the same die's unprivileged
+                // FB_GET_INFO_V2 reply for exactly these indices.
+                // ★ v3-gfx: plus the host's own answers for the geometry indices the GL/Vulkan UMD
+                // also asks (`HostFacts::forwarded_fb_extra` — PARTITION_COUNT/_MASK, LTC_MASK,
+                // `[measured vgfx 2026-09-26]`).
+                let mut answers = self.host.forwarded_fb_info.clone();
+                answers.extend(
+                    self.host.forwarded_fb_extra.iter().filter(|(i, _)| !answers.iter().any(|(d, _)| d == i)).copied().collect::<Vec<_>>(),
+                );
                 match kf_abi::fbinfo::answer_fb_get_info_v2(
                     &cmd.payload[at..at + kf_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE],
                     &answers,
@@ -2282,8 +2375,9 @@ impl CommandPolicy for InitTablePolicy {
             //
             // ⊘ And it states no new number either: `present` is the `DEV_TYPE_ENUM_LCE`
             // rows of `chip.engines` — the same slice `WantedTable::DeviceInfo` and
-            // `WantedTable::InternalDeviceInfo` serve — and the one per-CE caps bit is
-            // `NV_CE_GRCE_ALLOWED_LCE_MASK` intersected with them. A device that advertises
+            // `WantedTable::InternalDeviceInfo` serve — and each LCE's caps (GRCE included)
+            // are the HOST die's own `CE_GET_ALL_CAPS` answer (`HostFacts::ce_caps`,
+            // 2026-09-26; was GA10x's `NV_CE_GRCE_ALLOWED_LCE_MASK` + a GA106 measurement). A device that advertises
             // four copy engines to the guest's FIFO and five to its CE layer would be two
             // descriptions of one silicon.
             //
@@ -2295,7 +2389,7 @@ impl CommandPolicy for InitTablePolicy {
             // (`kgmmuInitCeMmuFaultIdRange_GA100` needs an LCE row to boot at all), and a
             // `present` of zero is a declared value meaning "this GPU has no copy engines".
             WantedTable::CeGetAllPhysicalCaps => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines)
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
                 else {
                     return refuse();
                 };
@@ -2320,7 +2414,7 @@ impl CommandPolicy for InitTablePolicy {
             // `0x20802a02` refusing LCE4 on a real GA106. ⊘ A zero caps row would NOT be the
             // safe fallback: `{0,0}` positively claims a copy engine that can do nothing.
             WantedTable::CeGetPhysicalCaps => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines)
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
                 else {
                     return refuse();
                 };
@@ -2346,7 +2440,7 @@ impl CommandPolicy for InitTablePolicy {
             // `queryCopyEngines` issues both per engine, six lines apart, each with a hard
             // `goto done`. Serving one alone moves the wall and buys nothing.
             WantedTable::CeGetCePceMask => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines)
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
                 else {
                     return refuse();
                 };
@@ -2476,13 +2570,32 @@ impl CommandPolicy for InitTablePolicy {
             // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
             // a real GA106 overwrites. A constant body here would clobber content the guest
             // sent — the `#203` zero-fill defect pointing the other way.
+            // ★ 2026-09-26: the words are the HOST's reply to the same question, asked once at
+            // realize (`HostFacts::perf_level_info_v2`) — never the GA106 clock table
+            // (`kf_abi::cudartinit::SPLICED`, now the test oracle). A host that refused it, or a
+            // guest asking a different question, is refused.
             WantedTable::CudartPerfLevelInfoV2 => {
                 let at = req.params_at;
                 let mut p = cmd.payload[at..at + want.params_size()].to_vec();
-                if !kf_abi::cudartinit::splice_cudart_init(req.cmd, &mut p) {
+                let Some(host) = self.host.perf_level_info_v2.as_deref() else {
+                    return refuse();
+                };
+                if !kf_abi::cudartinit::splice_perf_level_info_v2(&mut p, host) {
                     return refuse();
                 }
                 p
+            }
+            // ★ The host's VBIOS version, or a refusal when the host gave none (never a zero:
+            // `00.00…` in nvidia-smi would be an invented version).
+            WantedTable::BiosGetInfoV2 => {
+                let at = req.params_at;
+                let Some(v) = self.host.vbios_version else {
+                    return refuse();
+                };
+                match kf_abi::vbios::answer_bios_get_info_v2(&cmd.payload[at..at + want.params_size()], v) {
+                    Some(p) => p,
+                    None => return refuse(),
+                }
             }
             WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162 => {
                 let at = req.params_at;

@@ -428,6 +428,7 @@ pub fn host_facts() -> HostFacts {
     HostFacts {
         family: kf_chip::Family::Ampere,
         has_c2c: false,
+        ce_caps: ce_caps(),
         engines: ENGINES.to_vec(),
         lce_pce_masks: kf_abi::cepce::GA106_LCE_PCE_MASKS.to_vec(),
         intr_table: INTR_TABLE.to_vec(),
@@ -463,7 +464,23 @@ pub fn host_facts() -> HostFacts {
         gr_static: kf_abi::grstatic::GA106_GR_STATIC,
         gr_info: kf_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kf_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        // ⊘ unmeasured on GA106 so far: None (refused, as before v3-gfx) until a host reply is captured.
+        gr_zcull_info: None,
+        // ⊘ v3-gfx fields: unmeasured on GA106 — the refusing values (as before v3-gfx).
+        zbc_table_sizes: None,
+        forwarded_fb_extra: vec![],
+        gpu_cache_info: None,
         forwarded_gpu_info: kf_abi::gpuinfo::GA106_FORWARDED_GPU_INFO.to_vec(),
+        // The GA106's measured words (`kf_abi::fbinfo` tests: bus 0xc0, FBPs 3, LTS 18), which
+        // the GA10x projections of its row reproduce.
+        forwarded_fb_info: kf_abi::fbinfo::FbGeometry {
+            l2_cache_size: MEMORY_SYSTEM.l2_cache_size,
+            ram_type: MEMORY_SYSTEM.ram_type,
+            ltc_count: MEMORY_SYSTEM.ltc_count,
+        }
+        .forwarded_answers()
+        .expect("the GA106 row projects")
+        .to_vec(),
         smc_mode: kf_abi::smcmode::GA106_SMC_MODE,
         pcie_max_gen: kf_abi::businfo::PcieGen::Gen4,
         ce_fault_method_buffer_size: kf_abi::fmbsize::GA106_CE_FAULT_METHOD_BUFFER_SIZE,
@@ -472,7 +489,35 @@ pub fn host_facts() -> HostFacts {
         // faithful to what the old device answered. `derive_gpu_name` is checked separately.
         gpu_name: None,
         gpu_short_name: None,
+        // The old row's ROM version (`kf_abi::vbios::VBIOS_PROFILES[0]`) — ⊘ not a measured
+        // board version; the v3 device asks the host (`BIOS_GET_INFO_V2`).
+        vbios_version: Some((0x9418_0000, 0x00)),
+        perf_level_info_v2: Some(perf_level_info_v2()),
+        gss_replay: Vec::new(),
+        video_caps: Vec::new(),
     }
+}
+
+/// `[measured 2026-08-09, real GA106]` `CE_GET_ALL_CAPS` (`0x20802a0a`), R18 and `cuInit` line 62:
+/// `e303e303e203e203`, 120 zero bytes, `present = 0x0f`.
+pub fn ce_caps_reply() -> Vec<u8> {
+    let mut v = vec![0xe3, 0x03, 0xe3, 0x03, 0xe2, 0x03, 0xe2, 0x03];
+    v.resize(kf_abi::cecaps::PRESENT_OFF, 0);
+    v.extend_from_slice(&0x0f_u64.to_le_bytes());
+    v
+}
+
+/// [`ce_caps_reply`], decoded.
+pub fn ce_caps() -> kf_abi::cecaps::HostCeCaps {
+    kf_abi::cecaps::HostCeCaps::decode(&ce_caps_reply()).expect("136 bytes")
+}
+
+/// `[measured 2026-08-20, real GA106]` the host's `PERF_GET_LEVEL_INFO_V2` reply to libcudart's
+/// question: the request with the nine `kf_abi::cudartinit::SPLICED` words written.
+pub fn perf_level_info_v2() -> Vec<u8> {
+    let mut r = kf_abi::cudartinit::perf_level_info_v2_request();
+    assert!(kf_abi::cudartinit::splice_cudart_init(kf_abi::cudartinit::PERF_GET_LEVEL_INFO_V2, &mut r));
+    r
 }
 
 /// [`host_facts`], shared.

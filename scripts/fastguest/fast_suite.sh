@@ -17,7 +17,7 @@ TAG=${1:-fastsuite}; shift || true
 # ~2-5 µs, boot alone is 15-27 s, passing arms take 33-58 s, and even BARE METAL on that box runs
 # --ce-client-guest-ram in 17-37 s (9 s on a non-nested reference). 60 s was noise-bound there.
 # ⊘ Still a ceiling, not a formality: a hang is a failure. Revisit on a non-nested KVM host.
-BUDGET=${1:-120}; shift || true
+BUDGET=${1:-180}; shift || true
 BENCH=${BENCH_DIR:-/workspace/bench}
 ARMS=("$@")
 if [ "${#ARMS[@]}" -eq 0 ]; then

@@ -13,13 +13,14 @@
 use crate::{ABI_ENCODE_FAILED, HostRm, RmError};
 use kf_abi::bringup::{
     NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
+    NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
     NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters,
 };
 use kf_abi::generated::classes::NvChannelGroupAllocationParameters;
 use kf_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kf_abi::submit::{
-    BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, GpfifoScheduleParams,
+    BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, GpfifoScheduleParams, NvMemoryAllocationParams,
     NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
     NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, WORK_SUBMIT_TOKEN_PARAMS_SIZE,
 };
@@ -39,14 +40,96 @@ pub const USERD_ALIGNMENT: u64 = 512;
 pub const USERD_OFFSET_MISALIGNED: u32 = 0x4B70;
 
 /// One host VA space: the `FERMI_VASPACE_A` object and the `NV01_MEMORY_VIRTUAL` range over it
-/// that every map names as `hDma`.
+/// that every map names as `hDma` — except inside a [`GuestVaRange`], whose own reserving object
+/// is the `hDma` there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VaSpace {
     /// The VA space object.
     pub space: u32,
     /// The virtual range (`hDma`).
     pub range: u32,
+    /// ★ v3-gfx: the guest-allocatable VA ranges, RESERVED in this space (handle 0 = not reserved).
+    pub guest: [GuestVaRange; 2],
 }
+
+/// ★ v3-gfx — **a VA range reserved in the host space for the GUEST'S mappings.**
+///
+/// `[measured vgfx 2026-09-26, gfx7]` a GL guest faulted every 3D channel (host Xid 31,
+/// `GPCCLIENT_PROP_0 … FAULT_PRIV_VIOLATION`): host RM's own allocator places the twin's GR context
+/// buffers (privileged, `bIsKernelAlloc`) lowest-fit in the twin's space — the very VAs the guest's
+/// RM, running the same allocator, hands its next surfaces. The guest's FIXED map there then found
+/// the VA held by host RM (`VA_ALREADY_MAPPED` ⇒ `HeldByHost`) and its ROP read a host context
+/// buffer. RM offers userspace no way to steer its own placements (`VA_INTERNAL_LIMIT` pins them to
+/// the split window the client RM reserves against itself; `IS_MIRRORED` is VER1-only). ⇒ kf
+/// RESERVES the guest's allocatable ranges up front with a lazy `NV50_MEMORY_VIRTUAL` (no page
+/// tables pinned, `gpu_vaspace.c:1640`), so host RM's own placements can only land above them, and
+/// maps the guest's rows THROUGH the reservation (a FIXED map into a VA-reserving object is absolute
+/// and in-bounds, `dma.c:129-155`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GuestVaRange {
+    /// The reserving `NV50_MEMORY_VIRTUAL` handle (0 = none).
+    pub handle: u32,
+    /// Inclusive start.
+    pub lo: u64,
+    /// Exclusive end.
+    pub hi: u64,
+}
+
+/// ★ v3-gfx: the guest-allocatable ranges reserved in every host twin space, leaving ONE hole for
+/// host RM's own placements: `[HOST_HOLE_LO, 1 TiB)`.
+///
+/// - Everything from the split window's end (`4.5 GiB`, `g_gpu_vaspace_nvoc.h:99-100`) — where the
+///   guest RM's bottom-up allocator places context buffers and surfaces — up to the hole.
+/// - Everything from `1 TiB` to the CPU-VA ceiling `2^47` (UVM places CUDA allocations at CPU VAs).
+/// - ⊘ The hole must stay BELOW `1 TiB`: `[measured vgfx 2026-09-26, gfx8]` with the whole of
+///   `[4.5 GiB, 2^47)` reserved, host RM placed the twin's GR context buffers above `2^47` and every
+///   3D/compute context faulted in context switch (host Xid 44) — GR's global context-buffer
+///   pointers are `VA >> 8` in 32-bit fields. kf's own ring region `[1 TiB − 4 GiB, 1 TiB)`
+///   (`kf-qemu` `RING_REGION_BASE`) is inside the hole and stays mapped through the range object.
+/// - ⊘ `[1 MiB, 4 GiB)` is NOT reserved: `[measured gfx8]` RM refuses a reservation there
+///   (`NoMemory`) — it already withholds it — so host RM cannot place there either.
+pub const GUEST_VA_RANGES: [(u64, u64); 2] = [((1 << 32) + (1 << 29), HOST_HOLE_LO), (1 << 40, 1 << 47)];
+/// The start of host RM's hole — 64 GiB below `1 TiB`. A guest reaches it only after its RM heap has
+/// handed out ~1 TiB of VA; a guest row there is mapped through the range object as before (and a
+/// collision is still named `HeldByHost`).
+pub const HOST_HOLE_LO: u64 = (1 << 40) - (64 << 30);
+
+/// `NV50_MEMORY_VIRTUAL` (`ogkm-580: resource_list.h:516-523`, parent `Device`).
+const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
+/// `NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE | _LAZY | _VIRTUAL` (`nvos.h:1448-1464`).
+const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
+
+impl VaSpace {
+    /// The `hDma` a mapping of `[va, va+len)` names: the reservation that contains it, else the
+    /// space's range. ⊘ A mapping straddling a reservation edge is refused by name (the guest's
+    /// RM never allocates across the split window, and `2^47` is the CPU-VA ceiling).
+    ///
+    /// # Errors
+    /// [`VA_STRADDLES_RESERVATION`].
+    pub fn dma_for(&self, va: u64, len: u64) -> Result<u32, RmError> {
+        let end = va.saturating_add(len.max(1));
+        for g in self.guest.iter().filter(|g| g.handle != 0) {
+            if va >= g.lo && end <= g.hi {
+                return Ok(g.handle);
+            }
+            if va < g.hi && g.lo < end {
+                return Err(RmError::Other(VA_STRADDLES_RESERVATION));
+            }
+        }
+        Ok(self.range)
+    }
+
+    /// ★ v3-int: whether `[va, va+len)` lies wholly inside a LIVE guest reservation — i.e. host
+    /// RM's own allocator can never place anything there (only the guest's FIXED maps land in it).
+    #[must_use]
+    pub fn guest_reserved(&self, va: u64, len: u64) -> bool {
+        let end = va.saturating_add(len.max(1));
+        self.guest.iter().any(|g| g.handle != 0 && va >= g.lo && end <= g.hi)
+    }
+}
+
+/// A FIXED map that straddles the edge of a [`GuestVaRange`].
+pub const VA_STRADDLES_RESERVATION: u32 = 0x4B71;
 
 /// One born host channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,13 +192,52 @@ impl HostRm {
         match self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, &mut range) {
             Ok(h) => {
                 self.remember(h, self.device);
-                Ok(VaSpace { space, range: h })
+                let mut vas = VaSpace { space, range: h, guest: [GuestVaRange::default(); 2] };
+                // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
+                // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
+                if std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none() {
+                    for (slot, &(lo, hi)) in vas.guest.iter_mut().zip(GUEST_VA_RANGES.iter()) {
+                        match self.reserve_va(space, lo, hi - lo) {
+                            Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
+                            Err(e) => eprintln!("kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"),
+                        }
+                    }
+                }
+                Ok(vas)
             }
             Err(e) => {
                 let _ = self.free(space);
                 Err(e)
             }
         }
+    }
+
+    /// ★ v3-gfx: a lazy, FIXED `NV50_MEMORY_VIRTUAL` reservation of `[at, at+len)` in `space`.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn reserve_va(&self, space: u32, at: u64, len: u64) -> Result<u32, RmError> {
+        let mut p = [0u8; NvMemoryAllocationParams::SIZE];
+        NvMemoryAllocationParams { owner: self.client.raw(), kind: 0, attr: 0, size: len, alignment: 0 }
+            .encode_into(&mut p)
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        p[8..12].copy_from_slice(&NVOS32_RESERVE_FLAGS.to_le_bytes());
+        p[80..88].copy_from_slice(&at.to_le_bytes()); // offset
+        p[108..112].copy_from_slice(&space.to_le_bytes()); // hVASpace
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, NV50_MEMORY_VIRTUAL, &mut p)?;
+        self.remember(h, self.device);
+        Ok(h)
+    }
+
+    /// ★ v3-gfx: free a space and everything kf allocated over it (reservations first — they
+    /// reference the space).
+    pub fn free_vaspace(&self, space: VaSpace) {
+        for g in space.guest.iter().filter(|g| g.handle != 0) {
+            let _ = self.free(g.handle);
+        }
+        let _ = self.free(space.range);
+        let _ = self.free(space.space);
     }
 
     /// Map `len` bytes of `memory` at `offset` into `space`, at `at` if given. `defer` sets
@@ -138,8 +260,35 @@ impl HostRm {
         at: Option<u64>,
         defer: bool,
     ) -> Result<u64, RmError> {
+        self.map_kind(space, memory, backing, offset, len, at, defer, 0)
+    }
+
+    /// ★ v3-gfx: [`HostRm::map`] with a PTE `kind` (0 = PITCH, no override). A non-zero kind is
+    /// set with `NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES` + `kindOverride` (`nvos.h:2113-2115, 2177`),
+    /// which host RM validates with `FB_IS_KIND_SUPPORTED` (`virtual_mem.c:1348-1357`). The caller
+    /// passes an UNCOMPRESSED kind; this device backs no comptags.
+    ///
+    /// # Errors
+    /// As [`HostRm::map`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn map_kind(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        backing: MapBacking,
+        offset: u64,
+        len: u64,
+        at: Option<u64>,
+        defer: bool,
+        kind: u8,
+    ) -> Result<u64, RmError> {
         let extra = if defer { NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
-        self.raw_map_dma_slice(space.range, memory, offset, len, at, extra, backing == MapBacking::SharedSlice)
+        let extra = extra | if kind != 0 { NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES } else { 0 };
+        let dma = match at {
+            Some(a) => space.dma_for(a, len)?,
+            None => space.range,
+        };
+        self.raw_map_dma_slice(dma, memory, offset, len, at, extra, backing == MapBacking::SharedSlice, u32::from(kind))
     }
 
     /// ★ Map ALL of `memory` (`len` bytes) into `space` at an address RM chooses, and return it —
@@ -152,7 +301,7 @@ impl HostRm {
     /// The host's refusal.
     pub fn map_window(&self, space: VaSpace, memory: u32, len: u64, high: bool) -> Result<u64, RmError> {
         let extra = if high { NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN } else { 0 };
-        self.raw_map_dma_slice(space.range, memory, 0, len, None, extra, false)
+        self.raw_map_dma_slice(space.range, memory, 0, len, None, extra, false, 0)
     }
 
     /// Unmap the mapping at `va` in `space`; `defer` as for [`HostRm::map`].
@@ -161,7 +310,94 @@ impl HostRm {
     /// The host's status.
     pub fn unmap(&self, space: VaSpace, va: u64, defer: bool) -> Result<(), RmError> {
         let flags = if defer { NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
-        self.raw_unmap_dma_flags(space.range, va, flags)
+        self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, flags)
+    }
+
+    /// ★★★ Unmap EVERY mapping of ours in `space` that intersects `[va, va+len)` — one host call
+    /// for any number of placements (`V3_BATCHED_MAP.md` §4; [`HostRm::raw_unmap_dma_range`]). A
+    /// placement straddling an edge is split and keeps its outside part. `defer` as for
+    /// [`HostRm::map`].
+    ///
+    /// ⊘ The range must be one the caller OWNS whole: RM removes whatever of this client's
+    /// mappings lie in it, so a range reaching into a window or a ring would take it down too.
+    ///
+    /// # Errors
+    /// [`VA_STRADDLES_RESERVATION`] before any host call; else the host's status.
+    pub fn unmap_range(&self, space: VaSpace, va: u64, len: u64, defer: bool) -> Result<(), RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let flags = if defer { NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
+        self.raw_unmap_dma_range(space.dma_for(va, len)?, va, len, flags)
+    }
+
+    /// ★★★ **Map N scattered pieces of a file at ONE VA-contiguous range, in O(1) host RM calls**
+    /// (`V3_BATCHED_MAP.md` §3): stitch the pieces into one host view
+    /// ([`kf_linux_raw::MappedRegion::stitch`]), describe it with ONE
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` (RM pins the pages and keeps no address — the view is
+    /// dropped before this returns), then ONE fixed `NV_ESC_RM_MAP_MEMORY_DMA` of the whole object
+    /// at `at`. Returns the object's handle: the caller owns it and frees it (with [`HostRm::free`])
+    /// once no mapping of it is left — freeing it earlier would unmap every piece
+    /// (`rs_client.c:1342-1395`, `_clientUnmapInterBackRefMappings`).
+    ///
+    /// ★ All or nothing: `Ok` ⇔ the host placed every piece at its VA; on any refusal nothing of
+    /// ours is left (a failed map is rolled back by RM, `virt_mem_allocator_gm107.c:1540-1557`, a
+    /// misplaced one torn down by [`HostRm::map`]'s placement assertion, and the object is freed).
+    /// Mapped as a [`MapBacking::SharedSlice`] (4 KiB pinned): a stitched object is not physically
+    /// contiguous at any bigger page.
+    ///
+    /// # Errors
+    /// The stitch (by name), the descriptor or the map — whichever refused.
+    #[allow(clippy::too_many_arguments)]
+    pub fn map_scattered(
+        &self,
+        space: VaSpace,
+        fd: std::os::fd::BorrowedFd<'_>,
+        pieces: &[(u64, u64)],
+        at: u64,
+        defer: bool,
+        kind: u8,
+    ) -> Result<u32, ScatterError> {
+        let t0 = std::time::Instant::now();
+        let view = kf_linux_raw::MappedRegion::stitch(
+            fd,
+            pieces,
+            kf_linux_raw::HostProt::ReadWrite,
+            kf_linux_raw::CachePolicy::WriteBack,
+            kf_linux_raw::HostPageSize::query(),
+        )
+        .map_err(ScatterError::Stitch)?;
+        let t_stitch = t0.elapsed();
+        let len = view.len_bytes();
+        let obj = self
+            .alloc_os_descriptor(&view, kf_linux_raw::HostOffset::new(0), len)
+            .map_err(ScatterError::Descriptor)?;
+        let t_desc = t0.elapsed();
+        // RM holds the pages now (and never the address): the view goes before any map exists —
+        // to the reaper, because its `munmap` is the costliest step (`[measured bm3]` 80-97 ms for
+        // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
+        reap_view(view);
+        let t_drop = t0.elapsed();
+        let r = self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind);
+        // ★ Bounded phase breakdown (the first 32 batches of the process): stitch vs pin vs map.
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
+            eprintln!(
+                "kf-host: map_scattered {} pieces {len:#x} bytes: stitch {} us, descriptor {} us, hand view to reaper {} us, map {} us",
+                pieces.len(),
+                t_stitch.as_micros(),
+                (t_desc - t_stitch).as_micros(),
+                (t_drop - t_desc).as_micros(),
+                (t0.elapsed() - t_drop).as_micros()
+            );
+        }
+        match r {
+            Ok(_) => Ok(obj),
+            Err(e) => {
+                let _ = self.free(obj);
+                Err(ScatterError::Map(e))
+            }
+        }
     }
 
     /// ONE TLB invalidate for `space` — the end of a deferred batch.
@@ -189,6 +425,22 @@ impl HostRm {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
+        let tsg = self.birth_group(space, engine_type)?;
+        self.birth_member(tsg, engine_type, ring, true).inspect_err(|_| {
+            let _ = self.free(tsg);
+        })
+    }
+
+    /// ★ A host channel GROUP (`KEPLER_CHANNEL_GROUP_A`) over `space` on `engine_type`, with no
+    /// member yet — the twin of ONE guest TSG, whose channels are born into it with
+    /// [`HostRm::birth_member`]. `[measured vvid 2026-09-26]` CUDA puts its 8 GR channels in ONE
+    /// TSG sharing ONE GR context; per-channel host TSGs split that context and a kernel launched
+    /// on a second stream's channel fails the SKED local-memory check (Xid 13
+    /// `SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE`) — context state pushed on one channel never reached it.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn birth_group(&self, space: VaSpace, engine_type: u32) -> Result<u32, RmError> {
         let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
         NvChannelGroupAllocationParameters {
             h_object_error: 0,
@@ -202,7 +454,22 @@ impl HostRm {
         let want = self.mint();
         let tsg = self.raw_alloc(self.device, want, CHANNEL_GROUP, &mut tsg_params)?;
         self.remember(tsg, self.device);
+        Ok(tsg)
+    }
 
+    /// ★ A channel over `ring` inside the host group `tsg` → bound → work-submit token. The FIRST
+    /// member binds the group (`NVA06C_CTRL_CMD_BIND`, every member present); a later member binds
+    /// itself (`NVA06F_CTRL_CMD_BIND` on the channel) so a bound group's other members are never
+    /// re-bound. `hContextShare = 0`: the group's LEGACY subcontext, shared by every member
+    /// (`kernel_channel.c:607-668`) — one GR context, as CUDA's one-ctxshare TSG has on hardware.
+    /// A failure frees the channel (never the group, which the caller owns).
+    ///
+    /// # Errors
+    /// [`USERD_OFFSET_MISALIGNED`] before any host call; else the host's refusal.
+    pub fn birth_member(&self, tsg: u32, engine_type: u32, ring: RingSpec, first: bool) -> Result<Channel, RmError> {
+        if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
+            return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
+        }
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         let encoded = ChannelAllocParams {
             h_object_error: ring.err_notifier,
@@ -224,25 +491,18 @@ impl HostRm {
         }
         .encode_into(&mut chan_params);
         if encoded.is_err() {
-            let _ = self.free(tsg);
             return Err(RmError::Other(ABI_ENCODE_FAILED));
         }
         let want = self.mint();
-        let chan = match self.raw_alloc(tsg, want, self.classes.gpfifo_channel().channel_id().0, &mut chan_params) {
-            Ok(h) => h,
-            Err(e) => {
-                let _ = self.free(tsg);
-                return Err(e);
-            }
-        };
+        let chan = self.raw_alloc(tsg, want, self.classes.gpfifo_channel().channel_id().0, &mut chan_params)?;
         self.remember(chan, tsg);
         let unwind = |me: &Self| {
             let _ = me.free(chan);
-            let _ = me.free(tsg);
         };
         let mut bind = [0u8; BIND_PARAMS_SIZE];
         bind.copy_from_slice(&engine_type.to_le_bytes());
-        if let Err(e) = self.raw_control(tsg, NVA06C_CTRL_CMD_BIND, &mut bind) {
+        let (on, cmd) = if first { (tsg, NVA06C_CTRL_CMD_BIND) } else { (chan, kf_abi::submit::NVA06F_CTRL_CMD_BIND) };
+        if let Err(e) = self.raw_control(on, cmd, &mut bind) {
             unwind(self);
             return Err(e);
         }
@@ -332,6 +592,25 @@ impl HostRm {
         Ok(h)
     }
 
+    /// ★ A VIDEO engine object (NVENC / NVDEC class) of `class` on `chan`, with params WE author:
+    /// `NV_MSENC_ALLOCATION_PARAMETERS` / `NV_BSP_ALLOCATION_PARAMETERS` — the same 12 bytes
+    /// `{size = 12, prohibitMultipleInstances = 0, engineInstance}` (`ogkm-580: nvos.h:2943-2996`),
+    /// `engineInstance` = the twin's own engine index, so nothing of the guest's alloc but its
+    /// class reaches the host. Host RM (a GSP client itself) allocates and promotes the falcon
+    /// context (`kernel_falcon.c:279-299`) — the guest's own context buffer is never used.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn alloc_video_object(&self, chan: Channel, class: u32, engine_instance: u32) -> Result<u32, RmError> {
+        let mut p = [0u8; 12];
+        p[0..4].copy_from_slice(&12u32.to_le_bytes());
+        p[8..12].copy_from_slice(&engine_instance.to_le_bytes());
+        let want = self.mint();
+        let h = self.raw_alloc(chan.chan, want, class, &mut p)?;
+        self.remember(h, chan.chan);
+        Ok(h)
+    }
+
     /// ★ w827: a `GT200_DEBUGGER` session on OUR device, bound to `obj3d` — a GR object this
     /// session allocated (a twin's engine object). Params WE author:
     /// `NV83DE_ALLOC_PARAMETERS {hDebuggerClient_Obsolete = 0, hAppClient = our client,
@@ -376,6 +655,23 @@ impl HostRm {
         self.raw_control(self.subdevice, 0x2080_1210, &mut p)
     }
 
+    /// ★ v3-gfx: `NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND` for `chan` on our subdevice — params WE
+    /// author: our client, the twin's channel, the guest's zcull buffer VA (the twin's VA space is
+    /// the guest channel's, VA-identical) and a mode the caller validated (`0..=2`). Host RM binds
+    /// it into the twin's GR context; it programs nothing outside that context
+    /// (`ctrl2080gr.h:589-608`).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn zcull_bind(&self, chan: Channel, va: u64, mode: u32) -> Result<(), RmError> {
+        let mut p = [0u8; 24];
+        p[0..4].copy_from_slice(&self.client.raw().to_le_bytes());
+        p[4..8].copy_from_slice(&chan.chan.to_le_bytes());
+        p[8..16].copy_from_slice(&va.to_le_bytes());
+        p[16..20].copy_from_slice(&mode.to_le_bytes());
+        self.raw_control(self.subdevice, 0x2080_1208, &mut p)
+    }
+
     /// ★ w827: `NVA06C_CTRL_CMD_SET_TIMESLICE` on `chan`'s group (`ctrla06c.h:146-152`) — host RM
     /// rounds to what the hardware supports and refuses what it does not.
     ///
@@ -411,6 +707,21 @@ impl HostRm {
         let flags = (aperture & 0x3) | (u32::from(write_back) << 2) | (u32::from(invalidate) << 3) | (1 << 4);
         let mut p = vec![0u8; SIZE];
         p[4016..4020].copy_from_slice(&flags.to_le_bytes());
+        self.raw_control(self.subdevice, 0x2080_130e, &mut p)
+    }
+
+    /// ★ w828: the same verb with ONLY `FB_FLUSH_YES` (flags bit 5) — the host's sysmembar
+    /// (`kmemsysFlushGpuCache_IMPL` → `kbusSendSysmembar`, `ogkm-580: src/nvidia/src/kernel/gpu/
+    /// mem_sys/kern_mem_sys_ctrl.c:1470-1476`; *"If only the FB flush is needed, only the _APERTURE
+    /// and _FB_FLUSH_YES are needed"*, `:1500-1502`). Serves a Hopper+ guest's
+    /// `NV_XAL_EP_UFLUSH_FB_FLUSH` token read.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn fb_flush(&self) -> Result<(), RmError> {
+        const SIZE: usize = 4024;
+        let mut p = vec![0u8; SIZE];
+        p[4016..4020].copy_from_slice(&(1u32 << 5).to_le_bytes());
         self.raw_control(self.subdevice, 0x2080_130e, &mut p)
     }
 
@@ -529,4 +840,58 @@ impl HostRm {
         let b = self.free(chan.tsg);
         a.and(b)
     }
+
+    /// ★ Free ONE member of a shared group (the channel only); the group is freed by its owner
+    /// when its last member goes ([`HostRm::free`] on `chan.tsg`).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn free_member(&self, chan: Channel) -> Result<(), RmError> {
+        self.free(chan.chan)
+    }
 }
+
+/// Why a [`HostRm::map_scattered`] placed nothing — each step named, so a refusal says whether the
+/// host kernel, the descriptor or the GPU map refused.
+#[derive(Debug)]
+pub enum ScatterError {
+    /// The stitched host view could not be built (e.g. a hugetlb backing, `max_map_count`).
+    Stitch(kf_linux_raw::RawError),
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` refused.
+    Descriptor(RmError),
+    /// The fixed map refused (incl. `VA_ALREADY_MAPPED`, [`RmError::PlacementRefused`]).
+    Map(RmError),
+}
+
+/// ★ `V3_BATCHED_MAP.md` §3: release a stitched view OFF the caller's thread.
+///
+/// The view is dead the moment its descriptor exists — RM pinned its pages and keeps no address
+/// (`os-mlock.c:216-254`, `nv.c:3357-3400`); nothing reads it — so WHEN it is unmapped changes
+/// nothing but who waits. One long-lived reaper thread `munmap`s views in order. The queue holds at
+/// most [`REAP_QUEUE`] views: beyond that the caller waits for the reaper (backpressure keeps the
+/// process's VMA count bounded — each queued view is up to `BATCH_MAX_RUNS` VMAs — never an
+/// unbounded pile against `vm.max_map_count`). If the thread cannot be started, the view is dropped
+/// here, as before.
+fn reap_view(view: kf_linux_raw::MappedRegion) {
+    type Tx = std::sync::mpsc::SyncSender<kf_linux_raw::MappedRegion>;
+    static REAPER: std::sync::OnceLock<Option<std::sync::Mutex<Tx>>> = std::sync::OnceLock::new();
+    let tx = REAPER.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<kf_linux_raw::MappedRegion>(REAP_QUEUE);
+        std::thread::Builder::new()
+            .name("kf-view-reaper".into())
+            .spawn(move || {
+                for v in rx {
+                    drop(v);
+                }
+            })
+            .ok()
+            .map(|_| std::sync::Mutex::new(tx))
+    });
+    let sent = tx.as_ref().and_then(|m| m.lock().ok().map(|tx| tx.send(view)));
+    if let Some(Err(std::sync::mpsc::SendError(v))) = sent {
+        drop(v);
+    }
+}
+
+/// Stitched views that may wait for the reaper at once.
+const REAP_QUEUE: usize = 2;

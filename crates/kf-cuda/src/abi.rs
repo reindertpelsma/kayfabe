@@ -49,7 +49,7 @@ pub const KF_MAX_SCOPE: usize = 256;
 ///
 /// ⚠ A host/PTX skew must fail **loudly at launch** rather than decode garbage field offsets
 /// and look like a page-table bug (`THE_CONSTRAINTS.md` §21). Mirrors `KF_ABI_VERSION`.
-pub const KF_ABI_VERSION: u32 = 3;
+pub const KF_ABI_VERSION: u32 = 4;
 
 /// `KFWR_OP_UNMAP` — the run names a VA being RETIRED, so it carries no `gpga` and is exempt
 /// from the §39(c) containment check. Mirrors `kf_walk.h:88`.
@@ -83,6 +83,14 @@ pub const KFWR_OP_MAP: u16 = 1;
 /// ★ A committed placement the host answered "already held" — its UNMAP is retired without asking
 /// the host (P6b ruling (a)). Mirrors `KFWR_RF_HELD`.
 pub const KFWR_RF_HELD: u32 = 1 << 31;
+/// `KFWR_R_RUN_CAP`: out of run capacity (a walk region, a slot, or the report).
+pub const KFWR_R_RUN_CAP: u32 = 1 << 4;
+/// `KFWR_R_BUDGET`: the walk's entry budget stopped it.
+pub const KFWR_R_BUDGET: u32 = 1 << 5;
+/// `KFWR_R_PDB_CAP`: more address spaces than the report's `PdbEntry` capacity.
+pub const KFWR_R_PDB_CAP: u32 = 1 << 6;
+/// `KFWR_R_FRONTIER_CAP`: the parallel walk's frontier/stage ran out.
+pub const KFWR_R_FRONTIER_CAP: u32 = 1 << 12;
 /// Per-entry flag: the entry's MAPs were withheld (slot capacity); re-walk after its UNMAPs.
 pub const KFWR_V_PARTIAL: u32 = 1 << 3;
 /// Per-entry flag: the slot is full and nothing can be retired; no runs.
@@ -272,6 +280,9 @@ pub struct KfDev {
     pub walk_abort: u32,
     /// Accumulator, zeroed by `kf_begin_kernel`.
     pub sparse_slots: u32,
+    /// ★ w829: per entry, the capacity it NEEDED (the walk's uncapped run count, or a diff's
+    /// placements + maps when its slot could not hold them).
+    pub need: [u32; KF_MAX_PDB],
 }
 
 impl Default for KfDev {
@@ -299,6 +310,7 @@ impl Default for KfDev {
             walk_trunc: 0,
             walk_abort: 0,
             sparse_slots: 0,
+            need: [0; KF_MAX_PDB],
         }
     }
 }
@@ -309,6 +321,43 @@ impl Default for KfDev {
 pub struct KfSlot {
     /// Placements per class; class 0's come first in the slot's run array.
     pub n: [u32; 4],
+}
+
+/// Committed-placement slots a [`KfLayout`] describes. Mirrors `KF_MAX_SLOTS`.
+pub const KF_MAX_SLOTS: usize = 128;
+
+/// ★★★★★ **The capacity layout** (`KfLayout` in `kf_walk.h`, w829) — per walk entry, its region
+/// of the walk pool (and so of the scratch); the previous walk's (the commit's scratch); per slot,
+/// its region of the committed-placement pool. In run units. Written by the host into pinned
+/// memory before each submit; read in place by the kernels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct KfLayout {
+    /// This walk's per-entry table offset.
+    pub walk_off: [u32; KF_MAX_PDB],
+    /// This walk's per-entry table capacity.
+    pub walk_cap: [u32; KF_MAX_PDB],
+    /// The previous walk's `walk_off`.
+    pub prev_off: [u32; KF_MAX_PDB],
+    /// The previous walk's `walk_cap`.
+    pub prev_cap: [u32; KF_MAX_PDB],
+    /// Per slot: its committed-placement region's offset.
+    pub slot_off: [u32; KF_MAX_SLOTS],
+    /// Per slot: its capacity (`0` = no region yet).
+    pub slot_cap: [u32; KF_MAX_SLOTS],
+}
+
+impl Default for KfLayout {
+    fn default() -> Self {
+        KfLayout {
+            walk_off: [0; KF_MAX_PDB],
+            walk_cap: [0; KF_MAX_PDB],
+            prev_off: [0; KF_MAX_PDB],
+            prev_cap: [0; KF_MAX_PDB],
+            slot_off: [0; KF_MAX_SLOTS],
+            slot_cap: [0; KF_MAX_SLOTS],
+        }
+    }
 }
 
 /// Slots one verdict may empty. Mirrors `KF_MAX_RESET`.
@@ -379,6 +428,8 @@ pub struct KfArgs {
     pub rpdb: u64,
     /// Device pointer to the report's run array.
     pub rrun: u64,
+    /// ★ w829: device pointer to the [`KfLayout`] (host-managed capacity).
+    pub lay: u64,
 }
 
 /// The report header. `KfReportHeader` in the `.cu`.
@@ -435,6 +486,21 @@ pub struct KfPdbEntry {
     pub reserved2: u64,
 }
 
+impl KfPdbEntry {
+    /// The `KFWR_R_*` bits this entry's walk refused (`reserved2` low 32).
+    #[must_use]
+    pub fn refused_bits(&self) -> u32 {
+        (self.reserved2 & 0xFFFF_FFFF) as u32
+    }
+
+    /// ★ w829: the capacity this entry NEEDED (`reserved2` high 32) — the walk's uncapped run
+    /// count, or placements + maps when the diff could not fit its slot.
+    #[must_use]
+    pub fn need(&self) -> u32 {
+        (self.reserved2 >> 32) as u32
+    }
+}
+
 /// One coalesced mapping run.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(C)]
@@ -452,6 +518,11 @@ pub struct KfMapRun {
     /// Index into the `PdbEntry` array.
     pub pdb_index: u16,
 }
+
+/// `KFWR_RF_AP_*` sys-coherent (`cuda/walk/kf_walk.h:109`): the run's `gpga` is guest-PHYSICAL.
+pub const KFWR_AP_SYS_COHERENT: u8 = 2;
+/// `KFWR_RF_AP_*` sys-noncoherent: the run's `gpga` is guest-PHYSICAL.
+pub const KFWR_AP_SYS_NONCOHERENT: u8 = 3;
 
 impl KfMapRun {
     /// The leaf aperture code: `flags` bits `KFWR_RF_AP_SHIFT`/`KFWR_RF_AP_MASK`

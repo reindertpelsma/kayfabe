@@ -303,6 +303,13 @@ const MAX_WIDTH_MASK: u32 = 0x3f;
 
 /// The lane count the emulated link is presented with.
 ///
+/// ⊘⊘ **SUPERSEDED as the v3 device's width, 2026-09-26 (`v3-families`).** The argument below
+/// ("the same on every host by construction") does not survive a second die: an AD106 is an x8
+/// part, and RM derives the UVM link bandwidth from this field (`nv_gpu_ops.c:2110-2113`), so
+/// presenting x16 over it doubles the bandwidth the guest believes it has. The v3 device now
+/// presents the HOST function's own `max_link_width` (sysfs, read at realize — §50 level 1) via
+/// [`PcieLinkCaps::host_link`]. This constant stays the old tree's and the tests' value.
+///
 /// ⊘ Deliberately **one constant here, not a chip-row field.** A row would invite a
 /// per-family transcription of whatever width the rented card happened to train at, and this
 /// is not describing a card: it is a property of the link *this port presents*, which is the
@@ -370,6 +377,18 @@ impl PcieLinkCaps {
         Self {
             max_gen,
             max_width: PRESENTED_LINK_WIDTH,
+        }
+    }
+
+    /// ★ The link the HOST function advertises: its maximum generation at its own maximum
+    /// width (sysfs `max_link_speed` / `max_link_width` of the host GPU). `None` for a width
+    /// PCIe does not define (`1, 2, 4, 8, 12, 16, 32` lanes) or one the 6-bit `MAX_WIDTH`
+    /// field (`ctrl2080bus.h:364`) cannot carry.
+    #[must_use]
+    pub const fn host_link(max_gen: PcieGen, max_width: u32) -> Option<Self> {
+        match max_width {
+            1 | 2 | 4 | 8 | 12 | 16 | 32 => Some(Self { max_gen, max_width }),
+            _ => None,
         }
     }
 

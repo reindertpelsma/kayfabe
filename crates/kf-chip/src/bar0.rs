@@ -65,12 +65,18 @@ pub const fn pmc_boot_42(architecture: u32, implementation: u32, revision: u32) 
         | ((revision & 0xF) << 12)
 }
 
-/// `NV_XVE_LINK_CAPABILITIES` for a link trained at `max_gen` ×16 — delegated to the ABI's own
-/// encoder (`kf_abi::businfo::PcieLinkCaps::fully_trained`), which documents why the real part's
-/// measured word is the wrong thing to copy.
+/// `NV_XVE_LINK_CAPABILITIES` for the HOST function's link: its maximum generation at its own
+/// maximum width (sysfs `max_link_speed` / `max_link_width`, read at realize) — delegated to the
+/// ABI's encoder (`kf_abi::businfo::PcieLinkCaps::host_link`). ⊘ Was `fully_trained` = ×16 on
+/// every die; an AD106 is ×8 (2026-09-26, `V3_FAMILY_PORT_ADA.md` §2).
+///
+/// `None` for a width PCIe does not define.
 #[must_use]
-pub const fn pcie_link_caps(max_gen: kf_abi::businfo::PcieGen) -> u32 {
-    kf_abi::businfo::PcieLinkCaps::fully_trained(max_gen).encode()
+pub const fn pcie_link_caps(max_gen: kf_abi::businfo::PcieGen, max_width: u32) -> Option<u32> {
+    match kf_abi::businfo::PcieLinkCaps::host_link(max_gen, max_width) {
+        Some(l) => Some(l.encode()),
+        None => None,
+    }
 }
 
 const NV_PMC_BOOT_0: u64 = 0x0000_0000;
@@ -82,15 +88,46 @@ const NV_XVE_LINK_CAPABILITIES: u64 = 0x0008_8084;
 /// (`0x3110`) — identical in `turing/tu102/dev_vm.h:209` and `blackwell/gb100/dev_vm.h:503`.
 const NV_VF_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE: u64 = 0x00B8_3110;
 /// `NV_USABLE_FB_SIZE_IN_MB` = `NV_PGC6_AON_SECURE_SCRATCH_GROUP_42` (`ampere/ga102/
-/// dev_gc6_island_addendum.h:33`) — published for the falcon-boot families only.
+/// dev_gc6_island_addendum.h:33`). ⊘ CORRECTED 2026-09-26 (family port): read by
+/// `kmemsysReadUsableFbSize_GA102`, which ogkm binds for GA102–GA107, AD102–AD107, GH100 and every
+/// GB die (`g_kern_mem_sys_nvoc.c:353-357`) — compiled against the GA102 header, so the SAME offset
+/// on Hopper/Blackwell. It is NOT read on Turing or GA100 (they bind `_GP102`, below).
 const NV_USABLE_FB_SIZE_IN_MB: u64 = 0x0011_83A4;
+/// `NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE` (`published/pascal/gp102/dev_fb.h:26-29`): `LOWER_SCALE`
+/// `3:0`, `LOWER_MAG` `9:4`, size = `mag << (scale + 20)`. Read by `kmemsysReadUsableFbSize_GP102`,
+/// bound for TU10x and GA100 (`g_kern_mem_sys_nvoc.c:349-352`).
+const NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GP102: u64 = 0x0010_0CE0;
+/// `NV_PGC6_BSI_VPR_SECURE_SCRATCH_15` = `NV_PGC6_BSI_SECURE_SCRATCH_15` (`ogkm-580:
+/// published/ada/ad102/dev_gc6_island.h:27`, addendum `:27-29`): `SCRUBBER_HANDOFF` is `31:29`,
+/// `_DONE` = 3.
+const NV_PGC6_BSI_VPR_SECURE_SCRATCH_15: u64 = 0x0011_80FC;
+/// `SCRUBBER_HANDOFF_DONE << 29`.
+const SCRUBBER_HANDOFF_DONE: u32 = 3 << 29;
 /// Access-counter notify buffer: two pages of 32-byte entries — advertised, never written (the old
 /// tree's `resume_from_fault.md` §S2 ruling: migration heuristics simply never fire).
 const ACCESS_COUNTER_ENTRIES_ADVERTISED: u32 = 2 * (4096 / 32);
 
-/// ★ The boot registers for `family`, from `facts`. ⊘ `USABLE_FB_SIZE_IN_MB` is served only where
-/// ogkm publishes it (Turing … Ada); on Hopper/Blackwell the framebuffer size reaches RM by another
-/// path, and inventing the register there would be a guess.
+/// `NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE` for `fb_mb` MiB: the largest scale that states it EXACTLY
+/// with a 6-bit magnitude, or `None` (never a rounded size).
+#[must_use]
+pub const fn local_memory_range_gp102(fb_mb: u64) -> Option<u32> {
+    let mut scale = 15u32;
+    loop {
+        let unit = 1u64 << scale;
+        if fb_mb % unit == 0 && fb_mb / unit >= 1 && fb_mb / unit <= 0x3F {
+            return Some((((fb_mb / unit) as u32) << 4) | scale);
+        }
+        if scale == 0 {
+            return None;
+        }
+        scale -= 1;
+    }
+}
+
+/// ★ The boot registers for `family`, from `facts`. The framebuffer size is served through BOTH
+/// usable-size HALs' registers wherever a die of the family reads one: `USABLE_FB_SIZE_IN_MB` on
+/// Ampere (GA10x) … Blackwell, `LOCAL_MEMORY_RANGE` on Turing and Ampere (GA100) — a register a die
+/// does not read is an unread shadow word.
 #[must_use]
 pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
     let mut v = vec![
@@ -125,12 +162,35 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             from: Provenance::Advertised("uvmInitializeAccessCntrBuffer refuses a zero size; nothing is ever written"),
         },
     ];
-    if matches!(family, Family::Turing | Family::Ampere | Family::Ada) {
+    if !matches!(family, Family::Turing) {
         v.push(BootReg {
             off: NV_USABLE_FB_SIZE_IN_MB,
             value: u32::try_from(f.fb_mb).unwrap_or(u32::MAX),
             name: "NV_USABLE_FB_SIZE_IN_MB",
             from: Provenance::Host("the store's reserved size (constraint 15)"),
+        });
+    }
+    if matches!(family, Family::Turing | Family::Ampere) {
+        if let Some(value) = local_memory_range_gp102(f.fb_mb) {
+            v.push(BootReg {
+                off: NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GP102,
+                value,
+                name: "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE",
+                from: Provenance::Host("the store's reserved size (constraint 15), kmemsysReadUsableFbSize_GP102 encoding"),
+            });
+        }
+    }
+    // ★ Ada only (`kgspExecuteScrubberIfNeeded_AD102`, `ogkm-580: kernel_gsp_ad102.c`; the image is
+    // ALWAYS allocated on Ada — `kernel_gsp.c:3734` "WAR for Bug 5016200"). Before the booter runs,
+    // RM reads SCRUBBER_HANDOFF and, below DONE, resets SEC2 and runs a scrubber HS ucode on it —
+    // a falcon run our GSP FSM would read as the booter. ⇒ We are the GSP and the store is ours,
+    // so the top of FB is "already scrubbed": advertise DONE, and RM skips it by its own branch.
+    if matches!(family, Family::Ada) {
+        v.push(BootReg {
+            off: NV_PGC6_BSI_VPR_SECURE_SCRATCH_15,
+            value: SCRUBBER_HANDOFF_DONE,
+            name: "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15",
+            from: Provenance::Advertised("kgspExecuteScrubberIfNeeded_AD102 skips the SEC2 scrubber when HANDOFF >= DONE"),
         });
     }
     v
@@ -148,9 +208,14 @@ pub struct PciIdentity {
     pub class: [u8; 3],
 }
 
-/// ★ The VBIOS profile for THIS host: its PCI identity, plus the FWSEC geometry kf-abi documents as
-/// GENERATED to satisfy the driver's inequalities (not transcribed from any card) — so it is
-/// family-level for every falcon-boot family, never a per-die row keyed by device id.
+/// ★ The VBIOS profile for THIS host: its PCI identity and its own VBIOS version
+/// (`BIOS_GET_INFO_V2` `REVISION`/`OEM_REVISION`, `0x20800810`, NON_PRIVILEGED — asked at realize,
+/// `kf_rm::HostFacts::vbios_version`), plus the FWSEC geometry kf-abi documents as GENERATED to
+/// satisfy the driver's inequalities ([`kf_abi::vbios::GENERATED_FWSEC`]) — so it is family-level
+/// for every falcon-boot family, never a per-die row keyed by device id.
+///
+/// ⊘ Was `VBIOS_PROFILES.first()`: the GA106 row's version `0x9418_0000` on every die
+/// (2026-09-26, `V3_FAMILY_PORT_ADA.md` §2).
 ///
 /// ⊘ Hopper/Blackwell boot through FSP and do not run FWSEC from the VBIOS; what their ROM image must
 /// carry is not yet established from ogkm, so they are refused by name here rather than handed a
@@ -158,22 +223,25 @@ pub struct PciIdentity {
 ///
 /// # Errors
 /// A family whose ROM content is not yet derived.
-pub fn vbios_profile(family: Family, id: PciIdentity) -> Result<kf_abi::vbios::VbiosProfile, crate::RowUnbuilt> {
+pub fn vbios_profile(
+    family: Family,
+    id: PciIdentity,
+    version: (u32, u8),
+) -> Result<kf_abi::vbios::VbiosProfile, crate::RowUnbuilt> {
     if matches!(family, Family::Hopper | Family::Blackwell) {
         return Err(crate::RowUnbuilt {
             family,
             what: "VBIOS image: FSP families do not run FWSEC; their ROM contents are not yet derived from ogkm",
         });
     }
-    let generated = kf_abi::vbios::VBIOS_PROFILES
-        .first()
-        .ok_or(crate::RowUnbuilt { family, what: "kf-abi carries no generated FWSEC geometry" })?;
     Ok(kf_abi::vbios::VbiosProfile {
-        name: "derived (host PCI identity + generated FWSEC geometry)",
+        name: "derived (host PCI identity + host VBIOS version + generated FWSEC geometry)",
         pci_vendor_id: id.vendor,
         pci_device_id: id.device,
         pci_class_code: id.class,
-        ..*generated
+        vbios_version: version.0,
+        vbios_oem_version: version.1,
+        fwsec: kf_abi::vbios::GENERATED_FWSEC,
     })
 }
 

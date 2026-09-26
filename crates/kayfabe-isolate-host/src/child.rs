@@ -382,7 +382,11 @@ fn build_backends(
             if args.cuda_walk {
                 crate::cudawalk::probe_after_sandbox();
             }
-            // ★ #156 — the host board's class profile, PINNED. See
+            // ★ #156 — the host board's class profile. ⊘ CORRECTED 2026-09-26: it is now
+            // ASKED of the device (`RmConnection::open_on_host`, R6a: the host's own
+            // `GET_CLASSLIST_V2`, newest per role); the text below is the pinned era's.
+            //
+            // (was:) PINNED. See
             // `kayfabe_chips::host_classes::pinned_host_classes`: this process does not
             // ask the device what generation it is.
             //
@@ -394,7 +398,7 @@ fn build_backends(
             // those profiles are INFERRED from `ogkm`'s per-chip class tables
             // (`src/nvidia/generated/g_gpu_class_list.c`) and compile only.
             let conn = Arc::new(
-                RmConnection::open(&dev, GpuId(args.gpu), kayfabe_chips::pinned_host_classes())
+                RmConnection::open_on_host(&dev, GpuId(args.gpu))
                     .map_err(|e| e.to_string())?,
             );
             Ok((0..args.workers)

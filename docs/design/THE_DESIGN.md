@@ -638,6 +638,16 @@ is wrong.
 Mapped as a **read-only KVM memslot over the real host doorbell page**: reads are hardware with no
 exit, writes trap into the path above, and when *we* ring we write the host page directly.
 
+> ⊘ **CORRECTED 2026-09-26 for v3 (`V3_BAR1_DOORBELL.md` §1.4).** The paragraph below was written
+> for Mode 1, where kayfabe served the ioctl. In v3 the stock guest RM allocates the usermode object
+> **without any GSP RPC** (`resource_list.h:885-904`), so there is no handle to identify it by: the
+> BAR1 view is learned from the guest's BAR1 PTE (aperture SYS_COH + kind SMSKED_MESSAGE, address =
+> the VF register offset — the GMMU's own decode, not a pattern match) and trapped at runtime where
+> RM's BAR1 allocator put it. The BAR0 doorbell stays live on Hopper+ too (RM rings its internal
+> channels through BAR0; a client without `bBar1Mapping` gets the BAR0 view) — both trap writes.
+> ⚠ And the "two privilege domains" line below is not clean on Hopper+: guest-KERNEL UVM sets
+> `bBar1Mapping` and rings its channels through a BAR1 view (`nv_gpu_ops.c:5548,5625`).
+
 On Hopper and newer, unprivileged clients map the doorbell over **BAR1** instead — `bBar1Mapping`
 is not privilege-gated, and both UVM and NVIDIA's own pushbuffer library request it. ⇒
 **BAR1 is never trapped, with exactly one exception: the page the guest maps the usermode object

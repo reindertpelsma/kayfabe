@@ -14,7 +14,7 @@
 //! The body below is the old `kayfabe-chips/gb20x.rs` (the superset), with those three changes.
 
 use kf_arch::gsp::{
-    ArchBootState, BootContext, BootSequence, BootStageDesc, BootStep, BootStepKind, BootSteps,
+    AfterSuspend, ArchBootState, BootPhase, BootContext, BootSequence, BootStageDesc, BootStep, BootStepKind, BootSteps,
     GspModel, GspObservation, GspReg, LibosRegionLayout, RegWrite,
 };
 
@@ -230,6 +230,12 @@ const DMATRFCMD_IDLE: u64 = 0x2;
 /// (`ogkm-580: ampere/ga102/dev_riscv_pri.h:33`, the header GB202's
 /// `kflcnRiscvReadIntrStatus_GA102` binding selects).
 const RISCV_CPUCTL_ACTIVE: u64 = 0x80;
+/// `NV_PRISCV_RISCV_CPUCTL_HALTED` is `4:4`, `_TRUE` is `1`
+/// (`ogkm-580: hopper/gh100/dev_riscv_pri.h:62-64`).
+const RISCV_CPUCTL_HALTED: u64 = 0x10;
+/// The suspend sentinel `kgspWaitForProcessorSuspend_TU102` compares `MAILBOX0` against, by exact
+/// equality (`ogkm-580: kernel_gsp_tu102.c:1238`) — see the falcon model's `PROCESSOR_SUSPENDED`.
+const PROCESSOR_SUSPENDED: u64 = 0x8000_0000;
 /// `NV_PFALCON_FALCON_IRQSTAT_SWGEN0` is `6:6`
 /// (`ogkm-580: turing/tu102/dev_falcon_v4.h:34`).
 const IRQSTAT_SWGEN0: u64 = 1 << 6;
@@ -340,6 +346,15 @@ const FSP_STAGES: &[BootStageDesc] = &[
 impl BootSequence for FspBoot {
     fn stages(&self) -> &'static [BootStageDesc] {
         FSP_STAGES
+    }
+
+    /// ★★★★★ w828 — the firmware stops itself. `kgspTeardown_GH100` writes nothing; it waits for
+    /// the RISC-V core to halt *"to allow ACR and GSP FMC to finish shutdown"*
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/hopper/kernel_gsp_gh100.c:995-1004`),
+    /// bound for every non-Tegra chip after AD107 (`generated/g_kernel_gsp_nvoc.c:723-742`) —
+    /// Hopper and Blackwell alike. See [`BootSequence::after_suspend`].
+    fn after_suspend(&self) -> AfterSuspend {
+        AfterSuspend::FirmwareHalts
     }
 
     fn on_write(
@@ -602,7 +617,18 @@ impl GspModel for FspGspModel {
             // A non-zero MAILBOX0 is how the GSP-FMC reports a boot ERROR on this regime
             // (`ogkm-580: kernel_gsp_gh100.c:552,562`), so the boot-args echo the falcon
             // regime serves here is LOST rather than served with the wrong meaning.
-            GspReg::GspFalconMailbox0 => 0,
+            // ★ w828: …but once fn-47 has suspended the processor it is the suspend sentinel,
+            // which `kgspWaitForProcessorSuspend_TU102` polls for on THIS regime too (bound for
+            // every non-Tegra chip, `generated/g_kernel_gsp_nvoc.c:1449-1462`; exact equality,
+            // `ogkm-580: kernel_gsp_tu102.c:1226-1249`). `suspended` is false at every stage of a
+            // boot (the STARTCPU clears it), so the FMC error channel is unaffected.
+            GspReg::GspFalconMailbox0 => {
+                if obs.suspended {
+                    PROCESSOR_SUSPENDED
+                } else {
+                    0
+                }
+            }
             GspReg::GspFalconMailbox1 => u64::from(obs.boot_args_hi),
             GspReg::GspFalconIrqstat => {
                 if obs.swgen0_pending {
@@ -626,6 +652,11 @@ impl GspModel for FspGspModel {
             GspReg::GspRiscvCpuctl => {
                 if obs.riscv_active {
                     RISCV_CPUCTL_ACTIVE
+                } else if obs.stage == BootPhase::Halted {
+                    // ★ w828: the firmware halted itself after the suspend — the edge
+                    // `kgspTeardown_GH100` → `kflcnWaitForHaltRiscv_GA102` spins on
+                    // (`ogkm-580: .../falcon/arch/ampere/kernel_falcon_ga102.c:277-301`).
+                    RISCV_CPUCTL_HALTED
                 } else {
                     0
                 }
@@ -654,6 +685,17 @@ impl GspModel for FspGspModel {
             | GspReg::Sec2FalconMailbox0
             | GspReg::Sec2FalconDmatrfcmd => return None,
         })
+    }
+
+    /// ★★★ w828 — see [`GspModel::answer_on_store`]: `DMATRFCMD` is always idle and `BCR_CTRL`
+    /// acknowledges the core just selected, whatever the FSM's state. ⊘ Never `CPUCTL`.
+    fn answer_on_store(&self, reg: GspReg, written: u64) -> Option<u64> {
+        match reg {
+            GspReg::GspFalconDmatrfcmd => Some(DMATRFCMD_IDLE),
+            #[allow(clippy::cast_possible_truncation)]
+            GspReg::GspRiscvBcrCtrl => Some(u64::from(written as u32) | BCR_CTRL_VALID),
+            _ => None,
+        }
     }
 
     fn boot_sequence(&self) -> &dyn BootSequence {
