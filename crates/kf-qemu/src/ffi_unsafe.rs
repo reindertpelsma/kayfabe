@@ -297,6 +297,37 @@ pub extern "C" fn kf3_irq_fd(h: *mut c_void, vector: u32) -> i32 {
     dev(h).and_then(|d| d.irq_fd(vector as usize)).unwrap_or(-1)
 }
 
+/// ★ Whether this device's guest can place BAR1 usermode (doorbell) views — Hopper+ — so the C
+/// device must build its overlay pool and register [`kf3_set_bar1_overlay`]. 1 or 0; -1 on a bad
+/// handle.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_bar1_follows_guest(h: *mut c_void) -> i32 {
+    dev(h).map_or(-1, |d| i32::from(d.plane.doorbell.follows_guest_bar1()))
+}
+
+/// ★ Register the C device's BAR1 overlay verb (`V3_BAR1_DOORBELL.md` §4). Returns 0, or -1 (bad
+/// handle, null verb, or already registered).
+///
+/// # Safety
+/// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime; it
+/// may block (bounded) and must never be called on a vCPU.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_set_bar1_overlay(h: *mut c_void, f: Option<crate::raw_unsafe::OverlayFn>, opaque: *mut c_void) -> i32 {
+    let (Some(d), Some(f)) = (dev(h), f) else { return -1 };
+    // SAFETY: forwarded from this function's contract.
+    let hook = unsafe { crate::raw_unsafe::OverlayHook::adopt(f, opaque) };
+    if d.bar1_overlay.set(hook) { 0 } else { -1 }
+}
+
+/// ★ THE vCPU PATH for a write into a BAR1 usermode overlay: `vf_rel` = offset inside the 64 KiB
+/// usermode page (the overlay aliases it, so QEMU hands us that offset directly). Lock-free.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_bar1_usermode_write(h: *mut c_void, vf_rel: u64, val: u64, width: u32) {
+    if let Some(d) = dev(h) {
+        d.bar1_usermode_write(vf_rel, val, u8::try_from(width).unwrap_or(4));
+    }
+}
+
 /// Stop the device's threads (the device itself lives for the process).
 #[unsafe(no_mangle)]
 pub extern "C" fn kf3_unrealize(h: *mut c_void) {

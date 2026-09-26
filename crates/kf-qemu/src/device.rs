@@ -187,6 +187,8 @@ pub struct Device {
     vat_prev: Mutex<kf_mem::vasmgr::VaTiming>,
     /// ★ w827: the attribution instruments (`KF3_PROF=1`; off = one relaxed load per hook).
     pub prof: Box<crate::prof::Prof>,
+    /// ★ Hopper+: the C device's BAR1 overlay verb and its counters (`V3_BAR1_DOORBELL.md`).
+    pub bar1_overlay: std::sync::Arc<crate::mem::Bar1Overlay>,
     /// The GSP command-queue head (the RPC doorbell) as a BAR0 offset — for [`crate::prof`].
     qhead_off: u64,
     /// Held replies' queue-head stamps, oldest first (drainer only) — for [`crate::prof`].
@@ -436,7 +438,10 @@ impl Device {
             fb_length,
             Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
         )
-        .with_page_grain(family.mmu_format().small_page_bytes());
+        .with_page_grain(family.mmu_format().small_page_bytes())
+        // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM
+        // (`V3_BAR1_DOORBELL.md`). `None` on Turing … Ada: unchanged.
+        .with_usermode_mmio(family.usermode_mmio());
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -446,9 +451,21 @@ impl Device {
             .map_err(|e| format!("our BAR2 root: {e:?}"))?;
         // ★ P5 (P4 row 6): BAR1 is walked from OUR BAR1 root like BAR2 — the guest writes its BAR1
         // PDEs straight into that page (no RPC) and invalidates it; the walk places store views.
+        let bar1_overlay = std::sync::Arc::new(crate::mem::Bar1Overlay::default());
+        let bar1_win = kf_mem::cpuwin::CpuWindow::new(bar1_ops, cfg.bar1_bytes);
         va.table.insert(
             crate::mem::K_BAR1,
-            crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar1_ops, cfg.bar1_bytes)),
+            // ★ Hopper+: the guest places BAR1 usermode views where ITS allocator chooses; they
+            // become write-trapped overlays there (`V3_BAR1_DOORBELL.md` §4).
+            match family.usermode_mmio() {
+                Some(u) => crate::mem::Target::Bar1(crate::mem::Bar1Target::new(
+                    bar1_win,
+                    cfg.bar1_bytes,
+                    u.vf_len,
+                    bar1_overlay.clone(),
+                )),
+                None => crate::mem::Target::Window(bar1_win),
+            },
         );
         va.table
             .set_root(crate::mem::K_BAR1, layout.bar1_pde_base, kf_trap::PdbAperture::Vidmem)
@@ -496,6 +513,7 @@ impl Device {
             counters: Counters::default(),
             vat_prev: Mutex::new(kf_mem::vasmgr::VaTiming::default()),
             prof: Box::default(),
+            bar1_overlay,
             qhead_off,
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
         })
@@ -683,9 +701,7 @@ impl Device {
         if (0x0011_0c00..0x0011_0c40).contains(&off) {
             return "GSP_QUEUE_HEAD/TAIL(n)";
         }
-        if let kf_trap::trappolicy::DoorbellPlacement::Bar0 { offset } = self.plane.doorbell
-            && off == kf_trap::memmap::VF_USERMODE_PAGE + offset
-        {
+        if off == kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset() {
             return "USERMODE_DOORBELL";
         }
         if off == self.mem.pramin_reg.offset {
@@ -709,12 +725,11 @@ impl Device {
     fn bar0_write_inner(&self, off: u64, val: u64, width: u8) {
         self.counters.trapped.fetch_add(1, Ordering::Relaxed);
         self.counters.last_off.store(off, Ordering::Relaxed);
-        let doorbell = match self.plane.doorbell {
-            kf_trap::trappolicy::DoorbellPlacement::Bar0 { offset } => {
-                off == kf_trap::memmap::VF_USERMODE_PAGE + u64::from(offset)
-            }
-            kf_trap::trappolicy::DoorbellPlacement::Bar1 { .. } => false,
-        };
+        // ★ The BAR0 doorbell is live on EVERY family — on Hopper+ too: RM rings kernel channels
+        // through its own BAR0 mapping (`kfifoRingChannelDoorBell_GH100` → GV100 →
+        // `GPU_VREG_WR32`), and a client without `bBar1Mapping` gets the BAR0 view
+        // (`V3_BAR1_DOORBELL.md` §1). ⊘ Before 2026-09-26 Hopper+ never recognised it here.
+        let doorbell = off == kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset();
         let in_usermode = (kf_trap::memmap::VF_USERMODE_PAGE..kf_trap::memmap::VF_USERMODE_PAGE + kf_trap::memmap::PAGE)
             .contains(&off);
         // ★ P4: the three MMU_INVALIDATE registers. The port arms FIRST, then the shadow takes the
@@ -799,6 +814,23 @@ impl Device {
             }
             Action::None => {}
         }
+    }
+
+    /// ★★★ **A write into a Hopper+ BAR1 usermode view** (`V3_BAR1_DOORBELL.md` §4) — the vCPU
+    /// path, from the C device's overlay; `vf_rel` is the offset inside the 64 KiB usermode page,
+    /// decoded by the overlay itself (no lookup, no lock).
+    ///
+    /// The GMMU routes a write through such a PTE to the VF register at `vf_rel` — the SAME
+    /// register the BAR0 usermode page exposes — so page 0 enters exactly as that BAR0 write:
+    /// `+0x90` is the doorbell (token → our table, never the trap's identity), every other
+    /// offset is `Class::UserspaceMappable` and does nothing. ⊘ Pages 1..15 of the view do
+    /// nothing either: they are never routed onto BAR0's privileged path (a BAR1 view is an
+    /// unprivileged client's).
+    pub fn bar1_usermode_write(&self, vf_rel: u64, val: u64, width: u8) {
+        if !self.plane.doorbell.follows_guest_bar1() || vf_rel >= kf_trap::memmap::PAGE {
+            return;
+        }
+        self.bar0_write(kf_trap::memmap::VF_USERMODE_PAGE + vf_rel, val, width);
     }
 
     /// ★ Send what a tree write or latch asked for: ONE eventfd write on MSI-X vector 0 (RM reads
@@ -1237,7 +1269,21 @@ impl Device {
             self.mem.pramin_trap.inline_opens.load(o),
             self.mem.pramin_trap.reaped.load(o),
             mc.cache_ops.load(o),
-        ) + &timing;
+        ) + &timing
+            // ★ Hopper+ only (Turing … Ada's line is unchanged): the BAR1 doorbell views.
+            + &if self.plane.doorbell.follows_guest_bar1() {
+                let b = &self.bar1_overlay;
+                format!(
+                    " bar1db[trapped={} unmirrored={} installed={} removed={} refused={}]",
+                    va.usermode_trapped,
+                    va.usermode_unmirrored,
+                    b.installed.load(o),
+                    b.removed.load(o),
+                    b.refused.load(o)
+                )
+            } else {
+                String::new()
+            };
         let ws = &self.worker_stats;
         let toks: Vec<String> = self
             .chans

@@ -20,6 +20,7 @@ pub mod falcon_gsp;
 pub mod fsp_gsp;
 pub mod host_classes;
 pub mod ptekind;
+pub mod usermode;
 
 pub use classes::{ClassSet, Kind, classes_for};
 pub use host_classes::{DerivedHostClasses, HostLacksKind};

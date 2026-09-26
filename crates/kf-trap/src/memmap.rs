@@ -176,23 +176,13 @@ pub fn memory_map(
         regions.push(Region { bar: Bar(0), base: at, len: bar0_bytes - at, how: Disposition::ShadowWriteTrapped });
     }
 
-    // ---- BAR1: plain RAM throughout, except the doorbell page where the doorbell lives there. ----
-    match doorbell {
-        DoorbellPlacement::Bar0 { .. } => {
-            regions.push(Region { bar: Bar(1), base: 0, len: bar1_bytes, how: Disposition::PlainRam });
-        }
-        DoorbellPlacement::Bar1 { page_base } => {
-            let end = page_base + 0x1_0000;
-            if page_base > 0 {
-                regions.push(Region { bar: Bar(1), base: 0, len: page_base, how: Disposition::PlainRam });
-            }
-            // ★ The ONE page of BAR1 that may trap, and only writes — the ring is a write.
-            regions.push(Region { bar: Bar(1), base: page_base, len: 0x1_0000, how: Disposition::ShadowWriteTrapped });
-            if bar1_bytes > end {
-                regions.push(Region { bar: Bar(1), base: end, len: bar1_bytes - end, how: Disposition::PlainRam });
-            }
-        }
-    }
+    // ---- BAR1: plain RAM throughout, on EVERY family — one memslot (`THE_CONSTRAINTS.md` §23). ----
+    // ⊘⊘⊘ 2026-09-26: Hopper+ used to carve a fixed "doorbell page" at 0x9_0000 here. RM places
+    // the BAR1 usermode view where ITS BAR1 allocator chooses, per mapping, so a setup-time carve
+    // can only be wrong; the view is overlaid at runtime where the guest's BAR1 PTEs put it
+    // (`crate::bar1db`, `V3_BAR1_DOORBELL.md`). `doorbell` no longer shapes BAR1 at all.
+    let _ = doorbell;
+    regions.push(Region { bar: Bar(1), base: 0, len: bar1_bytes, how: Disposition::PlainRam });
 
     // ---- BAR2: plain RAM, always, in every configuration. ----
     regions.push(Region { bar: Bar(2), base: 0, len: bar2_bytes, how: Disposition::PlainRam });

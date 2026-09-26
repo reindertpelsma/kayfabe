@@ -37,7 +37,7 @@ use crate::raw_unsafe::{BackendFd, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, SharedRam};
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
-use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped};
+use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, UsermodeRow};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey};
 use kf_rm::barpde::{BarAperture, MemStatement};
 use kf_trap::pramin::{GRANULE, SLOTS, Target as WinTarget, WindowReg};
@@ -289,6 +289,9 @@ impl ViewOps for WindowOps {
 pub enum Target {
     /// A guest BAR aperture.
     Window(CpuWindow<WindowOps>),
+    /// ★ The Hopper+ BAR1 aperture: the window, plus the guest's usermode (doorbell) views
+    /// (`V3_BAR1_DOORBELL.md`). Turing … Ada use [`Target::Window`] for BAR1, unchanged.
+    Bar1(Bar1Target),
     /// A host GPU VA space mirroring a guest one (the Translated plane's target).
     Gpu(GpuMirror),
 }
@@ -456,32 +459,159 @@ impl MapTarget for Target {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         match self {
             Target::Window(w) => w.map(d, defer),
+            Target::Bar1(b) => b.map(d, defer),
             Target::Gpu(g) => g.map(d, defer),
         }
     }
     fn reserved(&self) -> Vec<(u64, u64)> {
         match self {
             Target::Window(w) => w.reserved(),
+            Target::Bar1(b) => b.win.reserved(),
             Target::Gpu(g) => g.reserved(),
         }
     }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
         match self {
             Target::Window(w) => w.unmap(va, defer),
+            Target::Bar1(b) => b.unmap(va, defer),
             Target::Gpu(g) => g.unmap(va, defer),
         }
     }
     fn invalidate(&self) -> Result<(), String> {
         match self {
             Target::Window(w) => w.invalidate(),
+            Target::Bar1(b) => b.win.invalidate(),
             Target::Gpu(g) => g.invalidate(),
         }
     }
     fn va_extent(&self) -> Option<u64> {
         match self {
             Target::Window(w) => w.va_extent(),
+            Target::Bar1(b) => b.win.va_extent(),
             Target::Gpu(g) => g.va_extent(),
         }
+    }
+    fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
+        match self {
+            // ⊘ BAR2 is RM's own kernel aperture; a usermode view there has no reader. The trait
+            // default (not mirrored, satisfied) is the answer, as for a GPU VA space.
+            Target::Window(w) => w.map_usermode(u),
+            Target::Bar1(b) => b.map_usermode(u),
+            // ★ A GPU VA view of the doorbell: NOT MIRRORED (the trait default, `V3_BAR1_DOORBELL.md` §5).
+            Target::Gpu(g) => g.map_usermode(u),
+        }
+    }
+}
+
+/// ★ How many BAR1 doorbell views the C device can overlay at once (its alias pool,
+/// `KF3_BAR1_OVERLAYS` in `kf3.c`). ⊘ User CPU maps are `ALLOW_DISCONTIG` ⇒ never reused
+/// (`mapping_cpu.c:484`, `kern_bus_gm107.c:3043-3047`), so this is roughly one per guest process
+/// holding a CUDA context, plus UVM's one kernel view. The 65th is refused by name.
+pub const BAR1_OVERLAY_SLOTS: usize = 64;
+
+/// ★ The BAR1 overlay verb, registered by the C device after realize, and its counters.
+#[derive(Debug, Default)]
+pub struct Bar1Overlay {
+    hook: std::sync::OnceLock<crate::raw_unsafe::OverlayHook>,
+    /// Overlays installed.
+    pub installed: AtomicU64,
+    /// Overlays removed.
+    pub removed: AtomicU64,
+    /// Views refused (by the tracker or the C device), each named in the VA stats.
+    pub refused: AtomicU64,
+}
+
+impl Bar1Overlay {
+    /// Register the C device's verb (once).
+    pub fn set(&self, h: crate::raw_unsafe::OverlayHook) -> bool {
+        self.hook.set(h).is_ok()
+    }
+}
+
+/// ★★★ **The Hopper+ BAR1 target** (`V3_BAR1_DOORBELL.md` §4): ordinary leaves go to the window;
+/// a usermode-page view becomes a write-trapped overlay at exactly the BAR1 offset the guest's
+/// own PTEs put it, BEFORE the guest's invalidate clears (map may not defer the mapping), and is
+/// removed when its UNMAP arrives. VA-manager thread only.
+pub struct Bar1Target {
+    /// The BAR1 window.
+    pub win: CpuWindow<WindowOps>,
+    db: std::cell::RefCell<kf_trap::bar1db::Bar1Doorbells>,
+    overlay: std::sync::Arc<Bar1Overlay>,
+}
+
+impl Bar1Target {
+    /// The window, a tracker over `bar1_bytes` and a `usermode_len`-byte page, and the verb.
+    #[must_use]
+    pub fn new(win: CpuWindow<WindowOps>, bar1_bytes: u64, usermode_len: u64, overlay: std::sync::Arc<Bar1Overlay>) -> Bar1Target {
+        Bar1Target {
+            win,
+            db: std::cell::RefCell::new(kf_trap::bar1db::Bar1Doorbells::new(bar1_bytes, usermode_len, BAR1_OVERLAY_SLOTS)),
+            overlay,
+        }
+    }
+
+    /// The views currently trapped (the guest doorbell module's replay set).
+    #[must_use]
+    pub fn views(&self) -> Vec<kf_trap::bar1db::Bar1View> {
+        self.db.borrow().views().copied().collect()
+    }
+
+    fn refuse<T>(&self, why: String) -> Result<T, String> {
+        self.overlay.refused.fetch_add(1, Ordering::Relaxed);
+        Err(why)
+    }
+
+    /// An ordinary BAR1 leaf. ⊘ Refused by name under a LIVE doorbell view: the overlay would
+    /// shadow it, and the guest's stores to that memory would be decoded as doorbell writes. The
+    /// walker unmaps a whole placement before re-mapping its VA, so a correct guest never gets here.
+    fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
+        let end = d.va.saturating_add(d.len);
+        if let Some(v) = self.db.borrow().views().find(|v| v.base < end && d.va < v.base + v.len) {
+            return self.refuse(format!(
+                "BAR1 leaf {:#x}+{:#x} lies under the live doorbell view {:#x}+{:#x}; refused until that view is unmapped",
+                d.va, d.len, v.base, v.len
+            ));
+        }
+        self.win.map(d, defer)
+    }
+
+    fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
+        let v = kf_trap::bar1db::Bar1View { base: u.va, len: u.len, vf_rel: u.vf_rel };
+        let Some(hook) = self.overlay.hook.get() else {
+            return self.refuse(format!(
+                "BAR1 doorbell view {:#x}+{:#x}: the C device registered no overlay verb — the view cannot trap, and it is NEVER backed by guest RAM",
+                v.base, v.len
+            ));
+        };
+        if let Err(e) = self.db.borrow_mut().place(v) {
+            return self.refuse(format!("BAR1 doorbell view refused: {e:?}"));
+        }
+        if let Err(e) = hook.install(v.base, v.len, v.vf_rel) {
+            self.db.borrow_mut().remove(v.base);
+            return self.refuse(format!(
+                "BAR1 doorbell view {:#x}+{:#x} (page {:#x}): overlay install refused by the C device (errno {e}); retried at the next walk",
+                v.base, v.len, v.vf_rel
+            ));
+        }
+        self.overlay.installed.fetch_add(1, Ordering::Relaxed);
+        Ok(Mapped::Placed)
+    }
+
+    fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
+        let Some(v) = self.db.borrow().at_base(va) else {
+            return self.win.unmap(va, defer);
+        };
+        // ⊘ Unmap may not defer: the overlay is gone from QEMU's map before this returns, so the
+        // guest's invalidate clears only after its BAR1 VA shows the window again.
+        let Some(hook) = self.overlay.hook.get() else {
+            return self.refuse(format!("BAR1 doorbell view {va:#x}: no overlay verb to remove it"));
+        };
+        if let Err(e) = hook.remove(v.base, v.len) {
+            return self.refuse(format!("BAR1 doorbell view {va:#x}+{:#x}: overlay removal refused (errno {e}); retried", v.len));
+        }
+        self.db.borrow_mut().remove(va);
+        self.overlay.removed.fetch_add(1, Ordering::Relaxed);
+        Ok(())
     }
 }
 

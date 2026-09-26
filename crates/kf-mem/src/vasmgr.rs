@@ -494,6 +494,10 @@ pub struct VaStats {
     pub held: u64,
     /// ★ P6b: walked leaves refused because they overlap one of OUR VMM placements.
     pub vmm_overlaps: u64,
+    /// ★ Hopper+ usermode-page views a target placed a trap for (BAR1, `V3_BAR1_DOORBELL.md`).
+    pub usermode_trapped: u64,
+    /// ★ Hopper+ usermode-page views satisfied with NO host mapping (a GPU VA view).
+    pub usermode_unmirrored: u64,
     /// ★ Diffs whose maps were withheld for slot capacity (walked again at once).
     pub partial: u64,
     /// ★ Objects walked with no slot left (refused by name).
@@ -591,6 +595,9 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     splits_done: Vec<(u64, Result<(), String>)>,
     /// ★ P6b (b): the coverage grain — the family's smallest GMMU page ([`VaManager::with_page_grain`]).
     page_grain: u64,
+    /// ★ The family's internal-MMIO usermode page ([`VaManager::with_usermode_mmio`]); `None`
+    /// (Turing … Ada) leaves every leaf on the memory path.
+    usermode: Option<kf_chip::usermode::UsermodeMmio>,
     /// Counters and named refusals.
     pub stats: VaStats,
 }
@@ -609,8 +616,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             inflight: None,
             splits_done: Vec::new(),
             page_grain: SMALL_PAGE,
+            usermode: None,
             stats: VaStats::default(),
         }
+    }
+
+    /// ★ Hopper+: classify walked internal-MMIO leaves against the family's usermode page
+    /// (`kf_chip::Family::usermode_mmio`) — a doorbell view is handed to its target's
+    /// [`MapTarget::map_usermode`] instead of becoming a memory row (`V3_BAR1_DOORBELL.md` §4).
+    #[must_use]
+    pub fn with_usermode_mmio(mut self, u: Option<kf_chip::usermode::UsermodeMmio>) -> Self {
+        self.usermode = u;
+        self
     }
 
     /// ★ P6b (b): the coverage grain — the smallest page the family's GMMU format maps (the
@@ -850,7 +867,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; done.nrun];
         let mut failed: BTreeSet<VasKey> = BTreeSet::new();
         let mut partial: BTreeSet<VasKey> = BTreeSet::new();
-        let cfg = ApplyCfg { store_bytes: self.store_bytes, grain: self.page_grain, ram_offset: &*self.ram_offset };
+        let cfg = ApplyCfg {
+            store_bytes: self.store_bytes,
+            grain: self.page_grain,
+            ram_offset: &*self.ram_offset,
+            usermode: self.usermode,
+        };
         for (&key, &(slot, walked_root)) in &batch.walked {
             let Some(space) = self.table.spaces.get(&key) else {
                 continue; // removed while the walk ran: its slot is released, nothing to apply
@@ -891,6 +913,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.host_invalidates += u64::from(a.invalidated);
             self.stats.held += a.held as u64;
             self.stats.vmm_overlaps += a.vmm_overlaps as u64;
+            self.stats.usermode_trapped += a.usermode_trapped as u64;
+            self.stats.usermode_unmirrored += a.usermode_unmirrored as u64;
             self.stats.clipped_bytes += a.clipped_bytes;
             if a.refused > 0 {
                 failed.insert(key);

@@ -22,6 +22,7 @@
 //! ⊘ No `unsafe`, no OS call, no lock, no allocation on the vCPU path. The trap SAYS whether a
 //! syscall is owed ([`trap::Action`]); the caller performs it.
 
+pub mod bar1db;
 pub mod bitmap;
 pub mod cacheop;
 pub mod cpuintr;

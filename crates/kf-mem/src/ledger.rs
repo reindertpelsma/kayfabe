@@ -110,6 +110,21 @@ pub enum Mapped {
     HeldByHost,
 }
 
+/// ★★★ **A walked leaf that is a view of the usermode (doorbell) page, not memory** — Hopper+
+/// internal MMIO: aperture SYS_COHERENT + kind SMSKED_MESSAGE, address = the VF register offset
+/// (`kf_chip::usermode`, `V3_BAR1_DOORBELL.md`). ⊘ Never a [`Desired`] row: its "address" is a
+/// register offset, and turning it into guest RAM maps guest-physical `0x30000` where the guest
+/// expects its doorbell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UsermodeRow {
+    /// Guest VA (a BAR1 offset for the BAR1 window).
+    pub va: u64,
+    /// Bytes.
+    pub len: u64,
+    /// Offset of `va` inside the 64 KiB usermode page (`+0x90` is the doorbell).
+    pub vf_rel: u64,
+}
+
 /// ★★★ **Where a diff's operations land** — `V3_P4_PORT_MAP.md` §2.3(b).
 ///
 /// The P4 composition (the invalidate → walk → apply → clear step, [`crate::vasmgr`]) must be
@@ -137,6 +152,28 @@ pub trait MapTarget {
     /// # Errors
     /// The host's refusal, by name.
     fn invalidate(&self) -> Result<(), String>;
+
+    /// ★★★ Satisfy a [`UsermodeRow`] (Hopper+; `V3_BAR1_DOORBELL.md` §4).
+    ///
+    /// [`Mapped::Placed`]: the target installed something of its OWN for the view (the BAR1
+    /// window: a write-trapped overlay) — its later UNMAP reaches [`MapTarget::unmap`] at `u.va`.
+    ///
+    /// ★ **The default is the GPU-VA-space policy: NOT MIRRORED, answered [`Mapped::HeldByHost`].**
+    /// A GPU VA view of the usermode page lets the GPU ring doorbells by its own writes
+    /// (`usrmodeGetMemInterMapParams_IMPL`, `usermode_api.c:112-135`; ogkm's only user is UVM under
+    /// Confidential Computing, `nv_gpu_ops.c:5649-5676` → `uvm_channel.c:1232-1234`). Such a write
+    /// never traps, and the value it writes is a GUEST-computed token, so forwarding it to the host's
+    /// real doorbell would ring an arbitrary host channel. ⇒ No host mapping is made: the guest's
+    /// statement is satisfied (its invalidate clears, nothing wedges), and a GPU-originated ring
+    /// through that VA faults on the host twin — contained and visible — instead of landing
+    /// anywhere. Counted by name ([`crate::apply::Applied::usermode_unmirrored`]).
+    ///
+    /// # Errors
+    /// The target's refusal, by name.
+    fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
+        let _ = u;
+        Ok(Mapped::HeldByHost)
+    }
 
     /// ★ P4: the VA extent `[0, extent)` this target can express, or `None` for a whole GPU VA
     /// space. A CPU window (the guest's BAR2 aperture) shows only the VAs its PCI BAR decodes:

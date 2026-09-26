@@ -113,3 +113,58 @@ impl BackendFd {
         unsafe { std::os::fd::BorrowedFd::borrow_raw(self.0) }
     }
 }
+
+/// ★ The C device's BAR1 overlay verb (`V3_BAR1_DOORBELL.md` §4): `op` 1 = show usermode-page
+/// bytes `[vf_rel, vf_rel+len)` write-trapped at BAR1 `[base, base+len)`; `op` 0 = remove the
+/// overlay at `base`. Returns 0 once QEMU's memory map (and so KVM's memslots) reflects it, or a
+/// negative errno. Called ONLY from the VA-manager thread — never a vCPU.
+pub type OverlayFn = unsafe extern "C" fn(opaque: *mut core::ffi::c_void, op: u32, base: u64, len: u64, vf_rel: u64) -> i32;
+
+/// The registered overlay verb and its opaque device pointer.
+#[derive(Debug, Clone, Copy)]
+pub struct OverlayHook {
+    f: OverlayFn,
+    opaque: *mut core::ffi::c_void,
+}
+
+// SAFETY: `opaque` is the C device's state, which lives for the process (the device is never
+// freed — `kf3_unrealize` only stops threads); the verb itself is thread-safe by contract (it
+// schedules a main-loop bottom half and waits on a semaphore).
+unsafe impl Send for OverlayHook {}
+// SAFETY: as above.
+unsafe impl Sync for OverlayHook {}
+
+impl OverlayHook {
+    /// Adopt the C device's verb.
+    ///
+    /// # Safety
+    /// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime.
+    #[must_use]
+    pub unsafe fn adopt(f: OverlayFn, opaque: *mut core::ffi::c_void) -> OverlayHook {
+        OverlayHook { f, opaque }
+    }
+
+    fn call(&self, op: u32, base: u64, len: u64, vf_rel: u64) -> Result<(), i32> {
+        // SAFETY: the contract `adopt` was given.
+        match unsafe { (self.f)(self.opaque, op, base, len, vf_rel) } {
+            0 => Ok(()),
+            e => Err(e),
+        }
+    }
+
+    /// Install the overlay. `Err` carries the C device's negative errno.
+    ///
+    /// # Errors
+    /// The C device's refusal (or its named timeout, `-ETIMEDOUT`).
+    pub fn install(&self, base: u64, len: u64, vf_rel: u64) -> Result<(), i32> {
+        self.call(1, base, len, vf_rel)
+    }
+
+    /// Remove the overlay at `base` (idempotent in the C device).
+    ///
+    /// # Errors
+    /// The C device's refusal (or its named timeout).
+    pub fn remove(&self, base: u64, len: u64) -> Result<(), i32> {
+        self.call(0, base, len, 0)
+    }
+}
