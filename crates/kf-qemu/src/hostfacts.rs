@@ -23,6 +23,10 @@ pub struct HostPci {
     pub revision: u8,
     /// BAR0 size in bytes (`resource0`).
     pub bar0_bytes: u64,
+    /// ★ The host's BAR1 aperture in bytes (sysfs `resource` line 1) — the pool every kf3 device
+    /// on this card takes views from ([`crate::cardbudget`]). Queried, never a literal (ReBAR and
+    /// datacenter parts differ).
+    pub bar1_bytes: u64,
     /// The PCIe generation of the link's maximum speed.
     pub max_gen: kf_abi::businfo::PcieGen,
 }
@@ -59,9 +63,20 @@ pub fn sysfs_dir_for_minor(minor: u32) -> Result<PathBuf, String> {
 pub fn read_host_pci(dir: &Path) -> Result<HostPci, String> {
     let h = |n: &str| read_hex(&dir.join(n));
     let resource = std::fs::read_to_string(dir.join("resource")).map_err(|e| format!("resource: {e}"))?;
-    let bar0 = resource.lines().next().ok_or("resource: empty")?;
-    let mut f = bar0.split_whitespace().map(|x| u64::from_str_radix(x.trim_start_matches("0x"), 16).unwrap_or(0));
-    let (start, end) = (f.next().unwrap_or(0), f.next().unwrap_or(0));
+    let span = |line: Option<&str>| -> u64 {
+        let mut f = line
+            .unwrap_or("")
+            .split_whitespace()
+            .map(|x| u64::from_str_radix(x.trim_start_matches("0x"), 16).unwrap_or(0));
+        let (start, end) = (f.next().unwrap_or(0), f.next().unwrap_or(0));
+        if end > start { end - start + 1 } else { 0 }
+    };
+    let mut lines = resource.lines();
+    let bar0 = lines.next().ok_or("resource: empty")?;
+    let bar1_bytes = span(lines.next());
+    if bar1_bytes == 0 {
+        return Err("resource: the host GPU reports no BAR1 aperture".to_string());
+    }
     let speed = std::fs::read_to_string(dir.join("max_link_speed")).unwrap_or_default();
     // "16.0 GT/s PCIe" → Gen4. The encoder rejects nothing; an unknown speed is refused here.
     let max_gen = match speed.split_whitespace().next().unwrap_or("") {
@@ -79,7 +94,8 @@ pub fn read_host_pci(dir: &Path) -> Result<HostPci, String> {
         subsystem: h("subsystem_device")? as u16,
         class: h("class")? as u32,
         revision: h("revision")? as u8,
-        bar0_bytes: if end > start { end - start + 1 } else { 0 },
+        bar0_bytes: span(Some(bar0)),
+        bar1_bytes,
         max_gen,
     })
 }

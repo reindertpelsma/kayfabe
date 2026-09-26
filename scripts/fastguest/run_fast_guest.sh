@@ -71,7 +71,10 @@ fi
 # ⊘ `pkill` on its own line and with the bracket trick: a pattern that appears later on the same
 # command line matches the shell running it, and then everything after silently never runs
 # (`nvkvm-pv`, 2026-08-17).
-pkill -9 -x qemu-system-x86 2>/dev/null
+# ★ 2026-09-26 (V3_MULTI_GPU_AUDIT §2 harness): kill ONLY this lane's own QEMUs — the ones started
+# with `-name kf-fastguest` below — never every `qemu-system-x86` on the box (that shot other VMs,
+# and ruled out several VMs per host by construction). The lock above already serializes this lane.
+pkill -9 -f '[k]f-fastguest' 2>/dev/null
 sleep 1
 
 # ⊘⊘⊘ **ONE WHITESPACE-FREE TOKEN, OR THE ARMS SILENTLY DO NOT ARRIVE.** The kernel command
@@ -144,7 +147,8 @@ echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms 
 if command -v nvidia-smi >/dev/null 2>&1; then
     KF_GPU_IDLE_MIB=${KF_GPU_IDLE_MIB:-512}
     for _i in $(seq 1 60); do
-        _used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc 0-9)
+        # ★ The MAX over every GPU (a multi-GPU run uses several), not the first line's.
+        _used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | tr -dc '0-9\n' | sort -n | tail -1)
         [ -n "$_used" ] && [ "$_used" -le "$KF_GPU_IDLE_MIB" ] && break
         sleep 0.5
     done
@@ -245,12 +249,38 @@ export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-128}
 # ★ w770 — pass an operator-supplied VA through to the device's walk probe.
 [ -n "${KAYFABE_PROBE_VA:-}" ] && export KAYFABE_PROBE_VA
 
+# ★★ MULTI-GPU (V3_MULTI_GPU_AUDIT §2 harness, 2026-09-26): `KF3_GPUS=0,1` emits ONE kf3 device
+# per listed HOST MINOR (`gpu-minor=<m>`, `id=kf<i>`), in order; the guest sees them as its
+# /dev/nvidia0..N-1 and `/init` runs the client on each (`KF_MGPU_MODE`, below). Unset = the
+# single-device lane exactly as before (one device, the property's default minor 0).
+# `KF3_DEV_EXTRA` applies to every device. A host minor listed twice is the same card twice —
+# `cardbudget` then refuses by name unless the summed BAR1 demand fits.
+MGPU_TOK=""
 case "$KF_DEVICE" in
     nvkvm) DEVARGS=(-device "nvkvm-gpu,bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA}") ;;
-    kf3)   DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}") ;;
+    kf3)
+        if [ -z "${KF3_GPUS:-}" ]; then
+            DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
+        else
+            case "$KF3_GPUS" in *[!0-9,]*|,*|*,|*,,*) echo "run_fast_guest: KF3_GPUS must be comma-separated host minors, got [$KF3_GPUS]" >&2; exit 2 ;; esac
+            DEVARGS=(); _i=0
+            for _m in $(echo "$KF3_GPUS" | tr ',' ' '); do
+                DEVARGS+=(-device "kf3-gpu,gpu-minor=$_m,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf$_i${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
+                _i=$((_i+1))
+            done
+            # ★ The guest's side of the contract, in whitespace-free tokens (see KF_ARMS above).
+            # KF_MGPU_MODE: serial | concurrent | serial,concurrent (default: both, serial first).
+            # KF_HOLD0=0 (default) leaves /dev/nvidia0 CLOSED while GPU 1.. run alone — the
+            # instance-renumbering case (the guest RM gives the first-attached GPU instance 0,
+            # whatever its minor). KF_HOLD0=1 holds it open throughout.
+            _mode=$(echo "${KF_MGPU_MODE:-serial,concurrent}" | tr -d ' ')
+            case ",$_mode," in *,serial,*|*,concurrent,*) ;; *) echo "run_fast_guest: KF_MGPU_MODE must name serial and/or concurrent, got [$_mode]" >&2; exit 2 ;; esac
+            MGPU_TOK="KF_NGPU=$_i KF_MGPU_MODE=$_mode KF_HOLD0=${KF_HOLD0:-0} "
+        fi ;;
     *) echo "run_fast_guest: KF_DEVICE must be nvkvm or kf3, got [$KF_DEVICE]" >&2; exit 2 ;;
 esac
-echo "== device: ${DEVARGS[*]}"
+echo "== device(s): ${DEVARGS[*]}"
+[ -n "$MGPU_TOK" ] && echo "== multi-GPU guest contract: $MGPU_TOK"
 
 # ⊘⊘⊘ **P5c — THE 16550 IS A 115 200-BAUD LINK, AND THE VERBOSE TRACE WAS RUNNING INTO IT.**
 # QEMU's UART paces transmission at the programmed baud rate, and 115 200 is the 16550's ceiling
@@ -277,10 +307,10 @@ esac
 echo "== console: ${KF_CONSOLE:-hvc} ($CONSOLE)"
 
 start=$(date +%s)
-timeout --kill-after=3 "$BUDGET" "$Q" \
+timeout --kill-after=3 "$BUDGET" "$Q" -name kf-fastguest \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
-    -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_BUDGET_S=$BUDGET" \
+    -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}${MGPU_TOK}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_BUDGET_S=$BUDGET" \
     "${DEVARGS[@]}" \
     -msg timestamp=on \
     "${CONARGS[@]}" -display none \

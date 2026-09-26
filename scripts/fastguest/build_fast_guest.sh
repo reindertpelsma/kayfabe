@@ -367,9 +367,16 @@ done < /lib/modules/loadorder
 # ⊘ The device nodes are created by the driver's own open path on a real system; without
 # nvidia-modprobe we make them ourselves from /proc/devices.
 maj=$(awk '/nvidia-frontend|nvidiactl|^ *[0-9]+ nvidia$/ {print $1; exit}' /proc/devices)
+# ★ One node per kf3 device (`KF_NGPU`, from `run_fast_guest.sh KF3_GPUS=…`; default 1). The guest
+# driver numbers its GPUs 0..N-1 in probe order, so minor i is the i-th kf3 device.
+NGPU=${KF_NGPU:-1}
 if [ -n "$maj" ]; then
     mknod /dev/nvidiactl c "$maj" 255 2>/dev/null
-    mknod /dev/nvidia0   c "$maj" 0   2>/dev/null
+    _g=0
+    while [ "$_g" -lt "$NGPU" ]; do
+        mknod "/dev/nvidia$_g" c "$maj" "$_g" 2>/dev/null
+        _g=$((_g+1))
+    done
 fi
 # ⊘⊘⊘ **nvidia-uvm IS ITS OWN MAJOR, AND FORGETTING IT READS AS A KAYFABE DEFECT.**
 # `[measured w763]` `--uvm-invalidate` failed `W392C open = /dev/nvidia-uvm: No such file or
@@ -407,8 +414,58 @@ LEFT=$(( BUDGET_S - UP - 3 ))
 [ "$LEFT" -lt 2 ] && LEFT=2
 export KF_SELF_DEADLINE_MS=$(( LEFT * 1000 ))
 echo "FASTGUEST: arms $ARMS  deadline ${LEFT}s (budget ${BUDGET_S}s, ${UP}s already spent booting)"
-/bin/rmladder --gpu 0 $ARMS 2>&1
-echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"
+if [ "$NGPU" -le 1 ]; then
+    /bin/rmladder --gpu 0 $ARMS 2>&1
+    echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"
+else
+    # ★★ MULTI-GPU (V3_MULTI_GPU_AUDIT §2 harness). The client runs once per guest GPU, in the
+    # modes `KF_MGPU_MODE` names (serial and/or concurrent), every line prefixed `[gpuN]`, every
+    # run's rc printed as `FASTGUEST: gpuN <mode> rc=R`. ⊘ The final `client rc=` is 0 ONLY if
+    # EVERY run was 0 — one aggregate the host grader already reads, never "the last one".
+    # ⊘ SERIAL runs go HIGHEST minor first, with /dev/nvidia0 NOT held open unless KF_HOLD0=1:
+    # the guest RM then attaches minor N-1 alone and gives it instance 0 — the renumbering case
+    # that `deviceId = minor` failed (`Other(34)`, "deviceInstance 0x1 does not exist").
+    worst=0
+    if [ "${KF_HOLD0:-0}" = 1 ]; then
+        exec 7</dev/nvidia0 && echo "FASTGUEST: holding /dev/nvidia0 open throughout (KF_HOLD0=1)"
+    else
+        echo "FASTGUEST: /dev/nvidia0 NOT held open (KF_HOLD0=0) — minors and RM instances may differ"
+    fi
+    for mode in $(echo "${KF_MGPU_MODE:-serial,concurrent}" | tr ',' ' '); do
+        case "$mode" in
+        serial)
+            g=$((NGPU-1))
+            while [ "$g" -ge 0 ]; do
+                echo "FASTGUEST: gpu$g serial start at $(cut -d' ' -f1 /proc/uptime)s"
+                { /bin/rmladder --gpu "$g" $ARMS 2>&1; r=$?; echo "$r" > "/.kf_rc_serial_$g"; echo "FASTGUEST: gpu$g serial rc=$r"; } | sed "s/^/[gpu$g] /"
+                g=$((g-1))
+            done ;;
+        concurrent)
+            echo "FASTGUEST: concurrent start ($NGPU clients) at $(cut -d' ' -f1 /proc/uptime)s"
+            g=0
+            while [ "$g" -lt "$NGPU" ]; do
+                { /bin/rmladder --gpu "$g" $ARMS 2>&1; r=$?; echo "$r" > "/.kf_rc_concurrent_$g"; echo "FASTGUEST: gpu$g concurrent rc=$r"; } | sed "s/^/[gpu$g] /" &
+                g=$((g+1))
+            done
+            wait ;;
+        *) echo "FASTGUEST: unknown KF_MGPU_MODE entry [$mode]"; worst=2 ;;
+        esac
+    done
+    [ "${KF_HOLD0:-0}" = 1 ] && exec 7<&-
+    # ★ Each run left its rc in a file (a pipeline's subshell cannot carry it back). ⊘ A run
+    # that left NO file never finished — counted as a failure, never as "nothing to report".
+    for mode in $(echo "${KF_MGPU_MODE:-serial,concurrent}" | tr ',' ' '); do
+        g=0
+        while [ "$g" -lt "$NGPU" ]; do
+            r=$(cat "/.kf_rc_${mode}_$g" 2>/dev/null)
+            [ -n "$r" ] || { echo "FASTGUEST: gpu$g $mode left NO rc — counted as a failure"; r=99; }
+            [ "$r" = 0 ] || worst=1
+            g=$((g+1))
+        done
+    done
+    echo "FASTGUEST: multi-GPU runs done at $(cut -d' ' -f1 /proc/uptime)s (worst=$worst)"
+    echo "FASTGUEST: client rc=$worst at $(cut -d' ' -f1 /proc/uptime)s"
+fi
 echo "FASTGUEST: DONE"
 poweroff -f
 INIT
