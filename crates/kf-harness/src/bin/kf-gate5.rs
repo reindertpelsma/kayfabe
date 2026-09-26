@@ -179,7 +179,15 @@ fn run(l: &mut Checks) -> Result<(), String> {
     l.check("every_ring_was_inline", not_inline == 0, format!("{not_inline} of {SUBMITS} took another arm"));
     l.check("engine_ran_the_guest_ring_unparsed", rd(&walk, DATA_B, a.len())? == a, format!("{SUBMITS} virtual copies through the mirrored process VAS"));
     let gp_get = word(&walk, U_MEM + USERD + USERD_GP_GET)?;
-    l.check("hardware_advanced_the_guest_gp_get", gp_get == SUBMITS % ENTRIES, format!("guest USERD GP_GET={gp_get} (written by the engine, not by us)"));
+    // ★ 2026-09-26: only a family whose engine writes USERD GP_GET can be held to it — Blackwell's
+    // channel classes have no such word (`kf_chip::Family::engine_writes_userd_gp_get`).
+    let (arch, implementation, _) = rm.arch_info();
+    let family = kf_chip::Family::from_arch(arch, implementation).map_err(|e| format!("{e:?}"))?;
+    if family.engine_writes_userd_gp_get() {
+        l.check("hardware_advanced_the_guest_gp_get", gp_get == SUBMITS % ENTRIES, format!("guest USERD GP_GET={gp_get} (written by the engine, not by us)"));
+    } else {
+        l.measure("hardware_advanced_the_guest_gp_get", format!("NOT A FACT ON {family:?}: the channel class has no USERD GP_GET (read {gp_get}); every semaphore above is the completion"));
+    }
     let mut scan = Vec::new();
     l.check("no_worker_ever_saw_the_token", bits.scan(&mut scan, 64) == 0 && wake.seen() == 0, format!("bits={scan:?} wake_seq={}", wake.seen()));
     l.measure("ring_to_semaphore_us", format!("p50={} p90={} max={} (includes the harness's DtoH poll)", pct(50), pct(90), pct(100)));

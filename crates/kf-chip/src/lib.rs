@@ -159,6 +159,18 @@ impl Family {
         }
     }
 
+    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3) — **does the host engine write `GP_GET` back
+    /// into a channel's USERD?** Turing … Hopper: yes — every channel class's control struct names
+    /// `GPGet` at `0x88` (`ogkm-580: clc46f.h`…`clc86f.h:29-45`). Blackwell: **no** — `Nvc96fControl`
+    /// and `Nvca6fControl` are `Ignored00[0x23]` then `GPPut` (`clc96f.h:29-33`, `clca6f.h:27-31`),
+    /// and `[measured bare metal, GB203, 580.159.04]` the word stays 0 for 22 s after the release.
+    /// ⇒ on Blackwell a channel's progress is its semaphores; a GP_GET we AUTHOR (Translated) is
+    /// still ours to write, but none may be expected FROM the engine.
+    #[must_use]
+    pub const fn engine_writes_userd_gp_get(self) -> bool {
+        !matches!(self, Family::Blackwell)
+    }
+
     /// How the GSP boots (`kgspBootstrap_*` HAL per family: falcon/booter through Ada, FSP after).
     #[must_use]
     pub const fn boot_style(self) -> BootStyle {

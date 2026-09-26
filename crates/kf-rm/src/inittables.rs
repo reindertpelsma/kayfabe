@@ -1443,6 +1443,14 @@ impl InitTablePolicy {
 }
 
 /// A reply that carries no body and a non-zero envelope result — the short-circuit.
+/// ★ 2026-09-26: an ENCODER's refusal, named — `w349c`'s rule for the gates above, applied to the
+/// 34 arms whose `Err(_)` was silent. `[measured GB203 bw1]` `INTERNAL_GET_DEVICE_INFO_TABLE`
+/// refused in a loop with nothing in the log but the guest's `NV_ERR_NOT_SUPPORTED`.
+fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
+    eprintln!("W349REFUSE cmd={cmd:#010x} why=encoder {why:?}");
+    refuse()
+}
+
 fn refuse() -> Option<Reply> {
     Some(Reply {
         rpc_result: NV_ERR_NOT_SUPPORTED,
@@ -1692,7 +1700,7 @@ impl CommandPolicy for InitTablePolicy {
                 ]);
                 match inittables::encode_device_info_table(&self.host.engines, base_index) {
                     Ok(p) => p.params,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             WantedTable::IntrKernelTable => match inittables::encode_intr_kernel_table(
@@ -1700,7 +1708,7 @@ impl CommandPolicy for InitTablePolicy {
                 &self.host.intr_subtree_map,
             ) {
                 Ok(p) => p,
-                Err(_) => return refuse(),
+                Err(e) => return refuse_named(req.cmd, &e),
             },
             // ★ No cursor and no request field is read: the answer is a pure function of
             // the chip row. That is not laziness — the request body for THIS control is
@@ -1709,7 +1717,7 @@ impl CommandPolicy for InitTablePolicy {
             // header the envelope path already validated.
             WantedTable::PciBarInfo => match pcibars::encode_pci_bar_info(&self.board.pci_bars) {
                 Ok(p) => p,
-                Err(_) => return refuse(),
+                Err(e) => return refuse_named(req.cmd, &e),
             },
             // ★★ The identity half is taken from `identity_for`, which is the *same* call
             // the hypervisor shell builds configuration space from — and which refuses if
@@ -1736,7 +1744,7 @@ impl CommandPolicy for InitTablePolicy {
                     self.board.regs_aperture_len(),
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ A **policy** answered from the chip row, and the refusal on the error
@@ -1749,7 +1757,7 @@ impl CommandPolicy for InitTablePolicy {
                     &self.host.user_register_access_map,
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ An **inventory**, and the refusal on the error arm is the same kind of
@@ -1765,7 +1773,7 @@ impl CommandPolicy for InitTablePolicy {
                     self.board.regs_aperture_len(),
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The one whose error arm is load-bearing in the OTHER direction. Every
@@ -1782,7 +1790,7 @@ impl CommandPolicy for InitTablePolicy {
             WantedTable::MemorySystemStaticConfig => {
                 match memsysconfig::encode_memsys_static_config(&self.host.memory_system) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The only arm that is a **projection** rather than a statement: the reply
@@ -1807,7 +1815,7 @@ impl CommandPolicy for InitTablePolicy {
                     self.board.regs_aperture_len(),
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ Two `NvBool`s, and the arm where the error branch is the ONLY thing
@@ -1820,7 +1828,7 @@ impl CommandPolicy for InitTablePolicy {
             WantedTable::ConfComputeStaticInfo => {
                 match confcompute::encode_conf_compute_static_info(&self.host.conf_compute) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★ Four `NvBool`s, two of which are directions rather than descriptions:
@@ -1831,7 +1839,7 @@ impl CommandPolicy for InitTablePolicy {
             WantedTable::BifStaticInfo => {
                 match bifstatic::encode_bif_static_info(&self.host.bif_static) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The second arm that reads the request, and for the opposite reason to
@@ -1854,7 +1862,7 @@ impl CommandPolicy for InitTablePolicy {
                 ]);
                 match fifochannels::encode_fifo_num_channels(&self.host.fifo_channels, runlist_id) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The arm whose refusal is a guest-kernel USE-AFTER-FREE rather than a
@@ -1868,7 +1876,7 @@ impl CommandPolicy for InitTablePolicy {
             WantedTable::GmmuStaticInfo => {
                 match gmmustatic::encode_gmmu_static_info(&self.host.gmmu_static) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ `0x20800a9b` — the IDENTITY arm. See the variant's docs for the whole
@@ -1907,7 +1915,7 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kf_abi::faultbuffer::decode_register_fault_buffer(raw) {
                     Ok(r) if !r.exceeds_vendor_bound() => raw.to_vec(),
-                    Ok(_) | Err(_) => return refuse(),
+                    Ok(_) | Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ `0x20800a9d` — the same three steps as the arm above, for the same reasons,
@@ -1932,7 +1940,7 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kf_abi::faultbuffer::decode_register_client_shadow_fault_buffer(raw) {
                     Ok(r) if !r.exceeds_vendor_bound() => raw.to_vec(),
-                    Ok(_) | Err(_) => return refuse(),
+                    Ok(_) | Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ `0x20800a1d` — third of the three, and its geometry check has TWO arms
@@ -1951,7 +1959,7 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kf_abi::faultbuffer::decode_register_access_cntr_buffer(raw) {
                     Ok(r) if !r.is_illegal_geometry() => raw.to_vec(),
-                    Ok(_) | Err(_) => return refuse(),
+                    Ok(_) | Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The event-plane arm — the only one that CHANGES this policy's state, and
@@ -2119,7 +2127,7 @@ impl CommandPolicy for InitTablePolicy {
                     self.host.ce_fault_method_buffer_size,
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The five GR static-info arms. Each is a pure function of the chip's own
@@ -2129,7 +2137,7 @@ impl CommandPolicy for InitTablePolicy {
             // plausible reply. See `kf_abi::grstatic`.
             WantedTable::GrCaps => match grstatic::encode_gr_caps(&self.host.gr_static) {
                 Ok(p) => p,
-                Err(_) => return refuse(),
+                Err(e) => return refuse_named(req.cmd, &e),
             },
             // ★★★ The sixth GR arm, and the only one that validates against ANOTHER
             // chip-row field before it encodes. Six of its 58 entries restate the geometry
@@ -2153,31 +2161,31 @@ impl CommandPolicy for InitTablePolicy {
                 }
                 match self.host.gr_info.encode() {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             WantedTable::GrFloorsweepingMasks => {
                 match grstatic::encode_floorsweeping_masks(&self.host.gr_static) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             WantedTable::GrGlobalSmOrder => {
                 match grstatic::encode_global_sm_order(&self.host.gr_static) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             WantedTable::GrFecsRecordSize => {
                 match grstatic::encode_fecs_record_size(&self.host.gr_static) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             WantedTable::GrPdbProperties => {
                 match grstatic::encode_pdb_properties(&self.host.gr_static) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ⊘ A host die with no zcull (`None`) is refused exactly as its own GSP would.
@@ -2232,7 +2240,7 @@ impl CommandPolicy for InitTablePolicy {
             WantedTable::GrContextBuffersInfo => {
                 match grstatic::encode_context_buffers_info(&self.host.gr_context_buffers) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The only arm that reads the request as a whole, and the only one whose
@@ -2264,7 +2272,7 @@ impl CommandPolicy for InitTablePolicy {
                     // that land here (`0x23`, `0x24`) are per-chip identity values
                     // `[measured 2026-08-08]` to DIFFER between two physical RTX 3060 parts;
                     // see `kf_abi::gpuinfo`.
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★★ The control that decided `cuInit`. A pure function of the chip row — this
@@ -2305,7 +2313,7 @@ impl CommandPolicy for InitTablePolicy {
                     &answers,
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The third request-editing arm, and the first whose REFUSAL is itself a
@@ -2331,7 +2339,7 @@ impl CommandPolicy for InitTablePolicy {
                     &kf_abi::gpuatomics::GpuAtomicOp::none_supported(),
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The fourth request-editing arm, and the first that introduces NO NEW
@@ -2365,7 +2373,7 @@ impl CommandPolicy for InitTablePolicy {
                     &answers,
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The FIRST arm that does not read the request at all. Every other reply
@@ -2427,7 +2435,7 @@ impl CommandPolicy for InitTablePolicy {
                     &geometry,
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ §14.42, second of two — and the only arm in this rung whose value was
@@ -2454,7 +2462,7 @@ impl CommandPolicy for InitTablePolicy {
                     &self.host.lce_pce_masks,
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The first arm whose reply carries PER-ITEM statuses. Every other control
@@ -2503,7 +2511,7 @@ impl CommandPolicy for InitTablePolicy {
                     &geometry,
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The first arm whose reply is a fact about the GUEST, not about the
@@ -2567,7 +2575,7 @@ impl CommandPolicy for InitTablePolicy {
             | WantedTable::CudartInit9A001 => {
                 match kf_abi::cudartinit::answer_cudart_init(req.cmd, want.params_size()) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
@@ -2607,7 +2615,7 @@ impl CommandPolicy for InitTablePolicy {
                     &cmd.payload[at..at + want.params_size()],
                 ) {
                     Ok(p) => p,
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
             // ★★ The one arm whose value is an ARGUMENT rather than a capture, and the flag
@@ -2625,7 +2633,7 @@ impl CommandPolicy for InitTablePolicy {
             // is the reply-plane test that now bites it.
             WantedTable::C2cInfo => match kf_abi::c2cinfo::c2c_absent(self.host.has_c2c) {
                 Ok(p) => p,
-                Err(_) => return refuse(),
+                Err(e) => return refuse_named(req.cmd, &e),
             },
             // ★★★ §14.43 — the **acknowledgement** arm, and the only one in this table whose
             // reply contains no fact of this port's own. Every field of
@@ -2654,7 +2662,7 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kf_abi::fmbpromote::decode_promote_fault_method_buffers(raw) {
                     Ok(req) => kf_abi::fmbpromote::encode_promote_fault_method_buffers(&req),
-                    Err(_) => return refuse(),
+                    Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
         };
