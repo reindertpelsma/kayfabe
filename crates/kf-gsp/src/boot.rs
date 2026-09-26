@@ -868,10 +868,12 @@ pub struct GspFsm {
     /// Bound on how many LibOS region-array entries a hostile guest can make us read.
     /// Also bounds the page-table entry count.
     max_entries: u32,
-    /// ★★★ v3-initrace: the FRTS offset the FWSEC about to start was commanded to place
-    /// ([`BootStep::FwsecCommand`], [`read_frts_command`]) — consumed by the next STARTCPU.
-    frts_pending: Option<u64>,
-    /// … and the one the FWSEC that raised WPR2 was commanded to place, served while WPR2 is up
+    /// ★★★ v3-initrace: the DMEM image of the ucode about to start ([`BootStep::FwsecCommand`]) —
+    /// consumed by the next STARTCPU.
+    fwsec_image: Option<u64>,
+    /// … the image of the FWSEC that raised WPR2, until [`GspFsm::resolve_frts_command`] reads it,
+    frts_image: Option<u64>,
+    /// … and the FRTS offset its command named, served while WPR2 is up
     /// ([`GspObservation::frts_offset`]). Cleared when WPR2 comes down.
     frts_offset: Option<u64>,
 }
@@ -949,9 +951,29 @@ impl GspFsm {
             cmd_read_ptr: 0,
             region_identity: None,
             max_entries: 4096,
-            frts_pending: None,
+            fwsec_image: None,
+            frts_image: None,
             frts_offset: None,
         }
+    }
+
+    /// ★★★ v3-initrace — **read the FRTS command of the FWSEC that raised WPR2**, once, and serve
+    /// WPR2 at the offset it names ([`read_frts_command`]). Returns `Some(what was read)` when a
+    /// command was pending, `None` when there was nothing to do.
+    ///
+    /// ⊘ **A device act, called after the write that started FWSEC and before the registers are
+    /// published** (the guest reads `WPR2_ADDR_LO` only after it sees FWSEC halted, and `HALTED`
+    /// is published last). It is NOT inside [`GspFsm::mmio_write_with`] on purpose: the C artifact
+    /// never read this command, so a replay that must close over the C's own guest-RAM reads
+    /// (`kf-crec`'s `cap1`) would stop at it; without it the FSM serves the derivation — exactly
+    /// what the C served.
+    pub fn resolve_frts_command(&mut self, ram: &mut dyn GuestRam) -> Option<Option<u64>> {
+        if !self.phase.wpr2_up() {
+            return None;
+        }
+        let image = self.frts_image.take()?;
+        self.frts_offset = read_frts_command(ram, image);
+        Some(self.frts_offset)
     }
 
     /// The current phase.
@@ -1162,8 +1184,9 @@ impl GspFsm {
     ) -> Result<(), GspFault> {
         match step {
             BootStep::FwsecCommand(dmem0) => {
-                // ★ v3-initrace: consumed by the StartProcessor that follows in the same write.
-                self.frts_pending = read_frts_command(ram, dmem0);
+                // ★ v3-initrace: consumed by the StartProcessor that follows in the same write; the
+                // command itself is read by `resolve_frts_command` (a device act — see there).
+                self.fwsec_image = Some(dmem0);
             }
             BootStep::StartProcessor => {
                 // ★ w828: the regime that starts the processor decides how it stops.
@@ -1259,13 +1282,14 @@ impl GspFsm {
 
     /// E1 / E2 / E3 — the GSP falcon STARTCPU, classified on `phase` alone.
     fn gsp_startcpu(&mut self) -> Transition {
-        // ★ v3-initrace: the command read for THIS start (if any) is consumed now, whichever way.
-        let frts = self.frts_pending.take();
+        // ★ v3-initrace: the DMEM image loaded for THIS start (if any) is consumed now, whichever way.
+        let image = self.fwsec_image.take();
         match self.phase {
             BootPhase::Cold | BootPhase::Halted => {
                 self.phase = BootPhase::ProtectedRegionUp;
                 self.fw_halted_after_suspend = false;
-                self.frts_offset = frts;
+                self.frts_image = image;
+                self.frts_offset = None;
                 Transition::E1
             }
             BootPhase::Suspending => {
@@ -1285,7 +1309,8 @@ impl GspFsm {
         self.phase = BootPhase::Halted;
         // ★ v3-initrace: WPR2 is down; the next FWSEC-FRTS carries its own command.
         self.frts_offset = None;
-        self.frts_pending = None;
+        self.frts_image = None;
+        self.fwsec_image = None;
         self.queue = QueueState::Unbound;
         self.init_done_posted = false;
         self.swgen0_pending = false;
@@ -2859,15 +2884,25 @@ mod a_retry_after_a_failed_boot_reads_its_own_frts_command {
     #[test]
     fn the_command_read_for_a_start_is_served_while_wpr2_is_up_and_dropped_when_it_comes_down() {
         let mut f = GspFsm::new(super::a_life_ends_and_the_next_one_boots::abi());
-        assert_eq!(f.observe().frts_offset, None);
-        f.frts_pending = read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), IMAGE);
+        let mut ram = image(0x15, 0x1f6e0, 0x100, 2);
+        assert_eq!(f.resolve_frts_command(&mut ram), None, "nothing started: nothing to read");
+        f.fwsec_image = Some(IMAGE); // `BootStep::FwsecCommand`
         assert_eq!(f.gsp_startcpu(), Transition::E1);
+        assert_eq!(f.observe().frts_offset, None, "until the device resolves it");
+        assert_eq!(f.resolve_frts_command(&mut ram), Some(Some(0x1f6e0_000)));
         assert_eq!(f.observe().frts_offset, Some(0x1f6e0_000), "the retry's FWSEC-FRTS placed it there");
+        assert_eq!(f.resolve_frts_command(&mut ram), None, "read once");
         assert_eq!(f.gsp_startcpu(), Transition::E3, "a start while up changes nothing");
         assert_eq!(f.observe().frts_offset, Some(0x1f6e0_000));
         f.enter_halted();
         assert_eq!(f.observe().frts_offset, None, "WPR2 down: nothing is served");
-        assert_eq!(f.gsp_startcpu(), Transition::E1, "a start with no command read of its own");
+        assert_eq!(f.gsp_startcpu(), Transition::E1, "a start with no DMEM load of its own");
+        assert_eq!(f.resolve_frts_command(&mut ram), None, "nothing to read");
         assert_eq!(f.observe().frts_offset, None, "derives — never the previous life's command");
+        f.enter_halted();
+        f.fwsec_image = Some(IMAGE);
+        assert_eq!(f.gsp_startcpu(), Transition::E1);
+        assert_eq!(f.resolve_frts_command(&mut Ram::default()), Some(None), "an unreadable command derives");
+        assert_eq!(f.observe().frts_offset, None);
     }
 }

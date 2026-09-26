@@ -419,10 +419,11 @@ pub enum BootStep {
     /// The guest acknowledged the status-queue interrupt edge.
     ClearStatusIrq,
     /// ★★★ v3-initrace — the HS ucode the next [`BootStep::StartProcessor`] starts was loaded
-    /// into the boot processor's DMEM from guest-physical memory, DMEM offset 0 at this address:
-    /// read the command RM patched into it (`s_vbiosPatchInterfaceData`,
-    /// `ogkm-580: kernel_gsp_frts_tu102.c:156-262`) before starting it — FWSEC-FRTS carries the FB
-    /// offset WPR2 must come up at, and RM checks it exactly.
+    /// into the boot processor's DMEM from guest-physical memory, DMEM offset 0 at this address.
+    /// The command RM patched into it (`s_vbiosPatchInterfaceData`,
+    /// `ogkm-580: kernel_gsp_frts_tu102.c:156-262`) is read once the start raised WPR2 and before
+    /// the registers are published (`kf_gsp::GspFsm::resolve_frts_command`) — FWSEC-FRTS carries
+    /// the FB offset WPR2 must come up at, and RM checks it exactly.
     ///
     /// *Turing regime (GA10x, AD10x `BOOT_FROM_HS`):* the GSP falcon's `DMATRF*` DMEM load.
     FwsecCommand(u64),

@@ -1857,7 +1857,6 @@ impl HostOps for Device {
         }
         let mut ram = Ram(self);
         let before = g.fsm.phase();
-        let frts_before = g.fsm.observe().frts_offset;
         // ⊘ FAULT INJECTION (`KF3_INJECT_FWSEC_FAIL=<n>`, default off): the first n FWSEC-FRTS
         // starts (a GSP falcon STARTCPU from Cold/Halted) are dropped before the FSM sees them —
         // WPR2 never comes up, the guest's `kgspExecuteFwsec` fails "no initialized WPR2 found",
@@ -1898,12 +1897,13 @@ impl HostOps for Device {
             // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
             eprintln!("kf3: GSP phase {before:?} -> {after:?}");
         }
-        // ★ v3-initrace: where WPR2 came up — the guest's own FWSEC-FRTS command, or the derivation.
-        let frts_after = g.fsm.observe().frts_offset;
-        if frts_after != frts_before && after == kf_arch::BootPhase::ProtectedRegionUp {
+        // ★★★ v3-initrace: the FWSEC that just raised WPR2 was commanded where to put FRTS — read it
+        // before anything is published (the guest reads WPR2_ADDR_LO only after HALTED, published
+        // last). One guest-RAM read of ≤ 8 words at offsets of the ROM we generated.
+        if let Some(read) = g.fsm.resolve_frts_command(&mut ram) {
             eprintln!(
-                "kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset={} (served WPR2_ADDR_LO={:?})",
-                frts_after.map_or("none read — derived".to_string(), |o| format!("{o:#x}")),
+                "kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset={} → served WPR2_ADDR_LO={:?}",
+                read.map_or("unreadable/not FRTS — derived".to_string(), |o| format!("{o:#x}")),
                 g.model.at(GspReg::Wpr2AddrLo).and_then(|(b, o)| g.fsm.mmio_read_with(g.model.as_ref(), b, o)).map(|r| r.map(|v| format!("{v:#x}")))
             );
         }
