@@ -272,7 +272,12 @@ it sooner, because it runs more processes. Results files are in `traces/video_ga
 - **Turing / Ada / Blackwell** video rows are derived and unit-tested, but no hardware measurement exists. Watch for:
   - Ada's AV1 encode (the guest-local `GPU_GET_ENCODER_CAPACITY` AV1 flag);
   - Ada's multiple NVENC instances.
-- **Not advertised**: NVJPG, OFA and SEC2. Their `classify_engine` arms return `None` by design.
+- ⊘ **CORRECTED 2026-09-26 (`v3-gfxset`, `V3_GFX_TESTSET.md` §4): OFA IS advertised now.** Leaving it
+  out cost Vulkan its `VK_NV_optical_flow` extension and its sixth queue family in the guest (nvkvm-pv's
+  "RDR2 check" failed on it). It follows this document's pattern exactly — host engine list, host falcon
+  table, generated `NV*FA_VIDEO_OFA` class sets, ogkm constants pinned to the captured GA106 row — see
+  `crates/kf-rm/tests/ofa_engine.rs`.
+- **Not advertised**: NVJPG and SEC2. Their `classify_engine` arms return `None` by design.
 - **`0x2080a028`**: only the NVD and GPC clock domains are asked of the host. A library asking another domain is refused, as before.
 - **The steer (§2.1) is falcon-specific.** Any other host-RM internal allocation in a mirrored VA space has the same two-allocator hazard. A GR collision would show as a `HELD BY HOST` leaf, and none has been seen.
 - **The no-persistence-mode RUN_CAP wall** (§5) is master's open memory-plane defect. Without guest

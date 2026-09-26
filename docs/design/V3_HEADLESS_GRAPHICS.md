@@ -296,6 +296,10 @@ DRM-backend Wayland compositor. The options are unchanged from `display_plane_sc
 
 ## 4. Video engines: same passthrough plane, but not reachable today
 
+> ⊘ **SUPERSEDED for NVENC/NVDEC by `V3_VIDEO_ENGINES.md` (2026-09-26), and for OFA by `V3_GFX_TESTSET.md`
+> §4 (2026-09-26, `v3-gfxset`):** the optical-flow engine is advertised and twinned the same way; without
+> it the guest's Vulkan driver withheld `VK_NV_optical_flow` and its queue family (measured, `gs1`).
+
 ⊘ **UPDATE 2026-09-26 (owner): derive the video engine inventory from HOST USERSPACE.** Checked against
 ogkm-580.159.04 `g_subdevice_nvoc.c` export flags (`RMCTRL_FLAGS_NON_PRIVILEGED = 0x8`):
 `GPU_GET_ENGINES_V2` `0x20800170` (flags `0x10109`), `GPU_GET_ENGINE_CLASSLIST` (`0x109`) and
