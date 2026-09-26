@@ -192,6 +192,21 @@ impl HostAbi {
         self.version == crate::versions::BENCH_DRIVER
     }
 
+    /// ★★ Can a mapping on this host carry its OWN PTE kind — `NVOS46_PARAMETERS::kindOverride`
+    /// with `NVOS46_FLAGS_PAGE_KIND_OVERRIDE` (bit 19)? MEASURED by the field: the two arrive
+    /// together at 580.65.06 (`nvos.h:2113-2115, 2177`). At ≤575.64.05 there is no field and bit 19
+    /// is undefined: a mapping's PTE takes the memory object's own kind (`PAGE_KIND_PHYSICAL`,
+    /// `3:3`), so the v3-gfx per-map kind cannot be asked of that host at all.
+    /// `[measured 2026-09-26, host 575.57.08]` every kinded map was refused by the carry
+    /// (`kindOverride` absent, 609 refusals in one suite) and no guest got past CeUtils.
+    #[must_use]
+    pub fn per_map_pte_kind(&self) -> bool {
+        Resolved::of(&crate::generated::matrix::NVOS46_PARAMETERS, self.version)
+            .ok()
+            .and_then(|l| l.maybe("kindOverride"))
+            .is_some()
+    }
+
     /// How `runs` crosses to this host.
     ///
     /// # Errors
@@ -657,5 +672,24 @@ mod tests {
         let te = t.need("engineType").expect("engineType").off();
         assert_ne!(e, te, "engineType moved at 610");
         assert_eq!(u32::from_le_bytes(out[te..te + 4].try_into().expect("4")), 0x13);
+    }
+
+    /// ★★ The per-map PTE kind is a 580.65.06+ host capability — the field that carries it is
+    /// measured absent at every earlier tag (bit 19 is undefined there).
+    #[test]
+    fn the_per_map_pte_kind_arrives_with_580_65_06() {
+        assert!(!host("575.57.08").per_map_pte_kind());
+        assert!(!host("535.309.01").per_map_pte_kind());
+        assert!(host("580.65.06").per_map_pte_kind());
+        assert!(host("580.159.04").per_map_pte_kind());
+        for &v in m::MEASURED {
+            let h = HostAbi { version: v };
+            let boundary = DriverVersion {
+                major: 580,
+                minor: 65,
+                patch: 6,
+            };
+            assert_eq!(h.per_map_pte_kind(), v >= boundary, "{v}");
+        }
     }
 }

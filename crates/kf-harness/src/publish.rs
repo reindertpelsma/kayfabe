@@ -186,7 +186,17 @@ pub fn publish(
         .iter()
         .map(|m| kf_mem::apply::PermPolicy::default().diff_run(m))
         .collect();
-    let applied = apply_entry(target, &runs, &ApplyCfg { store_bytes, grain: 0x1000, ram_offset, usermode: None });
+    let applied = apply_entry(
+        target,
+        &runs,
+        &ApplyCfg {
+            store_bytes,
+            grain: 0x1000,
+            ram_offset,
+            usermode: None,
+            per_map_kind: true,
+        },
+    );
     let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; r.runs.len()];
     codes[first..first + applied.codes.len()].copy_from_slice(&applied.codes);
     walk.ack(r.header.generation, codes).map_err(|e| e.to_string())?;

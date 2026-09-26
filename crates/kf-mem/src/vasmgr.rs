@@ -740,6 +740,8 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     /// ★ The family's internal-MMIO usermode page ([`VaManager::with_usermode_mmio`]); `None`
     /// (Turing … Ada) leaves every leaf on the memory path.
     usermode: Option<kf_chip::usermode::UsermodeMmio>,
+    /// ★★ The host can place a per-map PTE kind ([`VaManager::with_per_map_kind`]).
+    per_map_kind: bool,
     /// Counters and named refusals.
     pub stats: VaStats,
 }
@@ -760,6 +762,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             awaiting: Vec::new(),
             page_grain: SMALL_PAGE,
             usermode: None,
+            per_map_kind: true,
             stats: VaStats::default(),
         }
     }
@@ -770,6 +773,15 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     #[must_use]
     pub fn with_usermode_mmio(mut self, u: Option<kf_chip::usermode::UsermodeMmio>) -> Self {
         self.usermode = u;
+        self
+    }
+
+    /// ★★ The host driver's per-map PTE kind (`kf_abi::hostabi::HostAbi::per_map_pte_kind`):
+    /// `false` below 580.65.06, where [`crate::apply::host_pte_kind`] maps PITCH/GENERIC with the
+    /// memory's own kind and leaves a depth/stencil kind for the host carry to refuse by name.
+    #[must_use]
+    pub fn with_per_map_kind(mut self, per_map_kind: bool) -> Self {
+        self.per_map_kind = per_map_kind;
         self
     }
 
@@ -1142,6 +1154,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             grain: self.page_grain,
             ram_offset: &*self.ram_offset,
             usermode: self.usermode,
+            per_map_kind: self.per_map_kind,
         };
         for (&key, &(slot, walked_root)) in &batch.walked {
             let Some(space) = self.table.spaces.get(&key) else {

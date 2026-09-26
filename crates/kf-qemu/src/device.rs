@@ -500,6 +500,17 @@ impl Device {
         } else {
             family.usermode_mmio()
         };
+        // ★★ The host-driver axis: a host below 580.65.06 has no per-map PTE kind (no NVOS46
+        // `kindOverride`); PITCH/GENERIC leaves then map with the memory's own kind and a
+        // depth/stencil leaf is refused by name (`kf_mem::apply::host_pte_kind`).
+        let per_map_kind = rm.host_abi().per_map_pte_kind();
+        if !per_map_kind {
+            eprintln!(
+                "kf3: host driver {} has no per-map PTE kind (NVOS46 kindOverride is 580.65.06+): \
+                 PITCH/GENERIC leaves map with the memory's own kind; a depth/stencil kind is refused by name",
+                rm.host_abi().version()
+            );
+        }
         // ★ P6b (b): coverage at the family's smallest GMMU page.
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
@@ -509,7 +520,8 @@ impl Device {
         .with_page_grain(family.mmu_format().small_page_bytes())
         // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM
         // (`V3_BAR1_DOORBELL.md`). `None` on Turing … Ada: unchanged.
-        .with_usermode_mmio(usermode_mmio);
+        .with_usermode_mmio(usermode_mmio)
+        .with_per_map_kind(per_map_kind);
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),

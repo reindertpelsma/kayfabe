@@ -115,6 +115,14 @@ the four no spec reached). The rule is one encoder, carried at the boundary:
   names (NVENC/NVDEC — the old names survive only as `#define` aliases DWARF cannot see).
 - **NVOS46/47** carried (H3, H4); a field the host lacks that the request sets — a kind override
   on a 575 host, a range unmap on a 545 host — is `HOST_ABI_REFUSED`, printed by name.
+  ⊘⊘ **CORRECTED 2026-09-26 (host 575.57.08, measured): refusing the kind override was right as a
+  statement and fatal as a policy** — every guest vidmem leaf carries a kind (GENERIC_MEMORY), so
+  the carry refused 609 maps in one suite and no guest got past CeUtils (thin **0/30**, all
+  timeouts). A host below 580.65.06 has no per-map kind at all (no `kindOverride`, bit 19
+  undefined; the PTE takes the memory object's own kind), so kf-mem now asks the host ABI
+  (`HostAbi::per_map_pte_kind`, measured by the field) and maps PITCH/GENERIC there with NO
+  override — the pre-v3-gfx mapping every compute rung ran under — while a depth/stencil kind is
+  kept and still refused by name (mapping a Z surface as the memory's kind is host Xid 13).
 - **H9** — the subtree map is authored per family from ogkm where the host's driver measurably
   lacks the control (ruling 3; `kf_chip::authored_intr_subtree_map` = the GA106 host's own answer);
   `MC_GET_STATIC_INTR_TABLE` exists at every measured tag (the earlier "absent at 535/545" was a
@@ -318,8 +326,12 @@ the fat-guest CUDA ladder (cup2 / cup3 / cup8 / cup8bench).
 | 545.23.08 | needs a ≤ 6.6 guest kernel (harness built) + capability row (owner review) | — |
 | 535.309.01 | capability row (owner review, `567942c1`) | — |
 
-Host axis, guest **580.159.04**: 580.95.05 / 580.65.06 / 575.57.08 / 570.148.08 / 565.57.01 /
-550.54.14 queued on box 2 (§8.3), each with mixed pairs (guest 590.48.01 and 575.57.08 ladders).
+Host axis, guest **580.159.04** (box 2, RTX 3080 Ti):
+
+| host | result | rev |
+|---|---|---|
+| 575.57.08 | gates **9/9** (the measured host axis: every host struct carried, the Ampere subtree-map rule standing in for the control 575 lacks); bare-metal cup2 PASS (nvdiff 798 records). Thin **0/30**, ladder 0/4: every kinded map refused — the host has no per-map PTE kind (§2.2 H3 correction). Fixed on the branch; re-walk queued | `9339ee6b` |
+| 570.148.08 / 565.57.01 / 550.54.14 / 580.95.05 / 580.65.06 | queued behind the fix (the walk was stopped: each sub-580 host would have timed out 30 arms the same way) | — |
 
 ★ Every row carries its source revision. Box: vast `52746206`, RTX 3090 (GA102 `0x2204`), Xeon
 E5-2673 v4 (nested KVM), host driver **580.159.04 open**. Thin suite = `KF_DEVICE=kf3

@@ -54,6 +54,9 @@ pub struct ApplyCfg<'a> {
     /// ★ The family's internal-MMIO usermode page (`kf_chip::Family::usermode_mmio`): `None` on
     /// Turing … Ada, where no such leaf exists and nothing below changes.
     pub usermode: Option<UsermodeMmio>,
+    /// ★★ The host driver can place a PER-MAP PTE kind (`kf_abi::hostabi::HostAbi::per_map_pte_kind`,
+    /// 580.65.06+). `false` on an older host: see [`host_pte_kind`].
+    pub per_map_kind: bool,
 }
 
 /// What one [`apply_entry`] did.
@@ -199,9 +202,20 @@ fn whole_pages(d: &Desired, grain: u64) -> bool {
 /// GENERIC (sysmem holds no depth/stencil surface kinds); anything unknown stays PITCH, the
 /// pre-v3-gfx mapping. `[measured vgfx 2026-09-26, gfx9]` a GL depth buffer mapped PITCH raised
 /// host Xid 13 "3D-Z KIND Violation" on every draw.
+///
+/// ★★ **The host-driver axis (`per_map_kind`, `V3_DRIVER_MATRIX.md` §2.2 H3).** A host below
+/// 580.65.06 has no per-map kind at all: its PTE takes the memory object's own kind. There
+/// PITCH and GENERIC_MEMORY (and compressible generic, stripped) map with NO override — the
+/// pre-v3-gfx mapping, under which every compute rung ran for months: for an uncompressed backing
+/// the two place the same bytes for the SM and the copy engine. A depth/stencil kind has no such
+/// equivalent — mapping it as the memory's kind is the Xid 13 above — so it is KEPT, and the host
+/// carry refuses it by name (`HOST_ABI_REFUSED`, `kindOverride`): a loud gap, never a wrong kind.
 #[must_use]
-pub fn host_pte_kind(guest: u8, ram: bool) -> u8 {
+pub fn host_pte_kind(guest: u8, ram: bool, per_map_kind: bool) -> u8 {
     match kf_chip::uncompressed_pte_kind(guest) {
+        Some(kf_chip::PTE_KIND_PITCH | kf_chip::PTE_KIND_GENERIC) if !per_map_kind => {
+            kf_chip::PTE_KIND_PITCH
+        }
         Some(k) if !ram => k,
         Some(k @ (kf_chip::PTE_KIND_PITCH | kf_chip::PTE_KIND_GENERIC)) => k,
         _ => kf_chip::PTE_KIND_PITCH,
@@ -341,19 +355,25 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             }
             out.priv_mirrored += 1;
         }
-        let mut d = match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
-            // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
-            // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
-            Ok(v) if v.len() == 1 => Desired { kind: host_pte_kind(r.kind, v[0].ram), perm: r.perm, ..v[0] },
-            Ok(_) => {
-                out.refuse(i, format!("map {:#x}: no row", r.va));
-                continue;
-            }
-            Err(e) => {
-                out.refuse(i, format!("leaf refused: {e:?}"));
-                continue;
-            }
-        };
+        let mut d =
+            match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset)
+            {
+                // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
+                // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
+                Ok(v) if v.len() == 1 => Desired {
+                    kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
+                    perm: r.perm,
+                    ..v[0]
+                },
+                Ok(_) => {
+                    out.refuse(i, format!("map {:#x}: no row", r.va));
+                    continue;
+                }
+                Err(e) => {
+                    out.refuse(i, format!("leaf refused: {e:?}"));
+                    continue;
+                }
+            };
         if !whole_pages(&d, cfg.grain) {
             out.refuse(
                 i,
@@ -619,7 +639,13 @@ mod tests {
         t
     }
     fn cfg() -> ApplyCfg<'static> {
-        ApplyCfg { store_bytes: 1 << 30, grain: 0x1000, ram_offset: &|gpa, _| Some(gpa), usermode: None }
+        ApplyCfg {
+            store_bytes: 1 << 30,
+            grain: 0x1000,
+            ram_offset: &|gpa, _| Some(gpa),
+            usermode: None,
+            per_map_kind: true,
+        }
     }
     fn m(va: u64, at: u64, len: u64) -> DiffRun {
         DiffRun { unmap: false, va, len, at, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE, privileged: false }
@@ -660,6 +686,64 @@ mod tests {
             ]
         );
         assert_eq!((a.mapped, a.batches, a.batched_runs, a.map_calls), (7, 2, 5, 4));
+    }
+
+    /// ★★ The host-driver axis: on a host with no per-map PTE kind (≤575.64.05) PITCH / GENERIC /
+    /// compressible generic map with NO override (the pre-v3-gfx mapping), vidmem or RAM alike,
+    /// while a depth/stencil kind is KEPT — so the host carry refuses it by name rather than
+    /// mapping a Z surface as the memory's own kind (host Xid 13). On a 580.65.06+ host, unchanged.
+    #[test]
+    fn a_host_without_a_per_map_kind_gets_the_memorys_own_kind_or_a_named_refusal() {
+        for ram in [false, true] {
+            for k in [
+                kf_chip::PTE_KIND_PITCH,
+                kf_chip::PTE_KIND_GENERIC,
+                0x08,
+                0x09,
+            ] {
+                assert_eq!(
+                    host_pte_kind(k, ram, false),
+                    kf_chip::PTE_KIND_PITCH,
+                    "kind {k:#x} ram={ram}"
+                );
+            }
+        }
+        assert_eq!(
+            host_pte_kind(0x01, false, false),
+            0x01,
+            "Z16 is kept, for the carry to refuse by name"
+        );
+        assert_eq!(
+            host_pte_kind(0x0B, false, false),
+            0x01,
+            "compressible Z16 → Z16, kept"
+        );
+        // 580.65.06+: the v3-gfx mapping, unchanged.
+        assert_eq!(
+            host_pte_kind(kf_chip::PTE_KIND_GENERIC, false, true),
+            kf_chip::PTE_KIND_GENERIC
+        );
+        assert_eq!(host_pte_kind(0x08, true, true), kf_chip::PTE_KIND_GENERIC);
+        assert_eq!(host_pte_kind(0x01, false, true), 0x01);
+        assert_eq!(
+            host_pte_kind(0x01, true, true),
+            kf_chip::PTE_KIND_PITCH,
+            "RAM holds no Z surface"
+        );
+        // Through apply: a GENERIC vidmem leaf on an old host is placed kind 0.
+        let t = Rec::default();
+        let a = apply_entry(
+            &t,
+            &[DiffRun {
+                kind: 0x06,
+                ..m(0x2_0000_0000, 0x10_0000, 0x1000)
+            }],
+            &ApplyCfg {
+                per_map_kind: false,
+                ..cfg()
+            },
+        );
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED]);
     }
 
     /// ★★★ v3-roperm — **THE PERMISSION BIT POSITIONS, PER FAMILY, AGAINST ogkm's MMU FORMATS.**
