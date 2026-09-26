@@ -2097,6 +2097,17 @@ impl ChanPlane {
                     "kf3: RC host twin {:#x} (guest chid {:#x}, engine {:#x}) wrote its notifier: except_type={:#x} (Xid {}) — forwarding RC_TRIGGERED",
                     e.host_token, e.chid, e.engine, e.except_type, e.except_type
                 );
+                if kf_mem::maplog::on() {
+                    eprintln!(
+                        "kf3: maplog t={:.6} RC-SEEN twin host {:#x} guest chid {:#x} engine {:#x} except_type={:#x} doorbells rung={}",
+                        kf_mem::maplog::t(),
+                        e.host_token,
+                        e.chid,
+                        e.engine,
+                        e.except_type,
+                        self.rung.get(e.chid as usize).map_or(0, |c| c.load(Ordering::Relaxed))
+                    );
+                }
             }
             if let Ok(mut q) = self.rc_queue.lock() {
                 q.extend(found);
@@ -2249,6 +2260,21 @@ impl ChanPlane {
             self.completions.clear(g.guest_idx);
         }
         g.chan.counts().1 > before
+    }
+
+    /// ★ `KF3_MAPLOG` (diagnostic): the passthrough twins in host space `space`, each as
+    /// `chid:engine=rung` — the doorbells the guest has rung on it so far (a relaxed read).
+    #[must_use]
+    pub fn pt_doorbells(&self, space: u32) -> String {
+        // ⊘ try_lock: the VA thread must never wait on a lock the act thread may hold.
+        let Ok(m) = self.pt.try_lock() else { return "[pt busy]".into() };
+        let mut v: Vec<(u32, u32, u64)> = m
+            .values()
+            .filter(|t| t.space.space == space)
+            .map(|t| (t.idx, t.engine, self.rung.get(t.idx as usize).map_or(0, |c| c.load(Ordering::Relaxed))))
+            .collect();
+        v.sort_unstable();
+        format!("[{}]", v.iter().map(|(i, e, n)| format!("{i:#x}:{e:#x}={n}")).collect::<Vec<_>>().join(" "))
     }
 
     /// Whether the channel behind `ht` can take work (a dead one cannot: §7 then poisons).

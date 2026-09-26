@@ -1000,6 +1000,9 @@ impl Inbox {
     /// completed — ask the VA thread to walk + reconcile. Returns the ticket to poll. ⊘ Never waits.
     pub fn request_split(&self, token: u32, pdb: Option<u64>) -> u64 {
         let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        if kf_mem::maplog::on() {
+            eprintln!("kf3: maplog t={:.6} SPLIT-REQUEST ticket={t} by channel token {token:#x} pdb={pdb:x?}", kf_mem::maplog::t());
+        }
         if let Ok(mut q) = self.splits.lock() {
             q.push((t, token, pdb));
         }

@@ -1030,6 +1030,9 @@ impl Device {
             for st in self.mem.inbox.take() {
                 taken += 1;
                 let line = crate::mem::apply_statement(&mut m, &self.mem, self.rm, self.store.handle, st, trigger);
+                if kf_mem::maplog::on() {
+                    eprintln!("kf3: maplog t={:.6} STATEMENT {line}", kf_mem::maplog::t());
+                }
                 if logged < 256 {
                     logged += 1;
                     eprintln!("kf3: mem t={:.3}s {line}", self.born.elapsed().as_secs_f64());
@@ -1064,11 +1067,34 @@ impl Device {
                 if let Err(e) = &res {
                     eprintln!("kf3: mem t={:.3}s split ticket {ticket} REFUSED: {e}", self.born.elapsed().as_secs_f64());
                 }
+                if kf_mem::maplog::on() {
+                    eprintln!("kf3: maplog t={:.6} SPLIT-DONE ticket={ticket} ok={}", kf_mem::maplog::t(), res.is_ok());
+                }
                 // Ring the channel's own token: its next pump resumes after the split.
                 if let Some(tok) = self.mem.inbox.finish_split(ticket, res)
                     && self.plane.ring_internal(tok)
                 {
                     let _ = self.worker_efd.signal();
+                }
+            }
+            if r.collected && kf_mem::maplog::on() {
+                // ★ `KF3_MAPLOG`: for every space this walk changed, the doorbells rung so far on each
+                // passthrough twin in it — so a later RC can say whether work was submitted AFTER
+                // the change (the counts moved) or only before it.
+                for (k, a) in &r.applied {
+                    if a.mapped + a.unmapped == 0 {
+                        continue;
+                    }
+                    let space = self.mem.mirrors.lock().ok().and_then(|mm| mm.get(k).map(|mi| mi.space.space));
+                    if let Some(sp) = space {
+                        eprintln!(
+                            "kf3: maplog t={:.6} APPLIED {k:?} +{} -{} host space {sp:#x} doorbells {}",
+                            kf_mem::maplog::t(),
+                            a.mapped,
+                            a.unmapped,
+                            self.chans.pt_doorbells(sp)
+                        );
+                    }
                 }
             }
             if r.collected && logged < 256 {
