@@ -163,6 +163,11 @@ pub struct ChannelAlloc {
     /// ★ P5b: the channel group it was allocated under (`hParent`), when that is a TSG this link
     /// saw allocated — the group `GPFIFO_SCHEDULE` names.
     pub tsg: Option<u32>,
+    /// ★ v3-int: `hContextShare` as declared (0 = none: the group's legacy subcontext). The
+    /// channel plane mirrors a guest TSG as one host group PER CONTEXT SHARE: CUDA's TSG is one
+    /// ctxshare (all members share one GR context), a Vulkan TSG carries a graphics and an
+    /// async-compute ctxshare (distinct subcontexts, which one legacy host subcontext cannot be).
+    pub ctx_share: u32,
     /// ★ v3-promote: the DEVICE the channel hangs off (its parent, or its group's parent) — a
     /// guest free of the device takes the channel with it, so the plane must match it.
     pub device: u32,
@@ -632,6 +637,7 @@ impl ChannelPolicy {
             privilege,
             declared_kernel_pid: self.kernel_clients.contains(&h.client),
             tsg: tsg.map(|_| h.parent),
+            ctx_share: f.h_ctx_share,
             device,
             error_notifier: self.abi.decode_channel_error_notifier(params).ok().flatten(),
         };

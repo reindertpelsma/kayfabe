@@ -73,6 +73,8 @@ struct PtChan {
     idx: u32,
     /// The channel group it was allocated under.
     tsg: Option<u32>,
+    /// ★ v3-int: its declared `hContextShare` — with `tsg`, the host group it joined.
+    ctx_share: u32,
     /// The channel's parent (its TSG, or its device).
     parent: u32,
     /// ★ v3-promote: the device it hangs off (== `parent` outside a TSG).
@@ -567,10 +569,17 @@ pub struct ChanPlane {
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
     /// released with the guest's release or its client's free).
     enc_sessions: Mutex<HashMap<u32, u32>>,
-    /// ★ v3-video: guest TSG `(hClient, hTsg)` → `(host group, live members)` — the guest's TSG
-    /// membership mirrored, so its channels share ONE host GR context as on hardware. Touched by
-    /// acts only (serialised on the act thread).
-    groups: Mutex<HashMap<(u32, u32), (u32, u32)>>,
+    /// ★ v3-video: guest TSG `(hClient, hTsg, hContextShare)` → `(host group, live members)` — the
+    /// guest's TSG membership mirrored, so its channels share ONE host GR context as on hardware.
+    /// Touched by acts only (serialised on the act thread).
+    /// ★★ v3-int: keyed PER CONTEXT SHARE. Every member of a host group is born on the group's
+    /// legacy subcontext (`HostRm::birth_member`, `hContextShare = 0`), which is exact for CUDA
+    /// (one ctxshare per TSG) and wrong for a TSG with several subcontexts: `[measured vint
+    /// int_gfx, ada6855a]` the Vulkan render's graphics (VEID0) and async-compute channels were
+    /// merged onto one legacy subcontext and the compute channel took Xid 69 (class error, 3D
+    /// class `c797`) — fence never signalled. Per-ctxshare groups keep CUDA's one-group shape and
+    /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
+    groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
     rung: Box<[AtomicU64]>,
@@ -1684,7 +1693,7 @@ impl ChanPlane {
                     line.push(format!("translated host {ht:#x}"));
                 }
                 for ((c, h), t) in twins {
-                    let r = me.release_twin(c, t.tsg, t.chan);
+                    let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
                     t.live.fetch_sub(1, Ordering::AcqRel);
                     // The error context goes AFTER its channel (host RM refuses freeing a context
                     // DMA a live channel names as its error context).
@@ -1759,8 +1768,8 @@ impl ChanPlane {
 
     /// ★ v3-video: free a Passthrough twin — a member of a shared host group frees its channel,
     /// and the group goes with its LAST member; an ungrouped twin frees channel and group.
-    fn release_twin(&self, client: u32, guest_tsg: Option<u32>, chan: kf_host::Channel) -> Result<(), kf_host::RmError> {
-        let Some(k) = guest_tsg.map(|t| (client, t)) else { return self.rm.free_channel(chan) };
+    fn release_twin(&self, client: u32, guest_tsg: Option<u32>, ctx_share: u32, chan: kf_host::Channel) -> Result<(), kf_host::RmError> {
+        let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else { return self.rm.free_channel(chan) };
         let r = self.rm.free_member(chan);
         let last = self.groups.lock().map_or(true, |mut m| match m.get_mut(&k) {
             Some(g) if g.1 > 1 => {
@@ -1868,7 +1877,7 @@ impl ChanPlane {
                     let notifier = err_at.and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
                     let g = kf_chan::passthrough::GuestChannel { err_ctx: notifier.as_ref().map_or(0, |n| n.ctx), ..g0 };
                     // ★ v3-video: a member of a guest TSG joins the host group standing for it.
-                    let gkey = a.tsg.map(|t| (a.client, t));
+                    let gkey = a.tsg.map(|t| (a.client, t, a.ctx_share));
                     let join = gkey.and_then(|k| me.groups.lock().ok().and_then(|m| m.get(&k).map(|g| g.0)));
                     let chan = match kf_chan::passthrough::birth_twin_in(me.rm, space, g, join) {
                         Ok(c) => {
@@ -1892,7 +1901,7 @@ impl ChanPlane {
                         .map_err(|_| "caps poisoned".to_string())
                         .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Passthrough, chan.token, owner).map_err(|e| format!("{e:?}")));
                     if let Err(e) = alloc {
-                        let _ = me.release_twin(a.client, a.tsg, chan);
+                        let _ = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
                         live.fetch_sub(1, Ordering::AcqRel);
                         if let Some(n) = notifier {
                             me.release_notifier(n);
@@ -1905,6 +1914,7 @@ impl ChanPlane {
                             chan,
                             idx,
                             tsg: a.tsg,
+                            ctx_share: a.ctx_share,
                             parent: a.parent,
                             device: a.device,
                             engine,

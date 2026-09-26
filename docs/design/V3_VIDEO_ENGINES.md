@@ -106,6 +106,19 @@ A guest video channel becomes a host twin exactly like a GR/CE twin. The guest's
 
 ### 2.2 ★ The guest's TSG is one host group (affects CUDA as well)
 
+> ⊘ **CORRECTED by the `v3-int` merge (2026-09-26): one host group PER (TSG, context share), not
+> per TSG.** Every member of a host group is born on the group's legacy subcontext
+> (`hContextShare = 0`), which is exact for CUDA (one ctxshare per TSG — the case measured below)
+> and wrong for a TSG carrying several subcontexts. `[measured vint int_gfx, ada6855a]` with the
+> `v3-gfx` headless-graphics lane merged in, the Vulkan render's graphics and async-compute GR
+> channels (one guest TSG, two ctxshares) were merged onto one legacy host subcontext: the compute
+> channel took host **Xid 69** (class error, 3D class `c797`, method `0x2620`) and the fence never
+> signalled (`GFX_S3=FAIL`). The group map is now keyed `(hClient, hTsg, hContextShare)`
+> (`ChannelAlloc::ctx_share`, `ChanPlane::groups`): CUDA keeps its one group; Vulkan gets one host
+> group per subcontext — the shape `v3-gfx` measured bit-identical to bare metal. Mirroring guest
+> subcontexts as host `FERMI_CONTEXT_SHARE_A`s inside ONE group is the faithful model and is not
+> built.
+
 [M vid5/vid6] Every ffmpeg CUDA context raised Xid 13 `SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE` on its GR twin.
 
 A driver-API probe reproduces this with no video at all: a local-memory kernel launched on a second CUDA stream passes on bare metal and fails in the guest (`sync 719`).
