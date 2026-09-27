@@ -7,6 +7,11 @@ this file.
 
 ## 0. Where work paused (2026-09-27, ~00:05 CEST) — resume here
 
+- **2026-09-27, resumed (cloud session): merge candidate `v3-mc20` = master `0d3ecde9` + `v3-drivers~1` (`8f9bdd14`,
+  the held 535/545 allowlist commit left out) — merge commit `5018bb57`, clean, on branch `claude/relaxed-babbage-7zz89s`.
+  GPU-free: all `kf-*` crate tests **1639 passed / 0 failed** at `5018bb57`. Hardware bar (gates, kf3 build, 30/30)
+  NOT run: this session's container has no SSH egress, so `merge_check.sh` cannot be driven on a box from here.
+  Do not promote to master until the bar passes at `5018bb57`.**
 - **Master = `v3-mc19` verified** (`08bf7f18`: 1637 tests / 0 failed, gates 9/9, 30/30) + docs. All vast boxes are being
   destroyed; nothing depends on a box or on local files. Every branch below is on GitHub.
 - **`v3-initrace` is ON MASTER** (verified at `08bf7f18`). It contains: USERD cleared at Translated-channel birth (the re-init "flake": a reborn CeUtils channel
