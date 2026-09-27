@@ -7,11 +7,16 @@ this file.
 
 ## 0. Where work paused (2026-09-27, ~00:05 CEST) — resume here
 
-- **2026-09-27, resumed (cloud session): merge candidate `v3-mc20` = master `0d3ecde9` + `v3-drivers~1` (`8f9bdd14`,
+- **2026-09-27 18:27 UTC — `v3-mc20` PASSED THE FULL MERGE BAR** at `c0ef7b75` (= `5018bb57` + docs only), on
+  branch `claude/kayfabe-gpu-testing-m0cv1q`: crate tests **1639 / 0**, gates **9/9**, `KF3_RC=0`, `FG_RC=0`,
+  fast suite **30/30** — vast 53004208, RTX 3060 GA106, host 580.159.04 open. Evidence: `traces/v3_mc20/`.
+  Ready to fast-forward master and v3 (owner go-ahead asked in the session). Cloud sessions now reach boxes
+  through execd behind a cloudflared quick tunnel (the `vx` kit), not SSH.
+- ⊘ *Superseded by the line above:* 2026-09-27, resumed (cloud session): merge candidate `v3-mc20` = master `0d3ecde9` + `v3-drivers~1` (`8f9bdd14`,
   the held 535/545 allowlist commit left out) — merge commit `5018bb57`, clean, on branch `claude/relaxed-babbage-7zz89s`.
   GPU-free: all `kf-*` crate tests **1639 passed / 0 failed** at `5018bb57`. Hardware bar (gates, kf3 build, 30/30)
   NOT run: this session's container has no SSH egress, so `merge_check.sh` cannot be driven on a box from here.
-  Do not promote to master until the bar passes at `5018bb57`.**
+  Do not promote to master until the bar passes at `5018bb57`.
 - **Master = `v3-mc19` verified** (`08bf7f18`: 1637 tests / 0 failed, gates 9/9, 30/30) + docs. All vast boxes are being
   destroyed; nothing depends on a box or on local files. Every branch below is on GitHub.
 - **`v3-initrace` is ON MASTER** (verified at `08bf7f18`). It contains: USERD cleared at Translated-channel birth (the re-init "flake": a reborn CeUtils channel

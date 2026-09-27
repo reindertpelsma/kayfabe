@@ -1,0 +1,11 @@
+START 2026-09-27T18:08:17+00:00
+c0ef7b75 docs: handoff §0 — merge candidate v3-mc20 (master + v3-drivers minus the held allowlist); crate tests 1639/0, hardware bar not run
+TESTS passed 1639 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/c0ef7b75/qemu-system-x86_64 rev=c0ef7b75 mtime=2026-09-27 18:10:15.716106518 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT 2026-09-27T18:26:52+00:00
