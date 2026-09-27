@@ -29,6 +29,11 @@ pub use classes::{ClassSet, Kind, classes_for};
 pub use host_classes::{DerivedHostClasses, HostLacksKind};
 pub use ptekind::{PTE_KIND_GENERIC, PTE_KIND_PITCH, uncompressed_pte_kind};
 
+/// `NV_PGSP_MAILBOX(0)` — the GSP scratch mailbox array (`ampere/ga102/dev_gsp.h:35`,
+/// `(0x110804+(i)*4)`, the same in `hopper/gh100` and `blackwell/gb100`; pinned by
+/// `heartbeat_tests`).
+pub const GSP_MAILBOX0: u64 = 0x0011_0804;
+
 /// ★ A GPU family — ogkm's own axis (`MC_GET_ARCH_INFO`'s architecture). ⊘ NOT a die group: GA100
 /// and GA10x are both Ampere, GB100 and GB202 both Blackwell; their differences are per-die FACTS
 /// (the host's class list, its token layout, its sizes), never a new row.
@@ -183,9 +188,31 @@ impl Family {
     /// GB110/GB112 and every GB20x (`ogkm-580: generated/g_kernel_fifo_nvoc.c:226-236`); Turing …
     /// Hopper default `FALSE` (only an SR-IOV host turns it on, `kernel_fifo_init.c:197-222`). With it
     /// the doorbell token's `VECTOR` is NOT device-unique and the index must carry `RUNLIST_ID`.
+    ///
+    /// ⊘ **A family default of the 580 … 595 guests, not a family fact:** from 610.43.02 the HAL
+    /// list also names GA10x / AD10x / GH100 (`610.57.04: g_kernel_fifo_nvoc.c:233-243`). The device
+    /// therefore indexes by `(runlist, chid)` on every family (`kf_core::Plane::for_device`); this
+    /// predicate now only shapes the harness planes.
     #[must_use]
     pub const fn chids_per_runlist(self) -> bool {
         matches!(self, Family::Blackwell)
+    }
+
+    /// ★ The two words a GSP publishes its HEARTBEATS in: `NV_PGSP_MAILBOX(0)` (GSP-RM) and `(1)`
+    /// (LibOS), GPU time in ms (`595.84` / `610.57.04: g_kernel_gsp_nvoc.h`
+    /// `NV_PGSP_MAILBOX_REGISTER_GSPRM_HEARTBEAT = 0`, `_LIBOS_HEARTBEAT = 1`). From 595.84 the
+    /// guest RM reads both after every RPC poll and logs *"heartbeat timed out"* when they lag
+    /// (`kernel_gsp.c` `_kgspIsHeartbeatTimedOut`), where `kgspIsHeartbeatSupported` — GA102 and
+    /// later; not Turing / GA100. Before 595 the array is read only by `kgspDumpMailbox`, a failure
+    /// dump, so publishing is version-independent. `None` on Turing (no heartbeat on its HAL).
+    #[must_use]
+    pub const fn gsp_heartbeat_mailboxes(self) -> Option<[u64; 2]> {
+        match self {
+            Family::Turing => None,
+            Family::Ampere | Family::Ada | Family::Hopper | Family::Blackwell => {
+                Some([GSP_MAILBOX0, GSP_MAILBOX0 + 4])
+            }
+        }
     }
 
     /// How the GSP boots (`kgspBootstrap_*` HAL per family: falcon/booter through Ada, FSP after).
@@ -315,5 +342,34 @@ mod authored_intr_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod heartbeat_tests {
+    use super::*;
+    use crate::hwref::DieGroup;
+    use crate::hwref::expect::val;
+
+    /// ★ The heartbeat words are each GA102+ die group's own `NV_PGSP_MAILBOX(0)` / `(1)`.
+    #[test]
+    fn the_heartbeat_mailboxes_are_each_die_groups_header() {
+        for (g, f) in [
+            (DieGroup::Ga10x, Family::Ampere),
+            (DieGroup::Ad10x, Family::Ada),
+            (DieGroup::Gh100, Family::Hopper),
+            (DieGroup::Gb10x, Family::Blackwell),
+            (DieGroup::Gb20x, Family::Blackwell),
+        ] {
+            let [m0, m1] = f
+                .gsp_heartbeat_mailboxes()
+                .expect("GA102+ publishes heartbeats");
+            assert_eq!(
+                (m0, m1),
+                (val(g, "NV_PGSP_MAILBOX(0)"), val(g, "NV_PGSP_MAILBOX(1)")),
+                "{g:?}"
+            );
+        }
+        assert_eq!(Family::Turing.gsp_heartbeat_mailboxes(), None);
     }
 }

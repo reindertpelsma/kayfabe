@@ -379,7 +379,7 @@ impl Device {
         // holds a plain `&'static`, never a lock or a refcount.
         let vmm: &'static Vmm = Box::leak(Box::new(Vmm::new()));
         let bar0_bytes = if pci.bar0_bytes != 0 { pci.bar0_bytes } else { 16 << 20 };
-        let plane: &'static Plane<'static> = Box::leak(Box::new(Plane::for_family(
+        let plane: &'static Plane<'static> = Box::leak(Box::new(Plane::for_device(
             vmm,
             1 << 12,
             0xFFF,
@@ -388,8 +388,9 @@ impl Device {
         )));
         // ★ P5: the channel plane — built BEFORE the served chain, which carries the guest's channel
         // statements to it. Its completion fd is opened here (host ioctls at realize, never a vCPU).
-        // ⊘ The token table is indexed by the doorbell's VECTOR (11:0) — the guest's chid, which is
-        // device-unique on the GSP families (one global CHID_MGR, `kf_arch::DoorbellTarget`).
+        // ⊘ The token table is indexed by the doorbell's `(RUNLIST_ID, VECTOR)` on every family
+        // (`Plane::for_device`): a guest's chid is device-unique only while its RM runs one global
+        // CHID_MGR — not on Blackwell, and not on Ampere/Ada/Hopper from 610.43.02.
         let worker_efd: &'static Notifier = Box::leak(Box::new(Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?));
         // ★ P5b: the drainer's wake exists before the channel plane: an act that resolves a held
         // reply signals it.
@@ -1338,12 +1339,28 @@ impl Device {
             return;
         }
         let mut beat = (std::time::Instant::now(), String::new());
+        // ★ The GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+ guest reads
+        // them after every RPC poll. Stored on this thread (never a vCPU) every 0.5 s — well inside
+        // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
+        // reads through the aliased usermode page.
+        let heartbeat = self.plane.family.gsp_heartbeat_mailboxes();
+        let mut hb_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let mut prof_beat = std::time::Instant::now();
         let mut marks_seen = 0u64;
         let mut busy_from = crate::prof::now_ns();
         // ★ w827: the last wait ended by TIMEOUT — did the pass after it find work?
         let mut after_timeout = false;
         while !self.stop.load(Ordering::Acquire) {
+            if let Some([gsprm, libos]) = heartbeat
+                && hb_at.elapsed() >= std::time::Duration::from_millis(500)
+            {
+                hb_at = std::time::Instant::now();
+                if let Ok(ns) = self.rm.gpu_time_ns() {
+                    let ms = u64::from((ns / 1_000_000) as u32);
+                    self.shadow_store(gsprm, ms, 4);
+                    self.shadow_store(libos, ms, 4);
+                }
+            }
             // A heartbeat for the boot log, on the drainer (never a vCPU): printed only on change.
             if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
                 let now = self.status_line();

@@ -1,0 +1,41 @@
+Q9_START 2026-09-26T22:49:44+00:00 rev=1837166d host=580.159.04
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/1837166d/qemu-system-x86_64 rev=1837166d mtime=2026-09-26 22:50:15.357878937 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+V3_GATES_SUMMARY pass=9 fail=0
+TESTS_RC=0 passed=1617 failed=0
+FG_DEFAULT_RC=0
+MATRIX_ROW host=580.159.04 guest=580.159.04 rev=1837166d FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+LADDER host=580.159.04 guest=580.159.04 rev=1837166d 4/4
+Q9_BAR_DONE 2026-09-26T23:14:23+00:00
+LADDER host=580.159.04 guest=610.57.04 rev=1837166d 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=12253
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=12252
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=12354
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=6 trapped=12897
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+      3 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 100 }
+      3 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 106 }
+      3 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 107 }
+      3 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 13 }
+LADDER host=580.159.04 guest=575.57.08 rev=1837166d 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10376
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10384
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10512
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=5 trapped=11062
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+     76 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+FAT 590.48.01 [2026-09-26T23:29:49+00:00] fat 590.48.01: STAGED ✔ /workspace/bench/guest-590.48.01.qcow2
+LADDER host=580.159.04 guest=590.48.01 rev=1837166d 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10369
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10355
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=4 trapped=10498
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=4 trapped=10993
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+      2 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 100 }
+      2 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 12 }
+      1 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 124 }
+      1 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 125 }
+Q9_EXIT 2026-09-26T23:35:31+00:00

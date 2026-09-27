@@ -1,11 +1,54 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
-**STATUS: LIVE (in progress), 2026-09-26, branch `v3-drivers`.** The two-axis model, the
-inventory, the derivation pipeline and the generated-table design are built on BOTH axes; the guest
-axis is being walked on hardware (§6 is the running matrix) and the host axis is wired (kf-host
-carries every host struct to the host's measured layout, §2.2). Boxes: vast `52746206` (RTX 3090
-GA102, Xeon E5-2673 v4) and `52788835` (RTX 3080 Ti GA102, 38 cores), host driver **580.159.04
-open** on both.
+> ### ⏸ WHERE I STOPPED — 2026-09-27 ~02:00 UTC (owner: weekly usage limit; stopped mid-walk, boxes destroyed)
+> **Branch `v3-drivers`**, the 535/545 capability commit is LAST (owner review); everything below it
+> is mergeable (coordinator merging `42b25354`+ onto master). All evidence is committed under
+> `traces/driver_matrix/walk/` (both boxes' queue logs, suites, ladders, failure points, host
+> installer logs); §6.0's grid is derived from it by `scripts/drivermatrix/matrix_table.py`.
+>
+> **Last measured (not yet folded into §6 rows):**
+> - `bb9b67a9` (kfd, host 580.159.04): guests **595.84 and 610.57.04 ladder 4/4 with ZERO
+>   "heartbeat timed out" lines** — the GSP heartbeat (`46d9bf37`) verified on hardware; tests
+>   1618/0; the thin suite at that head was interrupted (not measured).
+> - Host **570.148.08** (kfh, `1f3e4fc4`, guest 580.159.04): gates 9/9, thin **30/30**, ladder **4/4**,
+>   mixed pairs 590.48.01 **4/4** and 575.57.08 **4/4** (its `.run` is on the `tesla/` path only).
+> - 535.309.01 / 545.23.08 past the chip-info carry: next wall `INTERNAL_GET_CONSTRUCTED_FALCON_INFO`
+>   (`0x20800a42`) — the ≤545 id of what 550+ asks as `GPU_GET_CONSTRUCTED_FALCON_INFO`
+>   (`0x208001b0`, served as `WantedTable::ConstructedFalconInfo`): the same answer under another id.
+>
+> **Next steps, in order:**
+> 1. **570 UVM first-channel wall** (on master after `v3-mc19` = the init-race fix): nvidia-uvm 570's
+>    first channel (`UVM_OWNED`, GPFIFO VA `0x121010000`) is read before the mirror places it
+>    (`traces/v3_initrace/570/`). Measured difference: the UVM internal VA space's root is stated
+>    `0x1efa74000` on 570 and every walk under it finds **0 rows**; on 575 it is `0x4000` and the walks
+>    find its rows — and no fn 54 arrives on 570 before the channel dies. Run the 570 fat ladder with
+>    `KF_VAS_CENSUS=1` (`b87d9882` now names each root's carrier) beside a 575 run and compare which
+>    statement roots `0xc1d0000a:0xcaf00005` on each (queued as `q11`, interrupted before it ran).
+> 2. Host **565.57.01 / 550.54.14**: root-caused from the kept installer logs — the old `.run` builds
+>    with `cc` (gcc-11) while Linux 6.8 was built by gcc-12 (`cc: error: unrecognized command-line
+>    option '-ftrivial-auto-var-init=zero'`, `Failed CC version check`). Run the installer with
+>    `CC=x86_64-linux-gnu-gcc-12` in `provision_host_driver.sh`; the 550 fat-guest `.run` (image kernel
+>    6.8.0-139) most likely fails the same way (`stage_fat_guest.sh` now prints its errors).
+> 3. The remaining host walk: 535.309.01 (the ISA 8.2 JIT floor), 590.48.01, 595.84, 610.57.04 hosts
+>    (`hostwalk3`, interrupted after 570).
+> 4. 535/545: serve `0x20800a42` from the `ConstructedFalconInfo` answer (the INTERNAL/GPU struct
+>    pair measured identical in the matrix before relying on it) — behind the owner's review of the
+>    capability rows.
+> 5. The final bar at the merged head (tests, gates 9/9, default thin 30/30, ladder 4/4), then the
+>    570 / 565 ladders again.
+
+**STATUS: LIVE (in progress), 2026-09-27, branch `v3-drivers`** (the 535/545 capability commit is
+always the LAST one — owner review; everything below it is mergeable). Both axes are built and
+walked on hardware; §6.0 is the running grid, DERIVED from `traces/driver_matrix/walk/`.
+**Guest axis (host 580.159.04):** every 580.x thin 27–30/30 (the reds are the adapter-init flake);
+CUDA ladder **4/4 for 580.159.04, 580.105.08, 590.48.01, 595.84, 575.57.08 and 610.57.04**;
+570.148.08 / 565.57.01 initialise but every adapter RE-init fails at CeUtils (the flake's mechanism,
+deterministic — handed to `v3-initrace`); 550.54.14 initialises (fat image unstaged: its `.run`
+does not build on the image's kernel); 535.309.01 / 545.23.08 (the latter on a staged 6.5 guest
+kernel) reach `_gpuInitChipInfo`, carried since. **Host axis (guest 580.159.04):** 575.57.08,
+580.95.05, 580.65.06 — gates 9/9, thin 30/30, ladder 4/4, mixed pairs (590 / 575 guests) 4/4; the
+first sub-580 host needed the per-map-kind fix (§2.2 H3). 570/565/550/535/590/595/610 hosts in the
+third walk. Boxes: vast `52746206` (RTX 3090 GA102) and `52788835` (RTX 3080 Ti GA102).
 
 > Owner roadmap item (2026-09-26): kayfabe v3 must support the NVIDIA driver range nvkvm-pv
 > supports — 535 → 610 — on BOTH axes, with per-version values **derived from source into
@@ -22,7 +65,7 @@ open** on both.
 | who chooses it | the operator, inside the VM | the operator, on the host |
 | what varies | the GSP firmware interface our fake GSP must speak: queue element, init args, RPC numbers and payloads, static info, every RM control the guest's CPU-RM forwards | the RM ioctl ABI kf-host authors: NVOS escape bodies, control params, alloc params, plus the PTX ISA the host's libcuda JITs |
 | selected by | `guest-driver=` (defaults to the host's), **cross-checked** against the guest's own `NV_VERSION_STRING` at fn 1 | the host RM's own `NV_ESC_CHECK_VERSION_STR` |
-| state 2026-09-26 | table assembled from **measured** per-tag layouts; 580.x walked (thin 30/30 + ladder 4/4); **590.48.01 and 595.84 initialize** (grader is 580-only); 575/570/565 past the INTR wall at head; 550 → device-info carry; 610 → register-map carry; 535/545 need the capability rows (§6, §7) | R2 gates on **measurement**; every host struct carried by name (`kf_abi::hostabi`, 53 controls pinned to the matrix); subtree map authored per family below 580.65.06 (ruling 3); walker PTX at ISA 8.2 (ruling 4) |
+| state 2026-09-27 | table assembled from **measured** per-tag layouts; CUDA ladder 4/4 for 580.159.04 / 580.105.08 / 590.48.01 / 595.84 / 575.57.08 / 610.57.04 guests; ≤575 guests needed the fn 54/79 page-directory carrier (G11), 610 the `(runlist, chid)` token index and the large RPC; 570/565 blocked by adapter re-init (`v3-initrace`); 535/545 reach chip-info (carried) — capability rows under owner review | R2 gates on **measurement**; every host struct carried by name (`kf_abi::hostabi`, 53 controls pinned to the matrix); subtree map authored per family below 580.65.06 (ruling 3); walker PTX at ISA 8.2 (ruling 4); per-map PTE kind only from 580.65.06 (H3 correction); hosts 575.57.08 / 580.95.05 / 580.65.06 green on thin + ladder + mixed pairs |
 
 ★ **The finding that shapes everything:** NVIDIA moves ABI **inside** a branch. Measured:
 `GspSystemInfo` gains a field at 580.95.05 and another at 580.105.08, `NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS`
@@ -309,29 +352,57 @@ the fat-guest CUDA ladder (cup2 / cup3 / cup8 / cup8bench).
 
 | guest | result | rev |
 |---|---|---|
-| 580.159.04 | thin **30/30**, ladder **4/4** | `47348e3b`, `6de22590` |
+| 580.159.04 | thin **30/30**, ladder **4/4** | `47348e3b`, `6de22590`, `13b25624` (rebased on master `59cc98a9`) |
 | 580.105.08 | thin **30/30**, ladder **4/4** | `47348e3b` |
 | 580.65.06 | thin 28/30 (2 × adapter-init flake) | `47348e3b` |
 | 580.95.05 | thin 29/30 (`rpc-mixed-allocs`: a SYSMEM object read `0xffffffff`, dead mapping — rerun queued) | `47348e3b` |
-| 580.126.09 / 580.173.02 / 580.178.04 | *running* | `47348e3b` |
+| 580.126.09 | thin 29/30 (1 × adapter-init flake, the `memmgrInitCeUtils` `NV_ERR_INVALID_STATE` variant) | `47348e3b` |
+| 580.173.02 | thin **30/30** | `47348e3b` |
+| 580.178.04 | thin 27/30 — all three reds (`concurrency`, `late-map-race`, `executor-vas`) are the adapter-init flake (`RmInitAdapter failed` in each; 6 in 213 boots of this revision's walk) | `47348e3b` |
 | **590.48.01** | init ✔, **ladder 4/4** | `6de22590` |
 | **595.84** | init ✔, **ladder 4/4** | `6de22590` |
-| 575.57.08 | init ✔; ladder **0/4** at `6de22590`: `cuInit` → `CUDA_ERROR_NOT_INITIALIZED`. ⊘ **CORRECTED (same day): not the GSS-legacy `0x2080a637`** this row first blamed — that 96 KB control is asked during the boot-time adapter init, before the module is reloaded cold, and a bare-metal 575.57.08 host's `cup2` never asks it (nvdiff: 798 records, `a637=0`). ★ **The wall is the page-directory carrier (G11):** inside `cuInit` UVM registers the GPU, brings up its six channels, then calls `nvUvmInterfaceSetPageDirectory` — which a ≤575.64.05 RM sends as the dedicated RPC **fn 54**, refused as an unknown function (`GSP rpc UNSERVICED { code: 54 }`); UVM tears the registration down. The guest RM's own failure set is otherwise identical to a passing 590.48.01 guest's. Fixed on the branch (fn 54/79 carried as the same statements as `0x00801813`/`0x00801814`); ladder re-run queued | `6de22590` |
+| **575.57.08** | init ✔, **ladder 4/4** at `ee35ca4a` (cup2 `0xabcd1234`, cup3 `43`, cup8 `bad=0 maxerr=0`, cup8bench verified) — the fn 54 carrier (G11). Before it: ladder **0/4** at `6de22590`, `cuInit` → `CUDA_ERROR_NOT_INITIALIZED`. ⊘ **CORRECTED (same day): not the GSS-legacy `0x2080a637`** this row first blamed — that 96 KB control is asked during the boot-time adapter init, before the module is reloaded cold, and a bare-metal 575.57.08 host's `cup2` never asks it. ★ **The wall was the page-directory carrier (G11):** inside `cuInit` UVM registers the GPU, brings up its six channels, then calls `nvUvmInterfaceSetPageDirectory` — which a ≤575.64.05 RM sends as the dedicated RPC **fn 54**, refused as an unknown function (`GSP rpc UNSERVICED { code: 54 }`; `traces/driver_matrix/walk/kfh/ladder_boots.tar.xz`); UVM tears the registration down | `ee35ca4a` |
 | 575.51.03 | INTR wall at `47348e3b`; re-run queued | — |
-| 570.148.08 | init ✔, ladder queued | `6de22590` |
+| 570.148.08 | init ✔ (the FIRST `RmInitAdapter` of every boot); **ladder 0/4** at `ee35ca4a`, `cuInit` → 999: every adapter **RE-init** fails at `memmgrInitCeUtils` (`memmgrMemCopy` TIMEOUT, `0x25:0x65:1128`). The reborn CeUtils channel (same token, same host channel, same GPFIFO VA, a new VA space) retires `forwarded=1 submissions=0`: the ring reader fetched the guest's entry and produced NO words, while the completion tail still retired it (host CE2 non-stall 1→2→3, `GP_GET=1`) — the guest's copy and its `finishPayload` release never ran. Deterministic here because 570's CeUtils self-test OPENS with the sysmem copy (575+ first memsets vidmem). The adapter-init flake's mechanism, reproducible — handed to `v3-initrace` (coordinator, 2026-09-26); re-run when its fix lands | `ee35ca4a` |
 | 570.124.06 | INTR wall at `47348e3b`; re-run queued | — |
-| 565.57.01 | init ✔ (BIF refused, carried since), ladder queued | `6de22590` |
-| 550.54.14 | device-info wall at `6de22590` → carried; re-run queued | — |
-| 610.57.04 | register-map wall at `47348e3b` → carried + large RPCs; re-run queued | — |
-| 545.23.08 | needs a ≤ 6.6 guest kernel (harness built) + capability row (owner review) | — |
-| 535.309.01 | capability row (owner review, `567942c1`) | — |
+| 565.57.01 | init ✔ (BIF refused, carried since); **ladder 0/4** at `ee35ca4a` — the same adapter RE-init wall as 570 (first init passes; the reborn CeUtils channel retires `forwarded=1 submissions=0`; `v3-initrace`) | `ee35ca4a` |
+| 550.54.14 | device-info wall at `6de22590` → carried; failure point re-run queued. Fat guest **unstaged**: the 550.54.14 `.run` does not install on the fat image's kernel (6.8.0-139; the thin guest's 6.8.0-59 builds it) — `stage_fat_guest.sh` now prints the installer's errors | — |
+| **610.57.04** | init ✔, **ladder 4/4** at `1837166d` (cup2 `0xabcd1234`, cup3 `43`, cup8 `bad=0 maxerr=0`, cup8bench verified). Two 610-only facts made it: the **large RPC on hardware** — `GET_GLOBAL_SM_ORDER` (73 800 B) joined from 2 fragments and answered in 2 replies (ruling 2) — and **per-runlist chids on Ampere** (`bUsePerRunlistChram`, GA10x from 610.43.02): at `ee35ca4a` the user channel's chid 1 collided with CeUtils' on the chid-indexed token table (`OverDeclaredCap` → `0x1a`, `cuInit` → 3); the device now indexes by `(runlist, chid)` on every family (`84967e3a`). The GSP heartbeat a 610 guest reads is published since `46d9bf37` (hardware check queued) | `1837166d` |
+| 545.23.08 | boots the staged **6.5.0-45** guest kernel (`stage_guest_kernel.sh`; the 6.8 build gap closed) with the capability row (owner review); RmInitAdapter stops at `_gpuInitChipInfo`: `INTERNAL_GPU_GET_CHIP_INFO` is 92 bytes there (`bar1Size` at +12) — carried by name since `ee35ca4a`+1 (see 535) | `ee35ca4a` |
+| 535.309.01 | with the capability row (owner review — the LAST commit on the branch): RmInitAdapter stops at `_gpuInitChipInfo` (`0x23:0x56:907`) — `INTERNAL_GPU_GET_CHIP_INFO` is 92 bytes at ≤545 (`bar1Size` at +12; it has no reader in the 535/545 RM). Carried by name at the next commit (a unit test pins the carry at both versions); re-run queued | `ee35ca4a` |
 
 Host axis, guest **580.159.04** (box 2, RTX 3080 Ti):
 
 | host | result | rev |
 |---|---|---|
-| 575.57.08 | gates **9/9** (the measured host axis: every host struct carried, the Ampere subtree-map rule standing in for the control 575 lacks); bare-metal cup2 PASS (nvdiff 798 records). Thin **0/30**, ladder 0/4: every kinded map refused — the host has no per-map PTE kind (§2.2 H3 correction). Fixed on the branch; re-walk queued | `9339ee6b` |
-| 570.148.08 / 565.57.01 / 550.54.14 / 580.95.05 / 580.65.06 | queued behind the fix (the walk was stopped: each sub-580 host would have timed out 30 arms the same way) | — |
+| **575.57.08** | at `ee35ca4a`: gates **9/9**, thin **30/30**, ladder **4/4** (guest 580.159.04); mixed pairs: guest **590.48.01 ladder 4/4**, guest **575.57.08 ladder 4/4**. Refused by name, as designed: `MC_GET_INTR_CATEGORY_SUBTREE_MAP` (absent at 575 — the Ampere family rule answers, ruling 3) and the four GSS-legacy clock rows (no public header, unmeasured below 580 — §7). Before the per-map-kind fix (`9339ee6b`): gates 9/9 but thin **0/30**, ladder 0/4 — every kinded map refused (§2.2 H3 correction) | `ee35ca4a` (`9339ee6b`) |
+| **580.95.05** | at `ee35ca4a`: gates **9/9**, thin **30/30**, ladder **4/4**; mixed: guest 590.48.01 **4/4**, guest 575.57.08 **4/4** | `ee35ca4a` |
+| **580.65.06** | at `ee35ca4a`: gates **9/9**, thin **30/30**, ladder **4/4**; mixed: guest 590.48.01 **4/4**, guest 575.57.08 **4/4** | `ee35ca4a` |
+| 570.148.08 | not swapped: its `.run` is 404 under `XFree86/` (it is on the datacenter path `tesla/`) — the third walk tries both | — |
+| 565.57.01 / 550.54.14 | not swapped: the `.run` failed "Building kernel modules" on the host's Linux 6.8.0-59, and the next swap overwrote the one log that said why — `provision_host_driver.sh` now keeps each version's installer log and prints its errors; retried in the third walk | — |
+
+**The host × guest grid** — DERIVED, not typed: `scripts/drivermatrix/matrix_table.py` reads every
+queue log committed under `traces/driver_matrix/walk/` and keeps each cell's latest measurement
+(thin = the 30-arm suite, 580.x guests only; ladder = the fat-guest CUDA ladder; revision in
+backticks). Regenerate after every refresh of the walk evidence.
+
+| guest \ host | 570.148.08 | 575.57.08 | 580.65.06 | 580.95.05 | 580.159.04 |
+|---|---|---|---|---|---|
+| *gates* | 9/9 | 9/9 | 9/9 | 9/9 | 9/9 |
+| 550.54.14 |  |  |  |  | ladder unstaged |
+| 565.57.01 |  |  |  |  | ladder 0/4 `ee35ca4a` |
+| 570.148.08 |  |  |  |  | ladder 0/4 `ee35ca4a` |
+| 575.57.08 | ladder 4/4 `1f3e4fc4` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `1837166d` |
+| 580.65.06 |  |  |  |  | thin 28/30 `47348e3b` |
+| 580.95.05 |  |  |  |  | thin 29/30 `47348e3b` |
+| 580.105.08 |  |  |  |  | thin 30/30, ladder 4/4 `47348e3b` |
+| 580.126.09 |  |  |  |  | thin 29/30 `47348e3b` |
+| 580.159.04 | thin 30/30, ladder 4/4 `1f3e4fc4` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `1837166d` |
+| 580.173.02 |  |  |  |  | thin 30/30 `47348e3b` |
+| 580.178.04 |  |  |  |  | thin 27/30 `47348e3b` |
+| 590.48.01 | ladder 4/4 `1f3e4fc4` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `1837166d` |
+| 595.84 |  |  |  |  | ladder 4/4 `bb9b67a9` |
+| 610.57.04 |  |  |  |  | ladder 4/4 `bb9b67a9` |
 
 ★ Every row carries its source revision. Box: vast `52746206`, RTX 3090 (GA102 `0x2204`), Xeon
 E5-2673 v4 (nested KVM), host driver **580.159.04 open**. Thin suite = `KF_DEVICE=kf3
@@ -387,6 +458,7 @@ cup8bench, every timed iteration verified).
 | 580.159.04 | 580.159.04 | `47348e3b` (rebased on master `02b27c2a`; walker PTX ISA 8.2) | **9/9** | **1533 / 0** | **30/30** | **4/4** | the early-merge candidate — green on the whole bar |
 | 580.159.04 | 580.105.08 | `47348e3b` | — | — | **30/30** | **4/4** | + **fn-1 re-selection on hardware 3/3**: the 580.105.08 initrd on a DEFAULTED device logs `RE-SELECTED at fn 1: 580.159.04 (defaulted) -> 580.105.08` and passes `--timer`, `--engines`, `--ce-client` |
 | 580.159.04 | 580.159.04 | `6de22590` (rebased on master `f8c68286`; host axis carried) | **9/9** (RTX 3080 Ti, box 2) | **1591 / 0** | **30/30** | — | at the bench host every host carry is the identity |
+| 580.159.04 | 580.159.04 | `13b25624` (the branch REBASED on master `59cc98a9`, 535 commit last; mergeable head `7538aabf`; walker PTX regenerated by `make_ptx.py` + NVRTC 12.2 — byte-identical) | **9/9** | **1612 / 0** | **30/30** | **4/4** | green on the whole bar after the rebase. ⚠ This box's GPU had wedged just before (GFW boot `progress 0xff` on the first adapter init after a QEMU exit, 19:37); an FLR (`rmmod`, PCI `reset`, `modprobe`) recovered it — the queues now health-check and FLR before every step |
 | 580.159.04 | 580.65.06 | `47348e3b` | — | — | 28/30 | — | both reds are the adapter-init flake (§6 triage note) — one a NEW variant: `memmgrInitCeUtils` `NV_ERR_INVALID_STATE` with BOTH CeUtils submissions retired (the self-test's data check failed) |
 
 ★ **At `6de22590` (element sizes in the matrix) the 575.57.08, 570.148.08 and 565.57.01 guests'
@@ -478,6 +550,30 @@ from "the view was stale".
 | 595.84 | 11 | 46 | static info 1592, nine-field init args, KGR info/floorsweeping, GPU name 68, `rpc_run_cpu_sequencer_v` |
 | 610.x | 18 | 72 | 16-byte MCTP element (encoded), static info 1600, `USER_REGISTER_ACCESS_MAP` 20492, SM order 73760 (> 64 KiB element max), GPU info 580, … |
 
+**Guest axis — a GSP behaviour the newest guests expect and we do not provide (measured
+2026-09-26):** from **595.84** the guest RM reads two GSP heartbeats after every RPC poll —
+`NV_PGSP_MAILBOX(0)` (GSP-RM) and `(1)` (LibOS), GPU time in ms (`595.84` / `610.57.04:
+kernel_gsp.c` `_kgspHeartbeatIsGspRmHeartbeatTimedOut`, supported on GA102 and later per
+`kgspIsHeartbeatSupported`). Ours stay 0, so a 595/610 guest logs *"GSP RM heartbeat timed out"* /
+*"LibOS heartbeat timed out"* after every RPC. Not fatal (the 595.84 ladder is 4/4 with it), but an
+RPC that DOES time out is then classified as a hung GSP (`_kgspIsTimeoutFatal`). Up to 590 the
+registers are read only by `kgspDumpMailbox` (a failure dump), so publishing a heartbeat is
+version-independent. ★ **Built:** the drainer stores the host GPU's time in ms (`HostRm::gpu_time_ns`
+— the usermode page's `TIME_1:_0`, the counter the guest itself reads through the aliased page)
+into both words every 0.5 s, on GA102-and-later families (`kf_chip::Family::gsp_heartbeat_mailboxes`,
+offsets pinned to each die group's `NV_PGSP_MAILBOX(i)`). Hardware check pending (a 595/610
+guest's dmesg must lose the *"heartbeat timed out"* lines).
+
+**Host axis — what a sub-580 host cannot be asked, measured on host 575.57.08 (all refused by
+name, none silent):**
+
+| gap | hosts | effect in the guest | path to close |
+|---|---|---|---|
+| per-map PTE kind (`NVOS46` `kindOverride`) | < 580.65.06 | none for compute: PITCH/GENERIC map with the memory's own kind (the pre-v3-gfx mapping); a depth/stencil kind is refused by name (graphics on such a host: Z surfaces unmapped) | a per-kind virtual range (`PAGE_KIND_VIRTUAL`) — only if graphics on an old host is wanted |
+| `MC_GET_INTR_CATEGORY_SUBTREE_MAP` | < 580.65.06 | none — the family rule answers (ruling 3) | — |
+| GSS-legacy clock rows `0x20809064` / `0x2080a028` / `0x2080a084` / `0x2080a026` | outside [580.65.06, 581) | `cudaDevAttrClockRate` falls back to `cudartinit`'s constant; NVENC's clock query refused ("unsupported device") | probe each host version's answers (the rows are asked with requests WE author) and widen the interval per measured version |
+| host 545.x | — | not measurable on these boxes: the 545 kernel module does not build on the hosts' Linux 6.8 (same conftest gap as the guest, §5) | a ≤ 6.6 host kernel |
+
 ### 7.1 Index-keyed lists: append-only, with one exception (measured)
 
 The info-list controls (`GPU_GET_INFO_V2`, `FB_GET_INFO_V2`, `KGR_GET_INFO`) carry
@@ -544,11 +640,21 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
    | RTX 5080 (GB203, sm_120) | 580.173.02 | `3855338c` | PASS | **9/9** | — |
    | RTX 4070 (AD104, sm_89) | 580.159.04 | `3855338c` | PASS | 7/9 | **7/9, the same two** |
 
+   ⊘⊘ **ANSWERED 2026-09-26 (coordinator, `v3-adasys`, `traces/v3_adasys/FINDING.txt`): a kayfabe
+   bug — neither the box nor Ada.** kf-host mapped system memory WITHOUT
+   `NVOS46_FLAGS_CACHE_SNOOP_ENABLE`, so RM built non-coherent (PCIe No-Snoop) PTEs; on a
+   bare-metal host with no GPU pass-through a copy engine reads zeros under the CPU's dirty lines
+   (a nested-VM box can never show it). Fixed on `v3-adasys` (v3-mc18, which also sets the bit in
+   the frozen grader). What stood here, kept because it is what the correction corrects:
    ⚠ The Ada box's gates 3 and 4 fail **identically with the 8.8 PTX**, so they are not the ISA:
    every check that has a copy engine read or write GUEST-RAM (sysmem) pages fails
    (`sysmem_to_fb_by_engine`, `fb_to_sysmem_by_engine`, a release semaphore in guest RAM reads 0)
    while every vidmem check passes. It was a container box (no `dmesg`, so an IOMMU fault could
    not be seen) — recorded as an open environment-or-Ada question, not a PTX result.
+   ⇒ The PTX result stands either way: the two failing gates were the snoop bit, the walker gates
+   7–9 passed at ISA 8.2 on Ada. The snoop flag's position (`CACHE_SNOOP` field of `NVOS46`
+   `flags`) is the same at every host tag this branch walks (535 → 610), so the host carry passes
+   it unchanged.
 5. **535/545 capability allowlist.** **RULED: port nvproxy's 535.104.05 / 545.23.06 blocks as a
    separate, clearly marked commit**, list every entry that differs from the 580 allowlist here —
    ⊘ **a security-policy change: explicit owner review before it merges.**
