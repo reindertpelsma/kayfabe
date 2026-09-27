@@ -1,5 +1,42 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
+> ### ⏸ WHERE I STOPPED — 2026-09-27 ~02:00 UTC (owner: weekly usage limit; stopped mid-walk, boxes destroyed)
+> **Branch `v3-drivers`**, the 535/545 capability commit is LAST (owner review); everything below it
+> is mergeable (coordinator merging `42b25354`+ onto master). All evidence is committed under
+> `traces/driver_matrix/walk/` (both boxes' queue logs, suites, ladders, failure points, host
+> installer logs); §6.0's grid is derived from it by `scripts/drivermatrix/matrix_table.py`.
+>
+> **Last measured (not yet folded into §6 rows):**
+> - `bb9b67a9` (kfd, host 580.159.04): guests **595.84 and 610.57.04 ladder 4/4 with ZERO
+>   "heartbeat timed out" lines** — the GSP heartbeat (`46d9bf37`) verified on hardware; tests
+>   1618/0; the thin suite at that head was interrupted (not measured).
+> - Host **570.148.08** (kfh, `1f3e4fc4`, guest 580.159.04): gates 9/9, thin **30/30**, ladder **4/4**,
+>   mixed pairs 590.48.01 **4/4** and 575.57.08 **4/4** (its `.run` is on the `tesla/` path only).
+> - 535.309.01 / 545.23.08 past the chip-info carry: next wall `INTERNAL_GET_CONSTRUCTED_FALCON_INFO`
+>   (`0x20800a42`) — the ≤545 id of what 550+ asks as `GPU_GET_CONSTRUCTED_FALCON_INFO`
+>   (`0x208001b0`, served as `WantedTable::ConstructedFalconInfo`): the same answer under another id.
+>
+> **Next steps, in order:**
+> 1. **570 UVM first-channel wall** (on master after `v3-mc19` = the init-race fix): nvidia-uvm 570's
+>    first channel (`UVM_OWNED`, GPFIFO VA `0x121010000`) is read before the mirror places it
+>    (`traces/v3_initrace/570/`). Measured difference: the UVM internal VA space's root is stated
+>    `0x1efa74000` on 570 and every walk under it finds **0 rows**; on 575 it is `0x4000` and the walks
+>    find its rows — and no fn 54 arrives on 570 before the channel dies. Run the 570 fat ladder with
+>    `KF_VAS_CENSUS=1` (`b87d9882` now names each root's carrier) beside a 575 run and compare which
+>    statement roots `0xc1d0000a:0xcaf00005` on each (queued as `q11`, interrupted before it ran).
+> 2. Host **565.57.01 / 550.54.14**: root-caused from the kept installer logs — the old `.run` builds
+>    with `cc` (gcc-11) while Linux 6.8 was built by gcc-12 (`cc: error: unrecognized command-line
+>    option '-ftrivial-auto-var-init=zero'`, `Failed CC version check`). Run the installer with
+>    `CC=x86_64-linux-gnu-gcc-12` in `provision_host_driver.sh`; the 550 fat-guest `.run` (image kernel
+>    6.8.0-139) most likely fails the same way (`stage_fat_guest.sh` now prints its errors).
+> 3. The remaining host walk: 535.309.01 (the ISA 8.2 JIT floor), 590.48.01, 595.84, 610.57.04 hosts
+>    (`hostwalk3`, interrupted after 570).
+> 4. 535/545: serve `0x20800a42` from the `ConstructedFalconInfo` answer (the INTERNAL/GPU struct
+>    pair measured identical in the matrix before relying on it) — behind the owner's review of the
+>    capability rows.
+> 5. The final bar at the merged head (tests, gates 9/9, default thin 30/30, ladder 4/4), then the
+>    570 / 565 ladders again.
+
 **STATUS: LIVE (in progress), 2026-09-27, branch `v3-drivers`** (the 535/545 capability commit is
 always the LAST one — owner review; everything below it is mergeable). Both axes are built and
 walked on hardware; §6.0 is the running grid, DERIVED from `traces/driver_matrix/walk/`.
@@ -349,23 +386,23 @@ queue log committed under `traces/driver_matrix/walk/` and keeps each cell's lat
 (thin = the 30-arm suite, 580.x guests only; ladder = the fat-guest CUDA ladder; revision in
 backticks). Regenerate after every refresh of the walk evidence.
 
-| guest \ host | 575.57.08 | 580.65.06 | 580.95.05 | 580.159.04 |
-|---|---|---|---|---|
-| *gates* | 9/9 | 9/9 | 9/9 | 9/9 |
-| 550.54.14 |  |  |  | ladder unstaged |
-| 565.57.01 |  |  |  | ladder 0/4 `ee35ca4a` |
-| 570.148.08 |  |  |  | ladder 0/4 `ee35ca4a` |
-| 575.57.08 | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `1837166d` |
-| 580.65.06 |  |  |  | thin 28/30 `47348e3b` |
-| 580.95.05 |  |  |  | thin 29/30 `47348e3b` |
-| 580.105.08 |  |  |  | thin 30/30, ladder 4/4 `47348e3b` |
-| 580.126.09 |  |  |  | thin 29/30 `47348e3b` |
-| 580.159.04 | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `1837166d` |
-| 580.173.02 |  |  |  | thin 30/30 `47348e3b` |
-| 580.178.04 |  |  |  | thin 27/30 `47348e3b` |
-| 590.48.01 | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `1837166d` |
-| 595.84 |  |  |  | ladder 4/4 `6de22590` |
-| 610.57.04 |  |  |  | ladder 4/4 `1837166d` |
+| guest \ host | 570.148.08 | 575.57.08 | 580.65.06 | 580.95.05 | 580.159.04 |
+|---|---|---|---|---|---|
+| *gates* | 9/9 | 9/9 | 9/9 | 9/9 | 9/9 |
+| 550.54.14 |  |  |  |  | ladder unstaged |
+| 565.57.01 |  |  |  |  | ladder 0/4 `ee35ca4a` |
+| 570.148.08 |  |  |  |  | ladder 0/4 `ee35ca4a` |
+| 575.57.08 | ladder 4/4 `1f3e4fc4` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `1837166d` |
+| 580.65.06 |  |  |  |  | thin 28/30 `47348e3b` |
+| 580.95.05 |  |  |  |  | thin 29/30 `47348e3b` |
+| 580.105.08 |  |  |  |  | thin 30/30, ladder 4/4 `47348e3b` |
+| 580.126.09 |  |  |  |  | thin 29/30 `47348e3b` |
+| 580.159.04 | thin 30/30, ladder 4/4 `1f3e4fc4` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `1837166d` |
+| 580.173.02 |  |  |  |  | thin 30/30 `47348e3b` |
+| 580.178.04 |  |  |  |  | thin 27/30 `47348e3b` |
+| 590.48.01 | ladder 4/4 `1f3e4fc4` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `1837166d` |
+| 595.84 |  |  |  |  | ladder 4/4 `bb9b67a9` |
+| 610.57.04 |  |  |  |  | ladder 4/4 `bb9b67a9` |
 
 ★ Every row carries its source revision. Box: vast `52746206`, RTX 3090 (GA102 `0x2204`), Xeon
 E5-2673 v4 (nested KVM), host driver **580.159.04 open**. Thin suite = `KF_DEVICE=kf3
