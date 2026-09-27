@@ -20,6 +20,7 @@ members = [
     "crates/kf-harness",
     "crates/kf-chan",
     "crates/kf-cuda",
+    "crates/kf-disp",
     "crates/kayfabe-doorbell",
     "crates/kayfabe-rm-ladder",
     "crates/kayfabe-util",
@@ -56,6 +57,7 @@ kf-host = { path = "crates/kf-host" }
 kf-chip = { path = "crates/kf-chip" }
 kf-chan = { path = "crates/kf-chan" }
 kf-cuda = { path = "crates/kf-cuda" }
+kf-disp = { path = "crates/kf-disp" }
 kf-mem = { path = "crates/kf-mem" }
 kf-trap = { path = "crates/kf-trap" }
 kf-rm = { path = "crates/kf-rm" }

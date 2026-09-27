@@ -1191,6 +1191,16 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         name: "VOLTA_USERMODE_A",
         origin: Origin::Nvproxy,
     },
+    // ★ v3-display (`docs/design/V3_DISPLAY.md` §4): the display classes below (0xC372, the
+    // C57x/C67x/C77x/CA7x display objects and their core/window/window-immediate/cursor channels)
+    // are allocated by the guest's KERNEL (NVKMS / KernelDisplay, `RS_FLAGS_ALLOC_PRIVILEGED |
+    // RS_FLAGS_ALLOC_RPC_TO_ALL`, `ogkm-580: resource_list.h:1071-1320`) and answered by the
+    // emulated display engine (`kf_rm::display`); never twinned, never forwarded to the host.
+    ClassEntry {
+        class: 0x0000c372,
+        name: "NVC372_DISPLAY_SW",
+        origin: Origin::Mode2Rpc,
+    },
     ClassEntry {
         class: 0x0000c461,
         name: "TURING_USERMODE_A",
@@ -1221,6 +1231,11 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         name: "AMPERE_CHANNEL_GPFIFO_A",
         origin: Origin::Nvproxy,
     },
+    ClassEntry {
+        class: 0x0000c570,
+        name: "NVC570_DISPLAY",
+        origin: Origin::Mode2Rpc,
+    },
     // ★★ `UVM_CHANNEL_RETAINER` — UVM's reference on a channel it did not create. Admitted
     // because serving it is BOOKKEEPING rather than a forgery: both of its two parameters
     // are `[IN]` handles and `uvmchanrtnrConstruct_IMPL` writes nothing back, so echoing the
@@ -1235,6 +1250,26 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
     ClassEntry {
         class: 0x0000c574,
         name: "UVM_CHANNEL_RETAINER",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c57a,
+        name: "NVC57A_CURSOR_IMM_CHANNEL_PIO",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c57b,
+        name: "NVC57B_WINDOW_IMM_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c57d,
+        name: "NVC57D_CORE_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c57e,
+        name: "NVC57E_WINDOW_CHANNEL_DMA",
         origin: Origin::Mode2Rpc,
     },
     ClassEntry {
@@ -1256,6 +1291,31 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         class: 0x0000c661,
         name: "HOPPER_USERMODE_A",
         origin: Origin::Nvproxy,
+    },
+    ClassEntry {
+        class: 0x0000c670,
+        name: "NVC670_DISPLAY",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c67a,
+        name: "NVC67A_CURSOR_IMM_CHANNEL_PIO",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c67b,
+        name: "NVC67B_WINDOW_IMM_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c67d,
+        name: "NVC67D_CORE_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c67e,
+        name: "NVC67E_WINDOW_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
     },
     ClassEntry {
         class: 0x0000c697,
@@ -1281,6 +1341,16 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         class: 0x0000c6fa,
         name: "NVC6FA_VIDEO_OFA",
         origin: Origin::Nvproxy,
+    },
+    ClassEntry {
+        class: 0x0000c770,
+        name: "NVC770_DISPLAY",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000c77d,
+        name: "NVC77D_CORE_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
     },
     ClassEntry {
         class: 0x0000c797,
@@ -1351,6 +1421,31 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         class: 0x0000c9fa,
         name: "NVC9FA_VIDEO_OFA",
         origin: Origin::Nvproxy,
+    },
+    ClassEntry {
+        class: 0x0000ca70,
+        name: "NVCA70_DISPLAY",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000ca7a,
+        name: "NVCA7A_CURSOR_IMM_CHANNEL_PIO",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000ca7b,
+        name: "NVCA7B_WINDOW_IMM_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000ca7d,
+        name: "NVCA7D_CORE_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
+    },
+    ClassEntry {
+        class: 0x0000ca7e,
+        name: "NVCA7E_WINDOW_CHANNEL_DMA",
+        origin: Origin::Mode2Rpc,
     },
     ClassEntry {
         class: 0x0000cb33,
@@ -2247,7 +2342,9 @@ mod tests {
         for (label, (a, b, c), n_ctl, n_cls, own) in want {
             let t = at(*a, *b, *c);
             assert_eq!(t.all_controls().count(), *n_ctl, "{label} controls");
-            assert_eq!(t.all_classes().count(), *n_cls, "{label} classes");
+            // ★ +18 on 2026-09-27 (v3-display): the display classes joined the SHARED floor, so
+            // every boundary's class count moves by the same 18.
+            assert_eq!(t.all_classes().count(), *n_cls + 18, "{label} classes");
             let mut got: Vec<&str> = t
                 .own_controls
                 .iter()
@@ -2817,10 +2914,13 @@ mod tests {
         // not: that id was already admitted and **cannot be served** (not
         // `ROUTE_TO_PHYSICAL`). See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
         assert_eq!(bench().all_controls().count(), 166, "controls"); // +1 v3-promote: GPU_EVICT_CTX
-        assert_eq!(at(550, 54, 4).all_classes().count(), 78, "classes at 550");
-        assert_eq!(at(560, 28, 3).all_classes().count(), 86, "classes at 560");
-        assert_eq!(at(570, 86, 15).all_classes().count(), 92, "classes at 570");
-        assert_eq!(bench().all_classes().count(), 94, "classes at 580");
+        // ★ +18 on 2026-09-27 (v3-display): the display classes the guest's KERNEL allocates and
+        // RPCs to us (`NVC372_DISPLAY_SW`, the C57x/C67x/C77x/CA7x display objects and their
+        // core/window/window-immediate/cursor channels). SHARED, so every boundary moves by 18.
+        assert_eq!(at(550, 54, 4).all_classes().count(), 78 + 18, "classes at 550");
+        assert_eq!(at(560, 28, 3).all_classes().count(), 86 + 18, "classes at 560");
+        assert_eq!(at(570, 86, 15).all_classes().count(), 92 + 18, "classes at 570");
+        assert_eq!(bench().all_classes().count(), 94 + 18, "classes at 580");
         assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");
     }

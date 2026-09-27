@@ -1001,6 +1001,15 @@ pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
     if class == GF100_ZBC_CLEAR || class == GF100_DISP_SW {
         return Some(AllocParams::NoDeclaredFacts);
     }
+    // ★ v3-display (`docs/design/V3_DISPLAY.md` §4.3): the display objects the guest's KERNEL
+    // allocates (`NV04_DISPLAY_COMMON`, the display object, `NVC372_DISPLAY_SW`, the core/window/
+    // window-immediate/cursor channels) are graph nodes with no host counterpart. The display link
+    // (`crate::display`) reads what it needs of a channel's params (`NV50VAIO_CHANNELDMA_ALLOCATION_
+    // PARAMETERS`) itself; the object model keeps only the edge. ⊘ Never twinned: the host's display
+    // engine is never touched. A class outside the guest's family is refused earlier (capability).
+    if crate::display::is_display_class(class) {
+        return Some(AllocParams::NoDeclaredFacts);
+    }
     abi.alloc_params(kf_arch::ids::ClassId(class)).or_else(|| match engine_class_kind(class)? {
         kf_chip::classes::Kind::ChannelGpfifo => Some(AllocParams::Channel),
         kf_chip::classes::Kind::Compute

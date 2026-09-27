@@ -40,6 +40,10 @@ pub struct Config {
     pub bar2_bytes: u64,
     /// The GUEST driver's version (its GSP wire layout), e.g. `580.159.04`. Defaults to the host's.
     pub guest_driver: Option<String>,
+    /// ★ v3-display: present the virtual NVDisplay (`display=on`, `docs/design/V3_DISPLAY.md`).
+    /// Off is today's displayless posture. On a chip whose bare metal has no display engine the
+    /// device REFUSES to realize rather than invent one.
+    pub display: bool,
 }
 
 /// What the C device needs to present the PCI function.
@@ -420,6 +424,24 @@ impl Device {
         // invisible on the wire); this device answers as a Linux guest.
         let chain_logs = kf_rm::ChainLogs::default();
         let census = kf_rm::census::ControlCensusLog::new();
+        // ★ v3-display (`docs/design/V3_DISPLAY.md` §4.1): the chip's display row, when asked for.
+        // ⊘ A chip whose bare metal has no display engine (GA100, GH100, GB10x datacenter) is
+        // REFUSED by name: the guest driver hard-wires those as displayless, so a display here
+        // would be a lie about the chip — their VM display is a separate adapter (§2.2).
+        let display_row = if cfg.display {
+            let row = kf_chip::display::display_for(architecture, implementation).ok_or(format!(
+                "display=on: chip arch {architecture:#x} impl {implementation:#x} has no display engine on \
+                 bare metal (the guest driver hard-wires it displayless) — use a separate display adapter \
+                 (docs/design/V3_DISPLAY.md §2.2)"
+            ))?;
+            eprintln!(
+                "kf3: display plane ON — virtual NVDisplay for {} (IP {:#010x}, display class {:#06x}, {} heads)",
+                row.chips, row.ip_version, row.classes.display, row.heads
+            );
+            Some(row)
+        } else {
+            None
+        };
         // ★ The chain is built through a RECIPE (`V3_DRIVER_MATRIX.md` §4.2): every table-dependent
         // link is constructed from the table handed in, so `ReselectAtFn1` can rebuild it for the
         // guest's own version at fn 1 when the version was defaulted. The shared state (logs,
@@ -455,6 +477,7 @@ impl Device {
                         // ★ P5: channel allocs, GPFIFO_SCHEDULE, the token and frees reach the plane,
                         // on the drainer; each answer IS the plane's act.
                         channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
+                        display: display_row,
                     },
                 )
             })

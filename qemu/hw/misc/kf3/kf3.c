@@ -110,6 +110,8 @@ struct Kf3State {
     /* w827 trap bench (property dummy-bar, default off): two do-nothing MMIO pages in the MSI-X
      * BAR (every other BAR index is taken: BAR1/BAR3 are 64-bit and consume 2 and 4). */
     bool dummy_bar;
+    /* v3-display (docs/design/V3_DISPLAY.md): the virtual NVDisplay; off = the displayless posture */
+    bool display;
     MemoryRegion dummy_pages[3];
     EventNotifier dummy_efd;   /* page 2's KVM ioeventfd — nobody reads it */
 };
@@ -605,7 +607,8 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         error_setg(errp, "kf3: archive ABI %u, device ABI %u", kf3_abi_version(), KF3_ABI);
         return;
     }
-    if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, &s->h, err, sizeof(err)) != 0) {
+    if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
+                    &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }
@@ -742,6 +745,7 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_UINT32("msix-vectors", Kf3State, msix_vectors, 32),
     DEFINE_PROP_STRING("guest-driver", Kf3State, guest_driver),
     DEFINE_PROP_BOOL("dummy-bar", Kf3State, dummy_bar, false),
+    DEFINE_PROP_BOOL("display", Kf3State, display, false),
 };
 
 static void kf3_class_init(ObjectClass *klass, const void *data)

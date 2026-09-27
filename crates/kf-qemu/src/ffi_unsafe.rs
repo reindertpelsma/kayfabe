@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 7;
+pub const KF3_ABI: u32 = 8;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -83,6 +83,7 @@ pub unsafe extern "C" fn kf3_realize(
     bar1_bytes: u64,
     bar2_bytes: u64,
     guest_driver: *const c_char,
+    display: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -93,7 +94,7 @@ pub unsafe extern "C" fn kf3_realize(
         // SAFETY: the caller promises a NUL-terminated string.
         Some(unsafe { CStr::from_ptr(guest_driver) }.to_string_lossy().into_owned()).filter(|s| !s.is_empty())
     };
-    let cfg = Config { gpu_minor, fb_mb, bar1_bytes, bar2_bytes, guest_driver: guest };
+    let cfg = Config { gpu_minor, fb_mb, bar1_bytes, bar2_bytes, guest_driver: guest, display: display != 0 };
     match Device::realize(&cfg) {
         Ok(d) => {
             let d: &'static Device = Box::leak(Box::new(d));

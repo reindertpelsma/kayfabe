@@ -17,6 +17,7 @@ pub mod authored;
 pub mod barpde;
 pub mod census;
 pub mod chanlink;
+pub mod display;
 pub mod faultbuffer;
 pub mod guestsysinfo;
 pub mod hostfacts;
@@ -124,6 +125,11 @@ pub struct ObjectLinks {
     /// and frees ([`chanlink::ChannelPolicy`]). `None` is the plane absent: those reach the object
     /// seat and the ledger as before (the controls then answer `NV_ERR_NOT_SUPPORTED`).
     pub channels: Option<chanlink::ChanSink>,
+    /// ★ v3-display: the display plane's seat — the chip's display row when the device was realized
+    /// with `display=on` ([`display::DisplayPolicy`], `docs/design/V3_DISPLAY.md`). `None` keeps the
+    /// displayless posture: `GET_IP_VERSION` reaches the ledger and is refused, and the guest
+    /// amputates its display engine (`sweep.rs`).
+    pub display: Option<&'static kf_chip::display::DisplayRow>,
 }
 
 /// ★ P4: the memory plane's seat — where statements go, and the guest OS the page-directory
@@ -142,6 +148,7 @@ impl core::fmt::Debug for ObjectLinks {
             .field("objects", &self.objects.is_some())
             .field("memory", &self.memory.is_some())
             .field("channels", &self.channels.is_some())
+            .field("display", &self.display.map(|r| r.chips))
             .finish()
     }
 }
@@ -361,13 +368,18 @@ pub fn served_chain(
 ) -> Box<dyn kf_gsp::CommandPolicy> {
     // ★★★ EXHAUSTIVE: a latch added to `ChainLogs` and not seated below is a compile error.
     let ChainLogs { unserviced, fault_buffer, os_events } = logs;
-    let ObjectLinks { objects, memory, channels } = links;
+    let ObjectLinks { objects, memory, channels, display } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
         .with_engine_caps(authored::engine_caps(&host.engines));
     if let (Some(n), Some(sn)) = (host.gpu_name, host.gpu_short_name.or(host.gpu_name)) {
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
+    // ★ v3-display: the display link claims only its own controls, so its place is a matter of
+    // which link answers first; it goes first so no other link's refusal can shadow it.
+    if let Some(row) = display {
+        chain.push(Box::new(display::DisplayPolicy::new(driver, row)));
+    }
     // ★ P5: the channel link is FIRST — ahead of the object seat (which terminates the alloc and
     // free it must see) and of the ledger (which would record its controls unserviced).
     if let Some(sink) = channels {

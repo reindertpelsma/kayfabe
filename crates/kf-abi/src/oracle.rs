@@ -642,6 +642,39 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
     // site was `tests/tests/admitted_is_served.rs` — a membership list, never a read — and that
     // suite moved to `archive/tests/` with the pre-v3 tree, so nothing live names either id any
     // more. `truncated_row_reads.rs` refuses a reliance statement nobody depends on, rightly.
+    // ★ 2026-09-27 (v3-display): the display link (`crates/kf-rm/src/display.rs`) serves three of
+    // the C's truncated rows — and reads none of them. Its answers are authored from the chip's
+    // display row (`kf_chip::display`) or echo the guest's own [IN] request.
+    CaptureReliance {
+        cmd: 0x2080_0a01,
+        read_end: 0,
+        sites: &["crates/kf-rm/src/display.rs"],
+        why: "NOT A READ of the capture. INTERNAL_DISPLAY_GET_STATIC_INFO is authored from the \
+              virtual display's own topology (heads, windows, channel count); the C row's missing \
+              four bytes are exactly `numDispChannels`, the field that once decoded to 0 — this \
+              port states it (81, one past the last cursor channel number) instead",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0a49,
+        read_end: 0,
+        sites: &["crates/kf-rm/src/display.rs"],
+        why: "NOT A READ. INTERNAL_DISPLAY_WRITE_INST_MEM is [IN]: the guest states where its display \
+              instance memory is; the link records the guest's own request and answers NV_OK",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0ac6,
+        read_end: 0,
+        sites: &["crates/kf-rm/src/display.rs"],
+        why: "NOT A READ. INIT_BRIGHTC_STATE_LOAD is [IN] (the guest's ACPI backlight data); the \
+              reply is the guest's own request with NV_OK",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0adf,
+        read_end: 0,
+        sites: &["crates/kf-rm/src/display.rs"],
+        why: "NOT A READ. SET_STATIC_EDID_DATA is [IN] (a laptop's ACPI panel EDIDs); the reply is \
+              the guest's own request with NV_OK",
+    },
 ];
 
 /// The reliance statement for `cmd`, if this tree has one.

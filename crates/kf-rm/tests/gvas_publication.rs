@@ -145,6 +145,7 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
                 guest_os: kf_abi::GuestOs::Linux,
             }),
             channels: None,
+            display: None,
         },
     );
     // The publication: carried, held, and answered exactly as before.

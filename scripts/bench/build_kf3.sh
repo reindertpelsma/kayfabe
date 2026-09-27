@@ -39,12 +39,22 @@ grep -q '^config KF3' "$QEMU/hw/misc/Kconfig" || printf '\nconfig KF3\n    bool\
 mkdir -p "$BUILD"
 exec 9>"$BUILD.lock"
 flock 9
-if [ ! -f "$BUILD/build.ninja" ]; then
+# ★ v3-display (docs/design/V3_DISPLAY.md §4.6): the kf3 device registers a QEMU graphic console per
+# virtual head, so the build needs pixman (DisplaySurface) and a frontend that works on a headless box
+# (VNC; `screendump` needs only pixman). ⊘ The configure line is part of the build's identity: a build
+# dir configured with other flags is RE-configured, never silently reused (the first version of this
+# script configured once and kept whatever an earlier revision had chosen).
+CONF_FLAGS="--target-list=x86_64-softmmu --disable-docs --disable-tools --disable-guest-agent \
+--disable-werror --disable-slirp --enable-vnc --enable-pixman --disable-gtk --disable-sdl \
+--disable-curses --disable-libssh --disable-vde --disable-tpm --without-default-features \
+--enable-kvm --enable-system"
+if [ ! -f "$BUILD/build.ninja" ] || [ "$(cat "$BUILD/.kf3-configure" 2>/dev/null)" != "$CONF_FLAGS" ]; then
+  # a stale configuration is removed whole (a full rebuild, minutes) rather than reconfigured in place
+  [ -f "$BUILD/build.ninja" ] && { echo "== build dir $BUILD was configured with other flags: rebuilding it"; rm -rf "$BUILD"; }
   mkdir -p "$BUILD"
-  ( cd "$BUILD" && "$QEMU/configure" --target-list=x86_64-softmmu \
-      --disable-docs --disable-tools --disable-guest-agent --disable-werror --disable-slirp \
-      --disable-vnc --disable-gtk --disable-sdl --disable-curses --disable-libssh --disable-vde \
-      --disable-tpm --without-default-features --enable-kvm --enable-system >/dev/null )
+  # shellcheck disable=SC2086  # CONF_FLAGS is a flag list by design
+  ( cd "$BUILD" && "$QEMU/configure" $CONF_FLAGS >/dev/null )
+  printf '%s' "$CONF_FLAGS" > "$BUILD/.kf3-configure"
 fi
 ninja -C "$BUILD" qemu-system-x86_64
 REV=$(git -C "$REPO" rev-parse --short=8 HEAD)
