@@ -7,21 +7,20 @@ this file.
 
 ## 0. Where work paused (2026-09-27, ~00:05 CEST) — resume here
 
-- **Master = `6ec7ec1a`** (verified: 1626 tests / 0 failed, gates 9/9, 30/30). All vast boxes are being
+- **Master = `v3-mc19` verified** (`08bf7f18`: 1637 tests / 0 failed, gates 9/9, 30/30) + docs. All vast boxes are being
   destroyed; nothing depends on a box or on local files. Every branch below is on GitHub.
-- **`v3-mc19` = master + `v3-initrace`** (commit `08bf7f18`), mid-verification when paused: crate tests
-  1637/0, gates 9/9, kf3 + fast guest built — **the 30-arm suite had not finished**. To promote: run
-  `scripts/bench/box/merge_check.sh v3-mc19 <tag>` on a fresh box (§5) and fast-forward master if green.
-  It contains: USERD cleared at Translated-channel birth (the re-init "flake": a reborn CeUtils channel
+- **`v3-initrace` is ON MASTER** (verified at `08bf7f18`). It contains: USERD cleared at Translated-channel birth (the re-init "flake": a reborn CeUtils channel
   inherited a leftover GP_PUT — 0/300 after, 20/20 injected failures before) and WPR2 served at the guest's
   own FWSEC-FRTS offset after a failed GSP boot (retry boots; 20/20 later opens pass).
-- **`v3-drivers` head `42b25354`** (rebased on `6ec7ec1a`; the 535/545 allowlist commit is LAST and held
+- **`v3-drivers` mergeable head `8f9bdd14`** (= `42b25354` + a default-off logging aid + its stop note; the bar was
+  last fully green at `1837166d`, the thin suite at the newest head never ran) (rebased on `6ec7ec1a`; the 535/545 allowlist commit is LAST and held
   for owner review): guest 610 ladder 4/4, hosts 575.57.08 / 580.95.05 / 580.65.06 green on every row,
   (runlist, chid) token index, ≤545 GET_CHIP_INFO carry, 595+ GSP heartbeat. Merge it onto the new master
   after `v3-mc19`, then run the bar. Next for that branch: the 570 guest's UVM-first-channel wall (token
   0x803 reads its GPFIFO before the mirror maps it) and a 570 thin-guest NULL deref seen on master.
-- **`v3-display`**: display architecture (Phase 1) in progress when paused — read the note at the top of
-  `docs/design/V3_DISPLAY.md` on that branch.
+- **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
+  (~3–5 weeks to a desktop on GA10x); M0 (behind `display=on`, default off) brings the guest's display layer
+  up; next step and plan in the stop note at the top of `docs/design/V3_DISPLAY.md`. Merge bar not run.
 - **Open owner decisions**: §3 (535/545 allowlist, UVM route + E6″ brief, doorbell module).
 
 ## 1. Master, and what it has been verified to do
