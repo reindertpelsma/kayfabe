@@ -1,9 +1,28 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-09-27** (updated at master `f89f66bb`). The single entry point for resuming work
+**STATUS: LIVE, 2026-09-27** (updated at master `6ec7ec1a`; work paused at the weekly usage limit — see §0). The single entry point for resuming work
 without any chat history. Decisions live in `docs/OWNER_RULINGS.md`; per-topic detail in the design docs
 named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then fix
 this file.
+
+## 0. Where work paused (2026-09-27, ~00:05 CEST) — resume here
+
+- **Master = `6ec7ec1a`** (verified: 1626 tests / 0 failed, gates 9/9, 30/30). All vast boxes are being
+  destroyed; nothing depends on a box or on local files. Every branch below is on GitHub.
+- **`v3-mc19` = master + `v3-initrace`** (commit `08bf7f18`), mid-verification when paused: crate tests
+  1637/0, gates 9/9, kf3 + fast guest built — **the 30-arm suite had not finished**. To promote: run
+  `scripts/bench/box/merge_check.sh v3-mc19 <tag>` on a fresh box (§5) and fast-forward master if green.
+  It contains: USERD cleared at Translated-channel birth (the re-init "flake": a reborn CeUtils channel
+  inherited a leftover GP_PUT — 0/300 after, 20/20 injected failures before) and WPR2 served at the guest's
+  own FWSEC-FRTS offset after a failed GSP boot (retry boots; 20/20 later opens pass).
+- **`v3-drivers` head `42b25354`** (rebased on `6ec7ec1a`; the 535/545 allowlist commit is LAST and held
+  for owner review): guest 610 ladder 4/4, hosts 575.57.08 / 580.95.05 / 580.65.06 green on every row,
+  (runlist, chid) token index, ≤545 GET_CHIP_INFO carry, 595+ GSP heartbeat. Merge it onto the new master
+  after `v3-mc19`, then run the bar. Next for that branch: the 570 guest's UVM-first-channel wall (token
+  0x803 reads its GPFIFO before the mirror maps it) and a 570 thin-guest NULL deref seen on master.
+- **`v3-display`**: display architecture (Phase 1) in progress when paused — read the note at the top of
+  `docs/design/V3_DISPLAY.md` on that branch.
+- **Open owner decisions**: §3 (535/545 allowlist, UVM route + E6″ brief, doorbell module).
 
 ## 1. Master, and what it has been verified to do
 
@@ -17,7 +36,7 @@ Last bar: `f89f66bb` — 1625 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 
 | Multi-GPU | distinct host GPUs in one VM work (8×3060 box); per-card BAR1 budget refused at realize | `design/V3_MULTI_GPU_AUDIT.md` |
 | CUDA apps | 58/65 nvkvm-pv apps at `670bd310`; fixes since (clpeak, torch_ai_bench, gpu_burn, BAR1-view leak) ⇒ expected ~61/65, **not re-measured**; the rest need UVM demand paging | `design/V3_APP_MATRIX.md` |
 | Graphics / video | nvkvm-pv's headless graphics set + 15 more items: **38/38** on an RTX 3070 (31 byte-identical to bare metal; OFA optical flow advertised); NVENC/NVDEC byte-exact. Per-call GPU waits are slow on nested boxes (`glFinish` 62 vs 9 µs) | `design/V3_GFX_TESTSET.md` (display-phase list §7), `V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
-| Memory plane | pooled walker capacity (no per-space 16k-run wall); batched host maps; big-PTE slot ownership; guest PTE read-only/volatile carried, PRIV leaves withheld from user twins | `design/V3_BUILD.md`, `V3_BATCHED_MAP.md` |
+| Memory plane | pooled walker capacity (no per-space 16k-run wall); batched host maps; big-PTE slot ownership; guest PTE read-only/volatile carried, PRIV leaves withheld from user twins; **every host map snoops the CPU cache** (`NVOS46_FLAGS_CACHE_SNOOP_ENABLE` — without it a CE read stale DRAM on bare-metal hosts; nested VM boxes hid it) | `design/V3_BUILD.md`, `V3_BATCHED_MAP.md`, `traces/v3_adasys/FINDING.txt` |
 | Refusals | audited host-vs-guest: forged completions removed (MC_SERVICE_INTERRUPTS, sysmembar flush); the rest classified | `design/V3_REFUSAL_AUDIT.md` |
 | Driver matrix | 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
 | LLM | decode ~0.29–0.31× host on nested vast boxes; the gap is mostly doorbell VM exits | `design/V3_BUILD.md`, `V3_GUEST_DOORBELL_MODULE.md` |
@@ -68,7 +87,7 @@ measure on a non-nested host, where exits are a few µs rather than ~50 µs.
 
 ## 4. Queued / in-progress investigations
 
-1. **Adapter re-init race (a forged completion).** Guest 570.148.08 reproduces it every boot (fat guest,
+1. **Adapter re-init race — ROOT-CAUSED + FIXED on `v3-mc19` (uncleared vidmem USERD; see §0).** Original note: Guest 570.148.08 reproduces it every boot (fat guest,
    no persistence mode): on re-init the CeUtils channel is reborn with the same token, host channel id
    and GPFIFO VA; the ring reader yields no words, nothing is pushed, yet the completion tail retires the
    entry (GP_GET authored 1) — the guest sees its work "done" and times out. Rare on 580.x (3/≈270
@@ -76,8 +95,8 @@ measure on a non-nested host, where exits are a few µs rather than ~50 µs.
    path. Fix rule: an entry that yields no words must wait or refuse — never retire. Also: after one failed
    GSP boot every retry fails on TU/GA10x/Ada (WPR-end margin not modelled). Branch `v3-initrace`;
    evidence on `v3-drivers` (`traces/driver_matrix/walk/`, `scripts/drivermatrix/initflake_evidence.sh`).
-2. **RTX 4070 (AD104) sysmem copies fail** in v3 gates 3/4 on a container box (vidmem fine) — being
-   confirmed on bare metal first (`v3-adasys`).
+2. ~~RTX 4070 sysmem copies fail~~ **ANSWERED + FIXED (master `6ec7ec1a`)**: kayfabe's missing CACHE_SNOOP
+   bit, not the box. Lesson: run memory-plane changes on a non-VM host too.
 3. **Hardware gaps** ranked in `design/V3_HW_BOUNDARY_INVENTORY.md` §5.2 (GB100/GB102 PCIe capability,
    VER3 unmapped-big-PTE and sparse-PDE encodings, GB10x 256 GiB leaf, 128 KiB pages, …).
 4. **Host GPU wedge after QEMU exit** seen once on an RTX 3090 (GFW boot "progress 0xff", recovered by
