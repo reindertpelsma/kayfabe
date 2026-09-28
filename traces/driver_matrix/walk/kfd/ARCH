@@ -1,0 +1,8 @@
+# The die of this box's GPU, for queue-log rows written before sweep.sh put `arch=` on every row
+# (scripts/drivermatrix/matrix_table.py reads the first non-comment line). Recorded 2026-09-28 from
+# the box's own evidence, not a lookup table:
+#   - vast 52746206: every gates log here prints `GPU=NVIDIA GeForce RTX 3090, 580.159.04`
+#     (gates/v3_gates_*.log);
+#   - the walk README (traces/driver_matrix/walk/README.md) and V3_DRIVER_MATRIX.md §6.0 record it as
+#     RTX 3090, GA102, PCI device 0x2204.
+GA102
