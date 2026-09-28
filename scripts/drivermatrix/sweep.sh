@@ -178,12 +178,15 @@ refusals() {  # the named refusals of a step's QEMU logs, counted — the host a
 nvq() { timeout 60 nvidia-smi -i 0 --query-gpu="$1" --format=csv,noheader 2>/dev/null | head -1; }
 die_of() { sed -n 's/.*NVIDIA Corporation \([A-Z][A-Z][0-9][0-9][0-9]\)[A-Z]*[[ ].*/\1/p' <<< "$1" | head -1; }
 derive_arch() {
-    local bus name did fam line="" die="" dev="" src=raw n
-    bus=$(nvq pci.bus_id); name=$(nvq name); did=$(nvq pci.device_id)
-    fam=$(timeout 60 nvidia-smi -q -i 0 2>/dev/null | sed -n 's/^ *Product Architecture *: *//p' | head -1)
-    n=$(timeout 60 nvidia-smi -L 2>/dev/null | grep -c '^GPU ')
+    local bus="" name="" did="" fam="" line="" die="" dev="" src=raw n=""
+    # (a failing nvidia-smi answers every query with its complaint: ask only a driver that answers)
+    if timeout 60 nvidia-smi -L >/dev/null 2>&1; then
+        bus=$(nvq pci.bus_id); name=$(nvq name); did=$(nvq pci.device_id)
+        fam=$(timeout 60 nvidia-smi -q -i 0 2>/dev/null | sed -n 's/^ *Product Architecture *: *//p' | head -1)
+        n=$(timeout 60 nvidia-smi -L 2>/dev/null | grep -c '^GPU ')
+    fi
     BDF=""
-    [ -n "$bus" ] && BDF=$(tr 'A-F' 'a-f' <<< "${bus: -12}")
+    [[ "$bus" =~ [0-9A-Fa-f]{4}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}\.[0-7]$ ]] && BDF=$(tr 'A-F' 'a-f' <<< "${bus: -12}")
     if [ -z "$BDF" ] && command -v lspci >/dev/null 2>&1; then
         BDF=$(lspci -D -n -d 10de: 2>/dev/null | awk '$2 ~ /^030[02]:/ { print $1; exit }')
     fi
@@ -235,7 +238,8 @@ finish() {  # <rc>
 abort() { emit "SWEEP_ABORTED $(date -Is) host=$CUR_HOST: $* arch=$ARCH"; finish 3; }
 
 # ── state steps (decided on content; only a FAILED one is remembered) ─────────────────────────
-loaded_driver() { timeout 60 nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1; }
+# (a failing nvidia-smi prints its complaint on stdout: only a version is an answer)
+loaded_driver() { timeout 60 nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | grep -E '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; }
 ensure_host() {  # <version> → 0: that host driver is loaded (open module)
     local h=$1 rc log got
     if [ "$DRY" = 1 ]; then
@@ -306,7 +310,6 @@ if [ "$DRY" != 1 ]; then
     mkdir -p "$DIR/summary" "$DIR/rows" "$DIR/gates" "$DIR/swaps"
     exec 8>"$SWEEP_ROOT/.lock"
     flock -n 8 || { echo "SWEEP_REFUSED: another sweep holds $SWEEP_ROOT/.lock (one sweep per box)"; exit 2; }
-    echo $$ > "$DIR/RUNNING.pid"
     DMESG_BAD=$(bad_kernel_lines)   # the baseline: only NEW bad-register lines indict the GPU
 fi
 if [ "$DRY" = 1 ] && ! command -v nvidia-smi >/dev/null 2>&1; then
@@ -319,7 +322,7 @@ if [ -f "$LOG" ]; then
     rec_arch=$(sed -n 's/^SWEEP_START .* arch=\([^ ]*\).*/\1/p' "$LOG" | head -1)
     why=""
     [ -z "$rec_rev" ] || [ "$rec_rev" = "$REV" ] || why="rev=$rec_rev (this checkout is $REV)"
-    [ -z "$rec_arch" ] || [ "$rec_arch" = "$ARCH" ] || why="$why arch=$rec_arch (this box is $ARCH)"
+    [ -z "$rec_arch" ] || [ "$rec_arch" = "$ARCH" ] || why="${why:+$why, }arch=$rec_arch (this box is $ARCH)"
     if [ -n "$why" ]; then
         echo "SWEEP_REFUSED: $LOG was measured at $why — one TAG = one revision on one architecture"
         [ "$DRY" = 1 ] || exit 2
@@ -327,6 +330,7 @@ if [ -f "$LOG" ]; then
     echo "resuming $LOG: $(grep -c '^SWEEP_ROW_EXIT' "$LOG") row EXITs recorded"
 fi
 CUR_HOST=$(loaded_driver)
+[ "$DRY" = 1 ] || echo $$ > "$DIR/RUNNING.pid"   # alive = this pid runs (a killed job leaves no EXIT)
 trap 'emit "SWEEP_KILLED $(date -Is) by a signal (host=$CUR_HOST)"; rm -f "$DIR/RUNNING.pid"; exit 143' TERM INT HUP
 emit "SWEEP_START $(date -Is) rev=$REV tag=$TAG arch=$ARCH"
 emit "$ARCH_LINE"
