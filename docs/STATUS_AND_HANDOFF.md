@@ -1,5 +1,11 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+> **2026-09-28 recovery update:** read [RESUME_2026-09-28.md](RESUME_2026-09-28.md)
+> first. All four Vast boxes were audited; unpublished Turing work and later
+> CDP/driver evidence were recovered. The Turing guest now has recovered 30/30
+> thin-suite and 4/4 ladder evidence. The dated report supersedes older pause
+> and box-disposition statements below; no new product merge was made here.
+
 **STATUS: LIVE, 2026-09-27** (updated ~19:40 UTC at master `db038f5f` = v3-mc20 and merge candidate
 `4c48ca0c` = v3-mc21; ⊘ before that, updated at master `6ec7ec1a` when work paused at the weekly usage
 limit — see §0). The single entry point for resuming work
