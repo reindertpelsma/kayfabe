@@ -1,12 +1,31 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-09-27** (updated at master `6ec7ec1a`; work paused at the weekly usage limit — see §0). The single entry point for resuming work
+**STATUS: LIVE, 2026-09-28.** The owner resolved the three implementation decisions in §3;
+work has resumed on separate candidate branches. The historical campaign entries below are dated;
+the last published product baseline at this resumption is `8ab92bf4` (mc21). The single entry point for resuming work
 without any chat history. Decisions live in `docs/OWNER_RULINGS.md`; per-topic detail in the design docs
 named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then fix
 this file.
 
 ## 0. Where work paused (2026-09-27, ~00:05 CEST) — resume here
 
+- **2026-09-28 owner decisions:** 535/545 capability extension approved, subject to the independent
+  audit and exact-revision merge bar; **b3 patched host nvidia-uvm selected, full native host CUDA
+  coexistence required**; doorbells: **non-nested baseline and host-side/ioeventfd work first, guest
+  helper afterward**, optional modified guest driver deferred. See §3 and `OWNER_RULINGS.md`.
+- **Recovery is preserved, not implicitly merged:** source/evidence at
+  [`recovery/resume-2026-09-28`](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md),
+  recovered Turing code at `recovery/vast-tuwork-2026-09-28` (`2825c42f`, code tree `576f5bb0`).
+  The Claude head `826ef957` has 30 commits beyond the baseline and needs its own combined merge bar.
+  Do not use those historical results to certify a new candidate. The fresh allowlist candidate
+  starts from the published baseline, so it does not silently promote the other pending changes.
+- **Physical baseline access:** read-only SSH to `172.22.1.20` reports `Network is unreachable`
+  from this workspace on 2026-09-28. Prepare the protocol locally; do not label a Vast KVM VM as a
+  non-nested host. No physical-host session or display was changed. Paguro's retained Windows VM
+  on instance `53076605` is running and reserved for the separate Paguro chat.
+- **Historical pause notes below are superseded by this resumption.** mc21 was promoted to
+  `8ab92bf4`; older "awaiting promotion", "all boxes being destroyed", and open-choice lines below
+  describe earlier points in the campaign, not current actions.
 - **2026-09-27 19:59 UTC — `v3-mc21` (= master `db038f5f` + `origin/v3-display`, merge `4c48ca0c`) PASSED THE
   FULL MERGE BAR** at exactly `4c48ca0c`: crate tests **1651 / 0**, gates **9/9**, `KF3_RC=0` (VNC+pixman build),
   `FG_RC=0`, fast suite **30/30** — same box. Evidence: `traces/v3_mc21/`. Display stays default-off; the
@@ -37,13 +56,17 @@ this file.
 - **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
   (~3–5 weeks to a desktop on GA10x); M0 (behind `display=on`, default off) brings the guest's display layer
   up; next step and plan in the stop note at the top of `docs/design/V3_DISPLAY.md`. Merge bar not run.
-- **Open owner decisions**: §3 (535/545 allowlist, UVM route + E6″ brief, doorbell module).
+- **Owner decisions resolved 2026-09-28**: §3. The cloud-only execd shared-key question remains
+  separate; direct SSH without agent forwarding avoids it and does not block this work.
 
 ## 1. Master, and what it has been verified to do
 
 Every promotion to master passed the merge bar (`scripts/bench/box/merge_check.sh`): all `kf-*` crate
 tests, v3 gates 9/9, a kf3 build of that exact revision, and the 30-arm thin-guest suite 30/30.
-Last bar: `f89f66bb` — 1625 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 (GA106).
+Last published bar at resumption: **`4c48ca0c`** (mc21) — **1651 tests / 0 failed**, gates **9/9**,
+build and fast guest successful, thin suite **30/30**, RTX 3060 (GA106); `traces/v3_mc21/`.
+Published baseline `8ab92bf4` adds only evidence/docs to that tested code. New candidates require a
+new bar; this is not a current-run test claim.
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
@@ -68,9 +91,14 @@ Last bar: `f89f66bb` — 1625 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 
 | `v3-uvm-n4` | UVM demand-paging research + N4 experiments E5/E6/E6′ | research; E6″ not run; see §3.2 |
 | `v3-mgpu-audit` | original multi-GPU audit doc | **superseded** by the version merged with the multi-GPU fix |
 
-## 3. Decisions waiting on the owner
+## 3. Decisions resolved by the owner — 2026-09-28
 
-### 3.1 The 535/545 capability allowlist (`ee35ca4a` on `v3-drivers`)
+### 3.1 The 535/545 capability allowlist (`a50265f8` on `v3-drivers`) — approved
+
+The owner approved the scoped extension and the recommended audit/test work. Independently check
+the shared groups not covered by the header sweep and compare the full resolved 550+ policies,
+including names/IDs and rule/deny behavior, rather than only equal entry counts. Merge only after
+the exact candidate passes the normal bar. `ee35ca4a` below older references was a pre-rebase name.
 
 Ports nvproxy's v535_104_05 / v545_23_06 capability rows so those guests get a capability surface
 instead of a realize refusal. Existing tables are unchanged (pinned by test). Review points: every
@@ -81,24 +109,35 @@ allowed at 535/545 (as at 550); several shared-floor rows (`NV00FD`, `NV9096`, `
 
 ### 3.2 UVM demand paging — route and next experiment
 
-Needed by the remaining CUDA app failures (managed memory touched on demand; GPU access to pageable
-memory). Two feasible routes, both needing a privileged host piece for UVM only:
-**b3** — a maintained patch to the host's open nvidia-uvm; **N4** — a separate kayfabe host module on
-nvidia.ko's exported UVM interface, nvidia-uvm not loaded (host loses CUDA on that GPU; the walker must
-launch without libcuda). The owner prefers a separate module over a patch (maintainability).
-**E6″ — the open problem, not yet run:** demonstrate that a replayable fault from a compute kernel,
-running in a VMM-created fault-capable address space, reaches the module, and measure it (latency
-median/p99, replay → correct data, scoped cancel, negative control). E6′ stopped because (1) mapping
-memory into that externally-owned address space failed on both the GPU side (`0x33`) and the CPU side
-(`0x1f`), and (2) no compute kernel can be launched there without libcuda (nvidia-uvm unloaded). Detail:
-`docs/design/V3_UVM_DEMAND_PAGING.md` §11–§13 on `v3-uvm-n4`. The E6″ brief is to come from the owner.
+**Selected: b3**, a narrowly scoped opt-in patch to the host's open nvidia-uvm for guest fault
+handling. **Full host CUDA coexistence is a requirement**, not a feature to trade away. The VMM
+remains unprivileged and untrusted. Preserve ordinary UVM behavior for non-opted-in address spaces.
+
+**N4 is not the next experiment.** Correction to the earlier "host CUDA on that GPU" claim:
+580.159.04's `nvUvmInterfaceRegisterUvmCallbacks` has one global registrant, so the replacement
+module excludes stock UVM throughout the same host kernel, including a second GPU. Historical N4
+research through `v3-uvm-e6pp` (`c6765f5c`) remains useful source evidence. Phase 0 traced a stock-UVM
+launch; it did not demonstrate replacement-module replay, cancellation or fault latency.
+
+The next bounded milestone is a **host-only b3 proof**: authenticate ownership, deliver a real
+replayable compute fault, map/repair and replay to correct data, cancel only the intended channel,
+reject forged/stale handles, bound timeout/teardown, and run ordinary host CUDA concurrently.
+The `DupAddressSpace` / `RetainChannel` helper calls must not be assumed to authenticate the caller;
+the research's ownership correction applies to b3 too. Production guest fault injection follows
+the privileged proof, not the other way around. No route-selection answer is pending from the owner.
 
 ### 3.3 The guest doorbell module — how to proceed
 
-The design is approved (`design/V3_GUEST_DOORBELL_MODULE.md`); nothing is built. Options on the table:
-build it as designed; a paravirtual doorbell interface in an optional guest driver build instead of
-intercepting mappings; or first make the host-side exit cheaper (in-kernel handling, coalescing) and
-measure on a non-nested host, where exits are a few µs rather than ~50 µs.
+**Selected: non-nested baseline and cheaper host-side exits first; optional helper afterward.**
+`ioeventfd` remains in the pipeline. Measure vCPU return latency independently of delayed GPU
+notification, with idle/synchronous and deep-queue workloads plus content/progress checks. Faster
+vCPU return can help throughput without improving single-launch latency. Coalescing is valid only
+with preserved ordering and no lost wakeups. The optional modified guest NVIDIA driver remains open
+for later; it is not selected now. The helper remains design-only with stock-guest fallback.
+
+The owner's ~0.70x bare-metal expectation and possible Windows batching advantage are hypotheses.
+Record nesting, same-host controls, doorbells per token, CPU use and correctness hashes; distinguish
+a guest kernel entry from a hardware VM exit. Windows performance needs its own measurement.
 
 ## 4. Queued / in-progress investigations
 

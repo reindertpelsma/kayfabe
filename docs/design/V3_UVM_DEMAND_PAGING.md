@@ -1,6 +1,19 @@
 # V3_UVM_DEMAND_PAGING — managed memory and HMM in a kf3 guest
 
-**STATUS: RESEARCH, 2026-09-26.** No production code. Answers *"how can kayfabe v3 support CUDA
+**STATUS: RESEARCH, 2026-09-28.** No production implementation. **Owner decision: b3 patched host
+nvidia-uvm is selected; full ordinary host CUDA must coexist.** A privileged piece is allowed for
+guest UVM only and must not trust the VMM. Start with a bounded host-only fault/replay/cancel and
+concurrent-host-CUDA proof; no measured coexistence claim yet.
+
+**Supersession of the 09-26 preference below:** N4 replacement-module research is preserved on
+`v3-uvm-e6pp` (`c6765f5c`) but is not the implementation route. In 580.159.04, UVM callback
+registration is **global to nvidia.ko**, not per GPU: N4 excludes stock UVM throughout the same
+host kernel. Also, `DupAddressSpace` / `RetainChannel` do not themselves establish caller ownership;
+the new b3 registration boundary must authenticate objects independently. Source: NVIDIA
+`kernel-open/nvidia/nv_uvm_interface.c` (`g_pNvUvmEvents`, `nvUvmInterfaceRegisterUvmCallbacks`),
+`kernel-open/nvidia-uvm/uvm_va_space.c` (Bug 1624521 TODO), tag `580.159.04`.
+
+The original research below answers *"how can kayfabe v3 support CUDA
 managed memory / UVM demand paging (and HMM pageable access) in the guest?"*, ranks the options,
 and names the first experiment. Owner direction recorded the same day (§0.1): **option (b), fault
 delivery to the guest, everything else stock**; implementation preference root helper > kernel
@@ -69,6 +82,9 @@ hypothesis for an experiment, never a premise for code.
    guest with `uvm_disable_hmm=1` against the five C-class apps.
 
 ### 0.1 Owner direction on this question (2026-09-26, recorded in place)
+
+**Superseded 2026-09-28 on route preference:** full host CUDA coexistence is required; b3 is
+explicitly accepted. The privileged-only-for-UVM and hostile-VMM constraints below still stand.
 
 *"UVM with unprivileged likely is impossible. CPU VA == GPU VA, and we can not let a guest use VMM
 VA. So a privileged helper or host kernel module is needed, for UVM only … this module shouldn't
