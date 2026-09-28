@@ -100,5 +100,9 @@ citation: ask whether its reason still holds before relying on it.
 - **Boxes:** untrusted, not guaranteed to persist, no secrets, no executables copied back, evidence
   pushed to git after each run, keep only boxes in use, teardown only by ids you created
   (`scripts/bench/box/README.md`).
+- ⊘ *2026-09-27 — a reference update, not a ruling: the allowlist commit the next bullet names as
+  `ee35ca4a` is now **`a50265f8`** — the same change after `v3-drivers` was rebased onto `6ec7ec1a`. It is
+  the tip of `v3-drivers`, the only commit there not on master, and it is **still held**; the rest of
+  the branch (`8f9bdd14`) went to master via v3-mc20 (`5018bb57`, bar at `c0ef7b75`).*
 - **Security-policy changes need explicit owner review before merge** — e.g. the 535/545 capability
   allowlist (commit `ee35ca4a` on `v3-drivers`, held).

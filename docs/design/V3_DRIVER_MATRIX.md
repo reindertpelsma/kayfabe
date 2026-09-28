@@ -1,8 +1,20 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
 > ### ⏸ WHERE I STOPPED — 2026-09-27 ~02:00 UTC (owner: weekly usage limit; stopped mid-walk, boxes destroyed)
+> ★ **2026-09-27 ~19:40 UTC — merged** (a later note; the stop note below is kept as written):
+> everything on `v3-drivers` but its tip is **on master**. `8f9bdd14` (this note's own commit) went in
+> through merge candidate v3-mc20 (`5018bb57` = master `0d3ecde9` + `v3-drivers~1`), which passed the
+> merge bar at `c0ef7b75` — `kf-*` tests 1639 / 0, gates 9/9, `KF3_RC=0`, thin 30/30 (vast 53004208,
+> RTX 3060 GA106, host 580.159.04 open; `traces/v3_mc20/`); master and v3 are `db038f5f`. The 535/545
+> capability commit, now **`a50265f8`** (the same change as `ee35ca4a` before the rebase onto
+> `6ec7ec1a`; §6's rows still cite `ee35ca4a` as the revision they were measured at), **remains held**
+> for owner review and is the only commit on the branch that is not on master. Step 5 below is
+> therefore only partly done: the bar ran at the merged head without the allowlist and without the CUDA
+> ladder (`merge_check.sh` does not run it), and the 570 / 565 ladders were not re-run. Steps 1–4 stand.
+>
 > **Branch `v3-drivers`**, the 535/545 capability commit is LAST (owner review); everything below it
-> is mergeable (coordinator merging `42b25354`+ onto master). All evidence is committed under
+> is mergeable (coordinator merging `42b25354`+ onto master — ⊘ *done, through `8f9bdd14`: see the ★
+> note above*). All evidence is committed under
 > `traces/driver_matrix/walk/` (both boxes' queue logs, suites, ladders, failure points, host
 > installer logs); §6.0's grid is derived from it by `scripts/drivermatrix/matrix_table.py`.
 >
@@ -38,7 +50,8 @@
 >    570 / 565 ladders again.
 
 **STATUS: LIVE (in progress), 2026-09-27, branch `v3-drivers`** (the 535/545 capability commit is
-always the LAST one — owner review; everything below it is mergeable). Both axes are built and
+always the LAST one — owner review; everything below it is mergeable — ⊘ *and since 2026-09-27 on
+master via v3-mc20 `5018bb57`; the held commit is `a50265f8`: the ★ note at the top*). Both axes are built and
 walked on hardware; §6.0 is the running grid, DERIVED from `traces/driver_matrix/walk/`.
 **Guest axis (host 580.159.04):** every 580.x thin 27–30/30 (the reds are the adapter-init flake);
 CUDA ladder **4/4 for 580.159.04, 580.105.08, 590.48.01, 595.84, 575.57.08 and 610.57.04**;

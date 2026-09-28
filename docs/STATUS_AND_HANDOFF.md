@@ -1,11 +1,13 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-09-27** (updated at master `6ec7ec1a`; work paused at the weekly usage limit — see §0). The single entry point for resuming work
+**STATUS: LIVE, 2026-09-27** (updated ~19:40 UTC at master `db038f5f` = v3-mc20 and merge candidate
+`4c48ca0c` = v3-mc21; ⊘ before that, updated at master `6ec7ec1a` when work paused at the weekly usage
+limit — see §0). The single entry point for resuming work
 without any chat history. Decisions live in `docs/OWNER_RULINGS.md`; per-topic detail in the design docs
 named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then fix
 this file.
 
-## 0. Where work paused (2026-09-27, ~00:05 CEST) — resume here
+## 0. Where work stands — resume here (updated 2026-09-27 ~19:40 UTC; work first paused 2026-09-27 ~00:05 CEST)
 
 - **2026-09-27 19:59 UTC — `v3-mc21` (= master `db038f5f` + `origin/v3-display`, merge `4c48ca0c`) PASSED THE
   FULL MERGE BAR** at exactly `4c48ca0c`: crate tests **1651 / 0**, gates **9/9**, `KF3_RC=0` (VNC+pixman build),
@@ -13,24 +15,36 @@ this file.
   **Master and v3 fast-forwarded to `8ab92bf4`** (= `4c48ca0c` + evidence/docs; owner go-ahead in the session,
   2026-09-28). The `display=on` M0 lane on GA106 (`traces/v3_display/mc21m0/`) reproduces GA102's `m0a`
   exactly: KernelDisplay up, NVKMS stops at `0x730101`/`0x730102`/`0x730107`/`0x730151` ⇒ displayless.
-- ⊘ *Superseded (master is now `8ab92bf4`, above):* **Master and v3 = `db038f5f`** (fast-forwarded 2026-09-27 with the owner's go-ahead in the session):
-  v3-mc20 below + its evidence. `v3-drivers~1` (`8f9bdd14`) is on master; the allowlist `a50265f8` is not.
+- **Boxes from a cloud session:** the container has no SSH egress, so a box is driven through the **`vx`
+  kit** (execd behind a cloudflared quick tunnel) — see `scripts/bench/box/README.md` (its `vx` section).
+  `provision_full.sh` and `merge_check.sh` run unchanged that way (`traces/v3_mc20/README.md`).
+- **`v3-uvm-e6pp` (`c6765f5c`): E6″ phase 0 ran** (a capture on a stock box — no fault numbers yet); §2, §3.2.
+- ⊘ *Superseded 2026-09-28 (master is now `8ab92bf4`, above; v3-mc21 passed):* **2026-09-27 19:38 UTC — master
+  and v3 = `db038f5f`** (= `c0ef7b75`, the revision that passed the bar below, + the commit that added its
+  evidence, `traces/v3_mc20/` and this file only), fast-forwarded with the owner's go-ahead. `v3-drivers~1`
+  (`8f9bdd14`) is therefore **ON MASTER** (via merge `5018bb57`); `v3-drivers` now holds only the held 535/545
+  allowlist commit, **`a50265f8`** (§3.1). Merge candidate `v3-mc21` = `4c48ca0c` … bar in progress.
 - **2026-09-27 18:27 UTC — `v3-mc20` PASSED THE FULL MERGE BAR** at `c0ef7b75` (= `5018bb57` + docs only), on
   branch `claude/kayfabe-gpu-testing-m0cv1q`: crate tests **1639 / 0**, gates **9/9**, `KF3_RC=0`, `FG_RC=0`,
   fast suite **30/30** — vast 53004208, RTX 3060 GA106, host 580.159.04 open. Evidence: `traces/v3_mc20/`.
-  Ready to fast-forward master and v3 (owner go-ahead asked in the session). Cloud sessions now reach boxes
-  through execd behind a cloudflared quick tunnel (the `vx` kit), not SSH.
+  Ready to fast-forward master and v3 (owner go-ahead asked in the session) — ⊘ *done at 19:38 UTC, see the
+  first line.* Cloud sessions now reach boxes through execd behind a cloudflared quick tunnel (the `vx`
+  kit), not SSH.
 - ⊘ *Superseded by the line above:* 2026-09-27, resumed (cloud session): merge candidate `v3-mc20` = master `0d3ecde9` + `v3-drivers~1` (`8f9bdd14`,
   the held 535/545 allowlist commit left out) — merge commit `5018bb57`, clean, on branch `claude/relaxed-babbage-7zz89s`.
   GPU-free: all `kf-*` crate tests **1639 passed / 0 failed** at `5018bb57`. Hardware bar (gates, kf3 build, 30/30)
   NOT run: this session's container has no SSH egress, so `merge_check.sh` cannot be driven on a box from here.
   Do not promote to master until the bar passes at `5018bb57`.
-- **Master = `v3-mc19` verified** (`08bf7f18`: 1637 tests / 0 failed, gates 9/9, 30/30) + docs. All vast boxes are being
+- ⊘ *Superseded 2026-09-27 19:38 UTC — master is now `db038f5f` (v3-mc20), see the first line:*
+  **Master = `v3-mc19` verified** (`08bf7f18`: 1637 tests / 0 failed, gates 9/9, 30/30) + docs. All vast boxes are being
   destroyed; nothing depends on a box or on local files. Every branch below is on GitHub.
 - **`v3-initrace` is ON MASTER** (verified at `08bf7f18`). It contains: USERD cleared at Translated-channel birth (the re-init "flake": a reborn CeUtils channel
   inherited a leftover GP_PUT — 0/300 after, 20/20 injected failures before) and WPR2 served at the guest's
   own FWSEC-FRTS offset after a failed GSP boot (retry boots; 20/20 later opens pass).
-- **`v3-drivers` mergeable head `8f9bdd14`** (= `42b25354` + a default-off logging aid + its stop note; the bar was
+- ⊘ *Merged 2026-09-27: `8f9bdd14` is on master via v3-mc20 (`5018bb57`; bar at `c0ef7b75`); the held
+  allowlist commit is now `a50265f8`, the only commit on `v3-drivers` beyond master. The "Next for that
+  branch" items below still stand:*
+  **`v3-drivers` mergeable head `8f9bdd14`** (= `42b25354` + a default-off logging aid + its stop note; the bar was
   last fully green at `1837166d`, the thin suite at the newest head never ran) (rebased on `6ec7ec1a`; the 535/545 allowlist commit is LAST and held
   for owner review): guest 610 ladder 4/4, hosts 575.57.08 / 580.95.05 / 580.65.06 green on every row,
   (runlist, chid) token index, ≤545 GET_CHIP_INFO carry, 595+ GSP heartbeat. Merge it onto the new master
@@ -39,13 +53,20 @@ this file.
 - **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
   (~3–5 weeks to a desktop on GA10x); M0 (behind `display=on`, default off) brings the guest's display layer
   up; next step and plan in the stop note at the top of `docs/design/V3_DISPLAY.md`. Merge bar not run.
-- **Open owner decisions**: §3 (535/545 allowlist, UVM route + E6″ brief, doorbell module).
+  ⊘ *2026-09-27: merged into the v3-mc21 candidate `4c48ca0c` (second line); its bar is in progress.*
+- **Open owner decisions**: §3 (535/545 allowlist `a50265f8`, UVM route + E6″ brief, doorbell module).
 
 ## 1. Master, and what it has been verified to do
 
 Every promotion to master passed the merge bar (`scripts/bench/box/merge_check.sh`): all `kf-*` crate
 tests, v3 gates 9/9, a kf3 build of that exact revision, and the 30-arm thin-guest suite 30/30.
-Last bar: `f89f66bb` — 1625 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 (GA106).
+Last bar: **`c0ef7b75`** (v3-mc20, 2026-09-27) — **1639 tests / 0 failed**, gates **9/9**, `KF3_RC=0`,
+thin suite **30/30** on an RTX 3060 (GA106), vast 53004208, host 580.159.04 open; evidence
+`traces/v3_mc20/`. Master = `db038f5f` = that revision + its evidence commit. (The bar does not run the
+CUDA ladder or the fat-guest lanes.)
+⊘ *Superseded by the line above, kept for the record:* Last bar: `f89f66bb` — 1625 tests / 0 failed,
+gates 9/9, 30/30 on an RTX 3060 (GA106). (Between the two, `6ec7ec1a` (v3-mc18) and `08bf7f18` (v3-mc19,
+1637 / 0) were promoted the same way; the logs of mc17–mc19 are in `traces/vh_archive/`.)
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
@@ -55,12 +76,31 @@ Last bar: `f89f66bb` — 1625 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 
 | Graphics / video | nvkvm-pv's headless graphics set + 15 more items: **38/38** on an RTX 3070 (31 byte-identical to bare metal; OFA optical flow advertised); NVENC/NVDEC byte-exact. Per-call GPU waits are slow on nested boxes (`glFinish` 62 vs 9 µs) | `design/V3_GFX_TESTSET.md` (display-phase list §7), `V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
 | Memory plane | pooled walker capacity (no per-space 16k-run wall); batched host maps; big-PTE slot ownership; guest PTE read-only/volatile carried, PRIV leaves withheld from user twins; **every host map snoops the CPU cache** (`NVOS46_FLAGS_CACHE_SNOOP_ENABLE` — without it a CE read stale DRAM on bare-metal hosts; nested VM boxes hid it) | `design/V3_BUILD.md`, `V3_BATCHED_MAP.md`, `traces/v3_adasys/FINDING.txt` |
 | Refusals | audited host-vs-guest: forged completions removed (MC_SERVICE_INTERRUPTS, sysmembar flush); the rest classified | `design/V3_REFUSAL_AUDIT.md` |
-| Driver matrix | 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
+| Driver matrix | ★ (2026-09-27, the `v3-drivers` code on master since `5018bb57`) CUDA ladder 4/4 for guests 580.159.04 / 580.105.08 / 590.48.01 / 595.84 / 575.57.08 / 610.57.04; hosts 575.57.08 / 580.95.05 / 580.65.06 gates 9/9, thin 30/30, ladder 4/4, mixed pairs 4/4 — measured on `v3-drivers` heads before the merge (grid §6.0, derived from `traces/driver_matrix/walk/`); 535/545 capability rows held (§3.1). Earlier: 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
 | LLM | decode ~0.29–0.31× host on nested vast boxes; the gap is mostly doorbell VM exits | `design/V3_BUILD.md`, `V3_GUEST_DOORBELL_MODULE.md` |
 | Hardware boundary | every hardware constant pinned to ogkm headers by 43 GPU-free tests; generator `tools/derive_hwref.sh` | `design/V3_HW_BOUNDARY_INVENTORY.md` |
 | Pre-v3 tree | archived under `archive/`; 16 `kayfabe-*` crates kept only because the 30-arm grader uses them | `archive/README.md` |
 
-## 2. Branches with work not on master (as of this writing)
+## 2. Branches with work not on master (as of 2026-09-27 ~19:40 UTC, master `db038f5f`)
+
+Checked with `git branch -r --no-merged origin/master`.
+
+| Branch | What it is | State / what it needs |
+|---|---|---|
+| `v3-display` (`adbea28e`) | display plane: Phase 1 design + M0 (`display=on`, default off) | **merged into the v3-mc21 candidate `4c48ca0c`** on `claude/kayfabe-gpu-testing-m0cv1q`; bar in progress (§0). Next steps: the stop note atop `design/V3_DISPLAY.md`; M0 evidence `traces/v3_display/m0a/` |
+| `v3-drivers` (`a50265f8`) | driver matrix (both axes) | everything but its tip is on master (`8f9bdd14` via v3-mc20, `5018bb57`); **the tip `a50265f8` = 535/545 capability allowlist — HELD for owner review** (§3.1). Next: `design/V3_DRIVER_MATRIX.md` stop note — the 570 guest's UVM first-channel wall first |
+| `v3-uvm-e6pp` (`c6765f5c`) | E6″ phase 0, forked from `v3-uvm-n4` at `600b864a` | research: **phase 0 ran** — the real libcuda's mapping/launch ioctl shape captured on a stock box (`V3_UVM_DEMAND_PAGING.md` §12.6 on that branch; evidence `traces/v3_uvm_research/e6pp/results.txt` there). E6″ proper (module present; fault, latency, replay, cancel) not run; see §3.2 |
+| `v3-uvm-n4` (`600b864a`) | UVM demand-paging research + N4 experiments E5/E6/E6′ (`V3_UVM_DEMAND_PAGING.md` §11–§13; §0–§10 are on master via `v3-uvm-research`) | research; continued on `v3-uvm-e6pp`; see §3.2 |
+| `v3-mgpu-audit` | original multi-GPU audit doc | **superseded** by the version merged with the multi-GPU fix |
+
+The same listing also shows older branches last committed 2026-09-24 … 26 (`v3-p3`, `v3-p4a`, `v3-p4b`,
+`v3-p5`, `v3-p5b`, `v3-p6uvm`, `v3-walkgraph`, `v3-attrib`, `v3-dbmod`, `v3-family`, `v3-hostfacts`,
+`v3-mgpu`, and `v3-uvm-nopatch`, whose §11 is inside `v3-uvm-n4`); this file does not classify them.
+
+⊘ *Superseded 2026-09-27 by the table above — kept as written at master `6ec7ec1a`. Since then
+`v3-initrace` went to master at `08bf7f18` (v3-mc19), `v3-adasys` at `8b32178f` (v3-mc18), and
+`v3-drivers~1` at `5018bb57` (v3-mc20); `ee35ca4a` below is the allowlist commit's SHA before
+`v3-drivers` was rebased onto `6ec7ec1a` — it is now `a50265f8`:*
 
 | Branch | What it is | State / what it needs |
 |---|---|---|
@@ -72,7 +112,12 @@ Last bar: `f89f66bb` — 1625 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 
 
 ## 3. Decisions waiting on the owner
 
-### 3.1 The 535/545 capability allowlist (`ee35ca4a` on `v3-drivers`)
+### 3.1 The 535/545 capability allowlist (`a50265f8`, the tip of `v3-drivers`)
+
+⊘ *2026-09-27: this heading named `ee35ca4a` — the same commit's SHA before `v3-drivers` was rebased
+onto `6ec7ec1a`. It is now `a50265f8`, the only commit on `v3-drivers` that is not on master. The full
+table below is in that commit's own edit to `design/V3_DRIVER_MATRIX.md` §8.2 ruling 5 (`git show
+a50265f8 -- docs/design/V3_DRIVER_MATRIX.md`); master's copy of the doc has the ruling, not the table.*
 
 Ports nvproxy's v535_104_05 / v545_23_06 capability rows so those guests get a capability surface
 instead of a realize refusal. Existing tables are unchanged (pinned by test). Review points: every
@@ -88,12 +133,28 @@ memory). Two feasible routes, both needing a privileged host piece for UVM only:
 **b3** — a maintained patch to the host's open nvidia-uvm; **N4** — a separate kayfabe host module on
 nvidia.ko's exported UVM interface, nvidia-uvm not loaded (host loses CUDA on that GPU; the walker must
 launch without libcuda). The owner prefers a separate module over a patch (maintainability).
-**E6″ — the open problem, not yet run:** demonstrate that a replayable fault from a compute kernel,
+
+★ **2026-09-27 — E6″ phase 0 ran** (branch `v3-uvm-e6pp`, `c6765f5c`; `V3_UVM_DEMAND_PAGING.md` §12.6 on
+that branch, evidence `traces/v3_uvm_research/e6pp/results.txt` there). On a stock box (nvidia-uvm
+loaded, no takeover) an `LD_PRELOAD` logger recorded what the real libcuda sends: every data allocation
+is an `RM_ALLOC` (`0x0040` vidmem / `0x003e` sysmem) followed by exactly one `UVM_CREATE_EXTERNAL_RANGE`
++ one `UVM_MAP_EXTERNAL_ALLOCATION`, never a raw `NV_ESC_RM_MAP_MEMORY_DMA` into the VAS — E6′'s `0x33`
+used the wrong mechanism; a sysmem allocation adds a CPU-side `NV_ESC_RM_MAP_MEMORY` between the alloc
+and that pair — E6′'s `0x1f` was that map with the wrong handle/order. The QMD layout is public
+(`open-gpu-doc` `clc7c0qmd.h`): without libcuda what is missing is a compiler, not the layout. A
+correction there to §12.3.1(2): `nvGpuOpsDupAddressSpace` / `nvGpuOpsRetainChannel` do not check who
+the caller is (the source's own "Bug 1624521" TODOs), so an N4 module must validate the adopting VMM
+itself. **Still not measured:** fault delivery, latency, replay, cancel — E6″ proper (module present,
+the captured calls driven against the adopted VAS) has not run.
+
+**E6″ — the open problem, not yet run:** (⊘ *phase 0 has since run — above; E6″ proper has not.*)
+demonstrate that a replayable fault from a compute kernel,
 running in a VMM-created fault-capable address space, reaches the module, and measure it (latency
 median/p99, replay → correct data, scoped cancel, negative control). E6′ stopped because (1) mapping
 memory into that externally-owned address space failed on both the GPU side (`0x33`) and the CPU side
 (`0x1f`), and (2) no compute kernel can be launched there without libcuda (nvidia-uvm unloaded). Detail:
-`docs/design/V3_UVM_DEMAND_PAGING.md` §11–§13 on `v3-uvm-n4`. The E6″ brief is to come from the owner.
+`docs/design/V3_UVM_DEMAND_PAGING.md` §11–§13 on `v3-uvm-n4` (+ §12.6, phase 0, on `v3-uvm-e6pp`). The
+E6″ brief is to come from the owner.
 
 ### 3.3 The guest doorbell module — how to proceed
 
@@ -104,7 +165,11 @@ measure on a non-nested host, where exits are a few µs rather than ~50 µs.
 
 ## 4. Queued / in-progress investigations
 
-1. **Adapter re-init race — ROOT-CAUSED + FIXED on `v3-mc19` (uncleared vidmem USERD; see §0).** Original note: Guest 570.148.08 reproduces it every boot (fat guest,
+1. ~~Adapter re-init race~~ **ANSWERED + FIXED, ON MASTER since `08bf7f18`** (v3-mc19; bar 1637 / 0,
+   gates 9/9, 30/30 — see §0). Its evidence is on master too (`traces/v3_initrace/`, and
+   `traces/driver_matrix/walk/` + `scripts/drivermatrix/initflake_evidence.sh` since `5018bb57`). The 570
+   guest's next wall is a different one (the UVM first channel: `design/V3_DRIVER_MATRIX.md` stop note, step 1).
+   **Adapter re-init race — ROOT-CAUSED + FIXED on `v3-mc19` (uncleared vidmem USERD; see §0).** Original note: Guest 570.148.08 reproduces it every boot (fat guest,
    no persistence mode): on re-init the CeUtils channel is reborn with the same token, host channel id
    and GPFIFO VA; the ring reader yields no words, nothing is pushed, yet the completion tail retires the
    entry (GP_GET authored 1) — the guest sees its work "done" and times out. Rare on 580.x (3/≈270
@@ -112,8 +177,9 @@ measure on a non-nested host, where exits are a few µs rather than ~50 µs.
    path. Fix rule: an entry that yields no words must wait or refuse — never retire. Also: after one failed
    GSP boot every retry fails on TU/GA10x/Ada (WPR-end margin not modelled). Branch `v3-initrace`;
    evidence on `v3-drivers` (`traces/driver_matrix/walk/`, `scripts/drivermatrix/initflake_evidence.sh`).
-2. ~~RTX 4070 sysmem copies fail~~ **ANSWERED + FIXED (master `6ec7ec1a`)**: kayfabe's missing CACHE_SNOOP
-   bit, not the box. Lesson: run memory-plane changes on a non-VM host too.
+2. ~~RTX 4070 sysmem copies fail~~ **ANSWERED + FIXED, ON MASTER (merge `8b32178f`, v3-mc18; promoted as
+   `6ec7ec1a`)**: kayfabe's missing CACHE_SNOOP bit, not the box (`traces/v3_adasys/FINDING.txt`).
+   Lesson: run memory-plane changes on a non-VM host too.
 3. **Hardware gaps** ranked in `design/V3_HW_BOUNDARY_INVENTORY.md` §5.2 (GB100/GB102 PCIe capability,
    VER3 unmapped-big-PTE and sparse-PDE encodings, GB10x 256 GiB leaf, 128 KiB pages, …).
 4. **Host GPU wedge after QEMU exit** seen once on an RTX 3090 (GFW boot "progress 0xff", recovered by
@@ -122,12 +188,15 @@ measure on a non-nested host, where exits are a few µs rather than ~50 µs.
 6. **`cuda/walk` tidy-up:** Rust decodes `KfMapRun` by hand-written byte offsets in places (use one
    decoder per `#[repr(C)]` struct via `offset_of!`); name the per-format bit ranges after `dev_mmu.h`.
 7. Re-run the full CUDA app matrix at the current master (the 58/65 predates several fixes).
-8. **Display**, then a desktop, then **Windows** (roadmap).
+8. **Display** (started: M0 on `v3-display`, in the v3-mc21 candidate — §0, §2), then a desktop, then
+   **Windows** (roadmap).
 
 ## 5. How work was run (so it can be run again)
 
 - **Boxes:** `scripts/bench/box/README.md` — rent, register with the idle watchdog
-  (`vast_reaper.sh`), provision (`provision_full.sh`), check (`merge_check.sh`), destroy.
+  (`vast_reaper.sh`), provision (`provision_full.sh`), check (`merge_check.sh`), destroy. From a cloud
+  session (no SSH egress) the same scripts are driven through the `vx` kit — execd behind a cloudflared
+  quick tunnel (that README's `vx` section; the v3-mc20 bar ran this way, `traces/v3_mc20/README.md`).
 - **Merging:** agents push sub-branches; a merge branch `v3-mcN` combines verified work on the current
   master; the full bar runs on a box at that exact revision; then master and v3 are fast-forwarded. Only
   docs/traces may be added on top of a verified revision without re-running the bar.
