@@ -23,6 +23,20 @@ prototype that first proved the idea is frozen under [`archive/nvkvm/`](archive/
 
 ## Status — 2026-09-26, `master` at `74dc3113`
 
+> ⊘ **2026-09-27 — parts of this section are stale.** `master` is now `db038f5f` (v3-mc20: all
+> `kf-*` crate tests 1639 / 0, gates 9/9, thin guest 30/30 at `c0ef7b75`; `traces/v3_mc20/`). The
+> app matrix (`v3-apps2`) and the UVM research (`v3-uvm-research`) are on `master`. So is the fix
+> for the refused `UnifiedMemoryStreams` map (`62a50c44`, `v3-mapfix`; the app has not been re-run
+> since). **Blackwell GB203** (RTX 5080) passes 30/30 on hardware
+> ([`V3_FAMILY_PORT_BLACKWELL.md`](docs/design/V3_FAMILY_PORT_BLACKWELL.md)). The driver matrix is on
+> `master`: the CUDA ladder passes for guests 575.57.08, 580.105.08, 580.159.04, 590.48.01, 595.84
+> and 610.57.04, and hosts 575.57.08, 580.65.06 and 580.95.05 pass the gates, the thin suite and the
+> ladder, measured on the branch before it merged
+> ([`V3_DRIVER_MATRIX.md`](docs/design/V3_DRIVER_MATRIX.md) §6.0). Display M0 exists on branch
+> `v3-display` and is not on `master` yet. The corrected long form is
+> [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md), and the resume point is
+> [`docs/STATUS_AND_HANDOFF.md`](docs/STATUS_AND_HANDOFF.md).
+
 **Research stage, published so the approach can be read and argued with.** There is no install
 path and no stable interface. Every result below was measured on rented vast.ai boxes that are
 themselves KVM guests (so the guest under test is *nested*), host driver 580.159.04 (open).

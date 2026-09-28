@@ -2,6 +2,12 @@
 
 > ### STATUS — 2026-09-26 / **LIVE**, written at `master` `74dc3113`
 >
+> ★ **Updated 2026-09-27 at master `db038f5f`** (v3-mc20; checked against the v3-mc21 merge candidate
+> `4c48ca0c`): a truth pass. Claims that said "on branch X, not on `master`" are corrected where they
+> stand — each correction is a dated ⊘ note placed before the text it corrects, which is kept. The
+> latest merge bar is in §1. Branches in flight and the next steps:
+> [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md).
+>
 > ★ Updated 2026-09-26 on branch `v3-gpcmask` (§1, §5): floor-swept GR — the first boot on a die
 > whose GPC mask is not `0..n` ([`design/V3_FLOORSWEPT_GR.md`](design/V3_FLOORSWEPT_GR.md)).
 >
@@ -28,6 +34,8 @@ same `.run`. "Bare metal" means the same program on the same box's host, with no
 | thin guest **30/30** on **Ada**; bare metal 30/30 after one client fix | `1d6bb323`, `6ccb4585` | vast 52660152, RTX 4060 Ti AD106 | [`design/V3_FAMILY_PORT_ADA.md`](design/V3_FAMILY_PORT_ADA.md) |
 | the only Ada boot blocker (a SEC2 scrubber handoff register), fixed as a per-family row and A/B-checked on hardware | `09a3944b` | AD106 | same, §2 |
 | ★ **floor-swept GA104** (`GR_GET_GPC_MASK = 0x3e`): realize refused at `283a5304` (*"a non-contiguous GPC mask"*); thin guest **30/30** after the fix, v3 gates **9/9**; bare metal 30/30; fat-guest CUDA `cup3`/`cup8` pass; the guest's GR floorsweeping controls answer byte-identically to the host's | `25edb757` (30/30, `fb-mb=6144`); `948b38e2` (gates, suite at the lanes' new card-aware default); `2e32b7b1` (CUDA); `0d8426a3` (probe diff); `524b3d17` (head: gates 9/9, suite 30/30) | vast 52739422, RTX 3060 Ti 8 GB | [`design/V3_FLOORSWEPT_GR.md`](design/V3_FLOORSWEPT_GR.md), `traces/v3_gpcmask/` |
+| ★ **Blackwell GB203**: thin guest **30/30** and gates **9/9** (first FSP-booted family); bare metal 30/30; fat-guest CUDA ladder passes. On `master` since `6fce7f54` | `256ec854` (thin, gates, ladder); `54158daa` (bare; code = `256ec854`) | vast 52730218, RTX 5080 GB203 | [`design/V3_FAMILY_PORT_BLACKWELL.md`](design/V3_FAMILY_PORT_BLACKWELL.md), `traces/v3_blackwell/` |
+| ★ **merge bar v3-mc20** (2026-09-27): every `kf-*` crate test **1639 / 0**, gates **9/9**, `KF3_RC=0`, thin guest **30/30**. `master` `db038f5f` = this revision + its evidence commit | `c0ef7b75` | vast 53004208, RTX 3060 GA106 | `traces/v3_mc20/` |
 
 Every arm reports `forwarded>0` and `emulated=0` for its passthrough tokens. The suite is graded
 by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre-v3 crates.
@@ -40,6 +48,8 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
 - **App matrix, R2 at `670bd310`:** **58/65 apps pass in the guest; the host passes 65/65.**
   Six stream-shape probes pass 6/6. The result is the same with and without guest persistence
   mode. The run used vast 52624429, an RTX 3060 GA106 on an AMD EPYC 7452.
+  ⊘ *2026-09-27: `v3-apps2` is on `master` since `f108f47a` (v3-mc9), the document and its evidence
+  both — the next sentence's "not on `master`" is stale.*
   `docs/design/V3_APP_MATRIX.md` §R2 has this, and is **on branch `v3-apps2`, not on `master`**;
   its evidence is under `traces/v3_app_matrix/` on that branch. Passing apps include PyTorch
   (`torch_correct`: CNN training-step digest equal to the host's), Hugging Face `generate`
@@ -57,6 +67,12 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
   - A re-run of the single-stream and UVM rows scored guest 38/43, host 43/43. The **full
     65-app matrix has not been re-run since.**
 - **Still failing — six apps:**
+  - ⊘ *2026-09-27: `clpeak` is misfiled in class C below. Its host Xid 31 came from kf3 refusing
+    `MC_SERVICE_INTERRUPTS`: the blocked waiter read the refusal as the end of its wait (a forged
+    completion). kf3 serves it since `56032c46` (`v3-mapfix`, on `master` since `01b8cb5a`), and
+    `clpeak` passes in the guest at `393012fd` ([`design/V3_REFUSAL_AUDIT.md`](design/V3_REFUSAL_AUDIT.md)
+    §1, §6.2). That was the refusal audit's workload set; the app matrix has not been re-run, so its
+    recorded count is unchanged.*
   - **C, UVM demand paging (5 apps):** `conjugateGradientUM`, `attach_verify`,
     `UnifiedMemoryPerf`, `torch_ai_bench`, `clpeak`. They fail on managed memory touched first by
     the CPU or GPU, and on kernels that access pageable host memory (HMM). What the guest UVM
@@ -66,10 +82,17 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
     checks neither its sync status nor its result.
     - This cannot be closed from host userspace. A replayable host fault needs a VA space that
       UVM owns, and the fault-buffer class is kernel-privileged.
-    - The research is `docs/design/V3_UVM_DEMAND_PAGING.md`, on branch `v3-uvm-research`
+    - ⊘ *2026-09-27: that document is on `master` since `f740da10` (v3-mc9). Its continuation — §11
+      (no NVIDIA patch: a separate module, N4), §12 (N4 in depth; experiments E5, E6, E6′), §13 (the
+      guest-side fault plane) — is on branch `v3-uvm-n4`, and E6″ phase 0 (§12.6, a capture of the
+      real libcuda's mapping calls; no fault numbers yet) on `v3-uvm-e6pp` `c6765f5c`; neither is on
+      `master`. The owner prefers a separate host module to a patch, and the route is undecided
+      ([`OWNER_RULINGS.md`](OWNER_RULINGS.md) §E).*
+      The research is `docs/design/V3_UVM_DEMAND_PAGING.md`, on branch `v3-uvm-research`
       (RESEARCH, no code). Its recommendation is a patch to the host's open nvidia-uvm that
       diverts a VA space's faults to kayfabe, which then replays or cancels them.
-    - ⊘ **MEASURED AND FIXED 2026-09-26 (branch `v3-roperm`) — this bullet used to say
+    - ⊘ **MEASURED AND FIXED 2026-09-26 (branch `v3-roperm`; ⊘ *on `master` since `59cc98a9`,
+      v3-mc14 — 2026-09-27*) — this bullet used to say
       "inferred, not measured".** The same document reported, from source reading, that the
       walker **drops the guest PTE's READ_ONLY bit**, so a read-only duplicate was mapped
       read-write on the host. Measured on master `283a5304` (vast 52732498, GA106):
@@ -86,7 +109,13 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
       Evidence: `traces/v3_roperm/`.
   - **C′, a refused host map (1 app):** `UnifiedMemoryStreams`. kf3 logs `1 run(s) not applied:
     map … Other(31)`, and the host then reports Xid 31 `FAULT_PTE` inside that range. Without
-    persistence mode the boot stays wedged afterwards. Branch `v3-mapfix` is working on it; it
+    persistence mode the boot stays wedged afterwards. ⊘ *2026-09-27: root-caused and fixed, on
+    `master` — the next sentence is stale. The walker reported the stale 4 KiB PTEs under a valid
+    64 KiB PTE as live leaves, so two host maps covered one VA and host RM refused the second
+    (`Other(31)` = `NV_ERR_INVALID_ARGUMENT`); a valid big PTE now owns its slot, and a refused map
+    no longer poisons the guest's shared UVM kernel channel (`62a50c44`, `v3-mapfix`; on `master`
+    since `283a5304`, the rest of the branch since `01b8cb5a`). `UnifiedMemoryStreams` itself has
+    not been re-run in the app matrix since.* Branch `v3-mapfix` is working on it; it
     is not on `master`.
 
 ## 3. Graphics, video, multi-process, multi-GPU
@@ -103,7 +132,8 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
   Evidence is in `traces/v3_gfx/`. It was re-run on the merged tree at `d536595d`
   (`traces/v3_int_ga106/gfx_guest_d536595d.txt`).
 - **nvkvm-pv's headless-graphics test set** ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md);
-  `v3-gfxset` `d06833f0` = master `59cc98a9` + the branch; vast 52775275, RTX 3070 GA104): nvkvm-pv's 25
+  `v3-gfxset` `d06833f0` = master `59cc98a9` + the branch — ⊘ *on `master` since `f89f66bb` (v3-mc17,
+  whose merge bar logs are in `traces/vh_archive/`), 2026-09-27*; vast 52775275, RTX 3070 GA104): nvkvm-pv's 25
   headless rows in 23 items (Vulkan, EGL/GLES, GBM, dma-buf sharing, headless weston and sway with
   capture, glmark2, NVENC/NVDEC, Geekbench Vulkan, Blender Open Data) and 15 more (ffmpeg
   CUDA/Vulkan/OpenCL/libplacebo filters, Blender Cycles CUDA/OptiX, EEVEE on GL and Vulkan, VirtualGL,
@@ -159,19 +189,40 @@ LLM decode, `Qwen/Qwen2-0.5B-Instruct`, Hugging Face eager, from `V3_BUILD.md`
 
 ## 5. GPU families and driver versions
 
+⊘ *2026-09-27: the Hopper/Blackwell row below is stale for Blackwell. GB203 (RTX 5080) has run on
+hardware since 2026-09-26 — thin guest and bare metal 30/30, gates 9/9, the fat-guest CUDA ladder, at
+`256ec854` (§1; [`design/V3_FAMILY_PORT_BLACKWELL.md`](design/V3_FAMILY_PORT_BLACKWELL.md),
+`traces/v3_blackwell/`; on `master` since `6fce7f54`). Hopper and datacenter Blackwell (GB10x) are
+still source-derived only.*
+
 | family | state | source |
 |---|---|---|
 | Ampere GA10x (GA106, GA102; ★ floor-swept GA104) | **measured**; GA104 thin guest 30/30 | above; `V3_FLOORSWEPT_GR.md` |
 | Ada (AD106; ★ floor-swept AD104 GR facts) | **measured**, thin guest 30/30 on AD106; AD104 (`gpcMask 0x1d`) GR realize path replayed from its own unprivileged answers, **no guest boot** | `V3_FAMILY_PORT_ADA.md`, `V3_FLOORSWEPT_GR.md` |
 | Turing | GSP model built, **never booted** | `V3_FAMILY_PORT_ADA.md` (update, branch `v3-families`, merged) |
-| Hopper, Blackwell | derived from ogkm-580.159.04 source, including the Hopper+ BAR1 doorbell; unit-tested against source-shaped fixtures; **never run on hardware** | [`design/V3_BAR1_DOORBELL.md`](design/V3_BAR1_DOORBELL.md) (DESIGN+CODE, hardware-unverified); gate 7 covers VER3 page tables |
+| Hopper, Blackwell (⊘ *GB203 since measured: the note above*) | derived from ogkm-580.159.04 source, including the Hopper+ BAR1 doorbell; unit-tested against source-shaped fixtures; **never run on hardware** | [`design/V3_BAR1_DOORBELL.md`](design/V3_BAR1_DOORBELL.md) (DESIGN+CODE, hardware-unverified); gate 7 covers VER3 page tables |
 | GA100 | **refused by name** | `V3_FAMILY_PORT_ADA.md` |
 
+⊘ *2026-09-27: the next sentence is stale. The driver-version matrix (both axes) is on `master`
+since `5018bb57` (v3-mc20). With host 580.159.04, the CUDA ladder passes 4/4 for guests 580.159.04,
+580.105.08, 590.48.01, 595.84, 575.57.08 and 610.57.04; with guest 580.159.04, hosts 575.57.08,
+580.95.05 and 580.65.06 pass gates 9/9, thin 30/30 and ladder 4/4. These were measured on `v3-drivers`
+heads before the merge (GA102 boxes; each row names its revision); the grid is
+[`design/V3_DRIVER_MATRIX.md`](design/V3_DRIVER_MATRIX.md) §6.0, derived from
+`traces/driver_matrix/walk/`. Not yet: the 570 / 565 guest ladders (the re-init wall is fixed on
+`master`; 570 then meets its UVM first-channel wall), the 550 fat guest, and 535 / 545, whose
+capability rows (`a50265f8`) are held for owner review.*
 Only guest driver **580.159.04** has been run. The driver-version matrix is a later roadmap step.
 
 ## 6. Not started, or not measured
 
-- **Display / scanout:** not started. Xorg with NVIDIA's own display driver needs a display
+- ⊘ *2026-09-27: display is started, not on `master`. `v3-display` M0 (`5dbf670b`, device property
+  `display=on`, default off): with it the guest's KernelDisplay comes up on a virtual NVDisplay, and
+  NVKMS stops at its first physical-RM query (`NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2`), so nvidia-drm
+  stays displayless — run `m0a`, vast 52837869, RTX 3090 GA102, host and guest 580.159.04
+  ([`design/V3_DISPLAY.md`](design/V3_DISPLAY.md) stop note, `traces/v3_display/m0a/`). The branch
+  is in the v3-mc21 merge candidate `4c48ca0c`, whose bar is in progress.*
+  **Display / scanout:** not started. Xorg with NVIDIA's own display driver needs a display
   object (`V3_HEADLESS_GRAPHICS.md` §5). Headless rendering works (§3).
 - **Windows guests:** research only (`design/THE_WINDOWS_AXIS.md`,
   `design/V3_WINDOWS_DOORBELL_RESEARCH.md`). It is the last roadmap step.
@@ -187,9 +238,10 @@ Only guest driver **580.159.04** has been run. The driver-version matrix is a la
 
 1. Apps: close the matrix (UVM demand paging, the refused map).
 2. The headless-graphics test set from nvkvm-pv. — **38/38 on `v3-gfxset` `d06833f0`**, RTX 3070
-   ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md); merge-ready bar held there).
-3. Display, and a desktop (Linux Mint).
+   ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md); merge-ready bar held there — ⊘ *on
+   `master` since `f89f66bb`, 2026-09-27*).
+3. Display, and a desktop (Linux Mint). — ⊘ *M0 started, not on `master` (§6).*
 4. *In parallel:* doorbell-module parity (§4).
-5. *In parallel:* Blackwell on hardware.
-6. The guest-driver version matrix.
+5. *In parallel:* Blackwell on hardware. — ⊘ *GB203 30/30 (§1, §5).*
+6. The guest-driver version matrix. — ⊘ *on `master`, walk in progress (§5).*
 7. Windows.
