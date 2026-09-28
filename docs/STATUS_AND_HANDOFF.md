@@ -9,9 +9,11 @@ this file.
 
 - **2026-09-27 19:59 UTC — `v3-mc21` (= master `db038f5f` + `origin/v3-display`, merge `4c48ca0c`) PASSED THE
   FULL MERGE BAR** at exactly `4c48ca0c`: crate tests **1651 / 0**, gates **9/9**, `KF3_RC=0` (VNC+pixman build),
-  `FG_RC=0`, fast suite **30/30** — same box. Evidence: `traces/v3_mc21/`. Display stays default-off; the
-  `display=on` lane on GA106 is the next box job. Promotion of `4c48ca0c` awaits the owner's go-ahead.
-- **Master and v3 = `db038f5f`** (fast-forwarded 2026-09-27 with the owner's go-ahead in the session):
+  `FG_RC=0`, fast suite **30/30** — same box. Evidence: `traces/v3_mc21/`. Display stays default-off.
+  **Master and v3 fast-forwarded to `8ab92bf4`** (= `4c48ca0c` + evidence/docs; owner go-ahead in the session,
+  2026-09-28). The `display=on` M0 lane on GA106 (`traces/v3_display/mc21m0/`) reproduces GA102's `m0a`
+  exactly: KernelDisplay up, NVKMS stops at `0x730101`/`0x730102`/`0x730107`/`0x730151` ⇒ displayless.
+- ⊘ *Superseded (master is now `8ab92bf4`, above):* **Master and v3 = `db038f5f`** (fast-forwarded 2026-09-27 with the owner's go-ahead in the session):
   v3-mc20 below + its evidence. `v3-drivers~1` (`8f9bdd14`) is on master; the allowlist `a50265f8` is not.
 - **2026-09-27 18:27 UTC — `v3-mc20` PASSED THE FULL MERGE BAR** at `c0ef7b75` (= `5018bb57` + docs only), on
   branch `claude/kayfabe-gpu-testing-m0cv1q`: crate tests **1639 / 0**, gates **9/9**, `KF3_RC=0`, `FG_RC=0`,

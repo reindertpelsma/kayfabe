@@ -1,0 +1,13 @@
+[2026-09-27T22:59:55+00:00] guest up, kernel 6.8.0-142-generic — phase base
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+PROBE_BUILD_OK
+DISPLAY_LANE_PROVISIONED=yes
+phase=base
+date=2026-09-27T23:00:51+00:00
+control=/usr/bin/modetest /usr/bin/kmscube /usr/bin/weston PROBE=yes
+/usr/lib/xorg/modules/drivers/nvidia_drv.so 
+kernel_before=6.8.0-142-generic
+kernel_after=6.8.0-142-generic
+provisioner_rev=4c48ca0c
+[2026-09-27T23:01:51+00:00] GUEST_DISPLAY_DONE rc=0
