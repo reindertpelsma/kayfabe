@@ -209,19 +209,43 @@ pub struct GrInfoProfile {
     pub data: [u32; GR_INFO_MAX_SIZE],
 }
 
+/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 1) — which of RM's **zero-sensitive** readers
+/// of this table the guest's HAL binds. Family-free here; the composition root fills it from the
+/// family row (`kf_chip::Family::reads_gr_veid_step_size`), which cites the HAL binding.
+///
+/// ⊘ `MAX_SUBCONTEXT_COUNT` and `LITTER_NUM_GPCS` have readers that are not HALs
+/// (`kfifoGetMaxSubcontextFromGr_KERNEL`, `ogkm-580: kernel_fifo.c:2791`;
+/// `kgrmgrGetLegacyTpcMask_IMPL`, `kernel_graphics_manager.c:625`) and are required on every
+/// family. `LITTER_MIN_SUBCTX_PER_SMC_ENG` is read only through `kgrmgrGetVeidsFromGpcCount_GA100`,
+/// which Turing and Blackwell do not bind — and `[measured TU116, 580.159.04]` a Turing host states
+/// 0 there (`traces/real_tu116/grfs_probe_real_tu116_1660s.txt`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GrInfoReaders {
+    /// The guest's HAL multiplies by [`IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG`]
+    /// (`kgrmgrGetVeidsFromGpcCount_GA100`: GA100, GA10x, AD10x, GH100).
+    pub veid_step_size: bool,
+}
+
+impl GrInfoReaders {
+    /// Every zero-sensitive reader this module knows — the GA100/GA10x/AD10x/GH100 binding, and
+    /// the strictest statement.
+    pub const EVERY: GrInfoReaders = GrInfoReaders { veid_step_size: true };
+}
+
 impl GrInfoProfile {
-    /// The invariants RM's own readers rest on.
+    /// The invariants RM's own readers rest on — the readers `readers` says the guest binds.
     ///
     /// # Errors
-    /// The three zero variants of [`GrInfoError`].
-    pub fn validate(&self) -> Result<(), GrInfoError> {
+    /// The three zero variants of [`GrInfoError`] ([`GrInfoError::VeidStepSizeZero`] only when
+    /// `readers.veid_step_size`).
+    pub fn validate(&self, readers: GrInfoReaders) -> Result<(), GrInfoError> {
         if self.data[IDX_MAX_SUBCONTEXT_COUNT] == 0 {
             return Err(GrInfoError::MaxSubcontextCountZero);
         }
         if self.data[IDX_LITTER_NUM_GPCS] == 0 {
             return Err(GrInfoError::LitterNumGpcsZero);
         }
-        if self.data[IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG] == 0 {
+        if readers.veid_step_size && self.data[IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG] == 0 {
             return Err(GrInfoError::VeidStepSizeZero);
         }
         Ok(())
@@ -295,8 +319,8 @@ impl GrInfoProfile {
     ///
     /// # Errors
     /// [`GrInfoError`] — see [`GrInfoProfile::validate`].
-    pub fn encode(&self) -> Result<Vec<u8>, GrInfoError> {
-        self.validate()?;
+    pub fn encode(&self, readers: GrInfoReaders) -> Result<Vec<u8>, GrInfoError> {
+        self.validate(readers)?;
         let mut out = vec![0u8; KGR_GET_INFO_PARAMS_SIZE];
         for (i, data) in self.data.iter().enumerate() {
             let at = i * GR_INFO_ENTRY_SIZE;
@@ -392,7 +416,7 @@ mod tests {
     fn every_entry_carries_its_own_position_as_its_index() {
         // ★★ The invariant `ogkm-580: gpu.c:6279-6280` searches on, checked over the RAW
         // bytes rather than through any accessor.
-        let body = GA106_GR_INFO.encode().expect("the GA106 row validates");
+        let body = GA106_GR_INFO.encode(GrInfoReaders::EVERY).expect("the GA106 row validates");
         assert_eq!(body.len(), KGR_GET_INFO_PARAMS_SIZE);
         for i in 0..GR_INFO_MAX_SIZE {
             let at = i * GR_INFO_ENTRY_SIZE;
@@ -406,7 +430,7 @@ mod tests {
 
     #[test]
     fn the_seven_other_engine_rows_are_zero() {
-        let body = GA106_GR_INFO.encode().expect("the GA106 row validates");
+        let body = GA106_GR_INFO.encode(GrInfoReaders::EVERY).expect("the GA106 row validates");
         let row = GR_INFO_MAX_SIZE * GR_INFO_ENTRY_SIZE;
         assert!(
             body[row..].iter().all(|&b| b == 0),
@@ -419,18 +443,35 @@ mod tests {
         // ★★★ The wall, expressed as a value. Not "some error" — the named one.
         let mut p = GA106_GR_INFO;
         p.data[IDX_MAX_SUBCONTEXT_COUNT] = 0;
-        assert_eq!(p.encode(), Err(GrInfoError::MaxSubcontextCountZero));
+        assert_eq!(p.encode(GrInfoReaders::EVERY), Err(GrInfoError::MaxSubcontextCountZero));
     }
 
     #[test]
     fn the_other_two_load_bearing_zeros_are_refused_by_name() {
         let mut p = GA106_GR_INFO;
         p.data[IDX_LITTER_NUM_GPCS] = 0;
-        assert_eq!(p.encode(), Err(GrInfoError::LitterNumGpcsZero));
+        assert_eq!(p.encode(GrInfoReaders::EVERY), Err(GrInfoError::LitterNumGpcsZero));
 
         let mut p = GA106_GR_INFO;
         p.data[IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG] = 0;
-        assert_eq!(p.encode(), Err(GrInfoError::VeidStepSizeZero));
+        assert_eq!(p.encode(GrInfoReaders::EVERY), Err(GrInfoError::VeidStepSizeZero));
+    }
+
+    #[test]
+    fn a_zero_veid_step_size_is_served_where_no_reader_multiplies_by_it() {
+        // ★ 2026-09-28: `[measured TU116]` the host states 0 at 0x37, and Turing's
+        // `kgrmgrGetVeidsFromGpcCount_46f6a7` reads nothing. The other two zeros stay refused.
+        let turing = GrInfoReaders { veid_step_size: false };
+        let mut p = GA106_GR_INFO;
+        p.data[IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG] = 0;
+        let body = p.encode(turing).expect("no reader binds the step size");
+        let at = IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG * GR_INFO_ENTRY_SIZE;
+        assert_eq!(&body[at..at + 8], &[0x37, 0, 0, 0, 0, 0, 0, 0], "served verbatim, never invented");
+        p.data[IDX_MAX_SUBCONTEXT_COUNT] = 0;
+        assert_eq!(p.encode(turing), Err(GrInfoError::MaxSubcontextCountZero));
+        let mut p = GA106_GR_INFO;
+        p.data[IDX_LITTER_NUM_GPCS] = 0;
+        assert_eq!(p.encode(turing), Err(GrInfoError::LitterNumGpcsZero));
     }
 
     #[test]

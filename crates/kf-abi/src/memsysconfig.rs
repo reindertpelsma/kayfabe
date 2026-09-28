@@ -322,6 +322,25 @@ pub struct MemorySystemRow {
     pub lts_per_ltc_count: u32,
 }
 
+/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 2) — which zero-sensitive readers of this
+/// reply the guest's HAL binds. Family-free here; the composition root fills it from the family
+/// row (`kf_chip::Family::reads_memsys_ltc_slices`).
+///
+/// ⊘ `ltcCount × ltsPerLtcCount` is read only by `kmemsysIsPagePLCable_GA100` / `_GA102`
+/// (`ogkm-580: kern_mem_sys_ga100.c:332-345`, `kern_mem_sys_ga102.c:66-120`), bound for GA100 and
+/// GA102 … GA107 only (`generated/g_kern_mem_sys_nvoc.c:558-577`). `[measured TU116, 580.159.04]`
+/// the GR litter `ltsPerLtcCount` is sourced from states 0 on Turing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemsysReaders {
+    /// The guest's HAL multiplies and branches on `ltcCount × ltsPerLtcCount`.
+    pub ltc_slices: bool,
+}
+
+impl MemsysReaders {
+    /// Every zero-sensitive reader this module knows — the Ampere binding, and the strictest.
+    pub const EVERY: MemsysReaders = MemsysReaders { ltc_slices: true };
+}
+
 /// Why the reply could not be encoded.
 ///
 /// Every variant stands in front of a *specific* guest-side consequence, and each one is
@@ -419,8 +438,10 @@ impl core::error::Error for MemorySystemError {}
 /// # Errors
 ///
 /// Every variant of [`MemorySystemError`]; see each for the guest-side consequence it
-/// stands in front of.
-pub fn encode_memsys_static_config(row: &MemorySystemRow) -> Result<Vec<u8>, MemorySystemError> {
+/// stands in front of. ⊘ 2026-09-28: a zero `ltsPerLtcCount` is [`MemorySystemError::NoLtcSlices`]
+/// only where `readers.ltc_slices` (a Turing host states 0 and no Turing HAL reads it); a zero
+/// `ltcCount` — `FB_GET_INFO_V2`'s own count, false about every die this port serves — always is.
+pub fn encode_memsys_static_config(row: &MemorySystemRow, readers: MemsysReaders) -> Result<Vec<u8>, MemorySystemError> {
     if row.compr_page_size == 0 {
         return Err(MemorySystemError::ComprPageSizeZero);
     }
@@ -429,7 +450,7 @@ pub fn encode_memsys_static_config(row: &MemorySystemRow) -> Result<Vec<u8>, Mem
             compr_page_size: row.compr_page_size,
         });
     }
-    if row.ltc_count == 0 || row.lts_per_ltc_count == 0 {
+    if row.ltc_count == 0 || (readers.ltc_slices && row.lts_per_ltc_count == 0) {
         return Err(MemorySystemError::NoLtcSlices {
             ltc_count: row.ltc_count,
             lts_per_ltc_count: row.lts_per_ltc_count,

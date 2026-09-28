@@ -103,7 +103,7 @@
 //! separate, and there the derivation is the right one.
 
 use crate::NV_ERR_NOT_SUPPORTED;
-use crate::grstatic::{GpcRow, GrStaticProfile, GrSyspipeMasks};
+use crate::grstatic::{GpcRow, GrStaticProfile, GrSyspipeMasks, HostFsAnswer};
 
 /// `NV_ERR_INVALID_ARGUMENT` — what a real GPU writes into a per-GPC query's `status` for a
 /// `gpcId` at or past the GPC count (`[measured 2026-09-26, RTX 3060 Ti, 580.159.04]`: `0x1f`
@@ -260,12 +260,15 @@ impl GrFsQuery {
         // ★ The per-GPC types take a LOGICAL `gpcId`; past the GPC count a real GPU writes
         // `NV_ERR_INVALID_ARGUMENT` into the query and marches on (measured, module header).
         let row = geom.gpcs.get(self.input as usize);
-        let per_gpc = |value: fn(&GpcRow) -> Option<u32>| match row {
+        let per_gpc = |value: fn(&GpcRow) -> Option<HostFsAnswer>| match row {
             None => QueryAnswer::RefusedByHardware {
                 status: NV_ERR_INVALID_ARGUMENT,
             },
             Some(g) => match value(g) {
-                Some(v) => QueryAnswer::Data { at: 4, value: v },
+                Some(HostFsAnswer::Word(v)) => QueryAnswer::Data { at: 4, value: v },
+                // ★ 2026-09-28: in range, and the HOST refused this slot (TU116's `ROP_MASK`,
+                // `0x56`): the same per-query status — a measured refusal, not an unmodelled type.
+                Some(HostFsAnswer::Refused(status)) => QueryAnswer::RefusedByHardware { status },
                 // ⊘ In range, but the host's word was never measured: whole-call refusal.
                 None => QueryAnswer::Unmodelled,
             },
@@ -278,10 +281,10 @@ impl GrFsQuery {
                 value: u32::try_from(geom.gpcs.len()).unwrap_or(u32::MAX),
             },
             // ★ The one libcuda asks: the host's own logical → physical map.
-            query_type::CHIPLET_GPC_MAP => per_gpc(|g| Some(g.physical_id)),
+            query_type::CHIPLET_GPC_MAP => per_gpc(|g| Some(HostFsAnswer::Word(g.physical_id))),
             // ★ Modelled since 2026-09-26: a LOGICAL `gpcId` answered with that GPC's PHYSICAL
             // TPC mask — the row's `tpc_mask`, the word `tpcMask[physical_id]` carries.
-            query_type::TPC_MASK => per_gpc(|g| Some(g.tpc_mask)),
+            query_type::TPC_MASK => per_gpc(|g| Some(HostFsAnswer::Word(g.tpc_mask))),
             // The host's own words, when realize measured them.
             query_type::PPC_MASK => per_gpc(|g| g.ppc_mask),
             query_type::ROP_MASK => per_gpc(|g| g.rop_mask),
@@ -500,8 +503,8 @@ mod tests {
             mmu_per_gpc: 1,
             num_pes_per_gpc: 2,
             zcull_mask: 0xf,
-            ppc_mask: Some(0x3),
-            rop_mask: Some(0x3),
+            ppc_mask: Some(HostFsAnswer::Word(0x3)),
+            rop_mask: Some(HostFsAnswer::Word(0x3)),
         }
     }
 

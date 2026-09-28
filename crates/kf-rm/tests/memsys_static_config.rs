@@ -108,7 +108,7 @@ fn the_encoder_reproduces_the_oracles_reply_byte_for_byte() {
         MEMSYS_STATIC_CONFIG_PARAMS_SIZE,
         "the capture is a whole struct, not a prefix"
     );
-    let ours = memsysconfig::encode_memsys_static_config(&row()).expect("the GA106 row encodes");
+    let ours = memsysconfig::encode_memsys_static_config(&row(), memsysconfig::MemsysReaders::EVERY).expect("the GA106 row encodes");
     assert_eq!(ours, oracle, "byte for byte");
 }
 
@@ -215,7 +215,7 @@ fn the_zero_filled_reply_rm_pre_zeroes_for_us_is_unencodable() {
         let p = memsysconfig::encode_memsys_static_config(&MemorySystemRow {
             comptag_policy: policy,
             ..row()
-        })
+        }, memsysconfig::MemsysReaders::EVERY)
         .expect("both policies encode");
         assert!(
             p[ONE_TO_ONE_COMPTAG_OFF] != 0 || p[RAW_MODE_COMPTAG_OFF] != 0,
@@ -238,7 +238,7 @@ fn the_one_to_four_bit_rm_would_reject_alone_is_never_set() {
         let p = memsysconfig::encode_memsys_static_config(&MemorySystemRow {
             comptag_policy: policy,
             ..row()
-        })
+        }, memsysconfig::MemsysReaders::EVERY)
         .expect("encodes");
         assert_eq!(
             p[ONE_TO_FOUR_COMPTAG_OFF], 0,
@@ -255,7 +255,7 @@ fn a_zero_compr_page_size_is_unencodable_because_rm_divides_by_it() {
         memsysconfig::encode_memsys_static_config(&MemorySystemRow {
             compr_page_size: 0,
             ..row()
-        }),
+        }, memsysconfig::MemsysReaders::EVERY),
         Err(MemorySystemError::ComprPageSizeZero)
     );
 }
@@ -270,7 +270,7 @@ fn a_compr_page_size_that_is_not_a_power_of_two_is_unencodable() {
             memsysconfig::encode_memsys_static_config(&MemorySystemRow {
                 compr_page_size: bad,
                 ..row()
-            }),
+            }, memsysconfig::MemsysReaders::EVERY),
             Err(MemorySystemError::ComprPageSizeNotPowerOfTwo {
                 compr_page_size: bad
             }),
@@ -287,7 +287,7 @@ fn a_zero_ltc_factor_is_unencodable_because_ampere_multiplies_and_branches_on_it
         memsysconfig::encode_memsys_static_config(&MemorySystemRow {
             ltc_count: 0,
             ..row()
-        }),
+        }, memsysconfig::MemsysReaders::EVERY),
         Err(MemorySystemError::NoLtcSlices {
             ltc_count: 0,
             lts_per_ltc_count: 4
@@ -297,11 +297,35 @@ fn a_zero_ltc_factor_is_unencodable_because_ampere_multiplies_and_branches_on_it
         memsysconfig::encode_memsys_static_config(&MemorySystemRow {
             lts_per_ltc_count: 0,
             ..row()
-        }),
+        }, memsysconfig::MemsysReaders::EVERY),
         Err(MemorySystemError::NoLtcSlices {
             ltc_count: 6,
             lts_per_ltc_count: 0
         })
+    );
+}
+
+#[test]
+fn a_zero_slice_count_is_served_verbatim_where_no_hal_reads_it() {
+    // ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2 wall 2): `[measured TU116]` the GR litter
+    // `ltsPerLtcCount` comes from is 0 on Turing, and only GA100/GA10x's `kmemsysIsPagePLCable`
+    // reads the product. The family row decides; a zero LTC count stays refused everywhere.
+    use kf_chip::Family;
+    let readers = kf_rm::hostfacts::memsys_readers;
+    assert_eq!(readers(Family::Ampere), memsysconfig::MemsysReaders::EVERY);
+    for f in [Family::Turing, Family::Ada, Family::Hopper, Family::Blackwell] {
+        let p = memsysconfig::encode_memsys_static_config(&MemorySystemRow { lts_per_ltc_count: 0, ..row() }, readers(f))
+            .unwrap_or_else(|e| panic!("{f:?}: {e}"));
+        assert_eq!(&p[p.len() - 4..], &[0, 0, 0, 0], "{f:?}: the host's zero, not an invented count");
+        assert_eq!(
+            memsysconfig::encode_memsys_static_config(&MemorySystemRow { ltc_count: 0, ..row() }, readers(f)),
+            Err(MemorySystemError::NoLtcSlices { ltc_count: 0, lts_per_ltc_count: 4 }),
+            "{f:?}"
+        );
+    }
+    assert_eq!(
+        memsysconfig::encode_memsys_static_config(&MemorySystemRow { lts_per_ltc_count: 0, ..row() }, readers(Family::Ampere)),
+        Err(MemorySystemError::NoLtcSlices { ltc_count: 6, lts_per_ltc_count: 0 })
     );
 }
 
@@ -314,7 +338,7 @@ fn claiming_no_framebuffer_partitions_is_unencodable_because_it_moves_rms_bar0_w
         memsysconfig::encode_memsys_static_config(&MemorySystemRow {
             fbpa_present: false,
             ..row()
-        }),
+        }, memsysconfig::MemsysReaders::EVERY),
         Err(MemorySystemError::FbpaAbsent)
     );
 }
@@ -325,7 +349,7 @@ fn a_zero_l2_is_unencodable() {
         memsysconfig::encode_memsys_static_config(&MemorySystemRow {
             l2_cache_size: 0,
             ..row()
-        }),
+        }, memsysconfig::MemsysReaders::EVERY),
         Err(MemorySystemError::L2CacheSizeZero)
     );
 }
@@ -339,7 +363,7 @@ fn the_shift_cannot_disagree_with_the_size_because_it_is_not_a_field() {
         let p = memsysconfig::encode_memsys_static_config(&MemorySystemRow {
             compr_page_size: size,
             ..row()
-        })
+        }, memsysconfig::MemsysReaders::EVERY)
         .expect("a power of two encodes");
         let got_size = u32::from_le_bytes(
             p[COMPR_PAGE_SIZE_OFF..COMPR_PAGE_SIZE_OFF + 4]

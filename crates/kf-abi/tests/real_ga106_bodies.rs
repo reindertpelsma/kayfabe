@@ -192,7 +192,7 @@ fn the_gr_info_reply_is_byte_identical_to_the_real_ga106() {
     let theirs = &seen[0];
     assert_eq!(theirs.len(), KGR_GET_INFO_PARAMS_SIZE);
 
-    let ours = GA106_GR_INFO.encode().expect("the GA106 row encodes");
+    let ours = GA106_GR_INFO.encode(kf_abi::grinfo::GrInfoReaders::EVERY).expect("the GA106 row encodes");
     if ours == *theirs {
         return;
     }

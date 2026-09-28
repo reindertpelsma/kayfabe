@@ -24,7 +24,7 @@
 use std::collections::BTreeMap;
 
 use kf_abi::grfsinfo::{self, GrFsGeometry};
-use kf_abi::grstatic::{self, FLOORSWEEPING_ROW_SIZE, GR_MAX_GPC, MAX_TPC_PER_GPC};
+use kf_abi::grstatic::{self, FLOORSWEEPING_ROW_SIZE, GR_MAX_GPC, HostFsAnswer::{Refused, Word}, MAX_TPC_PER_GPC};
 use kf_rm::hostfacts;
 use kf_rm::hostquery::{self, HostControls, HostRefusal};
 
@@ -42,8 +42,22 @@ fn field<'a>(line: &'a str, key: &str) -> Option<&'a str> {
 const GA104: &str = "real_ga104/grfs_probe_real_ga104_3060ti.txt";
 /// The RTX 4070 (AD104).
 const AD104: &str = "real_ad104/grfs_probe_real_ad104_4070.txt";
-/// Both.
-const DIES: [&str; 2] = [GA104, AD104];
+/// ★ 2026-09-28: the GTX 1660 SUPER (TU116, Turing) — contiguous `0x7`, but a Turing GR info table
+/// (`LITTER_MIN_SUBCTX_PER_SMC_ENG` and `LITTER_NUM_SLICES_PER_LTC` 0, no RT / tensor cores) and a
+/// GRMGR that refuses `ROP_MASK` with `NV_ERR_NOT_SUPPORTED`.
+const TU116: &str = "real_tu116/grfs_probe_real_tu116_1660s.txt";
+/// All three.
+const DIES: [&str; 3] = [GA104, AD104, TU116];
+
+/// The family each die's host reported — the readers its guest RM binds.
+fn family(trace: &str) -> kf_chip::Family {
+    match trace {
+        GA104 => kf_chip::Family::Ampere,
+        AD104 => kf_chip::Family::Ada,
+        TU116 => kf_chip::Family::Turing,
+        other => panic!("no family for {other}"),
+    }
+}
 
 /// Every logged control of `trace`: `(cmd, in, status, out)`, in file order.
 fn probe(trace: &str) -> Vec<(u32, Vec<u8>, u32, Vec<u8>)> {
@@ -143,7 +157,7 @@ fn realize(
     grstatic::GrStaticProfile,
 ) {
     let mut host = ProbeReplay::load(trace);
-    let info = hostquery::query_gr_info(&mut host).expect("GR_GET_INFO_V2 captured");
+    let info = hostquery::query_gr_info(&mut host, family(trace)).expect("GR_GET_INFO_V2 captured");
     let geo =
         hostquery::query_gr_geometry(&mut host, Some(&info)).unwrap_or_else(|e| panic!("{e:?}"));
     let p = hostquery::gr_static_from(&geo, &info).unwrap_or_else(|e| panic!("{e:?}"));
@@ -182,7 +196,7 @@ fn a_3060ti_realizes_with_its_own_non_contiguous_mask() {
         .fs_extra
         .clone()
         .expect("the optional GRMGR batch was answered");
-    assert_eq!(extra.per_gpc, vec![(Some(3), Some(3)); 5]);
+    assert_eq!(extra.per_gpc, vec![(Some(Word(3)), Some(Word(3))); 5]);
     assert_eq!(
         extra.syspipe,
         grstatic::GrSyspipeMasks {
@@ -220,7 +234,7 @@ fn an_rtx4070_with_a_hole_at_gpc1_realizes_as_an_unprivileged_client() {
         .fs_extra
         .clone()
         .expect("the optional GRMGR batch was answered");
-    assert_eq!(extra.per_gpc, vec![(Some(7), Some(3)); 4]);
+    assert_eq!(extra.per_gpc, vec![(Some(Word(7)), Some(Word(3))); 4]);
     assert_eq!(
         extra.syspipe,
         grstatic::GrSyspipeMasks {
@@ -242,6 +256,38 @@ fn an_rtx4070_with_a_hole_at_gpc1_realizes_as_an_unprivileged_client() {
         phys.1, 0x1b,
         "NV_ERR_INSUFFICIENT_PERMISSIONS: GR_GET_PHYS_GPC_MASK is PRIVILEGED"
     );
+}
+
+/// ★★★ 2026-09-28 — **Turing (TU116) realizes over its own replies** — the die whose first
+/// realize (`traces/v3_turing/tu1_80e13bc5/`) refused `gr_info` because its host states 0 at
+/// `LITTER_MIN_SUBCTX_PER_SMC_ENG`, an entry no Turing HAL reads. The same table under Ampere's
+/// readers is still refused, naming the entry.
+#[test]
+fn a_gtx1660s_realizes_under_turings_readers_and_not_under_amperes() {
+    let (info, g, p) = realize(TU116);
+    assert_eq!(info.data[kf_abi::grinfo::IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG], 0, "the measured zero");
+    assert_eq!(info.data[hostquery::GR_INFO_IDX_LITTER_NUM_SLICES_PER_LTC], 0, "the litter memory_system reads");
+    assert_eq!(info.data[kf_abi::grinfo::IDX_SM_VERSION], 0x703, "SM 7.5");
+    assert_eq!(g.gpc_mask, 0x7);
+    assert_eq!(g.tpc_masks, [(0, 0xe), (1, 0xf), (2, 0xf)]);
+    assert_eq!(g.chiplet_gpc_map, [0, 1, 2]);
+    assert_eq!(g.tpc_counts, [3, 4, 4]);
+    assert_eq!(g.pes.clone().expect("GPU_GET_PES_INFO answered").0, [2, 2, 2]);
+    assert_eq!(g.gfx, (0x7, 11));
+    let extra = g.fs_extra.clone().expect("the optional GRMGR batch was answered NV_OK");
+    assert_eq!(
+        extra.per_gpc,
+        vec![(Some(Word(3)), Some(Refused(0x56))); 3],
+        "the host's ROP_MASK slots are NV_ERR_NOT_SUPPORTED — carried, not dropped to unmeasured"
+    );
+    assert_eq!((g.tpcs.len(), g.sms_per_tpc), (11, 2));
+    p.validate().expect("validates");
+    info.validate_against(&p).expect("22 SMs x 64 cores, 0 RT, 0 tensor");
+
+    let mut host = ProbeReplay::load(TU116);
+    let refused = hostquery::query_gr_info(&mut host, kf_chip::Family::Ampere).expect_err("Ampere's HAL multiplies by it");
+    let text = format!("{refused:?}");
+    assert!(text.contains("LITTER_MIN_SUBCTX_PER_SMC_ENG (0x37)"), "names the entry: {text}");
 }
 
 /// ★★★ **The guest sees what the host sees.** The guest's RM answers its userspace's GR
@@ -395,7 +441,7 @@ fn every_grmgr_batch_the_host_answered_is_answered_byte_for_byte() {
 fn the_realize_path_asks_nothing_the_probe_did_not() {
     for die in DIES {
         let mut host = ProbeReplay::load(die);
-        let info = hostquery::query_gr_info(&mut host).expect("captured");
+        let info = hostquery::query_gr_info(&mut host, family(die)).expect("captured");
         hostquery::query_gr_geometry(&mut host, Some(&info))
             .expect("every request was one the probe made");
         let asked: std::collections::BTreeSet<u32> = host.asked.iter().copied().collect();

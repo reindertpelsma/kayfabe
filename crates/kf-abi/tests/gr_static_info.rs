@@ -637,8 +637,8 @@ fn a_3060ti_publishes_its_own_non_contiguous_mask() {
         mmu_per_gpc: 1,
         num_pes_per_gpc: 2,
         zcull_mask: 0xf,
-        ppc_mask: Some(3),
-        rop_mask: Some(3),
+        ppc_mask: Some(kf_abi::grstatic::HostFsAnswer::Word(3)),
+        rop_mask: Some(kf_abi::grstatic::HostFsAnswer::Word(3)),
     };
     let gpcs = [
         row(1, 0xe),
