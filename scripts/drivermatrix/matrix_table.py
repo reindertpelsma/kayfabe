@@ -5,6 +5,9 @@ Reads every queue log under traces/driver_matrix/walk/<box>/summary/ (q*.log, ho
 sweep*.log) and keeps, per (arch, host, guest), the LATEST revision's rows:
   MATRIX_ROW host=H guest=G rev=R FAST_SUITE_PASS=p ... ARMS=n   -> thin p/n
   LADDER host=H guest=G rev=R k/n                              -> ladder k/n
+  LADDER host=H guest=G rev=R k/n CUT ...                      -> ladder k/n cut   (sweep.sh: cut off
+                                                                  by its bound; n is the PLANNED count)
+  THIN host=H guest=G rev=R NO_RESULT ...                      -> thin none        (sweep.sh: no numeric p/n)
   GATES host=H V3_GATES_SUMMARY pass=p fail=f                    -> gates (per arch and host)
 Queue logs that predate the host= field on LADDER lines (a guest walk on the bench host) are read
 with the log's own `host=` from its *_START line.
@@ -23,6 +26,8 @@ One grid per arch; the per-arch grid is exactly the old grid when every row is o
                                                       V3_DRIVER_MATRIX.md §6.0's grid, and a sweep
                                                       row of another arch must land in its own grid
 """
+import contextlib
+import io
 import os
 import re
 import sys
@@ -33,6 +38,7 @@ DEFAULT_WALK = os.path.join(HERE, "..", "..", "traces", "driver_matrix", "walk")
 DOC = os.path.join(HERE, "..", "..", "docs", "design", "V3_DRIVER_MATRIX.md")
 LOGS = re.compile(r"(q\d+\w*|hostwalk\d*|sweep\w*)\.log$")
 ARCH_FIELD = re.compile(r"\sarch=(\S+)")
+USAGE = "usage: matrix_table.py [--arch DIE] [walk-dir]  |  matrix_table.py --selftest"
 
 
 def vkey(v):
@@ -93,9 +99,15 @@ def parse(walk):
                     thin = m.group(4) or f"{m.group(5)}/{m.group(6)}"
                     put("thin", arch, m.group(1), m.group(2), m.group(3), thin, order)
                     recorded = True
-                m = None if recorded else re.match(r"LADDER host=([\d.]+) guest=([\d.]+) rev=(\w+) (\d+/\d+)", line)
+                m = None if recorded else re.match(
+                    r"LADDER host=([\d.]+) guest=([\d.]+) rev=(\w+) (\d+/\d+)( CUT\b)?", line)
                 if m:
-                    put("ladder", arch, m.group(1), m.group(2), m.group(3), m.group(4), order)
+                    put("ladder", arch, m.group(1), m.group(2), m.group(3),
+                        m.group(4) + (" cut" if m.group(5) else ""), order)
+                    recorded = True
+                m = None if recorded else re.match(r"THIN host=([\d.]+) guest=([\d.]+) rev=(\w+) NO_RESULT\b", line)
+                if m:
+                    put("thin", arch, m.group(1), m.group(2), m.group(3), "none", order)
                     recorded = True
                 m = None if recorded else re.match(r"LADDER guest=([\d.]+) (UNSTAGED)", line)
                 if m and start_host:
@@ -212,6 +224,10 @@ def selftest():
                 "MATRIX_ROW host=580.159.04 guest=580.159.04 rev=0123abcd thin=29/30 ladder=- arch=ZZ999",
                 "LADDER host=580.159.04 guest=580.159.04 rev=0123abcd 4/4 arch=ZZ999",
                 "LADDER guest=550.54.14 UNSTAGED arch=ZZ999",
+                # a thin suite that died before its summary, and a ladder cut off by the sweep's bound:
+                # neither may read as a pass (review of 81f16870)
+                "THIN host=580.159.04 guest=580.65.06 rev=0123abcd NO_RESULT thin=?/? rc=0 arch=ZZ999",
+                "LADDER host=580.159.04 guest=590.48.01 rev=0123abcd 2/4 CUT ran=2 step_rc=124 arch=ZZ999",
                 "SWEEP_HOST_START 2026-09-29T03:00:00+00:00 rev=0123abcd host=575.57.08 arch=ZZ999",
                 "HOSTROW host=575.57.08 SWAP_FAILED arch=ZZ999",
                 "SWEEP_EXIT 2026-09-29T05:00:00+00:00 rc=0 rows_run=5",
@@ -226,10 +242,18 @@ def selftest():
             "|---|---|",
             "| *gates* | 8/9 |",
             "| 550.54.14 | ladder unstaged |",
+            "| 580.65.06 | thin none `0123abcd` |",
             "| 580.159.04 | thin 29/30, ladder 4/4 `0123abcd` |",
+            "| 590.48.01 | ladder 2/4 cut `0123abcd` |",
         ]
         check("sweep_rows_parsed", zz == want_zz, "" if zz == want_zz else "\n" + "\n".join(zz))
         check("sweep_box_recorded", b2.get("ZZ999") == {"_selftest_zz999"}, f"{b2.get('ZZ999')}")
+    with contextlib.redirect_stderr(io.StringIO()):
+        try:
+            rc = main(["--arch"])
+        except Exception as e:  # noqa: BLE001 — the check is exactly that nothing escapes
+            rc = repr(e)
+    check("arch_without_a_value_is_usage", rc == 2, f"rc={rc}")
     print(f"SELFTEST {'PASS' if not fails else 'FAIL: ' + ', '.join(fails)}")
     return 0 if not fails else 1
 
@@ -240,6 +264,9 @@ def main(argv):
     only, walk, args = None, DEFAULT_WALK, list(argv)
     if "--arch" in args:
         i = args.index("--arch")
+        if i + 1 >= len(args) or args[i + 1].startswith("-"):
+            print(USAGE + "\nmatrix_table.py: --arch needs a die name (e.g. --arch GA102)", file=sys.stderr)
+            return 2
         only = args[i + 1]
         del args[i:i + 2]
     if args:

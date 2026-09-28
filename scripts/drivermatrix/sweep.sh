@@ -42,15 +42,30 @@
 #     SWAP host=<v> rc=<rc> got=<v> OPEN_MODULE=<yes|no> … | SWAP host=<v> already installed | HOSTROW host=<v> SWAP_FAILED
 #     BARE host=<v> cup2 rc=<rc> CE rv=… -> PASS verdict=PASS             (bare metal, same box, first)
 #     GATES host=<v> V3_GATES_SUMMARY pass=<p> fail=<f>
-#     CANARY host=<v> verdict=<PASS|FAIL> thin=<p>/<n> guest=<v>           (gates the 30-arm suites)
+#     CANARY host=<v> verdict=<PASS|FAIL|NO_RESULT> thin=<p>/<n> guest=<v> (gates the 30-arm suites)
 #     MATRIX_ROW host=<v> guest=<v> rev=<rev> thin=<p>/<n> ladder=-        (guest_walk.sh's own line)
-#     LADDER host=<v> guest=<v> rev=<rev> <k>/<n>  |  LADDER guest=<v> UNSTAGED
+#       | THIN host=<v> guest=<v> rev=<rev> NO_RESULT thin=<what it said> rc=<rc>   (no numeric p/n)
+#     LADDER host=<v> guest=<v> rev=<rev> <k>/<planned> [CUT ran=<n> step_rc=<rc>]  |  LADDER guest=<v> UNSTAGED
+#       (<planned> = rungs x LADDER_REPS, never the rows that happened to be written: a ladder cut
+#        off by T_LADDER reads `2/4 CUT`, not `2/2`)
 #     STAGE <v> rc=<rc> …   FAT <v> rc=<rc> …                              (guest staging, when it runs)
 #     SWEEP_ROW_START <ts> row=<id>  …  SWEEP_ROW_EXIT <ts> row=<id> rc=<rc> secs=<s>
 #     SWEEP_EXIT <ts> rc=<rc> rows_run=<n>
 #   <dir>/rows/<id>.log   every step's whole output;   gates/  swaps/  ARCH
 #   <dir>/summary_<TAG>.tar.xz  summary/ gates/ swaps/ ARCH — text only, refreshed after every host;
 #       unpacked under traces/driver_matrix/walk/<TAG>/ it is what `matrix_table.py` reads.
+#
+# ## Alive, and stopping it
+#
+#   <dir>/RUNNING.pid holds the runner's pid while it runs. ⊘ `kill -0 <pid>` alone is NOT "alive":
+#   a SIGKILL, the OOM killer or a reboot leaves the file behind, and the pid can be reused. Alive =
+#   that pid holds the box's sweep lock on its fd 8 (only the runner does; every step closes fd 8):
+#     p=$(cat <dir>/RUNNING.pid); [ "$(readlink /proc/$p/fd/8)" = "$(readlink -f $SWEEP_ROOT/.lock)" ] && echo alive
+#   Stop: `kill -TERM <pid>` (never -KILL: the running step would be orphaned, still holding the GPU
+#   with the lock already free). The runner signals the running step's `timeout` at once — every step
+#   is waited on in the background, because bash defers a trap until a FOREGROUND child returns —
+#   which TERMs the step's process group and KILLs it 60 s later; then it logs SWEEP_KILLED, packs
+#   the tarball and exits. The stopped row has no EXIT, so the next invocation re-runs it.
 #
 # ## Resumable — boxes vanish
 #
@@ -97,9 +112,18 @@ read -r -a H_LIST <<< "$(split "${HOSTS:-$REF_HOST 580.95.05 580.65.06 575.57.08
 read -r -a G_LIST <<< "$(split "${GUESTS:-580.159.04 580.105.08 580.65.06 580.95.05 580.126.09 580.173.02 580.178.04 590.48.01 595.84 610.57.04 575.57.08 570.148.08 565.57.01 550.54.14 535.309.01}")"
 read -r -a M_LIST <<< "$(split "${MIXED-*:590.48.01 *:575.57.08}")"
 read -r -a RUNGS <<< "$(split "${BARE_RUNGS:-cup2}")"
+# The fat ladder's rungs, passed to `cuda_ladder.sh` explicitly (they are its default) so that a
+# ladder's denominator is THIS list x LADDER_REPS — what was planned, not what got written.
+LADDER_RUNGS=cup2,cup3,cup8,cup8bench
+read -r -a LRUNGS <<< "$(split "$LADDER_RUNGS")"
+LADDER_PLANNED=$(( ${#LRUNGS[@]} * LADDER_REPS ))
 T_BUILD=${T_BUILD:-5400} T_TESTS=${T_TESTS:-3600} T_SWAP=${T_SWAP:-2400} T_BARE=${T_BARE:-1800}
 T_GATES=${T_GATES:-3600} T_CANARY=${T_CANARY:-1200} T_THIN=${T_THIN:-10800} T_STAGE=${T_STAGE:-2400}
-T_FAT=${T_FAT:-4800} T_LADDER=${T_LADDER:-$(( 4 * LADDER_REPS * 900 + 600 ))}
+# T_LADDER: every rung's boot is designed against a 1800 s outer bound (`cup8_hook.sh`,
+# `cup8bench_hook.sh`: w290p_run.sh's `timeout 1800 boot_capture.sh`), so a ladder gets that per
+# boot. (It was 900 per boot: a slow but healthy cup8bench could be cut off.) A cut ladder is
+# recorded as `k/<planned> CUT`, never as a pass.
+T_FAT=${T_FAT:-4800} T_LADDER=${T_LADDER:-$(( LADDER_PLANNED * 1800 + 600 ))}
 
 bad=""
 for v in "${H_LIST[@]}" "${G_LIST[@]}" "$REF_HOST" "$DEFAULT_GUEST" "$BASE_GUEST"; do
@@ -159,11 +183,21 @@ row_begin() {  # <id> <plan text> → 0: run it now; 1: skip (recorded, or DRY_R
     row_start "$1"; return 0
 }
 rowlog() { echo "$DIR/rows/${1//[^A-Za-z0-9._-]/_}.log"; }
+STEP_PID="" STEP_FROM=0
 step() {  # <timeout-s> <log> <cmd…> → the command's rc (124/137: the bound expired)
-    local to=$1 log=$2; shift 2
+    local to=$1 log=$2 rc; shift 2
     echo "== $(date -Is) [timeout ${to}s] $*" >> "$log"
-    timeout -k 60 "$to" "$@" < /dev/null >> "$log" 2>&1 8>&-
+    STEP_FROM=$(wc -l < "$log")   # this attempt's output starts on the next line (a row log is appended to)
+    # ⊘ In the background and `wait`ed, not in the foreground: bash runs a trap only after a
+    # foreground child returns, so a `kill` of the runner would take effect up to T_THIN later.
+    # `wait` returns at once on a trapped signal, and on_signal() stops the step.
+    timeout -k 60 "$to" "$@" < /dev/null >> "$log" 2>&1 8>&- &
+    STEP_PID=$!
+    wait "$STEP_PID"; rc=$?
+    STEP_PID=""
+    return "$rc"
 }
+this_attempt() { tail -n "+$(( STEP_FROM + 1 ))" "$1" 2>/dev/null; }  # <log>: the last step's output only
 refusals() {  # the named refusals of a step's QEMU logs, counted — the host axis' first question
     # shellcheck disable=SC2068  # a glob list on purpose
     grep -ahE "HOST-ABI REFUSED|has no per-map PTE kind|UNSERVICED|RPC-REFUSED" $@ 2>/dev/null \
@@ -330,14 +364,26 @@ if [ -f "$LOG" ]; then
     echo "resuming $LOG: $(grep -c '^SWEEP_ROW_EXIT' "$LOG") row EXITs recorded"
 fi
 CUR_HOST=$(loaded_driver)
-[ "$DRY" = 1 ] || echo $$ > "$DIR/RUNNING.pid"   # alive = this pid runs (a killed job leaves no EXIT)
-trap 'emit "SWEEP_KILLED $(date -Is) by a signal (host=$CUR_HOST)"; rm -f "$DIR/RUNNING.pid"; exit 143' TERM INT HUP
+# Alive = this pid AND it holds $SWEEP_ROOT/.lock on fd 8 (header, *Alive*): a killed job leaves
+# this file and no EXIT, and its pid can be reused.
+[ "$DRY" = 1 ] || echo $$ > "$DIR/RUNNING.pid"
+# shellcheck disable=SC2317  # reached only through the traps below
+on_signal() {  # <SIG> <rc>: stop the running step (its `timeout` TERMs its group, KILLs 60 s later), then exit
+    trap '' TERM INT HUP
+    local stopped=""
+    if [ -n "$STEP_PID" ]; then kill -TERM "$STEP_PID" 2>/dev/null; wait "$STEP_PID" 2>/dev/null; stopped=", its running step stopped"; fi
+    emit "SWEEP_KILLED $(date -Is) by SIG$1 (host=$CUR_HOST$stopped) arch=$ARCH"
+    pack; rm -f "$DIR/RUNNING.pid"; exit "$2"
+}
+trap 'on_signal TERM 143' TERM
+trap 'on_signal INT 130' INT
+trap 'on_signal HUP 129' HUP
 emit "SWEEP_START $(date -Is) rev=$REV tag=$TAG arch=$ARCH"
 emit "$ARCH_LINE"
 if [ "$DRY" != 1 ] && [ ! -f "$DIR/ARCH" ]; then
     printf '# The die this sweep ran on, derived by sweep.sh on the box (%s).\n%s\n' "${ARCH_LINE#SWEEP_ARCH }" "$ARCH" > "$DIR/ARCH"
 fi
-emit "SWEEP_PLAN hosts=${H_LIST[*]} ref_host=$REF_HOST guests=${G_LIST[*]} mixed=${M_LIST[*]:-none} default_guest=$DEFAULT_GUEST thin_re=$THIN_GUEST_RE budget=$BUDGET ladder_reps=$LADDER_REPS bare=${RUNGS[*]}"
+emit "SWEEP_PLAN hosts=${H_LIST[*]} ref_host=$REF_HOST guests=${G_LIST[*]} mixed=${M_LIST[*]:-none} default_guest=$DEFAULT_GUEST thin_re=$THIN_GUEST_RE budget=$BUDGET ladder_reps=$LADDER_REPS ladder_rungs=$LADDER_RUNGS bare=${RUNGS[*]}"
 
 # ── build ONCE per revision: every invocation asks cargo, whose fingerprints decide ──────────
 if [ "$DRY" = 1 ]; then
@@ -378,7 +424,7 @@ for H in "${H_LIST[@]}"; do
     for r in "${RUNGS[@]}"; do   # bare metal first: the same workload, no kayfabe
         if row_begin "bare:$H:$r" "cuda_ladder.sh host (bare metal, $r)"; then
             health "bare:$r" || abort "the GPU is dead (rows/health.log)"
-            t=${TAG}_h${hs}_bare_${r}_r${REV}; log=$(rowlog "bare:$H:$r")
+            t=${TAG}_h${hs}_bare_${r}_r${REV}; log=$(rowlog "bare:$H:$r"); rm -f "$BENCH/cl_${t}_host.out"
             step "$T_BARE" "$log" bash "$REPO/scripts/bench/cuda_ladder.sh" host "$t" 1 "$r"; rc=$?
             l=$(grep -a '^CL_ROW mode=host' "$BENCH/cl_${t}_host.out" 2>/dev/null | tail -1)
             if [ -n "$l" ]; then
@@ -409,8 +455,13 @@ for H in "${H_LIST[@]}"; do
             t=${TAG}_h${hs}_canary_g${thin[0]//./}_r${REV}; log=$(rowlog "canary:$H")
             step "$T_CANARY" "$log" env GUEST_WALK_ARMS="$CANARY_ARMS" \
                 bash "$REPO/scripts/drivermatrix/guest_walk.sh" "${thin[0]}" "$t" "$BUDGET" 0; rc=$?
-            th=$(grep -a '^MATRIX_ROW ' "$log" | tail -1 | sed -n 's/.* thin=\([0-9?]*\/[0-9?]*\).*/\1/p')
-            v=FAIL; [ -n "$th" ] && [ "${th%/*}" = "${th#*/}" ] && [ "${th#*/}" != 0 ] && v=PASS
+            th=$(this_attempt "$log" | grep -a '^MATRIX_ROW ' | tail -1 | sed -n 's/.* thin=\([^ ]*\).*/\1/p')
+            # ⊘ PASS only on NUMBERS, p = n > 0. guest_walk.sh prints `thin=?/?` when fast_suite.sh
+            # died before its FAST_SUITE_PASS line, and '?' = '?' must not read as a pass.
+            v=NO_RESULT
+            if [[ "$th" =~ ^([0-9]+)/([0-9]+)$ ]]; then
+                v=FAIL; [ "${BASH_REMATCH[1]}" = "${BASH_REMATCH[2]}" ] && [ "${BASH_REMATCH[2]}" -gt 0 ] && v=PASS
+            fi
             emit "CANARY host=$H verdict=$v thin=${th:-none} guest=${thin[0]} arch=$ARCH"
             # a failed canary is a row RETRY_FAILED=1 re-runs (and with it the thin rows it held back)
             [ "$v" = PASS ] || [ "$rc" != 0 ] || rc=1
@@ -433,10 +484,14 @@ for H in "${H_LIST[@]}"; do
             health "thin:$g" || abort "the GPU is dead (rows/health.log)"
             t=${TAG}_h${hs}_g${g//./}_r${REV}; log=$(rowlog "thin:$H:$g")
             step "$T_THIN" "$log" bash "$REPO/scripts/drivermatrix/guest_walk.sh" "$g" "$t" "$BUDGET" 0; rc=$?
-            m=$(grep -a '^MATRIX_ROW ' "$log" | tail -1)
-            if [ -n "$m" ]; then emit "$m arch=$ARCH"
+            m=$(this_attempt "$log" | grep -a '^MATRIX_ROW ' | tail -1)
+            # ⊘ A result is NUMBERS with n > 0. No MATRIX_ROW, or guest_walk.sh's `thin=?/?` (fast_suite.sh
+            # died before its FAST_SUITE_PASS line), is NO_RESULT with a non-zero rc — never an rc=0 EXIT
+            # whose row matrix_table.py would silently drop.
+            if [[ "$m" =~ \ thin=[0-9]+/[1-9][0-9]*(\ |$) ]]; then emit "$m arch=$ARCH"
             else
-                emit "THIN host=$H guest=$g NO_MATRIX_ROW rc=$rc $(grep -a 'GUEST_WALK_REFUSED' "$log" | tail -1) arch=$ARCH"
+                ref=$(this_attempt "$log" | grep -a 'GUEST_WALK_REFUSED' | tail -1)
+                emit "THIN host=$H guest=$g rev=$REV NO_RESULT thin=$(sed -n 's/.* thin=\([^ ]*\).*/\1/p' <<< "$m" | grep . || echo none) rc=$rc${ref:+ $ref} arch=$ARCH"
                 [ "$rc" = 0 ] && rc=4
             fi
             grep -a '^FAST_CELL_ARM ' "$BENCH/${t}_suite.out" 2>/dev/null | grep -v 'verdict=PASS' | head -12 \
@@ -456,10 +511,15 @@ for H in "${H_LIST[@]}"; do
             health "ladder:$g" || abort "the GPU is dead (rows/health.log)"
             t=${TAG}_h${hs}_g${g//./}_r${REV}; log=$(rowlog "ladder:$H:$g")
             ev=(KF3_DEV_EXTRA="guest-driver=$g" KF_DEVICE=kf3); [ -n "$img" ] && ev+=(KF_GUEST_IMG="$img")
-            step "$T_LADDER" "$log" env "${ev[@]}" bash "$REPO/scripts/bench/cuda_ladder.sh" guest "$t" "$LADDER_REPS"; rc=$?
-            clout=$BENCH/cl_${t}_guest.out
+            clout=$BENCH/cl_${t}_guest.out; rm -f "$clout"   # (a retry must not read the last attempt's rows)
+            step "$T_LADDER" "$log" env "${ev[@]}" bash "$REPO/scripts/bench/cuda_ladder.sh" guest "$t" "$LADDER_REPS" "$LADDER_RUNGS"; rc=$?
             lp=$(grep -ac '^CL_ROW .*verdict=PASS' "$clout" 2>/dev/null); ln=$(grep -ac '^CL_ROW ' "$clout" 2>/dev/null)
-            if [ "${ln:-0}" -gt 0 ]; then emit "LADDER host=$H guest=$g rev=$REV ${lp:-0}/$ln arch=$ARCH"
+            # ⊘ The denominator is what was PLANNED. A ladder cut off by T_LADDER after 2 passing rungs
+            # is `2/4 CUT`, never `2/2` — the grid would show a partial ladder as a full pass.
+            if [ "${ln:-0}" -gt 0 ]; then
+                cut=""
+                if [ "$ln" -lt "$LADDER_PLANNED" ]; then cut=" CUT ran=$ln step_rc=$rc"; [ "$rc" = 0 ] && rc=5; fi
+                emit "LADDER host=$H guest=$g rev=$REV ${lp:-0}/$LADDER_PLANNED$cut arch=$ARCH"
             else emit "LADDER host=$H guest=$g rev=$REV NOTRUN (step rc=$rc, no CL_ROW) arch=$ARCH"; [ "$rc" = 0 ] && rc=4; fi
             grep -a '^CL_ROW ' "$clout" 2>/dev/null | sed 's/ ledger=.*//' | while IFS= read -r x; do emit "$x"; done
             refusals "$BENCH/run_cl_${t}_*_qemu.log" | while IFS= read -r x; do emit "$x"; done

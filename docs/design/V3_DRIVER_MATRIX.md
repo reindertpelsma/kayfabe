@@ -376,6 +376,14 @@ committed, resumable runner, run once per architecture.
 - **A host's guest set:** the default guest 580.159.04 on every host; the whole `GUESTS` list on the
   reference host; the `MIXED` pairs elsewhere (`<host>:<guest>`, `*` = every other host; default
   `*:590.48.01 *:575.57.08`, the host walk's).
+- ⊘ *[2026-09-28, review of `81f16870`] Two results that read as passes did not pass, fixed before
+  any hardware run.* **A ladder's denominator is what was PLANNED** (4 rungs × `LADDER_REPS`), not the
+  `CL_ROW` lines written: a ladder cut off by the sweep's own `T_LADDER` after two passing rungs was
+  logged `2/2` and shown as a pass; it is now `LADDER … 2/4 CUT ran=2 step_rc=124` (grid: `ladder 2/4
+  cut`, non-zero EXIT), and `T_LADDER` is 1800 s per boot (the rungs' designed outer bound), not 900.
+  **A thin result is numbers, p = n > 0:** guest_walk.sh's `thin=?/?` (fast_suite.sh died before its
+  summary) passed the canary (`'?' = '?'`) and was an rc=0 thin row the grid dropped; now the canary
+  is `verdict=NO_RESULT` (its thin rows skipped) and the row `THIN … NO_RESULT` (grid: `thin none`).
 - **Output:** the queue-log lines the §6.0 grid is derived from (`SWAP`, `BARE`, `GATES host=`,
   `CANARY`, `MATRIX_ROW`, `LADDER host=`, `HOSTROW`), each with `arch=<die>` appended, one per event
   in `summary/sweep_<TAG>.log`; every step's whole output under `rows/`; a text-only tarball
@@ -408,19 +416,36 @@ committed, resumable runner, run once per architecture.
 - **Validated off hardware only:** `DRY_RUN=1` prints the plan (and, with `SWEEP_LOG=<pulled log>`,
   which rows a resume skips); `matrix_table.py --selftest` asserts that the committed logs reproduce
   the §6.0 grid exactly and that a sweep log of another arch forms its own grid; `bash -n` and
-  shellcheck on every touched script.
+  shellcheck on every touched script. *[2026-09-28]* Also a stubbed end-to-end run of the runner
+  (stub tools and step scripts, not committed): a ladder cut after 2 of 4 rungs → `2/4 CUT`, rc=124;
+  a `?/?` canary → `NO_RESULT`, its thin rows skipped; a `?/?` thin row → `NO_RESULT`, rc=4; a TERM
+  during a thin step → `SWEEP_KILLED` 0.02 s later, no orphan, and the resume re-ran that row.
+
+⊘ *[2026-09-28, review of `81f16870`] "alive" was `kill -0 "$(cat RUNNING.pid)"` — and a SIGKILL,
+the OOM killer or a reboot leaves `RUNNING.pid` behind, so a reused pid read as a running sweep
+(the killed-job trap of CLAUDE.md). Alive is now **that pid holding the box's sweep lock on its fd 8**
+(only the runner holds it; every step closes fd 8). And a `kill` of the runner took effect only when
+the current step returned (up to `T_THIN` = 3 h: bash defers a trap while a foreground child runs);
+every step now runs in the background under `wait`, so the stop below takes effect at once.*
 
 From a cloud session (`scripts/bench/box/README.md`, *vx*; the box clones from GitHub, so the
 revision must be pushed):
 
 ```bash
 vx -b sweep 'TAG=ga102a KF_REV=<sha> bash /root/kayfabe/scripts/drivermatrix/sweep.sh'
-vx 'd=/workspace/bench/sweep/ga102a; kill -0 "$(cat $d/RUNNING.pid)" 2>/dev/null && echo alive; \
+vx 'd=/workspace/bench/sweep/ga102a; p=$(cat $d/RUNNING.pid 2>/dev/null); \
+    [ -n "$p" ] && [ "$(readlink /proc/$p/fd/8)" = "$(readlink -f /workspace/bench/sweep/.lock)" ] && echo alive || echo "NOT running"; \
     grep -aE "^(SWEEP_|SWAP|BARE|GATES|CANARY|MATRIX_ROW|LADDER|HOSTROW|HEALTH)" $d/summary/sweep_ga102a.log | tail -20'
 vget /workspace/bench/sweep/ga102a/summary_ga102a.tar.xz /tmp/   # after every host; commit it:
 mkdir -p traces/driver_matrix/walk/ga102a && tar xJf /tmp/summary_ga102a.tar.xz -C traces/driver_matrix/walk/ga102a
 python3 scripts/drivermatrix/matrix_table.py                     # then refresh §6.0
 ```
+
+**Stopping it:** `vx 'kill -TERM "$(cat /workspace/bench/sweep/ga102a/RUNNING.pid)"'` — the runner
+TERMs the running step's `timeout` (which TERMs the step's process group and KILLs it 60 s later),
+logs `SWEEP_KILLED`, packs the tarball and exits; poll until "NOT running". The stopped row has no
+EXIT, so the same command resumes at it. ⊘ Never `kill -KILL` the runner: its step is orphaned and
+keeps the GPU while the lock is already free for the next sweep.
 
 A box that vanished: rent one of the same arch, provision it, `vput` the last pulled
 `sweep_<TAG>.log` to `/workspace/bench/sweep/<TAG>/summary/`, and start the same command again.
