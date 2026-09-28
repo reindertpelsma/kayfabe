@@ -743,7 +743,16 @@ mod tests {
         ];
         let mut p = policy();
         assert_eq!(rows.map(|(c, _)| k(c)), GUEST_CACHEABLE, "the constant names the derived ids");
-        let ask = |p: &mut DisplayPolicy| rows.map(|(c, s)| p.answer(k(c), &zeroed(s)));
+        // SPECIFIC_GET_TYPE is asked of a real connector (a zero displayId is INVALID_ARGUMENT, and an
+        // error is never cached): the one GET_SUPPORTED names
+        let sup = p.answer(k(rows[0].0), &zeroed(rows[0].1)).expect("claimed").expect("ok");
+        let sup = kf_disp::layout::Params::new(layouts(), rows[0].1, &sup).expect("layout");
+        let mask = sup.get("displayMask").expect("displayMask");
+        assert!(mask != 0, "a connector is supported");
+        let mut get_type = kf_disp::layout::Params::new(layouts(), rows[2].1, &zeroed(rows[2].1)).expect("layout");
+        get_type.set("displayId", mask & mask.wrapping_neg());
+        let params = [zeroed(rows[0].1), zeroed(rows[1].1), get_type.buf.clone()];
+        let ask = |p: &mut DisplayPolicy| [0, 1, 2].map(|i| p.answer(k(rows[i].0), &params[i]));
         let first = ask(&mut p);
         assert!(first.iter().all(|a| matches!(a, Some(Ok(_)))), "claimed and answered OK: {first:?}");
         let (c, dev, disp) = (0xc1d0_0001, 0xcafe_0001, 0xcafe_0070);
