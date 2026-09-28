@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-09-27.** Every ruling the owner made in the 2026-09-25 … 09-27 working sessions,
+**STATUS: LIVE, 2026-09-28.** Every ruling the owner made in the 2026-09-25 … 09-28 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -58,7 +58,8 @@ citation: ask whether its reason still holds before relying on it.
 1. Apps working (the nvkvm-pv CUDA app set; works/fails, not parity).
 2. All headless-graphics tests nvkvm-pv passed.
 3. Display (scanout), then display apps / a desktop (Mint) that nvkvm-pv ran.
-4. In parallel: the Linux guest doorbell module (parity), Blackwell (done: RTX 5080 30/30).
+4. In parallel: doorbell performance — non-nested baseline and host-side exits first, optional
+   Linux guest helper afterward (refined 2026-09-28, §D); Blackwell (done: RTX 5080 30/30).
 5. Driver matrix — the same driver range nvkvm-pv supports (535 → 610), both driver axes.
 6. Windows guest last.
 - Later, if time: **Turing** on hardware (its GSP model is source-derived only).
@@ -75,9 +76,14 @@ citation: ask whether its reason still holds before relying on it.
 - **Windows:** a legitimate Windows equivalent is not possible today (WDDM rings from the kernel
   driver); possibly not needed — measure doorbells/token on a Windows guest first
   (`docs/design/V3_WINDOWS_DOORBELL_RESEARCH.md`).
-- **Open:** how to proceed with the module (build as designed / a paravirtual interface in an optional
-  guest driver build / cheaper host-side exits first) is an **owner decision** — see
-  `docs/STATUS_AND_HANDOFF.md`.
+- **DECIDED 2026-09-28: baseline first, then the helper.** Measure on non-nested hardware and
+  improve host-side exit handling first; **ioeventfd remains in the pipeline**. An optional
+  paravirtual interface in a modified guest NVIDIA driver stays open for later, not selected now.
+  Measure vCPU return separately from the eventual GPU doorbell: asynchronous dispatch can help
+  a deep queue while hurting an idle/synchronous launch. Coalescing must preserve progress and
+  ordering. The owner's ~70% non-nested throughput expectation and possible Windows batching
+  advantage are hypotheses, not measured results. A Windows kernel transition is not itself a
+  hardware VM exit; collect submission/doorbell counts before comparing OSes.
 - **BAR1 doorbell (Hopper+):** must follow where RM places it — built (`V3_BAR1_DOORBELL.md`).
 
 ## E. UVM demand paging (2026-09-26)
@@ -86,12 +92,20 @@ citation: ask whether its reason still holds before relying on it.
   fault buffer is kernel-privileged; the GPU reaches memory at the guest's VA).
 - **A privileged host piece is allowed, for UVM only, and it must not trust the VMM**; the rest stays
   unprivileged and untrusted.
-- **Preference is maintainability, not bypass:** prefer a separate kayfabe module on NVIDIA's exported
-  interface (nvidia.ko stock) over carrying a fork/patch of nvidia-uvm. The host admin owns the machine.
+- **DECIDED 2026-09-28: full host CUDA must coexist.** A narrowly scoped patch to the host's open
+  **nvidia-uvm (b3)** for guest UVM fault handling is acceptable and is the selected route. Keep
+  ordinary host CUDA behavior, the CUDA-based walker, and non-opted-in address spaces working.
+  **Supersedes the 09-26 preference** for a separate replacement module: N4 takeover prevents
+  stock UVM coexistence in the same host kernel (the 580.159.04 callback registration is global,
+  not per GPU). N4 remains historical research, not the next implementation experiment.
 - Stock UVM read-duplication (`cudaMemAdviseSetReadMostly`) is not a kayfabe mode — kayfabe must *handle*
   it correctly (read-only PTEs, collapse on write): permission bits are now carried.
-- **Route (b3 patch vs N4 module) is undecided**; N4 is the best-bet experiment. State and the open
-  problem: `docs/design/V3_UVM_DEMAND_PAGING.md` (branch `v3-uvm-n4`) and `docs/STATUS_AND_HANDOFF.md`.
+- **Next: bounded b3 host-only proof before guest integration.** Require real fault delivery,
+  repair/replay with correct data, scoped cancellation, ownership-negative tests, bounded teardown,
+  and concurrent ordinary host CUDA. Existing `DupAddressSpace` / `RetainChannel` helpers do not
+  provide caller ownership authentication for free; the new boundary must enforce it. No production
+  support or coexistence result is implied by this direction. Historical research continues through
+  `v3-uvm-e6pp` at `c6765f5c`; its phase 0 did not prove replay with a replacement module present.
 
 ## F. Work practice (2026-09-26)
 
@@ -100,5 +114,14 @@ citation: ask whether its reason still holds before relying on it.
 - **Boxes:** untrusted, not guaranteed to persist, no secrets, no executables copied back, evidence
   pushed to git after each run, keep only boxes in use, teardown only by ids you created
   (`scripts/bench/box/README.md`).
-- **Security-policy changes need explicit owner review before merge** — e.g. the 535/545 capability
-  allowlist (commit `ee35ca4a` on `v3-drivers`, held).
+- **Security-policy changes need explicit owner review before merge.** **APPROVED 2026-09-28:**
+  the 535/545 capability extension (`a50265f8`, formerly `ee35ca4a`, on `v3-drivers`). Independently
+  audit the shared groups omitted by the header sweep, compare complete resolved existing 550+
+  policies (not just counts), and pass the required exact-revision tests before promotion. This
+  approval does not claim end-to-end 535/545 application support or relax other policy rules.
+- **Storage and execution reaffirmed 2026-09-28:** Vast is untrusted, replaceable compute, never the
+  only copy of unique work. Commit/push source and useful text evidence from trusted local storage;
+  do not send account credentials or forward the SSH agent. The owner authorized taking over all
+  instances in the recovery inventory and retiring those no longer needed, after preserving work.
+  Keep the requested Paguro Windows environment for its separate follow-up. The /dev/sdb SSD is
+  spare workspace; regenerate/download caches, builds and VM images rather than lose unique work.

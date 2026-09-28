@@ -1,6 +1,13 @@
 # V3 — optional guest doorbell helper module
 
-**STATUS: DESIGN-ONLY, 2026-09-26.** Owner idea; security posture approved 2026-09-26 (guest root
+**STATUS: DESIGN-ONLY, 2026-09-28.** **Owner sequence: non-nested baseline and host-side exit
+optimization first (ioeventfd remains planned), optional guest helper afterward.** An optional
+modified guest NVIDIA driver is left open for later, not selected now. Separate faster vCPU return
+from eventual GPU notification; compare idle/synchronous launches against deep-queue throughput.
+The expected ~0.70x non-nested throughput and possible Windows batching benefit are hypotheses,
+not benchmark results. The existing 0.29–0.31x result is from nested Vast setups only.
+
+Owner idea; security posture approved 2026-09-26 (guest root
 writing the real host doorbell page — able to ring any host token — is accepted risk, the same
 posture as shared-GPU CUDA containers on vast/runpod). Nothing is built. Stock guests without the
 module keep today's trapped path unchanged.
