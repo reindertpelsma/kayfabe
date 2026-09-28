@@ -1294,7 +1294,7 @@ impl WalkKernel {
         let mut walk_cut = false;
         let mut moves = Vec::new();
         for p in &r.pdbs {
-            let s = p.reserved;
+            let s = p.slot();
             let need = p.need();
             if p.refused_bits() & KFWR_R_RUN_CAP != 0 {
                 walk_cut = true;
@@ -1350,7 +1350,7 @@ impl WalkKernel {
             )?;
             self.events.push(format!("capacity: slot {} grown {} → {} runs", m.slot, m.from.cap, m.to.cap));
         }
-        let needs: Vec<String> = r.pdbs.iter().filter(|p| p.need() > 0).map(|p| format!("s{}:{}", p.reserved, p.need())).collect();
+        let needs: Vec<String> = r.pdbs.iter().filter(|p| p.need() > 0).map(|p| format!("s{}:{}", p.slot(), p.need())).collect();
         self.events.push(format!("capacity: re-walk (needs {}); {}", needs.join(" "), self.cap.census()));
         let entries = core::mem::take(&mut self.last_entries);
         self.submit_over(f.gpga, f.gpga_len, &entries)?;

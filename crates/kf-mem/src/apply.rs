@@ -277,7 +277,7 @@ impl PermPolicy {
             at: m.gpga,
             ap: m.aperture(),
             held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
-            kind: ((m.flags >> 16) & 0xff) as u8,
+            kind: m.kind(),
             perm: self.host_perm(m.flags),
             privileged: m.flags & kf_cuda::abi::KFWR_RF_PRIVILEGE != 0,
         }
@@ -813,9 +813,12 @@ mod tests {
         use kf_cuda::abi::{
             KFWR_RF_ATOMIC_DISABLE, KFWR_RF_KEY_PERM_DEFAULT, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE,
         };
+        use kf_cuda::abi::{AP_SYS, PS_64K, RF_AP, RF_KIND, RF_PS};
         let off = PermPolicy::default();
         let on = PermPolicy { carry_atomic_disable: true };
-        assert_eq!(off.host_perm(2 | (0x06 << 16) | (1 << 8)), MapPerm::READ_WRITE);
+        let sys_generic_64k = RF_AP.put(u32::from(AP_SYS)) | RF_KIND.put(0x06) | RF_PS.put(u32::from(PS_64K));
+        assert_eq!(sys_generic_64k, 2 | (0x06 << 16) | (1 << 8));
+        assert_eq!(off.host_perm(sys_generic_64k), MapPerm::READ_WRITE);
         assert_eq!(off.host_perm(KFWR_RF_READ_ONLY), ro);
         assert_eq!(off.host_perm(KFWR_RF_PRIVILEGE), MapPerm::READ_WRITE, "PRIVILEGE is never placeable");
         let all = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE;
@@ -825,6 +828,69 @@ mod tests {
         assert_eq!(off.key_perm(), KFWR_RF_KEY_PERM_DEFAULT);
         assert_eq!(on.key_perm(), KFWR_RF_KEY_PERM_DEFAULT | KFWR_RF_ATOMIC_DISABLE);
         assert_eq!(off.key_perm() & KFWR_RF_ATOMIC_DISABLE, 0);
+    }
+
+    /// ★ [`PermPolicy::diff_run`] — one report run → one [`DiffRun`], every flags field read
+    /// through its named `kf_walk.h` range (`kf_cuda::abi::RF_*`, `KFWR_RF_*`): the aperture, the
+    /// KIND, HELD, the permissions and PRIVILEGE, each at its extremes; and every single flags bit
+    /// lands in exactly the one field its range names — the page-size code and the unnamed bits in
+    /// none (the host places no page size).
+    #[test]
+    fn diff_run_reads_every_flags_field_through_its_named_range() {
+        use kf_cuda::abi::{
+            AP_PEER, AP_SYS, AP_SYS_NC, AP_VID, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_ATOMIC_DISABLE, KFWR_RF_HELD,
+            KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE, KfMapRun, PS_2M, PS_4K, PS_64K, PS_512M, RF_AP,
+            RF_KIND, RF_PS,
+        };
+        use kf_host::MapPerm;
+        let base = KfMapRun { va: 0x2_0000_0000, gpga: 0x40_0000, len: 0x3000, flags: 0, op: KFWR_OP_MAP, pdb_index: 7 };
+        let plain = DiffRun {
+            unmap: false,
+            va: 0x2_0000_0000,
+            len: 0x3000,
+            at: 0x40_0000,
+            ap: AP_VID,
+            held: false,
+            kind: 0,
+            perm: MapPerm::READ_WRITE,
+            privileged: false,
+        };
+        let atomic_on = PermPolicy { carry_atomic_disable: true };
+        assert_eq!(PermPolicy::default().diff_run(&base), plain);
+        let every_perm = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE;
+        let cases: [(u8, u8, u8); 4] = [(AP_VID, 0x00, PS_4K), (AP_PEER, 0xFF, PS_512M), (AP_SYS, 0x06, PS_64K), (AP_SYS_NC, 0xDB, PS_2M)];
+        for (ap, kind, ps) in cases {
+            let flags = RF_AP.put(ap.into()) | RF_KIND.put(kind.into()) | RF_PS.put(ps.into()) | KFWR_RF_HELD | every_perm;
+            let m = KfMapRun { flags, op: KFWR_OP_UNMAP, ..base };
+            for (policy, atomic_disable) in [(PermPolicy::default(), false), (atomic_on, true)] {
+                assert_eq!(
+                    policy.diff_run(&m),
+                    DiffRun {
+                        unmap: true,
+                        ap,
+                        held: true,
+                        kind,
+                        perm: MapPerm { read_only: true, atomic_disable, volatile: true },
+                        privileged: true,
+                        ..plain
+                    },
+                    "ap {ap} kind {kind:#x} ps {ps} {policy:?}"
+                );
+            }
+        }
+        for bit in 0..32u32 {
+            let want = match bit {
+                0..=2 => DiffRun { ap: 1 << bit, ..plain },
+                3 => DiffRun { perm: MapPerm { read_only: true, ..MapPerm::READ_WRITE }, ..plain },
+                4 => DiffRun { perm: MapPerm { atomic_disable: true, ..MapPerm::READ_WRITE }, ..plain },
+                5 => DiffRun { perm: MapPerm { volatile: true, ..MapPerm::READ_WRITE }, ..plain },
+                6 => DiffRun { privileged: true, ..plain },
+                16..=23 => DiffRun { kind: 1 << (bit - 16), ..plain },
+                31 => DiffRun { held: true, ..plain },
+                _ => plain,
+            };
+            assert_eq!(atomic_on.diff_run(&KfMapRun { flags: 1 << bit, ..base }), want, "flags bit {bit}");
+        }
     }
 
     /// ★★★ v3-roperm: a user twin WITHHOLDS a privileged memory leaf — never a host call, FAILED

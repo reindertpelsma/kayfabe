@@ -512,6 +512,15 @@ pub struct KfPdbEntry {
 }
 
 impl KfPdbEntry {
+    /// ★ The committed-placement SLOT this entry was diffed against — `reserved`, which the
+    /// kernel's emit writes as `a.slots[t]` and its commit reads back (`kf_walk.cu`,
+    /// `kf_diff_emit` / `kf_commit_kernel`). ⊘ The C field keeps its name: a frozen seam compiles
+    /// against it.
+    #[must_use]
+    pub fn slot(&self) -> u32 {
+        self.reserved
+    }
+
     /// The `KFWR_R_*` bits this entry's walk refused (`reserved2` low 32).
     #[must_use]
     pub fn refused_bits(&self) -> u32 {
@@ -549,12 +558,108 @@ pub const KFWR_AP_SYS_COHERENT: u8 = 2;
 /// `KFWR_RF_AP_*` sys-noncoherent: the run's `gpga` is guest-PHYSICAL.
 pub const KFWR_AP_SYS_NONCOHERENT: u8 = 3;
 
+// ── KfMapRun::flags — the DECODED fields, never the raw entry (`kf_walk.h`) ───────────────────
+//
+// ★ Mirrors of the header's `KFWR_RF_*_{SHIFT,MASK}` pairs, by the header's own names, and pinned
+// against it by `tests/walk_abi_matches_the_cu.rs` (`the_report_constants_match_the_header`). The
+// kernel builds `flags` in `kf_leaf_flags` from these and nothing else; every Rust reader goes
+// through [`RfField`] rather than restating a shift.
+
+/// `KFWR_RF_AP_SHIFT`: the leaf aperture code's first bit.
+pub const KFWR_RF_AP_SHIFT: u32 = 0;
+/// `KFWR_RF_AP_MASK`: the leaf aperture code, after the shift (0 vidmem, 1 peer, 2 sys-coherent,
+/// 3 sys-noncoherent).
+pub const KFWR_RF_AP_MASK: u32 = 0x7;
+/// `KFWR_RF_PS_SHIFT`: the page-size code's first bit.
+pub const KFWR_RF_PS_SHIFT: u32 = 8;
+/// `KFWR_RF_PS_MASK`: the page-size code ([`PS_4K`] … [`PS_512M`]), after the shift.
+pub const KFWR_RF_PS_MASK: u32 = 0xF;
+/// `KFWR_RF_KIND_SHIFT`: the guest PTE's KIND, which joins run identity (`kf_walk.h` §w725b).
+pub const KFWR_RF_KIND_SHIFT: u32 = 16;
+/// `KFWR_RF_KIND_MASK`: the KIND, after the shift.
+pub const KFWR_RF_KIND_MASK: u32 = 0xFF;
+/// ★ The page-size CLASS mask: the kernel's `kf_pcls` and `kf_ps_bytes_of` read the page-size
+/// field as `(flags >> KFWR_RF_PS_SHIFT) & 3u` — the four codes a format has — not through
+/// [`KFWR_RF_PS_MASK`]. ⊘ The header names no macro for the `3u`, so this is not a `KFWR_*`
+/// mirror; it is kept exactly (a code above 3 would alias a class, as it does on the GPU).
+pub const KF_PS_CLASS_MASK: u32 = 3;
+
+/// ★ One named bit range of [`KfMapRun::flags`]: `value = (flags >> shift) & mask` — a
+/// `KFWR_RF_*_{SHIFT,MASK}` pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RfField {
+    /// The field's first bit (`KFWR_RF_*_SHIFT`).
+    pub shift: u32,
+    /// Its mask, after the shift (`KFWR_RF_*_MASK`).
+    pub mask: u32,
+}
+
+impl RfField {
+    /// The field's value in `flags`.
+    #[must_use]
+    pub const fn get(self, flags: u32) -> u32 {
+        (flags >> self.shift) & self.mask
+    }
+
+    /// `value` placed in the field (masked), to be OR'd into a flags word.
+    #[must_use]
+    pub const fn put(self, value: u32) -> u32 {
+        (value & self.mask) << self.shift
+    }
+
+    /// The field's bits, in place.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.mask << self.shift
+    }
+}
+
+/// The leaf aperture code (`KFWR_RF_AP_*`).
+pub const RF_AP: RfField = RfField {
+    shift: KFWR_RF_AP_SHIFT,
+    mask: KFWR_RF_AP_MASK,
+};
+/// The page-size code (`KFWR_RF_PS_*`).
+pub const RF_PS: RfField = RfField {
+    shift: KFWR_RF_PS_SHIFT,
+    mask: KFWR_RF_PS_MASK,
+};
+/// The page-size CLASS as the kernel reads it (`kf_pcls`: `KFWR_RF_PS_SHIFT`, [`KF_PS_CLASS_MASK`]).
+pub const RF_CLASS: RfField = RfField {
+    shift: KFWR_RF_PS_SHIFT,
+    mask: KF_PS_CLASS_MASK,
+};
+/// The guest PTE's KIND (`KFWR_RF_KIND_*`).
+pub const RF_KIND: RfField = RfField {
+    shift: KFWR_RF_KIND_SHIFT,
+    mask: KFWR_RF_KIND_MASK,
+};
+
 impl KfMapRun {
     /// The leaf aperture code: `flags` bits `KFWR_RF_AP_SHIFT`/`KFWR_RF_AP_MASK`
     /// (`cuda/walk/kf_walk.h:92-97` — 0 vidmem, 1 peer, 2 sys-coherent, 3 sys-noncoherent).
     #[must_use]
     pub fn aperture(&self) -> u8 {
-        (self.flags & 0x7) as u8
+        RF_AP.get(self.flags) as u8
+    }
+
+    /// The page-size code ([`PS_4K`] … [`PS_512M`]): `KFWR_RF_PS_SHIFT`/`KFWR_RF_PS_MASK`.
+    #[must_use]
+    pub fn page_size(&self) -> u8 {
+        RF_PS.get(self.flags) as u8
+    }
+
+    /// The page-size class the diff groups by, exactly as the kernel's `kf_pcls` reads it
+    /// ([`RF_CLASS`]).
+    #[must_use]
+    pub fn class(&self) -> usize {
+        RF_CLASS.get(self.flags) as usize
+    }
+
+    /// The guest PTE's KIND: `KFWR_RF_KIND_SHIFT`/`KFWR_RF_KIND_MASK`.
+    #[must_use]
+    pub fn kind(&self) -> u8 {
+        RF_KIND.get(self.flags) as u8
     }
 }
 
@@ -1063,5 +1168,82 @@ mod tests {
     #[should_panic(expected = "cannot hold a 32-byte KfMapRun")]
     fn a_short_buffer_is_refused_loudly() {
         let _ = KfMapRun::decode(&[0u8; 31]);
+    }
+
+    /// ★ The `KFWR_RF_*` ranges and single-bit flags of a run's `flags` are pairwise DISJOINT
+    /// (a field cannot bleed into its neighbour), the class mask is the page-size field's low two
+    /// bits, and each accessor reads exactly its range.
+    #[test]
+    fn the_flags_ranges_are_disjoint_and_each_accessor_reads_its_own() {
+        let parts = [
+            RF_AP.bits(),
+            KFWR_RF_READ_ONLY,
+            KFWR_RF_ATOMIC_DISABLE,
+            KFWR_RF_VOLATILE,
+            KFWR_RF_PRIVILEGE,
+            RF_PS.bits(),
+            RF_KIND.bits(),
+            KFWR_RF_HELD,
+        ];
+        for (i, a) in parts.iter().enumerate() {
+            for b in &parts[i + 1..] {
+                assert_eq!(a & b, 0, "{a:#x} overlaps {b:#x}");
+            }
+        }
+        assert_eq!(
+            parts,
+            [
+                0x7,
+                1 << 3,
+                1 << 4,
+                1 << 5,
+                1 << 6,
+                0xF << 8,
+                0xFF << 16,
+                1 << 31
+            ]
+        );
+        assert_eq!(RF_CLASS.bits(), 0x3 << 8);
+        assert_eq!(
+            RF_CLASS.bits() & !RF_PS.bits(),
+            0,
+            "the class is inside the page-size field"
+        );
+        assert_eq!(KF_PS_CLASS_MASK as usize, crate::diffmodel::CLASSES - 1);
+        for (ap, ps, kind) in [
+            (AP_VID, PS_4K, 0u8),
+            (AP_SYS_NC, PS_512M, 0xFF),
+            (AP_PEER, PS_2M, 0x06),
+        ] {
+            let noise = KFWR_RF_HELD | KFWR_RF_KEY_PERM_ALL;
+            let r = KfMapRun {
+                flags: RF_AP.put(ap.into())
+                    | RF_PS.put(ps.into())
+                    | RF_KIND.put(kind.into())
+                    | noise,
+                ..KfMapRun::default()
+            };
+            assert_eq!(
+                (r.aperture(), r.page_size(), r.class(), r.kind()),
+                (ap, ps, usize::from(ps), kind)
+            );
+        }
+        // ⊘ A page-size code above 3 ALIASES a class — as `kf_pcls`'s `& 3u` does on the GPU.
+        let r = KfMapRun {
+            flags: RF_PS.put(0x6),
+            ..KfMapRun::default()
+        };
+        assert_eq!((r.page_size(), r.class()), (6, 2));
+        // `put` masks: a value wider than its field cannot reach the next one.
+        assert_eq!(RF_AP.put(0xFF), 0x7);
+        assert_eq!(RF_KIND.put(0x1FF), 0xFF << 16);
+        assert_eq!(
+            KfPdbEntry {
+                reserved: 42,
+                ..KfPdbEntry::default()
+            }
+            .slot(),
+            42
+        );
     }
 }

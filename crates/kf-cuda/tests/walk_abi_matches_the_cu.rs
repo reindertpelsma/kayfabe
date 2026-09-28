@@ -857,6 +857,55 @@ fn the_report_constants_match_the_header() {
     assert_eq!(parse("KFWR_RF_ATOMIC_DISABLE"), u64::from(kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE));
     assert_eq!(parse("KFWR_RF_VOLATILE"), u64::from(kf_cuda::abi::KFWR_RF_VOLATILE));
     assert_eq!(parse("KFWR_RF_PRIVILEGE"), u64::from(kf_cuda::abi::KFWR_RF_PRIVILEGE));
+    // ★ The flags word's named RANGES (`KFWR_RF_*_{SHIFT,MASK}`), which every Rust reader goes
+    // through (`kf_cuda::abi::RF_*`) instead of restating a shift.
+    for (n, r) in [
+        ("KFWR_RF_AP_SHIFT", kf_cuda::abi::KFWR_RF_AP_SHIFT),
+        ("KFWR_RF_AP_MASK", kf_cuda::abi::KFWR_RF_AP_MASK),
+        ("KFWR_RF_PS_SHIFT", kf_cuda::abi::KFWR_RF_PS_SHIFT),
+        ("KFWR_RF_PS_MASK", kf_cuda::abi::KFWR_RF_PS_MASK),
+        ("KFWR_RF_KIND_SHIFT", kf_cuda::abi::KFWR_RF_KIND_SHIFT),
+        ("KFWR_RF_KIND_MASK", kf_cuda::abi::KFWR_RF_KIND_MASK),
+    ] {
+        assert_eq!(parse(n), u64::from(r), "{n} differs");
+    }
+    assert_eq!(
+        (kf_cuda::abi::RF_AP.shift, kf_cuda::abi::RF_AP.mask),
+        (
+            kf_cuda::abi::KFWR_RF_AP_SHIFT,
+            kf_cuda::abi::KFWR_RF_AP_MASK
+        )
+    );
+    assert_eq!(
+        (kf_cuda::abi::RF_PS.shift, kf_cuda::abi::RF_PS.mask),
+        (
+            kf_cuda::abi::KFWR_RF_PS_SHIFT,
+            kf_cuda::abi::KFWR_RF_PS_MASK
+        )
+    );
+    assert_eq!(
+        (kf_cuda::abi::RF_KIND.shift, kf_cuda::abi::RF_KIND.mask),
+        (
+            kf_cuda::abi::KFWR_RF_KIND_SHIFT,
+            kf_cuda::abi::KFWR_RF_KIND_MASK
+        )
+    );
+    // ⊘ The class mask has no header macro: the .cu spells it `(flags >> KFWR_RF_PS_SHIFT) & 3u`
+    // in `kf_pcls` and `kf_ps_bytes_of`. Held to the .cu's own text, so a change there is loud.
+    let cu = std::fs::read_to_string(repo_root().join("cuda/walk/kf_walk.cu")).expect("the .cu");
+    let pcls = "(flags >> KFWR_RF_PS_SHIFT) & 3u";
+    assert!(
+        cu.contains(&format!("kf_pcls(uint32_t flags) {{ return {pcls}; }}")),
+        "kf_walk.cu's kf_pcls no longer reads `{pcls}` — re-derive kf_cuda::abi::KF_PS_CLASS_MASK"
+    );
+    assert_eq!(kf_cuda::abi::KF_PS_CLASS_MASK, 3);
+    assert_eq!(
+        (kf_cuda::abi::RF_CLASS.shift, kf_cuda::abi::RF_CLASS.mask),
+        (
+            kf_cuda::abi::KFWR_RF_PS_SHIFT,
+            kf_cuda::abi::KF_PS_CLASS_MASK
+        )
+    );
     // ★ v3-roperm: the header spells the key sets as ORs of the names; each must be the same set
     // abi.rs builds.
     let or_of = |name: &str| -> u32 {
