@@ -354,6 +354,244 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The member declarations of an extracted `struct … { … };`, as `(name, array length)`.
+///
+/// # Panics
+/// On a declaration this reader does not understand (a nested struct, a bitfield) — the report
+/// structs have neither, and one appearing must break this test rather than be skipped.
+fn fields_of(def: &str) -> Vec<(String, Option<usize>)> {
+    let open = def.find('{').expect("a struct body");
+    let close = def.rfind('}').expect("a struct body");
+    let mut body = String::new();
+    let mut rest = &def[open + 1..close];
+    while let Some(at) = rest.find("/*") {
+        body.push_str(&rest[..at]);
+        let end = rest[at..].find("*/").expect("a closed comment");
+        rest = &rest[at + end + 2..];
+    }
+    body.push_str(rest);
+    let body: Vec<&str> = body
+        .lines()
+        .map(|l| l.split("//").next().unwrap_or(""))
+        .collect();
+    body.join("\n")
+        .split(';')
+        .map(str::trim)
+        .filter(|d| !d.is_empty())
+        .map(|d| {
+            assert!(
+                !d.contains('{') && !d.contains(':'),
+                "`{d}`: a nested struct or a bitfield — the report is documented to have neither"
+            );
+            let last = d.split_whitespace().last().expect("a declarator");
+            match last.split_once('[') {
+                Some((n, len)) => (
+                    n.to_string(),
+                    Some(
+                        len.trim_end_matches(']')
+                            .parse()
+                            .expect("a literal array length"),
+                    ),
+                ),
+                None => (last.to_string(), None),
+            }
+        })
+        .collect()
+}
+
+/// One report field as a number, keyed `T.f` (or `T.f[k]` per array element).
+trait Flat {
+    fn flat(&self, key: &str, out: &mut std::collections::BTreeMap<String, u64>);
+}
+impl Flat for u16 {
+    fn flat(&self, key: &str, out: &mut std::collections::BTreeMap<String, u64>) {
+        out.insert(key.to_string(), u64::from(*self));
+    }
+}
+impl Flat for u32 {
+    fn flat(&self, key: &str, out: &mut std::collections::BTreeMap<String, u64>) {
+        out.insert(key.to_string(), u64::from(*self));
+    }
+}
+impl Flat for u64 {
+    fn flat(&self, key: &str, out: &mut std::collections::BTreeMap<String, u64>) {
+        out.insert(key.to_string(), *self);
+    }
+}
+impl<const N: usize> Flat for [u8; N] {
+    fn flat(&self, key: &str, out: &mut std::collections::BTreeMap<String, u64>) {
+        for (k, v) in self.iter().enumerate() {
+            out.insert(format!("{key}[{k}]"), u64::from(*v));
+        }
+    }
+}
+
+/// ★★★★★ **THE REPORT DECODERS, DIFFERENTIALLED FIELD BY FIELD AGAINST THE C COMPILER**
+/// (`STATUS_AND_HANDOFF.md` §4 item 6).
+///
+/// The struct test above samples offsets; this one takes **every** member of `KfReportHeader`,
+/// `KfPdbEntry` and `KfMapRun` from `kf_walk.h` itself (by parsing the extracted definitions, so a
+/// member added in C is checked without anyone remembering to add it here), and has `g++`:
+/// - fill each struct with a byte pattern in which no two bytes are equal,
+/// - print the bytes, and each member's `offsetof`, `sizeof` and **value as C reads it**.
+///
+/// Then the Rust side decodes those bytes with the struct's ONE decoder (`abi.rs`,
+/// `report_codec!`) and must agree member for member — offset, width and value — with no member
+/// missing on either side, and `encode` must give back C's bytes exactly. A field read at the
+/// wrong offset, at the wrong width or in the wrong byte order is a named failure here, not a
+/// wrong mapping on a GPU.
+#[test]
+fn every_report_field_decodes_to_what_the_c_compiler_reads() {
+    use std::collections::{BTreeMap, BTreeSet};
+    let root = repo_root();
+    let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h")).expect("the .h");
+    let names = ["KfReportHeader", "KfPdbEntry", "KfMapRun"];
+
+    let mut prog = String::from("#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n");
+    let mut c_fields: BTreeMap<&str, Vec<(String, Option<usize>)>> = BTreeMap::new();
+    for t in names {
+        let def = extract_struct(&h, t);
+        c_fields.insert(t, fields_of(&def));
+        prog.push_str(&def);
+        prog.push('\n');
+    }
+    prog.push_str("int main(void){\n");
+    for t in names {
+        prog.push_str(&format!(
+            "{{ {t} x; unsigned char *p = (unsigned char *)&x;\n\
+             for (size_t i = 0; i < sizeof x; i++) p[i] = (unsigned char)(i * 37u + 11u);\n\
+             printf(\"size {t} %zu\\n\", sizeof x);\n\
+             printf(\"bytes {t} \"); for (size_t i = 0; i < sizeof x; i++) printf(\"%02x\", p[i]); printf(\"\\n\");\n"
+        ));
+        for (f, n) in &c_fields[t] {
+            prog.push_str(&format!(
+                "printf(\"off {t}.{f} %zu\\n\", offsetof({t}, {f}));\n\
+                 printf(\"width {t}.{f} %zu\\n\", sizeof x.{f});\n"
+            ));
+            match n {
+                None => prog.push_str(&format!(
+                    "printf(\"val {t}.{f} %llu\\n\", (unsigned long long)x.{f});\n"
+                )),
+                Some(n) => prog.push_str(&format!(
+                    "for (int k = 0; k < {n}; k++) printf(\"val {t}.{f}[%d] %llu\\n\", k, (unsigned long long)x.{f}[k]);\n"
+                )),
+            }
+        }
+        prog.push_str("}\n");
+    }
+    prog.push_str("return 0;}\n");
+
+    let dir = std::env::temp_dir().join(format!("kf_report_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a temp dir");
+    let src = dir.join("report.cpp");
+    let bin = dir.join("report");
+    std::fs::write(&src, &prog).expect("write the probe");
+    let out = Command::new("g++")
+        .args(["-std=c++14", "-O0", "-o"])
+        .arg(&bin)
+        .arg(&src)
+        .output()
+        .expect("g++ must be present — a check that cannot RUN is not a check that passed");
+    assert!(
+        out.status.success(),
+        "the extracted report structs did not compile — the extraction, not the layout, is what \
+         broke:\n{}\n--- program ---\n{prog}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let run = Command::new(&bin).output().expect("run the probe");
+    assert!(run.status.success(), "the probe did not run");
+    let text = String::from_utf8_lossy(&run.stdout).to_string();
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let mut c_bytes: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    let mut c_num: BTreeMap<String, u64> = BTreeMap::new();
+    for line in text.lines() {
+        let mut it = line.split_whitespace();
+        let (kind, key, v) = (
+            it.next().unwrap_or(""),
+            it.next().unwrap_or(""),
+            it.next().unwrap_or(""),
+        );
+        if kind == "bytes" {
+            let b = (0..v.len() / 2)
+                .map(|i| u8::from_str_radix(&v[i * 2..i * 2 + 2], 16).expect("hex"))
+                .collect();
+            c_bytes.insert(key.to_string(), b);
+        } else {
+            c_num.insert(format!("{kind} {key}"), v.parse().expect("a decimal"));
+        }
+    }
+
+    // The Rust side: the ONE decoder, over C's bytes; each member's offset and width.
+    macro_rules! rust_side {
+        ($t:ident; $($f:ident),+ $(,)?) => {{
+            let bytes = &c_bytes[stringify!($t)];
+            let v = $t::decode(bytes);
+            assert_eq!(&v.encode()[..], &bytes[..], "{}: encode(decode(C's bytes)) is C's bytes", stringify!($t));
+            assert_eq!(c_num[concat!("size ", stringify!($t))], $t::BYTES as u64, "{}: sizeof", stringify!($t));
+            let mut vals = BTreeMap::new();
+            let mut layout = BTreeMap::new();
+            $(
+                let key = concat!(stringify!($t), ".", stringify!($f));
+                Flat::flat(&v.$f, key, &mut vals);
+                layout.insert(key.to_string(), (std::mem::offset_of!($t, $f), std::mem::size_of_val(&v.$f)));
+            )+
+            (vals, layout)
+        }};
+    }
+    let sides = [
+        (
+            "KfReportHeader",
+            rust_side!(KfReportHeader; magic, version, flags, generation, acked_generation, pdb_count,
+                pdb_capacity, run_count, run_capacity, entries_visited, refusals, refuse_mask,
+                sparse_slots, ps_log2),
+        ),
+        (
+            "KfPdbEntry",
+            rust_side!(KfPdbEntry; pdb, first_run, run_count, vas_flags, reserved, reserved2),
+        ),
+        (
+            "KfMapRun",
+            rust_side!(KfMapRun; va, gpga, len, flags, op, pdb_index),
+        ),
+    ];
+    for (t, (vals, layout)) in sides {
+        let c_members: BTreeSet<String> = c_fields[t]
+            .iter()
+            .map(|(f, _)| format!("{t}.{f}"))
+            .collect();
+        let rust_members: BTreeSet<String> = layout.keys().cloned().collect();
+        assert_eq!(
+            c_members, rust_members,
+            "★ {t}: the header and the Rust decoder list different members"
+        );
+        for (key, (off, width)) in &layout {
+            assert_eq!(
+                c_num[&format!("off {key}")],
+                *off as u64,
+                "★ REPORT SKEW: offset of {key}"
+            );
+            assert_eq!(
+                c_num[&format!("width {key}")],
+                *width as u64,
+                "★ REPORT SKEW: width of {key}"
+            );
+        }
+        let c_vals: BTreeMap<String, u64> = c_num
+            .iter()
+            .filter_map(|(k, v)| {
+                k.strip_prefix("val ")
+                    .filter(|k| k.starts_with(&format!("{t}.")))
+                    .map(|k| (k.to_string(), *v))
+            })
+            .collect();
+        assert_eq!(
+            c_vals, vals,
+            "★ {t}: the Rust decoder reads different values from the bytes C wrote than C does"
+        );
+    }
+}
+
 /// Pull a whole function definition out of a C++ source, keyed on its signature line.
 fn extract_fn(src: &str, sig: &str) -> String {
     let start = src.find(sig).unwrap_or_else(|| {

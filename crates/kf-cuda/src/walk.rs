@@ -1252,23 +1252,15 @@ impl WalkKernel {
         let submit_to_collect_us = u64::try_from(f.submitted.elapsed().as_micros()).unwrap_or(u64::MAX);
         let gpu_us = self.cu.event_elapsed_us(self.ev_start, self.ev_copied).unwrap_or(0);
         let at = self.pin_at;
-        let hb = self.pin.read(at.hdr, core::mem::size_of::<KfReportHeader>());
-        let header = crate::driver_unsafe::read_struct::<KfReportHeader>(&hb);
+        // ★ One decoder per report struct (`abi.rs`, `offset_of!`), shared with every other reader.
+        let header = KfReportHeader::decode(&self.pin.read(at.hdr, KfReportHeader::BYTES));
         // ⊘ Clamped to the CAPACITY: a truncated report legitimately declares more than it
         // carries (invariant I3), and reading `run_count` elements out of a `run_capacity`
         // buffer would turn "loud truncation" into a host-side overrun.
         let npdb = header.pdb_count.min(self.cfg.pdb_capacity) as usize;
         let nrun = header.run_count.min(self.cfg.run_capacity) as usize;
-        let pb = self.pin.read(at.rpdb, npdb * core::mem::size_of::<KfPdbEntry>());
-        let pdbs = pb
-            .chunks_exact(core::mem::size_of::<KfPdbEntry>())
-            .map(crate::driver_unsafe::read_struct::<KfPdbEntry>)
-            .collect();
-        let rb = self.pin.read(at.rrun, nrun * core::mem::size_of::<KfMapRun>());
-        let runs = rb
-            .chunks_exact(core::mem::size_of::<KfMapRun>())
-            .map(crate::driver_unsafe::read_struct::<KfMapRun>)
-            .collect();
+        let pdbs = KfPdbEntry::decode_all(&self.pin.read(at.rpdb, npdb * KfPdbEntry::BYTES));
+        let runs = KfMapRun::decode_all(&self.pin.read(at.rrun, nrun * KfMapRun::BYTES));
         let report = Report { header, pdbs, runs, gpga_span: f.gpga_len };
         // ★ w829: a capacity refusal the pools can fix is fixed HERE and the same walk re-queued
         // — the caller never sees that report (it was never acked, so nothing of it is committed
@@ -1834,21 +1826,10 @@ impl WalkKernel {
         let Some(reg) = self.cap.prev_walk(entry as usize) else {
             return Err(refused("WalkKernel::debug_walk_runs", format!("entry {entry}: no walk region")));
         };
-        let mut buf = vec![0u8; reg.cap as usize * 32];
-        let at = self.walk.ptr + u64::from(reg.off) * 32;
+        let mut buf = vec![0u8; reg.cap as usize * KfMapRun::BYTES];
+        let at = self.walk.ptr + u64::from(reg.off) * KfMapRun::BYTES as u64;
         self.cu.memcpy_d2h(&mut buf, at, "cuMemcpyDtoH(debug_walk_runs)")?;
-        let u64at = |b: &[u8], o: usize| u64::from_le_bytes(b[o..o + 8].try_into().unwrap_or([0; 8]));
-        Ok(buf
-            .chunks_exact(32)
-            .map(|c| KfMapRun {
-                va: u64at(c, 0),
-                gpga: u64at(c, 8),
-                len: u64at(c, 16),
-                flags: u32::from_le_bytes(c[24..28].try_into().unwrap_or([0; 4])),
-                op: u16::from_le_bytes(c[28..30].try_into().unwrap_or([0; 2])),
-                pdb_index: u16::from_le_bytes(c[30..32].try_into().unwrap_or([0; 2])),
-            })
-            .collect())
+        Ok(KfMapRun::decode_all(&buf))
     }
 
     /// Read `buf.len()` bytes of an uploaded image at `off`, bounds-checked against it.

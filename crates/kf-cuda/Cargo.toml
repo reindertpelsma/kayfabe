@@ -27,7 +27,8 @@ license.workspace = true
 # ## What the surface actually is, and why it is small
 #
 # ⊘ One file, `driver_unsafe.rs`, and three shapes: the `dlopen`/`dlsym` binding, the
-# by-value launch marshalling (`view_bytes` / `read_struct`), and two `unsafe impl` for a
+# by-value launch marshalling (`view_bytes` / `zeroed`; ⊘ `read_struct` was removed 2026-09-27 —
+# the walk report is decoded in safe code, `abi.rs`), and two `unsafe impl` for a
 # handle this crate never dereferences. Everything else in the crate — `abi.rs`, `walk.rs`,
 # `synth.rs`, `selftest.rs` — contains no `unsafe` at all, so gate B's acceptance criterion
 # ("read the audited surface in one sitting") is one file of this crate.
