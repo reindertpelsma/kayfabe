@@ -1,6 +1,6 @@
 # 535/545 capability review — 2026-09-28
 
-**STATUS: AUDIT IN PROGRESS.** Owner approved the extension on 2026-09-28, conditional on the
+**STATUS: AUDIT COMPLETE; FINAL COMBINED CANDIDATE NOT PROMOTED.** Owner approved the extension on 2026-09-28, conditional on the
 recommended independent review and normal exact-revision verification. No end-to-end old-driver
 support is claimed. The candidate is based on published master `8ab92bf4`, not the unverified
 combined Claude/recovered-Turing line.
@@ -50,13 +50,25 @@ own tag with the exact ID. Two broad-filter matches are bitfield ranges, not int
 `NV208F_CTRL_FB_CTRL_GPU_CACHE_FLAGS_MODE` and `NV208F_CTRL_FB_ECC_INJECTION_SUPPORTED_LOC`.
 The compiler reports them missing; neither is an admitted control. No missing control is excused.
 
+The full before-policy fixture was independently regenerated on the trusted development host from
+`8ab92bf4` under the global cargo flock, `-j2`, with a temporary target directory. `cmp` returned 0.
+The temporary worktree/compiled cache was removed. Fixture SHA-256:
+`d367cbc948ae3cc4a191a57b638f0b43528f069df2868629a426b6093f8532a2`.
+
 Header presence verifies spelling/numbering, not the safety of forwarding arbitrary guest bytes.
 The named policy remains defense in depth; legacy-rule exceptions and authored host verbs are
 unchanged. Existing rows were independently cross-read against nvproxy's historical 535 registry;
-the GPIO/fabric/profiling privilege exclusions are not relaxed by this change.
+the existing explicit privilege/exposure denials are not relaxed by this change.
 
 ## Verification
 
-Pending at this commit: candidate Rust tests and the complete hardware merge bar. Record the exact
-tested revision and terminal verdicts here before promotion. Header extraction itself completed for
-both tags; it is not a GPU/guest support test.
+**First run, exact code `3a738baa`, RTX 3060 / host 580.159.04:** 1,653 tests / 0 failed, gates
+9/9, KF3_RC=0, thin suite **30/30**, no fail/crash/notrun, terminal EXIT at 18:19:28 UTC. Text
+evidence is in `first-run/`. **FG_RC=1:** the fat-image NBD partition did not appear, so the suite
+used the pre-existing 2026-09-27 thin image. The raw-client source/dependency closure was unchanged;
+the runner documents this exception, but it is not a fresh-image success. A fresh supported
+`KF_FROM_HOST=1` build/rerun is still planned before promoting the final combined candidate.
+
+The candidate subsequently adds the independently tested GPU-free ioeventfd probe and b3 preflight
+document; no additional production GPU code. Nevertheless the final combined revision needs its
+own recorded merge bar. Header extraction and policy tests are not end-to-end 535/545 guest tests.

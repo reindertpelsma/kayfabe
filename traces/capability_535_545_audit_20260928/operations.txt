@@ -1,0 +1,22 @@
+2026-09-28 Vast disposition, performed from the trusted development host:
+
+53080587 (GTX 1660 SUPER): retired, confirmed absent from Vast inventory.
+Before deletion:
+- No active QEMU, cargo, rustc, nvcc or probe job.
+- HEAD d4ff6be8452c921115c29ca23bfe4adbd76b4289 unchanged.
+- Source tree c371879f96a08a9604ea131773272bb4b971e9ed matches recovered code 576f5bb0.
+- All 493 selected recovery evidence files rehashed and match GitHub-backed manifest.
+- Only 20 already-preserved untracked guest logs; no tracked diff or new job/bench output.
+- Recovery branches confirmed on GitHub before retirement:
+  recovery/vast-tuwork-2026-09-28 = 2825c42fd38c7d33adeb2b6ff02a3ab9d23c8f86
+  recovery/resume-2026-09-28 = 061d68f23f321b96885062cac97ea1c6ac57e2c5
+Its provisioned disk/VM/build environment is deleted and not recoverable from Vast.
+Unique source and evidence remain on GitHub; environment can be reprovisioned.
+
+Remaining:
+53004208 RTX 3060: retained as active allowlist/final-candidate and next UVM test environment.
+53076605 RTX 4060 Ti: retained for Paguro; Windows QEMU confirmed running, untouched.
+No new rentals. Listed combined rate approximately $0.5203/hour before additional fees.
+
+Subagents were stopped by workspace-credit errors; main agent completed the audit/probe/doc work.
+Physical RTX 4070 host 172.22.1.20 remains unreachable; no non-nested GPU ratio measured.
