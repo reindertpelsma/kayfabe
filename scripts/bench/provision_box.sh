@@ -69,12 +69,27 @@ pick_apt_mirror || exit 1
 # ⊘ [2026-09-27] The lock test was `fuser` alone, and `fuser` is psmisc, which nothing in the
 # provisioning chain installed (it is in the list below now). Without it `fuser` exits 127, the
 # loop reads that as "nobody holds the lock", and the wait is a silent no-op ("free after 0s").
-# ⇒ Until psmisc is in, fall back to the processes that take the lock.
+# ⇒ Until psmisc is in, ask the kernel's lock table: `lslocks` (util-linux, which is Essential, so
+# it is on every Ubuntu image) lists the fcntl locks that apt and dpkg hold, by path. Process names
+# are the last resort, for an image without lslocks.
+# ⚠ Never the process name `unattended-upgr`: unattended-upgrades.service keeps a helper up from
+# boot to shutdown (`unattended-upgrade-shutdown --wait-for-signal`, a python3 script, so its comm
+# is `unattended-upgr` too) that never takes the lock. Matching it made every wait run to its bound
+# on a box without psmisc (1200 s, then 600 s and exit 1: the run this fallback was added for).
+# [reproduced 2026-09-27 with a python3 shebang script of that name: `pgrep -x unattended-upgr`
+# rc=0 with no upgrade running.] The upgrade itself is matched on its command line, which the kernel
+# builds from the shebang as `/usr/bin/python3 /usr/bin/unattended-upgrade [args]`.
+uu_running() {
+  pgrep -f '^[^ ]*python3[^ ]* [^ ]*/unattended-upgrade( |$)' >/dev/null 2>&1
+}
 dpkg_busy() {
+  local held
   if command -v fuser >/dev/null 2>&1; then
     fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock >/dev/null 2>&1
+  elif held=$(lslocks -n -o PATH 2>/dev/null); then
+    grep -qE '^/var/lib/(dpkg/lock-frontend|apt/lists/lock)' <<<"$held"
   else
-    pgrep -x 'unattended-upgr|apt|apt-get|dpkg' >/dev/null 2>&1
+    uu_running || pgrep -x 'apt|apt-get|dpkg' >/dev/null 2>&1
   fi
 }
 wait_for_dpkg() {  # [MAX_SECONDS], default 600
@@ -115,7 +130,9 @@ systemctl mask --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1 && 
 # at 1200 s (provision_host_driver.sh's bound for the same lock, which it needs next anyway):
 # whether it installed a kernel can only be answered once it has finished, so the answer is
 # computed below instead of being left to whoever reads this log.
-if pgrep -x unattended-upgr >/dev/null 2>&1 || dpkg_busy; then
+# ⊘ The entry test was `pgrep -x unattended-upgr`, which also matches the always-running shutdown
+# helper (see the ⚠ at dpkg_busy), so every box with unattended-upgrades reported a run in flight.
+if uu_running || dpkg_busy; then
   echo "⚠ an unattended upgrade is ALREADY IN FLIGHT -- kernel packages its log names so far:"
   { grep -oE "linux-(image|headers|generic)[a-z0-9.-]*" /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null | sort -u | head; } || true
   wait_for_dpkg 1200 || echo "⚠ still locked after 1200s -- continuing; the apt step below waits again and stops loudly"
