@@ -107,15 +107,29 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
       from user twins: none in CUDA spaces; vkpeak's GR context buffers were withheld and it ran at
       host speed. Verified at `d6959acb` (gates 9/9, fast suite 30/30, ladder, 9/9 app samples).
       Evidence: `traces/v3_roperm/`.
-  - **C′, a refused host map (1 app):** `UnifiedMemoryStreams`. kf3 logs `1 run(s) not applied:
+  - **C′, a refused host map (1 app):** ⊘ *2026-09-27: the refused map is fixed, on `master`; the
+    app still fails. The rest of this bullet is the pre-fix signature at `670bd310`, and its
+    "working on it … not on `master`" is stale. Cause of the refused map: the walker reported the
+    stale 4 KiB PTEs under a valid 64 KiB PTE as live leaves, so two host maps covered one VA and
+    host RM refused the second (`Other(31)` = `NV_ERR_INVALID_ARGUMENT`). A valid big PTE now owns
+    its slot, and a refused map no longer poisons the guest's shared UVM kernel channel
+    (`62a50c44`, `v3-mapfix`; on `master` since `283a5304`, the rest of the branch since
+    `01b8cb5a`). `UnifiedMemoryStreams` was re-run in the guest after the fix (the merge commit
+    `283a5304` says so: "fails contained (719)"), on vh (vast 52624429, RTX 3060 GA106): kf3
+    `80264e63` in runs `mapfix_g1`, `mapfix_g2` and `mapfix_contain`, and `56032c46` in
+    `mapfix_cfix20` (all in `traces/vh_archive/vh_apps_results.tgz`). None of those runs logs
+    `not applied`; the pre-fix
+    runs `nb1`, `iso1` (`670bd310`) and `mapfix_base` (`74dc3113`) each logged one. The no-PM boot
+    no longer wedges: in `mapfix_contain` the apps after it in the same boot pass. **The app still
+    fails in every run:** CUDA 719 at `cudaStreamAttachMemAsync` / `cudaStreamSynchronize`, or
+    CUBLAS 13 at `cublasDgemv`. kf3 logs `RC host twin … except_type=0x1f (Xid 31)` on eight of its
+    channels, and the one host-dmesg window that caught it (`mapfix_cfix20`) shows Xid 31
+    `FAULT_PTE VIRT_READ`. The pre-fix run with persistence mode (`pm2`, `670bd310`) had already
+    failed the same way (719 at `cudaStreamAttachMemAsync`), with no refused map in the app's kf3
+    log. So the refused map was not needed for the failure, and what faults is still open. The
+    65-app matrix has not been re-run.* `UnifiedMemoryStreams`. kf3 logs `1 run(s) not applied:
     map … Other(31)`, and the host then reports Xid 31 `FAULT_PTE` inside that range. Without
-    persistence mode the boot stays wedged afterwards. ⊘ *2026-09-27: root-caused and fixed, on
-    `master` — the next sentence is stale. The walker reported the stale 4 KiB PTEs under a valid
-    64 KiB PTE as live leaves, so two host maps covered one VA and host RM refused the second
-    (`Other(31)` = `NV_ERR_INVALID_ARGUMENT`); a valid big PTE now owns its slot, and a refused map
-    no longer poisons the guest's shared UVM kernel channel (`62a50c44`, `v3-mapfix`; on `master`
-    since `283a5304`, the rest of the branch since `01b8cb5a`). `UnifiedMemoryStreams` itself has
-    not been re-run in the app matrix since.* Branch `v3-mapfix` is working on it; it
+    persistence mode the boot stays wedged afterwards. Branch `v3-mapfix` is working on it; it
     is not on `master`.
 
 ## 3. Graphics, video, multi-process, multi-GPU
@@ -132,8 +146,9 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
   Evidence is in `traces/v3_gfx/`. It was re-run on the merged tree at `d536595d`
   (`traces/v3_int_ga106/gfx_guest_d536595d.txt`).
 - **nvkvm-pv's headless-graphics test set** ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md);
-  `v3-gfxset` `d06833f0` = master `59cc98a9` + the branch — ⊘ *on `master` since `f89f66bb` (v3-mc17,
-  whose merge bar logs are in `traces/vh_archive/`), 2026-09-27*; vast 52775275, RTX 3070 GA104): nvkvm-pv's 25
+  `v3-gfxset` `d06833f0` = master `59cc98a9` + the branch — ⊘ *2026-09-27: on `master` since
+  `f89f66bb` (v3-mc17; its bar, 1625 / 0, gates 9/9, 30/30, is recorded in the handoff at `e9c37b1c`,
+  and no log of that run is in the repo)*; vast 52775275, RTX 3070 GA104): nvkvm-pv's 25
   headless rows in 23 items (Vulkan, EGL/GLES, GBM, dma-buf sharing, headless weston and sway with
   capture, glmark2, NVENC/NVDEC, Geekbench Vulkan, Blender Open Data) and 15 more (ffmpeg
   CUDA/Vulkan/OpenCL/libplacebo filters, Blender Cycles CUDA/OptiX, EEVEE on GL and Vulkan, VirtualGL,
@@ -236,12 +251,17 @@ Only guest driver **580.159.04** has been run. The driver-version matrix is a la
 
 ## 7. Roadmap (owner, 2026-09-26)
 
+⊘ *2026-09-27, progress since this list was written (the items themselves are the owner's and stand):
+item 1 — the refused map is fixed on `master`, but `UnifiedMemoryStreams` still fails (§2 C′); item 3 —
+display M0 started, not on `master` (§6); item 5 — Blackwell GB203 passes 30/30 on hardware (§1, §5);
+item 6 — the driver matrix is on `master`, and its walk is in progress (§5).*
+
 1. Apps: close the matrix (UVM demand paging, the refused map).
 2. The headless-graphics test set from nvkvm-pv. — ⊘ *2026-09-27: on `master` since `f89f66bb`; the
    "held there" below is stale.* **38/38 on `v3-gfxset` `d06833f0`**, RTX 3070
    ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md); merge-ready bar held there).
-3. Display, and a desktop (Linux Mint). — ⊘ *M0 started, not on `master` (§6).*
+3. Display, and a desktop (Linux Mint).
 4. *In parallel:* doorbell-module parity (§4).
-5. *In parallel:* Blackwell on hardware. — ⊘ *GB203 30/30 (§1, §5).*
-6. The guest-driver version matrix. — ⊘ *on `master`, walk in progress (§5).*
+5. *In parallel:* Blackwell on hardware.
+6. The guest-driver version matrix.
 7. Windows.
