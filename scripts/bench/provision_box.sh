@@ -58,6 +58,35 @@ pick_apt_mirror() {
 }
 pick_apt_mirror || exit 1
 
+# ⚠ A FRESH CLOUD BOX RUNS `unattended-upgrades` AT BOOT and it holds the dpkg lock.
+# Measured on vast instance 50013922, 2026-09-06: provisioning launched ~7 minutes after
+# first boot and died instantly with
+#   E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 7603
+# `apt-get` exits 100 without installing anything. ⇒ The failure is a RACE WITH THE BOX,
+# not with our code, and retrying by hand a minute later "fixes" it — which is exactly why
+# it never gets written down and bites the next person instead. Wait for the lock.
+# ⊘ [2026-09-27] Moved up from below the in-flight check, which now waits too (see there).
+# ⊘ [2026-09-27] The lock test was `fuser` alone, and `fuser` is psmisc, which nothing in the
+# provisioning chain installed (it is in the list below now). Without it `fuser` exits 127, the
+# loop reads that as "nobody holds the lock", and the wait is a silent no-op ("free after 0s").
+# ⇒ Until psmisc is in, fall back to the processes that take the lock.
+dpkg_busy() {
+  if command -v fuser >/dev/null 2>&1; then
+    fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock >/dev/null 2>&1
+  else
+    pgrep -x 'unattended-upgr|apt|apt-get|dpkg' >/dev/null 2>&1
+  fi
+}
+wait_for_dpkg() {  # [MAX_SECONDS], default 600
+  local waited=0 max=${1:-600}
+  while dpkg_busy; do
+    [ "$waited" -ge "$max" ] && { echo "DPKG_LOCK_TIMEOUT after ${waited}s"; return 1; }
+    [ $((waited % 60)) -eq 0 ] && echo "waiting for dpkg lock (${waited}s)"
+    sleep 10; waited=$((waited + 10))
+  done
+  echo "dpkg lock free after ${waited}s"
+}
+
 # ★★★★ DO THIS FIRST, BEFORE ANYTHING ELSE, AND UNDERSTAND WHY IT IS USUALLY TOO LATE.
 # A freshly rented box starts `unattended-upgrade` AT BOOT. By the time you can ssh in, it
 # is already running -- so masking the timers (below) prevents the NEXT run and does nothing
@@ -76,29 +105,34 @@ pick_apt_mirror || exit 1
 #   and only then install the driver. `reboot_chain` in the bench notes does this.
 systemctl mask --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1 && \
   echo "apt timers masked (prevents the NEXT run; see header re: the one already running)"
-if pgrep -x unattended-upgr >/dev/null 2>&1 || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
-  echo "⚠ an unattended upgrade is ALREADY IN FLIGHT -- check whether it upgrades the kernel:"
-  grep -oE "linux-(image|headers|generic)[a-z0-9.-]*" /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null | sort -u | head
-  echo "  if it does, you must REBOOT before installing the NVIDIA driver."
+# ⊘⊘ [2026-09-27] THIS CHECK KILLED THE RUN IT WARNS ABOUT. Under `set -euo pipefail` its report,
+# `grep … | sort -u | head`, fails whenever the run in flight names no kernel package (grep exit
+# 1) or has not written its log yet (exit 2: e.g. the boot-time `apt-get update` holds the lock).
+# pipefail made that the pipeline's status and `set -e` ended provisioning HERE, before the clone
+# — provision_full.sh then prints BOX_RC=1 and NO_REPO. [reproduced 2026-09-27, this block
+# isolated: rc=2 with no log, rc=1 with a kernel-free log; it survived only when a kernel
+# package WAS listed.] ⇒ The report is never fatal, and the run in flight is WAITED OUT, bounded
+# at 1200 s (provision_host_driver.sh's bound for the same lock, which it needs next anyway):
+# whether it installed a kernel can only be answered once it has finished, so the answer is
+# computed below instead of being left to whoever reads this log.
+if pgrep -x unattended-upgr >/dev/null 2>&1 || dpkg_busy; then
+  echo "⚠ an unattended upgrade is ALREADY IN FLIGHT -- kernel packages its log names so far:"
+  { grep -oE "linux-(image|headers|generic)[a-z0-9.-]*" /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null | sort -u | head; } || true
+  wait_for_dpkg 1200 || echo "⚠ still locked after 1200s -- continuing; the apt step below waits again and stops loudly"
+fi
+# ★ [2026-09-27] The kernel question, answered on content rather than from the log: a run that
+# FINISHED before this script started (never seen in flight) installs a kernel just the same.
+newest_kernel=$(find /boot -maxdepth 1 -name 'vmlinuz-*' -printf '%f\n' 2>/dev/null \
+                  | sed 's/^vmlinuz-//' | sort -V | tail -1 || true)
+if [ -n "$newest_kernel" ] && [ "$newest_kernel" != "$(uname -r)" ]; then
+  echo "⚠⚠ REBOOT_NEEDED running=$(uname -r) newest_installed=$newest_kernel -- REBOOT before installing the NVIDIA driver (see the header)"
 fi
 
-# ⚠ A FRESH CLOUD BOX RUNS `unattended-upgrades` AT BOOT and it holds the dpkg lock.
-# Measured on vast instance 50013922, 2026-09-06: provisioning launched ~7 minutes after
-# first boot and died instantly with
-#   E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 7603
-# `apt-get` exits 100 without installing anything. ⇒ The failure is a RACE WITH THE BOX,
-# not with our code, and retrying by hand a minute later "fixes" it — which is exactly why
-# it never gets written down and bites the next person instead. Wait for the lock.
-wait_for_dpkg() {
-  local waited=0
-  while fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock >/dev/null 2>&1; do
-    [ "$waited" -ge 600 ] && { echo "DPKG_LOCK_TIMEOUT after ${waited}s"; return 1; }
-    [ $((waited % 60)) -eq 0 ] && echo "waiting for dpkg lock (${waited}s)"
-    sleep 10; waited=$((waited + 10))
-  done
-  echo "dpkg lock free after ${waited}s"
-}
-# ★ ASK BEFORE WAITING. Measured on the same box: `unattended-upgrade` held the lock for
+# ★ ASK BEFORE WAITING. ⊘ [2026-09-27] Partly superseded: a run found IN FLIGHT is now waited
+# out above (bounded), because the kernel question needs it finished and the driver step needs
+# the same lock next, so that wait moves earlier rather than being added (what is lost is only
+# its overlap with the cargo build below). This probe still decides whether apt runs at all.
+# Measured on the same box: `unattended-upgrade` held the lock for
 # over nine minutes, while EVERY package below was already installed -- the image ships
 # them. Waiting for a lock to run an install that would be a no-op is pure dead time, and
 # on a 600s ceiling it can fail the run outright. So probe first and only touch apt if
@@ -114,17 +148,33 @@ wait_for_dpkg() {
 # that caught it was its `OPEN_MODULE=no` check at the end. The box looked provisioned and was
 # not. ⇒ A dependency of a LATER step belongs in the FIRST step's list, because the later step
 # is the one that cannot tell a missing tool from a broken swap.
+# ★ [2026-09-27] Same rule, for the tools the later steps assume and nothing installed:
+#   - `busybox`, `cpio`: build_fast_guest.sh dies without them (its `command -v` checks);
+#   - `zstd`: the same builder decompresses the noble guest's `.ko.zst` modules with no check —
+#     without it the initrd's loadorder names modules the initrd does not contain;
+#   - `fuser` (psmisc): every wait_for_dpkg in the chain (here, provision_host_driver.sh,
+#     provision_bench_tree.sh) — see the ⊘ at dpkg_busy.
+# ⚠ busybox must be the STATIC one: the initrd carries shared libraries for the raw client only
+# (build_fast_guest.sh, "carry what it needs"), and Ubuntu's `busybox` is dynamic (Depends:
+# libc6; it also needs libresolv, which the client does not). A present-but-dynamic busybox
+# therefore counts as missing, and `busybox-static` (Conflicts/Replaces: busybox) goes in.
+# [checked 2026-09-27 on the extracted packages: `ldd` exits 1 on busybox-static's binary, 0 on
+# busybox's.]
 NEED=""
-for b in gcc pkg-config git curl clang lld python3 modprobe lspci; do
+for b in gcc pkg-config git curl clang lld python3 modprobe lspci cpio zstd fuser; do
   command -v "$b" >/dev/null 2>&1 || NEED="$NEED $b"
 done
 [ -e /usr/include/openssl/ssl.h ] || NEED="$NEED libssl-dev"
+# ldd exits non-zero for a static binary ("not a dynamic executable")
+if ! command -v busybox >/dev/null 2>&1 || ldd "$(command -v busybox)" >/dev/null 2>&1; then
+  NEED="$NEED busybox-static"
+fi
 if [ -n "$NEED" ]; then
   echo "apt needed for:$NEED"
   wait_for_dpkg
   apt-get update -qq
   apt-get install -y -qq build-essential pkg-config libssl-dev git curl clang lld python3 \
-      kmod pciutils
+      kmod pciutils cpio zstd psmisc busybox-static
 else
   echo "apt SKIPPED - every dependency already present"
 fi

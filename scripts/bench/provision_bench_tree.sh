@@ -65,6 +65,12 @@ mkdir -p "$BENCH"
 say "phase 3: host deps"
 export DEBIAN_FRONTEND=noninteractive
 for i in $(seq 1 60); do fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || break; sleep 10; done
+# ⊘ [2026-09-27] No `apt-get update` ran before this install. provision_box.sh updates the lists
+# only when IT needs a package ("apt SKIPPED" otherwise), and its pick_apt_mirror may have just
+# rewritten sources.list to a mirror with no lists on disk yet — then every package below that is
+# not already installed is "Unable to locate package" and, with the output discarded, the only
+# trace is a non-zero "apt rc". (The wait above needs `fuser`; provision_box.sh installs psmisc.)
+apt-get update -qq >/dev/null 2>&1
 apt-get install -y -qq ninja-build meson python3-venv python3-pip python3-tomli \
   libglib2.0-dev libpixman-1-dev flex bison qemu-utils cloud-image-utils genisoimage \
   qemu-system-x86 ovmf musl-tools libslirp-dev >/dev/null 2>&1
