@@ -61,6 +61,13 @@ if [ ! -f "$OUT/modules/nvidia.ko" ] || [ "$(modinfo -F version "$OUT/modules/nv
     # every object on it, while 570+ (which pick the kernel's compiler themselves) built. The
     # compiler is read from the kernel's own `CONFIG_CC_VERSION_TEXT`, never guessed.
     KCC=$(sed -n 's/^CONFIG_CC_VERSION_TEXT="\([^ ]*\) .*/\1/p' "$KBUILD/.config" 2>/dev/null)
+    # ★ [2026-09-28] A compiler the kernel names but the box lacks is installed from its package
+    # (`x86_64-linux-gnu-gcc-12` ships in `gcc-12`), as `provision_host_driver.sh` does for the
+    # host's .run, before the `cc` fallback that 550/565 cannot build with.
+    if [ -n "$KCC" ] && ! command -v "$KCC" >/dev/null 2>&1; then
+        say "installing ${KCC##*-linux-gnu-} (the compiler $KREL was built with: $KCC)"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${KCC##*-linux-gnu-}" >/dev/null 2>&1
+    fi
     command -v "$KCC" >/dev/null 2>&1 || KCC=cc
     say "make modules against $KREL (-j$JOBS, CC=$KCC)"
     ( cd "$SRC" && make -s modules -j"$JOBS" SYSSRC="$KBUILD" CC="$KCC" > "$OUT/build.log" 2>&1 ) \
