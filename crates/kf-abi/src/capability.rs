@@ -1704,7 +1704,7 @@ pub(crate) static CONTROLS_UNTIL_555_42_02: &[ControlEntry] = &[ControlEntry {
     origin: Origin::Nvproxy,
 }];
 
-/// ★★★ [OWNER REVIEW REQUIRED — ruling 5, 2026-09-26] The 535/545 boundary blocks.
+/// ★★★ [OWNER APPROVED — ruling 5, 2026-09-28] The 535/545 boundary blocks.
 ///
 /// Controls in the shared floor that NEITHER 535 has — added at 545.23.06
 /// (`gvisor nvproxy: version.go:837-846`) and, `[measured, tools/drivermatrix]`, absent from
@@ -1716,7 +1716,7 @@ pub(crate) static CONTROLS_FROM_545_23_06: &[ControlEntry] = &[
     ControlEntry { cmd: 0x00de0001, name: "NV00DE_CTRL_CMD_REQUEST_DATA_POLL", origin: Origin::Nvproxy },
 ];
 
-/// ★★★ [OWNER REVIEW REQUIRED — ruling 5] Controls added at 550.40.07
+/// ★★★ [OWNER APPROVED 2026-09-28 — ruling 5] Controls added at 550.40.07
 /// (`gvisor nvproxy: version.go:878-895`), `[measured]` absent from 535.309.01's and
 /// 545.23.08's SDK headers and present from 550.40.07 — moved out of [`CONTROLS_SHARED`];
 /// every boundary from 550.54.04 up names this block.
@@ -1727,7 +1727,7 @@ pub(crate) static CONTROLS_FROM_550_40_07: &[ControlEntry] = &[
     ControlEntry { cmd: 0x20802068, name: "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE", origin: Origin::Nvproxy },
 ];
 
-/// ★★★ [OWNER REVIEW REQUIRED — ruling 5] Allocation classes added at 550.40.07
+/// ★★★ [OWNER APPROVED 2026-09-28 — ruling 5] Allocation classes added at 550.40.07
 /// (`gvisor nvproxy: version.go:895-899`; `NV_MEMORY_EXPORT`, which nvproxy registers at 545,
 /// is `[measured]` absent from 545.23.08's class list too), moved out of [`CLASSES_SHARED`].
 pub(crate) static CLASSES_FROM_550_40_07: &[ClassEntry] = &[
@@ -1810,7 +1810,7 @@ pub static SHARED_CAPS: SharedCapabilities = SharedCapabilities {
     denied_classes: DENIED_CLASSES,
 };
 
-/// ★★★ [OWNER REVIEW REQUIRED — ruling 5, 2026-09-26] 535.104.05 — nvproxy's oldest ABI
+/// ★★★ [OWNER APPROVED — ruling 5, 2026-09-28] 535.104.05 — nvproxy's oldest ABI
 /// (`gvisor nvproxy: version.go:159`), carried for a 535 guest: the 550.54.04 surface WITHOUT
 /// the controls/classes added at 545.23.06 and 550.40.07 (each `[measured]` absent from
 /// 535.309.01's SDK headers). No row is added that a newer boundary lacks.
@@ -1818,17 +1818,17 @@ pub static CAPS_535_104_05: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
     own_controls: &[CONTROLS_UNTIL_555_42_02],
     own_classes: &[],
-    note: "[OWNER REVIEW] nvproxy v535_104_05: the 550.54.04 surface minus \
+    note: "[OWNER APPROVED 2026-09-28] nvproxy v535_104_05: the 550.54.04 surface minus \
            CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07 and CLASSES_FROM_550_40_07",
 };
 
-/// ★★★ [OWNER REVIEW REQUIRED — ruling 5] 545.23.06 (`gvisor nvproxy: version.go:837`): the
+/// ★★★ [OWNER APPROVED 2026-09-28 — ruling 5] 545.23.06 (`gvisor nvproxy: version.go:837`): the
 /// 535 surface plus the two controls added there.
 pub static CAPS_545_23_06: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
     own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_UNTIL_555_42_02],
     own_classes: &[],
-    note: "[OWNER REVIEW] nvproxy v545_23_06: the 535 surface plus \
+    note: "[OWNER APPROVED 2026-09-28] nvproxy v545_23_06: the 535 surface plus \
            NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS and NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
 };
 
@@ -2101,7 +2101,7 @@ mod tests {
         // Eight boundaries, eight driver rows, and the rows outnumber nothing: a
         // `TABLES` that grew a row without a boundary would already have failed above,
         // but the literal is what says how big the universe is meant to be.
-        // ★★★ 10 from 2026-09-26: the 535.104.05 / 545.23.06 rows (ruling 5, OWNER REVIEW).
+        // ★★★ 10 from 2026-09-26: the 535.104.05 / 545.23.06 rows (ruling 5, approved 2026-09-28).
         assert_eq!(ALL_BOUNDARIES.len(), 10);
         assert_eq!(crate::versions::capability_tables().count(), 10);
     }

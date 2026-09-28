@@ -1,5 +1,14 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
+> **2026-09-28 correction:** the owner approved `a50265f8`'s 535/545 capability extension,
+> subject to independent audit and the exact-revision merge bar. The review hold in the historical
+> stop note below is lifted. All 16 shared controls in the seven previously unchecked prefix groups
+> now have GCC-derived ID evidence at exact tags 535.104.05 and 545.23.06; the regression checks
+> names/IDs against those fixtures. A separate full resolved-policy fixture was captured from
+> pre-extension `8ab92bf4` for all eight existing 550–610 boundaries. See
+> `traces/capability_535_545_audit_20260928/README.md`. This is not a claim that old guests now pass
+> CUDA workloads. Candidate verification/promotion is recorded separately from approval.
+
 > ### ⏸ WHERE I STOPPED — 2026-09-27 ~02:00 UTC (owner: weekly usage limit; stopped mid-walk, boxes destroyed)
 > **Branch `v3-drivers`**, the 535/545 capability commit is LAST (owner review); everything below it
 > is mergeable (coordinator merging `42b25354`+ onto master). All evidence is committed under
@@ -658,7 +667,9 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
 5. **535/545 capability allowlist.** **RULED: port nvproxy's 535.104.05 / 545.23.06 blocks as a
    separate, clearly marked commit**, list every entry that differs from the 580 allowlist here —
    ⊘ **a security-policy change: explicit owner review before it merges.**
-   ⇒ **PORTED 2026-09-26 as ONE clearly marked commit — ⊘ OWNER REVIEW REQUIRED BEFORE MERGE.**
+   ⇒ **PORTED 2026-09-26 as ONE clearly marked commit; OWNER APPROVED 2026-09-28.** The independent
+   compiler audit and full resolved-policy equality test close the review gaps below; the normal
+   exact-candidate hardware merge bar still applies.
    Every row is nvproxy's, and every delta is ALSO measured: each name below is absent from the
    SDK headers of the version it is withheld from (`tools/drivermatrix` sweep, `ctrl_cmds` /
    `class_ids`). The restructure moves the 545/550-era rows out of the shared floor into dated
@@ -675,7 +686,9 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
    | classes: the Blackwell A/B channel, copy, 3D, compute, inline-to-memory, usermode; `NVCDB0`/`NVCDD1`/`NVCDFA`/`NVCFB7`/`NVCEB7`/`NVD1B7` (560–580) | ✘ | ✘ | ✘ | ✔ |
 
    Counts resolved: 535.104.05 = **156 controls / 74 classes**, 545.23.06 = 158 / 74, 550.54.04 = 162 / 78.
-   ⚠ Not measurable by the sweep (their prefixes are outside its control-id patterns) and taken
+   **Superseded 2026-09-28:** `capability_legacy_shared.spec` now compiles these groups against each
+   exact old tag; all 16 admitted control names/IDs have evidence. Original limitation:
+   not measurable by the original sweep (their prefixes are outside its control-id patterns) and taken
    from nvproxy alone: the `NV00FD`, `NV9096`, `NV906F`, `NV208F`, `NV90E6`, `NV_CONF_COMPUTE`
    and `NV_SEMAPHORE_SURFACE` rows of the shared floor.
 6. **Default `guest-driver=`.** **RULED: re-select at fn 1** for (declared, reported) pairs whose

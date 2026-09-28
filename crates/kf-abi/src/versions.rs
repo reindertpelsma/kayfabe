@@ -419,18 +419,18 @@ const fn dv(major: u16, minor: u16, patch: u16) -> DriverVersion {
 
 /// Ascending. See [`CapsRow`].
 const CAPS_ROWS: &[CapsRow] = &[
-    // ★★★ [OWNER REVIEW REQUIRED — ruling 5, 2026-09-26] the two rows below admit 535/545
+    // ★★★ [OWNER APPROVED — ruling 5, 2026-09-28] the two rows below admit 535/545
     // guests (nvproxy's v535_104_05 / v545_23_06 blocks; `crate::capability`).
     CapsRow {
         from: dv(535, 104, 5),
         caps: &crate::capability::CAPS_535_104_05,
-        note: "[OWNER REVIEW] nvproxy's oldest ABI (version.go:159): the 550.54.04 surface \
+        note: "[OWNER APPROVED 2026-09-28] nvproxy's oldest ABI (version.go:159): the 550.54.04 surface \
                minus what 545.23.06 and 550.40.07 added",
     },
     CapsRow {
         from: dv(545, 23, 6),
         caps: &crate::capability::CAPS_545_23_06,
-        note: "[OWNER REVIEW] + GPU_GET_ACTIVE_DEVICE_IDS, NV00DE REQUEST_DATA_POLL (version.go:837-846)",
+        note: "[OWNER APPROVED 2026-09-28] + GPU_GET_ACTIVE_DEVICE_IDS, NV00DE REQUEST_DATA_POLL (version.go:837-846)",
     },
     CapsRow {
         from: dv(550, 54, 4),
@@ -2310,7 +2310,7 @@ mod tests {
     /// no capability surface, never admitted against the 550 one.
     #[test]
     fn below_the_oldest_capability_row_is_refused_by_name() {
-        // ★★★ [OWNER REVIEW — ruling 5, 2026-09-26] the oldest row is now nvproxy's
+        // ★★★ [OWNER APPROVED — ruling 5, 2026-09-28] the oldest row is now nvproxy's
         // 535.104.05, so every measured tag has a capability surface; the refusal arm stays
         // for a version below it (none is measured).
         assert_eq!(
