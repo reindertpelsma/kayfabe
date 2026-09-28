@@ -1,8 +1,38 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
-**STATUS: LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
+**STATUS: LIVE, 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
+measured 01:20–02:39 UTC): 60/65 apps work, 6/6 stream probes, 100/100 processes in one boot.**
+⊘ *Superseded by §R3 (the headline below is R2's):* **LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
+
+## R3 — re-run at master (kf3 `4c48ca0c`, 2026-09-28)
+
+**[M]** Box: vast 53004208, RTX 3060 (GA106), EPYC 7K62 host, nested KVM, host + guest 580.159.04 open.
+The kf3 binary is `kf3-bins/4c48ca0c` (the v3-mc21 bar revision, `traces/v3_mc21/`); scripts from a
+worktree at `8ab92bf4` (= `4c48ca0c` + docs). Evidence: `traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/`
+(`m20` = no persistence mode, several apps per boot then every non-PASS app alone; `m20pm` = persistence
+mode, one boot; `m20seq` = 100 `vectorAdd` processes in one boot; `all_logs.tgz` = every per-app log).
+
+| run | result | vs R2 (`670bd310`) |
+|---|---|---|
+| host (bare metal) `m20` | **71/71** (65 apps + 6 probes) | same |
+| guest, no PM, batched `m20` | **66/71 = 60/65 apps + 6/6 probes** | 58/65 |
+| guest, alone (every non-PASS) | the same 5 fail alone (`m20/iso_guest.res`) | — |
+| guest, PM, ONE boot `m20pm` | **66/71**, the identical 5, no wedge | 58/65 |
+| 100 CUDA processes, one boot, no PM `m20seq` | **100/100** — the per-boot process budget J (§R2.2) is gone | R2 `seq2`: 39, the 40th hung |
+
+- **Fixed since R2 (now PASS):** `gpu_burn` (G), `torch_ai_bench` (C/J), `clpeak` (C) — the mapfix /
+  BAR1-view leak work. Output digests equal the host's for `torch_correct`, `hf_generate`, `llama_cpp_gen`
+  (`m20/guest.dig` vs `m20/host.res`).
+- **Still failing, the UVM demand-paging four** (host twin RC `except_type=0x1f` = Xid 31 in `m20/triage.txt`):
+  `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM` (silent wrong answer, `Error amount =
+  1.000000`), `attach_verify` — the owner-decision route (`STATUS_AND_HANDOFF.md` §3.2).
+- ⊘ **REGRESSION: `cdpSimpleQuicksort`** (CUDA dynamic parallelism) **PASSED in R2** and now TIMES OUT
+  (60 s, quiet, no guest Xid, no kf3 RC line) — batched, alone and with PM. Host PASS. Being bisected over
+  the 75 first-parent master revisions `670bd310..4c48ca0c` (2026-09-28, branch `local/cdpfix` of the
+  cloud session; result will be folded in here, above this line).
+
 
 ## R2 — re-run at kayfabe `670bd310` (2026-09-26)
 
