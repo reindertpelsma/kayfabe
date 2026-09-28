@@ -4,8 +4,8 @@
 >
 > ★ **Updated 2026-09-27 at master `db038f5f`** (v3-mc20; checked against the v3-mc21 merge candidate
 > `4c48ca0c`): a truth pass. Claims that said "on branch X, not on `master`" are corrected where they
-> stand — each correction is a dated ⊘ note placed before the text it corrects, which is kept. The
-> latest merge bar is in §1. Branches in flight and the next steps:
+> stand — each correction is a dated ⊘ note placed at or just before the text it corrects, and that
+> text is kept. The latest merge bar is in §1. Branches in flight and the next steps:
 > [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md).
 >
 > ★ Updated 2026-09-26 on branch `v3-gpcmask` (§1, §5): floor-swept GR — the first boot on a die
@@ -237,9 +237,9 @@ Only guest driver **580.159.04** has been run. The driver-version matrix is a la
 ## 7. Roadmap (owner, 2026-09-26)
 
 1. Apps: close the matrix (UVM demand paging, the refused map).
-2. The headless-graphics test set from nvkvm-pv. — **38/38 on `v3-gfxset` `d06833f0`**, RTX 3070
-   ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md); merge-ready bar held there — ⊘ *on
-   `master` since `f89f66bb`, 2026-09-27*).
+2. The headless-graphics test set from nvkvm-pv. — ⊘ *2026-09-27: on `master` since `f89f66bb`; the
+   "held there" below is stale.* **38/38 on `v3-gfxset` `d06833f0`**, RTX 3070
+   ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md); merge-ready bar held there).
 3. Display, and a desktop (Linux Mint). — ⊘ *M0 started, not on `master` (§6).*
 4. *In parallel:* doorbell-module parity (§4).
 5. *In parallel:* Blackwell on hardware. — ⊘ *GB203 30/30 (§1, §5).*

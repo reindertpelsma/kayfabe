@@ -115,9 +115,10 @@ The same listing also shows older branches last committed 2026-09-24 … 26 (`v3
 ### 3.1 The 535/545 capability allowlist (`a50265f8`, the tip of `v3-drivers`)
 
 ⊘ *2026-09-27: this heading named `ee35ca4a` — the same commit's SHA before `v3-drivers` was rebased
-onto `6ec7ec1a`. It is now `a50265f8`, the only commit on `v3-drivers` that is not on master. The full
-table below is in that commit's own edit to `design/V3_DRIVER_MATRIX.md` §8.2 ruling 5 (`git show
-a50265f8 -- docs/design/V3_DRIVER_MATRIX.md`); master's copy of the doc has the ruling, not the table.*
+onto `6ec7ec1a`. It is now `a50265f8`, the only commit on `v3-drivers` that is not on master. The
+"full table" this section points to is in that commit's own edit to `design/V3_DRIVER_MATRIX.md` §8.2
+ruling 5 (`git show a50265f8 -- docs/design/V3_DRIVER_MATRIX.md`); master's copy of the doc has the
+ruling, not the table.*
 
 Ports nvproxy's v535_104_05 / v545_23_06 capability rows so those guests get a capability surface
 instead of a realize refusal. Existing tables are unchanged (pinned by test). Review points: every
