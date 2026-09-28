@@ -11,6 +11,7 @@
  * 48 MiB device); CUP8_N overrides. PASS => map-on-touch holds for general compute. */
 #include <cuda.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #define CK(x) do{ CUresult r=(x); const char*s=0; if(r!=CUDA_SUCCESS){ \
@@ -43,6 +44,29 @@ static const char *PTX =
 "$L_ret:\n"
 "  ret;\n}\n";
 
+/* ★ 2026-09-28 (docs/design/V3_FAMILY_PORT_TURING.md §3): PTX JITs only for a `.target` at or
+ * below the device's SM, and the text above says sm_86 — `CUDA_ERROR_INVALID_PTX` (218) at
+ * cuModuleLoadData on Turing (sm_75) and GA100 (sm_80), ON BARE METAL (`traces/v3_turing/tu1_80e13bc5/`).
+ * Below 8.6 the target becomes the device's own SM (asked of the driver, never assumed); at 8.6
+ * and above the text is byte for byte what every run before this date loaded. */
+static const char *ptx_for(const char *ptx, CUdevice dev) {
+    int maj = 0, min = 0;
+    char *p, *t;
+    if (cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, dev) != CUDA_SUCCESS ||
+        cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, dev) != CUDA_SUCCESS ||
+        maj < 1 || maj > 9 || min < 0 || min > 9 || maj * 10 + min >= 86) {
+        printf("PTX_TARGET=sm_86 (device cc %d.%d)\n", maj, min);
+        return ptx;
+    }
+    p = strdup(ptx);
+    t = p ? strstr(p, ".target sm_86") : NULL;
+    if (!t) { printf("PTX_TARGET=sm_86 (no rewrite)\n"); return ptx; }
+    t[11] = (char)('0' + maj);
+    t[12] = (char)('0' + min);
+    printf("PTX_TARGET=sm_%d%d (device cc %d.%d)\n", maj, min, maj, min);
+    return p;
+}
+
 int main(void){
     unsigned N = 2048; const char *e = getenv("CUP8_N"); if(e){ N=(unsigned)atoi(e); }
     N = (N + 15u) & ~15u; if(!N) N=16;
@@ -50,6 +74,7 @@ int main(void){
     int nd=0; CK(cuDeviceGetCount(&nd)); if(nd<1){printf("no dev\n");return 1;}
     CUdevice d; CK(cuDeviceGet(&d,0));
     CUcontext ctx; CK(cuCtxCreate(&ctx,0,d)); printf("CTX OK\n"); fflush(stdout);
+    PTX = ptx_for(PTX, d);
     CUmodule mod; CK(cuModuleLoadData(&mod,PTX)); printf("MODULE OK\n"); fflush(stdout);
     CUfunction fn; CK(cuModuleGetFunction(&fn,mod,"mm")); printf("FUNC OK\n"); fflush(stdout);
 
