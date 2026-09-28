@@ -12,6 +12,8 @@ kf-gsp.workspace = true
 kf-chip.workspace = true
 kf-arch.workspace = true
 kf-trace.workspace = true
+# ★ v3-display step (1): the display link delegates to `kf_disp::model::DisplayModel`.
+kf-disp.workspace = true
 
 [lints]
 workspace = true
