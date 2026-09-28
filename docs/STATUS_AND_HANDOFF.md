@@ -54,7 +54,8 @@ this file.
   **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
   (~3–5 weeks to a desktop on GA10x); M0 (behind `display=on`, default off) brings the guest's display layer
   up; next step and plan in the stop note at the top of `docs/design/V3_DISPLAY.md`. Merge bar not run.
-- **Open owner decisions**: §3 (535/545 allowlist `a50265f8`, UVM route + E6″ brief, doorbell module).
+- **Open owner decisions**: §3 (535/545 allowlist `a50265f8`, UVM route + E6″ brief, doorbell module, execd PSK
+  on `vx` boxes).
 
 ## 1. Master, and what it has been verified to do
 
@@ -167,6 +168,20 @@ The design is approved (`design/V3_GUEST_DOORBELL_MODULE.md`); nothing is built.
 build it as designed; a paravirtual doorbell interface in an optional guest driver build instead of
 intercepting mappings; or first make the host-side exit cheaper (in-kernel handling, coalescing) and
 measure on a non-nested host, where exits are a few µs rather than ~50 µs.
+
+### 3.4 The execd PSK on `vx` boxes and "no secrets on a box" (raised 2026-09-27)
+
+Cloud sessions have no SSH egress, so they drive boxes through execd behind a cloudflared quick tunnel
+(the `vx` kit; `scripts/bench/box/README.md`, last section). The v3-mc20 bar ran this way. Each such box
+holds execd's HMAC pre-shared key (`/root/.execd_key`, written by the onstart). Root on a hostile box
+can read that key, and the key runs commands as root on every box that holds the same key. With the
+kit's per-container token, those are the boxes one session rented. With a shared `$VAST_EXEC_PSK` (set
+so that boxes can pass between sessions), they are every box rented with that key. The key opens no
+vast account and no GitHub. Ruling F says "no secrets on a box", and security-policy changes need the
+owner. The question: is a box-scoped key like this allowed? If yes, may the key be shared across
+sessions? If no, what should replace it (for example, a key per box derived from the session's key and
+the instance id)? Until the owner rules, the README asks for the per-container token unless a box
+must pass to another session.
 
 ## 4. Queued / in-progress investigations
 
