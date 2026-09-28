@@ -64,11 +64,18 @@ if [ ! -f "$OUT/modules/nvidia.ko" ] || [ "$(modinfo -F version "$OUT/modules/nv
     # ★ [2026-09-28] A compiler the kernel names but the box lacks is installed from its package
     # (`x86_64-linux-gnu-gcc-12` ships in `gcc-12`), as `provision_host_driver.sh` does for the
     # host's .run, before the `cc` fallback that 550/565 cannot build with.
+    # As robust as there: stale package lists get an `apt-get update` and one retry; a held dpkg lock
+    # (unattended-upgrades on a fresh box) is waited for; the outcome is logged, never silent.
     if [ -n "$KCC" ] && ! command -v "$KCC" >/dev/null 2>&1; then
-        say "installing ${KCC##*-linux-gnu-} (the compiler $KREL was built with: $KCC)"
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${KCC##*-linux-gnu-}" >/dev/null 2>&1
+        say "installing ${KCC##*-linux-gnu-} (the compiler $KREL was built with: $KCC; log: $OUT/kernel_cc_install.log)"
+        apt_cc() { DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y -qq "${KCC##*-linux-gnu-}"; }
+        { apt_cc || { apt-get -o DPkg::Lock::Timeout=300 update -qq; apt_cc; }; } > "$OUT/kernel_cc_install.log" 2>&1
+        say "kernel_cc_install_rc=$?"
     fi
-    command -v "$KCC" >/dev/null 2>&1 || KCC=cc
+    if ! command -v "$KCC" >/dev/null 2>&1; then
+        say "⚠ KERNEL_CC=${KCC:-unknown} NOT AVAILABLE — building with cc (ogkm < 570 fails on a gcc-12 kernel with gcc-11)"
+        KCC=cc
+    fi
     say "make modules against $KREL (-j$JOBS, CC=$KCC)"
     ( cd "$SRC" && make -s modules -j"$JOBS" SYSSRC="$KBUILD" CC="$KCC" > "$OUT/build.log" 2>&1 ) \
         || { tail -25 "$OUT/build.log"; die "ogkm $V did not build against $KREL (log: $OUT/build.log)"; }
