@@ -399,10 +399,12 @@ committed, resumable runner, run once per architecture.
   marker's existence was checked, so a thin guest built by an earlier revision's walk on the same box
   would be reused and grade the new device with the old grader (read from the code, not seen in a
   result). `guest_walk.sh` also takes `GUEST_WALK_ARMS` (the canary).
-- **Budget — estimated, not measured:** with the defaults (11 hosts, 15 guests on the reference
-  host, 2 mixed pairs, 1 ladder rep) about 25–30 h per arch on a nested-KVM vast box: the reference
-  host about 10 h (7 thin suites, 15 ladders, the stagings), each other host about 1.5 h. Trim with
-  `HOSTS` / `GUESTS` / `MIXED`.
+- **Budget — estimated from the 2026-09-26 walk's pace, not measured for the sweep:** a
+  non-reference host took about 37 min swap to swap (hostwalk2/3: swap, bare, gates, canary, thin,
+  3 ladders), a thin suite about 15 min (q3), a fat stage plus its ladder about 10 min (q8). With the
+  defaults (95 rows: 11 hosts, 15 guests on the reference host, 2 mixed pairs, 1 ladder rep) that is
+  about 5 h on the reference host and 6 h on the other ten, so roughly 12 h per arch on a GA102-class
+  nested-KVM box. Trim with `HOSTS` / `GUESTS` / `MIXED`.
 - **Validated off hardware only:** `DRY_RUN=1` prints the plan (and, with `SWEEP_LOG=<pulled log>`,
   which rows a resume skips); `matrix_table.py --selftest` asserts that the committed logs reproduce
   the §6.0 grid exactly and that a sweep log of another arch forms its own grid; `bash -n` and
