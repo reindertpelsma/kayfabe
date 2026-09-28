@@ -234,6 +234,39 @@ pub fn classes_for(f: Family) -> &'static ClassSet {
     FAMILIES.iter().find(|c| c.family == f).expect("FAMILIES is exhaustive")
 }
 
+/// ★ A copy-engine (`*_DMA_COPY_*`) class id on ANY family: the union of every
+/// [`ClassSet::dma_copy`]. Class ids are unique across families, so no family argument is needed
+/// (the pushbuffer rewriter takes a plain `fn`). ⊘ 2026-09-28: the v3 gate harnesses carried a
+/// hand list starting at Ampere, which refused Turing's `0xC5B5` (`TURING_DMA_COPY_A`) as a
+/// foreign class — measured on a TU116 (GTX 1660 SUPER): gates 3 and 4 FAIL. Derive, never capture.
+#[must_use]
+pub fn is_any_dma_copy_class(c: u32) -> bool {
+    FAMILIES.iter().any(|s| s.dma_copy.contains(&c))
+}
+
+#[cfg(test)]
+mod dma_copy_union {
+    use super::*;
+
+    /// Every family's copy classes are in the union (Turing's included), and nothing else is.
+    #[test]
+    fn the_union_is_every_family_and_only_copy_classes() {
+        for s in &FAMILIES {
+            for c in s.dma_copy {
+                assert!(is_any_dma_copy_class(*c), "{:?} {c:#x}", s.family);
+            }
+            for c in s.compute.iter().chain(s.channel_gpfifo).chain(s.threed).chain(s.usermode) {
+                assert!(!is_any_dma_copy_class(*c), "{:?} {c:#x} is not a copy class", s.family);
+            }
+        }
+        assert!(is_any_dma_copy_class(0xC5B5), "TURING_DMA_COPY_A");
+        // the gate harnesses' former hand list is a subset
+        for c in [0xc6b5, 0xc7b5, 0xc8b5, 0xc9b5, 0xcab5] {
+            assert!(is_any_dma_copy_class(c), "{c:#x}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod gfx_kinds {
     use super::*;

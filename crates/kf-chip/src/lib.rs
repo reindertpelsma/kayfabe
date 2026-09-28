@@ -26,7 +26,7 @@ pub mod hwref;
 pub mod ptekind;
 pub mod usermode;
 
-pub use classes::{ClassSet, Kind, classes_for};
+pub use classes::{ClassSet, Kind, classes_for, is_any_dma_copy_class};
 pub use host_classes::{DerivedHostClasses, HostLacksKind};
 pub use ptekind::{PTE_KIND_GENERIC, PTE_KIND_PITCH, uncompressed_pte_kind};
 
