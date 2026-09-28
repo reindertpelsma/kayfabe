@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-09-27.** Every ruling the owner made in the 2026-09-25 … 09-27 working sessions,
+**STATUS: LIVE, 2026-09-28.** Every ruling the owner made in the 2026-09-25 … 09-28 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -60,8 +60,13 @@ citation: ask whether its reason still holds before relying on it.
 3. Display (scanout), then display apps / a desktop (Mint) that nvkvm-pv ran.
 4. In parallel: the Linux guest doorbell module (parity), Blackwell (done: RTX 5080 30/30).
 5. Driver matrix — the same driver range nvkvm-pv supports (535 → 610), both driver axes.
+   ★ **Refined 2026-09-28 (owner): keep the GPU-architecture axis — the sweep covers every family
+   Turing and newer** (host driver × guest driver × GPU arch), not one bench die. Vast VM offers seen on
+   2026-09-28: TU116 (GTX 1660 S/Ti) and TU106 (RTX 2060 S), GA10x, AD10x and GB20x in number; **no
+   GA100, GH100 or GB10x as VMs** — those rows stay source-derived until such a host is available.
 6. Windows guest last.
-- Later, if time: **Turing** on hardware (its GSP model is source-derived only).
+- ⊘ *Superseded 2026-09-28 by the refinement of item 5 (Turing is on the arch axis, so it runs on
+  hardware before the sweep):* Later, if time: **Turing** on hardware (its GSP model is source-derived only).
 - **All working, verified work lands on master.** Nothing verified may be stranded on a branch.
 
 ## D. Guest doorbell helper module (2026-09-26)
