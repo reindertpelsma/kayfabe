@@ -38,6 +38,37 @@ whether intentional FD transfer delegates authority. If this cannot be implement
 available interface, document the smallest required RM-interface change before widening the patch.
 Do not hide an unauthenticated registration behind a default-off switch and call it secure.
 
+### Follow-up source trace: checks and lifetime are distinct
+
+The next source pass narrows the questions above (same pinned 580.159.04 source):
+
+- `rmapi/sharing.c:serverInitGlobalSharePolicies` installs a default `RS_SHARE_TYPE_PID`
+  duplication policy. `rmapi/client_resource.c:cliresShareCallback_IMPL` checks the current
+  process against the source client's PID when the destination is a kernel client and a parent
+  context is present. `resserv/rs_client.c:clientCopyResource_IMPL` supplies that parent context;
+  `resserv/rs_access_map.c` carries it into the sharing callback. This is materially stronger
+  than assuming the same-EUID token helper is the only check. Policies can be overridden or
+  explicitly shared, so test the actual duplication path, including deliberate delegation.
+- The channel-retention path's `serverAcquireClient` takes a client lock; it is not itself a
+  caller-credential check. However, `nvGpuOpsVerifyChannel` compares the channel's `pVAS` with
+  the previously duplicated address-space object and rejects mismatches. Thus channel retention
+  is not an unrestricted handle lookup either. Any b3 design must preserve that binding, not
+  introduce a second raw-handle cancellation interface.
+- Retaining a `uvm_user_channel_t` reference is **not sufficient to pin usable RM channel state**.
+  `uvm_user_channel.h` explicitly permits detach while that memory object remains retained.
+  `uvm_user_channel_detach` removes fault lookup, defers hardware-resource release until fault
+  buffers are flushed, and clears `gpu_va_space`; `uvm_user_channel_destroy_detached` waits for
+  the clear-faulted tracker, releases the RM-retained channel, then drops the memory reference.
+  An EFS record must become invalid during detach, under the appropriate locks, and userspace
+  replies must revalidate generation/liveness before accessing channel or VA-space state.
+
+**Implementation implication, not yet a demonstrated authorization result:** prefer reusing the
+existing checked UVM registration and retained-object lifecycle. Run same-process, foreign
+same-UID, foreign different-UID and explicit-sharing negative/positive controls before deciding
+that a new RM export is necessary. Do not defer PID-sensitive registration to a kernel worker
+without tracing how the originating authority is carried. Separately define EFS file transfer
+semantics and prove pending replies cannot outlive the channel's hardware resources.
+
 ## Incremental patch shape
 
 1. **Opt-in state and authenticated registration.** Default stock behavior. Admin enables the

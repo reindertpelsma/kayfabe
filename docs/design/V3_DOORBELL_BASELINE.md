@@ -33,6 +33,24 @@ failure. This is not a hardware-notification latency test, a concurrent lifetime
 proof or evidence for 70% GPU throughput. It never opens an NVIDIA device or changes a host module.
 The authoritative interface is [Linux KVM API: KVM_IOEVENTFD](https://docs.kernel.org/virt/kvm/api.html#kvm-ioeventfd).
 
+## Why passthrough is the initial performance target
+
+The production classifier in `crates/kf-qemu/src/chan.rs` births ordinary user channels as
+passthrough and guest-kernel physical-address copy-engine channels as translated. The latter's
+rewriter, real GPU submissions, fence-based retirement and wake/requeue protocol already exist;
+this experiment does not replace them. Kernel channels are explicitly forbidden from the
+emulated route (`kf_core::channel::Submission::kernel_channels_are_never_emulated`). Therefore
+"translated and emulated are both kernel traffic" is not the routing rule.
+
+High-frequency application submissions make passthrough the first target. Lower translated trap
+volume is a workload hypothesis, not a guarantee: allocations, scrubbing, migration and future
+UVM fault service can put kernel CE latency on an application's critical path. Keep those paths
+prompt and measure them separately. Existing correctness tests and hardware gates establish a
+working implementation, not universal driver coverage or proof that every workload is fast.
+Translated completions must still follow actual GPU work; notifications alone are never proof
+of completion. The worker's existing timed park is a shutdown recheck, not a batching delay:
+ready work is handled immediately and eventfd readiness interrupts the wait.
+
 ## Non-nested baseline protocol
 
 Read-only SSH to the documented physical RTX 4070 host `172.22.1.20` failed with **Network is

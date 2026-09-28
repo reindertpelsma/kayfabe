@@ -55,6 +55,11 @@ The full before-policy fixture was independently regenerated on the trusted deve
 The temporary worktree/compiled cache was removed. Fixture SHA-256:
 `d367cbc948ae3cc4a191a57b638f0b43528f069df2868629a426b6093f8532a2`.
 
+Both shared-header sweeps were also independently repeated on the trusted development host,
+fetching the two NVIDIA commits above directly from GitHub. Each compiler-generated `values.tsv`
+is byte-for-byte identical to its checked-in fixture (`cmp` returned 0 for both tags). Thus neither
+the pre-change golden nor the new shared-control values relies solely on the untrusted rental.
+
 Header presence verifies spelling/numbering, not the safety of forwarding arbitrary guest bytes.
 The named policy remains defense in depth; legacy-rule exceptions and authored host verbs are
 unchanged. Existing rows were independently cross-read against nvproxy's historical 535 registry;
