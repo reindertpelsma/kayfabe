@@ -22,12 +22,14 @@ CLIENT=${CLIENT:-$REPO/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladde
 HOSTV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)
 REV=$(git -C "$REPO" rev-parse --short=8 HEAD)
 [ -f "$DRV/STAGED" ] || { echo "FAILPOINT guest=$V REFUSED: not staged"; exit 2; }
-if [ ! -f "$FG/BUILT" ]; then
+# ⊘ [2026-09-28] Reused only for the same raw client (the initrd carries it) — as in guest_walk.sh.
+CSUM=$(sha256sum "$CLIENT" 2>/dev/null | cut -c1-16)
+if [ ! -f "$FG/BUILT" ] || ! grep -qx "client=$CSUM" "$FG/BUILT"; then
     tmp=$(mktemp -d "$BENCH/.fastguest-$V.XXXX")
     CLIENT="$CLIENT" KF_FROM_HOST=1 KF_GUEST_DRIVER_DIR="$DRV" \
         bash "$REPO/scripts/fastguest/build_fast_guest.sh" "$BENCH/guest.qcow2" "$tmp" > "$tmp.log" 2>&1 \
       && [ -s "$tmp/initrd.cpio.gz" ] || { echo "FAILPOINT guest=$V REFUSED: thin guest build failed ($tmp.log)"; exit 2; }
-    { echo "guest_driver=$V"; echo "built=$(date -Is)"; } > "$tmp/BUILT"
+    { echo "guest_driver=$V"; echo "client=$CSUM"; echo "built=$(date -Is)"; } > "$tmp/BUILT"
     rm -rf "$FG"; mv "$tmp" "$FG"; mv "$tmp.log" "$FG/build.log"
 fi
 T=fp_${V//./}_$REV
