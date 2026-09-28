@@ -242,6 +242,23 @@ impl Family {
         matches!(self, Family::Ampere)
     }
 
+    /// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 4) — **the FWSEC descriptor version our
+    /// synthetic ROM carries: the one this family's `kgspExecuteHsFalcon` can run.** `_TU102`
+    /// (TU102 … TU117, and GA100) runs `BOOT_WITH_LOADER` / `BOOT_DIRECT` only ⇒ V2; `_GA102`
+    /// (GA102 … AD107) asserts `BOOT_FROM_HS` ⇒ V3 (`ogkm-580: generated/g_kernel_gsp_nvoc.c:1427-1445`,
+    /// `kernel_gsp_falcon_tu102.c:327-338`, `kernel_gsp_falcon_ga102.c:186`). Hopper / Blackwell
+    /// read no VBIOS (`kgspExtractVbiosFromRom_395e98`): V3, inert. ⊘ GA100 would need V2 too; it is
+    /// refused by name before any ROM is built ([`Family::gsp_model`]).
+    #[must_use]
+    pub const fn fwsec_desc(self) -> kf_abi::vbios::FwsecDescVersion {
+        match self {
+            Family::Turing => kf_abi::vbios::FwsecDescVersion::V2WithLoader,
+            Family::Ampere | Family::Ada | Family::Hopper | Family::Blackwell => {
+                kf_abi::vbios::FwsecDescVersion::V3FromHs
+            }
+        }
+    }
+
     /// How the GSP boots (`kgspBootstrap_*` HAL per family: falcon/booter through Ada, FSP after).
     #[must_use]
     pub const fn boot_style(self) -> BootStyle {

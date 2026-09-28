@@ -309,6 +309,10 @@ pub struct PciIdentity {
 /// satisfy the driver's inequalities ([`kf_abi::vbios::GENERATED_FWSEC`]) — so it is family-level
 /// for every falcon-boot family, never a per-die row keyed by device id.
 ///
+/// ⊘ Corrected 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2 wall 4): the geometry is family-level but
+/// the **descriptor version** is not — Turing's `kgspExecuteHsFalcon_TU102` cannot run the V3
+/// (`BOOT_FROM_HS`) descriptor every family was given, so the ROM carries [`Family::fwsec_desc`].
+///
 /// ⊘ Was `VBIOS_PROFILES.first()`: the GA106 row's version `0x9418_0000` on every die
 /// (2026-09-26, `V3_FAMILY_PORT_ADA.md` §2).
 ///
@@ -327,7 +331,6 @@ pub fn vbios_profile(
     id: PciIdentity,
     version: (u32, u8),
 ) -> Result<kf_abi::vbios::VbiosProfile, crate::RowUnbuilt> {
-    let _ = family;
     Ok(kf_abi::vbios::VbiosProfile {
         name: "derived (host PCI identity + host VBIOS version + generated FWSEC geometry)",
         pci_vendor_id: id.vendor,
@@ -336,6 +339,8 @@ pub fn vbios_profile(
         vbios_version: version.0,
         vbios_oem_version: version.1,
         fwsec: kf_abi::vbios::GENERATED_FWSEC,
+        // ★ 2026-09-28: the descriptor version the family's HS-falcon HAL runs (V2 on Turing).
+        fwsec_desc: family.fwsec_desc(),
     })
 }
 
