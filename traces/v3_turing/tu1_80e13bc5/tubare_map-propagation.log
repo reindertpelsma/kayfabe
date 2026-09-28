@@ -1,0 +1,26 @@
+info  RMLADDER ARGV     = [--map-propagation]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d000fe
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_alias_two_vas=NOTRUN
+RUNG_alias_unmap=NOTRUN
+RUNG_missing_page=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+RUNG_cross_client=NOTRUN
+info  R2 propagation      = GPU 0, euid 0 — map at a VA we dictate, then ask the HOST DRIVER whether it resolves
+info  R2 the bar          = an unmapped VA must probe FREE (negative control), the mapped one must NOT, and the VA must be FREE again after the unmap
+info  R2 N1 unmapped VA   = Ok(Free) at 0x0000000951000000
+info  R2 N2 pde(unmapped) = PDE_ABSENT ⊘ recorded, UNGRADED
+ok    R2 control          = the unmapped VA probes Free — the instrument can say no
+ok    R2 P1 placed as asked = 0x0000000911000000
+info  R2 P2 mapped VA     = Ok(Occupied(Other(19305)))
+ok    R2 P2               = the allocator refuses the mapped VA
+★     R2 P3 host tables   = PDE_COVERS at 0x0000000911000000
+info  R2 P4 after unmap   = Ok(Free)
+ok    R2 P4               = the VA is reusable again
+RUNGCTL_map_propagation=PASS
+RUNG_map_propagation=PASS
+done — w379/w381 mapping-plane rungs only

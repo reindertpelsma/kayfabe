@@ -1,0 +1,30 @@
+info  RMLADDER ARGV     = [--doorbell-census]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d000a7
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R13c census        = RM's own chid manager vs the work-submit token, GPU 0
+FACT per_runlist_channel_ram=0
+FACT chid_namespaces=[0] of 0..24
+FACT device_info_table=Err(InsufficientPermissions)
+SAMPLE engine_type=0x1 token=0x00000004 chid=4 chid_namespace=0
+SAMPLE engine_type=0x9 token=0x00000005 chid=5 chid_namespace=0
+SAMPLE engine_type=0xa token=0x00000006 chid=6 chid_namespace=0
+SAMPLE engine_type=0xb token=0x00080007 chid=7 chid_namespace=0
+SAMPLE engine_type=0xc token=0x00090008 chid=8 chid_namespace=0
+SAMPLE engine_type=0xd token=0x000a0009 chid=9 chid_namespace=0
+SAMPLE-REFUSED engine_type=0xe reason=Other(87)
+SAMPLE-REFUSED engine_type=0xf reason=Other(87)
+SAMPLE-REFUSED engine_type=0x10 reason=Other(87)
+PARTITION engine_type=0x1 token=0x00000004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0x9 token=0x00000004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xa token=0x00000004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xb token=0x00080004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xc token=0x00090004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION engine_type=0xd token=0x000a0004 members=[0x1,0x9,0xa,0xb,0xc,0xd]
+PARTITION-REFUSED engine_type=0xe reason=Other(87)
+PARTITION-REFUSED engine_type=0xf reason=Other(87)
+PARTITION-REFUSED engine_type=0x10 reason=Other(87)
+FACT partition_is_vacuous=1
+info  R13c census        = done
+done — doorbell census only

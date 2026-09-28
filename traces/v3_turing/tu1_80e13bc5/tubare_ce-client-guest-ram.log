@@ -1,0 +1,10 @@
+info  RMLADDER ARGV     = [--ce-client-guest-ram]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00164
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+info  R34 guest-RAM CE   = GPU 0 — a CE copy whose SOURCE is NV01_MEMORY_SYSTEM (guest RAM, run inside the guest), placed behind 13000 further guest-RAM rows declared FIRST so the operand is the freshest row a bounded backing pass reaches LAST. ⊘ R33 cannot express this: both its operands are `alloc_device_local`, so no engine in it reads guest RAM at all
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+★      R34 guest-RAM CE   = declared 13000 decoy guest-RAM rows (asked 13000), src 0x00000001232c8000 dst 0x00000001232c9000, dst[0] 0xc0ffee34 (want 0xc0ffee34), dst[last] 0xc0fff233 (want 0xc0fff233), semaphore 0x00000001
+R34_OUTCOME=(P)

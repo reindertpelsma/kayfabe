@@ -1,0 +1,18 @@
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1669 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=FAIL rc=1 wall_ms=1694 graded=[CUP3_VAL=]
+CL_ROW mode=host rung=cup8 rep=1 verdict=FAIL rc=1 wall_ms=1704 graded=[CUP8_BAD= CUP8_MAXERR=]
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=127.42
+CUDA_LADDER_STARTED=2026-09-28T02:04:00+00:00 mode=host reps=1 rungs=cup2,cup3,cup8,cup8bench rev=80e13bc5
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.580.159.04
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 3c90b0f5f9b7deedc9d9bea471ee551a
+src cup8.c md5 593c1ef978503af6a6a67c58430dda5b
+src cup8bench.c md5 502965babad604c7be0685cdeb3fe7f8
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=1669 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=FAIL rc=1 wall_ms=1694 graded=[CUP3_VAL=]
+CL_ROW mode=host rung=cup8 rep=1 verdict=FAIL rc=1 wall_ms=1704 graded=[CUP8_BAD= CUP8_MAXERR=]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=FAIL rc=1 wall_ms=1684 graded=[]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=1220.65
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=127.42
+CUDA_LADDER_DONE=2026-09-28T02:04:08+00:00
