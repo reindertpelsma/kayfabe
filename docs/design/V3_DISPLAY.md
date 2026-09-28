@@ -1,5 +1,49 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> ### ★ 2026-09-27 (later) — next step (1) DONE in code, GPU-free (`b11f96c6`, branch `local/display-step1` on `4c48ca0c`); NOT on the bench
+> **What step (1) now does** (`crates/kf-rm/src/display.rs`). Still only with `display=on`; with the
+> default (off) the display link is never built, so a default-off device answers exactly as before
+> (`crates/kf-rm/tests/display_seat.rs` pins it through the whole served chain).
+> - `DisplayPolicy` delegates to a `SharedDisplayModel` = `Arc<Mutex<kf_disp::model::DisplayModel>>`
+>   (`kf-rm` now depends on `kf-disp`), built from the chip's display row, one 1920×1080 DVI-D monitor
+>   (`Monitor::default_1080p`) and the control layouts **derived** for the guest driver's version
+>   (`kf_disp::layout::for_version` — today `580.159.04` only). A guest driver without derived layouts
+>   keeps the M0 answers and observes nothing (logged at realize).
+> - It answers **every control the model claims**: the M0 five (byte for byte the M0 replies m0a
+>   measured — a unit test compares them), `INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER` (`0x20800a58`), and the
+>   30 NVKMS bring-up controls of §4.2 (A) — among them m0a's first refusal `0x730101` and the ledger's
+>   `0x730107`, `0x730102`, `0x730151`. 36 controls in all.
+> - **The FINN refusal set is the claim set**: a claimed control arriving FINN-serialized is refused
+>   `NOT_SUPPORTED` by name, never decoded; one whose params are missing, `INVALID_ARGUMENT`. [E] No
+>   display interface is FINN-serializable in 580 (`ogkm-580: src/nvidia/interface/rmapi/src/g_finn_rm_api.c:803-850`),
+>   so only a crafted message meets this refusal.
+> - It **observes** `GSP_RM_ALLOC` / `GSP_RM_FREE` (it returns `None`: the channel link and the object
+>   seat still see both, and the object seat answers). A display-channel alloc is recorded in the model's
+>   registry — instance, GET = PUT = `offset`, the pushbuffer stated before it; a free releases it: the
+>   channel's own free, its display object's or device's free (parent edges remembered, at most 256),
+>   its client's free. [E] The guest's RM sends one free per object (`ogkm-580: rs_client.c:785-843`
+>   → `alloc_free.c:959-990`), children before their parent (`rs_client.c:1085-1092`).
+> - **Hostile-guest bounds** added to `kf_disp::model`: `CHANNEL_PUSHBUFFER` is accepted only for this
+>   family's channel classes at an instance the display has; an alloc whose params are not the derived
+>   struct, or whose instance does not exist, is not recorded (it was read as instance 0); the statement
+>   queue stops at 1024 and counts the rest. The link drains the statements into the QEMU log after it
+>   drops the lock (no worker exists yet to take them). No vCPU takes the model's lock.
+> - `kf_abi::oracle::CAPTURE_RELIANCE` gains `0x00730107` (`SYSTEM_GET_SUPPORTED`, a truncated C row):
+>   NOT A READ, the model authors it from its own connectors.
+> - `DisplayModel::claimed()` enumerates the claim set (6 internal + 30 named, ids from the derived
+>   layouts); the link caches it at construction, so asking whether a control is the display's takes
+>   no lock.
+> - Crate tests (before → after): `kf-disp` 9 → 11, `kf-rm` 544 → 553, `kf-abi` 528 → 528, `kf-qemu` 10 → 10.
+>
+> **What remains of step (1)** — nothing GPU-free. On the bench (the M1 grade, §5): with `display=on`,
+> NVKMS gets past `0x730101` and the unserviced ledger holds no NV0073 / NV5070 / NVC370 / NVC372 id.
+> Known gaps, each small and bounded: (a) an alloc is observed before the object seat answers it, so an
+> alloc the seat then refuses leaves a registry entry until that channel is allocated again; (b) a
+> claimed control is answered whatever object it names (`hObject`'s class is not checked);
+> (c) `kf-qemu` does not hold the model yet — step (3) must take the `SharedDisplayModel`
+> (`DisplayPolicy::over` / `DisplayPolicy::model`) across `ReselectAtFn1` rebuilds of the chain, and move
+> the statement drain from the link to the display worker. Steps (2)–(4) below are unchanged.
+
 > ### ⊘ STOPPED 2026-09-27 (owner: weekly usage limit) — where this stands, and the next steps
 > **Done (branch `v3-display`):** Phase 1 — this design, decision (a). M0 code (`5dbf670b`, device
 > property `display=on`, default off): the chip display rows (`kf_chip::display`), the KernelDisplay
@@ -18,8 +62,10 @@
 > method/field/caps tables compiled from the class headers), `kf_disp::model` (answers for all ~30
 > NVKMS bring-up controls of §4.2 (A), the pushbuffer/channel registry, `GET_CHANNEL_INFO` idle from GET==PUT).
 > Unit-tested (`cargo test -p kf-disp`), **not yet wired**: `kf_rm::display` still answers only the M0 set.
+> ⊘ *Superseded 2026-09-27 by the step-(1) note above: the model is wired (with `display=on`).*
 > **Next, in order:** (1) make `kf_rm::display::DisplayPolicy` delegate to a shared
-> `Arc<Mutex<kf_disp::model::DisplayModel>>` and observe display allocs/frees (`DisplayModel::alloc/free`);
+> `Arc<Mutex<kf_disp::model::DisplayModel>>` and observe display allocs/frees (`DisplayModel::alloc/free`)
+> — ⊘ *done in code 2026-09-27, not on the bench (the note above)*;
 > (2) `kf_disp::engine`: PUT → read the 4 KiB sysmem pushbuffer → decode → assembly/armed state per class
 > (derived tables) → core notifier FINISHED + ARMED mirror at `0x688000` → window flips with acquire
 > (EQ `0xf473f473`) / release-on-flip-away (`0xd00dd00d`) + WRITE_AWAKEN notifier; ctxdma resolution by
@@ -29,7 +75,7 @@
 > AWAKEN interrupt on vector `0x9a`; (4) M2: the scanout copy kernel (kf-cuda) + the QEMU graphic console
 > (kf3.c) + `lane.sh` pixel-exact grade. Merge bar not run on this branch (display defaults off).
 
-**STATUS: DESIGN, LIVE — decided 2026-09-27 (branch `v3-display`); Phase 2 STOPPED at M0 (see the note above).** Phase 1 of the
+**STATUS: DESIGN, LIVE — decided 2026-09-27 (branch `v3-display`); Phase 2 STOPPED at M0 (see the note above); its next step (1) written and unit-tested 2026-09-27, not on the bench (the first note).** Phase 1 of the
 owner's display roadmap item (`OWNER_RULINGS.md` §C.3, 2026-09-26: *"go full in on getting the DISPLAY to
 work, then display apps / Mint desktop etc. that nvkvm-pv had working, on kayfabe"*). Nothing below is
 measured on a kf3 guest yet except where a row says **[M]**; source readings are **[E]** with a
