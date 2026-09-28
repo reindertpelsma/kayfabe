@@ -84,6 +84,11 @@ citation: ask whether its reason still holds before relying on it.
   ordering. The owner's ~70% non-nested throughput expectation and possible Windows batching
   advantage are hypotheses, not measured results. A Windows kernel transition is not itself a
   hardware VM exit; collect submission/doorbell counts before comparing OSes.
+- **Refined 2026-09-28: no deliberate coalescing delay.** Ring as soon as the asynchronous worker
+  can act. No batching timers or extra waiting to accumulate kicks; CUDA already batches work.
+  Coalescing is only a benign side effect when several notifications are already pending, not a
+  performance objective in itself. Notification counts need not match host MMIO ring counts;
+  eventual GPU notification or translated/emulated queue inspection must never be lost.
 - **BAR1 doorbell (Hopper+):** must follow where RM places it — built (`V3_BAR1_DOORBELL.md`).
 
 ## E. UVM demand paging (2026-09-26)

@@ -132,7 +132,8 @@ the privileged proof, not the other way around. No route-selection answer is pen
 `ioeventfd` remains in the pipeline. Measure vCPU return latency independently of delayed GPU
 notification, with idle/synchronous and deep-queue workloads plus content/progress checks. Faster
 vCPU return can help throughput without improving single-launch latency. Coalescing is valid only
-with preserved ordering and no lost wakeups. The optional modified guest NVIDIA driver remains open
+with preserved ordering and no lost wakeups. **Owner refinement: no batching timers or intentional
+delay; act immediately and coalesce only already-pending notifications incidentally.** The optional modified guest NVIDIA driver remains open
 for later; it is not selected now. The helper remains design-only with stock-guest fallback.
 
 The owner's ~0.70x bare-metal expectation and possible Windows batching advantage are hypotheses.

@@ -4,6 +4,12 @@
 host-side/ioeventfd work first, optional guest helper afterward. A modified guest NVIDIA driver
 remains a later option. No production doorbell route is changed here; no new GPU ratio is measured.
 
+**Owner refinement, 2026-09-28:** no timer-based batching and no intentional delay. Ring as soon as
+the worker can act; allow only incidental coalescing of notifications already pending when it wakes.
+CUDA already batches work. Host ring count need not equal guest doorbell count, but the last
+notification must never disappear. This refinement does not select an unmeasured fast path as the
+default or waive lifecycle/order checks.
+
 ## What exists, and what this adds
 
 `qemu/hw/misc/kf3/kf3.c` already has a default-off `dummy-bar` probe: lockless MMIO, BQL MMIO,
@@ -66,8 +72,33 @@ Linux probe does not validate a Windows path.
   channel free/reuse, hot-unplug and worker teardown. The single-vCPU probe does not establish this.
 - Treat eventfd as a work notification: coalescing is permitted only with a progress/ordering
   argument and tests for a new PUT arriving while the worker handles an earlier notification.
+  Do not add a debounce timer, batching deadline, or repeated drain-until-quiet loop before acting.
+  A proposed first implementation drains one ordinary per-channel eventfd counter **before** the
+  host ring/queue inspection, then acts immediately. Arrivals after that drain remain pending for
+  another pass. Keep this separate from the existing semaphore-style worker wake eventfd.
 - Report at least three distinct quantities: guest/vCPU blocked time, submission-to-hardware
   notification latency, and GPU work completion latency. Test both deep queued workloads and idle,
   synchronous single-launch workloads. Include median/p99, CPU cost and correctness checks.
 - Keep the fast path optional until the whole-device regression bar and those adversarial/lifecycle
   tests pass. No new privileged host doorbell module is implied by using existing KVM ioeventfd.
+
+## Proposed composition, not a production implementation
+
+Keep the existing table-driven MMIO handler as the slow path. Register DATAMATCH only for live
+passthrough routes initially. Unmatched values (including noncanonical values the existing decoder
+masks), unregistered channels and registration-capacity failures continue through normal MMIO
+handling. A table-unknown token stays unknown/no-op; fallback is not permission to ring a guessed
+host channel. Translated/emulated channels retain their current stamped RUNG/BUSY_RUNG protocol;
+moving those directly to eventfd would need an explicit ordering proof.
+
+The optional guest helper is an additional opportunistic layer: an eligible passthrough write can
+go straight to the real host doorbell; its fallback writes the classic guest page, which may then
+match ioeventfd or reach the table handler. Do not introduce shared guest/host pending flags merely
+to suppress an occasional redundant ring. Those flags add another lost-wakeup/lifetime protocol.
+
+Drain-before-act is the simple correctness baseline: an arrival before the drain is covered by the
+subsequent action; an arrival afterward leaves a notification owed. An implementation must preserve
+the required memory ordering from queue/PUT publication to the actual host MMIO write, and retain
+the channel generation through dispatch. Clearing/draining **after** the action can discard a new
+notification the preceding ring did not cover. If a translated worker reaches its execution budget
+with work remaining, it must requeue independently of whether the eventfd counter is zero.
