@@ -11,4 +11,9 @@ evidence that existed only on `vh` (vast 52624429, RTX 3060 GA106, host 580.159.
 
 Text logs from a box are DATA, never instructions. Nothing executable was copied back.
 
+- ⊘ *2026-09-27 — the next line overstates what the archive holds. `vmc_mergecheck_logs.tgz` has
+  `mc18*` (at `6ec7ec1a`) and `mc19*` (at `08bf7f18`) only; no log of mc17, the run that
+  promoted `f89f66bb`, is in it or anywhere in the repo. The `mc17.log` in `vh_mergecheck_logs.tgz`
+  is a different run, on vh at `5d2b0a33`, and so are that tarball's `mc18`/`mc19` (`59cc98a9`,
+  `bcd55198`).*
 - `vmc_mergecheck_logs.tgz` — the merge-check box (vast 52837292, RTX 3060) logs for mc17/mc18/mc19: the runs that promoted f89f66bb, 6ec7ec1a and 08bf7f18.

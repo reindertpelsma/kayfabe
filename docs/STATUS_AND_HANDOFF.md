@@ -16,8 +16,8 @@ this file.
   2026-09-28). The `display=on` M0 lane on GA106 (`traces/v3_display/mc21m0/`) reproduces GA102's `m0a`
   exactly: KernelDisplay up, NVKMS stops at `0x730101`/`0x730102`/`0x730107`/`0x730151` ⇒ displayless.
 - **Boxes from a cloud session:** the container has no SSH egress, so a box is driven through the **`vx`
-  kit** (execd behind a cloudflared quick tunnel) — see `scripts/bench/box/README.md` (its `vx` section).
-  `provision_full.sh` and `merge_check.sh` run unchanged that way (`traces/v3_mc20/README.md`).
+  kit** (execd behind a cloudflared quick tunnel). `provision_full.sh` and `merge_check.sh` run unchanged
+  that way; `traces/v3_mc20/README.md` records the v3-mc20 bar run like this.
 - **`v3-uvm-e6pp` (`c6765f5c`): E6″ phase 0 ran** (a capture on a stock box — no fault numbers yet); §2, §3.2.
 - ⊘ *Superseded 2026-09-28 (master is now `8ab92bf4`, above; v3-mc21 passed):* **2026-09-27 19:38 UTC — master
   and v3 = `db038f5f`** (= `c0ef7b75`, the revision that passed the bar below, + the commit that added its
@@ -27,9 +27,9 @@ this file.
 - **2026-09-27 18:27 UTC — `v3-mc20` PASSED THE FULL MERGE BAR** at `c0ef7b75` (= `5018bb57` + docs only), on
   branch `claude/kayfabe-gpu-testing-m0cv1q`: crate tests **1639 / 0**, gates **9/9**, `KF3_RC=0`, `FG_RC=0`,
   fast suite **30/30** — vast 53004208, RTX 3060 GA106, host 580.159.04 open. Evidence: `traces/v3_mc20/`.
-  Ready to fast-forward master and v3 (owner go-ahead asked in the session) — ⊘ *done at 19:38 UTC, see the
-  first line.* Cloud sessions now reach boxes through execd behind a cloudflared quick tunnel (the `vx`
-  kit), not SSH.
+  ⊘ *2026-09-27 19:38 UTC: done; see the first line.* Ready to fast-forward master and v3 (owner go-ahead
+  asked in the session). Cloud sessions now reach boxes through execd behind a cloudflared quick tunnel
+  (the `vx` kit), not SSH.
 - ⊘ *Superseded by the line above:* 2026-09-27, resumed (cloud session): merge candidate `v3-mc20` = master `0d3ecde9` + `v3-drivers~1` (`8f9bdd14`,
   the held 535/545 allowlist commit left out) — merge commit `5018bb57`, clean, on branch `claude/relaxed-babbage-7zz89s`.
   GPU-free: all `kf-*` crate tests **1639 passed / 0 failed** at `5018bb57`. Hardware bar (gates, kf3 build, 30/30)
@@ -50,10 +50,10 @@ this file.
   (runlist, chid) token index, ≤545 GET_CHIP_INFO carry, 595+ GSP heartbeat. Merge it onto the new master
   after `v3-mc19`, then run the bar. Next for that branch: the 570 guest's UVM-first-channel wall (token
   0x803 reads its GPFIFO before the mirror maps it) and a 570 thin-guest NULL deref seen on master.
-- **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
+- ⊘ *2026-09-27: merged into the v3-mc21 candidate `4c48ca0c` (second line); its bar is in progress:*
+  **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
   (~3–5 weeks to a desktop on GA10x); M0 (behind `display=on`, default off) brings the guest's display layer
   up; next step and plan in the stop note at the top of `docs/design/V3_DISPLAY.md`. Merge bar not run.
-  ⊘ *2026-09-27: merged into the v3-mc21 candidate `4c48ca0c` (second line); its bar is in progress.*
 - **Open owner decisions**: §3 (535/545 allowlist `a50265f8`, UVM route + E6″ brief, doorbell module).
 
 ## 1. Master, and what it has been verified to do
@@ -66,7 +66,9 @@ thin suite **30/30** on an RTX 3060 (GA106), vast 53004208, host 580.159.04 open
 CUDA ladder or the fat-guest lanes.)
 ⊘ *Superseded by the line above, kept for the record:* Last bar: `f89f66bb` — 1625 tests / 0 failed,
 gates 9/9, 30/30 on an RTX 3060 (GA106). (Between the two, `6ec7ec1a` (v3-mc18) and `08bf7f18` (v3-mc19,
-1637 / 0) were promoted the same way; the logs of mc17–mc19 are in `traces/vh_archive/`.)
+1637 / 0) were promoted the same way. Their merge-check logs are `mc18*` and `mc19*` in
+`traces/vh_archive/vmc_mergecheck_logs.tgz`. No log of the `f89f66bb` (v3-mc17) run is in the repo:
+`vh_mergecheck_logs.tgz`'s `mc17.log` is an earlier run, on the vh box at `5d2b0a33`.)
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
@@ -99,8 +101,8 @@ The same listing also shows older branches last committed 2026-09-24 … 26 (`v3
 
 ⊘ *Superseded 2026-09-27 by the table above — kept as written at master `6ec7ec1a`. Since then
 `v3-initrace` went to master at `08bf7f18` (v3-mc19), `v3-adasys` at `8b32178f` (v3-mc18), and
-`v3-drivers~1` at `5018bb57` (v3-mc20); `ee35ca4a` below is the allowlist commit's SHA before
-`v3-drivers` was rebased onto `6ec7ec1a` — it is now `a50265f8`:*
+`v3-drivers~1` at `5018bb57` (v3-mc20); `ee35ca4a` below is an earlier (pre-rebase) SHA of the
+allowlist change, no longer in the object store — the change is now `a50265f8`:*
 
 | Branch | What it is | State / what it needs |
 |---|---|---|
@@ -114,7 +116,8 @@ The same listing also shows older branches last committed 2026-09-24 … 26 (`v3
 
 ### 3.1 The 535/545 capability allowlist (`a50265f8`, the tip of `v3-drivers`)
 
-⊘ *2026-09-27: this heading named `ee35ca4a` — the same commit's SHA before `v3-drivers` was rebased
+⊘ *2026-09-27: this heading named `ee35ca4a` — an earlier (pre-rebase) SHA of the same change; the
+branch was rewritten after it (the walk measured later heads `1837166d` and `bb9b67a9`) and then rebased
 onto `6ec7ec1a`. It is now `a50265f8`, the only commit on `v3-drivers` that is not on master. The
 "full table" this section points to is in that commit's own edit to `design/V3_DRIVER_MATRIX.md` §8.2
 ruling 5 (`git show a50265f8 -- docs/design/V3_DRIVER_MATRIX.md`); master's copy of the doc has the
@@ -148,7 +151,8 @@ the caller is (the source's own "Bug 1624521" TODOs), so an N4 module must valid
 itself. **Still not measured:** fault delivery, latency, replay, cancel — E6″ proper (module present,
 the captured calls driven against the adopted VAS) has not run.
 
-**E6″ — the open problem, not yet run:** (⊘ *phase 0 has since run — above; E6″ proper has not.*)
+**E6″ — the open problem, not yet run:** (⊘ *2026-09-27: phase 0 has since run — above; E6″ proper has
+not.*)
 demonstrate that a replayable fault from a compute kernel,
 running in a VMM-created fault-capable address space, reaches the module, and measure it (latency
 median/p99, replay → correct data, scoped cancel, negative control). E6′ stopped because (1) mapping
@@ -167,8 +171,10 @@ measure on a non-nested host, where exits are a few µs rather than ~50 µs.
 ## 4. Queued / in-progress investigations
 
 1. ~~Adapter re-init race~~ **ANSWERED + FIXED, ON MASTER since `08bf7f18`** (v3-mc19; bar 1637 / 0,
-   gates 9/9, 30/30 — see §0). Its evidence is on master too (`traces/v3_initrace/`, and
-   `traces/driver_matrix/walk/` + `scripts/drivermatrix/initflake_evidence.sh` since `5018bb57`). The 570
+   gates 9/9, 30/30 — see §0). Its evidence is on master too: `traces/v3_initrace/`, and
+   `traces/driver_matrix/walk/` since `5018bb57`; `scripts/drivermatrix/initflake_evidence.sh` was on
+   master before either, since `36ef0358` (2026-09-26), so "evidence on `v3-drivers`" below was only
+   half right. The 570
    guest's next wall is a different one (the UVM first channel: `design/V3_DRIVER_MATRIX.md` stop note, step 1).
    **Adapter re-init race — ROOT-CAUSED + FIXED on `v3-mc19` (uncleared vidmem USERD; see §0).** Original note: Guest 570.148.08 reproduces it every boot (fat guest,
    no persistence mode): on re-init the CeUtils channel is reborn with the same token, host channel id
@@ -197,7 +203,7 @@ measure on a non-nested host, where exits are a few µs rather than ~50 µs.
 - **Boxes:** `scripts/bench/box/README.md` — rent, register with the idle watchdog
   (`vast_reaper.sh`), provision (`provision_full.sh`), check (`merge_check.sh`), destroy. From a cloud
   session (no SSH egress) the same scripts are driven through the `vx` kit — execd behind a cloudflared
-  quick tunnel (that README's `vx` section; the v3-mc20 bar ran this way, `traces/v3_mc20/README.md`).
+  quick tunnel (the v3-mc20 bar ran this way: `traces/v3_mc20/README.md`).
 - **Merging:** agents push sub-branches; a merge branch `v3-mcN` combines verified work on the current
   master; the full bar runs on a box at that exact revision; then master and v3 are fast-forwarded. Only
   docs/traces may be added on top of a verified revision without re-running the bar.

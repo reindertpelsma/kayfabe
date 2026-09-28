@@ -6,8 +6,8 @@
 > through merge candidate v3-mc20 (`5018bb57` = master `0d3ecde9` + `v3-drivers~1`), which passed the
 > merge bar at `c0ef7b75` — `kf-*` tests 1639 / 0, gates 9/9, `KF3_RC=0`, thin 30/30 (vast 53004208,
 > RTX 3060 GA106, host 580.159.04 open; `traces/v3_mc20/`); master and v3 are `db038f5f`. The 535/545
-> capability commit, now **`a50265f8`** (the same change as `ee35ca4a` before the rebase onto
-> `6ec7ec1a`; §6's rows still cite `ee35ca4a` as the revision they were measured at), **remains held**
+> capability commit, now **`a50265f8`** (the same change as `ee35ca4a`, which was an earlier
+> (pre-rebase) SHA of it; §6's rows still cite `ee35ca4a` as the revision they were measured at), **remains held**
 > for owner review and is the only commit on the branch that is not on master. Step 5 below is
 > therefore only partly done: the bar ran at the merged head without the allowlist and without the CUDA
 > ladder (`merge_check.sh` does not run it), and the 570 / 565 ladders were not re-run. Steps 1–4 stand.
