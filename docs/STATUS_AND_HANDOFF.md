@@ -50,7 +50,8 @@ this file.
   (runlist, chid) token index, ≤545 GET_CHIP_INFO carry, 595+ GSP heartbeat. Merge it onto the new master
   after `v3-mc19`, then run the bar. Next for that branch: the 570 guest's UVM-first-channel wall (token
   0x803 reads its GPFIFO before the mirror maps it) and a 570 thin-guest NULL deref seen on master.
-- ⊘ *2026-09-27: merged into the v3-mc21 candidate `4c48ca0c` (second line); its bar is in progress:*
+- ⊘ *2026-09-28: ON MASTER — merged as v3-mc21 `4c48ca0c`, bar passed (§0 first line), master `8ab92bf4`; step (1)
+  is wired in code since (`docs/design/V3_DISPLAY.md` step-(1) note); superseded text follows:*
   **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
   (~3–5 weeks to a desktop on GA10x); M0 (behind `display=on`, default off) brings the guest's display layer
   up; next step and plan in the stop note at the top of `docs/design/V3_DISPLAY.md`. Merge bar not run.
@@ -90,7 +91,7 @@ Checked with `git branch -r --no-merged origin/master`.
 
 | Branch | What it is | State / what it needs |
 |---|---|---|
-| `v3-display` (`adbea28e`) | display plane: Phase 1 design + M0 (`display=on`, default off) | **merged into the v3-mc21 candidate `4c48ca0c`** on `claude/kayfabe-gpu-testing-m0cv1q`; bar in progress (§0). Next steps: the stop note atop `design/V3_DISPLAY.md`; M0 evidence `traces/v3_display/m0a/` |
+| `v3-display` (`adbea28e`) | display plane: Phase 1 design + M0 (`display=on`, default off) | **ON MASTER** (v3-mc21 `4c48ca0c`, bar passed 2026-09-27; master `8ab92bf4`); step (1) wired in code on `claude/kayfabe-gpu-testing-m0cv1q`, not yet on the bench; GA106 M0 lane `traces/v3_display/mc21m0/`. Next steps: the stop note atop `design/V3_DISPLAY.md`; M0 evidence `traces/v3_display/m0a/` |
 | `v3-drivers` (`a50265f8`) | driver matrix (both axes) | everything but its tip is on master (`8f9bdd14` via v3-mc20, `5018bb57`); **the tip `a50265f8` = 535/545 capability allowlist — HELD for owner review** (§3.1). Next: `design/V3_DRIVER_MATRIX.md` stop note — the 570 guest's UVM first-channel wall first |
 | `v3-uvm-e6pp` (`c6765f5c`) | E6″ phase 0, forked from `v3-uvm-n4` at `600b864a` | research: **phase 0 ran** — the real libcuda's mapping/launch ioctl shape captured on a stock box (`V3_UVM_DEMAND_PAGING.md` §12.6 on that branch; evidence `traces/v3_uvm_research/e6pp/results.txt` there). E6″ proper (module present; fault, latency, replay, cancel) not run; see §3.2 |
 | `v3-uvm-n4` (`600b864a`) | UVM demand-paging research + N4 experiments E5/E6/E6′ (`V3_UVM_DEMAND_PAGING.md` §11–§13; §0–§10 are on master via `v3-uvm-research`) | research; continued on `v3-uvm-e6pp`; see §3.2 |

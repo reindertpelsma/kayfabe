@@ -681,7 +681,10 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
     CaptureReliance {
         cmd: 0x0073_0107,
         read_end: 0,
-        sites: &["crates/kf-rm/src/display.rs", "crates/kf-rm/tests/display_seat.rs"],
+        sites: &[
+            "crates/kf-rm/src/display.rs",
+            "crates/kf-rm/tests/display_seat.rs",
+        ],
         why: "NOT A READ of the capture. NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED is authored by the \
               display model from its own connectors (`displayMask` = `displayMaskDDC` = the OR of \
               the virtual monitors' display ids, `kf_disp::model` \"supported\"); the C row's \

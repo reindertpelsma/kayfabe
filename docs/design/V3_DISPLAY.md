@@ -37,8 +37,13 @@
 >
 > **What remains of step (1)** — nothing GPU-free. On the bench (the M1 grade, §5): with `display=on`,
 > NVKMS gets past `0x730101` and the unserviced ledger holds no NV0073 / NV5070 / NVC370 / NVC372 id.
-> Known gaps, each small and bounded: (a) an alloc is observed before the object seat answers it, so an
-> alloc the seat then refuses leaves a registry entry until that channel is allocated again; (b) a
+> Known gaps, each small and bounded: (a) ⊘ *corrected 2026-09-28 (review): the effect is wider than
+> first written.* An alloc is observed before the object seat answers it, and a free likewise. An alloc
+> the seat then refuses **replaces** a live channel's registry entry at the same `(kind, instance)` (new
+> handle, GET/PUT and pushbuffer), after which the real channel's own free no longer matches it
+> (`DisplayModel::free` keys on `(client, handle)`); a free the seat refuses still releases the entry.
+> Only `display=on`, only a crafted guest, the harm stays in that guest's own display, and nothing reads
+> the registry yet. The fix belongs with step (3): record on the seat's answer, not before it. (b) a
 > claimed control is answered whatever object it names (`hObject`'s class is not checked);
 > (c) `kf-qemu` does not hold the model yet — step (3) must take the `SharedDisplayModel`
 > (`DisplayPolicy::over` / `DisplayPolicy::model`) across `ReselectAtFn1` rebuilds of the chain, and move
@@ -61,11 +66,11 @@
 > (control layouts compiled from ogkm), `kf_disp::class` + `tools/derive_display_classes.sh` (per-family
 > method/field/caps tables compiled from the class headers), `kf_disp::model` (answers for all ~30
 > NVKMS bring-up controls of §4.2 (A), the pushbuffer/channel registry, `GET_CHANNEL_INFO` idle from GET==PUT).
-> Unit-tested (`cargo test -p kf-disp`), **not yet wired**: `kf_rm::display` still answers only the M0 set.
 > ⊘ *Superseded 2026-09-27 by the step-(1) note above: the model is wired (with `display=on`).*
-> **Next, in order:** (1) make `kf_rm::display::DisplayPolicy` delegate to a shared
-> `Arc<Mutex<kf_disp::model::DisplayModel>>` and observe display allocs/frees (`DisplayModel::alloc/free`)
-> — ⊘ *done in code 2026-09-27, not on the bench (the note above)*;
+> Unit-tested (`cargo test -p kf-disp`), **not yet wired**: `kf_rm::display` still answers only the M0 set.
+> **Next, in order:** (1) ⊘ *done in code 2026-09-27, not on the bench (the note above):* make
+> `kf_rm::display::DisplayPolicy` delegate to a shared
+> `Arc<Mutex<kf_disp::model::DisplayModel>>` and observe display allocs/frees (`DisplayModel::alloc/free`);
 > (2) `kf_disp::engine`: PUT → read the 4 KiB sysmem pushbuffer → decode → assembly/armed state per class
 > (derived tables) → core notifier FINISHED + ARMED mirror at `0x688000` → window flips with acquire
 > (EQ `0xf473f473`) / release-on-flip-away (`0xd00dd00d`) + WRITE_AWAKEN notifier; ctxdma resolution by

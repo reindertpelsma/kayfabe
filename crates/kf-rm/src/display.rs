@@ -67,6 +67,17 @@ pub const SET_STATIC_EDID_DATA: u32 = 0x2080_0adf;
 /// tree has not derived).
 pub const M0_CONTROLS: [u32; 5] = [GET_IP_VERSION, GET_STATIC_INFO, INIT_BRIGHTC_STATE_LOAD, SET_STATIC_EDID_DATA, WRITE_INST_MEM];
 
+/// ★ The claimed controls the **guest's own** export table marks cacheable
+/// (`PERSISTENT_CACHEABLE`, `0x800000`): `NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED` and
+/// `_SYSTEM_GET_INTERNAL_DISPLAYS` (flags `0x82004a`), `_SPECIFIC_GET_TYPE` (`0x820046`), accessRight 0
+/// (`ogkm-580: g_disp_objs_nvoc.c`, the export table). The guest keeps our FIRST answer across
+/// StateLoad/Unload, so each must be fixed for the device's life — the decision
+/// [`crate::sticky::BRANCH_A_CACHEABLE`] forces for the init-table rows, made here for the display
+/// link (2026-09-28). It holds: the connector set is the model's fixed monitor list ([`monitors`]) and
+/// the display type a constant, pinned by a test. ⊘ Revisit when monitors become configurable or
+/// hotplug exists — those answers then stop being constant and the guest would serve stale ones.
+pub const GUEST_CACHEABLE: [u32; 3] = [0x0073_0107, 0x0073_0116, 0x0073_0240];
+
 /// `sizeof(NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS)` — `feHwSysCap windowPresentMask
 /// bFbRemapperEnabled(+pad) numHeads i2cPort internalDispActiveMask embeddedDisplayPortMask
 /// bExternalMuxSupported bInternalMuxSupported(+pad) numDispChannels` (`ctrl2080internal.h:71-82`).
@@ -718,5 +729,28 @@ mod tests {
         assert!(p.respond(&alloc(0xc1d0_0001, 0xcafe_0070, 0xcafe_0d00, 0xC67D, &chan_params(false, 0))).is_none());
         assert!(p.objects.is_empty());
         assert!(p.respond(&control(0x0073_0101, 0, &[0; 16])).is_none(), "not claimed without the model");
+    }
+
+    /// ★ [`GUEST_CACHEABLE`]: the guest keeps these answers for the driver's life, so each is claimed,
+    /// named as the export table names it, and identical before and after a display-channel
+    /// alloc/free cycle (the only state the link changes today).
+    #[test]
+    fn guest_cacheable_answers_are_fixed_for_the_device_life() {
+        let rows = [
+            ("NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED", "NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS"),
+            ("NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS", "NV0073_CTRL_SYSTEM_GET_INTERNAL_DISPLAYS_PARAMS"),
+            ("NV0073_CTRL_CMD_SPECIFIC_GET_TYPE", "NV0073_CTRL_SPECIFIC_GET_TYPE_PARAMS"),
+        ];
+        let mut p = policy();
+        assert_eq!(rows.map(|(c, _)| k(c)), GUEST_CACHEABLE, "the constant names the derived ids");
+        let ask = |p: &mut DisplayPolicy| rows.map(|(c, s)| p.answer(k(c), &zeroed(s)));
+        let first = ask(&mut p);
+        assert!(first.iter().all(|a| matches!(a, Some(Ok(_)))), "claimed and answered OK: {first:?}");
+        let (c, dev, disp) = (0xc1d0_0001, 0xcafe_0001, 0xcafe_0070);
+        assert!(p.respond(&alloc(c, dev, disp, 0xC670, &[])).is_none());
+        assert!(p.respond(&alloc(c, disp, 0xcafe_0d00, 0xC67D, &chan_params(false, 0))).is_none());
+        assert_eq!(ask(&mut p), first, "unchanged while a channel is live");
+        assert!(p.respond(&free(c, dev, disp)).is_none());
+        assert_eq!(ask(&mut p), first, "unchanged after the free");
     }
 }

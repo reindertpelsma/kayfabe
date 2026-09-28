@@ -446,7 +446,7 @@ impl DisplayModel {
                 // ★ Hostile guest: `(class, instance)` keys the registry, so both are bounded —
                 // one of this family's channel classes, an instance that exists. The guest's CPU-RM
                 // sends it for every DMA channel (`valid`) and every PIO channel (`!valid`), after
-                // its own channel-number check (`disp_channel.c:786-864`), and ignores the status.
+                // its own channel-number check (`disp_channel.c:786-863`), and ignores the status.
                 match self.classes.channel_kind(class) {
                     Some(kd) if inst < self.instances(kd) => {}
                     _ => return Err(NV_ERR_INVALID_ARGUMENT),
