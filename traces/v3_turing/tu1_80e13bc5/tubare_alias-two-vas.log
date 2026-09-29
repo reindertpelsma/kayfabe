@@ -1,0 +1,31 @@
+info  RMLADDER ARGV     = [--alias-two-vas]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d000ea
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine emulator                      decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so                      inside a guest EVERY rung below is expected to report its CONTROL as                      FAILED and NOTRUN. That is the emulator's declared scope, NOT a red
+RUNG_map_propagation=NOTRUN
+RUNG_alias_unmap=NOTRUN
+RUNG_missing_page=NOTRUN
+RUNG_map_stress=NOTRUN
+RUNG_rpc_mixed=NOTRUN
+RUNG_cross_client=NOTRUN
+info  R1' alias two VAs   = GPU 0, euid 0 — ONE object, TWO GPU VAs, and a release through the FIRST one AFTER the second is mapped
+info  R1' the bar         = A must land (control), then B, then A AGAIN. ⊘ Steps A and B pass even where the second map revokes the first; only the RE-release through VA_A can see a revoke
+info  R1' host says A     = PDE_COVERS at 0x0000000711000000 (after mapping A)
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  R1' release via A   = Landed
+ok    R1' control         = MAGIC_A landed through the single mapping
+info  R1' host says A/B   = A PDE_COVERS / B PDE_COVERS (after mapping BOTH)
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  R1' release via B   = Landed
+★     R1' ALIAS PROVED    = MAGIC_B landed at offset 0x40 of the ONE object this rung allocated — VA_A and VA_B name the same memory, measured rather than asked for
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #3 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+info  R1' release via A#2 = Landed
+★     R1' BOTH VAs LIVE   = a release through VA_A landed AFTER VA_B was mapped over the same frame. ⇒ One allocation IS live at two GPU VAs at once. On bare metal this is the control. IN THE GUEST this REFUTES the FB-join aliasing diagnosis and must be said loudly
+RUNGCTL_alias_two_vas=PASS
+RUNG_alias_two_vas=PASS
+done — w379/w381 mapping-plane rungs only

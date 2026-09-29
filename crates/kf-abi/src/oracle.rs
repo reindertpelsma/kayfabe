@@ -675,6 +675,22 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         why: "NOT A READ. SET_STATIC_EDID_DATA is [IN] (a laptop's ACPI panel EDIDs); the reply is \
               the guest's own request with NV_OK",
     },
+    // ★ 2026-09-27 (v3-display step (1)): the display link now delegates to
+    // `kf_disp::model::DisplayModel`, which serves one more of the C's truncated rows — and reads
+    // none of it.
+    CaptureReliance {
+        cmd: 0x0073_0107,
+        read_end: 0,
+        sites: &[
+            "crates/kf-rm/src/display.rs",
+            "crates/kf-rm/tests/display_seat.rs",
+        ],
+        why: "NOT A READ of the capture. NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED is authored by the \
+              display model from its own connectors (`displayMask` = `displayMaskDDC` = the OR of \
+              the virtual monitors' display ids, `kf_disp::model` \"supported\"); the C row's \
+              missing four bytes are never decoded, and the two sites only name the id (the \
+              link's claim test and the served-chain seat test)",
+    },
 ];
 
 /// The reliance statement for `cmd`, if this tree has one.

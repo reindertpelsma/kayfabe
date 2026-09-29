@@ -71,9 +71,26 @@ say "guest up; installed now: $(GS 'modinfo -F version nvidia 2>/dev/null' | tr 
 # /var/tmp is on disk (the guest's /tmp is a tmpfs).
 scp -q -P "$PORT" -i "$BENCH/guest_key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -o LogLevel=ERROR "$RUN" ubuntu@127.0.0.1:/var/tmp/nv-$V.run || die "scp of the .run failed"
+# ⊘ [2026-09-28] THE GUEST KERNEL'S OWN COMPILER — the host installer's gap one layer down
+# (`provision_host_driver.sh`): a .run older than 570 builds its modules with `cc` (gcc-11 on
+# jammy) while the image's HWE 6.8 kernel was built by gcc-12, and every object fails on
+# `-ftrivial-auto-var-init=zero` — possibly why 550.54.14 never staged here (V3_DRIVER_MATRIX §6.0;
+# its installer errors were not kept then; 565.57.01 did stage, so this is unproven). DERIVED in
+# the guest from its kernel's `CONFIG_CC_VERSION_TEXT` (else `/proc/version`), installed there if
+# missing, and handed to the installer as `CC`; if it cannot be had, the installer keeps its
+# default and the line below says so.
+# shellcheck disable=SC2016  # expanded by the GUEST's shell, on purpose
+GKCC=$(GS 'k=$(sed -n "s/^CONFIG_CC_VERSION_TEXT=\"\([^ ]*\) .*/\1/p" /lib/modules/$(uname -r)/build/.config 2>/dev/null); [ -n "$k" ] || k=$(sed -n "s/^Linux version [^ ]* ([^)]*) (\([^ ]*\) .*/\1/p" /proc/version 2>/dev/null); echo "$k"' | tr -d '\r')
+CCENV=""
+if [ -n "$GKCC" ]; then
+    GSL "command -v $GKCC >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${GKCC##*-linux-gnu-} >/dev/null 2>&1 \
+         || { sudo apt-get update -qq >/dev/null 2>&1; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${GKCC##*-linux-gnu-} >/dev/null 2>&1; }" >/dev/null 2>&1
+    GS "command -v $GKCC" >/dev/null 2>&1 && CCENV="env CC=$GKCC"
+fi
+say "guest kernel compiler: ${GKCC:-unknown} (${CCENV:-NOT AVAILABLE in the guest — the installer uses its default cc})"
 say "uninstall the previous .run install, install $V (open modules)"
 GSL "sudo /usr/bin/nvidia-uninstall --silent >/dev/null 2>&1; \
-     sudo sh /var/tmp/nv-$V.run --silent --no-x-check --no-nouveau-check --no-questions -m=kernel-open -j$(nproc); \
+     sudo $CCENV sh /var/tmp/nv-$V.run --silent --no-x-check --no-nouveau-check --no-questions -m=kernel-open -j$(nproc); \
      echo NVRUN_RC=\$?" 2>&1 | tail -4
 
 MOD=$(GS 'modinfo -F version nvidia 2>/dev/null' | tr -d '\r')

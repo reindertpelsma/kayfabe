@@ -4,6 +4,12 @@
 //! `docs/design/V3_HW_BOUNDARY_INVENTORY.md`). Until this test the two hand copies were only tied to
 //! EACH OTHER; nothing tied either to the header.
 //!
+//! ★ TABLE-DRIVEN (2026-09-27, `STATUS_AND_HANDOFF.md` §4 item 6): each format is a table of rows,
+//! one per NAMED `dev_mmu.h` define (`NV_MMU_{VER2,VER3}_…`, spelled after the prefix), each saying
+//! which descriptor entry it pins — so what is checked reads as a list of header names, a new
+//! descriptor field is one row, and a failure names the define. Every assertion of the
+//! per-format functions this replaced is a row here.
+//!
 //! ⊘ Header facts only: bit positions, widths, shifts, aperture codes, entry sizes, PCF encodings.
 //! The level GEOMETRY (which VA bits each level decodes, which levels are leaves) lives in RM's C
 //! (`kern_gmmu_fmt_gp10x.c` / `_ga10x.c` / `_gh10x.c` / `_gb10x.c`), not in a header, and is not
@@ -33,262 +39,225 @@ fn field(g: DieGroup, name: &str, word: u64) -> (u64, u64) {
 fn ours(f: KfField) -> (u64, u64) {
     (u64::from(f.lo), u64::from(f.bits))
 }
-fn bit(i: u8) -> u64 {
-    u64::from(i)
+/// The descriptor's aperture nibble, as `(lo, bits)`.
+fn ap_nibble(f: &KfFormat) -> (u64, u64) {
+    (u64::from(f.ap_lo), u64::from(f.ap_bits))
 }
 
-/// The aperture codes of `prefix` (`…_APERTURE_*`), in the descriptor's map order.
-fn aperture_codes(g: DieGroup, prefix: &str) -> [u64; 4] {
-    [
-        "VIDEO_MEMORY",
-        "PEER_MEMORY",
-        "SYSTEM_COHERENT_MEMORY",
-        "SYSTEM_NON_COHERENT_MEMORY",
+/// A descriptor bit-field, as `(lo, bits)`.
+type Spec = fn(&KfFormat) -> (u64, u64);
+/// A descriptor number: a bit position, a shift, an entry size, a code.
+type Num = fn(&KfFormat) -> u64;
+/// A descriptor aperture map (raw nibble → `KFWR_AP_*`).
+type ApMap = fn(&KfFormat) -> [u8; 4];
+
+/// ★ One row: a `dev_mmu.h` define, named after `NV_MMU_{VERn}_`, and what the descriptor must
+/// say about it.
+enum Row {
+    /// A `hi:lo` field, `word` 64-bit words into the entry: the descriptor's `(lo, bits)`.
+    Field(&'static str, u64, Spec),
+    /// A one-bit `n:n` field: the descriptor's bit position.
+    Bit(&'static str, Num),
+    /// A plain value (`_SHIFT`, `__SIZE`, an enumerant): the descriptor's number.
+    Val(&'static str, Num),
+    /// A PCF enumerant that is ONE bit of the PCF field: the descriptor's bit position for it.
+    PcfBit(&'static str, Num),
+    /// An aperture enumeration `<name>_<APERTURE>`: the descriptor's map sends each code to the
+    /// report aperture named beside it.
+    Apertures(&'static str, ApMap, [(&'static str, u8); 4]),
+    /// Two header fields that must be the same range (the descriptor holds one spec for both).
+    Same(&'static str, &'static str),
+    /// A header range the walker assumes, pinned as a literal `(hi, lo)`.
+    Range(&'static str, (u64, u64)),
+}
+
+use Row::{Apertures, Bit, Field, PcfBit, Range, Same, Val};
+
+const PTE_APERTURES: [(&str, u8); 4] = [
+    ("VIDEO_MEMORY", AP_VID),
+    ("PEER_MEMORY", AP_PEER),
+    ("SYSTEM_COHERENT_MEMORY", AP_SYS),
+    ("SYSTEM_NON_COHERENT_MEMORY", AP_SYS_NC),
+];
+const PDE_APERTURES: [(&str, u8); 4] = [
+    ("INVALID", AP_INVALID),
+    ("VIDEO_MEMORY", AP_VID),
+    ("SYSTEM_COHERENT_MEMORY", AP_SYS),
+    ("SYSTEM_NON_COHERENT_MEMORY", AP_SYS_NC),
+];
+
+/// Every row that holds in BOTH formats: validity, the aperture nibble and its codes, entry
+/// sizes, and KIND.
+fn common_rows() -> Vec<Row> {
+    vec![
+        Bit("PTE_VALID", |f| u64::from(f.valid_bit)),
+        Field("PTE_APERTURE", 0, ap_nibble),
+        // The PTE aperture code i maps to the report code in slot i: VID, PEER, SYS_COH, SYS_NC.
+        Apertures("PTE_APERTURE", |f| f.pte_ap_map, PTE_APERTURES),
+        Val("PTE__SIZE", |f| u64::from(f.small_entry_bytes)),
+        Val("PTE__SIZE", |f| u64::from(f.big_entry_bytes)),
+        Val("DUAL_PDE__SIZE", |f| u64::from(f.dir[4].entry_bytes)),
+        Field("PTE_KIND", 0, |f| ours(f.kind)),
     ]
-    .map(|a| val(g, &format!("{prefix}_{a}")))
 }
 
-fn common(f: &KfFormat, g: DieGroup, v: &str) {
-    let pte = format!("NV_MMU_{v}_PTE");
-    assert_eq!(
-        bit(f.valid_bit),
-        range(g, &format!("{pte}_VALID")).1,
-        "{g:?}"
-    );
-    let (ap_hi, ap_lo) = range(g, &format!("{pte}_APERTURE"));
-    assert_eq!(
-        (u64::from(f.ap_lo), u64::from(f.ap_bits)),
-        (ap_lo, ap_hi - ap_lo + 1),
-        "{g:?}"
-    );
-    // The PTE aperture code i maps to the report code in slot i: VID, PEER, SYS_COH, SYS_NC.
-    assert_eq!(
-        aperture_codes(g, &format!("{pte}_APERTURE")),
-        [0, 1, 2, 3],
-        "{g:?}"
-    );
-    assert_eq!(f.pte_ap_map, [AP_VID, AP_PEER, AP_SYS, AP_SYS_NC]);
-    assert_eq!(val(g, &format!("{pte}__SIZE")), 8, "{g:?}");
-    assert_eq!(u64::from(f.small_entry_bytes), 8);
-    assert_eq!(u64::from(f.big_entry_bytes), 8);
-    assert_eq!(
-        u64::from(f.dir[4].entry_bytes),
-        val(g, &format!("NV_MMU_{v}_DUAL_PDE__SIZE")),
-        "{g:?}"
-    );
-    for d in &f.dir[..4] {
-        if d.active != 0 {
-            assert_eq!(
-                u64::from(d.entry_bytes),
-                val(g, &format!("NV_MMU_{v}_PDE__SIZE")),
-                "{g:?}"
-            );
+/// VER2 (Turing, Ampere, Ada): split vidmem/sysmem address fields; single-bit permissions.
+fn ver2_rows() -> Vec<Row> {
+    let mut rows = common_rows();
+    rows.extend([
+        // PTE address: VID 32:8 / SYS 53:8, both `<< ADDRESS_SHIFT` (12).
+        Field("PTE_ADDRESS_VID", 0, |f| ours(f.addr_local)),
+        Field("PTE_ADDRESS_SYS", 0, |f| ours(f.addr_sys)),
+        Val("PTE_ADDRESS_SHIFT", |f| u64::from(f.addr_local.shift)),
+        Val("PTE_ADDRESS_SHIFT", |f| u64::from(f.addr_sys.shift)),
+        // The PDE reuses the same field spec: the header must agree it is the same field.
+        Field("PDE_ADDRESS_VID", 0, |f| ours(f.addr_local)),
+        Field("PDE_ADDRESS_SYS", 0, |f| ours(f.addr_sys)),
+        Val("PDE_ADDRESS_SHIFT", |f| u64::from(f.addr_local.shift)),
+        Same("PDE_APERTURE", "PTE_APERTURE"),
+        // PDE aperture codes: INVALID 0 / VID 1 / SYS_COH 2 / SYS_NC 3.
+        Apertures("PDE_APERTURE", |f| f.pde_ap_map, PDE_APERTURES),
+        Val("PDE_APERTURE_INVALID", |f| u64::from(f.pde_ap_invalid)),
+        // Dual PDE: big half in the low word (32:4 / 53:4, `<< 8`), small half in the high word
+        // with the PDE's own layout (66:65 aperture, 96:72 / 117:72 address).
+        Field("DUAL_PDE_ADDRESS_BIG_VID", 0, |f| ours(f.big_addr_local)),
+        Field("DUAL_PDE_ADDRESS_BIG_SYS", 0, |f| ours(f.big_addr_sys)),
+        Val("DUAL_PDE_ADDRESS_BIG_SHIFT", |f| {
+            u64::from(f.big_addr_local.shift)
+        }),
+        Same("DUAL_PDE_APERTURE_BIG", "PDE_APERTURE"),
+        Field("DUAL_PDE_ADDRESS_SMALL_VID", 1, |f| ours(f.addr_local)),
+        Field("DUAL_PDE_ADDRESS_SMALL_SYS", 1, |f| ours(f.addr_sys)),
+        Field("DUAL_PDE_APERTURE_SMALL", 1, ap_nibble),
+        // Flag bits.
+        Bit("PTE_VOL", |f| u64::from(f.bit_volatile)),
+        Bit("PTE_PRIVILEGE", |f| u64::from(f.bit_privilege)),
+        Bit("PTE_READ_ONLY", |f| u64::from(f.bit_read_only)),
+        Bit("PTE_ATOMIC_DISABLE", |f| u64::from(f.bit_atomic_disable)),
+        Bit("PDE_VOL", |f| u64::from(f.bit_volatile)),
+    ]);
+    rows
+}
+
+/// VER3 (Hopper, Blackwell): one address field for every aperture; permissions in the PCF.
+fn ver3_rows() -> Vec<Row> {
+    let mut rows = common_rows();
+    rows.extend([
+        // ONE address field for every aperture: 51:12, `<< 12`.
+        Field("PTE_ADDRESS", 0, |f| ours(f.addr_local)),
+        Field("PTE_ADDRESS", 0, |f| ours(f.addr_sys)),
+        Val("PTE_ADDRESS_SHIFT", |f| u64::from(f.addr_local.shift)),
+        Val("PTE_ADDRESS_SHIFT", |f| u64::from(f.addr_sys.shift)),
+        Field("PDE_ADDRESS", 0, |f| ours(f.addr_local)),
+        Val("PDE_ADDRESS_SHIFT", |f| u64::from(f.addr_local.shift)),
+        Range("PDE_IS_PTE", (0, 0)),
+        // Dual PDE: big half 51:8 `<< 8` in the low word; small half = the PDE layout, high word.
+        Field("DUAL_PDE_ADDRESS_BIG", 0, |f| ours(f.big_addr_local)),
+        Field("DUAL_PDE_ADDRESS_BIG", 0, |f| ours(f.big_addr_sys)),
+        Val("DUAL_PDE_ADDRESS_BIG_SHIFT", |f| {
+            u64::from(f.big_addr_local.shift)
+        }),
+        Field("DUAL_PDE_ADDRESS_SMALL", 1, |f| ours(f.addr_local)),
+        // PCF 7:3; SPARSE = 1; the four permission bits are the enumerants' low four bits.
+        Field("PTE_PCF", 0, |f| ours(f.pcf)),
+        Val("PTE_PCF_SPARSE", |f| u64::from(f.pcf_sparse)),
+        PcfBit("PTE_PCF_REGULAR_RW_ATOMIC_UNCACHED_ACE", |f| {
+            u64::from(f.bit_volatile)
+        }),
+        PcfBit("PTE_PCF_PRIVILEGE_RW_ATOMIC_CACHED_ACE", |f| {
+            u64::from(f.bit_privilege)
+        }),
+        PcfBit("PTE_PCF_REGULAR_RO_ATOMIC_CACHED_ACE", |f| {
+            u64::from(f.bit_read_only)
+        }),
+        PcfBit("PTE_PCF_REGULAR_RW_NO_ATOMIC_CACHED_ACE", |f| {
+            u64::from(f.bit_atomic_disable)
+        }),
+        // PDE apertures: 2:1, and code 0 is INVALID (the descriptor's "names no sub-level").
+        Range("PDE_APERTURE", (2, 1)),
+        Apertures("PDE_APERTURE", |f| f.pde_ap_map, PDE_APERTURES),
+        Val("PDE_APERTURE_INVALID", |f| u64::from(f.pde_ap_invalid)),
+    ]);
+    rows
+}
+
+/// Hold `f` to every row, for every die group `groups` names, with header names under
+/// `NV_MMU_{v}_`.
+fn check(f: &KfFormat, v: &str, groups: &[DieGroup], rows: &[Row]) {
+    let n = |s: &str| format!("NV_MMU_{v}_{s}");
+    for &g in groups {
+        for row in rows {
+            match *row {
+                Field(name, word, spec) => {
+                    assert_eq!(
+                        spec(f),
+                        field(g, &n(name), word),
+                        "{g:?} {} (lo, bits), word {word}",
+                        n(name)
+                    );
+                }
+                Bit(name, pos) => {
+                    assert_eq!(range(g, &n(name)), (pos(f), pos(f)), "{g:?} {}", n(name));
+                }
+                Val(name, num) => assert_eq!(num(f), val(g, &n(name)), "{g:?} {}", n(name)),
+                PcfBit(name, pos) => {
+                    let e = val(g, &n(name));
+                    assert!(
+                        e.is_power_of_two(),
+                        "{g:?} {}: not one bit of the PCF",
+                        n(name)
+                    );
+                    assert_eq!(
+                        pos(f),
+                        u64::from(f.pcf.lo) + u64::from(e.trailing_zeros()),
+                        "{g:?} {}",
+                        n(name)
+                    );
+                }
+                Apertures(name, map, names) => {
+                    let map = map(f);
+                    for (a, ap) in names {
+                        let code = val(g, &n(&format!("{name}_{a}")));
+                        let slot = usize::try_from(code).ok().filter(|&c| c < map.len());
+                        assert_eq!(
+                            slot.map(|c| map[c]),
+                            Some(ap),
+                            "{g:?} {}_{a} = {code}",
+                            n(name)
+                        );
+                    }
+                }
+                Same(a, b) => assert_eq!(
+                    range(g, &n(a)),
+                    range(g, &n(b)),
+                    "{g:?} {} vs {}",
+                    n(a),
+                    n(b)
+                ),
+                Range(name, want) => assert_eq!(range(g, &n(name)), want, "{g:?} {}", n(name)),
+            }
+        }
+        // Every ACTIVE directory level uses the PDE's entry size (level 4 is the dual level).
+        for d in f.dir[..4].iter().filter(|d| d.active != 0) {
+            assert_eq!(u64::from(d.entry_bytes), val(g, &n("PDE__SIZE")), "{g:?}");
         }
     }
-    assert_eq!(ours(f.kind), field(g, &format!("{pte}_KIND"), 0), "{g:?}");
 }
 
 #[test]
 fn the_ver2_descriptor_is_every_ver2_die_groups_dev_mmu_h() {
     let f = kf_format_ver2();
-    for g in VER2 {
-        common(&f, g, "VER2");
-        // PTE address: VID 32:8 / SYS 53:8, both `<< ADDRESS_SHIFT` (12).
-        assert_eq!(
-            ours(f.addr_local),
-            field(g, "NV_MMU_VER2_PTE_ADDRESS_VID", 0),
-            "{g:?}"
-        );
-        assert_eq!(
-            ours(f.addr_sys),
-            field(g, "NV_MMU_VER2_PTE_ADDRESS_SYS", 0),
-            "{g:?}"
-        );
-        assert_eq!(
-            u64::from(f.addr_local.shift),
-            val(g, "NV_MMU_VER2_PTE_ADDRESS_SHIFT"),
-            "{g:?}"
-        );
-        assert_eq!(
-            u64::from(f.addr_sys.shift),
-            val(g, "NV_MMU_VER2_PTE_ADDRESS_SHIFT"),
-            "{g:?}"
-        );
-        // The PDE reuses the same field spec: the header must agree it is the same field.
-        assert_eq!(
-            field(g, "NV_MMU_VER2_PDE_ADDRESS_VID", 0),
-            ours(f.addr_local),
-            "{g:?}"
-        );
-        assert_eq!(
-            field(g, "NV_MMU_VER2_PDE_ADDRESS_SYS", 0),
-            ours(f.addr_sys),
-            "{g:?}"
-        );
-        assert_eq!(
-            val(g, "NV_MMU_VER2_PDE_ADDRESS_SHIFT"),
-            u64::from(f.addr_local.shift),
-            "{g:?}"
-        );
-        assert_eq!(
-            range(g, "NV_MMU_VER2_PDE_APERTURE"),
-            range(g, "NV_MMU_VER2_PTE_APERTURE"),
-            "{g:?}"
-        );
-        // PDE aperture codes: INVALID 0 / VID 1 / SYS_COH 2 / SYS_NC 3.
-        let pde: Vec<u64> = [
-            "INVALID",
-            "VIDEO_MEMORY",
-            "SYSTEM_COHERENT_MEMORY",
-            "SYSTEM_NON_COHERENT_MEMORY",
-        ]
-        .iter()
-        .map(|a| val(g, &format!("NV_MMU_VER2_PDE_APERTURE_{a}")))
-        .collect();
-        assert_eq!(pde, [0, 1, 2, 3], "{g:?}");
-        assert_eq!(f.pde_ap_map, [AP_INVALID, AP_VID, AP_SYS, AP_SYS_NC]);
-        assert_eq!(
-            u64::from(f.pde_ap_invalid),
-            val(g, "NV_MMU_VER2_PDE_APERTURE_INVALID"),
-            "{g:?}"
-        );
-        // Dual PDE: big half in the low word (32:4 / 53:4, `<< 8`), small half in the high word
-        // with the PDE's own layout (66:65 aperture, 96:72 / 117:72 address).
-        assert_eq!(
-            ours(f.big_addr_local),
-            field(g, "NV_MMU_VER2_DUAL_PDE_ADDRESS_BIG_VID", 0),
-            "{g:?}"
-        );
-        assert_eq!(
-            ours(f.big_addr_sys),
-            field(g, "NV_MMU_VER2_DUAL_PDE_ADDRESS_BIG_SYS", 0),
-            "{g:?}"
-        );
-        assert_eq!(
-            u64::from(f.big_addr_local.shift),
-            val(g, "NV_MMU_VER2_DUAL_PDE_ADDRESS_BIG_SHIFT"),
-            "{g:?}"
-        );
-        assert_eq!(
-            range(g, "NV_MMU_VER2_DUAL_PDE_APERTURE_BIG"),
-            range(g, "NV_MMU_VER2_PDE_APERTURE"),
-            "{g:?}"
-        );
-        assert_eq!(
-            field(g, "NV_MMU_VER2_DUAL_PDE_ADDRESS_SMALL_VID", 1),
-            ours(f.addr_local),
-            "{g:?}"
-        );
-        assert_eq!(
-            field(g, "NV_MMU_VER2_DUAL_PDE_ADDRESS_SMALL_SYS", 1),
-            ours(f.addr_sys),
-            "{g:?}"
-        );
-        assert_eq!(
-            field(g, "NV_MMU_VER2_DUAL_PDE_APERTURE_SMALL", 1),
-            (u64::from(f.ap_lo), u64::from(f.ap_bits))
-        );
-        // Flag bits.
-        for (ours, name) in [
-            (f.bit_volatile, "NV_MMU_VER2_PTE_VOL"),
-            (f.bit_privilege, "NV_MMU_VER2_PTE_PRIVILEGE"),
-            (f.bit_read_only, "NV_MMU_VER2_PTE_READ_ONLY"),
-            (f.bit_atomic_disable, "NV_MMU_VER2_PTE_ATOMIC_DISABLE"),
-        ] {
-            assert_eq!(range(g, name), (bit(ours), bit(ours)), "{g:?} {name}");
-        }
-        assert_eq!(
-            range(g, "NV_MMU_VER2_PDE_VOL"),
-            (bit(f.bit_volatile), bit(f.bit_volatile)),
-            "{g:?}"
-        );
-    }
+    // ⊘ The two maps as the descriptor states them, beside the per-code rows that derive them.
+    assert_eq!(f.pte_ap_map, [AP_VID, AP_PEER, AP_SYS, AP_SYS_NC]);
+    assert_eq!(f.pde_ap_map, [AP_INVALID, AP_VID, AP_SYS, AP_SYS_NC]);
+    check(&f, "VER2", &VER2, &ver2_rows());
 }
 
 #[test]
 fn the_ver3_descriptor_is_every_ver3_die_groups_dev_mmu_h() {
     let f = kf_format_ver3();
-    for g in VER3 {
-        common(&f, g, "VER3");
-        // ONE address field for every aperture: 51:12, `<< 12`.
-        assert_eq!(
-            ours(f.addr_local),
-            field(g, "NV_MMU_VER3_PTE_ADDRESS", 0),
-            "{g:?}"
-        );
-        assert_eq!(
-            ours(f.addr_sys),
-            field(g, "NV_MMU_VER3_PTE_ADDRESS", 0),
-            "{g:?}"
-        );
-        assert_eq!(
-            u64::from(f.addr_local.shift),
-            val(g, "NV_MMU_VER3_PTE_ADDRESS_SHIFT"),
-            "{g:?}"
-        );
-        assert_eq!(
-            field(g, "NV_MMU_VER3_PDE_ADDRESS", 0),
-            ours(f.addr_local),
-            "{g:?}"
-        );
-        assert_eq!(
-            val(g, "NV_MMU_VER3_PDE_ADDRESS_SHIFT"),
-            u64::from(f.addr_local.shift),
-            "{g:?}"
-        );
-        assert_eq!(range(g, "NV_MMU_VER3_PDE_IS_PTE"), (0, 0), "{g:?}");
-        // Dual PDE: big half 51:8 `<< 8` in the low word; small half = the PDE layout, high word.
-        assert_eq!(
-            ours(f.big_addr_local),
-            field(g, "NV_MMU_VER3_DUAL_PDE_ADDRESS_BIG", 0),
-            "{g:?}"
-        );
-        assert_eq!(
-            u64::from(f.big_addr_local.shift),
-            val(g, "NV_MMU_VER3_DUAL_PDE_ADDRESS_BIG_SHIFT"),
-            "{g:?}"
-        );
-        assert_eq!(
-            field(g, "NV_MMU_VER3_DUAL_PDE_ADDRESS_SMALL", 1),
-            ours(f.addr_local),
-            "{g:?}"
-        );
-        // PCF 7:3; SPARSE = 1; the four permission bits are the enumerants' low four bits.
-        assert_eq!(ours(f.pcf), field(g, "NV_MMU_VER3_PTE_PCF", 0), "{g:?}");
-        assert_eq!(
-            u64::from(f.pcf_sparse),
-            val(g, "NV_MMU_VER3_PTE_PCF_SPARSE"),
-            "{g:?}"
-        );
-        let pcf_bit = |enumerant: &str| {
-            let v = val(g, &format!("NV_MMU_VER3_PTE_PCF_{enumerant}"));
-            assert!(v.is_power_of_two(), "{g:?} {enumerant}");
-            u64::from(f.pcf.lo) + u64::from(v.trailing_zeros())
-        };
-        assert_eq!(
-            bit(f.bit_volatile),
-            pcf_bit("REGULAR_RW_ATOMIC_UNCACHED_ACE"),
-            "{g:?}"
-        );
-        assert_eq!(
-            bit(f.bit_privilege),
-            pcf_bit("PRIVILEGE_RW_ATOMIC_CACHED_ACE"),
-            "{g:?}"
-        );
-        assert_eq!(
-            bit(f.bit_read_only),
-            pcf_bit("REGULAR_RO_ATOMIC_CACHED_ACE"),
-            "{g:?}"
-        );
-        assert_eq!(
-            bit(f.bit_atomic_disable),
-            pcf_bit("REGULAR_RW_NO_ATOMIC_CACHED_ACE"),
-            "{g:?}"
-        );
-        // PDE apertures: 2:1, and code 0 is INVALID (the descriptor's "names no sub-level").
-        assert_eq!(range(g, "NV_MMU_VER3_PDE_APERTURE"), (2, 1), "{g:?}");
-        assert_eq!(val(g, "NV_MMU_VER3_PDE_APERTURE_INVALID"), 0, "{g:?}");
-    }
+    assert_eq!(f.pte_ap_map, [AP_VID, AP_PEER, AP_SYS, AP_SYS_NC]);
+    check(&f, "VER3", &VER3, &ver3_rows());
 }
 
 /// ★ RATCHET — the VER3 PDE sparse encodings the walker does not honour (inventory, page-table

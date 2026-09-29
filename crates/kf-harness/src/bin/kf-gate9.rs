@@ -18,6 +18,7 @@
 use kf_cuda::abi::{KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KfMapRun};
 use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
 use kf_cuda::abi::{KFWR_RF_KEY_PERM_ALL, KFWR_RF_KEY_PERM_DEFAULT};
+use kf_cuda::abi::{AP_SYS, AP_VID, RF_AP};
 use kf_cuda::abi::{kf_format_ver2, kf_format_ver3};
 use kf_cuda::diffmodel::{self, AckCode, Committed};
 use kf_cuda::walk::{DeviceImage, WalkCfg, WalkEntry, WalkKernel};
@@ -141,7 +142,7 @@ fn random_perm(r: &mut Rng) -> u32 {
 fn walk_of(pages: &BTreeMap<u64, (u64, bool, u32)>) -> Vec<KfMapRun> {
     let mut out: Vec<KfMapRun> = Vec::new();
     for (&va, &(at, sys, perm)) in pages {
-        let flags = if sys { 2 } else { 0 } | perm;
+        let flags = RF_AP.put(u32::from(if sys { AP_SYS } else { AP_VID })) | perm;
         if let Some(l) = out.last_mut()
             && l.va + l.len == va
             && l.gpga + l.len == at
@@ -158,7 +159,7 @@ fn walk_of(pages: &BTreeMap<u64, (u64, bool, u32)>) -> Vec<KfMapRun> {
 /// The comparable part of a run: op, va, len, backing, aperture + permissions (v3-roperm), held.
 fn key(r: &KfMapRun) -> (u16, u64, u64, u64, u32, bool) {
     let perm = PERM_BITS.iter().fold(0, |a, b| a | b);
-    (r.op, r.va, r.len, r.gpga, r.flags & (7 | perm), r.flags & KFWR_RF_HELD != 0)
+    (r.op, r.va, r.len, r.gpga, r.flags & (RF_AP.bits() | perm), r.flags & KFWR_RF_HELD != 0)
 }
 
 struct Rng(u64);
@@ -276,7 +277,7 @@ fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>, 
             let got = entry_runs(&rep, i);
             runs_seen += got.len();
             let (a, b): (Vec<_>, Vec<_>) = (got.iter().map(key).collect(), want.runs.iter().map(key).collect());
-            if a != b || rep.pdbs[i].reserved != slot {
+            if a != b || rep.pdbs[i].slot() != slot {
                 mismatches += 1;
                 first_mismatch.get_or_insert_with(|| {
                     format!("step {step} slot {slot}: gpu={a:x?}\n  model={b:x?}")

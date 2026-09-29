@@ -205,7 +205,7 @@ pub struct EngineEvent {
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
 /// unique across them, so this needs no family argument (the rewriter takes a plain `fn`).
 fn is_any_ce_class(c: u32) -> bool {
-    kf_chip::Family::ALL.iter().any(|f| kf_chip::classes_for(*f).dma_copy.contains(&c))
+    kf_chip::is_any_dma_copy_class(c)
 }
 
 /// A copy engine — `kf_chan::passthrough::is_copy_engine` (both of the header's blocks; the P5

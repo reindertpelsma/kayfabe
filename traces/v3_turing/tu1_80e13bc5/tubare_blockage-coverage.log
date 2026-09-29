@@ -1,0 +1,26 @@
+info  RMLADDER ARGV     = [--blockage-coverage]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d000e0
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+BLOCKAGE_PROBE_BEGIN gpu=0 euid=0 — R1/C1. Phase A maps BEFORE the doorbell (the covered population); phase B maps AFTER, with the channel already running (R1.3's residual, and this counter's KNOWN-POSITIVE)
+info  T1 the bar          = the VERDICT IS ON THE HOST. This program drives two populations and brackets them; `kayfabe: BLOCKAGE-COVERAGE …` on the host log is what C1 is graded on. ⊘ A green line here is not a green C1
+--- T1 phase A: MAP, THEN RING. Every mapping exists before the engine runs ---
+info  T1-A map            = BEFORE the doorbell, at 0x0000000741000000
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #1 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+ok    T1-A parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+info  T1-A outcome        = Landed { gp_get: 1, gp_put: 1 }
+BLOCKAGE_PROBE_A=PASS
+ok    T1-A control        = the payload landed with the target mapped BEFORE the doorbell. ⇒ every row this phase used was published before the channel could use it, BY CONSTRUCTION of the workload — the device line says whether we SAW that
+--- T1 phase B: RING, THEN MAP. No second doorbell — R1.3, the one case the blockage points structurally cannot cover ---
+info  T1-B map            = deferred until AFTER the doorbell
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 runlist=0 chid=4 → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING=0x90 in the mapped usermode window
+kayfabe-isolate: DOORBELL-STORE #2 host_token=0x00000004 ★★★ WROTE — the store instruction executed
+ok    T1-B parked         = target still 0xdead0000 (sentinel), GP_GET 1 GP_PUT 1 — the channel is STALLED IN THE ACQUIRE, which is what makes the window below real
+ok    T1-B late map       = mapped at 0x0000000761000000 AFTER the doorbell, with the channel running. NO further doorbell is sent
+info  T1-B outcome        = Landed { gp_get: 1, gp_put: 1 }
+BLOCKAGE_PROBE_B=PASS
+★     T1-B KNOWN-POSITIVE = a mapping created AFTER the doorbell, with the channel already running and NO second doorbell, was reached by the engine. ⇒ the device's `USES_UNCOVERED` MUST be > 0 for this phase. If it reads 0, the COUNTER is blind — that is not evidence of coverage
+BLOCKAGE_PROBE_END outcome=(P)
+done — blockage-coverage probe only

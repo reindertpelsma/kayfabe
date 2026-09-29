@@ -10,8 +10,28 @@
 > CUDA workloads. Candidate verification/promotion is recorded separately from approval.
 
 > ### ⏸ WHERE I STOPPED — 2026-09-27 ~02:00 UTC (owner: weekly usage limit; stopped mid-walk, boxes destroyed)
+> ★ **2026-09-28 — the third axis, in code; NOT yet run on hardware** (a later note; nothing below is
+> changed by it except step 2, marked in place). The owner kept the GPU-architecture axis
+> (`OWNER_RULINGS.md` C.5: every family Turing and newer), so the walk becomes a **3-axis sweep**, host
+> driver × guest driver × GPU arch, one rented box per arch: the resumable runner
+> `scripts/drivermatrix/sweep.sh` and the per-arch grid of `matrix_table.py` (§5.0). Step 2's compiler
+> fix and the `tesla/` download path are in `provision_host_driver.sh` / `stage_fat_guest.sh`. No
+> result in this document comes from them yet.
+>
+> ★ **2026-09-27 ~19:40 UTC — merged** (a later note; the stop note below is kept as written):
+> everything on `v3-drivers` but its tip is **on master**. `8f9bdd14` (this note's own commit) went in
+> through merge candidate v3-mc20 (`5018bb57` = master `0d3ecde9` + `v3-drivers~1`), which passed the
+> merge bar at `c0ef7b75` — `kf-*` tests 1639 / 0, gates 9/9, `KF3_RC=0`, thin 30/30 (vast 53004208,
+> RTX 3060 GA106, host 580.159.04 open; `traces/v3_mc20/`); master and v3 are `db038f5f`. The 535/545
+> capability commit, now **`a50265f8`** (the same change as `ee35ca4a`, which was an earlier
+> (pre-rebase) SHA of it; §6's rows still cite `ee35ca4a` as the revision they were measured at), **remains held**
+> for owner review and is the only commit on the branch that is not on master. Step 5 below is
+> therefore only partly done: the bar ran at the merged head without the allowlist and without the CUDA
+> ladder (`merge_check.sh` does not run it), and the 570 / 565 ladders were not re-run. Steps 1–4 stand.
+>
 > **Branch `v3-drivers`**, the 535/545 capability commit is LAST (owner review); everything below it
-> is mergeable (coordinator merging `42b25354`+ onto master). All evidence is committed under
+> is mergeable (coordinator merging `42b25354`+ onto master — ⊘ *done, through `8f9bdd14`: see the ★
+> note above*). All evidence is committed under
 > `traces/driver_matrix/walk/` (both boxes' queue logs, suites, ladders, failure points, host
 > installer logs); §6.0's grid is derived from it by `scripts/drivermatrix/matrix_table.py`.
 >
@@ -33,13 +53,21 @@
 >    find its rows — and no fn 54 arrives on 570 before the channel dies. Run the 570 fat ladder with
 >    `KF_VAS_CENSUS=1` (`b87d9882` now names each root's carrier) beside a 575 run and compare which
 >    statement roots `0xc1d0000a:0xcaf00005` on each (queued as `q11`, interrupted before it ran).
-> 2. Host **565.57.01 / 550.54.14**: root-caused from the kept installer logs — the old `.run` builds
+> 2. ⇒ **[2026-09-28] DONE IN CODE, not yet run on hardware:** `provision_host_driver.sh` exports as
+>    `CC` the compiler the running kernel was built with — DERIVED from its build tree's
+>    `CONFIG_CC_VERSION_TEXT`, else `/proc/version`, installed from its package when missing (not a
+>    hard-coded gcc-12); `stage_fat_guest.sh` does the same inside the guest for the image's kernel;
+>    `stage_guest_driver.sh` (which already read the kernel's compiler) now installs it when missing.
+>    A `.run` absent from `XFree86/` is fetched from `tesla/` (`HOST_DRIVER=<v>` names the version).
+>    The step as written:
+>    Host **565.57.01 / 550.54.14**: root-caused from the kept installer logs — the old `.run` builds
 >    with `cc` (gcc-11) while Linux 6.8 was built by gcc-12 (`cc: error: unrecognized command-line
 >    option '-ftrivial-auto-var-init=zero'`, `Failed CC version check`). Run the installer with
 >    `CC=x86_64-linux-gnu-gcc-12` in `provision_host_driver.sh`; the 550 fat-guest `.run` (image kernel
 >    6.8.0-139) most likely fails the same way (`stage_fat_guest.sh` now prints its errors).
 > 3. The remaining host walk: 535.309.01 (the ISA 8.2 JIT floor), 590.48.01, 595.84, 610.57.04 hosts
->    (`hostwalk3`, interrupted after 570).
+>    (`hostwalk3`, interrupted after 570). ⇒ *[2026-09-28] these hosts are in `sweep.sh`'s default
+>    host list (§5.0); not yet run.*
 > 4. 535/545: serve `0x20800a42` from the `ConstructedFalconInfo` answer (the INTERNAL/GPU struct
 >    pair measured identical in the matrix before relying on it) — behind the owner's review of the
 >    capability rows.
@@ -47,7 +75,8 @@
 >    570 / 565 ladders again.
 
 **STATUS: LIVE (in progress), 2026-09-27, branch `v3-drivers`** (the 535/545 capability commit is
-always the LAST one — owner review; everything below it is mergeable). Both axes are built and
+always the LAST one — owner review; everything below it is mergeable — ⊘ *and since 2026-09-27 on
+master via v3-mc20 `5018bb57`; the held commit is `a50265f8`: the ★ note at the top*). Both axes are built and
 walked on hardware; §6.0 is the running grid, DERIVED from `traces/driver_matrix/walk/`.
 **Guest axis (host 580.159.04):** every 580.x thin 27–30/30 (the reds are the adapter-init flake);
 CUDA ladder **4/4 for 580.159.04, 580.105.08, 590.48.01, 595.84, 575.57.08 and 610.57.04**;
@@ -330,6 +359,106 @@ them — before 575 those bytes were `params[0..8]` and were being zeroed in eve
 
 ## 5. The hardware walk — mechanics
 
+### 5.0 The 3-axis sweep — `scripts/drivermatrix/sweep.sh`
+
+**2026-09-28 — DESIGN + CODE; not yet run on hardware. No row of §6 comes from it.** The owner kept
+the GPU-architecture axis (`OWNER_RULINGS.md` C.5): the matrix is **host driver × guest driver × GPU
+arch**, every family Turing and newer. VM offers seen that day: TU116 / TU106, GA10x, AD10x, GB20x;
+no GA100, GH100 or GB10x as VMs (those rows stay source-derived). The 2026-09-26 walk (below, §6)
+was two GA102 boxes driven by queue scripts that were never committed; the sweep is that walk as one
+committed, resumable runner, run once per architecture.
+
+- **One box = one architecture.** `sweep.sh` runs on one READY box (`provision_full.sh`) as one
+  detached job. The arch is DERIVED on the box: pciutils' `pci.ids` name for the GPU's PCI id
+  (`NVIDIA Corporation GA102 [GeForce RTX 3090] [10de:2204]` → `GA102`), `update-pciids` once when
+  the device is newer than the database, else the raw `10de:<device>`. It is recorded with the GPU
+  name, the PCI id and `nvidia-smi`'s Product Architecture (the `SWEEP_ARCH` line, `<dir>/ARCH`). No
+  die table is kept in the repo.
+- **Per host, in order** (`HOSTS`; the reference host 580.159.04 first, so its rows need no swap):
+  the swap (`HOST_DRIVER=<v> provision_host_driver.sh`; skipped when that open driver is loaded) →
+  **bare metal first** (`cuda_ladder.sh host`, cup2) → the gates (`v3_gates.sh`) → a one-arm canary
+  (`guest_walk.sh` with `GUEST_WALK_ARMS=--timer`; a failed canary skips the host's 30-arm suites —
+  the first host walk spent 90 min on 30 timeouts) → the thin 30-arm suite (`guest_walk.sh`) for the
+  580.x guests of the host's set (ruling 1) → the fat-guest CUDA ladder (`cuda_ladder.sh guest`) for
+  every guest of the set, each guest staged on first use (`stage_guest_driver.sh`,
+  `stage_fat_guest.sh`).
+- **A host's guest set:** the default guest 580.159.04 on every host; the whole `GUESTS` list on the
+  reference host; the `MIXED` pairs elsewhere (`<host>:<guest>`, `*` = every other host; default
+  `*:590.48.01 *:575.57.08`, the host walk's).
+- ⊘ *[2026-09-28, review of `81f16870`] Two results that read as passes did not pass, fixed before
+  any hardware run.* **A ladder's denominator is what was PLANNED** (4 rungs × `LADDER_REPS`), not the
+  `CL_ROW` lines written: a ladder cut off by the sweep's own `T_LADDER` after two passing rungs was
+  logged `2/2` and shown as a pass; it is now `LADDER … 2/4 CUT ran=2 step_rc=124` (grid: `ladder 2/4
+  cut`, non-zero EXIT), and `T_LADDER` is 1800 s per boot (the rungs' designed outer bound), not 900.
+  **A thin result is numbers, p = n > 0:** guest_walk.sh's `thin=?/?` (fast_suite.sh died before its
+  summary) passed the canary (`'?' = '?'`) and was an rc=0 thin row the grid dropped; now the canary
+  is `verdict=NO_RESULT` (its thin rows skipped) and the row `THIN … NO_RESULT` (grid: `thin none`).
+- **Output:** the queue-log lines the §6.0 grid is derived from (`SWAP`, `BARE`, `GATES host=`,
+  `CANARY`, `MATRIX_ROW`, `LADDER host=`, `HOSTROW`), each with `arch=<die>` appended, one per event
+  in `summary/sweep_<TAG>.log`; every step's whole output under `rows/`; a text-only tarball
+  (`summary/ gates/ swaps/ ARCH`) refreshed after every host. Unpacked under
+  `traces/driver_matrix/walk/<TAG>/`, `matrix_table.py` reads it with the rest and prints **one grid
+  per arch**. A queue log without `arch=` belongs to the die in its box's `ARCH` file (`kfd/ARCH`,
+  `kfh/ARCH`: GA102, from each box's own evidence).
+- **Resumable, because boxes vanish.** Every row writes `SWEEP_ROW_START` and `SWEEP_ROW_EXIT`, its
+  result lines before its EXIT. A row with an EXIT is never run again (`RETRY_FAILED=1`: unless it
+  failed). State steps (the swap, the stagings, the builds) are decided on content, so a resume on a
+  NEW box — the pulled log `vput` back into `summary/` — redoes them. A log from another revision or
+  another arch is refused: one TAG is one revision on one arch. No `set -e`; every step is bounded
+  (`timeout -k`); a GPU that `nvidia-smi` cannot reach, or that logs new bad-register reads (the
+  GFW-boot wedge of `13b25624`, §6), gets an FLR, and if it does not come back the sweep stops by name.
+- **The revision.** `KF_REV=<sha>` → a detached worktree `<dir>/src`, and the runner re-executes from
+  it, so every script, the kf3 binary and the raw client are that revision's (rebuilt on every
+  invocation; cargo's fingerprints decide). Use a sha, not a branch: a resume on a new box re-creates
+  the worktree, and a moved branch is refused as another revision. A dirty tree is refused.
+- **Two harness fixes came with it.** `guest_walk.sh` and `failure_point.sh` rebuild a thin guest
+  whose initrd carries another raw client (`BUILT` records the client's sha256). Before, only the
+  marker's existence was checked, so a thin guest built by an earlier revision's walk on the same box
+  would be reused and grade the new device with the old grader (read from the code, not seen in a
+  result). `guest_walk.sh` also takes `GUEST_WALK_ARMS` (the canary).
+- **Budget — estimated from the 2026-09-26 walk's pace, not measured for the sweep:** a
+  non-reference host took about 37 min swap to swap (hostwalk2/3: swap, bare, gates, canary, thin,
+  3 ladders), a thin suite about 15 min (q3), a fat stage plus its ladder about 10 min (q8). With the
+  defaults (95 rows: 11 hosts, 15 guests on the reference host, 2 mixed pairs, 1 ladder rep) that is
+  about 5 h on the reference host and 6 h on the other ten, so roughly 12 h per arch on a GA102-class
+  nested-KVM box. Trim with `HOSTS` / `GUESTS` / `MIXED`.
+- **Validated off hardware only:** `DRY_RUN=1` prints the plan (and, with `SWEEP_LOG=<pulled log>`,
+  which rows a resume skips); `matrix_table.py --selftest` asserts that the committed logs reproduce
+  the §6.0 grid exactly and that a sweep log of another arch forms its own grid; `bash -n` and
+  shellcheck on every touched script. *[2026-09-28]* Also a stubbed end-to-end run of the runner
+  (stub tools and step scripts, not committed): a ladder cut after 2 of 4 rungs → `2/4 CUT`, rc=124;
+  a `?/?` canary → `NO_RESULT`, its thin rows skipped; a `?/?` thin row → `NO_RESULT`, rc=4; a TERM
+  during a thin step → `SWEEP_KILLED` 0.02 s later, no orphan, and the resume re-ran that row.
+
+⊘ *[2026-09-28, review of `81f16870`] "alive" was `kill -0 "$(cat RUNNING.pid)"` — and a SIGKILL,
+the OOM killer or a reboot leaves `RUNNING.pid` behind, so a reused pid read as a running sweep
+(the killed-job trap of CLAUDE.md). Alive is now **that pid holding the box's sweep lock on its fd 8**
+(only the runner holds it; every step closes fd 8). And a `kill` of the runner took effect only when
+the current step returned (up to `T_THIN` = 3 h: bash defers a trap while a foreground child runs);
+every step now runs in the background under `wait`, so the stop below takes effect at once.*
+
+From a cloud session (`scripts/bench/box/README.md`, *vx*; the box clones from GitHub, so the
+revision must be pushed):
+
+```bash
+vx -b sweep 'TAG=ga102a KF_REV=<sha> bash /root/kayfabe/scripts/drivermatrix/sweep.sh'
+vx 'd=/workspace/bench/sweep/ga102a; p=$(cat $d/RUNNING.pid 2>/dev/null); \
+    [ -n "$p" ] && [ "$(readlink /proc/$p/fd/8)" = "$(readlink -f /workspace/bench/sweep/.lock)" ] && echo alive || echo "NOT running"; \
+    grep -aE "^(SWEEP_|SWAP|BARE|GATES|CANARY|MATRIX_ROW|LADDER|HOSTROW|HEALTH)" $d/summary/sweep_ga102a.log | tail -20'
+vget /workspace/bench/sweep/ga102a/summary_ga102a.tar.xz /tmp/   # after every host; commit it:
+mkdir -p traces/driver_matrix/walk/ga102a && tar xJf /tmp/summary_ga102a.tar.xz -C traces/driver_matrix/walk/ga102a
+python3 scripts/drivermatrix/matrix_table.py                     # then refresh §6.0
+```
+
+**Stopping it:** `vx 'kill -TERM "$(cat /workspace/bench/sweep/ga102a/RUNNING.pid)"'` — the runner
+TERMs the running step's `timeout` (which TERMs the step's process group and KILLs it 60 s later),
+logs `SWEEP_KILLED`, packs the tarball and exits; poll until "NOT running". The stopped row has no
+EXIT, so the same command resumes at it. ⊘ Never `kill -KILL` the runner: its step is orphaned and
+keeps the GPU while the lock is already free for the next sweep.
+
+A box that vanished: rent one of the same arch, provision it, `vput` the last pulled
+`sweep_<TAG>.log` to `/workspace/bench/sweep/<TAG>/summary/`, and start the same command again.
+
 - **Guest driver, thin guest:** `scripts/drivermatrix/stage_guest_driver.sh <v>` builds that tag's
   open modules for the host's running kernel and takes that version's GSP firmware from its `.run`
   (CUDA-repo deb fallback: 545.23.08 and 575.51.03 have no public `.run`).
@@ -344,7 +473,8 @@ them — before 575 those bytes were `params[0..8]` and were being zeroed in eve
   guest driver that does not build on the host's 6.8 (545.x: `libspdm_shash.c`,
   `crypto_tfm_ctx_aligned`); `stage_guest_driver.sh` builds against it (`KREL=`, `KBUILD=`) and
   `build_fast_guest.sh` boots it (`KF_GUEST_KROOT=`).
-- **Host driver:** `scripts/bench/provision_host_driver.sh` with `RUN_URL=` for the version; the
+- **Host driver:** `scripts/bench/provision_host_driver.sh` with `RUN_URL=` for the version (or,
+  since 2026-09-28, `HOST_DRIVER=<v>`: `XFree86/`, then `tesla/`; `CC` = the kernel's compiler); the
   guest stays at 580.159.04 (the bench image, and a thin guest staged from 580.159.04 with
   `guest-driver=580.159.04` declared so a defaulted device cannot take the host's version).
 - **Non-580 guests are graded by the fat ladder** (ruling 1): the thin guest's raw client is a
@@ -393,7 +523,12 @@ Host axis, guest **580.159.04** (box 2, RTX 3080 Ti):
 **The host × guest grid** — DERIVED, not typed: `scripts/drivermatrix/matrix_table.py` reads every
 queue log committed under `traces/driver_matrix/walk/` and keeps each cell's latest measurement
 (thin = the 30-arm suite, 580.x guests only; ladder = the fat-guest CUDA ladder; revision in
-backticks). Regenerate after every refresh of the walk evidence.
+backticks). Regenerate after every refresh of the walk evidence. ★ *[2026-09-28] One grid per GPU
+architecture (§5.0): a row's arch is its own `arch=` field, else its box's `ARCH` file. Every
+committed row is GA102, so the grid below is the one it was (`matrix_table.py --selftest` asserts
+that the committed logs print exactly this block); a sweep on another arch adds its own grid here.*
+
+#### arch `GA102` — boxes: kfd, kfh
 
 | guest \ host | 570.148.08 | 575.57.08 | 580.65.06 | 580.95.05 | 580.159.04 |
 |---|---|---|---|---|---|

@@ -16,12 +16,36 @@
 # string "Open Kernel Module" in /proc/driver/nvidia/version -- an installer that exits 0 and
 # leaves the closed module loaded is the exact false green this tree keeps paying for.
 set -uo pipefail
+# ★ [2026-09-28] `HOST_DRIVER=<version>` names the version instead of a URL (the driver-matrix
+# sweep, `scripts/drivermatrix/sweep.sh`); `RUN_URL` still wins when given. The default stays the
+# bench's 580.159.04 on the XFree86/ path.
+[ -n "${HOST_DRIVER:-}" ] && [ -z "${RUN_URL:-}" ] && \
+  RUN_URL=https://us.download.nvidia.com/XFree86/Linux-x86_64/$HOST_DRIVER/NVIDIA-Linux-x86_64-$HOST_DRIVER.run
 RUN_URL=${RUN_URL:-https://us.download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04.run}
 RUN=/root/$(basename "$RUN_URL")
 echo "DRIVER_SWAP_START $(date -Is)"
 echo "before: $(cat /proc/driver/nvidia/version 2>/dev/null | head -1)"
 
-[ -s "$RUN" ] || { echo "downloading $(basename "$RUN")"; curl -fsSL -o "$RUN" "$RUN_URL" || { echo "DOWNLOAD_FAILED"; exit 3; }; }
+# ⊘ [2026-09-28] XFree86/ IS NOT EVERY VERSION'S PATH. `[measured 2026-09-26, box 52788835]`
+# 570.148.08's .run is 404 under XFree86/Linux-x86_64/ and present only on the datacenter path
+# `tesla/<v>/` (hostwalk2: `SWAP host=570.148.08 rc=3`); hostwalk3 swapped it from there. An
+# XFree86/ URL is therefore tried as given, then as its tesla/ twin — the same two paths
+# `stage_guest_driver.sh` tries for the guest's .run. Downloaded to `.part` and renamed, so a cut
+# download is never mistaken for a .run on the next swap.
+if [ ! -s "$RUN" ]; then
+  URLS=("$RUN_URL")
+  case "$RUN_URL" in
+    */XFree86/Linux-x86_64/*)
+      _v=$(basename "$RUN" .run | sed 's/^NVIDIA-Linux-x86_64-//')
+      URLS+=("https://us.download.nvidia.com/tesla/$_v/$(basename "$RUN")") ;;
+  esac
+  for u in "${URLS[@]}"; do
+    echo "downloading $u"
+    curl -fsSL -o "$RUN.part" "$u" && { mv "$RUN.part" "$RUN"; break; }
+  done
+  rm -f "$RUN.part"
+  [ -s "$RUN" ] || { echo "DOWNLOAD_FAILED (tried: ${URLS[*]})"; exit 3; }
+fi
 ls -la "$RUN"
 
 # ⚠⚠ SECOND TRAP, MEASURED 2026-09-06 ON THIS EXACT PATH — and it is worth more than the
@@ -84,6 +108,34 @@ rm -rf /var/lib/dkms/nvidia
 # re-index, and check the loaded version against the .run below.
 rm -f /lib/modules/"$(uname -r)"/updates/dkms/nvidia*.ko* /lib/modules/"$(uname -r)"/kernel/drivers/video/nvidia*.ko* 2>/dev/null
 depmod -a
+
+# ⊘⊘ [2026-09-28] THE RUNNING KERNEL'S OWN COMPILER, never the default `cc`. `[measured 2026-09-26,
+# box 52788835, the kept installer logs]` 565.57.01 and 550.54.14 failed "Building kernel modules"
+# on Ubuntu 22.04's HWE 6.8 kernel: the installer ran `CC="/usr/bin/cc"` (gcc-11) while the kernel
+# was built by `x86_64-linux-gnu-gcc-12` — `Failed CC version check`, then
+# `cc: error: unrecognized command-line option '-ftrivial-auto-var-init=zero'` on every object.
+# 570+ pick the kernel's compiler themselves; older .run installers take `$CC` (the installer's
+# own advice: "set the CC environment variable to the compiler that was used to compile the
+# kernel"). ★ DERIVED from the kernel, not hard-coded: its build tree's `CONFIG_CC_VERSION_TEXT`
+# (the first word is the compiler's name), else `/proc/version` (the same string, for the
+# RUNNING kernel — which is the one the installer builds for). A missing compiler is installed
+# from its package (`x86_64-linux-gnu-gcc-12` ships in `gcc-12`); if that fails the installer runs
+# with its default and the log says so.
+KREL=$(uname -r)
+KCC=$(sed -n 's/^CONFIG_CC_VERSION_TEXT="\([^ ]*\) .*/\1/p' "/lib/modules/$KREL/build/.config" 2>/dev/null)
+[ -n "$KCC" ] || KCC=$(sed -n 's/^Linux version [^ ]* ([^)]*) (\([^ ]*\) .*/\1/p' /proc/version 2>/dev/null)
+if [ -n "$KCC" ] && ! command -v "$KCC" >/dev/null 2>&1; then
+  echo "installing ${KCC##*-linux-gnu-} (the compiler kernel $KREL was built with: $KCC)"
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${KCC##*-linux-gnu-}" >/dev/null 2>&1 \
+    || { apt-get update -qq >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${KCC##*-linux-gnu-}" >/dev/null 2>&1; }
+  echo "kernel_cc_install_rc=$?"
+fi
+if [ -n "$KCC" ] && command -v "$KCC" >/dev/null 2>&1; then
+  export CC="$KCC"
+  echo "KERNEL_CC=$KCC ($(command -v "$KCC")) for kernel $KREL"
+else
+  echo "KERNEL_CC=${KCC:-unknown} NOT AVAILABLE for kernel $KREL ⚠ the installer uses its default cc (a <570 .run fails on a gcc-12 kernel)"
+fi
 
 sh "$RUN" --silent --no-x-check --no-nouveau-check --no-questions --dkms -m=kernel-open -j8 2>&1 | tail -15
 echo "installer_rc_IGNORED_ON_PURPOSE=$?"

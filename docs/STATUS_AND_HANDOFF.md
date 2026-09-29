@@ -55,32 +55,48 @@ this file.
   describe earlier points in the campaign, not current actions.
 - **2026-09-27 19:59 UTC — `v3-mc21` (= master `db038f5f` + `origin/v3-display`, merge `4c48ca0c`) PASSED THE
   FULL MERGE BAR** at exactly `4c48ca0c`: crate tests **1651 / 0**, gates **9/9**, `KF3_RC=0` (VNC+pixman build),
-  `FG_RC=0`, fast suite **30/30** — same box. Evidence: `traces/v3_mc21/`. Display stays default-off; the
-  `display=on` lane on GA106 is the next box job. Promotion of `4c48ca0c` awaits the owner's go-ahead.
-- **Master and v3 = `db038f5f`** (fast-forwarded 2026-09-27 with the owner's go-ahead in the session):
-  v3-mc20 below + its evidence. `v3-drivers~1` (`8f9bdd14`) is on master; the allowlist `a50265f8` is not.
+  `FG_RC=0`, fast suite **30/30** — same box. Evidence: `traces/v3_mc21/`. Display stays default-off.
+  **Master and v3 fast-forwarded to `8ab92bf4`** (= `4c48ca0c` + evidence/docs; owner go-ahead in the session,
+  2026-09-28). The `display=on` M0 lane on GA106 (`traces/v3_display/mc21m0/`) reproduces GA102's `m0a`
+  exactly: KernelDisplay up, NVKMS stops at `0x730101`/`0x730102`/`0x730107`/`0x730151` ⇒ displayless.
+- **Boxes from a cloud session:** the container has no SSH egress, so a box is driven through the **`vx`
+  kit** (execd behind a cloudflared quick tunnel). `provision_full.sh` and `merge_check.sh` run unchanged
+  that way; `traces/v3_mc20/README.md` records the v3-mc20 bar run like this.
+- **`v3-uvm-e6pp` (`c6765f5c`): E6″ phase 0 ran** (a capture on a stock box — no fault numbers yet); §2, §3.2.
+- ⊘ *Superseded 2026-09-28 (master is now `8ab92bf4`, above; v3-mc21 passed):* **2026-09-27 19:38 UTC — master
+  and v3 = `db038f5f`** (= `c0ef7b75`, the revision that passed the bar below, + the commit that added its
+  evidence, `traces/v3_mc20/` and this file only), fast-forwarded with the owner's go-ahead. `v3-drivers~1`
+  (`8f9bdd14`) is therefore **ON MASTER** (via merge `5018bb57`); `v3-drivers` now holds only the held 535/545
+  allowlist commit, **`a50265f8`** (§3.1). Merge candidate `v3-mc21` = `4c48ca0c` … bar in progress.
 - **2026-09-27 18:27 UTC — `v3-mc20` PASSED THE FULL MERGE BAR** at `c0ef7b75` (= `5018bb57` + docs only), on
   branch `claude/kayfabe-gpu-testing-m0cv1q`: crate tests **1639 / 0**, gates **9/9**, `KF3_RC=0`, `FG_RC=0`,
   fast suite **30/30** — vast 53004208, RTX 3060 GA106, host 580.159.04 open. Evidence: `traces/v3_mc20/`.
-  Ready to fast-forward master and v3 (owner go-ahead asked in the session). Cloud sessions now reach boxes
-  through execd behind a cloudflared quick tunnel (the `vx` kit), not SSH.
+  ⊘ *2026-09-27 19:38 UTC: done; see the first line.* Ready to fast-forward master and v3 (owner go-ahead
+  asked in the session). Cloud sessions now reach boxes through execd behind a cloudflared quick tunnel
+  (the `vx` kit), not SSH.
 - ⊘ *Superseded by the line above:* 2026-09-27, resumed (cloud session): merge candidate `v3-mc20` = master `0d3ecde9` + `v3-drivers~1` (`8f9bdd14`,
   the held 535/545 allowlist commit left out) — merge commit `5018bb57`, clean, on branch `claude/relaxed-babbage-7zz89s`.
   GPU-free: all `kf-*` crate tests **1639 passed / 0 failed** at `5018bb57`. Hardware bar (gates, kf3 build, 30/30)
   NOT run: this session's container has no SSH egress, so `merge_check.sh` cannot be driven on a box from here.
   Do not promote to master until the bar passes at `5018bb57`.
-- **Master = `v3-mc19` verified** (`08bf7f18`: 1637 tests / 0 failed, gates 9/9, 30/30) + docs. All vast boxes are being
+- ⊘ *Superseded 2026-09-27 19:38 UTC — master is now `db038f5f` (v3-mc20), see the first line:*
+  **Master = `v3-mc19` verified** (`08bf7f18`: 1637 tests / 0 failed, gates 9/9, 30/30) + docs. All vast boxes are being
   destroyed; nothing depends on a box or on local files. Every branch below is on GitHub.
 - **`v3-initrace` is ON MASTER** (verified at `08bf7f18`). It contains: USERD cleared at Translated-channel birth (the re-init "flake": a reborn CeUtils channel
   inherited a leftover GP_PUT — 0/300 after, 20/20 injected failures before) and WPR2 served at the guest's
   own FWSEC-FRTS offset after a failed GSP boot (retry boots; 20/20 later opens pass).
-- **`v3-drivers` mergeable head `8f9bdd14`** (= `42b25354` + a default-off logging aid + its stop note; the bar was
+- ⊘ *Merged 2026-09-27: `8f9bdd14` is on master via v3-mc20 (`5018bb57`; bar at `c0ef7b75`); the held
+  allowlist commit is now `a50265f8`, the only commit on `v3-drivers` beyond master. The "Next for that
+  branch" items below still stand:*
+  **`v3-drivers` mergeable head `8f9bdd14`** (= `42b25354` + a default-off logging aid + its stop note; the bar was
   last fully green at `1837166d`, the thin suite at the newest head never ran) (rebased on `6ec7ec1a`; the 535/545 allowlist commit is LAST and held
   for owner review): guest 610 ladder 4/4, hosts 575.57.08 / 580.95.05 / 580.65.06 green on every row,
   (runlist, chid) token index, ≤545 GET_CHIP_INFO carry, 595+ GSP heartbeat. Merge it onto the new master
   after `v3-mc19`, then run the bar. Next for that branch: the 570 guest's UVM-first-channel wall (token
   0x803 reads its GPFIFO before the mirror maps it) and a 570 thin-guest NULL deref seen on master.
-- **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
+- ⊘ *2026-09-28: ON MASTER — merged as v3-mc21 `4c48ca0c`, bar passed (§0 first line), master `8ab92bf4`; step (1)
+  is wired in code since (`docs/design/V3_DISPLAY.md` step-(1) note); superseded text follows:*
+  **`v3-display` (`adbea28e`)**: Phase 1 decided — emulate the display hardware the stock guest driver expects
   (~3–5 weeks to a desktop on GA10x); M0 (behind `display=on`, default off) brings the guest's display layer
   up; next step and plan in the stop note at the top of `docs/design/V3_DISPLAY.md`. Merge bar not run.
 - **Owner decisions resolved 2026-09-28**: §3. The cloud-only execd shared-key question remains
@@ -104,7 +120,7 @@ their own bar; this pass does not certify the separately recovered Claude/Turing
 | Graphics / video | nvkvm-pv's headless graphics set + 15 more items: **38/38** on an RTX 3070 (31 byte-identical to bare metal; OFA optical flow advertised); NVENC/NVDEC byte-exact. Per-call GPU waits are slow on nested boxes (`glFinish` 62 vs 9 µs) | `design/V3_GFX_TESTSET.md` (display-phase list §7), `V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
 | Memory plane | pooled walker capacity (no per-space 16k-run wall); batched host maps; big-PTE slot ownership; guest PTE read-only/volatile carried, PRIV leaves withheld from user twins; **every host map snoops the CPU cache** (`NVOS46_FLAGS_CACHE_SNOOP_ENABLE` — without it a CE read stale DRAM on bare-metal hosts; nested VM boxes hid it) | `design/V3_BUILD.md`, `V3_BATCHED_MAP.md`, `traces/v3_adasys/FINDING.txt` |
 | Refusals | audited host-vs-guest: forged completions removed (MC_SERVICE_INTERRUPTS, sysmembar flush); the rest classified | `design/V3_REFUSAL_AUDIT.md` |
-| Driver matrix | 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
+| Driver matrix | ★ (2026-09-27, the `v3-drivers` code on master since `5018bb57`) CUDA ladder 4/4 for guests 580.159.04 / 580.105.08 / 590.48.01 / 595.84 / 575.57.08 / 610.57.04; hosts 575.57.08 / 580.95.05 / 580.65.06 gates 9/9, thin 30/30, ladder 4/4, mixed pairs 4/4 — measured on `v3-drivers` heads before the merge (grid §6.0, derived from `traces/driver_matrix/walk/`); 535/545 capability rows held (§3.1). Earlier: 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
 | LLM | decode ~0.29–0.31× host on nested vast boxes; the gap is mostly doorbell VM exits | `design/V3_BUILD.md`, `V3_GUEST_DOORBELL_MODULE.md` |
 | Hardware boundary | every hardware constant pinned to ogkm headers by 43 GPU-free tests; generator `tools/derive_hwref.sh` | `design/V3_HW_BOUNDARY_INVENTORY.md` |
 | Pre-v3 tree | archived under `archive/`; 16 `kayfabe-*` crates kept only because the 30-arm grader uses them | `archive/README.md` |
@@ -177,9 +193,29 @@ The owner's ~0.70x bare-metal expectation and possible Windows batching advantag
 Record nesting, same-host controls, doorbells per token, CPU use and correctness hashes; distinguish
 a guest kernel entry from a hardware VM exit. Windows performance needs its own measurement.
 
+### 3.4 The execd PSK on `vx` boxes and "no secrets on a box" (raised 2026-09-27)
+
+Cloud sessions have no SSH egress, so they drive boxes through execd behind a cloudflared quick tunnel
+(the `vx` kit; `scripts/bench/box/README.md`, last section). The v3-mc20 bar ran this way. Each such box
+holds execd's HMAC pre-shared key (`/root/.execd_key`, written by the onstart). Root on a hostile box
+can read that key, and the key runs commands as root on every box that holds the same key. With the
+kit's per-container token, those are the boxes one session rented. With a shared `$VAST_EXEC_PSK` (set
+so that boxes can pass between sessions), they are every box rented with that key. The key opens no
+vast account and no GitHub. Ruling F says "no secrets on a box", and security-policy changes need the
+owner. The question: is a box-scoped key like this allowed? If yes, may the key be shared across
+sessions? If no, what should replace it (for example, a key per box derived from the session's key and
+the instance id)? Until the owner rules, the README asks for the per-container token unless a box
+must pass to another session.
+
 ## 4. Queued / in-progress investigations
 
-1. **Adapter re-init race — ROOT-CAUSED + FIXED on `v3-mc19` (uncleared vidmem USERD; see §0).** Original note: Guest 570.148.08 reproduces it every boot (fat guest,
+1. ~~Adapter re-init race~~ **ANSWERED + FIXED, ON MASTER since `08bf7f18`** (v3-mc19; bar 1637 / 0,
+   gates 9/9, 30/30 — see §0). Its evidence is on master too: `traces/v3_initrace/`, and
+   `traces/driver_matrix/walk/` since `5018bb57`; `scripts/drivermatrix/initflake_evidence.sh` was on
+   master before either, since `36ef0358` (2026-09-26), so "evidence on `v3-drivers`" below was only
+   half right. The 570
+   guest's next wall is a different one (the UVM first channel: `design/V3_DRIVER_MATRIX.md` stop note, step 1).
+   **Adapter re-init race — ROOT-CAUSED + FIXED on `v3-mc19` (uncleared vidmem USERD; see §0).** Original note: Guest 570.148.08 reproduces it every boot (fat guest,
    no persistence mode): on re-init the CeUtils channel is reborn with the same token, host channel id
    and GPFIFO VA; the ring reader yields no words, nothing is pushed, yet the completion tail retires the
    entry (GP_GET authored 1) — the guest sees its work "done" and times out. Rare on 580.x (3/≈270
@@ -187,8 +223,9 @@ a guest kernel entry from a hardware VM exit. Windows performance needs its own 
    path. Fix rule: an entry that yields no words must wait or refuse — never retire. Also: after one failed
    GSP boot every retry fails on TU/GA10x/Ada (WPR-end margin not modelled). Branch `v3-initrace`;
    evidence on `v3-drivers` (`traces/driver_matrix/walk/`, `scripts/drivermatrix/initflake_evidence.sh`).
-2. ~~RTX 4070 sysmem copies fail~~ **ANSWERED + FIXED (master `6ec7ec1a`)**: kayfabe's missing CACHE_SNOOP
-   bit, not the box. Lesson: run memory-plane changes on a non-VM host too.
+2. ~~RTX 4070 sysmem copies fail~~ **ANSWERED + FIXED, ON MASTER (merge `8b32178f`, v3-mc18; promoted as
+   `6ec7ec1a`)**: kayfabe's missing CACHE_SNOOP bit, not the box (`traces/v3_adasys/FINDING.txt`).
+   Lesson: run memory-plane changes on a non-VM host too.
 3. **Hardware gaps** ranked in `design/V3_HW_BOUNDARY_INVENTORY.md` §5.2 (GB100/GB102 PCIe capability,
    VER3 unmapped-big-PTE and sparse-PDE encodings, GB10x 256 GiB leaf, 128 KiB pages, …).
 4. **Host GPU wedge after QEMU exit** seen once on an RTX 3090 (GFW boot "progress 0xff", recovered by
@@ -197,12 +234,15 @@ a guest kernel entry from a hardware VM exit. Windows performance needs its own 
 6. **`cuda/walk` tidy-up:** Rust decodes `KfMapRun` by hand-written byte offsets in places (use one
    decoder per `#[repr(C)]` struct via `offset_of!`); name the per-format bit ranges after `dev_mmu.h`.
 7. Re-run the full CUDA app matrix at the current master (the 58/65 predates several fixes).
-8. **Display**, then a desktop, then **Windows** (roadmap).
+8. **Display** (started: M0 on `v3-display`, in the v3-mc21 candidate — §0, §2), then a desktop, then
+   **Windows** (roadmap).
 
 ## 5. How work was run (so it can be run again)
 
 - **Boxes:** `scripts/bench/box/README.md` — rent, register with the idle watchdog
-  (`vast_reaper.sh`), provision (`provision_full.sh`), check (`merge_check.sh`), destroy.
+  (`vast_reaper.sh`), provision (`provision_full.sh`), check (`merge_check.sh`), destroy. From a cloud
+  session (no SSH egress) the same scripts are driven through the `vx` kit — execd behind a cloudflared
+  quick tunnel (the v3-mc20 bar ran this way: `traces/v3_mc20/README.md`).
 - **Merging:** agents push sub-branches; a merge branch `v3-mcN` combines verified work on the current
   master; the full bar runs on a box at that exact revision; then master and v3 are fast-forwarded. Only
   docs/traces may be added on top of a verified revision without re-running the bar.

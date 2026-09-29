@@ -128,7 +128,9 @@ pub struct ObjectLinks {
     /// ★ v3-display: the display plane's seat — the chip's display row when the device was realized
     /// with `display=on` ([`display::DisplayPolicy`], `docs/design/V3_DISPLAY.md`). `None` keeps the
     /// displayless posture: `GET_IP_VERSION` reaches the ledger and is refused, and the guest
-    /// amputates its display engine (`sweep.rs`).
+    /// amputates its display engine (`sweep.rs`). ★ Step (1) (2026-09-27): with a row, the link
+    /// delegates to a `kf_disp::model::DisplayModel` built for the guest driver's derived layouts
+    /// and observes the display objects' allocs and frees (`tests/display_seat.rs`).
     pub display: Option<&'static kf_chip::display::DisplayRow>,
 }
 
@@ -376,7 +378,9 @@ pub fn served_chain(
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
     // ★ v3-display: the display link claims only its own controls, so its place is a matter of
-    // which link answers first; it goes first so no other link's refusal can shadow it.
+    // which link answers first; it goes first so no other link's refusal can shadow it. ★ Step (1):
+    // it also OBSERVES `GSP_RM_ALLOC`/`GSP_RM_FREE` (returning `None`), so the channel link and the
+    // object seat below still see every alloc and free, and the object seat answers them.
     if let Some(row) = display {
         chain.push(Box::new(display::DisplayPolicy::new(driver, row)));
     }

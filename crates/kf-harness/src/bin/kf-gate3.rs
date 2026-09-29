@@ -170,8 +170,10 @@ impl Window for Windows {
     }
 }
 
+/// A copy-engine class on any family, derived from the generated class tables (⊘ 2026-09-28: was a
+/// hand list from Ampere on, which refused Turing's `0xC5B5` — `kf_chip::is_any_dma_copy_class`).
 fn is_ce(c: u32) -> bool {
-    matches!(c, 0xc6b5 | 0xc7b5 | 0xc8b5 | 0xc9b5 | 0xcab5)
+    kf_chip::is_any_dma_copy_class(c)
 }
 
 #[allow(clippy::too_many_lines)]

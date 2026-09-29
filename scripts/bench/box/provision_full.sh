@@ -8,6 +8,9 @@
 mkdir -p /root/prov; exec > /root/prov/prov.log 2>&1
 echo "START $(date -Is)"; rm -f /root/prov/READY
 KAYFABE_BRANCH=${KAYFABE_BRANCH:-master} bash /root/provision_box.sh > /root/prov/box.log 2>&1; echo "BOX_RC=$?"
+# ⚠ [2026-09-27] a kernel newer than the running one is installed: the driver built next will
+# not survive a reboot (provision_box.sh header). Said here, in the log people read.
+grep -a 'REBOOT_NEEDED' /root/prov/box.log
 export PATH=$HOME/.cargo/bin:$PATH
 cd /root/kayfabe || { echo NO_REPO; echo "EXIT $(date -Is)"; exit 1; }
 git log --oneline -1
@@ -23,4 +26,8 @@ if [ "$V" = "${KF_HOST_DRIVER:-580.159.04}" ] && [ "$KF3_RC" = 0 ] && [ "$FG_RC"
   touch /root/prov/READY; echo "READY driver=$V"
 else echo "NOT_READY driver=$V KF3_RC=$KF3_RC FG_RC=$FG_RC"; fi
 echo "EXIT $(date -Is)"
-[ -f /root/prov/READY ] && [ -n "${1:-}" ] && bash "$1"
+# ⊘ [2026-09-27] The exit status is the verdict: a `vx -b` job's .rc and `vwait` read it. The old
+# last line, `[ -f READY ] && [ -n "$1" ] && bash "$1"`, made every READY run WITHOUT a
+# then-script exit 1 — indistinguishable from NOT_READY.
+[ -f /root/prov/READY ] || exit 1
+[ -z "${1:-}" ] || bash "$1"

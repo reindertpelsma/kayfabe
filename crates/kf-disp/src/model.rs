@@ -51,6 +51,56 @@ pub const NO_I2C_PORT: u32 = 16;
 /// indexed by it without a bounds check (`disp_channel.c:254-263`), so the count is one past the
 /// last cursor channel.
 pub const NUM_DISP_CHANNELS: u32 = 81;
+/// ★ Hostile guest: the most [`Statement`]s the model holds for a plane that has not drained them.
+/// A boot states ~25 (instance memory + one per channel); past the bound a statement is counted in
+/// [`DisplayModel::statements_dropped`] and not kept — the registry (`channels`, `inst_mem`) stays
+/// authoritative, so a plane that fell this far behind re-reads it.
+pub const MAX_STATEMENTS: usize = 1024;
+
+/// The subdevice-internal display controls (`ctrl2080internal.h`) and the kind of answer each gets.
+const INTERNAL_CONTROLS: &[(u32, &str)] = &[
+    (GET_IP_VERSION, "ip_version"),
+    (GET_STATIC_INFO, "static_info"),
+    (INIT_BRIGHTC_STATE_LOAD, "echo"),
+    (SET_STATIC_EDID_DATA, "echo"),
+    (WRITE_INST_MEM, "inst_mem"),
+    (CHANNEL_PUSHBUFFER, "pushbuffer"),
+];
+
+/// The NVKMS bring-up controls (§4.2 (A)) by NAME — their ids come from the derived layouts — and
+/// the kind of answer each gets.
+const NAMED_CONTROLS: &[(&str, &str)] = &[
+    ("NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2", "caps0073"),
+    ("NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS", "num_heads"),
+    ("NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED", "supported"),
+    ("NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE", "connect_state"),
+    ("NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE", "active"),
+    ("NV0073_CTRL_CMD_SYSTEM_GET_BOOT_DISPLAYS", "boot_displays"),
+    ("NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP", "head_routing"),
+    ("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA", "echo"),
+    ("NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS", "internal_displays"),
+    ("NV0073_CTRL_CMD_SPECIFIC_GET_ALL_HEAD_MASK", "head_mask"),
+    ("NV0073_CTRL_CMD_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT", "window_assign"),
+    ("NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO", "or_info"),
+    ("NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA", "connector_data"),
+    ("NV0073_CTRL_CMD_SPECIFIC_GET_TYPE", "get_type"),
+    ("NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2", "get_edid"),
+    ("NV0073_CTRL_CMD_SPECIFIC_SET_EDID_V2", "set_edid"),
+    ("NV0073_CTRL_CMD_SPECIFIC_GET_PCLK_LIMIT", "pclk_limit"),
+    ("NV0073_CTRL_CMD_SPECIFIC_IS_DIRECTMODE_DISPLAY", "directmode"),
+    ("NV0073_CTRL_CMD_SPECIFIC_DISPLAY_CHANGE", "echo"),
+    ("NV0073_CTRL_CMD_SPECIFIC_GET_BACKLIGHT_BRIGHTNESS", "not_supported"),
+    ("NV0073_CTRL_CMD_DFP_GET_INFO", "dfp_info"),
+    ("NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO", "dongle"),
+    ("NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2", "caps5070"),
+    ("NVC370_CTRL_CMD_IDLE_CHANNEL", "echo"),
+    ("NVC370_CTRL_CMD_SET_ACCL", "echo"),
+    ("NVC370_CTRL_CMD_GET_ACCL", "get_accl"),
+    ("NVC370_CTRL_CMD_GET_CHANNEL_INFO", "channel_info"),
+    ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
+    ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
+    ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
+];
 
 /// The display classes a chip lists (a copy of the chip row's, so this crate owns its inputs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -247,8 +297,10 @@ pub struct DisplayModel {
     pub pushbuffers: BTreeMap<(u32, u32), Pushbuffer>,
     /// Live channels by `(kind, instance)`.
     pub channels: BTreeMap<(ChannelKind, u32), Channel>,
-    /// Statements for the plane, in order.
+    /// Statements for the plane, in order (at most [`MAX_STATEMENTS`]).
     pub statements: Vec<Statement>,
+    /// Statements not kept because [`Self::statements`] was full.
+    pub statements_dropped: u64,
     /// Every display control answered (the first 512), for the log.
     pub seen: Vec<u32>,
 }
@@ -275,7 +327,32 @@ impl DisplayModel {
             pushbuffers: BTreeMap::new(),
             channels: BTreeMap::new(),
             statements: Vec::new(),
+            statements_dropped: 0,
             seen: Vec::new(),
+        }
+    }
+
+    /// ★ Hostile guest: how many instances of `kind` this display has — the bound every
+    /// guest-stated `channelInstance` is checked against before it keys the registry. One core
+    /// channel; a window and a window-immediate channel per window; a cursor per head
+    /// (`kdispGetChannelNum_v03_00`, `ogkm-580: kern_disp_0300.c:47-125`, refuses the same window
+    /// and cursor range on the guest's side before it RPCs; it does not check a core instance, and
+    /// NVKMS allocates the core channel as instance 0, `nvkms-rm.c:3375-3384` — so a well-formed
+    /// guest never meets this bound).
+    #[must_use]
+    pub fn instances(&self, kind: ChannelKind) -> u32 {
+        match kind {
+            ChannelKind::Core => 1,
+            ChannelKind::Window | ChannelKind::WindowImm => self.windows,
+            ChannelKind::Cursor => self.heads,
+        }
+    }
+
+    fn state(&mut self, s: Statement) {
+        if self.statements.len() < MAX_STATEMENTS {
+            self.statements.push(s);
+        } else {
+            self.statements_dropped += 1;
         }
     }
 
@@ -299,49 +376,19 @@ impl DisplayModel {
         self.kind_of(cmd).is_some()
     }
 
+    /// ★ Every control this model claims, in a fixed order: the subdevice-internal ones, then the
+    /// named ones whose ids the derived layouts carry (a name the TSV lacks is not claimed — never
+    /// a guessed id). A link caches this set; [`Self::claims`] is membership in it.
+    #[must_use]
+    pub fn claimed(&self) -> Vec<u32> {
+        INTERNAL_CONTROLS.iter().map(|(c, _)| *c).chain(NAMED_CONTROLS.iter().filter_map(|(n, _)| self.l.k32(n))).collect()
+    }
+
     fn kind_of(&self, cmd: u32) -> Option<&'static str> {
-        let l = self.l;
-        let names: &[(&str, &str)] = &[
-            ("NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2", "caps0073"),
-            ("NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS", "num_heads"),
-            ("NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED", "supported"),
-            ("NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE", "connect_state"),
-            ("NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE", "active"),
-            ("NV0073_CTRL_CMD_SYSTEM_GET_BOOT_DISPLAYS", "boot_displays"),
-            ("NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP", "head_routing"),
-            ("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA", "echo"),
-            ("NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS", "internal_displays"),
-            ("NV0073_CTRL_CMD_SPECIFIC_GET_ALL_HEAD_MASK", "head_mask"),
-            ("NV0073_CTRL_CMD_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT", "window_assign"),
-            ("NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO", "or_info"),
-            ("NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA", "connector_data"),
-            ("NV0073_CTRL_CMD_SPECIFIC_GET_TYPE", "get_type"),
-            ("NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2", "get_edid"),
-            ("NV0073_CTRL_CMD_SPECIFIC_SET_EDID_V2", "set_edid"),
-            ("NV0073_CTRL_CMD_SPECIFIC_GET_PCLK_LIMIT", "pclk_limit"),
-            ("NV0073_CTRL_CMD_SPECIFIC_IS_DIRECTMODE_DISPLAY", "directmode"),
-            ("NV0073_CTRL_CMD_SPECIFIC_DISPLAY_CHANGE", "echo"),
-            ("NV0073_CTRL_CMD_SPECIFIC_GET_BACKLIGHT_BRIGHTNESS", "not_supported"),
-            ("NV0073_CTRL_CMD_DFP_GET_INFO", "dfp_info"),
-            ("NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO", "dongle"),
-            ("NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2", "caps5070"),
-            ("NVC370_CTRL_CMD_IDLE_CHANNEL", "echo"),
-            ("NVC370_CTRL_CMD_SET_ACCL", "echo"),
-            ("NVC370_CTRL_CMD_GET_ACCL", "get_accl"),
-            ("NVC370_CTRL_CMD_GET_CHANNEL_INFO", "channel_info"),
-            ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
-            ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
-            ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
-        ];
-        match cmd {
-            GET_IP_VERSION => return Some("ip_version"),
-            GET_STATIC_INFO => return Some("static_info"),
-            INIT_BRIGHTC_STATE_LOAD | SET_STATIC_EDID_DATA => return Some("echo"),
-            WRITE_INST_MEM => return Some("inst_mem"),
-            CHANNEL_PUSHBUFFER => return Some("pushbuffer"),
-            _ => {}
+        if let Some((_, k)) = INTERNAL_CONTROLS.iter().find(|(c, _)| *c == cmd) {
+            return Some(k);
         }
-        names.iter().find(|(n, _)| l.k32(n) == Some(cmd)).map(|(_, k)| *k)
+        NAMED_CONTROLS.iter().find(|(n, _)| self.l.k32(n) == Some(cmd)).map(|(_, k)| *k)
     }
 
     /// ★ Answer one display control: `Some(Ok(reply params))`, `Some(Err(status))`, or `None` when
@@ -389,13 +436,21 @@ impl DisplayModel {
                     addr_space: p.get("instMemAddrSpace").unwrap_or(0) as u32,
                 };
                 self.inst_mem = Some(im);
-                self.statements.push(Statement::InstMem(im));
+                self.state(Statement::InstMem(im));
                 Ok(p.buf)
             }
             "pushbuffer" => {
                 let p = self.view("NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS", params)?;
                 let class = p.get("hclass").unwrap_or(0) as u32;
                 let inst = p.get("channelInstance").unwrap_or(0) as u32;
+                // ★ Hostile guest: `(class, instance)` keys the registry, so both are bounded —
+                // one of this family's channel classes, an instance that exists. The guest's CPU-RM
+                // sends it for every DMA channel (`valid`) and every PIO channel (`!valid`), after
+                // its own channel-number check (`disp_channel.c:786-863`), and ignores the status.
+                match self.classes.channel_kind(class) {
+                    Some(kd) if inst < self.instances(kd) => {}
+                    _ => return Err(NV_ERR_INVALID_ARGUMENT),
+                }
                 if p.get("valid").unwrap_or(0) != 0 {
                     self.pushbuffers.insert(
                         (class, inst),
@@ -612,33 +667,51 @@ impl DisplayModel {
 
     /// ★ A display object the guest allocated (after the RPC's header was decoded). Returns `true`
     /// when it was one of ours and was recorded.
+    ///
+    /// ⊘ Hostile guest: params that are not the derived allocation struct, or an instance this
+    /// display does not have ([`Self::instances`]), are NOT recorded — never read as instance 0.
+    /// The registry is keyed by `(kind, instance)`, so it holds at most one entry per channel the
+    /// display has, whatever the guest sends. (The guest's CPU-RM does not check a CORE instance,
+    /// `kern_disp_0300.c:96-99`: there is one core channel, number 0, and NVKMS allocates it as
+    /// instance 0.)
     pub fn alloc(&mut self, client: u32, handle: u32, class: u32, params: &[u8]) -> bool {
         let Some(kind) = self.classes.channel_kind(class) else { return false };
-        let (inst, offset) = if kind == ChannelKind::Cursor {
-            let p = Params::new(self.l, "NV50VAIO_CHANNELPIO_ALLOCATION_PARAMETERS", params);
-            (p.and_then(|p| p.get("channelInstance")).unwrap_or(0) as u32, 0)
+        let decoded = if kind == ChannelKind::Cursor {
+            Params::new(self.l, "NV50VAIO_CHANNELPIO_ALLOCATION_PARAMETERS", params)
+                .and_then(|p| Some((p.get("channelInstance")? as u32, 0)))
         } else {
-            let p = Params::new(self.l, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS", params);
-            let inst = p.as_ref().and_then(|p| p.get("channelInstance")).unwrap_or(0) as u32;
-            let off = p.as_ref().and_then(|p| p.get("offset")).unwrap_or(0) as u32;
-            (inst, off)
+            Params::new(self.l, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS", params)
+                .and_then(|p| Some((p.get("channelInstance")? as u32, p.get("offset")? as u32)))
         };
+        let Some((inst, offset)) = decoded.filter(|(i, _)| *i < self.instances(kind)) else { return false };
         let pb = self.pushbuffers.get(&(class, inst)).copied();
         self.channels.insert(
             (kind, inst),
             Channel { class, kind, instance: inst, client, handle, pb, get: offset, put: offset },
         );
-        self.statements.push(Statement::ChannelAllocated { kind, instance: inst, offset });
+        self.state(Statement::ChannelAllocated { kind, instance: inst, offset });
         true
     }
 
-    /// A free of `(client, handle)`: drops the channel if it was one.
-    pub fn free(&mut self, client: u32, handle: u32) {
+    /// A free of `(client, handle)`: drops the channel if it was one. Returns `true` when it was.
+    pub fn free(&mut self, client: u32, handle: u32) -> bool {
         let key = self.channels.iter().find(|(_, c)| c.client == client && c.handle == handle).map(|(k, _)| *k);
         if let Some(k) = key {
             self.channels.remove(&k);
-            self.statements.push(Statement::ChannelFreed { kind: k.0, instance: k.1 });
+            self.state(Statement::ChannelFreed { kind: k.0, instance: k.1 });
         }
+        key.is_some()
+    }
+
+    /// A free of the CLIENT `client` (the guest's RM frees each object first, but a client free is
+    /// the last word on everything it held): drops every channel it owned. Returns how many.
+    pub fn free_client(&mut self, client: u32) -> usize {
+        let keys: Vec<_> = self.channels.iter().filter(|(_, c)| c.client == client).map(|(k, _)| *k).collect();
+        for k in &keys {
+            self.channels.remove(k);
+            self.state(Statement::ChannelFreed { kind: k.0, instance: k.1 });
+        }
+        keys.len()
     }
 
     /// Drain the statements for the plane.
@@ -763,5 +836,78 @@ mod tests {
             m.take_statements().as_slice(),
             [Statement::ChannelAllocated { kind: ChannelKind::Core, .. }, Statement::ChannelFreed { .. }]
         ));
+    }
+
+    /// ★ The claim set is enumerable and exact: six subdevice-internal controls plus the thirty
+    /// named ones, every name resolved through the derived layouts, no id twice, and nothing in the
+    /// display interfaces' command pages claimed that the set does not list.
+    #[test]
+    fn the_claim_set_is_enumerable_and_exact() {
+        let m = model();
+        let set = m.claimed();
+        assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
+        assert_eq!(set.len(), 36);
+        let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
+        assert_eq!(distinct.len(), set.len(), "no id twice");
+        assert!(set.iter().all(|c| m.claims(*c)));
+        let scanned: std::collections::BTreeSet<u32> = [0x0073_0000u32, 0x5070_0000, 0xc370_0000, 0xc372_0000]
+            .iter()
+            .flat_map(|b| *b..*b + 0x2000)
+            .chain(0x2080_0a00..0x2080_0b00)
+            .filter(|c| m.claims(*c))
+            .collect();
+        assert_eq!(scanned, distinct);
+    }
+
+    /// ★ Hostile guest: every guest-stated key of the registry is bounded. A pushbuffer for a class
+    /// that is not one of this family's channels, or for an instance the display does not have, is
+    /// refused; an alloc whose params are not the derived struct, or whose instance does not exist,
+    /// is not recorded (never read as instance 0); the statement queue stops at its bound and counts
+    /// the rest; a client free drops every channel it owned.
+    #[test]
+    fn guest_stated_keys_are_bounded_and_the_statement_queue_is_capped() {
+        let mut m = model();
+        assert_eq!((m.instances(ChannelKind::Core), m.instances(ChannelKind::Window)), (1, 8));
+        assert_eq!((m.instances(ChannelKind::WindowImm), m.instances(ChannelKind::Cursor)), (8, 4));
+        let s = "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS";
+        let pb = |m: &mut DisplayModel, class: u32, inst: u32| {
+            let mut q = Params::new(m.layouts(), s, &vec![0; size(m, s)]).unwrap();
+            q.set("hclass", u64::from(class));
+            q.set("channelInstance", u64::from(inst));
+            q.set("valid", 1);
+            m.control(CHANNEL_PUSHBUFFER, &q.buf)
+        };
+        assert_eq!(pb(&mut m, 0xC67E, 8), Some(Err(NV_ERR_INVALID_ARGUMENT)), "window 8 does not exist");
+        assert_eq!(pb(&mut m, 0xC57E, 0), Some(Err(NV_ERR_INVALID_ARGUMENT)), "a Turing class on a GA10x display");
+        assert_eq!(pb(&mut m, 0xC67D, 1), Some(Err(NV_ERR_INVALID_ARGUMENT)), "there is one core channel");
+        assert!(matches!(pb(&mut m, 0xC67E, 7), Some(Ok(_))));
+        assert_eq!(m.pushbuffers.len(), 1);
+        let dma = size(&m, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS");
+        let pio = size(&m, "NV50VAIO_CHANNELPIO_ALLOCATION_PARAMETERS");
+        let with_inst = |n: usize, inst: u32| {
+            let mut v = vec![0u8; n];
+            v[0..4].copy_from_slice(&inst.to_le_bytes());
+            v
+        };
+        let c = 0xc1d0_0001;
+        assert!(!m.alloc(c, 0x10, 0xC67E, &with_inst(dma - 4, 0)), "short params are not a window at instance 0");
+        assert!(!m.alloc(c, 0x11, 0xC67E, &with_inst(dma, 0xffff_ffff)), "an instance the display does not have");
+        assert!(!m.alloc(c, 0x12, 0xC67A, &with_inst(pio, 4)), "cursor 4 on a four-head display");
+        assert!(!m.alloc(c, 0x13, 0xC670, &with_inst(dma, 0)), "the display object is not a channel");
+        assert!(m.channels.is_empty());
+        assert!(m.alloc(c, 0x20, 0xC67E, &with_inst(dma, 7)));
+        assert_eq!(m.channels[&(ChannelKind::Window, 7)].pb.map(|p| p.phys), Some(0), "its pushbuffer was stated first");
+        assert!(m.alloc(c, 0x21, 0xC67A, &with_inst(pio, 3)));
+        assert!(m.alloc(0xc1d0_0002, 0x22, 0xC67D, &with_inst(dma, 0)));
+        assert_eq!(m.free_client(c), 2);
+        assert_eq!(m.channels.keys().copied().collect::<Vec<_>>(), vec![(ChannelKind::Core, 0)]);
+        assert!(!m.free(c, 0x20), "already gone");
+        m.take_statements();
+        for i in 0..MAX_STATEMENTS + 5 {
+            m.alloc(c, 0x100 + i as u32, 0xC67B, &with_inst(dma, (i % 8) as u32));
+        }
+        assert_eq!(m.statements.len(), MAX_STATEMENTS);
+        assert_eq!(m.statements_dropped, 5);
+        assert_eq!(m.channels.len(), 1 + 8, "the registry holds one entry per channel the display has");
     }
 }

@@ -512,6 +512,15 @@ pub struct KfPdbEntry {
 }
 
 impl KfPdbEntry {
+    /// ★ The committed-placement SLOT this entry was diffed against — `reserved`, which the
+    /// kernel's emit writes as `a.slots[t]` and its commit reads back (`kf_walk.cu`,
+    /// `kf_diff_emit` / `kf_commit_kernel`). ⊘ The C field keeps its name: a frozen seam compiles
+    /// against it.
+    #[must_use]
+    pub fn slot(&self) -> u32 {
+        self.reserved
+    }
+
     /// The `KFWR_R_*` bits this entry's walk refused (`reserved2` low 32).
     #[must_use]
     pub fn refused_bits(&self) -> u32 {
@@ -549,14 +558,243 @@ pub const KFWR_AP_SYS_COHERENT: u8 = 2;
 /// `KFWR_RF_AP_*` sys-noncoherent: the run's `gpga` is guest-PHYSICAL.
 pub const KFWR_AP_SYS_NONCOHERENT: u8 = 3;
 
+// ── KfMapRun::flags — the DECODED fields, never the raw entry (`kf_walk.h`) ───────────────────
+//
+// ★ Mirrors of the header's `KFWR_RF_*_{SHIFT,MASK}` pairs, by the header's own names, and pinned
+// against it by `tests/walk_abi_matches_the_cu.rs` (`the_report_constants_match_the_header`). The
+// kernel builds `flags` in `kf_leaf_flags` from these and nothing else; every Rust reader goes
+// through [`RfField`] rather than restating a shift.
+
+/// `KFWR_RF_AP_SHIFT`: the leaf aperture code's first bit.
+pub const KFWR_RF_AP_SHIFT: u32 = 0;
+/// `KFWR_RF_AP_MASK`: the leaf aperture code, after the shift (0 vidmem, 1 peer, 2 sys-coherent,
+/// 3 sys-noncoherent).
+pub const KFWR_RF_AP_MASK: u32 = 0x7;
+/// `KFWR_RF_PS_SHIFT`: the page-size code's first bit.
+pub const KFWR_RF_PS_SHIFT: u32 = 8;
+/// `KFWR_RF_PS_MASK`: the page-size code ([`PS_4K`] … [`PS_512M`]), after the shift.
+pub const KFWR_RF_PS_MASK: u32 = 0xF;
+/// `KFWR_RF_KIND_SHIFT`: the guest PTE's KIND, which joins run identity (`kf_walk.h` §w725b).
+pub const KFWR_RF_KIND_SHIFT: u32 = 16;
+/// `KFWR_RF_KIND_MASK`: the KIND, after the shift.
+pub const KFWR_RF_KIND_MASK: u32 = 0xFF;
+/// ★ The page-size CLASS mask: the kernel's `kf_pcls` and `kf_ps_bytes_of` read the page-size
+/// field as `(flags >> KFWR_RF_PS_SHIFT) & 3u` — the four codes a format has — not through
+/// [`KFWR_RF_PS_MASK`]. ⊘ The header names no macro for the `3u`, so this is not a `KFWR_*`
+/// mirror; it is kept exactly (a code above 3 would alias a class, as it does on the GPU).
+pub const KF_PS_CLASS_MASK: u32 = 3;
+
+/// ★ One named bit range of [`KfMapRun::flags`]: `value = (flags >> shift) & mask` — a
+/// `KFWR_RF_*_{SHIFT,MASK}` pair.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RfField {
+    /// The field's first bit (`KFWR_RF_*_SHIFT`).
+    pub shift: u32,
+    /// Its mask, after the shift (`KFWR_RF_*_MASK`).
+    pub mask: u32,
+}
+
+impl RfField {
+    /// The field's value in `flags`.
+    #[must_use]
+    pub const fn get(self, flags: u32) -> u32 {
+        (flags >> self.shift) & self.mask
+    }
+
+    /// `value` placed in the field (masked), to be OR'd into a flags word.
+    #[must_use]
+    pub const fn put(self, value: u32) -> u32 {
+        (value & self.mask) << self.shift
+    }
+
+    /// The field's bits, in place.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.mask << self.shift
+    }
+}
+
+/// The leaf aperture code (`KFWR_RF_AP_*`).
+pub const RF_AP: RfField = RfField {
+    shift: KFWR_RF_AP_SHIFT,
+    mask: KFWR_RF_AP_MASK,
+};
+/// The page-size code (`KFWR_RF_PS_*`).
+pub const RF_PS: RfField = RfField {
+    shift: KFWR_RF_PS_SHIFT,
+    mask: KFWR_RF_PS_MASK,
+};
+/// The page-size CLASS as the kernel reads it (`kf_pcls`: `KFWR_RF_PS_SHIFT`, [`KF_PS_CLASS_MASK`]).
+pub const RF_CLASS: RfField = RfField {
+    shift: KFWR_RF_PS_SHIFT,
+    mask: KF_PS_CLASS_MASK,
+};
+/// The guest PTE's KIND (`KFWR_RF_KIND_*`).
+pub const RF_KIND: RfField = RfField {
+    shift: KFWR_RF_KIND_SHIFT,
+    mask: KFWR_RF_KIND_MASK,
+};
+
 impl KfMapRun {
     /// The leaf aperture code: `flags` bits `KFWR_RF_AP_SHIFT`/`KFWR_RF_AP_MASK`
     /// (`cuda/walk/kf_walk.h:92-97` — 0 vidmem, 1 peer, 2 sys-coherent, 3 sys-noncoherent).
     #[must_use]
     pub fn aperture(&self) -> u8 {
-        (self.flags & 0x7) as u8
+        RF_AP.get(self.flags) as u8
+    }
+
+    /// The page-size code ([`PS_4K`] … [`PS_512M`]): `KFWR_RF_PS_SHIFT`/`KFWR_RF_PS_MASK`.
+    #[must_use]
+    pub fn page_size(&self) -> u8 {
+        RF_PS.get(self.flags) as u8
+    }
+
+    /// The page-size class the diff groups by, exactly as the kernel's `kf_pcls` reads it
+    /// ([`RF_CLASS`]).
+    #[must_use]
+    pub fn class(&self) -> usize {
+        RF_CLASS.get(self.flags) as usize
+    }
+
+    /// The guest PTE's KIND: `KFWR_RF_KIND_SHIFT`/`KFWR_RF_KIND_MASK`.
+    #[must_use]
+    pub fn kind(&self) -> u8 {
+        RF_KIND.get(self.flags) as u8
     }
 }
+
+// ── The report, decoded: ONE decoder per `#[repr(C)]` struct ─────────────────────────────────
+//
+// ★★★ `STATUS_AND_HANDOFF.md` §4 item 6. The report used to be decoded two ways — a raw
+// `read_struct` copy in `try_collect` and hand-written byte offsets (`c[24..28]`, `c[28..30]`, …)
+// in `debug_walk_runs` — so a field move in `kf_walk.h` would have been caught by the layout
+// differential for one path and read at the wrong offset by the other. Now every report struct
+// has exactly one decoder, generated from its field list at `offset_of!`, in safe code:
+// - the field list is a STRUCT LITERAL, so a field added to the struct and not to the list is a
+//   compile error, never a silently-zero field;
+// - a `const` assertion proves the fields TILE the struct (no padding a decoder would skip, no
+//   byte `encode` leaves unwritten), which is what makes `encode ∘ decode` the identity on bytes;
+// - the report is little-endian by the header's contract (*"little-endian, naturally aligned,
+//   no bitfields"*), so it is decoded as little-endian whatever the host.
+// ⊘ `offset_of!` is this struct's layout as the Rust compiler lays it out; that it is also the C
+// compiler's is `tests/walk_abi_matches_the_cu.rs`'s job, field by field.
+
+/// A fixed-width little-endian field of a report struct.
+trait LeField: Sized {
+    fn get(b: &[u8], at: usize) -> Self;
+    fn put(&self, b: &mut [u8], at: usize);
+}
+
+macro_rules! le_int_field {
+    ($($t:ty),+) => {$(
+        impl LeField for $t {
+            fn get(b: &[u8], at: usize) -> Self {
+                let mut w = [0u8; core::mem::size_of::<$t>()];
+                w.copy_from_slice(&b[at..at + core::mem::size_of::<$t>()]);
+                <$t>::from_le_bytes(w)
+            }
+            fn put(&self, b: &mut [u8], at: usize) {
+                b[at..at + core::mem::size_of::<$t>()].copy_from_slice(&self.to_le_bytes());
+            }
+        }
+    )+};
+}
+le_int_field!(u16, u32, u64);
+
+impl<const N: usize> LeField for [u8; N] {
+    fn get(b: &[u8], at: usize) -> Self {
+        let mut w = [0u8; N];
+        w.copy_from_slice(&b[at..at + N]);
+        w
+    }
+    fn put(&self, b: &mut [u8], at: usize) {
+        b[at..at + N].copy_from_slice(self);
+    }
+}
+
+/// Generate a report struct's ONE decoder (and its inverse) from its field list.
+macro_rules! report_codec {
+    ($t:ident { $($f:ident: $ty:ty),+ $(,)? }) => {
+        impl $t {
+            /// Bytes in the report: `size_of`, which the layout differential pins to the C
+            /// compiler's `sizeof`.
+            pub const BYTES: usize = core::mem::size_of::<$t>();
+
+            /// ★ Decode one from the bytes the device wrote — little-endian, every field at its
+            /// `offset_of!`.
+            ///
+            /// # Panics
+            /// If `b` is shorter than [`Self::BYTES`]. ⊘ A panic and not a truncation: a short
+            /// read would decode whatever follows in the buffer — usually zeros — with no marker
+            /// distinguishing it from a real value.
+            #[must_use]
+            pub fn decode(b: &[u8]) -> Self {
+                assert!(
+                    b.len() >= Self::BYTES,
+                    "a {}-byte buffer cannot hold a {}-byte {}",
+                    b.len(),
+                    Self::BYTES,
+                    stringify!($t)
+                );
+                $t { $($f: <$ty as LeField>::get(b, core::mem::offset_of!($t, $f)),)+ }
+            }
+
+            /// ★ Decode an array of them — every WHOLE struct in `b`, in order (a trailing
+            /// partial one is not a struct and is not read).
+            #[must_use]
+            pub fn decode_all(b: &[u8]) -> Vec<Self> {
+                let (whole, _partial) = b.as_chunks::<{ core::mem::size_of::<$t>() }>();
+                whole.iter().map(|c| Self::decode(c)).collect()
+            }
+
+            /// The bytes [`Self::decode`] reads this value back from (little-endian, every
+            /// field at its `offset_of!`) — for a test that must hand the host a report.
+            #[must_use]
+            pub fn encode(&self) -> [u8; core::mem::size_of::<$t>()] {
+                let mut b = [0u8; core::mem::size_of::<$t>()];
+                $(LeField::put(&self.$f, &mut b, core::mem::offset_of!($t, $f));)+
+                b
+            }
+        }
+        // The fields TILE the struct: their widths sum to its size, so there is no padding.
+        const _: () = assert!(0 $(+ core::mem::size_of::<$ty>())+ == core::mem::size_of::<$t>());
+    };
+}
+
+report_codec!(KfReportHeader {
+    magic: u32,
+    version: u16,
+    flags: u16,
+    generation: u64,
+    acked_generation: u64,
+    pdb_count: u32,
+    pdb_capacity: u32,
+    run_count: u32,
+    run_capacity: u32,
+    entries_visited: u64,
+    refusals: u32,
+    refuse_mask: u32,
+    sparse_slots: u32,
+    ps_log2: [u8; 4],
+});
+
+report_codec!(KfPdbEntry {
+    pdb: u64,
+    first_run: u32,
+    run_count: u32,
+    vas_flags: u32,
+    reserved: u32,
+    reserved2: u64,
+});
+
+report_codec!(KfMapRun {
+    va: u64,
+    gpga: u64,
+    len: u64,
+    flags: u32,
+    op: u16,
+    pdb_index: u16,
+});
 
 /// `{pdb, va_base, va_len}`; `va_len == 0` means "walk this whole PDB".
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -781,3 +1019,231 @@ pub const PS_64K: u8 = 1;
 pub const PS_2M: u8 = 2;
 /// Page-size code: 512 MiB.
 pub const PS_512M: u8 = 3;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::mem::{offset_of, size_of};
+
+    /// `[1, 2, …, n]`: every byte distinct and non-zero, so a field read at the wrong offset, at the
+    /// wrong width or in the wrong byte order cannot come out right by accident.
+    fn seq(n: usize) -> Vec<u8> {
+        (1..=n).map(|i| u8::try_from(i).expect("< 256")).collect()
+    }
+
+    /// ★★★ **THE HEADER'S DOCUMENTED LAYOUT, PINNED** (`cuda/walk/kf_walk.h`: *"little-endian,
+    /// naturally aligned, no bitfields"*, `ReportHeader` 64 B). A third statement of it, stated as
+    /// numbers, which needs no C compiler; `tests/walk_abi_matches_the_cu.rs` holds the same
+    /// fields to `g++`'s own `offsetof`.
+    #[test]
+    fn the_report_structs_have_the_headers_documented_layout() {
+        assert_eq!(
+            (size_of::<KfReportHeader>(), KfReportHeader::BYTES),
+            (64, 64)
+        );
+        assert_eq!((size_of::<KfPdbEntry>(), KfPdbEntry::BYTES), (32, 32));
+        assert_eq!((size_of::<KfMapRun>(), KfMapRun::BYTES), (32, 32));
+        let h = [
+            offset_of!(KfReportHeader, magic),
+            offset_of!(KfReportHeader, version),
+            offset_of!(KfReportHeader, flags),
+            offset_of!(KfReportHeader, generation),
+            offset_of!(KfReportHeader, acked_generation),
+            offset_of!(KfReportHeader, pdb_count),
+            offset_of!(KfReportHeader, pdb_capacity),
+            offset_of!(KfReportHeader, run_count),
+            offset_of!(KfReportHeader, run_capacity),
+            offset_of!(KfReportHeader, entries_visited),
+            offset_of!(KfReportHeader, refusals),
+            offset_of!(KfReportHeader, refuse_mask),
+            offset_of!(KfReportHeader, sparse_slots),
+            offset_of!(KfReportHeader, ps_log2),
+        ];
+        assert_eq!(h, [0, 4, 6, 8, 16, 24, 28, 32, 36, 40, 48, 52, 56, 60]);
+        let p = [
+            offset_of!(KfPdbEntry, pdb),
+            offset_of!(KfPdbEntry, first_run),
+            offset_of!(KfPdbEntry, run_count),
+            offset_of!(KfPdbEntry, vas_flags),
+            offset_of!(KfPdbEntry, reserved),
+            offset_of!(KfPdbEntry, reserved2),
+        ];
+        assert_eq!(p, [0, 8, 12, 16, 20, 24]);
+        let r = [
+            offset_of!(KfMapRun, va),
+            offset_of!(KfMapRun, gpga),
+            offset_of!(KfMapRun, len),
+            offset_of!(KfMapRun, flags),
+            offset_of!(KfMapRun, op),
+            offset_of!(KfMapRun, pdb_index),
+        ];
+        assert_eq!(r, [0, 8, 16, 24, 28, 30]);
+    }
+
+    /// ★★★ **EACH DECODER READS THE DOCUMENTED BYTES AS THE DOCUMENTED VALUES** — little-endian,
+    /// every field at its offset — and round-trips through the struct's own layout: the bytes the
+    /// compiler lays the value out in (`view_bytes`, what the device writes) decode back to the
+    /// value, `encode` produces exactly those bytes, and `encode ∘ decode` is the identity on any
+    /// buffer (the fields tile the struct, so no byte is skipped or left stale).
+    #[test]
+    fn every_report_struct_round_trips_through_its_own_layout() {
+        let hdr = KfReportHeader {
+            magic: 0x0403_0201,
+            version: 0x0605,
+            flags: 0x0807,
+            generation: 0x100F_0E0D_0C0B_0A09,
+            acked_generation: 0x1817_1615_1413_1211,
+            pdb_count: 0x1C1B_1A19,
+            pdb_capacity: 0x201F_1E1D,
+            run_count: 0x2423_2221,
+            run_capacity: 0x2827_2625,
+            entries_visited: 0x302F_2E2D_2C2B_2A29,
+            refusals: 0x3433_3231,
+            refuse_mask: 0x3837_3635,
+            sparse_slots: 0x3C3B_3A39,
+            ps_log2: [0x3D, 0x3E, 0x3F, 0x40],
+        };
+        let pdb = KfPdbEntry {
+            pdb: 0x0807_0605_0403_0201,
+            first_run: 0x0C0B_0A09,
+            run_count: 0x100F_0E0D,
+            vas_flags: 0x1413_1211,
+            reserved: 0x1817_1615,
+            reserved2: 0x201F_1E1D_1C1B_1A19,
+        };
+        let run = KfMapRun {
+            va: 0x0807_0605_0403_0201,
+            gpga: 0x100F_0E0D_0C0B_0A09,
+            len: 0x1817_1615_1413_1211,
+            flags: 0x1C1B_1A19,
+            op: 0x1E1D,
+            pdb_index: 0x201F,
+        };
+        macro_rules! round_trip {
+            ($t:ident, $v:expr) => {{
+                let v: $t = $v;
+                let doc = seq($t::BYTES);
+                assert_eq!($t::decode(&doc), v, "{}: the documented bytes decode to the documented values", stringify!($t));
+                assert_eq!(&v.encode()[..], &doc[..], "{}: encode is decode's inverse", stringify!($t));
+                // The struct's own layout — the bytes the device writes — on a little-endian host.
+                if cfg!(target_endian = "little") {
+                    let laid_out = crate::driver_unsafe::view_bytes(&v);
+                    assert_eq!(laid_out, &doc[..], "{}: the compiler lays it out as documented", stringify!($t));
+                    assert_eq!($t::decode(laid_out), v, "{}: layout → decode → equal", stringify!($t));
+                }
+                // Any buffer: every byte is read and written back.
+                let mut x = 0x9E37_79B9_7F4A_7C15u64;
+                for _ in 0..64 {
+                    let b: Vec<u8> = (0..$t::BYTES)
+                        .map(|_| {
+                            x ^= x << 13;
+                            x ^= x >> 7;
+                            x ^= x << 17;
+                            x.to_le_bytes()[0]
+                        })
+                        .collect();
+                    assert_eq!(&$t::decode(&b).encode()[..], &b[..], "{}: encode ∘ decode", stringify!($t));
+                }
+                // A longer buffer: only the struct's own prefix is read.
+                let mut longer = doc.clone();
+                longer.extend([0xEE; 7]);
+                assert_eq!($t::decode(&longer), v);
+            }};
+        }
+        round_trip!(KfReportHeader, hdr);
+        round_trip!(KfPdbEntry, pdb);
+        round_trip!(KfMapRun, run);
+        // Arrays decode struct by struct, as `try_collect` reads them; a trailing partial struct
+        // is not read.
+        let mut two: Vec<u8> = [run.encode(), KfMapRun { va: 7, ..run }.encode()].concat();
+        let both = vec![run, KfMapRun { va: 7, ..run }];
+        assert_eq!(KfMapRun::decode_all(&two), both);
+        two.extend([0xEE; 31]);
+        assert_eq!(KfMapRun::decode_all(&two), both);
+        assert!(KfPdbEntry::decode_all(&[]).is_empty());
+    }
+
+    /// A short buffer is a panic, never a truncated value padded with whatever followed.
+    #[test]
+    #[should_panic(expected = "cannot hold a 32-byte KfMapRun")]
+    fn a_short_buffer_is_refused_loudly() {
+        let _ = KfMapRun::decode(&[0u8; 31]);
+    }
+
+    /// ★ The `KFWR_RF_*` ranges and single-bit flags of a run's `flags` are pairwise DISJOINT
+    /// (a field cannot bleed into its neighbour), the class mask is the page-size field's low two
+    /// bits, and each accessor reads exactly its range.
+    #[test]
+    fn the_flags_ranges_are_disjoint_and_each_accessor_reads_its_own() {
+        let parts = [
+            RF_AP.bits(),
+            KFWR_RF_READ_ONLY,
+            KFWR_RF_ATOMIC_DISABLE,
+            KFWR_RF_VOLATILE,
+            KFWR_RF_PRIVILEGE,
+            RF_PS.bits(),
+            RF_KIND.bits(),
+            KFWR_RF_HELD,
+        ];
+        for (i, a) in parts.iter().enumerate() {
+            for b in &parts[i + 1..] {
+                assert_eq!(a & b, 0, "{a:#x} overlaps {b:#x}");
+            }
+        }
+        assert_eq!(
+            parts,
+            [
+                0x7,
+                1 << 3,
+                1 << 4,
+                1 << 5,
+                1 << 6,
+                0xF << 8,
+                0xFF << 16,
+                1 << 31
+            ]
+        );
+        assert_eq!(RF_CLASS.bits(), 0x3 << 8);
+        assert_eq!(
+            RF_CLASS.bits() & !RF_PS.bits(),
+            0,
+            "the class is inside the page-size field"
+        );
+        assert_eq!(KF_PS_CLASS_MASK as usize, crate::diffmodel::CLASSES - 1);
+        for (ap, ps, kind) in [
+            (AP_VID, PS_4K, 0u8),
+            (AP_SYS_NC, PS_512M, 0xFF),
+            (AP_PEER, PS_2M, 0x06),
+        ] {
+            let noise = KFWR_RF_HELD | KFWR_RF_KEY_PERM_ALL;
+            let r = KfMapRun {
+                flags: RF_AP.put(ap.into())
+                    | RF_PS.put(ps.into())
+                    | RF_KIND.put(kind.into())
+                    | noise,
+                ..KfMapRun::default()
+            };
+            assert_eq!(
+                (r.aperture(), r.page_size(), r.class(), r.kind()),
+                (ap, ps, usize::from(ps), kind)
+            );
+        }
+        // ⊘ A page-size code above 3 ALIASES a class — as `kf_pcls`'s `& 3u` does on the GPU.
+        let r = KfMapRun {
+            flags: RF_PS.put(0x6),
+            ..KfMapRun::default()
+        };
+        assert_eq!((r.page_size(), r.class()), (6, 2));
+        // `put` masks: a value wider than its field cannot reach the next one.
+        assert_eq!(RF_AP.put(0xFF), 0x7);
+        assert_eq!(RF_KIND.put(0x1FF), 0xFF << 16);
+        assert_eq!(
+            KfPdbEntry {
+                reserved: 42,
+                ..KfPdbEntry::default()
+            }
+            .slot(),
+            42
+        );
+    }
+}

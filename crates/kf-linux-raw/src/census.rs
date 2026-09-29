@@ -236,7 +236,9 @@ mod tests {
     /// `cargo test` runs test functions on many threads, so a second test toggling
     /// [`record_sequence`] would flip the log off underneath this one — a flake that reads as
     /// *"the record was not written"*, which is the exact false negative this instrument
-    /// exists to avoid. Splitting it is not a style choice; it is a race.
+    /// exists to avoid. Splitting it is not a style choice; it is a race. ⊘ The same holds for the
+    /// TOTAL: other test functions of this crate issue ioctls concurrently, so every count below is
+    /// bounded by the snapshots around the call, never asserted exactly.
     #[test]
     fn the_census_counts_at_the_syscall_logs_in_order_and_survives_the_log_being_off() {
         let dir = DevDir::open(c"/dev").expect("/dev exists on a Linux host");
@@ -263,10 +265,15 @@ mod tests {
         assert_eq!(mine[0].magic, 0x46, "the driver magic is carried");
         assert_eq!(mine[0].size, 8, "the copy length is carried");
         assert_ne!(mine[0].errno, 0, "a REFUSAL is recorded AS a refusal");
-        assert_eq!(
+        // ⊘ 2026-09-28: NOT `== before + 1`. The total is process-wide, and the chardev tests issue
+        // their own ioctls (`0x2A` on `/dev/null`) on other test threads, so one can land between
+        // `before` and ours — measured: 1 failure in 8 full `kf-*` runs, 0 in 6 of this crate alone.
+        // The property is the position, so bound it by the two snapshots around our call.
+        assert!(
+            mine[0].seq > before && mine[0].seq <= after.total,
+            "the sequence number is the process-wide position: {} not in ({before}, {}]",
             mine[0].seq,
-            before + 1,
-            "the sequence number is the process-wide position"
+            after.total
         );
 
         // (b) with the log OFF: the total still moves. That is what makes a phase shortfall
@@ -276,7 +283,8 @@ mod tests {
         let req = ioctl::readwrite(0x46, 201, 8).expect("8 bytes encodes");
         let _ = d.ioctl(req, &mut arg, &mut []);
         let off = snapshot();
-        assert_eq!(off.total, before_off + 1, "counted with the log off");
+        // ⊘ 2026-09-28: at least ours (sibling tests' ioctls may also land — see (a)).
+        assert!(off.total > before_off, "counted with the log off");
         assert!(
             !off.log.iter().any(|r| r.nr == 201),
             "and NOT logged — the two switches are independent"

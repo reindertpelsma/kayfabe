@@ -1,0 +1,32 @@
+grep: /workspace/bench/run_cl_tuguest_cup2_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup2_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup2_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup2_1_probe.log: No such file or directory
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+grep: /workspace/bench/run_cl_tuguest_cup3_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup3_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup3_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup3_1_probe.log: No such file or directory
+CL_ROW mode=guest rung=cup3 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+grep: /workspace/bench/run_cl_tuguest_cup8_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8_1_probe.log: No such file or directory
+CL_ROW mode=guest rung=cup8 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+grep: /workspace/bench/run_cl_tuguest_cup8bench_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8bench_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8bench_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8bench_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8bench_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8bench_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8bench_1_probe.log: No such file or directory
+grep: /workspace/bench/run_cl_tuguest_cup8bench_1_probe.log: No such file or directory
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+CUDA_LADDER_STARTED=2026-09-28T02:04:08+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=80e13bc5
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=FAIL boot_rc=2 graded=[]  trapped=? ledger=[]
+CUDA_LADDER_DONE=2026-09-28T02:04:49+00:00

@@ -366,7 +366,7 @@ impl Walker for GpuWalker {
                 .pdbs
                 .iter()
                 .filter(|p| p.refused_bits() != 0)
-                .map(|p| format!("pdb {:#x} slot {} refuse {:#x} need {}", p.pdb, p.reserved, p.refused_bits(), p.need()))
+                .map(|p| format!("pdb {:#x} slot {} refuse {:#x} need {}", p.pdb, p.slot(), p.refused_bits(), p.need()))
                 .collect();
             if std::env::var_os("KF_VAS_CENSUS").is_some() {
                 for (i, p) in r.pdbs.iter().enumerate() {
@@ -392,7 +392,7 @@ impl Walker for GpuWalker {
                 if p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0
                     && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
                 {
-                    eprintln!("kf3: census overflow entry {i} pdb {:#x} slot {}: {}", p.pdb, p.reserved, run_census(&runs));
+                    eprintln!("kf3: census overflow entry {i} pdb {:#x} slot {}: {}", p.pdb, p.slot(), run_census(&runs));
                 }
             }
         }
@@ -419,7 +419,7 @@ impl Walker for GpuWalker {
                     .collect();
                 EntryDiff {
                     pdb: p.pdb,
-                    slot: p.reserved,
+                    slot: p.slot(),
                     first,
                     runs,
                     partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,

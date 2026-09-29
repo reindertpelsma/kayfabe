@@ -34,16 +34,27 @@
 //! from it in place of the guest's tables, and a stale entry can only cost an extra diff line,
 //! never a wrong translation.
 
-use crate::abi::{KfMapRun, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KFWR_RF_KEY_PERM_ALL, KFWR_RF_KEY_PERM_DEFAULT};
+use crate::abi::{
+    AP_SYS, AP_SYS_NC, AP_VID, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KFWR_RF_KEY_PERM_ALL, KFWR_RF_KEY_PERM_DEFAULT,
+    KfMapRun, RF_AP, RF_CLASS, RF_KIND,
+};
 
 /// Page-size classes.
 pub const CLASSES: usize = 4;
 
-/// A run's page-size class (`flags` bits 8..12, clamped to the four codes the format has).
+/// A run's page-size class: the page-size field (`KFWR_RF_PS_SHIFT`) clamped to the four codes the
+/// format has, exactly as the kernel's `kf_pcls` reads it ([`RF_CLASS`], `& 3`).
 #[must_use]
 pub fn class_of(flags: u32) -> usize {
-    ((flags >> 8) & 0x3) as usize
+    RF_CLASS.get(flags) as usize
 }
+
+/// Where [`host_key_with`] puts the KIND (bits `2..10`) — `kf_hkey`'s `<< 2`.
+const HKEY_KIND_LO: u32 = 2;
+/// Where [`host_key_with`] puts the keyed permissions (bits `10..14`) — `kf_hkey`'s `<< 10`.
+const HKEY_PERM_LO: u32 = 10;
+/// The lowest permission bit of the run flags (`KFWR_RF_READ_ONLY`, bit 3) — `kf_hkey`'s `>> 3`.
+const RF_PERM_LO: u32 = KFWR_RF_KEY_PERM_ALL.trailing_zeros();
 
 /// ★ The ground truth a run's backing names, as the HOST maps it: `0` the store (vidmem), `1`
 /// guest RAM (both system apertures — the host maps one guest-RAM object either way), `2` any
@@ -57,12 +68,13 @@ pub fn class_of(flags: u32) -> usize {
 /// `kf_hkey` (`cuda/walk/kf_walk.cu`), whose `kp` is `KfArgs::key_perm`.
 #[must_use]
 pub fn host_key_with(flags: u32, key_perm: u32) -> u32 {
-    let ap = match flags & 0x7 {
-        0 => 0,
-        2 | 3 => 1,
+    // `RF_AP` is 3 bits wide, so the narrowing is exact.
+    let ap = match RF_AP.get(flags) as u8 {
+        AP_VID => 0,
+        AP_SYS | AP_SYS_NC => 1,
         _ => 2,
     };
-    ap | (((flags >> 16) & 0xff) << 2) | (((flags & key_perm & KFWR_RF_KEY_PERM_ALL) >> 3) << 10)
+    ap | (RF_KIND.get(flags) << HKEY_KIND_LO) | (((flags & key_perm & KFWR_RF_KEY_PERM_ALL) >> RF_PERM_LO) << HKEY_PERM_LO)
 }
 
 /// [`host_key_with`] under the default policy ([`KFWR_RF_KEY_PERM_DEFAULT`]).
@@ -314,14 +326,54 @@ pub fn coverage_with(runs: &[KfMapRun], key_perm: u32) -> [Vec<(u64, u64, u32, u
 mod tests {
     use super::*;
     use crate::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_KEY_PERM_ALL, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
+    use crate::abi::{PS_64K, RF_PS};
 
     const PAGE: u64 = 0x1000;
 
     fn run(va: u64, gpga: u64, len: u64, flags: u32) -> KfMapRun {
         KfMapRun { va, gpga, len, flags, op: KFWR_OP_MAP, pdb_index: 0 }
     }
-    const SYS: u32 = 2;
-    const BIG: u32 = 1 << 8;
+    const SYS: u32 = RF_AP.put(AP_SYS as u32);
+    const BIG: u32 = RF_PS.put(PS_64K as u32);
+    /// The four permission bits a guest can flip in place.
+    const PERM_FLIPS: [u32; 4] = [KFWR_RF_READ_ONLY, KFWR_RF_ATOMIC_DISABLE, KFWR_RF_VOLATILE, KFWR_RF_PRIVILEGE];
+
+    /// ★ The named-range rewrite of [`class_of`] and [`host_key_with`] (`STATUS_AND_HANDOFF.md` §4
+    /// item 6) is BEHAVIOUR-PRESERVING: both still compute, bit for bit, the formulas they were
+    /// written as — and that `kf_hkey`/`kf_pcls` spell in `kf_walk.cu` — over flags words that
+    /// exercise every field, including page-size codes above 3 (the `& 3` class mask aliases
+    /// them, as on the GPU) and bits outside every named range.
+    #[test]
+    fn the_named_ranges_compute_the_literal_formulas() {
+        let literal_class = |f: u32| ((f >> 8) & 0x3) as usize;
+        let literal_key = |f: u32, kp: u32| {
+            let ap = match f & 0x7 {
+                0 => 0,
+                2 | 3 => 1,
+                _ => 2,
+            };
+            ap | (((f >> 16) & 0xff) << 2) | (((f & kp & 0x78) >> 3) << 10)
+        };
+        assert_eq!(SYS, 2);
+        assert_eq!(BIG, 1 << 8);
+        assert_eq!(PERM_FLIPS, [1 << 3, 1 << 4, 1 << 5, 1 << 6]);
+        assert_eq!(KFWR_RF_KEY_PERM_ALL, 0x78, "the permission bits are 3..=6");
+        let mut x = 0x9E37_79B9_7F4A_7C15u64;
+        let mut words: Vec<u32> = (0u32..=0xF).flat_map(|ps| (0u32..8).map(move |ap| (ps << 8) | ap)).collect();
+        words.extend([u32::MAX, KFWR_RF_HELD, 0xFF << 16, KFWR_RF_KEY_PERM_ALL]);
+        for _ in 0..4096 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            words.push(x as u32);
+        }
+        for &f in &words {
+            assert_eq!(class_of(f), literal_class(f), "class_of({f:#x})");
+            for kp in [0, KFWR_RF_KEY_PERM_DEFAULT, KFWR_RF_KEY_PERM_ALL, u32::MAX, f.rotate_left(7)] {
+                assert_eq!(host_key_with(f, kp), literal_key(f, kp), "host_key_with({f:#x}, {kp:#x})");
+            }
+        }
+    }
 
     fn ok(n: usize) -> Vec<AckCode> {
         vec![AckCode::Applied; n]
@@ -528,7 +580,7 @@ mod tests {
             for _ in 0..n {
                 va += r.below(3) * PAGE;
                 let len = (1 + r.below(3)) * PAGE;
-                let flags = (c << 8) | if r.below(4) == 0 { SYS } else { 0 } | if r.below(5) == 0 { 1 << 3 } else { 0 };
+                let flags = RF_PS.put(c) | if r.below(4) == 0 { SYS } else { 0 } | if r.below(5) == 0 { KFWR_RF_READ_ONLY } else { 0 };
                 let gpga = r.below(64) * PAGE;
                 let x = run(va, gpga, len, flags);
                 if let Some(l) = last.as_mut()
@@ -561,7 +613,7 @@ mod tests {
                 1 => v.push(KfMapRun { gpga: r.below(64) * PAGE, ..*x }),
                 // ★ v3-roperm: a permission flip at the same backing (RW↔RO, atomics, cache,
                 // privilege) — the in-place downgrade UVM's read duplication performs.
-                3 => v.push(KfMapRun { flags: x.flags ^ [1u32 << 3, 1 << 4, 1 << 5, 1 << 6][r.below(4) as usize], ..*x }),
+                3 => v.push(KfMapRun { flags: x.flags ^ PERM_FLIPS[r.below(4) as usize], ..*x }),
                 2 if x.len > PAGE => {
                     v.push(KfMapRun { len: PAGE, ..*x });
                     v.push(KfMapRun { va: x.va + PAGE, gpga: r.below(64) * PAGE, len: x.len - PAGE, ..*x });

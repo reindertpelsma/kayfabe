@@ -1,0 +1,21 @@
+info  RMLADDER ARGV     = [--uvm-invalidate]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d0011c
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unstamped
+ok    W392C hVaSpace      = 0xcafe0004
+--- w392c UVM raw client: forcing nvidia-uvm to build a KERNEL channel ---
+ok    W392C uuid          = GPU-67ae25f5-306b-140f-1a30-ab8b976594b3
+ok    W392C open          = /dev/nvidia-uvm
+ok    W392C INITIALIZE    = rmStatus 0x0
+ok    W392C MM_INITIALIZE = rmStatus 0x0
+ok    W392C REGISTER_GPU  = rmStatus 0x0
+ok    W392C REGISTER_VAS  = rmStatus 0x0
+ok    W392C UNREGISTER     = rmStatus 0x0
+=== ★★ W392C VERDICT — pre-registered ===
+    W392C_OUTCOME=(P) ★★★★★ THE CLIENT WORKS. UVM registered the GPU and a VA
+        space against a RAW RM connection — so nvidia-uvm built its channel
+        manager, and point 2's transport EXISTS on this run.
+        ⇒ On BARE METAL this is the client's known-positive.
+        ⇒ In the GUEST, a MEMOP-CENSUS of zero after this is OURS to explain.
+done — uvm-invalidate probe only

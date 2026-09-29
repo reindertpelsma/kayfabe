@@ -1475,35 +1475,9 @@ pub fn view_bytes<T: Copy>(v: &T) -> &[u8] {
     unsafe { core::slice::from_raw_parts((v as *const T).cast::<u8>(), core::mem::size_of::<T>()) }
 }
 
-/// ★ Read one `Copy`, `#[repr(C)]` value out of a byte buffer the device wrote.
-///
-/// # Panics
-/// If `bytes` is shorter than `T`. ⊘ A panic and not a truncation: a short read would decode
-/// whatever follows in the buffer — usually zeros — with no marker distinguishing it from a
-/// real value, which is the `dlen=0` oracle failure one layer over.
-#[must_use]
-pub fn read_struct<T: Copy>(bytes: &[u8]) -> T {
-    assert!(
-        bytes.len() >= core::mem::size_of::<T>(),
-        "a {}-byte buffer cannot hold a {}-byte {}",
-        bytes.len(),
-        core::mem::size_of::<T>(),
-        core::any::type_name::<T>()
-    );
-    let mut out = core::mem::MaybeUninit::<T>::uninit();
-    // SAFETY: `out` is a live, aligned, writable `T`-sized region; `bytes` is at least that
-    // long (asserted immediately above) and the regions cannot overlap because `out` is a
-    // fresh local. `T`'s validity for an arbitrary bit pattern is the caller's obligation and
-    // is discharged by every call site using a `#[repr(C)]` aggregate of integers.
-    unsafe {
-        core::ptr::copy_nonoverlapping(
-            bytes.as_ptr(),
-            out.as_mut_ptr().cast::<u8>(),
-            core::mem::size_of::<T>(),
-        );
-        out.assume_init()
-    }
-}
+// ⊘ `read_struct` (a raw `copy_nonoverlapping` of device bytes into any `Copy` type) was removed
+// 2026-09-27: its only callers decoded the walk report, which now has ONE safe decoder per
+// struct (`abi.rs`, `report_codec!`, by `offset_of!`). One fewer unsafe block in the audited file.
 
 /// ★★★★★ **AN ALL-ZERO VALUE, INCLUDING ITS PADDING** — and the padding is the whole point.
 ///

@@ -9,6 +9,12 @@ summaries, traces; no binary. One directory per box:
 | `kfd/` | 52746206 | RTX 3090 (GA102 `0x2204`), host **580.159.04** open | guest walk (queues `q3` … `q8`) |
 | `kfh/` | 52788835 | RTX 3080 Ti (GA102), host driver swapped per version | host walk (`q4h`, `hostwalk`, `hostwalk2`) + mixed pairs |
 
+★ *[2026-09-28] The GPU-architecture axis (`V3_DRIVER_MATRIX.md` §5.0):* each box directory carries an
+`ARCH` file — the die its rows belong to, recorded from the box's own evidence (`kfd/ARCH`, `kfh/ARCH`:
+GA102) — which `scripts/drivermatrix/matrix_table.py` uses for queue-log rows that have no `arch=`
+field. A `scripts/drivermatrix/sweep.sh` run is committed as `<TAG>/` (its `summary_<TAG>.tar.xz`
+unpacked: `summary/sweep_<TAG>.log` with `arch=` on every row, `gates/`, `swaps/`, `ARCH`).
+
 Per box:
 
 - `summary/` — the queue logs (`q*.log`, `hostwalk*.log`: one line per step, every row names its
