@@ -40,15 +40,29 @@ fn answers() -> Vec<Answer> {
     let clocks = row(GSS_CUDART_CLOCKS);
     let a084 = row(GSS_CUDART_A084);
     vec![
-        Answer::from_probes(clocks, &host_reply(clocks.request()), Some(&host_reply(clocks.request_over(PROBE_BACKGROUND)))).0,
-        Answer::from_probes(a084, &a084.request(), Some(&a084.request_over(PROBE_BACKGROUND))).0,
+        Answer::from_probes(
+            clocks,
+            &host_reply(clocks.request()),
+            Some(&host_reply(clocks.request_over(PROBE_BACKGROUND))),
+        )
+        .0,
+        Answer::from_probes(
+            a084,
+            &a084.request(),
+            Some(&a084.request_over(PROBE_BACKGROUND)),
+        )
+        .0,
     ]
 }
 
 fn policy(gss: Vec<Answer>) -> InitTablePolicy {
     let mut host = ga106::host_facts();
     host.gss_replay = gss;
-    InitTablePolicy::new(ga106::board(), std::sync::Arc::new(host), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        std::sync::Arc::new(host),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 fn control(cmd: u32, params: &[u8]) -> RpcCommand {
@@ -58,13 +72,23 @@ fn control(cmd: u32, params: &[u8]) -> RpcCommand {
     payload[8..12].copy_from_slice(&cmd.to_le_bytes());
     payload[16..20].copy_from_slice(&(params.len() as u32).to_le_bytes());
     payload[PARAMS_AT..].copy_from_slice(params);
-    RpcCommand { function: RpcFunction::RmControl, code: 0x4c, sequence: 103, payload, elements: 1, delivered: Vec::new() }
+    RpcCommand {
+        function: RpcFunction::RmControl,
+        code: 0x4c,
+        sequence: 103,
+        payload,
+        elements: 1,
+        delivered: Vec::new(),
+    }
 }
 
 /// A request as a measured bare-metal cudart sample carries it: the constant words, garbage
 /// (`0x5a`) in the bytes the caller never initialised.
 fn cudart_request() -> Vec<u8> {
-    let row = *ROWS.iter().find(|r| r.cmd == GSS_CUDART_CLOCKS).expect("row");
+    let row = *ROWS
+        .iter()
+        .find(|r| r.cmd == GSS_CUDART_CLOCKS)
+        .expect("row");
     let mut g = row.request_over(0x5a);
     for &(o, v) in row.inputs {
         g[o..o + 4].copy_from_slice(&v.to_le_bytes());
@@ -78,13 +102,29 @@ fn the_clock_query_is_answered_with_the_hosts_clocks_and_whole_fields() {
     let r = policy(answers()).respond(&cmd).expect("answered");
     assert_eq!(r.rpc_result, 0, "envelope NV_OK");
     let b = &r.body;
-    assert_eq!(&b[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4], &0u32.to_le_bytes(), "control header NV_OK");
+    assert_eq!(
+        &b[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4],
+        &0u32.to_le_bytes(),
+        "control header NV_OK"
+    );
     let p = &b[PARAMS_AT..];
-    assert_eq!(&p[0x1c..0x20], &1_695_000u32.to_le_bytes(), "GPC max clock, kHz — the 1695 MHz deviceQuery shows");
+    assert_eq!(
+        &p[0x1c..0x20],
+        &1_695_000u32.to_le_bytes(),
+        "GPC max clock, kHz — the 1695 MHz deviceQuery shows"
+    );
     assert_eq!(&p[0x2c..0x30], &9_751_000u32.to_le_bytes(), "MCLK, kHz");
-    assert_eq!(&p[12..16], &1u32.to_le_bytes(), "a whole field: no stack garbage above its low byte");
+    assert_eq!(
+        &p[12..16],
+        &1u32.to_le_bytes(),
+        "a whole field: no stack garbage above its low byte"
+    );
     assert_eq!(p[4], 2);
-    assert_eq!(&p[5..8], &[0x5a; 3], "bytes the host never writes stay the guest's, as on bare metal");
+    assert_eq!(
+        &p[5..8],
+        &[0x5a; 3],
+        "bytes the host never writes stay the guest's, as on bare metal"
+    );
     assert_eq!(p[0x100], 0x5a);
 }
 
@@ -92,7 +132,10 @@ fn the_clock_query_is_answered_with_the_hosts_clocks_and_whole_fields() {
 fn with_no_host_answer_the_path_answers_nothing() {
     let cmd = control(GSS_CUDART_CLOCKS, &cudart_request());
     let r = policy(Vec::new()).respond(&cmd);
-    assert!(r.is_none_or(|r| r.rpc_result != 0), "never a constant where the host gave nothing");
+    assert!(
+        r.is_none_or(|r| r.rpc_result != 0),
+        "never a constant where the host gave nothing"
+    );
 }
 
 #[test]

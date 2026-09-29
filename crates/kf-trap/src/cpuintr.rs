@@ -141,8 +141,12 @@ impl CpuIntr {
             TOP_EN_SET_OFF => Some(Reg::TopEnSet),
             TOP_EN_CLEAR_OFF => Some(Reg::TopEnClear),
             r if (LEAF_OFF..LEAF_OFF + 0x200).contains(&r) => row(LEAF_OFF).map(Reg::Leaf),
-            r if (LEAF_EN_SET_OFF..LEAF_EN_SET_OFF + 0x200).contains(&r) => row(LEAF_EN_SET_OFF).map(Reg::LeafEnSet),
-            r if (LEAF_EN_CLEAR_OFF..LEAF_EN_CLEAR_OFF + 0x200).contains(&r) => row(LEAF_EN_CLEAR_OFF).map(Reg::LeafEnClear),
+            r if (LEAF_EN_SET_OFF..LEAF_EN_SET_OFF + 0x200).contains(&r) => {
+                row(LEAF_EN_SET_OFF).map(Reg::LeafEnSet)
+            }
+            r if (LEAF_EN_CLEAR_OFF..LEAF_EN_CLEAR_OFF + 0x200).contains(&r) => {
+                row(LEAF_EN_CLEAR_OFF).map(Reg::LeafEnClear)
+            }
             _ => None,
         }
     }
@@ -171,12 +175,20 @@ impl CpuIntr {
     pub fn snapshot(&self) -> String {
         let mut v = Vec::new();
         for i in 0..self.n_leaf {
-            let (p, e) = (self.leaf[i].load(Ordering::Acquire), self.leaf_en[i].load(Ordering::Acquire));
+            let (p, e) = (
+                self.leaf[i].load(Ordering::Acquire),
+                self.leaf_en[i].load(Ordering::Acquire),
+            );
             if p != 0 || e != 0 {
                 v.push(format!("leaf{i}={p:#x}/{e:#x}"));
             }
         }
-        format!("[{}] top_en={:#x} top={:#x}", v.join(" "), self.top_en.load(Ordering::Acquire), self.top())
+        format!(
+            "[{}] top_en={:#x} top={:#x}",
+            v.join(" "),
+            self.top_en.load(Ordering::Acquire),
+            self.top()
+        )
     }
 
     /// What the guest reads at `r`.
@@ -217,7 +229,8 @@ impl CpuIntr {
             Reg::TopEnSet => {
                 let was = self.top_en.fetch_or(v, Ordering::AcqRel);
                 let newly = v & !was;
-                let any = (0..self.n_leaf).any(|i| newly & (1 << subtree_of_leaf(i)) != 0 && self.asserted_leaf(i));
+                let any = (0..self.n_leaf)
+                    .any(|i| newly & (1 << subtree_of_leaf(i)) != 0 && self.asserted_leaf(i));
                 if any { Raise::Message } else { Raise::None }
             }
             Reg::TopEnClear => {
@@ -236,7 +249,11 @@ impl CpuIntr {
             return Raise::OutOfRange;
         }
         self.leaf[i].fetch_or(1 << bit, Ordering::AcqRel);
-        if self.asserted_leaf(i) { Raise::Message } else { Raise::None }
+        if self.asserted_leaf(i) {
+            Raise::Message
+        } else {
+            Raise::None
+        }
     }
 
     /// `(BAR0 offset, value)` for every register whose read-back `r` may have changed — the vCPU
@@ -257,7 +274,10 @@ impl CpuIntr {
             }
             Reg::Trigger | Reg::Top => {
                 for i in 0..self.n_leaf {
-                    put(b + LEAF_OFF + 4 * i as u64, self.leaf[i].load(Ordering::Acquire));
+                    put(
+                        b + LEAF_OFF + 4 * i as u64,
+                        self.leaf[i].load(Ordering::Acquire),
+                    );
                 }
                 put(b + LEAF_TRIGGER_OFF, 0);
             }
@@ -285,11 +305,23 @@ mod tests {
         let pb = UM - 0x30000;
         let (leaf, bit, top_bit) = (129 / 32, 129 % 32, (129 / 32) / 2);
         let w = |off: u64, v: u32| t.write(t.decode(off).unwrap(), v);
-        assert_eq!(w(pb + LEAF_OFF + 4 * leaf, 1 << bit), Raise::None, "clear first");
+        assert_eq!(
+            w(pb + LEAF_OFF + 4 * leaf, 1 << bit),
+            Raise::None,
+            "clear first"
+        );
         assert_eq!(w(pb + LEAF_EN_SET_OFF + 4 * leaf, 1 << bit), Raise::None);
         assert_eq!(w(pb + TOP_EN_SET_OFF, 1 << top_bit), Raise::None);
-        assert_eq!(w(pb + LEAF_TRIGGER_OFF, 129), Raise::Message, "the trigger sends");
-        assert_eq!(t.read(Reg::Leaf(leaf as usize)), 1 << bit, "the ISR finds it pending");
+        assert_eq!(
+            w(pb + LEAF_TRIGGER_OFF, 129),
+            Raise::Message,
+            "the trigger sends"
+        );
+        assert_eq!(
+            t.read(Reg::Leaf(leaf as usize)),
+            1 << bit,
+            "the ISR finds it pending"
+        );
         assert_eq!(t.read(Reg::Top), 1 << top_bit);
         assert_eq!(w(pb + LEAF_OFF + 4 * leaf, 1 << bit), Raise::None, "W1C");
         assert_eq!(t.read(Reg::Leaf(leaf as usize)), 0);
@@ -301,7 +333,11 @@ mod tests {
         let t = CpuIntr::new(kf_chip::Family::Ampere, UM).unwrap();
         assert_eq!(t.latch(7), Raise::None, "nothing enabled: pending only");
         assert_eq!(t.write(Reg::TopEnSet, 1), Raise::None, "leaf still masked");
-        assert_eq!(t.write(Reg::LeafEnSet(0), 1 << 7), Raise::Message, "enabling a pending leaf sends it");
+        assert_eq!(
+            t.write(Reg::LeafEnSet(0), 1 << 7),
+            Raise::Message,
+            "enabling a pending leaf sends it"
+        );
         assert_eq!(t.latch(16 * 32), Raise::OutOfRange, "Ampere has 8 leaves");
         let h = CpuIntr::new(kf_chip::Family::Hopper, UM).unwrap();
         assert_ne!(h.latch(12 * 32), Raise::OutOfRange, "Hopper has 16");

@@ -413,29 +413,56 @@ fn usermode_window_is_the_whole_mappable_window_and_holds_no_register_past_page_
     use kf_chip::hwref::HwValue;
     use kf_chip::hwref::expect::class_val;
     for g in DieGroup::ALL {
-        assert_eq!(memmap::VF_USERMODE_LEN, len(g, "NV_VIRTUAL_FUNCTION"), "{g:?}");
+        assert_eq!(
+            memmap::VF_USERMODE_LEN,
+            len(g, "NV_VIRTUAL_FUNCTION"),
+            "{g:?}"
+        );
     }
-    assert_eq!(memmap::VF_USERMODE_LEN, class_val("NVC361_NV_USERMODE__SIZE"));
+    assert_eq!(
+        memmap::VF_USERMODE_LEN,
+        class_val("NVC361_NV_USERMODE__SIZE")
+    );
     let (lo, hi) = (0x3_0000u64, 0x4_0000u64);
     let mut seen = 0;
-    for line in kf_chip::hwref::TABLE.lines().filter(|l| !l.starts_with('#')) {
+    for line in kf_chip::hwref::TABLE
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+    {
         let f: Vec<&str> = line.split('\t').collect();
         let (name, dir) = (f[2], f[0]);
-        if !name.starts_with("NV_VIRTUAL_FUNCTION_") || name.starts_with("NV_VIRTUAL_FUNCTION_PRIV") {
+        if !name.starts_with("NV_VIRTUAL_FUNCTION_") || name.starts_with("NV_VIRTUAL_FUNCTION_PRIV")
+        {
             continue;
         }
         if let Some(HwValue::Val(v)) = table().in_dir(dir, name)
             && (lo..hi).contains(&v)
         {
             seen += 1;
-            assert!(v < lo + memmap::PAGE, "{dir} {name} = {v:#x} lies past the window's first page");
+            assert!(
+                v < lo + memmap::PAGE,
+                "{dir} {name} = {v:#x} lies past the window's first page"
+            );
         }
     }
-    assert!(seen >= 4, "the scan must see the window's own registers (TIME_0/1, DOORBELL, …): saw {seen}");
+    assert!(
+        seen >= 4,
+        "the scan must see the window's own registers (TIME_0/1, DOORBELL, …): saw {seen}"
+    );
     // The predicate the trap uses.
     assert!(memmap::in_usermode_window(memmap::VF_USERMODE_PAGE));
-    assert!(memmap::in_usermode_window(memmap::VF_USERMODE_PAGE + 0x1000), "page 1 is userspace-mappable");
-    assert!(memmap::in_usermode_window(memmap::VF_USERMODE_PAGE + memmap::VF_USERMODE_LEN - 4));
-    assert!(!memmap::in_usermode_window(memmap::VF_USERMODE_PAGE + memmap::VF_USERMODE_LEN));
-    assert!(!memmap::in_usermode_window(memmap::VF_USERMODE_PAGE - 4), "the PRIV block below is guest root's");
+    assert!(
+        memmap::in_usermode_window(memmap::VF_USERMODE_PAGE + 0x1000),
+        "page 1 is userspace-mappable"
+    );
+    assert!(memmap::in_usermode_window(
+        memmap::VF_USERMODE_PAGE + memmap::VF_USERMODE_LEN - 4
+    ));
+    assert!(!memmap::in_usermode_window(
+        memmap::VF_USERMODE_PAGE + memmap::VF_USERMODE_LEN
+    ));
+    assert!(
+        !memmap::in_usermode_window(memmap::VF_USERMODE_PAGE - 4),
+        "the PRIV block below is guest root's"
+    );
 }

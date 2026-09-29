@@ -36,7 +36,9 @@ pub fn init() {
     let _ = T0.get_or_init(Instant::now);
     ON.store(on, Ordering::Relaxed);
     if on {
-        eprintln!("kf3: PROF armed (KF3_PROF=1) — attribution counters on; timing costs two clock reads per trap");
+        eprintln!(
+            "kf3: PROF armed (KF3_PROF=1) — attribution counters on; timing costs two clock reads per trap"
+        );
     }
 }
 
@@ -49,7 +51,9 @@ pub fn on() -> bool {
 /// Nanoseconds since realize.
 #[inline]
 pub fn now_ns() -> u64 {
-    T0.get().map_or(0, |t| u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX))
+    T0.get().map_or(0, |t| {
+        u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
+    })
 }
 
 /// A log-linear latency histogram (4 sub-buckets per octave of nanoseconds), lock-free.
@@ -154,8 +158,18 @@ pub struct OffTable {
 
 impl Default for OffTable {
     fn default() -> Self {
-        let mk = || (0..SLOTS).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice();
-        OffTable { key: mk(), n: mk(), ns: mk(), overflow: AtomicU64::new(0) }
+        let mk = || {
+            (0..SLOTS)
+                .map(|_| AtomicU64::new(0))
+                .collect::<Vec<_>>()
+                .into_boxed_slice()
+        };
+        OffTable {
+            key: mk(),
+            n: mk(),
+            ns: mk(),
+            overflow: AtomicU64::new(0),
+        }
     }
 }
 
@@ -168,7 +182,12 @@ impl OffTable {
             let cur = self.key[i].load(Ordering::Relaxed);
             if cur == k
                 || (cur == 0
-                    && match self.key[i].compare_exchange(0, k, Ordering::Relaxed, Ordering::Relaxed) {
+                    && match self.key[i].compare_exchange(
+                        0,
+                        k,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                    ) {
                         Ok(_) => true,
                         Err(now) => now == k,
                     })
@@ -187,7 +206,13 @@ impl OffTable {
         let mut v: Vec<_> = (0..SLOTS)
             .filter_map(|i| {
                 let k = self.key[i].load(Ordering::Relaxed);
-                (k != 0).then(|| (k - 1, self.n[i].load(Ordering::Relaxed), self.ns[i].load(Ordering::Relaxed)))
+                (k != 0).then(|| {
+                    (
+                        k - 1,
+                        self.n[i].load(Ordering::Relaxed),
+                        self.ns[i].load(Ordering::Relaxed),
+                    )
+                })
             })
             .collect();
         v.sort_by_key(|r| std::cmp::Reverse(r.1));
@@ -237,7 +262,11 @@ impl Busy {
             "busy_ms={:.1} wait_ms={:.1} busy_pct={:.2} max_busy_us={:.1} waits={} timeouts={} timeouts_with_work={}",
             b as f64 / 1e6,
             w as f64 / 1e6,
-            if b + w == 0 { 0.0 } else { 100.0 * b as f64 / (b + w) as f64 },
+            if b + w == 0 {
+                0.0
+            } else {
+                100.0 * b as f64 / (b + w) as f64
+            },
             self.max_busy_ns.load(o) as f64 / 1000.0,
             self.waits.load(o),
             self.timeouts.load(o),
@@ -296,7 +325,10 @@ impl Prof {
     pub fn lines(&self, names: &dyn Fn(u64) -> &'static str) -> Vec<String> {
         let mut out = Vec::new();
         let t = now_ns() as f64 / 1e9;
-        out.push(format!("kf3: PROF t={t:.3}s bar0_handler {}", self.bar0_handler.line()));
+        out.push(format!(
+            "kf3: PROF t={t:.3}s bar0_handler {}",
+            self.bar0_handler.line()
+        ));
         let rows = self.bar0.rows();
         let total: u64 = rows.iter().map(|r| r.1).sum();
         out.push(format!(
@@ -312,7 +344,10 @@ impl Prof {
                 names(*off)
             ));
         }
-        out.push(format!("kf3: PROF drainer_wake {}", self.drainer_wake.line()));
+        out.push(format!(
+            "kf3: PROF drainer_wake {}",
+            self.drainer_wake.line()
+        ));
         out.push(format!("kf3: PROF drainer {}", self.drainer.line()));
         out.push(format!("kf3: PROF vamgr {}", self.vamgr.line()));
         out.push(format!(
@@ -321,11 +356,20 @@ impl Prof {
             self.rpc_commands.load(Ordering::Relaxed),
             self.held_released_late.load(Ordering::Relaxed)
         ));
-        out.push(format!("kf3: PROF rpc_trap_to_apply {}", self.rpc_trap_to_apply.line()));
+        out.push(format!(
+            "kf3: PROF rpc_trap_to_apply {}",
+            self.rpc_trap_to_apply.line()
+        ));
         out.push(format!("kf3: PROF rpc_service {}", self.rpc_service.line()));
-        out.push(format!("kf3: PROF rpc_immediate {}", self.rpc_immediate.line()));
+        out.push(format!(
+            "kf3: PROF rpc_immediate {}",
+            self.rpc_immediate.line()
+        ));
         out.push(format!("kf3: PROF rpc_held {}", self.rpc_held.line()));
-        out.push(format!("kf3: PROF other_applies {}", self.other_applies.line()));
+        out.push(format!(
+            "kf3: PROF other_applies {}",
+            self.other_applies.line()
+        ));
         out.push(format!("kf3: PROF publish {}", self.publish.line()));
         out.push(format!(
             "kf3: PROF vidmem_view_reads n={} bytes={} ms={:.3} guest_ram_read_bytes={}",
@@ -352,8 +396,15 @@ mod tests {
         }
         for ns in [0u64, 1, 3, 4, 5, 7, 8, 1000, 1023, 1024, 123_456, 9_999_999] {
             let b = bucket(ns);
-            assert!(bucket_hi(b) >= ns, "{ns} in bucket {b} (hi {})", bucket_hi(b));
-            assert!(b == 0 || bucket_hi(b - 1) < ns, "{ns} not in the lowest bucket that holds it");
+            assert!(
+                bucket_hi(b) >= ns,
+                "{ns} in bucket {b} (hi {})",
+                bucket_hi(b)
+            );
+            assert!(
+                b == 0 || bucket_hi(b - 1) < ns,
+                "{ns} not in the lowest bucket that holds it"
+            );
         }
     }
 

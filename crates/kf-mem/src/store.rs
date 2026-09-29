@@ -13,7 +13,11 @@ use crate::addr::{HostToken, StoreOffset};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StoreRefusal {
     /// The range `[offset, offset+len)` is not wholly inside the object. Refused by name.
-    OutOfObject { offset: u64, len: u64, object: u64 },
+    OutOfObject {
+        offset: u64,
+        len: u64,
+        object: u64,
+    },
     ZeroLength,
 }
 
@@ -54,7 +58,11 @@ impl Store {
         }
         match offset.checked_add(len) {
             Some(end) if end <= self.len => Ok(StoreOffset(offset)),
-            _ => Err(StoreRefusal::OutOfObject { offset, len, object: self.len }),
+            _ => Err(StoreRefusal::OutOfObject {
+                offset,
+                len,
+                object: self.len,
+            }),
         }
     }
 }

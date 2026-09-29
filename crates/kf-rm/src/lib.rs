@@ -32,8 +32,8 @@ pub mod staticinfo;
 pub mod sticky;
 pub mod sweep;
 pub mod sysmembar;
-pub mod zbc;
 pub mod unserviced;
+pub mod zbc;
 
 pub use hostfacts::HostFacts;
 
@@ -184,7 +184,10 @@ pub fn served_policy(
     Box::new(census::ControlCensus::new(
         driver,
         census,
-        sticky::StickyAnswerGuard::new(driver, served_chain(board, host, driver, logs, probe_arm, links)),
+        sticky::StickyAnswerGuard::new(
+            driver,
+            served_chain(board, host, driver, logs, probe_arm, links),
+        ),
     ))
 }
 
@@ -226,10 +229,18 @@ impl ReselectAtFn1 {
     pub fn new(
         provisional: kf_abi::versions::DriverAbiTable,
         source: GuestDriverSource,
-        build: Box<dyn Fn(kf_abi::versions::DriverAbiTable) -> Box<dyn kf_gsp::CommandPolicy> + Send>,
+        build: Box<
+            dyn Fn(kf_abi::versions::DriverAbiTable) -> Box<dyn kf_gsp::CommandPolicy> + Send,
+        >,
     ) -> ReselectAtFn1 {
         let inner = build(provisional);
-        ReselectAtFn1 { provisional, current: provisional.driver_version(), source, build, inner }
+        ReselectAtFn1 {
+            provisional,
+            current: provisional.driver_version(),
+            source,
+            build,
+            inner,
+        }
     }
 
     /// The version the chain currently answers as.
@@ -254,7 +265,12 @@ impl ReselectAtFn1 {
         }
         let table = match kf_abi::versions::table_for(reported) {
             Ok(t) => *t,
-            Err(e) => return Reselection::RefusedUnserved { reported, why: e.to_string() },
+            Err(e) => {
+                return Reselection::RefusedUnserved {
+                    reported,
+                    why: e.to_string(),
+                };
+            }
         };
         if let Some(what) = kf_abi::versions::pre_fn1_surface_differs(&self.provisional, &table) {
             return Reselection::RefusedSurface { reported, what };
@@ -368,8 +384,17 @@ pub fn served_chain(
     links: ObjectLinks,
 ) -> Box<dyn kf_gsp::CommandPolicy> {
     // ★★★ EXHAUSTIVE: a latch added to `ChainLogs` and not seated below is a compile error.
-    let ChainLogs { unserviced, fault_buffer, os_events } = logs;
-    let ObjectLinks { mut objects, memory, channels, display } = links;
+    let ChainLogs {
+        unserviced,
+        fault_buffer,
+        os_events,
+    } = logs;
+    let ObjectLinks {
+        mut objects,
+        memory,
+        channels,
+        display,
+    } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
         .with_engine_caps(authored::engine_caps(&host.engines));
     if let (Some(n), Some(sn)) = (host.gpu_name, host.gpu_short_name.or(host.gpu_name)) {
@@ -391,27 +416,41 @@ pub fn served_chain(
     // ★ P5: the channel link is FIRST — ahead of the object seat (which terminates the alloc and
     // free it must see) and of the ledger (which would record its controls unserviced).
     if let Some(sink) = channels {
-        let guest_os = memory.as_ref().map_or(kf_abi::GuestOs::Linux, |m| m.guest_os);
-        chain.push(Box::new(chanlink::ChannelPolicy::new(driver, guest_os, sink)));
+        let guest_os = memory
+            .as_ref()
+            .map_or(kf_abi::GuestOs::Linux, |m| m.guest_os);
+        chain.push(Box::new(chanlink::ChannelPolicy::new(
+            driver, guest_os, sink,
+        )));
     }
     // ★ P4: the page-directory carrier is FIRST — ahead of `InitTablePolicy`, which terminates
     // the chain for the publication ids — and answers nothing; fn 70's link answers only fn 70.
     if let Some(MemoryLink { sink, guest_os }) = memory {
-        chain.push(Box::new(barpde::PageDirPolicy::new(driver, guest_os, sink.clone())));
+        chain.push(Box::new(barpde::PageDirPolicy::new(
+            driver,
+            guest_os,
+            sink.clone(),
+        )));
         // ★ v3-refusals: the guest's sysmembar, performed as the host's (`sysmembar.rs`).
-        chain.push(Box::new(sysmembar::SysmembarPolicy::new(driver, sink.clone())));
+        chain.push(Box::new(sysmembar::SysmembarPolicy::new(
+            driver,
+            sink.clone(),
+        )));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
     chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 7]>([
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
         Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),
-        Box::new(kf_gsp::Observing(Box::new(faultbuffer::FaultBufferRecorder::new(
-            driver,
-            fault_buffer,
+        Box::new(kf_gsp::Observing(Box::new(
+            faultbuffer::FaultBufferRecorder::new(driver, fault_buffer),
+        ))),
+        Box::new(kf_gsp::Observing(Box::new(osevent::OsEventRecorder::new(
+            driver, os_events,
         )))),
-        Box::new(kf_gsp::Observing(Box::new(osevent::OsEventRecorder::new(driver, os_events)))),
-        Box::new(inittables::InitTablePolicy::with_probe_arm(board, host, driver, probe_arm)),
+        Box::new(inittables::InitTablePolicy::with_probe_arm(
+            board, host, driver, probe_arm,
+        )),
         Box::new(static_info),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         Box::new(inert::InertPolicy::new()),
@@ -419,6 +458,8 @@ pub fn served_chain(
     if let Some(objects) = objects {
         chain.push(Box::new(objects));
     }
-    chain.push(Box::new(unserviced::UnservicedLedger::new(driver, unserviced)));
+    chain.push(Box::new(unserviced::UnservicedLedger::new(
+        driver, unserviced,
+    )));
     Box::new(kf_gsp::PolicyChain::new(chain))
 }

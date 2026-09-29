@@ -398,8 +398,7 @@ fn build_backends(
             // those profiles are INFERRED from `ogkm`'s per-chip class tables
             // (`src/nvidia/generated/g_gpu_class_list.c`) and compile only.
             let conn = Arc::new(
-                RmConnection::open_on_host(&dev, GpuId(args.gpu))
-                    .map_err(|e| e.to_string())?,
+                RmConnection::open_on_host(&dev, GpuId(args.gpu)).map_err(|e| e.to_string())?,
             );
             Ok((0..args.workers)
                 .map(|_| {

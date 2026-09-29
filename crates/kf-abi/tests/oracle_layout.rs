@@ -1105,7 +1105,12 @@ fn the_gsp_element_wire_boundary_is_610_not_570() {
         (550u16, 54u16, 14u16, GspInitArgsWire::FourField),
         (575, 64, 5, GspInitArgsWire::FourField),
         (580, 65, 6, GspInitArgsWire::FourField),
-        (BENCH_DRIVER.major, BENCH_DRIVER.minor, BENCH_DRIVER.patch, GspInitArgsWire::FourField),
+        (
+            BENCH_DRIVER.major,
+            BENCH_DRIVER.minor,
+            BENCH_DRIVER.patch,
+            GspInitArgsWire::FourField,
+        ),
         (590, 48, 1, GspInitArgsWire::FourField),
         (595, 84, 0, GspInitArgsWire::NineField),
     ] {
@@ -1114,7 +1119,11 @@ fn the_gsp_element_wire_boundary_is_610_not_570() {
             GspElementWire::Pre610,
             "{major}.{minor}.{patch} is on the 48-byte side",
         );
-        assert_eq!(at(major, minor, patch).gsp_init_args_wire(), init, "{major}.{minor}.{patch} init args");
+        assert_eq!(
+            at(major, minor, patch).gsp_init_args_wire(),
+            init,
+            "{major}.{minor}.{patch} init args"
+        );
     }
 
     for (major, minor, patch) in [(610u16, 43u16, 2u16), (610, 57, 4)] {
@@ -1130,7 +1139,15 @@ fn the_gsp_element_wire_boundary_is_610_not_570() {
     }
     // Unmeasured versions are refused, never extrapolated from the nearest tag.
     for (major, minor, patch) in [(609u16, 255u16, 255u16), (610, 43, 1), (999, 0, 0)] {
-        assert!(table_for(DriverVersion { major, minor, patch }).is_err(), "{major}.{minor}.{patch} is unmeasured");
+        assert!(
+            table_for(DriverVersion {
+                major,
+                minor,
+                patch
+            })
+            .is_err(),
+            "{major}.{minor}.{patch} is unmeasured"
+        );
     }
 
     // The offsets each side implies, so a mis-typed table entry is caught here and not by

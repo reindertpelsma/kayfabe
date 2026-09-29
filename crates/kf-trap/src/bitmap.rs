@@ -53,8 +53,14 @@ impl Default for RungBitmap {
 impl RungBitmap {
     pub fn new() -> RungBitmap {
         RungBitmap {
-            words: (0..N_WORDS).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice(),
-            summary: (0..N_SUMMARY).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice(),
+            words: (0..N_WORDS)
+                .map(|_| AtomicU64::new(0))
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            summary: (0..N_SUMMARY)
+                .map(|_| AtomicU64::new(0))
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
             next_start: AtomicUsize::new(0),
         }
     }
@@ -113,13 +119,15 @@ impl RungBitmap {
                         }
                         // ⊘ Resume at the NEXT summary word, not this one: resuming here would
                         // re-take the same attacker's group first and rebuild the starve.
-                        self.next_start.store((si + 1) % N_SUMMARY, Ordering::Relaxed);
+                        self.next_start
+                            .store((si + 1) % N_SUMMARY, Ordering::Relaxed);
                         return out.len();
                     }
                 }
             }
         }
-        self.next_start.store((base + 1) % N_SUMMARY, Ordering::Relaxed);
+        self.next_start
+            .store((base + 1) % N_SUMMARY, Ordering::Relaxed);
         out.len()
     }
 

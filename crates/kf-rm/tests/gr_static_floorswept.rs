@@ -24,7 +24,11 @@
 use std::collections::BTreeMap;
 
 use kf_abi::grfsinfo::{self, GrFsGeometry};
-use kf_abi::grstatic::{self, FLOORSWEEPING_ROW_SIZE, GR_MAX_GPC, HostFsAnswer::{Refused, Word}, MAX_TPC_PER_GPC};
+use kf_abi::grstatic::{
+    self, FLOORSWEEPING_ROW_SIZE, GR_MAX_GPC,
+    HostFsAnswer::{Refused, Word},
+    MAX_TPC_PER_GPC,
+};
 use kf_rm::hostfacts;
 use kf_rm::hostquery::{self, HostControls, HostRefusal};
 
@@ -265,16 +269,30 @@ fn an_rtx4070_with_a_hole_at_gpc1_realizes_as_an_unprivileged_client() {
 #[test]
 fn a_gtx1660s_realizes_under_turings_readers_and_not_under_amperes() {
     let (info, g, p) = realize(TU116);
-    assert_eq!(info.data[kf_abi::grinfo::IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG], 0, "the measured zero");
-    assert_eq!(info.data[hostquery::GR_INFO_IDX_LITTER_NUM_SLICES_PER_LTC], 0, "the litter memory_system reads");
+    assert_eq!(
+        info.data[kf_abi::grinfo::IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG],
+        0,
+        "the measured zero"
+    );
+    assert_eq!(
+        info.data[hostquery::GR_INFO_IDX_LITTER_NUM_SLICES_PER_LTC],
+        0,
+        "the litter memory_system reads"
+    );
     assert_eq!(info.data[kf_abi::grinfo::IDX_SM_VERSION], 0x703, "SM 7.5");
     assert_eq!(g.gpc_mask, 0x7);
     assert_eq!(g.tpc_masks, [(0, 0xe), (1, 0xf), (2, 0xf)]);
     assert_eq!(g.chiplet_gpc_map, [0, 1, 2]);
     assert_eq!(g.tpc_counts, [3, 4, 4]);
-    assert_eq!(g.pes.clone().expect("GPU_GET_PES_INFO answered").0, [2, 2, 2]);
+    assert_eq!(
+        g.pes.clone().expect("GPU_GET_PES_INFO answered").0,
+        [2, 2, 2]
+    );
     assert_eq!(g.gfx, (0x7, 11));
-    let extra = g.fs_extra.clone().expect("the optional GRMGR batch was answered NV_OK");
+    let extra = g
+        .fs_extra
+        .clone()
+        .expect("the optional GRMGR batch was answered NV_OK");
     assert_eq!(
         extra.per_gpc,
         vec![(Some(Word(3)), Some(Refused(0x56))); 3],
@@ -282,12 +300,17 @@ fn a_gtx1660s_realizes_under_turings_readers_and_not_under_amperes() {
     );
     assert_eq!((g.tpcs.len(), g.sms_per_tpc), (11, 2));
     p.validate().expect("validates");
-    info.validate_against(&p).expect("22 SMs x 64 cores, 0 RT, 0 tensor");
+    info.validate_against(&p)
+        .expect("22 SMs x 64 cores, 0 RT, 0 tensor");
 
     let mut host = ProbeReplay::load(TU116);
-    let refused = hostquery::query_gr_info(&mut host, kf_chip::Family::Ampere).expect_err("Ampere's HAL multiplies by it");
+    let refused = hostquery::query_gr_info(&mut host, kf_chip::Family::Ampere)
+        .expect_err("Ampere's HAL multiplies by it");
     let text = format!("{refused:?}");
-    assert!(text.contains("LITTER_MIN_SUBCTX_PER_SMC_ENG (0x37)"), "names the entry: {text}");
+    assert!(
+        text.contains("LITTER_MIN_SUBCTX_PER_SMC_ENG (0x37)"),
+        "names the entry: {text}"
+    );
 }
 
 /// ★★★ **The guest sees what the host sees.** The guest's RM answers its userspace's GR

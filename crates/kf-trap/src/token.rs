@@ -200,8 +200,17 @@ impl TokenWord {
             if t.state != State::Dead {
                 return false;
             }
-            let next = Token { state: State::Idle, route, host_token, applied_seq: 0 }.encode();
-            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+            let next = Token {
+                state: State::Idle,
+                route,
+                host_token,
+                applied_seq: 0,
+            }
+            .encode();
+            match self
+                .0
+                .compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => return true,
                 // ⊘ A CAS failure is not evidence of another owner — the same rule the claim()
                 // race taught. Re-read; give up only on the STATE.
@@ -217,8 +226,16 @@ impl TokenWord {
         if Token::decode(cur).state != State::Idle || cur != 0 {
             return false;
         }
-        let next = Token { state: State::Idle, route, host_token, applied_seq: 0 }.encode();
-        self.0.compare_exchange(cur, next, Ordering::AcqRel, Ordering::Acquire).is_ok()
+        let next = Token {
+            state: State::Idle,
+            route,
+            host_token,
+            applied_seq: 0,
+        }
+        .encode();
+        self.0
+            .compare_exchange(cur, next, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     }
 
     /// ★ THE vCPU PATH. §5.2: *"stamp the ring position, THEN `fetch_or(RUNG)`"*.
@@ -249,8 +266,16 @@ impl TokenWord {
             // ⚠ The stamp is written in the SAME word as the state, so "stamp then set RUNG"
             // is one CAS and cannot be observed half-done. That is stronger than the two-step
             // §5.2 describes and satisfies it by construction.
-            let next = Token { state: next_state, applied_seq, ..t }.encode();
-            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+            let next = Token {
+                state: next_state,
+                applied_seq,
+                ..t
+            }
+            .encode();
+            match self
+                .0
+                .compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 // Publish iff we moved IDLE → RUNG. Every other transition already has a bit
                 // outstanding or is owned by a worker who will re-check.
                 Ok(_) => return t.state == State::Idle,
@@ -286,8 +311,15 @@ impl TokenWord {
                 // word costs one look."* This is that look, and it is the whole cost.
                 return Claim::NotOurs;
             }
-            let next = Token { state: State::Busy, ..t }.encode();
-            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+            let next = Token {
+                state: State::Busy,
+                ..t
+            }
+            .encode();
+            match self
+                .0
+                .compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 // ⊘ `t` is the token AS CLAIMED, carrying the newest stamp we observed — which is
                 // what the worker must act up to.
                 Ok(_) => return Claim::Won(t),
@@ -316,8 +348,15 @@ impl TokenWord {
                 State::Dead => return Release::Idled,
                 s => panic!("release() on a token in state {s:?} — not owned by this worker"),
             };
-            let next = Token { state: next_state, ..t }.encode();
-            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+            let next = Token {
+                state: next_state,
+                ..t
+            }
+            .encode();
+            match self
+                .0
+                .compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => return out,
                 Err(seen) => cur = seen,
             }
@@ -337,8 +376,15 @@ impl TokenWord {
             if t.state == State::Dead {
                 return Release::Idled;
             }
-            let next = Token { state: State::Rung, ..t }.encode();
-            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+            let next = Token {
+                state: State::Rung,
+                ..t
+            }
+            .encode();
+            match self
+                .0
+                .compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => return Release::RepublishAndMoveOn,
                 Err(seen) => cur = seen,
             }
@@ -355,8 +401,16 @@ impl TokenWord {
             State::Busy | State::BusyRung => false,
             State::Dead => true,
             _ => {
-                let next = Token { state: State::Dead, route: Route::Unknown, host_token: 0, applied_seq: 0 }.encode();
-                self.0.compare_exchange(cur, next, Ordering::AcqRel, Ordering::Acquire).is_ok()
+                let next = Token {
+                    state: State::Dead,
+                    route: Route::Unknown,
+                    host_token: 0,
+                    applied_seq: 0,
+                }
+                .encode();
+                self.0
+                    .compare_exchange(cur, next, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
             }
         }
     }

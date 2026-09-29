@@ -47,7 +47,9 @@ impl RawRegion {
 
     /// Store a 32-bit value (volatile — a guest vCPU may read it concurrently).
     pub fn store_u32(&self, off: usize, v: u32) -> bool {
-        let Some(p) = self.span(off, 4) else { return false };
+        let Some(p) = self.span(off, 4) else {
+            return false;
+        };
         // SAFETY: `span` bounds-checked 4 bytes; unaligned-safe write of a plain integer.
         unsafe { core::ptr::write_unaligned(p.cast::<u32>(), v) };
         true
@@ -72,7 +74,9 @@ impl RawRegion {
 
     /// Copy `src` into the region at `off`.
     pub fn write_from(&self, off: usize, src: &[u8]) -> bool {
-        let Some(p) = self.span(off, src.len()) else { return false };
+        let Some(p) = self.span(off, src.len()) else {
+            return false;
+        };
         // SAFETY: `span` bounds-checked `src.len()` bytes; `src` is a Rust slice, which cannot alias
         // guest memory we never hand out references to.
         unsafe { core::ptr::copy_nonoverlapping(src.as_ptr(), p, src.len()) };
@@ -81,7 +85,9 @@ impl RawRegion {
 
     /// Copy from the region at `off` into `dst`.
     pub fn read_into(&self, off: usize, dst: &mut [u8]) -> bool {
-        let Some(p) = self.span(off, dst.len()) else { return false };
+        let Some(p) = self.span(off, dst.len()) else {
+            return false;
+        };
         // SAFETY: `span` bounds-checked `dst.len()` bytes; `dst` is ours alone.
         unsafe { core::ptr::copy_nonoverlapping(p, dst.as_mut_ptr(), dst.len()) };
         true
@@ -120,8 +126,14 @@ impl BackendFd {
 /// a main-loop bottom half, which applies the changes in FIFO order under the BQL and reports each
 /// through `kf3_bar1_overlay_done(seq, rc)`. Returns 0 once queued, or a negative errno. Called only
 /// from the VA-manager thread.
-pub type OverlayFn =
-    unsafe extern "C" fn(opaque: *mut core::ffi::c_void, seq: u64, op: u32, base: u64, len: u64, vf_rel: u64) -> i32;
+pub type OverlayFn = unsafe extern "C" fn(
+    opaque: *mut core::ffi::c_void,
+    seq: u64,
+    op: u32,
+    base: u64,
+    len: u64,
+    vf_rel: u64,
+) -> i32;
 
 /// The registered overlay verb and its opaque device pointer.
 #[derive(Debug, Clone, Copy)]

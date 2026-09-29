@@ -31,10 +31,10 @@ use kf_abi::faultbuffer::{
     REGISTER_FAULT_BUFFER_PARAMS_SIZE,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
+use kf_gsp::{CommandObserver, RpcCommand, RpcFunction};
 use kf_rm::faultbuffer::{
     FAULT_BUFFER_SAMPLE_MAX, FaultBufferLog, FaultBufferNote, FaultBufferRecorder,
 };
-use kf_gsp::{CommandObserver, RpcCommand, RpcFunction};
 
 /// `RpcControlReq::HEADER` — the control header the params follow.
 const CTRL_HEADER: usize = 40;

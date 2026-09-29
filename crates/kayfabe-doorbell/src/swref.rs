@@ -172,7 +172,10 @@ fn is_access_code(c: &str) -> bool {
     b.len() == 5
         && matches!(b[0], b'-' | b'C' | b'R')
         && matches!(b[1], b'-' | b'W')
-        && matches!(b[2], b'-' | b'A' | b'B' | b'C' | b'D' | b'E' | b'H' | b'I' | b'X')
+        && matches!(
+            b[2],
+            b'-' | b'A' | b'B' | b'C' | b'D' | b'E' | b'H' | b'I' | b'X'
+        )
         && matches!(b[3], b'-' | b'U' | b'V')
         && matches!(b[4], b'C' | b'D' | b'F' | b'G' | b'L' | b'M' | b'T' | b'V')
 }
@@ -188,28 +191,40 @@ fn is_access_code(c: &str) -> bool {
 /// corpus contains, and anything else returns `None` and is skipped.
 fn eval_expr(t: &str) -> Option<i64> {
     fn atom(b: &[u8], i: &mut usize) -> Option<i64> {
-        while *i < b.len() && b[*i] == b' ' { *i += 1 }
+        while *i < b.len() && b[*i] == b' ' {
+            *i += 1
+        }
         if *i < b.len() && b[*i] == b'(' {
             *i += 1;
             let v = add(b, i)?;
-            if *i >= b.len() || b[*i] != b')' { return None }
+            if *i >= b.len() || b[*i] != b')' {
+                return None;
+            }
             *i += 1;
             return Some(v);
         }
         let st = *i;
-        while *i < b.len() && b[*i].is_ascii_digit() { *i += 1 }
-        if st == *i { return None }
+        while *i < b.len() && b[*i].is_ascii_digit() {
+            *i += 1
+        }
+        if st == *i {
+            return None;
+        }
         std::str::from_utf8(&b[st..*i]).ok()?.parse().ok()
     }
     fn mul(b: &[u8], i: &mut usize) -> Option<i64> {
         let mut v = atom(b, i)?;
-        while *i < b.len() && b[*i] == b'*' { *i += 1; v *= atom(b, i)?; }
+        while *i < b.len() && b[*i] == b'*' {
+            *i += 1;
+            v *= atom(b, i)?;
+        }
         Some(v)
     }
     fn add(b: &[u8], i: &mut usize) -> Option<i64> {
         let mut v = mul(b, i)?;
         while *i < b.len() && (b[*i] == b'+' || b[*i] == b'-') {
-            let op = b[*i]; *i += 1;
+            let op = b[*i];
+            *i += 1;
             let r = mul(b, i)?;
             v = if op == b'+' { v + r } else { v - r };
         }
@@ -218,7 +233,9 @@ fn eval_expr(t: &str) -> Option<i64> {
     let b = t.as_bytes();
     let mut i = 0;
     let v = add(b, &mut i)?;
-    if i != b.len() { return None }
+    if i != b.len() {
+        return None;
+    }
     Some(v)
 }
 
@@ -245,14 +262,22 @@ fn parse_value(t: &str) -> Option<Value> {
             });
         }
         let (hi, lo) = (eval_expr(a)?, eval_expr(b)?);
-        if hi < 0 || lo < 0 { return None }
+        if hi < 0 || lo < 0 {
+            return None;
+        }
         // ⊘ A range beyond one 64-bit word is not a register field — it is a structure offset.
         // Distinguishing them is the point; squeezing both into one variant would silently
         // truncate USERD's word-34 cursor into a nonsense bit index.
         return Some(if hi < 64 && lo < 64 {
-            Value::BitRange { hi: hi as u8, lo: lo as u8 }
+            Value::BitRange {
+                hi: hi as u8,
+                lo: lo as u8,
+            }
         } else {
-            Value::StructBits { hi: hi as u32, lo: lo as u32 }
+            Value::StructBits {
+                hi: hi as u32,
+                lo: lo as u32,
+            }
         });
     }
     if let Some(h) = t.strip_prefix("0x") {
@@ -288,11 +313,18 @@ pub fn parse_header(text: &str) -> Vec<Descriptor> {
 ///
 /// ⚠ Note the direction: we do **not** demand an overlay entry for all 24 042 registers. Only
 /// that every overlay name is real.
-pub fn overlay_names_all_exist(generated: &[Descriptor], overlay: &[&str]) -> Result<(), Vec<String>> {
+pub fn overlay_names_all_exist(
+    generated: &[Descriptor],
+    overlay: &[&str],
+) -> Result<(), Vec<String>> {
     let missing: Vec<String> = overlay
         .iter()
         .filter(|n| !generated.iter().any(|d| d.name == **n))
         .map(|n| (*n).to_string())
         .collect();
-    if missing.is_empty() { Ok(()) } else { Err(missing) }
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(missing)
+    }
 }

@@ -68,11 +68,17 @@ impl GuestRamBlock {
         // ⊘ Checked arithmetic: an overflowing `offset + len` must not wrap into a legal-looking
         // range. This is the one place a guest value meets a bound, so it is the one place
         // wrapping would be fatal.
-        let end = offset.checked_add(len).ok_or(LeafRefusal::CrossesBlockEnd)?;
+        let end = offset
+            .checked_add(len)
+            .ok_or(LeafRefusal::CrossesBlockEnd)?;
         if end > self.len {
             return Err(LeafRefusal::CrossesBlockEnd);
         }
-        Ok(HostSlice { block: self.id, offset, len })
+        Ok(HostSlice {
+            block: self.id,
+            offset,
+            len,
+        })
     }
 
     #[inline]

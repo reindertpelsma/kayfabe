@@ -117,7 +117,8 @@ pub const ENGINE_CAPS_WORDS: usize = (0x54 - 1) / 32 + 1;
 
 /// ★ Byte offset of `engineCaps[]` — after `fbRegionInfoParams`, `sriovCaps` and the u32
 /// `sriovMaxGfid` (`ogkm-580: gsp_static_config.h:84-88`).
-pub const ENGINE_CAPS_OFF: usize = FB_REGION_INFO_PARAMS_OFF + FB_REGION_INFO_PARAMS_SIZE + SRIOV_CAPS_SIZE + 4;
+pub const ENGINE_CAPS_OFF: usize =
+    FB_REGION_INFO_PARAMS_OFF + FB_REGION_INFO_PARAMS_SIZE + SRIOV_CAPS_SIZE + 4;
 
 /// Round `off` up to `align`, which must be a power of two.
 const fn align_up(off: usize, align: usize) -> usize {
@@ -751,7 +752,8 @@ pub fn encode_gsp_static_info(
     body[BAR2_PDE_BASE_OFF..BAR2_PDE_BASE_OFF + 8]
         .copy_from_slice(&info.bar2_pde_base.to_le_bytes());
     for (i, w) in info.engine_caps.iter().enumerate() {
-        body[ENGINE_CAPS_OFF + 4 * i..ENGINE_CAPS_OFF + 4 * i + 4].copy_from_slice(&w.to_le_bytes());
+        body[ENGINE_CAPS_OFF + 4 * i..ENGINE_CAPS_OFF + 4 * i + 4]
+            .copy_from_slice(&w.to_le_bytes());
     }
     Ok(body)
 }
@@ -790,9 +792,12 @@ pub fn encode_gsp_static_info_at(
     };
     let region_arr = need("fbRegionInfoParams.fbRegion")?;
     let region_el = need("fbRegionInfoParams.fbRegion[]")?;
-    let stride = region_el.bytes().filter(|b| *b > 0).ok_or(GspStaticInfoError::MissingField {
-        path: "fbRegionInfoParams.fbRegion[]",
-    })?;
+    let stride = region_el
+        .bytes()
+        .filter(|b| *b > 0)
+        .ok_or(GspStaticInfoError::MissingField {
+            path: "fbRegionInfoParams.fbRegion[]",
+        })?;
     let max_entries = region_arr.bytes().unwrap_or(0) / stride;
     let regions = info.fb_regions;
     if regions.is_empty() {
@@ -836,12 +841,24 @@ pub fn encode_gsp_static_info_at(
         body[off..off + bytes.len()].copy_from_slice(bytes);
     };
     // gidInfo — see `encode_gsp_static_info` for why flags and length are written.
-    put(&mut body, need("gidInfo.flags")?.off(), &GID_FLAGS_SHA1_BINARY.to_le_bytes());
-    put(&mut body, need("gidInfo.length")?.off(), &(RM_SHA1_GID_SIZE as u32).to_le_bytes());
+    put(
+        &mut body,
+        need("gidInfo.flags")?.off(),
+        &GID_FLAGS_SHA1_BINARY.to_le_bytes(),
+    );
+    put(
+        &mut body,
+        need("gidInfo.length")?.off(),
+        &(RM_SHA1_GID_SIZE as u32).to_le_bytes(),
+    );
     put(&mut body, need("gidInfo.data")?.off(), info.gid.as_bytes());
     // The FB region table, entry by entry at the measured stride and member offsets.
     let n = u32::try_from(regions.len()).unwrap_or(u32::MAX);
-    put(&mut body, need("fbRegionInfoParams.numFBRegions")?.off(), &n.to_le_bytes());
+    put(
+        &mut body,
+        need("fbRegionInfoParams.numFBRegions")?.off(),
+        &n.to_le_bytes(),
+    );
     let e0 = region_el.off();
     let rel = |path: &'static str| need(path).map(|f| f.off() - e0);
     let (o_base, o_limit, o_rsvd, o_perf) = (
@@ -865,7 +882,11 @@ pub fn encode_gsp_static_info_at(
         body[o + o_iso] = u8::from(r.support_iso);
         body[o + o_prot] = u8::from(r.protected);
     }
-    put(&mut body, need("fb_length")?.off(), &info.fb_length.to_le_bytes());
+    put(
+        &mut body,
+        need("fb_length")?.off(),
+        &info.fb_length.to_le_bytes(),
+    );
     if let Some(name) = info.name {
         put_name(&mut body, need("gpuNameString")?.off(), name);
         if let Some(u) = layout.maybe("gpuNameString_Unicode") {
@@ -877,8 +898,16 @@ pub fn encode_gsp_static_info_at(
     {
         put_name(&mut body, f.off(), short);
     }
-    put(&mut body, need("bar1PdeBase")?.off(), &info.bar1_pde_base.to_le_bytes());
-    put(&mut body, need("bar2PdeBase")?.off(), &info.bar2_pde_base.to_le_bytes());
+    put(
+        &mut body,
+        need("bar1PdeBase")?.off(),
+        &info.bar1_pde_base.to_le_bytes(),
+    );
+    put(
+        &mut body,
+        need("bar2PdeBase")?.off(),
+        &info.bar2_pde_base.to_le_bytes(),
+    );
     // `engineCaps[]` is indexed by NV2080 engine type, which is append-only; a version with
     // fewer words (2 at ≤ 550) cannot name the engine types the dropped word would carry,
     // because those types do not exist at that version.
@@ -1306,13 +1335,33 @@ mod tests {
 
     fn two_regions(fb: u64) -> [FbRegion; 2] {
         [
-            FbRegion { base: 0, limit: 0xFFFFF, reserved: 0x10_0000, performance: 0, support_compressed: false, support_iso: false, protected: false },
-            FbRegion { base: 0x10_0000, limit: fb - 1, reserved: 0, performance: 6, support_compressed: true, support_iso: true, protected: false },
+            FbRegion {
+                base: 0,
+                limit: 0xFFFFF,
+                reserved: 0x10_0000,
+                performance: 0,
+                support_compressed: false,
+                support_iso: false,
+                protected: false,
+            },
+            FbRegion {
+                base: 0x10_0000,
+                limit: fb - 1,
+                reserved: 0,
+                performance: 6,
+                support_compressed: true,
+                support_iso: true,
+                protected: false,
+            },
         ]
     }
 
     fn v(major: u16, minor: u16, patch: u16) -> crate::DriverVersion {
-        crate::DriverVersion { major, minor, patch }
+        crate::DriverVersion {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// ★★★ The measured encoder IS the bench encoder at every 580.x tag — byte for byte — so it
@@ -1323,11 +1372,16 @@ mod tests {
         let fb = 8u64 << 30;
         let regions = two_regions(fb);
         let info = full_info(&regions, fb);
-        let bench = encode_gsp_static_info(&info, GspStaticInfoWire::Pre610).expect("bench encodes");
+        let bench =
+            encode_gsp_static_info(&info, GspStaticInfoWire::Pre610).expect("bench encodes");
         let mut n = 0;
         for tag in MEASURED.iter().filter(|t| t.major == 580) {
             let lay = crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, *tag).expect("measured");
-            assert_eq!(encode_gsp_static_info_at(&info, &lay).expect("encodes"), bench, "{tag}");
+            assert_eq!(
+                encode_gsp_static_info_at(&info, &lay).expect("encodes"),
+                bench,
+                "{tag}"
+            );
             n += 1;
         }
         assert!(n >= 7, "the 580 branch is measured at {n} tags");
@@ -1349,9 +1403,17 @@ mod tests {
             assert_eq!(u64_at(1224), fb, "fb_length at {tag}");
             assert_eq!(u64_at(1536), 0x20C_C000, "bar1PdeBase at {tag}");
             assert_eq!(u64_at(1544), 0x37B_2000, "bar2PdeBase at {tag}");
-            assert_eq!(u32::from_le_bytes(b[344..348].try_into().expect("4")), 2, "numFBRegions");
+            assert_eq!(
+                u32::from_le_bytes(b[344..348].try_into().expect("4")),
+                2,
+                "numFBRegions"
+            );
             // entry 1 at 352 + 48: base, limit
-            assert_eq!(u64_at(352 + 48), 0x10_0000, "region 1 base at the 48-byte stride");
+            assert_eq!(
+                u64_at(352 + 48),
+                0x10_0000,
+                "region 1 base at the 48-byte stride"
+            );
             assert_eq!(u64_at(352 + 48 + 8), fb - 1, "region 1 limit");
             assert_eq!(&b[36..52], a_gid().as_bytes(), "gidInfo.data@36");
         }
@@ -1365,7 +1427,8 @@ mod tests {
         let fb = 8u64 << 30;
         let regions = two_regions(fb);
         let info = full_info(&regions, fb);
-        let lay = crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, v(610, 43, 2)).expect("measured");
+        let lay =
+            crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, v(610, 43, 2)).expect("measured");
         assert!(lay.maybe("gpuNameString_Unicode").is_none());
         let b = encode_gsp_static_info_at(&info, &lay).expect("encodes");
         assert_eq!(b.len(), 1600);

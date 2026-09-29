@@ -29,8 +29,8 @@ use kf_abi::fbinfo::{
 };
 use kf_abi::memsysconfig;
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `RpcControlReq::HEADER`.
 const PARAMS_AT: usize = 40;
@@ -38,7 +38,11 @@ const PARAMS_AT: usize = 40;
 const CONTROL_STATUS_OFF: usize = 12;
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` carrying an arbitrary control id with an arbitrary params body.

@@ -99,7 +99,8 @@ pub const KFWR_RF_PRIVILEGE: u32 = 1 << 6;
 /// ★★★ v3-roperm: the permission bits that MAY join the diff key (`kf_hkey` /
 /// [`crate::diffmodel::host_key_with`]); which of them do is the host's policy, passed per launch
 /// in [`KfArgs::key_perm`]. Mirrors `KFWR_RF_KEY_PERM_ALL`.
-pub const KFWR_RF_KEY_PERM_ALL: u32 = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE;
+pub const KFWR_RF_KEY_PERM_ALL: u32 =
+    KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE;
 /// ★★★ v3-roperm: the default key — what the host carries by default (read-only, volatile) plus
 /// PRIVILEGE (whose flip re-decides whether a user twin may hold the leaf at all). ATOMIC_DISABLE
 /// joins only with `KF3_CARRY_ATOMIC_DISABLE=1` (`kf_mem::apply::PermPolicy`). Mirrors
@@ -402,7 +403,12 @@ pub struct KfAck {
 
 impl Default for KfAck {
     fn default() -> Self {
-        KfAck { generation: 0, nrun: 0, nreset: 0, reset: [0; KF_MAX_RESET] }
+        KfAck {
+            generation: 0,
+            nrun: 0,
+            nreset: 0,
+            reset: [0; KF_MAX_RESET],
+        }
     }
 }
 
@@ -975,17 +981,37 @@ pub fn kf_format_ver3() -> KfFormat {
     f.dir[3] = dir(29, 37, 8, PS_512M);
     f.dir[4] = dir(21, 28, 16, PS_2M);
     f.addr_sel = [0, 0, 0, 0];
-    f.addr_local = KfField { lo: 12, bits: 40, shift: 12, pad: 0 };
+    f.addr_local = KfField {
+        lo: 12,
+        bits: 40,
+        shift: 12,
+        pad: 0,
+    };
     f.addr_sys = f.addr_local;
-    f.big_addr_local = KfField { lo: 8, bits: 44, shift: 8, pad: 0 };
+    f.big_addr_local = KfField {
+        lo: 8,
+        bits: 44,
+        shift: 8,
+        pad: 0,
+    };
     f.big_addr_sys = f.big_addr_local;
     f.bit_volatile = 3;
     f.bit_privilege = 4;
     f.bit_read_only = 5;
     f.bit_atomic_disable = 6;
-    f.pcf = KfField { lo: 3, bits: 5, shift: 0, pad: 0 };
+    f.pcf = KfField {
+        lo: 3,
+        bits: 5,
+        shift: 0,
+        pad: 0,
+    };
     f.pcf_sparse = 1;
-    f.kind = KfField { lo: 8, bits: 4, shift: 0, pad: 0 };
+    f.kind = KfField {
+        lo: 8,
+        bits: 4,
+        shift: 0,
+        pad: 0,
+    };
     f
 }
 

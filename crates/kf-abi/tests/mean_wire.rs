@@ -1908,10 +1908,7 @@ fn the_control_table_names_exactly_the_commands_it_can_argue_for() {
     assert_eq!(ControlParams::VaspacePublishedPdes.params_size(), Some(184));
     assert_eq!(
         ControlParams::VaspacePublishedPdes.params_size(),
-        Some(
-            0x28 + kf_abi::gvaspacepdes::GMMU_FMT_MAX_LEVELS
-                * kf_abi::gvaspacepdes::LEVEL_SIZE
-        ),
+        Some(0x28 + kf_abi::gvaspacepdes::GMMU_FMT_MAX_LEVELS * kf_abi::gvaspacepdes::LEVEL_SIZE),
     );
     // ★ 560, and it is asserted BOTH ways: against the literal the captured host RPC
     // recorded (`psize=560`), and against the composition the port actually computes —

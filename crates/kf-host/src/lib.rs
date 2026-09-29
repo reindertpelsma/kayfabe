@@ -11,25 +11,22 @@
 
 pub mod channel;
 pub mod event;
-pub use event::EventFd;
 pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
+pub use event::EventFd;
 
 use kf_abi::bringup::{
-    NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
-    NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV20_SUBDEVICE_0,
-    NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
-    NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
-    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
-    CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
-    Nv2080AllocParameters, Nvos02ParametersWithFd, RegisterFd,
+    CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD,
+    NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
+    NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV20_SUBDEVICE_0, NVOS02_FLAGS_COHERENCY_CACHED,
+    NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP, NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS,
+    NVOS46_FLAGS_CACHE_SNOOP_ENABLE, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters,
+    Nvos02ParametersWithFd, RegisterFd,
 };
-use kf_abi::generated::classes::{
-    NV01_DEVICE_0, NV01_ROOT_CLIENT, Nv0080AllocParameters,
-};
+use kf_abi::generated::classes::{NV01_DEVICE_0, NV01_ROOT_CLIENT, Nv0080AllocParameters};
 use kf_abi::generated::nvos::{
-    NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE,
-    NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters,
-    Nvos46Parameters, Nvos47Parameters, Nvos54Parameters,
+    NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA,
+    NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters, Nvos46Parameters,
+    Nvos47Parameters, Nvos54Parameters,
 };
 use kf_abi::submit::*;
 use kf_arch::ids::GpuId;
@@ -167,8 +164,15 @@ fn ioctl_error(e: &RawError) -> RmError {
 /// layout at this host. Unreadable / unparsable / unmeasured are refusals by name, never a default.
 fn host_abi_gate(reported: Option<&str>) -> Result<(String, kf_abi::hostabi::HostAbi), String> {
     use kf_abi::host_driver::{HostDriverRefusal, HostDriverVersion};
-    let Some(r) = reported else { return Err(HostDriverRefusal::Unreadable.to_string()) };
-    let v = HostDriverVersion::parse(r).ok_or_else(|| HostDriverRefusal::Unparsable { reported: r.to_string() }.to_string())?;
+    let Some(r) = reported else {
+        return Err(HostDriverRefusal::Unreadable.to_string());
+    };
+    let v = HostDriverVersion::parse(r).ok_or_else(|| {
+        HostDriverRefusal::Unparsable {
+            reported: r.to_string(),
+        }
+        .to_string()
+    })?;
     let abi = kf_abi::hostabi::HostAbi::for_host(v).map_err(|e| e.to_string())?;
     for runs in PASSED_THROUGH {
         match abi.carry(runs) {
@@ -226,7 +230,11 @@ pub(crate) const fn nvos46_map_flags(extra: u32, page_size: u32, fixed: bool) ->
     extra
         | page_size
         | NVOS46_FLAGS_CACHE_SNOOP_ENABLE
-        | if fixed { NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE } else { 0 }
+        | if fixed {
+            NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
+        } else {
+            0
+        }
 }
 
 fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
@@ -501,22 +509,37 @@ impl HostRm {
         )?;
         rung("R4b CARD_INFO", conn.ctl.ioctl(req, &mut ci, &mut []))?;
         let cards = rung("R4b CARD_INFO decode", CardInfo::decode_all(&ci))?;
-        let card = cards.iter().copied().find(|c| c.minor == gpu.0).ok_or_else(|| BringUpError {
-            rung: "R4b CARD_INFO minor",
-            detail: format!(
-                "no probed GPU has minor {} (the frontend lists minors {:?}) — refused by name",
-                gpu.0,
-                cards.iter().map(|c| c.minor).collect::<Vec<_>>()
-            ),
-        })?;
+        let card = cards
+            .iter()
+            .copied()
+            .find(|c| c.minor == gpu.0)
+            .ok_or_else(|| BringUpError {
+                rung: "R4b CARD_INFO minor",
+                detail: format!(
+                    "no probed GPU has minor {} (the frontend lists minors {:?}) — refused by name",
+                    gpu.0,
+                    cards.iter().map(|c| c.minor).collect::<Vec<_>>()
+                ),
+            })?;
         let mut idinfo = [0u8; GpuIdInfoV2::SIZE];
-        rung("R4c GET_ID_INFO_V2 encode", GpuIdInfoV2::encode_request(card.gpu_id, &mut idinfo))?;
+        rung(
+            "R4c GET_ID_INFO_V2 encode",
+            GpuIdInfoV2::encode_request(card.gpu_id, &mut idinfo),
+        )?;
         rung(
             "R4c GET_ID_INFO_V2",
-            conn.raw_control(conn.client.raw(), NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2, &mut idinfo),
+            conn.raw_control(
+                conn.client.raw(),
+                NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
+                &mut idinfo,
+            ),
         )?;
         let id = rung("R4c GET_ID_INFO_V2 decode", GpuIdInfoV2::decode(&idinfo))?;
-        let conn = HostRm { card, device_instance: id.device_instance, ..conn };
+        let conn = HostRm {
+            card,
+            device_instance: id.device_instance,
+            ..conn
+        };
 
         // R5 — the device. The parameters are NOT optional: without them RM does not
         // associate the device with a physical GPU and every later control answers
@@ -532,18 +555,37 @@ impl HostRm {
         )?;
         let device = rung(
             "R5 NV01_DEVICE_0",
-            conn.raw_alloc(client.raw(), FIRST_HANDLE, NV01_DEVICE_0, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV0080_ALLOC_PARAMETERS)), &mut dev_params),
+            conn.raw_alloc(
+                client.raw(),
+                FIRST_HANDLE,
+                NV01_DEVICE_0,
+                Some(kf_abi::hostabi::HostParams::Measured(
+                    &kf_abi::generated::matrix::NV0080_ALLOC_PARAMETERS,
+                )),
+                &mut dev_params,
+            ),
         )?;
 
         // R6 — the subdevice.
         let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
         rung(
             "R6 NV2080 encode",
-            Nv2080AllocParameters { sub_device_id: id.sub_device_instance }.encode_into(&mut sub_params),
+            Nv2080AllocParameters {
+                sub_device_id: id.sub_device_instance,
+            }
+            .encode_into(&mut sub_params),
         )?;
         let subdevice = rung(
             "R6 NV20_SUBDEVICE_0",
-            conn.raw_alloc(device, FIRST_HANDLE + 1, NV20_SUBDEVICE_0, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV2080_ALLOC_PARAMETERS)), &mut sub_params),
+            conn.raw_alloc(
+                device,
+                FIRST_HANDLE + 1,
+                NV20_SUBDEVICE_0,
+                Some(kf_abi::hostabi::HostParams::Measured(
+                    &kf_abi::generated::matrix::NV2080_ALLOC_PARAMETERS,
+                )),
+                &mut sub_params,
+            ),
         )?;
 
         {
@@ -580,16 +622,29 @@ impl HostRm {
         )?;
         let n = (u32::from_le_bytes([list[0], list[1], list[2], list[3]]) as usize).min(200);
         let host_classes: Vec<u32> = (0..n)
-            .map(|i| u32::from_le_bytes([list[4 + 4 * i], list[5 + 4 * i], list[6 + 4 * i], list[7 + 4 * i]]))
+            .map(|i| {
+                u32::from_le_bytes([
+                    list[4 + 4 * i],
+                    list[5 + 4 * i],
+                    list[6 + 4 * i],
+                    list[7 + 4 * i],
+                ])
+            })
             .collect();
-        let classes = classes_for(architecture, implementation, &host_classes).map_err(|detail| BringUpError {
-            rung: "R6d family row",
-            detail: format!(
-                "architecture {architecture:#x} implementation {implementation:#x}: {detail} — \
+        let classes = classes_for(architecture, implementation, &host_classes).map_err(
+            |detail| BringUpError {
+                rung: "R6d family row",
+                detail: format!(
+                    "architecture {architecture:#x} implementation {implementation:#x}: {detail} — \
                  refused by name, never a nearest guess"
-            ),
-        })?;
-        let conn = HostRm { classes, arch_info, ..conn };
+                ),
+            },
+        )?;
+        let conn = HostRm {
+            classes,
+            arch_info,
+            ..conn
+        };
         let usermode = conn.open_usermode(conn.classes.usermode());
         Ok(HostRm { usermode, ..conn })
     }
@@ -734,7 +789,6 @@ impl HostRm {
             .map_err(|e| region_error(&e))
     }
 
-
     /// [`ptimer_sample`] over a [`VolatileRegion`], mapping both refusals onto [`RmError`].
     pub fn raw_alloc(
         &self,
@@ -744,7 +798,9 @@ impl HostRm {
         strukt: Option<kf_abi::hostabi::HostParams>,
         params: &mut [u8],
     ) -> Result<u32, RmError> {
-        self.carried_alloc(class, strukt, params, |p| self.raw_alloc_exact(parent, want, class, p))
+        self.carried_alloc(class, strukt, params, |p| {
+            self.raw_alloc_exact(parent, want, class, p)
+        })
     }
 
     /// ★ The host-driver axis for allocations: `params` (bench layout) carried to the host's
@@ -761,11 +817,15 @@ impl HostRm {
         let (name, carry) = match strukt {
             None if params.is_empty() => return issue(params),
             None => {
-                eprintln!("kf-host: HOST-ABI REFUSED {what}: a parameter block with no named struct");
+                eprintln!(
+                    "kf-host: HOST-ABI REFUSED {what}: a parameter block with no named struct"
+                );
                 return Err(RmError::Other(HOST_ABI_REFUSED));
             }
             Some(HostParams::Measured(r)) => (r.name, self.abi.carry(r)),
-            Some(HostParams::Renamed { before, after }) => (before.name, self.abi.carry_renamed(before, after)),
+            Some(HostParams::Renamed { before, after }) => {
+                (before.name, self.abi.carry_renamed(before, after))
+            }
             Some(HostParams::NoHeader { .. }) => {
                 eprintln!("kf-host: HOST-ABI REFUSED {what}: allocation params with no header");
                 return Err(RmError::Other(HOST_ABI_REFUSED));
@@ -775,9 +835,15 @@ impl HostRm {
         match carry {
             Carry::Same { .. } => issue(params),
             c @ Carry::Carried { .. } => {
-                let mut host = self.abi.carry_out(name, &c, params).map_err(|e| abi_refused(&what, &e))?;
+                let mut host = self
+                    .abi
+                    .carry_out(name, &c, params)
+                    .map_err(|e| abi_refused(&what, &e))?;
                 let h = issue(&mut host)?;
-                let back = self.abi.carry_in(name, &c, &host).map_err(|e| abi_refused(&format!("{what} reply"), &e))?;
+                let back = self
+                    .abi
+                    .carry_in(name, &c, &host)
+                    .map_err(|e| abi_refused(&format!("{what} reply"), &e))?;
                 params.copy_from_slice(&back);
                 Ok(h)
             }
@@ -785,7 +851,13 @@ impl HostRm {
     }
 
     /// The allocation ioctl with `params` exactly as given (already at the host's layout).
-    fn raw_alloc_exact(&self, parent: u32, want: u32, class: u32, params: &mut [u8]) -> Result<u32, RmError> {
+    fn raw_alloc_exact(
+        &self,
+        parent: u32,
+        want: u32,
+        class: u32,
+        params: &mut [u8],
+    ) -> Result<u32, RmError> {
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
             h_root: self.client.raw(),
@@ -829,7 +901,9 @@ impl HostRm {
         strukt: Option<kf_abi::hostabi::HostParams>,
         params: &mut [u8],
     ) -> Result<u32, RmError> {
-        self.carried_alloc(class, strukt, params, |p| self.raw_alloc_via_exact(node, parent, want, class, p))
+        self.carried_alloc(class, strukt, params, |p| {
+            self.raw_alloc_via_exact(node, parent, want, class, p)
+        })
     }
 
     fn raw_alloc_via_exact(
@@ -861,8 +935,7 @@ impl HostRm {
         if !params.is_empty() {
             patches.push(Indirect::new(16, params));
         }
-        node
-            .ioctl(req, &mut arg, &mut patches)
+        node.ioctl(req, &mut arg, &mut patches)
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
@@ -929,7 +1002,6 @@ impl HostRm {
         Ok(out.h_object_new)
     }
 
-
     /// Mint the next handle value. Taken and released around the ioctl, never held across
     /// one — the leaf-witness assert inside [`CharDevice::ioctl`] would fire if it were.
     pub fn mint(&self) -> u32 {
@@ -957,7 +1029,10 @@ impl HostRm {
     pub fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
         // ★ The host-driver axis: the payload is the bench layout; carry it to the host's own
         // measured layout and back (`kf_abi::hostabi::HOST_CONTROLS`). Same layout ⇒ untouched.
-        let carry = self.abi.control_carry(cmd).map_err(|e| abi_refused(&format!("control {cmd:#010x}"), &e))?;
+        let carry = self
+            .abi
+            .control_carry(cmd)
+            .map_err(|e| abi_refused(&format!("control {cmd:#010x}"), &e))?;
         match carry {
             Some(c @ kf_abi::hostabi::Carry::Carried { .. }) => {
                 let name = kf_abi::hostabi::host_control(cmd).map_or("?", |r| r.name);
@@ -1068,13 +1143,19 @@ impl HostRm {
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         // ★ The host-driver axis: NVOS46 is 56 bytes below 580.65.06 (no flags2 / kindOverride).
         let runs = &kf_abi::generated::matrix::NVOS46_PARAMETERS;
-        let mut host = self.abi.to_host(runs, &arg).map_err(|e| abi_refused("NVOS46 map", &e))?;
+        let mut host = self
+            .abi
+            .to_host(runs, &arg)
+            .map_err(|e| abi_refused("NVOS46 map", &e))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, host.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
             .ioctl(req, &mut host, &mut [])
             .map_err(|e| ioctl_error(&e))?;
-        let arg = self.abi.from_host(runs, &host).map_err(|e| abi_refused("NVOS46 map reply", &e))?;
+        let arg = self
+            .abi
+            .from_host(runs, &host)
+            .map_err(|e| abi_refused("NVOS46 map reply", &e))?;
         let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         // ★★★★★ w755d — see [`VA_ALREADY_MAPPED`]. `0x51` on a FIXED map is ADDRESS
         // OCCUPANCY, not capacity, and `status_check` would report it as `NoMemory`.
@@ -1116,12 +1197,7 @@ impl HostRm {
     ///
     /// # Errors
     /// The host's status.
-    pub fn raw_unmap_dma_flags(
-        &self,
-        h_dma: u32,
-        gpu_va: u64,
-        flags: u32,
-    ) -> Result<(), RmError> {
+    pub fn raw_unmap_dma_flags(&self, h_dma: u32, gpu_va: u64, flags: u32) -> Result<(), RmError> {
         self.raw_unmap_dma_range(h_dma, gpu_va, 0, flags)
     }
 
@@ -1157,13 +1233,19 @@ impl HostRm {
         // ★ The host-driver axis: NVOS47 has no `size` (range unmap) at 535/545 — a range unmap
         // there is refused by name, a whole-mapping unmap carries.
         let runs = &kf_abi::generated::matrix::NVOS47_PARAMETERS;
-        let mut host = self.abi.to_host(runs, &arg).map_err(|e| abi_refused("NVOS47 unmap", &e))?;
+        let mut host = self
+            .abi
+            .to_host(runs, &arg)
+            .map_err(|e| abi_refused("NVOS47 unmap", &e))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, host.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
             .ioctl(req, &mut host, &mut [])
             .map_err(|e| ioctl_error(&e))?;
-        let arg = self.abi.from_host(runs, &host).map_err(|e| abi_refused("NVOS47 unmap reply", &e))?;
+        let arg = self
+            .abi
+            .from_host(runs, &host)
+            .map_err(|e| abi_refused("NVOS47 unmap reply", &e))?;
         let out = Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)
     }
@@ -1333,16 +1415,20 @@ impl HostRm {
     ///
     /// # Errors
     /// The `openat` refusal.
-    pub fn open_view_node(&self, which: MapNode, access: ViewAccess) -> Result<CharDevice, RmError> {
+    pub fn open_view_node(
+        &self,
+        which: MapNode,
+        access: ViewAccess,
+    ) -> Result<CharDevice, RmError> {
         match which {
             MapNode::Gpu => {
                 let name = CString::new(format!("nvidia{}", self.gpu_index))
                     .map_err(|_| RmError::Other(IMPOSSIBLE_CONVERSION))?;
-                CharDevice::openat_mode(&self.dev, &name, access.dev_access()).map_err(|e| ioctl_error(&e))
+                CharDevice::openat_mode(&self.dev, &name, access.dev_access())
+                    .map_err(|e| ioctl_error(&e))
             }
-            MapNode::Ctl => {
-                CharDevice::openat_mode(&self.dev, c"nvidiactl", access.dev_access()).map_err(|e| ioctl_error(&e))
-            }
+            MapNode::Ctl => CharDevice::openat_mode(&self.dev, c"nvidiactl", access.dev_access())
+                .map_err(|e| ioctl_error(&e)),
         }
     }
 
@@ -1421,9 +1507,13 @@ impl HostRm {
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos34Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         let r = status_check(out.status);
-        let n = self.views[if r.is_ok() { 1 } else { 2 }].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let n = self.views[if r.is_ok() { 1 } else { 2 }]
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if r.is_err() && n < 16 {
-            eprintln!("kf-host: CPU view release REFUSED (#{n}): memory {:#x} cookie {:#x}: status {:#x} — its BAR1 aperture stays held", r_mem, r_cookie, out.status);
+            eprintln!(
+                "kf-host: CPU view release REFUSED (#{n}): memory {:#x} cookie {:#x}: status {:#x} — its BAR1 aperture stays held",
+                r_mem, r_cookie, out.status
+            );
         }
         r
     }
@@ -1433,7 +1523,11 @@ impl HostRm {
     #[must_use]
     pub fn view_counts(&self) -> (u64, u64, u64) {
         let o = std::sync::atomic::Ordering::Relaxed;
-        (self.views[0].load(o), self.views[1].load(o), self.views[2].load(o))
+        (
+            self.views[0].load(o),
+            self.views[1].load(o),
+            self.views[2].load(o),
+        )
     }
 
     /// Allocate `len` bytes of **device-local** memory — the only kind a ring, a USERD
@@ -1619,9 +1713,20 @@ impl HostRm {
         }
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        if let Ok(h) = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS)), &mut params) {
+        if let Ok(h) = self.raw_alloc(
+            self.device,
+            want,
+            NV01_MEMORY_LOCAL_USER,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS,
+            )),
+            &mut params,
+        ) {
             self.remember(h, self.device);
-            return Ok(Reservation { handle: h, contiguous_aligned: true });
+            return Ok(Reservation {
+                handle: h,
+                contiguous_aligned: true,
+            });
         }
         // ⊘ The fallback is not a degraded mode, it is the documented one. Only the page-size
         // freedom is lost.
@@ -1636,9 +1741,20 @@ impl HostRm {
         }
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS)), &mut params)?;
+        let h = self.raw_alloc(
+            self.device,
+            want,
+            NV01_MEMORY_LOCAL_USER,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS,
+            )),
+            &mut params,
+        )?;
         self.remember(h, self.device);
-        Ok(Reservation { handle: h, contiguous_aligned: false })
+        Ok(Reservation {
+            handle: h,
+            contiguous_aligned: false,
+        })
     }
 
     /// A device-local memory object of `len` bytes.
@@ -1657,7 +1773,15 @@ impl HostRm {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS)), &mut params)?;
+        let h = self.raw_alloc(
+            self.device,
+            want,
+            NV01_MEMORY_LOCAL_USER,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS,
+            )),
+            &mut params,
+        )?;
         self.remember(h, self.device);
         Ok(h)
     }
@@ -1751,7 +1875,6 @@ impl HostRm {
         Ok(out.h_object_new)
     }
 
-
     /// Export `object` to a FRESH control-node fd (owned by the returned device) — how the store
     /// is handed to the CUDA walk context (`WalkKernel::import_store`).
     ///
@@ -1772,7 +1895,9 @@ impl HostRm {
     /// The family's compute object class, if it has one.
     #[must_use]
     pub fn compute_class_id(&self) -> Option<u32> {
-        self.classes.compute_object().map(|c| c.compute_object_id().0)
+        self.classes
+            .compute_object()
+            .map(|c| c.compute_object_id().0)
     }
 
     /// `MC_GET_ARCH_INFO` as the host answered it: `(architecture, implementation, revision)` — the
@@ -1796,7 +1921,12 @@ impl HostRm {
 
     fn parent_of(&self, child: u32) -> Option<u32> {
         let _leaf = leafwitness::Held::enter();
-        self.objects.lock().expect("objects").parents.get(&child).copied()
+        self.objects
+            .lock()
+            .expect("objects")
+            .parents
+            .get(&child)
+            .copied()
     }
 
     /// Drop `object` AND every descendant from the parent map — RM's `NV_ESC_RM_FREE` frees the
@@ -1809,7 +1939,12 @@ impl HostRm {
         let mut i = 0;
         while i < doomed.len() {
             let p = doomed[i];
-            doomed.extend(o.parents.iter().filter(|&(_, &par)| par == p).map(|(&c, _)| c));
+            doomed.extend(
+                o.parents
+                    .iter()
+                    .filter(|&(_, &par)| par == p)
+                    .map(|(&c, _)| c),
+            );
             i += 1;
         }
         for h in doomed {
@@ -1822,7 +1957,9 @@ impl HostRm {
     /// # Errors
     /// The host's refusal.
     pub fn free(&self, object: u32) -> Result<(), RmError> {
-        let parent = self.parent_of(object).ok_or(RmError::Other(NOT_IN_THIS_OBJECT))?;
+        let parent = self
+            .parent_of(object)
+            .ok_or(RmError::Other(NOT_IN_THIS_OBJECT))?;
         let mut arg = [0u8; Nvos00Parameters::SIZE];
         Nvos00Parameters {
             h_root: self.client.raw(),

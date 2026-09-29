@@ -112,7 +112,11 @@ impl Invalidate {
             hubtlb_only: raw & 0b100 != 0,
             replay: (raw >> 3) & 0b111,
             pdb: ((hi20 << 28) | lo28) << PDB_ADDR_ALIGNMENT,
-            pdb_aperture: if (pdb_lo >> 1) & 1 == 0 { PdbAperture::Vidmem } else { PdbAperture::Sysmem },
+            pdb_aperture: if (pdb_lo >> 1) & 1 == 0 {
+                PdbAperture::Vidmem
+            } else {
+                PdbAperture::Sysmem
+            },
         }
     }
 
@@ -174,7 +178,13 @@ impl InvalidatePort {
     /// A port at `regs`, idle.
     #[must_use]
     pub fn new(regs: InvalidateRegs) -> InvalidatePort {
-        InvalidatePort { regs, pdb_lo: Cell::new(), pdb_hi: Cell::new(), word: Cell::new(), trigger: Trigger::new() }
+        InvalidatePort {
+            regs,
+            pdb_lo: Cell::new(),
+            pdb_hi: Cell::new(),
+            word: Cell::new(),
+            trigger: Trigger::new(),
+        }
     }
 
     /// The offsets it answers.
@@ -199,8 +209,10 @@ impl InvalidatePort {
             PortWrite::Latched
         } else if offset == self.regs.trigger {
             // The readable word keeps the scope bits; bit 31 is the Trigger's, never stored.
-            self.word.apply(WriteSemantics::Plain, u64::from(value & !TRIGGER_BIT));
-            let inval = Invalidate::decode(value, self.pdb_lo.read() as u32, self.pdb_hi.read() as u32);
+            self.word
+                .apply(WriteSemantics::Plain, u64::from(value & !TRIGGER_BIT));
+            let inval =
+                Invalidate::decode(value, self.pdb_lo.read() as u32, self.pdb_hi.read() as u32);
             if !inval.trigger {
                 return PortWrite::Latched;
             }
@@ -237,7 +249,11 @@ impl InvalidatePort {
         } else if offset == self.regs.upper_pdb {
             Some(self.pdb_hi.read() as u32)
         } else if offset == self.regs.trigger {
-            let busy = if self.trigger.read() != 0 { TRIGGER_BIT } else { 0 };
+            let busy = if self.trigger.read() != 0 {
+                TRIGGER_BIT
+            } else {
+                0
+            };
             Some(self.word.read() as u32 | busy)
         } else {
             None
@@ -258,12 +274,23 @@ mod tests {
         assert_eq!(r.trigger, 0xB8_30B0);
         assert_eq!(r.pdb, r.trigger - 0x10);
         assert_eq!(r.upper_pdb, r.trigger - 0xC);
-        assert_eq!(InvalidateRegs::from_usermode_base(0x1000), None, "below the PRIV delta: refused");
+        assert_eq!(
+            InvalidateRegs::from_usermode_base(0x1000),
+            None,
+            "below the PRIV delta: refused"
+        );
     }
 
     #[test]
     fn pdb_round_trips_through_the_two_registers() {
-        for pdb in [0u64, 0x1000, 0x0100_0000, 0x3_FFFF_F000, 0xFF_FFFF_F000_u64 & !0xFFF, 0x1234_5678_9000] {
+        for pdb in [
+            0u64,
+            0x1000,
+            0x0100_0000,
+            0x3_FFFF_F000,
+            0xFF_FFFF_F000_u64 & !0xFFF,
+            0x1234_5678_9000,
+        ] {
             for ap in [PdbAperture::Vidmem, PdbAperture::Sysmem] {
                 let (lo, hi) = Invalidate::encode_pdb(pdb, ap);
                 let d = Invalidate::decode(TRIGGER_BIT | 1, lo, hi);
@@ -285,11 +312,21 @@ mod tests {
         let (lo, hi) = Invalidate::encode_pdb(0x0100_0000, PdbAperture::Vidmem);
         assert_eq!(p.write(r.pdb, lo), PortWrite::Latched);
         assert_eq!(p.write(r.upper_pdb, hi), PortWrite::Latched);
-        let PortWrite::Publish(req) = p.write(r.trigger, TRIGGER_BIT | 1) else { panic!("no publish") };
+        let PortWrite::Publish(req) = p.write(r.trigger, TRIGGER_BIT | 1) else {
+            panic!("no publish")
+        };
         assert_eq!(req.inval.pdb, 0x0100_0000);
-        assert_eq!(p.read(r.trigger).unwrap() & TRIGGER_BIT, TRIGGER_BIT, "busy while armed");
+        assert_eq!(
+            p.read(r.trigger).unwrap() & TRIGGER_BIT,
+            TRIGGER_BIT,
+            "busy while armed"
+        );
         assert_eq!(p.trigger().complete(req.seq), ClearOutcome::Cleared);
-        assert_eq!(p.read(r.trigger).unwrap() & TRIGGER_BIT, 0, "idle after the clear");
+        assert_eq!(
+            p.read(r.trigger).unwrap() & TRIGGER_BIT,
+            0,
+            "idle after the clear"
+        );
         assert_eq!(p.read(r.trigger).unwrap(), 1, "the scope bits read back");
     }
 
@@ -310,12 +347,20 @@ mod tests {
         p.write(r.pdb, lo);
         p.write(r.upper_pdb, hi);
         // `[cap3 #159730]` the guest's BAR2 invalidate word.
-        let PortWrite::Publish(a) = p.write(r.trigger, 0x8001_0005) else { panic!() };
+        let PortWrite::Publish(a) = p.write(r.trigger, 0x8001_0005) else {
+            panic!()
+        };
         assert_eq!(p.armed_request(), Some(a));
         assert_eq!(a.inval.pdb, 0x2_F339_2000);
         assert!(a.inval.all_va && a.inval.hubtlb_only && !a.inval.all_pdb);
-        let PortWrite::Publish(b) = p.write(r.trigger, 0x8001_0005) else { panic!() };
-        assert_eq!(p.armed_request().map(|x| x.seq), Some(b.seq), "the later arm");
+        let PortWrite::Publish(b) = p.write(r.trigger, 0x8001_0005) else {
+            panic!()
+        };
+        assert_eq!(
+            p.armed_request().map(|x| x.seq),
+            Some(b.seq),
+            "the later arm"
+        );
         assert_eq!(p.trigger().complete(b.seq), ClearOutcome::Cleared);
         assert_eq!(p.armed_request(), None);
     }
@@ -326,11 +371,19 @@ mod tests {
     fn a_stale_completion_never_clears_a_later_trigger() {
         let p = port();
         let r = p.regs();
-        let PortWrite::Publish(a) = p.write(r.trigger, TRIGGER_BIT | 1) else { panic!() };
-        let PortWrite::Publish(b) = p.write(r.trigger, TRIGGER_BIT | 1) else { panic!() };
+        let PortWrite::Publish(a) = p.write(r.trigger, TRIGGER_BIT | 1) else {
+            panic!()
+        };
+        let PortWrite::Publish(b) = p.write(r.trigger, TRIGGER_BIT | 1) else {
+            panic!()
+        };
         assert!(b.seq > a.seq);
         assert_eq!(p.trigger().complete(a.seq), ClearOutcome::Superseded);
-        assert_ne!(p.read(r.trigger).unwrap() & TRIGGER_BIT, 0, "B is still pending");
+        assert_ne!(
+            p.read(r.trigger).unwrap() & TRIGGER_BIT,
+            0,
+            "B is still pending"
+        );
         assert_eq!(p.trigger().complete(b.seq), ClearOutcome::Cleared);
     }
 

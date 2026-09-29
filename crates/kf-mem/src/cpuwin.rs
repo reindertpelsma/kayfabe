@@ -135,7 +135,12 @@ impl<V: ViewOps> CpuWindow<V> {
     /// A window of `bytes` whose every page currently shows scratch.
     #[must_use]
     pub fn new(ops: V, bytes: u64) -> CpuWindow<V> {
-        CpuWindow { ops, bytes, placed: RefCell::new(BTreeMap::new()), stats: RefCell::default() }
+        CpuWindow {
+            ops,
+            bytes,
+            placed: RefCell::new(BTreeMap::new()),
+            stats: RefCell::default(),
+        }
     }
 
     /// The counters.
@@ -166,30 +171,50 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
             ));
         }
         if self.placed.borrow().contains_key(&d.va) {
-            return self.refuse(format!("window map {:#x}: a placement WE made is still there", d.va));
+            return self.refuse(format!(
+                "window map {:#x}: a placement WE made is still there",
+                d.va
+            ));
         }
         let held = if d.ram {
             if let Err(e) = self.ops.place_ram(d.va, d.len, d.off) {
-                return self.refuse(format!("window map {:#x}+{:#x} (guest RAM @{:#x}): {e}", d.va, d.len, d.off));
+                return self.refuse(format!(
+                    "window map {:#x}+{:#x} (guest RAM @{:#x}): {e}",
+                    d.va, d.len, d.off
+                ));
             }
             self.stats.borrow_mut().ram_placed += 1;
-            Held { len: d.len, view: None }
+            Held {
+                len: d.len,
+                view: None,
+            }
         } else {
             let view = match self.ops.arm_store(d.off, d.len) {
                 Ok(v) => v,
-                Err(e) => return self.refuse(format!("window map {:#x}+{:#x} (store @{:#x}): arm: {e}", d.va, d.len, d.off)),
+                Err(e) => {
+                    return self.refuse(format!(
+                        "window map {:#x}+{:#x} (store @{:#x}): arm: {e}",
+                        d.va, d.len, d.off
+                    ));
+                }
             };
             if let Err(e) = self.ops.place_view(d.va, d.len, &view) {
                 // Nothing was placed: give the aperture straight back, and put scratch back in
                 // case the failed MAP_FIXED left the range in any other state.
                 let _ = self.ops.sink(d.va, d.len);
                 let _ = self.ops.release(view);
-                return self.refuse(format!("window map {:#x}+{:#x} (store @{:#x}): place: {e}", d.va, d.len, d.off));
+                return self.refuse(format!(
+                    "window map {:#x}+{:#x} (store @{:#x}): place: {e}",
+                    d.va, d.len, d.off
+                ));
             }
             let mut s = self.stats.borrow_mut();
             s.views_placed += 1;
             s.view_bytes += d.len;
-            Held { len: d.len, view: Some(view) }
+            Held {
+                len: d.len,
+                view: Some(view),
+            }
         };
         self.placed.borrow_mut().insert(d.va, held);
         Ok(Mapped::Placed)
@@ -202,7 +227,9 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
         // ★ Scratch FIRST: from this instant the guest can no longer reach the view, so its
         // aperture may be released.
         if let Err(e) = self.ops.sink(va, len) {
-            return self.refuse(format!("window unmap {va:#x}+{len:#x}: re-point to scratch: {e}"));
+            return self.refuse(format!(
+                "window unmap {va:#x}+{len:#x}: re-point to scratch: {e}"
+            ));
         }
         let held = self.placed.borrow_mut().remove(&va);
         let mut s = self.stats.borrow_mut();
@@ -218,7 +245,9 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
                 // later diff would re-emit an unmap nothing can satisfy.
                 Err(e) => {
                     self.stats.borrow_mut().refused += 1;
-                    eprintln!("kf3: window unmap {va:#x}: view release refused ({e}) — aperture leaked, counted");
+                    eprintln!(
+                        "kf3: window unmap {va:#x}: view release refused ({e}) — aperture leaked, counted"
+                    );
                 }
             }
         }
@@ -276,11 +305,15 @@ fn runs(slots: &[SlotSource], granule: u64) -> Vec<Run> {
     let mut out: Vec<Run> = Vec::new();
     for (i, src) in slots.iter().enumerate() {
         let extended = match (out.last_mut(), *src) {
-            (Some(Run::Store { n, off, .. }), SlotSource::Store(o)) if *off + *n as u64 * granule == o => {
+            (Some(Run::Store { n, off, .. }), SlotSource::Store(o))
+                if *off + *n as u64 * granule == o =>
+            {
                 *n += 1;
                 true
             }
-            (Some(Run::Ram { n, gpa, .. }), SlotSource::Ram(g)) if *gpa + *n as u64 * granule == g => {
+            (Some(Run::Ram { n, gpa, .. }), SlotSource::Ram(g))
+                if *gpa + *n as u64 * granule == g =>
+            {
                 *n += 1;
                 true
             }
@@ -292,8 +325,16 @@ fn runs(slots: &[SlotSource], granule: u64) -> Vec<Run> {
         };
         if !extended {
             out.push(match *src {
-                SlotSource::Store(off) => Run::Store { first: i, n: 1, off },
-                SlotSource::Ram(gpa) => Run::Ram { first: i, n: 1, gpa },
+                SlotSource::Store(off) => Run::Store {
+                    first: i,
+                    n: 1,
+                    off,
+                },
+                SlotSource::Ram(gpa) => Run::Ram {
+                    first: i,
+                    n: 1,
+                    gpa,
+                },
                 SlotSource::Nothing => Run::Nothing { first: i, n: 1 },
             });
         }
@@ -337,7 +378,11 @@ fn elapsed_ns(t: std::time::Instant) -> u64 {
 impl<V: ViewOps> PraminPool<V> {
     /// A pool over `ops`. `ram_offset(gpa, len)` maps a sysmem target to the guest-RAM memfd.
     #[must_use]
-    pub fn new(ops: V, granule: u64, ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send + Sync>) -> Self {
+    pub fn new(
+        ops: V,
+        granule: u64,
+        ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send + Sync>,
+    ) -> Self {
         PraminPool {
             ops,
             granule,
@@ -366,7 +411,9 @@ impl<V: ViewOps> PraminPool<V> {
         let mut fresh = Vec::new();
         for run in runs(slots, g) {
             let (first, n) = match run {
-                Run::Store { first, n, .. } | Run::Ram { first, n, .. } | Run::Nothing { first, n } => (first, n),
+                Run::Store { first, n, .. }
+                | Run::Ram { first, n, .. }
+                | Run::Nothing { first, n } => (first, n),
             };
             let (at, len) = (first as u64 * g, n as u64 * g);
             let n32 = u32::try_from(n).unwrap_or(u32::MAX);
@@ -375,13 +422,15 @@ impl<V: ViewOps> PraminPool<V> {
                     out.maps += 1;
                     let t = std::time::Instant::now();
                     let armed = self.ops.arm_store_in_trap(off, len);
-                    self.worst_map_ns.fetch_max(elapsed_ns(t), Ordering::Relaxed);
+                    self.worst_map_ns
+                        .fetch_max(elapsed_ns(t), Ordering::Relaxed);
                     match armed {
                         Ok(v) => {
                             out.mmaps += 1;
                             let t = std::time::Instant::now();
                             let r = self.ops.place_view(at, len, &v).map(|()| out.views += n32);
-                            self.worst_mmap_ns.fetch_max(elapsed_ns(t), Ordering::Relaxed);
+                            self.worst_mmap_ns
+                                .fetch_max(elapsed_ns(t), Ordering::Relaxed);
                             fresh.push(v);
                             r
                         }
@@ -419,10 +468,13 @@ impl<V: ViewOps> PraminPool<V> {
             self.ops.retire(v);
         }
         self.repoints.fetch_add(1, Ordering::Relaxed);
-        self.missed.fetch_add(u64::from(out.missed), Ordering::Relaxed);
-        self.refused.fetch_add(u64::from(out.refused), Ordering::Relaxed);
+        self.missed
+            .fetch_add(u64::from(out.missed), Ordering::Relaxed);
+        self.refused
+            .fetch_add(u64::from(out.refused), Ordering::Relaxed);
         self.maps.fetch_add(u64::from(out.maps), Ordering::Relaxed);
-        self.mmaps.fetch_add(u64::from(out.mmaps), Ordering::Relaxed);
+        self.mmaps
+            .fetch_add(u64::from(out.mmaps), Ordering::Relaxed);
         out
     }
 }
@@ -480,7 +532,14 @@ mod tests {
     }
 
     fn d(va: u64, off: u64, len: u64, ram: bool) -> Desired {
-        Desired { va, len, off, ram, kind: 0, perm: kf_host::MapPerm::READ_WRITE }
+        Desired {
+            va,
+            len,
+            off,
+            ram,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+        }
     }
 
     #[test]
@@ -488,7 +547,13 @@ mod tests {
         let r = Rec::default();
         let w = CpuWindow::new(&r, 32 << 20);
         w.map(&d(0, 0x2_EFBA_E000, 0x1000, false), true).unwrap();
-        assert_eq!(*r.ops.lock().unwrap(), vec![Op::Arm(0x2_EFBA_E000, 0x1000), Op::View(0, 0x1000, 0x2_EFBA_E000)]);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![
+                Op::Arm(0x2_EFBA_E000, 0x1000),
+                Op::View(0, 0x1000, 0x2_EFBA_E000)
+            ]
+        );
         assert_eq!(w.stats().view_bytes, 0x1000);
     }
 
@@ -496,10 +561,14 @@ mod tests {
     fn an_unmap_sinks_first_then_releases_the_aperture() {
         let r = Rec::default();
         let w = CpuWindow::new(&r, 32 << 20);
-        w.map(&d(0xFEF000, 0x1000_0000, 0x1000, false), true).unwrap();
+        w.map(&d(0xFEF000, 0x1000_0000, 0x1000, false), true)
+            .unwrap();
         r.ops.lock().unwrap().clear();
         w.unmap(0xFEF000, true).unwrap();
-        assert_eq!(*r.ops.lock().unwrap(), vec![Op::Sink(0xFEF000, 0x1000), Op::Release(0x1000_0000)]);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![Op::Sink(0xFEF000, 0x1000), Op::Release(0x1000_0000)]
+        );
         let s = w.stats();
         assert_eq!((s.sunk, s.released, s.view_bytes), (1, 1, 0));
     }
@@ -510,23 +579,47 @@ mod tests {
         let w = CpuWindow::new(&r, 32 << 20);
         w.map(&d(0x2000, 0x4000_0000, 0x1000, true), true).unwrap();
         w.unmap(0x2000, true).unwrap();
-        assert_eq!(*r.ops.lock().unwrap(), vec![Op::Ram(0x2000, 0x1000, 0x4000_0000), Op::Sink(0x2000, 0x1000)]);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![
+                Op::Ram(0x2000, 0x1000, 0x4000_0000),
+                Op::Sink(0x2000, 0x1000)
+            ]
+        );
     }
 
     #[test]
     fn refusals_are_named_and_leave_nothing_placed() {
-        let r = Rec { refuse_arm_at: Some(0x5000), ..Rec::default() };
+        let r = Rec {
+            refuse_arm_at: Some(0x5000),
+            ..Rec::default()
+        };
         let w = CpuWindow::new(&r, 0x10_0000);
-        assert!(w.map(&d(0x0F_F000, 0, 0x2000, false), true).unwrap_err().contains("outside"));
-        assert!(w.map(&d(0, 0x5000, 0x1000, false), true).unwrap_err().contains("NV_ERR_NO_MEMORY"));
+        assert!(
+            w.map(&d(0x0F_F000, 0, 0x2000, false), true)
+                .unwrap_err()
+                .contains("outside")
+        );
+        assert!(
+            w.map(&d(0, 0x5000, 0x1000, false), true)
+                .unwrap_err()
+                .contains("NV_ERR_NO_MEMORY")
+        );
         assert!(w.unmap(0, true).unwrap_err().contains("no placement"));
         assert_eq!(w.stats().refused, 3);
-        let r2 = Rec { refuse_place: true, ..Rec::default() };
+        let r2 = Rec {
+            refuse_place: true,
+            ..Rec::default()
+        };
         let w2 = CpuWindow::new(&r2, 0x10_0000);
         assert!(w2.map(&d(0, 0x7000, 0x1000, false), true).is_err());
         assert_eq!(
             *r2.ops.lock().unwrap(),
-            vec![Op::Arm(0x7000, 0x1000), Op::Sink(0, 0x1000), Op::Release(0x7000)],
+            vec![
+                Op::Arm(0x7000, 0x1000),
+                Op::Sink(0, 0x1000),
+                Op::Release(0x7000)
+            ],
             "a failed place gives the aperture straight back"
         );
     }
@@ -534,10 +627,17 @@ mod tests {
     #[test]
     fn leaves_above_the_window_are_clipped_not_refused() {
         let (kept, cut) = crate::ledger::clip_leaves(
-            &[(0, 0x10, 0x1000, 0), (0x1F_F000, 0x20, 0x2000, 0), (0x200_0000, 0x30, 0x1000, 2)],
+            &[
+                (0, 0x10, 0x1000, 0),
+                (0x1F_F000, 0x20, 0x2000, 0),
+                (0x200_0000, 0x30, 0x1000, 2),
+            ],
             0x20_0000,
         );
-        assert_eq!(kept, vec![(0, 0x10, 0x1000, 0), (0x1F_F000, 0x20, 0x1000, 0)]);
+        assert_eq!(
+            kept,
+            vec![(0, 0x10, 0x1000, 0), (0x1F_F000, 0x20, 0x1000, 0)]
+        );
         assert_eq!(cut, 0x2000);
     }
 
@@ -552,10 +652,28 @@ mod tests {
         let r = Rec::default();
         let g = 0x1_0000;
         let pool = PraminPool::new(&r, g, Box::new(|gpa, _| Some(gpa + 7)));
-        let slots: Vec<_> = (0..16).map(|i| SlotSource::Store(0x2_0000_0000 + i * g)).collect();
+        let slots: Vec<_> = (0..16)
+            .map(|i| SlotSource::Store(0x2_0000_0000 + i * g))
+            .collect();
         let out = pool.repoint(&slots);
-        assert_eq!(out, Repointed { views: 16, ram: 0, missed: 0, refused: 0, maps: 1, mmaps: 1 });
-        assert_eq!(*r.ops.lock().unwrap(), vec![Op::Arm(0x2_0000_0000, 16 * g), Op::View(0, 16 * g, 0x2_0000_0000)]);
+        assert_eq!(
+            out,
+            Repointed {
+                views: 16,
+                ram: 0,
+                missed: 0,
+                refused: 0,
+                maps: 1,
+                mmaps: 1
+            }
+        );
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![
+                Op::Arm(0x2_0000_0000, 16 * g),
+                Op::View(0, 16 * g, 0x2_0000_0000)
+            ]
+        );
     }
 
     #[test]
@@ -563,13 +681,21 @@ mod tests {
         let r = Rec::default();
         let g = 0x1_0000;
         let pool = PraminPool::new(&r, g, Box::new(|_, _| None));
-        let at = |base: u64| (0..16).map(|i| SlotSource::Store(base + i * g)).collect::<Vec<_>>();
+        let at = |base: u64| {
+            (0..16)
+                .map(|i| SlotSource::Store(base + i * g))
+                .collect::<Vec<_>>()
+        };
         pool.repoint(&at(0x10_0000));
         r.ops.lock().unwrap().clear();
         pool.repoint(&at(0x40_0000));
         assert_eq!(
             *r.ops.lock().unwrap(),
-            vec![Op::Arm(0x40_0000, 16 * g), Op::View(0, 16 * g, 0x40_0000), Op::Release(0x10_0000)]
+            vec![
+                Op::Arm(0x40_0000, 16 * g),
+                Op::View(0, 16 * g, 0x40_0000),
+                Op::Release(0x10_0000)
+            ]
         );
     }
 
@@ -578,10 +704,15 @@ mod tests {
         let r = Rec::default();
         let g = 0x1_0000;
         let pool = PraminPool::new(&r, g, Box::new(|gpa, _| Some(gpa + 7)));
-        let slots: Vec<_> = (0..16).map(|i| SlotSource::Ram(0x9000_0000 + i * g)).collect();
+        let slots: Vec<_> = (0..16)
+            .map(|i| SlotSource::Ram(0x9000_0000 + i * g))
+            .collect();
         let out = pool.repoint(&slots);
         assert_eq!((out.maps, out.mmaps, out.ram), (0, 1, 16));
-        assert_eq!(*r.ops.lock().unwrap(), vec![Op::Ram(0, 16 * g, 0x9000_0007)]);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![Op::Ram(0, 16 * g, 0x9000_0007)]
+        );
     }
 
     #[test]
@@ -595,16 +726,34 @@ mod tests {
             SlotSource::Ram(0x9000_0000),
             SlotSource::Nothing,
         ]);
-        assert_eq!(out, Repointed { views: 2, ram: 1, missed: 1, refused: 0, maps: 1, mmaps: 3 });
+        assert_eq!(
+            out,
+            Repointed {
+                views: 2,
+                ram: 1,
+                missed: 1,
+                refused: 0,
+                maps: 1,
+                mmaps: 3
+            }
+        );
         assert_eq!(
             *r.ops.lock().unwrap(),
-            vec![Op::Arm(0x11_0000, 2 * g), Op::View(0, 2 * g, 0x11_0000), Op::Ram(2 * g, g, 0x9000_0007), Op::Sink(3 * g, g)]
+            vec![
+                Op::Arm(0x11_0000, 2 * g),
+                Op::View(0, 2 * g, 0x11_0000),
+                Op::Ram(2 * g, g, 0x9000_0007),
+                Op::Sink(3 * g, g)
+            ]
         );
     }
 
     #[test]
     fn a_refused_map_shows_scratch_and_is_counted() {
-        let r = Rec { refuse_arm_at: Some(0x2_0000), ..Rec::default() };
+        let r = Rec {
+            refuse_arm_at: Some(0x2_0000),
+            ..Rec::default()
+        };
         let g = 0x1_0000;
         let pool = PraminPool::new(&r, g, Box::new(|_, _| None));
         let out = pool.repoint(&[SlotSource::Store(0x2_0000), SlotSource::Store(0x3_0000)]);

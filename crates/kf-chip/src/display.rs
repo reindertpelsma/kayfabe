@@ -178,12 +178,26 @@ mod tests {
         assert!(display_for(arch::GH100, 0x0).is_none(), "GH100");
         assert!(display_for(arch::GB100, 0x0).is_none(), "GB100");
         assert!(display_for(arch::GB100, 0x2).is_none(), "GB102");
-        assert_eq!(display_for(arch::GA100, 0x6).map(|r| r.ip_version), Some(0x0401_0000));
-        assert_eq!(display_for(arch::GB200, 0x3).map(|r| r.classes.display), Some(0xCA70));
-        assert_eq!(display_for(arch::AD100, 0x4).map(|r| (r.classes.core, r.classes.window)), Some((0xC77D, 0xC67E)));
+        assert_eq!(
+            display_for(arch::GA100, 0x6).map(|r| r.ip_version),
+            Some(0x0401_0000)
+        );
+        assert_eq!(
+            display_for(arch::GB200, 0x3).map(|r| r.classes.display),
+            Some(0xCA70)
+        );
+        assert_eq!(
+            display_for(arch::AD100, 0x4).map(|r| (r.classes.core, r.classes.window)),
+            Some((0xC77D, 0xC67E))
+        );
         for r in ALL {
             assert_eq!(r.windows, 2 * r.heads, "{}: two windows per head", r.chips);
-            assert_eq!(r.ip_version & 0xFFFF, 0, "{}: a halspec value is ipver & 0xFFFF0000", r.chips);
+            assert_eq!(
+                r.ip_version & 0xFFFF,
+                0,
+                "{}: a halspec value is ipver & 0xFFFF0000",
+                r.chips
+            );
         }
     }
 }

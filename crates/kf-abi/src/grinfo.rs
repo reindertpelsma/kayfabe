@@ -229,7 +229,9 @@ pub struct GrInfoReaders {
 impl GrInfoReaders {
     /// Every zero-sensitive reader this module knows — the GA100/GA10x/AD10x/GH100 binding, and
     /// the strictest statement.
-    pub const EVERY: GrInfoReaders = GrInfoReaders { veid_step_size: true };
+    pub const EVERY: GrInfoReaders = GrInfoReaders {
+        veid_step_size: true,
+    };
 }
 
 impl GrInfoProfile {
@@ -416,7 +418,9 @@ mod tests {
     fn every_entry_carries_its_own_position_as_its_index() {
         // ★★ The invariant `ogkm-580: gpu.c:6279-6280` searches on, checked over the RAW
         // bytes rather than through any accessor.
-        let body = GA106_GR_INFO.encode(GrInfoReaders::EVERY).expect("the GA106 row validates");
+        let body = GA106_GR_INFO
+            .encode(GrInfoReaders::EVERY)
+            .expect("the GA106 row validates");
         assert_eq!(body.len(), KGR_GET_INFO_PARAMS_SIZE);
         for i in 0..GR_INFO_MAX_SIZE {
             let at = i * GR_INFO_ENTRY_SIZE;
@@ -430,7 +434,9 @@ mod tests {
 
     #[test]
     fn the_seven_other_engine_rows_are_zero() {
-        let body = GA106_GR_INFO.encode(GrInfoReaders::EVERY).expect("the GA106 row validates");
+        let body = GA106_GR_INFO
+            .encode(GrInfoReaders::EVERY)
+            .expect("the GA106 row validates");
         let row = GR_INFO_MAX_SIZE * GR_INFO_ENTRY_SIZE;
         assert!(
             body[row..].iter().all(|&b| b == 0),
@@ -443,30 +449,45 @@ mod tests {
         // ★★★ The wall, expressed as a value. Not "some error" — the named one.
         let mut p = GA106_GR_INFO;
         p.data[IDX_MAX_SUBCONTEXT_COUNT] = 0;
-        assert_eq!(p.encode(GrInfoReaders::EVERY), Err(GrInfoError::MaxSubcontextCountZero));
+        assert_eq!(
+            p.encode(GrInfoReaders::EVERY),
+            Err(GrInfoError::MaxSubcontextCountZero)
+        );
     }
 
     #[test]
     fn the_other_two_load_bearing_zeros_are_refused_by_name() {
         let mut p = GA106_GR_INFO;
         p.data[IDX_LITTER_NUM_GPCS] = 0;
-        assert_eq!(p.encode(GrInfoReaders::EVERY), Err(GrInfoError::LitterNumGpcsZero));
+        assert_eq!(
+            p.encode(GrInfoReaders::EVERY),
+            Err(GrInfoError::LitterNumGpcsZero)
+        );
 
         let mut p = GA106_GR_INFO;
         p.data[IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG] = 0;
-        assert_eq!(p.encode(GrInfoReaders::EVERY), Err(GrInfoError::VeidStepSizeZero));
+        assert_eq!(
+            p.encode(GrInfoReaders::EVERY),
+            Err(GrInfoError::VeidStepSizeZero)
+        );
     }
 
     #[test]
     fn a_zero_veid_step_size_is_served_where_no_reader_multiplies_by_it() {
         // ★ 2026-09-28: `[measured TU116]` the host states 0 at 0x37, and Turing's
         // `kgrmgrGetVeidsFromGpcCount_46f6a7` reads nothing. The other two zeros stay refused.
-        let turing = GrInfoReaders { veid_step_size: false };
+        let turing = GrInfoReaders {
+            veid_step_size: false,
+        };
         let mut p = GA106_GR_INFO;
         p.data[IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG] = 0;
         let body = p.encode(turing).expect("no reader binds the step size");
         let at = IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG * GR_INFO_ENTRY_SIZE;
-        assert_eq!(&body[at..at + 8], &[0x37, 0, 0, 0, 0, 0, 0, 0], "served verbatim, never invented");
+        assert_eq!(
+            &body[at..at + 8],
+            &[0x37, 0, 0, 0, 0, 0, 0, 0],
+            "served verbatim, never invented"
+        );
         p.data[IDX_MAX_SUBCONTEXT_COUNT] = 0;
         assert_eq!(p.encode(turing), Err(GrInfoError::MaxSubcontextCountZero));
         let mut p = GA106_GR_INFO;

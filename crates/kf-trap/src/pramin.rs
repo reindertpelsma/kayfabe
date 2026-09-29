@@ -45,11 +45,21 @@ impl WindowReg {
     #[must_use]
     pub const fn for_family(family: Family) -> WindowReg {
         match family {
-            Family::Turing | Family::Ampere | Family::Ada => {
-                WindowReg { offset: 0x1700, base_mask: 0x00FF_FFFF, has_target: true }
-            }
-            Family::Hopper => WindowReg { offset: 0x0010_FD40, base_mask: 0x003F_FFFF, has_target: false },
-            Family::Blackwell => WindowReg { offset: 0x0010_FD40, base_mask: 0x01FF_FFFF, has_target: false },
+            Family::Turing | Family::Ampere | Family::Ada => WindowReg {
+                offset: 0x1700,
+                base_mask: 0x00FF_FFFF,
+                has_target: true,
+            },
+            Family::Hopper => WindowReg {
+                offset: 0x0010_FD40,
+                base_mask: 0x003F_FFFF,
+                has_target: false,
+            },
+            Family::Blackwell => WindowReg {
+                offset: 0x0010_FD40,
+                base_mask: 0x01FF_FFFF,
+                has_target: false,
+            },
         }
     }
 
@@ -66,7 +76,10 @@ impl WindowReg {
         } else {
             Target::Vidmem
         };
-        Window { base: u64::from(raw & self.base_mask) << BASE_SHIFT, target }
+        Window {
+            base: u64::from(raw & self.base_mask) << BASE_SHIFT,
+            target,
+        }
     }
 }
 
@@ -112,7 +125,13 @@ mod tests {
     #[test]
     fn the_measured_verify_window_decodes_to_the_measured_address() {
         let w = WindowReg::for_family(Family::Ampere).decode(0x0002_EFBA);
-        assert_eq!(w, Window { base: 0x2_EFBA_0000, target: Target::Vidmem });
+        assert_eq!(
+            w,
+            Window {
+                base: 0x2_EFBA_0000,
+                target: Target::Vidmem
+            }
+        );
         assert_eq!(w.slot_addr(0xE), Some(0x2_EFBA_0000 + 0xE_0000));
         assert_eq!(w.slot_addr(SLOTS), None);
     }
@@ -126,15 +145,27 @@ mod tests {
         for f in [Family::Hopper, Family::Blackwell] {
             let r = WindowReg::for_family(f);
             assert_eq!(r.offset, 0x10_FD40);
-            assert_eq!(r.decode(0x0300_0010).target, Target::Vidmem, "{f:?}: always vidmem");
+            assert_eq!(
+                r.decode(0x0300_0010).target,
+                Target::Vidmem,
+                "{f:?}: always vidmem"
+            );
         }
-        assert_eq!(WindowReg::for_family(Family::Hopper).decode(0xFFFF_FFFF).base, 0x3F_FFFF << 16);
+        assert_eq!(
+            WindowReg::for_family(Family::Hopper)
+                .decode(0xFFFF_FFFF)
+                .base,
+            0x3F_FFFF << 16
+        );
     }
 
     #[test]
     fn slots_tile_the_window() {
         assert_eq!(SLOTS as u64 * GRANULE, PRAMIN_LEN);
-        let w = Window { base: u64::MAX & !0xFFFF, target: Target::Vidmem };
+        let w = Window {
+            base: u64::MAX & !0xFFFF,
+            target: Target::Vidmem,
+        };
         assert_eq!(w.slot_addr(1), None, "no wrap into a low address");
     }
 }

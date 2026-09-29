@@ -70,7 +70,15 @@ impl BatchBook {
         {
             *last = (1u64 << (pages % 64)) - 1;
         }
-        self.by_va.insert((va, handle), Entry { handle, len, live, live_pages: pages });
+        self.by_va.insert(
+            (va, handle),
+            Entry {
+                handle,
+                len,
+                live,
+                live_pages: pages,
+            },
+        );
         self.max_len = self.max_len.max(len);
         Ok(())
     }
@@ -100,7 +108,11 @@ impl BatchBook {
                 emptied.push((start, h));
             }
         }
-        emptied.into_iter().filter_map(|s| self.by_va.remove(&s)).map(|e| e.handle).collect()
+        emptied
+            .into_iter()
+            .filter_map(|s| self.by_va.remove(&s))
+            .map(|e| e.handle)
+            .collect()
     }
 
     /// Whether a batch of ours has a live page at `va` — the caller must then unmap by RANGE (a
@@ -108,17 +120,22 @@ impl BatchBook {
     #[must_use]
     pub fn covers(&self, va: u64) -> bool {
         let floor = va.saturating_sub(self.max_len);
-        self.by_va.range((floor, 0)..=(va, u32::MAX)).any(|(&(start, _), e)| {
-            let p = (va - start) / BATCH_PAGE;
-            va < start + e.len && e.live[(p / 64) as usize] & (1 << (p % 64)) != 0
-        })
+        self.by_va
+            .range((floor, 0)..=(va, u32::MAX))
+            .any(|(&(start, _), e)| {
+                let p = (va - start) / BATCH_PAGE;
+                va < start + e.len && e.live[(p / 64) as usize] & (1 << (p % 64)) != 0
+            })
     }
 
     /// Forget every batch and return every handle (the space is being retired).
     #[must_use]
     pub fn drain(&mut self) -> Vec<u32> {
         self.max_len = 0;
-        core::mem::take(&mut self.by_va).into_values().map(|e| e.handle).collect()
+        core::mem::take(&mut self.by_va)
+            .into_values()
+            .map(|e| e.handle)
+            .collect()
     }
 
     /// Batches tracked.
@@ -153,7 +170,11 @@ impl<'rm> BatchedVas<'rm> {
     /// Batches over `vas`, none yet.
     #[must_use]
     pub fn new(vas: HostVas<'rm>) -> Self {
-        BatchedVas { vas, book: std::sync::Mutex::new(BatchBook::default()), frees: std::sync::atomic::AtomicU64::new(0) }
+        BatchedVas {
+            vas,
+            book: std::sync::Mutex::new(BatchBook::default()),
+            frees: std::sync::atomic::AtomicU64::new(0),
+        }
     }
 
     /// ★ Place VA-contiguous guest-RAM `rows` as ONE batch stitched from `ram_fd` and book its
@@ -162,16 +183,32 @@ impl<'rm> BatchedVas<'rm> {
     ///
     /// # Errors
     /// The host's refusal or the book's, by name.
-    pub fn place(&self, ram_fd: std::os::fd::BorrowedFd<'_>, rows: &[Desired], defer: bool) -> Result<(), String> {
+    pub fn place(
+        &self,
+        ram_fd: std::os::fd::BorrowedFd<'_>,
+        rows: &[Desired],
+        defer: bool,
+    ) -> Result<(), String> {
         let (va, len) = match (rows.first(), rows.last()) {
-            (Some(a), Some(b)) => (a.va, (b.va + b.len).checked_sub(a.va).ok_or("batch rows out of order")?),
+            (Some(a), Some(b)) => (
+                a.va,
+                (b.va + b.len)
+                    .checked_sub(a.va)
+                    .ok_or("batch rows out of order")?,
+            ),
             _ => return Err("empty batch".into()),
         };
         let handle = self.vas.map_scattered(ram_fd, rows, defer)?;
-        let booked = self.book.lock().map_err(|_| "batch book poisoned".to_string()).and_then(|mut b| b.insert(va, len, handle).map_err(|e| format!("{e:?}")));
+        let booked = self
+            .book
+            .lock()
+            .map_err(|_| "batch book poisoned".to_string())
+            .and_then(|mut b| b.insert(va, len, handle).map_err(|e| format!("{e:?}")));
         if let Err(e) = booked {
             self.free(vec![handle]);
-            return Err(format!("batch {va:#x}+{len:#x}: its object could not be booked ({e}) — freed, nothing placed"));
+            return Err(format!(
+                "batch {va:#x}+{len:#x}: its object could not be booked ({e}) — freed, nothing placed"
+            ));
         }
         Ok(())
     }
@@ -202,7 +239,9 @@ impl<'rm> BatchedVas<'rm> {
                 self.retired(va, len);
                 Ok(())
             }
-            (None, true) => Err(format!("unmap {va:#x}: a piece of a batch with no known length — refused (a whole-mapping unmap would take the batch)")),
+            (None, true) => Err(format!(
+                "unmap {va:#x}: a piece of a batch with no known length — refused (a whole-mapping unmap would take the batch)"
+            )),
             (None, false) => self.vas.unmap(va, defer),
         }
     }
@@ -216,7 +255,11 @@ impl<'rm> BatchedVas<'rm> {
     }
 
     fn retired(&self, va: u64, len: u64) {
-        let emptied = self.book.lock().map(|mut b| b.unmapped(va, len)).unwrap_or_default();
+        let emptied = self
+            .book
+            .lock()
+            .map(|mut b| b.unmapped(va, len))
+            .unwrap_or_default();
         self.free(emptied);
     }
 
@@ -224,11 +267,14 @@ impl<'rm> BatchedVas<'rm> {
         for h in handles {
             match self.vas.rm.free(h) {
                 Ok(()) => {
-                    self.frees.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    self.frees
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
                 // ⊘ Not fatal to the unmap that emptied it (its mappings ARE gone); the object and
                 // its pinned pages live until the host client closes — named.
-                Err(e) => eprintln!("kf-mem: batch object {h:#x} free refused: {e:?} — its pages stay pinned until the host client closes"),
+                Err(e) => eprintln!(
+                    "kf-mem: batch object {h:#x} free refused: {e:?} — its pages stay pinned until the host client closes"
+                ),
             }
         }
     }
@@ -243,8 +289,14 @@ mod tests {
     fn a_batch_is_freed_exactly_when_its_last_page_goes() {
         let mut b = BatchBook::default();
         b.insert(0x10_0000, 4 * P, 7).unwrap();
-        assert!(b.unmapped(0x10_0000 + P, P).is_empty(), "one page gone, three live");
-        assert!(b.unmapped(0x10_0000 + P, P).is_empty(), "a repeated unmap does not double-count");
+        assert!(
+            b.unmapped(0x10_0000 + P, P).is_empty(),
+            "one page gone, three live"
+        );
+        assert!(
+            b.unmapped(0x10_0000 + P, P).is_empty(),
+            "a repeated unmap does not double-count"
+        );
         assert!(b.unmapped(0x10_0000, P).is_empty());
         assert!(b.unmapped(0x10_0000 + 3 * P, P).is_empty());
         assert_eq!(b.unmapped(0x10_0000 + 2 * P, P), vec![7]);
@@ -273,7 +325,11 @@ mod tests {
         assert!(b.unmapped(0x20_0000 + P, 2 * P).is_empty());
         // Pages 1-2 of batch 1 are dead; batch 2 is placed over them.
         b.insert(0x20_0000 + P, 2 * P, 2).unwrap();
-        assert_eq!(b.unmapped(0x20_0000 + P, 2 * P), vec![2], "batch 1's pages there were already dead");
+        assert_eq!(
+            b.unmapped(0x20_0000 + P, 2 * P),
+            vec![2],
+            "batch 1's pages there were already dead"
+        );
         let mut got = b.unmapped(0x20_0000, 4 * P);
         got.sort_unstable();
         assert_eq!(got, vec![1]);
@@ -294,7 +350,10 @@ mod tests {
         let mut b = BatchBook::default();
         assert_eq!(b.insert(0x1000, 0, 1), Err(BookRefusal::Shape));
         assert_eq!(b.insert(0x1001, P, 1), Err(BookRefusal::Shape));
-        assert_eq!(b.insert(u64::MAX - P + 1, 2 * P, 1), Err(BookRefusal::Shape));
+        assert_eq!(
+            b.insert(u64::MAX - P + 1, 2 * P, 1),
+            Err(BookRefusal::Shape)
+        );
         b.insert(0x1000, P, 1).unwrap();
         assert_eq!(b.insert(0x1000, P, 1), Err(BookRefusal::Occupied));
         b.insert(0x1000, P, 2).unwrap();

@@ -26,8 +26,8 @@ use kf_abi::inittables::{
     NV2080_CTRL_CMD_FIFO_GET_DEVICE_INFO_TABLE, NV2080_CTRL_CMD_INTERNAL_INTR_GET_KERNEL_TABLE,
     encode_device_info_table, encode_intr_kernel_table, engine_info_type,
 };
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// The six kept entries of the C's `cmd=0x20801112` reply, in wire order — 600 bytes.
 const ORACLE_ENGINE_ENTRIES: &str = concat!(
@@ -101,9 +101,7 @@ fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
         row.psize
     );
     assert!(12 + unhex(ORACLE_ENGINE_ENTRIES).len() <= ORACLE_DEEPEST_BYTE);
-    assert!(!kf_abi::oracle::field_is_captured(
-        0, row.psize, row.kept
-    ));
+    assert!(!kf_abi::oracle::field_is_captured(0, row.psize, row.kept));
 }
 
 fn chip() -> kf_rm::HostFacts {
@@ -133,7 +131,8 @@ fn the_engine_entries_are_the_bytes_the_oracle_put_on_the_wire() {
 
 #[test]
 fn the_interrupt_table_is_the_bytes_the_oracle_put_on_the_wire() {
-    let p = encode_intr_kernel_table(&chip().intr_table, &chip().intr_subtree_map).expect("encodes");
+    let p =
+        encode_intr_kernel_table(&chip().intr_table, &chip().intr_subtree_map).expect("encodes");
     // ★★ Every number below is a LITERAL, deliberately. Reading the map back at
     // `INTR_SUBTREE_MAP_OFF` would make this test agree with the constant under test
     // instead of with the wire. Induced 2026-07-31 on this branch: with the constant moved
@@ -585,10 +584,7 @@ fn no_control_this_port_serves_can_be_cached_permanently_by_the_guest() {
         .map(|i| u8::try_from(i % 251).expect("fits"))
         .collect();
     assert_eq!(
-        kf_abi::gsslegacy::answer_gss_legacy(
-            kf_abi::gsslegacy::GSS_LEGACY_0X8159,
-            &probe
-        ),
+        kf_abi::gsslegacy::answer_gss_legacy(kf_abi::gsslegacy::GSS_LEGACY_0X8159, &probe),
         Ok(probe.clone()),
         "…8159's answer must be the identity, which is what makes caching it \
          indistinguishable from re-executing it"
@@ -709,14 +705,34 @@ fn bios_get_info_v2_is_the_hosts_version_or_refused() {
     let mut host = ga106::host_facts();
     host.vbios_version = Some((0x9406_1d00, 0x28));
     let abi = kf_rm::abi::gsp_abi_for(kf_abi::versions::BENCH_DRIVER).expect("wire table");
-    let mut p = InitTablePolicy::new(ga106::board(), std::sync::Arc::new(host.clone()), abi.driver);
+    let mut p = InitTablePolicy::new(
+        ga106::board(),
+        std::sync::Arc::new(host.clone()),
+        abi.driver,
+    );
     let r = p.respond(&ask(&[1, 0])).expect("answered");
     assert_eq!(r.rpc_result, 0);
-    assert_eq!((word(&r.body, 44), word(&r.body, 48)), (1, 0x28), "OEM_REVISION");
-    assert_eq!((word(&r.body, 52), word(&r.body, 56)), (0, 0x9406_1d00), "REVISION");
-    assert_ne!(p.respond(&ask(&[2])).expect("answered").rpc_result, 0, "an undefined index is refused");
+    assert_eq!(
+        (word(&r.body, 44), word(&r.body, 48)),
+        (1, 0x28),
+        "OEM_REVISION"
+    );
+    assert_eq!(
+        (word(&r.body, 52), word(&r.body, 56)),
+        (0, 0x9406_1d00),
+        "REVISION"
+    );
+    assert_ne!(
+        p.respond(&ask(&[2])).expect("answered").rpc_result,
+        0,
+        "an undefined index is refused"
+    );
 
     host.vbios_version = None;
     let mut p = InitTablePolicy::new(ga106::board(), std::sync::Arc::new(host), abi.driver);
-    assert_ne!(p.respond(&ask(&[0])).expect("answered").rpc_result, 0, "no host version: refused as before");
+    assert_ne!(
+        p.respond(&ask(&[0])).expect("answered").rpc_result,
+        0,
+        "no host version: refused as before"
+    );
 }

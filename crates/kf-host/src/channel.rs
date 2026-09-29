@@ -12,18 +12,19 @@
 
 use crate::{ABI_ENCODE_FAILED, HostRm, RmError};
 use kf_abi::bringup::{
-    NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
-    NVOS46_FLAGS_ACCESS_READ_ONLY, NVOS46_FLAGS_GPU_CACHEABLE_NO, NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
-    NVOS46_FLAGS_TLB_LOCK_ENABLE,
+    NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_ACCESS_READ_ONLY, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+    NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN, NVOS46_FLAGS_GPU_CACHEABLE_NO,
+    NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES, NVOS46_FLAGS_TLB_LOCK_ENABLE,
     NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters,
 };
 use kf_abi::generated::classes::NvChannelGroupAllocationParameters;
 use kf_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kf_abi::submit::{
-    BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, GpfifoScheduleParams, NvMemoryAllocationParams,
+    BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, GpfifoScheduleParams,
     NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
-    NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, WORK_SUBMIT_TOKEN_PARAMS_SIZE,
+    NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams,
+    WORK_SUBMIT_TOKEN_PARAMS_SIZE,
 };
 
 /// `NV01_CONTEXT_DMA` (`ogkm-580: class/cl0002.h:40`).
@@ -89,7 +90,8 @@ pub struct GuestVaRange {
 ///   (`kf-qemu` `RING_REGION_BASE`) is inside the hole and stays mapped through the range object.
 /// - ⊘ `[1 MiB, 4 GiB)` is NOT reserved: `[measured gfx8]` RM refuses a reservation there
 ///   (`NoMemory`) — it already withholds it — so host RM cannot place there either.
-pub const GUEST_VA_RANGES: [(u64, u64); 2] = [((1 << 32) + (1 << 29), HOST_HOLE_LO), (1 << 40, 1 << 47)];
+pub const GUEST_VA_RANGES: [(u64, u64); 2] =
+    [((1 << 32) + (1 << 29), HOST_HOLE_LO), (1 << 40, 1 << 47)];
 /// The start of host RM's hole — 64 GiB below `1 TiB`. A guest reaches it only after its RM heap has
 /// handed out ~1 TiB of VA; a guest row there is mapped through the range object as before (and a
 /// collision is still named `HeldByHost`).
@@ -125,7 +127,9 @@ impl VaSpace {
     #[must_use]
     pub fn guest_reserved(&self, va: u64, len: u64) -> bool {
         let end = va.saturating_add(len.max(1));
-        self.guest.iter().any(|g| g.handle != 0 && va >= g.lo && end <= g.hi)
+        self.guest
+            .iter()
+            .any(|g| g.handle != 0 && va >= g.lo && end <= g.hi)
     }
 }
 
@@ -179,7 +183,15 @@ impl HostRm {
             .encode_into(&mut params)
             .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        let space = self.raw_alloc(self.device, want, VA_SPACE, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_VASPACE_ALLOCATION_PARAMETERS)), &mut params)?;
+        let space = self.raw_alloc(
+            self.device,
+            want,
+            VA_SPACE,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_VASPACE_ALLOCATION_PARAMETERS,
+            )),
+            &mut params,
+        )?;
         self.remember(space, self.device);
         let mut range = [0u8; NvMemoryVirtualAllocationParams::SIZE];
         NvMemoryVirtualAllocationParams {
@@ -190,17 +202,31 @@ impl HostRm {
         .encode_into(&mut range)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        match self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS)), &mut range) {
+        match self.raw_alloc(
+            self.device,
+            want,
+            NV01_MEMORY_VIRTUAL,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS,
+            )),
+            &mut range,
+        ) {
             Ok(h) => {
                 self.remember(h, self.device);
-                let mut vas = VaSpace { space, range: h, guest: [GuestVaRange::default(); 2] };
+                let mut vas = VaSpace {
+                    space,
+                    range: h,
+                    guest: [GuestVaRange::default(); 2],
+                };
                 // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
                 // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
                 if std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none() {
                     for (slot, &(lo, hi)) in vas.guest.iter_mut().zip(GUEST_VA_RANGES.iter()) {
                         match self.reserve_va(space, lo, hi - lo) {
                             Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
-                            Err(e) => eprintln!("kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"),
+                            Err(e) => eprintln!(
+                                "kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"
+                            ),
                         }
                     }
                 }
@@ -219,14 +245,28 @@ impl HostRm {
     /// The host's refusal.
     pub fn reserve_va(&self, space: u32, at: u64, len: u64) -> Result<u32, RmError> {
         let mut p = [0u8; NvMemoryAllocationParams::SIZE];
-        NvMemoryAllocationParams { owner: self.client.raw(), kind: 0, attr: 0, size: len, alignment: 0 }
-            .encode_into(&mut p)
-            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        NvMemoryAllocationParams {
+            owner: self.client.raw(),
+            kind: 0,
+            attr: 0,
+            size: len,
+            alignment: 0,
+        }
+        .encode_into(&mut p)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         p[8..12].copy_from_slice(&NVOS32_RESERVE_FLAGS.to_le_bytes());
         p[80..88].copy_from_slice(&at.to_le_bytes()); // offset
         p[108..112].copy_from_slice(&space.to_le_bytes()); // hVASpace
         let want = self.mint();
-        let h = self.raw_alloc(self.device, want, NV50_MEMORY_VIRTUAL, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS)), &mut p)?;
+        let h = self.raw_alloc(
+            self.device,
+            want,
+            NV50_MEMORY_VIRTUAL,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS,
+            )),
+            &mut p,
+        )?;
         self.remember(h, self.device);
         Ok(h)
     }
@@ -261,7 +301,17 @@ impl HostRm {
         at: Option<u64>,
         defer: bool,
     ) -> Result<u64, RmError> {
-        self.map_kind(space, memory, backing, offset, len, at, defer, 0, MapPerm::READ_WRITE)
+        self.map_kind(
+            space,
+            memory,
+            backing,
+            offset,
+            len,
+            at,
+            defer,
+            0,
+            MapPerm::READ_WRITE,
+        )
     }
 
     /// ★ v3-gfx: [`HostRm::map`] with a PTE `kind` (0 = PITCH, no override). A non-zero kind is
@@ -288,14 +338,32 @@ impl HostRm {
         kind: u8,
         perm: MapPerm,
     ) -> Result<u64, RmError> {
-        let extra = if defer { NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
-        let extra = extra | if kind != 0 { NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES } else { 0 };
+        let extra = if defer {
+            NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE
+        } else {
+            0
+        };
+        let extra = extra
+            | if kind != 0 {
+                NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES
+            } else {
+                0
+            };
         let extra = extra | perm.nvos46_flags();
         let dma = match at {
             Some(a) => space.dma_for(a, len)?,
             None => space.range,
         };
-        self.raw_map_dma_slice(dma, memory, offset, len, at, extra, backing == MapBacking::SharedSlice, u32::from(kind))
+        self.raw_map_dma_slice(
+            dma,
+            memory,
+            offset,
+            len,
+            at,
+            extra,
+            backing == MapBacking::SharedSlice,
+            u32::from(kind),
+        )
     }
 
     /// ★ Map ALL of `memory` (`len` bytes) into `space` at an address RM chooses, and return it —
@@ -306,8 +374,18 @@ impl HostRm {
     ///
     /// # Errors
     /// The host's refusal.
-    pub fn map_window(&self, space: VaSpace, memory: u32, len: u64, high: bool) -> Result<u64, RmError> {
-        let extra = if high { NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN } else { 0 };
+    pub fn map_window(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        len: u64,
+        high: bool,
+    ) -> Result<u64, RmError> {
+        let extra = if high {
+            NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN
+        } else {
+            0
+        };
         self.raw_map_dma_slice(space.range, memory, 0, len, None, extra, false, 0)
     }
 
@@ -316,7 +394,11 @@ impl HostRm {
     /// # Errors
     /// The host's status.
     pub fn unmap(&self, space: VaSpace, va: u64, defer: bool) -> Result<(), RmError> {
-        let flags = if defer { NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
+        let flags = if defer {
+            NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE
+        } else {
+            0
+        };
         self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, flags)
     }
 
@@ -330,11 +412,21 @@ impl HostRm {
     ///
     /// # Errors
     /// [`VA_STRADDLES_RESERVATION`] before any host call; else the host's status.
-    pub fn unmap_range(&self, space: VaSpace, va: u64, len: u64, defer: bool) -> Result<(), RmError> {
+    pub fn unmap_range(
+        &self,
+        space: VaSpace,
+        va: u64,
+        len: u64,
+        defer: bool,
+    ) -> Result<(), RmError> {
         if len == 0 {
             return Err(RmError::NoMemory);
         }
-        let flags = if defer { NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
+        let flags = if defer {
+            NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE
+        } else {
+            0
+        };
         self.raw_unmap_dma_range(space.dma_for(va, len)?, va, len, flags)
     }
 
@@ -386,7 +478,17 @@ impl HostRm {
         // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
         reap_view(view);
         let t_drop = t0.elapsed();
-        let r = self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind, perm);
+        let r = self.map_kind(
+            space,
+            obj,
+            MapBacking::SharedSlice,
+            0,
+            len,
+            Some(at),
+            defer,
+            kind,
+            perm,
+        );
         // ★ Bounded phase breakdown (the first 32 batches of the process): stitch vs pin vs map.
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
@@ -434,9 +536,10 @@ impl HostRm {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
         let tsg = self.birth_group(space, engine_type)?;
-        self.birth_member(tsg, engine_type, ring, true).inspect_err(|_| {
-            let _ = self.free(tsg);
-        })
+        self.birth_member(tsg, engine_type, ring, true)
+            .inspect_err(|_| {
+                let _ = self.free(tsg);
+            })
     }
 
     /// ★ A host channel GROUP (`KEPLER_CHANNEL_GROUP_A`) over `space` on `engine_type`, with no
@@ -460,7 +563,15 @@ impl HostRm {
         .encode_into(&mut tsg_params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        let tsg = self.raw_alloc(self.device, want, CHANNEL_GROUP, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS)), &mut tsg_params)?;
+        let tsg = self.raw_alloc(
+            self.device,
+            want,
+            CHANNEL_GROUP,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS,
+            )),
+            &mut tsg_params,
+        )?;
         self.remember(tsg, self.device);
         Ok(tsg)
     }
@@ -474,7 +585,13 @@ impl HostRm {
     ///
     /// # Errors
     /// [`USERD_OFFSET_MISALIGNED`] before any host call; else the host's refusal.
-    pub fn birth_member(&self, tsg: u32, engine_type: u32, ring: RingSpec, first: bool) -> Result<Channel, RmError> {
+    pub fn birth_member(
+        &self,
+        tsg: u32,
+        engine_type: u32,
+        ring: RingSpec,
+        first: bool,
+    ) -> Result<Channel, RmError> {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
@@ -502,22 +619,36 @@ impl HostRm {
             return Err(RmError::Other(ABI_ENCODE_FAILED));
         }
         let want = self.mint();
-        let chan = self.raw_alloc(tsg, want, self.classes.gpfifo_channel().channel_id().0, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS)), &mut chan_params)?;
+        let chan = self.raw_alloc(
+            tsg,
+            want,
+            self.classes.gpfifo_channel().channel_id().0,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+            )),
+            &mut chan_params,
+        )?;
         self.remember(chan, tsg);
         let unwind = |me: &Self| {
             let _ = me.free(chan);
         };
         let mut bind = [0u8; BIND_PARAMS_SIZE];
         bind.copy_from_slice(&engine_type.to_le_bytes());
-        let (on, cmd) = if first { (tsg, NVA06C_CTRL_CMD_BIND) } else { (chan, kf_abi::submit::NVA06F_CTRL_CMD_BIND) };
+        let (on, cmd) = if first {
+            (tsg, NVA06C_CTRL_CMD_BIND)
+        } else {
+            (chan, kf_abi::submit::NVA06F_CTRL_CMD_BIND)
+        };
         if let Err(e) = self.raw_control(on, cmd, &mut bind) {
             unwind(self);
             return Err(e);
         }
         let mut token = [0u8; WORK_SUBMIT_TOKEN_PARAMS_SIZE];
-        if let Err(e) =
-            self.raw_control(chan, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, &mut token)
-        {
+        if let Err(e) = self.raw_control(
+            chan,
+            NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+            &mut token,
+        ) {
             unwind(self);
             return Err(e);
         }
@@ -541,7 +672,15 @@ impl HostRm {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        let h = self.raw_alloc(chan.chan, want, self.classes.ce_object().ce_object_id().0, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NVB0B5_ALLOCATION_PARAMETERS)), &mut params)?;
+        let h = self.raw_alloc(
+            chan.chan,
+            want,
+            self.classes.ce_object().ce_object_id().0,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NVB0B5_ALLOCATION_PARAMETERS,
+            )),
+            &mut params,
+        )?;
         self.remember(h, chan.chan);
         Ok(h)
     }
@@ -564,7 +703,15 @@ impl HostRm {
         params[0..4].copy_from_slice(&2u32.to_le_bytes());
         params[8..12].copy_from_slice(&16u32.to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc(chan.chan, want, class, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_GR_ALLOCATION_PARAMETERS)), &mut params)?;
+        let h = self.raw_alloc(
+            chan.chan,
+            want,
+            class,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_GR_ALLOCATION_PARAMETERS,
+            )),
+            &mut params,
+        )?;
         self.remember(h, chan.chan);
         Ok((h, class))
     }
@@ -578,14 +725,22 @@ impl HostRm {
     ///
     /// # Errors
     /// The host's refusal.
-    pub fn alloc_engine_object(&self, chan: Channel, class: u32, copy_engine: Option<u32>) -> Result<u32, RmError> {
+    pub fn alloc_engine_object(
+        &self,
+        chan: Channel,
+        class: u32,
+        copy_engine: Option<u32>,
+    ) -> Result<u32, RmError> {
         let mut ce = [0u8; CeAllocParams::SIZE];
         let mut gr = [0u8; 16];
         let params: &mut [u8] = match copy_engine {
             Some(engine_type) => {
-                CeAllocParams { version: CeAllocParams::VERSION_1, engine_type }
-                    .encode_into(&mut ce)
-                    .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+                CeAllocParams {
+                    version: CeAllocParams::VERSION_1,
+                    engine_type,
+                }
+                .encode_into(&mut ce)
+                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
                 &mut ce
             }
             None => {
@@ -595,9 +750,13 @@ impl HostRm {
             }
         };
         let strukt = if copy_engine.is_some() {
-            kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NVB0B5_ALLOCATION_PARAMETERS)
+            kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NVB0B5_ALLOCATION_PARAMETERS,
+            )
         } else {
-            kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_GR_ALLOCATION_PARAMETERS)
+            kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_GR_ALLOCATION_PARAMETERS,
+            )
         };
         let want = self.mint();
         let h = self.raw_alloc(chan.chan, want, class, Some(strukt), params)?;
@@ -614,7 +773,12 @@ impl HostRm {
     ///
     /// # Errors
     /// The host's refusal.
-    pub fn alloc_video_object(&self, chan: Channel, class: u32, engine_instance: u32) -> Result<u32, RmError> {
+    pub fn alloc_video_object(
+        &self,
+        chan: Channel,
+        class: u32,
+        engine_instance: u32,
+    ) -> Result<u32, RmError> {
         let mut p = [0u8; 12];
         p[0..4].copy_from_slice(&12u32.to_le_bytes());
         p[8..12].copy_from_slice(&engine_instance.to_le_bytes());
@@ -622,7 +786,10 @@ impl HostRm {
         // 610 — carried under the class's own name: `xxB7` is an encoder class, `xxB0` a decoder.
         let m = &kf_abi::generated::matrix::NV_MSENC_ALLOCATION_PARAMETERS;
         let strukt = if class & 0xff == 0xb7 {
-            kf_abi::hostabi::HostParams::Renamed { before: m, after: &kf_abi::generated::matrix::NV_NVENC_ALLOCATION_PARAMETERS }
+            kf_abi::hostabi::HostParams::Renamed {
+                before: m,
+                after: &kf_abi::generated::matrix::NV_NVENC_ALLOCATION_PARAMETERS,
+            }
         } else {
             kf_abi::hostabi::HostParams::Renamed {
                 before: &kf_abi::generated::matrix::NV_BSP_ALLOCATION_PARAMETERS,
@@ -649,7 +816,15 @@ impl HostRm {
         params[4..8].copy_from_slice(&self.client.raw().to_le_bytes());
         params[8..12].copy_from_slice(&obj3d.to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc(self.device, want, 0x83de, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV83DE_ALLOC_PARAMETERS)), &mut params)?;
+        let h = self.raw_alloc(
+            self.device,
+            want,
+            0x83de,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV83DE_ALLOC_PARAMETERS,
+            )),
+            &mut params,
+        )?;
         self.remember(h, self.device);
         Ok(h)
     }
@@ -670,7 +845,13 @@ impl HostRm {
     ///
     /// # Errors
     /// The host's status.
-    pub fn set_ctxsw_preemption_mode(&self, chan: Channel, flags: u32, gfxp: u32, cilp: u32) -> Result<(), RmError> {
+    pub fn set_ctxsw_preemption_mode(
+        &self,
+        chan: Channel,
+        flags: u32,
+        gfxp: u32,
+        cilp: u32,
+    ) -> Result<(), RmError> {
         let mut p = [0u8; 32];
         p[0..4].copy_from_slice(&flags.to_le_bytes());
         p[4..8].copy_from_slice(&chan.tsg.to_le_bytes());
@@ -726,9 +907,17 @@ impl HostRm {
     ///
     /// # Errors
     /// The host's status.
-    pub fn flush_gpu_cache(&self, aperture: u32, write_back: bool, invalidate: bool) -> Result<(), RmError> {
+    pub fn flush_gpu_cache(
+        &self,
+        aperture: u32,
+        write_back: bool,
+        invalidate: bool,
+    ) -> Result<(), RmError> {
         const SIZE: usize = 4024;
-        let flags = (aperture & 0x3) | (u32::from(write_back) << 2) | (u32::from(invalidate) << 3) | (1 << 4);
+        let flags = (aperture & 0x3)
+            | (u32::from(write_back) << 2)
+            | (u32::from(invalidate) << 3)
+            | (1 << 4);
         let mut p = vec![0u8; SIZE];
         p[4016..4020].copy_from_slice(&flags.to_le_bytes());
         self.raw_control(self.subdevice, 0x2080_130e, &mut p)
@@ -786,7 +975,12 @@ impl HostRm {
     /// # Errors
     /// The host's status.
     pub fn preempt(&self, chan: Channel) -> Result<(), RmError> {
-        let mut p = kf_abi::submit::Preempt { wait: true, manual_timeout: false, timeout_us: 0 }.encode();
+        let mut p = kf_abi::submit::Preempt {
+            wait: true,
+            manual_timeout: false,
+            timeout_us: 0,
+        }
+        .encode();
         self.raw_control(chan.tsg, kf_abi::submit::NVA06C_CTRL_CMD_PREEMPT, &mut p)
     }
 
@@ -802,7 +996,13 @@ impl HostRm {
     ///
     /// # Errors
     /// The host's status; more than 64 channels.
-    pub fn disable_channels(&self, chans: &[Channel], disable: bool, only_scheduling: bool, rewind_gp_put: bool) -> Result<(), RmError> {
+    pub fn disable_channels(
+        &self,
+        chans: &[Channel],
+        disable: bool,
+        only_scheduling: bool,
+        rewind_gp_put: bool,
+    ) -> Result<(), RmError> {
         let d = kf_abi::submit::DisableChannels {
             disable,
             only_disable_scheduling: only_scheduling,
@@ -811,7 +1011,11 @@ impl HostRm {
             list: chans.iter().map(|c| (self.client.raw(), c.chan)).collect(),
         };
         let mut p = d.encode().map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        self.raw_control(self.subdevice, kf_abi::submit::NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS, &mut p)
+        self.raw_control(
+            self.subdevice,
+            kf_abi::submit::NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS,
+            &mut p,
+        )
     }
 
     /// ★ Is host copy engine `engine_type` a GRAPHICS copy engine (it shares the GR runlist)?
@@ -843,14 +1047,24 @@ impl HostRm {
     /// The host's refusal (`NV_ERR_INVALID_LIMIT` past the object).
     pub fn alloc_context_dma(&self, memory: u32, offset: u64, len: u64) -> Result<u32, RmError> {
         const NVOS03_FLAGS_HASH_TABLE_DISABLE: u32 = 1 << 29;
-        let limit = len.checked_sub(1).ok_or(RmError::Other(ABI_ENCODE_FAILED))?;
+        let limit = len
+            .checked_sub(1)
+            .ok_or(RmError::Other(ABI_ENCODE_FAILED))?;
         let mut p = [0u8; 32];
         p[4..8].copy_from_slice(&NVOS03_FLAGS_HASH_TABLE_DISABLE.to_le_bytes());
         p[8..12].copy_from_slice(&memory.to_le_bytes());
         p[16..24].copy_from_slice(&offset.to_le_bytes());
         p[24..32].copy_from_slice(&limit.to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc(self.device, want, NV01_CONTEXT_DMA, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_CONTEXT_DMA_ALLOCATION_PARAMS)), &mut p)?;
+        let h = self.raw_alloc(
+            self.device,
+            want,
+            NV01_CONTEXT_DMA,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_CONTEXT_DMA_ALLOCATION_PARAMS,
+            )),
+            &mut p,
+        )?;
         self.remember(h, self.device);
         Ok(h)
     }
@@ -901,14 +1115,28 @@ pub struct MapPerm {
 
 impl MapPerm {
     /// The pre-roperm mapping: read-write, atomics allowed, the memory's own cache attribute.
-    pub const READ_WRITE: MapPerm = MapPerm { read_only: false, atomic_disable: false, volatile: false };
+    pub const READ_WRITE: MapPerm = MapPerm {
+        read_only: false,
+        atomic_disable: false,
+        volatile: false,
+    };
 
     /// The `NVOS46_PARAMETERS::flags` bits that place these permissions.
     #[must_use]
     pub const fn nvos46_flags(self) -> u32 {
-        (if self.read_only { NVOS46_FLAGS_ACCESS_READ_ONLY } else { 0 })
-            | (if self.atomic_disable { NVOS46_FLAGS_TLB_LOCK_ENABLE } else { 0 })
-            | (if self.volatile { NVOS46_FLAGS_GPU_CACHEABLE_NO } else { 0 })
+        (if self.read_only {
+            NVOS46_FLAGS_ACCESS_READ_ONLY
+        } else {
+            0
+        }) | (if self.atomic_disable {
+            NVOS46_FLAGS_TLB_LOCK_ENABLE
+        } else {
+            0
+        }) | (if self.volatile {
+            NVOS46_FLAGS_GPU_CACHEABLE_NO
+        } else {
+            0
+        })
     }
 }
 
@@ -948,7 +1176,9 @@ fn reap_view(view: kf_linux_raw::MappedRegion) {
             .ok()
             .map(|_| std::sync::Mutex::new(tx))
     });
-    let sent = tx.as_ref().and_then(|m| m.lock().ok().map(|tx| tx.send(view)));
+    let sent = tx
+        .as_ref()
+        .and_then(|m| m.lock().ok().map(|tx| tx.send(view)));
     if let Some(Err(std::sync::mpsc::SendError(v))) = sent {
         drop(v);
     }
@@ -968,14 +1198,43 @@ mod perm_tests {
     fn each_permission_sets_exactly_its_nvos46_field() {
         assert_eq!(MapPerm::READ_WRITE.nvos46_flags(), 0);
         assert_eq!(MapPerm::default(), MapPerm::READ_WRITE);
-        assert_eq!(MapPerm { read_only: true, ..MapPerm::READ_WRITE }.nvos46_flags(), 0x1);
-        assert_eq!(MapPerm { atomic_disable: true, ..MapPerm::READ_WRITE }.nvos46_flags(), 1 << 28);
-        assert_eq!(MapPerm { volatile: true, ..MapPerm::READ_WRITE }.nvos46_flags(), 2 << 17);
-        let all = MapPerm { read_only: true, atomic_disable: true, volatile: true }.nvos46_flags();
+        assert_eq!(
+            MapPerm {
+                read_only: true,
+                ..MapPerm::READ_WRITE
+            }
+            .nvos46_flags(),
+            0x1
+        );
+        assert_eq!(
+            MapPerm {
+                atomic_disable: true,
+                ..MapPerm::READ_WRITE
+            }
+            .nvos46_flags(),
+            1 << 28
+        );
+        assert_eq!(
+            MapPerm {
+                volatile: true,
+                ..MapPerm::READ_WRITE
+            }
+            .nvos46_flags(),
+            2 << 17
+        );
+        let all = MapPerm {
+            read_only: true,
+            atomic_disable: true,
+            volatile: true,
+        }
+        .nvos46_flags();
         assert_eq!(all, 0x1 | (1 << 28) | (2 << 17));
         // None of them touches the fields the map path owns: FIXED 15, PAGE_SIZE 11:8, KIND_OVERRIDE
         // 19, DEFER 31, CACHE_SNOOP 4.
-        assert_eq!(all & ((1 << 15) | (0xF << 8) | (1 << 19) | (1 << 31) | (1 << 4)), 0);
+        assert_eq!(
+            all & ((1 << 15) | (0xF << 8) | (1 << 19) | (1 << 31) | (1 << 4)),
+            0
+        );
     }
 
     /// ★★★★★ v3-adasys: EVERY map the crate makes asks RM to snoop the CPU cache
@@ -991,11 +1250,21 @@ mod perm_tests {
             NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
             NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES, NVOS46_FLAGS_PAGE_SIZE_4KB,
         };
-        assert_eq!(NVOS46_FLAGS_CACHE_SNOOP_ENABLE, 0x10, "nvos.h: CACHE_SNOOP is 4:4, _ENABLE is 1");
+        assert_eq!(
+            NVOS46_FLAGS_CACHE_SNOOP_ENABLE, 0x10,
+            "nvos.h: CACHE_SNOOP is 4:4, _ENABLE is 1"
+        );
         let perms = [
             MapPerm::READ_WRITE,
-            MapPerm { read_only: true, ..MapPerm::READ_WRITE },
-            MapPerm { atomic_disable: true, volatile: true, read_only: true },
+            MapPerm {
+                read_only: true,
+                ..MapPerm::READ_WRITE
+            },
+            MapPerm {
+                atomic_disable: true,
+                volatile: true,
+                read_only: true,
+            },
         ];
         let others = [
             0,
@@ -1009,9 +1278,23 @@ mod perm_tests {
                 for page_size in [0, NVOS46_FLAGS_PAGE_SIZE_4KB] {
                     for fixed in [false, true] {
                         let f = crate::nvos46_map_flags(extra, page_size, fixed);
-                        assert_ne!(f & NVOS46_FLAGS_CACHE_SNOOP_ENABLE, 0, "snoop missing: {f:#x}");
-                        let want = extra | page_size | if fixed { NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE } else { 0 };
-                        assert_eq!(f & !NVOS46_FLAGS_CACHE_SNOOP_ENABLE, want, "another bit moved: {f:#x}");
+                        assert_ne!(
+                            f & NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
+                            0,
+                            "snoop missing: {f:#x}"
+                        );
+                        let want = extra
+                            | page_size
+                            | if fixed {
+                                NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
+                            } else {
+                                0
+                            };
+                        assert_eq!(
+                            f & !NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
+                            want,
+                            "another bit moved: {f:#x}"
+                        );
                     }
                 }
             }

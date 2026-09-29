@@ -441,7 +441,10 @@ impl core::error::Error for MemorySystemError {}
 /// stands in front of. ⊘ 2026-09-28: a zero `ltsPerLtcCount` is [`MemorySystemError::NoLtcSlices`]
 /// only where `readers.ltc_slices` (a Turing host states 0 and no Turing HAL reads it); a zero
 /// `ltcCount` — `FB_GET_INFO_V2`'s own count, false about every die this port serves — always is.
-pub fn encode_memsys_static_config(row: &MemorySystemRow, readers: MemsysReaders) -> Result<Vec<u8>, MemorySystemError> {
+pub fn encode_memsys_static_config(
+    row: &MemorySystemRow,
+    readers: MemsysReaders,
+) -> Result<Vec<u8>, MemorySystemError> {
     if row.compr_page_size == 0 {
         return Err(MemorySystemError::ComprPageSizeZero);
     }

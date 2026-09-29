@@ -44,25 +44,25 @@ pub enum ClassPolicy {
 /// The classes §2.2 enumerates. ⊘ Anything not here is denied by default.
 pub fn class_policy(class: ClassId) -> ClassPolicy {
     match class {
-        0x0 | 0x41 => ClassPolicy::Emulate,     // NV01_ROOT / NV01_ROOT_CLIENT
-        0x80 => ClassPolicy::Emulate,           // NV01_DEVICE_0
-        0x2080 => ClassPolicy::Emulate,         // NV20_SUBDEVICE_0
+        0x0 | 0x41 => ClassPolicy::Emulate, // NV01_ROOT / NV01_ROOT_CLIENT
+        0x80 => ClassPolicy::Emulate,       // NV01_DEVICE_0
+        0x2080 => ClassPolicy::Emulate,     // NV20_SUBDEVICE_0
         // ⊘ Opaque by design: its controls tunnel whole to firmware, uninterpreted by the
         // kernel. ★ load-bearing for `cuInit`.
-        0x2081 => ClassPolicy::OpaqueAllow,     // NV2081_BINAPI
-        0x79 => ClassPolicy::Emulate,           // NV01_EVENT_OS_EVENT
+        0x2081 => ClassPolicy::OpaqueAllow, // NV2081_BINAPI
+        0x79 => ClassPolicy::Emulate,       // NV01_EVENT_OS_EVENT
         // ⊘ params are a guest-KERNEL function pointer and are deliberately not decoded.
-        0x7e => ClassPolicy::Emulate,           // NV01_EVENT_KERNEL_CALLBACK_EX
-        0x90f1 => ClassPolicy::EmulateAndHost,  // FERMI_VASPACE_A (family-independent)
-        0xa06c => ClassPolicy::Emulate,         // KEPLER_CHANNEL_GROUP_A (TSG)
-        0x9067 => ClassPolicy::Emulate,         // FERMI_CONTEXT_SHARE_A
+        0x7e => ClassPolicy::Emulate, // NV01_EVENT_KERNEL_CALLBACK_EX
+        0x90f1 => ClassPolicy::EmulateAndHost, // FERMI_VASPACE_A (family-independent)
+        0xa06c => ClassPolicy::Emulate, // KEPLER_CHANNEL_GROUP_A (TSG)
+        0x9067 => ClassPolicy::Emulate, // FERMI_CONTEXT_SHARE_A
         // ⊘ `[fable w824, MEDIUM 4]` this arm used to read `0xc797 => Emulate // AMPERE_B`. The 3D
         // class is per die-group (TURING_A 0xC597 … BLACKWELL_B 0xCE97), so it now comes from the
         // derived set below as `Kind::ThreeD`, with the SAME policy it had: modelled, not hosted.
         c if crate::classgen::engine_class_kind(c) == Some(crate::classgen::Kind::ThreeD) => {
             ClassPolicy::Emulate
         }
-        0xc574 => ClassPolicy::Emulate,         // UVM_CHANNEL_RETAINER — ⊘ never forwarded
+        0xc574 => ClassPolicy::Emulate, // UVM_CHANNEL_RETAINER — ⊘ never forwarded
         // ⊘⊘ [MEASURED] all 4 requests in a boot refused 0x56.
         0xc076 => ClassPolicy::Deny("GP100_UVM_SW: measured refused in every boot"),
         0x3f => ClassPolicy::Deny("NV01_MEMORY_LOCAL_PRIVILEGED: privileged video memory"),
@@ -88,7 +88,7 @@ pub fn class_policy(class: ClassId) -> ClassPolicy {
 /// chips list it. ⊘ Default-deny at the family, so a Turing guest asking for `HOPPER_COMPUTE_A`
 /// is refused by us rather than bounced off the host RM.
 pub fn class_policy_on(family: crate::classgen::Family, class: ClassId) -> ClassPolicy {
-    use crate::classgen::{classes_for, engine_class_kind, Kind};
+    use crate::classgen::{Kind, classes_for, engine_class_kind};
     match engine_class_kind(class) {
         // Not an engine class anywhere: the family-independent table decides.
         None => class_policy(class),
@@ -133,7 +133,12 @@ impl ObjectGraph {
 
     /// `GSP_RM_ALLOC`. ⊘ **MIXED, default REFUSE** — serving the envelope is not serving its
     /// contents.
-    pub fn alloc(&mut self, h: HandleId, class: ClassId, parent: Option<HandleId>) -> Result<ClassPolicy, GraphError> {
+    pub fn alloc(
+        &mut self,
+        h: HandleId,
+        class: ClassId,
+        parent: Option<HandleId>,
+    ) -> Result<ClassPolicy, GraphError> {
         let policy = class_policy(class);
         if let ClassPolicy::Deny(why) = policy {
             self.denied += 1;
@@ -147,7 +152,14 @@ impl ObjectGraph {
                 return Err(GraphError::UnknownParent);
             }
         }
-        self.nodes.insert(h, Node { class, parent, refs: 1 });
+        self.nodes.insert(
+            h,
+            Node {
+                class,
+                parent,
+                refs: 1,
+            },
+        );
         Ok(policy)
     }
 

@@ -1012,13 +1012,16 @@ pub fn apply_settlement_as(
                         // what produced the stale translation above. A non-zero here with no
                         // matching release is the reclaim path's work list.
                         out.unbound_without_release += 1;
-                        out.unbind_refusal_why.push((va.0, if !whole_row {
-                            "released-row-kept-object/partial-extent"
-                        } else if !h.frees_object() {
-                            "released-row-kept-object/shared-host-object"
-                        } else {
-                            "released-row-kept-object/not-a-guest-window-join"
-                        }));
+                        out.unbind_refusal_why.push((
+                            va.0,
+                            if !whole_row {
+                                "released-row-kept-object/partial-extent"
+                            } else if !h.frees_object() {
+                                "released-row-kept-object/shared-host-object"
+                            } else {
+                                "released-row-kept-object/not-a-guest-window-join"
+                            },
+                        ));
                     }
                     continue;
                 }

@@ -29,7 +29,11 @@ pub fn t() -> f64 {
     let (at, up) = ANCHOR.get_or_init(|| {
         let up = std::fs::read_to_string("/proc/uptime")
             .ok()
-            .and_then(|s| s.split_whitespace().next().and_then(|w| w.parse::<f64>().ok()))
+            .and_then(|s| {
+                s.split_whitespace()
+                    .next()
+                    .and_then(|w| w.parse::<f64>().ok())
+            })
             .unwrap_or(0.0);
         (Instant::now(), up)
     });
@@ -42,5 +46,10 @@ pub fn t() -> f64 {
 #[must_use]
 pub fn unmap_delay_ms() -> Option<u64> {
     static MS: OnceLock<Option<u64>> = OnceLock::new();
-    *MS.get_or_init(|| std::env::var("KF3_DIAG_UNMAP_DELAY_MS").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0))
+    *MS.get_or_init(|| {
+        std::env::var("KF3_DIAG_UNMAP_DELAY_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|&n| n > 0)
+    })
 }

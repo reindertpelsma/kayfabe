@@ -25,9 +25,9 @@
 //! register on that page must be *implemented*, because there is no memory behind any of them.
 //! That is why [`holes_for`] is a short, named, per-family list and not a predicate.
 
-use kf_chip::Family;
 use crate::trappolicy::{DoorbellPlacement, PRAMIN_BASE, PRAMIN_LEN};
 use crate::vmm::Bar;
+use kf_chip::Family;
 
 pub const PAGE: u64 = 0x1000;
 
@@ -121,18 +121,39 @@ pub fn holes_for(family: Family) -> &'static [(u64, &'static str)] {
         // asserts EMEMC advanced by exactly packetSize/4.
         // ★ w828: + the two memop token pages (`crate::cacheop::token_registers`).
         Family::Hopper => &[
-            (0x0010_F000, "NV_XAL_EP_UFLUSH_{FB_FLUSH,L2_FLUSH_DIRTY} 0x10f800/0x10f810 — a READ starts the memop"),
-            (0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake, AINCR burst"),
-            (0x00B8_0000, "NV_VIRTUAL_FUNCTION_PRIV_FUNC_L2_{SYSMEM,PEERMEM}_INVALIDATE 0xB80F10/F18 — a READ starts the memop"),
+            (
+                0x0010_F000,
+                "NV_XAL_EP_UFLUSH_{FB_FLUSH,L2_FLUSH_DIRTY} 0x10f800/0x10f810 — a READ starts the memop",
+            ),
+            (
+                0x008F_2000,
+                "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake, AINCR burst",
+            ),
+            (
+                0x00B8_0000,
+                "NV_VIRTUAL_FUNCTION_PRIV_FUNC_L2_{SYSMEM,PEERMEM}_INVALIDATE 0xB80F10/F18 — a READ starts the memop",
+            ),
         ],
 
         // ⚠ Blackwell is split by die group: discrete parts use FSP like Hopper; the integrated
         // GB10B/GB20B parts have no FSP and put the identical protocol behind SEC2.
         Family::Blackwell => &[
-            (0x0010_F000, "NV_XAL_EP_UFLUSH_{FB_FLUSH,L2_FLUSH_DIRTY} 0x10f800/0x10f810 — a READ starts the memop"),
-            (0x0084_0000, "NV_PSEC_EMEMD 0x840ac4 — SEC2 boot handshake (integrated GB10B/GB20B)"),
-            (0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake (discrete)"),
-            (0x00B8_0000, "NV_VIRTUAL_FUNCTION_PRIV_FUNC_L2_{SYSMEM,PEERMEM}_INVALIDATE 0xB80F10/F18 — a READ starts the memop"),
+            (
+                0x0010_F000,
+                "NV_XAL_EP_UFLUSH_{FB_FLUSH,L2_FLUSH_DIRTY} 0x10f800/0x10f810 — a READ starts the memop",
+            ),
+            (
+                0x0084_0000,
+                "NV_PSEC_EMEMD 0x840ac4 — SEC2 boot handshake (integrated GB10B/GB20B)",
+            ),
+            (
+                0x008F_2000,
+                "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake (discrete)",
+            ),
+            (
+                0x00B8_0000,
+                "NV_VIRTUAL_FUNCTION_PRIV_FUNC_L2_{SYSMEM,PEERMEM}_INVALIDATE 0xB80F10/F18 — a READ starts the memop",
+            ),
         ],
     }
 }
@@ -187,15 +208,33 @@ pub fn memory_map(
     for (base, len, how) in cuts {
         // ⊘ Overlapping exceptions would silently drop one. They are page-aligned and disjoint by
         // construction; assert it rather than trust it.
-        assert!(base >= at, "memory-map cuts overlap at {base:#x} (cursor {at:#x})");
+        assert!(
+            base >= at,
+            "memory-map cuts overlap at {base:#x} (cursor {at:#x})"
+        );
         if base > at {
-            regions.push(Region { bar: Bar(0), base: at, len: base - at, how: Disposition::ShadowWriteTrapped });
+            regions.push(Region {
+                bar: Bar(0),
+                base: at,
+                len: base - at,
+                how: Disposition::ShadowWriteTrapped,
+            });
         }
-        regions.push(Region { bar: Bar(0), base, len, how });
+        regions.push(Region {
+            bar: Bar(0),
+            base,
+            len,
+            how,
+        });
         at = base + len;
     }
     if at < bar0_bytes {
-        regions.push(Region { bar: Bar(0), base: at, len: bar0_bytes - at, how: Disposition::ShadowWriteTrapped });
+        regions.push(Region {
+            bar: Bar(0),
+            base: at,
+            len: bar0_bytes - at,
+            how: Disposition::ShadowWriteTrapped,
+        });
     }
 
     // ---- BAR1: plain RAM throughout, on EVERY family — one memslot (`THE_CONSTRAINTS.md` §23). ----
@@ -204,12 +243,27 @@ pub fn memory_map(
     // can only be wrong; the view is overlaid at runtime where the guest's BAR1 PTEs put it
     // (`crate::bar1db`, `V3_BAR1_DOORBELL.md`). `doorbell` no longer shapes BAR1 at all.
     let _ = doorbell;
-    regions.push(Region { bar: Bar(1), base: 0, len: bar1_bytes, how: Disposition::PlainRam });
+    regions.push(Region {
+        bar: Bar(1),
+        base: 0,
+        len: bar1_bytes,
+        how: Disposition::PlainRam,
+    });
 
     // ---- BAR2: plain RAM, always, in every configuration. ----
-    regions.push(Region { bar: Bar(2), base: 0, len: bar2_bytes, how: Disposition::PlainRam });
+    regions.push(Region {
+        bar: Bar(2),
+        base: 0,
+        len: bar2_bytes,
+        how: Disposition::PlainRam,
+    });
 
-    MemoryMap { regions, bar0_bytes, bar1_bytes, bar2_bytes }
+    MemoryMap {
+        regions,
+        bar0_bytes,
+        bar1_bytes,
+        bar2_bytes,
+    }
 }
 
 impl MemoryMap {
@@ -219,7 +273,11 @@ impl MemoryMap {
     /// omission: an uncovered span is an accidental [`Disposition::Hole`], i.e. a **read exit we
     /// never decided to have** — precisely the failure this whole design exists to prevent.
     pub fn tiles(&self) -> Result<(), String> {
-        for (bar, total) in [(0u8, self.bar0_bytes), (1, self.bar1_bytes), (2, self.bar2_bytes)] {
+        for (bar, total) in [
+            (0u8, self.bar0_bytes),
+            (1, self.bar1_bytes),
+            (2, self.bar2_bytes),
+        ] {
             let mut rs: Vec<&Region> = self.regions.iter().filter(|r| r.bar.0 == bar).collect();
             rs.sort_by_key(|r| r.base);
             let mut at = 0u64;
@@ -227,7 +285,9 @@ impl MemoryMap {
                 if r.base != at {
                     return Err(format!(
                         "BAR{bar}: {} at {:#x}..{:#x} — an uncovered span is an ACCIDENTAL read exit",
-                        if r.base > at { "GAP" } else { "OVERLAP" }, at, r.base
+                        if r.base > at { "GAP" } else { "OVERLAP" },
+                        at,
+                        r.base
                     ));
                 }
                 at = r.base + r.len;
@@ -247,7 +307,10 @@ impl MemoryMap {
     /// How many 4 KiB pages lose their free reads. ⚠ The cost the owner named: a hole is
     /// page-granular, so this counts pages we must fully **implement**, not registers.
     pub fn read_exit_pages(&self) -> u64 {
-        self.read_exit_regions().iter().map(|r| r.len.div_ceil(PAGE)).sum()
+        self.read_exit_regions()
+            .iter()
+            .map(|r| r.len.div_ceil(PAGE))
+            .sum()
     }
 
     /// The disposition covering `(bar, offset)`, if the map covers it.
@@ -303,15 +366,23 @@ pub fn install(
             // ★ D — install NOTHING. This `continue` is the entire read-trap implementation.
             Disposition::Hole { .. } => continue,
         };
-        let Some(base) = bar_base(r.bar) else { continue }; // BAR not yet programmed by the guest
+        let Some(base) = bar_base(r.bar) else {
+            continue;
+        }; // BAR not yet programmed by the guest
         // ⊘⊘⊘ `[fable w825]` This was `else { continue }`. By this function's OWN doc an
         // uncovered span is an ACCIDENTAL READ EXIT — so silently skipping a region the map says
         // must be backed was a check that reported nothing and gated nothing. ⇒ Refuse by name;
         // the VMM must not come up with a hole it did not choose.
         let Some(host) = host_for(r) else {
-            return Err(crate::vmm::VmmError::Unbacked { bar: r.bar.0, base: r.base, len: r.len });
+            return Err(crate::vmm::VmmError::Unbacked {
+                bar: r.bar.0,
+                base: r.base,
+                len: r.len,
+            });
         };
-        let gpa = base.checked_add(r.base).ok_or(crate::vmm::VmmError::BadGpa)?;
+        let gpa = base
+            .checked_add(r.base)
+            .ok_or(crate::vmm::VmmError::BadGpa)?;
         installed.push((*r, vmm.install_memslot(gpa, r.len, host, readonly)?));
     }
     Ok(installed)

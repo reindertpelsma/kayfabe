@@ -66,7 +66,13 @@ pub const INIT_BRIGHTC_STATE_LOAD: u32 = 0x2080_0ac6;
 pub const SET_STATIC_EDID_DATA: u32 = 0x2080_0adf;
 /// The M0 set: what the link answers without a model (a guest driver whose display layouts this
 /// tree has not derived).
-pub const M0_CONTROLS: [u32; 5] = [GET_IP_VERSION, GET_STATIC_INFO, INIT_BRIGHTC_STATE_LOAD, SET_STATIC_EDID_DATA, WRITE_INST_MEM];
+pub const M0_CONTROLS: [u32; 5] = [
+    GET_IP_VERSION,
+    GET_STATIC_INFO,
+    INIT_BRIGHTC_STATE_LOAD,
+    SET_STATIC_EDID_DATA,
+    WRITE_INST_MEM,
+];
 
 /// ★ The claimed controls the **guest's own** export table marks cacheable
 /// (`PERSISTENT_CACHEABLE`, `0x800000`): `NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED` and
@@ -118,7 +124,10 @@ fn monitors() -> Vec<kf_disp::edid::Monitor> {
 /// ★ The model for a chip's display row and a guest driver, or `None` when this tree has not
 /// derived that driver's display layouts (never a guessed layout: `kf_disp::layout`).
 #[must_use]
-pub fn model_for(driver: &kf_abi::versions::DriverAbiTable, row: &kf_chip::display::DisplayRow) -> Option<DisplayModel> {
+pub fn model_for(
+    driver: &kf_abi::versions::DriverAbiTable,
+    row: &kf_chip::display::DisplayRow,
+) -> Option<DisplayModel> {
     let layouts = kf_disp::layout::for_version(&driver.driver_version().to_string())?;
     Some(DisplayModel::new(row, monitors(), layouts))
 }
@@ -144,7 +153,15 @@ pub fn is_display_class(class: u32) -> bool {
     class == kf_chip::display::ALL[0].classes.common
         || kf_chip::display::ALL.iter().any(|r| {
             let c = &r.classes;
-            [c.display, c.core, c.window, c.window_imm, c.cursor, c.disp_sw].contains(&class)
+            [
+                c.display,
+                c.core,
+                c.window,
+                c.window_imm,
+                c.cursor,
+                c.disp_sw,
+            ]
+            .contains(&class)
         })
 }
 
@@ -180,7 +197,10 @@ impl DisplayPolicy {
     /// The link for a chip's display row: delegates to a model built for the guest driver's derived
     /// layouts ([`model_for`]), or answers the M0 set when they are not derived.
     #[must_use]
-    pub fn new(driver: kf_abi::versions::DriverAbiTable, row: &'static kf_chip::display::DisplayRow) -> DisplayPolicy {
+    pub fn new(
+        driver: kf_abi::versions::DriverAbiTable,
+        row: &'static kf_chip::display::DisplayRow,
+    ) -> DisplayPolicy {
         let model = model_for(&driver, row).map(|m| Arc::new(Mutex::new(m)));
         if model.is_none() {
             eprintln!(
@@ -194,13 +214,20 @@ impl DisplayPolicy {
 
     /// ★ The link over a model the caller shares (the display plane's handle on the same registry).
     #[must_use]
-    pub fn over(driver: kf_abi::versions::DriverAbiTable, row: &'static kf_chip::display::DisplayRow, model: SharedDisplayModel) -> DisplayPolicy {
+    pub fn over(
+        driver: kf_abi::versions::DriverAbiTable,
+        row: &'static kf_chip::display::DisplayRow,
+        model: SharedDisplayModel,
+    ) -> DisplayPolicy {
         DisplayPolicy::with(driver, row, Some(model))
     }
 
     /// The M0 link with no model — what a guest driver without derived display layouts gets.
     #[must_use]
-    pub fn without_model(driver: kf_abi::versions::DriverAbiTable, row: &'static kf_chip::display::DisplayRow) -> DisplayPolicy {
+    pub fn without_model(
+        driver: kf_abi::versions::DriverAbiTable,
+        row: &'static kf_chip::display::DisplayRow,
+    ) -> DisplayPolicy {
         DisplayPolicy::with(driver, row, None)
     }
 
@@ -213,13 +240,24 @@ impl DisplayPolicy {
             Some(m) => lock(m).claimed().into_iter().collect(),
             None => M0_CONTROLS.into_iter().collect(),
         };
-        DisplayPolicy { driver, row, model, inst_mem: None, seen: Vec::new(), claimed }
+        DisplayPolicy {
+            driver,
+            row,
+            model,
+            inst_mem: None,
+            seen: Vec::new(),
+            claimed,
+        }
     }
 
     /// The separate lifecycle observer. It is seated inside the object policy, not in
     /// `respond`, so only successfully applied, fully reassembled events reach it.
     pub(crate) fn registry(&self) -> Option<DisplayRegistry> {
-        self.model.clone().map(|model| DisplayRegistry { driver: self.driver, model, objects: BTreeMap::new() })
+        self.model.clone().map(|model| DisplayRegistry {
+            driver: self.driver,
+            model,
+            objects: BTreeMap::new(),
+        })
     }
 
     /// The model this link delegates to (a handle on the same registry), if any.
@@ -245,7 +283,11 @@ impl DisplayPolicy {
     #[must_use]
     pub fn stated_inst_mem(&self) -> Option<InstMem> {
         match &self.model {
-            Some(m) => lock(m).inst_mem.map(|i| InstMem { phys: i.phys, size: i.size, addr_space: i.addr_space }),
+            Some(m) => lock(m).inst_mem.map(|i| InstMem {
+                phys: i.phys,
+                size: i.size,
+                addr_space: i.addr_space,
+            }),
             None => self.inst_mem,
         }
     }
@@ -257,7 +299,11 @@ impl DisplayPolicy {
         let heads = self.row.heads.min(8);
         let fe_hw_sys_cap = (1u32 << heads) - 1; // HEAD_EXISTS(i) = bit i (`dev_disp.h` v03_00)
         let windows = self.row.windows.min(32);
-        let window_mask = if windows == 32 { u32::MAX } else { (1u32 << windows) - 1 };
+        let window_mask = if windows == 32 {
+            u32::MAX
+        } else {
+            (1u32 << windows) - 1
+        };
         put(&mut p, 0, fe_hw_sys_cap);
         put(&mut p, 4, window_mask);
         // bFbRemapperEnabled @8 = 0
@@ -304,9 +350,15 @@ impl DisplayPolicy {
                 if params.len() != WRITE_INST_MEM_SIZE {
                     return Some(Err(NV_ERR_INVALID_ARGUMENT));
                 }
-                let q = |o: usize| u64::from_le_bytes(params[o..o + 8].try_into().unwrap_or([0; 8]));
-                let d = |o: usize| u32::from_le_bytes(params[o..o + 4].try_into().unwrap_or([0; 4]));
-                self.inst_mem = Some(InstMem { phys: q(0), size: q(8), addr_space: d(16) });
+                let q =
+                    |o: usize| u64::from_le_bytes(params[o..o + 8].try_into().unwrap_or([0; 8]));
+                let d =
+                    |o: usize| u32::from_le_bytes(params[o..o + 4].try_into().unwrap_or([0; 4]));
+                self.inst_mem = Some(InstMem {
+                    phys: q(0),
+                    size: q(8),
+                    addr_space: d(16),
+                });
                 Ok(params.to_vec())
             }
             _ => return None,
@@ -322,32 +374,47 @@ impl DisplayPolicy {
         if !self.claims(req.cmd) {
             return None;
         }
-        let refuse = |status: u32| Some(Reply { rpc_result: status, body: Vec::new() });
+        let refuse = |status: u32| {
+            Some(Reply {
+                rpc_result: status,
+                body: Vec::new(),
+            })
+        };
         if kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
             // ⊘ No control this link claims is FINN-serializable in the guest's RM: the 580 FINN
             // interface list has no NV0073 / NV5070 / NVC370 / NVC372 / NV2080-internal-display
             // entry (`ogkm-580: src/nvidia/interface/rmapi/src/g_finn_rm_api.c:803-850`,
             // `FinnRmApiGetUnserializedSize`), so a serialized one is a layout the model has not
             // measured — refused by name rather than decoded blind.
-            eprintln!("kf-rm: display: control {:#010x} arrived FINN-serialized — refused", req.cmd);
+            eprintln!(
+                "kf-rm: display: control {:#010x} arrived FINN-serialized — refused",
+                req.cmd
+            );
             return refuse(NV_ERR_NOT_SUPPORTED);
         }
-        let Some(params) = req.params_at.checked_add(req.params_size as usize).and_then(|e| cmd.payload.get(req.params_at..e)) else {
+        let Some(params) = req
+            .params_at
+            .checked_add(req.params_size as usize)
+            .and_then(|e| cmd.payload.get(req.params_at..e))
+        else {
             return refuse(NV_ERR_INVALID_ARGUMENT);
         };
         match self.answer(req.cmd, params)? {
             Ok(p) if p.len() == params.len() => {
                 let mut body = cmd.payload.clone();
-                body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                    .copy_from_slice(&NV_OK.to_le_bytes());
                 body[req.params_at..req.params_at + p.len()].copy_from_slice(&p);
-                Some(Reply { rpc_result: NV_OK, body })
+                Some(Reply {
+                    rpc_result: NV_OK,
+                    body,
+                })
             }
             // ⊘ An answer that is not the request's own size cannot be written back into it.
             Ok(_) => refuse(NV_ERR_INVALID_ARGUMENT),
             Err(st) => refuse(st),
         }
     }
-
 }
 
 /// The display object's accepted lifecycle, sharing only the model with the controls link.
@@ -371,18 +438,28 @@ impl DisplayRegistry {
     fn on_alloc(&mut self, cmd: &RpcCommand) {
         let m = self.model.clone();
         let body = cmd.wire_body();
-        let Ok(h) = self.driver.decode_rpc_alloc(body) else { return };
+        let Ok(h) = self.driver.decode_rpc_alloc(body) else {
+            return;
+        };
         if !is_display_class(h.class) {
             return;
         }
         // Defensive checks for the model's input, even though the object seat already accepted it.
-        if !self.driver.capabilities().alloc_class(kf_arch::ids::ClassId(h.class)).is_permitted() {
+        if !self
+            .driver
+            .capabilities()
+            .alloc_class(kf_arch::ids::ClassId(h.class))
+            .is_permitted()
+        {
             return;
         }
         // ⊘ Serialized or short params: the object seat refuses the alloc (`rmrpc`'s
         // `SerializedParams` / the declared window), so there is nothing to record either.
         let Some(params) = crate::rmrpc::alloc_params_window(&self.driver, body) else {
-            eprintln!("kf-rm: display: alloc {:#x}:{:#x} class {:#06x}: params not readable — not recorded", h.client, h.handle, h.class);
+            eprintln!(
+                "kf-rm: display: alloc {:#x}:{:#x} class {:#06x}: params not readable — not recorded",
+                h.client, h.handle, h.class
+            );
             return;
         };
         let key = (h.client, h.handle);
@@ -436,10 +513,16 @@ impl DisplayRegistry {
     /// free a parent alone, and the object seat drops the subtree).
     fn on_free(&mut self, cmd: &RpcCommand) {
         let m = self.model.clone();
-        let Ok(f) = self.driver.decode_free(&cmd.payload) else { return };
+        let Ok(f) = self.driver.decode_free(&cmd.payload) else {
+            return;
+        };
         let (client, object) = (f.client, f.handle);
         let gone: BTreeSet<u32> = if object == client {
-            self.objects.keys().filter(|k| k.0 == client).map(|k| k.1).collect()
+            self.objects
+                .keys()
+                .filter(|k| k.0 == client)
+                .map(|k| k.1)
+                .collect()
         } else {
             self.subtree(client, object)
         };
@@ -508,7 +591,14 @@ mod tests {
     }
 
     fn rpc(function: RpcFunction, payload: Vec<u8>) -> RpcCommand {
-        RpcCommand { function, code: 0, sequence: 1, payload, elements: 1, delivered: Vec::new() }
+        RpcCommand {
+            function,
+            code: 0,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
     }
 
     /// A `GSP_RM_CONTROL` envelope (`rpc_gsp_rm_control_v03_00`, 40-byte header).
@@ -526,7 +616,10 @@ mod tests {
     /// A `GSP_RM_ALLOC` envelope (`rpc_gsp_rm_alloc_v03_00`, 32-byte header).
     fn alloc(client: u32, parent: u32, handle: u32, class: u32, params: &[u8]) -> RpcCommand {
         let mut b = vec![0u8; 32];
-        for (i, v) in [client, parent, handle, class, 0, params.len() as u32].iter().enumerate() {
+        for (i, v) in [client, parent, handle, class, 0, params.len() as u32]
+            .iter()
+            .enumerate()
+        {
             b[4 * i..4 * i + 4].copy_from_slice(&v.to_le_bytes());
         }
         b.extend_from_slice(params);
@@ -535,12 +628,22 @@ mod tests {
 
     /// A `GSP_RM_FREE` (`NVOS00`: hRoot hObjectParent hObjectOld status).
     fn free(client: u32, parent: u32, object: u32) -> RpcCommand {
-        rpc(RpcFunction::Free, [client, parent, object, 0].iter().flat_map(|v| v.to_le_bytes()).collect())
+        rpc(
+            RpcFunction::Free,
+            [client, parent, object, 0]
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect(),
+        )
     }
 
     /// `NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS` (or the PIO one) with `channelInstance`.
     fn chan_params(pio: bool, inst: u32) -> Vec<u8> {
-        let mut p = zeroed(if pio { "NV50VAIO_CHANNELPIO_ALLOCATION_PARAMETERS" } else { "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS" });
+        let mut p = zeroed(if pio {
+            "NV50VAIO_CHANNELPIO_ALLOCATION_PARAMETERS"
+        } else {
+            "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS"
+        });
         p[0..4].copy_from_slice(&inst.to_le_bytes());
         p
     }
@@ -550,8 +653,14 @@ mod tests {
     #[test]
     fn ga10x_reports_the_real_ip_version_and_a_four_head_static_info() {
         for mut p in [m0_policy(), policy()] {
-            assert_eq!(p.answer(GET_IP_VERSION, &[0; 4]), Some(Ok(vec![0x00, 0x00, 0x01, 0x04])));
-            let si = p.answer(GET_STATIC_INFO, &[0; STATIC_INFO_SIZE]).expect("ours").expect("ok");
+            assert_eq!(
+                p.answer(GET_IP_VERSION, &[0; 4]),
+                Some(Ok(vec![0x00, 0x00, 0x01, 0x04]))
+            );
+            let si = p
+                .answer(GET_STATIC_INFO, &[0; STATIC_INFO_SIZE])
+                .expect("ours")
+                .expect("ok");
             let w = |o: usize| u32::from_le_bytes(si[o..o + 4].try_into().unwrap());
             assert_eq!(w(0), 0xf, "HEAD_EXISTS 0..3");
             assert_eq!(w(4), 0xff, "windows 0..7");
@@ -559,7 +668,12 @@ mod tests {
             assert_eq!(w(16), NO_I2C_PORT);
             assert_eq!(w(32), NUM_DISP_CHANNELS);
         }
-        const { assert!(NUM_DISP_CHANNELS > 73 + 7, "the last cursor channel number fits") };
+        const {
+            assert!(
+                NUM_DISP_CHANNELS > 73 + 7,
+                "the last cursor channel number fits"
+            )
+        };
     }
 
     /// Instance memory is recorded; the fatal-if-refused [IN] controls answer OK; malformed sizes
@@ -572,10 +686,26 @@ mod tests {
             im[8..16].copy_from_slice(&0x1_0000u64.to_le_bytes());
             im[16..20].copy_from_slice(&2u32.to_le_bytes());
             assert!(matches!(p.answer(WRITE_INST_MEM, &im), Some(Ok(_))));
-            assert_eq!(p.stated_inst_mem(), Some(InstMem { phys: 0x1234_5000, size: 0x1_0000, addr_space: 2 }));
-            assert!(matches!(p.answer(INIT_BRIGHTC_STATE_LOAD, &[0u8; 4104]), Some(Ok(_))));
-            assert!(matches!(p.answer(SET_STATIC_EDID_DATA, &[0u8; 8388]), Some(Ok(_))));
-            assert_eq!(p.answer(GET_STATIC_INFO, &[0; 8]), Some(Err(NV_ERR_INVALID_ARGUMENT)));
+            assert_eq!(
+                p.stated_inst_mem(),
+                Some(InstMem {
+                    phys: 0x1234_5000,
+                    size: 0x1_0000,
+                    addr_space: 2
+                })
+            );
+            assert!(matches!(
+                p.answer(INIT_BRIGHTC_STATE_LOAD, &[0u8; 4104]),
+                Some(Ok(_))
+            ));
+            assert!(matches!(
+                p.answer(SET_STATIC_EDID_DATA, &[0u8; 8388]),
+                Some(Ok(_))
+            ));
+            assert_eq!(
+                p.answer(GET_STATIC_INFO, &[0; 8]),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
             assert_eq!(p.answer(0x2080_0101, &[0; 4]), None);
         }
     }
@@ -590,14 +720,24 @@ mod tests {
         let reqs: [(u32, Vec<u8>); 5] = [
             (GET_IP_VERSION, vec![0xaa; 4]),
             (GET_STATIC_INFO, vec![0x5a; STATIC_INFO_SIZE]),
-            (INIT_BRIGHTC_STATE_LOAD, (0..4104).map(|i| i as u8).collect()),
-            (SET_STATIC_EDID_DATA, (0..8388).map(|i| (i * 7) as u8).collect()),
+            (
+                INIT_BRIGHTC_STATE_LOAD,
+                (0..4104).map(|i| i as u8).collect(),
+            ),
+            (
+                SET_STATIC_EDID_DATA,
+                (0..8388).map(|i| (i * 7) as u8).collect(),
+            ),
             (WRITE_INST_MEM, im),
         ];
         for (cmd, req) in reqs {
             assert_eq!(m.answer(cmd, &req), m0.answer(cmd, &req), "{cmd:#010x}");
             let c = control(cmd, 0, &req);
-            assert_eq!(m.respond(&c), m0.respond(&c), "{cmd:#010x} through respond()");
+            assert_eq!(
+                m.respond(&c),
+                m0.respond(&c),
+                "{cmd:#010x} through respond()"
+            );
         }
     }
 
@@ -608,7 +748,13 @@ mod tests {
     fn the_link_claims_what_the_model_claims() {
         let mut p = policy();
         let m = p.model().expect("the bench driver's layouts are derived");
-        for cmd in M0_CONTROLS.into_iter().chain([kf_disp::model::CHANNEL_PUSHBUFFER, 0x0073_0101, 0x0073_0107, 0x0073_0102, 0x0073_0151]) {
+        for cmd in M0_CONTROLS.into_iter().chain([
+            kf_disp::model::CHANNEL_PUSHBUFFER,
+            0x0073_0101,
+            0x0073_0107,
+            0x0073_0102,
+            0x0073_0151,
+        ]) {
             assert!(p.claims(cmd), "{cmd:#010x}");
             assert!(m.lock().unwrap().claims(cmd), "{cmd:#010x}");
         }
@@ -617,10 +763,19 @@ mod tests {
             assert!(!p.claims(cmd), "{cmd:#010x}");
         }
         let s = "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS";
-        let r = p.respond(&control(k("NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS"), 0, &zeroed(s))).expect("answered");
+        let r = p
+            .respond(&control(
+                k("NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS"),
+                0,
+                &zeroed(s),
+            ))
+            .expect("answered");
         assert_eq!(r.rpc_result, NV_OK);
         let (off, _) = layouts().field(s, "numHeads").unwrap();
-        assert_eq!(u32::from_le_bytes(r.body[40 + off..44 + off].try_into().unwrap()), 4);
+        assert_eq!(
+            u32::from_le_bytes(r.body[40 + off..44 + off].try_into().unwrap()),
+            4
+        );
         // the M0 link claims the M0 set only
         let m0 = m0_policy();
         assert!(M0_CONTROLS.iter().all(|c| m0.claims(*c)));
@@ -641,16 +796,34 @@ mod tests {
             .chain(0x2080_0a00..0x2080_0b00)
             .filter(|c| p.claims(*c))
             .collect();
-        assert_eq!(claimed.len(), 30 + 6, "the NVKMS bring-up set and the six internal controls");
-        assert_eq!(claimed.iter().copied().collect::<BTreeSet<u32>>(), *p.claimed(), "nothing claimed outside the set");
+        assert_eq!(
+            claimed.len(),
+            30 + 6,
+            "the NVKMS bring-up set and the six internal controls"
+        );
+        assert_eq!(
+            claimed.iter().copied().collect::<BTreeSet<u32>>(),
+            *p.claimed(),
+            "nothing claimed outside the set"
+        );
         for cmd in &claimed {
-            let r = p.respond(&control(*cmd, SERIALIZED, &[0; 16])).expect("refused by name");
+            let r = p
+                .respond(&control(*cmd, SERIALIZED, &[0; 16]))
+                .expect("refused by name");
             assert_eq!(r.rpc_result, NV_ERR_NOT_SUPPORTED, "{cmd:#010x}");
             let mut short = control(*cmd, 0, &[]);
             short.payload[16..20].copy_from_slice(&64u32.to_le_bytes()); // declares 64, sends 0
-            assert_eq!(p.respond(&short).map(|r| r.rpc_result), Some(NV_ERR_INVALID_ARGUMENT), "{cmd:#010x}");
+            assert_eq!(
+                p.respond(&short).map(|r| r.rpc_result),
+                Some(NV_ERR_INVALID_ARGUMENT),
+                "{cmd:#010x}"
+            );
         }
-        assert!(p.respond(&control(0x2080_0101, SERIALIZED, &[0; 16])).is_none(), "not claimed: not ours");
+        assert!(
+            p.respond(&control(0x2080_0101, SERIALIZED, &[0; 16]))
+                .is_none(),
+            "not claimed: not ours"
+        );
     }
 
     /// ★ Step (1), on: display channel allocs are recorded in the SHARED model (with their stated
@@ -658,7 +831,9 @@ mod tests {
     /// object's, and its client's — and nothing is answered: the object seat still answers.
     #[test]
     fn display_allocs_are_tracked_and_frees_release_them() {
-        let shared: SharedDisplayModel = Arc::new(Mutex::new(model_for(&abi(), &kf_chip::display::AMPERE).expect("derived")));
+        let shared: SharedDisplayModel = Arc::new(Mutex::new(
+            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+        ));
         let mut p = DisplayPolicy::over(abi(), &kf_chip::display::AMPERE, shared.clone());
         let mut registry = p.registry().unwrap();
         let (c, dev, disp) = (0xc1d0_0001, 0xcafe_0001, 0xcafe_0070);
@@ -670,17 +845,39 @@ mod tests {
         q.set("physicalAddr", 0x1234_5000);
         q.set("limit", 0xfff);
         q.set("valid", 1);
-        assert_eq!(p.respond(&control(kf_disp::model::CHANNEL_PUSHBUFFER, 0, &q.buf)).map(|r| r.rpc_result), Some(NV_OK));
+        assert_eq!(
+            p.respond(&control(kf_disp::model::CHANNEL_PUSHBUFFER, 0, &q.buf))
+                .map(|r| r.rpc_result),
+            Some(NV_OK)
+        );
         registry.observe(&alloc(c, dev, disp, 0xC670, &[]));
         let mut core = chan_params(false, 0);
         core[12..16].copy_from_slice(&0x40u32.to_le_bytes()); // offset
         registry.observe(&alloc(c, disp, 0xcafe_0d00, 0xC67D, &core));
         for w in 0..8 {
-            registry.observe(&alloc(c, disp, 0xcafe_0e00 + w, 0xC67E, &chan_params(false, w)));
-            registry.observe(&alloc(c, disp, 0xcafe_0b00 + w, 0xC67B, &chan_params(false, w)));
+            registry.observe(&alloc(
+                c,
+                disp,
+                0xcafe_0e00 + w,
+                0xC67E,
+                &chan_params(false, w),
+            ));
+            registry.observe(&alloc(
+                c,
+                disp,
+                0xcafe_0b00 + w,
+                0xC67B,
+                &chan_params(false, w),
+            ));
         }
         for h in 0..4 {
-            registry.observe(&alloc(c, disp, 0xcafe_0a00 + h, 0xC67A, &chan_params(true, h)));
+            registry.observe(&alloc(
+                c,
+                disp,
+                0xcafe_0a00 + h,
+                0xC67A,
+                &chan_params(true, h),
+            ));
         }
         {
             let g = shared.lock().unwrap();
@@ -688,11 +885,20 @@ mod tests {
             let core = &g.channels[&(ChannelKind::Core, 0)];
             assert_eq!((core.handle, core.get, core.put), (0xcafe_0d00, 0x40, 0x40));
             assert_eq!(core.pb.map(|b| b.phys), Some(0x1234_5000));
-            assert!(g.statements.is_empty(), "the link drains the statements into the log");
+            assert!(
+                g.statements.is_empty(),
+                "the link drains the statements into the log"
+            );
         }
         // the channel's own free
         registry.observe(&free(c, disp, 0xcafe_0e03));
-        assert!(!shared.lock().unwrap().channels.contains_key(&(ChannelKind::Window, 3)));
+        assert!(
+            !shared
+                .lock()
+                .unwrap()
+                .channels
+                .contains_key(&(ChannelKind::Window, 3))
+        );
         // a free of the display object takes every channel under it
         registry.observe(&free(c, dev, disp));
         assert!(shared.lock().unwrap().channels.is_empty());
@@ -702,7 +908,10 @@ mod tests {
         assert_eq!(shared.lock().unwrap().channels.len(), 1);
         registry.observe(&free(c, 0, c));
         assert!(shared.lock().unwrap().channels.is_empty());
-        assert!(registry.objects.is_empty(), "no parent edge outlives its client");
+        assert!(
+            registry.objects.is_empty(),
+            "no parent edge outlives its client"
+        );
     }
 
     /// ★ Hostile guest: an alloc that is not a display class, a channel instance the display does
@@ -714,19 +923,39 @@ mod tests {
         let m = p.model().unwrap();
         let mut registry = p.registry().unwrap();
         let (c, disp) = (0xc1d0_0001, 0xcafe_0070);
-        registry.observe(&alloc(c, 0xcafe_0001, 0xcafe_0e09, 0xC67E, &chan_params(false, 9)));
+        registry.observe(&alloc(
+            c,
+            0xcafe_0001,
+            0xcafe_0e09,
+            0xC67E,
+            &chan_params(false, 9),
+        ));
         registry.observe(&alloc(c, disp, 0xcafe_0a04, 0xC67A, &chan_params(true, 4)));
-        registry.observe(&alloc(c, disp, 0xcafe_0e00, 0xC67E, &chan_params(false, 0)[..8]));
+        registry.observe(&alloc(
+            c,
+            disp,
+            0xcafe_0e00,
+            0xC67E,
+            &chan_params(false, 0)[..8],
+        ));
         registry.observe(&alloc(c, disp, 0xcafe_0e01, 0xC57E, &chan_params(false, 1)));
         let mut ser = alloc(c, disp, 0xcafe_0e02, 0xC67E, &chan_params(false, 2));
         ser.payload[24..28].copy_from_slice(&(1u32 << 1).to_le_bytes());
         registry.observe(&ser);
         registry.observe(&alloc(c, disp, 0xcafe_00c0, 0xC0B5, &[0; 8]));
-        assert!(m.lock().unwrap().channels.is_empty(), "{:?}", m.lock().unwrap().channels);
+        assert!(
+            m.lock().unwrap().channels.is_empty(),
+            "{:?}",
+            m.lock().unwrap().channels
+        );
         registry.observe(&alloc(c, disp, 0xcafe_0e07, 0xC67E, &chan_params(false, 7)));
         registry.observe(&free(0xc1d0_0002, disp, 0xcafe_0e07));
         registry.observe(&free(0xc1d0_0002, 0, 0xc1d0_0002));
-        assert_eq!(m.lock().unwrap().channels.len(), 1, "another client's free names another object");
+        assert_eq!(
+            m.lock().unwrap().channels.len(),
+            1,
+            "another client's free names another object"
+        );
         for i in 0..(MAX_DISPLAY_OBJECTS as u32 + 10) {
             registry.observe(&alloc(c, disp, 0xd000_0000 + i, 0xC372, &[]));
         }
@@ -741,9 +970,21 @@ mod tests {
     fn without_a_model_allocs_are_not_observed() {
         let mut p = m0_policy();
         assert!(p.model().is_none());
-        assert!(p.respond(&alloc(0xc1d0_0001, 0xcafe_0070, 0xcafe_0d00, 0xC67D, &chan_params(false, 0))).is_none());
+        assert!(
+            p.respond(&alloc(
+                0xc1d0_0001,
+                0xcafe_0070,
+                0xcafe_0d00,
+                0xC67D,
+                &chan_params(false, 0)
+            ))
+            .is_none()
+        );
         assert!(p.registry().is_none());
-        assert!(p.respond(&control(0x0073_0101, 0, &[0; 16])).is_none(), "not claimed without the model");
+        assert!(
+            p.respond(&control(0x0073_0101, 0, &[0; 16])).is_none(),
+            "not claimed without the model"
+        );
     }
 
     /// ★ [`GUEST_CACHEABLE`]: the guest keeps these answers for the driver's life, so each is claimed,
@@ -752,24 +993,44 @@ mod tests {
     #[test]
     fn guest_cacheable_answers_are_fixed_for_the_device_life() {
         let rows = [
-            ("NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED", "NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS"),
-            ("NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS", "NV0073_CTRL_SYSTEM_GET_INTERNAL_DISPLAYS_PARAMS"),
-            ("NV0073_CTRL_CMD_SPECIFIC_GET_TYPE", "NV0073_CTRL_SPECIFIC_GET_TYPE_PARAMS"),
+            (
+                "NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED",
+                "NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS",
+            ),
+            (
+                "NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS",
+                "NV0073_CTRL_SYSTEM_GET_INTERNAL_DISPLAYS_PARAMS",
+            ),
+            (
+                "NV0073_CTRL_CMD_SPECIFIC_GET_TYPE",
+                "NV0073_CTRL_SPECIFIC_GET_TYPE_PARAMS",
+            ),
         ];
         let mut p = policy();
-        assert_eq!(rows.map(|(c, _)| k(c)), GUEST_CACHEABLE, "the constant names the derived ids");
+        assert_eq!(
+            rows.map(|(c, _)| k(c)),
+            GUEST_CACHEABLE,
+            "the constant names the derived ids"
+        );
         // SPECIFIC_GET_TYPE is asked of a real connector (a zero displayId is INVALID_ARGUMENT, and an
         // error is never cached): the one GET_SUPPORTED names
-        let sup = p.answer(k(rows[0].0), &zeroed(rows[0].1)).expect("claimed").expect("ok");
+        let sup = p
+            .answer(k(rows[0].0), &zeroed(rows[0].1))
+            .expect("claimed")
+            .expect("ok");
         let sup = kf_disp::layout::Params::new(layouts(), rows[0].1, &sup).expect("layout");
         let mask = sup.get("displayMask").expect("displayMask");
         assert!(mask != 0, "a connector is supported");
-        let mut get_type = kf_disp::layout::Params::new(layouts(), rows[2].1, &zeroed(rows[2].1)).expect("layout");
+        let mut get_type =
+            kf_disp::layout::Params::new(layouts(), rows[2].1, &zeroed(rows[2].1)).expect("layout");
         get_type.set("displayId", mask & mask.wrapping_neg());
         let params = [zeroed(rows[0].1), zeroed(rows[1].1), get_type.buf.clone()];
         let ask = |p: &mut DisplayPolicy| [0, 1, 2].map(|i| p.answer(k(rows[i].0), &params[i]));
         let first = ask(&mut p);
-        assert!(first.iter().all(|a| matches!(a, Some(Ok(_)))), "claimed and answered OK: {first:?}");
+        assert!(
+            first.iter().all(|a| matches!(a, Some(Ok(_)))),
+            "claimed and answered OK: {first:?}"
+        );
         let (c, dev, disp) = (0xc1d0_0001, 0xcafe_0001, 0xcafe_0070);
         let mut registry = p.registry().unwrap();
         registry.observe(&alloc(c, dev, disp, 0xC670, &[]));

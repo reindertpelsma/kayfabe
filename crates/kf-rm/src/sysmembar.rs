@@ -61,13 +61,20 @@ impl SysmembarPolicy {
     /// A link for one guest driver's wire, sending to the memory plane's `sink`.
     #[must_use]
     pub fn new(abi: kf_abi::versions::DriverAbiTable, sink: MemSink) -> SysmembarPolicy {
-        SysmembarPolicy { abi, sink, held_last: false, carried: 0 }
+        SysmembarPolicy {
+            abi,
+            sink,
+            held_last: false,
+            carried: 0,
+        }
     }
 }
 
 impl core::fmt::Debug for SysmembarPolicy {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("SysmembarPolicy").field("carried", &self.carried).finish()
+        f.debug_struct("SysmembarPolicy")
+            .field("carried", &self.carried)
+            .finish()
     }
 }
 
@@ -85,7 +92,10 @@ impl CommandPolicy for SysmembarPolicy {
         self.carried += 1;
         self.held_last = true;
         // ★ The header echoed, `NV_OK`: the control has no `[OUT]` field (paramsSize 0).
-        Some(Reply { rpc_result: NV_OK, body: cmd.payload.clone() })
+        Some(Reply {
+            rpc_result: NV_OK,
+            body: cmd.payload.clone(),
+        })
     }
 
     /// ★ Held until the plane settles the statement — the host sysmembar has returned.

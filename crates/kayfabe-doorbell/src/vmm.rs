@@ -143,7 +143,11 @@ pub enum VmmError {
     Refused,
     /// ★ A region the memory map says must be backed had no backing supplied. `[w825]` Named,
     /// because the alternative — skipping it — installs a read exit nobody decided to have.
-    Unbacked { bar: u8, base: u64, len: u64 },
+    Unbacked {
+        bar: u8,
+        base: u64,
+        len: u64,
+    },
 }
 
 /// The device model, as a VMM sees it. ⊘ `&self` throughout, because CH requires it and because

@@ -113,7 +113,10 @@ pub fn answer_at(
     let o = layout.instance_off;
     let inst = u32::from_le_bytes([params[o], params[o + 1], params[o + 2], params[o + 3]]);
     let want = if cmd == MSENC_GET_CAPS_V2 { 0 } else { inst };
-    let a = answers.iter().find(|a| a.cmd == cmd && a.instance == want).ok_or(CapsRefusal::Instance(inst))?;
+    let a = answers
+        .iter()
+        .find(|a| a.cmd == cmd && a.instance == want)
+        .ok_or(CapsRefusal::Instance(inst))?;
     let n = layout.caps_len.min(a.caps.len()).min(o);
     params[..n].copy_from_slice(&a.caps[..n]);
     Ok(())
@@ -131,7 +134,10 @@ pub fn answer(answers: &[CapsAnswer], cmd: u32, params: &mut [u8]) -> Result<(),
     }
     let inst = u32::from_le_bytes([params[8], params[9], params[10], params[11]]);
     let want = if cmd == MSENC_GET_CAPS_V2 { 0 } else { inst };
-    let a = answers.iter().find(|a| a.cmd == cmd && a.instance == want).ok_or(CapsRefusal::Instance(inst))?;
+    let a = answers
+        .iter()
+        .find(|a| a.cmd == cmd && a.instance == want)
+        .ok_or(CapsRefusal::Instance(inst))?;
     params[..n].copy_from_slice(&a.caps[..n]);
     Ok(())
 }
@@ -142,18 +148,32 @@ mod tests {
 
     #[test]
     fn the_measured_bsp_table_is_served_for_its_instance_only() {
-        let a = CapsAnswer { cmd: BSP_GET_CAPS_V2, instance: 0, caps: vec![1, 0, 0, 0, 0x16, 0, 0, 0] };
+        let a = CapsAnswer {
+            cmd: BSP_GET_CAPS_V2,
+            instance: 0,
+            caps: vec![1, 0, 0, 0, 0x16, 0, 0, 0],
+        };
         let mut p = host_request(0).to_vec();
         answer(std::slice::from_ref(&a), BSP_GET_CAPS_V2, &mut p).expect("instance 0");
         assert_eq!(p, [1, 0, 0, 0, 0x16, 0, 0, 0, 0, 0, 0, 0]);
         let mut p1 = host_request(1).to_vec();
-        assert_eq!(answer(std::slice::from_ref(&a), BSP_GET_CAPS_V2, &mut p1), Err(CapsRefusal::Instance(1)));
-        assert_eq!(answer(&[a], 0x2080_0000, &mut p1), Err(CapsRefusal::NotACapsControl(0x2080_0000)));
+        assert_eq!(
+            answer(std::slice::from_ref(&a), BSP_GET_CAPS_V2, &mut p1),
+            Err(CapsRefusal::Instance(1))
+        );
+        assert_eq!(
+            answer(&[a], 0x2080_0000, &mut p1),
+            Err(CapsRefusal::NotACapsControl(0x2080_0000))
+        );
     }
 
     #[test]
     fn msenc_ignores_the_instance_and_keeps_the_guests_padding() {
-        let a = CapsAnswer { cmd: MSENC_GET_CAPS_V2, instance: 0, caps: vec![9, 8, 7, 6, 5] };
+        let a = CapsAnswer {
+            cmd: MSENC_GET_CAPS_V2,
+            instance: 0,
+            caps: vec![9, 8, 7, 6, 5],
+        };
         let mut p = host_request(3).to_vec();
         p[5] = 0xee;
         answer(&[a], MSENC_GET_CAPS_V2, &mut p).expect("ignored instance");

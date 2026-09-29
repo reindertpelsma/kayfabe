@@ -24,19 +24,46 @@ const MUST_CALL: [(&str, &str); 4] = [
     ("VmCaps", "§9.1 — per-VM twin caps"),
     // ⊘⊘⊘ w824 — `read_traps.policy` used to sit here. It is a DELETE, not an omission: there is
     // no read-trap allowlist, no phase, and no read exit anywhere. See the gate below.
-    ("trappolicy::may_trap_read", "§5 — reads are never trapped, and the answer is a call site"),
+    (
+        "trappolicy::may_trap_read",
+        "§5 — reads are never trapped, and the answer is a call site",
+    ),
 ];
 
 const MUST_BE_REACHED: [(&str, &str); 9] = [
-    ("channel", "§7 — an untranslatable operand on a KERNEL channel must refuse, never fault"),
-    ("completion", "§8 — a forge is licensed only where no GPU work ran"),
-    ("trappolicy", "§5 — where a trap may exist at all; reads: nowhere on the product target"),
-    ("memmap", "§53 — the tiled map the VMM installs; a GAP in it is an accidental read exit"),
-    ("caps", "§9.1 — per-VM twin caps, the only thing stopping one guest starving another"),
+    (
+        "channel",
+        "§7 — an untranslatable operand on a KERNEL channel must refuse, never fault",
+    ),
+    (
+        "completion",
+        "§8 — a forge is licensed only where no GPU work ran",
+    ),
+    (
+        "trappolicy",
+        "§5 — where a trap may exist at all; reads: nowhere on the product target",
+    ),
+    (
+        "memmap",
+        "§53 — the tiled map the VMM installs; a GAP in it is an accidental read exit",
+    ),
+    (
+        "caps",
+        "§9.1 — per-VM twin caps, the only thing stopping one guest starving another",
+    ),
     ("wake", "§5.3 — the single wakeup word"),
-    ("leaf", "§6.4 — the system-memory bound; a guest leaf may never name OUR memslots"),
-    ("lifetime", "§9 — the teardown order; close() is not a synchronous free"),
-    ("shadow", "§5.5 — write semantics; a plain store is wrong for four of the five kinds"),
+    (
+        "leaf",
+        "§6.4 — the system-memory bound; a guest leaf may never name OUR memslots",
+    ),
+    (
+        "lifetime",
+        "§9 — the teardown order; close() is not a synchronous free",
+    ),
+    (
+        "shadow",
+        "§5.5 — write semantics; a plain store is wrong for four of the five kinds",
+    ),
 ];
 
 #[test]
@@ -44,14 +71,17 @@ fn every_policy_module_is_reached_from_a_composed_path() {
     let body = format!("{PLANE}\n{TRAP}");
     let mut orphaned = Vec::new();
     for (m, why) in MUST_BE_REACHED {
-        let used = body.contains(&format!("crate::{m}::")) || body.contains(&format!("use crate::{m}"));
+        let used =
+            body.contains(&format!("crate::{m}::")) || body.contains(&format!("use crate::{m}"));
         if !used {
             orphaned.push(format!("{m} — would stop enforcing: {why}"));
         }
     }
     for (sym, why) in MUST_CALL {
         if !body.contains(sym) {
-            orphaned.push(format!("{sym} is never CALLED — would stop enforcing: {why}"));
+            orphaned.push(format!(
+                "{sym} is never CALLED — would stop enforcing: {why}"
+            ));
         }
     }
     assert!(

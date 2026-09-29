@@ -388,7 +388,9 @@ pub fn run(pdbs: &[u64], ack: u64) -> Result<Vec<u8>, u32> {
     // leaves `acked` behind `generation`, which the kernel reads as RESYNC — the safe side.
     if ack != 0 {
         if let Err(e) = k.ack(ack) {
-            eprintln!("kayfabe-isolate: WALK-ACK ⊘ generation {ack} not acked ({e}) — next report is a RESYNC");
+            eprintln!(
+                "kayfabe-isolate: WALK-ACK ⊘ generation {ack} not acked ({e}) — next report is a RESYNC"
+            );
         }
     }
     let report = k.refresh(win_base, win_len, pdbs);

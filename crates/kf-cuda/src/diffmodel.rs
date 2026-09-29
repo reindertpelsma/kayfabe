@@ -35,8 +35,8 @@
 //! never a wrong translation.
 
 use crate::abi::{
-    AP_SYS, AP_SYS_NC, AP_VID, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KFWR_RF_KEY_PERM_ALL, KFWR_RF_KEY_PERM_DEFAULT,
-    KfMapRun, RF_AP, RF_CLASS, RF_KIND,
+    AP_SYS, AP_SYS_NC, AP_VID, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KFWR_RF_KEY_PERM_ALL,
+    KFWR_RF_KEY_PERM_DEFAULT, KfMapRun, RF_AP, RF_CLASS, RF_KIND,
 };
 
 /// Page-size classes.
@@ -74,7 +74,8 @@ pub fn host_key_with(flags: u32, key_perm: u32) -> u32 {
         AP_SYS | AP_SYS_NC => 1,
         _ => 2,
     };
-    ap | (RF_KIND.get(flags) << HKEY_KIND_LO) | (((flags & key_perm & KFWR_RF_KEY_PERM_ALL) >> RF_PERM_LO) << HKEY_PERM_LO)
+    ap | (RF_KIND.get(flags) << HKEY_KIND_LO)
+        | (((flags & key_perm & KFWR_RF_KEY_PERM_ALL) >> RF_PERM_LO) << HKEY_PERM_LO)
 }
 
 /// [`host_key_with`] under the default policy ([`KFWR_RF_KEY_PERM_DEFAULT`]).
@@ -136,7 +137,10 @@ pub struct EntryDiff {
 
 /// The walk's runs of one class, in order (the walk emits each class VA-ascending and disjoint).
 fn walk_class(walk: &[KfMapRun], c: usize) -> Vec<KfMapRun> {
-    walk.iter().filter(|r| class_of(r.flags) == c).copied().collect()
+    walk.iter()
+        .filter(|r| class_of(r.flags) == c)
+        .copied()
+        .collect()
 }
 
 /// Whether `w` backs `p` byte for byte: same host ground truth, same linear offset, no hole.
@@ -193,13 +197,25 @@ pub fn diff_with(com: &Committed, walk: &[KfMapRun], cap: usize, key_perm: u32) 
             if covered(x, &w, key_perm) {
                 kept.push(x);
             } else {
-                unmaps[c].push(KfMapRun { op: KFWR_OP_UNMAP, pdb_index: 0, ..*x });
+                unmaps[c].push(KfMapRun {
+                    op: KFWR_OP_UNMAP,
+                    pdb_index: 0,
+                    ..*x
+                });
             }
         }
         // Gap g lies between kept[g-1] and kept[g].
         for g in 0..=kept.len() {
-            let lo = if g == 0 { 0 } else { kept[g - 1].va + kept[g - 1].len };
-            let hi = if g == kept.len() { u64::MAX } else { kept[g].va };
+            let lo = if g == 0 {
+                0
+            } else {
+                kept[g - 1].va + kept[g - 1].len
+            };
+            let hi = if g == kept.len() {
+                u64::MAX
+            } else {
+                kept[g].va
+            };
             if lo >= hi {
                 continue;
             }
@@ -261,7 +277,11 @@ pub fn commit(com: &Committed, runs: &[KfMapRun], codes: &[AckCode]) -> Committe
                     rm[i] = true;
                 }
             } else if r.op == KFWR_OP_MAP {
-                let mut m = KfMapRun { op: KFWR_OP_MAP, pdb_index: 0, ..*r };
+                let mut m = KfMapRun {
+                    op: KFWR_OP_MAP,
+                    pdb_index: 0,
+                    ..*r
+                };
                 m.flags &= !KFWR_RF_HELD;
                 if code == AckCode::Held {
                     m.flags |= KFWR_RF_HELD;
@@ -269,7 +289,12 @@ pub fn commit(com: &Committed, runs: &[KfMapRun], codes: &[AckCode]) -> Committe
                 add.push(m);
             }
         }
-        let kept: Vec<KfMapRun> = p.iter().zip(&rm).filter(|(_, r)| !**r).map(|(x, _)| *x).collect();
+        let kept: Vec<KfMapRun> = p
+            .iter()
+            .zip(&rm)
+            .filter(|(_, r)| !**r)
+            .map(|(x, _)| *x)
+            .collect();
         // Merge by VA (both sorted).
         let (mut i, mut j) = (0, 0);
         let v = &mut out.cls[c];
@@ -325,18 +350,33 @@ pub fn coverage_with(runs: &[KfMapRun], key_perm: u32) -> [Vec<(u64, u64, u32, u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_KEY_PERM_ALL, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
+    use crate::abi::{
+        KFWR_RF_ATOMIC_DISABLE, KFWR_RF_KEY_PERM_ALL, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY,
+        KFWR_RF_VOLATILE,
+    };
     use crate::abi::{PS_64K, RF_PS};
 
     const PAGE: u64 = 0x1000;
 
     fn run(va: u64, gpga: u64, len: u64, flags: u32) -> KfMapRun {
-        KfMapRun { va, gpga, len, flags, op: KFWR_OP_MAP, pdb_index: 0 }
+        KfMapRun {
+            va,
+            gpga,
+            len,
+            flags,
+            op: KFWR_OP_MAP,
+            pdb_index: 0,
+        }
     }
     const SYS: u32 = RF_AP.put(AP_SYS as u32);
     const BIG: u32 = RF_PS.put(PS_64K as u32);
     /// The four permission bits a guest can flip in place.
-    const PERM_FLIPS: [u32; 4] = [KFWR_RF_READ_ONLY, KFWR_RF_ATOMIC_DISABLE, KFWR_RF_VOLATILE, KFWR_RF_PRIVILEGE];
+    const PERM_FLIPS: [u32; 4] = [
+        KFWR_RF_READ_ONLY,
+        KFWR_RF_ATOMIC_DISABLE,
+        KFWR_RF_VOLATILE,
+        KFWR_RF_PRIVILEGE,
+    ];
 
     /// ★ The named-range rewrite of [`class_of`] and [`host_key_with`] (`STATUS_AND_HANDOFF.md` §4
     /// item 6) is BEHAVIOUR-PRESERVING: both still compute, bit for bit, the formulas they were
@@ -359,7 +399,9 @@ mod tests {
         assert_eq!(PERM_FLIPS, [1 << 3, 1 << 4, 1 << 5, 1 << 6]);
         assert_eq!(KFWR_RF_KEY_PERM_ALL, 0x78, "the permission bits are 3..=6");
         let mut x = 0x9E37_79B9_7F4A_7C15u64;
-        let mut words: Vec<u32> = (0u32..=0xF).flat_map(|ps| (0u32..8).map(move |ap| (ps << 8) | ap)).collect();
+        let mut words: Vec<u32> = (0u32..=0xF)
+            .flat_map(|ps| (0u32..8).map(move |ap| (ps << 8) | ap))
+            .collect();
         words.extend([u32::MAX, KFWR_RF_HELD, 0xFF << 16, KFWR_RF_KEY_PERM_ALL]);
         for _ in 0..4096 {
             x ^= x << 13;
@@ -369,8 +411,18 @@ mod tests {
         }
         for &f in &words {
             assert_eq!(class_of(f), literal_class(f), "class_of({f:#x})");
-            for kp in [0, KFWR_RF_KEY_PERM_DEFAULT, KFWR_RF_KEY_PERM_ALL, u32::MAX, f.rotate_left(7)] {
-                assert_eq!(host_key_with(f, kp), literal_key(f, kp), "host_key_with({f:#x}, {kp:#x})");
+            for kp in [
+                0,
+                KFWR_RF_KEY_PERM_DEFAULT,
+                KFWR_RF_KEY_PERM_ALL,
+                u32::MAX,
+                f.rotate_left(7),
+            ] {
+                assert_eq!(
+                    host_key_with(f, kp),
+                    literal_key(f, kp),
+                    "host_key_with({f:#x}, {kp:#x})"
+                );
             }
         }
     }
@@ -388,19 +440,28 @@ mod tests {
     fn assert_sound(c: &Committed) {
         for v in &c.cls {
             for w in v.windows(2) {
-                assert!(w[0].va + w[0].len <= w[1].va, "committed not sorted/disjoint: {w:x?}");
+                assert!(
+                    w[0].va + w[0].len <= w[1].va,
+                    "committed not sorted/disjoint: {w:x?}"
+                );
             }
         }
     }
 
     #[test]
     fn a_first_walk_maps_every_run_and_then_is_quiet() {
-        let walk = vec![run(0x10_0000, 0x20_0000, 3 * PAGE, 0), run(0x20_0000, 0x5000, PAGE, SYS)];
+        let walk = vec![
+            run(0x10_0000, 0x20_0000, 3 * PAGE, 0),
+            run(0x20_0000, 0x5000, PAGE, SYS),
+        ];
         let d = diff(&Committed::default(), &walk, 1 << 14);
         assert_eq!(d.runs.len(), 2);
         assert!(d.runs.iter().all(|r| r.op == KFWR_OP_MAP));
         let c = commit(&Committed::default(), &d.runs, &ok(2));
-        assert!(diff(&c, &walk, 1 << 14).runs.is_empty(), "a settled slot diffs empty");
+        assert!(
+            diff(&c, &walk, 1 << 14).runs.is_empty(),
+            "a settled slot diffs empty"
+        );
         assert_eq!(coverage(&c.flat()), coverage(&walk));
     }
 
@@ -410,9 +471,20 @@ mod tests {
     fn a_failed_map_is_retried_and_a_successful_one_never_re_emitted() {
         let walk = vec![run(0x1000, 0xA000, PAGE, 0), run(0x3000, 0xC000, PAGE, 0)];
         let d = diff(&Committed::default(), &walk, 64);
-        let c = commit(&Committed::default(), &d.runs, &[AckCode::Applied, AckCode::Failed]);
+        let c = commit(
+            &Committed::default(),
+            &d.runs,
+            &[AckCode::Applied, AckCode::Failed],
+        );
         let d2 = diff(&c, &walk, 64);
-        assert_eq!(d2.runs, vec![KfMapRun { op: KFWR_OP_MAP, ..walk[1] }], "only the failed map, again");
+        assert_eq!(
+            d2.runs,
+            vec![KfMapRun {
+                op: KFWR_OP_MAP,
+                ..walk[1]
+            }],
+            "only the failed map, again"
+        );
     }
 
     /// An unmap names a WHOLE placement; the still-backed parts of it are mapped again.
@@ -420,9 +492,19 @@ mod tests {
     fn a_partly_changed_placement_is_unmapped_whole_and_its_rest_remapped() {
         let c = settle(&Committed::default(), &[run(0, 0x10_0000, 4 * PAGE, 0)]);
         // The guest re-points page 2.
-        let walk = vec![run(0, 0x10_0000, 2 * PAGE, 0), run(2 * PAGE, 0x90_0000, PAGE, 0), run(3 * PAGE, 0x10_3000, PAGE, 0)];
+        let walk = vec![
+            run(0, 0x10_0000, 2 * PAGE, 0),
+            run(2 * PAGE, 0x90_0000, PAGE, 0),
+            run(3 * PAGE, 0x10_3000, PAGE, 0),
+        ];
         let d = diff(&c, &walk, 64);
-        assert_eq!(d.runs[0], KfMapRun { op: KFWR_OP_UNMAP, ..c.cls[0][0] });
+        assert_eq!(
+            d.runs[0],
+            KfMapRun {
+                op: KFWR_OP_UNMAP,
+                ..c.cls[0][0]
+            }
+        );
         assert_eq!(d.runs.len(), 4, "{:x?}", d.runs);
         let c2 = commit(&c, &d.runs, &ok(4));
         assert_eq!(coverage(&c2.flat()), coverage(&walk));
@@ -440,14 +522,23 @@ mod tests {
     /// placed under the old one — migrated entries are kept, the rest retired.
     #[test]
     fn a_root_move_keeps_what_the_new_root_still_maps() {
-        let old = vec![run(0x1210_1000, 0x20_0000, PAGE, 0), run(0x1210_2000, 0x21_0000, PAGE, 0)];
+        let old = vec![
+            run(0x1210_1000, 0x20_0000, PAGE, 0),
+            run(0x1210_2000, 0x21_0000, PAGE, 0),
+        ];
         let c = settle(&Committed::default(), &old);
-        let new_root_walk = vec![run(0x1210_1000, 0x20_0000, PAGE, 0), run(0x5000_0000, 0x40_0000, PAGE, 0)];
+        let new_root_walk = vec![
+            run(0x1210_1000, 0x20_0000, PAGE, 0),
+            run(0x5000_0000, 0x40_0000, PAGE, 0),
+        ];
         let d = diff(&c, &new_root_walk, 64);
         assert_eq!(
             d.runs,
             vec![
-                KfMapRun { op: KFWR_OP_UNMAP, ..old[1] },
+                KfMapRun {
+                    op: KFWR_OP_UNMAP,
+                    ..old[1]
+                },
                 run(0x5000_0000, 0x40_0000, PAGE, 0),
             ]
         );
@@ -459,10 +550,17 @@ mod tests {
         let d = diff(&Committed::default(), &walk, 64);
         let c = commit(&Committed::default(), &d.runs, &[AckCode::Held]);
         assert_ne!(c.cls[0][0].flags & KFWR_RF_HELD, 0);
-        assert!(diff(&c, &walk, 64).runs.is_empty(), "a held placement is kept while the walk agrees");
+        assert!(
+            diff(&c, &walk, 64).runs.is_empty(),
+            "a held placement is kept while the walk agrees"
+        );
         let d = diff(&c, &[], 64);
         assert_eq!(d.runs.len(), 1);
-        assert_ne!(d.runs[0].flags & KFWR_RF_HELD, 0, "its unmap says it was never ours");
+        assert_ne!(
+            d.runs[0].flags & KFWR_RF_HELD,
+            0,
+            "its unmap says it was never ours"
+        );
     }
 
     /// ★★★★★ v3-roperm — **A GUEST RW→RO DOWNGRADE OVER THE SAME BACKING IS A CHANGE.** Stock UVM
@@ -475,26 +573,58 @@ mod tests {
     fn a_rw_to_ro_downgrade_over_the_same_backing_unmaps_and_remaps() {
         let rw = run(0x10_0000, 0x20_0000, 4 * PAGE, SYS);
         let c = settle(&Committed::default(), &[rw]);
-        assert!(diff(&c, &[rw], 64).runs.is_empty(), "control: an unchanged walk is quiet");
+        assert!(
+            diff(&c, &[rw], 64).runs.is_empty(),
+            "control: an unchanged walk is quiet"
+        );
         let ro = run(0x10_0000, 0x20_0000, 4 * PAGE, SYS | KFWR_RF_READ_ONLY);
         let d = diff(&c, &[ro], 64);
         assert_eq!(
             d.runs,
-            vec![KfMapRun { op: KFWR_OP_UNMAP, ..rw }, ro],
+            vec![
+                KfMapRun {
+                    op: KFWR_OP_UNMAP,
+                    ..rw
+                },
+                ro
+            ],
             "a permission downgrade must retire the RW placement and place the RO one"
         );
         let c = commit(&c, &d.runs, &ok(d.runs.len()));
-        assert_eq!(c.cls[0], vec![ro], "the slot now records the placement as read-only");
-        assert!(diff(&c, &[ro], 64).runs.is_empty(), "and is quiet once it landed");
+        assert_eq!(
+            c.cls[0],
+            vec![ro],
+            "the slot now records the placement as read-only"
+        );
+        assert!(
+            diff(&c, &[ro], 64).runs.is_empty(),
+            "and is quiet once it landed"
+        );
         // The upgrade back (a collapse re-grants write) is a change too.
         let d = diff(&c, &[rw], 64);
-        assert_eq!(d.runs, vec![KfMapRun { op: KFWR_OP_UNMAP, ..ro }, rw]);
+        assert_eq!(
+            d.runs,
+            vec![
+                KfMapRun {
+                    op: KFWR_OP_UNMAP,
+                    ..ro
+                },
+                rw
+            ]
+        );
         // ⊘ A refused remap stays a difference: the RW placement is still what the host holds.
         let c2 = settle(&Committed::default(), &[rw]);
         let d = diff(&c2, &[ro], 64);
         let c2 = commit(&c2, &d.runs, &[AckCode::Applied, AckCode::Failed]);
-        assert!(c2.is_empty(), "the unmap landed, the RO map did not: nothing is placed");
-        assert_eq!(diff(&c2, &[ro], 64).runs, vec![ro], "and the RO map is retried");
+        assert!(
+            c2.is_empty(),
+            "the unmap landed, the RO map did not: nothing is placed"
+        );
+        assert_eq!(
+            diff(&c2, &[ro], 64).runs,
+            vec![ro],
+            "and the RO map is retried"
+        );
     }
 
     /// ★ The DEFAULT key: READ_ONLY and VOLATILE (carried to the host map) and PRIVILEGE (a user
@@ -506,15 +636,35 @@ mod tests {
         let base = run(0, 0x40_0000, 2 * PAGE, 0);
         let c = settle(&Committed::default(), &[base]);
         for bit in [KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE, KFWR_RF_PRIVILEGE] {
-            let w = KfMapRun { flags: base.flags | bit, ..base };
-            assert_eq!(diff(&c, &[w], 64).runs.len(), 2, "flag {bit:#x} must re-map");
+            let w = KfMapRun {
+                flags: base.flags | bit,
+                ..base
+            };
+            assert_eq!(
+                diff(&c, &[w], 64).runs.len(),
+                2,
+                "flag {bit:#x} must re-map"
+            );
             assert_ne!(host_key(w.flags), host_key(base.flags));
         }
-        let ad = KfMapRun { flags: base.flags | KFWR_RF_ATOMIC_DISABLE, ..base };
-        assert!(diff(&c, &[ad], 64).runs.is_empty(), "ATOMIC_DISABLE is not keyed by default");
-        assert_eq!(diff_with(&c, &[ad], 64, KFWR_RF_KEY_PERM_ALL).runs.len(), 2, "…and is when the host carries it");
+        let ad = KfMapRun {
+            flags: base.flags | KFWR_RF_ATOMIC_DISABLE,
+            ..base
+        };
+        assert!(
+            diff(&c, &[ad], 64).runs.is_empty(),
+            "ATOMIC_DISABLE is not keyed by default"
+        );
+        assert_eq!(
+            diff_with(&c, &[ad], 64, KFWR_RF_KEY_PERM_ALL).runs.len(),
+            2,
+            "…and is when the host carries it"
+        );
         // A bit outside the permission set never joins the key, whatever the policy says.
-        assert_eq!(host_key_with(base.flags | KFWR_RF_HELD, u32::MAX), host_key_with(base.flags, u32::MAX));
+        assert_eq!(
+            host_key_with(base.flags | KFWR_RF_HELD, u32::MAX),
+            host_key_with(base.flags, u32::MAX)
+        );
     }
 
     /// A downgrade of PART of a placement retires the whole placement (the host unmaps by the VA
@@ -522,7 +672,10 @@ mod tests {
     #[test]
     fn a_partial_downgrade_splits_the_placement_by_permission() {
         let c = settle(&Committed::default(), &[run(0, 0x10_0000, 4 * PAGE, 0)]);
-        let walk = vec![run(0, 0x10_0000, 2 * PAGE, 0), run(2 * PAGE, 0x10_2000, 2 * PAGE, KFWR_RF_READ_ONLY)];
+        let walk = vec![
+            run(0, 0x10_0000, 2 * PAGE, 0),
+            run(2 * PAGE, 0x10_2000, 2 * PAGE, KFWR_RF_READ_ONLY),
+        ];
         let d = diff(&c, &walk, 64);
         assert_eq!(d.runs.len(), 3);
         assert_eq!(d.runs[0].op, KFWR_OP_UNMAP);
@@ -538,21 +691,47 @@ mod tests {
         // The same VAs, now one 64 KiB page with the same backing.
         let walk = vec![run(0, 0x10_0000, 16 * PAGE, BIG)];
         let d = diff(&c, &walk, 64);
-        assert_eq!(d.runs.iter().map(|r| r.op).collect::<Vec<_>>(), vec![KFWR_OP_UNMAP, KFWR_OP_MAP]);
+        assert_eq!(
+            d.runs.iter().map(|r| r.op).collect::<Vec<_>>(),
+            vec![KFWR_OP_UNMAP, KFWR_OP_MAP]
+        );
     }
 
     #[test]
     fn a_diff_that_could_overflow_the_slot_withholds_its_maps() {
-        let c = settle(&Committed::default(), &[run(0, 0x10_0000, PAGE, 0), run(2 * PAGE, 0x20_0000, PAGE, 0)]);
-        let walk = vec![run(2 * PAGE, 0x30_0000, PAGE, 0), run(4 * PAGE, 0x40_0000, PAGE, 0)];
+        let c = settle(
+            &Committed::default(),
+            &[
+                run(0, 0x10_0000, PAGE, 0),
+                run(2 * PAGE, 0x20_0000, PAGE, 0),
+            ],
+        );
+        let walk = vec![
+            run(2 * PAGE, 0x30_0000, PAGE, 0),
+            run(4 * PAGE, 0x40_0000, PAGE, 0),
+        ];
         let d = diff(&c, &walk, 3);
         assert!(d.partial);
         assert!(d.runs.iter().all(|r| r.op == KFWR_OP_UNMAP));
         let c = commit(&c, &d.runs, &ok(d.runs.len()));
         let d = diff(&c, &walk, 3);
         assert!(!d.partial && d.runs.len() == 2);
-        let full = settle(&Committed::default(), &[run(0, 0, PAGE, 0), run(PAGE * 2, 0, PAGE, 0)]);
-        assert!(diff(&full, &[run(0, 0, PAGE, 0), run(PAGE * 2, 0, PAGE, 0), run(PAGE * 9, 0, PAGE, 0)], 2).overflow);
+        let full = settle(
+            &Committed::default(),
+            &[run(0, 0, PAGE, 0), run(PAGE * 2, 0, PAGE, 0)],
+        );
+        assert!(
+            diff(
+                &full,
+                &[
+                    run(0, 0, PAGE, 0),
+                    run(PAGE * 2, 0, PAGE, 0),
+                    run(PAGE * 9, 0, PAGE, 0)
+                ],
+                2
+            )
+            .overflow
+        );
     }
 
     // ── property tests: a deterministic generator, no dependency ─────────────────────────────
@@ -580,7 +759,13 @@ mod tests {
             for _ in 0..n {
                 va += r.below(3) * PAGE;
                 let len = (1 + r.below(3)) * PAGE;
-                let flags = RF_PS.put(c) | if r.below(4) == 0 { SYS } else { 0 } | if r.below(5) == 0 { KFWR_RF_READ_ONLY } else { 0 };
+                let flags = RF_PS.put(c)
+                    | if r.below(4) == 0 { SYS } else { 0 }
+                    | if r.below(5) == 0 {
+                        KFWR_RF_READ_ONLY
+                    } else {
+                        0
+                    };
                 let gpga = r.below(64) * PAGE;
                 let x = run(va, gpga, len, flags);
                 if let Some(l) = last.as_mut()
@@ -610,13 +795,24 @@ mod tests {
         for x in walk {
             match r.below(10) {
                 0 => {}
-                1 => v.push(KfMapRun { gpga: r.below(64) * PAGE, ..*x }),
+                1 => v.push(KfMapRun {
+                    gpga: r.below(64) * PAGE,
+                    ..*x
+                }),
                 // ★ v3-roperm: a permission flip at the same backing (RW↔RO, atomics, cache,
                 // privilege) — the in-place downgrade UVM's read duplication performs.
-                3 => v.push(KfMapRun { flags: x.flags ^ PERM_FLIPS[r.below(4) as usize], ..*x }),
+                3 => v.push(KfMapRun {
+                    flags: x.flags ^ PERM_FLIPS[r.below(4) as usize],
+                    ..*x
+                }),
                 2 if x.len > PAGE => {
                     v.push(KfMapRun { len: PAGE, ..*x });
-                    v.push(KfMapRun { va: x.va + PAGE, gpga: r.below(64) * PAGE, len: x.len - PAGE, ..*x });
+                    v.push(KfMapRun {
+                        va: x.va + PAGE,
+                        gpga: r.below(64) * PAGE,
+                        len: x.len - PAGE,
+                        ..*x
+                    });
                 }
                 _ => v.push(*x),
             }
@@ -646,7 +842,10 @@ mod tests {
                 assert!(!d.partial && !d.overflow);
                 for u in d.runs.iter().filter(|x| x.op == KFWR_OP_UNMAP) {
                     let p = &com.cls[class_of(u.flags)];
-                    assert!(p.iter().any(|x| x.va == u.va && x.len == u.len), "unmap of a non-placement {u:x?}");
+                    assert!(
+                        p.iter().any(|x| x.va == u.va && x.len == u.len),
+                        "unmap of a non-placement {u:x?}"
+                    );
                 }
                 // The host refuses at random; a map overlapping a refused unmap is not attempted.
                 let mut codes: Vec<AckCode> = Vec::with_capacity(d.runs.len());
@@ -654,8 +853,14 @@ mod tests {
                 for x in &d.runs {
                     let c = class_of(x.flags);
                     let blocked = x.op == KFWR_OP_MAP
-                        && failed_unmaps.iter().any(|&(fc, a, b)| fc == c && x.va < b && a < x.va + x.len);
-                    let code = if blocked || r.below(4) == 0 { AckCode::Failed } else { AckCode::Applied };
+                        && failed_unmaps
+                            .iter()
+                            .any(|&(fc, a, b)| fc == c && x.va < b && a < x.va + x.len);
+                    let code = if blocked || r.below(4) == 0 {
+                        AckCode::Failed
+                    } else {
+                        AckCode::Applied
+                    };
                     if x.op == KFWR_OP_UNMAP && code == AckCode::Failed {
                         failed_unmaps.push((c, x.va, x.va + x.len));
                     }
@@ -666,18 +871,31 @@ mod tests {
                 // Retry and no-re-emission, against the SAME walk.
                 let d2 = diff(&next, &walk, 1 << 14);
                 for (x, code) in d.runs.iter().zip(&codes) {
-                    let again = d2.runs.iter().any(|y| y.op == x.op && y.va == x.va && y.len == x.len && y.gpga == x.gpga);
+                    let again = d2.runs.iter().any(|y| {
+                        y.op == x.op && y.va == x.va && y.len == x.len && y.gpga == x.gpga
+                    });
                     if *code == AckCode::Applied {
                         assert!(!again, "an applied entry was re-emitted: {x:x?}");
                     } else if x.op == KFWR_OP_UNMAP {
                         assert!(again, "a refused unmap was not retried: {x:x?}");
                     } else {
                         // A refused map's bytes are still unplaced: covered by the next diff's maps.
-                        let cov = coverage(&d2.runs.iter().filter(|y| y.op == KFWR_OP_MAP).copied().collect::<Vec<_>>());
+                        let cov = coverage(
+                            &d2.runs
+                                .iter()
+                                .filter(|y| y.op == KFWR_OP_MAP)
+                                .copied()
+                                .collect::<Vec<_>>(),
+                        );
                         let mine = coverage(&[*x]);
                         let c = class_of(x.flags);
                         let (va, len, _, _) = mine[c][0];
-                        assert!(cov[c].iter().any(|&(a, l, _, _)| a <= va && va + len <= a + l), "a refused map was not retried: {x:x?}");
+                        assert!(
+                            cov[c]
+                                .iter()
+                                .any(|&(a, l, _, _)| a <= va && va + len <= a + l),
+                            "a refused map was not retried: {x:x?}"
+                        );
                     }
                 }
                 com = next;
@@ -687,7 +905,10 @@ mod tests {
                 com = settle(&com, &walk);
             }
             assert_eq!(coverage(&com.flat()), coverage(&walk), "closure");
-            assert!(diff(&com, &walk, 1 << 14).runs.is_empty(), "settled ⇒ quiet");
+            assert!(
+                diff(&com, &walk, 1 << 14).runs.is_empty(),
+                "settled ⇒ quiet"
+            );
         }
     }
 

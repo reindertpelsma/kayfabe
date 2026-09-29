@@ -67,8 +67,8 @@
 //! `tests/cap1b_differential.rs` is where the reply plane is now differenced.
 
 pub mod format;
-pub mod gspreplay;
 pub mod ga10x;
+pub mod gspreplay;
 pub mod ledger;
 pub mod oracle;
 pub mod replay;

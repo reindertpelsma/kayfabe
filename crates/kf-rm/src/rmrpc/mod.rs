@@ -216,14 +216,12 @@ pub use policy::{
 };
 pub use reasm::{MAX_CONTINUATIONS, MAX_REASSEMBLED_BODY, ReasmLimits, Reassembled, Reassembler};
 
+use crate::rmgraph::{AllocFacts, NodeKey, RESERVED_CLIENT, RmEvent};
 use kf_abi::capability::{AllocPermit, ControlPermit, Denial, PassthroughRule};
 use kf_abi::versions::{AllocParams, ControlParams, DriverAbiTable};
 use kf_abi::wire::AbiError;
-use kf_abi::{
-    ClientKindRuleUnknown, GuestOs, NV_ERR_NOT_SUPPORTED, rpc_params_are_serialized,
-};
+use kf_abi::{ClientKindRuleUnknown, GuestOs, NV_ERR_NOT_SUPPORTED, rpc_params_are_serialized};
 use kf_arch::ids::{ClassId, ControlCmd, HClient, HObject, Pdb};
-use crate::rmgraph::{AllocFacts, NodeKey, RESERVED_CLIENT, RmEvent};
 use kf_gsp::{RpcCommand, RpcFunction};
 use kf_trace::FaultTag;
 
@@ -1809,7 +1807,6 @@ fn translate_published_pdes(
         pdb_aperture: kf_abi::gvaspacepdes::decode_aperture(root.aperture),
     }))
 }
-
 
 /// `DUP_OBJECT` (fn 21) → [`RmEvent::Dup`].
 ///

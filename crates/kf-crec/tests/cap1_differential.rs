@@ -52,11 +52,11 @@
 //! is not**, and it is the closure limit: the first multi-element command in the capture.
 
 use kf_crec::format::CKind;
+use kf_crec::gspreplay::Observation;
 use kf_crec::{
     Answer, CTrace, Fill, Note, ReconKind, Replay, ReplayResult, Verdict, bench_abi, cap1_path,
     census, load_cap1,
 };
-use kf_crec::gspreplay::Observation;
 use kf_gsp::{BootPhase, GspFault, Transition};
 use kf_trace::{TraceEvent, diff};
 
@@ -171,17 +171,34 @@ fn every_gsp_register_read_within_the_oracles_reach_is_served_exactly_as_the_c_s
     let bcr = |evs: &[TraceEvent]| {
         evs.iter()
             .find_map(|e| match e {
-                TraceEvent::MmioRead { off: 0x0011_1668, val, .. } => Some(*val),
+                TraceEvent::MmioRead {
+                    off: 0x0011_1668,
+                    val,
+                    ..
+                } => Some(*val),
                 _ => None,
             })
             .expect("the teardown reads BCR_CTRL")
     };
     assert_eq!(bcr(&after_c) & 1, 0, "the C: VALID never rose");
-    assert_eq!(bcr(&after_rust) & 1, 1, "ours: the core switch is acknowledged");
+    assert_eq!(
+        bcr(&after_rust) & 1,
+        1,
+        "ours: the core switch is acknowledged"
+    );
     let mailbox_at = after_c
         .iter()
         .zip(&after_rust)
-        .position(|(a, b)| a != b && matches!(a, TraceEvent::MmioRead { off: 0x0011_0040, .. }))
+        .position(|(a, b)| {
+            a != b
+                && matches!(
+                    a,
+                    TraceEvent::MmioRead {
+                        off: 0x0011_0040,
+                        ..
+                    }
+                )
+        })
         .expect("the MAILBOX0 divergence");
     assert!(
         matches!(

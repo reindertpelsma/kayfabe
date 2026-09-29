@@ -1152,7 +1152,11 @@ pub const fn engine_type_nvenc(i: u32) -> Option<u32> {
 /// `NV2080_ENGINE_TYPE_NVDEC(i)` (`cl2080_notification.h:408`), `None` past `NVDEC7`.
 #[must_use]
 pub const fn engine_type_nvdec(i: u32) -> Option<u32> {
-    if i < NVDEC_SIZE { Some(NV2080_ENGINE_TYPE_NVDEC0 + i) } else { None }
+    if i < NVDEC_SIZE {
+        Some(NV2080_ENGINE_TYPE_NVDEC0 + i)
+    } else {
+        None
+    }
 }
 
 /// ★ *"Which NVENC is this, in **NV2080** space?"* — `NV2080_ENGINE_TYPE_IS_NVENC` then
@@ -5872,7 +5876,9 @@ impl DisableChannels {
             only_disable_scheduling: b[8] != 0,
             rewind_gp_put: b[9] != 0,
             runlist_preempt_event: u64::from_le_bytes(ev),
-            list: (0..n as usize).map(|i| (u32_at(24 + 4 * i), u32_at(280 + 4 * i))).collect(),
+            list: (0..n as usize)
+                .map(|i| (u32_at(24 + 4 * i), u32_at(280 + 4 * i)))
+                .collect(),
         })
     }
 
@@ -5883,7 +5889,9 @@ impl DisableChannels {
     /// [`DisableChannelsError::TooMany`].
     pub fn encode(&self) -> Result<[u8; DISABLE_CHANNELS_PARAMS_SIZE], DisableChannelsError> {
         if self.list.len() > DISABLE_CHANNELS_MAX_ENTRIES {
-            return Err(DisableChannelsError::TooMany(u32::try_from(self.list.len()).unwrap_or(u32::MAX)));
+            return Err(DisableChannelsError::TooMany(
+                u32::try_from(self.list.len()).unwrap_or(u32::MAX),
+            ));
         }
         let mut b = [0u8; DISABLE_CHANNELS_PARAMS_SIZE];
         b[0] = u8::from(self.disable);
@@ -5916,8 +5924,11 @@ impl Preempt {
     /// Decode; `None` unless exactly [`PREEMPT_PARAMS_SIZE`] bytes.
     #[must_use]
     pub fn decode(b: &[u8]) -> Option<Preempt> {
-        (b.len() == PREEMPT_PARAMS_SIZE)
-            .then(|| Preempt { wait: b[0] != 0, manual_timeout: b[1] != 0, timeout_us: u32::from_le_bytes([b[4], b[5], b[6], b[7]]) })
+        (b.len() == PREEMPT_PARAMS_SIZE).then(|| Preempt {
+            wait: b[0] != 0,
+            manual_timeout: b[1] != 0,
+            timeout_us: u32::from_le_bytes([b[4], b[5], b[6], b[7]]),
+        })
     }
 
     /// Encode.
@@ -5949,18 +5960,34 @@ mod chanctl_shape_tests {
         assert_eq!(b[0], 1);
         assert_eq!(u32::from_le_bytes([b[4], b[5], b[6], b[7]]), 2);
         assert_eq!(b[9], 1);
-        assert_eq!(u32::from_le_bytes([b[28], b[29], b[30], b[31]]), 0xc1d0_000b);
-        assert_eq!(u32::from_le_bytes([b[284], b[285], b[286], b[287]]), 0xcafe_0014);
+        assert_eq!(
+            u32::from_le_bytes([b[28], b[29], b[30], b[31]]),
+            0xc1d0_000b
+        );
+        assert_eq!(
+            u32::from_le_bytes([b[284], b[285], b[286], b[287]]),
+            0xcafe_0014
+        );
         assert_eq!(DisableChannels::decode(&b), Ok(d));
         let mut bad = b;
         bad[4..8].copy_from_slice(&65u32.to_le_bytes());
-        assert_eq!(DisableChannels::decode(&bad), Err(DisableChannelsError::TooMany(65)));
-        assert_eq!(DisableChannels::decode(&b[..535]), Err(DisableChannelsError::Size(535)));
+        assert_eq!(
+            DisableChannels::decode(&bad),
+            Err(DisableChannelsError::TooMany(65))
+        );
+        assert_eq!(
+            DisableChannels::decode(&b[..535]),
+            Err(DisableChannelsError::Size(535))
+        );
     }
 
     #[test]
     fn preempt_round_trips() {
-        let p = Preempt { wait: true, manual_timeout: false, timeout_us: 0 };
+        let p = Preempt {
+            wait: true,
+            manual_timeout: false,
+            timeout_us: 0,
+        };
         assert_eq!(p.encode(), [1, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(Preempt::decode(&p.encode()), Some(p));
         assert_eq!(Preempt::decode(&[1, 0, 0]), None);

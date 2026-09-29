@@ -95,7 +95,8 @@ pub struct ZbcValue {
 /// Little-endian word `i` of `b`.
 #[must_use]
 pub fn word(b: &[u8], i: usize) -> Option<u32> {
-    b.get(4 * i..4 * i + 4).map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+    b.get(4 * i..4 * i + 4)
+        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
 }
 
 /// Write word `i` of `b` (no-op past the end — callers size `b` from the constants above).

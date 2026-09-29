@@ -26,9 +26,9 @@ use kf_abi::fmbsize::{
     GA106_CE_FAULT_METHOD_BUFFER_SIZE, NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
-use kf_rm::hostfacts::{self, FactRefusal};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::hostfacts::{self, FactRefusal};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `RpcControlReq::HEADER` — `cap1b`'s own arithmetic: `paylen 44 - 4 = 40`.
 const PARAMS_AT: usize = 40;
@@ -41,7 +41,11 @@ fn chip() -> kf_rm::HostFacts {
 }
 
 fn policy_for(c: kf_rm::HostFacts) -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), std::sync::Arc::new(c), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        std::sync::Arc::new(c),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 fn policy() -> InitTablePolicy {
@@ -159,7 +163,9 @@ fn a_chip_that_states_no_size_is_refused_at_realize_not_served_a_zero() {
     assert!(why.contains("fault records"), "{why}");
     // The real value still realizes, so the check above is not passing for the wrong reason.
     assert_eq!(
-        hostfacts::derive_ce_fault_method_buffer_size(&chip().ce_fault_method_buffer_size.to_le_bytes()),
+        hostfacts::derive_ce_fault_method_buffer_size(
+            &chip().ce_fault_method_buffer_size.to_le_bytes()
+        ),
         Ok(20480)
     );
 }

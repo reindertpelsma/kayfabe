@@ -12,7 +12,9 @@
 
 use crate::ring::{GuestMemory, Next, RingRefusal, TranslatedRing};
 use crate::translated::{IsCeClass, Window};
-use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_GP_GET, USERD_GP_PUT, fifo, gp_entry, method_header_inc};
+use kf_abi::submit::{
+    ENGINE_TYPE_COPY0, USERD_GP_GET, USERD_GP_PUT, fifo, gp_entry, method_header_inc,
+};
 use kf_linux_raw::HostOffset as At;
 use std::collections::VecDeque;
 
@@ -111,7 +113,11 @@ impl HostRing {
     ///
     /// # Errors
     /// Any step's refusal, by name.
-    pub fn on_engine(rm: &kf_host::HostRm, space: kf_host::VaSpace, engine: u32) -> Result<HostRing, String> {
+    pub fn on_engine(
+        rm: &kf_host::HostRm,
+        space: kf_host::VaSpace,
+        engine: u32,
+    ) -> Result<HostRing, String> {
         Self::on_engine_at(rm, space, engine, None)
     }
 
@@ -123,32 +129,61 @@ impl HostRing {
     ///
     /// # Errors
     /// Any step's refusal, by name; `at` not below [`RING_VA_LIMIT`] - [`RING_BYTES`].
-    pub fn on_engine_at(rm: &kf_host::HostRm, space: kf_host::VaSpace, engine: u32, at: Option<u64>) -> Result<HostRing, String> {
+    pub fn on_engine_at(
+        rm: &kf_host::HostRm,
+        space: kf_host::VaSpace,
+        engine: u32,
+        at: Option<u64>,
+    ) -> Result<HostRing, String> {
         if let Some(a) = at
             && a.checked_add(RING_BYTES).is_none_or(|e| e > RING_VA_LIMIT)
         {
-            return Err(format!("ring VA {a:#x}+{RING_BYTES:#x} is not below 2^40 (GP entry GET_HI 7:0)"));
+            return Err(format!(
+                "ring VA {a:#x}+{RING_BYTES:#x} is not below 2^40 (GP entry GET_HI 7:0)"
+            ));
         }
-        let mem = rm.alloc_device_local(RING_BYTES).map_err(|e| format!("ring obj: {e:?}"))?;
-        let va = match rm.map(space, mem, kf_host::MapBacking::Dedicated, 0, RING_BYTES, at, false) {
+        let mem = rm
+            .alloc_device_local(RING_BYTES)
+            .map_err(|e| format!("ring obj: {e:?}"))?;
+        let va = match rm.map(
+            space,
+            mem,
+            kf_host::MapBacking::Dedicated,
+            0,
+            RING_BYTES,
+            at,
+            false,
+        ) {
             Ok(va) => va,
             Err(e) => {
                 let _ = rm.free(mem);
-                return Err(format!("map ring{}: {e:?}", at.map(|a| format!(" at {a:#x}")).unwrap_or_default()));
+                return Err(format!(
+                    "map ring{}: {e:?}",
+                    at.map(|a| format!(" at {a:#x}")).unwrap_or_default()
+                ));
             }
         };
         // ★ Every failure below gives back what was built (object, mapping, view) — a refused
         // birth must not leak the host aperture any more than a retired one may.
         let undo = |cookie: Option<u64>| {
             if let Some(c) = cookie {
-                let _ = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: mem, p_linear_address: c });
+                let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
+                    h_memory: mem,
+                    p_linear_address: c,
+                });
             }
             let _ = rm.unmap(space, va, false);
             let _ = rm.free(mem);
         };
         // The CPU view is armed with its release COOKIE kept (`HostRm::map_cpu` drops it, which
         // makes a view unreleasable for the life of the process).
-        let (node, cookie) = match rm.arm_cpu_view(kf_host::MapNode::Gpu, mem, 0, RING_BYTES, kf_host::ViewAccess::ReadWrite) {
+        let (node, cookie) = match rm.arm_cpu_view(
+            kf_host::MapNode::Gpu,
+            mem,
+            0,
+            RING_BYTES,
+            kf_host::ViewAccess::ReadWrite,
+        ) {
             Ok(v) => v,
             Err(e) => {
                 undo(None);
@@ -168,13 +203,17 @@ impl HostRing {
             }
         };
         let owned = RingOwned { mem, cookie, space };
-        let chan = match rm.birth_channel(space, engine, kf_host::RingSpec {
-            gp_fifo_va: va + GPFIFO_OFF,
-            gp_fifo_entries: GPFIFO_ENTRIES,
-            userd_memory: mem,
-            userd_offset: USERD_OFF,
-            err_notifier: 0,
-        }) {
+        let chan = match rm.birth_channel(
+            space,
+            engine,
+            kf_host::RingSpec {
+                gp_fifo_va: va + GPFIFO_OFF,
+                gp_fifo_entries: GPFIFO_ENTRIES,
+                userd_memory: mem,
+                userd_offset: USERD_OFF,
+                err_notifier: 0,
+            },
+        ) {
             Ok(c) => c,
             Err(e) => {
                 drop(cpu);
@@ -182,12 +221,26 @@ impl HostRing {
                 return Err(format!("birth: {e:?}"));
             }
         };
-        let mut ring = HostRing { cpu: Some(cpu), _node: node, owned: Some(owned), va, chan, head: 0, put: 0, seq: 0, live: VecDeque::new() };
+        let mut ring = HostRing {
+            cpu: Some(cpu),
+            _node: node,
+            owned: Some(owned),
+            va,
+            chan,
+            head: 0,
+            put: 0,
+            seq: 0,
+            live: VecDeque::new(),
+        };
         let tail = rm
             .alloc_ce_object(chan, engine)
             .map_err(|e| format!("ce object: {e:?}"))
             .and_then(|_| rm.schedule(chan).map_err(|e| format!("schedule: {e:?}")))
-            .and_then(|()| ring.cpu()?.store_u32(At::new(FENCE_OFF), 0).map_err(|e| format!("{e:?}")));
+            .and_then(|()| {
+                ring.cpu()?
+                    .store_u32(At::new(FENCE_OFF), 0)
+                    .map_err(|e| format!("{e:?}"))
+            });
         if let Err(e) = tail {
             let _ = rm.free_channel(chan);
             ring.release(rm);
@@ -197,7 +250,9 @@ impl HostRing {
     }
 
     fn cpu(&self) -> Result<&kf_linux_raw::VolatileRegion, String> {
-        self.cpu.as_ref().ok_or_else(|| "host ring already released (no CPU mapping)".to_string())
+        self.cpu
+            .as_ref()
+            .ok_or_else(|| "host ring already released (no CPU mapping)".to_string())
     }
 
     /// ★ v3-appfix J: give back what the ring owns besides its channel — its CPU view (host BAR1
@@ -211,7 +266,10 @@ impl HostRing {
         let o = self.owned.take()?;
         // Drop the CPU mapping (munmap) before the view's aperture is given back.
         self.cpu = None;
-        let view = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: o.mem, p_linear_address: o.cookie });
+        let view = rm.release_cpu_view(kf_host::CpuViewRelease {
+            h_memory: o.mem,
+            p_linear_address: o.cookie,
+        });
         let unmap = rm.unmap(o.space, self.va, false);
         let free = rm.free(o.mem);
         Some(format!(
@@ -256,7 +314,10 @@ impl HostRing {
     /// # Errors
     /// A failed load.
     pub fn completed(&mut self) -> Result<u32, String> {
-        let done = self.cpu()?.load_u32(At::new(FENCE_OFF)).map_err(|e| format!("{e:?}"))?;
+        let done = self
+            .cpu()?
+            .load_u32(At::new(FENCE_OFF))
+            .map_err(|e| format!("{e:?}"))?;
         while self.live.front().is_some_and(|r| reached(done, r.seq)) {
             self.live.pop_front();
         }
@@ -280,28 +341,47 @@ impl HostRing {
             return Ok(Ok(()));
         }
         if n > PB_BYTES / 2 {
-            return Err(format!("segment of {n} bytes exceeds half the host pushbuffer"));
+            return Err(format!(
+                "segment of {n} bytes exceeds half the host pushbuffer"
+            ));
         }
         if self.live.len() + usize::from(reserve > 0) >= MAX_IN_FLIGHT {
             return Ok(Err(Busy));
         }
         let need = n + reserve;
-        let start = if self.head + need <= PB_BYTES { self.head } else { 0 };
-        let overlaps = self.live.iter().any(|r| start < r.start + r.len && r.start < start + need);
+        let start = if self.head + need <= PB_BYTES {
+            self.head
+        } else {
+            0
+        };
+        let overlaps = self
+            .live
+            .iter()
+            .any(|r| start < r.start + r.len && r.start < start + need);
         if overlaps {
             return Ok(Err(Busy));
         }
         for (i, w) in words.iter().enumerate() {
-            self.cpu()?.store_u32(At::new(start + 4 * i as u64), *w).map_err(|e| format!("{e:?}"))?;
+            self.cpu()?
+                .store_u32(At::new(start + 4 * i as u64), *w)
+                .map_err(|e| format!("{e:?}"))?;
         }
         let entry = gp_entry(self.va + start, n).ok_or("gp entry (ring VA above 2^40?)")?;
         let gp = GPFIFO_OFF + u64::from(self.put % GPFIFO_ENTRIES) * 8;
-        self.cpu()?.store_u32(At::new(gp), entry as u32).map_err(|e| format!("{e:?}"))?;
-        self.cpu()?.store_u32(At::new(gp + 4), (entry >> 32) as u32).map_err(|e| format!("{e:?}"))?;
+        self.cpu()?
+            .store_u32(At::new(gp), entry as u32)
+            .map_err(|e| format!("{e:?}"))?;
+        self.cpu()?
+            .store_u32(At::new(gp + 4), (entry >> 32) as u32)
+            .map_err(|e| format!("{e:?}"))?;
         self.put = self.put.wrapping_add(1);
         self.head = start + n;
         // Covered by the NEXT fence.
-        self.live.push_back(Region { start, len: n, seq: self.seq.wrapping_add(1) });
+        self.live.push_back(Region {
+            start,
+            len: n,
+            seq: self.seq.wrapping_add(1),
+        });
         Ok(Ok(()))
     }
 
@@ -322,7 +402,8 @@ impl HostRing {
             .store_u32(At::new(USERD_OFF + USERD_GP_PUT), self.put % GPFIFO_ENTRIES)
             .map_err(|e| format!("{e:?}"))?;
         kf_linux_raw::release_fence();
-        rm.doorbell(self.chan.token).map_err(|e| format!("doorbell: {e:?}"))?;
+        rm.doorbell(self.chan.token)
+            .map_err(|e| format!("doorbell: {e:?}"))?;
         Ok(Ok(seq))
     }
 }
@@ -381,7 +462,8 @@ pub trait UserdInit {
 pub fn zero_userd(u: &mut dyn UserdInit, declared: u64) -> Result<u64, String> {
     let len = declared.min(kf_abi::submit::USERD_SIZE) & !3;
     for off in (0..len).step_by(4) {
-        u.store_u32(off, 0).map_err(|e| format!("USERD +{off:#x}: {e}"))?;
+        u.store_u32(off, 0)
+            .map_err(|e| format!("USERD +{off:#x}: {e}"))?;
     }
     Ok(len)
 }
@@ -481,7 +563,14 @@ impl Probe {
         releases: Vec<crate::translated::Release>,
         launches: Vec<crate::translated::PhysLaunch>,
     ) {
-        self.inflight.push_back(ProbeFence { seq, gp_get, releases, launches, submitted: std::time::Instant::now(), completed: None });
+        self.inflight.push_back(ProbeFence {
+            seq,
+            gp_get,
+            releases,
+            launches,
+            submitted: std::time::Instant::now(),
+            completed: None,
+        });
     }
     fn reached(&mut self, done: u32) {
         while self.inflight.front().is_some_and(|f| reached(done, f.seq)) {
@@ -524,13 +613,19 @@ impl TranslatedChannel {
     /// ★ v3-initrace: the fences seen complete since the last call (oldest first), each with the
     /// guest releases its work asked for. Empty while the probe is off.
     pub fn take_completed(&mut self) -> Vec<ProbeFence> {
-        self.probe.as_mut().map(|p| std::mem::take(&mut p.done)).unwrap_or_default()
+        self.probe
+            .as_mut()
+            .map(|p| std::mem::take(&mut p.done))
+            .unwrap_or_default()
     }
 
     /// ★ v3-initrace: fences still in flight (the probe's "submitted, never seen complete").
     #[must_use]
     pub fn probe_inflight(&self) -> Vec<ProbeFence> {
-        self.probe.as_ref().map(|p| p.inflight.iter().cloned().collect()).unwrap_or_default()
+        self.probe
+            .as_ref()
+            .map(|p| p.inflight.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// ★ v3-initrace: our host ring's own `GP_GET`/`GP_PUT` (USERD) and the fence word — the
@@ -620,7 +715,10 @@ impl TranslatedChannel {
         let outcome = loop {
             let next = match self.stash.take() {
                 Some(n) => n,
-                None => self.ring.next(gp_put, mem, is_ce, w).map_err(ChanError::Ring)?,
+                None => self
+                    .ring
+                    .next(gp_put, mem, is_ce, w)
+                    .map_err(ChanError::Ring)?,
             };
             match next {
                 Next::Idle => break Pumped::Caught,
@@ -648,7 +746,12 @@ impl TranslatedChannel {
                                 self.retire.push_back((seq, g));
                             }
                             if let Some(p) = self.probe.as_mut() {
-                                p.submitted(seq, g0, self.ring.take_releases(), self.ring.take_launches());
+                                p.submitted(
+                                    seq,
+                                    g0,
+                                    self.ring.take_releases(),
+                                    self.ring.take_launches(),
+                                );
                             }
                             self.suspended = Some((seq, pdb, retires));
                             return Ok(Pumped::Waiting);
@@ -669,7 +772,12 @@ impl TranslatedChannel {
                         self.retire.push_back((seq, g));
                     }
                     if let Some(p) = self.probe.as_mut() {
-                        p.submitted(seq, last_retire, self.ring.take_releases(), self.ring.take_launches());
+                        p.submitted(
+                            seq,
+                            last_retire,
+                            self.ring.take_releases(),
+                            self.ring.take_launches(),
+                        );
                     }
                 }
                 // No room for the tail: the regions already live carry fences of their own

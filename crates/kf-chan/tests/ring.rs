@@ -37,7 +37,10 @@ impl Mem {
 impl GuestMemory for Mem {
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
         for (i, o) in out.iter_mut().enumerate() {
-            *o = *self.0.get(&(va + i as u64)).ok_or(format!("unmapped {:#x}", va + i as u64))?;
+            *o = *self
+                .0
+                .get(&(va + i as u64))
+                .ok_or(format!("unmapped {:#x}", va + i as u64))?;
         }
         Ok(())
     }
@@ -80,7 +83,10 @@ fn a_split_holds_the_rest_of_its_segment_and_retirement_follows_the_last_piece()
             Next::Idle => "I".into(),
         })
         .collect();
-    assert_eq!(shape, ["SNone", "WSome(200201000)None", "SSome(1)", "SSome(2)"]);
+    assert_eq!(
+        shape,
+        ["SNone", "WSome(200201000)None", "SSome(1)", "SSome(2)"]
+    );
     assert_eq!(r.entries_fetched(), 2);
 }
 
@@ -89,7 +95,13 @@ fn a_control_entry_still_retires() {
     let mut mem = Mem::default();
     mem.entry(0, 0); // LENGTH 0 ⇒ a control entry (NOP)
     let mut r = TranslatedRing::new(GPFIFO, 4, 0);
-    assert_eq!(r.next(1, &mut mem, is_ce, &W).unwrap(), Next::Submit { words: vec![], retires: Some(1) });
+    assert_eq!(
+        r.next(1, &mut mem, is_ce, &W).unwrap(),
+        Next::Submit {
+            words: vec![],
+            retires: Some(1)
+        }
+    );
     assert_eq!(r.next(1, &mut mem, is_ce, &W).unwrap(), Next::Idle);
 }
 
@@ -99,8 +111,20 @@ fn the_ring_wraps() {
     seg(&mut mem, 3, PB, &m(4, ce::LAUNCH_DMA, &[0]));
     seg(&mut mem, 0, PB + 0x100, &m(4, ce::LAUNCH_DMA, &[0]));
     let mut r = TranslatedRing::new(GPFIFO, 4, 3);
-    assert!(matches!(r.next(1, &mut mem, is_ce, &W).unwrap(), Next::Submit { retires: Some(0), .. }));
-    assert!(matches!(r.next(1, &mut mem, is_ce, &W).unwrap(), Next::Submit { retires: Some(1), .. }));
+    assert!(matches!(
+        r.next(1, &mut mem, is_ce, &W).unwrap(),
+        Next::Submit {
+            retires: Some(0),
+            ..
+        }
+    ));
+    assert!(matches!(
+        r.next(1, &mut mem, is_ce, &W).unwrap(),
+        Next::Submit {
+            retires: Some(1),
+            ..
+        }
+    ));
     assert_eq!(r.next(1, &mut mem, is_ce, &W).unwrap(), Next::Idle);
 }
 
@@ -108,23 +132,49 @@ fn the_ring_wraps() {
 fn hostile_rings_are_refused_by_name() {
     let mut mem = Mem::default();
     let mut r = TranslatedRing::new(GPFIFO, 4, 0);
-    assert_eq!(r.next(4, &mut mem, is_ce, &W), Err(RingRefusal::PutOutOfRange { gp_put: 4, entries: 4 }));
+    assert_eq!(
+        r.next(4, &mut mem, is_ce, &W),
+        Err(RingRefusal::PutOutOfRange {
+            gp_put: 4,
+            entries: 4
+        })
+    );
 
     let mut r = TranslatedRing::new(GPFIFO, 4, 0);
-    assert!(matches!(r.next(1, &mut mem, is_ce, &W), Err(RingRefusal::Read { gp: 0, va: GPFIFO, .. })));
+    assert!(matches!(
+        r.next(1, &mut mem, is_ce, &W),
+        Err(RingRefusal::Read {
+            gp: 0,
+            va: GPFIFO,
+            ..
+        })
+    ));
 
     let mut mem = Mem::default();
     mem.entry(0, gp_entry(PB, 4 * 70_000).unwrap());
     let mut r = TranslatedRing::new(GPFIFO, 4, 0);
-    assert!(matches!(r.next(1, &mut mem, is_ce, &W), Err(RingRefusal::SegmentTooLong { gp: 0, .. })));
+    assert!(matches!(
+        r.next(1, &mut mem, is_ce, &W),
+        Err(RingRefusal::SegmentTooLong { gp: 0, .. })
+    ));
 
     let mut mem = Mem::default();
     let mut w = m(4, 0, &[CE_CLASS]);
     w.extend(m(4, ce::SET_DST_PHYS_MODE, &[3]));
-    w.extend(m(4, ce::LAUNCH_DMA, &[ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH]));
+    w.extend(m(
+        4,
+        ce::LAUNCH_DMA,
+        &[ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH],
+    ));
     seg(&mut mem, 0, PB, &w);
     let mut r = TranslatedRing::new(GPFIFO, 4, 0);
-    assert_eq!(r.next(1, &mut mem, is_ce, &W), Err(RingRefusal::Rewrite { gp: 0, why: Refusal::PeerOperand }));
+    assert_eq!(
+        r.next(1, &mut mem, is_ce, &W),
+        Err(RingRefusal::Rewrite {
+            gp: 0,
+            why: Refusal::PeerOperand
+        })
+    );
 }
 
 /// Drain the ring at `gp_put` into the steps it produced (Idle excluded).
@@ -150,17 +200,34 @@ fn a_ring_born_over_a_stale_gp_put_never_fetches_the_guests_first_entry() {
     let real = |mem: &mut Mem| {
         let mut w = m(4, 0, &[CE_CLASS]);
         w.extend(m(4, ce::SET_SEMAPHORE_A, &[0x3, 0x2006_c004, 1]));
-        w.extend(m(4, ce::LAUNCH_DMA, &[ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD]));
+        w.extend(m(
+            4,
+            ce::LAUNCH_DMA,
+            &[ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD],
+        ));
         seg(mem, 0, PB, &w);
     };
     // The stale slot: the schedule-time pump sees GP_PUT = 1 over a zeroed GPFIFO.
     let mut mem = Mem::default();
     mem.entry(0, 0);
     let mut r = TranslatedRing::new(GPFIFO, 4096, 0);
-    assert_eq!(drain(&mut r, 1, &mut mem), vec![Next::Submit { words: vec![], retires: Some(1) }], "the NOP it fetched");
+    assert_eq!(
+        drain(&mut r, 1, &mut mem),
+        vec![Next::Submit {
+            words: vec![],
+            retires: Some(1)
+        }],
+        "the NOP it fetched"
+    );
     real(&mut mem);
-    assert!(drain(&mut r, 1, &mut mem).is_empty(), "the guest's real entry 0 is never fetched");
-    assert!(r.take_releases().is_empty(), "so its semaphore release never reaches the engine");
+    assert!(
+        drain(&mut r, 1, &mut mem).is_empty(),
+        "the guest's real entry 0 is never fetched"
+    );
+    assert!(
+        r.take_releases().is_empty(),
+        "so its semaphore release never reaches the engine"
+    );
 
     // The zeroed slot (physical RM's initialisation): the same schedule-time pump sees 0.
     let mut mem = Mem::default();
@@ -169,7 +236,16 @@ fn a_ring_born_over_a_stale_gp_put_never_fetches_the_guests_first_entry() {
     assert!(drain(&mut r, 0, &mut mem).is_empty());
     real(&mut mem);
     let steps = drain(&mut r, 1, &mut mem);
-    assert!(matches!(steps.as_slice(), [Next::Submit { retires: Some(1), .. }]), "{steps:?}");
+    assert!(
+        matches!(
+            steps.as_slice(),
+            [Next::Submit {
+                retires: Some(1),
+                ..
+            }]
+        ),
+        "{steps:?}"
+    );
     let rel = r.take_releases();
     assert_eq!(rel.len(), 1, "the release is forwarded: {rel:?}");
     assert_eq!((rel[0].va, rel[0].payload), (0x3_2006_c004, 1));
@@ -193,12 +269,22 @@ fn zero_userd_clears_the_channel_size_and_no_further() {
     let mut p = Page([0xAA; 4096], None);
     assert_eq!(zero_userd(&mut p, 512).unwrap(), 512);
     assert!(p.0[..512].iter().all(|&b| b == 0));
-    assert!(p.0[512..].iter().all(|&b| b == 0xAA), "nothing past the channel's USERD");
-    let (put, get) = (kf_abi::submit::USERD_GP_PUT as usize, kf_abi::submit::USERD_GP_GET as usize);
+    assert!(
+        p.0[512..].iter().all(|&b| b == 0xAA),
+        "nothing past the channel's USERD"
+    );
+    let (put, get) = (
+        kf_abi::submit::USERD_GP_PUT as usize,
+        kf_abi::submit::USERD_GP_GET as usize,
+    );
     assert_eq!((p.0[put], p.0[get]), (0, 0));
 
     let mut p = Page([0xAA; 4096], None);
-    assert_eq!(zero_userd(&mut p, 1 << 20).unwrap(), 512, "a larger declared size is clamped to the channel's");
+    assert_eq!(
+        zero_userd(&mut p, 1 << 20).unwrap(),
+        512,
+        "a larger declared size is clamped to the channel's"
+    );
     assert_eq!(zero_userd(&mut p, 0x8e).unwrap(), 0x8c, "whole words only");
     let mut p = Page([0xAA; 4096], Some(0x88));
     assert!(zero_userd(&mut p, 512).unwrap_err().contains("+0x88"));

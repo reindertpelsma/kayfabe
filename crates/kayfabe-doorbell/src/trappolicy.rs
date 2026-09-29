@@ -132,7 +132,9 @@ pub fn may_trap_read(bar: Bar, offset: u64, family: crate::classgen::Family) -> 
         return false; // ⊘ BAR1/BAR2 never read-exit, under any family.
     }
     let page = offset & !(crate::memmap::PAGE - 1);
-    crate::memmap::holes_for(family).iter().any(|(p, _)| *p == page)
+    crate::memmap::holes_for(family)
+        .iter()
+        .any(|(p, _)| *p == page)
 }
 
 /// How a read must be satisfied instead.
@@ -144,7 +146,6 @@ pub enum ReadSource {
     /// that moves the latch**, never read-exited.
     ComputedShadow,
 }
-
 
 /// ★ One MMIO region as the VMM must register it. ⊘ There is no `reads` field: a region that
 /// trapped reads cannot be expressed, which is the point — an absent field cannot be set by
@@ -167,20 +168,34 @@ pub fn trap_regions(doorbell: DoorbellPlacement, bar0_bytes: u64) -> Vec<TrapReg
     let mut v = Vec::new();
     // BAR0, below PRAMIN.
     if PRAMIN_BASE > 0 {
-        v.push(TrapRegion { bar: Bar(0), base: 0, len: PRAMIN_BASE.min(bar0_bytes) });
+        v.push(TrapRegion {
+            bar: Bar(0),
+            base: 0,
+            len: PRAMIN_BASE.min(bar0_bytes),
+        });
     }
     // BAR0, above PRAMIN.
     let after = PRAMIN_BASE + PRAMIN_LEN;
     if bar0_bytes > after {
-        v.push(TrapRegion { bar: Bar(0), base: after, len: bar0_bytes - after });
+        v.push(TrapRegion {
+            bar: Bar(0),
+            base: after,
+            len: bar0_bytes - after,
+        });
     }
     // BAR1: the doorbell page, and nothing else, and only when the doorbell is there at all.
     if let DoorbellPlacement::Bar1 { page_base } = doorbell {
-        v.push(TrapRegion { bar: Bar(1), base: page_base, len: 0x1_0000 });
+        v.push(TrapRegion {
+            bar: Bar(1),
+            base: page_base,
+            len: 0x1_0000,
+        });
     }
     // ⊘ BAR2 contributes no region, in any configuration.
     debug_assert!(v.iter().all(|r| {
-        (r.base..r.base + r.len).step_by(0x1000).all(|o| may_trap_write(r.bar, o, doorbell))
+        (r.base..r.base + r.len)
+            .step_by(0x1000)
+            .all(|o| may_trap_write(r.bar, o, doorbell))
             && !may_trap_read(r.bar, r.base, crate::classgen::Family::Ampere)
     }));
     v
@@ -191,7 +206,9 @@ pub fn doorbell_for(family: crate::classgen::Family) -> DoorbellPlacement {
     use crate::classgen::Family::*;
     match family {
         // ⊘ §5: "generated per die/arch; Hopper+ maps it over BAR1".
-        Hopper | Blackwell => DoorbellPlacement::Bar1 { page_base: 0x9_0000 },
+        Hopper | Blackwell => DoorbellPlacement::Bar1 {
+            page_base: 0x9_0000,
+        },
         _ => DoorbellPlacement::Bar0 { offset: 0x90 },
     }
 }

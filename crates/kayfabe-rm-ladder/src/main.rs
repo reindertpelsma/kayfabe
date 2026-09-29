@@ -141,12 +141,16 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
     // thread doing ALL the work, sequentially. If (a) and (b) both match this, then no amount
     // of parallelism buys throughput and the bottleneck is device-global — which is a
     // completely different finding from "the pool does not help".
-    let Some(c0) = open_client("baseline") else { return false };
+    let Some(c0) = open_client("baseline") else {
+        return false;
+    };
     let (_, t_base) = measure(vec![backend(&c0, 899)], threads * verbs);
     drop(c0);
 
     // (a) ONE RM client, `threads` threads.
-    let Some(c1) = open_client("one-client") else { return false };
+    let Some(c1) = open_client("one-client") else {
+        return false;
+    };
     let ws: Vec<_> = (0..threads).map(|i| backend(&c1, 900 + i as u32)).collect();
     let (same_client, t_same) = measure(ws, verbs);
     drop(c1);
@@ -154,7 +158,9 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
     // (b) `threads` RM clients, one thread each.
     let mut conns = Vec::new();
     for i in 0..threads {
-        let Some(c) = open_client("many-clients") else { return false };
+        let Some(c) = open_client("many-clients") else {
+            return false;
+        };
         conns.push((c, 910 + i as u32));
     }
     let ws: Vec<_> = conns.iter().map(|(c, p)| backend(c, *p)).collect();
@@ -1383,19 +1389,33 @@ fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// of nothing), and N shadowed BAR0 reads (no exit — the floor). Prints `TRAPBENCH …` ns/op.
 fn trap_bench_probe() -> bool {
     use std::os::fd::AsFd;
-    let n: usize = std::env::var("KF_TRAPBENCH_N").ok().and_then(|v| v.parse().ok()).unwrap_or(100_000);
-    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
-        d.flatten().map(|e| e.path()).find(|p| {
-            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
-            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+    let n: usize = std::env::var("KF_TRAPBENCH_N")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(100_000);
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices")
+        .ok()
+        .and_then(|d| {
+            d.flatten().map(|e| e.path()).find(|p| {
+                let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+                rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+            })
         })
-    }) else {
+    else {
         println!("FAIL  TRAPBENCH no NVIDIA display-class function");
         return false;
     };
-    let open = |res: &str| std::fs::OpenOptions::new().read(true).write(true).open(dir.join(res));
+    let open = |res: &str| {
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(dir.join(res))
+    };
     let (Ok(f0), Ok(f5)) = (open("resource0"), open("resource5")) else {
-        println!("FAIL  TRAPBENCH cannot open resource0/resource5 under {}", dir.display());
+        println!(
+            "FAIL  TRAPBENCH cannot open resource0/resource5 under {}",
+            dir.display()
+        );
         return false;
     };
     let map = |f: &std::fs::File, len: u64| {
@@ -1449,16 +1469,23 @@ fn exit_cost_probe() -> bool {
     use std::os::fd::AsFd;
     const OFF: u64 = 0x00B8_101C;
     const N: usize = 2000;
-    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
-        d.flatten().map(|e| e.path()).find(|p| {
-            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
-            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices")
+        .ok()
+        .and_then(|d| {
+            d.flatten().map(|e| e.path()).find(|p| {
+                let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+                rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+            })
         })
-    }) else {
+    else {
         println!("FAIL  EXITCOST no NVIDIA display-class function in /sys/bus/pci/devices");
         return false;
     };
-    let f = match std::fs::OpenOptions::new().read(true).write(true).open(dir.join("resource0")) {
+    let f = match std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(dir.join("resource0"))
+    {
         Ok(f) => f,
         Err(e) => {
             println!("FAIL  EXITCOST open {}/resource0: {e}", dir.display());
@@ -1512,13 +1539,14 @@ fn bar1_bw_probe(rm: &mut HostRmBackend) -> bool {
             return false;
         }
     };
-    let v = match rm.export_device_view(mem, 0, LEN, kayfabe_isolate_host::rm::ViewAccess::ReadWrite) {
-        Ok(v) => v,
-        Err(e) => {
-            println!("FAIL  BAR1BW view = {e:?}");
-            return false;
-        }
-    };
+    let v =
+        match rm.export_device_view(mem, 0, LEN, kayfabe_isolate_host::rm::ViewAccess::ReadWrite) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("FAIL  BAR1BW view = {e:?}");
+                return false;
+            }
+        };
     let fd = match rm.exports().lend(v.token) {
         Ok(fd) => fd,
         Err(e) => {
@@ -1527,7 +1555,10 @@ fn bar1_bw_probe(rm: &mut HostRmBackend) -> bool {
         }
     };
     let region = match kayfabe_linux_raw::MappedRegion::map(
-        kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
+        kayfabe_linux_raw::Backing::SharedFile {
+            fd: fd.as_fd(),
+            offset: 0,
+        },
         v.mmap_len,
         kayfabe_linux_raw::HostProt::ReadWrite,
         kayfabe_linux_raw::CachePolicy::WriteBack,
@@ -1543,14 +1574,19 @@ fn bar1_bw_probe(rm: &mut HostRmBackend) -> bool {
     let src: Vec<u8> = (0..n).map(|i| (i as u8) ^ 0x5a).collect();
     let mut dst = vec![0u8; n];
     let mut ram = vec![0u8; n];
-    let mbs = |bytes: usize, d: std::time::Duration| bytes as f64 / d.as_secs_f64() / (1 << 20) as f64;
+    let mbs =
+        |bytes: usize, d: std::time::Duration| bytes as f64 / d.as_secs_f64() / (1 << 20) as f64;
     // Bulk write, BAR1 view.
     let t = std::time::Instant::now();
-    let w_ok = region.write_from(kayfabe_linux_raw::HostOffset::ZERO, &src).is_ok();
+    let w_ok = region
+        .write_from(kayfabe_linux_raw::HostOffset::ZERO, &src)
+        .is_ok();
     let bar_w = t.elapsed();
     // Bulk read, BAR1 view.
     let t = std::time::Instant::now();
-    let r_ok = region.read_into(kayfabe_linux_raw::HostOffset::ZERO, &mut dst).is_ok();
+    let r_ok = region
+        .read_into(kayfabe_linux_raw::HostOffset::ZERO, &mut dst)
+        .is_ok();
     let bar_r = t.elapsed();
     // RAM, the same sizes.
     let t = std::time::Instant::now();
@@ -1566,7 +1602,10 @@ fn bar1_bw_probe(rm: &mut HostRmBackend) -> bool {
     let mut words = [0u8; 4];
     let t = std::time::Instant::now();
     for i in 0..4096usize {
-        let _ = region.read_into(kayfabe_linux_raw::HostOffset::new(((i * 512) % n) as u64), &mut words);
+        let _ = region.read_into(
+            kayfabe_linux_raw::HostOffset::new(((i * 512) % n) as u64),
+            &mut words,
+        );
     }
     let one = t.elapsed();
     println!(
@@ -5723,19 +5762,21 @@ fn w381_retired(rm: &HostRmBackend, chan: kayfabe_isolate::HostHandle) -> &'stat
     }
 }
 
-
 /// ★★★★★ FIXED placement at guest-shaped VAs in a DEFAULT VA space — step 4's output shape.
 fn fixed_placement(rm: &mut HostRmBackend) -> bool {
-    println!("REV_UNDER_TEST={}", option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped"));
+    println!(
+        "REV_UNDER_TEST={}",
+        option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+    );
     // ⊘ VAs a real guest uses (§21 live boot, the native oracle's semaphore page, typical UVM
     // and CUDA heap addresses), each backed by a slice at a DIFFERENT object offset — including
     // one near the top where the guest's own tables live.
     let cases: &[(u64, u64)] = &[
-        (0x0000_0001_2000_0000, 0),                 // the corpus/live CE channel VA
-        (0x0000_0002_0440_0000, 0x10_0000),         // the native oracle's semaphore page region
-        (0x0000_0020_0000_0000, 0x200_0000),        // 128 GiB — a CUDA-heap-shaped VA
-        (0x0000_7f00_0000_0000, 0x4000_0000),       // high — near a 47-bit user VA top
-        (0x0000_0001_2001_0000, 0x2cea0_0000),      // adjacent VA, slice at the tables' offset
+        (0x0000_0001_2000_0000, 0),            // the corpus/live CE channel VA
+        (0x0000_0002_0440_0000, 0x10_0000),    // the native oracle's semaphore page region
+        (0x0000_0020_0000_0000, 0x200_0000),   // 128 GiB — a CUDA-heap-shaped VA
+        (0x0000_7f00_0000_0000, 0x4000_0000),  // high — near a 47-bit user VA top
+        (0x0000_0001_2001_0000, 0x2cea0_0000), // adjacent VA, slice at the tables' offset
     ];
     let obj_mb = 11760u64;
     match rm.prove_fixed_placement(obj_mb << 20, cases) {
@@ -5743,12 +5784,18 @@ fn fixed_placement(rm: &mut HostRmBackend) -> bool {
             let mut exact = 0;
             for (va, off, r) in &rows {
                 match r {
-                    Ok(g) if g == va => { exact += 1; println!("FIXED_PLACE va={va:#x} off={off:#x} got={g:#x} EXACT") }
+                    Ok(g) if g == va => {
+                        exact += 1;
+                        println!("FIXED_PLACE va={va:#x} off={off:#x} got={g:#x} EXACT")
+                    }
                     Ok(g) => println!("FIXED_PLACE va={va:#x} off={off:#x} got={g:#x} MOVED"),
                     Err(e) => println!("FIXED_PLACE va={va:#x} off={off:#x} REFUSED {e}"),
                 }
             }
-            println!("FIXED_PLACEMENT exact={exact}/{} obj_mib={obj_mb}", rows.len());
+            println!(
+                "FIXED_PLACEMENT exact={exact}/{} obj_mib={obj_mb}",
+                rows.len()
+            );
             if exact == rows.len() {
                 println!("RUNGCTL_fixed_placement=PASS");
                 println!("RUNG_fixed_placement=PASS");
@@ -5769,7 +5816,10 @@ fn fixed_placement(rm: &mut HostRmBackend) -> bool {
 /// ★★★★★ **THE CUDA WINDOW** — step 4's precondition: the walker, in libcuda's VA space, reads the
 /// guest's page tables IN PLACE in the one GPGA object. See `HostRmBackend::prove_cuda_window`.
 fn cuda_window(rm: &mut HostRmBackend) -> bool {
-    println!("REV_UNDER_TEST={}", option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped"));
+    println!(
+        "REV_UNDER_TEST={}",
+        option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+    );
     #[cfg(not(feature = "cuda-window"))]
     {
         let _ = rm;
@@ -5790,20 +5840,32 @@ fn cuda_window(rm: &mut HostRmBackend) -> bool {
                 println!(
                     "CUDA_WINDOW dptr={:#x} root={:#x} found={} runs={} walk_us={} \
                      control_found_nothing={} control_runs={}",
-                    ev.dptr, ev.root, ev.found, ev.runs, ev.walk_us,
-                    ev.control_found_nothing, ev.control_runs
+                    ev.dptr,
+                    ev.root,
+                    ev.found,
+                    ev.runs,
+                    ev.walk_us,
+                    ev.control_found_nothing,
+                    ev.control_runs
                 );
                 if ev.found && ev.control_found_nothing {
-                    println!("CUDA_WINDOW ✔ the walker reads the guest's tables IN PLACE at {} MiB", origin >> 20);
+                    println!(
+                        "CUDA_WINDOW ✔ the walker reads the guest's tables IN PLACE at {} MiB",
+                        origin >> 20
+                    );
                     println!("RUNGCTL_cuda_window=PASS");
                     println!("RUNG_cuda_window=PASS");
                     true
                 } else {
                     println!(
                         "FAIL  cuda window        = found={} control_found_nothing={} — {}",
-                        ev.found, ev.control_found_nothing,
-                        if !ev.found { "the walk did not find the fixture in the object" }
-                        else { "the walk still found it after the root was zeroed: NOT reading the live object" }
+                        ev.found,
+                        ev.control_found_nothing,
+                        if !ev.found {
+                            "the walk did not find the fixture in the object"
+                        } else {
+                            "the walk still found it after the root was zeroed: NOT reading the live object"
+                        }
                     );
                     println!("RUNGCTL_cuda_window=FAIL");
                     false
@@ -5876,7 +5938,11 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
 
     // ★★★ (2) NARROW THE CEILING. The halving bisect brackets; this answers.
     let mut ceiling_mb = 0u64;
-    if let Some((good, _)) = rm.largest_mappable_mb(mb).into_iter().find(|(_, r)| r.is_ok()) {
+    if let Some((good, _)) = rm
+        .largest_mappable_mb(mb)
+        .into_iter()
+        .find(|(_, r)| r.is_ok())
+    {
         ceiling_mb = rm.narrow_map_ceiling_mb(good, mb);
         println!("IDENTITY_WINDOW_CEILING_MB={ceiling_mb}  (largest single whole-object map)");
     }
@@ -5892,7 +5958,11 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
     // ★ And `gpga_is_one_reserved_object.md` already has the rule for this: "the guest's
     // advertised framebuffer size is DERIVED from the reservation that succeeded, never asserted
     // ahead of it." ⇒ Extend it by one word: derived from what can be **mapped**.
-    let window_bytes = if ceiling_mb > 0 { ceiling_mb << 20 } else { bytes };
+    let window_bytes = if ceiling_mb > 0 {
+        ceiling_mb << 20
+    } else {
+        bytes
+    };
     println!(
         "IDENTITY_WINDOW_SIZED reservable_mib={} mappable_mib={} delta_mib={}",
         bytes >> 20,
@@ -5908,18 +5978,20 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
     // space itself.
     // ⇒ Probe LOW, from just above RM's own choice, and let the ladder find the boundary.
     let low_bases: Vec<u64> = vec![
-        1u64 << 33,  // 8 GiB
-        1u64 << 34,  // 16 GiB
+        1u64 << 33,                                         // 8 GiB
+        1u64 << 34,                                         // 16 GiB
         0x2_0000_0000 + (window_bytes.next_power_of_two()), // above RM's pick + the object
-        1u64 << 35,  // 32 GiB
-        1u64 << 36,  // 64 GiB
+        1u64 << 35,                                         // 32 GiB
+        1u64 << 36,                                         // 64 GiB
         GPGA_VA_BASE, // 1 TiB, kept so the ladder still explains v1
     ];
     match rm.prove_identity_window(window_bytes, &low_bases) {
         Ok(ev) => {
             for (asked, got) in &ev.attempts {
                 match got {
-                    Ok(v) if v == asked => println!("IDENTITY_FIXED asked={asked:#x} got={v:#x} EXACT"),
+                    Ok(v) if v == asked => {
+                        println!("IDENTITY_FIXED asked={asked:#x} got={v:#x} EXACT")
+                    }
                     Ok(v) => println!("IDENTITY_FIXED asked={asked:#x} got={v:#x} MOVED"),
                     Err(e) => println!("IDENTITY_FIXED asked={asked:#x} REFUSED {e}"),
                 }
@@ -6008,15 +6080,21 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
         Err(e) => println!("IDENTITY_FIXED ⊘ SETUP REFUSED {e:?}"),
     }
 
-    let tile = if ceiling_mb >= 64 { (ceiling_mb / 2) << 20 } else { 1u64 << 30 };
+    let tile = if ceiling_mb >= 64 {
+        (ceiling_mb / 2) << 20
+    } else {
+        1u64 << 30
+    };
     match rm.prove_tiled_window(window_bytes, GPGA_VA_BASE, tile) {
         Ok(ev) => {
             for (off, asked, got) in &ev.tiles {
                 match got {
-                    Ok(v) if v == asked => println!(
-                        "IDENTITY_TILE off={off:#x} asked={asked:#x} got={v:#x} EXACT"
-                    ),
-                    Ok(v) => println!("IDENTITY_TILE off={off:#x} asked={asked:#x} got={v:#x} MOVED"),
+                    Ok(v) if v == asked => {
+                        println!("IDENTITY_TILE off={off:#x} asked={asked:#x} got={v:#x} EXACT")
+                    }
+                    Ok(v) => {
+                        println!("IDENTITY_TILE off={off:#x} asked={asked:#x} got={v:#x} MOVED")
+                    }
                     Err(e) => println!("IDENTITY_TILE off={off:#x} asked={asked:#x} REFUSED {e}"),
                 }
             }
@@ -12277,7 +12355,6 @@ mod route_k {
     // has it."* ⊘ Same constant (`0xa06c`), same id on GA106/AD106/GH100 — this renames the
     // reference, never the value.
     use kayfabe_abi::generated::classes::{FERMI_VASPACE_A, NV01_DEVICE_0, NV01_ROOT_CLIENT};
-    use kayfabe_abi::invariant_classes::CHANNEL_GROUP;
     use kayfabe_abi::generated::classes::{
         Nv0080AllocParameters, NvChannelGroupAllocationParameters,
     };
@@ -12286,6 +12363,7 @@ mod route_k {
         NV_ESC_RM_MAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters, Nvos46Parameters,
         Nvos54Parameters, Nvos55Parameters,
     };
+    use kayfabe_abi::invariant_classes::CHANNEL_GROUP;
     use kayfabe_abi::submit::{
         CeAllocParams, ChannelAllocParams, NV_ESC_RM_MAP_MEMORY, NVA06C_CTRL_CMD_BIND,
         NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, Nvos33ParametersWithFd, USERD_GP_GET,
@@ -13051,8 +13129,7 @@ mod route_k {
             println!("K_BIT5_KP=UNMEASURED:no-devdir");
             return 1;
         };
-        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu))
-        {
+        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu)) {
             Ok(c) => c,
             Err(e) => {
                 println!("K_BIT5_KP=UNMEASURED:open:{e}");
@@ -13106,13 +13183,14 @@ mod route_k {
         };
         let mut esc = Esc::new(&ctl_own, root, 0xCAFE_2001);
         // ⊘ `gpu` is the MINOR; the RM device instance is resolved (V3_MULTI_GPU_AUDIT §2).
-        let (_card, id) = match kayfabe_isolate_host::rm::resolve_device_instance(&ctl_own, root, gpu) {
-            Ok(r) => r,
-            Err((rung, detail)) => {
-                println!("K_BIT5_KP=UNMEASURED:{rung}:{detail}");
-                return 1;
-            }
-        };
+        let (_card, id) =
+            match kayfabe_isolate_host::rm::resolve_device_instance(&ctl_own, root, gpu) {
+                Ok(r) => r,
+                Err((rung, detail)) => {
+                    println!("K_BIT5_KP=UNMEASURED:{rung}:{detail}");
+                    return 1;
+                }
+            };
         let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
         let dev_encode = Nv0080AllocParameters {
             device_id: id.device_instance,
@@ -13131,7 +13209,10 @@ mod route_k {
             }
         };
         let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
-        let _ = Nv2080AllocParameters { sub_device_id: id.sub_device_instance }.encode_into(&mut sub_params);
+        let _ = Nv2080AllocParameters {
+            sub_device_id: id.sub_device_instance,
+        }
+        .encode_into(&mut sub_params);
         if let Err(e) = esc.alloc(
             device,
             NV20_SUBDEVICE_0,
@@ -13291,8 +13372,7 @@ mod route_k {
             println!("K_ROLE_I=UNMEASURED:no-devdir");
             return 1;
         };
-        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu))
-        {
+        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu)) {
             Ok(c) => c,
             Err(e) => {
                 println!("K_ROLE_I=UNMEASURED:open:{e}");
@@ -13647,8 +13727,7 @@ mod route_k {
             println!("K_EXIT=1 (no /dev)");
             return 1;
         };
-        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu))
-        {
+        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu)) {
             Ok(c) => c,
             Err(e) => {
                 println!("K_EXIT=1 (S open: {e})");
@@ -13720,13 +13799,14 @@ mod route_k {
 
         // ---- B's own device tree, built by S on I's descriptor --------------------------
         // ⊘ `gpu` is the MINOR; the RM device instance is resolved (V3_MULTI_GPU_AUDIT §2).
-        let (_card, id) = match kayfabe_isolate_host::rm::resolve_device_instance(&ctl2, b_client, gpu) {
-            Ok(r) => r,
-            Err((rung, detail)) => {
-                println!("K_EXIT=1 (device instance in B: {rung}: {detail})");
-                return 1;
-            }
-        };
+        let (_card, id) =
+            match kayfabe_isolate_host::rm::resolve_device_instance(&ctl2, b_client, gpu) {
+                Ok(r) => r,
+                Err((rung, detail)) => {
+                    println!("K_EXIT=1 (device instance in B: {rung}: {detail})");
+                    return 1;
+                }
+            };
         let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
         let _ = Nv0080AllocParameters {
             device_id: id.device_instance,
@@ -13742,7 +13822,10 @@ mod route_k {
             }
         };
         let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
-        let _ = Nv2080AllocParameters { sub_device_id: id.sub_device_instance }.encode_into(&mut sub_params);
+        let _ = Nv2080AllocParameters {
+            sub_device_id: id.sub_device_instance,
+        }
+        .encode_into(&mut sub_params);
         if let Err(e) = esc.alloc(
             device_b,
             NV20_SUBDEVICE_0,
@@ -14429,15 +14512,24 @@ fn prof_mark() {
     if std::env::var("KF_PROF_MARK").as_deref() != Ok("1") {
         return;
     }
-    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
-        d.flatten().map(|e| e.path()).find(|p| {
-            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
-            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices")
+        .ok()
+        .and_then(|d| {
+            d.flatten().map(|e| e.path()).find(|p| {
+                let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+                rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+            })
         })
-    }) else {
+    else {
         return;
     };
-    let Ok(f) = std::fs::OpenOptions::new().read(true).write(true).open(dir.join("resource0")) else { return };
+    let Ok(f) = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(dir.join("resource0"))
+    else {
+        return;
+    };
     if let Ok(r) = kayfabe_linux_raw::VolatileRegion::map(
         kayfabe_linux_raw::Backing::DeviceFile { fd: f.as_fd() },
         0x00C0_0000,
@@ -15343,7 +15435,10 @@ fn ladder_main() -> std::process::ExitCode {
         }
         std::hint::black_box(&host);
         let hw = t.elapsed();
-        println!("MMIO_BENCH control host-RAM cold-first-touch write_u64 {:.1} MiB/s", rate(hw_cold));
+        println!(
+            "MMIO_BENCH control host-RAM cold-first-touch write_u64 {:.1} MiB/s",
+            rate(hw_cold)
+        );
         let mut acc = 0u64;
         let t = std::time::Instant::now();
         for w in std::hint::black_box(&host) {
@@ -15868,17 +15963,29 @@ fn ladder_main() -> std::process::ExitCode {
     if want_trap_bench {
         let ok = trap_bench_probe();
         println!("done \u{2014} trap-bench probe only");
-        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
     }
     if want_exit_cost {
         let ok = exit_cost_probe();
         println!("done \u{2014} exit-cost probe only");
-        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
     }
     if want_bar1_bw {
         let ok = bar1_bw_probe(&mut rm);
         println!("done \u{2014} bar1-bw probe only");
-        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
     }
     if want_bar1_crossing {
         println!(
@@ -17960,7 +18067,10 @@ mod mean {
         let ce = match rm.first_async_copy_engine() {
             Ok(i) => i,
             Err(e) => {
-                return PathState::Refused { step: "CE_GET_ALL_CAPS (first async CE)", status: format!("{e:?}") };
+                return PathState::Refused {
+                    step: "CE_GET_ALL_CAPS (first async CE)",
+                    status: format!("{e:?}"),
+                };
             }
         };
         let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(ce) else {
@@ -18519,7 +18629,14 @@ mod mean {
         }
         lane.seq = lane.seq.wrapping_add(1);
         let d0_payload = 0x6D00_0000 | (lane.seq & 0x00FF_FFFF);
-        match rm.submit_copy_va(lane.chan, lane.token, lane.scratch_va, P3_TARGET, 4, d0_payload) {
+        match rm.submit_copy_va(
+            lane.chan,
+            lane.token,
+            lane.scratch_va,
+            P3_TARGET,
+            4,
+            d0_payload,
+        ) {
             Err(e) => {
                 println!(
                     "⊘     W392D P3 arm D0   = the CE could not even be asked to WRITE                      {P3_TARGET:#018x}: {e:?}"

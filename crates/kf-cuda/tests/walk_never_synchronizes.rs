@@ -52,7 +52,15 @@ fn only_the_probe_synchronizes() {
 
 #[test]
 fn the_walk_verbs_do_not_synchronize() {
-    for sig in ["pub fn submit", "fn submit_over", "pub fn ack", "pub fn reset_slot", "pub fn try_collect", "pub fn wait", "pub fn refresh"] {
+    for sig in [
+        "pub fn submit",
+        "fn submit_over",
+        "pub fn ack",
+        "pub fn reset_slot",
+        "pub fn try_collect",
+        "pub fn wait",
+        "pub fn refresh",
+    ] {
         let b = body_of(WALK_RS, sig).unwrap_or_else(|| panic!("{sig} exists"));
         let code: String = b
             .lines()
@@ -70,10 +78,23 @@ fn the_walk_verbs_do_not_synchronize() {
 #[test]
 fn the_ack_only_stages_a_per_run_verdict() {
     let b = body_of(WALK_RS, "pub fn ack").expect("the verdict verb exists");
-    let code: String = b.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
-    assert!(code.contains("codes: Vec<u8>"), "one verdict per run, not a generation alone");
+    let code: String = b
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        code.contains("codes: Vec<u8>"),
+        "one verdict per run, not a generation alone"
+    );
     for call in ["self.cu.", "launch", "memcpy"] {
-        assert!(!code.contains(call), "`ack` must only stage the verdict; found `{call}`");
+        assert!(
+            !code.contains(call),
+            "`ack` must only stage the verdict; found `{call}`"
+        );
     }
-    assert!(!WALK_RS.contains("ACKED_BYTE_OFFSET"), "nothing writes a whole-generation `acked`");
+    assert!(
+        !WALK_RS.contains("ACKED_BYTE_OFFSET"),
+        "nothing writes a whole-generation `acked`"
+    );
 }

@@ -128,7 +128,13 @@ pub enum FamilyRefusal {
 
 impl Family {
     /// Every family.
-    pub const ALL: [Family; 5] = [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell];
+    pub const ALL: [Family; 5] = [
+        Family::Turing,
+        Family::Ampere,
+        Family::Ada,
+        Family::Hopper,
+        Family::Blackwell,
+    ];
 
     /// The family for what the host reported. ⊘ Any DISCRETE implementation of a known architecture
     /// is accepted — a new die of a known family needs no edit (its facts come from the host). Only
@@ -140,12 +146,17 @@ impl Family {
         // ⊘ CORRECTED 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`): `GB100` was missing, so a GB10B
         // (arch 0x1A0, impl 0xB) was accepted as a discrete GB10x.
         let integrated = match architecture {
-            arch::GA100 | arch::AD100 | arch::GB100 | arch::GB200 => matches!(implementation, 0xB | 0xC),
+            arch::GA100 | arch::AD100 | arch::GB100 | arch::GB200 => {
+                matches!(implementation, 0xB | 0xC)
+            }
             arch::GH100 => implementation == 1,
             _ => false,
         };
         if integrated {
-            return Err(FamilyRefusal::Integrated { architecture, implementation });
+            return Err(FamilyRefusal::Integrated {
+                architecture,
+                implementation,
+            });
         }
         match architecture {
             arch::TU100 => Ok(Family::Turing),
@@ -286,7 +297,11 @@ impl Family {
     ///
     /// # Errors
     /// [`RowUnbuilt`] while a die group's model is still being ported (named, with what remains).
-    pub fn gsp_model(self, implementation: u32, fb_size_mb: u64) -> Result<Box<dyn kf_arch::gsp::GspModel>, RowUnbuilt> {
+    pub fn gsp_model(
+        self,
+        implementation: u32,
+        fb_size_mb: u64,
+    ) -> Result<Box<dyn kf_arch::gsp::GspModel>, RowUnbuilt> {
         use falcon_gsp::{FalconGspModel, RiscvLayout};
         match self {
             // Ada's GSP boot HAL dispatches to the `_TU102`/`_GA102` bodies for the whole sequence;
@@ -298,12 +313,24 @@ impl Family {
                        g_kernel_gsp_nvoc.c), so kgspBootstrap_TU102 goes straight to the SEC2 Booter and the \
                        shared FalconSecureBooterBoot FSM (FWSEC first) does not describe its boot",
             }),
-            Family::Ampere | Family::Ada => Ok(Box::new(FalconGspModel::with_layout(RiscvLayout::Ga102, fb_size_mb))),
+            Family::Ampere | Family::Ada => Ok(Box::new(FalconGspModel::with_layout(
+                RiscvLayout::Ga102,
+                fb_size_mb,
+            ))),
             // ★ 2026-09-26: Turing runs the SAME boot as GA10x (kgspBootstrap_TU102, FWSEC-FRTS —
             // kgspGetFrtsSize_TU102 = 1 MiB —, the SEC2 Booter); only the RISC-V block differs.
-            Family::Turing => Ok(Box::new(FalconGspModel::with_layout(RiscvLayout::Tu102, fb_size_mb))),
-            Family::Hopper => Ok(Box::new(fsp_gsp::FspGspModel::new(fsp_gsp::FspRow::HOPPER, fb_size_mb))),
-            Family::Blackwell => Ok(Box::new(fsp_gsp::FspGspModel::new(fsp_gsp::FspRow::BLACKWELL, fb_size_mb))),
+            Family::Turing => Ok(Box::new(FalconGspModel::with_layout(
+                RiscvLayout::Tu102,
+                fb_size_mb,
+            ))),
+            Family::Hopper => Ok(Box::new(fsp_gsp::FspGspModel::new(
+                fsp_gsp::FspRow::HOPPER,
+                fb_size_mb,
+            ))),
+            Family::Blackwell => Ok(Box::new(fsp_gsp::FspGspModel::new(
+                fsp_gsp::FspRow::BLACKWELL,
+                fb_size_mb,
+            ))),
         }
     }
 }
@@ -335,7 +362,9 @@ pub fn choose_host_classes(
     host_classlist: &[u32],
 ) -> Result<Box<dyn kf_arch::HostClasses>, String> {
     let family = Family::from_arch(architecture, implementation).map_err(|e| format!("{e:?}"))?;
-    let chosen = family.host_classes(host_classlist).map_err(|e| format!("{e:?}"))?;
+    let chosen = family
+        .host_classes(host_classlist)
+        .map_err(|e| format!("{e:?}"))?;
     Ok(Box::new(chosen))
 }
 
@@ -358,7 +387,9 @@ pub fn choose_host_classes(
 #[must_use]
 pub const fn authored_intr_subtree_map(f: Family) -> Option<[u64; 7]> {
     match f {
-        Family::Turing | Family::Ampere | Family::Ada => Some([0, 1 << 3, 1 << 0, 0, 0, 1 << 1, 1 << 2]),
+        Family::Turing | Family::Ampere | Family::Ada => {
+            Some([0, 1 << 3, 1 << 0, 0, 0, 1 << 1, 1 << 2])
+        }
         Family::Hopper => Some([0, 1 << 3, 1 << 0, 1 << 4, 1 << 5, 1 << 1, 1 << 2]),
         Family::Blackwell => None,
     }
@@ -372,7 +403,10 @@ mod authored_intr_tests {
     /// `tests/support/ga106.rs` `INTR_SUBTREE_MAP` = `[0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4]`).
     #[test]
     fn the_ampere_map_is_what_a_ga106_host_reports() {
-        assert_eq!(authored_intr_subtree_map(Family::Ampere), Some([0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4]));
+        assert_eq!(
+            authored_intr_subtree_map(Family::Ampere),
+            Some([0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4])
+        );
     }
 
     /// Every authored mask is one contiguous run (a ≤575 guest's `{start, end}` form can say it).

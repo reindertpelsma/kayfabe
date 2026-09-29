@@ -2555,7 +2555,10 @@ fn resolve_locked(
     let Some(fmt) = mmu.as_deref() else {
         return crate::ceresolve::CeResolve::NoMmuPort;
     };
-    let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
+    let mut src = FbStoreReader {
+        fb: fb.as_mut(),
+        memo: None,
+    };
     crate::ceresolve::resolve(fmt, &mut src, root, va, limits, demand)
 }
 
@@ -4297,7 +4300,10 @@ impl RegPlane {
         let Some(fmt) = mmu.as_deref() else {
             return " walk=NO-MMU-PORT".to_string();
         };
-        let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo: None,
+        };
         crate::ceresolve::walk_trace(fmt, &mut src, &root, va)
     }
 
@@ -4549,7 +4555,10 @@ impl RegPlane {
         let Some(fmt) = mmu.as_deref() else {
             return " walk=NO-MMU-PORT".to_string();
         };
-        let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo: None,
+        };
         crate::ceresolve::walk_trace(fmt, &mut src, root, va)
     }
 
@@ -6066,7 +6075,10 @@ impl RegPlane {
         // `pRootFmt->virtAddrBitLo` precisely because the entry alone does not say which format
         // row it belongs to). **That is what makes "a wrong root yields a plausible, WRONG list
         // of leaves" not apply**: the level is not guessed, it is the guest's own.
-        let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo: None,
+        };
         let decoded = match w {
             FbWindow::FbAperture => {
                 let root = self.chip.bar1_pde_base;
@@ -6184,7 +6196,10 @@ impl RegPlane {
                 why: BAR1_NO_ROOT_DECLARED,
             });
         }
-        let mut src = FbStoreReader { fb: fb.as_mut(), memo };
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo,
+        };
         let t = translate(
             fmt,
             &mut src,
@@ -6289,7 +6304,10 @@ impl RegPlane {
                 why: BAR2_OUTSIDE_PUBLISHED_SLOT,
             });
         }
-        let mut src = FbStoreReader { fb: fb.as_mut(), memo };
+        let mut src = FbStoreReader {
+            fb: fb.as_mut(),
+            memo,
+        };
         let t = translate_from_entry(fmt, &mut src, level, u128::from(root.entry), va)
             .map_err(|f| WindowRefusal::Translated { va, why: f.why() })?;
         // ⊘ Vidmem only, and by NAME. The guest's page tables can legitimately name

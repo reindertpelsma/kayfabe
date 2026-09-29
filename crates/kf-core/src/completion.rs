@@ -24,8 +24,8 @@
 //! ⚠ **The converse binds: once armed, a later release MUST produce an interrupt. There is no
 //! level-triggered fallback.**
 
-use kf_trap::token::Route;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use kf_trap::token::Route;
 
 /// What, if anything, we owe the guest when a unit of work retires.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

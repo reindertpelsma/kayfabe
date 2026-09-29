@@ -35,11 +35,17 @@ const UVM: HClient = HClient(0xc1d0_0069);
 const A2: HClient = HClient(0xc1d0_006b);
 
 fn user(client: HClient) -> AllocFacts {
-    AllocFacts { client_kind: Some(ClientKind::User { pid: client.0 }), ..Default::default() }
+    AllocFacts {
+        client_kind: Some(ClientKind::User { pid: client.0 }),
+        ..Default::default()
+    }
 }
 
 fn kernel() -> AllocFacts {
-    AllocFacts { client_kind: Some(ClientKind::Kernel), ..Default::default() }
+    AllocFacts {
+        client_kind: Some(ClientKind::Kernel),
+        ..Default::default()
+    }
 }
 
 fn client_root(client: HClient) -> RmEvent {
@@ -64,11 +70,20 @@ fn kernel_client_root(client: HClient) -> RmEvent {
 
 fn alloc(client: HClient, parent: HObject, handle: HObject, class: u32) -> RmEvent {
     let facts = if class == nv::NV01_DEVICE_0 {
-        AllocFacts { device_instance: Some(0), ..Default::default() }
+        AllocFacts {
+            device_instance: Some(0),
+            ..Default::default()
+        }
     } else {
         AllocFacts::default()
     };
-    RmEvent::Alloc { client, parent, handle, class: ClassId(class), facts }
+    RmEvent::Alloc {
+        client,
+        parent,
+        handle,
+        class: ClassId(class),
+        facts,
+    }
 }
 
 fn free(client: HClient, handle: HObject) -> RmEvent {
@@ -84,8 +99,12 @@ fn dup(src: NodeKey, dst: NodeKey) -> RmEvent {
 /// is cut from the graph in v3 and the channel's vChid was a projection fact.
 fn compute_process(ev: &mut Vec<RmEvent>, client: HClient, base: u32) -> NodeKey {
     let root = HObject(client.0);
-    let (dev, sub, vas, tsg) =
-        (HObject(base + 1), HObject(base + 2), HObject(base + 0x10), HObject(base + 0x12));
+    let (dev, sub, vas, tsg) = (
+        HObject(base + 1),
+        HObject(base + 2),
+        HObject(base + 0x10),
+        HObject(base + 0x12),
+    );
     ev.push(client_root(client));
     ev.push(alloc(client, root, dev, nv::NV01_DEVICE_0));
     ev.push(alloc(client, dev, sub, nv::NV20_SUBDEVICE_0));
@@ -98,8 +117,18 @@ fn compute_process(ev: &mut Vec<RmEvent>, client: HClient, base: u32) -> NodeKey
 /// into, two user processes, and a second user client of A joined by a peer dup.
 fn scenario() -> Vec<RmEvent> {
     let mut ev = vec![kernel_client_root(UVM)];
-    ev.push(alloc(UVM, HObject(UVM.0), HObject(0x9000_0001), nv::NV01_DEVICE_0));
-    ev.push(alloc(UVM, HObject(0x9000_0001), HObject(0x9000_0010), nv::FERMI_VASPACE_A));
+    ev.push(alloc(
+        UVM,
+        HObject(UVM.0),
+        HObject(0x9000_0001),
+        nv::NV01_DEVICE_0,
+    ));
+    ev.push(alloc(
+        UVM,
+        HObject(0x9000_0001),
+        HObject(0x9000_0010),
+        nv::FERMI_VASPACE_A,
+    ));
     let a_vas = compute_process(&mut ev, A, 0x5c00_0000);
     ev.push(dup(a_vas, NodeKey::new(UVM, HObject(0x9000_00a7))));
     let b_vas = compute_process(&mut ev, B, 0x5d00_0000);
@@ -141,7 +170,10 @@ fn legal_order(events: &[RmEvent]) -> Vec<RmEvent> {
                 deferred.push(ev);
             }
         }
-        assert!(out.len() > before, "the event set names a namespace that is never declared");
+        assert!(
+            out.len() > before,
+            "the event set names a namespace that is never declared"
+        );
         pending = deferred;
     }
     out
@@ -173,10 +205,17 @@ struct Snapshot {
 
 fn snapshot(g: &RmGraph) -> Snapshot {
     let nodes: BTreeMap<NodeKey, RmNode> = g.nodes().map(|n| (n.key, *n)).collect();
-    let refs = nodes.keys().map(|k| (*k, g.references(*k).collect())).collect();
+    let refs = nodes
+        .keys()
+        .map(|k| (*k, g.references(*k).collect()))
+        .collect();
     Snapshot {
         dups: g.dups().collect(),
-        declarations: g.client_declarations().into_iter().map(|(k, (_, kind))| (k, kind)).collect(),
+        declarations: g
+            .client_declarations()
+            .into_iter()
+            .map(|(k, (_, kind))| (k, kind))
+            .collect(),
         nodes,
         refs,
     }
@@ -202,7 +241,10 @@ fn graph_of(events: &[RmEvent]) -> RmGraph {
 fn the_graph_is_order_independent_over_legal_orders() {
     let events = scenario();
     let reference = snapshot(&graph_of(&events));
-    assert!(reference.nodes.len() > 15 && !reference.dups.is_empty(), "non-vacuous scenario");
+    assert!(
+        reference.nodes.len() > 15 && !reference.dups.is_empty(),
+        "non-vacuous scenario"
+    );
     for p in permutations(events.len()) {
         let shuffled: Vec<RmEvent> = p.iter().map(|&i| events[i]).collect();
         let g = graph_of(&legal_order(&shuffled));
@@ -215,7 +257,10 @@ fn the_graph_is_order_independent_over_legal_orders() {
 #[test]
 fn a_dup_into_an_undeclared_namespace_is_refused_in_every_order() {
     let events = scenario();
-    let planted = dup(NodeKey::new(A, HObject(0x5c00_0010)), NodeKey::new(HClient(0xc1d0_00ff), HObject(0x7777_0001)));
+    let planted = dup(
+        NodeKey::new(A, HObject(0x5c00_0010)),
+        NodeKey::new(HClient(0xc1d0_00ff), HObject(0x7777_0001)),
+    );
     let refusal = Err(RmGraphError::UndeclaredClient(HClient(0xc1d0_00ff)));
     let reference = graph_of(&events);
     for at in 0..=events.len() {
@@ -229,8 +274,16 @@ fn a_dup_into_an_undeclared_namespace_is_refused_in_every_order() {
         if at == events.len() {
             assert_eq!(g.apply(planted), refusal, "…including last");
         }
-        assert_eq!(snapshot(&g), snapshot(&reference), "a refused event mutated the graph (at {at})");
-        assert_eq!(g.client_declarations(), reference.client_declarations(), "ids too (at {at})");
+        assert_eq!(
+            snapshot(&g),
+            snapshot(&reference),
+            "a refused event mutated the graph (at {at})"
+        );
+        assert_eq!(
+            g.client_declarations(),
+            reference.client_declarations(),
+            "ids too (at {at})"
+        );
     }
 }
 
@@ -246,7 +299,10 @@ fn a_dupd_vaspace_stays_owned_by_the_client_that_allocated_it() {
     assert_eq!(g.owner_key_of(alias), Some(ClientKey::first(A)));
     assert_eq!(g.owner_key_of(a_vas), Some(ClientKey::first(A)));
     let refs: BTreeSet<NodeKey> = g.references(a_vas).collect();
-    assert_eq!(refs, BTreeSet::from([a_vas, alias, NodeKey::new(A2, HObject(0x7000_00ff))]));
+    assert_eq!(
+        refs,
+        BTreeSet::from([a_vas, alias, NodeKey::new(A2, HObject(0x7000_00ff))])
+    );
     // ⊘ The Proc-grouping half (user↔user merges, kernel refs do not) was a projection rule.
 }
 
@@ -271,16 +327,28 @@ fn identical_handles_across_clients_do_not_collide() {
 fn client_handle_zero_is_refused() {
     let mut g = RmGraph::new(Family::Ampere);
     let zero = HClient(0);
-    assert_eq!(g.apply(client_root(zero)), Err(RmGraphError::ReservedClient(zero)));
     assert_eq!(
-        g.apply(dup(NodeKey::new(A, HObject(1)), NodeKey::new(zero, HObject(2)))),
+        g.apply(client_root(zero)),
         Err(RmGraphError::ReservedClient(zero))
     );
     assert_eq!(
-        g.apply(dup(NodeKey::new(zero, HObject(1)), NodeKey::new(A, HObject(2)))),
+        g.apply(dup(
+            NodeKey::new(A, HObject(1)),
+            NodeKey::new(zero, HObject(2))
+        )),
         Err(RmGraphError::ReservedClient(zero))
     );
-    assert_eq!(g.apply(free(zero, HObject(1))), Err(RmGraphError::ReservedClient(zero)));
+    assert_eq!(
+        g.apply(dup(
+            NodeKey::new(zero, HObject(1)),
+            NodeKey::new(A, HObject(2))
+        )),
+        Err(RmGraphError::ReservedClient(zero))
+    );
+    assert_eq!(
+        g.apply(free(zero, HObject(1))),
+        Err(RmGraphError::ReservedClient(zero))
+    );
     assert_eq!(g.client_kinds().count(), 0, "nothing entered the graph");
 }
 
@@ -296,11 +364,15 @@ fn an_undeclared_or_doubly_declared_client_root_is_a_loud_refusal() {
         class: ClassId(nv::NV01_ROOT_CLIENT),
         facts: AllocFacts::default(),
     };
-    assert_eq!(g.apply(undeclared), Err(RmGraphError::UndeclaredClientKind(NodeKey::new(A, root))));
+    assert_eq!(
+        g.apply(undeclared),
+        Err(RmGraphError::UndeclaredClientKind(NodeKey::new(A, root)))
+    );
     assert_eq!(g.nodes().count(), 0, "the refusal changed nothing");
 
     g.apply(client_root(A)).expect("declared");
-    g.apply(client_root(A)).expect("an identical re-send is idempotent");
+    g.apply(client_root(A))
+        .expect("an identical re-send is idempotent");
 
     let second = HObject(A.0 + 0x100);
     assert_eq!(
@@ -323,8 +395,12 @@ fn an_undeclared_or_doubly_declared_client_root_is_a_loud_refusal() {
     );
 
     g.apply(free(A, root)).expect("the root frees");
-    g.apply(kernel_client_root(A)).expect("an empty namespace may declare a fresh root");
-    assert_eq!(g.client_kinds().collect::<Vec<_>>(), vec![(ClientKey::first(A), ClientKind::Kernel)]);
+    g.apply(kernel_client_root(A))
+        .expect("an empty namespace may declare a fresh root");
+    assert_eq!(
+        g.client_kinds().collect::<Vec<_>>(),
+        vec![(ClientKey::first(A), ClientKind::Kernel)]
+    );
 }
 
 /// Old `a_root_kept_alive_by_a_dup_no_longer_occupies_its_own_namespace` — verbatim graph
@@ -334,32 +410,54 @@ fn a_root_kept_alive_by_a_dup_no_longer_occupies_its_own_namespace() {
     let mut g = RmGraph::new(Family::Ampere);
     g.apply(client_root(A)).expect("A's root");
     g.apply(client_root(B)).expect("B's root");
-    g.apply(dup(NodeKey::new(B, HObject(B.0)), NodeKey::new(A, HObject(0x900))))
-        .expect("A aliases B's client object");
+    g.apply(dup(
+        NodeKey::new(B, HObject(B.0)),
+        NodeKey::new(A, HObject(0x900)),
+    ))
+    .expect("A aliases B's client object");
     g.apply(free(B, HObject(B.0))).expect("B's root frees");
     assert_eq!(
         g.origin_of(NodeKey::new(A, HObject(0x900))).map(|n| n.key),
         Some(NodeKey::new(B, HObject(B.0))),
         "the alias still resolves — the resource outlived its origin handle",
     );
-    assert!(!g.client_kinds().any(|(c, _)| c.client == B), "a freed root declares nothing");
-    g.apply(kernel_client_root(B)).expect("★ the emptied namespace may declare a fresh root");
+    assert!(
+        !g.client_kinds().any(|(c, _)| c.client == B),
+        "a freed root declares nothing"
+    );
+    g.apply(kernel_client_root(B))
+        .expect("★ the emptied namespace may declare a fresh root");
     assert_eq!(
         g.client_kinds().collect::<Vec<_>>(),
         vec![
             (ClientKey::first(A), ClientKind::User { pid: A.0 }),
-            (ClientKey { client: B, incarnation: 1 }, ClientKind::Kernel),
+            (
+                ClientKey {
+                    client: B,
+                    incarnation: 1
+                },
+                ClientKind::Kernel
+            ),
         ],
     );
     g.apply(free(A, HObject(0x900))).expect("the alias frees");
     assert_eq!(
-        g.client_kinds().find(|(c, _)| c.client == B).map(|(_, k)| k),
+        g.client_kinds()
+            .find(|(c, _)| c.client == B)
+            .map(|(_, k)| k),
         Some(ClientKind::Kernel),
         "the dead alias pruned the LIVE root's declaration",
     );
     assert_eq!(
-        g.client_declarations().keys().filter(|k| k.client == B).copied().collect::<Vec<_>>(),
-        vec![ClientKey { client: B, incarnation: 1 }],
+        g.client_declarations()
+            .keys()
+            .filter(|k| k.client == B)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![ClientKey {
+            client: B,
+            incarnation: 1
+        }],
         "the orphaned declaration outlived the last resource it owned",
     );
 }
@@ -385,26 +483,47 @@ fn a_freed_and_redeclared_namespace_is_two_declarations_in_every_order() {
         for ev in legal_order(a) {
             g.apply(ev).expect("phase 1 applies in any legal order");
         }
-        g.apply(free(RECYCLED, HObject(RECYCLED.0))).expect("the first tenant's root frees");
+        g.apply(free(RECYCLED, HObject(RECYCLED.0)))
+            .expect("the first tenant's root frees");
         for ev in legal_order(b) {
-            g.apply(ev).expect("★ re-declaring a recycled namespace is LEGAL");
+            g.apply(ev)
+                .expect("★ re-declaring a recycled namespace is LEGAL");
         }
         g
     };
     let reference = run(&phase1, &phase2);
     let gen1 = ClientKey::first(RECYCLED);
-    let gen2 = ClientKey { client: RECYCLED, incarnation: 1 };
-    assert_eq!(reference.owner_key_of(alias), Some(gen1), "the survivor stays with its allocator");
+    let gen2 = ClientKey {
+        client: RECYCLED,
+        incarnation: 1,
+    };
+    assert_eq!(
+        reference.owner_key_of(alias),
+        Some(gen1),
+        "the survivor stays with its allocator"
+    );
     assert_eq!(reference.origin_of(alias).map(|n| n.key), Some(first_vas));
-    assert_eq!(reference.owner_key_of(second_vas), Some(gen2), "the new tenant is its own declaration");
-    let decls: Vec<ClientKey> =
-        reference.client_declarations().keys().filter(|k| k.client == RECYCLED).copied().collect();
+    assert_eq!(
+        reference.owner_key_of(second_vas),
+        Some(gen2),
+        "the new tenant is its own declaration"
+    );
+    let decls: Vec<ClientKey> = reference
+        .client_declarations()
+        .keys()
+        .filter(|k| k.client == RECYCLED)
+        .copied()
+        .collect();
     assert_eq!(decls, vec![gen1, gen2]);
     for pa in permutations(phase1.len()) {
         for pb in permutations(phase2.len()) {
             let a: Vec<RmEvent> = pa.iter().map(|&i| phase1[i]).collect();
             let b: Vec<RmEvent> = pb.iter().map(|&i| phase2[i]).collect();
-            assert_eq!(snapshot(&run(&a, &b)), snapshot(&reference), "perms {pa:?} / {pb:?}");
+            assert_eq!(
+                snapshot(&run(&a, &b)),
+                snapshot(&reference),
+                "perms {pa:?} / {pb:?}"
+            );
         }
     }
 }
@@ -426,14 +545,28 @@ fn a_recycled_object_handle_is_a_new_incarnation_in_every_order() {
         for ev in legal_order(a) {
             g.apply(ev).expect("phase 1");
         }
-        g.apply(free(A, vas.handle)).expect("the origin handle frees");
-        g.apply(realloc).expect("★ re-allocating a freed object handle is LEGAL");
+        g.apply(free(A, vas.handle))
+            .expect("the origin handle frees");
+        g.apply(realloc)
+            .expect("★ re-allocating a freed object handle is LEGAL");
         g
     };
     let g = run(&phase1);
-    assert_eq!(g.node(vas).map(|n| n.incarnation), Some(1), "the new tenant of the handle value");
-    assert_eq!(g.origin_of(alias).map(|n| (n.key, n.incarnation)), Some((vas, 0)), "the survivor");
-    assert_eq!(g.nodes().filter(|n| n.key == vas).count(), 2, "two live resources at one handle value");
+    assert_eq!(
+        g.node(vas).map(|n| n.incarnation),
+        Some(1),
+        "the new tenant of the handle value"
+    );
+    assert_eq!(
+        g.origin_of(alias).map(|n| (n.key, n.incarnation)),
+        Some((vas, 0)),
+        "the survivor"
+    );
+    assert_eq!(
+        g.nodes().filter(|n| n.key == vas).count(),
+        2,
+        "two live resources at one handle value"
+    );
     for p in permutations(phase1.len()) {
         let a: Vec<RmEvent> = p.iter().map(|&i| phase1[i]).collect();
         assert_eq!(snapshot(&run(&a)), snapshot(&g), "perm {p:?}");
@@ -451,14 +584,34 @@ fn a_dup_whose_source_lost_its_root_keeps_naming_the_dead_declaration() {
     let mut g = RmGraph::new(Family::Ampere);
     g.apply(client_root(DST)).expect("dst");
     g.apply(client_root(SRC)).expect("src");
-    g.apply(dup(NodeKey::new(SRC, HObject(SRC.0)), alias)).expect("the alias applies");
-    g.apply(free(SRC, HObject(SRC.0))).expect("the source frees its root");
-    assert_eq!(g.origin_of(alias).map(|n| n.key), Some(NodeKey::new(SRC, HObject(SRC.0))));
-    g.apply(client_root(SRC)).expect("★ re-declaring a recycled namespace is LEGAL");
-    assert_eq!(g.owner_key_of(alias), Some(ClientKey::first(SRC)), "never the new tenant");
+    g.apply(dup(NodeKey::new(SRC, HObject(SRC.0)), alias))
+        .expect("the alias applies");
+    g.apply(free(SRC, HObject(SRC.0)))
+        .expect("the source frees its root");
     assert_eq!(
-        g.client_declarations().keys().filter(|k| k.client == SRC).copied().collect::<Vec<_>>(),
-        vec![ClientKey::first(SRC), ClientKey { client: SRC, incarnation: 1 }],
+        g.origin_of(alias).map(|n| n.key),
+        Some(NodeKey::new(SRC, HObject(SRC.0)))
+    );
+    g.apply(client_root(SRC))
+        .expect("★ re-declaring a recycled namespace is LEGAL");
+    assert_eq!(
+        g.owner_key_of(alias),
+        Some(ClientKey::first(SRC)),
+        "never the new tenant"
+    );
+    assert_eq!(
+        g.client_declarations()
+            .keys()
+            .filter(|k| k.client == SRC)
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![
+            ClientKey::first(SRC),
+            ClientKey {
+                client: SRC,
+                incarnation: 1
+            }
+        ],
     );
 }
 
@@ -471,13 +624,23 @@ fn a_parked_dup_dies_with_its_namespace_root() {
     g.apply(client_root(B)).expect("B");
     let src = NodeKey::new(A, HObject(0x1234));
     let dst = NodeKey::new(B, HObject(0x5678));
-    g.apply(dup(src, dst)).expect("a dup may precede its source object (order tolerance)");
+    g.apply(dup(src, dst))
+        .expect("a dup may precede its source object (order tolerance)");
     assert_eq!(g.dups().collect::<Vec<_>>(), vec![(dst, src)], "parked");
-    g.apply(free(A, HObject(A.0))).expect("the source namespace dies");
-    assert_eq!(g.dups().count(), 0, "the parked edge died with the namespace");
+    g.apply(free(A, HObject(A.0)))
+        .expect("the source namespace dies");
+    assert_eq!(
+        g.dups().count(),
+        0,
+        "the parked edge died with the namespace"
+    );
     g.apply(client_root(A)).expect("re-declared");
-    g.apply(alloc(A, HObject(A.0), src.handle, nv::FERMI_VASPACE_A)).expect("the new tenant allocates the handle");
-    assert!(g.origin_of(dst).is_none(), "★ the planted alias never fired");
+    g.apply(alloc(A, HObject(A.0), src.handle, nv::FERMI_VASPACE_A))
+        .expect("the new tenant allocates the handle");
+    assert!(
+        g.origin_of(dst).is_none(),
+        "★ the planted alias never fired"
+    );
 }
 
 #[test]
@@ -489,9 +652,13 @@ fn a_parked_dup_resolves_when_its_source_arrives() {
     let dst = NodeKey::new(B, HObject(0x5678));
     g.apply(dup(src, dst)).expect("parks");
     assert!(g.node(dst).is_none());
-    g.apply(alloc(A, HObject(A.0), src.handle, nv::FERMI_VASPACE_A)).expect("source");
+    g.apply(alloc(A, HObject(A.0), src.handle, nv::FERMI_VASPACE_A))
+        .expect("source");
     assert_eq!(g.origin_of(dst).map(|n| n.key), Some(src));
-    assert_eq!(g.references(src).collect::<BTreeSet<_>>(), BTreeSet::from([src, dst]));
+    assert_eq!(
+        g.references(src).collect::<BTreeSet<_>>(),
+        BTreeSet::from([src, dst])
+    );
 }
 
 /// Old `t0_subset_free.rs` — graph half: the guest frees a SUBSET and keeps running; the
@@ -506,12 +673,23 @@ fn the_guest_frees_a_subset_and_keeps_running() {
     ev.push(alloc(A, tsg.handle, ctx.handle, nv::FERMI_CONTEXT_SHARE_A));
     let mut g = graph_of(&ev);
     let before = g.nodes().count();
-    g.apply(free(A, tsg.handle)).expect("the guest frees its TSG");
-    assert!(g.node(tsg).is_none() && g.node(ctx).is_none(), "the subtree went");
+    g.apply(free(A, tsg.handle))
+        .expect("the guest frees its TSG");
+    assert!(
+        g.node(tsg).is_none() && g.node(ctx).is_none(),
+        "the subtree went"
+    );
     assert!(g.node(vas).is_some(), "a sibling stayed");
-    assert!(g.node(NodeKey::new(A, HObject(0x5c00_0001))).is_some(), "the parent stayed");
+    assert!(
+        g.node(NodeKey::new(A, HObject(0x5c00_0001))).is_some(),
+        "the parent stayed"
+    );
     assert_eq!(g.nodes().count(), before - 2);
-    assert_eq!(g.apply(free(A, tsg.handle)), Err(RmGraphError::FreeUnknown(tsg)), "double free is named");
+    assert_eq!(
+        g.apply(free(A, tsg.handle)),
+        Err(RmGraphError::FreeUnknown(tsg)),
+        "double free is named"
+    );
 }
 
 /// G9 — a Device naming a GPU instance the device was not realized with is refused.
@@ -524,9 +702,15 @@ fn a_device_instance_outside_the_entitlement_is_refused() {
         parent: HObject(A.0),
         handle: HObject(0x10),
         class: ClassId(nv::NV01_DEVICE_0),
-        facts: AllocFacts { device_instance: Some(1), ..Default::default() },
+        facts: AllocFacts {
+            device_instance: Some(1),
+            ..Default::default()
+        },
     };
-    assert_eq!(g.apply(dev1), Err(RmGraphError::InvalidDeviceInstance { instance: 1 }));
+    assert_eq!(
+        g.apply(dev1),
+        Err(RmGraphError::InvalidDeviceInstance { instance: 1 })
+    );
     g.entitle([0, 1]);
     g.apply(dev1).expect("entitled now");
 }
@@ -562,7 +746,9 @@ impl RefTracker {
     fn promote_pending(&mut self) {
         loop {
             let ready = self.pending.iter().find_map(|(dst, src)| {
-                (!self.handle_to_origin.contains_key(dst)).then(|| self.origin_of(*src).map(|o| (*dst, o))).flatten()
+                (!self.handle_to_origin.contains_key(dst))
+                    .then(|| self.origin_of(*src).map(|o| (*dst, o)))
+                    .flatten()
             });
             let Some((dst, origin)) = ready else { break };
             self.pending.remove(&dst);
@@ -572,7 +758,12 @@ impl RefTracker {
 
     fn apply(&mut self, g: &RmGraph, ev: RmEvent) {
         match ev {
-            RmEvent::Alloc { client, handle, class, .. } => {
+            RmEvent::Alloc {
+                client,
+                handle,
+                class,
+                ..
+            } => {
                 if g.engine_class_refusal(class).is_some() {
                     return;
                 }
@@ -594,7 +785,10 @@ impl RefTracker {
             }
             RmEvent::Dup { src, dst } => {
                 let (src, dst) = ((src.client, src.handle), (dst.client, dst.handle));
-                if [dst.0, src.0].iter().any(|c| !self.client_roots.iter().any(|r| r.0 == *c)) {
+                if [dst.0, src.0]
+                    .iter()
+                    .any(|c| !self.client_roots.iter().any(|r| r.0 == *c))
+                {
                     return;
                 }
                 if self.handle_to_origin.contains_key(&dst) || self.pending.contains_key(&dst) {
@@ -613,11 +807,18 @@ impl RefTracker {
             RmEvent::Free { client, handle } => {
                 let key = (client, handle);
                 let is_root = self.client_roots.contains(&key);
-                if !self.handle_to_origin.contains_key(&key) && !self.pending.contains_key(&key) && !is_root {
+                if !self.handle_to_origin.contains_key(&key)
+                    && !self.pending.contains_key(&key)
+                    && !is_root
+                {
                     return;
                 }
                 let doomed: BTreeSet<(HClient, HObject)> = if is_root {
-                    self.handle_to_origin.keys().filter(|k| k.0 == client).copied().collect()
+                    self.handle_to_origin
+                        .keys()
+                        .filter(|k| k.0 == client)
+                        .copied()
+                        .collect()
                 } else {
                     BTreeSet::from([key])
                 };
@@ -625,7 +826,8 @@ impl RefTracker {
                     self.handle_to_origin.remove(k);
                     self.client_roots.remove(k);
                 }
-                self.pending.retain(|d, s| !doomed.contains(d) && !doomed.contains(s));
+                self.pending
+                    .retain(|d, s| !doomed.contains(d) && !doomed.contains(s));
                 if is_root {
                     self.pending.retain(|d, s| d.0 != client && s.0 != client);
                 }
@@ -651,7 +853,10 @@ impl Rng {
 /// Old `any_class`, on real class ids: root, device, VA space, TSG, context share, one
 /// engine class of EVERY family (so the family gate is exercised), and junk.
 fn any_class(r: &mut Rng) -> ClassId {
-    let engines: Vec<u32> = kf_chip::classes::FAMILIES.iter().map(|c| c.compute[0]).collect();
+    let engines: Vec<u32> = kf_chip::classes::FAMILIES
+        .iter()
+        .map(|c| c.compute[0])
+        .collect();
     match r.below(8) {
         0 => ClassId(nv::NV01_ROOT_CLIENT),
         1 => ClassId(nv::NV01_DEVICE_0),
@@ -680,20 +885,37 @@ fn a4_dup_object_is_reference_counted() {
                     let c = client(&mut r);
                     let h = HObject(next);
                     next += 1;
-                    RmEvent::Alloc { client: c, parent: h, handle: h, class: any_class(&mut r), facts: user(c) }
+                    RmEvent::Alloc {
+                        client: c,
+                        parent: h,
+                        handle: h,
+                        class: any_class(&mut r),
+                        facts: user(c),
+                    }
                 }
-                1 => dup(NodeKey::new(client(&mut r), handle(&mut r)), NodeKey::new(client(&mut r), handle(&mut r))),
+                1 => dup(
+                    NodeKey::new(client(&mut r), handle(&mut r)),
+                    NodeKey::new(client(&mut r), handle(&mut r)),
+                ),
                 _ => free(client(&mut r), handle(&mut r)),
             };
             let _ = g.apply(ev); // never panics — at worst a named refusal
             tracker.apply(&g, ev);
 
-            let graph_live: BTreeSet<(HClient, HObject)> = g.nodes().map(|n| (n.key.client, n.key.handle)).collect();
-            assert_eq!(graph_live, tracker.live_resources(), "case {case}: graph vs independent tracker");
+            let graph_live: BTreeSet<(HClient, HObject)> =
+                g.nodes().map(|n| (n.key.client, n.key.handle)).collect();
+            assert_eq!(
+                graph_live,
+                tracker.live_resources(),
+                "case {case}: graph vs independent tracker"
+            );
             for origin in &graph_live {
                 let key = NodeKey::new(origin.0, origin.1);
                 let refs: Vec<_> = g.references(key).collect();
-                assert!(!refs.is_empty(), "case {case}: a live resource must have ≥1 reference");
+                assert!(
+                    !refs.is_empty(),
+                    "case {case}: a live resource must have ≥1 reference"
+                );
                 for h in refs {
                     assert_eq!(g.origin_of(h).map(|n| n.key), Some(key), "case {case}");
                 }
@@ -702,16 +924,27 @@ fn a4_dup_object_is_reference_counted() {
                 for h in 0..8u32 {
                     let k = NodeKey::new(HClient(0xB000 + c), HObject(0x7000_0000 + h));
                     if tracker.origin_of((k.client, k.handle)).is_none() {
-                        assert!(g.origin_of(k).is_none(), "case {case}: a stale handle resolved");
+                        assert!(
+                            g.origin_of(k).is_none(),
+                            "case {case}: a stale handle resolved"
+                        );
                     }
                 }
             }
         }
-        let remaining: Vec<NodeKey> = tracker.handle_to_origin.keys().map(|(c, h)| NodeKey::new(*c, *h)).collect();
+        let remaining: Vec<NodeKey> = tracker
+            .handle_to_origin
+            .keys()
+            .map(|(c, h)| NodeKey::new(*c, *h))
+            .collect();
         for k in remaining {
             let _ = g.apply(free(k.client, k.handle));
         }
-        assert_eq!(g.nodes().count(), 0, "case {case}: no resource leaks after every handle is freed");
+        assert_eq!(
+            g.nodes().count(),
+            0,
+            "case {case}: no resource leaks after every handle is freed"
+        );
     }
 }
 
@@ -727,12 +960,21 @@ fn defect1_the_same_hobject_in_two_clients_is_two_nodes() {
     g.apply(client_root(A)).expect("A");
     g.apply(client_root(B)).expect("B");
     let h = HObject(0x5c00_0003);
-    g.apply(alloc(A, HObject(A.0), h, nv::NV01_DEVICE_0)).expect("A's device");
-    g.apply(alloc(B, HObject(B.0), h, nv::NV01_DEVICE_0)).expect("★ B's device at the SAME value is not a duplicate");
-    assert_ne!(g.node(NodeKey::new(A, h)).map(|n| n.id()), g.node(NodeKey::new(B, h)).map(|n| n.id()));
+    g.apply(alloc(A, HObject(A.0), h, nv::NV01_DEVICE_0))
+        .expect("A's device");
+    g.apply(alloc(B, HObject(B.0), h, nv::NV01_DEVICE_0))
+        .expect("★ B's device at the SAME value is not a duplicate");
+    assert_ne!(
+        g.node(NodeKey::new(A, h)).map(|n| n.id()),
+        g.node(NodeKey::new(B, h)).map(|n| n.id())
+    );
     g.apply(free(A, h)).expect("A frees its device");
     assert!(g.node(NodeKey::new(A, h)).is_none());
-    assert_eq!(g.node(NodeKey::new(B, h)).map(|n| n.key), Some(NodeKey::new(B, h)), "B's survives");
+    assert_eq!(
+        g.node(NodeKey::new(B, h)).map(|n| n.key),
+        Some(NodeKey::new(B, h)),
+        "B's survives"
+    );
 }
 
 /// §4.4 defect 2 — the doorbell graph's `alloc` called the family-BLIND class table. Here,
@@ -742,13 +984,18 @@ fn defect1_the_same_hobject_in_two_clients_is_two_nodes() {
 fn defect2_the_engine_class_gate_is_per_family_for_every_family() {
     let all: BTreeSet<u32> = kf_chip::classes::FAMILIES
         .iter()
-        .flat_map(|c| Kind::ALL.iter().flat_map(move |k| c.of_kind(*k).iter().copied()))
+        .flat_map(|c| {
+            Kind::ALL
+                .iter()
+                .flat_map(move |k| c.of_kind(*k).iter().copied())
+        })
         .collect();
     for family in Family::ALL {
         let mut g = RmGraph::new(family);
         g.apply(client_root(A)).expect("A");
         let dev = HObject(0x10);
-        g.apply(alloc(A, HObject(A.0), dev, nv::NV01_DEVICE_0)).expect("device");
+        g.apply(alloc(A, HObject(A.0), dev, nv::NV01_DEVICE_0))
+            .expect("device");
         let mut next = 0x1000u32;
         let (mut admitted, mut refused) = (0, 0);
         for &class in &all {
@@ -762,14 +1009,23 @@ fn defect2_the_engine_class_gate_is_per_family_for_every_family() {
             } else {
                 assert_eq!(
                     got,
-                    Err(RmGraphError::EngineClassNotInFamily { class: ClassId(class), family }),
+                    Err(RmGraphError::EngineClassNotInFamily {
+                        class: ClassId(class),
+                        family
+                    }),
                     "{family:?} does not list {class:#x}"
                 );
-                assert!(g.node(NodeKey::new(A, h)).is_none(), "a refused alloc left a node");
+                assert!(
+                    g.node(NodeKey::new(A, h)).is_none(),
+                    "a refused alloc left a node"
+                );
                 refused += 1;
             }
         }
-        assert!(admitted > 0 && refused > 0, "{family:?}: non-vacuous ({admitted} admitted, {refused} refused)");
+        assert!(
+            admitted > 0 && refused > 0,
+            "{family:?}: non-vacuous ({admitted} admitted, {refused} refused)"
+        );
         // Non-engine classes are not this gate's business.
         assert_eq!(g.engine_class_refusal(ClassId(nv::FERMI_VASPACE_A)), None);
     }
@@ -786,20 +1042,42 @@ fn defect3_dup_aliases_one_resource_it_never_copies_a_count() {
         g.apply(client_root(B)).expect("B");
         let src = NodeKey::new(A, HObject(0x20));
         let dst = NodeKey::new(B, HObject(0x30));
-        g.apply(alloc(A, HObject(A.0), src.handle, nv::FERMI_VASPACE_A)).expect("vas");
+        g.apply(alloc(A, HObject(A.0), src.handle, nv::FERMI_VASPACE_A))
+            .expect("vas");
         let before = g.nodes().count();
         g.apply(dup(src, dst)).expect("dup");
-        assert_eq!(g.nodes().count(), before, "a dup creates no second resource");
-        assert_eq!(g.origin_of(dst).map(|n| n.id()), g.origin_of(src).map(|n| n.id()), "one resource");
-        assert_eq!(g.references(src).collect::<BTreeSet<_>>(), BTreeSet::from([src, dst]));
+        assert_eq!(
+            g.nodes().count(),
+            before,
+            "a dup creates no second resource"
+        );
+        assert_eq!(
+            g.origin_of(dst).map(|n| n.id()),
+            g.origin_of(src).map(|n| n.id()),
+            "one resource"
+        );
+        assert_eq!(
+            g.references(src).collect::<BTreeSet<_>>(),
+            BTreeSet::from([src, dst])
+        );
 
         let (first, second) = if src_first { (src, dst) } else { (dst, src) };
-        g.apply(free(first.client, first.handle)).expect("first free");
+        g.apply(free(first.client, first.handle))
+            .expect("first free");
         assert_eq!(g.nodes().count(), before, "alive through the other handle");
         assert_eq!(g.origin_of(second).map(|n| n.key), Some(src));
-        assert_eq!(g.references(src).collect::<Vec<_>>(), vec![second], "exactly one reference left");
-        g.apply(free(second.client, second.handle)).expect("second free");
-        assert_eq!(g.nodes().count(), before - 1, "dies with its LAST reference, not before, not after");
+        assert_eq!(
+            g.references(src).collect::<Vec<_>>(),
+            vec![second],
+            "exactly one reference left"
+        );
+        g.apply(free(second.client, second.handle))
+            .expect("second free");
+        assert_eq!(
+            g.nodes().count(),
+            before - 1,
+            "dies with its LAST reference, not before, not after"
+        );
         assert!(g.origin_of(src).is_none() && g.origin_of(dst).is_none());
     }
 }
@@ -813,26 +1091,62 @@ fn classification_is_kf_chips_for_every_family() {
     for set in kf_chip::classes::FAMILIES.iter() {
         let g = RmGraph::new(set.family);
         for &c in set.compute {
-            assert_eq!(g.classify(ClassId(c)), ObjectKind::EngineObject { engine: EngineKind::GrCompute });
+            assert_eq!(
+                g.classify(ClassId(c)),
+                ObjectKind::EngineObject {
+                    engine: EngineKind::GrCompute
+                }
+            );
         }
         for &c in set.dma_copy {
-            assert_eq!(g.classify(ClassId(c)), ObjectKind::EngineObject { engine: EngineKind::Ce });
+            assert_eq!(
+                g.classify(ClassId(c)),
+                ObjectKind::EngineObject {
+                    engine: EngineKind::Ce
+                }
+            );
         }
         for &c in set.threed {
-            assert_eq!(g.classify(ClassId(c)), ObjectKind::EngineObject { engine: EngineKind::GrGraphics });
+            assert_eq!(
+                g.classify(ClassId(c)),
+                ObjectKind::EngineObject {
+                    engine: EngineKind::GrGraphics
+                }
+            );
         }
         for &c in set.channel_gpfifo {
-            assert_eq!(g.classify(ClassId(c)), ObjectKind::Channel { engine: EngineKind::GrCompute });
+            assert_eq!(
+                g.classify(ClassId(c)),
+                ObjectKind::Channel {
+                    engine: EngineKind::GrCompute
+                }
+            );
         }
         for c in 0..=0xffffu32 {
-            assert_eq!(g.classify(ClassId(c)), set.classify(ClassId(c)), "{:?} {c:#x}", set.family);
+            assert_eq!(
+                g.classify(ClassId(c)),
+                set.classify(ClassId(c)),
+                "{:?} {c:#x}",
+                set.family
+            );
         }
-        assert_eq!(g.classify(ClassId(nv::NV01_ROOT_CLIENT)), ObjectKind::Client);
+        assert_eq!(
+            g.classify(ClassId(nv::NV01_ROOT_CLIENT)),
+            ObjectKind::Client
+        );
         assert_eq!(g.classify(ClassId(nv::NV01_DEVICE_0)), ObjectKind::Device);
         // A compute class of another family is not an engine object on THIS family.
-        for other in kf_chip::classes::FAMILIES.iter().filter(|o| o.family != set.family) {
+        for other in kf_chip::classes::FAMILIES
+            .iter()
+            .filter(|o| o.family != set.family)
+        {
             for &c in other.compute.iter().filter(|c| set.kind_of(**c).is_none()) {
-                assert_eq!(g.classify(ClassId(c)), ObjectKind::Unknown, "{:?} {c:#x}", set.family);
+                assert_eq!(
+                    g.classify(ClassId(c)),
+                    ObjectKind::Unknown,
+                    "{:?} {c:#x}",
+                    set.family
+                );
             }
         }
     }

@@ -37,9 +37,9 @@ use kf_abi::faultbuffer::{
     SHADOW_FAULT_BUFFER_NON_REPLAYABLE,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
+use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 use kf_rm::faultbuffer::{FaultBufferLog, FaultBufferNote};
 use kf_rm::inittables::{InitTablePolicy, WantedTable};
-use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 
 /// `RpcControlReq::HEADER`.
 const PARAMS_AT: usize = 40;
@@ -48,12 +48,19 @@ const CONTROL_STATUS_OFF: usize = 12;
 /// `NV_ERR_NOT_SUPPORTED`.
 const NV_ERR_NOT_SUPPORTED: u32 = 0x0000_0056;
 
-fn chip() -> (std::sync::Arc<kf_rm::BoardFacts>, std::sync::Arc<kf_rm::HostFacts>) {
+fn chip() -> (
+    std::sync::Arc<kf_rm::BoardFacts>,
+    std::sync::Arc<kf_rm::HostFacts>,
+) {
     (ga106::board(), ga106::host())
 }
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(chip().0, chip().1, *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        chip().0,
+        chip().1,
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// The params `kgmmuFaultBufferReplayableAllocate_IMPL` builds: handles, size, page list.

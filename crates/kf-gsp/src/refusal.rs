@@ -82,7 +82,13 @@ impl RefusalLedger {
             return;
         }
         self.distinct += 1;
-        let row = RefusalRow { function, detail, status, count: 1, first_sequence: sequence };
+        let row = RefusalRow {
+            function,
+            detail,
+            status,
+            count: 1,
+            first_sequence: sequence,
+        };
         if self.rows.len() < REFUSAL_ROWS_MAX {
             self.rows.push(row);
         }
@@ -189,7 +195,11 @@ mod tests {
             l.note(76, Some(i), 0x56, i);
         }
         assert_eq!(l.rows().len(), REFUSAL_ROWS_MAX);
-        assert_eq!(l.distinct(), REFUSAL_ROWS_MAX as u64 + 10, "distinct is the truth past the cap");
+        assert_eq!(
+            l.distinct(),
+            REFUSAL_ROWS_MAX as u64 + 10,
+            "distinct is the truth past the cap"
+        );
         assert_eq!(l.take_fresh().len(), REFUSAL_ROWS_MAX);
     }
 }

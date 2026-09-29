@@ -124,13 +124,13 @@ pub mod gspfeatures;
 pub mod gspstaticinfo;
 pub mod gsslegacy;
 pub mod gssreplay;
-pub mod videocaps;
 pub mod guest_os;
 pub mod guestsysinfo;
 pub mod gvaspacepdes;
 pub mod host_driver;
 pub mod hostabi;
 pub mod inittables;
+pub mod videocaps;
 // ★ #156 — the ⊘ half of the host-class seam: the three classes that do NOT vary,
 // named by role so a name-based gate can tell them from the three that do.
 pub mod invariant_classes;
@@ -367,8 +367,22 @@ mod tests {
         let v = DriverVersion::parse("595.84").expect("two fields is a real release");
         assert_eq!((v.major, v.minor, v.patch), (595, 84, 0));
         assert_eq!(v.to_string(), "595.84");
-        assert_eq!(DriverVersion::parse(" 610.43.02\n").map(|v| v.to_string()).as_deref(), Some("610.43.02"));
-        for bad in ["", "580", "580.", "580.65.06-x", "580.65.06.1", "v580.65.06", "580.x.04", "580..04"] {
+        assert_eq!(
+            DriverVersion::parse(" 610.43.02\n")
+                .map(|v| v.to_string())
+                .as_deref(),
+            Some("610.43.02")
+        );
+        for bad in [
+            "",
+            "580",
+            "580.",
+            "580.65.06-x",
+            "580.65.06.1",
+            "v580.65.06",
+            "580.x.04",
+            "580..04",
+        ] {
             assert_eq!(DriverVersion::parse(bad), None, "{bad:?} must not parse");
         }
     }

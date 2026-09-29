@@ -92,18 +92,18 @@ use crate::generated::vbios::{
     BCRT30_RSA3K_SIG_SIZE, BIT_DATA_BIOSDATA_BINVER_SIZE_5, BIT_DATA_BIOSDATA_VERSION_2,
     BIT_DATA_FALCON_DATA_V2_SIZE_4, BIT_HEADER_ID, BIT_HEADER_SIGNATURE, BIT_HEADER_SIZE_OFFSET,
     BIT_TOKEN_BIOSDATA, BIT_TOKEN_FALCON_DATA, BIT_TOKEN_V1_00_SIZE_8,
-    FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER, FALCON_UCODE_DESC_V2_SIZE_60, FALCON_UCODE_DESC_V3_SIZE_44,
-    FALCON_UCODE_ENTRY_APPID_FIRMWARE_SEC_LIC, FALCON_UCODE_ENTRY_APPID_FWSEC_DBG,
-    FALCON_UCODE_ENTRY_APPID_FWSEC_PROD, FALCON_UCODE_TABLE_ENTRY_V1_SIZE_6,
-    FALCON_UCODE_TABLE_HDR_V1_SIZE_6, FALCON_UCODE_TABLE_HDR_V1_VERSION,
-    FalconApplicationInterfaceDmemMapperV3, FalconApplicationInterfaceEntryV1,
-    FalconApplicationInterfaceHeaderV1, FwseclicFrtsRegionDesc, FwseclicReadVbiosDesc,
-    NV_BCRT_HASH_INFO_BASE_CODE_TYPE_VBIOS_BASE,
+    FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER, FALCON_UCODE_DESC_V2_SIZE_60,
+    FALCON_UCODE_DESC_V3_SIZE_44, FALCON_UCODE_ENTRY_APPID_FIRMWARE_SEC_LIC,
+    FALCON_UCODE_ENTRY_APPID_FWSEC_DBG, FALCON_UCODE_ENTRY_APPID_FWSEC_PROD,
+    FALCON_UCODE_TABLE_ENTRY_V1_SIZE_6, FALCON_UCODE_TABLE_HDR_V1_SIZE_6,
+    FALCON_UCODE_TABLE_HDR_V1_VERSION, FalconApplicationInterfaceDmemMapperV3,
+    FalconApplicationInterfaceEntryV1, FalconApplicationInterfaceHeaderV1, FwseclicFrtsRegionDesc,
+    FwseclicReadVbiosDesc, NV_BCRT_HASH_INFO_BASE_CODE_TYPE_VBIOS_BASE,
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION,
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION_AVAILABLE,
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_SIZE, NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION,
-    NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2, NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3,
-    NV_PCI_DATA_EXT_REV_11, NV_PCI_DATA_EXT_SIG,
+    NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2,
+    NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3, NV_PCI_DATA_EXT_REV_11, NV_PCI_DATA_EXT_SIG,
     OFFSETOF_PCI_DATA_EXT_STRUCT_LAST_IMAGE, OFFSETOF_PCI_DATA_EXT_STRUCT_LEN,
     OFFSETOF_PCI_DATA_EXT_STRUCT_REV, OFFSETOF_PCI_DATA_EXT_STRUCT_SIG,
     OFFSETOF_PCI_DATA_EXT_STRUCT_SUBIMAGE_LEN, OFFSETOF_PCI_DATA_STRUCT_CLASS_CODE,
@@ -696,8 +696,16 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
     if v3 && fw.signature_count == 0 {
         return Err(VbiosError::NoSignatures);
     }
-    let sig_total = if v3 { usize::from(fw.signature_count) * BCRT30_RSA3K_SIG_SIZE } else { 0 };
-    let desc_size = if v3 { FALCON_UCODE_DESC_V3_SIZE_44 + sig_total } else { FALCON_UCODE_DESC_V2_SIZE_60 };
+    let sig_total = if v3 {
+        usize::from(fw.signature_count) * BCRT30_RSA3K_SIG_SIZE
+    } else {
+        0
+    };
+    let desc_size = if v3 {
+        FALCON_UCODE_DESC_V3_SIZE_44 + sig_total
+    } else {
+        FALCON_UCODE_DESC_V2_SIZE_60
+    };
     // The descriptor states its own size in a 16-bit DRF field.
     let Ok(desc_size_u32) = u32::try_from(desc_size) else {
         return Err(VbiosError::DescriptorTooLarge { desc_size });
@@ -963,9 +971,15 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
     c.u8(ucode_table + 2, u8::try_from(entry_size).unwrap_or(0));
     c.u8(ucode_table + 3, u8::try_from(app_ids.len()).unwrap_or(0));
     let (desc_version, desc_base_size) = if v3 {
-        (NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3, FALCON_UCODE_DESC_V3_SIZE_44)
+        (
+            NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3,
+            FALCON_UCODE_DESC_V3_SIZE_44,
+        )
     } else {
-        (NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2, FALCON_UCODE_DESC_V2_SIZE_60)
+        (
+            NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2,
+            FALCON_UCODE_DESC_V2_SIZE_60,
+        )
     };
     c.u8(ucode_table + 4, u8::try_from(desc_version).unwrap_or(0));
     c.u8(ucode_table + 5, u8::try_from(desc_base_size).unwrap_or(0));
@@ -1012,7 +1026,10 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
         c.u32(desc + 20, fw.imem_phys_base);
         c.u32(desc + 24, fw.imem_load_size);
         c.u32(desc + 28, fw.imem_virt_base);
-        c.u32(desc + 32, fw.imem_virt_base + (fw.imem_load_size - sec_size)); // IMEMSecBase
+        c.u32(
+            desc + 32,
+            fw.imem_virt_base + (fw.imem_load_size - sec_size),
+        ); // IMEMSecBase
         c.u32(desc + 36, sec_size); // IMEMSecSize
         c.u32(desc + 40, fw.imem_load_size); // DMEMOffset
         c.u32(desc + 44, fw.dmem_phys_base);

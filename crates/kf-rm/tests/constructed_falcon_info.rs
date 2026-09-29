@@ -36,8 +36,8 @@ use kf_abi::falconinfo::{
     RM_DESTINATION_FALCON_SLOTS,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// The 163 non-zero bytes an RTX 3060's GSP answered: `numConstructedFalcons = 8` and the
 /// eight 20-byte entries. Everything after is zero.
@@ -100,9 +100,7 @@ fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
     assert!(unhex(ORACLE_PREFIX).len() <= ORACLE_DEEPEST_BYTE);
     // ⊘ The zero-extension `oracle_params` applies is THIS FILE's, not the recorder's: the
     // capture stops at `kept` and everything after is supplied here.
-    assert!(!kf_abi::oracle::field_is_captured(
-        0, row.psize, row.kept
-    ));
+    assert!(!kf_abi::oracle::field_is_captured(0, row.psize, row.kept));
 }
 
 /// The eight falcons the oracle's board reported, transcribed from
@@ -176,7 +174,11 @@ fn chip() -> kf_rm::HostFacts {
 }
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// `RpcControlReq::HEADER`, as the capture's own arithmetic gives it: the reply's declared

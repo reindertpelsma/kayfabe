@@ -29,8 +29,8 @@ use kf_abi::eventnotify::{
     NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, NOTIFY_SUBDEVICE_SLOTS};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, NOTIFY_SUBDEVICE_SLOTS};
 
 const PARAMS_AT: usize = 40;
 
@@ -39,7 +39,11 @@ const PARAMS_AT: usize = 40;
 const FIFO_EVENT_MTHD: u32 = 35;
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// The scrubber's own registration — index 35, `REPEAT`.
@@ -117,7 +121,10 @@ fn freeing_the_client_releases_its_slots() {
     }
     // Full: the next distinct subdevice is refused.
     let fresh = 0xc1e0_1000;
-    assert!(!served(&mut p, &arm(fresh, 0xb)), "precondition: the table is full");
+    assert!(
+        !served(&mut p, &arm(fresh, 0xb)),
+        "precondition: the table is full"
+    );
 
     p.respond(&free_client(0xc1e0_0000));
 

@@ -307,7 +307,10 @@ impl ChannelPrivilege {
     /// Decode from `internalFlags`.
     #[must_use]
     pub const fn from_internal_flags(v: u32) -> Self {
-        ChannelPrivilege { level: v & 0b11, uvm_owned: (v >> 7) & 1 == 1 }
+        ChannelPrivilege {
+            level: v & 0b11,
+            uvm_owned: (v >> 7) & 1 == 1,
+        }
     }
 
     /// The guest kernel's own statement that the CALLER was kernel-privileged.
@@ -327,7 +330,10 @@ impl ChannelNotifierWire {
         if bytes.len() < self.internal_flags + 4 {
             return Ok(None);
         }
-        Ok(Some(ChannelPrivilege::from_internal_flags(u32_at(bytes, self.internal_flags)?)))
+        Ok(Some(ChannelPrivilege::from_internal_flags(u32_at(
+            bytes,
+            self.internal_flags,
+        )?)))
     }
 }
 
@@ -756,7 +762,10 @@ mod tests {
     fn a_non_sysmem_or_short_notifier_is_unreachable_not_absent() {
         let w = ChannelNotifierWire::V580;
         let fb = params(w, NOTIFIER_TYPE_MEMORY, 0x4000, 64, ADDR_FBMEM);
-        assert_eq!(w.decode(&fb), Ok(Some(ErrorNotifier::Framebuffer { off: 0x4000 })));
+        assert_eq!(
+            w.decode(&fb),
+            Ok(Some(ErrorNotifier::Framebuffer { off: 0x4000 }))
+        );
         let peer = params(w, NOTIFIER_TYPE_MEMORY, 0x4000, 64, 3);
         assert_eq!(w.decode(&peer), Ok(Some(ErrorNotifier::Unreachable)));
         // sysmem, but smaller than one record

@@ -36,7 +36,8 @@ pub struct HostPci {
 
 fn read_hex(p: &Path) -> Result<u64, String> {
     let s = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
-    u64::from_str_radix(s.trim().trim_start_matches("0x"), 16).map_err(|e| format!("{}: {e}", p.display()))
+    u64::from_str_radix(s.trim().trim_start_matches("0x"), 16)
+        .map_err(|e| format!("{}: {e}", p.display()))
 }
 
 /// The sysfs directory of the GPU at device minor `minor`.
@@ -56,7 +57,10 @@ pub fn sysfs_dir_for_minor(minor: u32) -> Result<PathBuf, String> {
             return Ok(Path::new("/sys/bus/pci/devices").join(e.file_name()));
         }
     }
-    Err(format!("no GPU with device minor {minor} under {}", root.display()))
+    Err(format!(
+        "no GPU with device minor {minor} under {}",
+        root.display()
+    ))
 }
 
 /// Read the host GPU's identity from `dir` (a `/sys/bus/pci/devices/<bdf>`).
@@ -65,7 +69,8 @@ pub fn sysfs_dir_for_minor(minor: u32) -> Result<PathBuf, String> {
 /// A missing or unparsable sysfs attribute, by name.
 pub fn read_host_pci(dir: &Path) -> Result<HostPci, String> {
     let h = |n: &str| read_hex(&dir.join(n));
-    let resource = std::fs::read_to_string(dir.join("resource")).map_err(|e| format!("resource: {e}"))?;
+    let resource =
+        std::fs::read_to_string(dir.join("resource")).map_err(|e| format!("resource: {e}"))?;
     let span = |line: Option<&str>| -> u64 {
         let mut f = line
             .unwrap_or("")
@@ -88,13 +93,20 @@ pub fn read_host_pci(dir: &Path) -> Result<HostPci, String> {
         "8.0" => kf_abi::businfo::PcieGen::Gen3,
         "16.0" => kf_abi::businfo::PcieGen::Gen4,
         "32.0" => kf_abi::businfo::PcieGen::Gen5,
-        other => return Err(format!("max_link_speed {other:?} is not a PCIe generation this tree encodes")),
+        other => {
+            return Err(format!(
+                "max_link_speed {other:?} is not a PCIe generation this tree encodes"
+            ));
+        }
     };
     // "8" → ×8. Decimal in sysfs (`max_link_width`); a width PCIe does not define is refused
     // where the link word is built (`kf_chip::bar0::pcie_link_caps`).
-    let width = std::fs::read_to_string(dir.join("max_link_width")).map_err(|e| format!("max_link_width: {e}"))?;
-    let max_width =
-        width.trim().parse::<u32>().map_err(|e| format!("max_link_width {:?}: {e}", width.trim()))?;
+    let width = std::fs::read_to_string(dir.join("max_link_width"))
+        .map_err(|e| format!("max_link_width: {e}"))?;
+    let max_width = width
+        .trim()
+        .parse::<u32>()
+        .map_err(|e| format!("max_link_width {:?}: {e}", width.trim()))?;
     Ok(HostPci {
         vendor: h("vendor")? as u16,
         device: h("device")? as u16,

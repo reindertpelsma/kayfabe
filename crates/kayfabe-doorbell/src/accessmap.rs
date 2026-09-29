@@ -76,7 +76,10 @@ impl AccessMap {
 
     /// The general form: `bar0_bytes` is `NV_ESC_CARD_INFO.reg_size` for this device.
     pub fn deny_all_for(bar0_bytes: u32) -> AccessMap {
-        AccessMap { bits: vec![0u8; map_bytes_for(bar0_bytes)], bar0_bytes }
+        AccessMap {
+            bits: vec![0u8; map_bytes_for(bar0_bytes)],
+            bar0_bytes,
+        }
     }
 
     #[inline]
@@ -101,7 +104,9 @@ impl AccessMap {
     /// ★ The guest's own test, so our side and its side cannot disagree about bit order.
     pub fn is_allowed(&self, offset: u32) -> bool {
         let reg = (offset / 4) as usize;
-        self.bits.get(reg / 8).is_some_and(|b| b & (1 << (reg % 8)) != 0)
+        self.bits
+            .get(reg / 8)
+            .is_some_and(|b| b & (1 << (reg % 8)) != 0)
     }
 
     #[inline]
@@ -185,21 +190,33 @@ fn deflate_fixed_rle(data: &[u8]) -> Vec<u8> {
 }
 
 #[derive(Default)]
-struct BitWriter { out: Vec<u8>, acc: u32, n: u32 }
+struct BitWriter {
+    out: Vec<u8>,
+    acc: u32,
+    n: u32,
+}
 impl BitWriter {
     /// DEFLATE packs Huffman codes MSB-first but other fields LSB-first; `bits` is the LSB-first
     /// form used for BFINAL/BTYPE and the extra bits.
     fn bits(&mut self, v: u32, n: u32) {
         self.acc |= v << self.n;
         self.n += n;
-        while self.n >= 8 { self.out.push((self.acc & 0xff) as u8); self.acc >>= 8; self.n -= 8; }
+        while self.n >= 8 {
+            self.out.push((self.acc & 0xff) as u8);
+            self.acc >>= 8;
+            self.n -= 8;
+        }
     }
     /// Huffman codes are written most-significant-bit first.
     fn code(&mut self, v: u32, n: u32) {
-        for k in (0..n).rev() { self.bits((v >> k) & 1, 1); }
+        for k in (0..n).rev() {
+            self.bits((v >> k) & 1, 1);
+        }
     }
     fn finish(mut self) -> Vec<u8> {
-        if self.n > 0 { self.out.push((self.acc & 0xff) as u8); }
+        if self.n > 0 {
+            self.out.push((self.acc & 0xff) as u8);
+        }
         self.out
     }
 }
@@ -213,7 +230,9 @@ fn lit_code(w: &mut BitWriter, sym: u32) {
         _ => w.code(0xc0 + (sym - 280), 8),
     }
 }
-fn lit(w: &mut BitWriter, b: u8) { lit_code(w, b as u32); }
+fn lit(w: &mut BitWriter, b: u8) {
+    lit_code(w, b as u32);
+}
 
 /// Emit a length `n` (3..=258) with distance 1.
 fn length_dist1(w: &mut BitWriter, n: usize) {
@@ -224,12 +243,16 @@ fn length_dist1(w: &mut BitWriter, n: usize) {
         19..=34 => (269 + ((n - 19) / 4) as u32, 2, 19 + ((n - 19) / 4) * 4),
         35..=66 => (273 + ((n - 35) / 8) as u32, 3, 35 + ((n - 35) / 8) * 8),
         67..=130 => (277 + ((n - 67) / 16) as u32, 4, 67 + ((n - 67) / 16) * 16),
-        131..=257 => (281 + ((n - 131) / 32) as u32, 5, 131 + ((n - 131) / 32) * 32),
+        131..=257 => (
+            281 + ((n - 131) / 32) as u32,
+            5,
+            131 + ((n - 131) / 32) * 32,
+        ),
         _ => (285, 0, 258),
     };
     lit_code(w, code);
-    if extra_bits > 0 { w.bits((n - base) as u32, extra_bits); }
+    if extra_bits > 0 {
+        w.bits((n - base) as u32, extra_bits);
+    }
     w.code(0, 5); // distance code 0 => distance 1, no extra bits
 }
-
-

@@ -37,7 +37,9 @@ pub fn abi() -> &'static DriverAbiTable {
 /// # Panics
 /// If the envelope is malformed.
 pub fn command(msg: &[u8]) -> RpcCommand {
-    let env = abi().decode_rpc_envelope(msg).expect("well-formed envelope");
+    let env = abi()
+        .decode_rpc_envelope(msg)
+        .expect("well-formed envelope");
     RpcCommand {
         function: kf_rm::abi::FUNCTIONS.classify(env.function),
         code: env.function,
@@ -55,7 +57,11 @@ pub fn xlate(msg: &[u8]) -> Result<Translation, BridgeRefusal> {
 
 /// A `GSP_RM_ALLOC` message declaring a client root, built by the independent builder.
 pub fn root_alloc_msg(class: u32, h_client: u32, process_id: u32) -> Vec<u8> {
-    w::message(fn_id::GSP_RM_ALLOC, 1, &w::client_root_alloc_body(class, h_client, process_id))
+    w::message(
+        fn_id::GSP_RM_ALLOC,
+        1,
+        &w::client_root_alloc_body(class, h_client, process_id),
+    )
 }
 
 /// A `FREE` message shaped the way `rpcRmApiFree_GSP` shapes one.
@@ -77,7 +83,13 @@ pub mod spd {
 }
 
 /// A `GSP_RM_CONTROL`/`SET_PAGE_DIRECTORY` message, built by the independent builder.
-pub fn set_page_dir_msg(h_client: u32, h_device: u32, h_vaspace: u32, pdb: u64, flags: u32) -> Vec<u8> {
+pub fn set_page_dir_msg(
+    h_client: u32,
+    h_device: u32,
+    h_vaspace: u32,
+    pdb: u64,
+    flags: u32,
+) -> Vec<u8> {
     w::message(
         fn_id::GSP_RM_CONTROL,
         3,
@@ -114,7 +126,10 @@ pub fn expected_root_event(client: u32, class: u32, kind: ClientKind) -> RmEvent
         parent: HObject(client),
         handle: HObject(client),
         class: ClassId(class),
-        facts: AllocFacts { client_kind: Some(kind), ..Default::default() },
+        facts: AllocFacts {
+            client_kind: Some(kind),
+            ..Default::default()
+        },
     }
 }
 
@@ -150,8 +165,15 @@ impl RmObjects for Objs {
     /// because the graph no longer sees it. This test double applies it; a real memory plane
     /// must too.
     fn page_dir(&mut self, st: PageDirStatement) -> Result<(), ObjectsRefusal> {
-        if !self.graph.client_declarations().keys().any(|k| k.client == st.client) {
-            return Err(ObjectsRefusal::Graph(RmGraphError::UndeclaredClient(st.client)));
+        if !self
+            .graph
+            .client_declarations()
+            .keys()
+            .any(|k| k.client == st.client)
+        {
+            return Err(ObjectsRefusal::Graph(RmGraphError::UndeclaredClient(
+                st.client,
+            )));
         }
         self.page_dirs.push(st);
         Ok(())
@@ -160,7 +182,11 @@ impl RmObjects for Objs {
 
 /// A fresh object model on an Ampere host (the family the old `WireClassArch` spoke).
 pub fn fresh_objects() -> Objs {
-    Objs { graph: RmGraph::new(kf_chip::Family::Ampere), page_dirs: Vec::new(), history: Vec::new() }
+    Objs {
+        graph: RmGraph::new(kf_chip::Family::Ampere),
+        page_dirs: Vec::new(),
+        history: Vec::new(),
+    }
 }
 
 /// ★ The graph as a comparable value — the v3 stand-in for the old projection oracle.
@@ -186,18 +212,29 @@ impl Snapshot {
 
     /// The live kernel-client namespaces.
     pub fn kernel_clients(&self) -> Vec<HClient> {
-        self.decls.iter().filter(|(_, k)| matches!(k, ClientKind::Kernel)).map(|(k, _)| k.client).collect()
+        self.decls
+            .iter()
+            .filter(|(_, k)| matches!(k, ClientKind::Kernel))
+            .map(|(k, _)| k.client)
+            .collect()
     }
 }
 
 /// Snapshot a graph.
 pub fn snapshot(g: &RmGraph) -> Snapshot {
-    let mut nodes: Vec<_> = g.nodes().map(|n| (n.key, n.incarnation, n.parent, n.kind, n.facts)).collect();
+    let mut nodes: Vec<_> = g
+        .nodes()
+        .map(|n| (n.key, n.incarnation, n.parent, n.kind, n.facts))
+        .collect();
     nodes.sort_by_key(|n| (n.0, n.1));
     Snapshot {
         nodes,
         dups: g.dups().collect(),
-        decls: g.client_declarations().into_iter().map(|(k, (_, kind))| (k, kind)).collect(),
+        decls: g
+            .client_declarations()
+            .into_iter()
+            .map(|(k, (_, kind))| (k, kind))
+            .collect(),
     }
 }
 
@@ -233,7 +270,10 @@ pub fn drive(o: &mut Objs, msg: &[u8]) -> Result<(), BridgeRefusal> {
 }
 
 /// Drive whole RPC **messages** through the policy, with no ring and no FSM.
-pub fn deliver_all(policy: &mut GraphPolicy<'_>, msgs: &[Vec<u8>]) -> Vec<Result<Translation, BridgeRefusal>> {
+pub fn deliver_all(
+    policy: &mut GraphPolicy<'_>,
+    msgs: &[Vec<u8>],
+) -> Vec<Result<Translation, BridgeRefusal>> {
     msgs.iter().map(|m| policy.deliver(&command(m))).collect()
 }
 
@@ -243,7 +283,10 @@ pub fn objects_from_script(script: &w::RpcScript) -> Objs {
     let mut o = fresh_objects();
     {
         let mut policy = GraphPolicy::new(abi(), GuestOs::Linux, &mut o);
-        for (i, out) in deliver_all(&mut policy, &script.messages()).into_iter().enumerate() {
+        for (i, out) in deliver_all(&mut policy, &script.messages())
+            .into_iter()
+            .enumerate()
+        {
             let _ = out.unwrap_or_else(|e| panic!("message {i} of the script refused: {e:?}"));
         }
         assert!(policy.census().is_empty(), "a clean script refuses nothing");
@@ -293,7 +336,9 @@ pub fn run_through_policy(steps: &[w::Step], o: &mut Objs) -> Run {
         .enumerate()
         .map(|(i, s)| {
             let msg = w::message(s.function, 0x1000 + i as u32, &s.body);
-            policy.respond(&command(&msg)).expect("GraphPolicy answers every command")
+            policy
+                .respond(&command(&msg))
+                .expect("GraphPolicy answers every command")
         })
         .collect();
     Run {
@@ -374,5 +419,8 @@ pub fn ring_va_for(chid: u16) -> u64 {
 
 /// Old `kayfabe_tests::ring_fact_for`: the declared ring fact.
 pub fn ring_fact_for(chid: u16) -> kf_rm::rmgraph::GpFifoRing {
-    kf_rm::rmgraph::GpFifoRing { va: ring_va_for(chid), entries: RING_ENTRIES }
+    kf_rm::rmgraph::GpFifoRing {
+        va: ring_va_for(chid),
+        entries: RING_ENTRIES,
+    }
 }

@@ -23,8 +23,8 @@ use kf_abi::grfsinfo::{
 };
 use kf_abi::grstatic;
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 const PARAMS_AT: usize = 40;
 const CONTROL_STATUS_OFF: usize = 12;
@@ -33,7 +33,11 @@ fn chip() -> kf_rm::HostFacts {
     ga106::host_facts()
 }
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 fn command(params: &[u8]) -> RpcCommand {
@@ -183,9 +187,18 @@ fn an_unmodelled_query_type_refuses_the_whole_control() {
 #[test]
 fn tpc_mask_is_the_logical_rows_own_mask() {
     let req = grfsinfo::build_request(&[
-        GrFsQuery { query_type: query_type::TPC_MASK, input: 0 },
-        GrFsQuery { query_type: query_type::TPC_MASK, input: 2 },
-        GrFsQuery { query_type: query_type::TPC_MASK, input: 3 },
+        GrFsQuery {
+            query_type: query_type::TPC_MASK,
+            input: 0,
+        },
+        GrFsQuery {
+            query_type: query_type::TPC_MASK,
+            input: 2,
+        },
+        GrFsQuery {
+            query_type: query_type::TPC_MASK,
+            input: 3,
+        },
     ]);
     let (status, params) = reply_params(&command(&req)).expect("served");
     assert_eq!(status, 0);
@@ -193,7 +206,11 @@ fn tpc_mask_is_the_logical_rows_own_mask() {
     let rows = chip().gr_static.gpcs;
     assert_eq!((a[0].1, a[0].3), (0, rows[0].tpc_mask));
     assert_eq!((a[1].1, a[1].3), (0, rows[2].tpc_mask));
-    assert_eq!(a[2].1, grfsinfo::NV_ERR_INVALID_ARGUMENT, "gpcId 3 is past a three-GPC part");
+    assert_eq!(
+        a[2].1,
+        grfsinfo::NV_ERR_INVALID_ARGUMENT,
+        "gpcId 3 is past a three-GPC part"
+    );
 }
 
 /// ★ A MIG-only type is the other way round: served, with the refusal in the query's own
@@ -213,11 +230,7 @@ fn a_mig_only_query_type_is_served_with_a_per_query_refusal() {
     let (status, params) = reply_params(&command(&req)).expect("served");
     assert_eq!(status, 0, "the CALL succeeds");
     let a = grfsinfo::decode_answers(&params).expect("decode");
-    assert_eq!(
-        a[0].1,
-        kf_abi::NV_ERR_NOT_SUPPORTED,
-        "the QUERY refuses"
-    );
+    assert_eq!(a[0].1, kf_abi::NV_ERR_NOT_SUPPORTED, "the QUERY refuses");
     assert_eq!(a[1].1, 0, "and the batch marched on");
     assert_eq!(a[1].2, 3);
 }

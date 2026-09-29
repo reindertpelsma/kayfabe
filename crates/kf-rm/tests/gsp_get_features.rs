@@ -26,14 +26,18 @@ use kf_abi::guestsysinfo::{
     GUEST_DRIVER_VERSION_OFF, SET_GUEST_SYSTEM_INFO_SIZE, VGX_MAJOR_OFF, VGX_MINOR_OFF,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 const PARAMS_AT: usize = 40;
 const CONTROL_STATUS_OFF: usize = 12;
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `SET_GUEST_SYSTEM_INFO` (fn 1) carrying `version` where RM puts `NV_VERSION_STRING`.
@@ -179,7 +183,10 @@ fn the_firmware_version_follows_the_guest_and_not_any_constant() {
     // served string follows the GUEST for four different guests against ONE bench table — and
     // the table's own version is pinned here so the day it drifts from the bench this changes.
     use kf_abi::DriverAbi;
-    assert_eq!(table_for(BENCH_DRIVER).expect("bench").version(), BENCH_DRIVER);
+    assert_eq!(
+        table_for(BENCH_DRIVER).expect("bench").version(),
+        BENCH_DRIVER
+    );
 }
 
 /// ⚠ No fn 1 yet ⇒ a refusal, never a default.

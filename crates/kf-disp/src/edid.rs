@@ -106,8 +106,10 @@ impl Timing {
         let v_blank = vbi_lines.max(RB_V_FPORCH + v_sync + MIN_V_BPORCH);
         let v_total = h + v_blank;
         let h_total = w + RB_H_BLANK;
-        let pixel_khz = ((f64::from(hz) * f64::from(v_total) * f64::from(h_total) / 1000.0 / CLOCK_STEP_KHZ).floor()
-            * CLOCK_STEP_KHZ) as u32;
+        let pixel_khz =
+            ((f64::from(hz) * f64::from(v_total) * f64::from(h_total) / 1000.0 / CLOCK_STEP_KHZ)
+                .floor()
+                * CLOCK_STEP_KHZ) as u32;
         if pixel_khz / 10 > 0xffff {
             return None;
         }
@@ -190,8 +192,10 @@ impl Monitor {
         };
         e[20] = 0x80 | (0b010 << 4) | iface; // digital, 8 bpc
         // physical size from a 96-DPI assumption (cm), clamped to a byte
-        e[21] = u8::try_from((self.preferred.h_active * 254 / 960).clamp(1, 255)).unwrap_or(255) / 10;
-        e[22] = u8::try_from((self.preferred.v_active * 254 / 960).clamp(1, 255)).unwrap_or(255) / 10;
+        e[21] =
+            u8::try_from((self.preferred.h_active * 254 / 960).clamp(1, 255)).unwrap_or(255) / 10;
+        e[22] =
+            u8::try_from((self.preferred.v_active * 254 / 960).clamp(1, 255)).unwrap_or(255) / 10;
         e[23] = 120; // gamma 2.2
         e[24] = 0x06; // RGB 4:4:4; sRGB default; preferred timing is native
         // sRGB chromaticity (E-EDID 1.4 §3.7, the standard sRGB encoding)
@@ -200,8 +204,16 @@ impl Monitor {
         e[36] = 0x08; // 1024x768@60
         e[37] = 0x00;
         // standard timings: 1280x1024@60, 1600x900@60, 1680x1050@60; rest unused
-        let std_timings: [[u8; 2]; 8] =
-            [[0x81, 0x80], [0xa9, 0xc0], [0xb3, 0x00], [1, 1], [1, 1], [1, 1], [1, 1], [1, 1]];
+        let std_timings: [[u8; 2]; 8] = [
+            [0x81, 0x80],
+            [0xa9, 0xc0],
+            [0xb3, 0x00],
+            [1, 1],
+            [1, 1],
+            [1, 1],
+            [1, 1],
+            [1, 1],
+        ];
         for (i, s) in std_timings.iter().enumerate() {
             e[38 + 2 * i..40 + 2 * i].copy_from_slice(s);
         }
@@ -209,7 +221,8 @@ impl Monitor {
         // range limits: 24..75 Hz vertical, 15..160 kHz horizontal, max pixel clock (10 MHz units)
         let max_10mhz = u8::try_from(self.max_pixel_khz.div_ceil(10_000)).unwrap_or(255);
         e[72..90].copy_from_slice(&[
-            0, 0, 0, 0xfd, 0, 24, 75, 15, 160, max_10mhz, 0x00, 0x0a, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+            0, 0, 0, 0xfd, 0, 24, 75, 15, 160, max_10mhz, 0x00, 0x0a, 0x20, 0x20, 0x20, 0x20, 0x20,
+            0x20,
         ]);
         let mut name = [0x20u8; 13];
         let n = self.name.as_bytes();
@@ -243,7 +256,9 @@ fn dtd(t: &Timing) -> Result<[u8; 18], String> {
         && t.v_front <= 0x3f
         && t.v_sync <= 0x3f;
     if !fits {
-        return Err(format!("timing {t:?} does not fit a detailed timing descriptor"));
+        return Err(format!(
+            "timing {t:?} does not fit a detailed timing descriptor"
+        ));
     }
     let b = |v: u32| (v & 0xff) as u8;
     let mut d = [0u8; 18];
@@ -299,7 +314,13 @@ mod tests {
     /// CVT-RB sizes for common window sizes are ~60 Hz, fit a descriptor, and are refused out of range.
     #[test]
     fn cvt_rb_timings_are_about_60hz_and_bounded() {
-        for (w, h) in [(1280, 720), (1920, 1080), (2560, 1440), (1366, 768), (3840, 2160)] {
+        for (w, h) in [
+            (1280, 720),
+            (1920, 1080),
+            (2560, 1440),
+            (1366, 768),
+            (3840, 2160),
+        ] {
             let t = Timing::cvt_rb(w, h, 60).expect("cvt");
             let r = t.refresh_mhz();
             assert!((59_000..=61_000).contains(&r), "{w}x{h}: {r} mHz");

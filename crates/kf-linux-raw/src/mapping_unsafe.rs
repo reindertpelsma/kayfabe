@@ -537,11 +537,15 @@ impl MappedRegion {
         let mut total = 0u64;
         for &(off, len) in pieces {
             if len == 0 {
-                return Err(RawError::ZeroLength { what: "stitched piece length" });
+                return Err(RawError::ZeroLength {
+                    what: "stitched piece length",
+                });
             }
             geometry::require_aligned(len, page, "stitched piece length")?;
             geometry::require_aligned(off, page, "stitched piece file offset")?;
-            total = total.checked_add(len).ok_or(RawError::LengthOverflow { offset: total, len })?;
+            total = total
+                .checked_add(len)
+                .ok_or(RawError::LengthOverflow { offset: total, len })?;
         }
         // The reservation: kernel-chosen address, `PROT_NONE`, released on every early return.
         let map = Mapping::anywhere(
@@ -555,8 +559,12 @@ impl MappedRegion {
         lockwitness::assert_lock_free("mmap MAP_FIXED (stitching a view)");
         let mut cursor = 0u64;
         for &(off, len) in pieces {
-            let (start, len_host) =
-                bounds::checked_span(map.len_bytes(), HostOffset::new(cursor), len, "stitched piece length")?;
+            let (start, len_host) = bounds::checked_span(
+                map.len_bytes(),
+                HostOffset::new(cursor),
+                len,
+                "stitched piece length",
+            )?;
             let (fdn, file_offset, share_flags) =
                 decode_backing(Backing::SharedFile { fd, offset: off }, page)?;
             // SAFETY: the `MAP_FIXED` target is strictly inside a range this process owns and
@@ -572,7 +580,14 @@ impl MappedRegion {
             let target = unsafe { map.base.as_ptr().add(start).cast::<libc::c_void>() };
             // SAFETY: as argued in (a)-(d) directly above.
             let ret = unsafe {
-                libc::mmap(target, len_host, prot.bits(), share_flags | libc::MAP_FIXED, fdn, file_offset)
+                libc::mmap(
+                    target,
+                    len_host,
+                    prot.bits(),
+                    share_flags | libc::MAP_FIXED,
+                    fdn,
+                    file_offset,
+                )
             };
             if ret == libc::MAP_FAILED {
                 // `map` drops here and `munmap`s the whole range, placed pieces included.
@@ -927,7 +942,12 @@ unsafe impl Sync for HostSpan {}
 impl HostSpan {
     /// Mint a span of `[base + off, base + off + len)` inside a live mapping of `total` bytes.
     /// `None` when it would leave the mapping — the bound is checked HERE, once, by the owner.
-    pub(crate) fn within(base: NonNull<u8>, total: usize, off: usize, len: usize) -> Option<HostSpan> {
+    pub(crate) fn within(
+        base: NonNull<u8>,
+        total: usize,
+        off: usize,
+        len: usize,
+    ) -> Option<HostSpan> {
         let end = off.checked_add(len)?;
         if end > total || len == 0 {
             return None;
@@ -1067,7 +1087,10 @@ impl VolatileRegion {
     /// memslot (§53.1 disposition C). Safe code can carry it; only `unsafe` can open it.
     #[must_use]
     pub fn host_span(&self) -> HostSpan {
-        HostSpan { base: self.map.base_ptr(), len: usize::try_from(self.map.len_bytes()).unwrap_or(0) }
+        HostSpan {
+            base: self.map.base_ptr(),
+            len: usize::try_from(self.map.len_bytes()).unwrap_or(0),
+        }
     }
 
     /// A naturally-aligned atomic view of the word at `offset`.
@@ -1517,7 +1540,10 @@ mod tests {
         let pg = p.bytes();
         let f = shared_file(8 * pg);
         let file = MappedRegion::map(
-            Backing::SharedFile { fd: std::os::fd::AsFd::as_fd(&f), offset: 0 },
+            Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&f),
+                offset: 0,
+            },
             8 * pg,
             HostProt::ReadWrite,
             CachePolicy::WriteBack,
@@ -1525,20 +1551,30 @@ mod tests {
         )
         .expect("file view");
         for i in 0..8u64 {
-            file.write_from(HostOffset::new(i * pg), &vec![i as u8 + 1; pg as usize]).expect("seed");
+            file.write_from(HostOffset::new(i * pg), &vec![i as u8 + 1; pg as usize])
+                .expect("seed");
         }
         // Pages 5, 1-2 (one two-page piece), 7 — out of order and discontiguous.
         let pieces = [(5 * pg, pg), (pg, 2 * pg), (7 * pg, pg)];
-        let s = MappedRegion::stitch(std::os::fd::AsFd::as_fd(&f), &pieces, HostProt::ReadWrite, CachePolicy::WriteBack, p)
-            .expect("stitch");
+        let s = MappedRegion::stitch(
+            std::os::fd::AsFd::as_fd(&f),
+            &pieces,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            p,
+        )
+        .expect("stitch");
         assert_eq!(s.len_bytes(), 4 * pg);
         let mut b = [0u8; 1];
         for (i, want) in [6u8, 2, 3, 8].iter().enumerate() {
-            s.read_into(HostOffset::new(i as u64 * pg + 17), &mut b).expect("read");
+            s.read_into(HostOffset::new(i as u64 * pg + 17), &mut b)
+                .expect("read");
             assert_eq!(b[0], *want, "view page {i}");
         }
-        s.write_from(HostOffset::new(3 * pg), &[0xEE]).expect("write through the view");
-        file.read_into(HostOffset::new(7 * pg), &mut b).expect("read file");
+        s.write_from(HostOffset::new(3 * pg), &[0xEE])
+            .expect("write through the view");
+        file.read_into(HostOffset::new(7 * pg), &mut b)
+            .expect("read file");
         assert_eq!(b[0], 0xEE, "the view is the file's own page, not a copy");
         let fd = std::os::fd::AsFd::as_fd(&f);
         assert!(matches!(
@@ -1546,11 +1582,23 @@ mod tests {
             Err(RawError::ZeroLength { .. })
         ));
         assert!(matches!(
-            MappedRegion::stitch(fd, &[(pg, 0)], HostProt::ReadOnly, CachePolicy::WriteBack, p),
+            MappedRegion::stitch(
+                fd,
+                &[(pg, 0)],
+                HostProt::ReadOnly,
+                CachePolicy::WriteBack,
+                p
+            ),
             Err(RawError::ZeroLength { .. })
         ));
         assert!(matches!(
-            MappedRegion::stitch(fd, &[(17, pg)], HostProt::ReadOnly, CachePolicy::WriteBack, p),
+            MappedRegion::stitch(
+                fd,
+                &[(17, pg)],
+                HostProt::ReadOnly,
+                CachePolicy::WriteBack,
+                p
+            ),
             Err(RawError::Misaligned { .. })
         ));
     }

@@ -43,7 +43,9 @@ impl Family {
     #[must_use]
     pub const fn pte_kinds(self) -> &'static [(u8, u8)] {
         match self {
-            Family::Turing | Family::Ampere | Family::Ada | Family::Hopper | Family::Blackwell => UNCOMPRESSED_TU102,
+            Family::Turing | Family::Ampere | Family::Ada | Family::Hopper | Family::Blackwell => {
+                UNCOMPRESSED_TU102
+            }
         }
     }
 }
@@ -52,7 +54,10 @@ impl Family {
 /// module docs); `None` for a kind the table does not define.
 #[must_use]
 pub fn uncompressed_pte_kind(kind: u8) -> Option<u8> {
-    UNCOMPRESSED_TU102.iter().find(|(k, _)| *k == kind).map(|(_, u)| *u)
+    UNCOMPRESSED_TU102
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, u)| *u)
 }
 
 #[cfg(test)]
@@ -61,15 +66,33 @@ mod tests {
 
     #[test]
     fn compression_is_stripped_and_layout_is_kept() {
-        assert_eq!(uncompressed_pte_kind(0x0E), Some(0x05), "Z24S8 compressible -> Z24S8");
+        assert_eq!(
+            uncompressed_pte_kind(0x0E),
+            Some(0x05),
+            "Z24S8 compressible -> Z24S8"
+        );
         assert_eq!(uncompressed_pte_kind(0x08), Some(PTE_KIND_GENERIC));
         assert_eq!(uncompressed_pte_kind(0x05), Some(0x05));
-        assert_eq!(uncompressed_pte_kind(0x07), None, "INVALID is never a mapping");
-        assert_eq!(uncompressed_pte_kind(0x0F), None, "SMSKED_MESSAGE is not a surface");
+        assert_eq!(
+            uncompressed_pte_kind(0x07),
+            None,
+            "INVALID is never a mapping"
+        );
+        assert_eq!(
+            uncompressed_pte_kind(0x0F),
+            None,
+            "SMSKED_MESSAGE is not a surface"
+        );
         for (_, u) in UNCOMPRESSED_TU102 {
             assert!(*u <= 0x06, "an uncompressed kind is one of PITCH..GENERIC");
         }
-        for f in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
+        for f in [
+            Family::Turing,
+            Family::Ampere,
+            Family::Ada,
+            Family::Hopper,
+            Family::Blackwell,
+        ] {
             assert!(!f.pte_kinds().is_empty());
         }
     }
@@ -105,7 +128,9 @@ mod hwref_check {
     fn every_kind_is_its_die_groups_header_value() {
         assert_eq!(NAMED.len(), UNCOMPRESSED_TU102.len());
         for g in DieGroup::ALL {
-            let k = |n: &str| u8::try_from(val(g, &format!("NV_MMU_PTE_KIND_{n}"))).expect("a kind is 8 bits");
+            let k = |n: &str| {
+                u8::try_from(val(g, &format!("NV_MMU_PTE_KIND_{n}"))).expect("a kind is 8 bits")
+            };
             for ((kind, unc), (kn, un)) in g.family().pte_kinds().iter().zip(NAMED) {
                 assert_eq!((*kind, *unc), (k(kn), k(un)), "{g:?} {kn}");
             }

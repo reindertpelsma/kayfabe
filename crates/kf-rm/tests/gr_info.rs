@@ -32,8 +32,8 @@ use kf_abi::grinfo::{
     NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_INFO,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `RpcControlReq::HEADER` — `cap1b`'s own arithmetic: `paylen 44 - 4 = 40`.
 const PARAMS_AT: usize = 40;
@@ -45,7 +45,11 @@ fn chip() -> kf_rm::HostFacts {
 }
 
 fn policy_for(c: kf_rm::HostFacts) -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), std::sync::Arc::new(c), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        std::sync::Arc::new(c),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 fn policy() -> InitTablePolicy {
@@ -123,7 +127,9 @@ fn the_reply_carries_the_bytes_the_real_ga106_put_on_the_wire() {
     let params = &reply.body[PARAMS_AT..PARAMS_AT + KGR_GET_INFO_PARAMS_SIZE];
     assert_eq!(
         params,
-        GA106_GR_INFO.encode(kf_abi::grinfo::GrInfoReaders::EVERY).expect("the GA106 row encodes"),
+        GA106_GR_INFO
+            .encode(kf_abi::grinfo::GrInfoReaders::EVERY)
+            .expect("the GA106 row encodes"),
         "the reply is the chip row's encoding, unmodified in transit"
     );
     // ⊘ And not the poison. An echo would bring `0xAA` back, and `0xAAAAAAAA` at
@@ -153,7 +159,9 @@ fn the_answer_comes_from_the_chip_row_and_not_from_this_crate() {
 fn a_zero_max_subcontext_count_is_refused_rather_than_served() {
     // ★★★ The falsifier for the whole rung, observed on the RAW ENVELOPE.
     assert!(
-        GA106_GR_INFO.encode(kf_abi::grinfo::GrInfoReaders::EVERY).is_ok(),
+        GA106_GR_INFO
+            .encode(kf_abi::grinfo::GrInfoReaders::EVERY)
+            .is_ok(),
         "the real row still encodes, so the check below is not passing for the wrong reason"
     );
     let mut bad = chip();

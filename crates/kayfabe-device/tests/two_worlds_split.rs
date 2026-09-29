@@ -510,7 +510,9 @@ fn pramin_and_bar2_resolve_one_framebuffer_address_to_one_memory() {
 /// framebuffer addresses it touches are its own for the same reason.
 #[test]
 fn the_plane_attributes_each_window_to_the_world_constraint_15_assigns_it() {
-    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     // A BAR1 mapping and a BAR2 mapping onto two DIFFERENT pages — this test is about which
     // world each window is recorded as, so a shared page would report a collision that says
@@ -758,7 +760,9 @@ fn the_armed_trap_path_refuses_by_name_and_counts_it() {
 /// the third row of the prediction table and it stays a reading.
 #[test]
 fn a_bar1_translate_through_the_single_store_is_refused_and_the_store_is_what_refused() {
-    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     use kayfabe_device::DeviceFb;
     use kayfabe_device::fbwin::DEVICE_FB_READ_REFUSED;
 
@@ -938,7 +942,9 @@ fn a_declined_drain_ends_the_retry_rather_than_spinning_it() {
 /// format's depth and not a number somebody picked.
 #[test]
 fn a_bar1_translate_resolves_after_a_lock_free_caller_arms_the_pages_it_missed() {
-    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
     let p = device_plane_with_port(&port);
     build_bar1_tree_in_the_object(&port, BAR1_VA, leaf(SHARED_PHYS));

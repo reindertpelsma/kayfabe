@@ -586,9 +586,7 @@ impl DeclaredUserd {
     pub fn framebuffer_base(&self) -> Option<u64> {
         match self.resolved {
             Some(kf_arch::UserdMem::Framebuffer { base, .. }) => Some(base),
-            Some(
-                kf_arch::UserdMem::Sysmem { .. } | kf_arch::UserdMem::Undeclared { .. },
-            )
+            Some(kf_arch::UserdMem::Sysmem { .. } | kf_arch::UserdMem::Undeclared { .. })
             | None => None,
         }
     }
@@ -677,8 +675,6 @@ pub enum RmEvent {
         handle: HObject,
     },
 }
-
-
 
 /// One node of the graph — the resolved *payload* of a resource, reported at its
 /// stable origin key. (The set of handles that reference it lives on [`Resource`].)
@@ -1031,7 +1027,6 @@ pub struct RmGraph {
 /// guest input ([`RmGraphError::ReservedClient`]).
 pub const RESERVED_CLIENT: HClient = HClient(0);
 
-
 impl RmGraph {
     /// Empty graph for a host of `family`, entitled to the **single-GPU** roster `{0}` (the
     /// realize-time target). [`RmGraph::entitle`] widens it for a multi-GPU device.
@@ -1082,7 +1077,9 @@ impl RmGraph {
     /// the family-BLIND union table instead of the per-family form. There is only one form here.
     #[must_use]
     pub fn engine_class_refusal(&self, class: ClassId) -> Option<RmGraphError> {
-        let anywhere = kf_chip::classes::FAMILIES.iter().any(|c| c.kind_of(class.0).is_some());
+        let anywhere = kf_chip::classes::FAMILIES
+            .iter()
+            .any(|c| c.kind_of(class.0).is_some());
         let here = self.family.classes().kind_of(class.0).is_some();
         (anywhere && !here).then_some(RmGraphError::EngineClassNotInFamily {
             class,
@@ -1976,11 +1973,6 @@ impl RmGraph {
         }
     }
 
-
-
-
-
-
     /// Is `key` the client root of its OWN namespace? True only when `key` was
     /// **declared by `RM_ALLOC`** ([`HandleRef::Origin`] — the recorded fact, §12.25) AND
     /// the resource it allocated is a [`ObjectKind::Client`]. A dup *alias* that
@@ -2146,7 +2138,6 @@ impl RmGraph {
         refs.into_iter().flat_map(|set| set.iter().copied())
     }
 
-
     /// ★★★ §12.41 — `pdb_of`-family lookups (old tree; cut in v3) for a resource named by IDENTITY. **This is the one
     /// the projection uses**, and it has to be: the handle-shaped form answers about the
     /// current tenant of a recycled handle value, so asking it about a dup-kept ghost
@@ -2174,8 +2165,6 @@ impl RmGraph {
         self.resource_at(id).map(|r| &r.node)
     }
 
-
-
     /// ★★★★ **§16.28 — the handle naming a Device's DEFAULT VA space**, if the guest has
     /// declared one under `device` ([`VaSpaceRole::DeviceDefault`]).
     ///
@@ -2199,10 +2188,6 @@ impl RmGraph {
     pub fn nodes(&self) -> impl Iterator<Item = &RmNode> {
         self.resources.values().map(|r| &r.node)
     }
-
-
-
-
 
     /// All live EVENT (os-event / notifier) nodes owned by `client` — completion
     /// routing is graph-derived from these, not from an opaque id
@@ -2306,13 +2291,19 @@ impl crate::rmrpc::Faulted for RmGraphError {
         match self {
             RmGraphError::ConflictingAlloc(_) => FaultTag("RmGraphError::ConflictingAlloc"),
             RmGraphError::ConflictingDup(_) => FaultTag("RmGraphError::ConflictingDup"),
-            RmGraphError::InvalidDeviceInstance { .. } => FaultTag("RmGraphError::InvalidDeviceInstance"),
+            RmGraphError::InvalidDeviceInstance { .. } => {
+                FaultTag("RmGraphError::InvalidDeviceInstance")
+            }
             RmGraphError::UndeclaredClientKind(_) => FaultTag("RmGraphError::UndeclaredClientKind"),
             RmGraphError::ReservedClient(_) => FaultTag("RmGraphError::ReservedClient"),
-            RmGraphError::DuplicateClientRoot { .. } => FaultTag("RmGraphError::DuplicateClientRoot"),
+            RmGraphError::DuplicateClientRoot { .. } => {
+                FaultTag("RmGraphError::DuplicateClientRoot")
+            }
             RmGraphError::UndeclaredClient(_) => FaultTag("RmGraphError::UndeclaredClient"),
             RmGraphError::FreeUnknown(_) => FaultTag("RmGraphError::FreeUnknown"),
-            RmGraphError::EngineClassNotInFamily { .. } => FaultTag("RmGraphError::EngineClassNotInFamily"),
+            RmGraphError::EngineClassNotInFamily { .. } => {
+                FaultTag("RmGraphError::EngineClassNotInFamily")
+            }
             RmGraphError::CapacityExceeded(_) => FaultTag("RmGraphError::CapacityExceeded"),
         }
     }

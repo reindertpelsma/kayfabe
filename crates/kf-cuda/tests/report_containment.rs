@@ -10,7 +10,7 @@
 //! at all — it was added to the CUDA kernel and to `storemap::map` while the middle layer,
 //! the one production actually calls, said nothing about where a run points.
 
-use kf_cuda::abi::{KfMapRun, KfPdbEntry, KfReportHeader, KFWR_MAGIC, KFWR_OP_UNMAP};
+use kf_cuda::abi::{KFWR_MAGIC, KFWR_OP_UNMAP, KfMapRun, KfPdbEntry, KfReportHeader};
 use kf_cuda::walk::{Report, ReportError};
 
 const SPAN: u64 = 8 << 20;
@@ -55,7 +55,11 @@ fn a_run_wholly_inside_the_span_is_accepted() {
 #[test]
 fn a_run_ending_exactly_at_the_span_is_the_last_legal_page() {
     let r = report(vec![run(SPAN - 4096, 4096, 1)]);
-    assert_eq!(r.validate(), Ok(()), "gpga + len == span is the LAST LEGAL page, not an error");
+    assert_eq!(
+        r.validate(),
+        Ok(()),
+        "gpga + len == span is the LAST LEGAL page, not an error"
+    );
 }
 
 #[test]
@@ -112,7 +116,10 @@ fn a_diff_report_is_accepted() {
 fn a_report_without_the_diff_flag_is_refused() {
     let mut r = report(vec![run(0, 4096, 0)]);
     r.header.flags = kf_cuda::abi::KFWR_HF_RESYNC;
-    assert!(matches!(r.require_diff(), Err(ReportError::NotDiff { flags: 2 })));
+    assert!(matches!(
+        r.require_diff(),
+        Err(ReportError::NotDiff { flags: 2 })
+    ));
 }
 
 /// ★★★★★ w828 — a SYSMEM leaf names guest-PHYSICAL memory, not the store: the store span does
@@ -121,10 +128,17 @@ fn a_report_without_the_diff_flag_is_refused() {
 /// UVM's copy channel.
 #[test]
 fn a_sysmem_run_is_not_bounded_by_the_store_span() {
-    for ap in [kf_cuda::abi::KFWR_AP_SYS_COHERENT, kf_cuda::abi::KFWR_AP_SYS_NONCOHERENT] {
+    for ap in [
+        kf_cuda::abi::KFWR_AP_SYS_COHERENT,
+        kf_cuda::abi::KFWR_AP_SYS_NONCOHERENT,
+    ] {
         let mut r0 = run(SPAN + (16 << 20), 0x1_0000, 1);
         r0.flags = u32::from(ap);
-        assert_eq!(report(vec![r0]).validate(), Ok(()), "aperture {ap}: guest-physical, not a store offset");
+        assert_eq!(
+            report(vec![r0]).validate(),
+            Ok(()),
+            "aperture {ap}: guest-physical, not a store offset"
+        );
     }
 }
 
@@ -135,7 +149,10 @@ fn a_vidmem_or_peer_run_past_the_span_is_still_refused() {
         let mut r0 = run(SPAN + (16 << 20), 0x1_0000, 1);
         r0.flags = u32::from(ap);
         assert!(
-            matches!(report(vec![r0]).validate(), Err(ReportError::RunOutsideGpga { .. })),
+            matches!(
+                report(vec![r0]).validate(),
+                Err(ReportError::RunOutsideGpga { .. })
+            ),
             "aperture {ap} past the store span must stay refused"
         );
     }

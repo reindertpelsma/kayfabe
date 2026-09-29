@@ -19,9 +19,21 @@ impl Tree {
     pub fn new(base: u64, bytes: usize) -> Tree {
         let mut img = Image::at(base, bytes);
         let root = img.alloc(4 * 8, 4096);
-        Tree { img, root, tables: HashMap::new() }
+        Tree {
+            img,
+            root,
+            tables: HashMap::new(),
+        }
     }
-    fn child(&mut self, level: u8, parent: u64, idx: usize, bytes: u64, entry: u64, dual: bool) -> u64 {
+    fn child(
+        &mut self,
+        level: u8,
+        parent: u64,
+        idx: usize,
+        bytes: u64,
+        entry: u64,
+        dual: bool,
+    ) -> u64 {
         if let Some(&c) = self.tables.get(&(level, parent, idx)) {
             return c;
         }
@@ -65,7 +77,6 @@ impl Tree {
     }
 }
 
-
 /// ★ A VER3 (Hopper, Blackwell) tree — PD4 → PD3 → PD2 → PD1 → PD0 (dual) → PT — built exactly as the
 /// family's driver lays it out, so the walk kernel's VER3 decode can be proved on ANY GPU (the walker
 /// decodes guest bytes; the host's own MMU never walks these tables).
@@ -83,7 +94,11 @@ impl Tree3 {
     pub fn new(base: u64, bytes: usize) -> Tree3 {
         let mut img = Image::at(base, bytes);
         let root = img.alloc(2 * 8, 4096);
-        Tree3 { img, root, tables: HashMap::new() }
+        Tree3 {
+            img,
+            root,
+            tables: HashMap::new(),
+        }
     }
 
     fn child(&mut self, level: u8, parent: u64, idx: usize, bytes: u64, stride: u64) -> u64 {
@@ -127,7 +142,11 @@ impl Tree3 {
     /// ★ v3-roperm: [`Tree3::map4k`] / [`Tree3::map4k_sys`] with raw PCF permission `bits` OR-ed
     /// into the leaf (the caller derives them from the format descriptor's bit positions).
     pub fn map4k_bits(&mut self, va: u64, at: u64, sys: bool, bits: u64) {
-        let leaf = if sys { kf_cuda::synth::ver3::pte_sys(at) } else { kf_cuda::synth::ver3::pte(at) };
+        let leaf = if sys {
+            kf_cuda::synth::ver3::pte_sys(at)
+        } else {
+            kf_cuda::synth::ver3::pte(at)
+        };
         self.leaf4k(va, leaf | bits);
     }
 

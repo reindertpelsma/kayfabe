@@ -8,8 +8,8 @@
 //! committed PTX, built from that same file.
 
 use crate::abi::{
-    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KF_TBL_VER3, KFWR_HF_TRUNCATED, KFWR_MAGIC, KFWR_OP_UNMAP, KfArgs,
-    KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
+    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KF_TBL_VER3, KFWR_HF_TRUNCATED, KFWR_MAGIC,
+    KFWR_OP_UNMAP, KfArgs, KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
 };
 use crate::driver_unsafe::{CUdeviceptr, CtxHandle, Cuda, CudaError, Func};
 
@@ -305,8 +305,7 @@ impl Report {
             // again at map time. This is the MIDDLE layer and it was missing: the validator
             // documented as "what production consults" checked capacities, slice ranges and
             // zero-len while saying NOTHING about where a run points.
-            if r.op != KFWR_OP_UNMAP
-                && (r.gpga > self.gpga_span || r.len > self.gpga_span - r.gpga)
+            if r.op != KFWR_OP_UNMAP && (r.gpga > self.gpga_span || r.len > self.gpga_span - r.gpga)
             {
                 return Err(ReportError::RunOutsideGpga {
                     index: i,
@@ -509,7 +508,10 @@ impl WalkKernel {
             ],
             stage: a(KF_MAX_FRONTIER * KF_ENT_BYTES, "cuMemAlloc(par.stage)")?,
             task: a(KF_MAX_FRONTIER * KF_ENT_BYTES, "cuMemAlloc(par.task)")?,
-            runstage: a(KF_MAX_SCRATCH * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(par.runstage)")?,
+            runstage: a(
+                KF_MAX_SCRATCH * core::mem::size_of::<KfMapRun>(),
+                "cuMemAlloc(par.runstage)",
+            )?,
             cnt: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.cnt)")?,
             off: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.off)")?,
             start: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.start)")?,
@@ -574,11 +576,11 @@ impl WalkKernel {
         a.win = crate::abi::KfWin {
             base: gpga,
             len: gpga_len,
-                // ★ §39(c): in production these ARE the same number, and saying so here is
-                // the point. The single store is the whole of guest vidmem and all of it is
-                // mapped, so the bytes we may READ and the addresses a leaf may POINT AT
-                // coincide. They are separate fields because that coincidence is a property
-                // of THIS deployment, not of the walker -- a corpus image breaks it.
+            // ★ §39(c): in production these ARE the same number, and saying so here is
+            // the point. The single store is the whole of guest vidmem and all of it is
+            // mapped, so the bytes we may READ and the addresses a leaf may POINT AT
+            // coincide. They are separate fields because that coincidence is a property
+            // of THIS deployment, not of the walker -- a corpus image breaks it.
             span: gpga_len,
         };
         a.fmt = self.fmt;
@@ -737,8 +739,17 @@ impl WalkKernel {
         let ab = || param_bytes(a);
         let par = &self.par;
         let shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8;
-        let [f_seed, f_expand, f_scan, f_compact, f_leaf, f_heads, f_bases, f_emit, f_join] =
-            self.f_par;
+        let [
+            f_seed,
+            f_expand,
+            f_scan,
+            f_compact,
+            f_leaf,
+            f_heads,
+            f_bases,
+            f_emit,
+            f_join,
+        ] = self.f_par;
         self.cu.launch_args(
             f_seed,
             npdb.div_ceil(128).max(1),
@@ -751,7 +762,11 @@ impl WalkKernel {
         for k in u32::from(self.fmt.first_dir)..KF_DIRS {
             let nin = par.nfr.ptr + (src as u64) * 4;
             let nout = par.nfr.ptr + ((src ^ 1) as u64) * 4;
-            let dst = if k + 1 < KF_DIRS { par.fr[src ^ 1].ptr } else { par.task.ptr };
+            let dst = if k + 1 < KF_DIRS {
+                par.fr[src ^ 1].ptr
+            } else {
+                par.task.ptr
+            };
             self.cu.launch_args(
                 f_expand,
                 KF_PAR_GRID,
@@ -798,7 +813,8 @@ impl WalkKernel {
             if k + 1 < KF_DIRS {
                 src ^= 1;
             } else {
-                self.cu.memcpy_d2d(par.ntask.ptr, nout, 4, "cuMemcpyDtoD(ntask)")?;
+                self.cu
+                    .memcpy_d2d(par.ntask.ptr, nout, 4, "cuMemcpyDtoD(ntask)")?;
             }
             self.cu.memset_d8(par.used.ptr, 0, 4, "cuMemsetD8(used)")?;
         }
@@ -838,7 +854,12 @@ impl WalkKernel {
             1,
             KF_SCAN_BLOCK,
             0,
-            &mut [p(par.cnt.ptr), p(par.ntask.ptr), p(par.off.ptr), p(par.nfr.ptr + 12)],
+            &mut [
+                p(par.cnt.ptr),
+                p(par.ntask.ptr),
+                p(par.off.ptr),
+                p(par.nfr.ptr + 12),
+            ],
             "cuLaunchKernel(kf_par_scan tasks)",
         )?;
         self.cu.launch_args(
@@ -937,11 +958,13 @@ impl WalkKernel {
         })?;
         // ⊘ `import_and_map` reports which of its four steps refused as a string; carried in
         // `name` verbatim so the step is not lost to a generic code.
-        self.cu.import_and_map(0, fd, n).map_err(|name| CudaError::Refused {
-            what: "cuMemImportFromShareableHandle + cuMemMap",
-            code: 0,
-            name,
-        })
+        self.cu
+            .import_and_map(0, fd, n)
+            .map_err(|name| CudaError::Refused {
+                what: "cuMemImportFromShareableHandle + cuMemMap",
+                code: 0,
+                name,
+            })
     }
 
     /// Copy host bytes to an **arbitrary** device address — used to place tables at the

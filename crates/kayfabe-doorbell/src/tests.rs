@@ -35,7 +35,10 @@ fn ring_while_busy_becomes_busy_rung_and_is_re_acted() {
     w.allocate_fresh(Route::Translated, 7);
     w.ring(1);
     assert!(matches!(w.claim(), Claim::Won(_)));
-    assert!(!w.ring(2), "a ring over BUSY publishes nothing — the owner will see it");
+    assert!(
+        !w.ring(2),
+        "a ring over BUSY publishes nothing — the owner will see it"
+    );
     assert_eq!(w.load().state, State::BusyRung);
     assert_eq!(w.release(0, REACT_ROUNDS), Release::ActAgain);
     assert_eq!(w.load().state, State::Busy);
@@ -62,7 +65,11 @@ fn the_react_loop_is_bounded_and_hands_the_token_back() {
         Release::RepublishAndMoveOn,
         "after K rounds the worker MUST give up the token — that is the timeslice"
     );
-    assert_eq!(w.load().state, State::Rung, "and it goes back as RUNG, not IDLE");
+    assert_eq!(
+        w.load().state,
+        State::Rung,
+        "and it goes back as RUNG, not IDLE"
+    );
 }
 
 #[test]
@@ -75,15 +82,27 @@ fn retire_waits_out_busy_then_allocation_installs_the_new_route() {
     w.allocate_fresh(Route::Passthrough, 0xAAA);
     w.ring(1);
     assert!(matches!(w.claim(), Claim::Won(_)));
-    assert!(!w.retire(), "retire MUST refuse while a worker owns the token");
+    assert!(
+        !w.retire(),
+        "retire MUST refuse while a worker owns the token"
+    );
     // The recycled id must not be installable while the old worker is live.
-    assert!(!w.allocate(Route::Emulated, 0xBBB), "allocation over a BUSY token is the UAF");
+    assert!(
+        !w.allocate(Route::Emulated, 0xBBB),
+        "allocation over a BUSY token is the UAF"
+    );
     assert_eq!(w.release(0, REACT_ROUNDS), Release::Idled);
     assert!(w.retire());
     assert_eq!(w.load().state, State::Dead);
-    assert!(!w.ring(5), "a retired token absorbs rings and must not resurrect");
+    assert!(
+        !w.ring(5),
+        "a retired token absorbs rings and must not resurrect"
+    );
     assert_eq!(w.load().state, State::Dead);
-    assert!(w.allocate(Route::Emulated, 0xBBB), "DEAD → IDLE with the new route");
+    assert!(
+        w.allocate(Route::Emulated, 0xBBB),
+        "DEAD → IDLE with the new route"
+    );
     assert_eq!(w.load().route, Route::Emulated);
     assert_eq!(w.load().host_token, 0xBBB);
 }
@@ -112,7 +131,11 @@ fn a_token_published_during_a_scan_is_not_lost() {
     // Arrives right after the scan drained the word.
     b.publish(11);
     out.clear();
-    assert_eq!(b.scan(&mut out, 64), 1, "the later publish must still be findable");
+    assert_eq!(
+        b.scan(&mut out, 64),
+        1,
+        "the later publish must still be findable"
+    );
     assert_eq!(out, vec![11]);
 }
 
@@ -128,7 +151,10 @@ fn a_partial_scan_puts_back_bit_and_summary_together() {
     assert_eq!(b.scan(&mut out, 3), 3);
     out.clear();
     let rest = b.scan(&mut out, 64);
-    assert_eq!(rest, 5, "the five not taken must still be reachable, not stranded");
+    assert_eq!(
+        rest, 5,
+        "the five not taken must still be reachable, not stranded"
+    );
 }
 
 // ---- §5.3 the wake word -------------------------------------------------------------------
@@ -136,7 +162,11 @@ fn a_partial_scan_puts_back_bit_and_summary_together() {
 #[test]
 fn bump_owes_no_syscall_when_nobody_is_parked() {
     let w = WakeWord::new();
-    assert_eq!(w.bump(), Wake::NoOne, "the common case must cost no eventfd write");
+    assert_eq!(
+        w.bump(),
+        Wake::NoOne,
+        "the common case must cost no eventfd write"
+    );
 }
 
 #[test]
@@ -146,7 +176,10 @@ fn a_bump_during_a_scan_refuses_the_park() {
     let w = WakeWord::new();
     let seen = w.seen();
     w.bump(); // work arrives while the worker is scanning
-    assert!(!w.try_park(seen), "must rescan, never sleep on stale evidence");
+    assert!(
+        !w.try_park(seen),
+        "must rescan, never sleep on stale evidence"
+    );
 }
 
 #[test]
@@ -176,7 +209,11 @@ fn the_sequence_carry_falls_off_the_top_and_never_becomes_a_phantom_poller() {
     for _ in 0..1000 {
         w.bump();
     }
-    assert_eq!(w.pollers(), before, "bumping must never disturb the poller count");
+    assert_eq!(
+        w.pollers(),
+        before,
+        "bumping must never disturb the poller count"
+    );
     assert_eq!(before, 0);
 }
 
@@ -209,8 +246,8 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
     //
     // ⚠ This is a RACE test, not a proof: on x86 TSO it cannot catch a missing fence (§5.3 says
     // so). It catches lost work, which is the failure that matters here.
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as O};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as O};
 
     const N_TOKENS_USED: u32 = 512;
     const RINGS_PER_VCPU: u64 = 2_000;
@@ -241,7 +278,8 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
         let p = Arc::clone(&plane);
         hs.push(std::thread::spawn(move || {
             for n in 0..RINGS_PER_VCPU {
-                let t = ((n as u32).wrapping_mul(2654435761).wrapping_add(v as u32)) % N_TOKENS_USED;
+                let t =
+                    ((n as u32).wrapping_mul(2654435761).wrapping_add(v as u32)) % N_TOKENS_USED;
                 // ★ THE vCPU PATH, in the order §5.2/§5.3 mandate:
                 //   stamp+RUNG (one CAS) → publish bit,summary → bump.
                 if p.words[t as usize].ring(n + 1) {
@@ -256,7 +294,7 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
         hs.push(std::thread::spawn(move || {
             let mut found = Vec::new();
             loop {
-                let seen = p.wake.seen();          // §5.3: seen BEFORE the scan
+                let seen = p.wake.seen(); // §5.3: seen BEFORE the scan
                 p.bits.scan(&mut found, 128);
                 if found.is_empty() {
                     if p.stop.load(O::Acquire) {
@@ -326,7 +364,12 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
     for (i, w) in plane.words.iter().enumerate() {
         let st = w.load().state;
         if st != State::Idle {
-            stuck.push((i, st, plane.bits.bit(i as u32), plane.bits.summary_bit(i as u32)));
+            stuck.push((
+                i,
+                st,
+                plane.bits.bit(i as u32),
+                plane.bits.summary_bit(i as u32),
+            ));
         }
     }
     let orphaned: Vec<_> = stuck.iter().filter(|(_, _, bit, _)| !*bit).collect();
@@ -341,7 +384,10 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
          test's stop protocol raced, the plane did not lose anything. \
          (token, state, bit, summary) = {stuck:?}"
     );
-    assert!(plane.served.load(O::Acquire) > 0, "the workers must have served something");
+    assert!(
+        plane.served.load(O::Acquire) > 0,
+        "the workers must have served something"
+    );
 }
 
 // ---- §5.4 the privileged ring ----------------------------------------------------------------
@@ -352,11 +398,25 @@ fn the_ring_preserves_global_order_across_vcpus() {
     // lock and releases it; another thread on another vCPU takes the lock and writes TRIGGER...
     // Per-vCPU rings preserve only per-vCPU order and fire the trigger against a stale base."
     let r = PrivRing::new();
-    let pdb_lo = RegWrite { bar: 0, offset: 0x1000, value: 0xdead, width: 4 };
-    let trigger = RegWrite { bar: 0, offset: 0x1008, value: 1, width: 4 };
+    let pdb_lo = RegWrite {
+        bar: 0,
+        offset: 0x1000,
+        value: 0xdead,
+        width: 4,
+    };
+    let trigger = RegWrite {
+        bar: 0,
+        offset: 0x1008,
+        value: 1,
+        width: 4,
+    };
     assert!(matches!(r.push(pdb_lo), Push::Queued(0)));
     assert!(matches!(r.push(trigger), Push::Queued(1)));
-    assert_eq!(r.peek().unwrap().1, pdb_lo, "the base must drain BEFORE the trigger");
+    assert_eq!(
+        r.peek().unwrap().1,
+        pdb_lo,
+        "the base must drain BEFORE the trigger"
+    );
     r.commit();
     assert_eq!(r.peek().unwrap().1, trigger);
     r.commit();
@@ -368,12 +428,25 @@ fn peek_then_commit_means_a_failed_apply_retries_at_the_head() {
     // ⊘ §5.4: "peek → apply → commit, so a failed apply retries at the head". Consuming before
     // applying drops a write whose apply failed -- the silent-drop bug one layer down.
     let r = PrivRing::new();
-    let w = RegWrite { bar: 0, offset: 0x40, value: 7, width: 4 };
+    let w = RegWrite {
+        bar: 0,
+        offset: 0x40,
+        value: 7,
+        width: 4,
+    };
     r.push(w);
     assert_eq!(r.peek().unwrap().1, w);
     // apply "fails" -- we do NOT commit
-    assert_eq!(r.peek().unwrap().1, w, "the same write must still be at the head");
-    assert_eq!(r.applied_seq(), 0, "applied_seq must not move on a failed apply");
+    assert_eq!(
+        r.peek().unwrap().1,
+        w,
+        "the same write must still be at the head"
+    );
+    assert_eq!(
+        r.applied_seq(),
+        0,
+        "applied_seq must not move on a failed apply"
+    );
     r.commit();
     assert_eq!(r.applied_seq(), 1);
 }
@@ -384,22 +457,54 @@ fn full_poisons_and_claims_nothing_and_then_drops_by_name() {
     // full path -- "a claim-then-bail strands the consumer at that slot forever."
     let r = PrivRing::new();
     for i in 0..ring::CAPACITY {
-        assert!(matches!(r.push(RegWrite { bar: 0, offset: i as u32, value: 0, width: 4 }), Push::Queued(_)));
+        assert!(matches!(
+            r.push(RegWrite {
+                bar: 0,
+                offset: i as u32,
+                value: 0,
+                width: 4
+            }),
+            Push::Queued(_)
+        ));
     }
     assert_eq!(r.occupancy(), ring::CAPACITY);
-    assert_eq!(r.push(RegWrite { bar: 0, offset: 0xffff, value: 0, width: 4 }), Push::Poisoned);
+    assert_eq!(
+        r.push(RegWrite {
+            bar: 0,
+            offset: 0xffff,
+            value: 0,
+            width: 4
+        }),
+        Push::Poisoned
+    );
     assert!(r.is_poisoned());
-    assert_eq!(r.occupancy(), ring::CAPACITY, "the failed push must NOT have reserved a slot");
+    assert_eq!(
+        r.occupancy(),
+        ring::CAPACITY,
+        "the failed push must NOT have reserved a slot"
+    );
     // Every slot must still be drainable -- no hole.
     for i in 0..ring::CAPACITY {
-        assert_eq!(r.peek().unwrap().1.offset, i as u32, "a hole would strand the drainer here");
+        assert_eq!(
+            r.peek().unwrap().1.offset,
+            i as u32,
+            "a hole would strand the drainer here"
+        );
         r.commit();
     }
     assert!(r.peek().is_none());
     // ⊘ And once poisoned, further writes are dropped BY NAME, never silently: §5.4's security
     // half -- "dropping one write silently leaves state a later, differently-privileged guest
     // process inherits."
-    assert_eq!(r.push(RegWrite { bar: 0, offset: 1, value: 1, width: 4 }), Push::Dropped);
+    assert_eq!(
+        r.push(RegWrite {
+            bar: 0,
+            offset: 1,
+            value: 1,
+            width: 4
+        }),
+        Push::Dropped
+    );
 }
 
 #[test]
@@ -424,7 +529,12 @@ fn concurrent_producers_leave_no_hole_for_the_drainer() {
         let r = Arc::clone(&r);
         hs.push(std::thread::spawn(move || {
             for i in 0..PER {
-                r.push(RegWrite { bar: 0, offset: v * PER + i, value: v as u64, width: 4 });
+                r.push(RegWrite {
+                    bar: 0,
+                    offset: v * PER + i,
+                    value: v as u64,
+                    width: 4,
+                });
             }
         }));
     }
@@ -432,9 +542,16 @@ fn concurrent_producers_leave_no_hole_for_the_drainer() {
         h.join().unwrap();
     }
     // N*PER = 9000 > CAPACITY, so the ring MUST have filled and poisoned.
-    assert!(r.is_poisoned(), "9000 pushes into a {}-slot ring must poison", ring::CAPACITY);
+    assert!(
+        r.is_poisoned(),
+        "9000 pushes into a {}-slot ring must poison",
+        ring::CAPACITY
+    );
     let claimed = r.occupancy();
-    assert!(claimed <= ring::CAPACITY, "occupancy {claimed} exceeded capacity — a lost bail");
+    assert!(
+        claimed <= ring::CAPACITY,
+        "occupancy {claimed} exceeded capacity — a lost bail"
+    );
     // ⊘ THE ASSERTION THE KNOWN-POSITIVE DEMANDS: every slot the producers CLAIMED must be
     // drainable. Under fetch_add-then-bail, a bailing producer leaves slot `tail` never marked
     // ready, `peek()` returns None at that index, and the drain stops SHORT of `claimed`.
@@ -455,7 +572,12 @@ fn the_high_water_mark_is_recorded_for_the_teardown_line() {
     // prints at teardown."
     let r = PrivRing::new();
     for i in 0..10 {
-        r.push(RegWrite { bar: 0, offset: i, value: 0, width: 4 });
+        r.push(RegWrite {
+            bar: 0,
+            offset: i,
+            value: 0,
+            width: 4,
+        });
     }
     assert_eq!(r.high_water(), 10);
     while r.peek().is_some() {
@@ -487,7 +609,11 @@ fn w1c_does_not_lose_a_concurrent_set() {
     }
     h.join().unwrap();
     assert_eq!(c.read() & 0b0001, 0, "the cleared bit must stay cleared");
-    assert_eq!(c.read() & 0b1110, 0b1110, "the bits the guest did NOT clear must survive");
+    assert_eq!(
+        c.read() & 0b1110,
+        0b1110,
+        "the bits the guest did NOT clear must survive"
+    );
 }
 
 #[test]
@@ -496,7 +622,11 @@ fn a_write_only_port_does_not_move_its_own_shadow() {
     // the hardware does not have.
     let c = Cell::new();
     c.apply(WriteSemantics::WriteOnlyPort, 0xdead_beef);
-    assert_eq!(c.read(), 0, "a write-only port's own cell must not take the value");
+    assert_eq!(
+        c.read(),
+        0,
+        "a write-only port's own cell must not take the value"
+    );
 }
 
 #[test]
@@ -506,9 +636,9 @@ fn a_stale_completion_may_not_clear_a_later_trigger() {
     // B; our work for A finishes and clears the trigger; the guest reads zero and concludes B is
     // done. It is not."
     let t = Trigger::new();
-    t.arm(100);                       // invalidate A, at ring position 100
+    t.arm(100); // invalidate A, at ring position 100
     assert_eq!(t.read(), 1, "the guest spins while non-zero");
-    t.arm(200);                       // the guest timed out on A and issued B
+    t.arm(200); // the guest timed out on A and issued B
     // A's work finally finishes.
     assert_eq!(
         t.complete(100),
@@ -528,7 +658,11 @@ fn the_trigger_counts_issued_and_completed_separately() {
     t.arm(1);
     t.arm(2);
     assert_eq!(t.issued(), 2);
-    assert_eq!(t.completed(), 0, "issued != completed is the whole point of two counters");
+    assert_eq!(
+        t.completed(),
+        0,
+        "issued != completed is the whole point of two counters"
+    );
     t.complete(1); // superseded, but the work DID complete
     t.complete(2);
     assert_eq!(t.completed(), 2);
@@ -541,10 +675,19 @@ fn an_overdue_trigger_trips_before_the_guest_gives_up() {
     let t = Trigger::new();
     let guest_budget = 4_000_000_000u64; // ~4s
     t.arm(1);
-    assert!(!t.is_overdue(1_000_000_000, guest_budget), "1s of a 4s budget is not overdue");
-    assert!(t.is_overdue(3_000_000_000, guest_budget), "3s of a 4s budget must trip the tripwire");
+    assert!(
+        !t.is_overdue(1_000_000_000, guest_budget),
+        "1s of a 4s budget is not overdue"
+    );
+    assert!(
+        t.is_overdue(3_000_000_000, guest_budget),
+        "3s of a 4s budget must trip the tripwire"
+    );
     t.complete(1);
-    assert!(!t.is_overdue(u64::MAX, guest_budget), "a cleared trigger is never overdue");
+    assert!(
+        !t.is_overdue(u64::MAX, guest_budget),
+        "a cleared trigger is never overdue"
+    );
 }
 
 // ---- §8 completions and interrupts -----------------------------------------------------------
@@ -554,19 +697,34 @@ fn only_emulated_work_that_never_reached_the_gpu_may_be_forged() {
     // ⊘⊘ §8: "Forge is licensed ONLY where there was no work. A completion written for work that
     // did not happen is how a scrub becomes a leak." This campaign's most expensive measured
     // defect; the type must refuse to express it.
-    assert_eq!(Completion::for_route(Route::Emulated, false), Completion::Forge);
+    assert_eq!(
+        Completion::for_route(Route::Emulated, false),
+        Completion::Forge
+    );
     assert_eq!(
         Completion::for_route(Route::Emulated, true),
         Completion::Nothing,
         "emulated work that DID reach the GPU must not be forged — that is the leak"
     );
     // The GPU wrote the forwarded semaphore itself; a second author for one value is a bug.
-    assert_eq!(Completion::for_route(Route::Translated, true), Completion::Nothing);
-    assert_eq!(Completion::for_route(Route::Translated, false), Completion::Nothing);
+    assert_eq!(
+        Completion::for_route(Route::Translated, true),
+        Completion::Nothing
+    );
+    assert_eq!(
+        Completion::for_route(Route::Translated, false),
+        Completion::Nothing
+    );
     // We never inspected the channel, so its completion is not ours.
-    assert_eq!(Completion::for_route(Route::Passthrough, true), Completion::Nothing);
+    assert_eq!(
+        Completion::for_route(Route::Passthrough, true),
+        Completion::Nothing
+    );
     // An unknown route should never have been served, let alone completed.
-    assert_eq!(Completion::for_route(Route::Unknown, false), Completion::Nothing);
+    assert_eq!(
+        Completion::for_route(Route::Unknown, false),
+        Completion::Nothing
+    );
 }
 
 #[test]
@@ -578,9 +736,17 @@ fn an_edge_that_arrives_while_masked_is_delivered_on_unmask() {
     e.mask();
     assert_eq!(e.retire(), Raise::Hold, "masked ⇒ held, not delivered");
     assert_eq!(e.delivered(), 0);
-    assert_eq!(e.unmask(), Raise::Deliver, "the held edge MUST surface on unmask");
+    assert_eq!(
+        e.unmask(),
+        Raise::Deliver,
+        "the held edge MUST surface on unmask"
+    );
     assert_eq!(e.delivered(), 1);
-    assert_eq!(e.unmask(), Raise::Hold, "and it must not be delivered twice");
+    assert_eq!(
+        e.unmask(),
+        Raise::Hold,
+        "and it must not be delivered twice"
+    );
 }
 
 #[test]
@@ -608,7 +774,11 @@ fn a_polled_engine_can_legitimately_deliver_zero() {
         assert_eq!(e.retire(), Raise::Hold);
     }
     assert_eq!(e.delivered(), 0, "never armed ⇒ nothing delivered");
-    assert_eq!(e.retired_count(), 40, "but the work DID retire — count it separately");
+    assert_eq!(
+        e.retired_count(),
+        40,
+        "but the work DID retire — count it separately"
+    );
 }
 
 // ---- §5 the trap path, and §4's INNER boundary ------------------------------------------------
@@ -662,7 +832,10 @@ fn an_unprivileged_process_cannot_keep_workers_from_parking() {
         "10 000 rings on UNOWNED tokens must not move work_seq — otherwise no worker can ever park"
     );
     // ⇒ And the consequence that makes it a DoS if violated: a worker can still park.
-    assert!(f.wworker.try_park(seen), "a worker must still be able to park after the flood");
+    assert!(
+        f.wworker.try_park(seen),
+        "a worker must still be able to park after the flood"
+    );
 }
 
 #[test]
@@ -680,9 +853,20 @@ fn the_doorbell_pages_other_offsets_do_nothing_at_all() {
             "offset {off} on the doorbell page must do NOTHING"
         );
     }
-    assert_eq!(f.ring.occupancy(), 0, "not one byte may reach the privileged ring");
-    assert!(!f.ring.is_poisoned(), "and it must not be poisonable from userspace either");
-    assert_eq!(f.tokens[3].load().state, State::Idle, "no token may be disturbed");
+    assert_eq!(
+        f.ring.occupancy(),
+        0,
+        "not one byte may reach the privileged ring"
+    );
+    assert!(
+        !f.ring.is_poisoned(),
+        "and it must not be poisonable from userspace either"
+    );
+    assert_eq!(
+        f.tokens[3].load().state,
+        State::Idle,
+        "no token may be disturbed"
+    );
 }
 
 #[test]
@@ -692,9 +876,20 @@ fn a_passthrough_doorbell_is_inline_with_no_queue_no_wake_no_ring() {
     f.tokens[7].allocate_fresh(Route::Passthrough, 0xABC);
     let p = f.path();
     let seen = f.wworker.seen();
-    assert_eq!(p.write(Class::Doorbell, 0, 0, 7, 4), Action::RingHostInline { host_token: 0xABC });
-    assert_eq!(f.wworker.seen(), seen, "passthrough must not bump the work sequence");
-    assert_eq!(f.ring.occupancy(), 0, "and must not touch the privileged ring");
+    assert_eq!(
+        p.write(Class::Doorbell, 0, 0, 7, 4),
+        Action::RingHostInline { host_token: 0xABC }
+    );
+    assert_eq!(
+        f.wworker.seen(),
+        seen,
+        "passthrough must not bump the work sequence"
+    );
+    assert_eq!(
+        f.ring.occupancy(),
+        0,
+        "and must not touch the privileged ring"
+    );
 }
 
 #[test]
@@ -742,14 +937,21 @@ fn a_privileged_write_wakes_the_DRAINER_not_a_worker() {
     assert!(f.wworker.try_park(wseen), "a worker is parked");
     assert!(f.wdrainer.try_park(dseen), "and so is the drainer");
     let a = p.write(
-        Class::Privileged { readable: true, semantics: WriteSemantics::Plain },
+        Class::Privileged {
+            readable: true,
+            semantics: WriteSemantics::Plain,
+        },
         0,
         0x110c00,
         1,
         4,
     );
     assert_eq!(a, Action::WakeDrainer, "the DRAINER must be the one woken");
-    assert_eq!(f.wworker.seen(), wseen, "and the worker word must not have moved at all");
+    assert_eq!(
+        f.wworker.seen(),
+        wseen,
+        "and the worker word must not have moved at all"
+    );
     assert_eq!(f.ring.occupancy(), 1);
 }
 
@@ -763,7 +965,10 @@ fn a_data_port_never_enters_the_privileged_ring() {
     for i in 0..20_000u64 {
         assert_eq!(
             p.write(
-                Class::Privileged { readable: false, semantics: WriteSemantics::DataPort },
+                Class::Privileged {
+                    readable: false,
+                    semantics: WriteSemantics::DataPort
+                },
                 0,
                 0x110040,
                 i,
@@ -772,15 +977,25 @@ fn a_data_port_never_enters_the_privileged_ring() {
             Action::None
         );
     }
-    assert_eq!(f.ring.occupancy(), 0, "20 000 data-port writes must not occupy one ring slot");
-    assert!(!f.ring.is_poisoned(), "and must not poison the device -- boot would never complete");
+    assert_eq!(
+        f.ring.occupancy(),
+        0,
+        "20 000 data-port writes must not occupy one ring slot"
+    );
+    assert!(
+        !f.ring.is_poisoned(),
+        "and must not poison the device -- boot would never complete"
+    );
 }
 
 #[test]
 fn a_full_privileged_ring_poisons_rather_than_waiting() {
     let f = Fixture::new(32);
     let p = f.path();
-    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    let cls = Class::Privileged {
+        readable: true,
+        semantics: WriteSemantics::Plain,
+    };
     for i in 0..ring::CAPACITY {
         let a = p.write(cls, 0, i as u32, 0, 4);
         assert!(matches!(a, Action::None | Action::WakeDrainer));
@@ -823,7 +1038,11 @@ fn a_user_channel_may_fault_because_the_blast_radius_is_the_asker() {
 fn translatable_operands_always_submit() {
     for owner in [Owner::Kernel, Owner::User] {
         for route in [Route::Passthrough, Route::Translated, Route::Emulated] {
-            let s = Submission { owner, route, all_operands_translatable: true };
+            let s = Submission {
+                owner,
+                route,
+                all_operands_translatable: true,
+            };
             assert_eq!(s.decide(), Disposition::Submit, "{owner:?}/{route:?}");
         }
     }
@@ -834,9 +1053,18 @@ fn a_kernel_channel_is_never_emulated() {
     // §7: "Kernel channels are TRANSLATED, not emulated ... running them on our CPU is how a
     // guest process reads another's freed pages." ⊘ This is the rule w823 measured violated on
     // the OLD architecture: forwarded=0 emulated>0 on seven arms.
-    assert!(!Submission::kernel_channels_are_never_emulated(Owner::Kernel, Route::Emulated));
-    assert!(Submission::kernel_channels_are_never_emulated(Owner::Kernel, Route::Translated));
-    assert!(Submission::kernel_channels_are_never_emulated(Owner::User, Route::Emulated));
+    assert!(!Submission::kernel_channels_are_never_emulated(
+        Owner::Kernel,
+        Route::Emulated
+    ));
+    assert!(Submission::kernel_channels_are_never_emulated(
+        Owner::Kernel,
+        Route::Translated
+    ));
+    assert!(Submission::kernel_channels_are_never_emulated(
+        Owner::User,
+        Route::Emulated
+    ));
 }
 
 #[test]
@@ -844,8 +1072,15 @@ fn an_unmodelled_method_form_is_sized_but_decodes_to_nothing() {
     // §7: "We SIZE every pushbuffer method form so the stream never desynchronises, and DECODE
     // only what we model. An undefined form decodes to nothing rather than to a guess."
     let (sz, d) = size_is_total(false, 5);
-    assert_eq!(sz, 5, "an unmodelled form must STILL be sized, or the stream desynchronises");
-    assert_eq!(d, Decoded::SizedOnly, "and must decode to nothing, never to a guess");
+    assert_eq!(
+        sz, 5,
+        "an unmodelled form must STILL be sized, or the stream desynchronises"
+    );
+    assert_eq!(
+        d,
+        Decoded::SizedOnly,
+        "and must decode to nothing, never to a guess"
+    );
     let (sz, d) = size_is_total(true, 5);
     assert_eq!(sz, 5);
     assert_eq!(d, Decoded::Modelled { operand_words: 5 });
@@ -870,10 +1105,23 @@ fn a_leaf_naming_our_own_memslot_is_refused_by_name() {
         Err(LeafRefusal::NotInAnyRegisteredBlock),
         "a leaf naming OUR memory must be refused, not resolved"
     );
-    assert_eq!(l.refused(), 1, "and the refusal must be COUNTED — §6.4: not silent");
+    assert_eq!(
+        l.refused(),
+        1,
+        "and the refusal must be COUNTED — §6.4: not silent"
+    );
     // Genuine guest RAM still resolves.
-    let s = l.leaf(0x1_0000_2000, 0x1000).expect("real guest RAM must resolve");
-    assert_eq!(s, HostSlice { block: 0, offset: 0x2000, len: 0x1000 });
+    let s = l
+        .leaf(0x1_0000_2000, 0x1000)
+        .expect("real guest RAM must resolve");
+    assert_eq!(
+        s,
+        HostSlice {
+            block: 0,
+            offset: 0x2000,
+            len: 0x1000
+        }
+    );
 }
 
 #[test]
@@ -882,8 +1130,18 @@ fn a_leaf_may_select_a_block_but_never_name_a_base() {
     // GuestRamBlock is minted at registration. There is deliberately no
     // `resolve(gpa, len) -> HostPtr` in this module -- that function is the circular one.
     let b = GuestRamBlock::register(7, 0x2_0000_0000, 0x1000_0000);
-    assert_eq!(b.slice(0x100, 0x200).unwrap(), HostSlice { block: 7, offset: 0x100, len: 0x200 });
-    assert_eq!(b.slice(0x0FFF_FF00, 0x200), Err(LeafRefusal::CrossesBlockEnd));
+    assert_eq!(
+        b.slice(0x100, 0x200).unwrap(),
+        HostSlice {
+            block: 7,
+            offset: 0x100,
+            len: 0x200
+        }
+    );
+    assert_eq!(
+        b.slice(0x0FFF_FF00, 0x200),
+        Err(LeafRefusal::CrossesBlockEnd)
+    );
 }
 
 #[test]
@@ -899,7 +1157,10 @@ fn an_overflowing_offset_cannot_wrap_into_a_legal_looking_range() {
 fn a_leaf_that_starts_inside_a_block_but_runs_past_it_is_refused() {
     let mut l = GuestRamLayout::new();
     l.register(GuestRamBlock::register(0, 0x1000, 0x1000));
-    assert!(l.leaf(0x1000, 0x1000).is_ok(), "exactly filling the block is legal");
+    assert!(
+        l.leaf(0x1000, 0x1000).is_ok(),
+        "exactly filling the block is legal"
+    );
     assert_eq!(l.leaf(0x1800, 0x1000), Err(LeafRefusal::CrossesBlockEnd));
     assert_eq!(l.refused(), 1);
 }
@@ -927,11 +1188,13 @@ impl plane::HostOps for RecordingHost {
         self.rung.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn run_translated(&self, _t: u32, _s: u64) -> bool {
-        self.translated.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.translated
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         true
     }
     fn run_emulated(&self, _t: u32, _s: u64) {
-        self.emulated.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.emulated
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn apply_register(&self, _b: u8, off: u32, v: u64, _w: u8) {
         self.registers.lock().unwrap().push((off, v));
@@ -947,13 +1210,16 @@ impl plane::HostOps for RecordingHost {
         }
     }
     fn forge_completion(&self, _t: u32) {
-        self.forged.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.forged
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn refuse_and_poison(&self, _t: u32) {
-        self.poisoned.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.poisoned
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn fault_channel(&self, _t: u32) {
-        self.faulted.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.faulted
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn map_guest_slice(&self, s: leaf::HostSlice) {
         self.mapped.lock().unwrap().push(s);
@@ -973,7 +1239,10 @@ fn the_drainer_applies_registers_in_global_order_across_vcpus() {
     let vmm = Box::leak(Box::new(plane::Vmm::new()));
     let p = Arc::new(Plane::new(vmm, 64, 0x3f));
     let host = Arc::new(RecordingHost::default());
-    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    let cls = Class::Privileged {
+        readable: true,
+        semantics: WriteSemantics::Plain,
+    };
 
     // Two "vCPUs" handing off through a lock, exactly as RM does.
     let lock = Arc::new(std::sync::Mutex::new(()));
@@ -1006,8 +1275,8 @@ fn the_drainer_applies_registers_in_global_order_across_vcpus() {
 fn every_ring_is_served_exactly_once_end_to_end() {
     // ★ The composition claim: vCPUs trap, workers scan/claim/serve, nothing is lost and nothing
     // is served twice. This is the whole plane running as §3 describes it.
-    use std::sync::atomic::Ordering as O;
     use std::sync::Arc;
+    use std::sync::atomic::Ordering as O;
     let vmm = Box::leak(Box::new(plane::Vmm::new()));
     let p = Arc::new(Plane::new(vmm, 256, 0xff));
     let host = Arc::new(RecordingHost::default());
@@ -1061,12 +1330,18 @@ fn every_ring_is_served_exactly_once_end_to_end() {
         .filter(|(i, w)| w.load().state != State::Idle && !p.bits.bit(*i as u32))
         .map(|(i, w)| (i, w.load().state))
         .collect();
-    assert!(orphaned.is_empty(), "⊘ PLANE DEFECT: rung with no bit: {orphaned:?}");
+    assert!(
+        orphaned.is_empty(),
+        "⊘ PLANE DEFECT: rung with no bit: {orphaned:?}"
+    );
     assert!(
         p.tokens.iter().all(|w| w.load().state == State::Idle),
         "⊘ HARNESS: a token is still published when the workers exited"
     );
-    assert!(host.translated.load(O::Acquire) > 0, "the host must actually have been driven");
+    assert!(
+        host.translated.load(O::Acquire) > 0,
+        "the host must actually have been driven"
+    );
 }
 
 #[test]
@@ -1084,7 +1359,10 @@ fn a_passthrough_token_is_never_served_by_a_worker() {
     // Nothing was published, so a worker pass finds nothing.
     let mut scratch = Vec::new();
     assert_eq!(p.worker_pass(&host, &mut scratch, 16), 0);
-    assert_eq!(host.translated.load(std::sync::atomic::Ordering::Acquire), 0);
+    assert_eq!(
+        host.translated.load(std::sync::atomic::Ordering::Acquire),
+        0
+    );
 }
 
 // ---- P1's last gate item: the exhaustive interleaving check -----------------------------------
@@ -1100,7 +1378,10 @@ fn the_model_check_finds_the_single_cas_claim_bug() {
     match model::check(model::ClaimShape::SingleCas) {
         Err(why) => {
             assert!(why.contains("LOST"), "{why}");
-            assert!(why.contains("interleaving:"), "it must NAME the interleaving: {why}");
+            assert!(
+                why.contains("interleaving:"),
+                "it must NAME the interleaving: {why}"
+            );
         }
         Ok(n) => panic!("the checker explored {n} states and MISSED a known real bug"),
     }
@@ -1112,7 +1393,10 @@ fn the_model_check_clears_the_retrying_claim() {
     // ⚠ Under SEQUENTIAL CONSISTENCY only — this says nothing about whether Release/Acquire are
     // strong enough on a weakly-ordered target. See the module docs.
     match model::check(model::ClaimShape::Retrying) {
-        Ok(explored) => assert!(explored > 20, "the checker must actually explore: {explored} states"),
+        Ok(explored) => assert!(
+            explored > 20,
+            "the checker must actually explore: {explored} states"
+        ),
         Err(why) => panic!("the shipped claim() has a losing interleaving:\n{why}"),
     }
 }
@@ -1138,23 +1422,44 @@ fn the_timer_pages_settable_registers_are_refused_by_name_on_the_write_path() {
     let sem = shadow::WriteSemantics::Plain;
     for off in [0x9400u32, 0x9410] {
         assert_eq!(
-            p.write(Class::Privileged { readable: true, semantics: sem }, 0, off, 0x1234_5678, 4),
+            p.write(
+                Class::Privileged {
+                    readable: true,
+                    semantics: sem
+                },
+                0,
+                off,
+                0x1234_5678,
+                4
+            ),
             Action::RefusedByName,
             "a write to {off:#x} must be refused by name"
         );
     }
-    assert_eq!(f.ring.occupancy(), 0, "a refused write never enters the privileged ring");
+    assert_eq!(
+        f.ring.occupancy(),
+        0,
+        "a refused write never enters the privileged ring"
+    );
     // ★ And the READ of the legacy timer page is SERVED FROM MEMORY -- not refused, and not
     // trapped. `[w824]` The PLM answer (0x9430 bit 4) is recomputed on the trapped WRITE that
     // moves it, so no read ever leaves the guest.
     for off in [0x9000u64, 0x9400, 0x9410, 0x9430] {
-        assert!(!trappolicy::may_trap_read(vmm::Bar(0), off, classgen::Family::Ampere));
+        assert!(!trappolicy::may_trap_read(
+            vmm::Bar(0),
+            off,
+            classgen::Family::Ampere
+        ));
     }
     // ★ The registers RM actually reads time from are not refused on any path, and the VF pair is
     // a read-only passthrough memslot over live host time -- there is no exit there to refuse in.
     for off in [timer::VF_TIME_0, timer::VF_TIME_1] {
         assert!(!p.timer.is_refused_write(off));
-        assert!(!trappolicy::may_trap_read(vmm::Bar(0), off as u64, classgen::Family::Ampere));
+        assert!(!trappolicy::may_trap_read(
+            vmm::Bar(0),
+            off as u64,
+            classgen::Family::Ampere
+        ));
     }
 }
 
@@ -1165,10 +1470,17 @@ fn a_refused_time_write_touches_nothing_a_neighbour_write_still_queues() {
     let f = Fixture::new(4);
     let p = f.path();
     let sem = shadow::WriteSemantics::Plain;
-    let priv_ = Class::Privileged { readable: true, semantics: sem };
+    let priv_ = Class::Privileged {
+        readable: true,
+        semantics: sem,
+    };
     assert_eq!(p.write(priv_, 0, 0x9400, 1, 4), Action::RefusedByName);
     assert_eq!(f.ring.occupancy(), 0);
-    assert_ne!(p.write(priv_, 0, 0x9404, 1, 4), Action::RefusedByName, "0x9404 is not named");
+    assert_ne!(
+        p.write(priv_, 0, 0x9404, 1, 4),
+        Action::RefusedByName,
+        "0x9404 is not named"
+    );
     assert_eq!(f.ring.occupancy(), 1, "the neighbour was queued");
     // And the refusal is BAR0-scoped: the same offset on another BAR is not the timer.
     assert_ne!(p.write(priv_, 1, 0x9400, 1, 4), Action::RefusedByName);
@@ -1176,8 +1488,8 @@ fn a_refused_time_write_touches_nothing_a_neighbour_write_still_queues() {
 
 #[test]
 fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
-    use timer::*;
     use classgen::Family;
+    use timer::*;
     assert_eq!(timer_regs_for(Family::Turing), TIMER_GV100);
     assert_eq!(timer_regs_for(Family::Ampere), TIMER_GV100);
     assert_eq!(timer_regs_for(Family::Ada), TIMER_GV100);
@@ -1186,9 +1498,16 @@ fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
     // The PLM shadow: bit 4 = WRITE_PROTECTION_LEVEL0_ENABLE, so ogkm takes its `if` branch and
     // never reaches the NV_ASSERT(0) in the else (`timer_gv100.c:56,77-81`).
     assert_eq!(TIMER_GV100.plm_shadow(), Some((0x9430, 1 << 4)));
-    assert_eq!(TIMER_GH100.plm_shadow(), None, "the GH100 body has no privilege test");
+    assert_eq!(
+        TIMER_GH100.plm_shadow(),
+        None,
+        "the GH100 body has no privilege test"
+    );
     assert_eq!(TIMER_GB10B.plm_shadow(), None);
-    assert!(TIMER_GB10B.refused_writes.is_empty(), "GB10B writes no time register at all");
+    assert!(
+        TIMER_GB10B.refused_writes.is_empty(),
+        "GB10B writes no time register at all"
+    );
 }
 
 #[test]
@@ -1196,16 +1515,34 @@ fn bar0_size_is_a_parameter_and_the_ga106_value_is_only_a_named_default() {
     // `[fable w824, LOW 5]` 16 MiB was hard-coded in two files. The level-1 source is
     // NV_ESC_CARD_INFO.reg_size; until that binding exists the constructor takes the value.
     let m = accessmap::AccessMap::deny_all_for(32 << 20);
-    assert_eq!(m.raw().len(), accessmap::map_bytes_for(32 << 20), "one bit per 32-bit register");
-    assert_eq!(accessmap::AccessMap::deny_all().raw().len(), accessmap::MAP_BYTES);
-    assert_eq!(timer::GA106_BAR0_PAGES, 4096, "the BAR is still 4096 pages of 4 KiB");
+    assert_eq!(
+        m.raw().len(),
+        accessmap::map_bytes_for(32 << 20),
+        "one bit per 32-bit register"
+    );
+    assert_eq!(
+        accessmap::AccessMap::deny_all().raw().len(),
+        accessmap::MAP_BYTES
+    );
+    assert_eq!(
+        timer::GA106_BAR0_PAGES,
+        4096,
+        "the BAR is still 4096 pages of 4 KiB"
+    );
     assert_eq!(m.raw().len(), accessmap::map_bytes_for(32 << 20));
-    assert_eq!(m.raw().len(), 2 * accessmap::MAP_BYTES, "twice the BAR ⇒ twice the map");
+    assert_eq!(
+        m.raw().len(),
+        2 * accessmap::MAP_BYTES,
+        "twice the BAR ⇒ twice the map"
+    );
     assert_eq!(m.bar0_bytes(), 32 << 20);
     // allow_range clamps at THIS map's BAR, not at the GA106 constant.
     let mut m = accessmap::AccessMap::deny_all_for(32 << 20);
     m.allow_range(17 << 20, 4096);
-    assert!(m.is_allowed(17 << 20), "an offset past 16 MiB is inside a 32 MiB BAR");
+    assert!(
+        m.is_allowed(17 << 20),
+        "an offset past 16 MiB is inside a 32 MiB BAR"
+    );
     let mut g = accessmap::AccessMap::deny_all();
     g.allow_range(17 << 20, 4096);
     assert!(!g.is_allowed(17 << 20), "…and outside a 16 MiB one");
@@ -1217,10 +1554,13 @@ fn bar0_size_is_a_parameter_and_the_ga106_value_is_only_a_named_default() {
 fn the_parser_handles_the_three_real_shapes_from_the_headers() {
     // ⊘ These lines are copied VERBATIM from ogkm's swref headers, not invented -- a parser
     // tested only on its author's examples proves nothing about the corpus.
-    use swref::{parse_line, Value};
+    use swref::{Value, parse_line};
 
     // research_clones/ogkm/.../ampere/ga100/dev_ctrl.h:26 -- the bit range P1 names
-    let d = parse_line("#define NV_CTRL_VF_DOORBELL_VECTOR                                  11:0 /* -WXUF */").unwrap();
+    let d = parse_line(
+        "#define NV_CTRL_VF_DOORBELL_VECTOR                                  11:0 /* -WXUF */",
+    )
+    .unwrap();
     assert_eq!(d.name, "NV_CTRL_VF_DOORBELL_VECTOR");
     assert_eq!(d.value, Value::BitRange { hi: 11, lo: 0 });
     assert!(!d.readable_hint, "-W... is write-only");
@@ -1228,11 +1568,18 @@ fn the_parser_handles_the_three_real_shapes_from_the_headers() {
 
     // .../turing/tu102/dev_vm.h:27 -- the aperture P1 names
     let d = parse_line("#define NV_VIRTUAL_FUNCTION                                    0x0003FFFF:0x00030000 /* RW--D */").unwrap();
-    assert_eq!(d.value, Value::Aperture { hi: 0x0003FFFF, lo: 0x00030000 });
+    assert_eq!(
+        d.value,
+        Value::Aperture {
+            hi: 0x0003FFFF,
+            lo: 0x00030000
+        }
+    );
     assert!(d.readable_hint && d.writable_hint);
 
     // A plain offset.
-    let d = parse_line("#define NV_PBUS_FOO                          0x00001700 /* R---V */").unwrap();
+    let d =
+        parse_line("#define NV_PBUS_FOO                          0x00001700 /* R---V */").unwrap();
     assert_eq!(d.value, Value::Offset(0x1700));
     assert!(d.readable_hint && !d.writable_hint);
 }
@@ -1243,7 +1590,10 @@ fn a_constant_coded_register_is_readable() {
     // it appears on `NV_CONFIG_PCI_NV_0_VENDOR_ID` and on value defines like `..._NVIDIA`.
     // It means CONSTANT, and a constant is readable. Treating it as unreadable would have
     // shadowed the wrong set.
-    let d = swref::parse_line("#define NV_CONFIG_PCI_NV_0_VENDOR_ID                           15:0 /* C--UF */").unwrap();
+    let d = swref::parse_line(
+        "#define NV_CONFIG_PCI_NV_0_VENDOR_ID                           15:0 /* C--UF */",
+    )
+    .unwrap();
     assert!(d.readable_hint, "C is CONSTANT, and a constant is readable");
     assert!(!d.writable_hint);
 }
@@ -1253,8 +1603,14 @@ fn uncoded_and_odd_length_codes_are_skipped_not_guessed() {
     // ⚠ All 24 042 observed codes are exactly 5 chars. A 4- or 6-char code is a corpus we have
     // not seen; guessing its layout is how a capture-derived table expires as a vendor
     // regression. ⇒ Skip, never assume.
-    assert!(swref::parse_line("#define NV_SOMETHING 0x1234").is_none(), "uncoded define");
-    assert!(swref::parse_line("#define NV_ODD 0x1234 /* RWXY */").is_none(), "4-char code");
+    assert!(
+        swref::parse_line("#define NV_SOMETHING 0x1234").is_none(),
+        "uncoded define"
+    );
+    assert!(
+        swref::parse_line("#define NV_ODD 0x1234 /* RWXY */").is_none(),
+        "4-char code"
+    );
     assert!(swref::parse_line("/* just a comment */").is_none());
     assert!(swref::parse_line("#ifndef _DEV_VM_H_").is_none());
 }
@@ -1271,9 +1627,14 @@ fn the_overlay_cross_check_fails_the_build_on_a_vendor_rename() {
     assert_eq!(generated.len(), 2);
     assert!(swref::overlay_names_all_exist(&generated, &["NV_PFIFO_INTR_0"]).is_ok());
     // The vendor renames it in a new driver version:
-    let missing = swref::overlay_names_all_exist(&generated, &["NV_PFIFO_INTR_0", "NV_PFIFO_INTR_LEAF"])
-        .unwrap_err();
-    assert_eq!(missing, vec!["NV_PFIFO_INTR_LEAF"], "the build must name what vanished");
+    let missing =
+        swref::overlay_names_all_exist(&generated, &["NV_PFIFO_INTR_0", "NV_PFIFO_INTR_LEAF"])
+            .unwrap_err();
+    assert_eq!(
+        missing,
+        vec!["NV_PFIFO_INTR_LEAF"],
+        "the build must name what vanished"
+    );
 }
 
 #[test]
@@ -1297,7 +1658,13 @@ fn structure_bit_fields_give_the_userd_geometry() {
         "#define NV_RAMUSERD_GP_GET                     (34*32+31):(34*32+0) /* RWXUF */",
     )
     .unwrap();
-    assert_eq!(d.value, Value::StructBits { hi: 34 * 32 + 31, lo: 34 * 32 });
+    assert_eq!(
+        d.value,
+        Value::StructBits {
+            hi: 34 * 32 + 31,
+            lo: 34 * 32
+        }
+    );
     assert_eq!(d.value.byte_offset(), Some(0x88), "word 34 = byte 0x88");
     // ⊘ And it must NOT be mistaken for a register bit range -- 1120 would truncate to nonsense.
     assert!(!matches!(d.value, Value::BitRange { .. }));
@@ -1352,10 +1719,19 @@ fn signals_are_blocked_before_the_free_not_after() {
     // ⊘ Ordering with teeth: a pending signal is exactly what pushes the driver's close path onto
     // a kernel thread. Blocking AFTER the free would leave the free asynchronous -- the thing the
     // whole sequence exists to prevent.
-    let bs = lifetime::ORDER.iter().position(|s| *s == Step::BlockSignals).unwrap();
-    let fr = lifetime::ORDER.iter().position(|s| *s == Step::FreeClientTree).unwrap();
+    let bs = lifetime::ORDER
+        .iter()
+        .position(|s| *s == Step::BlockSignals)
+        .unwrap();
+    let fr = lifetime::ORDER
+        .iter()
+        .position(|s| *s == Step::FreeClientTree)
+        .unwrap();
     assert!(bs < fr, "BlockSignals must precede FreeClientTree");
-    let cl = lifetime::ORDER.iter().position(|s| *s == Step::CloseDescriptor).unwrap();
+    let cl = lifetime::ORDER
+        .iter()
+        .position(|s| *s == Step::CloseDescriptor)
+        .unwrap();
     assert!(fr < cl, "FreeClientTree must precede CloseDescriptor");
 }
 
@@ -1378,7 +1754,11 @@ fn a_second_driver_instance_does_not_map_nothing() {
 
     // First driver instance: the walk maps everything.
     assert_eq!(w.diff(7), lifetime::Diff::Changed(7));
-    assert_eq!(w.diff(7), lifetime::Diff::Unchanged, "no change within one instance is correct");
+    assert_eq!(
+        w.diff(7),
+        lifetime::Diff::Unchanged,
+        "no change within one instance is correct"
+    );
 
     // Teardown drops every mapping -- and MUST reset the walker.
     let mut t = Teardown::new();
@@ -1444,7 +1824,10 @@ fn one_wakeup_word_serves_every_gpu() {
     // And on the first, equally.
     let seen = vmm.worker_wake.seen();
     assert!(vmm.worker_wake.try_park(seen));
-    assert_eq!(gpu0.trap_write(Class::Doorbell, 0, 0, 1, 4), Action::WakeWorker);
+    assert_eq!(
+        gpu0.trap_write(Class::Doorbell, 0, 0, 1, 4),
+        Action::WakeWorker
+    );
 }
 
 #[test]
@@ -1455,13 +1838,19 @@ fn each_gpu_has_its_own_ring_because_ordering_is_per_pci_function() {
     let vmm = plane::Vmm::new();
     let gpu0 = Plane::new(&vmm, 32, 0x1f);
     let gpu1 = Plane::new(&vmm, 32, 0x1f);
-    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    let cls = Class::Privileged {
+        readable: true,
+        semantics: WriteSemantics::Plain,
+    };
     for i in 0..ring::CAPACITY {
         gpu0.trap_write(cls, 0, i as u32, 0, 4);
     }
     assert_eq!(gpu0.trap_write(cls, 0, 0xffff, 0, 4), Action::PoisonDevice);
     assert!(gpu0.ring.is_poisoned());
-    assert!(!gpu1.ring.is_poisoned(), "⊘ one GPU's full ring must NOT poison another device");
+    assert!(
+        !gpu1.ring.is_poisoned(),
+        "⊘ one GPU's full ring must NOT poison another device"
+    );
     assert_eq!(gpu1.occupancy_for_test(), 0);
 }
 
@@ -1497,14 +1886,26 @@ fn a_guest_cannot_starve_its_neighbours_by_allocating_twins() {
     }
     assert_eq!(
         vm.acquire(Twin::Channel),
-        Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: 4, asked: 5 }),
+        Err(Refusal::OverDeclaredCap {
+            twin: Twin::Channel,
+            cap: 4,
+            asked: 5
+        }),
         "past the cap must be refused BY NAME, carrying the cap and the ask"
     );
-    assert_eq!(vm.refused(Twin::Channel), 1, "and counted — a zero here must be evidence");
+    assert_eq!(
+        vm.refused(Twin::Channel),
+        1,
+        "and counted — a zero here must be evidence"
+    );
     // ⊘ Refusing one class must not disturb another.
     assert_eq!(vm.acquire(Twin::AddressSpace), Ok(()));
     vm.release(Twin::Channel);
-    assert_eq!(vm.acquire(Twin::Channel), Ok(()), "a freed twin returns capacity");
+    assert_eq!(
+        vm.acquire(Twin::Channel),
+        Ok(()),
+        "a freed twin returns capacity"
+    );
 }
 
 #[test]
@@ -1520,7 +1921,10 @@ fn the_cap_is_what_we_already_told_the_guest() {
     }
     match vm.acquire(Twin::Channel) {
         Err(Refusal::OverDeclaredCap { cap, .. }) => {
-            assert_eq!(cap, DECLARED_CHANNELS, "the refusal must cite the DECLARED number");
+            assert_eq!(
+                cap, DECLARED_CHANNELS,
+                "the refusal must cite the DECLARED number"
+            );
         }
         Ok(()) => panic!("the declared cap was not enforced"),
     }
@@ -1532,7 +1936,11 @@ fn an_unbackable_aperture_page_is_refused_not_holed() {
     // reading an unbacked hole is A WRONG ANSWER, NOT AN ERROR." A hole returns plausible bytes
     // and the guest proceeds on them.
     let mut a = Aperture::size_from_free(256 << 20, 128 << 20);
-    assert_eq!(a.len(), 128 << 20, "sized from what is actually FREE, not from the request");
+    assert_eq!(
+        a.len(),
+        128 << 20,
+        "sized from what is actually FREE, not from the request"
+    );
     assert_eq!(a.back(0, 4096), Backing::Backed { host_offset: 0 });
     assert_eq!(
         a.back((128 << 20) - 2048, 4096),
@@ -1556,16 +1964,25 @@ fn a_kernel_channel_with_an_untranslatable_operand_is_refused_not_faulted_on_the
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel).unwrap();
+    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
 
     p.trap_write(Class::Doorbell, 0, 0, 3, 4);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
 
-    assert_eq!(host.poisoned.load(O::Acquire), 1, "the kernel channel must be refused+poisoned");
+    assert_eq!(
+        host.poisoned.load(O::Acquire),
+        1,
+        "the kernel channel must be refused+poisoned"
+    );
     assert_eq!(host.faulted.load(O::Acquire), 0, "⊘ and NEVER faulted");
-    assert_eq!(host.translated.load(O::Acquire), 0, "nothing may have been submitted");
+    assert_eq!(
+        host.translated.load(O::Acquire),
+        0,
+        "nothing may have been submitted"
+    );
 }
 
 #[test]
@@ -1575,7 +1992,8 @@ fn a_user_channel_with_the_same_miss_faults_on_the_live_path() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::User)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 4, 4);
     let mut scratch = Vec::new();
@@ -1593,15 +2011,25 @@ fn a_forge_happens_only_for_emulated_work_on_the_live_path() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User).unwrap();
-    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User)
+        .unwrap();
+    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User)
+        .unwrap();
     let mut scratch = Vec::new();
     p.trap_write(Class::Doorbell, 0, 0, 5, 4);
     p.worker_pass(&host, &mut scratch, 8);
-    assert_eq!(host.forged.load(O::Acquire), 1, "emulated work owes a forged completion");
+    assert_eq!(
+        host.forged.load(O::Acquire),
+        1,
+        "emulated work owes a forged completion"
+    );
     p.trap_write(Class::Doorbell, 0, 0, 6, 4);
     p.worker_pass(&host, &mut scratch, 8);
-    assert_eq!(host.forged.load(O::Acquire), 1, "⊘ translated work must NOT be forged — the GPU wrote it");
+    assert_eq!(
+        host.forged.load(O::Acquire),
+        1,
+        "⊘ translated work must NOT be forged — the GPU wrote it"
+    );
 }
 
 #[test]
@@ -1610,13 +2038,24 @@ fn the_cap_refuses_a_channel_on_the_live_path() {
     let vmm = plane::Vmm::new();
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let mut caps = VmCaps::from_declared(2, 8, 8, 8);
-    assert!(p.allocate_channel(&mut caps, 1, Route::Translated, 1, Owner::User).is_ok());
-    assert!(p.allocate_channel(&mut caps, 2, Route::Translated, 2, Owner::User).is_ok());
     assert!(
-        p.allocate_channel(&mut caps, 3, Route::Translated, 3, Owner::User).is_err(),
+        p.allocate_channel(&mut caps, 1, Route::Translated, 1, Owner::User)
+            .is_ok()
+    );
+    assert!(
+        p.allocate_channel(&mut caps, 2, Route::Translated, 2, Owner::User)
+            .is_ok()
+    );
+    assert!(
+        p.allocate_channel(&mut caps, 3, Route::Translated, 3, Owner::User)
+            .is_err(),
         "the third channel is past the declared cap and must be refused"
     );
-    assert_eq!(p.tokens[3].load().route, Route::Unknown, "and the token must be untouched");
+    assert_eq!(
+        p.tokens[3].load().route,
+        Route::Unknown,
+        "and the token must be untouched"
+    );
 }
 
 #[test]
@@ -1628,14 +2067,21 @@ fn a_leaf_naming_our_memslot_never_reaches_a_host_map_on_the_live_path() {
     let host = RecordingHost::default();
     let mut layout = GuestRamLayout::new();
     layout.register(GuestRamBlock::register(0, 0x1_0000_0000, 0x1000_0000));
-    assert!(p.resolve_and_map_leaf(&host, &layout, 0x1_0000_1000, 0x1000).is_ok());
+    assert!(
+        p.resolve_and_map_leaf(&host, &layout, 0x1_0000_1000, 0x1000)
+            .is_ok()
+    );
     assert_eq!(host.mapped.lock().unwrap().len(), 1);
     // Our own memslot:
     assert_eq!(
         p.resolve_and_map_leaf(&host, &layout, 0xF000_0000, 0x1000),
         Err(LeafRefusal::NotInAnyRegisteredBlock)
     );
-    assert_eq!(host.mapped.lock().unwrap().len(), 1, "⊘ and NOTHING reached the host");
+    assert_eq!(
+        host.mapped.lock().unwrap().len(),
+        1,
+        "⊘ and NOTHING reached the host"
+    );
 }
 
 #[test]
@@ -1646,8 +2092,16 @@ fn teardown_runs_the_whole_ordered_sequence_on_the_live_path() {
     let mut w = WalkerState::default();
     assert_eq!(w.diff(9), lifetime::Diff::Changed(9));
     p.teardown(&host, &mut w).unwrap();
-    assert_eq!(*host.teardown.lock().unwrap(), lifetime::ORDER.to_vec(), "in §9's order");
-    assert_eq!(w.diff(9), lifetime::Diff::Changed(9), "the second instance must map");
+    assert_eq!(
+        *host.teardown.lock().unwrap(),
+        lifetime::ORDER.to_vec(),
+        "in §9's order"
+    );
+    assert_eq!(
+        w.diff(9),
+        lifetime::Diff::Changed(9),
+        "the second instance must map"
+    );
 }
 
 // ---- host verbs: authored, never forwarded; and the pointer discipline ------------------------
@@ -1667,10 +2121,18 @@ fn a_corrupted_vmm_addr_is_refused_not_dereferenced() {
 
     // A safe-code bug hands back an address outside the registered range.
     let corrupted = unsafe { VmmAddr::new(BASE + 0x8000, LEN) };
-    assert_eq!(corrupted.checked(BASE, LEN, 0x10), None, "outside the range ⇒ refuse");
+    assert_eq!(
+        corrupted.checked(BASE, LEN, 0x10),
+        None,
+        "outside the range ⇒ refuse"
+    );
 
     // A length larger than what was registered.
-    assert_eq!(good.checked(BASE, LEN, 0x2000), None, "past the end ⇒ refuse");
+    assert_eq!(
+        good.checked(BASE, LEN, 0x2000),
+        None,
+        "past the end ⇒ refuse"
+    );
 
     // ⊘ And overflow must not wrap into a legal-looking range.
     let high = unsafe { VmmAddr::new(usize::MAX - 8, LEN) };
@@ -1695,7 +2157,11 @@ fn only_four_leaf_bits_are_translated_and_the_rest_are_refused() {
     // page KIND would mint host mappings from a guest value and touch device-global compression
     // state -- a guest-to-host coupling in the same family as forwarding a flag word.
     let translated = [hostverb::TranslatedLeafBit::ReadOnly];
-    assert_eq!(translated.len(), 1, "read-only is the only leaf BIT we carry through");
+    assert_eq!(
+        translated.len(),
+        1,
+        "read-only is the only leaf BIT we carry through"
+    );
 }
 
 // ---- §2.2 the RM object graph ------------------------------------------------------------------
@@ -1724,7 +2190,10 @@ fn an_unlisted_class_is_denied_by_default() {
     let mut g = rmgraph::ObjectGraph::new();
     g.alloc(1, 0x41, None).unwrap();
     for class in [0xdeadu32, 0x1234, 0xffff] {
-        assert!(matches!(g.alloc(99, class, Some(1)), Err(rmgraph::GraphError::DeniedClass(_))));
+        assert!(matches!(
+            g.alloc(99, class, Some(1)),
+            Err(rmgraph::GraphError::DeniedClass(_))
+        ));
     }
 }
 
@@ -1738,8 +2207,16 @@ fn dup_object_aliases_and_does_not_copy() {
     g.alloc(2, 0x90f1, Some(1)).unwrap(); // a VA space
     g.dup(2, 200).unwrap();
     assert_eq!(g.get(2).unwrap().refs, 2, "the source's refcount must rise");
-    assert_eq!(g.get(200).unwrap().class, 0x90f1, "the alias names the same class");
-    assert_eq!(g.get(200).unwrap().parent, g.get(2).unwrap().parent, "and the same parent");
+    assert_eq!(
+        g.get(200).unwrap().class,
+        0x90f1,
+        "the alias names the same class"
+    );
+    assert_eq!(
+        g.get(200).unwrap().parent,
+        g.get(2).unwrap().parent,
+        "and the same parent"
+    );
 }
 
 #[test]
@@ -1747,30 +2224,44 @@ fn free_takes_the_whole_subtree() {
     // ⊘ RM's teardown is ordered by its own dependency rules; a child outliving its parent is a
     // dangling host object.
     let mut g = rmgraph::ObjectGraph::new();
-    g.alloc(1, 0x41, None).unwrap();       // root
-    g.alloc(2, 0x80, Some(1)).unwrap();    // device
-    g.alloc(3, 0x2080, Some(2)).unwrap();  // subdevice
-    g.alloc(4, 0x90f1, Some(2)).unwrap();  // vaspace
-    g.alloc(5, 0xc56f, Some(4)).unwrap();  // channel under the vaspace
+    g.alloc(1, 0x41, None).unwrap(); // root
+    g.alloc(2, 0x80, Some(1)).unwrap(); // device
+    g.alloc(3, 0x2080, Some(2)).unwrap(); // subdevice
+    g.alloc(4, 0x90f1, Some(2)).unwrap(); // vaspace
+    g.alloc(5, 0xc56f, Some(4)).unwrap(); // channel under the vaspace
     assert_eq!(g.len(), 5);
-    assert_eq!(g.free(2).unwrap(), 4, "device + subdevice + vaspace + channel");
+    assert_eq!(
+        g.free(2).unwrap(),
+        4,
+        "device + subdevice + vaspace + channel"
+    );
     assert_eq!(g.len(), 1, "only the root survives");
 }
 
 #[test]
 fn a_child_cannot_be_allocated_under_an_unknown_parent() {
     let mut g = rmgraph::ObjectGraph::new();
-    assert_eq!(g.alloc(9, 0x80, Some(404)), Err(rmgraph::GraphError::UnknownParent));
+    assert_eq!(
+        g.alloc(9, 0x80, Some(404)),
+        Err(rmgraph::GraphError::UnknownParent)
+    );
 }
 
 #[test]
 fn the_usermode_class_is_allocated_on_the_host_because_its_mapping_IS_the_doorbell() {
     // ★ §2.2: AMPERE_USERMODE_A is "the object whose 64 KiB CPU mapping IS the doorbell page".
     // ⊘ Emulating it would leave the guest's doorbell writes landing nowhere real.
-    assert_eq!(rmgraph::class_policy(0xc561), rmgraph::ClassPolicy::EmulateAndHost);
+    assert_eq!(
+        rmgraph::class_policy(0xc561),
+        rmgraph::ClassPolicy::EmulateAndHost
+    );
     // And the ones that must reach hardware to do real work.
     for c in [0x90f1u32, 0xc56f, 0xc7c0, 0xc7b5] {
-        assert_eq!(rmgraph::class_policy(c), rmgraph::ClassPolicy::EmulateAndHost, "{c:#x}");
+        assert_eq!(
+            rmgraph::class_policy(c),
+            rmgraph::ClassPolicy::EmulateAndHost,
+            "{c:#x}"
+        );
     }
 }
 
@@ -1778,7 +2269,10 @@ fn the_usermode_class_is_allocated_on_the_host_because_its_mapping_IS_the_doorbe
 fn binapi_is_opaque_and_that_is_load_bearing_for_cuinit() {
     // ⊘ §2.2: NV2081_BINAPI's "controls tunnel whole to firmware, uninterpreted by the kernel".
     // ★ Decoding it would be inventing meaning; refusing it breaks cuInit.
-    assert_eq!(rmgraph::class_policy(0x2081), rmgraph::ClassPolicy::OpaqueAllow);
+    assert_eq!(
+        rmgraph::class_policy(0x2081),
+        rmgraph::ClassPolicy::OpaqueAllow
+    );
 }
 
 // ---- §1.2 the Dg axis, as a descriptor ---------------------------------------------------------
@@ -1802,7 +2296,11 @@ fn a_vanished_field_is_None_not_a_sentinel() {
     assert_eq!(LAYOUT_580.elem_count_off, Some(40));
     assert_eq!(LAYOUT_610.elem_count_off, None, "gone, not zero");
     let buf = [0xAAu8; 64];
-    assert_eq!(LAYOUT_610.elem_count(&buf), None, "and reading it yields a FACT, not a value");
+    assert_eq!(
+        LAYOUT_610.elem_count(&buf),
+        None,
+        "and reading it yields a FACT, not a value"
+    );
     assert_eq!(LAYOUT_580.elem_count(&buf), Some(0xAAAA_AAAA));
 }
 
@@ -1826,13 +2324,20 @@ fn the_layout_is_detected_from_the_element_not_from_a_version_number() {
     e610[0..4].copy_from_slice(&MCTP_WORDS_610[0].to_le_bytes());
     e610[4..8].copy_from_slice(&MCTP_WORDS_610[1].to_le_bytes());
     assert_eq!(detect_layout(&e610), Some(LAYOUT_610));
-    assert_eq!(MCTP_WORDS_610[0], 0xC000_0001, "version nibble 1, SOM|EOM, everything else 0");
+    assert_eq!(
+        MCTP_WORDS_610[0], 0xC000_0001,
+        "version nibble 1, SOM|EOM, everything else 0"
+    );
     // A 580 element's word 0 is authTagBuffer[0..4]: zero outside CC (work area zeroed at init).
     let e580 = [0u8; 64];
     assert_eq!(detect_layout(&e580), Some(LAYOUT_580));
     // A short buffer is refused, not guessed.
     assert_eq!(detect_layout(&[0u8; 7]), None);
-    assert_eq!(detect_layout(&e610[..8]), Some(LAYOUT_610), "two words is enough");
+    assert_eq!(
+        detect_layout(&e610[..8]),
+        Some(LAYOUT_610),
+        "two words is enough"
+    );
 }
 
 #[test]
@@ -1843,15 +2348,31 @@ fn a_version_nibble_alone_does_not_make_an_element_mctp() {
     use element::*;
     let mut e = [0u8; 64];
     e[0] = 0x01; // version 1, nothing else
-    assert_eq!(detect_layout(&e), Some(LAYOUT_580), "no vendor id ⇒ not MCTP");
+    assert_eq!(
+        detect_layout(&e),
+        Some(LAYOUT_580),
+        "no vendor id ⇒ not MCTP"
+    );
     e[4..8].copy_from_slice(&(0x7eu32 | (0x1234 << 8)).to_le_bytes());
-    assert_eq!(detect_layout(&e), Some(LAYOUT_580), "wrong vendor ⇒ not MCTP");
+    assert_eq!(
+        detect_layout(&e),
+        Some(LAYOUT_580),
+        "wrong vendor ⇒ not MCTP"
+    );
     e[4..8].copy_from_slice(&(0x10u32 | (0x10de << 8)).to_le_bytes());
     assert_eq!(detect_layout(&e), Some(LAYOUT_580), "wrong type ⇒ not MCTP");
     e[4..8].copy_from_slice(&MCTP_WORDS_610[1].to_le_bytes());
-    assert_eq!(detect_layout(&e), Some(LAYOUT_610), "version + type + vendor ⇒ MCTP");
+    assert_eq!(
+        detect_layout(&e),
+        Some(LAYOUT_610),
+        "version + type + vendor ⇒ MCTP"
+    );
     e[0] = 0x02;
-    assert_eq!(detect_layout(&e), Some(LAYOUT_580), "version 2 is what ogkm rejects too");
+    assert_eq!(
+        detect_layout(&e),
+        Some(LAYOUT_580),
+        "version 2 is what ogkm rejects too"
+    );
 }
 
 #[test]
@@ -1863,7 +2384,10 @@ fn the_no_gsp_plane_is_a_seam_not_a_bolt_on() {
     let gsp = ControlPlane::Gsp { layout: LAYOUT_580 };
     let nogsp = ControlPlane::NoGsp;
     assert!(gsp.has_message_queue());
-    assert!(!nogsp.has_message_queue(), "pre-Turing, and Turing+ with firmware disabled");
+    assert!(
+        !nogsp.has_message_queue(),
+        "pre-Turing, and Turing+ with firmware disabled"
+    );
     assert!(gsp.element_layout().is_some());
     assert_eq!(
         nogsp.element_layout(),
@@ -1918,13 +2442,20 @@ fn the_scan_start_rotates_so_no_group_holds_priority() {
     let mut out = Vec::new();
     let (mut low, mut high) = (0usize, 0usize);
     for _ in 0..64 {
-        b.publish(1);      // summary word 0
+        b.publish(1); // summary word 0
         b.publish(70_000); // a far-away summary word
         b.scan(&mut out, 1);
-        if out.contains(&1) { low += 1 }
-        if out.contains(&70_000) { high += 1 }
+        if out.contains(&1) {
+            low += 1
+        }
+        if out.contains(&70_000) {
+            high += 1
+        }
     }
-    assert!(low > 0 && high > 0, "both groups must be reached: low={low} high={high}");
+    assert!(
+        low > 0 && high > 0,
+        "both groups must be reached: low={low} high={high}"
+    );
 }
 
 // ---- fable w823 CRITICAL S2 / S4 / S6 ----------------------------------------------------------
@@ -1941,15 +2472,24 @@ fn a_stale_mirror_puts_the_token_back_instead_of_poisoning_the_device() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel).unwrap();
+    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel)
+        .unwrap();
 
     host.mirror_stale.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 3, 4);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
 
-    assert_eq!(host.poisoned.load(O::Acquire), 0, "⊘ a stale mirror must NOT poison the device");
-    assert_eq!(p.tokens[3].load().state, State::Rung, "the token is put back, not consumed");
+    assert_eq!(
+        host.poisoned.load(O::Acquire),
+        0,
+        "⊘ a stale mirror must NOT poison the device"
+    );
+    assert_eq!(
+        p.tokens[3].load().state,
+        State::Rung,
+        "the token is put back, not consumed"
+    );
     assert!(p.bits.bit(3), "and re-published, so a later pass retries");
 
     // The mirror catches up; the same work now goes through.
@@ -1968,7 +2508,8 @@ fn a_genuinely_untranslatable_kernel_operand_still_refuses() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::Kernel).unwrap();
+    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::Kernel)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 4, 4);
     let mut scratch = Vec::new();
@@ -1985,13 +2526,18 @@ fn no_completion_is_forged_for_work_that_was_refused_or_faulted() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 5, 4);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
     assert_eq!(host.faulted.load(O::Acquire), 1, "a user channel faults");
-    assert_eq!(host.forged.load(O::Acquire), 0, "⊘ and NOTHING is forged for it");
+    assert_eq!(
+        host.forged.load(O::Acquire),
+        0,
+        "⊘ and NOTHING is forged for it"
+    );
 }
 
 #[test]
@@ -2003,13 +2549,18 @@ fn a_passthrough_token_reached_by_a_worker_is_released_not_wedged() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User)
+        .unwrap();
     p.trap_write(Class::Doorbell, 0, 0, 6, 4);
     // The channel is recycled as Passthrough while a bit is outstanding.
     assert!(p.tokens[6].retire() || true);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
-    assert_ne!(p.tokens[6].load().state, State::Busy, "⊘ must not be wedged BUSY");
+    assert_ne!(
+        p.tokens[6].load().state,
+        State::Busy,
+        "⊘ must not be wedged BUSY"
+    );
 }
 
 // ---- fable w823 HIGH S3 / S5 / S7 / H3 ---------------------------------------------------------
@@ -2023,13 +2574,19 @@ fn allocating_over_a_live_token_is_refused_and_the_caller_learns() {
     let vmm = plane::Vmm::new();
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 7, Route::Translated, 0x77, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 7, Route::Translated, 0x77, Owner::User)
+        .unwrap();
     // Re-allocating without freeing must FAIL and must not rehome the token.
     assert!(
-        p.allocate_channel(&mut caps, 7, Route::Translated, 0xBB, Owner::User).is_err(),
+        p.allocate_channel(&mut caps, 7, Route::Translated, 0xBB, Owner::User)
+            .is_err(),
         "⊘ allocation over a live token must be refused"
     );
-    assert_eq!(p.tokens[7].load().host_token, 0x77, "and must not have rehomed it");
+    assert_eq!(
+        p.tokens[7].load().host_token,
+        0x77,
+        "and must not have rehomed it"
+    );
 }
 
 #[test]
@@ -2043,16 +2600,26 @@ fn a_recycled_kernel_chid_does_not_keep_the_kernel_failure_policy() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 9, Route::Translated, 0x99, Owner::Kernel).unwrap();
+    p.allocate_channel(&mut caps, 9, Route::Translated, 0x99, Owner::Kernel)
+        .unwrap();
     assert!(p.free_channel(&mut caps, 9), "the kernel channel is freed");
     // chid 9 is recycled to an unprivileged process.
-    p.allocate_channel(&mut caps, 9, Route::Translated, 0xAA, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 9, Route::Translated, 0xAA, Owner::User)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 9, 4);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
-    assert_eq!(host.poisoned.load(O::Acquire), 0, "⊘ a USER channel must NOT poison the device");
-    assert_eq!(host.faulted.load(O::Acquire), 1, "it faults, and the blast radius is the asker");
+    assert_eq!(
+        host.poisoned.load(O::Acquire),
+        0,
+        "⊘ a USER channel must NOT poison the device"
+    );
+    assert_eq!(
+        host.faulted.load(O::Acquire),
+        1,
+        "it faults, and the blast radius is the asker"
+    );
 }
 
 #[test]
@@ -2079,5 +2646,9 @@ fn caps_are_released_on_free_so_a_long_lived_guest_is_not_refused_forever() {
             .unwrap_or_else(|e| panic!("cycle {i} refused: {e:?}"));
         assert!(p.free_channel(&mut caps, tok));
     }
-    assert_eq!(caps.live(Twin::Channel), 0, "every acquire was matched by a release");
+    assert_eq!(
+        caps.live(Twin::Channel),
+        0,
+        "every acquire was matched by a release"
+    );
 }

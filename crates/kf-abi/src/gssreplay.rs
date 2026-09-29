@@ -103,15 +103,31 @@ pub struct Row {
 /// ★ Every request this device asks its host at realize.
 pub const ROWS: &[Row] = &[
     // The encoder's listing request `{0, 1, 8}` (measured, bare-metal libnvidia-encode).
-    Row { cmd: GSS_CLOCK_DOMAINS, size: 520, inputs: &[(0, 0), (4, 1), (8, 8)] },
+    Row {
+        cmd: GSS_CLOCK_DOMAINS,
+        size: 520,
+        inputs: &[(0, 0), (4, 1), (8, 8)],
+    },
     // One-domain clock queries for the two domains the library has been seen to ask.
-    Row { cmd: GSS_CLOCK_QUERY, size: 0x890, inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_NVD), (0x20c, DOMAIN_NVD)] },
-    Row { cmd: GSS_CLOCK_QUERY, size: 0x890, inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_GPC), (0x20c, DOMAIN_GPC)] },
+    Row {
+        cmd: GSS_CLOCK_QUERY,
+        size: 0x890,
+        inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_NVD), (0x20c, DOMAIN_NVD)],
+    },
+    Row {
+        cmd: GSS_CLOCK_QUERY,
+        size: 0x890,
+        inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_GPC), (0x20c, DOMAIN_GPC)],
+    },
     // ★ v3-refusals: cudart's pair, the request words exactly as recorded calls carried them — `a084`
     // 136 bare-metal calls; `a026` 270 (135 bare metal + 135 guest, one cudart binary). Every word
     // CONSTANT across them is named; the varying ones (0x04, 0x0c, 0x34..) are the caller's
     // uninitialised stack.
-    Row { cmd: GSS_CUDART_A084, size: 4, inputs: &[(0, 0)] },
+    Row {
+        cmd: GSS_CUDART_A084,
+        size: 4,
+        inputs: &[(0, 0)],
+    },
     Row {
         cmd: GSS_CUDART_CLOCKS,
         size: 532,
@@ -161,7 +177,10 @@ impl Row {
     pub fn matches(&self, cmd: u32, params: &[u8]) -> bool {
         cmd == self.cmd
             && params.len() == self.size
-            && self.inputs.iter().all(|&(o, v)| params.get(o..o + 4).is_some_and(|w| w == v.to_le_bytes()))
+            && self
+                .inputs
+                .iter()
+                .all(|&(o, v)| params.get(o..o + 4).is_some_and(|w| w == v.to_le_bytes()))
     }
 }
 
@@ -179,7 +198,13 @@ impl Answer {
     #[must_use]
     pub fn from_host(row: Row, reply: &[u8]) -> Answer {
         let req = row.request();
-        let wrote = req.iter().zip(reply).enumerate().filter(|(_, (a, b))| a != b).map(|(i, (_, b))| (i, *b)).collect();
+        let wrote = req
+            .iter()
+            .zip(reply)
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .map(|(i, (_, b))| (i, *b))
+            .collect();
         Answer { row, wrote }
     }
 
@@ -212,7 +237,9 @@ impl Answer {
 /// ★ Answer a guest request from the host's realize-time answers; `false` = not ours.
 #[must_use]
 pub fn answer(answers: &[Answer], cmd: u32, params: &mut [u8]) -> bool {
-    let Some(a) = answers.iter().find(|a| a.row.matches(cmd, params)) else { return false };
+    let Some(a) = answers.iter().find(|a| a.row.matches(cmd, params)) else {
+        return false;
+    };
     for &(i, b) in &a.wrote {
         params[i] = b;
     }
@@ -244,12 +271,23 @@ mod tests {
         assert_eq!(&g[4..8], &4u32.to_le_bytes());
         assert_eq!(&g[0x14..0x18], &0x000f_55c8u32.to_le_bytes());
         assert_eq!(g[0x210], 2);
-        assert_eq!(g[0x30], 0x5a, "a byte the host did not write is the guest's");
+        assert_eq!(
+            g[0x30], 0x5a,
+            "a byte the host did not write is the guest's"
+        );
         // ⊘ Another domain, another size, another control: not ours.
         let mut other = row.request();
         other[0x0c] = 7;
-        assert!(!answer(std::slice::from_ref(&a), GSS_CLOCK_QUERY, &mut other));
-        assert!(!answer(std::slice::from_ref(&a), GSS_CLOCK_QUERY, &mut [0; 16]));
+        assert!(!answer(
+            std::slice::from_ref(&a),
+            GSS_CLOCK_QUERY,
+            &mut other
+        ));
+        assert!(!answer(
+            std::slice::from_ref(&a),
+            GSS_CLOCK_QUERY,
+            &mut [0; 16]
+        ));
         assert!(!answer(&[a], GSS_CLOCK_DOMAINS, &mut row.request()));
     }
 
@@ -258,7 +296,10 @@ mod tests {
     /// ABOVE the `u8` survive (bare metal keeps them) while those inside the `u32`s do not.
     #[test]
     fn the_cudart_clock_query_is_answered_whole_fields_from_two_probes() {
-        let row = *ROWS.iter().find(|r| r.cmd == GSS_CUDART_CLOCKS).expect("row");
+        let row = *ROWS
+            .iter()
+            .find(|r| r.cmd == GSS_CUDART_CLOCKS)
+            .expect("row");
         let host = |mut p: Vec<u8>| {
             p[4] = 2;
             p[8..12].copy_from_slice(&4u32.to_le_bytes());
@@ -267,7 +308,11 @@ mod tests {
             p[0x2c..0x30].copy_from_slice(&9_751_000u32.to_le_bytes());
             p
         };
-        let (a, used) = Answer::from_probes(row, &host(row.request()), Some(&host(row.request_over(PROBE_BACKGROUND))));
+        let (a, used) = Answer::from_probes(
+            row,
+            &host(row.request()),
+            Some(&host(row.request_over(PROBE_BACKGROUND))),
+        );
         assert!(used, "the background did not change the answer");
         // The guest's request as bare-metal cudart builds it (a measured sample): garbage above
         // the byte at 4, in all of 0x0c, and from 0x34 on.
@@ -278,8 +323,16 @@ mod tests {
         }
         assert!(answer(std::slice::from_ref(&a), GSS_CUDART_CLOCKS, &mut g));
         assert_eq!(g[4], 2);
-        assert_eq!(&g[5..8], &[0x5a; 3], "bytes the host never writes stay the guest's");
-        assert_eq!(&g[12..16], &1u32.to_le_bytes(), "a whole u32 the host writes: no garbage survives above its low byte");
+        assert_eq!(
+            &g[5..8],
+            &[0x5a; 3],
+            "bytes the host never writes stay the guest's"
+        );
+        assert_eq!(
+            &g[12..16],
+            &1u32.to_le_bytes(),
+            "a whole u32 the host writes: no garbage survives above its low byte"
+        );
         assert_eq!(&g[0x1c..0x20], &1_695_000u32.to_le_bytes());
         assert_eq!(&g[0x2c..0x30], &9_751_000u32.to_le_bytes());
         assert_eq!(g[0x40], 0x5a);
@@ -289,19 +342,34 @@ mod tests {
         for &(o, v) in row.inputs {
             g2[o..o + 4].copy_from_slice(&v.to_le_bytes());
         }
-        assert!(answer(std::slice::from_ref(&narrow), GSS_CUDART_CLOCKS, &mut g2));
-        assert_ne!(&g2[12..16], &1u32.to_le_bytes(), "one zero probe leaves 0x5a5a5a01");
+        assert!(answer(
+            std::slice::from_ref(&narrow),
+            GSS_CUDART_CLOCKS,
+            &mut g2
+        ));
+        assert_ne!(
+            &g2[12..16],
+            &1u32.to_le_bytes(),
+            "one zero probe leaves 0x5a5a5a01"
+        );
         // A request that differs in a named input is not this row's.
         let mut other = row.request();
         other[0x14] = 7;
-        assert!(!answer(std::slice::from_ref(&a), GSS_CUDART_CLOCKS, &mut other));
+        assert!(!answer(
+            std::slice::from_ref(&a),
+            GSS_CUDART_CLOCKS,
+            &mut other
+        ));
     }
 
     /// ★ v3-refusals: a host whose answer depends on the background is not trusted past the zero
     /// probe — the answer is never WIDER than the pre-v3-refusals rule.
     #[test]
     fn a_background_that_changes_the_answer_falls_back_to_the_zero_probe() {
-        let row = *ROWS.iter().find(|r| r.cmd == GSS_CUDART_CLOCKS).expect("row");
+        let row = *ROWS
+            .iter()
+            .find(|r| r.cmd == GSS_CUDART_CLOCKS)
+            .expect("row");
         let mut zero = row.request();
         zero[8] = 4;
         let mut bg = row.request_over(PROBE_BACKGROUND);
@@ -318,13 +386,20 @@ mod tests {
     #[test]
     fn the_cudart_precursor_is_answered_with_nothing_written() {
         let row = *ROWS.iter().find(|r| r.cmd == GSS_CUDART_A084).expect("row");
-        let (a, used) = Answer::from_probes(row, &row.request(), Some(&row.request_over(PROBE_BACKGROUND)));
+        let (a, used) = Answer::from_probes(
+            row,
+            &row.request(),
+            Some(&row.request_over(PROBE_BACKGROUND)),
+        );
         assert!(used);
         assert!(a.wrote.is_empty());
         let mut g = [0u8; 4];
         assert!(answer(std::slice::from_ref(&a), GSS_CUDART_A084, &mut g));
         assert_eq!(g, [0; 4]);
-        assert!(!answer(std::slice::from_ref(&a), GSS_CUDART_A084, &mut [1, 0, 0, 0]), "a non-zero request is not the row's");
+        assert!(
+            !answer(std::slice::from_ref(&a), GSS_CUDART_A084, &mut [1, 0, 0, 0]),
+            "a non-zero request is not the row's"
+        );
     }
 
     #[test]
@@ -336,6 +411,9 @@ mod tests {
         assert!(ROWS[0].matches(GSS_CLOCK_DOMAINS, &guest));
         let mut cudart = r;
         cudart[8] = 0;
-        assert!(!ROWS[0].matches(GSS_CLOCK_DOMAINS, &cudart), "cudart's request stays cudartinit's");
+        assert!(
+            !ROWS[0].matches(GSS_CLOCK_DOMAINS, &cudart),
+            "cudart's request stays cudartinit's"
+        );
     }
 }

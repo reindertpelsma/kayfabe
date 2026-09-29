@@ -346,7 +346,10 @@ pub const CLASSLIST_V2_SIZE: usize = 4 + 4 * CLASSLIST_MAX;
 /// Decode a `GET_CLASSLIST_V2` reply. `None` if `numClasses` exceeds the array.
 #[must_use]
 pub fn decode_classlist(buf: &[u8]) -> Option<Vec<u32>> {
-    let w = |o: usize| buf.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let w = |o: usize| {
+        buf.get(o..o + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    };
     let n = w(0)? as usize;
     if n > CLASSLIST_MAX {
         return None;
@@ -390,7 +393,11 @@ impl DerivedHostClasses {
     pub fn from_host_list(host: &[u32]) -> Result<Self, HostLacksKind> {
         use kayfabe_doorbell::classgen::{FAMILIES, Kind};
         let newest = |k: Kind| {
-            FAMILIES.iter().flat_map(|f| f.of_kind(k).iter().copied()).filter(|c| host.contains(c)).max()
+            FAMILIES
+                .iter()
+                .flat_map(|f| f.of_kind(k).iter().copied())
+                .filter(|c| host.contains(c))
+                .max()
         };
         let need = |k: Kind| newest(k).ok_or(HostLacksKind(k));
         Ok(Self {
@@ -429,7 +436,10 @@ mod derived_tests {
     /// profile names the family's newest classes — and on the GA10x list it reproduces the pin.
     #[test]
     fn the_derived_profile_is_the_newest_per_kind_of_the_hosts_list() {
-        let ga10x: Vec<u32> = [0xC56F, 0xC561, 0xC7B5, 0xC7C0, 0xC46F, 0xC461, 0xC36F, 0xC361].to_vec();
+        let ga10x: Vec<u32> = [
+            0xC56F, 0xC561, 0xC7B5, 0xC7C0, 0xC46F, 0xC461, 0xC36F, 0xC361,
+        ]
+        .to_vec();
         let d = DerivedHostClasses::from_host_list(&ga10x).expect("GA10x");
         let pin = pinned_host_classes();
         assert_eq!(d.gpfifo_channel(), pin.gpfifo_channel());
@@ -439,23 +449,45 @@ mod derived_tests {
         // GA100: the _A classes.
         let ga100 = [0xC56F, 0xC561, 0xC6B5, 0xC6C0];
         let d = DerivedHostClasses::from_host_list(&ga100).expect("GA100");
-        assert_eq!(d.compute_object().map(|c| c.compute_object_id().0), Some(0xC6C0));
+        assert_eq!(
+            d.compute_object().map(|c| c.compute_object_id().0),
+            Some(0xC6C0)
+        );
         assert_eq!(d.ce_object().ce_object_id().0, 0xC6B5);
         for f in FAMILIES {
             let all: Vec<u32> = [f.channel_gpfifo, f.usermode, f.dma_copy, f.compute].concat();
-            let d = DerivedHostClasses::from_host_list(&all).unwrap_or_else(|e| panic!("{:?}: {e:?}", f.family));
-            assert_eq!(d.usermode().usermode_id().0, *f.usermode.iter().max().unwrap(), "{:?}", f.family);
-            assert_eq!(d.compute_object().map(|c| c.compute_object_id().0), f.compute.iter().max().copied());
+            let d = DerivedHostClasses::from_host_list(&all)
+                .unwrap_or_else(|e| panic!("{:?}: {e:?}", f.family));
+            assert_eq!(
+                d.usermode().usermode_id().0,
+                *f.usermode.iter().max().unwrap(),
+                "{:?}",
+                f.family
+            );
+            assert_eq!(
+                d.compute_object().map(|c| c.compute_object_id().0),
+                f.compute.iter().max().copied()
+            );
         }
         let ada = FAMILIES.iter().find(|f| f.family == Family::Ada).unwrap();
-        let d = DerivedHostClasses::from_host_list(&[ada.channel_gpfifo, ada.usermode, ada.dma_copy, ada.compute].concat()).unwrap();
-        assert_eq!(d.compute_object().map(|c| c.compute_object_id().0), Some(0xC9C0), "not the pinned 0xC7C0");
+        let d = DerivedHostClasses::from_host_list(
+            &[ada.channel_gpfifo, ada.usermode, ada.dma_copy, ada.compute].concat(),
+        )
+        .unwrap();
+        assert_eq!(
+            d.compute_object().map(|c| c.compute_object_id().0),
+            Some(0xC9C0),
+            "not the pinned 0xC7C0"
+        );
     }
 
     #[test]
     fn a_host_list_without_a_required_kind_is_refused_by_name() {
         assert!(DerivedHostClasses::from_host_list(&[0xC56F, 0xC561]).is_err());
-        assert_eq!(decode_classlist(&[1, 0, 0, 0, 0x6f, 0xc5, 0, 0]), Some(vec![0xC56F]));
+        assert_eq!(
+            decode_classlist(&[1, 0, 0, 0, 0x6f, 0xc5, 0, 0]),
+            Some(vec![0xC56F])
+        );
         assert_eq!(decode_classlist(&[201, 0, 0, 0]), None);
     }
 }

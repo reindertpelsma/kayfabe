@@ -43,7 +43,9 @@ pub mod vmm;
 pub mod wake;
 
 pub use bitmap::RungBitmap;
-pub use mmuinval::{Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture, PortWrite};
+pub use mmuinval::{
+    Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture, PortWrite,
+};
 pub use ring::{PrivRing, Push, RegWrite};
 pub use shadow::{Cell, ClearOutcome, Trigger, WriteSemantics};
 pub use token::{Claim, Release, Route, State, Token, TokenWord};

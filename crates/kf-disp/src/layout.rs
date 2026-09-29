@@ -33,7 +33,8 @@ impl Layouts {
                 }
                 ["FIELD", s, m, off, sz] => {
                     if let (Ok(off), Ok(sz)) = (off.parse(), sz.parse()) {
-                        l.fields.insert(((*s).to_string(), (*m).to_string()), (off, sz));
+                        l.fields
+                            .insert(((*s).to_string(), (*m).to_string()), (off, sz));
                     }
                 }
                 ["CONST", c, v] => {
@@ -77,7 +78,10 @@ impl Layouts {
 pub fn for_version(version: &str) -> Option<&'static Layouts> {
     static V580_159_04: OnceLock<Layouts> = OnceLock::new();
     match version {
-        "580.159.04" => Some(V580_159_04.get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.159.04.tsv")))),
+        "580.159.04" => Some(
+            V580_159_04
+                .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.159.04.tsv"))),
+        ),
         _ => None,
     }
 }
@@ -94,7 +98,11 @@ impl<'a> Params<'a> {
     /// View `bytes` as `struct` — `None` when the size does not match the derived one.
     #[must_use]
     pub fn new(l: &'a Layouts, s: &'a str, bytes: &[u8]) -> Option<Params<'a>> {
-        (l.size(s)? == bytes.len()).then(|| Params { l, s, buf: bytes.to_vec() })
+        (l.size(s)? == bytes.len()).then(|| Params {
+            l,
+            s,
+            buf: bytes.to_vec(),
+        })
     }
 
     /// Read a 1-, 2-, 4- or 8-byte member (little-endian), or `None`.
@@ -113,8 +121,12 @@ impl<'a> Params<'a> {
 
     /// Write a 1-, 2-, 4- or 8-byte member; `false` when the member or width is unknown.
     pub fn set(&mut self, m: &str, v: u64) -> bool {
-        let Some((off, sz)) = self.l.field(self.s, m) else { return false };
-        let Some(b) = self.buf.get_mut(off..off + sz) else { return false };
+        let Some((off, sz)) = self.l.field(self.s, m) else {
+            return false;
+        };
+        let Some(b) = self.buf.get_mut(off..off + sz) else {
+            return false;
+        };
         match sz {
             1 => b[0] = v as u8,
             2 => b.copy_from_slice(&(v as u16).to_le_bytes()),
@@ -127,11 +139,15 @@ impl<'a> Params<'a> {
 
     /// Write bytes into an array member (`edidBuffer`, `windowHeadMask`), zero-filling the rest of it.
     pub fn set_bytes(&mut self, m: &str, data: &[u8]) -> bool {
-        let Some((off, sz)) = self.l.field(self.s, m) else { return false };
+        let Some((off, sz)) = self.l.field(self.s, m) else {
+            return false;
+        };
         if data.len() > sz {
             return false;
         }
-        let Some(b) = self.buf.get_mut(off..off + sz) else { return false };
+        let Some(b) = self.buf.get_mut(off..off + sz) else {
+            return false;
+        };
         b.fill(0);
         b[..data.len()].copy_from_slice(data);
         true
@@ -156,12 +172,25 @@ mod tests {
         let l = for_version("580.159.04").expect("derived");
         assert_eq!(l.version, "580.159.04");
         assert_eq!(l.size("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS"), Some(12));
-        assert_eq!(l.field("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", "numHeads"), Some((8, 4)));
-        assert_eq!(l.size("NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS"), Some(36));
-        assert_eq!(l.k32("NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2"), Some(0x0073_0101));
+        assert_eq!(
+            l.field("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", "numHeads"),
+            Some((8, 4))
+        );
+        assert_eq!(
+            l.size("NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS"),
+            Some(36)
+        );
+        assert_eq!(
+            l.k32("NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2"),
+            Some(0x0073_0101)
+        );
         assert_eq!(l.k32("NVC370_CTRL_GET_CHANNEL_INFO_STATE_IDLE"), Some(1));
-        assert!(for_version("535.309.01").is_none(), "an underived version is refused, never guessed");
-        let mut p = Params::new(l, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", &[0; 12]).expect("view");
+        assert!(
+            for_version("535.309.01").is_none(),
+            "an underived version is refused, never guessed"
+        );
+        let mut p =
+            Params::new(l, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", &[0; 12]).expect("view");
         assert!(p.set("numHeads", 4));
         assert_eq!(p.get("numHeads"), Some(4));
         assert!(Params::new(l, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", &[0; 8]).is_none());

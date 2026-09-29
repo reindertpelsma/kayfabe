@@ -92,32 +92,59 @@ pub unsafe extern "C" fn kf3_realize(
         None
     } else {
         // SAFETY: the caller promises a NUL-terminated string.
-        Some(unsafe { CStr::from_ptr(guest_driver) }.to_string_lossy().into_owned()).filter(|s| !s.is_empty())
+        Some(
+            unsafe { CStr::from_ptr(guest_driver) }
+                .to_string_lossy()
+                .into_owned(),
+        )
+        .filter(|s| !s.is_empty())
     };
-    let cfg = Config { gpu_minor, fb_mb, bar1_bytes, bar2_bytes, guest_driver: guest, display: display != 0 };
+    let cfg = Config {
+        gpu_minor,
+        fb_mb,
+        bar1_bytes,
+        bar2_bytes,
+        guest_driver: guest,
+        display: display != 0,
+    };
     match Device::realize(&cfg) {
         Ok(d) => {
             let d: &'static Device = Box::leak(Box::new(d));
-            if std::thread::Builder::new().name("kf3-drainer".into()).spawn(move || d.drainer_loop()).is_err() {
+            if std::thread::Builder::new()
+                .name("kf3-drainer".into())
+                .spawn(move || d.drainer_loop())
+                .is_err()
+            {
                 write_err(err, err_len, "could not start the register drainer thread");
                 return -1;
             }
             // ★ P5: the workers — they serve rung Translated tokens and host completions.
             for i in 0..2 {
-                if std::thread::Builder::new().name(format!("kf3-worker{i}")).spawn(move || d.worker_loop()).is_err() {
+                if std::thread::Builder::new()
+                    .name(format!("kf3-worker{i}"))
+                    .spawn(move || d.worker_loop())
+                    .is_err()
+                {
                     write_err(err, err_len, "could not start a worker thread");
                     return -1;
                 }
             }
             // ★ v3-initrace: the completion probe (`KF3_COMPLETION_PROBE`, default off).
             if crate::chan::completion_probe_ms().is_some()
-                && std::thread::Builder::new().name("kf3-probe".into()).spawn(move || d.probe_loop()).is_err()
+                && std::thread::Builder::new()
+                    .name("kf3-probe".into())
+                    .spawn(move || d.probe_loop())
+                    .is_err()
             {
                 write_err(err, err_len, "could not start the completion-probe thread");
                 return -1;
             }
             // ★ P4: the VA-manager thread — the one owner of the GPU walker.
-            if std::thread::Builder::new().name("kf3-vamgr".into()).spawn(move || d.va_loop()).is_err() {
+            if std::thread::Builder::new()
+                .name("kf3-vamgr".into())
+                .spawn(move || d.va_loop())
+                .is_err()
+            {
                 write_err(err, err_len, "could not start the VA-manager thread");
                 return -1;
             }
@@ -140,7 +167,9 @@ pub unsafe extern "C" fn kf3_realize(
 /// `out` is writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_identity(h: *mut c_void, out: *mut Kf3Identity) -> i32 {
-    let (Some(d), false) = (dev(h), out.is_null()) else { return -1 };
+    let (Some(d), false) = (dev(h), out.is_null()) else {
+        return -1;
+    };
     let p = d.identity.pci;
     let id = Kf3Identity {
         vendor: p.vendor,
@@ -164,9 +193,16 @@ pub unsafe extern "C" fn kf3_identity(h: *mut c_void, out: *mut Kf3Identity) -> 
 /// # Safety
 /// `off` and `val` are writable.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_config_word(h: *mut c_void, idx: u32, off: *mut u16, val: *mut u32) -> i32 {
+pub unsafe extern "C" fn kf3_config_word(
+    h: *mut c_void,
+    idx: u32,
+    off: *mut u16,
+    val: *mut u32,
+) -> i32 {
     let Some(d) = dev(h) else { return -1 };
-    let Some(w) = d.config_words.get(idx as usize) else { return -1 };
+    let Some(w) = d.config_words.get(idx as usize) else {
+        return -1;
+    };
     if off.is_null() || val.is_null() {
         return -1;
     }
@@ -183,7 +219,13 @@ pub unsafe extern "C" fn kf3_config_word(h: *mut c_void, idx: u32, off: *mut u16
 /// # Safety
 /// `out` is null or writable for `cap` regions.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_memory_map(h: *mut c_void, bar1: u64, bar2: u64, out: *mut Kf3Region, cap: usize) -> i64 {
+pub unsafe extern "C" fn kf3_memory_map(
+    h: *mut c_void,
+    bar1: u64,
+    bar2: u64,
+    out: *mut Kf3Region,
+    cap: usize,
+) -> i64 {
     let Some(d) = dev(h) else { return -1 };
     let map = d.memory_map(bar1, bar2);
     let regs: Vec<Kf3Region> = map
@@ -216,8 +258,15 @@ pub unsafe extern "C" fn kf3_memory_map(h: *mut c_void, bar1: u64, bar2: u64, ou
 /// # Safety
 /// `mem` is valid for `len` bytes until the device is unrealized.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_shadow_attach(h: *mut c_void, base: u64, mem: *mut u8, len: u64) -> i32 {
-    let (Some(d), false) = (dev(h), mem.is_null()) else { return -1 };
+pub unsafe extern "C" fn kf3_shadow_attach(
+    h: *mut c_void,
+    base: u64,
+    mem: *mut u8,
+    len: u64,
+) -> i32 {
+    let (Some(d), false) = (dev(h), mem.is_null()) else {
+        return -1;
+    };
     // SAFETY: the caller keeps `[mem, mem+len)` mapped until unrealize.
     d.attach_shadow(base, unsafe { RawRegion::adopt(mem, len as usize) });
     0
@@ -253,11 +302,25 @@ pub extern "C" fn kf3_bar0_read(h: *mut c_void, off: u64, width: u32) -> u64 {
 /// `hva` is valid for `len` bytes, and `fd` (when `>= 0`) stays open, until `kf3_ram_del` for the
 /// same `gpa`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_ram_add(h: *mut c_void, gpa: u64, hva: *mut u8, len: u64, fd: i32, fd_off: u64) -> i32 {
-    let (Some(d), false) = (dev(h), hva.is_null()) else { return -1 };
+pub unsafe extern "C" fn kf3_ram_add(
+    h: *mut c_void,
+    gpa: u64,
+    hva: *mut u8,
+    len: u64,
+    fd: i32,
+    fd_off: u64,
+) -> i32 {
+    let (Some(d), false) = (dev(h), hva.is_null()) else {
+        return -1;
+    };
     // SAFETY: the caller keeps the RAM mapped until it unregisters it.
     // SAFETY: the caller keeps the RAM mapped, and its backend fd open, until it unregisters it.
-    let (mem, fd) = unsafe { (RawRegion::adopt(hva, len as usize), crate::raw_unsafe::BackendFd::adopt(fd)) };
+    let (mem, fd) = unsafe {
+        (
+            RawRegion::adopt(hva, len as usize),
+            crate::raw_unsafe::BackendFd::adopt(fd),
+        )
+    };
     d.ram_add(gpa, mem, fd, fd_off);
     0
 }
@@ -270,9 +333,19 @@ pub unsafe extern "C" fn kf3_ram_add(h: *mut c_void, gpa: u64, hva: *mut u8, len
 /// # Safety
 /// `ptr` is writable.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_bar_ram(h: *mut c_void, bar: u32, base: u64, len: u64, ptr: *mut *mut c_void) -> i32 {
-    let (Some(d), false) = (dev(h), ptr.is_null()) else { return -1 };
-    let Some(span) = d.window_address(bar, base, len) else { return -1 };
+pub unsafe extern "C" fn kf3_bar_ram(
+    h: *mut c_void,
+    bar: u32,
+    base: u64,
+    len: u64,
+    ptr: *mut *mut c_void,
+) -> i32 {
+    let (Some(d), false) = (dev(h), ptr.is_null()) else {
+        return -1;
+    };
+    let Some(span) = d.window_address(bar, base, len) else {
+        return -1;
+    };
     // SAFETY: `ptr` is writable (caller contract); the span is handed to QEMU as a memory region's
     // backing for the device's life, which is the use `HostSpan::as_ptr` requires.
     unsafe { *ptr = span.as_ptr().cast::<c_void>() };
@@ -304,9 +377,15 @@ pub unsafe extern "C" fn kf3_status(h: *mut c_void, buf: *mut c_char, len: usize
 /// # Safety
 /// `ptr` and `len` are writable.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_usermode_view(h: *mut c_void, ptr: *mut *mut c_void, len: *mut u64) -> i32 {
+pub unsafe extern "C" fn kf3_usermode_view(
+    h: *mut c_void,
+    ptr: *mut *mut c_void,
+    len: *mut u64,
+) -> i32 {
     let Some(d) = dev(h) else { return -1 };
-    let Ok(span) = d.rm.usermode_view() else { return -1 };
+    let Ok(span) = d.rm.usermode_view() else {
+        return -1;
+    };
     if ptr.is_null() || len.is_null() {
         return -1;
     }
@@ -348,13 +427,19 @@ pub unsafe extern "C" fn kf3_set_bar1_overlay(
     opaque: *mut c_void,
     slots: u32,
 ) -> i32 {
-    let (Some(d), Some(f)) = (dev(h), f) else { return -1 };
+    let (Some(d), Some(f)) = (dev(h), f) else {
+        return -1;
+    };
     if slots == 0 {
         return -1;
     }
     // SAFETY: forwarded from this function's contract.
     let hook = unsafe { crate::raw_unsafe::OverlayHook::adopt(f, opaque) };
-    if d.bar1_overlay.set(hook, slots as usize) { 0 } else { -1 }
+    if d.bar1_overlay.set(hook, slots as usize) {
+        0
+    } else {
+        -1
+    }
 }
 
 /// ★ The main loop applied BAR1 overlay change `seq` with result `rc` (0, or a negative errno).

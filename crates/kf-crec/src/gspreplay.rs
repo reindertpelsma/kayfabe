@@ -36,12 +36,12 @@
 //! zero because nothing happened" is distinguishable from "…because nothing was
 //! measured".
 
+use kf_abi::view::RpcEnvelope;
+use kf_arch::GspReg;
 use kf_gsp::element::ElementLayout;
 use kf_gsp::fault::GspFault;
 use kf_gsp::ram::{GuestRam, RegionMap};
 use kf_gsp::ring::{MsgqGeometry, TxHeader};
-use kf_abi::view::RpcEnvelope;
-use kf_arch::GspReg;
 use kf_trace::FaultTag;
 
 /// Which of the two queues an observation is about.

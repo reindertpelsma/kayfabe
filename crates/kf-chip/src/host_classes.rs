@@ -10,8 +10,8 @@
 //! ⊘ Zero per-die maintenance: a new die of a known family is covered by the family's generated set
 //! and its own class list. A kind the host does not list is refused by name — never a guessed id.
 
-use crate::classes::{Kind, classes_for};
 use crate::Family;
+use crate::classes::{Kind, classes_for};
 use kf_arch::ids::ClassId;
 use kf_arch::{CeObjectClass, ChannelClass, ComputeObjectClass, HostClasses, UsermodeClass};
 
@@ -25,7 +25,10 @@ pub const CLASSLIST_V2_SIZE: usize = 4 + 4 * CLASSLIST_MAX;
 /// Decode a `GET_CLASSLIST_V2` reply. `None` if `numClasses` exceeds the array.
 #[must_use]
 pub fn decode_classlist(buf: &[u8]) -> Option<Vec<u32>> {
-    let w = |o: usize| buf.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let w = |o: usize| {
+        buf.get(o..o + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    };
     let n = w(0)? as usize;
     if n > CLASSLIST_MAX {
         return None;
@@ -60,7 +63,13 @@ impl DerivedHostClasses {
     /// Compute is optional (a CE-only host still runs the copy planes).
     pub fn choose(family: Family, host: &[u32]) -> Result<DerivedHostClasses, HostLacksKind> {
         let set = classes_for(family);
-        let newest = |k: Kind| set.of_kind(k).iter().copied().filter(|c| host.contains(c)).max();
+        let newest = |k: Kind| {
+            set.of_kind(k)
+                .iter()
+                .copied()
+                .filter(|c| host.contains(c))
+                .max()
+        };
         let need = |k: Kind| newest(k).ok_or(HostLacksKind { family, kind: k });
         Ok(DerivedHostClasses {
             family,

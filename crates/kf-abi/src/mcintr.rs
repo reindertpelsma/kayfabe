@@ -72,7 +72,10 @@ mod tests {
     #[test]
     fn engines_is_echoed_never_zeroed() {
         for e in [MC_ENGINE_ID_ALL, MC_ENGINE_ID_GRAPHICS, 0, 0x8000_0002] {
-            assert_eq!(answer_mc_service_interrupts(&e.to_le_bytes()), Some(e.to_le_bytes().to_vec()));
+            assert_eq!(
+                answer_mc_service_interrupts(&e.to_le_bytes()),
+                Some(e.to_le_bytes().to_vec())
+            );
         }
     }
 

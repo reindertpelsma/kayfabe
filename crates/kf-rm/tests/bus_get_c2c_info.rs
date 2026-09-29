@@ -18,8 +18,8 @@ mod ga106;
 
 use kf_abi::c2cinfo::{C2C_INFO_PARAMS_SIZE, NV2080_CTRL_CMD_BUS_GET_C2C_INFO};
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 const PARAMS_AT: usize = 40;
 const CONTROL_STATUS_OFF: usize = 12;
@@ -46,7 +46,11 @@ fn command(params: &[u8]) -> RpcCommand {
 }
 
 fn served(params: &[u8]) -> (u32, Vec<u8>) {
-    let mut p = InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"));
+    let mut p = InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    );
     let reply = p
         .respond(&command(params))
         .expect("the policy claims this control");

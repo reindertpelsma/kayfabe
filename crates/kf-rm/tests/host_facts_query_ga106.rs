@@ -34,11 +34,15 @@ use kf_rm::hostfacts::{self, PROVENANCE, Source};
 use kf_rm::hostquery::{self, FieldCause, HostControls, HostRefusal};
 
 fn unhex(s: &str) -> Vec<u8> {
-    (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).expect("hex")).collect()
+    (0..s.len() / 2)
+        .map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).expect("hex"))
+        .collect()
 }
 
 fn trace(name: &str) -> String {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../traces/real_ga106").join(name);
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../traces/real_ga106")
+        .join(name);
     std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))
 }
 
@@ -56,7 +60,9 @@ fn sweep(text: &str, tag: &str) -> BTreeMap<u32, Option<u32>> {
     let mut out = BTreeMap::new();
     for l in text.lines() {
         let mut w = l.split_whitespace().skip_while(|w| *w != tag).skip(1);
-        let (Some(idx), Some(status)) = (w.next(), w.next()) else { continue };
+        let (Some(idx), Some(status)) = (w.next(), w.next()) else {
+            continue;
+        };
         if !idx.starts_with("0x") || idx.len() != 4 {
             continue;
         }
@@ -89,26 +95,59 @@ const TRUNCATED: u32 = u32::MAX;
 
 /// The controls whose params carry no `[IN]` field this replay needs to match: any capture of
 /// the command answers them (libcuda seeds `GET_ENGINES_V2`'s count with `0x54`; RM overwrites it).
-const OUT_ONLY: &[u32] = &[0x2080_2a0a, 0x2080_1701, 0x2080_182b, 0x2080_0170, 0x2080_0110, 0x2080_0111, 0x2080_3601, 0x2080_122a, 0x2080_1227, 0x2080_121b];
+const OUT_ONLY: &[u32] = &[
+    0x2080_2a0a,
+    0x2080_1701,
+    0x2080_182b,
+    0x2080_0170,
+    0x2080_0110,
+    0x2080_0111,
+    0x2080_3601,
+    0x2080_122a,
+    0x2080_1227,
+    0x2080_121b,
+];
 
 impl Ga106Replay {
     fn load() -> Ga106Replay {
         let mut ctrls: BTreeMap<u32, Vec<(Vec<u8>, u32, Vec<u8>)>> = BTreeMap::new();
-        for l in trace("cuinit_ioctl_trace_real_ga106.txt").lines().filter(|l| l.starts_with("CTRL ")) {
-            let (Some(cmd), Some(st), Some(i), Some(o)) = (field(l, "cmd="), field(l, "status="), field(l, "in="), field(l, "out=")) else {
+        for l in trace("cuinit_ioctl_trace_real_ga106.txt")
+            .lines()
+            .filter(|l| l.starts_with("CTRL "))
+        {
+            let (Some(cmd), Some(st), Some(i), Some(o)) = (
+                field(l, "cmd="),
+                field(l, "status="),
+                field(l, "in="),
+                field(l, "out="),
+            ) else {
                 continue;
             };
             // ⊘ The interposer keeps 4096 bytes and marks the rest `..TRUNC`. A truncated reply
             // is NOT a reply (`dlen < psize` is the oracle's dangerous row): it is kept only so
             // the replay can refuse it by name instead of treating the command as uncaptured.
             let truncated = o.ends_with("..TRUNC") || i.ends_with("..TRUNC");
-            let bytes = |s: &str| if s == "-" { Vec::new() } else { unhex(s.trim_end_matches("..TRUNC")) };
+            let bytes = |s: &str| {
+                if s == "-" {
+                    Vec::new()
+                } else {
+                    unhex(s.trim_end_matches("..TRUNC"))
+                }
+            };
             let status = if truncated { TRUNCATED } else { hexword(st) };
-            ctrls.entry(hexword(cmd)).or_default().push((bytes(i), status, bytes(o)));
+            ctrls
+                .entry(hexword(cmd))
+                .or_default()
+                .push((bytes(i), status, bytes(o)));
         }
         let mut pce = BTreeMap::new();
-        for l in trace("rmladder_r24_pcemask_real_ga106.txt").lines().filter(|l| l.contains("R24 LCE")) {
-            let Some(t) = l.split("(type ").nth(1).and_then(|s| s.split(')').next()) else { continue };
+        for l in trace("rmladder_r24_pcemask_real_ga106.txt")
+            .lines()
+            .filter(|l| l.contains("R24 LCE"))
+        {
+            let Some(t) = l.split("(type ").nth(1).and_then(|s| s.split(')').next()) else {
+                continue;
+            };
             let v = field(l, "pceMask=").map(hexword);
             pce.insert(hexword(t), v);
         }
@@ -122,18 +161,30 @@ impl Ga106Replay {
     }
 
     fn no_capture(cmd: u32) -> HostRefusal {
-        HostRefusal { status: None, detail: format!("no real-GA106 capture holds {cmd:#010x}") }
+        HostRefusal {
+            status: None,
+            detail: format!("no real-GA106 capture holds {cmd:#010x}"),
+        }
     }
 
     /// `*_GET_INFO_V2` answered index by index from a one-index-per-call sweep.
-    fn info_list(cmd: u32, table: &BTreeMap<u32, Option<u32>>, params: &mut [u8]) -> Result<(), HostRefusal> {
+    fn info_list(
+        cmd: u32,
+        table: &BTreeMap<u32, Option<u32>>,
+        params: &mut [u8],
+    ) -> Result<(), HostRefusal> {
         let n = u32::from_le_bytes(params[0..4].try_into().expect("4")) as usize;
         for i in 0..n {
             let at = 4 + 8 * i;
             let index = u32::from_le_bytes(params[at..at + 4].try_into().expect("4"));
             match table.get(&index) {
                 Some(Some(v)) => params[at + 4..at + 8].copy_from_slice(&v.to_le_bytes()),
-                Some(None) => return Err(HostRefusal { status: Some(0x56), detail: format!("{cmd:#x}[{index:#x}] refused in the sweep") }),
+                Some(None) => {
+                    return Err(HostRefusal {
+                        status: Some(0x56),
+                        detail: format!("{cmd:#x}[{index:#x}] refused in the sweep"),
+                    });
+                }
                 None => return Err(Self::no_capture(cmd)),
             }
         }
@@ -154,7 +205,10 @@ impl HostControls for Ga106Replay {
                         params[4..8].copy_from_slice(&m.to_le_bytes());
                         Ok(())
                     }
-                    Some(None) => Err(HostRefusal { status: Some(0x56), detail: "LCE refused in R24".into() }),
+                    Some(None) => Err(HostRefusal {
+                        status: Some(0x56),
+                        detail: "LCE refused in R24".into(),
+                    }),
                     None => Err(Self::no_capture(cmd)),
                 };
             }
@@ -163,7 +217,9 @@ impl HostControls for Ga106Replay {
                 let mut known: BTreeMap<u32, Option<u32>> = BTreeMap::new();
                 for (_, st, out) in self.ctrls.get(&cmd).into_iter().flatten() {
                     if *st == 0 {
-                        for (i, d) in kf_abi::fbinfo::decode_fb_info_pairs(out).expect("captured reply decodes") {
+                        for (i, d) in kf_abi::fbinfo::decode_fb_info_pairs(out)
+                            .expect("captured reply decodes")
+                        {
                             known.insert(i, Some(d));
                         }
                     }
@@ -179,13 +235,22 @@ impl HostControls for Ga106Replay {
             .or_else(|| OUT_ONLY.contains(&cmd).then(|| &caps[0]))
             .ok_or_else(|| Self::no_capture(cmd))?;
         if hit.1 == TRUNCATED {
-            return Err(HostRefusal { status: None, detail: format!("the only capture of {cmd:#010x} is truncated at 4096 bytes") });
+            return Err(HostRefusal {
+                status: None,
+                detail: format!("the only capture of {cmd:#010x} is truncated at 4096 bytes"),
+            });
         }
         if hit.1 != 0 {
-            return Err(HostRefusal { status: Some(hit.1), detail: "captured refusal".into() });
+            return Err(HostRefusal {
+                status: Some(hit.1),
+                detail: "captured refusal".into(),
+            });
         }
         if hit.2.len() != params.len() {
-            return Err(HostRefusal { status: None, detail: format!("capture is {} bytes, request {}", hit.2.len(), params.len()) });
+            return Err(HostRefusal {
+                status: None,
+                detail: format!("capture is {} bytes, request {}", hit.2.len(), params.len()),
+            });
         }
         params.copy_from_slice(&hit.2);
         Ok(())
@@ -202,32 +267,70 @@ impl HostControls for Ga106Replay {
 #[test]
 fn over_the_real_ga106_the_query_refuses_only_the_uncaptured() {
     let mut host = Ga106Replay::load();
-    let refused = hostquery::query_host_facts(&mut host, Family::Ampere).expect_err("some controls have no capture");
-    let by_field: BTreeMap<&str, &FieldCause> = refused.refusals.iter().map(|r| (r.field, &r.cause)).collect();
-    let no_capture = |field: &str, cmd: u32| {
-        matches!(by_field.get(field), Some(FieldCause::Host { cmd: c, refused }) if *c == cmd && refused.status.is_none())
-    };
+    let refused = hostquery::query_host_facts(&mut host, Family::Ampere)
+        .expect_err("some controls have no capture");
+    let by_field: BTreeMap<&str, &FieldCause> = refused
+        .refusals
+        .iter()
+        .map(|r| (r.field, &r.cause))
+        .collect();
+    let no_capture = |field: &str, cmd: u32| matches!(by_field.get(field), Some(FieldCause::Host { cmd: c, refused }) if *c == cmd && refused.status.is_none());
     // libcuda's cuInit never asks these, and no rmladder rung did:
     assert!(no_capture("intr_table", 0x2080_170e), "{refused}");
     assert!(no_capture("intr_subtree_map", 0x2080_170f), "{refused}");
     assert!(no_capture("gr_info", 0x2080_1228), "{refused}");
     assert!(no_capture("gr_context_buffers", 0x2080_122d), "{refused}");
-    assert!(no_capture("gr_static", 0x2080_1237), "GR_GET_ZCULL_MASK was never captured: {refused}");
-    assert!(no_capture("gr_zcull_info", 0x2080_1206), "GR_GET_ZCULL_INFO was never captured: {refused}");
-    assert!(no_capture("zbc_table_sizes", 0x9096_0106), "GET_ZBC_CLEAR_TABLE_SIZE was never captured: {refused}");
+    assert!(
+        no_capture("gr_static", 0x2080_1237),
+        "GR_GET_ZCULL_MASK was never captured: {refused}"
+    );
+    assert!(
+        no_capture("gr_zcull_info", 0x2080_1206),
+        "GR_GET_ZCULL_INFO was never captured: {refused}"
+    );
+    assert!(
+        no_capture("zbc_table_sizes", 0x9096_0106),
+        "GET_ZBC_CLEAR_TABLE_SIZE was never captured: {refused}"
+    );
     // ⊘ BIOS_GET_INFO_V2 was never captured — and a host that does not answer it is NOT a refused
     // field: the version is cosmetic (coordinator, 2026-09-26). It is asked, and `None`.
     assert!(host.asked.contains(&0x2080_0810));
     assert!(!refused.fields().contains(&"vbios_version"));
-    assert_eq!(by_field.get("memory_system"), Some(&&FieldCause::DependsOn("gr_info")));
+    assert_eq!(
+        by_field.get("memory_system"),
+        Some(&&FieldCause::DependsOn("gr_info"))
+    );
     assert_eq!(
         refused.fields(),
-        ["intr_table", "intr_subtree_map", "memory_system", "gr_static", "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes"],
+        [
+            "intr_table",
+            "intr_subtree_map",
+            "memory_system",
+            "gr_static",
+            "gr_info",
+            "gr_context_buffers",
+            "gr_zcull_info",
+            "zbc_table_sizes"
+        ],
         "{refused}"
     );
-    assert!(!refused.refusals.iter().any(|r| matches!(r.cause, FieldCause::Unsourced(_))));
+    assert!(
+        !refused
+            .refusals
+            .iter()
+            .any(|r| matches!(r.cause, FieldCause::Unsourced(_)))
+    );
     // ★ Refusals come in PROVENANCE order, so the realize log reads like the table.
-    let order: Vec<usize> = refused.fields().iter().map(|f| PROVENANCE.iter().position(|(p, _)| p == f).expect("a provenance row")).collect();
+    let order: Vec<usize> = refused
+        .fields()
+        .iter()
+        .map(|f| {
+            PROVENANCE
+                .iter()
+                .position(|(p, _)| p == f)
+                .expect("a provenance row")
+        })
+        .collect();
     assert!(order.windows(2).all(|w| w[0] < w[1]), "{order:?}");
     // ⊘ The kernel-only control is no longer asked at all.
     assert!(!host.asked.contains(&0x2080_2a08));
@@ -253,7 +356,8 @@ fn ce_caps_from_the_real_ga106_equal_the_captured_row() {
 fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_divergence() {
     let f = ga106::host_facts();
     let mut host = CompletedGa106(Ga106Replay::load());
-    let got = hostquery::query_host_facts(&mut host, Family::Ampere).unwrap_or_else(|e| panic!("{e}"));
+    let got =
+        hostquery::query_host_facts(&mut host, Family::Ampere).unwrap_or_else(|e| panic!("{e}"));
 
     // From real GA106 replies:
     assert_eq!(got.family, f.family);
@@ -265,14 +369,20 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     assert_eq!(got.smc_mode, f.smc_mode);
     assert_eq!(got.pcie_max_gen, f.pcie_max_gen);
     assert_eq!(got.gsp_features, f.gsp_features);
-    assert_eq!(got.gpu_name.map(|n| n.as_str()), Some("NVIDIA GeForce RTX 3060"));
+    assert_eq!(
+        got.gpu_name.map(|n| n.as_str()),
+        Some("NVIDIA GeForce RTX 3060")
+    );
     assert_eq!(got.ce_caps, f.ce_caps);
     // Layout round-trips through the completed controls (BIOS info / PERF level info):
     assert_eq!(got.vbios_version, f.vbios_version);
     assert_eq!(got.perf_level_info_v2, f.perf_level_info_v2);
     // Authored, and equal to what a stock GA106 GSP states (by choice — see authored.rs):
     assert_eq!(got.gmmu_static, f.gmmu_static);
-    assert_eq!(got.ce_fault_method_buffer_size, f.ce_fault_method_buffer_size);
+    assert_eq!(
+        got.ce_fault_method_buffer_size,
+        f.ce_fault_method_buffer_size
+    );
     // Fixed values:
     assert_eq!(got.user_register_access_map, f.user_register_access_map);
     assert_eq!(got.constructed_falcons, f.constructed_falcons);
@@ -299,7 +409,10 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     assert_eq!(got.gr_static.tpc_to_pes_map, f.gr_static.tpc_to_pes_map);
     assert_eq!(got.gr_static.caps, f.gr_static.caps);
     assert_eq!(got.gr_static.fecs_record_size, f.gr_static.fecs_record_size);
-    assert_eq!(got.gr_static.per_subctx_header_supported, f.gr_static.per_subctx_header_supported);
+    assert_eq!(
+        got.gr_static.per_subctx_header_supported,
+        f.gr_static.per_subctx_header_supported
+    );
     // intr_table: the host's STATIC rows and the authored GSP/DISP rows equal the captured table's
     // stall/static rows exactly. ⊘ The engine NON-STALL rows are authored for OUR runlists
     // (0x2080170d is NOT_SUPPORTED to usermode, measured f4b78ed9), so they are checked against
@@ -311,18 +424,39 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     let captured_engine_row = |e: &kf_abi::inittables::IntrTableEntry| {
         e.vector_stall == kf_abi::inittables::INTR_VECTOR_INVALID && e.engine_idx < 156
     };
-    let mut a: Vec<_> = got.intr_table.iter().filter(|e| !engine_row(e)).cloned().collect();
-    let mut b: Vec<_> = f.intr_table.iter().filter(|e| !captured_engine_row(e)).cloned().collect();
+    let mut a: Vec<_> = got
+        .intr_table
+        .iter()
+        .filter(|e| !engine_row(e))
+        .cloned()
+        .collect();
+    let mut b: Vec<_> = f
+        .intr_table
+        .iter()
+        .filter(|e| !captured_engine_row(e))
+        .cloned()
+        .collect();
     a.sort_by_key(|e| e.engine_idx);
     b.sort_by_key(|e| e.engine_idx);
     assert_eq!(a, b);
-    let mut rows: Vec<(u16, u32)> =
-        got.intr_table.iter().filter(|e| engine_row(e)).map(|e| (e.engine_idx, e.vector_non_stall)).collect();
+    let mut rows: Vec<(u16, u32)> = got
+        .intr_table
+        .iter()
+        .filter(|e| engine_row(e))
+        .map(|e| (e.engine_idx, e.vector_non_stall))
+        .collect();
     rows.sort_unstable();
     let mut vectors: Vec<u32> = rows.iter().map(|r| r.1).collect();
     vectors.dedup();
-    assert_eq!(vectors.len(), rows.len(), "two engines on one non-stall vector: {rows:?}");
-    assert!(rows.contains(&(84, 0)), "GR0 notifies on vector 0: {rows:?}");
+    assert_eq!(
+        vectors.len(),
+        rows.len(),
+        "two engines on one non-stall vector: {rows:?}"
+    );
+    assert!(
+        rows.contains(&(84, 0)),
+        "GR0 notifies on vector 0: {rows:?}"
+    );
     // engines: see the dedicated test.
     assert_engine_rows_match_except_stated(&got.engines, &f.engines);
 }
@@ -330,28 +464,66 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
 /// ⊘ Every slot the authored engine layout does NOT reproduce, with the reason. Everything else
 /// in the six rows equals the old captured table.
 const ENGINE_DIVERGENCES: &[(&str, &str, &str)] = &[
-    ("*", "RC_MASK", "no kernel-RM reader (only kfifoEngineInfoXlate's switch); authored 0"),
-    ("CE1", "INTR", "capture noise (0x82300100): INTR is not stored on Ampere+ (kernel_fifo_ga100.c:52)"),
+    (
+        "*",
+        "RC_MASK",
+        "no kernel-RM reader (only kfifoEngineInfoXlate's switch); authored 0",
+    ),
+    (
+        "CE1",
+        "INTR",
+        "capture noise (0x82300100): INTR is not stored on Ampere+ (kernel_fifo_ga100.c:52)",
+    ),
     ("CE2", "INTR", "capture noise (0x77f2058f)"),
     ("CE3", "INTR", "capture noise (0x018e0102)"),
-    ("CE1", "pbdmaFaultIds", "capture says 0x20 for PBDMA 1, contradicting GR0's own 1 -> 0x21"),
-    ("CE2", "pbdmaIds", "the die's PBDMA 5; our device numbers PBDMAs contiguously (2); fault id 0x22 agrees"),
-    ("CE3", "pbdmaIds", "the die's PBDMA 6; ours is 3; fault id 0x23 agrees"),
-    ("SOFTWARE", "*", "RM's pseudo-engine: the capture's RUNLIST/RESET/INTR/MC/INSTANCE/PRI-base/PBDMA are noise (kf_abi::deviceinfo)"),
+    (
+        "CE1",
+        "pbdmaFaultIds",
+        "capture says 0x20 for PBDMA 1, contradicting GR0's own 1 -> 0x21",
+    ),
+    (
+        "CE2",
+        "pbdmaIds",
+        "the die's PBDMA 5; our device numbers PBDMAs contiguously (2); fault id 0x22 agrees",
+    ),
+    (
+        "CE3",
+        "pbdmaIds",
+        "the die's PBDMA 6; ours is 3; fault id 0x23 agrees",
+    ),
+    (
+        "SOFTWARE",
+        "*",
+        "RM's pseudo-engine: the capture's RUNLIST/RESET/INTR/MC/INSTANCE/PRI-base/PBDMA are noise (kf_abi::deviceinfo)",
+    ),
 ];
 
-fn assert_engine_rows_match_except_stated(got: &[kf_abi::inittables::FifoDeviceEntry], want: &[kf_abi::inittables::FifoDeviceEntry]) {
+fn assert_engine_rows_match_except_stated(
+    got: &[kf_abi::inittables::FifoDeviceEntry],
+    want: &[kf_abi::inittables::FifoDeviceEntry],
+) {
     use kf_rm::authored::slot;
     const NAMES: [(usize, &str); 15] = [
-        (slot::ENG_DESC, "ENG_DESC"), (slot::FIFO_TAG, "FIFO_TAG"), (slot::RM_ENGINE_TYPE, "RM_ENGINE_TYPE"),
-        (slot::RUNLIST, "RUNLIST"), (slot::MMU_FAULT_ID, "MMU_FAULT_ID"), (slot::RC_MASK, "RC_MASK"),
-        (slot::RESET, "RESET"), (slot::INTR, "INTR"), (slot::MC, "MC"), (slot::DEV_TYPE_ENUM, "DEV_TYPE_ENUM"),
-        (slot::INSTANCE_ID, "INSTANCE_ID"), (slot::RUNLIST_PRI_BASE, "RUNLIST_PRI_BASE"),
-        (slot::IS_HOST_DRIVEN_ENGINE, "IS_HOST_DRIVEN_ENGINE"), (slot::RUNLIST_ENGINE_ID, "RUNLIST_ENGINE_ID"),
+        (slot::ENG_DESC, "ENG_DESC"),
+        (slot::FIFO_TAG, "FIFO_TAG"),
+        (slot::RM_ENGINE_TYPE, "RM_ENGINE_TYPE"),
+        (slot::RUNLIST, "RUNLIST"),
+        (slot::MMU_FAULT_ID, "MMU_FAULT_ID"),
+        (slot::RC_MASK, "RC_MASK"),
+        (slot::RESET, "RESET"),
+        (slot::INTR, "INTR"),
+        (slot::MC, "MC"),
+        (slot::DEV_TYPE_ENUM, "DEV_TYPE_ENUM"),
+        (slot::INSTANCE_ID, "INSTANCE_ID"),
+        (slot::RUNLIST_PRI_BASE, "RUNLIST_PRI_BASE"),
+        (slot::IS_HOST_DRIVEN_ENGINE, "IS_HOST_DRIVEN_ENGINE"),
+        (slot::RUNLIST_ENGINE_ID, "RUNLIST_ENGINE_ID"),
         (slot::CHRAM_PRI_BASE, "CHRAM_PRI_BASE"),
     ];
     let excused = |name: &str, what: &str| {
-        ENGINE_DIVERGENCES.iter().any(|(n, w, _)| (*n == name || *n == "*") && (*w == what || *w == "*"))
+        ENGINE_DIVERGENCES
+            .iter()
+            .any(|(n, w, _)| (*n == name || *n == "*") && (*w == what || *w == "*"))
     };
     assert_eq!(got.len(), want.len());
     let mut checked = 0;
@@ -371,10 +543,19 @@ fn assert_engine_rows_match_except_stated(got: &[kf_abi::inittables::FifoDeviceE
             assert_eq!(g.pbdma_ids[..n], w.pbdma_ids[..n], "{} pbdmaIds", g.name);
         }
         if !excused(g.name, "pbdmaFaultIds") {
-            assert_eq!(g.pbdma_fault_ids[..n], w.pbdma_fault_ids[..n], "{} pbdmaFaultIds", g.name);
+            assert_eq!(
+                g.pbdma_fault_ids[..n],
+                w.pbdma_fault_ids[..n],
+                "{} pbdmaFaultIds",
+                g.name
+            );
         }
     }
-    assert_eq!(checked, 5 * 14 - 3, "5 hardware rows × 14 non-RC slots, minus CE1..3 INTR");
+    assert_eq!(
+        checked,
+        5 * 14 - 3,
+        "5 hardware rows × 14 non-RC slots, minus CE1..3 INTR"
+    );
 }
 
 /// ★ The engine rows: authored over the host's REAL `GET_ENGINES_V2` list (captured), compared
@@ -383,17 +564,33 @@ fn assert_engine_rows_match_except_stated(got: &[kf_abi::inittables::FifoDeviceE
 fn the_authored_engine_table_over_the_real_engine_list_equals_the_captured_rows_except_stated() {
     let f = ga106::host_facts();
     let all = hostquery::query_engine_list(&mut Ga106Replay::load()).expect("captured");
-    println!("host engine list: {:?}", all.iter().map(|k| k.name()).collect::<Vec<_>>());
+    println!(
+        "host engine list: {:?}",
+        all.iter().map(|k| k.name()).collect::<Vec<_>>()
+    );
     // ★ The captured old row predates the video engines (it advertised none): compare the
     // non-video subset, and the video rows separately (`the_video_rows_...`).
-    let kinds: Vec<_> = all.iter().copied().filter(|k| hostquery::video_eng_desc(*k).is_none()).collect();
-    assert_eq!(kinds.iter().map(|k| k.name()).collect::<Vec<_>>(), ["GR0", "CE0", "CE1", "CE2", "CE3", "SOFTWARE"]);
-    let rows = kf_rm::authored::engine_table(Family::Ampere, &kinds, f.ce_caps.grce_mask()).expect("Ampere has every constant");
+    let kinds: Vec<_> = all
+        .iter()
+        .copied()
+        .filter(|k| hostquery::video_eng_desc(*k).is_none())
+        .collect();
+    assert_eq!(
+        kinds.iter().map(|k| k.name()).collect::<Vec<_>>(),
+        ["GR0", "CE0", "CE1", "CE2", "CE3", "SOFTWARE"]
+    );
+    let rows = kf_rm::authored::engine_table(Family::Ampere, &kinds, f.ce_caps.grce_mask())
+        .expect("Ampere has every constant");
     assert_engine_rows_match_except_stated(&rows, &f.engines);
     assert_eq!(hostquery::device_info_rule(&kinds, &[]), f.device_info);
     // ★ And the served CE geometry derived from the authored rows names the LCEs the real GA106
     // reports present (R18 CE_GET_ALL_CAPS: 0x0f).
-    assert_eq!(kf_abi::cecaps::CeGeometry::from_engines(&rows, &f.ce_caps).expect("LCE rows").present, 0x0f);
+    assert_eq!(
+        kf_abi::cecaps::CeGeometry::from_engines(&rows, &f.ce_caps)
+            .expect("LCE rows")
+            .present,
+        0x0f
+    );
 }
 
 /// A host of another family than realize chose is refused by name.
@@ -401,19 +598,30 @@ fn the_authored_engine_table_over_the_real_engine_list_equals_the_captured_rows_
 fn a_host_of_another_family_is_refused_by_name() {
     let mut host = Ga106Replay::load();
     let refused = hostquery::query_host_facts(&mut host, Family::Hopper).expect_err("family");
-    assert!(refused
-        .refusals
-        .iter()
-        .any(|r| r.field == "family" && r.cause == FieldCause::FamilyMismatch { asked: Family::Hopper, host: Family::Ampere }));
+    assert!(refused.refusals.iter().any(|r| r.field == "family"
+        && r.cause
+            == FieldCause::FamilyMismatch {
+                asked: Family::Hopper,
+                host: Family::Ampere
+            }));
 }
 
 /// ★ No field is left without a source any more: the four the first cut refused are
 /// `Advertised` (gmmu, fault-method buffer) or host + authored (engines, gr_static).
 #[test]
 fn no_provenance_row_is_unsourced_and_the_authored_ones_say_so() {
-    assert!(!PROVENANCE.iter().any(|(_, s)| matches!(s, Source::Unsourced(_))));
+    assert!(
+        !PROVENANCE
+            .iter()
+            .any(|(_, s)| matches!(s, Source::Unsourced(_)))
+    );
     for f in ["gmmu_static", "ce_fault_method_buffer_size"] {
-        assert!(PROVENANCE.iter().any(|(n, s)| *n == f && matches!(s, Source::Advertised(_))), "{f}");
+        assert!(
+            PROVENANCE
+                .iter()
+                .any(|(n, s)| *n == f && matches!(s, Source::Advertised(_))),
+            "{f}"
+        );
     }
 }
 
@@ -436,7 +644,12 @@ impl HostControls for CompletedGa106 {
             // GR_GET_ZCULL_MASK — asked by PHYSICAL gpcId: the row naming that physical GPC.
             0x2080_1237 => {
                 let gpc = u32::from_le_bytes(p[0..4].try_into().expect("4"));
-                let row = f.gr_static.gpcs.iter().find(|g| g.physical_id == gpc).expect("an enabled GPC");
+                let row = f
+                    .gr_static
+                    .gpcs
+                    .iter()
+                    .find(|g| g.physical_id == gpc)
+                    .expect("an enabled GPC");
                 put(p, 4, row.zcull_mask);
                 Ok(())
             }
@@ -480,7 +693,10 @@ impl HostControls for CompletedGa106 {
                     }
                     Ok(())
                 }
-                None => Err(HostRefusal { status: Some(0x56), detail: "no zcull".into() }),
+                None => Err(HostRefusal {
+                    status: Some(0x56),
+                    detail: "no zcull".into(),
+                }),
             },
             // ★ v3-gfx: the fixture states no ZBC ranges ⇒ RM's own "no table" (0x56).
             0x9096_0106 => match f.zbc_table_sizes {
@@ -490,13 +706,19 @@ impl HostControls for CompletedGa106 {
                     put(p, 4, s[t - 1].1);
                     Ok(())
                 }
-                None => Err(HostRefusal { status: Some(0x56), detail: "no zbc".into() }),
+                None => Err(HostRefusal {
+                    status: Some(0x56),
+                    detail: "no zbc".into(),
+                }),
             },
             0x2080_122d => {
                 let id = u32::from_le_bytes(p[16..20].try_into().expect("4")) as usize;
                 let b = f.gr_context_buffers[id];
                 if b.size == kf_abi::grstatic::CONTEXT_BUFFER_ABSENT {
-                    return Err(HostRefusal { status: Some(0x56), detail: "absent".into() });
+                    return Err(HostRefusal {
+                        status: Some(0x56),
+                        detail: "absent".into(),
+                    });
                 }
                 put(p, 20, b.alignment);
                 put(p, 24, b.size);
@@ -514,7 +736,13 @@ impl HostControls for CompletedGa106 {
                 let rows: Vec<(u32, &kf_abi::inittables::IntrTableEntry)> = f
                     .intr_table
                     .iter()
-                    .filter_map(|e| (1..=0x10u32).find(|&t| hostfacts::mc_engine_idx_of_intr_type(t) == Some(e.engine_idx)).map(|t| (t, e)))
+                    .filter_map(|e| {
+                        (1..=0x10u32)
+                            .find(|&t| {
+                                hostfacts::mc_engine_idx_of_intr_type(t) == Some(e.engine_idx)
+                            })
+                            .map(|t| (t, e))
+                    })
                     .collect();
                 put(p, 0, rows.len() as u32);
                 for (i, (t, e)) in rows.iter().enumerate() {
@@ -531,7 +759,13 @@ impl HostControls for CompletedGa106 {
                 let rows: Vec<(u32, u32)> = f
                     .intr_table
                     .iter()
-                    .filter_map(|e| (1..0x54u32).find(|&t| hostfacts::mc_engine_idx_of_engine_type(t) == Some(e.engine_idx)).map(|t| (t, e.vector_non_stall)))
+                    .filter_map(|e| {
+                        (1..0x54u32)
+                            .find(|&t| {
+                                hostfacts::mc_engine_idx_of_engine_type(t) == Some(e.engine_idx)
+                            })
+                            .map(|t| (t, e.vector_non_stall))
+                    })
                     .collect();
                 put(p, 0, rows.len() as u32);
                 for (i, (t, v)) in rows.iter().enumerate() {
@@ -572,14 +806,23 @@ fn family_and_sub_revision_equal_the_captured_row() {
 
 #[test]
 fn has_c2c_equals_the_captured_row() {
-    assert_eq!(hostquery::query_has_c2c(&mut Ga106Replay::load()), Ok(ga106::host_facts().has_c2c));
+    assert_eq!(
+        hostquery::query_has_c2c(&mut Ga106Replay::load()),
+        Ok(ga106::host_facts().has_c2c)
+    );
 }
 
 #[test]
 fn lce_pce_masks_equal_the_captured_row_and_the_query_stops_at_the_first_refused_lce() {
     let mut host = Ga106Replay::load();
-    assert_eq!(hostquery::query_lce_pce_masks(&mut host), Ok(ga106::host_facts().lce_pce_masks));
-    assert_eq!(host.asked, [0x2080_2a02; 5], "LCE0..3 answered, LCE4 refused, nothing asked after");
+    assert_eq!(
+        hostquery::query_lce_pce_masks(&mut host),
+        Ok(ga106::host_facts().lce_pce_masks)
+    );
+    assert_eq!(
+        host.asked, [0x2080_2a02; 5],
+        "LCE0..3 answered, LCE4 refused, nothing asked after"
+    );
 }
 
 /// `chip_info`: the sub-revision (arch info), `isCmpSku` (R21 `0x3c`), and the USERMODE base
@@ -587,7 +830,8 @@ fn lce_pce_masks_equal_the_captured_row_and_the_query_stops_at_the_first_refused
 #[test]
 fn chip_info_equals_the_captured_row() {
     let f = ga106::host_facts();
-    let c = hostquery::query_chip_info(&mut Ga106Replay::load(), f.chip_info.chip_sub_rev).expect("R21 0x3c");
+    let c = hostquery::query_chip_info(&mut Ga106Replay::load(), f.chip_info.chip_sub_rev)
+        .expect("R21 0x3c");
     assert_eq!(c, f.chip_info);
 }
 
@@ -595,14 +839,20 @@ fn chip_info_equals_the_captured_row() {
 fn forwarded_gpu_info_smc_mode_and_pcie_gen_equal_the_captured_rows() {
     let f = ga106::host_facts();
     let mut host = Ga106Replay::load();
-    assert_eq!(hostquery::query_forwarded_gpu_info(&mut host), Ok(f.forwarded_gpu_info));
+    assert_eq!(
+        hostquery::query_forwarded_gpu_info(&mut host),
+        Ok(f.forwarded_gpu_info)
+    );
     assert_eq!(hostquery::query_smc_mode(&mut host), Ok(f.smc_mode));
     assert_eq!(hostquery::query_pcie_max_gen(&mut host), Ok(f.pcie_max_gen));
 }
 
 #[test]
 fn gsp_features_equal_the_captured_row() {
-    assert_eq!(hostquery::query_gsp_features(&mut Ga106Replay::load()), Ok(ga106::host_facts().gsp_features));
+    assert_eq!(
+        hostquery::query_gsp_features(&mut Ga106Replay::load()),
+        Ok(ga106::host_facts().gsp_features)
+    );
 }
 
 /// ⊘ The old row served NO name (`nvidia-smi`'s `ERR!`), so there is no row to equal; the oracle
@@ -610,9 +860,23 @@ fn gsp_features_equal_the_captured_row() {
 #[test]
 fn the_names_are_the_real_ga106s_own_strings() {
     let mut host = Ga106Replay::load();
-    assert_eq!(hostquery::query_gpu_name(&mut host).expect("captured").as_str(), "NVIDIA GeForce RTX 3060");
-    assert_eq!(hostquery::query_gpu_short_name(&mut host).expect("captured").as_str(), "GA106-A");
-    assert_eq!(ga106::host_facts().gpu_name, None, "the fixture is faithful to the old defect");
+    assert_eq!(
+        hostquery::query_gpu_name(&mut host)
+            .expect("captured")
+            .as_str(),
+        "NVIDIA GeForce RTX 3060"
+    );
+    assert_eq!(
+        hostquery::query_gpu_short_name(&mut host)
+            .expect("captured")
+            .as_str(),
+        "GA106-A"
+    );
+    assert_eq!(
+        ga106::host_facts().gpu_name,
+        None,
+        "the fixture is faithful to the old defect"
+    );
 }
 
 /// `memory_system`: L2, RAM type and LTC count come from the captured `FB_GET_INFO_V2`
@@ -622,7 +886,8 @@ fn the_names_are_the_real_ga106s_own_strings() {
 #[test]
 fn memory_system_equals_the_captured_row() {
     let f = ga106::host_facts();
-    let m = hostquery::query_memory_system(&mut Ga106Replay::load(), Some(&f.gr_info)).expect("FB captured");
+    let m = hostquery::query_memory_system(&mut Ga106Replay::load(), Some(&f.gr_info))
+        .expect("FB captured");
     assert_eq!(m, f.memory_system);
 }
 
@@ -637,15 +902,24 @@ fn gpc_mask_tpc_masks_and_caps_equal_the_captured_row() {
         host.control(cmd, &mut p).expect("captured");
         p
     };
-    let gpc_mask = hostfacts::derive_gpc_mask(&ask(0x2080_122a, vec![0; hostfacts::GR_MASK_PARAMS_SIZE])).expect("nonzero");
+    let gpc_mask =
+        hostfacts::derive_gpc_mask(&ask(0x2080_122a, vec![0; hostfacts::GR_MASK_PARAMS_SIZE]))
+            .expect("nonzero");
     assert_eq!(gpc_mask, f.gr_static.gpc_mask().expect("fixture"));
     // `GR_GET_TPC_MASK` takes the PHYSICAL gpcId: each row is asked by its own physical id.
     for row in f.gr_static.gpcs {
         let mut req = vec![0u8; hostfacts::GR_MASK_PARAMS_SIZE];
         req[16..20].copy_from_slice(&row.physical_id.to_le_bytes());
-        assert_eq!(hostfacts::derive_tpc_mask(&ask(0x2080_122b, req), row.physical_id), Ok(row.tpc_mask));
+        assert_eq!(
+            hostfacts::derive_tpc_mask(&ask(0x2080_122b, req), row.physical_id),
+            Ok(row.tpc_mask)
+        );
     }
-    let caps = hostfacts::derive_gr_caps(&ask(0x2080_1227, vec![0; hostfacts::GR_CAPS_V2_PARAMS_SIZE])).expect("populated");
+    let caps = hostfacts::derive_gr_caps(&ask(
+        0x2080_1227,
+        vec![0; hostfacts::GR_CAPS_V2_PARAMS_SIZE],
+    ))
+    .expect("populated");
     assert_eq!(caps, f.gr_static.caps);
 }
 
@@ -682,7 +956,12 @@ fn gr_info_has_no_capture_so_only_its_layout_round_trips() {
         reply[4 + 8 * i..8 + 8 * i].copy_from_slice(&(i as u32).to_le_bytes());
         reply[8 + 8 * i..12 + 8 * i].copy_from_slice(&d.to_le_bytes());
     }
-    assert_eq!(hostfacts::derive_gr_info(&reply, kf_chip::Family::Ampere).expect("well formed").data, f.gr_info.data);
+    assert_eq!(
+        hostfacts::derive_gr_info(&reply, kf_chip::Family::Ampere)
+            .expect("well formed")
+            .data,
+        f.gr_info.data
+    );
 }
 
 /// ⊘ `gr_context_buffers` — NO capture. Checked: the query's mapping of RM's own
@@ -697,7 +976,10 @@ fn gr_context_buffers_have_no_capture_so_only_the_absent_mapping_is_checked() {
             let id = u32::from_le_bytes(p[16..20].try_into().expect("4")) as usize;
             let b = kf_abi::grstatic::GA106_CONTEXT_BUFFERS[id];
             if b.size == kf_abi::grstatic::CONTEXT_BUFFER_ABSENT {
-                return Err(HostRefusal { status: Some(0x56), detail: "NV_U32_MAX".into() });
+                return Err(HostRefusal {
+                    status: Some(0x56),
+                    detail: "NV_U32_MAX".into(),
+                });
             }
             p[20..24].copy_from_slice(&b.alignment.to_le_bytes());
             p[24..28].copy_from_slice(&b.size.to_le_bytes());
@@ -705,7 +987,10 @@ fn gr_context_buffers_have_no_capture_so_only_the_absent_mapping_is_checked() {
             Ok(())
         }
     }
-    assert_eq!(hostquery::query_gr_context_buffers(&mut FromFixture), Ok(ga106::host_facts().gr_context_buffers));
+    assert_eq!(
+        hostquery::query_gr_context_buffers(&mut FromFixture),
+        Ok(ga106::host_facts().gr_context_buffers)
+    );
 }
 
 /// ⊘ `intr_table` / `intr_subtree_map` — NO capture. Checked: the re-keying. Every static
@@ -718,13 +1003,27 @@ fn intr_table_has_no_capture_so_only_the_mc_engine_idx_keying_is_checked() {
     let has = |idx: u16| f.intr_table.iter().any(|e| e.engine_idx == idx);
     for t in [0x4u32, 0x5, 0x6, 0x8] {
         let idx = hostfacts::mc_engine_idx_of_intr_type(t).expect("keyed");
-        assert!(has(idx), "INTR_TYPE {t:#x} -> {idx} not in the captured table");
+        assert!(
+            has(idx),
+            "INTR_TYPE {t:#x} -> {idx} not in the captured table"
+        );
     }
     for t in 0x9..=0x10u32 {
         assert!(has(hostfacts::mc_engine_idx_of_intr_type(t).expect("FECS")));
     }
     // GR0, CE0..CE4, NVDEC0, NVENC0, OFA0, SEC2 — the engine rows the captured table carries.
-    for (t, idx) in [(0x01, 84), (0x09, 15), (0x0a, 16), (0x0b, 17), (0x0c, 18), (0x0d, 19), (0x13, 65), (0x1b, 38), (0x33, 81), (0x26, 47)] {
+    for (t, idx) in [
+        (0x01, 84),
+        (0x09, 15),
+        (0x0a, 16),
+        (0x0b, 17),
+        (0x0c, 18),
+        (0x0d, 19),
+        (0x13, 65),
+        (0x1b, 38),
+        (0x33, 81),
+        (0x26, 47),
+    ] {
         assert_eq!(hostfacts::mc_engine_idx_of_engine_type(t), Some(idx));
         assert!(has(idx));
     }
@@ -741,16 +1040,35 @@ fn intr_table_has_no_capture_so_only_the_mc_engine_idx_keying_is_checked() {
 /// second copy decade (Hopper/Blackwell have >10 LCEs), whose NV2080 and RM spaces differ.
 #[test]
 fn the_family_rules_cover_what_a_ga106_does_not_have() {
-    assert_eq!(hostquery::USERMODE_REG_BASE, 0x00BB_0000, "tu102/gb100 dev_vm.h: 0xB80000 + 0x30000");
-    assert_eq!(hostquery::classify_engine(0x34), Some((kf_rm::authored::EngineKind::Copy(10), 0x13)), "COPY10: NV2080 0x34, RM 0x13");
-    assert_eq!(hostquery::classify_engine(0x3d), Some((kf_rm::authored::EngineKind::Copy(19), 0x1c)));
+    assert_eq!(
+        hostquery::USERMODE_REG_BASE,
+        0x00BB_0000,
+        "tu102/gb100 dev_vm.h: 0xB80000 + 0x30000"
+    );
+    assert_eq!(
+        hostquery::classify_engine(0x34),
+        Some((kf_rm::authored::EngineKind::Copy(10), 0x13)),
+        "COPY10: NV2080 0x34, RM 0x13"
+    );
+    assert_eq!(
+        hostquery::classify_engine(0x3d),
+        Some((kf_rm::authored::EngineKind::Copy(19), 0x1c))
+    );
     assert_eq!(
         hostquery::classify_engine(0x13),
         Some((kf_rm::authored::EngineKind::VideoDecode(0), 0x1d)),
         "NV2080 0x13 is NVDEC0 (RM 0x1d), not a copy engine"
     );
-    assert_eq!(hostquery::classify_engine(0x08), Some((kf_rm::authored::EngineKind::Graphics(7), 0x08)), "GR7 (MIG parts)");
-    assert_eq!(hostfacts::mc_engine_idx_of_engine_type(0x3d), Some(34), "CE19 = MC_ENGINE_IDX_CE19");
+    assert_eq!(
+        hostquery::classify_engine(0x08),
+        Some((kf_rm::authored::EngineKind::Graphics(7), 0x08)),
+        "GR7 (MIG parts)"
+    );
+    assert_eq!(
+        hostfacts::mc_engine_idx_of_engine_type(0x3d),
+        Some(34),
+        "CE19 = MC_ENGINE_IDX_CE19"
+    );
 }
 
 // =====================================================================================
@@ -762,9 +1080,14 @@ fn the_family_rules_cover_what_a_ga106_does_not_have() {
 #[test]
 fn the_tpc_to_pes_rule_reproduces_the_ga106_map() {
     let f = ga106::host_facts();
-    let map = kf_rm::authored::tpc_to_pes_map(f.gr_info.data[0x17], f.gr_info.data[0x1e]).expect("usable litters");
+    let map = kf_rm::authored::tpc_to_pes_map(f.gr_info.data[0x17], f.gr_info.data[0x1e])
+        .expect("usable litters");
     assert_eq!(map, kf_abi::grstatic::GA106_TPC_TO_PES_MAP);
-    assert_eq!(kf_rm::authored::tpc_to_pes_map(6, 0), None, "zero TPCs per PES is refused");
+    assert_eq!(
+        kf_rm::authored::tpc_to_pes_map(6, 0),
+        None,
+        "zero TPCs per PES is refused"
+    );
 }
 
 /// ★ The engine layout for every family: Blackwell's fault ids are its own header's (GR 384,
@@ -774,14 +1097,34 @@ fn the_tpc_to_pes_rule_reproduces_the_ga106_map() {
 #[test]
 fn the_engine_layout_answers_every_family_or_refuses_one_by_name() {
     use kf_rm::authored::{EngineKind as K, engine_table, slot};
-    let list = [K::Graphics(0), K::Copy(0), K::Copy(1), K::Copy(2), K::Copy(12), K::Software];
-    for fam in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
+    let list = [
+        K::Graphics(0),
+        K::Copy(0),
+        K::Copy(1),
+        K::Copy(2),
+        K::Copy(12),
+        K::Software,
+    ];
+    for fam in [
+        Family::Turing,
+        Family::Ampere,
+        Family::Ada,
+        Family::Hopper,
+        Family::Blackwell,
+    ] {
         let rows = engine_table(fam, &list, 0x3).unwrap_or_else(|e| panic!("{fam:?}: {e:?}"));
-        let resets: Vec<u32> = rows[..5].iter().map(|r| r.engine_data[slot::RESET]).collect();
+        let resets: Vec<u32> = rows[..5]
+            .iter()
+            .map(|r| r.engine_data[slot::RESET])
+            .collect();
         let mut uniq = resets.clone();
         uniq.sort_unstable();
         uniq.dedup();
-        assert_eq!(uniq.len(), resets.len(), "{fam:?}: reset bits collide: {resets:?}");
+        assert_eq!(
+            uniq.len(),
+            resets.len(),
+            "{fam:?}: reset bits collide: {resets:?}"
+        );
         assert!(resets.iter().all(|&b| b < 32));
     }
     let bw = engine_table(Family::Blackwell, &list, 0x3).expect("Blackwell");
@@ -789,13 +1132,26 @@ fn the_engine_layout_answers_every_family_or_refuses_one_by_name() {
     assert_eq!(bw[4].engine_data[slot::MMU_FAULT_ID], 65 + 12);
     assert_eq!(bw[0].pbdma_fault_ids, [85, 86]);
     let tu = engine_table(Family::Turing, &list, 0x3).expect("Turing");
-    assert_eq!(tu[3].engine_data[slot::RUNLIST_PRI_BASE], 0, "RUNLIST_PRI_BASE is valid only on Ampere+");
+    assert_eq!(
+        tu[3].engine_data[slot::RUNLIST_PRI_BASE],
+        0,
+        "RUNLIST_PRI_BASE is valid only on Ampere+"
+    );
     assert_eq!(tu[3].engine_data[slot::RUNLIST], 1);
-    let hopper = engine_table(Family::Hopper, &list, 0x3).expect("Hopper: GR 384, CE0 43, HOST0 64");
+    let hopper =
+        engine_table(Family::Hopper, &list, 0x3).expect("Hopper: GR 384, CE0 43, HOST0 64");
     assert_eq!(hopper[0].engine_data[slot::MMU_FAULT_ID], 384);
     assert_eq!(hopper[4].engine_data[slot::MMU_FAULT_ID], 43 + 12);
     assert_eq!(hopper[0].pbdma_fault_ids, [64, 65]);
-    assert!(engine_table(Family::Ampere, &[K::Graphics(0), K::Graphics(1), K::Copy(0)], 0x3).is_err(), "MIG");
+    assert!(
+        engine_table(
+            Family::Ampere,
+            &[K::Graphics(0), K::Graphics(1), K::Copy(0)],
+            0x3
+        )
+        .is_err(),
+        "MIG"
+    );
 }
 
 /// ★★ GB20x: four GRCEs (`kernel_ce_gb202.c:36`, `NV_CE_GRCE_ALLOWED_LCE_MASK 0x0F`). With the
@@ -805,15 +1161,34 @@ fn the_engine_layout_answers_every_family_or_refuses_one_by_name() {
 #[test]
 fn a_gb20x_host_with_four_grces_lays_them_all_on_runlist_zero() {
     use kf_rm::authored::{EngineKind as K, engine_notification_rows, engine_table, slot};
-    let list = [K::Graphics(0), K::Copy(0), K::Copy(1), K::Copy(2), K::Copy(3), K::Copy(4), K::Copy(5), K::Software];
+    let list = [
+        K::Graphics(0),
+        K::Copy(0),
+        K::Copy(1),
+        K::Copy(2),
+        K::Copy(3),
+        K::Copy(4),
+        K::Copy(5),
+        K::Software,
+    ];
     let rows = engine_table(Family::Blackwell, &list, 0x0f).expect("Blackwell");
     for (i, r) in rows[1..5].iter().enumerate() {
         assert_eq!(r.engine_data[slot::RUNLIST], 0, "GRCE{i}");
-        assert_eq!(r.engine_data[slot::RUNLIST_ENGINE_ID], i as u32 + 1, "GRCE{i}");
+        assert_eq!(
+            r.engine_data[slot::RUNLIST_ENGINE_ID],
+            i as u32 + 1,
+            "GRCE{i}"
+        );
         assert_eq!(r.pbdma_ids[0], i as u32 % 2, "GRCE{i} rides GR's PBDMA");
     }
-    assert_eq!((rows[5].engine_data[slot::RUNLIST], rows[5].pbdma_ids[0]), (1, 2));
-    assert_eq!((rows[6].engine_data[slot::RUNLIST], rows[6].pbdma_ids[0]), (2, 3));
+    assert_eq!(
+        (rows[5].engine_data[slot::RUNLIST], rows[5].pbdma_ids[0]),
+        (1, 2)
+    );
+    assert_eq!(
+        (rows[6].engine_data[slot::RUNLIST], rows[6].pbdma_ids[0]),
+        (2, 3)
+    );
     let ns = engine_notification_rows(&list, 0x0f);
     assert_eq!(ns.len(), 3, "GR0 + the two async CEs: {ns:?}");
     // And with GA10x's two GRCEs the same list keeps its old shape.
@@ -826,10 +1201,20 @@ fn a_gb20x_host_with_four_grces_lays_them_all_on_runlist_zero() {
 #[test]
 fn the_gsp_and_disp_rows_refuse_a_host_vector_collision() {
     use kf_abi::inittables::{INTR_VECTOR_INVALID, IntrTableEntry};
-    let clash = vec![IntrTableEntry { engine_idx: 59, pmc_intr_mask: 0, vector_stall: 0x9b, vector_non_stall: INTR_VECTOR_INVALID }];
+    let clash = vec![IntrTableEntry {
+        engine_idx: 59,
+        pmc_intr_mask: 0,
+        vector_stall: 0x9b,
+        vector_non_stall: INTR_VECTOR_INVALID,
+    }];
     assert_eq!(kf_rm::authored::with_gsp_and_disp_rows(clash), Err(0x9b));
     let rows = kf_rm::authored::with_gsp_and_disp_rows(Vec::new()).expect("no clash");
-    assert_eq!(rows.iter().map(|e| (e.engine_idx, e.vector_stall)).collect::<Vec<_>>(), [(50, 0x9b), (2, 0x9a)]);
+    assert_eq!(
+        rows.iter()
+            .map(|e| (e.engine_idx, e.vector_stall))
+            .collect::<Vec<_>>(),
+        [(50, 0x9b), (2, 0x9a)]
+    );
 }
 
 /// ★ v3-gfx: `gr_zcull_info` is the host's `GR_GET_ZCULL_INFO` reply word for word; the host's
@@ -841,7 +1226,11 @@ fn gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none() {
     impl HostControls for H {
         fn control(&mut self, cmd: u32, p: &mut [u8]) -> Result<(), HostRefusal> {
             assert_eq!(cmd, 0x2080_1206);
-            assert_eq!(p.len(), 40, "NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS is ten NvU32");
+            assert_eq!(
+                p.len(),
+                40,
+                "NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS is ten NvU32"
+            );
             match self.0 {
                 Ok(row) => {
                     for (i, w) in row.iter().enumerate() {
@@ -849,19 +1238,37 @@ fn gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none() {
                     }
                     Ok(())
                 }
-                Err(st) => Err(HostRefusal { status: Some(st), detail: "refused".into() }),
+                Err(st) => Err(HostRefusal {
+                    status: Some(st),
+                    detail: "refused".into(),
+                }),
             }
         }
     }
     let row = [32, 16, 1024, 2048, 64, 16, 32, 16, 256, 128];
-    assert_eq!(hostquery::query_gr_zcull_info(&mut H(Ok(row))).expect("served"), Some(row));
-    assert_eq!(hostquery::query_gr_zcull_info(&mut H(Err(0x56))).expect("no zcull"), None);
-    assert!(matches!(hostquery::query_gr_zcull_info(&mut H(Err(0x1b))), Err(FieldCause::Host { cmd: 0x2080_1206, .. })));
+    assert_eq!(
+        hostquery::query_gr_zcull_info(&mut H(Ok(row))).expect("served"),
+        Some(row)
+    );
+    assert_eq!(
+        hostquery::query_gr_zcull_info(&mut H(Err(0x56))).expect("no zcull"),
+        None
+    );
+    assert!(matches!(
+        hostquery::query_gr_zcull_info(&mut H(Err(0x1b))),
+        Err(FieldCause::Host {
+            cmd: 0x2080_1206,
+            ..
+        })
+    ));
     // …and the internal control's reply carries it as engine 0, every other engine zero.
     let enc = kf_abi::grstatic::encode_zcull_info(&row);
     assert_eq!(enc.len(), 320);
     for (i, w) in row.iter().enumerate() {
-        assert_eq!(u32::from_le_bytes(enc[4 * i..4 * i + 4].try_into().expect("4")), *w);
+        assert_eq!(
+            u32::from_le_bytes(enc[4 * i..4 * i + 4].try_into().expect("4")),
+            *w
+        );
     }
     assert!(enc[40..].iter().all(|&b| b == 0));
 }
@@ -874,13 +1281,19 @@ fn a_host_refusing_bios_info_still_fills_every_field_with_no_vbios_version() {
     impl HostControls for NoBios {
         fn control(&mut self, cmd: u32, p: &mut [u8]) -> Result<(), HostRefusal> {
             if cmd == 0x2080_0810 {
-                return Err(HostRefusal { status: Some(0x56), detail: "refused".into() });
+                return Err(HostRefusal {
+                    status: Some(0x56),
+                    detail: "refused".into(),
+                });
             }
             self.0.control(cmd, p)
         }
     }
-    let got = hostquery::query_host_facts(&mut NoBios(CompletedGa106(Ga106Replay::load())), Family::Ampere)
-        .unwrap_or_else(|e| panic!("{e}"));
+    let got = hostquery::query_host_facts(
+        &mut NoBios(CompletedGa106(Ga106Replay::load())),
+        Family::Ampere,
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(got.vbios_version, None);
 }
 
@@ -891,12 +1304,24 @@ fn a_host_refusing_bios_info_still_fills_every_field_with_no_vbios_version() {
 fn the_gpc_map_is_the_real_ga106s_own_grmgr_answer() {
     let f = ga106::host_facts();
     let mut host = CompletedGa106(Ga106Replay::load());
-    let g = hostquery::query_gr_geometry(&mut host, Some(&f.gr_info)).unwrap_or_else(|e| panic!("{e:?}"));
+    let g = hostquery::query_gr_geometry(&mut host, Some(&f.gr_info))
+        .unwrap_or_else(|e| panic!("{e:?}"));
     assert_eq!(g.chiplet_gpc_map, [0, 1, 2]);
-    assert_eq!(g.chiplet_gpc_map, f.gr_static.gpcs.iter().map(|r| r.physical_id).collect::<Vec<_>>());
+    assert_eq!(
+        g.chiplet_gpc_map,
+        f.gr_static
+            .gpcs
+            .iter()
+            .map(|r| r.physical_id)
+            .collect::<Vec<_>>()
+    );
     assert_eq!(g.tpc_counts, [4, 5, 5]);
     assert_eq!(g.fs_extra, None, "the optional batch has no capture");
-    assert!(host.0.asked.contains(&kf_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO));
+    assert!(
+        host.0
+            .asked
+            .contains(&kf_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO)
+    );
 }
 
 /// ★ Ruling 3: a host whose driver HAS NO `MC_GET_INTR_CATEGORY_SUBTREE_MAP` (below 580.65.06,
@@ -918,7 +1343,11 @@ fn a_host_without_the_subtree_map_control_gets_the_family_map() {
         }
     }
     let mut host = Pre58065(Ga106Replay::load());
-    let refused = hostquery::query_host_facts(&mut host, Family::Ampere).expect_err("other controls have no capture");
+    let refused = hostquery::query_host_facts(&mut host, Family::Ampere)
+        .expect_err("other controls have no capture");
     assert!(!refused.fields().contains(&"intr_subtree_map"), "{refused}");
-    assert_eq!(kf_chip::authored_intr_subtree_map(Family::Ampere), Some([0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4]));
+    assert_eq!(
+        kf_chip::authored_intr_subtree_map(Family::Ampere),
+        Some([0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4])
+    );
 }

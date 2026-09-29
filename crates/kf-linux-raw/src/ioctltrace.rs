@@ -29,7 +29,7 @@
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
 /// One issued ioctl, as much of it as is cheap to keep.
 #[derive(Debug, Clone, Copy)]
@@ -122,7 +122,9 @@ pub fn record(request: u64, arg: &[u8], rc: i32) {
             e.at_us, e.request, e.arg_len, e.rc, e.head_after
         );
     }
-    let mut g = RING_BUF.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut g = RING_BUF
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if g.len() == CAP {
         g.pop_front();
         DROPPED.fetch_add(1, Ordering::Relaxed);
@@ -138,7 +140,9 @@ pub fn dump(why: &str) {
         eprintln!("IOCTL-TRACE ⊘ NOT ARMED — set KF_IOCTL_TRACE=ring or =verbose. ({why})");
         return;
     }
-    let g = RING_BUF.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let g = RING_BUF
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dropped = DROPPED.load(Ordering::Relaxed);
     eprintln!(
         "IOCTL-TRACE ★★★ {why}: {} entries, dropped={dropped} (cap {CAP})",

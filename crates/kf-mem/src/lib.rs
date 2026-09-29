@@ -8,7 +8,7 @@
 pub mod addr;
 pub mod store;
 
-pub use addr::{Fb, Gpa, Gva, HostToken, StoreOffset, PAGE};
+pub use addr::{Fb, Gpa, Gva, HostToken, PAGE, StoreOffset};
 pub use store::{Store, StoreRefusal};
 pub mod apply;
 pub mod batch;

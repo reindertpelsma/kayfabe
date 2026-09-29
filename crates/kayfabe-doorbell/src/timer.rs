@@ -33,8 +33,6 @@ pub const GA106_BAR0_PAGES: u32 = GA106_BAR0_BYTES >> 12;
 /// said; new code should name the die or take the value from `CARD_INFO`.
 pub const BAR0_PAGES: u32 = GA106_BAR0_PAGES;
 
-
-
 /// Where Turing+ kernel RM actually READS time from: `NV_VIRTUAL_FUNCTION_TIME_0/1`.
 /// §50 level 2: `turing/tu102/dev_vm.h:224,226` (`R--4R`), read at `timer_tu102.c:142,159`; the
 /// same offsets in `ampere/ga100/dev_vm.h:127,129` and `blackwell/gb100/dev_vm.h:616,618`.
@@ -149,6 +147,7 @@ impl TimerRegs {
 
     /// What the PLM shadow must hold so ogkm takes its success branch: `(offset, value)`.
     pub fn plm_shadow(&self) -> Option<(u32, u32)> {
-        self.priv_level_mask.map(|off| (off, PLM_WRITE_PROTECTION_LEVEL0_ENABLE))
+        self.priv_level_mask
+            .map(|off| (off, PLM_WRITE_PROTECTION_LEVEL0_ENABLE))
     }
 }

@@ -184,59 +184,254 @@ pub enum Source {
 /// ★ Every [`HostFacts`] field and its source. Checked exhaustive by
 /// `tests/host_facts_ga106.rs`.
 pub const PROVENANCE: &[(&str, Source)] = &[
-    ("family", Source::HostControl { cmd: 0x2080_1701, name: "MC_GET_ARCH_INFO" }),
-    ("has_c2c", Source::HostControl { cmd: 0x2080_182b, name: "BUS_GET_C2C_INFO" }),
-    ("ce_caps", Source::HostControl { cmd: 0x2080_2a0a, name: "CE_GET_ALL_CAPS (per-LCE caps + GRCE bits; the three kernel-OR-able bits stripped, kf_abi::cecaps::KERNEL_OR_CAPS)" }),
+    (
+        "family",
+        Source::HostControl {
+            cmd: 0x2080_1701,
+            name: "MC_GET_ARCH_INFO",
+        },
+    ),
+    (
+        "has_c2c",
+        Source::HostControl {
+            cmd: 0x2080_182b,
+            name: "BUS_GET_C2C_INFO",
+        },
+    ),
+    (
+        "ce_caps",
+        Source::HostControl {
+            cmd: 0x2080_2a0a,
+            name: "CE_GET_ALL_CAPS (per-LCE caps + GRCE bits; the three kernel-OR-able bits stripped, kf_abi::cecaps::KERNEL_OR_CAPS)",
+        },
+    ),
     // ★ w827 ruling: "WE ARE THE GSP". The host supplies the engine TYPES and COUNTS; every
     // slot of each row describes OUR device (guest channels are re-born on host twins), authored
     // per family in `crate::authored::engine_table` (ogkm constants + a stated layout). The
     // host's own runlist/PBDMA/reset slots are unreachable anyway (0x20800179 PRIVILEGED,
     // 0x20801112 KERNEL). ⊘ Hopper was refused here by name ("no NV_PFAULT_MMU_ENG_ID_HOST0 in the
     // tree") until 2026-09-26: UVM's hwref/hopper/gh100/dev_fault.h:83 states HOST0 = 64.
-    ("engines", Source::HostControl { cmd: 0x2080_0170, name: "GPU_GET_ENGINES_V2 (types, counts); every slot authored per family: authored::engine_table / ENGINE_LAYOUT_WHY" }),
-    ("lce_pce_masks", Source::HostControl { cmd: 0x2080_2a02, name: "CE_GET_CE_PCE_MASK" }),
-    ("intr_table", Source::HostControl { cmd: 0x2080_170e, name: "MC_GET_STATIC_INTR_TABLE (static rows) (static rows, keyed to MC_ENGINE_IDX by rule) + authored::engine_notification_rows (non-stall rows of OUR runlists; 0x2080170d is NOT_SUPPORTED to usermode) + the GSP and DISP stall rows of the device we present (authored::GSP_DISP_VECTORS_WHY)" }),
-    ("intr_subtree_map", Source::HostControl { cmd: 0x2080_170f, name: "MC_GET_INTR_CATEGORY_SUBTREE_MAP" }),
-    ("chip_info", Source::FamilyRule("USERMODE base = DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET) + NV_VIRTUAL_FUNCTION (ogkm dev_vm.h); sub-rev from MC_GET_ARCH_INFO; isCmpSku from GPU_GET_INFO_V2[CMP_SKU 0x3c]")),
+    (
+        "engines",
+        Source::HostControl {
+            cmd: 0x2080_0170,
+            name: "GPU_GET_ENGINES_V2 (types, counts); every slot authored per family: authored::engine_table / ENGINE_LAYOUT_WHY",
+        },
+    ),
+    (
+        "lce_pce_masks",
+        Source::HostControl {
+            cmd: 0x2080_2a02,
+            name: "CE_GET_CE_PCE_MASK",
+        },
+    ),
+    (
+        "intr_table",
+        Source::HostControl {
+            cmd: 0x2080_170e,
+            name: "MC_GET_STATIC_INTR_TABLE (static rows) (static rows, keyed to MC_ENGINE_IDX by rule) + authored::engine_notification_rows (non-stall rows of OUR runlists; 0x2080170d is NOT_SUPPORTED to usermode) + the GSP and DISP stall rows of the device we present (authored::GSP_DISP_VECTORS_WHY)",
+        },
+    ),
+    (
+        "intr_subtree_map",
+        Source::HostControl {
+            cmd: 0x2080_170f,
+            name: "MC_GET_INTR_CATEGORY_SUBTREE_MAP",
+        },
+    ),
+    (
+        "chip_info",
+        Source::FamilyRule(
+            "USERMODE base = DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET) + NV_VIRTUAL_FUNCTION (ogkm dev_vm.h); sub-rev from MC_GET_ARCH_INFO; isCmpSku from GPU_GET_INFO_V2[CMP_SKU 0x3c]",
+        ),
+    ),
     ("user_register_access_map", Source::Authored("accessmap.rs")),
-    ("constructed_falcons", Source::HostControl { cmd: 0x2080_01b0, name: "GPU_GET_CONSTRUCTED_FALCON_INFO, kept to the engDescs of the advertised VIDEO engines (NVENC/NVDEC, and the optical-flow OFA — v3-gfxset); empty when the host lists none (hostquery::query_video_falcons)" }),
-    ("memory_system", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 (L2 size, RAM type, LTC count) + GR_GET_INFO_V2[LITTER_NUM_SLICES_PER_LTC]; comptag policy, compression page and flags authored" }),
-    ("device_info", Source::FamilyRule("PRI bases: GR = NV_PGRAPH 0x400000, LCE = the NV_CE block 0x104000 (ogkm dev_ce.h), NVENC/NVDEC/OFA = the host falcon table's registerBase for the same engDesc, SW = not a device; over the GPU_GET_ENGINES_V2 list")),
-    ("conf_compute", Source::Authored("CC off, fabricated so ogkm accepts it")),
-    ("bif_static", Source::Authored("fabricated so ogkm accepts it (no C2C, single function)")),
-    ("fifo_channels", Source::Authored("the channel count is ours to set")),
+    (
+        "constructed_falcons",
+        Source::HostControl {
+            cmd: 0x2080_01b0,
+            name: "GPU_GET_CONSTRUCTED_FALCON_INFO, kept to the engDescs of the advertised VIDEO engines (NVENC/NVDEC, and the optical-flow OFA — v3-gfxset); empty when the host lists none (hostquery::query_video_falcons)",
+        },
+    ),
+    (
+        "memory_system",
+        Source::HostControl {
+            cmd: 0x2080_1303,
+            name: "FB_GET_INFO_V2 (L2 size, RAM type, LTC count) + GR_GET_INFO_V2[LITTER_NUM_SLICES_PER_LTC]; comptag policy, compression page and flags authored",
+        },
+    ),
+    (
+        "device_info",
+        Source::FamilyRule(
+            "PRI bases: GR = NV_PGRAPH 0x400000, LCE = the NV_CE block 0x104000 (ogkm dev_ce.h), NVENC/NVDEC/OFA = the host falcon table's registerBase for the same engDesc, SW = not a device; over the GPU_GET_ENGINES_V2 list",
+        ),
+    ),
+    (
+        "conf_compute",
+        Source::Authored("CC off, fabricated so ogkm accepts it"),
+    ),
+    (
+        "bif_static",
+        Source::Authored("fabricated so ogkm accepts it (no C2C, single function)"),
+    ),
+    (
+        "fifo_channels",
+        Source::Authored("the channel count is ours to set"),
+    ),
     // ★ w827 ruling: ours to author. The physical computation IS in the open tree and is a
     // silicon reset-default read-back, not a formula (kern_gmmu_tu102.c:548-566).
-    ("gmmu_static", Source::Advertised("authored::GMMU_STATIC / GMMU_STATIC_WHY")),
+    (
+        "gmmu_static",
+        Source::Advertised("authored::GMMU_STATIC / GMMU_STATIC_WHY"),
+    ),
     // ★ v3-gpcmask (2026-09-26): one row per LOGICAL GPC naming its PHYSICAL GPC — no contiguity
     // assumed. Physical-indexed facts per set bit of the GPC mask, logical-indexed per logical id,
     // the map from the host's own GRMGR answer (kf_abi::grstatic's floorswept-parts section).
-    ("gr_static", Source::HostControl { cmd: 0x2080_122a, name: "GR_GET_GPC_MASK 0x2080122a (physical, any shape) + per physical GPC GR_GET_TPC_MASK 0x2080122b / GR_GET_ZCULL_MASK 0x20801237 (physGpcMask = gpcMask: GR_GET_PHYS_GPC_MASK is PRIVILEGED, never asked); logical->physical map = GRMGR_GET_GR_FS_INFO CHIPLET_GPC_MAP 0x20803801 (refused => the lowest unused enabled physical GPC of the logical GPC's TPC count); per logical GPC GR_GET_NUM_TPCS_FOR_GPC 0x20801234 + GPU_GET_PES_INFO 0x20800168 (numPes, tpcToPesMap; host NOT_SUPPORTED => GR info litter + authored::tpc_to_pes_map); GR_GET_GFX_GPC_AND_TPC_INFO 0x20801239; GR_GET_GLOBAL_SM_ORDER 0x2080121b (every per-TPC field); GR_GET_CAPS_V2 0x20801227; GRMGR PPC_MASK/ROP_MASK + syspipe words (optional); mmuPerGpc = GR_GET_INFO_V2 LITTER_NUM_GPCMMU_PER_GPC per logical GPC (no release-build control reads it); FECS record size, per-subctx header authored (authored.rs)" }),
-    ("gr_info", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2" }),
-    ("gr_context_buffers", Source::HostControl { cmd: 0x2080_122d, name: "GR_GET_ENGINE_CONTEXT_PROPERTIES" }),
-    ("gr_zcull_info", Source::HostControl { cmd: 0x2080_1206, name: "GR_GET_ZCULL_INFO (host NOT_SUPPORTED = no zcull on the die)" }),
-    ("zbc_table_sizes", Source::HostControl { cmd: 0x9096_0106, name: "GET_ZBC_CLEAR_TABLE_SIZE on a host GF100_ZBC_CLEAR object (ranges only; the table itself is per-VM, kf_rm::zbc)" }),
-    ("forwarded_fb_extra", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 [PARTITION_COUNT 0x04, PARTITION_MASK 0x14/0x37, LTC_MASK 0x2b/0x38], each index asked alone" }),
-    ("gpu_cache_info", Source::HostControl { cmd: 0x2080_1315, name: "FB_GET_GPU_CACHE_INFO" }),
-    ("gr_sm_issue_rate_modifier", Source::HostControl { cmd: 0x2080_1230, name: "GR_GET_SM_ISSUE_RATE_MODIFIER (host refusal = None, never a realize failure)" }),
-    ("forwarded_gpu_info", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2" }),
-    ("forwarded_fb_info", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 (the seven indices libcuda forwards; host words verbatim)" }),
+    (
+        "gr_static",
+        Source::HostControl {
+            cmd: 0x2080_122a,
+            name: "GR_GET_GPC_MASK 0x2080122a (physical, any shape) + per physical GPC GR_GET_TPC_MASK 0x2080122b / GR_GET_ZCULL_MASK 0x20801237 (physGpcMask = gpcMask: GR_GET_PHYS_GPC_MASK is PRIVILEGED, never asked); logical->physical map = GRMGR_GET_GR_FS_INFO CHIPLET_GPC_MAP 0x20803801 (refused => the lowest unused enabled physical GPC of the logical GPC's TPC count); per logical GPC GR_GET_NUM_TPCS_FOR_GPC 0x20801234 + GPU_GET_PES_INFO 0x20800168 (numPes, tpcToPesMap; host NOT_SUPPORTED => GR info litter + authored::tpc_to_pes_map); GR_GET_GFX_GPC_AND_TPC_INFO 0x20801239; GR_GET_GLOBAL_SM_ORDER 0x2080121b (every per-TPC field); GR_GET_CAPS_V2 0x20801227; GRMGR PPC_MASK/ROP_MASK + syspipe words (optional); mmuPerGpc = GR_GET_INFO_V2 LITTER_NUM_GPCMMU_PER_GPC per logical GPC (no release-build control reads it); FECS record size, per-subctx header authored (authored.rs)",
+        },
+    ),
+    (
+        "gr_info",
+        Source::HostControl {
+            cmd: 0x2080_1228,
+            name: "GR_GET_INFO_V2",
+        },
+    ),
+    (
+        "gr_context_buffers",
+        Source::HostControl {
+            cmd: 0x2080_122d,
+            name: "GR_GET_ENGINE_CONTEXT_PROPERTIES",
+        },
+    ),
+    (
+        "gr_zcull_info",
+        Source::HostControl {
+            cmd: 0x2080_1206,
+            name: "GR_GET_ZCULL_INFO (host NOT_SUPPORTED = no zcull on the die)",
+        },
+    ),
+    (
+        "zbc_table_sizes",
+        Source::HostControl {
+            cmd: 0x9096_0106,
+            name: "GET_ZBC_CLEAR_TABLE_SIZE on a host GF100_ZBC_CLEAR object (ranges only; the table itself is per-VM, kf_rm::zbc)",
+        },
+    ),
+    (
+        "forwarded_fb_extra",
+        Source::HostControl {
+            cmd: 0x2080_1303,
+            name: "FB_GET_INFO_V2 [PARTITION_COUNT 0x04, PARTITION_MASK 0x14/0x37, LTC_MASK 0x2b/0x38], each index asked alone",
+        },
+    ),
+    (
+        "gpu_cache_info",
+        Source::HostControl {
+            cmd: 0x2080_1315,
+            name: "FB_GET_GPU_CACHE_INFO",
+        },
+    ),
+    (
+        "gr_sm_issue_rate_modifier",
+        Source::HostControl {
+            cmd: 0x2080_1230,
+            name: "GR_GET_SM_ISSUE_RATE_MODIFIER (host refusal = None, never a realize failure)",
+        },
+    ),
+    (
+        "forwarded_gpu_info",
+        Source::HostControl {
+            cmd: 0x2080_0102,
+            name: "GPU_GET_INFO_V2",
+        },
+    ),
+    (
+        "forwarded_fb_info",
+        Source::HostControl {
+            cmd: 0x2080_1303,
+            name: "FB_GET_INFO_V2 (the seven indices libcuda forwards; host words verbatim)",
+        },
+    ),
     // ⊘ w827 CORRECTED from `GPU_GET_PARTITIONS 0x20800175` "(no partitions => SMC
     // unsupported)": an inference, and wrong for a MIG-capable part with MIG off (A100 is
     // DISABLED, not UNSUPPORTED). `GPU_GET_INFO_V2[GPU_SMC_MODE]` returns the mode word itself
     // (`kf_abi::smcmode`; real GA106 R21 sweep: `0x2a NV_OK data=0`).
-    ("smc_mode", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2[GPU_SMC_MODE 0x2a]" }),
-    ("pcie_max_gen", Source::HostControl { cmd: 0x2080_1823, name: "BUS_GET_INFO_V2 (PCIE_GEN_INFO)" }),
+    (
+        "smc_mode",
+        Source::HostControl {
+            cmd: 0x2080_0102,
+            name: "GPU_GET_INFO_V2[GPU_SMC_MODE 0x2a]",
+        },
+    ),
+    (
+        "pcie_max_gen",
+        Source::HostControl {
+            cmd: 0x2080_1823,
+            name: "BUS_GET_INFO_V2 (PCIE_GEN_INFO)",
+        },
+    ),
     // ★ w827 ruling: ours to author. 0x20802a08 is KERNEL_PRIVILEGED (flags 0x1c040) and its
     // physical body is GSP firmware, so it is not asked; see authored::CE_FAULT_METHOD_BUFFER_SIZE_WHY.
-    ("ce_fault_method_buffer_size", Source::Advertised("authored::CE_FAULT_METHOD_BUFFER_SIZE / CE_FAULT_METHOD_BUFFER_SIZE_WHY")),
-    ("gsp_features", Source::HostControl { cmd: 0x2080_3601, name: "GSP_GET_FEATURES" }),
-    ("gpu_name", Source::HostControl { cmd: 0x2080_0110, name: "GPU_GET_NAME_STRING (ASCII)" }),
-    ("gpu_short_name", Source::HostControl { cmd: 0x2080_0111, name: "GPU_GET_SHORT_NAME_STRING" }),
-    ("vbios_version", Source::HostControl { cmd: 0x2080_0810, name: "BIOS_GET_INFO_V2 [REVISION 0x0, OEM_REVISION 0x1] (a host that does not answer = None: cosmetic, never a realize failure)" }),
-    ("perf_level_info_v2", Source::HostControl { cmd: 0x2080_200b, name: "PERF_GET_LEVEL_INFO_V2 (libcudart's question, asked once; a host refusal is kept and relayed)" }),
-    ("video_caps", Source::HostControl { cmd: 0x0080_1c02, name: "MSENC_GET_CAPS_V2 0x801b02 / BSP_GET_CAPS_V2 0x801c02 on the host DEVICE, per advertised instance (kf_abi::videocaps)" }),
-    ("gss_replay", Source::HostControl { cmd: 0x2080_a028, name: "GSS-legacy 0x20809064 / 0x2080a028 / 0x2080a026 / 0x2080a084 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author over two backgrounds; the bytes the host wrote" }),
+    (
+        "ce_fault_method_buffer_size",
+        Source::Advertised(
+            "authored::CE_FAULT_METHOD_BUFFER_SIZE / CE_FAULT_METHOD_BUFFER_SIZE_WHY",
+        ),
+    ),
+    (
+        "gsp_features",
+        Source::HostControl {
+            cmd: 0x2080_3601,
+            name: "GSP_GET_FEATURES",
+        },
+    ),
+    (
+        "gpu_name",
+        Source::HostControl {
+            cmd: 0x2080_0110,
+            name: "GPU_GET_NAME_STRING (ASCII)",
+        },
+    ),
+    (
+        "gpu_short_name",
+        Source::HostControl {
+            cmd: 0x2080_0111,
+            name: "GPU_GET_SHORT_NAME_STRING",
+        },
+    ),
+    (
+        "vbios_version",
+        Source::HostControl {
+            cmd: 0x2080_0810,
+            name: "BIOS_GET_INFO_V2 [REVISION 0x0, OEM_REVISION 0x1] (a host that does not answer = None: cosmetic, never a realize failure)",
+        },
+    ),
+    (
+        "perf_level_info_v2",
+        Source::HostControl {
+            cmd: 0x2080_200b,
+            name: "PERF_GET_LEVEL_INFO_V2 (libcudart's question, asked once; a host refusal is kept and relayed)",
+        },
+    ),
+    (
+        "video_caps",
+        Source::HostControl {
+            cmd: 0x0080_1c02,
+            name: "MSENC_GET_CAPS_V2 0x801b02 / BSP_GET_CAPS_V2 0x801c02 on the host DEVICE, per advertised instance (kf_abi::videocaps)",
+        },
+    ),
+    (
+        "gss_replay",
+        Source::HostControl {
+            cmd: 0x2080_a028,
+            name: "GSS-legacy 0x20809064 / 0x2080a028 / 0x2080a026 / 0x2080a084 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author over two backgrounds; the bytes the host wrote",
+        },
+    ),
 ];
 
 /// Why a host reply could not become a fact — by name, never a zero.
@@ -284,10 +479,11 @@ pub fn derive_lce_pce_masks(replies: &[Option<&[u8]>]) -> Result<Vec<u32>, FactR
             out.push(kf_abi::cepce::NO_PCE_MASK);
             continue;
         };
-        let mask = kf_abi::cepce::decode_ce_pce_mask(body).map_err(|_| FactRefusal::ShortReply {
-            cmd: kf_abi::cepce::NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK,
-            len: body.len(),
-        })?;
+        let mask =
+            kf_abi::cepce::decode_ce_pce_mask(body).map_err(|_| FactRefusal::ShortReply {
+                cmd: kf_abi::cepce::NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK,
+                len: body.len(),
+            })?;
         out.push(mask);
     }
     while out.last() == Some(&kf_abi::cepce::NO_PCE_MASK) {
@@ -355,14 +551,30 @@ pub use kf_abi::vbios::{
 pub fn derive_vbios_version(reply: &[u8]) -> Result<(u32, u8), FactRefusal> {
     let cmd = NV2080_CTRL_CMD_BIOS_GET_INFO_V2;
     if reply.len() < BIOS_GET_INFO_V2_PARAMS_SIZE {
-        return Err(FactRefusal::ShortReply { cmd, len: reply.len() });
+        return Err(FactRefusal::ShortReply {
+            cmd,
+            len: reply.len(),
+        });
     }
     let w = |o: usize| u32::from_le_bytes([reply[o], reply[o + 1], reply[o + 2], reply[o + 3]]);
     let n = (w(0) as usize).min(15);
-    let find = |index: u32| (0..n).find(|&i| w(4 + 8 * i) == index).map(|i| w(8 + 8 * i));
-    let rev = find(BIOS_INFO_INDEX_REVISION).ok_or(FactRefusal::Missing { cmd, index: BIOS_INFO_INDEX_REVISION })?;
-    let oem = find(BIOS_INFO_INDEX_OEM_REVISION).ok_or(FactRefusal::Missing { cmd, index: BIOS_INFO_INDEX_OEM_REVISION })?;
-    let oem = u8::try_from(oem).map_err(|_| FactRefusal::Unservable { cmd, why: "OEM revision wider than the ROM's byte" })?;
+    let find = |index: u32| {
+        (0..n)
+            .find(|&i| w(4 + 8 * i) == index)
+            .map(|i| w(8 + 8 * i))
+    };
+    let rev = find(BIOS_INFO_INDEX_REVISION).ok_or(FactRefusal::Missing {
+        cmd,
+        index: BIOS_INFO_INDEX_REVISION,
+    })?;
+    let oem = find(BIOS_INFO_INDEX_OEM_REVISION).ok_or(FactRefusal::Missing {
+        cmd,
+        index: BIOS_INFO_INDEX_OEM_REVISION,
+    })?;
+    let oem = u8::try_from(oem).map_err(|_| FactRefusal::Unservable {
+        cmd,
+        why: "OEM revision wider than the ROM's byte",
+    })?;
     Ok((rev, oem))
 }
 
@@ -372,9 +584,16 @@ pub fn derive_vbios_version(reply: &[u8]) -> Result<(u32, u8), FactRefusal> {
 /// [`FactRefusal`] on a short reply or a bit this port does not model.
 pub fn derive_gsp_features(reply: &[u8]) -> Result<GspFeatures, FactRefusal> {
     let cmd = kf_abi::gspfeatures::NV2080_CTRL_CMD_GSP_GET_FEATURES;
-    let w = reply.get(..4).ok_or(FactRefusal::ShortReply { cmd, len: reply.len() })?;
-    GspFeatures::from_u32(u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
-        .ok_or(FactRefusal::Unservable { cmd, why: "a feature bit this port does not model" })
+    let w = reply.get(..4).ok_or(FactRefusal::ShortReply {
+        cmd,
+        len: reply.len(),
+    })?;
+    GspFeatures::from_u32(u32::from_le_bytes([w[0], w[1], w[2], w[3]])).ok_or(
+        FactRefusal::Unservable {
+            cmd,
+            why: "a feature bit this port does not model",
+        },
+    )
 }
 
 /// ★ The three memory-geometry facts `memory_system` takes from the host: `(l2_cache_size,
@@ -385,10 +604,14 @@ pub fn derive_gsp_features(reply: &[u8]) -> Result<GspFeatures, FactRefusal> {
 pub fn derive_fb_geometry(pairs: &[(u32, u32)]) -> Result<kf_abi::fbinfo::FbGeometry, FactRefusal> {
     use kf_abi::fbinfo as fb;
     let get = |index: u32| {
-        pairs.iter().find(|(i, _)| *i == index).map(|(_, d)| *d).ok_or(FactRefusal::Missing {
-            cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2,
-            index,
-        })
+        pairs
+            .iter()
+            .find(|(i, _)| *i == index)
+            .map(|(_, d)| *d)
+            .ok_or(FactRefusal::Missing {
+                cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2,
+                index,
+            })
     };
     Ok(fb::FbGeometry {
         l2_cache_size: u64::from(get(fb::FB_INFO_INDEX_L2CACHE_SIZE)?),
@@ -406,9 +629,15 @@ pub fn derive_family(reply: &[u8]) -> Result<Family, FactRefusal> {
     let b: &[u8; kf_chip::MC_GET_ARCH_INFO_SIZE] = reply
         .get(..kf_chip::MC_GET_ARCH_INFO_SIZE)
         .and_then(|s| s.try_into().ok())
-        .ok_or(FactRefusal::ShortReply { cmd, len: reply.len() })?;
+        .ok_or(FactRefusal::ShortReply {
+            cmd,
+            len: reply.len(),
+        })?;
     let (arch, imp) = kf_chip::decode_arch_info(b);
-    Family::from_arch(arch, imp).map_err(|_| FactRefusal::Unservable { cmd, why: "no family for this architecture" })
+    Family::from_arch(arch, imp).map_err(|_| FactRefusal::Unservable {
+        cmd,
+        why: "no family for this architecture",
+    })
 }
 
 /// ★ A model name from a host name-string reply: the ASCII run starting at `at` (4 for
@@ -420,8 +649,14 @@ pub fn derive_family(reply: &[u8]) -> Result<Family, FactRefusal> {
 /// # Errors
 /// [`FactRefusal::Unservable`] when the run is empty, unterminated, or not printable ASCII.
 pub fn derive_gpu_name(cmd: u32, reply: &[u8], at: usize) -> Result<GpuName, FactRefusal> {
-    let bad = FactRefusal::Unservable { cmd, why: "not a NUL-terminated printable ASCII name" };
-    let tail = reply.get(at..).ok_or(FactRefusal::ShortReply { cmd, len: reply.len() })?;
+    let bad = FactRefusal::Unservable {
+        cmd,
+        why: "not a NUL-terminated printable ASCII name",
+    };
+    let tail = reply.get(at..).ok_or(FactRefusal::ShortReply {
+        cmd,
+        len: reply.len(),
+    })?;
     let end = tail.iter().position(|&b| b == 0).ok_or(bad)?;
     let s = core::str::from_utf8(&tail[..end]).map_err(|_| bad)?;
     let leaked: &'static str = Box::leak(s.to_owned().into_boxed_str());
@@ -439,7 +674,8 @@ pub fn derive_gpu_name(cmd: u32, reply: &[u8], at: usize) -> Result<GpuName, Fac
 // =====================================================================================
 
 fn le32(b: &[u8], at: usize) -> Option<u32> {
-    b.get(at..at + 4).map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+    b.get(at..at + 4)
+        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
 }
 
 fn le16(b: &[u8], at: usize) -> Option<u16> {
@@ -448,7 +684,10 @@ fn le16(b: &[u8], at: usize) -> Option<u16> {
 
 fn need(cmd: u32, reply: &[u8], size: usize) -> Result<(), FactRefusal> {
     if reply.len() < size {
-        return Err(FactRefusal::ShortReply { cmd, len: reply.len() });
+        return Err(FactRefusal::ShortReply {
+            cmd,
+            len: reply.len(),
+        });
     }
     Ok(())
 }
@@ -475,7 +714,10 @@ pub fn derive_has_c2c(reply: &[u8]) -> Result<bool, FactRefusal> {
     match reply[kf_abi::c2cinfo::B_IS_LINK_UP_OFF] {
         0 => Ok(false),
         1 => Ok(true),
-        _ => Err(FactRefusal::Unservable { cmd, why: "bIsLinkUp is not an NvBool" }),
+        _ => Err(FactRefusal::Unservable {
+            cmd,
+            why: "bIsLinkUp is not an NvBool",
+        }),
     }
 }
 
@@ -496,7 +738,10 @@ pub fn derive_engine_list(reply: &[u8]) -> Result<Vec<u32>, FactRefusal> {
     need(cmd, reply, GET_ENGINES_V2_PARAMS_SIZE)?;
     let n = le32(reply, 0).unwrap_or(0) as usize;
     if n > GPU_MAX_ENGINES_LIST_SIZE {
-        return Err(FactRefusal::Unservable { cmd, why: "engineCount exceeds NV2080_GPU_MAX_ENGINES_LIST_SIZE" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "engineCount exceeds NV2080_GPU_MAX_ENGINES_LIST_SIZE",
+        });
     }
     Ok((0..n).filter_map(|i| le32(reply, 4 + 4 * i)).collect())
 }
@@ -525,14 +770,14 @@ pub const MC_SUBTREE_MAP_PARAMS_SIZE: usize = 8 * INTR_CATEGORY_COUNT;
 #[must_use]
 pub const fn mc_engine_idx_of_intr_type(intr_type: u32) -> Option<u16> {
     match intr_type {
-        0x1 => Some(61),               // NON_REPLAYABLE_FAULT
-        0x2 => Some(63),               // NON_REPLAYABLE_FAULT_ERROR
-        0x3 => Some(64),               // INFO_FAULT
-        0x4 => Some(59),               // REPLAYABLE_FAULT
-        0x5 => Some(62),               // REPLAYABLE_FAULT_ERROR
-        0x6 => Some(60),               // ACCESS_CNTR
-        0x7 => Some(1),                // TMR
-        0x8 => Some(73),               // CPU_DOORBELL
+        0x1 => Some(61),                                    // NON_REPLAYABLE_FAULT
+        0x2 => Some(63),                                    // NON_REPLAYABLE_FAULT_ERROR
+        0x3 => Some(64),                                    // INFO_FAULT
+        0x4 => Some(59),                                    // REPLAYABLE_FAULT
+        0x5 => Some(62),                                    // REPLAYABLE_FAULT_ERROR
+        0x6 => Some(60),                                    // ACCESS_CNTR
+        0x7 => Some(1),                                     // TMR
+        0x8 => Some(73),                                    // CPU_DOORBELL
         0x9..=0x10 => Some(156 + (intr_type as u16 - 0x9)), // GR0..GR7_FECS_LOG
         _ => None,
     }
@@ -572,19 +817,28 @@ pub fn mc_engine_idx_of_engine_type(engine_type: u32) -> Option<u16> {
 /// # Errors
 /// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] for a count over its array, a key
 /// with no `MC_ENGINE_IDX`, or a table over `INTR_MAX_TABLE_SIZE`.
-pub fn derive_intr_table(static_reply: &[u8], notification_reply: &[u8]) -> Result<Vec<IntrTableEntry>, FactRefusal> {
+pub fn derive_intr_table(
+    static_reply: &[u8],
+    notification_reply: &[u8],
+) -> Result<Vec<IntrTableEntry>, FactRefusal> {
     let mut out = derive_static_intr_table(static_reply)?;
     let cmd = NV2080_CTRL_CMD_MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS;
     need(cmd, notification_reply, MC_ENGINE_NOTIFICATION_PARAMS_SIZE)?;
     let n = le32(notification_reply, 0).unwrap_or(0) as usize;
     if n > MC_ENGINE_NOTIFICATION_MAX {
-        return Err(FactRefusal::Unservable { cmd, why: "numEntries exceeds MAX_ENGINES" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "numEntries exceeds MAX_ENGINES",
+        });
     }
     for i in 0..n {
         let at = 4 + 8 * i;
         let engine_type = le32(notification_reply, at).unwrap_or(0);
-        let engine_idx = mc_engine_idx_of_engine_type(engine_type)
-            .ok_or(FactRefusal::Unservable { cmd, why: "an NV2080_ENGINE_TYPE with no MC_ENGINE_IDX in this port" })?;
+        let engine_idx =
+            mc_engine_idx_of_engine_type(engine_type).ok_or(FactRefusal::Unservable {
+                cmd,
+                why: "an NV2080_ENGINE_TYPE with no MC_ENGINE_IDX in this port",
+            })?;
         out.push(IntrTableEntry {
             engine_idx,
             pmc_intr_mask: 0,
@@ -593,7 +847,10 @@ pub fn derive_intr_table(static_reply: &[u8], notification_reply: &[u8]) -> Resu
         });
     }
     if out.len() > kf_abi::inittables::INTR_MAX_TABLE_SIZE {
-        return Err(FactRefusal::Unservable { cmd, why: "more rows than INTR_MAX_TABLE_SIZE" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "more rows than INTR_MAX_TABLE_SIZE",
+        });
     }
     Ok(out)
 }
@@ -608,14 +865,19 @@ pub fn derive_static_intr_table(static_reply: &[u8]) -> Result<Vec<IntrTableEntr
     need(cmd, static_reply, MC_STATIC_INTR_TABLE_PARAMS_SIZE)?;
     let n = le32(static_reply, 0).unwrap_or(0) as usize;
     if n > MC_STATIC_INTR_TABLE_MAX {
-        return Err(FactRefusal::Unservable { cmd, why: "numEntries exceeds NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_MAX" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "numEntries exceeds NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_MAX",
+        });
     }
     let mut out = Vec::new();
     for i in 0..n {
         let at = 4 + 16 * i;
         let word = |k: usize| le32(static_reply, at + 4 * k).unwrap_or(0);
-        let engine_idx = mc_engine_idx_of_intr_type(word(0))
-            .ok_or(FactRefusal::Unservable { cmd, why: "an NV2080_INTR_TYPE with no MC_ENGINE_IDX in this port" })?;
+        let engine_idx = mc_engine_idx_of_intr_type(word(0)).ok_or(FactRefusal::Unservable {
+            cmd,
+            why: "an NV2080_INTR_TYPE with no MC_ENGINE_IDX in this port",
+        })?;
         out.push(IntrTableEntry {
             engine_idx,
             pmc_intr_mask: word(1),
@@ -712,7 +974,10 @@ pub fn derive_num_tpcs(reply: &[u8], gpc: u32) -> Result<u32, FactRefusal> {
     let cmd = NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC;
     need(cmd, reply, GR_NUM_TPCS_PARAMS_SIZE)?;
     if le32(reply, 0) != Some(gpc) {
-        return Err(FactRefusal::Unservable { cmd, why: "the reply names a different gpcId" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "the reply names a different gpcId",
+        });
     }
     Ok(le32(reply, 4).unwrap_or(0))
 }
@@ -724,18 +989,27 @@ pub fn derive_num_tpcs(reply: &[u8], gpc: u32) -> Result<u32, FactRefusal> {
 pub fn derive_gfx_gpc_and_tpc_info(reply: &[u8]) -> Result<(u32, u32), FactRefusal> {
     let cmd = NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO;
     need(cmd, reply, GR_GFX_GPC_AND_TPC_INFO_PARAMS_SIZE)?;
-    Ok((le32(reply, GR_ROUTE_INFO_SIZE).unwrap_or(0), le32(reply, GR_ROUTE_INFO_SIZE + 4).unwrap_or(0)))
+    Ok((
+        le32(reply, GR_ROUTE_INFO_SIZE).unwrap_or(0),
+        le32(reply, GR_ROUTE_INFO_SIZE + 4).unwrap_or(0),
+    ))
 }
 
 /// `(numPesInGpc, tpcToPesMap)` for `gpc` from `GPU_GET_PES_INFO`, checking the echo.
 ///
 /// # Errors
 /// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] when the echoed `gpcId` differs.
-pub fn derive_pes_info(reply: &[u8], gpc: u32) -> Result<(u32, [u32; kf_abi::grstatic::MAX_TPC_PER_GPC]), FactRefusal> {
+pub fn derive_pes_info(
+    reply: &[u8],
+    gpc: u32,
+) -> Result<(u32, [u32; kf_abi::grstatic::MAX_TPC_PER_GPC]), FactRefusal> {
     let cmd = NV2080_CTRL_CMD_GPU_GET_PES_INFO;
     need(cmd, reply, GPU_PES_INFO_PARAMS_SIZE)?;
     if le32(reply, 0) != Some(gpc) {
-        return Err(FactRefusal::Unservable { cmd, why: "the reply names a different gpcId" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "the reply names a different gpcId",
+        });
     }
     let mut map = [0u32; kf_abi::grstatic::MAX_TPC_PER_GPC];
     for (i, m) in map.iter_mut().enumerate() {
@@ -753,26 +1027,44 @@ pub fn derive_pes_info(reply: &[u8], gpc: u32) -> Result<(u32, [u32; kf_abi::grs
 /// # Errors
 /// [`FactRefusal::ShortReply`] on a malformed reply; [`FactRefusal::Unservable`] when the reply
 /// does not echo the batch it was asked (count, types or `[IN]` words).
-pub fn derive_gr_fs_answers(reply: &[u8], asked: &[kf_abi::grfsinfo::GrFsQuery]) -> Result<Vec<(u32, u32)>, FactRefusal> {
+pub fn derive_gr_fs_answers(
+    reply: &[u8],
+    asked: &[kf_abi::grfsinfo::GrFsQuery],
+) -> Result<Vec<(u32, u32)>, FactRefusal> {
     use kf_abi::grfsinfo as fs;
     let cmd = fs::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO;
-    let a = fs::decode_answers(reply).map_err(|_| FactRefusal::ShortReply { cmd, len: reply.len() })?;
+    let a = fs::decode_answers(reply).map_err(|_| FactRefusal::ShortReply {
+        cmd,
+        len: reply.len(),
+    })?;
     if a.len() != asked.len() {
-        return Err(FactRefusal::Unservable { cmd, why: "numQueries is not the batch asked" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "numQueries is not the batch asked",
+        });
     }
     let mut out = Vec::with_capacity(a.len());
     for (&(ty, status, d0, d1), q) in a.iter().zip(asked) {
         if ty != q.query_type {
-            return Err(FactRefusal::Unservable { cmd, why: "a queryType is not the one asked" });
+            return Err(FactRefusal::Unservable {
+                cmd,
+                why: "a queryType is not the one asked",
+            });
         }
         // The per-GPC types carry `[IN] gpcId` at `queryData + 0` and answer at `+ 4`; the
         // syspipe / count types answer at `+ 0`.
         let per_gpc = matches!(
             ty,
-            fs::query_type::CHIPLET_GPC_MAP | fs::query_type::TPC_MASK | fs::query_type::PPC_MASK | fs::query_type::ROP_MASK
+            fs::query_type::CHIPLET_GPC_MAP
+                | fs::query_type::TPC_MASK
+                | fs::query_type::PPC_MASK
+                | fs::query_type::ROP_MASK
         );
         if per_gpc && d0 != q.input {
-            return Err(FactRefusal::Unservable { cmd, why: "a query's gpcId is not the one asked" });
+            return Err(FactRefusal::Unservable {
+                cmd,
+                why: "a query's gpcId is not the one asked",
+            });
         }
         out.push((status, if per_gpc { d1 } else { d0 }));
     }
@@ -784,14 +1076,18 @@ pub fn derive_gr_fs_answers(reply: &[u8], asked: &[kf_abi::grfsinfo::GrFsQuery])
 /// the table goes through this, at realize and at serve.
 #[must_use]
 pub const fn gr_info_readers(family: Family) -> GrInfoReaders {
-    GrInfoReaders { veid_step_size: family.reads_gr_veid_step_size() }
+    GrInfoReaders {
+        veid_step_size: family.reads_gr_veid_step_size(),
+    }
 }
 
 /// ★ 2026-09-28 — the memory-system-config readers `family`'s guest RM binds
 /// ([`Family::reads_memsys_ltc_slices`]).
 #[must_use]
 pub const fn memsys_readers(family: Family) -> MemsysReaders {
-    MemsysReaders { ltc_slices: family.reads_memsys_ltc_slices() }
+    MemsysReaders {
+        ltc_slices: family.reads_memsys_ltc_slices(),
+    }
 }
 
 /// The refusal text for a GR info table RM's own readers would misread — naming the entry.
@@ -807,7 +1103,9 @@ const fn gr_info_why(e: GrInfoError) -> &'static str {
         GrInfoError::VeidStepSizeZero => {
             "GR info LITTER_MIN_SUBCTX_PER_SMC_ENG (0x37) is zero, and this family's kgrmgrGetVeidsFromGpcCount multiplies by it"
         }
-        GrInfoError::DisagreesWithGrStatic { .. } => "GR info disagrees with the GR static geometry",
+        GrInfoError::DisagreesWithGrStatic { .. } => {
+            "GR info disagrees with the GR static geometry"
+        }
     }
 }
 
@@ -822,17 +1120,27 @@ pub fn derive_gr_info(reply: &[u8], family: Family) -> Result<GrInfoProfile, Fac
     let cmd = NV2080_CTRL_CMD_GR_GET_INFO_V2;
     need(cmd, reply, GR_GET_INFO_V2_PARAMS_SIZE)?;
     if le32(reply, 0) != Some(GR_INFO_MAX_SIZE as u32) {
-        return Err(FactRefusal::Unservable { cmd, why: "grInfoListSize is not the whole table" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "grInfoListSize is not the whole table",
+        });
     }
     let mut data = [0u32; GR_INFO_MAX_SIZE];
     for (i, d) in data.iter_mut().enumerate() {
         if le32(reply, 4 + 8 * i) != Some(i as u32) {
-            return Err(FactRefusal::Missing { cmd, index: i as u32 });
+            return Err(FactRefusal::Missing {
+                cmd,
+                index: i as u32,
+            });
         }
         *d = le32(reply, 8 + 8 * i).unwrap_or(0);
     }
     let p = GrInfoProfile { data };
-    p.validate(gr_info_readers(family)).map_err(|e| FactRefusal::Unservable { cmd, why: gr_info_why(e) })?;
+    p.validate(gr_info_readers(family))
+        .map_err(|e| FactRefusal::Unservable {
+            cmd,
+            why: gr_info_why(e),
+        })?;
     Ok(p)
 }
 
@@ -845,7 +1153,10 @@ pub fn derive_gpc_mask(reply: &[u8]) -> Result<u32, FactRefusal> {
     let cmd = NV2080_CTRL_CMD_GR_GET_GPC_MASK;
     need(cmd, reply, GR_MASK_PARAMS_SIZE)?;
     match le32(reply, GR_ROUTE_INFO_SIZE) {
-        Some(0) | None => Err(FactRefusal::Unservable { cmd, why: "gpcMask is zero" }),
+        Some(0) | None => Err(FactRefusal::Unservable {
+            cmd,
+            why: "gpcMask is zero",
+        }),
         Some(m) => Ok(m),
     }
 }
@@ -858,7 +1169,10 @@ pub fn derive_tpc_mask(reply: &[u8], gpc: u32) -> Result<u32, FactRefusal> {
     let cmd = NV2080_CTRL_CMD_GR_GET_TPC_MASK;
     need(cmd, reply, GR_MASK_PARAMS_SIZE)?;
     if le32(reply, GR_ROUTE_INFO_SIZE) != Some(gpc) {
-        return Err(FactRefusal::Unservable { cmd, why: "the reply names a different gpcId" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "the reply names a different gpcId",
+        });
     }
     Ok(le32(reply, GR_ROUTE_INFO_SIZE + 4).unwrap_or(0))
 }
@@ -867,11 +1181,16 @@ pub fn derive_tpc_mask(reply: &[u8], gpc: u32) -> Result<u32, FactRefusal> {
 ///
 /// # Errors
 /// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] when not populated.
-pub fn derive_gr_caps(reply: &[u8]) -> Result<[u8; kf_abi::grstatic::GR_CAPS_TBL_SIZE], FactRefusal> {
+pub fn derive_gr_caps(
+    reply: &[u8],
+) -> Result<[u8; kf_abi::grstatic::GR_CAPS_TBL_SIZE], FactRefusal> {
     let cmd = NV2080_CTRL_CMD_GR_GET_CAPS_V2;
     need(cmd, reply, GR_CAPS_V2_PARAMS_SIZE)?;
     if reply[40] != 1 {
-        return Err(FactRefusal::Unservable { cmd, why: "bCapsPopulated is false" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "bCapsPopulated is false",
+        });
     }
     let mut caps = [0u8; kf_abi::grstatic::GR_CAPS_TBL_SIZE];
     caps.copy_from_slice(&reply[..kf_abi::grstatic::GR_CAPS_TBL_SIZE]);
@@ -901,18 +1220,30 @@ pub fn derive_sm_order(reply: &[u8]) -> Result<(Vec<kf_abi::grstatic::TpcRow>, u
         return Err(bad("numSm/numTpc zero, over range, or not an even split"));
     }
     let sms_per_tpc = num_sm / num_tpc;
-    let field = |sm: usize, k: usize| le16(reply, sm * GR_GLOBAL_SM_ENTRY_SIZE + 2 * k).unwrap_or(u16::MAX);
+    let field =
+        |sm: usize, k: usize| le16(reply, sm * GR_GLOBAL_SM_ENTRY_SIZE + 2 * k).unwrap_or(u16::MAX);
     let mut tpcs = Vec::with_capacity(usize::from(num_tpc));
     for t in 0..num_tpc {
-        let owned: Vec<usize> = (0..usize::from(num_sm)).filter(|&sm| field(sm, 3) == t).collect();
+        let owned: Vec<usize> = (0..usize::from(num_sm))
+            .filter(|&sm| field(sm, 3) == t)
+            .collect();
         if owned.len() != usize::from(sms_per_tpc) {
             return Err(bad("a TPC does not own numSm/numTpc SMs"));
         }
-        let first = owned.iter().copied().find(|&sm| field(sm, 2) == 0).ok_or(bad("a TPC has no localSmId 0"))?;
+        let first = owned
+            .iter()
+            .copied()
+            .find(|&sm| field(sm, 2) == 0)
+            .ok_or(bad("a TPC has no localSmId 0"))?;
         // Every field but localSmId (2) and globalTpcId (3, the key) is per TPC.
         const PER_TPC: [usize; 7] = [0, 1, 4, 5, 6, 7, 8];
-        if owned.iter().any(|&sm| PER_TPC.iter().any(|&k| field(sm, k) != field(first, k))) {
-            return Err(bad("a TPC's SMs disagree on a per-TPC field (gpcId, localTpcId, virtual/migratable/uGPU/CPC ids)"));
+        if owned
+            .iter()
+            .any(|&sm| PER_TPC.iter().any(|&k| field(sm, k) != field(first, k)))
+        {
+            return Err(bad(
+                "a TPC's SMs disagree on a per-TPC field (gpcId, localTpcId, virtual/migratable/uGPU/CPC ids)",
+            ));
         }
         tpcs.push(kf_abi::grstatic::TpcRow {
             gpc_id: field(first, 0),
@@ -939,16 +1270,25 @@ pub fn derive_context_buffer(reply: Option<&[u8]>) -> Result<ContextBuffer, Fact
     use kf_abi::grstatic::CONTEXT_BUFFER_ABSENT;
     let cmd = NV2080_CTRL_CMD_GR_GET_ENGINE_CONTEXT_PROPERTIES;
     let Some(reply) = reply else {
-        return Ok(ContextBuffer { size: CONTEXT_BUFFER_ABSENT, alignment: CONTEXT_BUFFER_ABSENT });
+        return Ok(ContextBuffer {
+            size: CONTEXT_BUFFER_ABSENT,
+            alignment: CONTEXT_BUFFER_ABSENT,
+        });
     };
     need(cmd, reply, GR_CONTEXT_PROPERTIES_PARAMS_SIZE)?;
     if reply[28] != 1 {
-        return Err(FactRefusal::Unservable { cmd, why: "bInfoPopulated is false" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "bInfoPopulated is false",
+        });
     }
     let alignment = le32(reply, 20).unwrap_or(0);
     let size = le32(reply, 24).unwrap_or(0);
     if alignment == 0 {
-        return Err(FactRefusal::Unservable { cmd, why: "a present context buffer with zero alignment" });
+        return Err(FactRefusal::Unservable {
+            cmd,
+            why: "a present context buffer with zero alignment",
+        });
     }
     Ok(ContextBuffer { size, alignment })
 }
@@ -959,8 +1299,16 @@ pub fn derive_context_buffer(reply: Option<&[u8]>) -> Result<ContextBuffer, Fact
 /// [`FactRefusal::ShortReply`] on a malformed reply; [`FactRefusal::Missing`] when absent.
 pub fn derive_gpu_info_value(reply: &[u8], index: u32) -> Result<u32, FactRefusal> {
     let cmd = kf_abi::gpuinfo::NV2080_CTRL_CMD_GPU_GET_INFO_V2;
-    let pairs = kf_abi::gpuinfo::decode_gpu_info_pairs(reply).map_err(|_| FactRefusal::ShortReply { cmd, len: reply.len() })?;
-    pairs.iter().find(|(i, _)| *i == index).map(|(_, d)| *d).ok_or(FactRefusal::Missing { cmd, index })
+    let pairs =
+        kf_abi::gpuinfo::decode_gpu_info_pairs(reply).map_err(|_| FactRefusal::ShortReply {
+            cmd,
+            len: reply.len(),
+        })?;
+    pairs
+        .iter()
+        .find(|(i, _)| *i == index)
+        .map(|(_, d)| *d)
+        .ok_or(FactRefusal::Missing { cmd, index })
 }
 
 /// `NV2080_CTRL_GPU_INFO_INDEX_GPU_SMC_MODE` (`ogkm-580: ctrl2080gpu.h:87`).
@@ -976,8 +1324,10 @@ pub const GPU_INFO_INDEX_CMP_SKU: u32 = 0x3c;
 pub fn derive_smc_mode(reply: &[u8]) -> Result<SmcMode, FactRefusal> {
     let cmd = kf_abi::gpuinfo::NV2080_CTRL_CMD_GPU_GET_INFO_V2;
     let word = derive_gpu_info_value(reply, GPU_INFO_INDEX_GPU_SMC_MODE)?;
-    kf_abi::smcmode::decode_smc_mode(&word.to_le_bytes())
-        .map_err(|_| FactRefusal::Unservable { cmd, why: "GPU_SMC_MODE names no NV2080_CTRL_GPU_INFO_GPU_SMC_MODE_*" })
+    kf_abi::smcmode::decode_smc_mode(&word.to_le_bytes()).map_err(|_| FactRefusal::Unservable {
+        cmd,
+        why: "GPU_SMC_MODE names no NV2080_CTRL_GPU_INFO_GPU_SMC_MODE_*",
+    })
 }
 
 /// `isCmpSku` from `GPU_GET_INFO_V2[CMP_SKU]` (`_NO` = 0, `_YES` = 1).
@@ -989,7 +1339,10 @@ pub fn derive_cmp_sku(reply: &[u8]) -> Result<bool, FactRefusal> {
     match derive_gpu_info_value(reply, GPU_INFO_INDEX_CMP_SKU)? {
         0 => Ok(false),
         1 => Ok(true),
-        _ => Err(FactRefusal::Unservable { cmd, why: "CMP_SKU is neither _NO nor _YES" }),
+        _ => Err(FactRefusal::Unservable {
+            cmd,
+            why: "CMP_SKU is neither _NO nor _YES",
+        }),
     }
 }
 
@@ -1002,13 +1355,22 @@ pub fn derive_cmp_sku(reply: &[u8]) -> Result<bool, FactRefusal> {
 pub fn derive_pcie_max_gen(reply: &[u8]) -> Result<PcieGen, FactRefusal> {
     use kf_abi::businfo as bus;
     let cmd = bus::NV2080_CTRL_CMD_BUS_GET_INFO_V2;
-    let pairs = bus::decode_bus_info_pairs(reply).map_err(|_| FactRefusal::ShortReply { cmd, len: reply.len() })?;
+    let pairs = bus::decode_bus_info_pairs(reply).map_err(|_| FactRefusal::ShortReply {
+        cmd,
+        len: reply.len(),
+    })?;
     let word = pairs
         .iter()
         .find(|(i, _)| *i == bus::BUS_INFO_INDEX_PCIE_GEN_INFO)
         .map(|(_, d)| *d)
-        .ok_or(FactRefusal::Missing { cmd, index: bus::BUS_INFO_INDEX_PCIE_GEN_INFO })?;
+        .ok_or(FactRefusal::Missing {
+            cmd,
+            index: bus::BUS_INFO_INDEX_PCIE_GEN_INFO,
+        })?;
     bus::PcieGenInfo::decode(word)
         .map(|g| g.gpu_gen)
-        .ok_or(FactRefusal::Unservable { cmd, why: "PCIE_GEN_INFO names a generation the header does not define" })
+        .ok_or(FactRefusal::Unservable {
+            cmd,
+            why: "PCIE_GEN_INFO names a generation the header does not define",
+        })
 }

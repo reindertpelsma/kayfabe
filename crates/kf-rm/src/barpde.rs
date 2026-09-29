@@ -96,7 +96,11 @@ pub fn decode_update_bar_pde(body: &[u8]) -> Result<PublishedPde, BarPdeRefusal>
         BAR_TYPE_2 => BarAperture::Bar2,
         _ => return Err(BarPdeRefusal::UnknownBarType { bar_type }),
     };
-    Ok(PublishedPde { bar, entry: u64_at(ENTRY_VALUE_OFF), level_shift: u64_at(ENTRY_LEVEL_SHIFT_OFF) })
+    Ok(PublishedPde {
+        bar,
+        entry: u64_at(ENTRY_VALUE_OFF),
+        level_shift: u64_at(ENTRY_LEVEL_SHIFT_OFF),
+    })
 }
 
 /// ★ A statement the guest made about its address spaces, carried to the memory plane.
@@ -152,13 +156,21 @@ impl BarPdePolicy {
     /// A link that sends to `sink`.
     #[must_use]
     pub fn new(sink: MemSink) -> BarPdePolicy {
-        BarPdePolicy { sink, held_last: false, published: 0, refused: 0 }
+        BarPdePolicy {
+            sink,
+            held_last: false,
+            published: 0,
+            refused: 0,
+        }
     }
 }
 
 impl core::fmt::Debug for BarPdePolicy {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("BarPdePolicy").field("published", &self.published).field("refused", &self.refused).finish()
+        f.debug_struct("BarPdePolicy")
+            .field("published", &self.published)
+            .field("refused", &self.refused)
+            .finish()
     }
 }
 
@@ -175,13 +187,19 @@ impl CommandPolicy for BarPdePolicy {
                 self.published += 1;
                 self.held_last = true;
                 // ★ An EMPTY body with NV_OK: the command has no `[OUT]` field.
-                Some(Reply { rpc_result: NV_OK, body: Vec::new() })
+                Some(Reply {
+                    rpc_result: NV_OK,
+                    body: Vec::new(),
+                })
             }
             Err(e) => {
                 self.refused += 1;
                 self.held_last = false;
                 eprintln!("kf-rm: UPDATE_BAR_PDE refused: {e:?} — the aperture stays as it was");
-                Some(Reply { rpc_result: NV_ERR_INVALID_ARGUMENT, body: Vec::new() })
+                Some(Reply {
+                    rpc_result: NV_ERR_INVALID_ARGUMENT,
+                    body: Vec::new(),
+                })
             }
         }
     }
@@ -242,33 +260,57 @@ pub struct PageDirPolicy {
 impl PageDirPolicy {
     /// A link for one guest driver's wire.
     #[must_use]
-    pub fn new(abi: kf_abi::versions::DriverAbiTable, guest_os: kf_abi::GuestOs, sink: MemSink) -> PageDirPolicy {
-        PageDirPolicy { abi, guest_os, sink, held_last: false, vas: Default::default(), aliases: Default::default(), orphans: Default::default(), carried: 0, retired: 0 }
+    pub fn new(
+        abi: kf_abi::versions::DriverAbiTable,
+        guest_os: kf_abi::GuestOs,
+        sink: MemSink,
+    ) -> PageDirPolicy {
+        PageDirPolicy {
+            abi,
+            guest_os,
+            sink,
+            held_last: false,
+            vas: Default::default(),
+            aliases: Default::default(),
+            orphans: Default::default(),
+            carried: 0,
+            retired: 0,
+        }
     }
 
     /// ★ P5c: observe a VA-space alloc (its parent device and whether it is only a reference to
     /// the device's default space).
     fn observe_alloc(&mut self, cmd: &RpcCommand) {
         let body = cmd.wire_body();
-        let Ok(h) = self.abi.decode_rpc_alloc(body) else { return };
-        if crate::chanlink::alloc_shape(&self.abi, h.class) != Some(kf_abi::versions::AllocParams::VaSpace) {
+        let Ok(h) = self.abi.decode_rpc_alloc(body) else {
+            return;
+        };
+        if crate::chanlink::alloc_shape(&self.abi, h.class)
+            != Some(kf_abi::versions::AllocParams::VaSpace)
+        {
             return;
         }
         let device_ref = crate::rmrpc::alloc_params_window(&self.abi, body)
             .and_then(|p| self.abi.decode_vaspace_index(p))
             .is_some_and(|i| i == kf_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE);
-        self.vas.insert((h.client, h.handle), (h.parent, device_ref));
+        self.vas
+            .insert((h.client, h.handle), (h.parent, device_ref));
     }
 
     /// ★ P6b: the VA-space object `(client, handle)` names — itself, or the original a dup aliases.
     #[must_use]
     pub fn canonical(&self, client: u32, handle: u32) -> (u32, u32) {
-        self.aliases.get(&(client, handle)).copied().unwrap_or((client, handle))
+        self.aliases
+            .get(&(client, handle))
+            .copied()
+            .unwrap_or((client, handle))
     }
 
     /// ★ P6b: a `DUP_OBJECT` of a VA-space object we know becomes an alias of the original.
     fn observe_dup(&mut self, cmd: &RpcCommand) {
-        let Ok(d) = self.abi.decode_dup(&cmd.payload) else { return };
+        let Ok(d) = self.abi.decode_dup(&cmd.payload) else {
+            return;
+        };
         let src = self.canonical(d.src_client, d.src_handle);
         if self.vas.contains_key(&src) {
             self.aliases.insert((d.dst_client, d.dst_handle), src);
@@ -277,18 +319,22 @@ impl PageDirPolicy {
 
     /// ★ P5c: a free — retire every VA-space object it takes with it.
     fn observe_free(&mut self, cmd: &RpcCommand) {
-        let Ok(f) = self.abi.decode_free(&cmd.payload) else { return };
+        let Ok(f) = self.abi.decode_free(&cmd.payload) else {
+            return;
+        };
         let (client, object) = (f.client, f.handle);
         // ★ P6b: an alias's free (or its client's) drops the NAME only — the object lives on
         // under its original handle, and only the original's free retires it. ⊘ A dup's parent
         // device is not tracked, so a device free that takes a dup with it leaves a stale name
         // until the client goes — a name that can only ever resolve to a live original.
-        self.aliases.retain(|&(c, h), _| !(c == client && (object == client || h == object)));
+        self.aliases
+            .retain(|&(c, h), _| !(c == client && (object == client || h == object)));
         let dying: Vec<(u32, u32)> = self
             .vas
             .iter()
             .filter(|((c, v), (dev, device_ref))| {
-                *c == client && (object == client || *dev == object || (*v == object && !*device_ref))
+                *c == client
+                    && (object == client || *dev == object || (*v == object && !*device_ref))
             })
             .map(|(k, _)| *k)
             .collect();
@@ -299,13 +345,24 @@ impl PageDirPolicy {
                 self.orphans.insert((c, v));
                 continue;
             }
-            (self.sink)(MemStatement::Retire { client: c, vaspace: v });
+            (self.sink)(MemStatement::Retire {
+                client: c,
+                vaspace: v,
+            });
             self.retired += 1;
         }
-        let gone: Vec<(u32, u32)> = self.orphans.iter().filter(|o| !self.aliases.values().any(|a| a == *o)).copied().collect();
+        let gone: Vec<(u32, u32)> = self
+            .orphans
+            .iter()
+            .filter(|o| !self.aliases.values().any(|a| a == *o))
+            .copied()
+            .collect();
         for (c, v) in gone {
             self.orphans.remove(&(c, v));
-            (self.sink)(MemStatement::Retire { client: c, vaspace: v });
+            (self.sink)(MemStatement::Retire {
+                client: c,
+                vaspace: v,
+            });
             self.retired += 1;
         }
     }
@@ -328,10 +385,14 @@ impl PageDirPolicy {
     /// or name no VA space (`hVASpace = 0`, the device default, which no statement keys).
     fn unset(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let h = self.abi.decode_rpc_control(&cmd.payload).ok()?;
-        if h.cmd != UNSET_PAGE_DIRECTORY || h.params_size as usize != UNSET_PAGE_DIRECTORY_PARAMS_SIZE {
+        if h.cmd != UNSET_PAGE_DIRECTORY
+            || h.params_size as usize != UNSET_PAGE_DIRECTORY_PARAMS_SIZE
+        {
             return None;
         }
-        let p = cmd.payload.get(h.params_at..h.params_at + UNSET_PAGE_DIRECTORY_PARAMS_SIZE)?;
+        let p = cmd
+            .payload
+            .get(h.params_at..h.params_at + UNSET_PAGE_DIRECTORY_PARAMS_SIZE)?;
         self.unset_statement(h.client, p, cmd)
     }
 
@@ -357,13 +418,18 @@ impl PageDirPolicy {
         (self.sink)(MemStatement::UnsetPageDir { client, vaspace });
         self.carried += 1;
         self.held_last = true;
-        Some(Reply { rpc_result: NV_OK, body: cmd.payload.clone() })
+        Some(Reply {
+            rpc_result: NV_OK,
+            body: cmd.payload.clone(),
+        })
     }
 }
 
 impl core::fmt::Debug for PageDirPolicy {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("PageDirPolicy").field("carried", &self.carried).finish()
+        f.debug_struct("PageDirPolicy")
+            .field("carried", &self.carried)
+            .finish()
     }
 }
 
@@ -404,7 +470,9 @@ impl CommandPolicy for PageDirPolicy {
             RpcFunction::UnsetPageDirectory => return self.unset_rpc(cmd),
             _ => return None,
         }
-        let Ok(crate::rmrpc::Translation::PageDir(mut st)) = crate::rmrpc::translate(&self.abi, self.guest_os, cmd) else {
+        let Ok(crate::rmrpc::Translation::PageDir(mut st)) =
+            crate::rmrpc::translate(&self.abi, self.guest_os, cmd)
+        else {
             return None;
         };
         // ★ P6b: a root published through a dup is the ORIGINAL object's root.
@@ -413,10 +481,10 @@ impl CommandPolicy for PageDirPolicy {
             // Which carrier stated this root (a control id, or the ≤575 fn 54) — the plane's
             // `pagedir` line cannot say, and two carriers can name one VA space.
             let carrier = match cmd.function {
-                RpcFunction::RmControl => self
-                    .abi
-                    .decode_rpc_control(&cmd.payload)
-                    .map_or_else(|_| "an undecodable control".to_string(), |h| format!("control {:#010x}", h.cmd)),
+                RpcFunction::RmControl => self.abi.decode_rpc_control(&cmd.payload).map_or_else(
+                    |_| "an undecodable control".to_string(),
+                    |h| format!("control {:#010x}", h.cmd),
+                ),
                 _ => format!("fn {}", cmd.code),
             };
             eprintln!(
@@ -472,13 +540,33 @@ mod tests {
     #[test]
     fn the_measured_entry_decodes_whole_and_skips_the_padding() {
         let p = decode_update_bar_pde(&body(BAR_TYPE_2, 0x2_efbc_302, 47)).unwrap();
-        assert_eq!(p, PublishedPde { bar: BarAperture::Bar2, entry: 0x2_efbc_302, level_shift: 47 });
-        assert_eq!(decode_update_bar_pde(&[0; 23]), Err(BarPdeRefusal::ShortBody { len: 23 }));
-        assert_eq!(decode_update_bar_pde(&body(2, 1, 1)), Err(BarPdeRefusal::UnknownBarType { bar_type: 2 }));
+        assert_eq!(
+            p,
+            PublishedPde {
+                bar: BarAperture::Bar2,
+                entry: 0x2_efbc_302,
+                level_shift: 47
+            }
+        );
+        assert_eq!(
+            decode_update_bar_pde(&[0; 23]),
+            Err(BarPdeRefusal::ShortBody { len: 23 })
+        );
+        assert_eq!(
+            decode_update_bar_pde(&body(2, 1, 1)),
+            Err(BarPdeRefusal::UnknownBarType { bar_type: 2 })
+        );
     }
 
     fn cmd(function: RpcFunction, payload: Vec<u8>) -> RpcCommand {
-        RpcCommand { function, code: 0x46, sequence: 1, payload, elements: 1, delivered: Vec::new() }
+        RpcCommand {
+            function,
+            code: 0x46,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
     }
 
     #[test]
@@ -486,7 +574,10 @@ mod tests {
         let got: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
         let g = got.clone();
         let mut p = BarPdePolicy::new(Arc::new(move |s| g.lock().unwrap().push(s)));
-        let c = cmd(RpcFunction::UpdateBarPde, body(BAR_TYPE_2, 0x2_efbc_302, 47));
+        let c = cmd(
+            RpcFunction::UpdateBarPde,
+            body(BAR_TYPE_2, 0x2_efbc_302, 47),
+        );
         let r = p.respond(&c).unwrap();
         assert_eq!((r.rpc_result, r.body.len()), (NV_OK, 0));
         assert!(p.holds_for_refresh(&c));
@@ -494,9 +585,15 @@ mod tests {
 
         let bad = cmd(RpcFunction::UpdateBarPde, vec![0; 4]);
         assert_eq!(p.respond(&bad).unwrap().rpc_result, NV_ERR_INVALID_ARGUMENT);
-        assert!(!p.holds_for_refresh(&bad), "a refusal holds nothing — a held reply nobody releases is a hang");
+        assert!(
+            !p.holds_for_refresh(&bad),
+            "a refusal holds nothing — a held reply nobody releases is a hang"
+        );
         assert_eq!(got.lock().unwrap().len(), 1);
-        assert!(p.respond(&cmd(RpcFunction::RmAlloc, vec![])).is_none(), "declines everything else");
+        assert!(
+            p.respond(&cmd(RpcFunction::RmAlloc, vec![])).is_none(),
+            "declines everything else"
+        );
     }
 
     /// ★★ v3-refusals: `DMA_UNSET_PAGE_DIRECTORY` through a DUP is answered `NV_OK`, HELD, and
@@ -507,11 +604,21 @@ mod tests {
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
         let seen: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
         let s2 = seen.clone();
-        let mut p = PageDirPolicy::new(abi, kf_abi::GuestOs::Linux, Arc::new(move |st| s2.lock().unwrap().push(st)));
+        let mut p = PageDirPolicy::new(
+            abi,
+            kf_abi::GuestOs::Linux,
+            Arc::new(move |st| s2.lock().unwrap().push(st)),
+        );
         let words = |w: &[u32]| w.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
-        let (orig, alias) = ((0xc1d0_0016u32, 0xcaf0_0003u32), (0xc1d0_001au32, 0xbeef_0300u32));
+        let (orig, alias) = (
+            (0xc1d0_0016u32, 0xcaf0_0003u32),
+            (0xc1d0_001au32, 0xbeef_0300u32),
+        );
         p.vas.insert(orig, (0xcaf0_0001, false));
-        p.respond(&cmd(RpcFunction::DupObject, words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0])));
+        p.respond(&cmd(
+            RpcFunction::DupObject,
+            words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0]),
+        ));
         let unset = |client: u32, device: u32, params: &[u8]| {
             let mut payload = vec![0u8; 40 + params.len()];
             payload[0..4].copy_from_slice(&client.to_le_bytes());
@@ -525,12 +632,33 @@ mod tests {
         let c = unset(alias.0, 0xbeef_0003, &words(&[alias.1, 1]));
         let r = p.respond(&c).expect("answered");
         assert_eq!(r.rpc_result, NV_OK);
-        assert_eq!(r.body, c.payload, "params echoed: the control has no [OUT] field");
-        assert!(p.holds_for_refresh(&c), "held until the plane has withdrawn the root");
-        assert_eq!(seen.lock().unwrap().as_slice(), &[MemStatement::UnsetPageDir { client: orig.0, vaspace: orig.1 }]);
-        for bad in [unset(alias.0, 0xbeef_0003, &words(&[0, 1])), unset(alias.0, 0xbeef_0003, &words(&[alias.1]))] {
-            assert!(p.respond(&bad).is_none(), "declined: no VA space named, or not the 8-byte struct");
-            assert!(!p.holds_for_refresh(&bad), "a declined control holds nothing");
+        assert_eq!(
+            r.body, c.payload,
+            "params echoed: the control has no [OUT] field"
+        );
+        assert!(
+            p.holds_for_refresh(&c),
+            "held until the plane has withdrawn the root"
+        );
+        assert_eq!(
+            seen.lock().unwrap().as_slice(),
+            &[MemStatement::UnsetPageDir {
+                client: orig.0,
+                vaspace: orig.1
+            }]
+        );
+        for bad in [
+            unset(alias.0, 0xbeef_0003, &words(&[0, 1])),
+            unset(alias.0, 0xbeef_0003, &words(&[alias.1])),
+        ] {
+            assert!(
+                p.respond(&bad).is_none(),
+                "declined: no VA space named, or not the 8-byte struct"
+            );
+            assert!(
+                !p.holds_for_refresh(&bad),
+                "a declined control holds nothing"
+            );
         }
         assert_eq!(seen.lock().unwrap().len(), 1);
     }
@@ -634,15 +762,38 @@ mod tests {
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
         let seen: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
         let s2 = seen.clone();
-        let mut p = PageDirPolicy::new(abi, kf_abi::GuestOs::Linux, Arc::new(move |st| s2.lock().unwrap().push(st)));
+        let mut p = PageDirPolicy::new(
+            abi,
+            kf_abi::GuestOs::Linux,
+            Arc::new(move |st| s2.lock().unwrap().push(st)),
+        );
         let words = |w: &[u32]| w.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
-        let (orig, alias) = ((0xc1d0_0016u32, 0xfade_0003u32), (0xc1d0_001au32, 0xbeef_0300u32));
+        let (orig, alias) = (
+            (0xc1d0_0016u32, 0xfade_0003u32),
+            (0xc1d0_001au32, 0xbeef_0300u32),
+        );
         p.vas.insert(orig, (0xfade_0001, false));
-        p.respond(&cmd(RpcFunction::DupObject, words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0])));
+        p.respond(&cmd(
+            RpcFunction::DupObject,
+            words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0]),
+        ));
         assert_eq!(p.canonical(alias.0, alias.1), orig);
         p.respond(&cmd(RpcFunction::Free, words(&[orig.0, 0, orig.0, 0])));
-        assert!(seen.lock().unwrap().is_empty(), "retired under a live dup: {:?}", seen.lock().unwrap());
-        p.respond(&cmd(RpcFunction::Free, words(&[alias.0, 0xbeef_0003, alias.1, 0])));
-        assert_eq!(seen.lock().unwrap().as_slice(), &[MemStatement::Retire { client: orig.0, vaspace: orig.1 }]);
+        assert!(
+            seen.lock().unwrap().is_empty(),
+            "retired under a live dup: {:?}",
+            seen.lock().unwrap()
+        );
+        p.respond(&cmd(
+            RpcFunction::Free,
+            words(&[alias.0, 0xbeef_0003, alias.1, 0]),
+        ));
+        assert_eq!(
+            seen.lock().unwrap().as_slice(),
+            &[MemStatement::Retire {
+                client: orig.0,
+                vaspace: orig.1
+            }]
+        );
     }
 }

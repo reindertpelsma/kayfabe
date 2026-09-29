@@ -232,7 +232,9 @@ impl OsEventLog {
     #[must_use]
     pub fn find(&self, client: u32, event: u32) -> Option<OsEventRegistration> {
         let live = self.live.lock().unwrap_or_else(|e| e.into_inner());
-        live.iter().copied().find(|r| r.client == client && r.event == event)
+        live.iter()
+            .copied()
+            .find(|r| r.client == client && r.event == event)
     }
 
     /// The live registrations, for the end-of-run report.

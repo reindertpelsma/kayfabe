@@ -111,7 +111,10 @@ impl TranslatedRing {
     /// If `entries == 0` or `start >= entries` — a caller bug, never guest input.
     #[must_use]
     pub fn new(gpfifo_va: u64, entries: u32, start: u32) -> TranslatedRing {
-        assert!(entries > 0 && start < entries, "ring of {entries} from {start}");
+        assert!(
+            entries > 0 && start < entries,
+            "ring of {entries} from {start}"
+        );
         TranslatedRing {
             gpfifo_va,
             entries,
@@ -152,11 +155,18 @@ impl TranslatedRing {
         w: &dyn Window,
     ) -> Result<Next, RingRefusal> {
         if gp_put >= self.entries {
-            return Err(RingRefusal::PutOutOfRange { gp_put, entries: self.entries });
+            return Err(RingRefusal::PutOutOfRange {
+                gp_put,
+                entries: self.entries,
+            });
         }
         loop {
             if let Some(p) = self.pending.pop_front() {
-                let retires = if self.pending.is_empty() { self.pending_retires.take() } else { None };
+                let retires = if self.pending.is_empty() {
+                    self.pending_retires.take()
+                } else {
+                    None
+                };
                 return Ok(match p {
                     Piece::Words(words) => Next::Submit { words, retires },
                     Piece::Invalidate { pdb } => Next::Walk { pdb, retires },
@@ -164,7 +174,10 @@ impl TranslatedRing {
             }
             if let Some(g) = self.pending_retires.take() {
                 // A segment that rewrote to nothing (e.g. only MEM_OP A-C): still retires.
-                return Ok(Next::Submit { words: Vec::new(), retires: Some(g) });
+                return Ok(Next::Submit {
+                    words: Vec::new(),
+                    retires: Some(g),
+                });
             }
             if self.cursor == gp_put {
                 return Ok(Next::Idle);
@@ -174,7 +187,8 @@ impl TranslatedRing {
             self.entries_fetched += 1;
             let at = self.gpfifo_va + u64::from(gp) * GP_ENTRY_SIZE;
             let mut raw = [0u8; 8];
-            mem.read(at, &mut raw).map_err(|why| RingRefusal::Read { gp, va: at, why })?;
+            mem.read(at, &mut raw)
+                .map_err(|why| RingRefusal::Read { gp, va: at, why })?;
             self.pending_retires = Some(self.cursor);
             let Some(e) = gp_entry_decode(u64::from_le_bytes(raw)) else {
                 continue; // a control entry (NOP etc.): nothing to run, still retires
@@ -183,15 +197,24 @@ impl TranslatedRing {
                 return Err(RingRefusal::SyncWait { gp });
             }
             if e.len_bytes > MAX_SEGMENT_BYTES {
-                return Err(RingRefusal::SegmentTooLong { gp, len: e.len_bytes });
+                return Err(RingRefusal::SegmentTooLong {
+                    gp,
+                    len: e.len_bytes,
+                });
             }
             let mut bytes = vec![0u8; e.len_bytes as usize];
-            mem.read(e.gpu_va, &mut bytes).map_err(|why| RingRefusal::Read { gp, va: e.gpu_va, why })?;
+            mem.read(e.gpu_va, &mut bytes)
+                .map_err(|why| RingRefusal::Read {
+                    gp,
+                    va: e.gpu_va,
+                    why,
+                })?;
             let words: Vec<u32> = bytes
                 .chunks_exact(4)
                 .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
                 .collect();
-            let pieces = rewrite(&words, is_ce, &mut self.st, w).map_err(|why| RingRefusal::Rewrite { gp, why })?;
+            let pieces = rewrite(&words, is_ce, &mut self.st, w)
+                .map_err(|why| RingRefusal::Rewrite { gp, why })?;
             self.pending.extend(pieces);
         }
     }

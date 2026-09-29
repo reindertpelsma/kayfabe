@@ -85,7 +85,12 @@ impl Bar1Doorbells {
     /// simultaneous views (the VMM's overlay pool).
     #[must_use]
     pub fn new(bar1_bytes: u64, usermode_len: u64, cap: usize) -> Bar1Doorbells {
-        Bar1Doorbells { views: BTreeMap::new(), cap, usermode_len, bar1_bytes }
+        Bar1Doorbells {
+            views: BTreeMap::new(),
+            cap,
+            usermode_len,
+            bar1_bytes,
+        }
     }
 
     /// Set the overlay pool's capacity (the C device's `bar1-overlays` property). Views already
@@ -102,15 +107,31 @@ impl Bar1Doorbells {
         if v.len == 0 || (v.base | v.len | v.vf_rel) & (PAGE - 1) != 0 {
             return Err(Bar1DbRefusal::Unaligned(v));
         }
-        if v.base.checked_add(v.len).is_none_or(|e| e > self.bar1_bytes) {
-            return Err(Bar1DbRefusal::OutsideBar1 { view: v, bar1_bytes: self.bar1_bytes });
+        if v.base
+            .checked_add(v.len)
+            .is_none_or(|e| e > self.bar1_bytes)
+        {
+            return Err(Bar1DbRefusal::OutsideBar1 {
+                view: v,
+                bar1_bytes: self.bar1_bytes,
+            });
         }
-        if v.vf_rel.checked_add(v.len).is_none_or(|e| e > self.usermode_len) {
+        if v.vf_rel
+            .checked_add(v.len)
+            .is_none_or(|e| e > self.usermode_len)
+        {
             return Err(Bar1DbRefusal::OutsideUsermodePage(v));
         }
         let end = v.base + v.len;
-        if let Some(held) = self.views.values().find(|h| h.base < end && v.base < h.base + h.len) {
-            return Err(Bar1DbRefusal::Overlap { view: v, held: *held });
+        if let Some(held) = self
+            .views
+            .values()
+            .find(|h| h.base < end && v.base < h.base + h.len)
+        {
+            return Err(Bar1DbRefusal::Overlap {
+                view: v,
+                held: *held,
+            });
         }
         if self.views.len() >= self.cap {
             return Err(Bar1DbRefusal::Full { cap: self.cap });
@@ -173,8 +194,17 @@ mod tests {
     fn a_placed_view_resolves_the_doorbell_and_nothing_else_traps() {
         let mut d = t();
         // A GH100-shaped view: RM's BAR1 allocator chose 0x0123_0000 for pBar1VF (64 KiB).
-        d.place(Bar1View { base: 0x0123_0000, len: 0x1_0000, vf_rel: 0 }).unwrap();
-        assert_eq!(d.resolve(0x0123_0090).map(|(_, o)| o), Some(0x90), "the doorbell");
+        d.place(Bar1View {
+            base: 0x0123_0000,
+            len: 0x1_0000,
+            vf_rel: 0,
+        })
+        .unwrap();
+        assert_eq!(
+            d.resolve(0x0123_0090).map(|(_, o)| o),
+            Some(0x90),
+            "the doorbell"
+        );
         assert_eq!(d.resolve(0x0123_0080).map(|(_, o)| o), Some(0x80), "TIME_0");
         assert!(d.may_trap_write(0x0123_FFFC));
         assert!(!d.may_trap_write(0x0124_0000), "one past the view");
@@ -187,8 +217,18 @@ mod tests {
     fn a_discontiguous_view_keeps_each_pieces_page_offset() {
         let mut d = t();
         // ALLOW_DISCONTIG (mapping_cpu.c:484): the 64 KiB may arrive as two runs.
-        d.place(Bar1View { base: 0x40_0000, len: 0x8000, vf_rel: 0 }).unwrap();
-        d.place(Bar1View { base: 0x80_0000, len: 0x8000, vf_rel: 0x8000 }).unwrap();
+        d.place(Bar1View {
+            base: 0x40_0000,
+            len: 0x8000,
+            vf_rel: 0,
+        })
+        .unwrap();
+        d.place(Bar1View {
+            base: 0x80_0000,
+            len: 0x8000,
+            vf_rel: 0x8000,
+        })
+        .unwrap();
         assert_eq!(d.resolve(0x80_0010).map(|(_, o)| o), Some(0x8010));
         assert_eq!(d.resolve(0x40_0090).map(|(_, o)| o), Some(0x90));
     }
@@ -196,34 +236,80 @@ mod tests {
     #[test]
     fn refusals_are_named() {
         let mut d = t();
-        assert!(matches!(d.place(Bar1View { base: 0x1010, len: 0x1000, vf_rel: 0 }), Err(Bar1DbRefusal::Unaligned(_))));
         assert!(matches!(
-            d.place(Bar1View { base: (256 << 20) - 0x1000, len: 0x2000, vf_rel: 0 }),
+            d.place(Bar1View {
+                base: 0x1010,
+                len: 0x1000,
+                vf_rel: 0
+            }),
+            Err(Bar1DbRefusal::Unaligned(_))
+        ));
+        assert!(matches!(
+            d.place(Bar1View {
+                base: (256 << 20) - 0x1000,
+                len: 0x2000,
+                vf_rel: 0
+            }),
             Err(Bar1DbRefusal::OutsideBar1 { .. })
         ));
         assert!(matches!(
-            d.place(Bar1View { base: 0, len: 0x2000, vf_rel: 0xF000 }),
+            d.place(Bar1View {
+                base: 0,
+                len: 0x2000,
+                vf_rel: 0xF000
+            }),
             Err(Bar1DbRefusal::OutsideUsermodePage(_))
         ));
-        d.place(Bar1View { base: 0x10_0000, len: 0x1_0000, vf_rel: 0 }).unwrap();
+        d.place(Bar1View {
+            base: 0x10_0000,
+            len: 0x1_0000,
+            vf_rel: 0,
+        })
+        .unwrap();
         assert!(matches!(
-            d.place(Bar1View { base: 0x10_8000, len: 0x1000, vf_rel: 0 }),
+            d.place(Bar1View {
+                base: 0x10_8000,
+                len: 0x1000,
+                vf_rel: 0
+            }),
             Err(Bar1DbRefusal::Overlap { .. })
         ));
         for i in 1..4u64 {
-            d.place(Bar1View { base: 0x100_0000 * i, len: 0x1000, vf_rel: 0 }).unwrap();
+            d.place(Bar1View {
+                base: 0x100_0000 * i,
+                len: 0x1000,
+                vf_rel: 0,
+            })
+            .unwrap();
         }
-        assert_eq!(d.place(Bar1View { base: 0x800_0000, len: 0x1000, vf_rel: 0 }), Err(Bar1DbRefusal::Full { cap: 4 }));
+        assert_eq!(
+            d.place(Bar1View {
+                base: 0x800_0000,
+                len: 0x1000,
+                vf_rel: 0
+            }),
+            Err(Bar1DbRefusal::Full { cap: 4 })
+        );
     }
 
     #[test]
     fn remove_ends_the_trap() {
         let mut d = t();
-        d.place(Bar1View { base: 0x2_0000, len: 0x1_0000, vf_rel: 0 }).unwrap();
+        d.place(Bar1View {
+            base: 0x2_0000,
+            len: 0x1_0000,
+            vf_rel: 0,
+        })
+        .unwrap();
         assert!(d.remove(0x2_0000).is_some());
         assert!(!d.may_trap_write(0x2_0090));
         assert!(d.is_empty());
         // The same VA may be placed again (a new process got the recycled BAR1 VA).
-        d.place(Bar1View { base: 0x2_0000, len: 0x1_0000, vf_rel: 0 }).unwrap();
+        d.place(Bar1View {
+            base: 0x2_0000,
+            len: 0x1_0000,
+            vf_rel: 0,
+        })
+        .unwrap();
     }
 }

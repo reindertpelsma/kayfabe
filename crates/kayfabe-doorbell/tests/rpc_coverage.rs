@@ -38,19 +38,33 @@ fn every_required_rpc_has_a_disposition() {
         match rpc::name_of(id) {
             Some(n) if n == name => {}
             Some(n) => missing.push(format!("{id:#x}: implemented as {n}, required {name}")),
-            None => missing.push(format!("{id:#x} {name}: NOT IMPLEMENTED — falls through to Refuse")),
+            None => missing.push(format!(
+                "{id:#x} {name}: NOT IMPLEMENTED — falls through to Refuse"
+            )),
         }
     }
-    assert!(missing.is_empty(), "⊘ RPC SURFACE INCOMPLETE:\n  {}", missing.join("\n  "));
+    assert!(
+        missing.is_empty(),
+        "⊘ RPC SURFACE INCOMPLETE:\n  {}",
+        missing.join("\n  ")
+    );
 }
 
 #[test]
 fn the_two_no_reply_functions_are_ignore_not_refuse() {
     // ⊘ §1.3: "no reply at all; ECHOING WOULD DESYNC THE GUEST'S SEQUENCE COUNTER." A refusal IS
     // a reply, so classifying these as Refuse would desync the guest just as an echo would.
-    assert_eq!(rpc::classify(72), Disposition::Ignore, "GSP_SET_SYSTEM_INFO");
+    assert_eq!(
+        rpc::classify(72),
+        Disposition::Ignore,
+        "GSP_SET_SYSTEM_INFO"
+    );
     assert_eq!(rpc::classify(73), Disposition::Ignore, "SET_REGISTRY");
-    assert_eq!(rpc::classify(202), Disposition::Ignore, "ECC_NOTIFIER_WRITE_ACK");
+    assert_eq!(
+        rpc::classify(202),
+        Disposition::Ignore,
+        "ECC_NOTIFIER_WRITE_ACK"
+    );
 }
 
 #[test]
@@ -59,7 +73,11 @@ fn an_unknown_function_is_refused_by_name_never_echoed() {
     // guest driver FORGIVES — so a generic-ack fallback would let a wrong configuration run on,
     // undetected, which is precisely the failure this project has measured repeatedly."
     for id in [2u32, 99, 150, 0x2000, 0xffff] {
-        assert_eq!(rpc::classify(id), Disposition::Refuse, "{id:#x} must be refused");
+        assert_eq!(
+            rpc::classify(id),
+            Disposition::Refuse,
+            "{id:#x} must be refused"
+        );
         assert_eq!(rpc::name_of(id), None);
     }
 }
@@ -97,27 +115,43 @@ fn the_nine_refused_by_name_controls_are_not_served() {
     let mut wrong = Vec::new();
     for (id, name) in MUST_BE_REFUSED {
         if rpc::control_is_served(id) {
-            wrong.push(format!("{id:#010x} {name} is SERVED but §2.3 refuses it by name"));
+            wrong.push(format!(
+                "{id:#010x} {name} is SERVED but §2.3 refuses it by name"
+            ));
         }
         match rpc::control_disposition(id) {
             rpc::ControlDisposition::RefusedByName(_) => {}
             other => wrong.push(format!("{id:#010x} {name}: {other:?}")),
         }
     }
-    assert!(wrong.is_empty(), "⊘ REFUSAL LIST VIOLATED:\n  {}", wrong.join("\n  "));
+    assert!(
+        wrong.is_empty(),
+        "⊘ REFUSAL LIST VIOLATED:\n  {}",
+        wrong.join("\n  ")
+    );
 }
 
 #[test]
 fn admitted_is_not_served() {
     // ⚠ §2.3: ~135 commands pass the allowlist with NO handler and fall to the unserviced ledger.
     // Collapsing that into "served" is how "the allowlist admits it" becomes "we handle it".
-    assert_eq!(rpc::control_disposition(0x2080a026), rpc::ControlDisposition::AdmittedUndispatched);
-    assert!(!rpc::control_is_served(0x2080a026), "admitted-undispatched is NOT served");
+    assert_eq!(
+        rpc::control_disposition(0x2080a026),
+        rpc::ControlDisposition::AdmittedUndispatched
+    );
+    assert!(
+        !rpc::control_is_served(0x2080a026),
+        "admitted-undispatched is NOT served"
+    );
 }
 
 #[test]
 fn an_unlisted_control_is_refused_even_though_the_envelope_is_served() {
-    assert_eq!(rpc::classify(76), Disposition::Serve, "the envelope is served");
+    assert_eq!(
+        rpc::classify(76),
+        Disposition::Serve,
+        "the envelope is served"
+    );
     assert!(!rpc::control_is_served(0x2080ffff));
     assert!(matches!(
         rpc::control_disposition(0xdeadbeef),

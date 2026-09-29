@@ -54,11 +54,13 @@ impl plane::HostOps for RecordingHost {
         self.rung.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn run_translated(&self, _t: u32, _s: u64) -> bool {
-        self.translated.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.translated
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         true
     }
     fn run_emulated(&self, _t: u32, _s: u64) {
-        self.emulated.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.emulated
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn apply_register(&self, _b: u8, off: u32, v: u64, _w: u8) {
         self.registers.lock().unwrap().push((off, v));
@@ -74,13 +76,16 @@ impl plane::HostOps for RecordingHost {
         }
     }
     fn forge_completion(&self, _t: u32) {
-        self.forged.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.forged
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn refuse_and_poison(&self, _t: u32) {
-        self.poisoned.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.poisoned
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn fault_channel(&self, _t: u32) {
-        self.faulted.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.faulted
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
     fn map_guest_slice(&self, s: leaf::HostSlice) {
         self.mapped.lock().unwrap().push(s);
@@ -120,7 +125,11 @@ fn the_react_loop_is_bounded_and_hands_the_token_back() {
         Release::RepublishAndMoveOn,
         "after K rounds the worker MUST give up the token — that is the timeslice"
     );
-    assert_eq!(w.load().state, State::Rung, "and it goes back as RUNG, not IDLE");
+    assert_eq!(
+        w.load().state,
+        State::Rung,
+        "and it goes back as RUNG, not IDLE"
+    );
 }
 
 #[test]
@@ -133,15 +142,27 @@ fn retire_waits_out_busy_then_allocation_installs_the_new_route() {
     w.allocate_fresh(Route::Passthrough, 0xAAA);
     w.ring(1);
     assert!(matches!(w.claim(), Claim::Won(_)));
-    assert!(!w.retire(), "retire MUST refuse while a worker owns the token");
+    assert!(
+        !w.retire(),
+        "retire MUST refuse while a worker owns the token"
+    );
     // The recycled id must not be installable while the old worker is live.
-    assert!(!w.allocate(Route::Emulated, 0xBBB), "allocation over a BUSY token is the UAF");
+    assert!(
+        !w.allocate(Route::Emulated, 0xBBB),
+        "allocation over a BUSY token is the UAF"
+    );
     assert_eq!(w.release(0, REACT_ROUNDS), Release::Idled);
     assert!(w.retire());
     assert_eq!(w.load().state, State::Dead);
-    assert!(!w.ring(5), "a retired token absorbs rings and must not resurrect");
+    assert!(
+        !w.ring(5),
+        "a retired token absorbs rings and must not resurrect"
+    );
     assert_eq!(w.load().state, State::Dead);
-    assert!(w.allocate(Route::Emulated, 0xBBB), "DEAD → IDLE with the new route");
+    assert!(
+        w.allocate(Route::Emulated, 0xBBB),
+        "DEAD → IDLE with the new route"
+    );
     assert_eq!(w.load().route, Route::Emulated);
     assert_eq!(w.load().host_token, 0xBBB);
 }
@@ -177,8 +198,8 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
     //
     // ⚠ This is a RACE test, not a proof: on x86 TSO it cannot catch a missing fence (§5.3 says
     // so). It catches lost work, which is the failure that matters here.
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as O};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as O};
 
     const N_TOKENS_USED: u32 = 512;
     const RINGS_PER_VCPU: u64 = 2_000;
@@ -209,7 +230,8 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
         let p = Arc::clone(&plane);
         hs.push(std::thread::spawn(move || {
             for n in 0..RINGS_PER_VCPU {
-                let t = ((n as u32).wrapping_mul(2654435761).wrapping_add(v as u32)) % N_TOKENS_USED;
+                let t =
+                    ((n as u32).wrapping_mul(2654435761).wrapping_add(v as u32)) % N_TOKENS_USED;
                 // ★ THE vCPU PATH, in the order §5.2/§5.3 mandate:
                 //   stamp+RUNG (one CAS) → publish bit,summary → bump.
                 if p.words[t as usize].ring(n + 1) {
@@ -224,7 +246,7 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
         hs.push(std::thread::spawn(move || {
             let mut found = Vec::new();
             loop {
-                let seen = p.wake.seen();          // §5.3: seen BEFORE the scan
+                let seen = p.wake.seen(); // §5.3: seen BEFORE the scan
                 p.bits.scan(&mut found, 128);
                 if found.is_empty() {
                     if p.stop.load(O::Acquire) {
@@ -294,7 +316,12 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
     for (i, w) in plane.words.iter().enumerate() {
         let st = w.load().state;
         if st != State::Idle {
-            stuck.push((i, st, plane.bits.bit(i as u32), plane.bits.summary_bit(i as u32)));
+            stuck.push((
+                i,
+                st,
+                plane.bits.bit(i as u32),
+                plane.bits.summary_bit(i as u32),
+            ));
         }
     }
     let orphaned: Vec<_> = stuck.iter().filter(|(_, _, bit, _)| !*bit).collect();
@@ -309,7 +336,10 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
          test's stop protocol raced, the plane did not lose anything. \
          (token, state, bit, summary) = {stuck:?}"
     );
-    assert!(plane.served.load(O::Acquire) > 0, "the workers must have served something");
+    assert!(
+        plane.served.load(O::Acquire) > 0,
+        "the workers must have served something"
+    );
 }
 
 // ---- §5.4 the privileged ring ----------------------------------------------------------------
@@ -321,9 +351,9 @@ fn a_stale_completion_may_not_clear_a_later_trigger() {
     // B; our work for A finishes and clears the trigger; the guest reads zero and concludes B is
     // done. It is not."
     let t = Trigger::new();
-    t.arm(100);                       // invalidate A, at ring position 100
+    t.arm(100); // invalidate A, at ring position 100
     assert_eq!(t.read(), 1, "the guest spins while non-zero");
-    t.arm(200);                       // the guest timed out on A and issued B
+    t.arm(200); // the guest timed out on A and issued B
     // A's work finally finishes.
     assert_eq!(
         t.complete(100),
@@ -340,19 +370,34 @@ fn only_emulated_work_that_never_reached_the_gpu_may_be_forged() {
     // ⊘⊘ §8: "Forge is licensed ONLY where there was no work. A completion written for work that
     // did not happen is how a scrub becomes a leak." This campaign's most expensive measured
     // defect; the type must refuse to express it.
-    assert_eq!(Completion::for_route(Route::Emulated, false), Completion::Forge);
+    assert_eq!(
+        Completion::for_route(Route::Emulated, false),
+        Completion::Forge
+    );
     assert_eq!(
         Completion::for_route(Route::Emulated, true),
         Completion::Nothing,
         "emulated work that DID reach the GPU must not be forged — that is the leak"
     );
     // The GPU wrote the forwarded semaphore itself; a second author for one value is a bug.
-    assert_eq!(Completion::for_route(Route::Translated, true), Completion::Nothing);
-    assert_eq!(Completion::for_route(Route::Translated, false), Completion::Nothing);
+    assert_eq!(
+        Completion::for_route(Route::Translated, true),
+        Completion::Nothing
+    );
+    assert_eq!(
+        Completion::for_route(Route::Translated, false),
+        Completion::Nothing
+    );
     // We never inspected the channel, so its completion is not ours.
-    assert_eq!(Completion::for_route(Route::Passthrough, true), Completion::Nothing);
+    assert_eq!(
+        Completion::for_route(Route::Passthrough, true),
+        Completion::Nothing
+    );
     // An unknown route should never have been served, let alone completed.
-    assert_eq!(Completion::for_route(Route::Unknown, false), Completion::Nothing);
+    assert_eq!(
+        Completion::for_route(Route::Unknown, false),
+        Completion::Nothing
+    );
 }
 
 #[test]
@@ -364,9 +409,17 @@ fn an_edge_that_arrives_while_masked_is_delivered_on_unmask() {
     e.mask();
     assert_eq!(e.retire(), Raise::Hold, "masked ⇒ held, not delivered");
     assert_eq!(e.delivered(), 0);
-    assert_eq!(e.unmask(), Raise::Deliver, "the held edge MUST surface on unmask");
+    assert_eq!(
+        e.unmask(),
+        Raise::Deliver,
+        "the held edge MUST surface on unmask"
+    );
     assert_eq!(e.delivered(), 1);
-    assert_eq!(e.unmask(), Raise::Hold, "and it must not be delivered twice");
+    assert_eq!(
+        e.unmask(),
+        Raise::Hold,
+        "and it must not be delivered twice"
+    );
 }
 
 #[test]
@@ -394,7 +447,11 @@ fn a_polled_engine_can_legitimately_deliver_zero() {
         assert_eq!(e.retire(), Raise::Hold);
     }
     assert_eq!(e.delivered(), 0, "never armed ⇒ nothing delivered");
-    assert_eq!(e.retired_count(), 40, "but the work DID retire — count it separately");
+    assert_eq!(
+        e.retired_count(),
+        40,
+        "but the work DID retire — count it separately"
+    );
 }
 
 // ---- §5 the trap path, and §4's INNER boundary ------------------------------------------------
@@ -414,9 +471,20 @@ fn the_doorbell_pages_other_offsets_do_nothing_at_all() {
             "offset {off} on the doorbell page must do NOTHING"
         );
     }
-    assert_eq!(f.ring.occupancy(), 0, "not one byte may reach the privileged ring");
-    assert!(!f.ring.is_poisoned(), "and it must not be poisonable from userspace either");
-    assert_eq!(f.tokens[3].load().state, State::Idle, "no token may be disturbed");
+    assert_eq!(
+        f.ring.occupancy(),
+        0,
+        "not one byte may reach the privileged ring"
+    );
+    assert!(
+        !f.ring.is_poisoned(),
+        "and it must not be poisonable from userspace either"
+    );
+    assert_eq!(
+        f.tokens[3].load().state,
+        State::Idle,
+        "no token may be disturbed"
+    );
 }
 
 #[test]
@@ -452,7 +520,11 @@ fn a_user_channel_may_fault_because_the_blast_radius_is_the_asker() {
 fn translatable_operands_always_submit() {
     for owner in [Owner::Kernel, Owner::User] {
         for route in [Route::Passthrough, Route::Translated, Route::Emulated] {
-            let s = Submission { owner, route, all_operands_translatable: true };
+            let s = Submission {
+                owner,
+                route,
+                all_operands_translatable: true,
+            };
             assert_eq!(s.decide(), Disposition::Submit, "{owner:?}/{route:?}");
         }
     }
@@ -463,9 +535,18 @@ fn a_kernel_channel_is_never_emulated() {
     // §7: "Kernel channels are TRANSLATED, not emulated ... running them on our CPU is how a
     // guest process reads another's freed pages." ⊘ This is the rule w823 measured violated on
     // the OLD architecture: forwarded=0 emulated>0 on seven arms.
-    assert!(!Submission::kernel_channels_are_never_emulated(Owner::Kernel, Route::Emulated));
-    assert!(Submission::kernel_channels_are_never_emulated(Owner::Kernel, Route::Translated));
-    assert!(Submission::kernel_channels_are_never_emulated(Owner::User, Route::Emulated));
+    assert!(!Submission::kernel_channels_are_never_emulated(
+        Owner::Kernel,
+        Route::Emulated
+    ));
+    assert!(Submission::kernel_channels_are_never_emulated(
+        Owner::Kernel,
+        Route::Translated
+    ));
+    assert!(Submission::kernel_channels_are_never_emulated(
+        Owner::User,
+        Route::Emulated
+    ));
 }
 
 #[test]
@@ -473,8 +554,15 @@ fn an_unmodelled_method_form_is_sized_but_decodes_to_nothing() {
     // §7: "We SIZE every pushbuffer method form so the stream never desynchronises, and DECODE
     // only what we model. An undefined form decodes to nothing rather than to a guess."
     let (sz, d) = size_is_total(false, 5);
-    assert_eq!(sz, 5, "an unmodelled form must STILL be sized, or the stream desynchronises");
-    assert_eq!(d, Decoded::SizedOnly, "and must decode to nothing, never to a guess");
+    assert_eq!(
+        sz, 5,
+        "an unmodelled form must STILL be sized, or the stream desynchronises"
+    );
+    assert_eq!(
+        d,
+        Decoded::SizedOnly,
+        "and must decode to nothing, never to a guess"
+    );
     let (sz, d) = size_is_total(true, 5);
     assert_eq!(sz, 5);
     assert_eq!(d, Decoded::Modelled { operand_words: 5 });
@@ -499,10 +587,23 @@ fn a_leaf_naming_our_own_memslot_is_refused_by_name() {
         Err(LeafRefusal::NotInAnyRegisteredBlock),
         "a leaf naming OUR memory must be refused, not resolved"
     );
-    assert_eq!(l.refused(), 1, "and the refusal must be COUNTED — §6.4: not silent");
+    assert_eq!(
+        l.refused(),
+        1,
+        "and the refusal must be COUNTED — §6.4: not silent"
+    );
     // Genuine guest RAM still resolves.
-    let s = l.leaf(0x1_0000_2000, 0x1000).expect("real guest RAM must resolve");
-    assert_eq!(s, HostSlice { block: 0, offset: 0x2000, len: 0x1000 });
+    let s = l
+        .leaf(0x1_0000_2000, 0x1000)
+        .expect("real guest RAM must resolve");
+    assert_eq!(
+        s,
+        HostSlice {
+            block: 0,
+            offset: 0x2000,
+            len: 0x1000
+        }
+    );
 }
 
 #[test]
@@ -511,15 +612,28 @@ fn a_leaf_may_select_a_block_but_never_name_a_base() {
     // GuestRamBlock is minted at registration. There is deliberately no
     // `resolve(gpa, len) -> HostPtr` in this module -- that function is the circular one.
     let b = GuestRamBlock::register(7, 0x2_0000_0000, 0x1000_0000);
-    assert_eq!(b.slice(0x100, 0x200).unwrap(), HostSlice { block: 7, offset: 0x100, len: 0x200 });
-    assert_eq!(b.slice(0x0FFF_FF00, 0x200), Err(LeafRefusal::CrossesBlockEnd));
+    assert_eq!(
+        b.slice(0x100, 0x200).unwrap(),
+        HostSlice {
+            block: 7,
+            offset: 0x100,
+            len: 0x200
+        }
+    );
+    assert_eq!(
+        b.slice(0x0FFF_FF00, 0x200),
+        Err(LeafRefusal::CrossesBlockEnd)
+    );
 }
 
 #[test]
 fn a_leaf_that_starts_inside_a_block_but_runs_past_it_is_refused() {
     let mut l = GuestRamLayout::new();
     l.register(GuestRamBlock::register(0, 0x1000, 0x1000));
-    assert!(l.leaf(0x1000, 0x1000).is_ok(), "exactly filling the block is legal");
+    assert!(
+        l.leaf(0x1000, 0x1000).is_ok(),
+        "exactly filling the block is legal"
+    );
     assert_eq!(l.leaf(0x1800, 0x1000), Err(LeafRefusal::CrossesBlockEnd));
     assert_eq!(l.refused(), 1);
 }
@@ -536,7 +650,10 @@ fn the_drainer_applies_registers_in_global_order_across_vcpus() {
     let vmm = Box::leak(Box::new(plane::Vmm::new()));
     let p = Arc::new(Plane::new(vmm, 64, 0x3f));
     let host = Arc::new(RecordingHost::default());
-    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    let cls = Class::Privileged {
+        readable: true,
+        semantics: WriteSemantics::Plain,
+    };
 
     // Two "vCPUs" handing off through a lock, exactly as RM does.
     let lock = Arc::new(std::sync::Mutex::new(()));
@@ -569,8 +686,8 @@ fn the_drainer_applies_registers_in_global_order_across_vcpus() {
 fn every_ring_is_served_exactly_once_end_to_end() {
     // ★ The composition claim: vCPUs trap, workers scan/claim/serve, nothing is lost and nothing
     // is served twice. This is the whole plane running as §3 describes it.
-    use std::sync::atomic::Ordering as O;
     use std::sync::Arc;
+    use std::sync::atomic::Ordering as O;
     let vmm = Box::leak(Box::new(plane::Vmm::new()));
     let p = Arc::new(Plane::new(vmm, 256, 0xff));
     let host = Arc::new(RecordingHost::default());
@@ -624,12 +741,18 @@ fn every_ring_is_served_exactly_once_end_to_end() {
         .filter(|(i, w)| w.load().state != State::Idle && !p.bits.bit(*i as u32))
         .map(|(i, w)| (i, w.load().state))
         .collect();
-    assert!(orphaned.is_empty(), "⊘ PLANE DEFECT: rung with no bit: {orphaned:?}");
+    assert!(
+        orphaned.is_empty(),
+        "⊘ PLANE DEFECT: rung with no bit: {orphaned:?}"
+    );
     assert!(
         p.tokens.iter().all(|w| w.load().state == State::Idle),
         "⊘ HARNESS: a token is still published when the workers exited"
     );
-    assert!(host.translated.load(O::Acquire) > 0, "the host must actually have been driven");
+    assert!(
+        host.translated.load(O::Acquire) > 0,
+        "the host must actually have been driven"
+    );
 }
 
 #[test]
@@ -647,7 +770,10 @@ fn a_passthrough_token_is_never_served_by_a_worker() {
     // Nothing was published, so a worker pass finds nothing.
     let mut scratch = Vec::new();
     assert_eq!(p.worker_pass(&host, &mut scratch, 16), 0);
-    assert_eq!(host.translated.load(std::sync::atomic::Ordering::Acquire), 0);
+    assert_eq!(
+        host.translated.load(std::sync::atomic::Ordering::Acquire),
+        0
+    );
 }
 
 // ---- P1's last gate item: the exhaustive interleaving check -----------------------------------
@@ -692,10 +818,19 @@ fn signals_are_blocked_before_the_free_not_after() {
     // ⊘ Ordering with teeth: a pending signal is exactly what pushes the driver's close path onto
     // a kernel thread. Blocking AFTER the free would leave the free asynchronous -- the thing the
     // whole sequence exists to prevent.
-    let bs = lifetime::ORDER.iter().position(|s| *s == Step::BlockSignals).unwrap();
-    let fr = lifetime::ORDER.iter().position(|s| *s == Step::FreeClientTree).unwrap();
+    let bs = lifetime::ORDER
+        .iter()
+        .position(|s| *s == Step::BlockSignals)
+        .unwrap();
+    let fr = lifetime::ORDER
+        .iter()
+        .position(|s| *s == Step::FreeClientTree)
+        .unwrap();
     assert!(bs < fr, "BlockSignals must precede FreeClientTree");
-    let cl = lifetime::ORDER.iter().position(|s| *s == Step::CloseDescriptor).unwrap();
+    let cl = lifetime::ORDER
+        .iter()
+        .position(|s| *s == Step::CloseDescriptor)
+        .unwrap();
     assert!(fr < cl, "FreeClientTree must precede CloseDescriptor");
 }
 
@@ -718,7 +853,11 @@ fn a_second_driver_instance_does_not_map_nothing() {
 
     // First driver instance: the walk maps everything.
     assert_eq!(w.diff(7), lifetime::Diff::Changed(7));
-    assert_eq!(w.diff(7), lifetime::Diff::Unchanged, "no change within one instance is correct");
+    assert_eq!(
+        w.diff(7),
+        lifetime::Diff::Unchanged,
+        "no change within one instance is correct"
+    );
 
     // Teardown drops every mapping -- and MUST reset the walker.
     let mut t = Teardown::new();
@@ -784,7 +923,10 @@ fn one_wakeup_word_serves_every_gpu() {
     // And on the first, equally.
     let seen = vmm.worker_wake.seen();
     assert!(vmm.worker_wake.try_park(seen));
-    assert_eq!(gpu0.trap_write(Class::Doorbell, 0, 0, 1, 4), Action::WakeWorker);
+    assert_eq!(
+        gpu0.trap_write(Class::Doorbell, 0, 0, 1, 4),
+        Action::WakeWorker
+    );
 }
 
 #[test]
@@ -795,13 +937,19 @@ fn each_gpu_has_its_own_ring_because_ordering_is_per_pci_function() {
     let vmm = plane::Vmm::new();
     let gpu0 = Plane::new(&vmm, 32, 0x1f);
     let gpu1 = Plane::new(&vmm, 32, 0x1f);
-    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    let cls = Class::Privileged {
+        readable: true,
+        semantics: WriteSemantics::Plain,
+    };
     for i in 0..ring::CAPACITY {
         gpu0.trap_write(cls, 0, i as u32, 0, 4);
     }
     assert_eq!(gpu0.trap_write(cls, 0, 0xffff, 0, 4), Action::PoisonDevice);
     assert!(gpu0.ring.is_poisoned());
-    assert!(!gpu1.ring.is_poisoned(), "⊘ one GPU's full ring must NOT poison another device");
+    assert!(
+        !gpu1.ring.is_poisoned(),
+        "⊘ one GPU's full ring must NOT poison another device"
+    );
     assert_eq!(gpu1.occupancy_for_test(), 0);
 }
 
@@ -837,14 +985,26 @@ fn a_guest_cannot_starve_its_neighbours_by_allocating_twins() {
     }
     assert_eq!(
         vm.acquire(Twin::Channel),
-        Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: 4, asked: 5 }),
+        Err(Refusal::OverDeclaredCap {
+            twin: Twin::Channel,
+            cap: 4,
+            asked: 5
+        }),
         "past the cap must be refused BY NAME, carrying the cap and the ask"
     );
-    assert_eq!(vm.refused(Twin::Channel), 1, "and counted — a zero here must be evidence");
+    assert_eq!(
+        vm.refused(Twin::Channel),
+        1,
+        "and counted — a zero here must be evidence"
+    );
     // ⊘ Refusing one class must not disturb another.
     assert_eq!(vm.acquire(Twin::AddressSpace), Ok(()));
     vm.release(Twin::Channel);
-    assert_eq!(vm.acquire(Twin::Channel), Ok(()), "a freed twin returns capacity");
+    assert_eq!(
+        vm.acquire(Twin::Channel),
+        Ok(()),
+        "a freed twin returns capacity"
+    );
 }
 
 #[test]
@@ -860,7 +1020,10 @@ fn the_cap_is_what_we_already_told_the_guest() {
     }
     match vm.acquire(Twin::Channel) {
         Err(Refusal::OverDeclaredCap { cap, .. }) => {
-            assert_eq!(cap, DECLARED_CHANNELS, "the refusal must cite the DECLARED number");
+            assert_eq!(
+                cap, DECLARED_CHANNELS,
+                "the refusal must cite the DECLARED number"
+            );
         }
         Ok(()) => panic!("the declared cap was not enforced"),
     }
@@ -876,16 +1039,25 @@ fn a_kernel_channel_with_an_untranslatable_operand_is_refused_not_faulted_on_the
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel).unwrap();
+    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
 
     p.trap_write(Class::Doorbell, 0, 0, 3, 4);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
 
-    assert_eq!(host.poisoned.load(O::Acquire), 1, "the kernel channel must be refused+poisoned");
+    assert_eq!(
+        host.poisoned.load(O::Acquire),
+        1,
+        "the kernel channel must be refused+poisoned"
+    );
     assert_eq!(host.faulted.load(O::Acquire), 0, "⊘ and NEVER faulted");
-    assert_eq!(host.translated.load(O::Acquire), 0, "nothing may have been submitted");
+    assert_eq!(
+        host.translated.load(O::Acquire),
+        0,
+        "nothing may have been submitted"
+    );
 }
 
 #[test]
@@ -895,7 +1067,8 @@ fn a_user_channel_with_the_same_miss_faults_on_the_live_path() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::User)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 4, 4);
     let mut scratch = Vec::new();
@@ -913,15 +1086,25 @@ fn a_forge_happens_only_for_emulated_work_on_the_live_path() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User).unwrap();
-    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User)
+        .unwrap();
+    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User)
+        .unwrap();
     let mut scratch = Vec::new();
     p.trap_write(Class::Doorbell, 0, 0, 5, 4);
     p.worker_pass(&host, &mut scratch, 8);
-    assert_eq!(host.forged.load(O::Acquire), 1, "emulated work owes a forged completion");
+    assert_eq!(
+        host.forged.load(O::Acquire),
+        1,
+        "emulated work owes a forged completion"
+    );
     p.trap_write(Class::Doorbell, 0, 0, 6, 4);
     p.worker_pass(&host, &mut scratch, 8);
-    assert_eq!(host.forged.load(O::Acquire), 1, "⊘ translated work must NOT be forged — the GPU wrote it");
+    assert_eq!(
+        host.forged.load(O::Acquire),
+        1,
+        "⊘ translated work must NOT be forged — the GPU wrote it"
+    );
 }
 
 #[test]
@@ -930,13 +1113,24 @@ fn the_cap_refuses_a_channel_on_the_live_path() {
     let vmm = plane::Vmm::new();
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let mut caps = VmCaps::from_declared(2, 8, 8, 8);
-    assert!(p.allocate_channel(&mut caps, 1, Route::Translated, 1, Owner::User).is_ok());
-    assert!(p.allocate_channel(&mut caps, 2, Route::Translated, 2, Owner::User).is_ok());
     assert!(
-        p.allocate_channel(&mut caps, 3, Route::Translated, 3, Owner::User).is_err(),
+        p.allocate_channel(&mut caps, 1, Route::Translated, 1, Owner::User)
+            .is_ok()
+    );
+    assert!(
+        p.allocate_channel(&mut caps, 2, Route::Translated, 2, Owner::User)
+            .is_ok()
+    );
+    assert!(
+        p.allocate_channel(&mut caps, 3, Route::Translated, 3, Owner::User)
+            .is_err(),
         "the third channel is past the declared cap and must be refused"
     );
-    assert_eq!(p.tokens[3].load().route, Route::Unknown, "and the token must be untouched");
+    assert_eq!(
+        p.tokens[3].load().route,
+        Route::Unknown,
+        "and the token must be untouched"
+    );
 }
 
 #[test]
@@ -948,14 +1142,21 @@ fn a_leaf_naming_our_memslot_never_reaches_a_host_map_on_the_live_path() {
     let host = RecordingHost::default();
     let mut layout = GuestRamLayout::new();
     layout.register(GuestRamBlock::register(0, 0x1_0000_0000, 0x1000_0000));
-    assert!(p.resolve_and_map_leaf(&host, &layout, 0x1_0000_1000, 0x1000).is_ok());
+    assert!(
+        p.resolve_and_map_leaf(&host, &layout, 0x1_0000_1000, 0x1000)
+            .is_ok()
+    );
     assert_eq!(host.mapped.lock().unwrap().len(), 1);
     // Our own memslot:
     assert_eq!(
         p.resolve_and_map_leaf(&host, &layout, 0xF000_0000, 0x1000),
         Err(LeafRefusal::NotInAnyRegisteredBlock)
     );
-    assert_eq!(host.mapped.lock().unwrap().len(), 1, "⊘ and NOTHING reached the host");
+    assert_eq!(
+        host.mapped.lock().unwrap().len(),
+        1,
+        "⊘ and NOTHING reached the host"
+    );
 }
 
 #[test]
@@ -966,8 +1167,16 @@ fn teardown_runs_the_whole_ordered_sequence_on_the_live_path() {
     let mut w = WalkerState::default();
     assert_eq!(w.diff(9), lifetime::Diff::Changed(9));
     p.teardown(&host, &mut w).unwrap();
-    assert_eq!(*host.teardown.lock().unwrap(), lifetime::ORDER.to_vec(), "in §9's order");
-    assert_eq!(w.diff(9), lifetime::Diff::Changed(9), "the second instance must map");
+    assert_eq!(
+        *host.teardown.lock().unwrap(),
+        lifetime::ORDER.to_vec(),
+        "in §9's order"
+    );
+    assert_eq!(
+        w.diff(9),
+        lifetime::Diff::Changed(9),
+        "the second instance must map"
+    );
 }
 
 // ---- host verbs: authored, never forwarded; and the pointer discipline ------------------------
@@ -984,15 +1193,24 @@ fn a_stale_mirror_puts_the_token_back_instead_of_poisoning_the_device() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel).unwrap();
+    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel)
+        .unwrap();
 
     host.mirror_stale.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 3, 4);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
 
-    assert_eq!(host.poisoned.load(O::Acquire), 0, "⊘ a stale mirror must NOT poison the device");
-    assert_eq!(p.tokens[3].load().state, State::Rung, "the token is put back, not consumed");
+    assert_eq!(
+        host.poisoned.load(O::Acquire),
+        0,
+        "⊘ a stale mirror must NOT poison the device"
+    );
+    assert_eq!(
+        p.tokens[3].load().state,
+        State::Rung,
+        "the token is put back, not consumed"
+    );
     assert!(p.bits.bit(3), "and re-published, so a later pass retries");
 
     // The mirror catches up; the same work now goes through.
@@ -1011,7 +1229,8 @@ fn a_genuinely_untranslatable_kernel_operand_still_refuses() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::Kernel).unwrap();
+    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::Kernel)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 4, 4);
     let mut scratch = Vec::new();
@@ -1028,13 +1247,18 @@ fn no_completion_is_forged_for_work_that_was_refused_or_faulted() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 5, 4);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
     assert_eq!(host.faulted.load(O::Acquire), 1, "a user channel faults");
-    assert_eq!(host.forged.load(O::Acquire), 0, "⊘ and NOTHING is forged for it");
+    assert_eq!(
+        host.forged.load(O::Acquire),
+        0,
+        "⊘ and NOTHING is forged for it"
+    );
 }
 
 #[test]
@@ -1046,13 +1270,18 @@ fn a_passthrough_token_reached_by_a_worker_is_released_not_wedged() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User)
+        .unwrap();
     p.trap_write(Class::Doorbell, 0, 0, 6, 4);
     // The channel is recycled as Passthrough while a bit is outstanding.
     assert!(p.tokens[6].retire() || true);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
-    assert_ne!(p.tokens[6].load().state, State::Busy, "⊘ must not be wedged BUSY");
+    assert_ne!(
+        p.tokens[6].load().state,
+        State::Busy,
+        "⊘ must not be wedged BUSY"
+    );
 }
 
 // ---- fable w823 HIGH S3 / S5 / S7 / H3 ---------------------------------------------------------
@@ -1066,13 +1295,19 @@ fn allocating_over_a_live_token_is_refused_and_the_caller_learns() {
     let vmm = plane::Vmm::new();
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 7, Route::Translated, 0x77, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 7, Route::Translated, 0x77, Owner::User)
+        .unwrap();
     // Re-allocating without freeing must FAIL and must not rehome the token.
     assert!(
-        p.allocate_channel(&mut caps, 7, Route::Translated, 0xBB, Owner::User).is_err(),
+        p.allocate_channel(&mut caps, 7, Route::Translated, 0xBB, Owner::User)
+            .is_err(),
         "⊘ allocation over a live token must be refused"
     );
-    assert_eq!(p.tokens[7].load().host_token, 0x77, "and must not have rehomed it");
+    assert_eq!(
+        p.tokens[7].load().host_token,
+        0x77,
+        "and must not have rehomed it"
+    );
 }
 
 #[test]
@@ -1086,16 +1321,26 @@ fn a_recycled_kernel_chid_does_not_keep_the_kernel_failure_policy() {
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
-    p.allocate_channel(&mut caps, 9, Route::Translated, 0x99, Owner::Kernel).unwrap();
+    p.allocate_channel(&mut caps, 9, Route::Translated, 0x99, Owner::Kernel)
+        .unwrap();
     assert!(p.free_channel(&mut caps, 9), "the kernel channel is freed");
     // chid 9 is recycled to an unprivileged process.
-    p.allocate_channel(&mut caps, 9, Route::Translated, 0xAA, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 9, Route::Translated, 0xAA, Owner::User)
+        .unwrap();
     host.untranslatable.store(true, O::Release);
     p.trap_write(Class::Doorbell, 0, 0, 9, 4);
     let mut scratch = Vec::new();
     p.worker_pass(&host, &mut scratch, 8);
-    assert_eq!(host.poisoned.load(O::Acquire), 0, "⊘ a USER channel must NOT poison the device");
-    assert_eq!(host.faulted.load(O::Acquire), 1, "it faults, and the blast radius is the asker");
+    assert_eq!(
+        host.poisoned.load(O::Acquire),
+        0,
+        "⊘ a USER channel must NOT poison the device"
+    );
+    assert_eq!(
+        host.faulted.load(O::Acquire),
+        1,
+        "it faults, and the blast radius is the asker"
+    );
 }
 
 #[test]
@@ -1122,5 +1367,9 @@ fn caps_are_released_on_free_so_a_long_lived_guest_is_not_refused_forever() {
             .unwrap_or_else(|e| panic!("cycle {i} refused: {e:?}"));
         assert!(p.free_channel(&mut caps, tok));
     }
-    assert_eq!(caps.live(Twin::Channel), 0, "every acquire was matched by a release");
+    assert_eq!(
+        caps.live(Twin::Channel),
+        0,
+        "every acquire was matched by a release"
+    );
 }

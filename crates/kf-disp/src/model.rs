@@ -76,20 +76,38 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE", "connect_state"),
     ("NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE", "active"),
     ("NV0073_CTRL_CMD_SYSTEM_GET_BOOT_DISPLAYS", "boot_displays"),
-    ("NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP", "head_routing"),
+    (
+        "NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP",
+        "head_routing",
+    ),
     ("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA", "echo"),
-    ("NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS", "internal_displays"),
+    (
+        "NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS",
+        "internal_displays",
+    ),
     ("NV0073_CTRL_CMD_SPECIFIC_GET_ALL_HEAD_MASK", "head_mask"),
-    ("NV0073_CTRL_CMD_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT", "window_assign"),
+    (
+        "NV0073_CTRL_CMD_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT",
+        "window_assign",
+    ),
     ("NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO", "or_info"),
-    ("NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA", "connector_data"),
+    (
+        "NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA",
+        "connector_data",
+    ),
     ("NV0073_CTRL_CMD_SPECIFIC_GET_TYPE", "get_type"),
     ("NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2", "get_edid"),
     ("NV0073_CTRL_CMD_SPECIFIC_SET_EDID_V2", "set_edid"),
     ("NV0073_CTRL_CMD_SPECIFIC_GET_PCLK_LIMIT", "pclk_limit"),
-    ("NV0073_CTRL_CMD_SPECIFIC_IS_DIRECTMODE_DISPLAY", "directmode"),
+    (
+        "NV0073_CTRL_CMD_SPECIFIC_IS_DIRECTMODE_DISPLAY",
+        "directmode",
+    ),
     ("NV0073_CTRL_CMD_SPECIFIC_DISPLAY_CHANGE", "echo"),
-    ("NV0073_CTRL_CMD_SPECIFIC_GET_BACKLIGHT_BRIGHTNESS", "not_supported"),
+    (
+        "NV0073_CTRL_CMD_SPECIFIC_GET_BACKLIGHT_BRIGHTNESS",
+        "not_supported",
+    ),
     ("NV0073_CTRL_CMD_DFP_GET_INFO", "dfp_info"),
     ("NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO", "dongle"),
     ("NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2", "caps5070"),
@@ -309,12 +327,21 @@ impl DisplayModel {
     /// A model for a chip's display row with `monitors` behind connectors `0..n`, answering with the
     /// layouts of `layouts`.
     #[must_use]
-    pub fn new(row: &kf_chip::display::DisplayRow, monitors: Vec<Monitor>, layouts: &'static Layouts) -> DisplayModel {
+    pub fn new(
+        row: &kf_chip::display::DisplayRow,
+        monitors: Vec<Monitor>,
+        layouts: &'static Layouts,
+    ) -> DisplayModel {
         let connectors = monitors
             .into_iter()
             .enumerate()
             .take(row.heads as usize)
-            .map(|(i, monitor)| Connector { display_id: 0x100 << i, or_index: i as u32, monitor, custom_edid: None })
+            .map(|(i, monitor)| Connector {
+                display_id: 0x100 << i,
+                or_index: i as u32,
+                monitor,
+                custom_edid: None,
+            })
             .collect();
         DisplayModel {
             l: layouts,
@@ -381,14 +408,21 @@ impl DisplayModel {
     /// a guessed id). A link caches this set; [`Self::claims`] is membership in it.
     #[must_use]
     pub fn claimed(&self) -> Vec<u32> {
-        INTERNAL_CONTROLS.iter().map(|(c, _)| *c).chain(NAMED_CONTROLS.iter().filter_map(|(n, _)| self.l.k32(n))).collect()
+        INTERNAL_CONTROLS
+            .iter()
+            .map(|(c, _)| *c)
+            .chain(NAMED_CONTROLS.iter().filter_map(|(n, _)| self.l.k32(n)))
+            .collect()
     }
 
     fn kind_of(&self, cmd: u32) -> Option<&'static str> {
         if let Some((_, k)) = INTERNAL_CONTROLS.iter().find(|(c, _)| *c == cmd) {
             return Some(k);
         }
-        NAMED_CONTROLS.iter().find(|(n, _)| self.l.k32(n) == Some(cmd)).map(|(_, k)| *k)
+        NAMED_CONTROLS
+            .iter()
+            .find(|(n, _)| self.l.k32(n) == Some(cmd))
+            .map(|(_, k)| *k)
     }
 
     /// ★ Answer one display control: `Some(Ok(reply params))`, `Some(Err(status))`, or `None` when
@@ -418,10 +452,17 @@ impl DisplayModel {
                 Ok(self.ip_version.to_le_bytes().to_vec())
             }
             "static_info" => {
-                let mut p = self.view("NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS", params)?;
+                let mut p = self.view(
+                    "NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS",
+                    params,
+                )?;
                 p.buf.fill(0);
                 p.set("feHwSysCap", u64::from((1u32 << self.heads) - 1)); // HEAD_EXISTS(i) = bit i
-                let wmask = if self.windows >= 32 { u32::MAX } else { (1u32 << self.windows) - 1 };
+                let wmask = if self.windows >= 32 {
+                    u32::MAX
+                } else {
+                    (1u32 << self.windows) - 1
+                };
                 p.set("windowPresentMask", u64::from(wmask));
                 p.set("numHeads", u64::from(self.heads));
                 p.set("i2cPort", u64::from(NO_I2C_PORT));
@@ -440,7 +481,10 @@ impl DisplayModel {
                 Ok(p.buf)
             }
             "pushbuffer" => {
-                let p = self.view("NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS", params)?;
+                let p = self.view(
+                    "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS",
+                    params,
+                )?;
                 let class = p.get("hclass").unwrap_or(0) as u32;
                 let inst = p.get("channelInstance").unwrap_or(0) as u32;
                 // ★ Hostile guest: `(class, instance)` keys the registry, so both are bounded —
@@ -487,7 +531,10 @@ impl DisplayModel {
                 Ok(p.buf)
             }
             "window_assign" => {
-                let mut p = self.view("NV0073_CTRL_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT_PARAMS", params)?;
+                let mut p = self.view(
+                    "NV0073_CTRL_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT_PARAMS",
+                    params,
+                )?;
                 let masks: Vec<u8> = (0..self.windows).map(|w| (1u32 << (w / 2)) as u8).collect();
                 p.set_bytes("windowHeadMask", &masks);
                 Ok(p.buf)
@@ -535,7 +582,10 @@ impl DisplayModel {
                 let c = self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?.clone();
                 p.set("index", u64::from(c.or_index));
                 p.set("type", k("NV0073_CTRL_SPECIFIC_OR_TYPE_SOR")?);
-                p.set("protocol", k("NV0073_CTRL_SPECIFIC_OR_PROTOCOL_SOR_SINGLE_TMDS_A")?);
+                p.set(
+                    "protocol",
+                    k("NV0073_CTRL_SPECIFIC_OR_PROTOCOL_SOR_SINGLE_TMDS_A")?,
+                );
                 p.set("location", k("NV0073_CTRL_SPECIFIC_OR_LOCATION_CHIP")?);
                 p.set("bIsLitByVbios", 0);
                 p.set("bIsDispDynamic", 0);
@@ -548,9 +598,15 @@ impl DisplayModel {
                 p.set("flags", 0);
                 p.set("count", 1);
                 p.set("data[0].index", u64::from(c.or_index));
-                p.set("data[0].type", k("NV0073_CTRL_SPECIFIC_CONNECTOR_DATA_TYPE_DVI_D")?);
+                p.set(
+                    "data[0].type",
+                    k("NV0073_CTRL_SPECIFIC_CONNECTOR_DATA_TYPE_DVI_D")?,
+                );
                 p.set("data[0].location", 0);
-                p.set("platform", k("NV0073_CTRL_SPECIFIC_CONNECTOR_PLATFORM_DEFAULT_ADD_IN_CARD")?);
+                p.set(
+                    "platform",
+                    k("NV0073_CTRL_SPECIFIC_CONNECTOR_PLATFORM_DEFAULT_ADD_IN_CARD")?,
+                );
                 Ok(p.buf)
             }
             "get_type" => {
@@ -583,21 +639,31 @@ impl DisplayModel {
                     return Err(NV_ERR_INVALID_ARGUMENT);
                 }
                 let custom = (n > 0).then(|| buf[..n].to_vec());
-                let c = self.connectors.iter_mut().find(|c| c.display_id == id).ok_or(NV_ERR_INVALID_ARGUMENT)?;
+                let c = self
+                    .connectors
+                    .iter_mut()
+                    .find(|c| c.display_id == id)
+                    .ok_or(NV_ERR_INVALID_ARGUMENT)?;
                 c.custom_edid = custom;
                 Ok(p.buf)
             }
             "pclk_limit" => {
                 let mut p = self.view("NV0073_CTRL_SPECIFIC_GET_PCLK_LIMIT_PARAMS", params)?;
                 let id = p.get("displayId").unwrap_or(0) as u32;
-                let khz = u64::from(self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?.monitor.max_pixel_khz);
+                let khz = u64::from(
+                    self.connector(id)
+                        .ok_or(NV_ERR_INVALID_ARGUMENT)?
+                        .monitor
+                        .max_pixel_khz,
+                );
                 p.set("pclkLimit", khz);
                 p.set("orPclkLimit", khz);
                 p.set("vbPclkLimit", khz);
                 Ok(p.buf)
             }
             "directmode" => {
-                let mut p = self.view("NV0073_CTRL_SPECIFIC_IS_DIRECTMODE_DISPLAY_PARAMS", params)?;
+                let mut p =
+                    self.view("NV0073_CTRL_SPECIFIC_IS_DIRECTMODE_DISPLAY_PARAMS", params)?;
                 p.set("bIsDirectmode", 0);
                 Ok(p.buf)
             }
@@ -606,14 +672,19 @@ impl DisplayModel {
                 let id = p.get("displayId").unwrap_or(0) as u32;
                 self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?;
                 // SIGNAL (2:0) = TMDS, LINK (21:20) = SINGLE; not HDMI-capable (a DVI monitor)
-                let flags = k("NV0073_CTRL_DFP_FLAGS_SIGNAL_TMDS")? | (k("NV0073_CTRL_DFP_FLAGS_LINK_SINGLE")? << 20);
+                let flags = k("NV0073_CTRL_DFP_FLAGS_SIGNAL_TMDS")?
+                    | (k("NV0073_CTRL_DFP_FLAGS_LINK_SINGLE")? << 20);
                 p.set("flags", flags);
                 p.set("UHBRSupportedByDfp", 0);
                 Ok(p.buf)
             }
             "dongle" => {
-                let mut p = self.view("NV0073_CTRL_DFP_GET_DISPLAYPORT_DONGLE_INFO_PARAMS", params)?;
-                p.set("flags", k("NV0073_CTRL_DFP_GET_DISPLAYPORT_DONGLE_INFO_FLAGS_ATTACHED_FALSE")?);
+                let mut p =
+                    self.view("NV0073_CTRL_DFP_GET_DISPLAYPORT_DONGLE_INFO_PARAMS", params)?;
+                p.set(
+                    "flags",
+                    k("NV0073_CTRL_DFP_GET_DISPLAYPORT_DONGLE_INFO_FLAGS_ATTACHED_FALSE")?,
+                );
                 p.set("maxTmdsClkRateHz", 0);
                 Ok(p.buf)
             }
@@ -624,10 +695,22 @@ impl DisplayModel {
             }
             "lockpins" => {
                 let mut p = self.view("NVC370_CTRL_GET_LOCKPINS_CAPS_PARAMS", params)?;
-                p.set("frameLockPin", k("NVC370_CTRL_GET_LOCKPINS_CAPS_FRAME_LOCK_PIN_NONE")?);
-                p.set("rasterLockPin", k("NVC370_CTRL_GET_LOCKPINS_CAPS_RASTER_LOCK_PIN_NONE")?);
-                p.set("flipLockPin", k("NVC370_CTRL_GET_LOCKPINS_CAPS_FLIP_LOCK_PIN_NONE")?);
-                p.set("stereoPin", k("NVC370_CTRL_GET_LOCKPINS_CAPS_STEREO_PIN_NONE")?);
+                p.set(
+                    "frameLockPin",
+                    k("NVC370_CTRL_GET_LOCKPINS_CAPS_FRAME_LOCK_PIN_NONE")?,
+                );
+                p.set(
+                    "rasterLockPin",
+                    k("NVC370_CTRL_GET_LOCKPINS_CAPS_RASTER_LOCK_PIN_NONE")?,
+                );
+                p.set(
+                    "flipLockPin",
+                    k("NVC370_CTRL_GET_LOCKPINS_CAPS_FLIP_LOCK_PIN_NONE")?,
+                );
+                p.set(
+                    "stereoPin",
+                    k("NVC370_CTRL_GET_LOCKPINS_CAPS_STEREO_PIN_NONE")?,
+                );
                 p.set("numScanLockPins", 0);
                 p.set("numFlipLockPins", 0);
                 p.set("numStereoPins", 0);
@@ -637,7 +720,11 @@ impl DisplayModel {
                 let mut p = self.view("NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS", params)?;
                 let class = p.get("channelClass").unwrap_or(0) as u32;
                 let inst = p.get("channelInstance").unwrap_or(0) as u32;
-                let state = match self.classes.channel_kind(class).and_then(|kd| self.channels.get(&(kd, inst))) {
+                let state = match self
+                    .classes
+                    .channel_kind(class)
+                    .and_then(|kd| self.channels.get(&(kd, inst)))
+                {
                     Some(ch) if ch.get == ch.put => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_IDLE")?,
                     Some(_) => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_BUSY")?,
                     None => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_DEALLOC")?,
@@ -675,7 +762,9 @@ impl DisplayModel {
     /// `kern_disp_0300.c:96-99`: there is one core channel, number 0, and NVKMS allocates it as
     /// instance 0.)
     pub fn alloc(&mut self, client: u32, handle: u32, class: u32, params: &[u8]) -> bool {
-        let Some(kind) = self.classes.channel_kind(class) else { return false };
+        let Some(kind) = self.classes.channel_kind(class) else {
+            return false;
+        };
         let decoded = if kind == ChannelKind::Cursor {
             Params::new(self.l, "NV50VAIO_CHANNELPIO_ALLOCATION_PARAMETERS", params)
                 .and_then(|p| Some((p.get("channelInstance")? as u32, 0)))
@@ -683,22 +772,44 @@ impl DisplayModel {
             Params::new(self.l, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS", params)
                 .and_then(|p| Some((p.get("channelInstance")? as u32, p.get("offset")? as u32)))
         };
-        let Some((inst, offset)) = decoded.filter(|(i, _)| *i < self.instances(kind)) else { return false };
+        let Some((inst, offset)) = decoded.filter(|(i, _)| *i < self.instances(kind)) else {
+            return false;
+        };
         let pb = self.pushbuffers.get(&(class, inst)).copied();
         self.channels.insert(
             (kind, inst),
-            Channel { class, kind, instance: inst, client, handle, pb, get: offset, put: offset },
+            Channel {
+                class,
+                kind,
+                instance: inst,
+                client,
+                handle,
+                pb,
+                get: offset,
+                put: offset,
+            },
         );
-        self.state(Statement::ChannelAllocated { kind, instance: inst, offset });
+        self.state(Statement::ChannelAllocated {
+            kind,
+            instance: inst,
+            offset,
+        });
         true
     }
 
     /// A free of `(client, handle)`: drops the channel if it was one. Returns `true` when it was.
     pub fn free(&mut self, client: u32, handle: u32) -> bool {
-        let key = self.channels.iter().find(|(_, c)| c.client == client && c.handle == handle).map(|(k, _)| *k);
+        let key = self
+            .channels
+            .iter()
+            .find(|(_, c)| c.client == client && c.handle == handle)
+            .map(|(k, _)| *k);
         if let Some(k) = key {
             self.channels.remove(&k);
-            self.state(Statement::ChannelFreed { kind: k.0, instance: k.1 });
+            self.state(Statement::ChannelFreed {
+                kind: k.0,
+                instance: k.1,
+            });
         }
         key.is_some()
     }
@@ -706,10 +817,18 @@ impl DisplayModel {
     /// A free of the CLIENT `client` (the guest's RM frees each object first, but a client free is
     /// the last word on everything it held): drops every channel it owned. Returns how many.
     pub fn free_client(&mut self, client: u32) -> usize {
-        let keys: Vec<_> = self.channels.iter().filter(|(_, c)| c.client == client).map(|(k, _)| *k).collect();
+        let keys: Vec<_> = self
+            .channels
+            .iter()
+            .filter(|(_, c)| c.client == client)
+            .map(|(k, _)| *k)
+            .collect();
         for k in &keys {
             self.channels.remove(k);
-            self.state(Statement::ChannelFreed { kind: k.0, instance: k.1 });
+            self.state(Statement::ChannelFreed {
+                kind: k.0,
+                instance: k.1,
+            });
         }
         keys.len()
     }
@@ -738,7 +857,10 @@ mod tests {
         m.layouts().size(s).expect(s)
     }
     fn get(m: &DisplayModel, s: &'static str, buf: &[u8], f: &str) -> u64 {
-        Params::new(m.layouts(), s, buf).expect("view").get(f).expect(f)
+        Params::new(m.layouts(), s, buf)
+            .expect("view")
+            .get(f)
+            .expect(f)
     }
 
     /// ★ The NVKMS bring-up conversation, in its order (`nvkms-rm.c:1665-1882`): caps, heads, the
@@ -747,17 +869,43 @@ mod tests {
     fn the_nvkms_bringup_conversation_describes_one_dvi_monitor() {
         let mut m = model();
         let s = "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS";
-        let r = m.control(cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS"), &vec![0; size(&m, s)]).unwrap().unwrap();
+        let r = m
+            .control(
+                cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS"),
+                &vec![0; size(&m, s)],
+            )
+            .unwrap()
+            .unwrap();
         assert_eq!(get(&m, s, &r, "numHeads"), 4);
         let s = "NV0073_CTRL_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT_PARAMS";
         let r = m
-            .control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT"), &vec![0; size(&m, s)])
+            .control(
+                cmd(
+                    &m,
+                    "NV0073_CTRL_CMD_SPECIFIC_GET_VALID_HEAD_WINDOW_ASSIGNMENT",
+                ),
+                &vec![0; size(&m, s)],
+            )
             .unwrap()
             .unwrap();
-        let wm = Params::new(m.layouts(), s, &r).unwrap().bytes("windowHeadMask").unwrap().to_vec();
-        assert_eq!(&wm[..9], &[1, 1, 2, 2, 4, 4, 8, 8, 0], "windows 2h, 2h+1 -> head h; window 8 absent");
+        let wm = Params::new(m.layouts(), s, &r)
+            .unwrap()
+            .bytes("windowHeadMask")
+            .unwrap()
+            .to_vec();
+        assert_eq!(
+            &wm[..9],
+            &[1, 1, 2, 2, 4, 4, 8, 8, 0],
+            "windows 2h, 2h+1 -> head h; window 8 absent"
+        );
         let s = "NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS";
-        let r = m.control(cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED"), &vec![0; size(&m, s)]).unwrap().unwrap();
+        let r = m
+            .control(
+                cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED"),
+                &vec![0; size(&m, s)],
+            )
+            .unwrap()
+            .unwrap();
         let id = get(&m, s, &r, "displayMask") as u32;
         assert_eq!(id, 0x100);
         let s = "NV0073_CTRL_SPECIFIC_OR_GET_INFO_PARAMS";
@@ -765,20 +913,32 @@ mod tests {
         let mut qp = Params::new(m.layouts(), s, &q).unwrap();
         qp.set("displayId", u64::from(id));
         q = qp.buf;
-        let r = m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO"), &q).unwrap().unwrap();
+        let r = m
+            .control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO"), &q)
+            .unwrap()
+            .unwrap();
         assert_eq!(get(&m, s, &r, "type"), 2, "SOR");
         assert_eq!(get(&m, s, &r, "protocol"), 1, "SINGLE_TMDS_A");
         let s = "NV0073_CTRL_SPECIFIC_GET_EDID_V2_PARAMS";
         let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
         q.set("displayId", u64::from(id));
-        let r = m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q.buf).unwrap().unwrap();
+        let r = m
+            .control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q.buf)
+            .unwrap()
+            .unwrap();
         let rp = Params::new(m.layouts(), s, &r).unwrap();
         assert_eq!(rp.get("bufferSize"), Some(128));
-        assert_eq!(&rp.bytes("edidBuffer").unwrap()[..8], &[0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0]);
+        assert_eq!(
+            &rp.bytes("edidBuffer").unwrap()[..8],
+            &[0, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0]
+        );
         // a display id we do not have is refused, never answered for connector 0
         let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
         q.set("displayId", 0x200);
-        assert_eq!(m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q.buf), Some(Err(NV_ERR_INVALID_ARGUMENT)));
+        assert_eq!(
+            m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q.buf),
+            Some(Err(NV_ERR_INVALID_ARGUMENT))
+        );
     }
 
     /// A custom EDID shadows the monitor's until cleared (NVKMS clears on every read,
@@ -791,12 +951,24 @@ mod tests {
         q.set("displayId", 0x100);
         q.set("bufferSize", 3);
         q.set_bytes("edidBuffer", &[1, 2, 3]);
-        assert!(matches!(m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_SET_EDID_V2"), &q.buf), Some(Ok(_))));
-        assert_eq!(m.connectors[0].custom_edid.as_deref(), Some(&[1u8, 2, 3][..]));
+        assert!(matches!(
+            m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_SET_EDID_V2"), &q.buf),
+            Some(Ok(_))
+        ));
+        assert_eq!(
+            m.connectors[0].custom_edid.as_deref(),
+            Some(&[1u8, 2, 3][..])
+        );
         q.set("bufferSize", 0);
-        assert!(matches!(m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_SET_EDID_V2"), &q.buf), Some(Ok(_))));
+        assert!(matches!(
+            m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_SET_EDID_V2"), &q.buf),
+            Some(Ok(_))
+        ));
         assert_eq!(m.connectors[0].custom_edid, None);
-        assert_eq!(m.control(cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS"), &[0; 4]), Some(Err(NV_ERR_INVALID_ARGUMENT)));
+        assert_eq!(
+            m.control(cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS"), &[0; 4]),
+            Some(Err(NV_ERR_INVALID_ARGUMENT))
+        );
         assert_eq!(m.control(0x2080_0101, &[0; 4]), None, "not ours");
     }
 
@@ -821,20 +993,41 @@ mod tests {
         let s = "NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS";
         let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
         q.set("channelClass", 0xC67D);
-        let r = m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf).unwrap().unwrap();
+        let r = m
+            .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
+            .unwrap()
+            .unwrap();
         assert_eq!(get(&m, s, &r, "channelState"), 1, "IDLE");
         m.channels.get_mut(&(ChannelKind::Core, 0)).unwrap().put = 0x40;
-        let r = m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf).unwrap().unwrap();
+        let r = m
+            .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
+            .unwrap()
+            .unwrap();
         assert_eq!(get(&m, s, &r, "channelState"), 0x40, "BUSY");
         m.free(0xc1d0_0001, 0xc67d_0000);
-        let r = m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf).unwrap().unwrap();
+        let r = m
+            .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
+            .unwrap()
+            .unwrap();
         assert_eq!(get(&m, s, &r, "channelState"), 0x80, "DEALLOC");
         let s = "NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS";
-        let r = m.control(cmd(&m, "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"), &vec![0; size(&m, s)]).unwrap().unwrap();
+        let r = m
+            .control(
+                cmd(&m, "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"),
+                &vec![0; size(&m, s)],
+            )
+            .unwrap()
+            .unwrap();
         assert_eq!(get(&m, s, &r, "bIsPossible"), 1);
         assert!(matches!(
             m.take_statements().as_slice(),
-            [Statement::ChannelAllocated { kind: ChannelKind::Core, .. }, Statement::ChannelFreed { .. }]
+            [
+                Statement::ChannelAllocated {
+                    kind: ChannelKind::Core,
+                    ..
+                },
+                Statement::ChannelFreed { .. }
+            ]
         ));
     }
 
@@ -850,12 +1043,13 @@ mod tests {
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
-        let scanned: std::collections::BTreeSet<u32> = [0x0073_0000u32, 0x5070_0000, 0xc370_0000, 0xc372_0000]
-            .iter()
-            .flat_map(|b| *b..*b + 0x2000)
-            .chain(0x2080_0a00..0x2080_0b00)
-            .filter(|c| m.claims(*c))
-            .collect();
+        let scanned: std::collections::BTreeSet<u32> =
+            [0x0073_0000u32, 0x5070_0000, 0xc370_0000, 0xc372_0000]
+                .iter()
+                .flat_map(|b| *b..*b + 0x2000)
+                .chain(0x2080_0a00..0x2080_0b00)
+                .filter(|c| m.claims(*c))
+                .collect();
         assert_eq!(scanned, distinct);
     }
 
@@ -867,8 +1061,20 @@ mod tests {
     #[test]
     fn guest_stated_keys_are_bounded_and_the_statement_queue_is_capped() {
         let mut m = model();
-        assert_eq!((m.instances(ChannelKind::Core), m.instances(ChannelKind::Window)), (1, 8));
-        assert_eq!((m.instances(ChannelKind::WindowImm), m.instances(ChannelKind::Cursor)), (8, 4));
+        assert_eq!(
+            (
+                m.instances(ChannelKind::Core),
+                m.instances(ChannelKind::Window)
+            ),
+            (1, 8)
+        );
+        assert_eq!(
+            (
+                m.instances(ChannelKind::WindowImm),
+                m.instances(ChannelKind::Cursor)
+            ),
+            (8, 4)
+        );
         let s = "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS";
         let pb = |m: &mut DisplayModel, class: u32, inst: u32| {
             let mut q = Params::new(m.layouts(), s, &vec![0; size(m, s)]).unwrap();
@@ -877,9 +1083,21 @@ mod tests {
             q.set("valid", 1);
             m.control(CHANNEL_PUSHBUFFER, &q.buf)
         };
-        assert_eq!(pb(&mut m, 0xC67E, 8), Some(Err(NV_ERR_INVALID_ARGUMENT)), "window 8 does not exist");
-        assert_eq!(pb(&mut m, 0xC57E, 0), Some(Err(NV_ERR_INVALID_ARGUMENT)), "a Turing class on a GA10x display");
-        assert_eq!(pb(&mut m, 0xC67D, 1), Some(Err(NV_ERR_INVALID_ARGUMENT)), "there is one core channel");
+        assert_eq!(
+            pb(&mut m, 0xC67E, 8),
+            Some(Err(NV_ERR_INVALID_ARGUMENT)),
+            "window 8 does not exist"
+        );
+        assert_eq!(
+            pb(&mut m, 0xC57E, 0),
+            Some(Err(NV_ERR_INVALID_ARGUMENT)),
+            "a Turing class on a GA10x display"
+        );
+        assert_eq!(
+            pb(&mut m, 0xC67D, 1),
+            Some(Err(NV_ERR_INVALID_ARGUMENT)),
+            "there is one core channel"
+        );
         assert!(matches!(pb(&mut m, 0xC67E, 7), Some(Ok(_))));
         assert_eq!(m.pushbuffers.len(), 1);
         let dma = size(&m, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS");
@@ -890,17 +1108,36 @@ mod tests {
             v
         };
         let c = 0xc1d0_0001;
-        assert!(!m.alloc(c, 0x10, 0xC67E, &with_inst(dma - 4, 0)), "short params are not a window at instance 0");
-        assert!(!m.alloc(c, 0x11, 0xC67E, &with_inst(dma, 0xffff_ffff)), "an instance the display does not have");
-        assert!(!m.alloc(c, 0x12, 0xC67A, &with_inst(pio, 4)), "cursor 4 on a four-head display");
-        assert!(!m.alloc(c, 0x13, 0xC670, &with_inst(dma, 0)), "the display object is not a channel");
+        assert!(
+            !m.alloc(c, 0x10, 0xC67E, &with_inst(dma - 4, 0)),
+            "short params are not a window at instance 0"
+        );
+        assert!(
+            !m.alloc(c, 0x11, 0xC67E, &with_inst(dma, 0xffff_ffff)),
+            "an instance the display does not have"
+        );
+        assert!(
+            !m.alloc(c, 0x12, 0xC67A, &with_inst(pio, 4)),
+            "cursor 4 on a four-head display"
+        );
+        assert!(
+            !m.alloc(c, 0x13, 0xC670, &with_inst(dma, 0)),
+            "the display object is not a channel"
+        );
         assert!(m.channels.is_empty());
         assert!(m.alloc(c, 0x20, 0xC67E, &with_inst(dma, 7)));
-        assert_eq!(m.channels[&(ChannelKind::Window, 7)].pb.map(|p| p.phys), Some(0), "its pushbuffer was stated first");
+        assert_eq!(
+            m.channels[&(ChannelKind::Window, 7)].pb.map(|p| p.phys),
+            Some(0),
+            "its pushbuffer was stated first"
+        );
         assert!(m.alloc(c, 0x21, 0xC67A, &with_inst(pio, 3)));
         assert!(m.alloc(0xc1d0_0002, 0x22, 0xC67D, &with_inst(dma, 0)));
         assert_eq!(m.free_client(c), 2);
-        assert_eq!(m.channels.keys().copied().collect::<Vec<_>>(), vec![(ChannelKind::Core, 0)]);
+        assert_eq!(
+            m.channels.keys().copied().collect::<Vec<_>>(),
+            vec![(ChannelKind::Core, 0)]
+        );
         assert!(!m.free(c, 0x20), "already gone");
         m.take_statements();
         for i in 0..MAX_STATEMENTS + 5 {
@@ -908,6 +1145,10 @@ mod tests {
         }
         assert_eq!(m.statements.len(), MAX_STATEMENTS);
         assert_eq!(m.statements_dropped, 5);
-        assert_eq!(m.channels.len(), 1 + 8, "the registry holds one entry per channel the display has");
+        assert_eq!(
+            m.channels.len(),
+            1 + 8,
+            "the registry holds one entry per channel the display has"
+        );
     }
 }

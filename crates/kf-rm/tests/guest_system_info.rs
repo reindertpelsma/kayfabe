@@ -20,8 +20,8 @@ use kf_abi::guestsysinfo::{
     encode_set_guest_system_info_reply,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::guestsysinfo::GuestSystemInfoPolicy;
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::guestsysinfo::GuestSystemInfoPolicy;
 
 /// `ogkm-580: src/nvidia/inc/kernel/vgpu/vgpu_version.h:33-34`, written as literals so a
 /// change to the table is a change this file has to agree to.
@@ -108,10 +108,36 @@ fn the_version_is_a_row_and_it_really_does_move() {
 /// branch — which a one-row-per-branch table could never have said.
 #[test]
 fn the_pair_is_measured_per_tag_and_moves_inside_a_branch() {
-    let v = |major, minor, patch| table_for(DriverVersion { major, minor, patch }).expect("measured").vgx_version();
-    assert_eq!(v(570, 124, 6), Some(VgxVersion { major: 0x29, minor: 0x0B }));
-    assert_eq!(v(570, 148, 8), Some(VgxVersion { major: 0x29, minor: 0x0C }));
-    assert_eq!(v(550, 54, 14), Some(VgxVersion { major: 0x25, minor: 0x1B }));
+    let v = |major, minor, patch| {
+        table_for(DriverVersion {
+            major,
+            minor,
+            patch,
+        })
+        .expect("measured")
+        .vgx_version()
+    };
+    assert_eq!(
+        v(570, 124, 6),
+        Some(VgxVersion {
+            major: 0x29,
+            minor: 0x0B
+        })
+    );
+    assert_eq!(
+        v(570, 148, 8),
+        Some(VgxVersion {
+            major: 0x29,
+            minor: 0x0C
+        })
+    );
+    assert_eq!(
+        v(550, 54, 14),
+        Some(VgxVersion {
+            major: 0x25,
+            minor: 0x1B
+        })
+    );
 }
 
 /// ★★★ The driver-version cross-check: the guest's own `NV_VERSION_STRING` must be the version
@@ -123,14 +149,33 @@ fn a_guest_whose_own_version_is_not_the_declared_one_is_refused_by_name() {
     let reply = p
         .respond(&request_as(V580_MAJOR, V580_MINOR, "580.105.08"))
         .expect("a refusal is still a reply");
-    assert_eq!(reply.rpc_result, kf_abi::NV_ERR_NOT_SUPPORTED, "same VGX pair, different release: refused");
-    let why = p.check_driver_version(&request_as(V580_MAJOR, V580_MINOR, "580.105.08").payload).expect_err("mismatch");
+    assert_eq!(
+        reply.rpc_result,
+        kf_abi::NV_ERR_NOT_SUPPORTED,
+        "same VGX pair, different release: refused"
+    );
+    let why = p
+        .check_driver_version(&request_as(V580_MAJOR, V580_MINOR, "580.105.08").payload)
+        .expect_err("mismatch");
     let msg = why.to_string();
-    assert!(msg.contains("580.105.08") && msg.contains("580.159.04") && msg.contains("guest-driver="), "{msg}");
+    assert!(
+        msg.contains("580.105.08") && msg.contains("580.159.04") && msg.contains("guest-driver="),
+        "{msg}"
+    );
     // The declared version itself passes, two-field spellings included.
-    assert!(p.check_driver_version(&request(V580_MAJOR, V580_MINOR).payload).is_ok());
-    let p595 = policy_for(DriverVersion { major: 595, minor: 84, patch: 0 });
-    assert!(p595.check_driver_version(&request_as(0x2D, 0x03, "595.84").payload).is_ok());
+    assert!(
+        p.check_driver_version(&request(V580_MAJOR, V580_MINOR).payload)
+            .is_ok()
+    );
+    let p595 = policy_for(DriverVersion {
+        major: 595,
+        minor: 84,
+        patch: 0,
+    });
+    assert!(
+        p595.check_driver_version(&request_as(0x2D, 0x03, "595.84").payload)
+            .is_ok()
+    );
 }
 
 #[test]

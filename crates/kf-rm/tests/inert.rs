@@ -13,8 +13,8 @@
 #[path = "support/ga106.rs"]
 mod ga106;
 
-use kf_rm::inert::InertPolicy;
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inert::InertPolicy;
 
 fn command(function: RpcFunction, code: u32, payload: Vec<u8>) -> RpcCommand {
     RpcCommand {

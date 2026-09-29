@@ -96,13 +96,13 @@ const NVOS46_FLAGS_CACHE_SNOOP_ENABLE: u32 = 1 << 4;
 
 use crate::export::ChildExports;
 use kayfabe_abi::bringup::{
-    NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
-    NV01_MEMORY_SYSTEM, NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
+    CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD,
+    NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2, NV01_MEMORY_SYSTEM,
+    NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
     NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
     NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
     NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
-    CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
 };
 // ★★ #156 — the three ARCH-VARYING class ids that used to be imported here
 // (`AMPERE_CHANNEL_GPFIFO_A`, `AMPERE_USERMODE_A`, `AMPERE_DMA_COPY_B`) are gone. They
@@ -1100,9 +1100,9 @@ mod birth_conn {
             // blocker 2) — resolved on B's own control node, never assumed equal.
             let (_card, id) = super::resolve_device_instance(&conn.ctl, handed.root(), gpu_index)
                 .map_err(|(rung, detail)| {
-                    eprintln!("BirthConn: {rung}: {detail}");
-                    RmError::Other(ABI_ENCODE_FAILED)
-                })?;
+                eprintln!("BirthConn: {rung}: {detail}");
+                RmError::Other(ABI_ENCODE_FAILED)
+            })?;
             let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
             Nv0080AllocParameters {
                 device_id: id.device_instance,
@@ -1112,9 +1112,11 @@ mod birth_conn {
             .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let device = conn.alloc(handed.root(), NV01_DEVICE_0, &mut dev_params)?;
             let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
-            Nv2080AllocParameters { sub_device_id: id.sub_device_instance }
-                .encode_into(&mut sub_params)
-                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+            Nv2080AllocParameters {
+                sub_device_id: id.sub_device_instance,
+            }
+            .encode_into(&mut sub_params)
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let subdevice = conn.alloc(device, NV20_SUBDEVICE_0, &mut sub_params)?;
             Ok(BirthConn {
                 device,
@@ -1602,7 +1604,9 @@ mod birth_conn {
                 h_memory,
                 offset,
                 length: len,
-                flags: page_size | NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE | crate::rm::NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
+                flags: page_size
+                    | NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
+                    | crate::rm::NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
                 flags2: 0,
                 kind_override: 0,
                 dma_offset: at,
@@ -3259,8 +3263,10 @@ pub fn resolve_device_instance(
     let mut ci = vec![0u8; CardInfo::SIZE * CardInfo::MAX_ENTRIES];
     let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_CARD_INFO, ci.len())
         .map_err(|e| ("R4b CARD_INFO request", format!("{e:?}")))?;
-    ctl.ioctl(req, &mut ci, &mut []).map_err(|e| ("R4b CARD_INFO", format!("{e:?}")))?;
-    let cards = CardInfo::decode_all(&ci).map_err(|e| ("R4b CARD_INFO decode", format!("{e:?}")))?;
+    ctl.ioctl(req, &mut ci, &mut [])
+        .map_err(|e| ("R4b CARD_INFO", format!("{e:?}")))?;
+    let cards =
+        CardInfo::decode_all(&ci).map_err(|e| ("R4b CARD_INFO decode", format!("{e:?}")))?;
     let card = cards.iter().copied().find(|c| c.minor == minor).ok_or_else(|| {
         (
             "R4b CARD_INFO minor",
@@ -3288,16 +3294,24 @@ pub fn resolve_device_instance(
     let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_CONTROL as u8, arg.len())
         .map_err(|e| ("R4c GET_ID_INFO_V2 request", format!("{e:?}")))?;
     let mut patches = vec![Indirect::new(16, &mut idinfo)];
-    ctl.ioctl(req, &mut arg, &mut patches).map_err(|e| ("R4c GET_ID_INFO_V2", format!("{e:?}")))?;
+    ctl.ioctl(req, &mut arg, &mut patches)
+        .map_err(|e| ("R4c GET_ID_INFO_V2", format!("{e:?}")))?;
     drop(patches);
-    let out = Nvos54Parameters::decode(&arg).map_err(|e| ("R4c GET_ID_INFO_V2 decode", format!("{e:?}")))?;
+    let out = Nvos54Parameters::decode(&arg)
+        .map_err(|e| ("R4c GET_ID_INFO_V2 decode", format!("{e:?}")))?;
     if out.status != 0 {
         return Err((
             "R4c GET_ID_INFO_V2",
-            format!("RM status {:#x} for gpuId {:#x} (minor {minor}, {})", out.status, card.gpu_id, card.bdf()),
+            format!(
+                "RM status {:#x} for gpuId {:#x} (minor {minor}, {})",
+                out.status,
+                card.gpu_id,
+                card.bdf()
+            ),
         ));
     }
-    let id = GpuIdInfoV2::decode(&idinfo).map_err(|e| ("R4c GET_ID_INFO_V2 decode", format!("{e:?}")))?;
+    let id = GpuIdInfoV2::decode(&idinfo)
+        .map_err(|e| ("R4c GET_ID_INFO_V2 decode", format!("{e:?}")))?;
     Ok((card, id))
 }
 
@@ -3432,10 +3446,13 @@ impl RmConnection {
         };
 
         // ★★ R4b/R4c — which RM device instance IS our minor ([`resolve_device_instance`]).
-        let (card, id) = resolve_device_instance(&conn.ctl, conn.client.raw(), gpu.0).map_err(|(rung, detail)| {
-            BringUpError { rung, detail }
-        })?;
-        let conn = RmConnection { card, device_instance: id.device_instance, ..conn };
+        let (card, id) = resolve_device_instance(&conn.ctl, conn.client.raw(), gpu.0)
+            .map_err(|(rung, detail)| BringUpError { rung, detail })?;
+        let conn = RmConnection {
+            card,
+            device_instance: id.device_instance,
+            ..conn
+        };
 
         // R5 — the device. The parameters are NOT optional: without them RM does not
         // associate the device with a physical GPU and every later control answers
@@ -3458,7 +3475,10 @@ impl RmConnection {
         let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
         rung(
             "R6 NV2080 encode",
-            Nv2080AllocParameters { sub_device_id: id.sub_device_instance }.encode_into(&mut sub_params),
+            Nv2080AllocParameters {
+                sub_device_id: id.sub_device_instance,
+            }
+            .encode_into(&mut sub_params),
         )?;
         let subdevice = rung(
             "R6 NV20_SUBDEVICE_0",
@@ -3482,15 +3502,24 @@ impl RmConnection {
         // ★ R6a — the host die's own class list, when no pin was passed ([`Self::open_on_host`]).
         let conn = if pinned.is_none() {
             let mut list = [0u8; kayfabe_chips::host_classes::CLASSLIST_V2_SIZE];
-            conn.raw_control(conn.device, kayfabe_chips::host_classes::NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2, &mut list)
-                .map_err(|e| BringUpError { rung: "R6a host class list", detail: format!("{e:?}") })?;
+            conn.raw_control(
+                conn.device,
+                kayfabe_chips::host_classes::NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2,
+                &mut list,
+            )
+            .map_err(|e| BringUpError {
+                rung: "R6a host class list",
+                detail: format!("{e:?}"),
+            })?;
             let ids = kayfabe_chips::host_classes::decode_classlist(&list).ok_or(BringUpError {
                 rung: "R6a host class list",
                 detail: "numClasses exceeds NV0080_CTRL_GPU_CLASSLIST_MAX_SIZE".to_string(),
             })?;
-            let derived = kayfabe_chips::DerivedHostClasses::from_host_list(&ids).map_err(|e| BringUpError {
-                rung: "R6a host class list",
-                detail: format!("the host lists no class of a required role: {e:?}"),
+            let derived = kayfabe_chips::DerivedHostClasses::from_host_list(&ids).map_err(|e| {
+                BringUpError {
+                    rung: "R6a host class list",
+                    detail: format!("the host lists no class of a required role: {e:?}"),
+                }
             })?;
             // One small immutable profile per connection, for the connection's `'static` seam.
             let classes: &'static dyn HostClasses = Box::leak(Box::new(derived));
@@ -6578,7 +6607,10 @@ impl TiledWindowEvidence {
             })
     }
     pub fn landed(&self) -> usize {
-        self.tiles.iter().filter(|(_, a, g)| matches!(g, Ok(v) if v == a)).count()
+        self.tiles
+            .iter()
+            .filter(|(_, a, g)| matches!(g, Ok(v) if v == a))
+            .count()
     }
 }
 
@@ -7341,7 +7373,8 @@ impl HostRmBackend {
         const CE_GET_ALL_CAPS: u32 = 0x2080_2a0a;
         const PRESENT_OFF: usize = 64 * 2;
         let mut p = [0u8; PRESENT_OFF + 8];
-        self.conn.control_for_probe(self.conn.subdevice(), CE_GET_ALL_CAPS, &mut p)?;
+        self.conn
+            .control_for_probe(self.conn.subdevice(), CE_GET_ALL_CAPS, &mut p)?;
         let mut present = [0u8; 8];
         present.copy_from_slice(&p[PRESENT_OFF..]);
         let present = u64::from_le_bytes(present);
@@ -7557,7 +7590,15 @@ impl HostRmBackend {
     pub fn bench_vidmem_mmio(
         &self,
         len: u64,
-    ) -> Result<(std::time::Duration, std::time::Duration, std::time::Duration, u64), RmError> {
+    ) -> Result<
+        (
+            std::time::Duration,
+            std::time::Duration,
+            std::time::Duration,
+            u64,
+        ),
+        RmError,
+    > {
         let raw = self.conn.reserve_gpga(len)?;
         let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
         // ⊘ Pass 0 is COLD: every page's first touch faults the mapping in (and in a guest, a
@@ -7566,11 +7607,15 @@ impl HostRmBackend {
         let cold = std::time::Instant::now();
         let mut off = 0u64;
         while off + 8 <= len {
-            map.store_u64(HostOffset::new(off), off).map_err(|e| region_error(&e))?;
+            map.store_u64(HostOffset::new(off), off)
+                .map_err(|e| region_error(&e))?;
             off += 8;
         }
         release_fence();
-        println!("MMIO_BENCH cold-first-touch write_u64 {:.1} ns/op", cold.elapsed().as_nanos() as f64 / (len / 8) as f64);
+        println!(
+            "MMIO_BENCH cold-first-touch write_u64 {:.1} ns/op",
+            cold.elapsed().as_nanos() as f64 / (len / 8) as f64
+        );
         let start = std::time::Instant::now();
         let mut off = 0u64;
         while off + 8 <= len {
@@ -7584,7 +7629,10 @@ impl HostRmBackend {
         let start = std::time::Instant::now();
         let mut off = 0u64;
         while off + 8 <= len {
-            acc = acc.wrapping_add(map.load_u64(HostOffset::new(off)).map_err(|e| region_error(&e))?);
+            acc = acc.wrapping_add(
+                map.load_u64(HostOffset::new(off))
+                    .map_err(|e| region_error(&e))?,
+            );
             off += 8;
         }
         let read = start.elapsed();
@@ -7593,8 +7641,11 @@ impl HostRmBackend {
         let start = std::time::Instant::now();
         let mut at = 0u64;
         while at + chunk <= len {
-            map.copy_out(HostOffset::new(at), &mut buf).map_err(|e| region_error(&e))?;
-            acc = acc.wrapping_add(u64::from(buf[0])).wrapping_add(u64::from(buf[buf.len() - 1]));
+            map.copy_out(HostOffset::new(at), &mut buf)
+                .map_err(|e| region_error(&e))?;
+            acc = acc
+                .wrapping_add(u64::from(buf[0]))
+                .wrapping_add(u64::from(buf[buf.len() - 1]));
             at += chunk;
         }
         let bulk = start.elapsed();
@@ -8466,11 +8517,11 @@ impl RmBackend for HostRmBackend {
                      every translation, as they do on hardware"
                 );
                 self.conn.remember_birth_range(range, client, duped);
-            self.conn
-                .birth_space_dups
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert((client, space), (duped, range, 1));
+                self.conn
+                    .birth_space_dups
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert((client, space), (duped, range, 1));
                 return Ok(self.stamp(duped));
             }
             let duped = birth.dup(birth.device(), client, space)?;
@@ -10581,7 +10632,8 @@ impl HostRmBackend {
     /// Whatever RM refused.
     pub fn host_architecture(&self) -> Result<u32, RmError> {
         let mut p = [0u8; 16];
-        self.conn.raw_control(self.conn.subdevice, 0x2080_1701, &mut p)?;
+        self.conn
+            .raw_control(self.conn.subdevice, 0x2080_1701, &mut p)?;
         Ok(u32::from_le_bytes([p[0], p[1], p[2], p[3]]))
     }
 
@@ -12359,7 +12411,8 @@ impl HostRmBackend {
         // ours to write), so the bar is unchanged: it must reach GP_PUT — within the same budget.
         let gp_get_by_hw = self.conn.host_classes().gpfifo_channel().userd_has_gp_get();
         let (mut gp_get, mut gp_put) = self.userd_cursors(chan)?;
-        while gp_get_by_hw && semaphore == payload && gp_get != gp_put && Instant::now() < deadline {
+        while gp_get_by_hw && semaphore == payload && gp_get != gp_put && Instant::now() < deadline
+        {
             std::thread::sleep(Duration::from_millis(1));
             (gp_get, gp_put) = self.userd_cursors(chan)?;
         }
@@ -13626,7 +13679,10 @@ impl HostRmBackend {
         while mb >= 16 {
             let bytes = mb << 20;
             let r = (|| -> Result<u64, String> {
-                let obj = self.conn.reserve_gpga(bytes).map_err(|e| format!("reserve: {e:?}"))?;
+                let obj = self
+                    .conn
+                    .reserve_gpga(bytes)
+                    .map_err(|e| format!("reserve: {e:?}"))?;
                 let vas = match self.alloc_vaspace() {
                     Ok(v) => v,
                     Err(e) => {
@@ -13699,12 +13755,17 @@ impl HostRmBackend {
     /// ⚠ This **pins** `len` bytes. The caller halves down from `start_mb`, and the first
     /// success is the answer; nothing larger is attempted after one succeeds.
     pub fn prove_guest_ram_window(&mut self, len: u64) -> Result<(u64, u64), String> {
-        use kayfabe_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, SharedRam};
+        use kayfabe_linux_raw::{
+            Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, SharedRam,
+        };
         use std::time::Instant;
 
         let ram = SharedRam::create(len).map_err(|e| format!("memfd {len:#x}: {e:?}"))?;
         let region = MappedRegion::map(
-            Backing::SharedFile { fd: ram.as_backing_fd(), offset: 0 },
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
             len,
             HostProt::ReadWrite,
             // ⊘ Guest RAM is ordinary write-back system memory, never write-combining:
@@ -13755,13 +13816,21 @@ impl HostRmBackend {
         fb_bytes: u64,
         ram_bytes: u64,
     ) -> Result<(u64, u64, u128), String> {
-        use kayfabe_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, SharedRam};
+        use kayfabe_linux_raw::{
+            Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, SharedRam,
+        };
         use std::time::Instant;
 
-        let fb = self.conn.reserve_gpga(fb_bytes).map_err(|e| format!("reserve: {e:?}"))?;
+        let fb = self
+            .conn
+            .reserve_gpga(fb_bytes)
+            .map_err(|e| format!("reserve: {e:?}"))?;
         let ram = SharedRam::create(ram_bytes).map_err(|e| format!("memfd: {e:?}"))?;
         let region = MappedRegion::map(
-            Backing::SharedFile { fd: ram.as_backing_fd(), offset: 0 },
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
             ram_bytes,
             HostProt::ReadWrite,
             CachePolicy::WriteBack,
@@ -13774,7 +13843,9 @@ impl HostRmBackend {
             .map_err(|e| format!("os_descriptor: {e:?}"))?;
 
         // ★ ONE space for both.
-        let vas = self.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
+        let vas = self
+            .alloc_vaspace()
+            .map_err(|e| format!("vaspace: {e:?}"))?;
 
         let t0 = Instant::now();
         let fb_va = self.map_local_at(vas, self.stamp(fb), fb_bytes, None);
@@ -13815,8 +13886,12 @@ impl HostRmBackend {
     /// and the walk repeated. It must find nothing. A walker reading a staged copy — the shape
     /// w758 caught — would still find the mapping.
     #[cfg(feature = "cuda-scratchpad")]
-    pub fn prove_cuda_window(&mut self, start_mb: u64, origin: u64) -> Result<CudaWindowEvidence, String> {
-        use kayfabe_cuda::{abi::kf_format_ver2, synth, WalkCfg, WalkKernel};
+    pub fn prove_cuda_window(
+        &mut self,
+        start_mb: u64,
+        origin: u64,
+    ) -> Result<CudaWindowEvidence, String> {
+        use kayfabe_cuda::{WalkCfg, WalkKernel, abi::kf_format_ver2, synth};
 
         // ⊘⊘⊘ `[measured w825]` THE WALKER COMES FIRST. The first run reserved 11857 MiB and THEN
         // brought the walker up: `cuCtxCreate_v2 refused: 2 (CUDA_ERROR_OUT_OF_MEMORY)`. A CUDA
@@ -13831,41 +13906,68 @@ impl HostRmBackend {
         }
         let bytes = mb << 20;
         eprintln!("CUDA_WINDOW_SIZED reservable_after_walker_mib={mb} (start {start_mb})");
-        let obj = self.conn.reserve_gpga(bytes).map_err(|e| format!("reserve: {e:?}"))?;
+        let obj = self
+            .conn
+            .reserve_gpga(bytes)
+            .map_err(|e| format!("reserve: {e:?}"))?;
         let out = (|| -> Result<CudaWindowEvidence, String> {
             let ctl = CharDevice::openat(&self.conn.dev, c"nvidiactl")
                 .map_err(|e| format!("open nvidiactl: {e:?}"))?;
             self.conn
                 .export_object_to_fd(obj, ctl.fd_number())
                 .map_err(|e| format!("rm export: {e:?}"))?;
-            let dptr = k.import_store(ctl.fd_number(), bytes).map_err(|e| format!("{e}"))?;
+            let dptr = k
+                .import_store(ctl.fd_number(), bytes)
+                .map_err(|e| format!("{e}"))?;
 
             const VA: u64 = 0x1_2000_0000;
             const PHYS: u64 = 0x4000_0000;
             let (img, root, want) = synth::contiguous_small_pages_at(origin, VA, 16, PHYS);
             if origin + img.mem.len() as u64 > bytes {
-                return Err(format!("fixture at {origin:#x} runs past the object ({bytes:#x})"));
+                return Err(format!(
+                    "fixture at {origin:#x} runs past the object ({bytes:#x})"
+                ));
             }
-            k.write_at(dptr + origin, &img.mem).map_err(|e| format!("write fixture: {e}"))?;
+            k.write_at(dptr + origin, &img.mem)
+                .map_err(|e| format!("write fixture: {e}"))?;
 
             let t0 = std::time::Instant::now();
-            let rep = k.refresh(dptr, bytes, &[root]).map_err(|e| format!("walk: {e}"))?;
+            let rep = k
+                .refresh(dptr, bytes, &[root])
+                .map_err(|e| format!("walk: {e}"))?;
             let walk_us = t0.elapsed().as_micros();
-            rep.validate().map_err(|e| format!("report invalid: {e:?}"))?;
-            let found = rep.runs.iter().any(|r| r.va == want.va && r.gpga == want.gpga && r.len == want.len);
+            rep.validate()
+                .map_err(|e| format!("report invalid: {e:?}"))?;
+            let found = rep
+                .runs
+                .iter()
+                .any(|r| r.va == want.va && r.gpga == want.gpga && r.len == want.len);
             let runs = rep.runs.len();
 
             // ★ THE CONTROL — zero the root IN THE OBJECT and walk again.
             let zeros = vec![0u8; 4096];
-            k.write_at(dptr + root, &zeros).map_err(|e| format!("zero root: {e}"))?;
-            let rep2 = k.refresh(dptr, bytes, &[root]).map_err(|e| format!("control walk: {e}"))?;
-            let control_found_nothing = !rep2.runs.iter().any(|r| r.va == want.va && r.gpga == want.gpga);
+            k.write_at(dptr + root, &zeros)
+                .map_err(|e| format!("zero root: {e}"))?;
+            let rep2 = k
+                .refresh(dptr, bytes, &[root])
+                .map_err(|e| format!("control walk: {e}"))?;
+            let control_found_nothing = !rep2
+                .runs
+                .iter()
+                .any(|r| r.va == want.va && r.gpga == want.gpga);
             let control_runs = rep2.runs.len();
 
             drop(ctl); // the export fd; the context (and the import) goes when `k` drops below
             Ok(CudaWindowEvidence {
-                object_bytes: bytes, dptr, origin, root, found, runs,
-                control_found_nothing, control_runs, walk_us,
+                object_bytes: bytes,
+                dptr,
+                origin,
+                root,
+                found,
+                runs,
+                control_found_nothing,
+                control_runs,
+                walk_us,
             })
         })();
         drop(k);
@@ -13888,7 +13990,10 @@ impl HostRmBackend {
         obj_bytes: u64,
         vas_list: &[(u64, u64)],
     ) -> Result<Vec<(u64, u64, Result<u64, String>)>, String> {
-        let obj = self.conn.reserve_gpga(obj_bytes).map_err(|e| format!("reserve: {e:?}"))?;
+        let obj = self
+            .conn
+            .reserve_gpga(obj_bytes)
+            .map_err(|e| format!("reserve: {e:?}"))?;
         let vas = match self.alloc_vaspace() {
             Ok(v) => v,
             Err(e) => {
@@ -13921,7 +14026,9 @@ impl HostRmBackend {
             let mid = lo + (hi - lo) / 2;
             let ok = (|| -> bool {
                 let bytes = mid << 20;
-                let Ok(obj) = self.conn.reserve_gpga(bytes) else { return false };
+                let Ok(obj) = self.conn.reserve_gpga(bytes) else {
+                    return false;
+                };
                 let Ok(vas) = self.alloc_vaspace() else {
                     let _ = self.free(self.stamp(obj));
                     return false;
@@ -13998,7 +14105,13 @@ impl HostRmBackend {
         let _ = self.free(vas);
         let _ = self.free(self.stamp(obj));
 
-        Ok(TiledWindowEvidence { object_bytes: bytes, tile_bytes: tile, base, tiles, total_ms })
+        Ok(TiledWindowEvidence {
+            object_bytes: bytes,
+            tile_bytes: tile,
+            base,
+            tiles,
+            total_ms,
+        })
     }
 
     pub fn prove_identity_window(
@@ -14057,7 +14170,10 @@ impl HostRmBackend {
             let vas = match self.alloc_vaspace_sized(base, span) {
                 Ok(v) => v,
                 Err(e) => {
-                    attempts.push((base, Err(format!("vaspace(base={base:#x},span={span:#x}): {e:?}"))));
+                    attempts.push((
+                        base,
+                        Err(format!("vaspace(base={base:#x},span={span:#x}): {e:?}")),
+                    ));
                     continue;
                 }
             };
@@ -14070,13 +14186,14 @@ impl HostRmBackend {
                         // inside the same declared range. `prove_ce_copy` cannot be used — it
                         // maps with `None`, which a shared-managed space must refuse.
                         let probe_at = base + bytes; // immediately past the window
-                        ce_still_works = match self.map_local_at(vas, self.stamp(obj), 4096, Some(probe_at)) {
-                            Ok(v2) => {
-                                let _ = self.unmap_local(vas, v2);
-                                v2 == probe_at
-                            }
-                            Err(_) => false,
-                        };
+                        ce_still_works =
+                            match self.map_local_at(vas, self.stamp(obj), 4096, Some(probe_at)) {
+                                Ok(v2) => {
+                                    let _ = self.unmap_local(vas, v2);
+                                    v2 == probe_at
+                                }
+                                Err(_) => false,
+                            };
                     }
                     attempts.push((base, Ok(va)));
                     let _ = self.unmap_local(vas, va);

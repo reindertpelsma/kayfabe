@@ -51,13 +51,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use kf_abi::{DriverAbi, GuestOs};
 use kf_abi::versions::DriverAbiTable;
+use kf_abi::{DriverAbi, GuestOs};
 use kf_gsp::{CommandPolicy, Reply, RpcCommand};
 use kf_trace::FaultTag;
 
 use super::{
-    BridgeRefusal, Faulted, PageDirStatement, ReasmLimits, Reassembled, Reassembler, Translation, translate,
+    BridgeRefusal, Faulted, PageDirStatement, ReasmLimits, Reassembled, Reassembler, Translation,
+    translate,
 };
 use crate::rmgraph::{RmEvent, RmGraph, RmGraphError};
 
@@ -249,7 +250,9 @@ impl GraphObjects {
     /// A fresh graph for `family`.
     #[must_use]
     pub fn new(family: kf_chip::Family) -> GraphObjects {
-        GraphObjects { graph: RmGraph::new(family) }
+        GraphObjects {
+            graph: RmGraph::new(family),
+        }
     }
 }
 
@@ -259,7 +262,9 @@ impl RmObjects for GraphObjects {
     }
 
     fn page_dir(&mut self, _st: PageDirStatement) -> Result<(), ObjectsRefusal> {
-        Err(ObjectsRefusal::NotModelled { what: "page-directory statement: the memory plane is P4" })
+        Err(ObjectsRefusal::NotModelled {
+            what: "page-directory statement: the memory plane is P4",
+        })
     }
 }
 
@@ -370,7 +375,11 @@ pub struct GraphPolicy<'a> {
 impl<'a> GraphPolicy<'a> {
     /// Build a policy over `objects` for one guest driver and guest OS.
     #[must_use]
-    pub fn new(abi: &DriverAbiTable, guest_os: GuestOs, objects: &'a mut dyn RmObjects) -> GraphPolicy<'a> {
+    pub fn new(
+        abi: &DriverAbiTable,
+        guest_os: GuestOs,
+        objects: &'a mut dyn RmObjects,
+    ) -> GraphPolicy<'a> {
         GraphPolicy::with_limits(abi, guest_os, objects, ReasmLimits::default())
     }
 
@@ -382,7 +391,10 @@ impl<'a> GraphPolicy<'a> {
         objects: &'a mut dyn RmObjects,
         limits: ReasmLimits,
     ) -> GraphPolicy<'a> {
-        GraphPolicy { bridge: Bridge::new(*abi, guest_os, limits), objects }
+        GraphPolicy {
+            bridge: Bridge::new(*abi, guest_os, limits),
+            objects,
+        }
     }
 
     /// The reassembler, for tests that assert on in-flight state.
@@ -505,15 +517,26 @@ impl ObjectPolicy {
     /// Attach the display registry at the acceptance boundary, after reassembly and
     /// `RmObjects::apply`, never at a speculative/held RPC reply. This observer cannot
     /// answer or change an object verdict.
-    pub(crate) fn with_accepted_observer(mut self, observer: impl FnMut(&RpcCommand) + Send + 'static) -> Self {
+    pub(crate) fn with_accepted_observer(
+        mut self,
+        observer: impl FnMut(&RpcCommand) + Send + 'static,
+    ) -> Self {
         self.bridge.accepted = Some(Box::new(observer));
         self
     }
 
     /// Build the link over `objects`.
     #[must_use]
-    pub fn over(abi: &DriverAbiTable, guest_os: GuestOs, objects: Box<dyn RmObjects>, limits: ReasmLimits) -> ObjectPolicy {
-        ObjectPolicy { bridge: Bridge::new(*abi, guest_os, limits), objects }
+    pub fn over(
+        abi: &DriverAbiTable,
+        guest_os: GuestOs,
+        objects: Box<dyn RmObjects>,
+        limits: ReasmLimits,
+    ) -> ObjectPolicy {
+        ObjectPolicy {
+            bridge: Bridge::new(*abi, guest_os, limits),
+            objects,
+        }
     }
 
     /// Whether this link claims `f`.
@@ -564,4 +587,9 @@ impl CommandPolicy for ObjectPolicy {
     }
 }
 
-kf_util::assert_send_sync!(RefusalCensus, SharedRefusalCensus, ObjectsRefusal, GraphObjects);
+kf_util::assert_send_sync!(
+    RefusalCensus,
+    SharedRefusalCensus,
+    ObjectsRefusal,
+    GraphObjects
+);

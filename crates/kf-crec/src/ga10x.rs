@@ -21,5 +21,7 @@ pub const CAPTURE_IMPLEMENTATION: u32 = 0x6;
 /// Never: GA10x's row is built (`kf_chip::Family::gsp_model`).
 #[must_use]
 pub fn gsp_model() -> Box<dyn GspModel> {
-    kf_chip::Family::Ampere.gsp_model(CAPTURE_IMPLEMENTATION, CAPTURE_FB_SIZE_MB).expect("the Ampere model is built")
+    kf_chip::Family::Ampere
+        .gsp_model(CAPTURE_IMPLEMENTATION, CAPTURE_FB_SIZE_MB)
+        .expect("the Ampere model is built")
 }

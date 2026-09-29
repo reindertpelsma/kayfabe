@@ -83,11 +83,23 @@ pub enum LargeRefusal {
 impl core::fmt::Display for LargeRefusal {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::TooLarge { declared } => write!(f, "a large RPC declares {declared} bytes (bound {MAX_LARGE_PAYLOAD})"),
-            Self::TooManyFragments => write!(f, "a large RPC ran past {MAX_FRAGMENTS} continuation records"),
-            Self::Overrun { declared, got } => write!(f, "continuations carried {got} bytes, the head declared {declared}"),
+            Self::TooLarge { declared } => write!(
+                f,
+                "a large RPC declares {declared} bytes (bound {MAX_LARGE_PAYLOAD})"
+            ),
+            Self::TooManyFragments => write!(
+                f,
+                "a large RPC ran past {MAX_FRAGMENTS} continuation records"
+            ),
+            Self::Overrun { declared, got } => write!(
+                f,
+                "continuations carried {got} bytes, the head declared {declared}"
+            ),
             Self::Interrupted { head_sequence, by } => {
-                write!(f, "function {by} arrived while the large RPC at sequence {head_sequence} was open")
+                write!(
+                    f,
+                    "function {by} arrived while the large RPC at sequence {head_sequence} was open"
+                )
             }
         }
     }
@@ -145,15 +157,25 @@ impl Assembler {
                 }
                 let mut next = open.clone();
                 next.whole.payload.extend_from_slice(&cmd.payload);
-                next.fragments.push(Fragment { sequence: cmd.sequence, code: cmd.code, len: cmd.payload.len() });
+                next.fragments.push(Fragment {
+                    sequence: cmd.sequence,
+                    code: cmd.code,
+                    len: cmd.payload.len(),
+                });
                 let got = next.whole.payload.len();
                 if got > next.declared {
                     self.staged = Some(None);
-                    return Step::Refused(LargeRefusal::Overrun { declared: next.declared, got });
+                    return Step::Refused(LargeRefusal::Overrun {
+                        declared: next.declared,
+                        got,
+                    });
                 }
                 if got == next.declared {
                     self.staged = Some(None);
-                    return Step::Complete { whole: next.whole, fragments: next.fragments };
+                    return Step::Complete {
+                        whole: next.whole,
+                        fragments: next.fragments,
+                    };
                 }
                 self.staged = Some(Some(next));
                 Step::Held
@@ -161,7 +183,10 @@ impl Assembler {
             (Some(open), _) => {
                 let head_sequence = open.whole.sequence;
                 self.staged = Some(None);
-                Step::Refused(LargeRefusal::Interrupted { head_sequence, by: cmd.code })
+                Step::Refused(LargeRefusal::Interrupted {
+                    head_sequence,
+                    by: cmd.code,
+                })
             }
             (None, RpcFunction::RmControl) => match declared {
                 Some(d) if d > cmd.payload.len() => {
@@ -170,9 +195,16 @@ impl Assembler {
                         return Step::Refused(LargeRefusal::TooLarge { declared: d });
                     }
                     let open = Open {
-                        whole: RpcCommand { delivered: Vec::new(), ..cmd.clone() },
+                        whole: RpcCommand {
+                            delivered: Vec::new(),
+                            ..cmd.clone()
+                        },
                         declared: d,
-                        fragments: vec![Fragment { sequence: cmd.sequence, code: cmd.code, len: cmd.payload.len() }],
+                        fragments: vec![Fragment {
+                            sequence: cmd.sequence,
+                            code: cmd.code,
+                            len: cmd.payload.len(),
+                        }],
                     };
                     self.staged = Some(Some(open));
                     Step::Held
@@ -208,15 +240,27 @@ impl Assembler {
 /// reply per continuation at ITS sequence, each carrying the next slice of the answer's payload.
 /// Every reply carries the answer's `rpc_result` (the guest reads it from the last one).
 #[must_use]
-pub fn split_reply(full: &OutgoingRpc, fragments: &[Fragment], continuation_code: u32) -> Vec<OutgoingRpc> {
+pub fn split_reply(
+    full: &OutgoingRpc,
+    fragments: &[Fragment],
+    continuation_code: u32,
+) -> Vec<OutgoingRpc> {
     let mut out = Vec::with_capacity(fragments.len());
     let mut at = 0usize;
     for (i, f) in fragments.iter().enumerate() {
         let end = (at + f.len).min(full.payload.len());
-        let mut payload = full.payload.get(at..end).map(<[u8]>::to_vec).unwrap_or_default();
+        let mut payload = full
+            .payload
+            .get(at..end)
+            .map(<[u8]>::to_vec)
+            .unwrap_or_default();
         payload.resize(f.len, 0);
         out.push(OutgoingRpc {
-            function: if i == 0 { full.function } else { continuation_code },
+            function: if i == 0 {
+                full.function
+            } else {
+                continuation_code
+            },
             sequence: f.sequence,
             rpc_result: full.rpc_result,
             rpc_result_private: full.rpc_result_private,
@@ -234,19 +278,36 @@ mod tests {
     const CONT: u32 = 71;
 
     fn cmd(function: RpcFunction, code: u32, sequence: u32, payload: Vec<u8>) -> RpcCommand {
-        RpcCommand { function, code, sequence, payload, elements: 1, delivered: Vec::new() }
+        RpcCommand {
+            function,
+            code,
+            sequence,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
     }
 
     /// Fragment a message the way `_issueRpcLarge` does: the head is `max_rpc - 32` payload
     /// bytes, every continuation `max_rpc - 32` more, the last one the remainder.
     fn fragment(payload: &[u8], max_rpc: usize, first_seq: u32) -> Vec<RpcCommand> {
         let chunk = max_rpc - RPC_HEADER;
-        let mut v = vec![cmd(RpcFunction::RmControl, 76, first_seq, payload[..chunk.min(payload.len())].to_vec())];
+        let mut v = vec![cmd(
+            RpcFunction::RmControl,
+            76,
+            first_seq,
+            payload[..chunk.min(payload.len())].to_vec(),
+        )];
         let mut at = chunk;
         let mut seq = first_seq + 1;
         while at < payload.len() {
             let end = (at + chunk).min(payload.len());
-            v.push(cmd(RpcFunction::ContinuationRecord, CONT, seq, payload[at..end].to_vec()));
+            v.push(cmd(
+                RpcFunction::ContinuationRecord,
+                CONT,
+                seq,
+                payload[at..end].to_vec(),
+            ));
             at = end;
             seq += 1;
         }
@@ -259,8 +320,16 @@ mod tests {
         let mut buf = Vec::new();
         let mut result = 0;
         for (i, r) in replies.iter().enumerate() {
-            assert_eq!(r.sequence, first_seq + i as u32, "reply {i} at the wrong sequence");
-            assert_eq!(r.function, if i == 0 { 76 } else { CONT }, "reply {i} under the wrong function");
+            assert_eq!(
+                r.sequence,
+                first_seq + i as u32,
+                "reply {i} at the wrong sequence"
+            );
+            assert_eq!(
+                r.function,
+                if i == 0 { 76 } else { CONT },
+                "reply {i} under the wrong function"
+            );
             buf.extend_from_slice(&r.payload);
             result = r.rpc_result;
             if buf.len() >= total {
@@ -279,7 +348,11 @@ mod tests {
         let max_rpc = 65536 - 48;
         let request: Vec<u8> = (0..40 + 73_760).map(|i| (i % 251) as u8).collect();
         let frags = fragment(&request, max_rpc, 100);
-        assert_eq!(frags.len(), 2, "73 800 bytes is a head and one continuation");
+        assert_eq!(
+            frags.len(),
+            2,
+            "73 800 bytes is a head and one continuation"
+        );
         let mut a = Assembler::default();
         let mut complete = None;
         for (i, f) in frags.iter().enumerate() {
@@ -294,15 +367,34 @@ mod tests {
         let (whole, fragments) = complete.expect("joined");
         assert!(!a.is_open());
         assert_eq!(whole.payload, request, "the policy sees the whole message");
-        assert_eq!((whole.function, whole.sequence), (RpcFunction::RmControl, 100));
+        assert_eq!(
+            (whole.function, whole.sequence),
+            (RpcFunction::RmControl, 100)
+        );
         // The answer: the request's bytes transformed, as a served control would rewrite them.
-        let answer: Vec<u8> = request.iter().map(|b| b.wrapping_mul(3).wrapping_add(1)).collect();
-        let full = OutgoingRpc { function: 76, sequence: 100, rpc_result: 0, rpc_result_private: 0, payload: answer.clone() };
+        let answer: Vec<u8> = request
+            .iter()
+            .map(|b| b.wrapping_mul(3).wrapping_add(1))
+            .collect();
+        let full = OutgoingRpc {
+            function: 76,
+            sequence: 100,
+            rpc_result: 0,
+            rpc_result_private: 0,
+            payload: answer.clone(),
+        };
         let replies = split_reply(&full, &fragments, CONT);
         assert_eq!(replies.len(), frags.len(), "one reply per fragment");
         for (r, f) in replies.iter().zip(&frags) {
-            assert_eq!(r.payload.len(), f.payload.len(), "each reply as long as its fragment");
-            assert!(r.payload.len() + RPC_HEADER <= max_rpc, "each reply fits maxRpcSize");
+            assert_eq!(
+                r.payload.len(),
+                f.payload.len(),
+                "each reply as long as its fragment"
+            );
+            assert!(
+                r.payload.len() + RPC_HEADER <= max_rpc,
+                "each reply fits maxRpcSize"
+            );
         }
         let (got, result) = guest_receives(&replies, answer.len(), 100);
         assert_eq!(got, answer);
@@ -312,8 +404,25 @@ mod tests {
     /// The refusal status reaches the guest from the LAST reply it reads.
     #[test]
     fn a_refused_answer_is_refused_in_every_fragment() {
-        let full = OutgoingRpc { function: 76, sequence: 5, rpc_result: 0x56, rpc_result_private: 0x56, payload: vec![0; 10] };
-        let frags = [Fragment { sequence: 5, code: 76, len: 6 }, Fragment { sequence: 6, code: CONT, len: 4 }];
+        let full = OutgoingRpc {
+            function: 76,
+            sequence: 5,
+            rpc_result: 0x56,
+            rpc_result_private: 0x56,
+            payload: vec![0; 10],
+        };
+        let frags = [
+            Fragment {
+                sequence: 5,
+                code: 76,
+                len: 6,
+            },
+            Fragment {
+                sequence: 6,
+                code: CONT,
+                len: 4,
+            },
+        ];
         let r = split_reply(&full, &frags, CONT);
         assert!(r.iter().all(|m| m.rpc_result == 0x56));
     }
@@ -342,19 +451,36 @@ mod tests {
     fn hostile_large_messages_are_refused_by_name() {
         let mut a = Assembler::default();
         let head = cmd(RpcFunction::RmControl, 76, 1, vec![0; 16]);
-        assert_eq!(a.step(&head, Some(MAX_LARGE_PAYLOAD + 1)), Step::Refused(LargeRefusal::TooLarge { declared: MAX_LARGE_PAYLOAD + 1 }));
+        assert_eq!(
+            a.step(&head, Some(MAX_LARGE_PAYLOAD + 1)),
+            Step::Refused(LargeRefusal::TooLarge {
+                declared: MAX_LARGE_PAYLOAD + 1
+            })
+        );
         a.commit();
         assert!(!a.is_open());
         assert_eq!(a.step(&head, Some(20)), Step::Held);
         a.commit();
         let over = cmd(RpcFunction::ContinuationRecord, CONT, 2, vec![0; 8]);
-        assert_eq!(a.step(&over, None), Step::Refused(LargeRefusal::Overrun { declared: 20, got: 24 }));
+        assert_eq!(
+            a.step(&over, None),
+            Step::Refused(LargeRefusal::Overrun {
+                declared: 20,
+                got: 24
+            })
+        );
         a.commit();
         assert!(!a.is_open());
         assert_eq!(a.step(&head, Some(20)), Step::Held);
         a.commit();
         let other = cmd(RpcFunction::RmAlloc, 103, 2, vec![0; 8]);
-        assert!(matches!(a.step(&other, None), Step::Refused(LargeRefusal::Interrupted { head_sequence: 1, by: 103 })));
+        assert!(matches!(
+            a.step(&other, None),
+            Step::Refused(LargeRefusal::Interrupted {
+                head_sequence: 1,
+                by: 103
+            })
+        ));
     }
 
     /// A control that fits is untouched, and so is a continuation outside any large message
@@ -362,8 +488,20 @@ mod tests {
     #[test]
     fn small_controls_and_stray_continuations_are_not_large() {
         let mut a = Assembler::default();
-        assert_eq!(a.step(&cmd(RpcFunction::RmControl, 76, 1, vec![0; 16]), Some(16)), Step::NotLarge);
-        assert_eq!(a.step(&cmd(RpcFunction::RmControl, 76, 1, vec![0; 16]), None), Step::NotLarge);
-        assert_eq!(a.step(&cmd(RpcFunction::ContinuationRecord, CONT, 2, vec![0; 16]), None), Step::NotLarge);
+        assert_eq!(
+            a.step(&cmd(RpcFunction::RmControl, 76, 1, vec![0; 16]), Some(16)),
+            Step::NotLarge
+        );
+        assert_eq!(
+            a.step(&cmd(RpcFunction::RmControl, 76, 1, vec![0; 16]), None),
+            Step::NotLarge
+        );
+        assert_eq!(
+            a.step(
+                &cmd(RpcFunction::ContinuationRecord, CONT, 2, vec![0; 16]),
+                None
+            ),
+            Step::NotLarge
+        );
     }
 }

@@ -45,7 +45,14 @@ struct Pool {
 
 impl Pool {
     fn new(size: u32) -> Pool {
-        Pool { size, free: if size > 0 { vec![Region { off: 0, cap: size }] } else { Vec::new() } }
+        Pool {
+            size,
+            free: if size > 0 {
+                vec![Region { off: 0, cap: size }]
+            } else {
+                Vec::new()
+            },
+        }
     }
 
     fn alloc(&mut self, cap: u32) -> Option<Region> {
@@ -54,7 +61,10 @@ impl Pool {
         if r.cap == cap {
             self.free.remove(i);
         } else {
-            self.free[i] = Region { off: r.off + cap, cap: r.cap - cap };
+            self.free[i] = Region {
+                off: r.off + cap,
+                cap: r.cap - cap,
+            };
         }
         Some(Region { off: r.off, cap })
     }
@@ -144,11 +154,18 @@ impl Capacity {
     ///
     /// # Errors
     /// A configuration the layout cannot express, by name.
-    pub fn new(max_slots: u32, walk_pool: u32, slot_pool: u32, max_cap: u32, slot_default: u32) -> Result<Capacity, String> {
+    pub fn new(
+        max_slots: u32,
+        walk_pool: u32,
+        slot_pool: u32,
+        max_cap: u32,
+        slot_default: u32,
+    ) -> Result<Capacity, String> {
         if max_slots == 0 || max_slots as usize > KF_MAX_SLOTS {
             return Err(format!("max_slots {max_slots} outside 1..={KF_MAX_SLOTS}"));
         }
-        if slot_default == 0 || slot_default > max_cap || max_cap > walk_pool || max_cap > slot_pool {
+        if slot_default == 0 || slot_default > max_cap || max_cap > walk_pool || max_cap > slot_pool
+        {
             return Err(format!(
                 "slot_default {slot_default} / max_cap {max_cap} must fit both pools (walk {walk_pool}, slot {slot_pool})"
             ));
@@ -182,7 +199,10 @@ impl Capacity {
     /// The previous walk's region for entry `t` (diagnostics read the table there).
     #[must_use]
     pub fn prev_walk(&self, t: usize) -> Option<Region> {
-        (t < KF_MAX_PDB && self.prev_cap[t] > 0).then(|| Region { off: self.prev_off[t], cap: self.prev_cap[t] })
+        (t < KF_MAX_PDB && self.prev_cap[t] > 0).then(|| Region {
+            off: self.prev_off[t],
+            cap: self.prev_cap[t],
+        })
     }
 
     /// ★ Slot `s`'s object is gone: its region returns to the pool and its hint is forgotten.
@@ -204,7 +224,10 @@ impl Capacity {
     /// first region to, which they keep).
     pub fn plan(&mut self, slots: &[u32]) -> Result<KfLayout, String> {
         if slots.len() > KF_MAX_PDB {
-            return Err(format!("{} entries; the layout carries {KF_MAX_PDB}", slots.len()));
+            return Err(format!(
+                "{} entries; the layout carries {KF_MAX_PDB}",
+                slots.len()
+            ));
         }
         for &s in slots {
             let i = s as usize;
@@ -231,7 +254,8 @@ impl Capacity {
         for (t, &s) in slots.iter().enumerate() {
             let i = s as usize;
             let scap = self.region[i].map_or(0, |r| r.cap);
-            let cap = grain(u64::from(scap.max(self.hint[i])), self.walk_min).min(u64::from(self.max_cap));
+            let cap = grain(u64::from(scap.max(self.hint[i])), self.walk_min)
+                .min(u64::from(self.max_cap));
             if off + cap > u64::from(self.walk_pool) {
                 self.stats.ceilings += 1;
                 return Err(format!(
@@ -293,9 +317,13 @@ impl Capacity {
         }
         if need > self.max_cap {
             self.stats.ceilings += 1;
-            return Err(format!("slot {s}: {need} committed placements; one space may hold {}", self.max_cap));
+            return Err(format!(
+                "slot {s}: {need} committed placements; one space may hold {}",
+                self.max_cap
+            ));
         }
-        let cap = grain(u64::from(need) + u64::from(need) / 2, self.slot_default).min(u64::from(self.max_cap)) as u32;
+        let cap = grain(u64::from(need) + u64::from(need) / 2, self.slot_default)
+            .min(u64::from(self.max_cap)) as u32;
         // ⊘ Allocate the new region BEFORE releasing the old one: the copy reads the old region,
         // so the two must not overlap.
         let Some(to) = self.slots.alloc(cap) else {
@@ -314,7 +342,11 @@ impl Capacity {
         *h = (*h).max(cap);
         self.stats.grows += 1;
         self.stats.largest_slot = self.stats.largest_slot.max(cap);
-        Ok(Some(Move { slot: s, from: old, to }))
+        Ok(Some(Move {
+            slot: s,
+            from: old,
+            to,
+        }))
     }
 
     /// Free runs in the slot pool.
@@ -355,11 +387,25 @@ mod tests {
         let mut c = cap();
         let lay = c.plan(&[3, 5]).expect("plan");
         assert_eq!(c.slot_region(3), Some(Region { off: 0, cap: 1024 }));
-        assert_eq!(c.slot_region(5), Some(Region { off: 1024, cap: 1024 }));
+        assert_eq!(
+            c.slot_region(5),
+            Some(Region {
+                off: 1024,
+                cap: 1024
+            })
+        );
         for t in 0..2 {
-            assert!(lay.walk_cap[t] >= 1024, "walk_cap {} < slot cap", lay.walk_cap[t]);
+            assert!(
+                lay.walk_cap[t] >= 1024,
+                "walk_cap {} < slot cap",
+                lay.walk_cap[t]
+            );
         }
-        assert_eq!(lay.walk_off[1], lay.walk_off[0] + lay.walk_cap[0], "entries are packed, disjoint");
+        assert_eq!(
+            lay.walk_off[1],
+            lay.walk_off[0] + lay.walk_cap[0],
+            "entries are packed, disjoint"
+        );
         assert_eq!(lay.slot_cap[3], 1024);
         assert_eq!(lay.slot_off[5], 1024);
     }
@@ -372,7 +418,11 @@ mod tests {
         let b = c.plan(&[2, 1]).expect("plan");
         assert_eq!(b.prev_off, a.walk_off);
         assert_eq!(b.prev_cap, a.walk_cap);
-        assert!(b.walk_cap[1] >= 25_000, "the need (+25%) sizes the next walk: {}", b.walk_cap[1]);
+        assert!(
+            b.walk_cap[1] >= 25_000,
+            "the need (+25%) sizes the next walk: {}",
+            b.walk_cap[1]
+        );
     }
 
     /// ★ The w829 case in miniature: a space whose walk outgrows its region is re-walked into a
@@ -385,11 +435,21 @@ mod tests {
         let m = c.slot_needed(0, 30_000).expect("grows").expect("a move");
         assert_eq!(m.from, Region { off: 0, cap: 1024 });
         assert!(m.to.cap >= 30_000);
-        assert!(m.to.off >= 1024 || m.to.off + m.to.cap <= m.from.off, "the move never overlaps its source");
+        assert!(
+            m.to.off >= 1024 || m.to.off + m.to.cap <= m.from.off,
+            "the move never overlaps its source"
+        );
         let lay = c.plan(&[0]).expect("plan");
-        assert!(lay.walk_cap[0] >= lay.slot_cap[0], "walk region >= slot region (the staging bound)");
+        assert!(
+            lay.walk_cap[0] >= lay.slot_cap[0],
+            "walk region >= slot region (the staging bound)"
+        );
         assert_eq!(c.stats.grows, 1);
-        assert_eq!(c.slot_needed(0, 30_000).expect("fits"), None, "already big enough: no move");
+        assert_eq!(
+            c.slot_needed(0, 30_000).expect("fits"),
+            None,
+            "already big enough: no move"
+        );
     }
 
     #[test]
@@ -434,8 +494,16 @@ mod tests {
             for &s in &slots {
                 c.release(s);
             }
-            assert_eq!(c.slot_pool_free(), u64::from(size), "round {round}: every run came back");
-            assert_eq!(c.slots.free.len(), 1, "round {round}: coalesced back to one region");
+            assert_eq!(
+                c.slot_pool_free(),
+                u64::from(size),
+                "round {round}: every run came back"
+            );
+            assert_eq!(
+                c.slots.free.len(),
+                1,
+                "round {round}: coalesced back to one region"
+            );
         }
     }
 }

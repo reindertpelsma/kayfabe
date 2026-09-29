@@ -380,7 +380,9 @@ impl Deferred {
     /// A pending outcome.
     #[must_use]
     pub fn new() -> Deferred {
-        Deferred(std::sync::Arc::new(core::sync::atomic::AtomicU64::new(Self::PENDING)))
+        Deferred(std::sync::Arc::new(core::sync::atomic::AtomicU64::new(
+            Self::PENDING,
+        )))
     }
 
     /// Resolve with an `NV_STATUS` (`0` = the act succeeded). The first resolution wins.
@@ -432,7 +434,8 @@ pub fn stamp_alloc_status(rpc: &mut OutgoingRpc, status: u32) {
     if rpc.payload.len() < RM_ALLOC_PARAMS_STATUS_AT + 4 {
         rpc.payload.resize(RM_ALLOC_PARAMS_STATUS_AT + 4, 0);
     }
-    rpc.payload[RM_ALLOC_PARAMS_STATUS_AT..RM_ALLOC_PARAMS_STATUS_AT + 4].copy_from_slice(&status.to_le_bytes());
+    rpc.payload[RM_ALLOC_PARAMS_STATUS_AT..RM_ALLOC_PARAMS_STATUS_AT + 4]
+        .copy_from_slice(&status.to_le_bytes());
 }
 
 /// How a command is answered — the seam the forwarding plane implements.
@@ -917,7 +920,10 @@ fn read_frts_command(ram: &mut dyn GuestRam, dmem0: u64) -> Option<u64> {
     let desc = g.cmd_in_buffer_offset.checked_add(24)?;
     let (version, size) = (rd(desc)?, rd(desc + 4)?);
     let (offset_4k, size_4k, media) = (rd(desc + 8)?, rd(desc + 12)?, rd(desc + 16)?);
-    (version == 1 && size == 20 && size_4k == FRTS_REGION_SIZE_1MB_IN_4K && media == FRTS_REGION_MEDIA_FB)
+    (version == 1
+        && size == 20
+        && size_4k == FRTS_REGION_SIZE_1MB_IN_4K
+        && media == FRTS_REGION_MEDIA_FB)
         .then_some(u64::from(offset_4k) << 12)
 }
 
@@ -1017,7 +1023,11 @@ impl GspFsm {
             boot_args_lo: self.mailbox_lo,
             boot_args_hi: self.mailbox_hi,
             riscv_bcr_ctrl: self.bcr_ctrl,
-            frts_offset: if self.phase.wpr2_up() { self.frts_offset } else { None },
+            frts_offset: if self.phase.wpr2_up() {
+                self.frts_offset
+            } else {
+                None
+            },
         }
     }
 
@@ -1232,7 +1242,11 @@ impl GspFsm {
                     None => gpa,
                     Some(off) => {
                         let mut b = [0u8; 8];
-                        ram.read(gpa.checked_add(off).ok_or(GspFault::RmargsRegionAbsent { scanned: 0 })?, &mut b)?;
+                        ram.read(
+                            gpa.checked_add(off)
+                                .ok_or(GspFault::RmargsRegionAbsent { scanned: 0 })?,
+                            &mut b,
+                        )?;
                         u64::from_le_bytes(b)
                     }
                 };
@@ -1861,14 +1875,18 @@ impl GspFsm {
                     Some(whole)
                 }
                 crate::large::Step::Refused(why) => {
-                    eprintln!("kf-gsp: LARGE-RPC REFUSED fn {} seq {}: {why}", cmd.code, cmd.sequence);
+                    eprintln!(
+                        "kf-gsp: LARGE-RPC REFUSED fn {} seq {}: {why}",
+                        cmd.code, cmd.sequence
+                    );
                     if matches!(why, crate::large::LargeRefusal::Interrupted { .. }) {
                         self.answer(ram, policy, &cmd, report)?;
                     } else {
                         let out = cmd.reply(NV_ERR_NOT_SUPPORTED, &[]);
                         self.post(ram, &out)?;
                         let detail = self.refusal_detail(&cmd);
-                        self.refusals.note(out.function, detail, out.rpc_result, out.sequence);
+                        self.refusals
+                            .note(out.function, detail, out.rpc_result, out.sequence);
                     }
                     Some(cmd)
                 }
@@ -1977,8 +1995,10 @@ impl GspFsm {
         let w = self.abi.driver.rm_control_wire();
         let size = cmd.payload.get(w.params_size_off..w.params_size_off + 4)?;
         let declared = w.params_off + u32::from_le_bytes(size.try_into().ok()?) as usize;
-        let max_rpc = (self.abi.element_size_max as usize).saturating_sub(self.abi.element.hdr_size());
-        (declared > cmd.payload.len() && cmd.payload.len() + crate::large::RPC_HEADER == max_rpc).then_some(declared)
+        let max_rpc =
+            (self.abi.element_size_max as usize).saturating_sub(self.abi.element.hdr_size());
+        (declared > cmd.payload.len() && cmd.payload.len() + crate::large::RPC_HEADER == max_rpc)
+            .then_some(declared)
     }
 
     /// ★ Ruling 2: answer a joined large command, split at the request's own boundaries
@@ -1995,11 +2015,15 @@ impl GspFsm {
         let full = match policy.respond(whole) {
             Some(r) => whole.reply(r.rpc_result, &r.body),
             None => {
-                report.unserviced.push(Unserviced { code: whole.code, sequence: whole.sequence });
+                report.unserviced.push(Unserviced {
+                    code: whole.code,
+                    sequence: whole.sequence,
+                });
                 whole.reply(NV_ERR_NOT_SUPPORTED, &[])
             }
         };
-        let replies = crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record);
+        let replies =
+            crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record);
         let QueueState::Bound(binding) = &self.queue else {
             return Err(GspFault::QueueNotBound);
         };
@@ -2007,7 +2031,14 @@ impl GspFsm {
         let element_size = geom.element_size();
         let mut needed = 0u32;
         for r in &replies {
-            let run = encode_message(&self.abi.element, self.abi.rpc.header_version, element_size, self.abi.element_size_max, self.stat_seq, r)?;
+            let run = encode_message(
+                &self.abi.element,
+                self.abi.rpc.header_version,
+                element_size,
+                self.abi.element_size_max,
+                self.stat_seq,
+                r,
+            )?;
             needed += (run.len() / element_size as usize) as u32;
         }
         let cursor = binding.stat;
@@ -2024,7 +2055,8 @@ impl GspFsm {
         // ★ v3-refusals: the guest reads the status from the last reply — one ledger row for the command.
         if full.rpc_result != 0 {
             let detail = self.refusal_detail(whole);
-            self.refusals.note(full.function, detail, full.rpc_result, full.sequence);
+            self.refusals
+                .note(full.function, detail, full.rpc_result, full.sequence);
         }
         eprintln!(
             "kf-gsp: large RPC fn {} seq {} joined from {} fragment(s), {} bytes, answered in {} replies (rpc_result {:#x})",
@@ -2090,7 +2122,12 @@ impl GspFsm {
                 // ⊘ An alloc refusal must carry its status IN the params (see
                 // `stamp_alloc_status`): an empty body leaves the guest reading `0`.
                 if cmd.function == RpcFunction::RmAlloc {
-                    cmd.reply_alloc(NV_ERR_NOT_SUPPORTED, &cmd.payload, &self.abi.driver, payload_max)
+                    cmd.reply_alloc(
+                        NV_ERR_NOT_SUPPORTED,
+                        &cmd.payload,
+                        &self.abi.driver,
+                        payload_max,
+                    )
                 } else {
                     cmd.reply(NV_ERR_NOT_SUPPORTED, &[])
                 }
@@ -2136,7 +2173,8 @@ impl GspFsm {
             // ★ v3-refusals: recorded AFTER a successful post — the status the guest reads.
             if out.rpc_result != 0 {
                 let detail = self.refusal_detail(cmd);
-                self.refusals.note(out.function, detail, out.rpc_result, out.sequence);
+                self.refusals
+                    .note(out.function, detail, out.rpc_result, out.sequence);
             }
         }
 
@@ -2400,7 +2438,8 @@ impl GspFsm {
             self.post(ram, &rpc)?;
             self.held.remove(0);
             // ★ v3-refusals: the FINAL status (after the deferred act resolved it).
-            self.refusals.note(rpc.function, detail, rpc.rpc_result, rpc.sequence);
+            self.refusals
+                .note(rpc.function, detail, rpc.rpc_result, rpc.sequence);
             posted += 1;
         }
         if posted > 0 {
@@ -2427,8 +2466,18 @@ impl GspFsm {
     /// class of a `GSP_RM_ALLOC`, else `None`. A header read only — nothing is judged here.
     fn refusal_detail(&self, cmd: &RpcCommand) -> Option<u32> {
         match cmd.function {
-            RpcFunction::RmControl => self.abi.driver.decode_rpc_control(cmd.wire_body()).ok().map(|r| r.cmd),
-            RpcFunction::RmAlloc => self.abi.driver.decode_rpc_alloc(cmd.wire_body()).ok().map(|r| r.class),
+            RpcFunction::RmControl => self
+                .abi
+                .driver
+                .decode_rpc_control(cmd.wire_body())
+                .ok()
+                .map(|r| r.cmd),
+            RpcFunction::RmAlloc => self
+                .abi
+                .driver
+                .decode_rpc_alloc(cmd.wire_body())
+                .ok()
+                .map(|r| r.class),
             _ => None,
         }
     }
@@ -2447,7 +2496,11 @@ impl GspFsm {
     ///
     /// # Errors
     /// As [`GspFsm::post_event`].
-    pub fn post_rc_triggered(&mut self, ram: &mut dyn GuestRam, payload: Vec<u8>) -> Result<(), GspFault> {
+    pub fn post_rc_triggered(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        payload: Vec<u8>,
+    ) -> Result<(), GspFault> {
         let rpc = OutgoingRpc {
             function: self.abi.rpc.codes.rc_triggered,
             sequence: 0,
@@ -2746,7 +2799,14 @@ mod a_reply_whose_status_is_a_host_act {
     }
 
     fn cmd() -> RpcCommand {
-        RpcCommand { function: RpcFunction::RmAlloc, code: 103, sequence: 9, payload: vec![0u8; 32], elements: 1, delivered: Vec::new() }
+        RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 103,
+            sequence: 9,
+            payload: vec![0u8; 32],
+            elements: 1,
+            delivered: Vec::new(),
+        }
     }
 
     #[test]
@@ -2756,7 +2816,11 @@ mod a_reply_whose_status_is_a_host_act {
         let seen = d.clone();
         d.resolve(0x56);
         d.resolve(0);
-        assert_eq!(seen.outcome(), Some(0x56), "a clone sees the act's outcome, and a second resolve cannot rewrite it");
+        assert_eq!(
+            seen.outcome(),
+            Some(0x56),
+            "a clone sees the act's outcome, and a second resolve cannot rewrite it"
+        );
     }
 
     /// ⊘ The default defers nothing, and a chain reports the one link that deferred wherever it
@@ -2764,24 +2828,53 @@ mod a_reply_whose_status_is_a_host_act {
     #[test]
     fn a_chain_reports_the_link_that_deferred() {
         let d = Deferred::new();
-        let mut chain = PolicyChain::new(vec![Box::new(Defers(None)), Box::new(Defers(Some(d.clone())))]);
+        let mut chain = PolicyChain::new(vec![
+            Box::new(Defers(None)),
+            Box::new(Defers(Some(d.clone()))),
+        ]);
         assert_eq!(chain.defers(&cmd()), Some(d));
-        assert_eq!(chain.defers(&cmd()), None, "a cell is carried for ONE command");
+        assert_eq!(
+            chain.defers(&cmd()),
+            None,
+            "a cell is carried for ONE command"
+        );
     }
 
     /// ★ A refused alloc's status is where the guest reads it — the params `status`, not only the
     /// envelope (`rpc.c:11236-11241`). `[measured kf3m2]` without it every refusal was a success.
     #[test]
     fn a_refused_alloc_carries_its_status_in_the_params() {
-        let mut rpc = OutgoingRpc { function: 103, sequence: 9, rpc_result: 0x56, rpc_result_private: 0x56, payload: vec![0u8; 40] };
+        let mut rpc = OutgoingRpc {
+            function: 103,
+            sequence: 9,
+            rpc_result: 0x56,
+            rpc_result_private: 0x56,
+            payload: vec![0u8; 40],
+        };
         stamp_alloc_status(&mut rpc, 0x56);
-        assert_eq!(&rpc.payload[RM_ALLOC_PARAMS_STATUS_AT..RM_ALLOC_PARAMS_STATUS_AT + 4], &0x56u32.to_le_bytes());
-        let mut empty = OutgoingRpc { payload: Vec::new(), ..rpc.clone() };
+        assert_eq!(
+            &rpc.payload[RM_ALLOC_PARAMS_STATUS_AT..RM_ALLOC_PARAMS_STATUS_AT + 4],
+            &0x56u32.to_le_bytes()
+        );
+        let mut empty = OutgoingRpc {
+            payload: Vec::new(),
+            ..rpc.clone()
+        };
         stamp_alloc_status(&mut empty, 0x40);
-        assert_eq!(&empty.payload[RM_ALLOC_PARAMS_STATUS_AT..], &0x40u32.to_le_bytes(), "an empty body grows to hold it");
-        let mut ok = OutgoingRpc { payload: vec![0u8; 40], ..rpc };
+        assert_eq!(
+            &empty.payload[RM_ALLOC_PARAMS_STATUS_AT..],
+            &0x40u32.to_le_bytes(),
+            "an empty body grows to hold it"
+        );
+        let mut ok = OutgoingRpc {
+            payload: vec![0u8; 40],
+            ..rpc
+        };
         stamp_alloc_status(&mut ok, 0);
-        assert!(ok.payload.iter().all(|&b| b == 0), "a success stamps nothing");
+        assert!(
+            ok.payload.iter().all(|&b| b == 0),
+            "a success stamps nothing"
+        );
     }
 }
 
@@ -2798,7 +2891,8 @@ mod a_life_ends_and_the_next_one_boots {
     /// A GSP Axis-A bundle for the bench driver. Only its shape matters here: these tests never
     /// decode an element.
     pub(super) fn abi() -> GspAbi {
-        let table = kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench driver");
+        let table =
+            kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench driver");
         let wire = table.gsp_element_wire();
         let transport = match wire.transport() {
             None => TransportHdr::None,
@@ -2809,9 +2903,14 @@ mod a_life_ends_and_the_next_one_boots {
                 nvdm_word: t.nvdm_word,
             },
         };
-        let element =
-            ElementLayout::new(wire.hdr_size(), wire.checksum_off(), wire.seqnum_off(), wire.elem_count_off(), transport)
-                .expect("element layout");
+        let element = ElementLayout::new(
+            wire.hdr_size(),
+            wire.checksum_off(),
+            wire.seqnum_off(),
+            wire.elem_count_off(),
+            transport,
+        )
+        .expect("element layout");
         let init = table.gsp_init_args_wire();
         let codes = FunctionCodes {
             set_guest_system_info: 1,
@@ -2839,9 +2938,17 @@ mod a_life_ends_and_the_next_one_boots {
                     .everywhere_u32(),
         };
         GspAbi {
-            msgq: MsgqAbi { version: 0, msg_size_min: 4096, swap_rx_flag: 1, region_page_size: 4096 },
+            msgq: MsgqAbi {
+                version: 0,
+                msg_size_min: 4096,
+                swap_rx_flag: 1,
+                region_page_size: 4096,
+            },
             element,
-            rpc: RpcAbi { header_version: 0x0300_0000, codes },
+            rpc: RpcAbi {
+                header_version: 0x0300_0000,
+                codes,
+            },
             element_size_max: table.gsp_element_size_max(),
             init_args: InitArgsLayout {
                 shared_mem_pa_off: 0,
@@ -2883,8 +2990,15 @@ mod a_life_ends_and_the_next_one_boots {
         f.suspend(&mut r);
         assert_eq!(r.transitions, vec![Transition::E9]);
         assert_eq!(f.phase(), BootPhase::Suspending);
-        assert!(f.observe().wpr2_up && f.observe().suspended, "WPR2 stays up until FWSEC-SB / Booter Unload");
-        assert_eq!(f.gsp_startcpu(), Transition::E2, "FWSEC-SB's STARTCPU ends the life");
+        assert!(
+            f.observe().wpr2_up && f.observe().suspended,
+            "WPR2 stays up until FWSEC-SB / Booter Unload"
+        );
+        assert_eq!(
+            f.gsp_startcpu(),
+            Transition::E2,
+            "FWSEC-SB's STARTCPU ends the life"
+        );
         assert!(!f.observe().wpr2_up && !f.observe().suspended);
         assert_eq!(f.gsp_startcpu(), Transition::E1, "and the next open boots");
         assert!(f.observe().wpr2_up);
@@ -2901,11 +3015,24 @@ mod a_life_ends_and_the_next_one_boots {
         assert_eq!(f.phase(), BootPhase::Halted);
         let o = f.observe();
         assert!(!o.wpr2_up, "the next _kgspBootGspRm must read WPR2 down");
-        assert!(o.suspended, "kgspWaitForProcessorSuspend still reads the sentinel");
+        assert!(
+            o.suspended,
+            "kgspWaitForProcessorSuspend still reads the sentinel"
+        );
         assert!(o.swgen0_pending, "the reply's interrupt survives the halt");
-        assert!(matches!(f.queue(), QueueState::Unbound), "the dead life's binding is dropped by value");
-        assert_eq!(f.gsp_startcpu(), Transition::E1, "the next open's FSP boot starts the processor");
-        assert!(!f.observe().suspended, "a boot clears the sentinel, freeing MAILBOX0 for FMC errors");
+        assert!(
+            matches!(f.queue(), QueueState::Unbound),
+            "the dead life's binding is dropped by value"
+        );
+        assert_eq!(
+            f.gsp_startcpu(),
+            Transition::E1,
+            "the next open's FSP boot starts the processor"
+        );
+        assert!(
+            !f.observe().suspended,
+            "a boot clears the sentinel, freeing MAILBOX0 for FMC errors"
+        );
         assert!(f.observe().wpr2_up);
     }
 
@@ -2918,8 +3045,16 @@ mod a_life_ends_and_the_next_one_boots {
         f.note_command_doorbells(2);
         let mut ram = Untouchable;
         let mut policy = EchoOk;
-        assert_eq!(f.service_one_deferred_command(&mut ram, &mut policy).unwrap_err(), GspFault::ProcessorSuspended);
-        assert_eq!(f.pending_command_doorbells(), 1, "the refused doorbell is consumed, not retried forever");
+        assert_eq!(
+            f.service_one_deferred_command(&mut ram, &mut policy)
+                .unwrap_err(),
+            GspFault::ProcessorSuspended
+        );
+        assert_eq!(
+            f.pending_command_doorbells(),
+            1,
+            "the refused doorbell is consumed, not retried forever"
+        );
     }
 }
 
@@ -2948,7 +3083,14 @@ mod a_retry_after_a_failed_boot_reads_its_own_frts_command {
         fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
             let len = buf.len();
             for (i, o) in buf.iter_mut().enumerate() {
-                *o = *self.0.get(&(gpa + i as u64)).ok_or(crate::fault::RamRefused { gpa, len, why: "not registered" })?;
+                *o = *self
+                    .0
+                    .get(&(gpa + i as u64))
+                    .ok_or(crate::fault::RamRefused {
+                        gpa,
+                        len,
+                        why: "not registered",
+                    })?;
             }
             Ok(())
         }
@@ -2969,7 +3111,10 @@ mod a_retry_after_a_failed_boot_reads_its_own_frts_command {
         for o in (0..g.dmem_load_size).step_by(4) {
             r.put32(base + u64::from(o), 0);
         }
-        r.put32(base + u64::from(g.dmem_mapper_offset + 8), g.cmd_in_buffer_offset);
+        r.put32(
+            base + u64::from(g.dmem_mapper_offset + 8),
+            g.cmd_in_buffer_offset,
+        );
         r.put32(base + u64::from(g.dmem_mapper_offset + 44), cmd);
         let d = base + u64::from(g.cmd_in_buffer_offset + 24);
         for (i, v) in [1, 20, off_4k, size_4k, media].into_iter().enumerate() {
@@ -2981,40 +3126,102 @@ mod a_retry_after_a_failed_boot_reads_its_own_frts_command {
     #[test]
     fn the_frts_offset_is_read_from_the_command_and_only_from_an_acceptable_one() {
         let at = 0x1f6e_0000u64; // a margin-shifted FRTS offset (4 KiB units: 0x1f6e0)
-        assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), IMAGE), Some(at));
-        assert_eq!(read_frts_command(&mut image(0x19, 0x1f6e0, 0x100, 2), IMAGE), None, "FWSEC-SB carries no region");
-        assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x200, 2), IMAGE), None, "only the 1 MiB region FWSEC builds");
-        assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 1), IMAGE), None, "only the FB medium");
+        assert_eq!(
+            read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), IMAGE),
+            Some(at)
+        );
+        assert_eq!(
+            read_frts_command(&mut image(0x19, 0x1f6e0, 0x100, 2), IMAGE),
+            None,
+            "FWSEC-SB carries no region"
+        );
+        assert_eq!(
+            read_frts_command(&mut image(0x15, 0x1f6e0, 0x200, 2), IMAGE),
+            None,
+            "only the 1 MiB region FWSEC builds"
+        );
+        assert_eq!(
+            read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 1), IMAGE),
+            None,
+            "only the FB medium"
+        );
         let mut other = image(0x15, 0x1f6e0, 0x100, 2);
         let g = kf_abi::vbios::GENERATED_FWSEC;
-        other.put32(IMAGE + u64::from(g.dmem_phys_base + g.dmem_mapper_offset + 8), g.cmd_in_buffer_offset + 0x40);
-        assert_eq!(read_frts_command(&mut other, IMAGE), None, "a mapper that disagrees with the ROM we generated");
-        assert_eq!(read_frts_command(&mut Ram::default(), IMAGE), None, "unregistered RAM is refused, never zero");
-        assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), u64::MAX - 8), None, "no wrap");
+        other.put32(
+            IMAGE + u64::from(g.dmem_phys_base + g.dmem_mapper_offset + 8),
+            g.cmd_in_buffer_offset + 0x40,
+        );
+        assert_eq!(
+            read_frts_command(&mut other, IMAGE),
+            None,
+            "a mapper that disagrees with the ROM we generated"
+        );
+        assert_eq!(
+            read_frts_command(&mut Ram::default(), IMAGE),
+            None,
+            "unregistered RAM is refused, never zero"
+        );
+        assert_eq!(
+            read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), u64::MAX - 8),
+            None,
+            "no wrap"
+        );
     }
 
     #[test]
     fn the_command_read_for_a_start_is_served_while_wpr2_is_up_and_dropped_when_it_comes_down() {
         let mut f = GspFsm::new(super::a_life_ends_and_the_next_one_boots::abi());
         let mut ram = image(0x15, 0x1f6e0, 0x100, 2);
-        assert_eq!(f.resolve_frts_command(&mut ram), None, "nothing started: nothing to read");
+        assert_eq!(
+            f.resolve_frts_command(&mut ram),
+            None,
+            "nothing started: nothing to read"
+        );
         f.fwsec_image = Some(IMAGE); // `BootStep::FwsecCommand`
         assert_eq!(f.gsp_startcpu(), Transition::E1);
-        assert_eq!(f.observe().frts_offset, None, "until the device resolves it");
+        assert_eq!(
+            f.observe().frts_offset,
+            None,
+            "until the device resolves it"
+        );
         assert_eq!(f.resolve_frts_command(&mut ram), Some(Some(0x1f6e_0000)));
-        assert_eq!(f.observe().frts_offset, Some(0x1f6e_0000), "the retry's FWSEC-FRTS placed it there");
+        assert_eq!(
+            f.observe().frts_offset,
+            Some(0x1f6e_0000),
+            "the retry's FWSEC-FRTS placed it there"
+        );
         assert_eq!(f.resolve_frts_command(&mut ram), None, "read once");
-        assert_eq!(f.gsp_startcpu(), Transition::E3, "a start while up changes nothing");
+        assert_eq!(
+            f.gsp_startcpu(),
+            Transition::E3,
+            "a start while up changes nothing"
+        );
         assert_eq!(f.observe().frts_offset, Some(0x1f6e_0000));
         f.enter_halted();
-        assert_eq!(f.observe().frts_offset, None, "WPR2 down: nothing is served");
-        assert_eq!(f.gsp_startcpu(), Transition::E1, "a start with no DMEM load of its own");
+        assert_eq!(
+            f.observe().frts_offset,
+            None,
+            "WPR2 down: nothing is served"
+        );
+        assert_eq!(
+            f.gsp_startcpu(),
+            Transition::E1,
+            "a start with no DMEM load of its own"
+        );
         assert_eq!(f.resolve_frts_command(&mut ram), None, "nothing to read");
-        assert_eq!(f.observe().frts_offset, None, "derives — never the previous life's command");
+        assert_eq!(
+            f.observe().frts_offset,
+            None,
+            "derives — never the previous life's command"
+        );
         f.enter_halted();
         f.fwsec_image = Some(IMAGE);
         assert_eq!(f.gsp_startcpu(), Transition::E1);
-        assert_eq!(f.resolve_frts_command(&mut Ram::default()), Some(None), "an unreadable command derives");
+        assert_eq!(
+            f.resolve_frts_command(&mut Ram::default()),
+            Some(None),
+            "an unreadable command derives"
+        );
         assert_eq!(f.observe().frts_offset, None);
     }
 }

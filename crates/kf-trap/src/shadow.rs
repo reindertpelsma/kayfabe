@@ -108,7 +108,11 @@ pub enum ClearOutcome {
 
 impl Trigger {
     pub const fn new() -> Trigger {
-        Trigger { armed_at: AtomicU64::new(0), issued: AtomicU64::new(0), completed: AtomicU64::new(0) }
+        Trigger {
+            armed_at: AtomicU64::new(0),
+            issued: AtomicU64::new(0),
+            completed: AtomicU64::new(0),
+        }
     }
 
     /// vCPU, in the trap: the guest wrote 1. Record WHICH write this is.
@@ -153,7 +157,10 @@ impl Trigger {
     /// ⊘ **Compare-and-set against the position, never a blind store.**
     pub fn complete(&self, ring_seq: u64) -> ClearOutcome {
         let want = ring_seq + 1;
-        match self.armed_at.compare_exchange(want, 0, Ordering::AcqRel, Ordering::Acquire) {
+        match self
+            .armed_at
+            .compare_exchange(want, 0, Ordering::AcqRel, Ordering::Acquire)
+        {
             Ok(_) => {
                 self.completed.fetch_add(1, Ordering::AcqRel);
                 ClearOutcome::Cleared

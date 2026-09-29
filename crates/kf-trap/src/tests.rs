@@ -24,7 +24,10 @@ fn ring_while_busy_becomes_busy_rung_and_is_re_acted() {
     w.allocate_fresh(Route::Translated, 7);
     w.ring(1);
     assert!(matches!(w.claim(), Claim::Won(_)));
-    assert!(!w.ring(2), "a ring over BUSY publishes nothing — the owner will see it");
+    assert!(
+        !w.ring(2),
+        "a ring over BUSY publishes nothing — the owner will see it"
+    );
     assert_eq!(w.load().state, State::BusyRung);
     assert_eq!(w.release(0, REACT_ROUNDS), Release::ActAgain);
     assert_eq!(w.load().state, State::Busy);
@@ -54,7 +57,11 @@ fn a_token_published_during_a_scan_is_not_lost() {
     // Arrives right after the scan drained the word.
     b.publish(11);
     out.clear();
-    assert_eq!(b.scan(&mut out, 64), 1, "the later publish must still be findable");
+    assert_eq!(
+        b.scan(&mut out, 64),
+        1,
+        "the later publish must still be findable"
+    );
     assert_eq!(out, vec![11]);
 }
 
@@ -70,7 +77,10 @@ fn a_partial_scan_puts_back_bit_and_summary_together() {
     assert_eq!(b.scan(&mut out, 3), 3);
     out.clear();
     let rest = b.scan(&mut out, 64);
-    assert_eq!(rest, 5, "the five not taken must still be reachable, not stranded");
+    assert_eq!(
+        rest, 5,
+        "the five not taken must still be reachable, not stranded"
+    );
 }
 
 // ---- §5.3 the wake word -------------------------------------------------------------------
@@ -78,7 +88,11 @@ fn a_partial_scan_puts_back_bit_and_summary_together() {
 #[test]
 fn bump_owes_no_syscall_when_nobody_is_parked() {
     let w = WakeWord::new();
-    assert_eq!(w.bump(), Wake::NoOne, "the common case must cost no eventfd write");
+    assert_eq!(
+        w.bump(),
+        Wake::NoOne,
+        "the common case must cost no eventfd write"
+    );
 }
 
 #[test]
@@ -88,7 +102,10 @@ fn a_bump_during_a_scan_refuses_the_park() {
     let w = WakeWord::new();
     let seen = w.seen();
     w.bump(); // work arrives while the worker is scanning
-    assert!(!w.try_park(seen), "must rescan, never sleep on stale evidence");
+    assert!(
+        !w.try_park(seen),
+        "must rescan, never sleep on stale evidence"
+    );
 }
 
 #[test]
@@ -118,7 +135,11 @@ fn the_sequence_carry_falls_off_the_top_and_never_becomes_a_phantom_poller() {
     for _ in 0..1000 {
         w.bump();
     }
-    assert_eq!(w.pollers(), before, "bumping must never disturb the poller count");
+    assert_eq!(
+        w.pollers(),
+        before,
+        "bumping must never disturb the poller count"
+    );
     assert_eq!(before, 0);
 }
 
@@ -128,11 +149,25 @@ fn the_ring_preserves_global_order_across_vcpus() {
     // lock and releases it; another thread on another vCPU takes the lock and writes TRIGGER...
     // Per-vCPU rings preserve only per-vCPU order and fire the trigger against a stale base."
     let r = PrivRing::new();
-    let pdb_lo = RegWrite { bar: 0, offset: 0x1000, value: 0xdead, width: 4 };
-    let trigger = RegWrite { bar: 0, offset: 0x1008, value: 1, width: 4 };
+    let pdb_lo = RegWrite {
+        bar: 0,
+        offset: 0x1000,
+        value: 0xdead,
+        width: 4,
+    };
+    let trigger = RegWrite {
+        bar: 0,
+        offset: 0x1008,
+        value: 1,
+        width: 4,
+    };
     assert!(matches!(r.push(pdb_lo), Push::Queued(0)));
     assert!(matches!(r.push(trigger), Push::Queued(1)));
-    assert_eq!(r.peek().unwrap().1, pdb_lo, "the base must drain BEFORE the trigger");
+    assert_eq!(
+        r.peek().unwrap().1,
+        pdb_lo,
+        "the base must drain BEFORE the trigger"
+    );
     r.commit();
     assert_eq!(r.peek().unwrap().1, trigger);
     r.commit();
@@ -144,12 +179,25 @@ fn peek_then_commit_means_a_failed_apply_retries_at_the_head() {
     // ⊘ §5.4: "peek → apply → commit, so a failed apply retries at the head". Consuming before
     // applying drops a write whose apply failed -- the silent-drop bug one layer down.
     let r = PrivRing::new();
-    let w = RegWrite { bar: 0, offset: 0x40, value: 7, width: 4 };
+    let w = RegWrite {
+        bar: 0,
+        offset: 0x40,
+        value: 7,
+        width: 4,
+    };
     r.push(w);
     assert_eq!(r.peek().unwrap().1, w);
     // apply "fails" -- we do NOT commit
-    assert_eq!(r.peek().unwrap().1, w, "the same write must still be at the head");
-    assert_eq!(r.applied_seq(), 0, "applied_seq must not move on a failed apply");
+    assert_eq!(
+        r.peek().unwrap().1,
+        w,
+        "the same write must still be at the head"
+    );
+    assert_eq!(
+        r.applied_seq(),
+        0,
+        "applied_seq must not move on a failed apply"
+    );
     r.commit();
     assert_eq!(r.applied_seq(), 1);
 }
@@ -160,22 +208,54 @@ fn full_poisons_and_claims_nothing_and_then_drops_by_name() {
     // full path -- "a claim-then-bail strands the consumer at that slot forever."
     let r = PrivRing::new();
     for i in 0..ring::CAPACITY {
-        assert!(matches!(r.push(RegWrite { bar: 0, offset: i as u32, value: 0, width: 4 }), Push::Queued(_)));
+        assert!(matches!(
+            r.push(RegWrite {
+                bar: 0,
+                offset: i as u32,
+                value: 0,
+                width: 4
+            }),
+            Push::Queued(_)
+        ));
     }
     assert_eq!(r.occupancy(), ring::CAPACITY);
-    assert_eq!(r.push(RegWrite { bar: 0, offset: 0xffff, value: 0, width: 4 }), Push::Poisoned);
+    assert_eq!(
+        r.push(RegWrite {
+            bar: 0,
+            offset: 0xffff,
+            value: 0,
+            width: 4
+        }),
+        Push::Poisoned
+    );
     assert!(r.is_poisoned());
-    assert_eq!(r.occupancy(), ring::CAPACITY, "the failed push must NOT have reserved a slot");
+    assert_eq!(
+        r.occupancy(),
+        ring::CAPACITY,
+        "the failed push must NOT have reserved a slot"
+    );
     // Every slot must still be drainable -- no hole.
     for i in 0..ring::CAPACITY {
-        assert_eq!(r.peek().unwrap().1.offset, i as u32, "a hole would strand the drainer here");
+        assert_eq!(
+            r.peek().unwrap().1.offset,
+            i as u32,
+            "a hole would strand the drainer here"
+        );
         r.commit();
     }
     assert!(r.peek().is_none());
     // ⊘ And once poisoned, further writes are dropped BY NAME, never silently: §5.4's security
     // half -- "dropping one write silently leaves state a later, differently-privileged guest
     // process inherits."
-    assert_eq!(r.push(RegWrite { bar: 0, offset: 1, value: 1, width: 4 }), Push::Dropped);
+    assert_eq!(
+        r.push(RegWrite {
+            bar: 0,
+            offset: 1,
+            value: 1,
+            width: 4
+        }),
+        Push::Dropped
+    );
 }
 
 #[test]
@@ -200,7 +280,12 @@ fn concurrent_producers_leave_no_hole_for_the_drainer() {
         let r = Arc::clone(&r);
         hs.push(std::thread::spawn(move || {
             for i in 0..PER {
-                r.push(RegWrite { bar: 0, offset: v * PER + i, value: v as u64, width: 4 });
+                r.push(RegWrite {
+                    bar: 0,
+                    offset: v * PER + i,
+                    value: v as u64,
+                    width: 4,
+                });
             }
         }));
     }
@@ -208,9 +293,16 @@ fn concurrent_producers_leave_no_hole_for_the_drainer() {
         h.join().unwrap();
     }
     // N*PER = 9000 > CAPACITY, so the ring MUST have filled and poisoned.
-    assert!(r.is_poisoned(), "9000 pushes into a {}-slot ring must poison", ring::CAPACITY);
+    assert!(
+        r.is_poisoned(),
+        "9000 pushes into a {}-slot ring must poison",
+        ring::CAPACITY
+    );
     let claimed = r.occupancy();
-    assert!(claimed <= ring::CAPACITY, "occupancy {claimed} exceeded capacity — a lost bail");
+    assert!(
+        claimed <= ring::CAPACITY,
+        "occupancy {claimed} exceeded capacity — a lost bail"
+    );
     // ⊘ THE ASSERTION THE KNOWN-POSITIVE DEMANDS: every slot the producers CLAIMED must be
     // drainable. Under fetch_add-then-bail, a bailing producer leaves slot `tail` never marked
     // ready, `peek()` returns None at that index, and the drain stops SHORT of `claimed`.
@@ -231,7 +323,12 @@ fn the_high_water_mark_is_recorded_for_the_teardown_line() {
     // prints at teardown."
     let r = PrivRing::new();
     for i in 0..10 {
-        r.push(RegWrite { bar: 0, offset: i, value: 0, width: 4 });
+        r.push(RegWrite {
+            bar: 0,
+            offset: i,
+            value: 0,
+            width: 4,
+        });
     }
     assert_eq!(r.high_water(), 10);
     while r.peek().is_some() {
@@ -263,7 +360,11 @@ fn w1c_does_not_lose_a_concurrent_set() {
     }
     h.join().unwrap();
     assert_eq!(c.read() & 0b0001, 0, "the cleared bit must stay cleared");
-    assert_eq!(c.read() & 0b1110, 0b1110, "the bits the guest did NOT clear must survive");
+    assert_eq!(
+        c.read() & 0b1110,
+        0b1110,
+        "the bits the guest did NOT clear must survive"
+    );
 }
 
 #[test]
@@ -272,7 +373,11 @@ fn a_write_only_port_does_not_move_its_own_shadow() {
     // the hardware does not have.
     let c = Cell::new();
     c.apply(WriteSemantics::WriteOnlyPort, 0xdead_beef);
-    assert_eq!(c.read(), 0, "a write-only port's own cell must not take the value");
+    assert_eq!(
+        c.read(),
+        0,
+        "a write-only port's own cell must not take the value"
+    );
 }
 
 #[test]
@@ -283,7 +388,11 @@ fn the_trigger_counts_issued_and_completed_separately() {
     t.arm(1);
     t.arm(2);
     assert_eq!(t.issued(), 2);
-    assert_eq!(t.completed(), 0, "issued != completed is the whole point of two counters");
+    assert_eq!(
+        t.completed(),
+        0,
+        "issued != completed is the whole point of two counters"
+    );
     t.complete(1); // superseded, but the work DID complete
     t.complete(2);
     assert_eq!(t.completed(), 2);
@@ -296,10 +405,19 @@ fn an_overdue_trigger_trips_before_the_guest_gives_up() {
     let t = Trigger::new();
     let guest_budget = 4_000_000_000u64; // ~4s
     t.arm(1);
-    assert!(!t.is_overdue(1_000_000_000, guest_budget), "1s of a 4s budget is not overdue");
-    assert!(t.is_overdue(3_000_000_000, guest_budget), "3s of a 4s budget must trip the tripwire");
+    assert!(
+        !t.is_overdue(1_000_000_000, guest_budget),
+        "1s of a 4s budget is not overdue"
+    );
+    assert!(
+        t.is_overdue(3_000_000_000, guest_budget),
+        "3s of a 4s budget must trip the tripwire"
+    );
     t.complete(1);
-    assert!(!t.is_overdue(u64::MAX, guest_budget), "a cleared trigger is never overdue");
+    assert!(
+        !t.is_overdue(u64::MAX, guest_budget),
+        "a cleared trigger is never overdue"
+    );
 }
 
 // ---- §8 completions and interrupts -----------------------------------------------------------
@@ -353,7 +471,10 @@ fn an_unprivileged_process_cannot_keep_workers_from_parking() {
         "10 000 rings on UNOWNED tokens must not move work_seq — otherwise no worker can ever park"
     );
     // ⇒ And the consequence that makes it a DoS if violated: a worker can still park.
-    assert!(f.wworker.try_park(seen), "a worker must still be able to park after the flood");
+    assert!(
+        f.wworker.try_park(seen),
+        "a worker must still be able to park after the flood"
+    );
 }
 
 #[test]
@@ -363,9 +484,20 @@ fn a_passthrough_doorbell_is_inline_with_no_queue_no_wake_no_ring() {
     f.tokens[7].allocate_fresh(Route::Passthrough, 0xABC);
     let p = f.path();
     let seen = f.wworker.seen();
-    assert_eq!(p.write(Class::Doorbell, 0, 0, 7, 4), Action::RingHostInline { host_token: 0xABC });
-    assert_eq!(f.wworker.seen(), seen, "passthrough must not bump the work sequence");
-    assert_eq!(f.ring.occupancy(), 0, "and must not touch the privileged ring");
+    assert_eq!(
+        p.write(Class::Doorbell, 0, 0, 7, 4),
+        Action::RingHostInline { host_token: 0xABC }
+    );
+    assert_eq!(
+        f.wworker.seen(),
+        seen,
+        "passthrough must not bump the work sequence"
+    );
+    assert_eq!(
+        f.ring.occupancy(),
+        0,
+        "and must not touch the privileged ring"
+    );
 }
 
 #[test]
@@ -413,14 +545,21 @@ fn a_privileged_write_wakes_the_DRAINER_not_a_worker() {
     assert!(f.wworker.try_park(wseen), "a worker is parked");
     assert!(f.wdrainer.try_park(dseen), "and so is the drainer");
     let a = p.write(
-        Class::Privileged { readable: true, semantics: WriteSemantics::Plain },
+        Class::Privileged {
+            readable: true,
+            semantics: WriteSemantics::Plain,
+        },
         0,
         0x110c00,
         1,
         4,
     );
     assert_eq!(a, Action::WakeDrainer, "the DRAINER must be the one woken");
-    assert_eq!(f.wworker.seen(), wseen, "and the worker word must not have moved at all");
+    assert_eq!(
+        f.wworker.seen(),
+        wseen,
+        "and the worker word must not have moved at all"
+    );
     assert_eq!(f.ring.occupancy(), 1);
 }
 
@@ -434,7 +573,10 @@ fn a_data_port_never_enters_the_privileged_ring() {
     for i in 0..20_000u64 {
         assert_eq!(
             p.write(
-                Class::Privileged { readable: false, semantics: WriteSemantics::DataPort },
+                Class::Privileged {
+                    readable: false,
+                    semantics: WriteSemantics::DataPort
+                },
                 0,
                 0x110040,
                 i,
@@ -443,15 +585,25 @@ fn a_data_port_never_enters_the_privileged_ring() {
             Action::None
         );
     }
-    assert_eq!(f.ring.occupancy(), 0, "20 000 data-port writes must not occupy one ring slot");
-    assert!(!f.ring.is_poisoned(), "and must not poison the device -- boot would never complete");
+    assert_eq!(
+        f.ring.occupancy(),
+        0,
+        "20 000 data-port writes must not occupy one ring slot"
+    );
+    assert!(
+        !f.ring.is_poisoned(),
+        "and must not poison the device -- boot would never complete"
+    );
 }
 
 #[test]
 fn a_full_privileged_ring_poisons_rather_than_waiting() {
     let f = Fixture::new(32);
     let p = f.path();
-    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    let cls = Class::Privileged {
+        readable: true,
+        semantics: WriteSemantics::Plain,
+    };
     for i in 0..ring::CAPACITY {
         let a = p.write(cls, 0, i as u32, 0, 4);
         assert!(matches!(a, Action::None | Action::WakeDrainer));
@@ -474,7 +626,10 @@ fn the_model_check_finds_the_single_cas_claim_bug() {
     match model::check(model::ClaimShape::SingleCas) {
         Err(why) => {
             assert!(why.contains("LOST"), "{why}");
-            assert!(why.contains("interleaving:"), "it must NAME the interleaving: {why}");
+            assert!(
+                why.contains("interleaving:"),
+                "it must NAME the interleaving: {why}"
+            );
         }
         Ok(n) => panic!("the checker explored {n} states and MISSED a known real bug"),
     }
@@ -486,7 +641,10 @@ fn the_model_check_clears_the_retrying_claim() {
     // ⚠ Under SEQUENTIAL CONSISTENCY only — this says nothing about whether Release/Acquire are
     // strong enough on a weakly-ordered target. See the module docs.
     match model::check(model::ClaimShape::Retrying) {
-        Ok(explored) => assert!(explored > 20, "the checker must actually explore: {explored} states"),
+        Ok(explored) => assert!(
+            explored > 20,
+            "the checker must actually explore: {explored} states"
+        ),
         Err(why) => panic!("the shipped claim() has a losing interleaving:\n{why}"),
     }
 }
@@ -500,10 +658,17 @@ fn a_refused_time_write_touches_nothing_a_neighbour_write_still_queues() {
     let f = Fixture::new(4);
     let p = f.path();
     let sem = shadow::WriteSemantics::Plain;
-    let priv_ = Class::Privileged { readable: true, semantics: sem };
+    let priv_ = Class::Privileged {
+        readable: true,
+        semantics: sem,
+    };
     assert_eq!(p.write(priv_, 0, 0x9400, 1, 4), Action::RefusedByName);
     assert_eq!(f.ring.occupancy(), 0);
-    assert_ne!(p.write(priv_, 0, 0x9404, 1, 4), Action::RefusedByName, "0x9404 is not named");
+    assert_ne!(
+        p.write(priv_, 0, 0x9404, 1, 4),
+        Action::RefusedByName,
+        "0x9404 is not named"
+    );
     assert_eq!(f.ring.occupancy(), 1, "the neighbour was queued");
     // And the refusal is BAR0-scoped: the same offset on another BAR is not the timer.
     assert_ne!(p.write(priv_, 1, 0x9400, 1, 4), Action::RefusedByName);
@@ -553,17 +718,23 @@ fn the_scan_start_rotates_so_no_group_holds_priority() {
     let mut out = Vec::new();
     let (mut low, mut high) = (0usize, 0usize);
     for _ in 0..64 {
-        b.publish(1);      // summary word 0
+        b.publish(1); // summary word 0
         b.publish(70_000); // a far-away summary word
         b.scan(&mut out, 1);
-        if out.contains(&1) { low += 1 }
-        if out.contains(&70_000) { high += 1 }
+        if out.contains(&1) {
+            low += 1
+        }
+        if out.contains(&70_000) {
+            high += 1
+        }
     }
-    assert!(low > 0 && high > 0, "both groups must be reached: low={low} high={high}");
+    assert!(
+        low > 0 && high > 0,
+        "both groups must be reached: low={low} high={high}"
+    );
 }
 
 // ---- fable w823 CRITICAL S2 / S4 / S6 ----------------------------------------------------------
-
 
 #[test]
 fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
@@ -576,7 +747,14 @@ fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
     // The PLM shadow: bit 4 = WRITE_PROTECTION_LEVEL0_ENABLE, so ogkm takes its `if` branch and
     // never reaches the NV_ASSERT(0) in the else (`timer_gv100.c:56,77-81`).
     assert_eq!(TIMER_GV100.plm_shadow(), Some((0x9430, 1 << 4)));
-    assert_eq!(TIMER_GH100.plm_shadow(), None, "the GH100 body has no privilege test");
+    assert_eq!(
+        TIMER_GH100.plm_shadow(),
+        None,
+        "the GH100 body has no privilege test"
+    );
     assert_eq!(TIMER_GB10B.plm_shadow(), None);
-    assert!(TIMER_GB10B.refused_writes.is_empty(), "GB10B writes no time register at all");
+    assert!(
+        TIMER_GB10B.refused_writes.is_empty(),
+        "GB10B writes no time register at all"
+    );
 }

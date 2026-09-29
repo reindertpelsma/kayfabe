@@ -10,7 +10,7 @@
 //! at all — it was added to the CUDA kernel and to `storemap::map` while the middle layer,
 //! the one production actually calls, said nothing about where a run points.
 
-use kayfabe_cuda::abi::{KfMapRun, KfPdbEntry, KfReportHeader, KFWR_MAGIC, KFWR_OP_UNMAP};
+use kayfabe_cuda::abi::{KFWR_MAGIC, KFWR_OP_UNMAP, KfMapRun, KfPdbEntry, KfReportHeader};
 use kayfabe_cuda::walk::{Report, ReportError};
 
 const SPAN: u64 = 8 << 20;
@@ -55,7 +55,11 @@ fn a_run_wholly_inside_the_span_is_accepted() {
 #[test]
 fn a_run_ending_exactly_at_the_span_is_the_last_legal_page() {
     let r = report(vec![run(SPAN - 4096, 4096, 1)]);
-    assert_eq!(r.validate(), Ok(()), "gpga + len == span is the LAST LEGAL page, not an error");
+    assert_eq!(
+        r.validate(),
+        Ok(()),
+        "gpga + len == span is the LAST LEGAL page, not an error"
+    );
 }
 
 #[test]

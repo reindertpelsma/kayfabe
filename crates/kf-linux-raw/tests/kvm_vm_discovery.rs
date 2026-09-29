@@ -60,9 +60,8 @@ fn the_discovered_machine_is_the_one_this_process_created_and_shares_its_address
             .expect("exactly one machine exists in this process, so discovery must succeed"),
     );
 
-    let w = Arc::new(
-        kf_linux_raw::GuestWindow::create(p.bytes(), p).expect("a one-page reservation"),
-    );
+    let w =
+        Arc::new(kf_linux_raw::GuestWindow::create(p.bytes(), p).expect("a one-page reservation"));
     let _held = KvmMemslot::install(
         Arc::clone(&discovered),
         0,
@@ -162,9 +161,8 @@ fn an_adopted_descriptor_reaches_the_address_space_it_was_duplicated_from() {
             .expect("duplicating the VM descriptor"),
     ));
 
-    let w = Arc::new(
-        kf_linux_raw::GuestWindow::create(p.bytes(), p).expect("a one-page reservation"),
-    );
+    let w =
+        Arc::new(kf_linux_raw::GuestWindow::create(p.bytes(), p).expect("a one-page reservation"));
     let _held = KvmMemslot::install(
         Arc::clone(&adopted),
         0,

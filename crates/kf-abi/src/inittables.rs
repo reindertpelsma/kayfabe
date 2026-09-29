@@ -444,13 +444,17 @@ pub const INTR_INVALID_SUBTREE: u8 = 0xFF;
 ///
 /// # Errors
 /// [`IntrAtError`].
-pub fn intr_kernel_table_at(bench_body: &[u8], version: crate::DriverVersion) -> Result<Vec<u8>, IntrAtError> {
+pub fn intr_kernel_table_at(
+    bench_body: &[u8],
+    version: crate::DriverVersion,
+) -> Result<Vec<u8>, IntrAtError> {
     use crate::generated::matrix as m;
     use crate::matrix::{Resolved, transcode};
     let runs = &m::NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS;
     let bench = Resolved::of(runs, crate::versions::BENCH_DRIVER).map_err(IntrAtError::Layout)?;
     let guest = Resolved::of(runs, version).map_err(IntrAtError::Layout)?;
-    let (mut out, _dropped) = transcode(&bench, &guest, bench_body, &[]).map_err(IntrAtError::Transcode)?;
+    let (mut out, _dropped) =
+        transcode(&bench, &guest, bench_body, &[]).map_err(IntrAtError::Transcode)?;
 
     // engineIdx by name.
     let names = |v: crate::DriverVersion| -> Vec<(&'static str, u64)> {
@@ -468,7 +472,11 @@ pub fn intr_kernel_table_at(bench_body: &[u8], version: crate::DriverVersion) ->
     }
     let need = |p: &'static str| guest.need(p).map_err(IntrAtError::Layout);
     let len_f = need("tableLen")?;
-    let len = u32::from_le_bytes(out[len_f.off()..len_f.off() + 4].try_into().unwrap_or([0; 4])) as usize;
+    let len = u32::from_le_bytes(
+        out[len_f.off()..len_f.off() + 4]
+            .try_into()
+            .unwrap_or([0; 4]),
+    ) as usize;
     let (el0, idx_f) = (need("table[]")?, need("table[].engineIdx")?);
     let stride = el0.bytes().unwrap_or(0);
     if bn != gn {
@@ -485,16 +493,23 @@ pub fn intr_kernel_table_at(bench_body: &[u8], version: crate::DriverVersion) ->
                     _ => return Err(IntrAtError::EngineIdx { bench: b }),
                 }
             }
-            let t = target.and_then(|t| u16::try_from(t).ok()).ok_or(IntrAtError::EngineIdx { bench: b })?;
+            let t = target
+                .and_then(|t| u16::try_from(t).ok())
+                .ok_or(IntrAtError::EngineIdx { bench: b })?;
             out[o..o + 2].copy_from_slice(&t.to_le_bytes());
         }
     }
 
     // subtreeMap by meaning.
-    if let (Some(start), Some(end)) = (guest.maybe("subtreeMap[].subtreeStart"), guest.maybe("subtreeMap[].subtreeEnd")) {
+    if let (Some(start), Some(end)) = (
+        guest.maybe("subtreeMap[].subtreeStart"),
+        guest.maybe("subtreeMap[].subtreeEnd"),
+    ) {
         let (b_arr, b_el) = (
             bench.need("subtreeMap").map_err(IntrAtError::Layout)?,
-            bench.need("subtreeMap[].subtreeMask").map_err(IntrAtError::Layout)?,
+            bench
+                .need("subtreeMap[].subtreeMask")
+                .map_err(IntrAtError::Layout)?,
         );
         let g_el0 = need("subtreeMap[]")?;
         let g_stride = g_el0.bytes().unwrap_or(0);
@@ -507,9 +522,16 @@ pub fn intr_kernel_table_at(bench_body: &[u8], version: crate::DriverVersion) ->
             } else {
                 let lo = mask.trailing_zeros();
                 let hi = 63 - mask.leading_zeros();
-                let run = if hi - lo == 63 { u64::MAX } else { ((1u64 << (hi - lo + 1)) - 1) << lo };
+                let run = if hi - lo == 63 {
+                    u64::MAX
+                } else {
+                    ((1u64 << (hi - lo + 1)) - 1) << lo
+                };
                 if run != mask {
-                    return Err(IntrAtError::NonContiguousSubtree { category: cat, mask });
+                    return Err(IntrAtError::NonContiguousSubtree {
+                        category: cat,
+                        mask,
+                    });
                 }
                 (lo as u8, hi as u8)
             };

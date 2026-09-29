@@ -3,7 +3,11 @@
 use kayfabe_device::dbtable::{DoorbellClass, DoorbellLedger};
 
 fn row(l: &DoorbellLedger, tok: &str) -> String {
-    l.render().lines().find(|r| r.contains(tok)).unwrap().to_string()
+    l.render()
+        .lines()
+        .find(|r| r.contains(tok))
+        .unwrap()
+        .to_string()
 }
 
 #[test]

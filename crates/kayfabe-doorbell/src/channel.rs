@@ -113,7 +113,13 @@ pub enum Decoded {
 pub fn size_is_total(form_known_to_model: bool, words: u8) -> (u8, Decoded) {
     (
         words,
-        if form_known_to_model { Decoded::Modelled { operand_words: words } } else { Decoded::SizedOnly },
+        if form_known_to_model {
+            Decoded::Modelled {
+                operand_words: words,
+            }
+        } else {
+            Decoded::SizedOnly
+        },
     )
 }
 
@@ -169,7 +175,10 @@ pub fn may_cpu_move(len: u64, names_real_vidmem: bool) -> Result<(), CpuMoveRefu
         return Err(CpuMoveRefusal::NamesRealVidmem);
     }
     if len > CPU_MOVE_MAX_BYTES {
-        return Err(CpuMoveRefusal::TooLarge { want: len, max: CPU_MOVE_MAX_BYTES });
+        return Err(CpuMoveRefusal::TooLarge {
+            want: len,
+            max: CPU_MOVE_MAX_BYTES,
+        });
     }
     Ok(())
 }

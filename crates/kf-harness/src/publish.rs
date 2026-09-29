@@ -7,7 +7,7 @@
 //! (`PlacedRows`) — the CPU record a reader needs, which the walk's diff cannot provide.
 
 use kf_cuda::walk::{WalkEntry, WalkKernel};
-use kf_mem::apply::{ApplyCfg, Applied, DiffRun, apply_entry};
+use kf_mem::apply::{Applied, ApplyCfg, DiffRun, apply_entry};
 use kf_mem::ledger::{Desired, MapTarget, Mapped};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -22,7 +22,10 @@ pub struct Recorded<T: MapTarget> {
 impl<T: MapTarget> Recorded<T> {
     /// Wrap `inner`.
     pub fn new(inner: T) -> Self {
-        Recorded { inner, rows: RefCell::new(BTreeMap::new()) }
+        Recorded {
+            inner,
+            rows: RefCell::new(BTreeMap::new()),
+        }
     }
 
     /// Where `[va, va+len)` lives in OUR placements: `(ram, offset)` when one row covers it.
@@ -72,7 +75,9 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
         let removed: Vec<(u64, (u64, u64, bool))> = {
             let mut r = self.rows.borrow_mut();
             let keys: Vec<u64> = r.range(va..end).map(|(&k, _)| k).collect();
-            keys.into_iter().filter_map(|k| r.remove(&k).map(|v| (k, v))).collect()
+            keys.into_iter()
+                .filter_map(|k| r.remove(&k).map(|v| (k, v)))
+                .collect()
         };
         let res = self.inner.unmap_range(va, len, defer);
         if res.is_err() {
@@ -109,7 +114,11 @@ impl<'a> Batching<'a> {
     /// Batch over `vas`, stitching from `ram_fd`.
     #[must_use]
     pub fn new(vas: kf_mem::ledger::HostVas<'a>, ram_fd: std::os::fd::BorrowedFd<'a>) -> Self {
-        Batching { bv: kf_mem::batch::BatchedVas::new(vas), ram_fd, lens: RefCell::new(BTreeMap::new()) }
+        Batching {
+            bv: kf_mem::batch::BatchedVas::new(vas),
+            ram_fd,
+            lens: RefCell::new(BTreeMap::new()),
+        }
     }
 }
 
@@ -172,13 +181,17 @@ pub fn publish(
     store_bytes: u64,
     ram_offset: &dyn Fn(u64, u64) -> Option<u64>,
 ) -> Result<Published, String> {
-    walk.submit(&[WalkEntry { pdb: root, slot }]).map_err(|e| e.to_string())?;
+    walk.submit(&[WalkEntry { pdb: root, slot }])
+        .map_err(|e| e.to_string())?;
     let c = walk.wait(10_000).map_err(|e| e.to_string())?;
     let r = &c.report;
     r.validate().map_err(|e| format!("report: {e}"))?;
     r.require_diff().map_err(|e| format!("report: {e}"))?;
     if r.truncated() {
-        return Err(format!("report TRUNCATED (flags={:#x} refuse_mask={:#x})", r.header.flags, r.header.refuse_mask));
+        return Err(format!(
+            "report TRUNCATED (flags={:#x} refuse_mask={:#x})",
+            r.header.flags, r.header.refuse_mask
+        ));
     }
     let e = r.pdbs.first().ok_or("report: no entry")?;
     let first = e.first_run as usize;
@@ -199,6 +212,11 @@ pub fn publish(
     );
     let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; r.runs.len()];
     codes[first..first + applied.codes.len()].copy_from_slice(&applied.codes);
-    walk.ack(r.header.generation, codes).map_err(|e| e.to_string())?;
-    Ok(Published { runs: runs.len(), applied, gpu_us: c.gpu_us })
+    walk.ack(r.header.generation, codes)
+        .map_err(|e| e.to_string())?;
+    Ok(Published {
+        runs: runs.len(),
+        applied,
+        gpu_us: c.gpu_us,
+    })
 }

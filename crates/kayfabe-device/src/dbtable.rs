@@ -580,7 +580,6 @@ impl DoorbellHistogram {
     }
 }
 
-
 /// ★★★★★ **w801 — WHICH TOKENS TOOK WHICH DISPOSITION, NOT JUST HOW MANY.**
 ///
 /// # ⊘⊘⊘ Why a per-token ledger and not another counter

@@ -112,9 +112,13 @@ impl UsermodeMmio {
         let end = at.checked_add(len)?;
         let within = |b: u64, l: u64| at >= b && end <= b + l && len > 0;
         Some(if within(self.vf_base, self.vf_len) {
-            UsermodeLeaf::User { vf_rel: at - self.vf_base }
+            UsermodeLeaf::User {
+                vf_rel: at - self.vf_base,
+            }
         } else if within(self.priv_base, self.priv_len) {
-            UsermodeLeaf::Priv { priv_off: at - self.priv_base }
+            UsermodeLeaf::Priv {
+                priv_off: at - self.priv_base,
+            }
         } else {
             UsermodeLeaf::Stray
         })
@@ -128,7 +132,11 @@ mod tests {
     #[test]
     fn only_hopper_and_blackwell_map_the_usermode_page_as_internal_mmio() {
         for f in [Family::Turing, Family::Ampere, Family::Ada] {
-            assert_eq!(f.usermode_mmio(), None, "{f:?}: kfifoConstructUsermodeMemdescs_GV100 builds no BAR1 memdesc");
+            assert_eq!(
+                f.usermode_mmio(),
+                None,
+                "{f:?}: kfifoConstructUsermodeMemdescs_GV100 builds no BAR1 memdesc"
+            );
         }
         for f in [Family::Hopper, Family::Blackwell] {
             let u = f.usermode_mmio().expect("GH100 HAL");
@@ -141,12 +149,27 @@ mod tests {
     fn the_gh100_pte_of_the_bar1_doorbell_view_classifies_as_the_user_page() {
         let u = Family::Hopper.usermode_mmio().unwrap();
         // The 16 4-KiB PTEs RM writes for pBar1VF: SYS_COH, kind 0xF, address 0x30000..0x3F000.
-        assert_eq!(u.classify(2, 0x0F, 0x30000, 0x10000), Some(UsermodeLeaf::User { vf_rel: 0 }));
-        assert_eq!(u.classify(2, 0x0F, 0x35000, 0x1000), Some(UsermodeLeaf::User { vf_rel: 0x5000 }));
+        assert_eq!(
+            u.classify(2, 0x0F, 0x30000, 0x10000),
+            Some(UsermodeLeaf::User { vf_rel: 0 })
+        );
+        assert_eq!(
+            u.classify(2, 0x0F, 0x35000, 0x1000),
+            Some(UsermodeLeaf::User { vf_rel: 0x5000 })
+        );
         // The PRIV view, and a leaf crossing out of the user page.
-        assert_eq!(u.classify(2, 0x0F, 0x2000, 0x1000), Some(UsermodeLeaf::Priv { priv_off: 0x2000 }));
-        assert_eq!(u.classify(2, 0x0F, 0x3F000, 0x2000), Some(UsermodeLeaf::Stray));
-        assert_eq!(u.classify(2, 0x0F, 0x10_0000, 0x1000), Some(UsermodeLeaf::Stray));
+        assert_eq!(
+            u.classify(2, 0x0F, 0x2000, 0x1000),
+            Some(UsermodeLeaf::Priv { priv_off: 0x2000 })
+        );
+        assert_eq!(
+            u.classify(2, 0x0F, 0x3F000, 0x2000),
+            Some(UsermodeLeaf::Stray)
+        );
+        assert_eq!(
+            u.classify(2, 0x0F, 0x10_0000, 0x1000),
+            Some(UsermodeLeaf::Stray)
+        );
     }
 
     #[test]
@@ -173,19 +196,40 @@ mod hwref_check {
     fn the_usermode_row_is_its_die_groups_header() {
         for g in DieGroup::ALL {
             let Some(u) = g.family().usermode_mmio() else {
-                assert!(matches!(g, DieGroup::Tu10x | DieGroup::Ga100 | DieGroup::Ga10x | DieGroup::Ad10x));
+                assert!(matches!(
+                    g,
+                    DieGroup::Tu10x | DieGroup::Ga100 | DieGroup::Ga10x | DieGroup::Ad10x
+                ));
                 continue;
             };
-            assert_eq!((u.vf_base, u.vf_len), (base(g, "NV_VIRTUAL_FUNCTION"), len(g, "NV_VIRTUAL_FUNCTION")), "{g:?}");
+            assert_eq!(
+                (u.vf_base, u.vf_len),
+                (
+                    base(g, "NV_VIRTUAL_FUNCTION"),
+                    len(g, "NV_VIRTUAL_FUNCTION")
+                ),
+                "{g:?}"
+            );
             assert_eq!(u.vf_len, class_val("NVC361_NV_USERMODE__SIZE"));
             assert_eq!(
                 (u.priv_base, u.priv_len),
-                (base(g, "NV_VIRTUAL_FUNCTION_PRIV"), len(g, "NV_VIRTUAL_FUNCTION_PRIV")),
+                (
+                    base(g, "NV_VIRTUAL_FUNCTION_PRIV"),
+                    len(g, "NV_VIRTUAL_FUNCTION_PRIV")
+                ),
                 "{g:?}"
             );
             assert_eq!(u.doorbell, class_val("NVC361_NOTIFY_CHANNEL_PENDING"));
-            assert_eq!(u64::from(u.aperture), val(g, "NV_MMU_VER3_PTE_APERTURE_SYSTEM_COHERENT_MEMORY"), "{g:?}");
-            assert_eq!(u64::from(u.kind), val(g, "NV_MMU_PTE_KIND_SMSKED_MESSAGE"), "{g:?}");
+            assert_eq!(
+                u64::from(u.aperture),
+                val(g, "NV_MMU_VER3_PTE_APERTURE_SYSTEM_COHERENT_MEMORY"),
+                "{g:?}"
+            );
+            assert_eq!(
+                u64::from(u.kind),
+                val(g, "NV_MMU_PTE_KIND_SMSKED_MESSAGE"),
+                "{g:?}"
+            );
         }
     }
 }

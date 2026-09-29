@@ -17,7 +17,10 @@ use kf_rm::HostFacts;
 use kf_rm::hostfacts::{self, FactRefusal};
 
 fn unhex(s: &str) -> Vec<u8> {
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).expect("hex")).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).expect("hex"))
+        .collect()
 }
 
 /// `rmladder_r24_pcemask_real_ga106.txt`: LCE0..3 answer, LCE4 is refused `Other(86)`.
@@ -30,8 +33,11 @@ fn lce_pce_masks_derived_from_the_real_ga106_equal_the_captured_row() {
         unhex("0b00000010000000"),
         unhex("0c00000020000000"),
     ];
-    let replies: Vec<Option<&[u8]>> =
-        lce.iter().map(|v| Some(v.as_slice())).chain(std::iter::once(None)).collect();
+    let replies: Vec<Option<&[u8]>> = lce
+        .iter()
+        .map(|v| Some(v.as_slice()))
+        .chain(std::iter::once(None))
+        .collect();
     let derived = hostfacts::derive_lce_pce_masks(&replies).expect("four LCEs answer");
     assert_eq!(derived, kf_abi::cepce::GA106_LCE_PCE_MASKS);
     assert_eq!(derived, ga106::host_facts().lce_pce_masks);
@@ -39,13 +45,17 @@ fn lce_pce_masks_derived_from_the_real_ga106_equal_the_captured_row() {
 
 #[test]
 fn a_host_that_refuses_lce0_is_a_named_refusal_not_an_empty_list() {
-    assert_eq!(hostfacts::derive_lce_pce_masks(&[None]), Err(FactRefusal::NoCopyEngine));
+    assert_eq!(
+        hostfacts::derive_lce_pce_masks(&[None]),
+        Err(FactRefusal::NoCopyEngine)
+    );
 }
 
 /// `fmb_real_ga106.txt`: `0x20802a08 -> status=0x0 params.size=20480`.
 #[test]
 fn the_fault_method_buffer_size_derived_from_the_real_ga106_equals_the_captured_row() {
-    let derived = hostfacts::derive_ce_fault_method_buffer_size(&20480u32.to_le_bytes()).expect("nonzero");
+    let derived =
+        hostfacts::derive_ce_fault_method_buffer_size(&20480u32.to_le_bytes()).expect("nonzero");
     assert_eq!(derived, kf_abi::fmbsize::GA106_CE_FAULT_METHOD_BUFFER_SIZE);
     assert_eq!(derived, ga106::host_facts().ce_fault_method_buffer_size);
 }
@@ -54,7 +64,10 @@ fn the_fault_method_buffer_size_derived_from_the_real_ga106_equals_the_captured_
 fn a_zero_fault_method_buffer_size_is_refused() {
     assert!(matches!(
         hostfacts::derive_ce_fault_method_buffer_size(&[0; 4]),
-        Err(FactRefusal::Unservable { cmd: 0x2080_2a08, .. })
+        Err(FactRefusal::Unservable {
+            cmd: 0x2080_2a08,
+            ..
+        })
     ));
 }
 
@@ -68,7 +81,8 @@ fn the_ce_geometry_from_the_engine_rows_names_the_lces_the_real_ga106_reports_pr
     reply[kf_abi::cecaps::PRESENT_OFF] = 0x0f;
     let host_present = hostfacts::derive_ce_present_mask(&reply).expect("136 bytes");
     let caps = hostfacts::derive_ce_caps(&reply).expect("136 bytes");
-    let geometry = kf_abi::cecaps::CeGeometry::from_engines(&ga106::host_facts().engines, &caps).expect("engines decode");
+    let geometry = kf_abi::cecaps::CeGeometry::from_engines(&ga106::host_facts().engines, &caps)
+        .expect("engines decode");
     assert_eq!(host_present, 0x0f);
     assert_eq!(geometry.present, host_present);
     // ★ The GRCE set the engine table lays out is the host's own: {LCE0, LCE1} on a GA106 —
@@ -92,7 +106,10 @@ fn the_vbios_version_is_read_from_the_hosts_bios_info() {
     put(&mut r, 0, 1);
     assert_eq!(
         hostfacts::derive_vbios_version(&r),
-        Err(FactRefusal::Missing { cmd: 0x2080_0810, index: 1 })
+        Err(FactRefusal::Missing {
+            cmd: 0x2080_0810,
+            index: 1
+        })
     );
 }
 
@@ -132,7 +149,10 @@ fn the_memory_geometry_derived_from_the_real_ga106_equals_the_captured_row() {
 fn a_missing_fb_index_is_named() {
     assert_eq!(
         hostfacts::derive_fb_geometry(&[(0x1b, 1), (0x0d, 0x11)]).map(|_| ()),
-        Err(FactRefusal::Missing { cmd: 0x2080_1303, index: 0x22 })
+        Err(FactRefusal::Missing {
+            cmd: 0x2080_1303,
+            index: 0x22
+        })
     );
 }
 
@@ -140,7 +160,10 @@ fn a_missing_fb_index_is_named() {
 #[test]
 fn the_family_derived_from_the_real_ga106_is_ampere() {
     let out = unhex("7001000006000000a100000000000000");
-    assert_eq!(hostfacts::derive_family(&out), Ok(ga106::host_facts().family));
+    assert_eq!(
+        hostfacts::derive_family(&out),
+        Ok(ga106::host_facts().family)
+    );
 }
 
 /// `cuinit_ioctl_trace_real_ga106.txt`: `0x20800110` and `0x20800111`. ⊘ The old row served NO
@@ -154,7 +177,10 @@ fn the_name_derived_from_the_real_ga106_is_the_hosts_own_string() {
     let sn = hostfacts::derive_gpu_name(0x2080_0111, &short, 0).expect("ASCII");
     assert_eq!(n.as_str(), "NVIDIA GeForce RTX 3060");
     assert_eq!(sn.as_str(), "GA106-A");
-    assert!(hostfacts::derive_gpu_name(0x2080_0110, &[0x41; 8], 0).is_err(), "unterminated");
+    assert!(
+        hostfacts::derive_gpu_name(0x2080_0110, &[0x41; 8], 0).is_err(),
+        "unterminated"
+    );
 }
 
 /// ★ Every field has exactly one provenance row. The destructure is exhaustive (no `..`), so a
@@ -201,18 +227,55 @@ fn every_host_fact_states_where_it_comes_from() {
         video_caps: _,
     } = ga106::host_facts();
     let fields = [
-        "family", "has_c2c", "ce_caps", "engines", "lce_pce_masks", "intr_table", "intr_subtree_map",
-        "chip_info", "user_register_access_map", "constructed_falcons", "memory_system",
-        "device_info", "conf_compute", "bif_static", "fifo_channels", "gmmu_static", "gr_static",
-        "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes", "forwarded_fb_extra", "gpu_cache_info", "gr_sm_issue_rate_modifier", "forwarded_gpu_info", "forwarded_fb_info", "smc_mode", "pcie_max_gen",
-        "ce_fault_method_buffer_size", "gsp_features", "gpu_name", "gpu_short_name",
-        "vbios_version", "perf_level_info_v2", "gss_replay", "video_caps",
+        "family",
+        "has_c2c",
+        "ce_caps",
+        "engines",
+        "lce_pce_masks",
+        "intr_table",
+        "intr_subtree_map",
+        "chip_info",
+        "user_register_access_map",
+        "constructed_falcons",
+        "memory_system",
+        "device_info",
+        "conf_compute",
+        "bif_static",
+        "fifo_channels",
+        "gmmu_static",
+        "gr_static",
+        "gr_info",
+        "gr_context_buffers",
+        "gr_zcull_info",
+        "zbc_table_sizes",
+        "forwarded_fb_extra",
+        "gpu_cache_info",
+        "gr_sm_issue_rate_modifier",
+        "forwarded_gpu_info",
+        "forwarded_fb_info",
+        "smc_mode",
+        "pcie_max_gen",
+        "ce_fault_method_buffer_size",
+        "gsp_features",
+        "gpu_name",
+        "gpu_short_name",
+        "vbios_version",
+        "perf_level_info_v2",
+        "gss_replay",
+        "video_caps",
     ];
     for f in fields {
-        let n = hostfacts::PROVENANCE.iter().filter(|(name, _)| *name == f).count();
+        let n = hostfacts::PROVENANCE
+            .iter()
+            .filter(|(name, _)| *name == f)
+            .count();
         assert_eq!(n, 1, "{f} has {n} provenance rows");
     }
-    assert_eq!(hostfacts::PROVENANCE.len(), fields.len(), "a provenance row names no field");
+    assert_eq!(
+        hostfacts::PROVENANCE.len(),
+        fields.len(),
+        "a provenance row names no field"
+    );
 }
 
 /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): a floorswept LCE is a HOLE, not the end of the
@@ -225,7 +288,8 @@ fn a_floorswept_lce_is_a_hole_not_the_end_of_the_list() {
         v
     };
     let (l0, l1, l4, l5) = (m(0x9, 0x1), m(0xa, 0x2), m(0xd, 0x4), m(0xe, 0x8));
-    let replies: Vec<Option<&[u8]>> = vec![Some(&l0), Some(&l1), None, None, Some(&l4), Some(&l5), None];
+    let replies: Vec<Option<&[u8]>> =
+        vec![Some(&l0), Some(&l1), None, None, Some(&l4), Some(&l5), None];
     let masks = hostfacts::derive_lce_pce_masks(&replies).expect("holes are not the end");
     assert_eq!(masks, vec![0x1, 0x2, 0, 0, 0x4, 0x8]);
     let present = 0b11_0011u64;
@@ -234,9 +298,26 @@ fn a_floorswept_lce_is_a_hole_not_the_end_of_the_list() {
         req.extend_from_slice(&[0; 4]);
         kf_abi::cepce::answer_ce_get_ce_pce_mask(&req, present, &masks)
     };
-    assert_eq!(kf_abi::cepce::decode_ce_pce_mask(&ask(0xd).expect("COPY4 served")).unwrap(), 0x4);
+    assert_eq!(
+        kf_abi::cepce::decode_ce_pce_mask(&ask(0xd).expect("COPY4 served")).unwrap(),
+        0x4
+    );
     assert!(ask(0xb).is_err(), "COPY2 is not present");
     // A present LCE whose row is a hole is refused, never served as zero.
-    let err = kf_abi::cepce::answer_ce_get_ce_pce_mask(&{ let mut r = 0xbu32.to_le_bytes().to_vec(); r.extend_from_slice(&[0; 4]); r }, present | 0b100, &masks);
-    assert!(matches!(err, Err(kf_abi::cepce::CePceMaskError::NoMaskForEngine { .. })), "{err:?}");
+    let err = kf_abi::cepce::answer_ce_get_ce_pce_mask(
+        &{
+            let mut r = 0xbu32.to_le_bytes().to_vec();
+            r.extend_from_slice(&[0; 4]);
+            r
+        },
+        present | 0b100,
+        &masks,
+    );
+    assert!(
+        matches!(
+            err,
+            Err(kf_abi::cepce::CePceMaskError::NoMaskForEngine { .. })
+        ),
+        "{err:?}"
+    );
 }

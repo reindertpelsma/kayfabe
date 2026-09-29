@@ -112,7 +112,11 @@ const FSP_BOOT_COMPLETE_SUCCESS: u32 = 0xFF;
 /// (`hopper/gh100/dev_therm.h:26`, `blackwell/gb100/dev_therm.h:27`).
 #[must_use]
 pub const fn therm_i2cs_scratch(architecture: u32) -> u64 {
-    if architecture == crate::arch::GB200 { 0x00AD_00BC } else { 0x0002_00BC }
+    if architecture == crate::arch::GB200 {
+        0x00AD_00BC
+    } else {
+        0x0002_00BC
+    }
 }
 /// Access-counter notify buffer: two pages of 32-byte entries — advertised, never written (the old
 /// tree's `resume_from_fault.md` §S2 ruling: migration heuristics simply never fire).
@@ -152,7 +156,9 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             off: NV_PMC_BOOT_1,
             value: 0,
             name: "NV_PMC_BOOT_1",
-            from: Provenance::Ogkm("VGPU = REAL: this device advertises no virtualization of its own"),
+            from: Provenance::Ogkm(
+                "VGPU = REAL: this device advertises no virtualization of its own",
+            ),
         },
         BootReg {
             off: NV_PMC_BOOT_42,
@@ -170,7 +176,9 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             off: NV_VF_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE,
             value: ACCESS_COUNTER_ENTRIES_ADVERTISED,
             name: "NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE",
-            from: Provenance::Advertised("uvmInitializeAccessCntrBuffer refuses a zero size; nothing is ever written"),
+            from: Provenance::Advertised(
+                "uvmInitializeAccessCntrBuffer refuses a zero size; nothing is ever written",
+            ),
         },
     ];
     if !matches!(family, Family::Turing) {
@@ -206,7 +214,9 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             off: therm_i2cs_scratch(f.architecture),
             value: FSP_BOOT_COMPLETE_SUCCESS,
             name: "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE",
-            from: Provenance::Ogkm("kfspWaitForSecureBoot_{GH100,GB100,GB202}: FSP boot complete = 0xFF"),
+            from: Provenance::Ogkm(
+                "kfspWaitForSecureBoot_{GH100,GB100,GB202}: FSP boot complete = 0xFF",
+            ),
         });
     }
     // ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): in a VM RM takes the PASSTHROUGH branch of
@@ -217,7 +227,8 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
     // link capabilities `config_words` presents at `0x6C` are ALSO served at `0x9206C` — the XVE
     // mirror GA10x reads at `0x88084`, one family later. `[measured bws2]` without it UVM still saw
     // "Unknown PCIe speed". ⊘ GB10x binds `_GB100` = a real config cycle; nothing to mirror.
-    if matches!(family, Family::Hopper | Family::Blackwell) && f.architecture != crate::arch::GB100 {
+    if matches!(family, Family::Hopper | Family::Blackwell) && f.architecture != crate::arch::GB100
+    {
         v.push(BootReg {
             off: NV_EP_PCFGM + u64::from(NV_EP_PCFG_GPU_LINK_CAPABILITIES),
             value: f.pcie_link_caps,
@@ -235,7 +246,9 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             off: NV_PGC6_BSI_VPR_SECURE_SCRATCH_15,
             value: SCRUBBER_HANDOFF_DONE,
             name: "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15",
-            from: Provenance::Advertised("kgspExecuteScrubberIfNeeded_AD102 skips the SEC2 scrubber when HANDOFF >= DONE"),
+            from: Provenance::Advertised(
+                "kgspExecuteScrubberIfNeeded_AD102 skips the SEC2 scrubber when HANDOFF >= DONE",
+            ),
         });
     }
     v
@@ -431,13 +444,21 @@ mod hwref_check {
             DieGroup::Gb10x => (crate::arch::GB100, 0),
             DieGroup::Gb20x => (crate::arch::GB200, 3),
         };
-        Bar0Facts { architecture, implementation, revision: 0xA1, fb_mb: 8192, pcie_link_caps: 0x0040_4103 }
+        Bar0Facts {
+            architecture,
+            implementation,
+            revision: 0xA1,
+            fb_mb: 8192,
+            pcie_link_caps: 0x0040_4103,
+        }
     }
 
     /// Rows served to a die group whose own code never reads them — an unread shadow word, named.
-    const UNREAD: &[(DieGroup, &str, &str)] = &[
-        (DieGroup::Ga100, "NV_USABLE_FB_SIZE_IN_MB", "GA100 binds kmemsysReadUsableFbSize_GP102 (g_kern_mem_sys_nvoc.c:349-352)"),
-    ];
+    const UNREAD: &[(DieGroup, &str, &str)] = &[(
+        DieGroup::Ga100,
+        "NV_USABLE_FB_SIZE_IN_MB",
+        "GA100 binds kmemsysReadUsableFbSize_GP102 (g_kern_mem_sys_nvoc.c:349-352)",
+    )];
 
     #[test]
     fn every_boot_register_sits_at_its_die_groups_header_offset() {
@@ -449,9 +470,14 @@ mod hwref_check {
                     }
                     "NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE" => Some(
                         base(g, "NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET")
-                            + val(g, "NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE"),
+                            + val(
+                                g,
+                                "NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE",
+                            ),
                     ),
-                    "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE" => Some(val(g, "NV_THERM_I2CS_SCRATCH")),
+                    "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE" => {
+                        Some(val(g, "NV_THERM_I2CS_SCRATCH"))
+                    }
                     "NV_EP_PCFGM + NV_EP_PCFG_GPU_LINK_CAPABILITIES" => {
                         Some(base(g, "NV_EP_PCFGM") + val(g, "NV_EP_PCFG_GPU_LINK_CAPABILITIES"))
                     }
@@ -476,28 +502,56 @@ mod hwref_check {
         for g in DieGroup::ALL {
             assert_eq!(range(g, "NV_PMC_BOOT_0_ARCHITECTURE_0"), (28, 24));
             assert_eq!(range(g, "NV_PMC_BOOT_0_IMPLEMENTATION"), (23, 20));
-            assert_eq!((range(g, "NV_PMC_BOOT_0_MAJOR_REVISION"), range(g, "NV_PMC_BOOT_0_MINOR_REVISION")), ((7, 4), (3, 0)));
+            assert_eq!(
+                (
+                    range(g, "NV_PMC_BOOT_0_MAJOR_REVISION"),
+                    range(g, "NV_PMC_BOOT_0_MINOR_REVISION")
+                ),
+                ((7, 4), (3, 0))
+            );
             assert_eq!(range(g, "NV_PMC_BOOT_42_ARCHITECTURE"), (29, 24));
             assert_eq!(range(g, "NV_PMC_BOOT_42_IMPLEMENTATION"), (23, 20));
             assert_eq!(range(g, "NV_PMC_BOOT_42_MAJOR_REVISION"), (19, 16));
             assert_eq!(range(g, "NV_PMC_BOOT_42_MINOR_REVISION"), (15, 12));
-            assert_eq!(val(g, "NV_PMC_BOOT_1_VGPU_REAL"), 0, "BOOT_1 = 0 advertises VGPU = REAL");
+            assert_eq!(
+                val(g, "NV_PMC_BOOT_1_VGPU_REAL"),
+                0,
+                "BOOT_1 = 0 advertises VGPU = REAL"
+            );
         }
         // ⚠ `pmc_boot_0` writes the architecture's low five bits at 28:24 only; `NV_PMC_BOOT_0_
         // ARCHITECTURE_1` (8:8) holds a sixth. Every architecture ogkm-580 names fits in five.
-        assert_eq!(range(DieGroup::Gb20x, "NV_PMC_BOOT_0_ARCHITECTURE_1"), (8, 8));
+        assert_eq!(
+            range(DieGroup::Gb20x, "NV_PMC_BOOT_0_ARCHITECTURE_1"),
+            (8, 8)
+        );
         assert!(val(DieGroup::Gb20x, "NV_PMC_BOOT_0_ARCHITECTURE_GB200") <= 0x1F);
         // LOCAL_MEMORY_RANGE (TU10x, GA100: `_GP102`): scale 3:0, mag 9:4.
         for g in [DieGroup::Tu10x, DieGroup::Ga100] {
-            assert_eq!(range(g, "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_LOWER_SCALE"), (3, 0));
-            assert_eq!(range(g, "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_LOWER_MAG"), (9, 4));
+            assert_eq!(
+                range(g, "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_LOWER_SCALE"),
+                (3, 0)
+            );
+            assert_eq!(
+                range(g, "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_LOWER_MAG"),
+                (9, 4)
+            );
         }
         // Ada's scrubber handoff: 31:29, DONE = 3.
         let g = DieGroup::Ad10x;
-        assert_eq!(range(g, "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15_SCRUBBER_HANDOFF"), (31, 29));
-        assert_eq!(u64::from(SCRUBBER_HANDOFF_DONE), val(g, "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15_SCRUBBER_HANDOFF_DONE") << 29);
+        assert_eq!(
+            range(g, "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15_SCRUBBER_HANDOFF"),
+            (31, 29)
+        );
+        assert_eq!(
+            u64::from(SCRUBBER_HANDOFF_DONE),
+            val(g, "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15_SCRUBBER_HANDOFF_DONE") << 29
+        );
         for g in [DieGroup::Gh100, DieGroup::Gb10x, DieGroup::Gb20x] {
-            assert_eq!(u64::from(FSP_BOOT_COMPLETE_SUCCESS), val(g, "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE_STATUS_SUCCESS"));
+            assert_eq!(
+                u64::from(FSP_BOOT_COMPLETE_SUCCESS),
+                val(g, "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE_STATUS_SUCCESS")
+            );
         }
     }
 
@@ -508,7 +562,9 @@ mod hwref_check {
             let want = match g {
                 DieGroup::Tu10x | DieGroup::Ga100 | DieGroup::Ga10x | DieGroup::Ad10x => None,
                 DieGroup::Gb10x => Some(val(g, "NV_PF0_LINK_CAPABILITIES")),
-                DieGroup::Gh100 | DieGroup::Gb20x => Some(val(g, "NV_EP_PCFG_GPU_LINK_CAPABILITIES")),
+                DieGroup::Gh100 | DieGroup::Gb20x => {
+                    Some(val(g, "NV_EP_PCFG_GPU_LINK_CAPABILITIES"))
+                }
             };
             assert_eq!(words.first().map(|w| u64::from(w.off)), want, "{g:?}");
         }

@@ -47,9 +47,9 @@ use kf_abi::l2evict::{
     L2_INVALIDATE_EVICT_PARAMS_SIZE, NV2080_CTRL_CMD_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
+use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_rm::sweep::{SWEEP_TRIAGE, SweepDisposition};
-use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 
 /// `RpcControlReq::HEADER` — `cap1b`'s own arithmetic: `paylen 44 - 4 = 40`.
 const PARAMS_AT: usize = 40;
@@ -61,7 +61,11 @@ const CONTROL_STATUS_OFF: usize = 12;
 const CONTROL_PARAMS_SIZE_OFF: usize = 16;
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` carrying an L2 invalidate/evict.

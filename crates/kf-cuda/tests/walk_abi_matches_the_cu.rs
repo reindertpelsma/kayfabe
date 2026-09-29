@@ -119,7 +119,15 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
          #define KF_MAX_PDB_L {kf_max_pdb_l}\n#define KF_MAX_SLOTS {kf_max_slots}\n"
     ));
     // The report ABI lives in the header; the launch ABI lives in the .cu.
-    for name in ["KfReportHeader", "KfPdbEntry", "KfMapRun", "KfScope", "KfSlot", "KfAck", "KfLayout"] {
+    for name in [
+        "KfReportHeader",
+        "KfPdbEntry",
+        "KfMapRun",
+        "KfScope",
+        "KfSlot",
+        "KfAck",
+        "KfLayout",
+    ] {
         prog.push_str(&extract_struct(&h, name));
         prog.push('\n');
     }
@@ -642,7 +650,11 @@ fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
 /// ★ Hopper and Blackwell's format, pinned the same way (w826: every family first-class).
 #[test]
 fn the_rust_ver3_descriptor_matches_the_cu_byte_for_byte() {
-    assert_descriptor_matches("kf_format_ver3_untested", &kf_cuda::abi::kf_format_ver3(), "VER3");
+    assert_descriptor_matches(
+        "kf_format_ver3_untested",
+        &kf_cuda::abi::kf_format_ver3(),
+        "VER3",
+    );
 }
 
 fn assert_descriptor_matches(cu_fn: &str, rust: &kf_cuda::abi::KfFormat, tag: &str) {
@@ -853,10 +865,22 @@ fn the_report_constants_match_the_header() {
     );
     assert_eq!(parse("KFWR_HF_DIFF"), u64::from(kf_cuda::abi::KFWR_HF_DIFF));
     assert_eq!(parse("KFWR_RF_HELD"), u64::from(kf_cuda::abi::KFWR_RF_HELD));
-    assert_eq!(parse("KFWR_RF_READ_ONLY"), u64::from(kf_cuda::abi::KFWR_RF_READ_ONLY));
-    assert_eq!(parse("KFWR_RF_ATOMIC_DISABLE"), u64::from(kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE));
-    assert_eq!(parse("KFWR_RF_VOLATILE"), u64::from(kf_cuda::abi::KFWR_RF_VOLATILE));
-    assert_eq!(parse("KFWR_RF_PRIVILEGE"), u64::from(kf_cuda::abi::KFWR_RF_PRIVILEGE));
+    assert_eq!(
+        parse("KFWR_RF_READ_ONLY"),
+        u64::from(kf_cuda::abi::KFWR_RF_READ_ONLY)
+    );
+    assert_eq!(
+        parse("KFWR_RF_ATOMIC_DISABLE"),
+        u64::from(kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE)
+    );
+    assert_eq!(
+        parse("KFWR_RF_VOLATILE"),
+        u64::from(kf_cuda::abi::KFWR_RF_VOLATILE)
+    );
+    assert_eq!(
+        parse("KFWR_RF_PRIVILEGE"),
+        u64::from(kf_cuda::abi::KFWR_RF_PRIVILEGE)
+    );
     // ★ The flags word's named RANGES (`KFWR_RF_*_{SHIFT,MASK}`), which every Rust reader goes
     // through (`kf_cuda::abi::RF_*`) instead of restating a shift.
     for (n, r) in [
@@ -918,38 +942,54 @@ fn the_report_constants_match_the_header() {
             body = format!("{}{}", body.trim_end().trim_end_matches('\\'), second);
         }
         let body = body.trim().trim_start_matches('(').trim_end_matches(')');
-        body.split('|').map(|n| u32::try_from(parse(n.trim())).expect("a flag")).fold(0, |a, b| a | b)
+        body.split('|')
+            .map(|n| u32::try_from(parse(n.trim())).expect("a flag"))
+            .fold(0, |a, b| a | b)
     };
-    assert_eq!(or_of("KFWR_RF_KEY_PERM_ALL"), kf_cuda::abi::KFWR_RF_KEY_PERM_ALL, "KFWR_RF_KEY_PERM_ALL differs");
-    assert_eq!(or_of("KFWR_RF_KEY_PERM_DEFAULT"), kf_cuda::abi::KFWR_RF_KEY_PERM_DEFAULT, "KFWR_RF_KEY_PERM_DEFAULT differs");
+    assert_eq!(
+        or_of("KFWR_RF_KEY_PERM_ALL"),
+        kf_cuda::abi::KFWR_RF_KEY_PERM_ALL,
+        "KFWR_RF_KEY_PERM_ALL differs"
+    );
+    assert_eq!(
+        or_of("KFWR_RF_KEY_PERM_DEFAULT"),
+        kf_cuda::abi::KFWR_RF_KEY_PERM_DEFAULT,
+        "KFWR_RF_KEY_PERM_DEFAULT differs"
+    );
     assert_eq!(
         kf_cuda::abi::KFWR_RF_KEY_PERM_DEFAULT & kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE,
         0,
         "ATOMIC_DISABLE joins the key only under KF3_CARRY_ATOMIC_DISABLE"
     );
-    assert_eq!(parse("KFWR_V_PARTIAL"), u64::from(kf_cuda::abi::KFWR_V_PARTIAL));
-    assert_eq!(parse("KFWR_V_OVERFLOW"), u64::from(kf_cuda::abi::KFWR_V_OVERFLOW));
-    assert_eq!(parse("KFWR_V_REFUSED"), u64::from(kf_cuda::abi::KFWR_V_REFUSED));
-    assert_eq!(parse("KFWR_ACK_APPLIED"), u64::from(kf_cuda::abi::KFWR_ACK_APPLIED));
-    assert_eq!(parse("KFWR_ACK_HELD"), u64::from(kf_cuda::abi::KFWR_ACK_HELD));
+    assert_eq!(
+        parse("KFWR_V_PARTIAL"),
+        u64::from(kf_cuda::abi::KFWR_V_PARTIAL)
+    );
+    assert_eq!(
+        parse("KFWR_V_OVERFLOW"),
+        u64::from(kf_cuda::abi::KFWR_V_OVERFLOW)
+    );
+    assert_eq!(
+        parse("KFWR_V_REFUSED"),
+        u64::from(kf_cuda::abi::KFWR_V_REFUSED)
+    );
+    assert_eq!(
+        parse("KFWR_ACK_APPLIED"),
+        u64::from(kf_cuda::abi::KFWR_ACK_APPLIED)
+    );
+    assert_eq!(
+        parse("KFWR_ACK_HELD"),
+        u64::from(kf_cuda::abi::KFWR_ACK_HELD)
+    );
     assert_eq!(parse("KF_MAX_RESET"), kf_cuda::abi::KF_MAX_RESET as u64);
     assert_eq!(
         parse("KF_ABI_VERSION"),
         u64::from(kf_cuda::abi::KF_ABI_VERSION)
     );
-    assert_eq!(
-        parse("KF_TBL_VER2"),
-        u64::from(kf_cuda::abi::KF_TBL_VER2)
-    );
-    assert_eq!(
-        parse("KF_TBL_VER3"),
-        u64::from(kf_cuda::abi::KF_TBL_VER3)
-    );
+    assert_eq!(parse("KF_TBL_VER2"), u64::from(kf_cuda::abi::KF_TBL_VER2));
+    assert_eq!(parse("KF_TBL_VER3"), u64::from(kf_cuda::abi::KF_TBL_VER3));
     assert_eq!(parse("KF_MAX_PDB"), kf_cuda::abi::KF_MAX_PDB as u64);
-    assert_eq!(
-        parse("KF_MAX_SCOPE"),
-        kf_cuda::abi::KF_MAX_SCOPE as u64
-    );
+    assert_eq!(parse("KF_MAX_SCOPE"), kf_cuda::abi::KF_MAX_SCOPE as u64);
     for (n, r) in [
         ("KFWR_AP_VIDMEM", kf_cuda::abi::AP_VID),
         ("KFWR_AP_PEER", kf_cuda::abi::AP_PEER),

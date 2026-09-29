@@ -14,7 +14,10 @@ use kf_abi::submit::{SET_OBJECT, ce, method_header_inc};
 /// the same GPU in general (V3_MULTI_GPU_AUDIT §2 blocker 1).
 #[must_use]
 pub fn gate_gpu() -> kf_arch::ids::GpuId {
-    let minor = std::env::var("KF_GATE_GPU").ok().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+    let minor = std::env::var("KF_GATE_GPU")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
     kf_arch::ids::GpuId(minor)
 }
 
@@ -26,14 +29,23 @@ pub fn gate_gpu() -> kf_arch::ids::GpuId {
 pub fn gate_bdf() -> Result<String, String> {
     let minor = gate_gpu().0;
     let root = std::path::Path::new("/proc/driver/nvidia/gpus");
-    for e in std::fs::read_dir(root).map_err(|e| format!("{}: {e}", root.display()))?.flatten() {
+    for e in std::fs::read_dir(root)
+        .map_err(|e| format!("{}: {e}", root.display()))?
+        .flatten()
+    {
         let info = std::fs::read_to_string(e.path().join("information")).unwrap_or_default();
-        let m = info.lines().find_map(|l| l.strip_prefix("Device Minor:")).and_then(|v| v.trim().parse::<u32>().ok());
+        let m = info
+            .lines()
+            .find_map(|l| l.strip_prefix("Device Minor:"))
+            .and_then(|v| v.trim().parse::<u32>().ok());
         if m == Some(minor) {
             return Ok(e.file_name().to_string_lossy().to_lowercase());
         }
     }
-    Err(format!("no GPU with device minor {minor} under {}", root.display()))
+    Err(format!(
+        "no GPU with device minor {minor} under {}",
+        root.display()
+    ))
 }
 
 /// The CE subchannel every harness push uses.
@@ -203,25 +215,44 @@ impl CeRig {
     /// Any step's refusal, by name.
     pub fn new(rm: &kf_host::HostRm, space: kf_host::VaSpace) -> Result<CeRig, String> {
         use kf_abi::submit::ENGINE_TYPE_COPY0;
-        let ring = rm.alloc_device_local(RIG_RING_BYTES).map_err(|e| format!("ring obj: {e:?}"))?;
-        let ring_va = rm.map(space, ring, kf_host::MapBacking::Dedicated, 0, RIG_RING_BYTES, None, false).map_err(|e| format!("map ring: {e:?}"))?;
+        let ring = rm
+            .alloc_device_local(RIG_RING_BYTES)
+            .map_err(|e| format!("ring obj: {e:?}"))?;
+        let ring_va = rm
+            .map(
+                space,
+                ring,
+                kf_host::MapBacking::Dedicated,
+                0,
+                RIG_RING_BYTES,
+                None,
+                false,
+            )
+            .map_err(|e| format!("map ring: {e:?}"))?;
         let (ring_node, ring_cpu) = rm
             .map_cpu(ring, RIG_RING_BYTES, kf_linux_raw::CachePolicy::Uncached)
             .map_err(|e| format!("cpu ring: {e:?}"))?;
         let ev = rm.open_event_fd().map_err(|e| format!("event fd: {e:?}"))?;
         let chan = rm
-            .birth_channel(space, ENGINE_TYPE_COPY0, kf_host::RingSpec {
-                gp_fifo_va: ring_va + RIG_GPFIFO_OFF,
-                gp_fifo_entries: RIG_GPFIFO_ENTRIES,
-                userd_memory: ring,
-                userd_offset: RIG_USERD_OFF,
-                err_notifier: 0,
-            })
+            .birth_channel(
+                space,
+                ENGINE_TYPE_COPY0,
+                kf_host::RingSpec {
+                    gp_fifo_va: ring_va + RIG_GPFIFO_OFF,
+                    gp_fifo_entries: RIG_GPFIFO_ENTRIES,
+                    userd_memory: ring,
+                    userd_offset: RIG_USERD_OFF,
+                    err_notifier: 0,
+                },
+            )
             .map_err(|e| format!("birth: {e:?}"))?;
-        rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0).map_err(|e| format!("ce object: {e:?}"))?;
+        rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0)
+            .map_err(|e| format!("ce object: {e:?}"))?;
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
         let poller = kf_linux_raw::Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
-        poller.watch(ev.as_fd(), 1).map_err(|e| format!("watch: {e:?}"))?;
+        poller
+            .watch(ev.as_fd(), 1)
+            .map_err(|e| format!("watch: {e:?}"))?;
         let rig = CeRig {
             ring_cpu,
             _ring_node: ring_node,
@@ -244,7 +275,8 @@ impl CeRig {
     pub fn arm(&self, rm: &kf_host::HostRm, notify_index: u32) -> Result<(), String> {
         rm.alloc_os_event(rm.subdevice(), notify_index, true, &self.ev)
             .map_err(|e| format!("os event {notify_index}: {e:?}"))?;
-        rm.arm_repeat(notify_index).map_err(|e| format!("notify {notify_index}: {e:?}"))
+        rm.arm_repeat(notify_index)
+            .map_err(|e| format!("notify {notify_index}: {e:?}"))
     }
 
     /// The rig's channel.
@@ -268,7 +300,12 @@ impl CeRig {
             }
             let mut ready = kf_linux_raw::ReadyTokens::new();
             let t = u32::try_from(left.as_millis().max(1)).unwrap_or(u32::MAX);
-            if self.poller.wait(&mut ready, kf_linux_raw::PollTimeout::Millis(t)).map_err(|e| format!("wait: {e:?}"))? > 0 {
+            if self
+                .poller
+                .wait(&mut ready, kf_linux_raw::PollTimeout::Millis(t))
+                .map_err(|e| format!("wait: {e:?}"))?
+                > 0
+            {
                 wakes += 1;
             }
         }
@@ -278,7 +315,13 @@ impl CeRig {
     ///
     /// # Errors
     /// An encode, store or wait failure.
-    pub fn copy(&mut self, rm: &kf_host::HostRm, src_va: u64, dst_va: u64, len: u32) -> Result<Submitted, String> {
+    pub fn copy(
+        &mut self,
+        rm: &kf_host::HostRm,
+        src_va: u64,
+        dst_va: u64,
+        len: u32,
+    ) -> Result<Submitted, String> {
         self.submit(rm, src_va, dst_va, len, Trigger::HostNsi, 2000)
     }
 
@@ -311,28 +354,49 @@ impl CeRig {
             trigger == Trigger::CeInterrupt,
         )
         .ok_or("push encode")?;
-        words.extend(host_fence_push(self.ring_va + RIG_FENCE_OFF, payload, trigger == Trigger::HostNsi).ok_or("fence encode")?);
+        words.extend(
+            host_fence_push(
+                self.ring_va + RIG_FENCE_OFF,
+                payload,
+                trigger == Trigger::HostNsi,
+            )
+            .ok_or("fence encode")?,
+        );
         if 4 * words.len() as u64 > RIG_PB_SLOT {
             return Err("push larger than a slot".into());
         }
         let slot = u64::from(self.put % RIG_PB_SLOTS) * RIG_PB_SLOT;
         for (i, w) in words.iter().enumerate() {
-            self.ring_cpu.store_u32(At::new(slot + 4 * i as u64), *w).map_err(|e| format!("{e:?}"))?;
+            self.ring_cpu
+                .store_u32(At::new(slot + 4 * i as u64), *w)
+                .map_err(|e| format!("{e:?}"))?;
         }
         let entry = gp_entry(self.ring_va + slot, 4 * words.len() as u64).ok_or("gp entry")?;
         let gp = RIG_GPFIFO_OFF + u64::from(self.put % RIG_GPFIFO_ENTRIES) * 8;
-        self.ring_cpu.store_u32(At::new(gp), entry as u32).map_err(|e| format!("{e:?}"))?;
-        self.ring_cpu.store_u32(At::new(gp + 4), (entry >> 32) as u32).map_err(|e| format!("{e:?}"))?;
+        self.ring_cpu
+            .store_u32(At::new(gp), entry as u32)
+            .map_err(|e| format!("{e:?}"))?;
+        self.ring_cpu
+            .store_u32(At::new(gp + 4), (entry >> 32) as u32)
+            .map_err(|e| format!("{e:?}"))?;
         self.put = self.put.wrapping_add(1);
         kf_linux_raw::release_fence();
         self.ring_cpu
-            .store_u32(At::new(RIG_USERD_OFF + USERD_GP_PUT), self.put % RIG_GPFIFO_ENTRIES)
+            .store_u32(
+                At::new(RIG_USERD_OFF + USERD_GP_PUT),
+                self.put % RIG_GPFIFO_ENTRIES,
+            )
             .map_err(|e| format!("{e:?}"))?;
         kf_linux_raw::release_fence();
         let t0 = std::time::Instant::now();
         let deadline = t0 + std::time::Duration::from_millis(timeout_ms);
-        rm.doorbell(self.chan.token).map_err(|e| format!("doorbell: {e:?}"))?;
-        let fence = |r: &Self| r.ring_cpu.load_u32(At::new(RIG_FENCE_OFF)).map_err(|e| format!("{e:?}"));
+        rm.doorbell(self.chan.token)
+            .map_err(|e| format!("doorbell: {e:?}"))?;
+        let fence = |r: &Self| {
+            r.ring_cpu
+                .load_u32(At::new(RIG_FENCE_OFF))
+                .map_err(|e| format!("{e:?}"))
+        };
         let (mut wakes, mut early_wakes, mut seen_at_wake) = (0u32, 0u32, false);
         loop {
             let left = deadline.saturating_duration_since(std::time::Instant::now());
@@ -341,7 +405,10 @@ impl CeRig {
             }
             let mut ready = kf_linux_raw::ReadyTokens::new();
             let t = u32::try_from(left.as_millis().max(1)).unwrap_or(u32::MAX);
-            let n = self.poller.wait(&mut ready, kf_linux_raw::PollTimeout::Millis(t)).map_err(|e| format!("wait: {e:?}"))?;
+            let n = self
+                .poller
+                .wait(&mut ready, kf_linux_raw::PollTimeout::Millis(t))
+                .map_err(|e| format!("wait: {e:?}"))?;
             if n == 0 {
                 continue;
             }
@@ -354,7 +421,18 @@ impl CeRig {
         }
         let event_us = t0.elapsed().as_micros();
         let fence_landed = fence(self)? == payload;
-        let ce_released = self.ring_cpu.load_u32(At::new(RIG_SEM_OFF)).map_err(|e| format!("{e:?}"))? == payload;
-        Ok(Submitted { wakes, early_wakes, seen_at_wake, event_us, ce_released, fence_landed })
+        let ce_released = self
+            .ring_cpu
+            .load_u32(At::new(RIG_SEM_OFF))
+            .map_err(|e| format!("{e:?}"))?
+            == payload;
+        Ok(Submitted {
+            wakes,
+            early_wakes,
+            seen_at_wake,
+            event_us,
+            ce_released,
+            fence_landed,
+        })
     }
 }

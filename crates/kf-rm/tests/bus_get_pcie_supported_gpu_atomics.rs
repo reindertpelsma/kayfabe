@@ -33,8 +33,8 @@ use kf_abi::gpuatomics::{
     PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_SIZE,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `RpcControlReq::HEADER`.
 const PARAMS_AT: usize = 40;
@@ -42,7 +42,11 @@ const PARAMS_AT: usize = 40;
 const CONTROL_STATUS_OFF: usize = 12;
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` carrying the guest's `0x2080182a`, over a chosen params fill and a

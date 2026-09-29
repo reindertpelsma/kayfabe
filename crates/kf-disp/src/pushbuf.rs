@@ -58,7 +58,14 @@ pub const MAX_PUSHBUFFER: u32 = 4096;
 pub fn decode(pb: &[u8], get: u32, put: u32) -> (Vec<MethodWrite>, u32, Option<DecodeError>) {
     let len = u32::try_from(pb.len()).unwrap_or(0);
     let mut out = Vec::new();
-    if len == 0 || len > MAX_PUSHBUFFER || len % 4 != 0 || get % 4 != 0 || put % 4 != 0 || get >= len || put > len {
+    if len == 0
+        || len > MAX_PUSHBUFFER
+        || len % 4 != 0
+        || get % 4 != 0
+        || put % 4 != 0
+        || get >= len
+        || put > len
+    {
         return (out, get, Some(DecodeError::BadPointers));
     }
     let word = |off: u32| -> u32 {
@@ -94,7 +101,10 @@ pub fn decode(pb: &[u8], get: u32, put: u32) -> (Vec<MethodWrite>, u32, Option<D
                 }
                 for i in 0..count {
                     let method = if opcode == 0 { offset + 4 * i } else { offset };
-                    out.push(MethodWrite { method, data: word(at + 4 + 4 * i) });
+                    out.push(MethodWrite {
+                        method,
+                        data: word(at + 4 + 4 * i),
+                    });
                 }
                 visited += count;
                 at = end;
@@ -137,17 +147,38 @@ mod tests {
     #[test]
     fn methods_decode_in_order_and_get_reaches_put() {
         // SET_SUBDEVICE_MASK, METHOD(2 @ 0x204), NOP, NONINC(2 @ 0x200)
-        let b = pb(&[(3 << 29) | 1, method(2, 0x204), 7, 8, 0, noninc(2, 0x200), 1, 0]);
+        let b = pb(&[
+            (3 << 29) | 1,
+            method(2, 0x204),
+            7,
+            8,
+            0,
+            noninc(2, 0x200),
+            1,
+            0,
+        ]);
         let (w, get, err) = decode(&b, 0, 32);
         assert_eq!(err, None);
         assert_eq!(get, 32);
         assert_eq!(
             w,
             vec![
-                MethodWrite { method: 0x204, data: 7 },
-                MethodWrite { method: 0x208, data: 8 },
-                MethodWrite { method: 0x200, data: 1 },
-                MethodWrite { method: 0x200, data: 0 },
+                MethodWrite {
+                    method: 0x204,
+                    data: 7
+                },
+                MethodWrite {
+                    method: 0x208,
+                    data: 8
+                },
+                MethodWrite {
+                    method: 0x200,
+                    data: 1
+                },
+                MethodWrite {
+                    method: 0x200,
+                    data: 0
+                },
             ]
         );
     }
@@ -164,7 +195,19 @@ mod tests {
         let (w, get, err) = decode(&b, 0xff0, 8);
         assert_eq!(err, None);
         assert_eq!(get, 8);
-        assert_eq!(w, vec![MethodWrite { method: 0x80, data: 9 }, MethodWrite { method: 0x84, data: 5 }]);
+        assert_eq!(
+            w,
+            vec![
+                MethodWrite {
+                    method: 0x80,
+                    data: 9
+                },
+                MethodWrite {
+                    method: 0x84,
+                    data: 5
+                }
+            ]
+        );
         // a JUMP to itself, with PUT elsewhere: bounded
         let b = pb(&[1u32 << 29]);
         assert_eq!(decode(&b, 0, 8).2, Some(DecodeError::Runaway));
@@ -173,10 +216,16 @@ mod tests {
         assert_eq!(decode(&b, 0, 8).2, Some(DecodeError::Truncated { at: 0 }));
         // opcode 7
         let b = pb(&[7 << 29]);
-        assert!(matches!(decode(&b, 0, 4).2, Some(DecodeError::BadOpcode { at: 0, .. })));
+        assert!(matches!(
+            decode(&b, 0, 4).2,
+            Some(DecodeError::BadOpcode { at: 0, .. })
+        ));
         // unaligned / out of range / oversize
         assert_eq!(decode(&pb(&[]), 2, 8).2, Some(DecodeError::BadPointers));
         assert_eq!(decode(&pb(&[]), 0, 8192).2, Some(DecodeError::BadPointers));
-        assert_eq!(decode(&vec![0u8; 8192], 0, 8).2, Some(DecodeError::BadPointers));
+        assert_eq!(
+            decode(&vec![0u8; 8192], 0, 8).2,
+            Some(DecodeError::BadPointers)
+        );
     }
 }

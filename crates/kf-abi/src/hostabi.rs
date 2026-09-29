@@ -134,23 +134,37 @@ impl fmt::Display for HostAbiError {
                  host structs only between measured layouts (tools/drivermatrix/regen.sh {version})"
             ),
             Self::Layout(e) => write!(f, "{e}"),
-            Self::Unexpressible { strukt, fields, version } => write!(
+            Self::Unexpressible {
+                strukt,
+                fields,
+                version,
+            } => write!(
                 f,
                 "{strukt}: host driver {version} has no {fields:?}, and the request sets them — the host \
                  cannot be asked this; refusing rather than letting it read the bytes as another field"
             ),
-            Self::Transcode { strukt, outgoing, err } => write!(
+            Self::Transcode {
+                strukt,
+                outgoing,
+                err,
+            } => write!(
                 f,
                 "{strukt} could not be carried {} the host driver's layout: {err}",
                 if *outgoing { "to" } else { "back from" }
             ),
-            Self::Size { strukt, want, got } => write!(f, "{strukt}: body is {got} bytes, its layout is {want}"),
+            Self::Size { strukt, want, got } => {
+                write!(f, "{strukt}: body is {got} bytes, its layout is {want}")
+            }
             Self::UnlistedControl { cmd, version } => write!(
                 f,
                 "host control {cmd:#010x} has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver \
                  {version} is outside the interval the host encoders were written for — its layout is unknown"
             ),
-            Self::NoHeader { cmd, source, version } => write!(
+            Self::NoHeader {
+                cmd,
+                source,
+                version,
+            } => write!(
                 f,
                 "host control {cmd:#010x} has no public header ({source}); its layout at host driver \
                  {version} was never measured"
@@ -173,7 +187,11 @@ impl HostAbi {
     /// # Errors
     /// [`HostAbiError::Unmeasured`] for a version outside the committed sweep.
     pub fn for_host(host: HostDriverVersion) -> Result<Self, HostAbiError> {
-        let version = DriverVersion { major: host.major, minor: host.minor, patch: host.patch };
+        let version = DriverVersion {
+            major: host.major,
+            minor: host.minor,
+            patch: host.patch,
+        };
         if !is_measured(version) {
             return Err(HostAbiError::Unmeasured { version });
         }
@@ -227,9 +245,14 @@ impl HostAbi {
     ///
     /// # Errors
     /// [`HostAbiError::Layout`] when neither name exists at the host.
-    pub fn carry_renamed(&self, before: &'static StructRuns, after: &'static StructRuns) -> Result<Carry, HostAbiError> {
+    pub fn carry_renamed(
+        &self,
+        before: &'static StructRuns,
+        after: &'static StructRuns,
+    ) -> Result<Carry, HostAbiError> {
         let bench = Resolved::of(before, crate::versions::BENCH_DRIVER)?;
-        let host = Resolved::of(before, self.version).or_else(|_| Resolved::of(after, self.version))?;
+        let host =
+            Resolved::of(before, self.version).or_else(|_| Resolved::of(after, self.version))?;
         if bench.layout == host.layout {
             Ok(Carry::Same { size: bench.size() })
         } else {
@@ -249,22 +272,44 @@ impl HostAbi {
     ///
     /// # Errors
     /// As [`Self::to_host`].
-    pub fn carry_out(&self, strukt: &'static str, c: &Carry, bench_body: &[u8]) -> Result<Vec<u8>, HostAbiError> {
+    pub fn carry_out(
+        &self,
+        strukt: &'static str,
+        c: &Carry,
+        bench_body: &[u8],
+    ) -> Result<Vec<u8>, HostAbiError> {
         match c {
             Carry::Same { size } => {
                 if bench_body.len() != *size {
-                    return Err(HostAbiError::Size { strukt, want: *size, got: bench_body.len() });
+                    return Err(HostAbiError::Size {
+                        strukt,
+                        want: *size,
+                        got: bench_body.len(),
+                    });
                 }
                 Ok(bench_body.to_vec())
             }
             Carry::Carried { bench, host } => {
                 if bench_body.len() != bench.size() {
-                    return Err(HostAbiError::Size { strukt, want: bench.size(), got: bench_body.len() });
+                    return Err(HostAbiError::Size {
+                        strukt,
+                        want: bench.size(),
+                        got: bench_body.len(),
+                    });
                 }
-                let (out, dropped) =
-                    transcode(bench, host, bench_body, &[]).map_err(|err| HostAbiError::Transcode { strukt, outgoing: true, err })?;
+                let (out, dropped) = transcode(bench, host, bench_body, &[]).map_err(|err| {
+                    HostAbiError::Transcode {
+                        strukt,
+                        outgoing: true,
+                        err,
+                    }
+                })?;
                 if !dropped.is_empty() {
-                    return Err(HostAbiError::Unexpressible { strukt, fields: dropped, version: self.version });
+                    return Err(HostAbiError::Unexpressible {
+                        strukt,
+                        fields: dropped,
+                        version: self.version,
+                    });
                 }
                 Ok(out)
             }
@@ -275,21 +320,38 @@ impl HostAbi {
     ///
     /// # Errors
     /// As [`Self::from_host`].
-    pub fn carry_in(&self, strukt: &'static str, c: &Carry, host_body: &[u8]) -> Result<Vec<u8>, HostAbiError> {
+    pub fn carry_in(
+        &self,
+        strukt: &'static str,
+        c: &Carry,
+        host_body: &[u8],
+    ) -> Result<Vec<u8>, HostAbiError> {
         match c {
             Carry::Same { size } => {
                 if host_body.len() != *size {
-                    return Err(HostAbiError::Size { strukt, want: *size, got: host_body.len() });
+                    return Err(HostAbiError::Size {
+                        strukt,
+                        want: *size,
+                        got: host_body.len(),
+                    });
                 }
                 Ok(host_body.to_vec())
             }
             Carry::Carried { bench, host } => {
                 if host_body.len() != host.size() {
-                    return Err(HostAbiError::Size { strukt, want: host.size(), got: host_body.len() });
+                    return Err(HostAbiError::Size {
+                        strukt,
+                        want: host.size(),
+                        got: host_body.len(),
+                    });
                 }
                 transcode(host, bench, host_body, &[])
                     .map(|(b, _)| b)
-                    .map_err(|err| HostAbiError::Transcode { strukt, outgoing: false, err })
+                    .map_err(|err| HostAbiError::Transcode {
+                        strukt,
+                        outgoing: false,
+                        err,
+                    })
             }
         }
     }
@@ -299,22 +361,43 @@ impl HostAbi {
     /// # Errors
     /// [`HostAbiError::Unexpressible`] when a field the host lacks carries data;
     /// [`HostAbiError::Transcode`] / [`HostAbiError::Size`] / [`HostAbiError::Layout`].
-    pub fn to_host(&self, runs: &'static StructRuns, bench_body: &[u8]) -> Result<Vec<u8>, HostAbiError> {
+    pub fn to_host(
+        &self,
+        runs: &'static StructRuns,
+        bench_body: &[u8],
+    ) -> Result<Vec<u8>, HostAbiError> {
         match self.carry(runs)? {
             Carry::Same { size } => {
                 if bench_body.len() != size {
-                    return Err(HostAbiError::Size { strukt: runs.name, want: size, got: bench_body.len() });
+                    return Err(HostAbiError::Size {
+                        strukt: runs.name,
+                        want: size,
+                        got: bench_body.len(),
+                    });
                 }
                 Ok(bench_body.to_vec())
             }
             Carry::Carried { bench, host } => {
                 if bench_body.len() != bench.size() {
-                    return Err(HostAbiError::Size { strukt: runs.name, want: bench.size(), got: bench_body.len() });
+                    return Err(HostAbiError::Size {
+                        strukt: runs.name,
+                        want: bench.size(),
+                        got: bench_body.len(),
+                    });
                 }
-                let (out, dropped) = transcode(&bench, &host, bench_body, &[])
-                    .map_err(|err| HostAbiError::Transcode { strukt: runs.name, outgoing: true, err })?;
+                let (out, dropped) = transcode(&bench, &host, bench_body, &[]).map_err(|err| {
+                    HostAbiError::Transcode {
+                        strukt: runs.name,
+                        outgoing: true,
+                        err,
+                    }
+                })?;
                 if !dropped.is_empty() {
-                    return Err(HostAbiError::Unexpressible { strukt: runs.name, fields: dropped, version: self.version });
+                    return Err(HostAbiError::Unexpressible {
+                        strukt: runs.name,
+                        fields: dropped,
+                        version: self.version,
+                    });
                 }
                 Ok(out)
             }
@@ -327,21 +410,37 @@ impl HostAbi {
     /// # Errors
     /// [`HostAbiError::Transcode`] (e.g. the host returned more array entries than the bench
     /// struct holds) / [`HostAbiError::Size`] / [`HostAbiError::Layout`].
-    pub fn from_host(&self, runs: &'static StructRuns, host_body: &[u8]) -> Result<Vec<u8>, HostAbiError> {
+    pub fn from_host(
+        &self,
+        runs: &'static StructRuns,
+        host_body: &[u8],
+    ) -> Result<Vec<u8>, HostAbiError> {
         match self.carry(runs)? {
             Carry::Same { size } => {
                 if host_body.len() != size {
-                    return Err(HostAbiError::Size { strukt: runs.name, want: size, got: host_body.len() });
+                    return Err(HostAbiError::Size {
+                        strukt: runs.name,
+                        want: size,
+                        got: host_body.len(),
+                    });
                 }
                 Ok(host_body.to_vec())
             }
             Carry::Carried { bench, host } => {
                 if host_body.len() != host.size() {
-                    return Err(HostAbiError::Size { strukt: runs.name, want: host.size(), got: host_body.len() });
+                    return Err(HostAbiError::Size {
+                        strukt: runs.name,
+                        want: host.size(),
+                        got: host_body.len(),
+                    });
                 }
                 transcode(&host, &bench, host_body, &[])
                     .map(|(b, _dropped)| b)
-                    .map_err(|err| HostAbiError::Transcode { strukt: runs.name, outgoing: false, err })
+                    .map_err(|err| HostAbiError::Transcode {
+                        strukt: runs.name,
+                        outgoing: false,
+                        err,
+                    })
             }
         }
     }
@@ -389,7 +488,11 @@ use crate::generated::matrix as hm;
 
 macro_rules! hc {
     ($name:literal, $cmd:literal, $s:ident) => {
-        HostControl { name: $name, cmd: $cmd, params: HostParams::Measured(&hm::$s) }
+        HostControl {
+            name: $name,
+            cmd: $cmd,
+            params: HostParams::Measured(&hm::$s),
+        }
     };
 }
 
@@ -398,73 +501,307 @@ macro_rules! hc {
 /// host whose layouts differ from the bench's — an unlisted row must never mean "pass it through".
 /// `every_host_control_id_is_the_measured_one` pins each id to the matrix at every tag.
 pub static HOST_CONTROLS: &[HostControl] = &[
-    hc!("NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2", 0x0000_0205, NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS),
-    hc!("NV0000_CTRL_CMD_OS_UNIX_EXPORT_OBJECT_TO_FD", 0x0000_3d05, NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS),
-    hc!("NV0000_CTRL_CMD_OS_UNIX_IMPORT_OBJECT_FROM_FD", 0x0000_3d06, NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS),
-    hc!("NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2", 0x0080_0292, NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS),
-    hc!("NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL", 0x0080_1909, NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS),
+    hc!(
+        "NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2",
+        0x0000_0205,
+        NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS
+    ),
+    hc!(
+        "NV0000_CTRL_CMD_OS_UNIX_EXPORT_OBJECT_TO_FD",
+        0x0000_3d05,
+        NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS
+    ),
+    hc!(
+        "NV0000_CTRL_CMD_OS_UNIX_IMPORT_OBJECT_FROM_FD",
+        0x0000_3d06,
+        NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS
+    ),
+    hc!(
+        "NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2",
+        0x0080_0292,
+        NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS
+    ),
+    hc!(
+        "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+        0x0080_1909,
+        NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS
+    ),
     HostControl {
         name: "NV0080_CTRL_CMD_MSENC_GET_CAPS_V2",
         cmd: 0x0080_1b02,
-        params: HostParams::Renamed { before: &hm::NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS, after: &hm::NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS },
+        params: HostParams::Renamed {
+            before: &hm::NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS,
+            after: &hm::NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS,
+        },
     },
     HostControl {
         name: "NV0080_CTRL_CMD_BSP_GET_CAPS_V2",
         cmd: 0x0080_1c02,
-        params: HostParams::Renamed { before: &hm::NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2, after: &hm::NV0080_CTRL_NVDEC_GET_CAPS_PARAMS_V2 },
+        params: HostParams::Renamed {
+            before: &hm::NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2,
+            after: &hm::NV0080_CTRL_NVDEC_GET_CAPS_PARAMS_V2,
+        },
     },
-    hc!("NV2080_CTRL_CMD_GPU_GET_INFO_V2", 0x2080_0102, NV2080_CTRL_GPU_GET_INFO_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_GPU_GET_NAME_STRING", 0x2080_0110, NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS),
-    hc!("NV2080_CTRL_CMD_GPU_GET_SHORT_NAME_STRING", 0x2080_0111, NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS),
-    hc!("NV2080_CTRL_CMD_GPU_GET_PES_INFO", 0x2080_0168, NV2080_CTRL_GPU_GET_PES_INFO_PARAMS),
-    hc!("NV2080_CTRL_CMD_GPU_GET_ENGINES_V2", 0x2080_0170, NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO", 0x2080_01b0, NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS),
-    hc!("NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION", 0x2080_0301, NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS),
-    hc!("NV2080_CTRL_CMD_BIOS_GET_INFO_V2", 0x2080_0810, NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS", 0x2080_110b, NV2080_CTRL_FIFO_DISABLE_CHANNELS_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_ZCULL_INFO", 0x2080_1206, NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND", 0x2080_1208, NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE", 0x2080_1210, NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER", 0x2080_121b, NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_CAPS_V2", 0x2080_1227, NV2080_CTRL_GR_GET_CAPS_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_INFO_V2", 0x2080_1228, NV2080_CTRL_GR_GET_INFO_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_GPC_MASK", 0x2080_122a, NV2080_CTRL_GR_GET_GPC_MASK_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_TPC_MASK", 0x2080_122b, NV2080_CTRL_GR_GET_TPC_MASK_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_ENGINE_CONTEXT_PROPERTIES", 0x2080_122d, NV2080_CTRL_GR_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER", 0x2080_1230, NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC", 0x2080_1234, NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_ZCULL_MASK", 0x2080_1237, NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS),
-    hc!("NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO", 0x2080_1239, NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS),
-    hc!("NV2080_CTRL_CMD_FB_GET_INFO_V2", 0x2080_1303, NV2080_CTRL_FB_GET_INFO_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_FB_FLUSH_GPU_CACHE", 0x2080_130e, NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS),
-    hc!("NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO", 0x2080_1315, NV2080_CTRL_FB_GET_GPU_CACHE_INFO_PARAMS),
-    hc!("NV2080_CTRL_CMD_MC_GET_ARCH_INFO", 0x2080_1701, NV2080_CTRL_MC_GET_ARCH_INFO_PARAMS),
-    hc!("NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE", 0x2080_170e, NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_PARAMS),
-    hc!("NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP", 0x2080_170f, NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS),
-    hc!("NV2080_CTRL_CMD_BUS_GET_INFO_V2", 0x2080_1823, NV2080_CTRL_BUS_GET_INFO_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_BUS_GET_C2C_INFO", 0x2080_182b, NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS),
-    hc!("NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2", 0x2080_200b, NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_DMA_INVALIDATE_TLB", 0x2080_2502, NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS),
-    hc!("NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK", 0x2080_2a02, NV2080_CTRL_CE_GET_CE_PCE_MASK_PARAMS),
-    hc!("NV2080_CTRL_CMD_CE_GET_CAPS_V2", 0x2080_2a03, NV2080_CTRL_CE_GET_CAPS_V2_PARAMS),
-    hc!("NV2080_CTRL_CMD_CE_GET_ALL_CAPS", 0x2080_2a0a, NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS),
-    hc!("NV2080_CTRL_CMD_GSP_GET_FEATURES", 0x2080_3601, NV2080_CTRL_GSP_GET_FEATURES_PARAMS),
-    hc!("NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO", 0x2080_3801, NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS),
-    hc!("NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK", 0x83de_0309, NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS),
-    hc!("NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE", 0x9096_0106, NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS),
-    hc!("NVA06C_CTRL_CMD_GPFIFO_SCHEDULE", 0xa06c_0101, NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS),
+    hc!(
+        "NV2080_CTRL_CMD_GPU_GET_INFO_V2",
+        0x2080_0102,
+        NV2080_CTRL_GPU_GET_INFO_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GPU_GET_NAME_STRING",
+        0x2080_0110,
+        NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GPU_GET_SHORT_NAME_STRING",
+        0x2080_0111,
+        NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GPU_GET_PES_INFO",
+        0x2080_0168,
+        NV2080_CTRL_GPU_GET_PES_INFO_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GPU_GET_ENGINES_V2",
+        0x2080_0170,
+        NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO",
+        0x2080_01b0,
+        NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION",
+        0x2080_0301,
+        NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_BIOS_GET_INFO_V2",
+        0x2080_0810,
+        NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS",
+        0x2080_110b,
+        NV2080_CTRL_FIFO_DISABLE_CHANNELS_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_ZCULL_INFO",
+        0x2080_1206,
+        NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND",
+        0x2080_1208,
+        NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE",
+        0x2080_1210,
+        NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER",
+        0x2080_121b,
+        NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_CAPS_V2",
+        0x2080_1227,
+        NV2080_CTRL_GR_GET_CAPS_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_INFO_V2",
+        0x2080_1228,
+        NV2080_CTRL_GR_GET_INFO_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_GPC_MASK",
+        0x2080_122a,
+        NV2080_CTRL_GR_GET_GPC_MASK_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_TPC_MASK",
+        0x2080_122b,
+        NV2080_CTRL_GR_GET_TPC_MASK_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_ENGINE_CONTEXT_PROPERTIES",
+        0x2080_122d,
+        NV2080_CTRL_GR_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER",
+        0x2080_1230,
+        NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC",
+        0x2080_1234,
+        NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_ZCULL_MASK",
+        0x2080_1237,
+        NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO",
+        0x2080_1239,
+        NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_FB_GET_INFO_V2",
+        0x2080_1303,
+        NV2080_CTRL_FB_GET_INFO_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_FB_FLUSH_GPU_CACHE",
+        0x2080_130e,
+        NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO",
+        0x2080_1315,
+        NV2080_CTRL_FB_GET_GPU_CACHE_INFO_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_MC_GET_ARCH_INFO",
+        0x2080_1701,
+        NV2080_CTRL_MC_GET_ARCH_INFO_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE",
+        0x2080_170e,
+        NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP",
+        0x2080_170f,
+        NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_BUS_GET_INFO_V2",
+        0x2080_1823,
+        NV2080_CTRL_BUS_GET_INFO_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_BUS_GET_C2C_INFO",
+        0x2080_182b,
+        NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2",
+        0x2080_200b,
+        NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_DMA_INVALIDATE_TLB",
+        0x2080_2502,
+        NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK",
+        0x2080_2a02,
+        NV2080_CTRL_CE_GET_CE_PCE_MASK_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_CE_GET_CAPS_V2",
+        0x2080_2a03,
+        NV2080_CTRL_CE_GET_CAPS_V2_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_CE_GET_ALL_CAPS",
+        0x2080_2a0a,
+        NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GSP_GET_FEATURES",
+        0x2080_3601,
+        NV2080_CTRL_GSP_GET_FEATURES_PARAMS
+    ),
+    hc!(
+        "NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO",
+        0x2080_3801,
+        NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS
+    ),
+    hc!(
+        "NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK",
+        0x83de_0309,
+        NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS
+    ),
+    hc!(
+        "NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE",
+        0x9096_0106,
+        NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS
+    ),
+    hc!(
+        "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE",
+        0xa06c_0101,
+        NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS
+    ),
     hc!("NVA06C_CTRL_CMD_BIND", 0xa06c_0102, NVA06C_CTRL_BIND_PARAMS),
-    hc!("NVA06C_CTRL_CMD_SET_TIMESLICE", 0xa06c_0103, NVA06C_CTRL_TIMESLICE_PARAMS),
-    hc!("NVA06C_CTRL_CMD_PREEMPT", 0xa06c_0105, NVA06C_CTRL_PREEMPT_PARAMS),
+    hc!(
+        "NVA06C_CTRL_CMD_SET_TIMESLICE",
+        0xa06c_0103,
+        NVA06C_CTRL_TIMESLICE_PARAMS
+    ),
+    hc!(
+        "NVA06C_CTRL_CMD_PREEMPT",
+        0xa06c_0105,
+        NVA06C_CTRL_PREEMPT_PARAMS
+    ),
     hc!("NVA06F_CTRL_CMD_BIND", 0xa06f_0104, NVA06F_CTRL_BIND_PARAMS),
-    hc!("NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN", 0xc36f_0108, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS),
+    hc!(
+        "NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN",
+        0xc36f_0108,
+        NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS
+    ),
     // GSS-legacy (bit 15; no open header) — `crate::gssreplay`.
-    HostControl { name: "", cmd: 0x2080_9064, params: HostParams::NoHeader { source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)" } },
-    HostControl { name: "", cmd: 0x2080_a028, params: HostParams::NoHeader { source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)" } },
-    HostControl { name: "", cmd: 0x2080_a084, params: HostParams::NoHeader { source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)" } },
-    HostControl { name: "", cmd: 0x2080_a026, params: HostParams::NoHeader { source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)" } },
-    HostControl { name: "", cmd: 0x2080_8163, params: HostParams::NoHeader { source: "kf_abi::gssreplay ENC session (measured on 580.159.04 hosts)" } },
-    HostControl { name: "", cmd: 0x2080_8164, params: HostParams::NoHeader { source: "kf_abi::gssreplay ENC session (measured on 580.159.04 hosts)" } },
+    HostControl {
+        name: "",
+        cmd: 0x2080_9064,
+        params: HostParams::NoHeader {
+            source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)",
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_a028,
+        params: HostParams::NoHeader {
+            source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)",
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_a084,
+        params: HostParams::NoHeader {
+            source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)",
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_a026,
+        params: HostParams::NoHeader {
+            source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)",
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_8163,
+        params: HostParams::NoHeader {
+            source: "kf_abi::gssreplay ENC session (measured on 580.159.04 hosts)",
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_8164,
+        params: HostParams::NoHeader {
+            source: "kf_abi::gssreplay ENC session (measured on 580.159.04 hosts)",
+        },
+    },
 ];
 
 /// The row for `cmd`, if kayfabe issues it to a host.
@@ -478,8 +815,12 @@ impl HostAbi {
     /// `crate::host_driver`)? Where it is, a control with no public header keeps its old contract.
     #[must_use]
     pub fn in_encoded_interval(&self) -> bool {
-        HostDriverVersion { major: self.version.major, minor: self.version.minor, patch: self.version.patch }
-            .is_encoded_for()
+        HostDriverVersion {
+            major: self.version.major,
+            minor: self.version.minor,
+            patch: self.version.patch,
+        }
+        .is_encoded_for()
     }
 
     /// How control `cmd` crosses to this host. `Ok(None)` = pass the bytes through unchanged.
@@ -491,16 +832,25 @@ impl HostAbi {
     pub fn control_carry(&self, cmd: u32) -> Result<Option<Carry>, HostAbiError> {
         match host_control(cmd).map(|c| c.params) {
             Some(HostParams::Measured(runs)) => self.carry(runs).map(Some),
-            Some(HostParams::Renamed { before, after }) => self.carry_renamed(before, after).map(Some),
+            Some(HostParams::Renamed { before, after }) => {
+                self.carry_renamed(before, after).map(Some)
+            }
             Some(HostParams::NoHeader { source }) => {
                 if self.in_encoded_interval() {
                     Ok(None)
                 } else {
-                    Err(HostAbiError::NoHeader { cmd, source, version: self.version })
+                    Err(HostAbiError::NoHeader {
+                        cmd,
+                        source,
+                        version: self.version,
+                    })
                 }
             }
             None if self.is_bench() || self.in_encoded_interval() => Ok(None),
-            None => Err(HostAbiError::UnlistedControl { cmd, version: self.version }),
+            None => Err(HostAbiError::UnlistedControl {
+                cmd,
+                version: self.version,
+            }),
         }
     }
 }
@@ -526,16 +876,27 @@ mod tests {
             };
             let row = hm::ALL_VALUES
                 .iter()
-                .find(|r| r.name == format!("ctrl_cmds:{}", c.name) || r.name == format!("host_zbc_cmds:{}", c.name))
+                .find(|r| {
+                    r.name == format!("ctrl_cmds:{}", c.name)
+                        || r.name == format!("host_zbc_cmds:{}", c.name)
+                })
                 .unwrap_or_else(|| panic!("{} is not in the matrix (consumed.txt)", c.name));
             let mut seen = false;
             for &v in hm::MEASURED {
                 let id = row.at(v).expect("measured");
-                let lay = runs.at(v).expect("measured").or_else(|| after.and_then(|a| a.at(v).expect("measured")));
+                let lay = runs
+                    .at(v)
+                    .expect("measured")
+                    .or_else(|| after.and_then(|a| a.at(v).expect("measured")));
                 match id {
                     Some(id) => {
                         assert_eq!(id, u64::from(c.cmd), "{} at {v}", c.name);
-                        assert!(lay.is_some(), "{} exists at {v} but {} does not", c.name, runs.name);
+                        assert!(
+                            lay.is_some(),
+                            "{} exists at {v} but {} does not",
+                            c.name,
+                            runs.name
+                        );
                         seen = true;
                     }
                     None => {}
@@ -558,11 +919,32 @@ mod tests {
     /// An unlisted control passes through only where the old contract holds; elsewhere it is refused.
     #[test]
     fn an_unlisted_control_is_refused_outside_the_encoded_interval() {
-        assert!(host("580.159.04").control_carry(0x2080_dead).expect("bench").is_none());
-        assert!(host("580.65.06").control_carry(0x2080_dead).expect("interval").is_none());
-        assert!(matches!(host("575.57.08").control_carry(0x2080_dead), Err(HostAbiError::UnlistedControl { .. })));
-        assert!(matches!(host("575.57.08").control_carry(0x2080_a026), Err(HostAbiError::NoHeader { .. })));
-        assert!(host("580.126.09").control_carry(0x2080_a026).expect("interval").is_none());
+        assert!(
+            host("580.159.04")
+                .control_carry(0x2080_dead)
+                .expect("bench")
+                .is_none()
+        );
+        assert!(
+            host("580.65.06")
+                .control_carry(0x2080_dead)
+                .expect("interval")
+                .is_none()
+        );
+        assert!(matches!(
+            host("575.57.08").control_carry(0x2080_dead),
+            Err(HostAbiError::UnlistedControl { .. })
+        ));
+        assert!(matches!(
+            host("575.57.08").control_carry(0x2080_a026),
+            Err(HostAbiError::NoHeader { .. })
+        ));
+        assert!(
+            host("580.126.09")
+                .control_carry(0x2080_a026)
+                .expect("interval")
+                .is_none()
+        );
     }
 
     /// ★ The MSENC caps query was malformed on hosts the old gate accepted: 8 bytes with
@@ -570,14 +952,22 @@ mod tests {
     #[test]
     fn msenc_caps_is_carried_on_early_580_hosts() {
         let h = host("580.65.06");
-        let c = h.control_carry(0x0080_1b02).expect("listed").expect("carried");
+        let c = h
+            .control_carry(0x0080_1b02)
+            .expect("listed")
+            .expect("carried");
         assert_eq!(c.host_size(), 8);
         let mut body = vec![0u8; 12];
         body[8] = 1; // instanceId = 1 at the bench offset
-        let out = h.carry_out("NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS", &c, &body).expect("carried");
+        let out = h
+            .carry_out("NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS", &c, &body)
+            .expect("carried");
         assert_eq!(out, vec![0, 0, 0, 0, 1, 0, 0, 0]);
         // …and at 610 the struct is NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS, same bytes as the bench's.
-        let c610 = host("610.57.04").control_carry(0x0080_1b02).expect("listed").expect("carried");
+        let c610 = host("610.57.04")
+            .control_carry(0x0080_1b02)
+            .expect("listed")
+            .expect("carried");
         assert_eq!(c610.host_size(), 12);
     }
 
@@ -593,7 +983,11 @@ mod tests {
         assert!(h.is_bench());
         for runs in m::ALL_STRUCTS {
             if let Ok(c) = h.carry(runs) {
-                assert!(matches!(c, Carry::Same { .. }), "{} is carried at the bench", runs.name);
+                assert!(
+                    matches!(c, Carry::Same { .. }),
+                    "{} is carried at the bench",
+                    runs.name
+                );
             }
         }
     }
@@ -619,12 +1013,18 @@ mod tests {
         assert_eq!(h.host_size(runs).expect("size"), 56);
         let out = h.to_host(runs, &body).expect("carried");
         assert_eq!(out.len(), 56);
-        assert_eq!(u64::from_le_bytes(out[40..48].try_into().expect("8")), 0x7f00_0000, "dmaOffset at +40 on 575");
+        assert_eq!(
+            u64::from_le_bytes(out[40..48].try_into().expect("8")),
+            0x7f00_0000,
+            "dmaOffset at +40 on 575"
+        );
         let back = h.from_host(runs, &out).expect("back");
         assert_eq!(back, body, "a plain map round-trips");
         put(&mut body, "kindOverride", 0xfe, 4);
         match h.to_host(runs, &body) {
-            Err(HostAbiError::Unexpressible { fields, .. }) => assert_eq!(fields, vec!["kindOverride"]),
+            Err(HostAbiError::Unexpressible { fields, .. }) => {
+                assert_eq!(fields, vec!["kindOverride"])
+            }
             other => panic!("expected Unexpressible, got {other:?}"),
         }
     }
@@ -636,7 +1036,10 @@ mod tests {
         let runs = &m::NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS;
         assert_eq!(h.host_size(runs).expect("size"), 2);
         assert_eq!(h.to_host(runs, &[1, 0, 0]).expect("enable"), vec![1, 0]);
-        assert!(matches!(h.to_host(runs, &[1, 0, 1]), Err(HostAbiError::Unexpressible { .. })));
+        assert!(matches!(
+            h.to_host(runs, &[1, 0, 1]),
+            Err(HostAbiError::Unexpressible { .. })
+        ));
     }
 
     /// `GET_CLASSLIST_V2` holds 100 classes at 555–575 and 200 at the bench: a host reply carries
@@ -671,7 +1074,10 @@ mod tests {
         let out = h.to_host(runs, &body).expect("carried");
         let te = t.need("engineType").expect("engineType").off();
         assert_ne!(e, te, "engineType moved at 610");
-        assert_eq!(u32::from_le_bytes(out[te..te + 4].try_into().expect("4")), 0x13);
+        assert_eq!(
+            u32::from_le_bytes(out[te..te + 4].try_into().expect("4")),
+            0x13
+        );
     }
 
     /// ★★ The per-map PTE kind is a 580.65.06+ host capability — the field that carries it is

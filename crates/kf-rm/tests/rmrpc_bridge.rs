@@ -12,28 +12,28 @@
 
 #![allow(clippy::unusual_byte_groupings)]
 
-#[path = "support/rpcwire.rs"]
-mod rpcwire;
 #[path = "support/bridge.rs"]
 mod bridge;
+#[path = "support/rpcwire.rs"]
+mod rpcwire;
 
 use bridge::*;
+use kf_abi::capability::PassthroughRule;
 use kf_abi::capability::{Denial, DeniedBecause};
 use kf_abi::wire::AbiError;
 use kf_abi::{ClientKindRuleUnknown, GuestOs};
 use kf_arch::ClientKind;
 use kf_arch::ids::{ClassId, HClient, HObject, Pdb, VChid};
-use kf_abi::capability::PassthroughRule;
 use kf_gsp::{RpcCommand, RpcFunction};
 use kf_rm::rmgraph::ResourceKey;
-use std::collections::BTreeMap;
 use kf_rm::rmgraph::{AllocFacts, GpFifoRing, NodeKey, RmEvent, RmGraphError};
 use kf_rm::rmrpc::{
-    BridgeRefusal, Faulted, GraphPolicy, ObjectsRefusal, PageDirStatement, ReasmLimits, Reassembled,
-    Reassembler, RefusalCensus, Translation, translate,
+    BridgeRefusal, Faulted, GraphPolicy, ObjectsRefusal, PageDirStatement, ReasmLimits,
+    Reassembled, Reassembler, RefusalCensus, Translation, translate,
 };
 use kf_trace::FaultTag;
 use rpcwire::{self as w, RpcScript, fn_id};
+use std::collections::BTreeMap;
 
 // =================================================================================
 // 1. The hand-written hex fixtures — transcription #2
@@ -742,10 +742,9 @@ fn a_free_of_an_undeclared_object_translates_cleanly_and_the_graph_refuses_it() 
     };
     assert_eq!(
         gpu.apply(ev),
-        Err(kf_rm::rmgraph::RmGraphError::FreeUnknown(kf_rm::rmgraph::NodeKey::new(
-            HClient(HEX_CLIENT),
-            HObject(HEX_OBJECT)
-        ))),
+        Err(kf_rm::rmgraph::RmGraphError::FreeUnknown(
+            kf_rm::rmgraph::NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_OBJECT))
+        )),
         "the graph's refusal is the answer, and it is named",
     );
 
@@ -955,11 +954,7 @@ fn the_control_refusal_order_matches_the_alloc_arms() {
             32,
             w::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY
         )),
-        Ok(expected_set_page_dir(
-            spd::C,
-            spd::VAS,
-            spd::PDB
-        )),
+        Ok(expected_set_page_dir(spd::C, spd::VAS, spd::PDB)),
     );
 }
 
@@ -988,9 +983,7 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
         BridgeRefusal::PublishedPdesUnnamedVaspace { cmd: 0x90f1_0106 },
         BridgeRefusal::PublishedPdesMalformed {
             cmd: 0x90f1_0106,
-            err: kf_abi::gvaspacepdes::ServerReservedPdesError::LevelCountOutOfRange {
-                got: 7,
-            },
+            err: kf_abi::gvaspacepdes::ServerReservedPdesError::LevelCountOutOfRange { got: 7 },
         },
         BridgeRefusal::PublishedPdesRootAperture {
             cmd: 0x90f1_0106,
@@ -1032,24 +1025,24 @@ fn every_refusal_carries_a_distinct_tag_and_a_nonzero_rpc_result() {
         // rule it broke rather than by one flat "the graph said no". If it were
         // flattened, these two would collide and the assertion below would fail — which
         // is the whole reason they are both here.
-        BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::FreeUnknown(NodeKey::new(
-            HClient(HEX_CLIENT),
-            HObject(HEX_OBJECT),
-        )))),
+        BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::FreeUnknown(
+            NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_OBJECT)),
+        ))),
         BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::ConflictingAlloc(
             NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_CLIENT)),
         ))),
         // ★ B5's, and the third distinct inner error on purpose: `DUP_OBJECT` is the
         // only verb that names two namespaces, so it is the only one that can reach
         // these. If `Faulted` were flattened they would collide with the two above.
-        BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::ConflictingDup(NodeKey::new(
+        BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::ConflictingDup(
+            NodeKey::new(HClient(HEX_CLIENT), HObject(HEX_OBJECT)),
+        ))),
+        BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::ReservedClient(
+            HClient(0),
+        ))),
+        BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::UndeclaredClient(
             HClient(HEX_CLIENT),
-            HObject(HEX_OBJECT),
-        )))),
-        BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::ReservedClient(HClient(0)))),
-        BridgeRefusal::Objects(ObjectsRefusal::Graph(RmGraphError::UndeclaredClient(HClient(
-            HEX_CLIENT,
-        )))),
+        ))),
         // ★ B6's five, and they are five rather than one because they answer five
         // different questions about a fragmented message: nothing was in flight; a
         // *different* message interrupted; the head's own declared total is beyond what
@@ -1192,7 +1185,11 @@ fn a_recycled_hclient_is_accepted_and_lands_in_a_different_component() {
     // (1) A user process declares the namespace.
     drive(&mut gpu, &root_alloc_msg(w::NV01_ROOT, HEX_CLIENT, HEX_PID)).expect("first root");
     let b = boundaries(&gpu);
-    assert_eq!(b.user_clients(), vec![HClient(HEX_CLIENT)], "one user process");
+    assert_eq!(
+        b.user_clients(),
+        vec![HClient(HEX_CLIENT)],
+        "one user process"
+    );
     assert!(b.kernel_clients().is_empty(), "no kernel client yet");
 
     // (2) It exits: RM frees the client root, and the value becomes recyclable.
@@ -1200,7 +1197,10 @@ fn a_recycled_hclient_is_accepted_and_lands_in_a_different_component() {
     let b = boundaries(&gpu);
     assert!(b.user_clients().is_empty(), "the user process is gone");
     assert!(b.kernel_clients().is_empty());
-    assert!(b.nodes.is_empty(), "nothing of the namespace survives its root free");
+    assert!(
+        b.nodes.is_empty(),
+        "nothing of the namespace survives its root free"
+    );
 
     // (3) The SAME handle value is declared again — this time by a kernel client.
     drive(
@@ -1510,7 +1510,10 @@ fn malformed_traffic_between_valid_messages_leaves_the_valid_stream_untouched() 
 /// this pins that they classify as themselves rather than falling through to `Other`.
 #[test]
 fn free_and_dup_object_classify_as_themselves_not_as_unknown() {
-    assert_eq!(kf_rm::abi::FUNCTIONS.classify(fn_id::FREE), RpcFunction::Free);
+    assert_eq!(
+        kf_rm::abi::FUNCTIONS.classify(fn_id::FREE),
+        RpcFunction::Free
+    );
     assert_eq!(
         kf_rm::abi::FUNCTIONS.classify(fn_id::DUP_OBJECT),
         RpcFunction::DupObject
@@ -1604,8 +1607,6 @@ fn scenario_x() -> Scenario {
         });
     s
 }
-
-
 
 // ---------------------------------------------------------------------------------
 // 6.1 The policy itself
@@ -1887,7 +1888,11 @@ fn the_projection_from_wire_bytes_equals_the_projection_from_hand_written_events
     // Non-vacuity for the comparison itself: it is not trivially true, and it is not
     // trivially true of an EMPTY projection either.
     assert_ne!(from_bytes, Snapshot::default());
-    assert_eq!(from_bytes.user_clients(), vec![HClient(x::B)], "A exited; B remains");
+    assert_eq!(
+        from_bytes.user_clients(),
+        vec![HClient(x::B)],
+        "A exited; B remains"
+    );
     assert_eq!(from_bytes.kernel_clients(), vec![HClient(x::K)]);
 }
 
@@ -2101,14 +2106,20 @@ fn scenario_compute() -> Scenario {
         cp::VAS,
         ref_classes::VASPACE,
         // The wire's default `vaspace_params` declares a non-device-default index.
-        AllocFacts { vaspace_role: Some(kf_arch::VaSpaceRole::Own), ..Default::default() },
+        AllocFacts {
+            vaspace_role: Some(kf_arch::VaSpaceRole::Own),
+            ..Default::default()
+        },
     ))
     .push(alloc(
         cp::DEV,
         cp::TSG,
         ref_classes::TSG,
         // ⊘ v3 port: the translator carries the TSG's `engineType` (0 here).
-        AllocFacts { channel_engine_type: Some(0), ..vas_only(cp::VAS) },
+        AllocFacts {
+            channel_engine_type: Some(0),
+            ..vas_only(cp::VAS)
+        },
     ))
     .push(alloc(
         cp::VAS,
@@ -2199,7 +2210,6 @@ fn set_page_dir() -> PageDirStatement {
         pdb_aperture: Some(kf_arch::Aperture::Vidmem),
     }
 }
-
 
 // ---------------------------------------------------------------------------------
 // 7.0 Transcription #2 for the new shape — a channel alloc, written byte by byte
@@ -3024,16 +3034,40 @@ fn the_compute_subgraph_from_wire_bytes_equals_the_hand_written_scenario() {
     // Non-vacuity: the equality is not between two empty graphs, and the subgraph really has
     // the shape the name claims.
     assert_ne!(from_bytes, Snapshot::default());
-    assert_eq!(from_bytes.user_clients(), vec![HClient(cp::C)], "one compute process");
-    assert_eq!(from_bytes.nodes.len(), 9, "root, device, VAS, TSG, ctxshare, 2 channels, 2 engine objects");
+    assert_eq!(
+        from_bytes.user_clients(),
+        vec![HClient(cp::C)],
+        "one compute process"
+    );
+    assert_eq!(
+        from_bytes.nodes.len(),
+        9,
+        "root, device, VAS, TSG, ctxshare, 2 channels, 2 engine objects"
+    );
 
     // ★ The fact the engine refinement reads: the CE engine object classifies as a CE object
     // and the compute one as GR — the wire has ONE channel class, so the engine arrives with
     // the engine object. ⊘ Dropped from the old test with the projection and the doorbell
     // plane: `by_pdb`, `by_vchid`, the refined per-channel engines, and ringing both channels.
-    let kind_of = |h: u32| from_bytes.nodes.iter().find(|n| n.0 == NodeKey::new(HClient(cp::C), HObject(h))).map(|n| n.3);
-    assert_eq!(kind_of(cp::GR_OBJ), Some(kf_arch::ObjectKind::EngineObject { engine: kf_arch::ids::EngineKind::GrCompute }));
-    assert_eq!(kind_of(cp::CE_OBJ), Some(kf_arch::ObjectKind::EngineObject { engine: kf_arch::ids::EngineKind::Ce }));
+    let kind_of = |h: u32| {
+        from_bytes
+            .nodes
+            .iter()
+            .find(|n| n.0 == NodeKey::new(HClient(cp::C), HObject(h)))
+            .map(|n| n.3)
+    };
+    assert_eq!(
+        kind_of(cp::GR_OBJ),
+        Some(kf_arch::ObjectKind::EngineObject {
+            engine: kf_arch::ids::EngineKind::GrCompute
+        })
+    );
+    assert_eq!(
+        kind_of(cp::CE_OBJ),
+        Some(kf_arch::ObjectKind::EngineObject {
+            engine: kf_arch::ids::EngineKind::Ce
+        })
+    );
     let _ = &mut gpu;
 }
 
@@ -3107,9 +3141,6 @@ fn one_changed_field_of_the_compute_script_changes_the_projection() {
         );
     }
 }
-
-
-
 
 /// ★★ **The statelessness canary, extended below the root** (§3.3). RM recycles object
 /// handles by design, so the same `hObject` VALUE is re-declared as a **different class**
@@ -3203,7 +3234,6 @@ fn an_object_handle_recycled_as_a_different_class_is_translated_afresh() {
     );
     assert!(policy.census().is_empty(), "nothing here is a refusal");
 }
-
 
 // =================================================================================
 // ★★ 8. **Stage B4 — the one modelled control**: where a VASpace gets its `Pdb`
@@ -3333,11 +3363,7 @@ fn the_hand_written_hex_control_and_the_independent_builder_agree_byte_for_byte(
 fn the_hand_hex_set_page_directory_becomes_the_declared_event() {
     assert_eq!(
         xlate(&HEX_SET_PAGE_DIR),
-        Ok(expected_set_page_dir(
-            spd::C,
-            spd::VAS,
-            spd::PDB
-        )),
+        Ok(expected_set_page_dir(spd::C, spd::VAS, spd::PDB)),
     );
 }
 
@@ -3364,11 +3390,7 @@ fn one_changed_field_of_the_control_moves_exactly_one_field_of_the_event() {
             spd::PDB,
             HEX_SPD_FLAGS
         )),
-        Ok(expected_set_page_dir(
-            0xc1d0_00ff,
-            spd::VAS,
-            spd::PDB
-        )),
+        Ok(expected_set_page_dir(0xc1d0_00ff, spd::VAS, spd::PDB)),
     );
     // The VASpace comes from params+16.
     assert_eq!(
@@ -3379,11 +3401,7 @@ fn one_changed_field_of_the_control_moves_exactly_one_field_of_the_event() {
             spd::PDB,
             HEX_SPD_FLAGS
         )),
-        Ok(expected_set_page_dir(
-            spd::C,
-            0x5c00_00ee,
-            spd::PDB
-        )),
+        Ok(expected_set_page_dir(spd::C, 0x5c00_00ee, spd::PDB)),
     );
     // The PDB comes from params+0, and it is 64 bits wide — a 32-bit read would truncate
     // this value, which is deliberately above 2^32.
@@ -3465,11 +3483,7 @@ fn a_sysmem_rooted_set_page_directory_is_refused_by_name() {
                 spd::PDB,
                 flags
             )),
-            Ok(expected_set_page_dir(
-                spd::C,
-                spd::VAS,
-                spd::PDB
-            )),
+            Ok(expected_set_page_dir(spd::C, spd::VAS, spd::PDB)),
             "flags {flags:#x} is a VIDMEM root and must still become the declared event",
         );
     }
@@ -3506,7 +3520,6 @@ fn a_sysmem_rooted_set_page_directory_is_refused_by_name() {
         );
     }
 }
-
 
 /// ⚠⚠ §16.64 — **the two aperture encodings disagree about what `0` means**, and this is
 /// the test that keeps them from ever being decoded by one another's table.
@@ -3547,11 +3560,7 @@ fn the_two_aperture_encodings_disagree_at_zero_and_are_never_shared() {
 /// and nothing hostile in them reaches the event.
 #[test]
 fn nothing_past_hvaspace_in_the_control_params_is_read() {
-    let want = Ok(expected_set_page_dir(
-        spd::C,
-        spd::VAS,
-        spd::PDB,
-    ));
+    let want = Ok(expected_set_page_dir(spd::C, spd::VAS, spd::PDB));
     for (ch_id, sub_device_id, pasid) in [
         (0u32, 1u32, 0u32),
         (u32::MAX, u32::MAX, u32::MAX),
@@ -3630,11 +3639,7 @@ fn a_zero_hvaspace_names_the_implicit_vas_and_is_refused() {
             spd::PDB,
             HEX_SPD_FLAGS
         )),
-        Ok(expected_set_page_dir(
-            spd::C,
-            1,
-            spd::PDB
-        )),
+        Ok(expected_set_page_dir(spd::C, 1, spd::PDB)),
     );
     // ★ And a zero PDB is NOT refused — it is a legal declaration this port has no
     // opinion about, and inventing a rule for it would be exactly the guess §4 forbids.
@@ -3646,11 +3651,7 @@ fn a_zero_hvaspace_names_the_implicit_vas_and_is_refused() {
             0,
             HEX_SPD_FLAGS
         )),
-        Ok(expected_set_page_dir(
-            spd::C,
-            spd::VAS,
-            0
-        )),
+        Ok(expected_set_page_dir(spd::C, spd::VAS, 0)),
     );
 }
 
@@ -3759,29 +3760,17 @@ fn a_publication_becomes_a_set_page_dir_event_keyed_on_the_headers_hobject() {
         w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
         w::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER,
     ] {
-        let params = publication_params(
-            pubv::ROOT,
-            kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
-            4,
-        );
+        let params = publication_params(pubv::ROOT, kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO, 4);
         assert_eq!(
             xlate(&publication_msg(cmd, pubv::C, pubv::VAS, &params)),
-            Ok(expected_set_page_dir(
-                pubv::C,
-                pubv::VAS,
-                pubv::ROOT
-            )),
+            Ok(expected_set_page_dir(pubv::C, pubv::VAS, pubv::ROOT)),
             "cmd {cmd:#x}",
         );
     }
     // ★ And the VA space really does travel from the header: change ONLY `hObject` and the
     // event's VA space changes with it. Without this, a hard-coded or params-derived
     // handle passes the assertion above.
-    let params = publication_params(
-        pubv::ROOT,
-        kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
-        4,
-    );
+    let params = publication_params(pubv::ROOT, kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO, 4);
     assert_eq!(
         xlate(&publication_msg(
             w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
@@ -3789,11 +3778,7 @@ fn a_publication_becomes_a_set_page_dir_event_keyed_on_the_headers_hobject() {
             0x0000_000c,
             &params
         )),
-        Ok(expected_set_page_dir(
-            pubv::C,
-            0x0000_000c,
-            pubv::ROOT
-        )),
+        Ok(expected_set_page_dir(pubv::C, 0x0000_000c, pubv::ROOT)),
     );
 }
 
@@ -3836,11 +3821,7 @@ fn a_publication_rooted_outside_the_framebuffer_is_refused_by_name() {
     // ⊘ And the fork is on `levels[0]` ONLY. A publication whose ROOT is vidmem and whose
     // deeper levels are not is accepted, because only the root becomes the `Pdb` — the
     // deeper levels are §14.12's "for a different path, must not be reused".
-    let mut params = publication_params(
-        pubv::ROOT,
-        kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
-        4,
-    );
+    let mut params = publication_params(pubv::ROOT, kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO, 4);
     // `levels[1].aperture` — offset 0x28 + 24 + 16.
     params[0x28 + 24 + 16..0x28 + 24 + 20]
         .copy_from_slice(&kf_abi::gvaspacepdes::GMMU_APERTURE_SYS_COH.to_le_bytes());
@@ -3864,11 +3845,7 @@ fn a_publication_rooted_outside_the_framebuffer_is_refused_by_name() {
 /// refusals do not silently swap places.
 #[test]
 fn a_publication_naming_no_vaspace_is_refused_and_the_global_arm_is_reserved_client() {
-    let params = publication_params(
-        pubv::ROOT,
-        kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO,
-        4,
-    );
+    let params = publication_params(pubv::ROOT, kf_abi::gvaspacepdes::GMMU_APERTURE_VIDEO, 4);
     assert_eq!(
         xlate(&publication_msg(
             w::NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
@@ -4051,11 +4028,7 @@ fn a_serialized_control_is_refused_but_copyout_on_error_alone_is_not() {
             ),
         )
     };
-    let want = Ok(expected_set_page_dir(
-        spd::C,
-        spd::VAS,
-        spd::PDB,
-    ));
+    let want = Ok(expected_set_page_dir(spd::C, spd::VAS, spd::PDB));
 
     assert_eq!(xlate(&with_flags(w::RMAPI_RPC_FLAGS_NONE)), want);
     // ★ The neighbour bit alone: ordinary, and it must translate.
@@ -4213,8 +4186,6 @@ fn the_same_control_always_translates_to_the_same_event() {
         assert_eq!(xlate(&HEX_SET_PAGE_DIR), first);
     }
 }
-
-
 
 // ---------------------------------------------------------------------------------
 // 8.4 ★★ The composed run — a routable VAS, entirely from bytes
@@ -4608,7 +4579,10 @@ fn a_dups_handles_are_carried_verbatim_including_zero() {
             // ⊘ v3 port: `engineType` 0 is carried (see
             // `every_class_in_the_table_decodes_its_declared_facts_and_only_those`); the
             // property here is `h_vaspace: None`, unchanged.
-            facts: AllocFacts { channel_engine_type: Some(0), ..Default::default() },
+            facts: AllocFacts {
+                channel_engine_type: Some(0),
+                ..Default::default()
+            },
         })),
         "a TSG declaring hVASpace = 0 declares NOTHING — `h_vaspace: None`",
     );
@@ -5130,7 +5104,11 @@ fn a_dup_that_precedes_its_source_parks_and_resolves_when_the_source_lands() {
         None,
         "an unresolved dup groups nothing — MISS is never a silent wrong grouping",
     );
-    assert_eq!(boundaries(&parked).dups, vec![(alias, vas2)], "…and the edge is parked, not dropped");
+    assert_eq!(
+        boundaries(&parked).dups,
+        vec![(alias, vas2)],
+        "…and the edge is parked, not dropped"
+    );
 }
 
 // ---------------------------------------------------------------------------------
@@ -5180,14 +5158,21 @@ fn two_user_processes_joined_by_a_dup_project_the_same_from_bytes_as_from_events
     // (the grouping the old projection derived from it — "one blast radius" — is not a
     // kf-rm concern; the edge it was computed from is), and both page directories arrived.
     assert_ne!(from_bytes, Snapshot::default());
-    assert_eq!(from_bytes.user_clients(), vec![HClient(tp::C1), HClient(tp::C2)]);
+    assert_eq!(
+        from_bytes.user_clients(),
+        vec![HClient(tp::C1), HClient(tp::C2)]
+    );
     let edge = (
         NodeKey::new(HClient(tp::C2), HObject(tp::ALIAS2)),
         NodeKey::new(HClient(tp::C1), HObject(tp::VAS1)),
     );
     assert_eq!(from_bytes.dups, vec![edge]);
     assert_eq!(
-        objects_from_script(&script).page_dirs.iter().map(|p| p.pdb).collect::<Vec<_>>(),
+        objects_from_script(&script)
+            .page_dirs
+            .iter()
+            .map(|p| p.pdb)
+            .collect::<Vec<_>>(),
         vec![Pdb(tp::PDB1), Pdb(tp::PDB2)],
     );
 
@@ -5204,7 +5189,6 @@ fn two_user_processes_joined_by_a_dup_project_the_same_from_bytes_as_from_events
     assert_ne!(from_bytes, split);
     assert!(split.dups.is_empty());
 }
-
 
 // =================================================================================
 // 8.5 ★★★ The FOURTH AXIS — the guest OS, and the privilege fold it used to hide
@@ -5251,7 +5235,11 @@ fn run_script_under(
         // ⊘ v3: a page-directory statement is a fact too, counted apart from graph events
         // (`GraphPolicy::page_dirs`); "applied" here keeps the old meaning — every message
         // that declared a fact and was accepted.
-        (out, policy.census().clone(), policy.applied() + policy.page_dirs())
+        (
+            out,
+            policy.census().clone(),
+            policy.applied() + policy.page_dirs(),
+        )
     };
     let b = boundaries(&gpu);
     (out, census, applied, b, gpu.page_dirs)
@@ -5345,7 +5333,11 @@ fn a_guest_os_without_a_rule_refuses_every_client_root_and_leaves_no_partial_gra
     );
 
     // 3. The graph is empty. Not "mostly empty" — empty.
-    assert_eq!(b, Snapshot::default(), "no node, no dup, no declaration may exist");
+    assert_eq!(
+        b,
+        Snapshot::default(),
+        "no node, no dup, no declaration may exist"
+    );
     assert!(
         page_dirs.is_empty(),
         "★ a page directory owned by no client is the worst outcome available here: {page_dirs:?}",
@@ -5566,7 +5558,11 @@ fn an_alias_keeps_a_freed_origins_resource_alive_and_the_recycled_handle_is_a_ne
     // resources are live".
     let vas1 = NodeKey::new(HClient(tp::C1), HObject(tp::VAS1));
     let live_at = |snap: &Snapshot| -> Vec<u32> {
-        snap.nodes.iter().filter(|n| n.0 == vas1).map(|n| n.1).collect()
+        snap.nodes
+            .iter()
+            .filter(|n| n.0 == vas1)
+            .map(|n| n.1)
+            .collect()
     };
 
     // Stage 1: the alias exists, one VASpace resource.
@@ -5584,7 +5580,10 @@ fn an_alias_keeps_a_freed_origins_resource_alive_and_the_recycled_handle_is_a_ne
         "★ a freed origin whose alias is live is STILL a live resource",
     );
     assert_eq!(
-        after_free_objs.graph.origin_of(NodeKey::new(HClient(tp::K), HObject(tp::KALIAS))).map(|n| n.id()),
+        after_free_objs
+            .graph
+            .origin_of(NodeKey::new(HClient(tp::K), HObject(tp::KALIAS)))
+            .map(|n| n.id()),
         Some(ResourceKey::first(vas1)),
         "the alias still resolves to the first incarnation",
     );
@@ -5607,11 +5606,19 @@ fn an_alias_keeps_a_freed_origins_resource_alive_and_the_recycled_handle_is_a_ne
          are two DIFFERENT resources at one handle value",
     );
     assert_eq!(
-        recycled_objs.page_dirs.iter().map(|p| p.pdb).collect::<Vec<_>>(),
+        recycled_objs
+            .page_dirs
+            .iter()
+            .map(|p| p.pdb)
+            .collect::<Vec<_>>(),
         vec![Pdb(tp::PDB1), Pdb(tp::PDB1B)],
         "both statements reached the memory plane's seam",
     );
-    assert_eq!(recycled.kernel_clients(), vec![HClient(tp::K)], "the alias holder is the kernel client");
+    assert_eq!(
+        recycled.kernel_clients(),
+        vec![HClient(tp::K)],
+        "the alias holder is the kernel client"
+    );
 }
 
 /// ★ **The statelessness canary, at the dup.** The same `hObject` value is used as an
@@ -5662,7 +5669,6 @@ fn an_alias_handle_recycled_against_a_different_source_is_translated_afresh() {
     );
     assert_eq!(b.user_clients(), vec![HClient(tp::C1), HClient(tp::C2)]);
 }
-
 
 // =================================================================================
 // 7. ★★ B6 — continuation records: reassembly, its two bounds, and the reply question
@@ -6657,11 +6663,7 @@ fn a_fragmented_control_reaches_the_graph_as_the_unfragmented_one_does() {
         );
         assert_eq!(
             last,
-            &Ok(expected_set_page_dir(
-                spd::C,
-                spd::VAS,
-                spd::PDB
-            )),
+            &Ok(expected_set_page_dir(spd::C, spd::VAS, spd::PDB)),
             "★ {what}: the fact is the head's, recovered from bytes split across messages",
         );
         assert!(
@@ -6717,11 +6719,7 @@ fn two_identical_fragmented_controls_produce_two_identical_events() {
         (first, second, third, policy.held())
     };
 
-    let want = Ok(expected_set_page_dir(
-        spd::C,
-        spd::VAS,
-        spd::PDB,
-    ));
+    let want = Ok(expected_set_page_dir(spd::C, spd::VAS, spd::PDB));
     assert_eq!(first, vec![Ok(Translation::Held), want.clone()]);
     assert_eq!(
         second, first,
@@ -6771,11 +6769,7 @@ fn two_policies_interleaving_fragment_runs_do_not_share_a_head() {
         (outs_a, outs_b)
     };
 
-    let want = Ok(expected_set_page_dir(
-        spd::C,
-        spd::VAS,
-        spd::PDB,
-    ));
+    let want = Ok(expected_set_page_dir(spd::C, spd::VAS, spd::PDB));
     assert_eq!(outs_a.last(), Some(&want));
     assert_eq!(
         outs_b, outs_a,
@@ -6792,7 +6786,6 @@ fn two_policies_interleaving_fragment_runs_do_not_share_a_head() {
 // `a_fragmented_control_is_answered_once_per_fragment_on_its_own_sequence` and
 // `hostile_fragment_traffic_through_the_ring_leaves_the_valid_stream_untouched`.
 // ---------------------------------------------------------------------------------
-
 
 /// ★★ **A refused fragmented control fails on its LAST fragment's reply — which is the
 /// one the driver reads the status from.**
@@ -6845,7 +6838,6 @@ fn a_refused_fragmented_control_carries_its_status_on_the_last_fragment() {
     assert_eq!(out.held, run.len() as u64 - 1);
     assert_eq!(out.applied, 0);
 }
-
 
 // =================================================================================
 // 4b. The capability gate — the ported default-deny boundary, driven from the wire
@@ -7124,7 +7116,6 @@ fn a_fragmented_unpermitted_control_is_refused_on_the_last_fragment() {
     assert_eq!(out.applied, 0);
 }
 
-
 /// ★ v3 — `GPU_PROMOTE_CTX` is refused BY NAME. The old translator turned it into
 /// `Translation::CtxPromotion` and joined its VA → physical bindings into an address table
 /// (`kayfabe_core::promote`, "the address-plane join"); that plane is forbidden in v3, so the
@@ -7154,6 +7145,9 @@ fn promote_ctx_is_refused_by_name_now_that_the_join_is_cut() {
         }),
     );
     let r = r.unwrap_err();
-    assert_eq!(r.fault_tag(), FaultTag("BridgeRefusal::PromoteCtxNotModelled"));
+    assert_eq!(
+        r.fault_tag(),
+        FaultTag("BridgeRefusal::PromoteCtxNotModelled")
+    );
     assert_eq!(r.rpc_result(), 0x56, "answered, and not NV_OK");
 }

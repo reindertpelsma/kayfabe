@@ -36,8 +36,8 @@ use kf_abi::chipinfo::{
     NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO, REG_BASE_UNSUPPORTED, RegBaseRow, reg_base,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `ctl_20800a36[]` — the 88 bytes an RTX 3060's GSP answered, as they sit in the capture.
 const ORACLE_CHIP_INFO_PARAMS: &str = concat!(
@@ -103,12 +103,20 @@ fn identity() -> ChipIdentity {
 }
 
 fn encode() -> Vec<u8> {
-    chipinfo::encode_chip_info(&chip().chip_info, &identity(), ga106::board().regs_aperture_len())
-        .expect("the GA106 row encodes")
+    chipinfo::encode_chip_info(
+        &chip().chip_info,
+        &identity(),
+        ga106::board().regs_aperture_len(),
+    )
+    .expect("the GA106 row encodes")
 }
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` whose header asks for `cmd` with `params_size` bytes of params.

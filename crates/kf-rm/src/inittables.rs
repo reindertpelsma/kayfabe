@@ -1304,18 +1304,14 @@ impl WantedTable {
             Self::BifStaticInfo => BIF_STATIC_INFO_PARAMS_SIZE,
             Self::FifoNumChannels => FIFO_NUM_CHANNELS_PARAMS_SIZE,
             Self::GmmuStaticInfo => GMMU_STATIC_INFO_PARAMS_SIZE,
-            Self::RegisterFaultBuffer => {
-                kf_abi::faultbuffer::REGISTER_FAULT_BUFFER_PARAMS_SIZE
-            }
+            Self::RegisterFaultBuffer => kf_abi::faultbuffer::REGISTER_FAULT_BUFFER_PARAMS_SIZE,
             Self::RegisterClientShadowFaultBuffer => {
                 kf_abi::faultbuffer::REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS_SIZE
             }
             Self::RegisterAccessCntrBuffer => {
                 kf_abi::faultbuffer::REGISTER_ACCESS_CNTR_BUFFER_PARAMS_SIZE
             }
-            Self::EventSetNotification => {
-                kf_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
-            }
+            Self::EventSetNotification => kf_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE,
             Self::MemsysL2InvalidateEvict => kf_abi::l2evict::L2_INVALIDATE_EVICT_PARAMS_SIZE,
             Self::McServiceInterrupts => kf_abi::mcintr::MC_SERVICE_INTERRUPTS_PARAMS_SIZE,
             Self::CeFaultMethodBufferSize => {
@@ -1336,9 +1332,7 @@ impl WantedTable {
             }
             Self::GrContextBuffersInfo => grstatic::CONTEXT_BUFFERS_INFO_PARAMS_SIZE,
             Self::GpuInfoV2 => GPU_GET_INFO_V2_PARAMS_SIZE,
-            Self::InternalGpuGetSmcMode => {
-                kf_abi::smcmode::INTERNAL_GPU_GET_SMC_MODE_PARAMS_SIZE
-            }
+            Self::InternalGpuGetSmcMode => kf_abi::smcmode::INTERNAL_GPU_GET_SMC_MODE_PARAMS_SIZE,
             Self::BusGetInfoV2 => kf_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE,
             Self::BusGetPcieSupportedGpuAtomics => {
                 kf_abi::gpuatomics::PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_SIZE
@@ -1377,11 +1371,17 @@ impl WantedTable {
             Self::IntrKernelTable => "NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS",
             Self::PciBarInfo => "NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS",
             Self::ChipInfo => "NV2080_CTRL_INTERNAL_GPU_GET_CHIP_INFO_PARAMS",
-            Self::UserRegisterAccessMap => "NV2080_CTRL_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP_PARAMS",
+            Self::UserRegisterAccessMap => {
+                "NV2080_CTRL_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP_PARAMS"
+            }
             Self::ConstructedFalconInfo => "NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS",
-            Self::MemorySystemStaticConfig => "NV2080_CTRL_INTERNAL_MEMSYS_GET_STATIC_CONFIG_PARAMS",
+            Self::MemorySystemStaticConfig => {
+                "NV2080_CTRL_INTERNAL_MEMSYS_GET_STATIC_CONFIG_PARAMS"
+            }
             Self::InternalDeviceInfo => "NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS",
-            Self::ConfComputeStaticInfo => "NV2080_CTRL_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO_PARAMS",
+            Self::ConfComputeStaticInfo => {
+                "NV2080_CTRL_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO_PARAMS"
+            }
             Self::BifStaticInfo => "NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS",
             Self::FifoNumChannels => "NV2080_CTRL_INTERNAL_FIFO_GET_NUM_CHANNELS_PARAMS",
             Self::GmmuStaticInfo => "NV2080_CTRL_INTERNAL_GMMU_GET_STATIC_INFO_PARAMS",
@@ -1389,27 +1389,41 @@ impl WantedTable {
             Self::RegisterClientShadowFaultBuffer => {
                 "NV2080_CTRL_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS"
             }
-            Self::RegisterAccessCntrBuffer => "NV2080_CTRL_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER_PARAMS",
+            Self::RegisterAccessCntrBuffer => {
+                "NV2080_CTRL_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER_PARAMS"
+            }
             Self::EventSetNotification => "NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS",
-            Self::MemsysL2InvalidateEvict => "NV2080_CTRL_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT_PARAMS",
+            Self::MemsysL2InvalidateEvict => {
+                "NV2080_CTRL_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT_PARAMS"
+            }
             Self::CeFaultMethodBufferSize => "NV2080_CTRL_CE_GET_FAULT_METHOD_BUFFER_SIZE_PARAMS",
             Self::GrCaps => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CAPS_PARAMS",
             Self::GrInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_INFO_PARAMS",
-            Self::GrFloorsweepingMasks => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS_PARAMS",
+            Self::GrFloorsweepingMasks => {
+                "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS_PARAMS"
+            }
             Self::GrGlobalSmOrder => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS",
-            Self::GrFecsRecordSize => "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE_PARAMS",
+            Self::GrFecsRecordSize => {
+                "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE_PARAMS"
+            }
             Self::GrPdbProperties => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES_PARAMS",
             Self::GrZcullInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_ZCULL_INFO_PARAMS",
             Self::FbGetGpuCacheInfo => "NV2080_CTRL_FB_GET_GPU_CACHE_INFO_PARAMS",
-            Self::FifoGetEngineContextProperties => "NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS",
+            Self::FifoGetEngineContextProperties => {
+                "NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS"
+            }
             Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
                 "NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS"
             }
-            Self::GrContextBuffersInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS",
+            Self::GrContextBuffersInfo => {
+                "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS"
+            }
             Self::GpuInfoV2 => "NV2080_CTRL_GPU_GET_INFO_V2_PARAMS",
             Self::InternalGpuGetSmcMode => "NV2080_CTRL_INTERNAL_GPU_GET_SMC_MODE_PARAMS",
             Self::BusGetInfoV2 => "NV2080_CTRL_BUS_GET_INFO_V2_PARAMS",
-            Self::BusGetPcieSupportedGpuAtomics => "NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS",
+            Self::BusGetPcieSupportedGpuAtomics => {
+                "NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS"
+            }
             Self::FbGetInfoV2 => "NV2080_CTRL_FB_GET_INFO_V2_PARAMS",
             Self::CeGetAllPhysicalCaps => "NV2080_CTRL_CE_GET_ALL_PHYSICAL_CAPS_PARAMS",
             Self::CeGetPhysicalCaps => "NV2080_CTRL_CE_GET_PHYSICAL_CAPS_PARAMS",
@@ -1419,13 +1433,17 @@ impl WantedTable {
             Self::CudartPerfLevelInfoV2 => "NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS",
             Self::BiosGetInfoV2 => "NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS",
             Self::C2cInfo => "NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS",
-            Self::PromoteFaultMethodBuffers => "NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS",
+            Self::PromoteFaultMethodBuffers => {
+                "NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS"
+            }
             // ⚠ A WAIT-PATH control: a refusal here is a forged completion
             // (`a_refusal_the_guest_reads_as_wait_over_forges_a_completion`). It is gated like the
             // rest only because its layout is ONE `NvU32` at every measured tag — pinned by
             // `wanted_table_versions.rs`, so the gate structurally cannot fire on it.
             Self::McServiceInterrupts => "NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS",
-            Self::GrSmIssueRateModifier => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS",
+            Self::GrSmIssueRateModifier => {
+                "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS"
+            }
             Self::GssLegacy8159
             | Self::GssLegacy8162
             | Self::CudartWatchdogInfo
@@ -1461,7 +1479,11 @@ impl InitTablePolicy {
     /// call sites are exactly the reason the probing case is a separate, named one
     /// ([`InitTablePolicy::with_probe_arm`]) rather than a parameter here.
     #[must_use]
-    pub fn new(board: Arc<BoardFacts>, host: Arc<HostFacts>, driver: DriverAbiTable) -> InitTablePolicy {
+    pub fn new(
+        board: Arc<BoardFacts>,
+        host: Arc<HostFacts>,
+        driver: DriverAbiTable,
+    ) -> InitTablePolicy {
         InitTablePolicy::with_probe_arm(board, host, driver, eventnotify::ProbeArmSet::default())
     }
 
@@ -1521,7 +1543,6 @@ impl InitTablePolicy {
         released
     }
 
-
     /// The guest driver version this policy has latched off fn 1, if any.
     ///
     /// Exposed so a test can ask what was observed without reaching into the reply plane,
@@ -1572,12 +1593,14 @@ enum Carry {
 }
 
 fn transcode_reviewed(want: WantedTable) -> Option<Carry> {
-    transcode_reviewed_paths(want).map(Carry::Generic).or(match want {
-        // subtreeMap is {subtreeMask} from 580.65.06 and {subtreeStart, subtreeEnd} before;
-        // engineIdx is an MC_ENGINE_IDX value whose numbering is per version.
-        WantedTable::IntrKernelTable => Some(Carry::Intr),
-        _ => None,
-    })
+    transcode_reviewed_paths(want)
+        .map(Carry::Generic)
+        .or(match want {
+            // subtreeMap is {subtreeMask} from 580.65.06 and {subtreeStart, subtreeEnd} before;
+            // engineIdx is an MC_ENGINE_IDX value whose numbering is per version.
+            WantedTable::IntrKernelTable => Some(Carry::Intr),
+            _ => None,
+        })
 }
 
 fn transcode_reviewed_paths(want: WantedTable) -> Option<&'static [&'static str]> {
@@ -1648,7 +1671,9 @@ impl InitTablePolicy {
         carry: Carry,
     ) -> Option<Reply> {
         let v = self.driver.driver_version();
-        let runs = kf_abi::generated::matrix::ALL_STRUCTS.iter().find(|r| r.name == ct)?;
+        let runs = kf_abi::generated::matrix::ALL_STRUCTS
+            .iter()
+            .find(|r| r.name == ct)?;
         let (Ok(guest), Ok(bench)) = (
             kf_abi::matrix::Resolved::of(runs, v),
             kf_abi::matrix::Resolved::of(runs, kf_abi::versions::BENCH_DRIVER),
@@ -1667,13 +1692,20 @@ impl InitTablePolicy {
         let up = match kf_abi::matrix::transcode(&guest, &bench, &cmd.payload[at..at + gsz], &[]) {
             Ok((b, _)) => b,
             Err(e) => {
-                eprintln!("W349REFUSE cmd={:#010x} why=transcode-up struct={ct} guest_driver={v}: {e}", req.cmd);
+                eprintln!(
+                    "W349REFUSE cmd={:#010x} why=transcode-up struct={ct} guest_driver={v}: {e}",
+                    req.cmd
+                );
                 return refuse();
             }
         };
         let size_off = self.driver.rm_control_wire().params_size_off;
         let mut payload = cmd.payload[..at].to_vec();
-        payload[size_off..size_off + 4].copy_from_slice(&u32::try_from(bench.size()).unwrap_or(u32::MAX).to_le_bytes());
+        payload[size_off..size_off + 4].copy_from_slice(
+            &u32::try_from(bench.size())
+                .unwrap_or(u32::MAX)
+                .to_le_bytes(),
+        );
         payload.extend_from_slice(&up);
         let inner = RpcCommand {
             function: cmd.function,
@@ -1692,8 +1724,10 @@ impl InitTablePolicy {
         }
         let bench_reply = &reply.body[at..at + bench.size()];
         let carried = match carry {
-            Carry::Generic(truncatable) => kf_abi::matrix::transcode(&bench, &guest, bench_reply, truncatable)
-                .map_err(|e| e.to_string()),
+            Carry::Generic(truncatable) => {
+                kf_abi::matrix::transcode(&bench, &guest, bench_reply, truncatable)
+                    .map_err(|e| e.to_string())
+            }
             Carry::Intr => kf_abi::inittables::intr_kernel_table_at(bench_reply, v)
                 .map(|b| (b, Vec::new()))
                 .map_err(|e| e.to_string()),
@@ -1701,7 +1735,10 @@ impl InitTablePolicy {
         let (down, dropped) = match carried {
             Ok(x) => x,
             Err(e) => {
-                eprintln!("W349REFUSE cmd={:#010x} why=transcode-down struct={ct} guest_driver={v}: {e}", req.cmd);
+                eprintln!(
+                    "W349REFUSE cmd={:#010x} why=transcode-down struct={ct} guest_driver={v}: {e}",
+                    req.cmd
+                );
                 return refuse();
             }
         };
@@ -1711,9 +1748,13 @@ impl InitTablePolicy {
             );
         }
         let mut body = reply.body[..at].to_vec();
-        body[size_off..size_off + 4].copy_from_slice(&u32::try_from(gsz).unwrap_or(u32::MAX).to_le_bytes());
+        body[size_off..size_off + 4]
+            .copy_from_slice(&u32::try_from(gsz).unwrap_or(u32::MAX).to_le_bytes());
         body.extend_from_slice(&down);
-        Some(Reply { rpc_result: reply.rpc_result, body })
+        Some(Reply {
+            rpc_result: reply.rpc_result,
+            body,
+        })
     }
 }
 
@@ -1751,10 +1792,9 @@ impl CommandPolicy for InitTablePolicy {
             // could have reported a string the guest had already replaced. `tests/
             // gsp_get_features.rs::the_latch_always_reflects_the_most_recent_handshake` is
             // that defect's fixture.
-            self.guest_firmware =
-                kf_abi::guestsysinfo::decode_guest_driver_version(&cmd.payload)
-                    .ok()
-                    .and_then(|text| kf_abi::gspfeatures::FirmwareVersion::parse(text).ok());
+            self.guest_firmware = kf_abi::guestsysinfo::decode_guest_driver_version(&cmd.payload)
+                .ok()
+                .and_then(|text| kf_abi::gspfeatures::FirmwareVersion::parse(text).ok());
             return None;
         }
         // ★★★★★ **w760p — RECLAIM THE NOTIFY SLOTS A FREED CLIENT WAS HOLDING.**
@@ -1896,31 +1936,51 @@ impl CommandPolicy for InitTablePolicy {
             if cmd.payload.len() >= req.params_at + ps {
                 let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
                 if kf_abi::gssreplay::answer(&self.host.gss_replay, req.cmd, &mut params) {
-                    eprintln!("kf3: GSS {:#010x} answered from the host's realize-time reply", req.cmd);
+                    eprintln!(
+                        "kf3: GSS {:#010x} answered from the host's realize-time reply",
+                        req.cmd
+                    );
                     let mut body = cmd.payload.clone();
-                    body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                    body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                        .copy_from_slice(&NV_OK.to_le_bytes());
                     body[req.params_at..req.params_at + ps].copy_from_slice(&params);
-                    return Some(Reply { rpc_result: NV_OK, body });
+                    return Some(Reply {
+                        rpc_result: NV_OK,
+                        body,
+                    });
                 }
             }
         }
-        if kf_abi::videocaps::caps_len(req.cmd).is_some() && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+        if kf_abi::videocaps::caps_len(req.cmd).is_some()
+            && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+        {
             let ps = req.params_size as usize;
             if cmd.payload.len() >= req.params_at + ps {
                 let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
                 // ★ At the GUEST's measured layout (8 bytes at 580.65.06, 12 from 580.95.05).
                 let answered = match self.driver.video_caps_layout(req.cmd) {
-                    Some(layout) => kf_abi::videocaps::answer_at(layout, &self.host.video_caps, req.cmd, &mut params),
+                    Some(layout) => kf_abi::videocaps::answer_at(
+                        layout,
+                        &self.host.video_caps,
+                        req.cmd,
+                        &mut params,
+                    ),
                     None => Err(kf_abi::videocaps::CapsRefusal::NotACapsControl(req.cmd)),
                 };
                 match answered {
                     Ok(()) => {
                         let mut body = cmd.payload.clone();
-                        body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                        body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                            .copy_from_slice(&NV_OK.to_le_bytes());
                         body[req.params_at..req.params_at + ps].copy_from_slice(&params);
-                        return Some(Reply { rpc_result: NV_OK, body });
+                        return Some(Reply {
+                            rpc_result: NV_OK,
+                            body,
+                        });
                     }
-                    Err(why) => eprintln!("kf3: video caps {:#010x} not answered: {why:?}", req.cmd),
+                    Err(why) => {
+                        eprintln!("kf3: video caps {:#010x} not answered: {why:?}", req.cmd)
+                    }
                 }
             }
         }
@@ -2085,7 +2145,10 @@ impl CommandPolicy for InitTablePolicy {
             // divide-by-zero (`mem_mgr_gm107.c:211`). There is no answer that is safe by
             // default here; there is only a row that is right.
             WantedTable::MemorySystemStaticConfig => {
-                match memsysconfig::encode_memsys_static_config(&self.host.memory_system, crate::hostfacts::memsys_readers(self.host.family)) {
+                match memsysconfig::encode_memsys_static_config(
+                    &self.host.memory_system,
+                    crate::hostfacts::memsys_readers(self.host.family),
+                ) {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
                 }
@@ -2468,7 +2531,11 @@ impl CommandPolicy for InitTablePolicy {
                 {
                     return refuse();
                 }
-                match self.host.gr_info.encode(crate::hostfacts::gr_info_readers(self.host.family)) {
+                match self
+                    .host
+                    .gr_info
+                    .encode(crate::hostfacts::gr_info_readers(self.host.family))
+                {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
                 }
@@ -2509,7 +2576,12 @@ impl CommandPolicy for InitTablePolicy {
             },
             WantedTable::FifoGetEngineContextProperties => {
                 let at = req.params_at;
-                let id = u32::from_le_bytes([cmd.payload[at], cmd.payload[at + 1], cmd.payload[at + 2], cmd.payload[at + 3]]) & 0x1f;
+                let id = u32::from_le_bytes([
+                    cmd.payload[at],
+                    cmd.payload[at + 1],
+                    cmd.payload[at + 2],
+                    cmd.payload[at + 3],
+                ]) & 0x1f;
                 // `NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_*` GRAPHICS, _ZCULL,
                 // _PREEMPT, _SPILL, _PAGEPOOL, _BETACB, _RTV, _SETUP — RM's own list.
                 if ![0x00, 0x08, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x19].contains(&id) {
@@ -2619,8 +2691,7 @@ impl CommandPolicy for InitTablePolicy {
                 let at = req.params_at;
                 let answers = [(
                     kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN_INFO,
-                    kf_abi::businfo::PcieGenInfo::fully_trained(self.host.pcie_max_gen)
-                        .encode(),
+                    kf_abi::businfo::PcieGenInfo::fully_trained(self.host.pcie_max_gen).encode(),
                 )];
                 match kf_abi::businfo::answer_bus_get_info_v2(
                     &cmd.payload[at..at + kf_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE],
@@ -2680,7 +2751,12 @@ impl CommandPolicy for InitTablePolicy {
                 // `[measured vgfx 2026-09-26]`).
                 let mut answers = self.host.forwarded_fb_info.clone();
                 answers.extend(
-                    self.host.forwarded_fb_extra.iter().filter(|(i, _)| !answers.iter().any(|(d, _)| d == i)).copied().collect::<Vec<_>>(),
+                    self.host
+                        .forwarded_fb_extra
+                        .iter()
+                        .filter(|(i, _)| !answers.iter().any(|(d, _)| d == i))
+                        .copied()
+                        .collect::<Vec<_>>(),
                 );
                 match kf_abi::fbinfo::answer_fb_get_info_v2(
                     &cmd.payload[at..at + kf_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE],
@@ -2714,8 +2790,10 @@ impl CommandPolicy for InitTablePolicy {
             // (`kgmmuInitCeMmuFaultIdRange_GA100` needs an LCE row to boot at all), and a
             // `present` of zero is a declared value meaning "this GPU has no copy engines".
             WantedTable::CeGetAllPhysicalCaps => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
-                else {
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(
+                    &self.host.engines,
+                    &self.host.ce_caps,
+                ) else {
                     return refuse();
                 };
                 kf_abi::cecaps::encode_ce_get_all_physical_caps(&geometry)
@@ -2739,8 +2817,10 @@ impl CommandPolicy for InitTablePolicy {
             // `0x20802a02` refusing LCE4 on a real GA106. ⊘ A zero caps row would NOT be the
             // safe fallback: `{0,0}` positively claims a copy engine that can do nothing.
             WantedTable::CeGetPhysicalCaps => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
-                else {
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(
+                    &self.host.engines,
+                    &self.host.ce_caps,
+                ) else {
                     return refuse();
                 };
                 let at = req.params_at;
@@ -2765,8 +2845,10 @@ impl CommandPolicy for InitTablePolicy {
             // `queryCopyEngines` issues both per engine, six lines apart, each with a hard
             // `goto done`. Serving one alone moves the wall and buys nothing.
             WantedTable::CeGetCePceMask => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
-                else {
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(
+                    &self.host.engines,
+                    &self.host.ce_caps,
+                ) else {
                     return refuse();
                 };
                 let at = req.params_at;
@@ -2904,7 +2986,10 @@ impl CommandPolicy for InitTablePolicy {
                 let Some(v) = self.host.vbios_version else {
                     return refuse();
                 };
-                match kf_abi::vbios::answer_bios_get_info_v2(&cmd.payload[at..at + want.params_size()], v) {
+                match kf_abi::vbios::answer_bios_get_info_v2(
+                    &cmd.payload[at..at + want.params_size()],
+                    v,
+                ) {
                     Some(p) => p,
                     None => return refuse(),
                 }
@@ -3048,7 +3133,9 @@ kf_util::assert_send_sync!(InitTablePolicy, WantedTable);
 /// or the version (then the caller's size check is the only gate, exactly as before).
 #[must_use]
 pub fn layout_differs_from_bench(c_type: &str, version: kf_abi::DriverVersion) -> Option<usize> {
-    let runs = kf_abi::generated::matrix::ALL_STRUCTS.iter().find(|r| r.name == c_type)?;
+    let runs = kf_abi::generated::matrix::ALL_STRUCTS
+        .iter()
+        .find(|r| r.name == c_type)?;
     let at_guest = runs.at(version).ok()?;
     let at_bench = runs.at(kf_abi::versions::BENCH_DRIVER).ok()?;
     match (at_guest, at_bench) {
@@ -3057,4 +3144,3 @@ pub fn layout_differs_from_bench(c_type: &str, version: kf_abi::DriverVersion) -
         (None, _) => Some(0),
     }
 }
-

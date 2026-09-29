@@ -12,9 +12,7 @@
 //! ⚠ These tests say what flag we SEND. They say nothing about what RM does with it — that
 //! is the hardware half, and its evidence is the trace cited above.
 
-use kf_abi::bringup::{
-    NVOS46_BIG_PAGE_BYTES, NVOS46_FLAGS_PAGE_SIZE_4KB, nvos46_page_size_flag,
-};
+use kf_abi::bringup::{NVOS46_BIG_PAGE_BYTES, NVOS46_FLAGS_PAGE_SIZE_4KB, nvos46_page_size_flag};
 
 /// The three VAs w744 measured at `0/3 honoured` without the flag and `3/3` with it.
 ///

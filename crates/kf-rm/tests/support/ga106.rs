@@ -77,10 +77,22 @@ pub fn fb_regions(fb_size_mb: u64) -> Vec<FbRegion> {
 /// Old `ga10x::GA106_PCI_BARS`.
 pub fn pci_bars() -> Vec<PciBarRow> {
     vec![
-        PciBarRow { name: "registers", size_bytes: REGS_APERTURE_LEN },
-        PciBarRow { name: "framebuffer-window", size_bytes: 256 << 20 },
-        PciBarRow { name: "instance-window", size_bytes: 32 << 20 },
-        PciBarRow { name: "io", size_bytes: 0 },
+        PciBarRow {
+            name: "registers",
+            size_bytes: REGS_APERTURE_LEN,
+        },
+        PciBarRow {
+            name: "framebuffer-window",
+            size_bytes: 256 << 20,
+        },
+        PciBarRow {
+            name: "instance-window",
+            size_bytes: 32 << 20,
+        },
+        PciBarRow {
+            name: "io",
+            size_bytes: 0,
+        },
     ]
 }
 
@@ -433,28 +445,55 @@ pub fn host_facts() -> HostFacts {
         lce_pce_masks: kf_abi::cepce::GA106_LCE_PCE_MASKS.to_vec(),
         intr_table: INTR_TABLE.to_vec(),
         intr_subtree_map: INTR_SUBTREE_MAP,
-        chip_info: ChipInfoRow { chip_sub_rev: 0, is_cmp_sku: false, reg_bases: REG_BASES },
+        chip_info: ChipInfoRow {
+            chip_sub_rev: 0,
+            is_cmp_sku: false,
+            reg_bases: REG_BASES,
+        },
         user_register_access_map: RegisterAccessMapRow::NOT_PUBLISHED,
         constructed_falcons: FalconInventoryRow::NONE,
         memory_system: MEMORY_SYSTEM,
         device_info: DeviceInfoRow {
             pri_bases: &[
-                EnginePriBase { engine: "GR0", pri_base: DevicePriBase::At(0x0040_0000) },
-                EnginePriBase { engine: "CE0", pri_base: DevicePriBase::At(0x0010_4000) },
-                EnginePriBase { engine: "CE1", pri_base: DevicePriBase::At(0x0010_4000) },
-                EnginePriBase { engine: "CE2", pri_base: DevicePriBase::At(0x0010_4000) },
-                EnginePriBase { engine: "CE3", pri_base: DevicePriBase::At(0x0010_4000) },
-                EnginePriBase { engine: "SOFTWARE", pri_base: DevicePriBase::NotADevice },
+                EnginePriBase {
+                    engine: "GR0",
+                    pri_base: DevicePriBase::At(0x0040_0000),
+                },
+                EnginePriBase {
+                    engine: "CE0",
+                    pri_base: DevicePriBase::At(0x0010_4000),
+                },
+                EnginePriBase {
+                    engine: "CE1",
+                    pri_base: DevicePriBase::At(0x0010_4000),
+                },
+                EnginePriBase {
+                    engine: "CE2",
+                    pri_base: DevicePriBase::At(0x0010_4000),
+                },
+                EnginePriBase {
+                    engine: "CE3",
+                    pri_base: DevicePriBase::At(0x0010_4000),
+                },
+                EnginePriBase {
+                    engine: "SOFTWARE",
+                    pri_base: DevicePriBase::NotADevice,
+                },
             ],
         },
-        conf_compute: ConfComputeRow { bar1_trusted: false, pcie_trusted: false },
+        conf_compute: ConfComputeRow {
+            bar1_trusted: false,
+            pcie_trusted: false,
+        },
         bif_static: BifStaticRow {
             pcie_gen4_capable: false,
             c2c_link_up: false,
             device_multi_function: false,
             gcx_pmu_cfg_space_restore: false,
         },
-        fifo_channels: FifoChannelsRow { channels_per_runlist: 0x0800 },
+        fifo_channels: FifoChannelsRow {
+            channels_per_runlist: 0x0800,
+        },
         gmmu_static: GmmuStaticRow {
             replayable_size: 0x0003_1000,
             replayable_shadow_metadata_size: 0,
@@ -517,7 +556,10 @@ pub fn ce_caps() -> kf_abi::cecaps::HostCeCaps {
 /// question: the request with the nine `kf_abi::cudartinit::SPLICED` words written.
 pub fn perf_level_info_v2() -> Vec<u8> {
     let mut r = kf_abi::cudartinit::perf_level_info_v2_request();
-    assert!(kf_abi::cudartinit::splice_cudart_init(kf_abi::cudartinit::PERF_GET_LEVEL_INFO_V2, &mut r));
+    assert!(kf_abi::cudartinit::splice_cudart_init(
+        kf_abi::cudartinit::PERF_GET_LEVEL_INFO_V2,
+        &mut r
+    ));
     r
 }
 

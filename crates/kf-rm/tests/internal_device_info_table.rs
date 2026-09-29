@@ -40,8 +40,8 @@ use kf_abi::deviceinfo::{
 };
 use kf_abi::inittables::{ENGINE_DATA_TYPES, FifoDeviceEntry};
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// GA106's register aperture — 16 MiB, spelled as a literal so the bound under test is not
 /// derived from the same place the encoder reads it.
@@ -106,9 +106,7 @@ fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
     // The five entries embedded here — 0, 4, 5, 6 and 7 of the twelve — end well inside it.
     assert!(4 + unhex(ORACLE_FIVE).len() <= ORACLE_DEEPEST_BYTE);
     // ⊘ And the row IS short: `oracle_params`' 24580-byte buffer is mostly this file's.
-    assert!(!kf_abi::oracle::field_is_captured(
-        0, row.psize, row.kept
-    ));
+    assert!(!kf_abi::oracle::field_is_captured(0, row.psize, row.kept));
 }
 
 fn chip() -> kf_rm::HostFacts {
@@ -121,7 +119,11 @@ fn device_info() -> DeviceInfoRow {
 }
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 fn encode(engines: &[FifoDeviceEntry], row: &DeviceInfoRow) -> Result<Vec<u8>, DeviceInfoError> {
@@ -195,8 +197,7 @@ fn the_projection_reproduces_the_oracles_five_rows_byte_for_byte() {
     // recorded through a driver, the other is `GA106_ENGINES` — itself read out of a
     // *different* control's capture, `0x20801112` — projected through offsets read from
     // `ctrl2080internal.h`.
-    let got = encode(ga106::ENGINES, &device_info())
-        .expect("this chip's engines project");
+    let got = encode(ga106::ENGINES, &device_info()).expect("this chip's engines project");
     assert_eq!(got, oracle_params(), "every byte of the 24580-byte reply");
 }
 
@@ -381,9 +382,7 @@ fn the_pseudo_engine_is_excluded_by_its_marking_and_not_by_its_name() {
     );
     let marked_absent: Vec<&str> = ga106::ENGINES
         .iter()
-        .filter(|e| {
-            device_info().pri_base_for(e.name) == Some(DevicePriBase::NotADevice)
-        })
+        .filter(|e| device_info().pri_base_for(e.name) == Some(DevicePriBase::NotADevice))
         .map(|e| e.name)
         .collect();
     assert_eq!(marked_absent, vec!["SOFTWARE"]);
@@ -714,11 +713,29 @@ fn copy_engine_fault_ids_that_are_not_one_run_are_unencodable() {
         e.engine_data[engine_info_type::INSTANCE_ID] = inst;
         e
     };
-    let engines = [lce("CE0", 65, 0), lce("CE1", 66, 1), lce("CE4", 69, 4), lce("CE5", 70, 5)];
-    let r4 = row(vec![at("CE0", 0x0010_4000), at("CE1", 0x0010_4000), at("CE4", 0x0010_4000), at("CE5", 0x0010_4000)]);
-    assert!(encode(&engines, &r4).is_ok(), "a floorswept LCE's slot is a copy engine's id");
+    let engines = [
+        lce("CE0", 65, 0),
+        lce("CE1", 66, 1),
+        lce("CE4", 69, 4),
+        lce("CE5", 70, 5),
+    ];
+    let r4 = row(vec![
+        at("CE0", 0x0010_4000),
+        at("CE1", 0x0010_4000),
+        at("CE4", 0x0010_4000),
+        at("CE5", 0x0010_4000),
+    ]);
+    assert!(
+        encode(&engines, &r4).is_ok(),
+        "a floorswept LCE's slot is a copy engine's id"
+    );
     // …but an id that is not CE0+instance for the others' CE0 is still nobody's.
-    let engines = [lce("CE0", 65, 0), lce("CE1", 66, 1), lce("CE4", 70, 4), lce("CE5", 71, 5)];
+    let engines = [
+        lce("CE0", 65, 0),
+        lce("CE1", 66, 1),
+        lce("CE4", 70, 4),
+        lce("CE5", 71, 5),
+    ];
     assert!(matches!(
         encode(&engines, &r4).expect_err("refused"),
         DeviceInfoError::CopyEngineFaultIdsNotContiguous { .. }
@@ -807,7 +824,11 @@ fn the_serve_site_refuses_when_the_projection_declines() {
     let engines: &'static [FifoDeviceEntry] =
         Box::leak(Box::new([one_ce(), synth("GR0", 0x40, 0, 1, 0x00c0_0000)]));
     let bad = bad_chip(engines, row(vec![at("CE0", 0x0010_4000)]));
-    let mut p = InitTablePolicy::new(ga106::board(), bad, *table_for(BENCH_DRIVER).expect("bench ABI"));
+    let mut p = InitTablePolicy::new(
+        ga106::board(),
+        bad,
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    );
     let reply = p
         .respond(&device_info_command(
             NV2080_CTRL_CMD_INTERNAL_GET_DEVICE_INFO_TABLE,

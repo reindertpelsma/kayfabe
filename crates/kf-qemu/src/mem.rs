@@ -35,7 +35,9 @@
 
 use crate::raw_unsafe::{BackendFd, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
-use kf_linux_raw::{Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, SharedRam};
+use kf_linux_raw::{
+    Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, SharedRam,
+};
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
 use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, Settle, UsermodeRow};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey};
@@ -103,7 +105,12 @@ impl RamMap {
     pub fn block_for(&self, gpa: u64, len: u64) -> Option<RamBlock> {
         let v = self.blocks.read().ok()?;
         v.iter()
-            .find(|b| gpa >= b.gpa && gpa.checked_add(len).is_some_and(|e| e - b.gpa <= b.mem.len() as u64))
+            .find(|b| {
+                gpa >= b.gpa
+                    && gpa
+                        .checked_add(len)
+                        .is_some_and(|e| e - b.gpa <= b.mem.len() as u64)
+            })
             .copied()
     }
 
@@ -116,7 +123,12 @@ impl RamMap {
         let first = v.iter().find_map(|x| x.fd)?;
         v.iter()
             .filter(|b| b.fd == Some(first))
-            .find(|b| off >= b.fd_off && off.checked_add(len).is_some_and(|e| e - b.fd_off <= b.mem.len() as u64))
+            .find(|b| {
+                off >= b.fd_off
+                    && off
+                        .checked_add(len)
+                        .is_some_and(|e| e - b.fd_off <= b.mem.len() as u64)
+            })
             .map(|b| (b.mem, (off - b.fd_off) as usize))
     }
 
@@ -173,7 +185,11 @@ impl ViewIndex {
     }
 
     fn forget(g: &mut ViewIndexInner, name: &'static str, at: u64, len: u64) {
-        let pages: Vec<(&'static str, u64)> = g.by_win.range((name, at & !(VIEW_PAGE - 1))..(name, at.saturating_add(len))).map(|(k, _)| *k).collect();
+        let pages: Vec<(&'static str, u64)> = g
+            .by_win
+            .range((name, at & !(VIEW_PAGE - 1))..(name, at.saturating_add(len)))
+            .map(|(k, _)| *k)
+            .collect();
         for k in pages {
             if let Some(sp) = g.by_win.remove(&k)
                 && let Some(v) = g.by_store.get_mut(&sp)
@@ -186,12 +202,22 @@ impl ViewIndex {
         }
     }
 
-    fn placed(&self, name: &'static str, win: &'static GuestWindow, at: u64, len: u64, store_off: u64) {
+    fn placed(
+        &self,
+        name: &'static str,
+        win: &'static GuestWindow,
+        at: u64,
+        len: u64,
+        store_off: u64,
+    ) {
         self.with(|g| {
             Self::forget(g, name, at, len);
             let mut p = 0;
             while p < len {
-                let (wp, sp) = ((at + p) & !(VIEW_PAGE - 1), (store_off + p) & !(VIEW_PAGE - 1));
+                let (wp, sp) = (
+                    (at + p) & !(VIEW_PAGE - 1),
+                    (store_off + p) & !(VIEW_PAGE - 1),
+                );
                 g.by_win.insert((name, wp), sp);
                 g.by_store.entry(sp).or_default().push((name, win, wp));
                 p += VIEW_PAGE;
@@ -206,8 +232,12 @@ impl ViewIndex {
     /// Every guest window position showing store offset `off`, and the `n` bytes the guest reads
     /// there now (`None`: the read was refused).
     pub fn guest_views(&self, off: u64, n: usize) -> Vec<(&'static str, u64, Option<Vec<u8>>)> {
-        let Ok(g) = self.inner.try_lock() else { return vec![("(index busy)", 0, None)] };
-        let Some(v) = g.by_store.get(&(off & !(VIEW_PAGE - 1))) else { return Vec::new() };
+        let Ok(g) = self.inner.try_lock() else {
+            return vec![("(index busy)", 0, None)];
+        };
+        let Some(v) = g.by_store.get(&(off & !(VIEW_PAGE - 1))) else {
+            return Vec::new();
+        };
         v.iter()
             .map(|(name, win, wp)| {
                 let at = wp + (off & (VIEW_PAGE - 1));
@@ -224,7 +254,10 @@ impl ViewIndex {
 pub fn view_index() -> Option<&'static ViewIndex> {
     static IDX: std::sync::OnceLock<ViewIndex> = std::sync::OnceLock::new();
     crate::chan::completion_probe_ms()?;
-    Some(IDX.get_or_init(|| ViewIndex { inner: Mutex::new(ViewIndexInner::default()), dropped: AtomicU64::new(0) }))
+    Some(IDX.get_or_init(|| ViewIndex {
+        inner: Mutex::new(ViewIndexInner::default()),
+        dropped: AtomicU64::new(0),
+    }))
 }
 
 /// ★ The host verbs of ONE guest window — [`ViewOps`] over the real session.
@@ -268,7 +301,9 @@ impl TrapNodes {
         let (retire_tx, retire_rx) = std::sync::mpsc::channel::<StoreView>();
         let open = move || rm.open_view_node(MapNode::Gpu, ViewAccess::ReadWrite);
         for _ in 0..TRAP_NODES {
-            node_tx.try_send(open().map_err(|e| format!("PRAMIN node: {e:?}"))?).map_err(|e| format!("{e}"))?;
+            node_tx
+                .try_send(open().map_err(|e| format!("PRAMIN node: {e:?}"))?)
+                .map_err(|e| format!("{e}"))?;
         }
         let t: &'static TrapNodes = Box::leak(Box::new(TrapNodes {
             nodes: Mutex::new(node_rx),
@@ -281,7 +316,10 @@ impl TrapNodes {
             .name("kf3-pramin-reaper".into())
             .spawn(move || {
                 while let Ok(v) = retire_rx.recv() {
-                    let r = rm.release_cpu_view(CpuViewRelease { h_memory: store, p_linear_address: v.cookie });
+                    let r = rm.release_cpu_view(CpuViewRelease {
+                        h_memory: store,
+                        p_linear_address: v.cookie,
+                    });
                     drop(v.node);
                     if r.is_ok() {
                         t.reaped.fetch_add(1, Ordering::Relaxed);
@@ -330,7 +368,14 @@ impl ViewOps for WindowOps {
             .and_then(|v| v.iter().find_map(|b| b.fd))
             .ok_or("no fd-backed guest RAM (the VM needs memory-backend-memfd,share=on)")?;
         self.win
-            .place(HostOffset::new(at), len, Backing::SharedFile { fd: fd.borrow(), offset: file_off })
+            .place(
+                HostOffset::new(at),
+                len,
+                Backing::SharedFile {
+                    fd: fd.borrow(),
+                    offset: file_off,
+                },
+            )
             .map_err(|e| format!("mmap guest RAM @{at:#x}+{len:#x} (file {file_off:#x}): {e:?}"))?;
         if let Some(ix) = view_index() {
             ix.sunk(self.name, at, len);
@@ -340,7 +385,14 @@ impl ViewOps for WindowOps {
 
     fn sink(&self, at: u64, len: u64) -> Result<(), String> {
         self.win
-            .place(HostOffset::new(at), len, Backing::SharedFile { fd: self.scratch.as_backing_fd(), offset: at })
+            .place(
+                HostOffset::new(at),
+                len,
+                Backing::SharedFile {
+                    fd: self.scratch.as_backing_fd(),
+                    offset: at,
+                },
+            )
             .map_err(|e| format!("mmap scratch @{at:#x}+{len:#x}: {e:?}"))?;
         if let Some(ix) = view_index() {
             ix.sunk(self.name, at, len);
@@ -349,14 +401,19 @@ impl ViewOps for WindowOps {
     }
 
     fn release(&self, v: StoreView) -> Result<(), String> {
-        let r = self.rm.release_cpu_view(CpuViewRelease { h_memory: self.store, p_linear_address: v.cookie });
+        let r = self.rm.release_cpu_view(CpuViewRelease {
+            h_memory: self.store,
+            p_linear_address: v.cookie,
+        });
         drop(v.node);
         r.map_err(|e| format!("NV_ESC_RM_UNMAP_MEMORY: {e:?}"))
     }
 
     /// ★ The trap's ONE RM call: `NV_ESC_RM_MAP_MEMORY` on a node opened ahead of time.
     fn arm_store_in_trap(&self, off: u64, len: u64) -> Result<StoreView, String> {
-        let Some(t) = self.trap else { return self.arm_store(off, len) };
+        let Some(t) = self.trap else {
+            return self.arm_store(off, len);
+        };
         let node = t.nodes.lock().ok().and_then(|rx| rx.try_recv().ok());
         let node = match node {
             Some(n) => n,
@@ -477,7 +534,10 @@ pub fn take_ring_slot(slots: &RingSlots) -> Option<u64> {
 /// ★ v3-appfix J: return a slot whose ring was fully released (unmapped and freed).
 pub fn give_ring_slot(slots: &RingSlots, va: u64) {
     let in_region = va >= RING_REGION_BASE && va < RING_REGION_BASE + RING_REGION_BYTES;
-    if in_region && let Ok(mut p) = slots.lock() && !p.free.contains(&va) {
+    if in_region
+        && let Ok(mut p) = slots.lock()
+        && !p.free.contains(&va)
+    {
         p.free.push(va);
     }
 }
@@ -566,7 +626,15 @@ impl GpuMirror {
         ram: Option<&'static RamMap>,
         kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> Self {
-        GpuMirror { vas, rows, reserved, ram, bv: kf_mem::batch::BatchedVas::new(vas), calls: SpaceCalls::default(), kernel_vas }
+        GpuMirror {
+            vas,
+            rows,
+            reserved,
+            ram,
+            bv: kf_mem::batch::BatchedVas::new(vas),
+            calls: SpaceCalls::default(),
+            kernel_vas,
+        }
     }
 
     /// Batch objects freed so far.
@@ -582,7 +650,11 @@ impl GpuMirror {
     /// ★ Retire-time teardown: every row, as few ranges as are VA-contiguous; then every batch
     /// object. Returns `(rows, refused, host calls)`.
     fn unmap_all_rows(&self) -> (usize, usize, u64) {
-        let rows: Vec<(u64, u64)> = self.rows.read().map(|r| r.iter().map(|(&va, &(len, _, _))| (va, len)).collect()).unwrap_or_default();
+        let rows: Vec<(u64, u64)> = self
+            .rows
+            .read()
+            .map(|r| r.iter().map(|(&va, &(len, _, _))| (va, len)).collect())
+            .unwrap_or_default();
         let before = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
         let mut refused = 0usize;
         let mut k = 0;
@@ -613,7 +685,11 @@ impl GpuMirror {
 #[must_use]
 pub fn vmm_ranges(fb: Option<(u64, u64)>, ram: Option<(u64, u64)>) -> Vec<(u64, u64)> {
     let mut v = vec![(RING_REGION_BASE, kf_chan::host::RING_VA_LIMIT)];
-    v.extend(fb.into_iter().chain(ram).map(|(b, l)| (b, b.saturating_add(l))));
+    v.extend(
+        fb.into_iter()
+            .chain(ram)
+            .map(|(b, l)| (b, b.saturating_add(l))),
+    );
     v
 }
 
@@ -639,7 +715,9 @@ impl MapTarget for GpuMirror {
         let (Some(ram), true) = (self.ram, batching_enabled()) else {
             return Err(kf_mem::ledger::NOT_BATCHED.into());
         };
-        let fd = ram.backing_fd().ok_or("no fd-backed guest RAM to stitch a batch from")?;
+        let fd = ram
+            .backing_fd()
+            .ok_or("no fd-backed guest RAM to stitch a batch from")?;
         let t = std::time::Instant::now();
         let placed = self.bv.place(fd.borrow(), rows, defer);
         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
@@ -648,7 +726,9 @@ impl MapTarget for GpuMirror {
             return Err(e);
         }
         self.calls.batches.fetch_add(1, Ordering::Relaxed);
-        self.calls.batched_runs.fetch_add(rows.len() as u64, Ordering::Relaxed);
+        self.calls
+            .batched_runs
+            .fetch_add(rows.len() as u64, Ordering::Relaxed);
         if let Ok(mut r) = self.rows.write() {
             for d in rows {
                 r.insert(d.va, (d.len, d.off, d.ram));
@@ -669,7 +749,9 @@ impl MapTarget for GpuMirror {
             Ok(mut r) => match r.remove(&va) {
                 Some(row) => row,
                 None => {
-                    eprintln!("kf3: mem unmap {va:#x}: no placement of ours there (host-held or handed to host RM) — no host call");
+                    eprintln!(
+                        "kf3: mem unmap {va:#x}: no placement of ours there (host-held or handed to host RM) — no host call"
+                    );
                     return Ok(());
                 }
             },
@@ -678,7 +760,9 @@ impl MapTarget for GpuMirror {
         let t = std::time::Instant::now();
         let r = self.bv.unmap_run(va, Some(row.0), defer);
         self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
-        self.calls.unmap_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        self.calls
+            .unmap_ns
+            .fetch_add(ns_since(t), Ordering::Relaxed);
         r
     }
     fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
@@ -689,7 +773,9 @@ impl MapTarget for GpuMirror {
         // ⊘ Belt and braces: RM removes EVERY mapping of ours in the range, so it must never reach
         // one of our VMM placements (a guest row over one is refused at map time — this re-checks).
         if let Some(&(a, b)) = self.reserved.iter().find(|&&(a, b)| va < b && a < end) {
-            return Err(format!("unmap range {va:#x}+{len:#x} reaches OUR placement [{a:#x}, {b:#x}) — refused"));
+            return Err(format!(
+                "unmap range {va:#x}+{len:#x} reaches OUR placement [{a:#x}, {b:#x}) — refused"
+            ));
         }
         // ⊘ Forget the rows FIRST (as `unmap`); put them back if the host refuses, so the per-run
         // fallback still knows each run's length.
@@ -698,7 +784,9 @@ impl MapTarget for GpuMirror {
             .write()
             .map(|mut r| {
                 let keys: Vec<u64> = r.range(va..end).map(|(&k, _)| k).collect();
-                keys.into_iter().filter_map(|k| r.remove(&k).map(|v| (k, v))).collect()
+                keys.into_iter()
+                    .filter_map(|k| r.remove(&k).map(|v| (k, v)))
+                    .collect()
             })
             .unwrap_or_default();
         let t = std::time::Instant::now();
@@ -710,7 +798,9 @@ impl MapTarget for GpuMirror {
         {
             rows.extend(removed);
         }
-        self.calls.unmap_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        self.calls
+            .unmap_ns
+            .fetch_add(ns_since(t), Ordering::Relaxed);
         r
     }
     fn invalidate(&self) -> Result<(), String> {
@@ -756,7 +846,9 @@ pub struct Mirror {
 #[must_use]
 pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
     let client = u32::try_from(key.0 >> 32).unwrap_or(0);
-    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(kf_rm::chanlink::is_rm_internal_client(client)))
+    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
+        kf_rm::chanlink::is_rm_internal_client(client),
+    ))
 }
 
 /// ★ P5c: a retired mirror's host space, its rows unmapped, its two windows still in place —
@@ -923,7 +1015,10 @@ impl Bar1Overlay {
     }
 
     fn take(&self) -> Vec<(u64, i32)> {
-        self.done.lock().map(|mut d| std::mem::take(&mut *d)).unwrap_or_default()
+        self.done
+            .lock()
+            .map(|mut d| std::mem::take(&mut *d))
+            .unwrap_or_default()
     }
 }
 
@@ -957,10 +1052,19 @@ pub struct Bar1Target {
 impl Bar1Target {
     /// The window, a tracker over `bar1_bytes` and a `usermode_len`-byte page, and the verb.
     #[must_use]
-    pub fn new(win: CpuWindow<WindowOps>, bar1_bytes: u64, usermode_len: u64, overlay: std::sync::Arc<Bar1Overlay>) -> Bar1Target {
+    pub fn new(
+        win: CpuWindow<WindowOps>,
+        bar1_bytes: u64,
+        usermode_len: u64,
+        overlay: std::sync::Arc<Bar1Overlay>,
+    ) -> Bar1Target {
         Bar1Target {
             win,
-            db: std::cell::RefCell::new(kf_trap::bar1db::Bar1Doorbells::new(bar1_bytes, usermode_len, BAR1_OVERLAY_SLOTS)),
+            db: std::cell::RefCell::new(kf_trap::bar1db::Bar1Doorbells::new(
+                bar1_bytes,
+                usermode_len,
+                BAR1_OVERLAY_SLOTS,
+            )),
             overlay,
             inflight: std::cell::RefCell::new(std::collections::BTreeMap::new()),
             next_seq: std::cell::Cell::new(1),
@@ -991,7 +1095,9 @@ impl Bar1Target {
             format!("BAR1 doorbell view {:#x}+{:#x}: the C device refused to queue the change (errno {e})", v.base, v.len)
         })?;
         self.next_seq.set(seq + 1);
-        self.inflight.borrow_mut().insert(seq, InFlight { install, view: v });
+        self.inflight
+            .borrow_mut()
+            .insert(seq, InFlight { install, view: v });
         Ok(())
     }
 
@@ -1001,7 +1107,12 @@ impl Bar1Target {
     /// lands, which is before the invalidate that states it clears.
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let end = d.va.saturating_add(d.len);
-        if let Some(v) = self.db.borrow().views().find(|v| v.base < end && d.va < v.base + v.len) {
+        if let Some(v) = self
+            .db
+            .borrow()
+            .views()
+            .find(|v| v.base < end && d.va < v.base + v.len)
+        {
             return self.refuse(format!(
                 "BAR1 leaf {:#x}+{:#x} lies under the live doorbell view {:#x}+{:#x}; refused until that view is unmapped",
                 d.va, d.len, v.base, v.len
@@ -1011,7 +1122,11 @@ impl Bar1Target {
     }
 
     fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
-        let v = kf_trap::bar1db::Bar1View { base: u.va, len: u.len, vf_rel: u.vf_rel };
+        let v = kf_trap::bar1db::Bar1View {
+            base: u.va,
+            len: u.len,
+            vf_rel: u.vf_rel,
+        };
         {
             let mut db = self.db.borrow_mut();
             db.set_cap(self.overlay.cap.load(Ordering::Acquire));
@@ -1048,7 +1163,9 @@ impl Bar1Target {
     fn settle(&self) -> Settle {
         let mut failures = Vec::new();
         for (seq, rc) in self.overlay.take() {
-            let Some(f) = self.inflight.borrow_mut().remove(&seq) else { continue };
+            let Some(f) = self.inflight.borrow_mut().remove(&seq) else {
+                continue;
+            };
             match (f.install, rc) {
                 (true, 0) => {
                     // ★ 2026-09-26 (T1 evidence, `V3_BAR1_DOORBELL.md` §7): one bounded line per
@@ -1087,7 +1204,10 @@ impl Bar1Target {
                 }
                 (false, e) => {
                     self.overlay.refused.fetch_add(1, Ordering::Relaxed);
-                    failures.push(format!("BAR1 doorbell overlay {:#x}: removal FAILED in QEMU (errno {e})", f.view.base));
+                    failures.push(format!(
+                        "BAR1 doorbell overlay {:#x}: removal FAILED in QEMU (errno {e})",
+                        f.view.base
+                    ));
                 }
             }
         }
@@ -1157,7 +1277,10 @@ impl Inbox {
     pub fn request_split(&self, token: u32, pdb: Option<u64>) -> u64 {
         let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
         if kf_mem::maplog::on() {
-            eprintln!("kf3: maplog t={:.6} SPLIT-REQUEST ticket={t} by channel token {token:#x} pdb={pdb:x?}", kf_mem::maplog::t());
+            eprintln!(
+                "kf3: maplog t={:.6} SPLIT-REQUEST ticket={t} by channel token {token:#x} pdb={pdb:x?}",
+                kf_mem::maplog::t()
+            );
         }
         if let Ok(mut q) = self.splits.lock() {
             q.push((t, token, pdb));
@@ -1168,7 +1291,11 @@ impl Inbox {
 
     /// ★ P6, the VA thread: the splits requested since the last call, `(ticket, pdb)`.
     pub fn take_split_requests(&self) -> Vec<(u64, Option<u64>)> {
-        let taken = self.splits.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
+        let taken = self
+            .splits
+            .lock()
+            .map(|mut q| std::mem::take(&mut *q))
+            .unwrap_or_default();
         if let Ok(mut m) = self.split_tokens.lock() {
             for (t, tok, _) in &taken {
                 m.insert(*t, *tok);
@@ -1182,12 +1309,18 @@ impl Inbox {
         if let Ok(mut m) = self.split_results.lock() {
             m.insert(ticket, r);
         }
-        self.split_tokens.lock().ok().and_then(|mut m| m.remove(&ticket))
+        self.split_tokens
+            .lock()
+            .ok()
+            .and_then(|mut m| m.remove(&ticket))
     }
 
     /// ★ P6, a WORKER: `ticket`'s outcome, once (`None`: still running).
     pub fn split_result(&self, ticket: u64) -> Option<Result<(), String>> {
-        self.split_results.lock().ok().and_then(|mut m| m.remove(&ticket))
+        self.split_results
+            .lock()
+            .ok()
+            .and_then(|mut m| m.remove(&ticket))
     }
 
     /// The drainer: enqueue one statement and wake the VA thread.
@@ -1201,7 +1334,10 @@ impl Inbox {
 
     /// The VA thread: take everything queued.
     pub fn take(&self) -> Vec<MemStatement> {
-        self.q.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default()
+        self.q
+            .lock()
+            .map(|mut q| std::mem::take(&mut *q))
+            .unwrap_or_default()
     }
 
     /// Whether every statement received has been settled — held replies may be delivered.
@@ -1218,7 +1354,10 @@ impl Inbox {
     /// `(received, settled)`, for the boot log.
     #[must_use]
     pub fn counts(&self) -> (u64, u64) {
-        (self.received.load(Ordering::Relaxed), self.settled.load(Ordering::Relaxed))
+        (
+            self.received.load(Ordering::Relaxed),
+            self.settled.load(Ordering::Relaxed),
+        )
     }
 }
 
@@ -1317,19 +1456,37 @@ impl MemPlane {
         mirrors: Mirrors,
     ) -> Result<(MemPlane, WindowOps, WindowOps), String> {
         let page = HostPageSize::query();
-        let window = |len: u64, what: &str| -> Result<(&'static GuestWindow, &'static SharedRam), String> {
-            let w = GuestWindow::create(len, page).map_err(|e| format!("{what} window of {len:#x}: {e:?}"))?;
-            let s = SharedRam::create(len).map_err(|e| format!("{what} scratch memfd of {len:#x}: {e:?}"))?;
-            // ⊘ Scratch over the WHOLE window before anyone can see it: never a hole.
-            w.place(HostOffset::new(0), len, Backing::SharedFile { fd: s.as_backing_fd(), offset: 0 })
+        let window =
+            |len: u64, what: &str| -> Result<(&'static GuestWindow, &'static SharedRam), String> {
+                let w = GuestWindow::create(len, page)
+                    .map_err(|e| format!("{what} window of {len:#x}: {e:?}"))?;
+                let s = SharedRam::create(len)
+                    .map_err(|e| format!("{what} scratch memfd of {len:#x}: {e:?}"))?;
+                // ⊘ Scratch over the WHOLE window before anyone can see it: never a hole.
+                w.place(
+                    HostOffset::new(0),
+                    len,
+                    Backing::SharedFile {
+                        fd: s.as_backing_fd(),
+                        offset: 0,
+                    },
+                )
                 .map_err(|e| format!("{what} scratch placement: {e:?}"))?;
-            Ok((Box::leak(Box::new(w)), Box::leak(Box::new(s))))
-        };
+                Ok((Box::leak(Box::new(w)), Box::leak(Box::new(s))))
+            };
         let pramin_len = kf_trap::trappolicy::PRAMIN_LEN;
         let (pramin_win, pramin_scratch) = window(pramin_len, "PRAMIN")?;
         let (bar1_win, bar1_scratch) = window(bar1_bytes, "BAR1")?;
         let (bar2_win, bar2_scratch) = window(bar2_bytes, "BAR2")?;
-        let ops = |name, win, scratch, trap| WindowOps { name, rm, store, win, scratch, ram, trap };
+        let ops = |name, win, scratch, trap| WindowOps {
+            name,
+            rm,
+            store,
+            win,
+            scratch,
+            ram,
+            trap,
+        };
         let trap = TrapNodes::start(rm, store)?;
         let pramin = PraminPool::new(
             ops("PRAMIN", pramin_win, pramin_scratch, Some(trap)),
@@ -1375,7 +1532,10 @@ impl MemPlane {
     pub fn guest_ram_object(&self, rm: &'static HostRm) -> Result<(u32, u64), String> {
         self.ram_obj
             .get_or_init(|| {
-                let fd = self.ram.backing_fd().ok_or("no fd-backed guest RAM block (memory-backend-memfd,share=on?)")?;
+                let fd = self
+                    .ram
+                    .backing_fd()
+                    .ok_or("no fd-backed guest RAM block (memory-backend-memfd,share=on?)")?;
                 let borrowed = fd.borrow();
                 let len = borrowed
                     .try_clone_to_owned()
@@ -1384,7 +1544,10 @@ impl MemPlane {
                     .map_err(|e| format!("guest memfd size: {e}"))?
                     .len();
                 let view = kf_linux_raw::MappedRegion::map(
-                    Backing::SharedFile { fd: borrowed, offset: 0 },
+                    Backing::SharedFile {
+                        fd: borrowed,
+                        offset: 0,
+                    },
                     len,
                     kf_linux_raw::HostProt::ReadWrite,
                     kf_linux_raw::CachePolicy::WriteBack,
@@ -1420,13 +1583,18 @@ impl MemPlane {
     /// last to finish always leaves the latest window in place.
     pub fn pramin_write(&self, raw: u32) {
         let t0 = std::time::Instant::now();
-        self.pramin_want.store(u64::from(raw) | (1 << 32), Ordering::Release);
+        self.pramin_want
+            .store(u64::from(raw) | (1 << 32), Ordering::Release);
         loop {
             let want = self.pramin_want.load(Ordering::Acquire);
             let r = self.pramin.repoint(&self.pramin_plan(want as u32));
             if r.missed > 0 || r.refused > 0 {
-                self.counters.pramin_miss_writes.fetch_add(1, Ordering::Relaxed);
-                self.counters.pramin_last_miss.store(want & 0xFFFF_FFFF, Ordering::Relaxed);
+                self.counters
+                    .pramin_miss_writes
+                    .fetch_add(1, Ordering::Relaxed);
+                self.counters
+                    .pramin_last_miss
+                    .store(want & 0xFFFF_FFFF, Ordering::Relaxed);
             }
             if self.pramin_want.load(Ordering::Acquire) == want {
                 break;
@@ -1455,7 +1623,13 @@ impl MemPlane {
 
 /// ★ Build a fresh mirror for `key`: a host space and its two windows (P5, §12). Returns the log
 /// line on refusal.
-fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: u32, key: VasKey) -> Result<(), String> {
+fn create_mirror(
+    m: &mut Manager,
+    plane: &MemPlane,
+    rm: &'static HostRm,
+    store: u32,
+    key: VasKey,
+) -> Result<(), String> {
     let t_mirror = std::time::Instant::now();
     let us = |t: std::time::Instant| t.elapsed().as_micros();
     let t_step = std::time::Instant::now();
@@ -1493,15 +1667,46 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
     let line = match (&fb_base, &ram_base) {
         (Ok(fb), Some(Ok((rb, rl)))) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
-                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone(), ram_obj: ram_obj.map(|(o, _)| o), live: Default::default(), rings: rings.clone(), kernel_vas: kernel_vas.clone() });
+                mm.insert(
+                    key,
+                    Mirror {
+                        space,
+                        fb_base: *fb,
+                        fb_len: plane.fb_len,
+                        ram: Some((*rb, *rl)),
+                        rows: rows.clone(),
+                        ram_obj: ram_obj.map(|(o, _)| o),
+                        live: Default::default(),
+                        rings: rings.clone(),
+                        kernel_vas: kernel_vas.clone(),
+                    },
+                );
             }
-            format!("windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x} rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}", plane.fb_len)
+            format!(
+                "windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x} rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}",
+                plane.fb_len
+            )
         }
         (Ok(fb), None) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
-                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone(), ram_obj: None, live: Default::default(), rings: rings.clone(), kernel_vas: kernel_vas.clone() });
+                mm.insert(
+                    key,
+                    Mirror {
+                        space,
+                        fb_base: *fb,
+                        fb_len: plane.fb_len,
+                        ram: None,
+                        rows: rows.clone(),
+                        ram_obj: None,
+                        live: Default::default(),
+                        rings: rings.clone(),
+                        kernel_vas: kernel_vas.clone(),
+                    },
+                );
             }
-            format!("windows fb={fb:#x} ram=NONE rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}")
+            format!(
+                "windows fb={fb:#x} ram=NONE rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}"
+            )
         }
         (fb, ram) => format!("windows REFUSED fb={fb:?} ram={ram:?}"),
     };
@@ -1512,13 +1717,30 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
     let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
     plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
     plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
-    plane.counters.mirror_ns_max.fetch_max(ns, Ordering::Relaxed);
+    plane
+        .counters
+        .mirror_ns_max
+        .fetch_max(ns, Ordering::Relaxed);
     eprintln!(
         "kf3: {key:?} mirror space={:#x}: {line} ({} us: vaspace {vas_us} ram_obj {ram_obj_us} fb_window {fb_us} ram_window {ram_us})",
         space.space,
         ns / 1000
     );
-    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved, Some(plane.ram), kernel_vas)));
+    m.table.insert(
+        key,
+        Target::Gpu(GpuMirror::new(
+            HostVas {
+                rm,
+                space,
+                store,
+                ram_obj: ram_obj.map(|(o, _)| o),
+            },
+            rows,
+            reserved,
+            Some(plane.ram),
+            kernel_vas,
+        )),
+    );
     Ok(())
 }
 
@@ -1546,14 +1768,21 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
     let t1 = std::time::Instant::now();
     let space = match rm.alloc_vaspace() {
         Ok(s) => s,
-        Err(e) => return Some(format!("prewarm: host VA space refused: {e:?} (ram_obj {ram_obj_us} us)")),
+        Err(e) => {
+            return Some(format!(
+                "prewarm: host VA space refused: {e:?} (ram_obj {ram_obj_us} us)"
+            ));
+        }
     };
     let vas_us = t1.elapsed().as_micros();
     let t2 = std::time::Instant::now();
     let fb = rm.map_window(space, store, plane.fb_len, true);
     let fb_us = t2.elapsed().as_micros();
     let t3 = std::time::Instant::now();
-    let ram = ram_obj.as_ref().ok().map(|(o, len)| rm.map_window(space, *o, *len, true).map(|b| (b, *len)));
+    let ram = ram_obj
+        .as_ref()
+        .ok()
+        .map(|(o, len)| rm.map_window(space, *o, *len, true).map(|b| (b, *len)));
     let ram_us = t3.elapsed().as_micros();
     let line = format!(
         "vaspace {vas_us} us, ram_obj {ram_obj_us} us ({}), fb_window {fb_us} us, ram_window {ram_us} us",
@@ -1564,16 +1793,28 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
     );
     match (fb, ram) {
         (Ok(fb_base), Some(Ok(r))) => {
-            let sp = Spare { space, fb_base, ram: Some(r), ram_obj: ram_obj.ok().map(|(o, _)| o), rings: RingSlots::default() };
+            let sp = Spare {
+                space,
+                fb_base,
+                ram: Some(r),
+                ram_obj: ram_obj.ok().map(|(o, _)| o),
+                rings: RingSlots::default(),
+            };
             if let Ok(mut v) = plane.spares.lock() {
                 v.push(sp);
             }
             plane.counters.prewarmed.fetch_add(1, Ordering::Relaxed);
-            Some(format!("prewarm: spare host space {:#x} ready before the guest runs — {line} (total {} us)", space.space, t0.elapsed().as_micros()))
+            Some(format!(
+                "prewarm: spare host space {:#x} ready before the guest runs — {line} (total {} us)",
+                space.space,
+                t0.elapsed().as_micros()
+            ))
         }
         (fb, ram) => {
             rm.free_vaspace(space);
-            Some(format!("prewarm: windows refused fb={fb:?} ram={ram:?} — no spare; {line}"))
+            Some(format!(
+                "prewarm: windows refused fb={fb:?} ram={ram:?} — no spare; {line}"
+            ))
         }
     }
 }
@@ -1586,14 +1827,25 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     let Some(target) = m.remove(key) else {
         return format!("retire {key:?}: no mirror (no page-directory statement named it)");
     };
-    plane.counters.mirrors_retired.fetch_add(1, Ordering::Relaxed);
+    plane
+        .counters
+        .mirrors_retired
+        .fetch_add(1, Ordering::Relaxed);
     let Target::Gpu(g) = target else {
         return format!("retire {key:?}: not a GPU mirror — kept");
     };
-    let live = mirror.as_ref().map_or(0, |mi| mi.live.load(Ordering::Acquire));
+    let live = mirror
+        .as_ref()
+        .map_or(0, |mi| mi.live.load(Ordering::Acquire));
     if live > 0 {
-        plane.counters.mirrors_kept_live.fetch_add(1, Ordering::Relaxed);
-        return format!("retire {key:?}: {live} live channel(s) still run in host space {:#x} — KEPT, never recycled", g.vas.space.space);
+        plane
+            .counters
+            .mirrors_kept_live
+            .fetch_add(1, Ordering::Relaxed);
+        return format!(
+            "retire {key:?}: {live} live channel(s) still run in host space {:#x} — KEPT, never recycled",
+            g.vas.space.space
+        );
     }
     // ★ Our placements in this space, from the space's own row record (what we PLACED, never a
     // copy of the guest's tables); the walker's slot for it is released by `m.remove`.
@@ -1605,9 +1857,21 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         refused += 1;
     }
     let unmap_us = t_unmap.elapsed().as_micros();
-    let spare = mirror.map(|mi| Spare { space: mi.space, fb_base: mi.fb_base, ram: mi.ram, ram_obj: mi.ram_obj, rings: mi.rings });
+    let spare = mirror.map(|mi| Spare {
+        space: mi.space,
+        fb_base: mi.fb_base,
+        ram: mi.ram,
+        ram_obj: mi.ram_obj,
+        rings: mi.rings,
+    });
     let recycled = match (spare, refused) {
-        (Some(sp), 0) => plane.spares.lock().ok().filter(|v| v.len() < SPARES_MAX).map(|mut v| v.push(sp)).is_some(),
+        (Some(sp), 0) => plane
+            .spares
+            .lock()
+            .ok()
+            .filter(|v| v.len() < SPARES_MAX)
+            .map(|mut v| v.push(sp))
+            .is_some(),
         _ => false,
     };
     if !recycled {
@@ -1631,7 +1895,12 @@ fn vas_census(m: &Manager) -> String {
             Some(Target::Gpu(g)) => g.rows.read().map_or(usize::MAX, |r| r.len()),
             _ => 0,
         };
-        out.push_str(&format!(" {:#x}=s{}@{}:{rows}", k.0, slot.map_or(-1, i64::from), root.map_or("-".to_string(), |r| format!("{r:#x}"))));
+        out.push_str(&format!(
+            " {:#x}=s{}@{}:{rows}",
+            k.0,
+            slot.map_or(-1, i64::from),
+            root.map_or("-".to_string(), |r| format!("{r:#x}"))
+        ));
     }
     out
 }
@@ -1661,11 +1930,24 @@ pub fn apply_statement(
             let w = m.walker().kernel.write_store(root, &p.entry.to_le_bytes());
             if let Err(e) = w {
                 plane.counters.refused.fetch_add(1, Ordering::Relaxed);
-                return format!("fn70 {:?} entry={:#x}: GPU write into our root @{root:#x} REFUSED: {e}", p.bar, p.entry);
+                return format!(
+                    "fn70 {:?} entry={:#x}: GPU write into our root @{root:#x} REFUSED: {e}",
+                    p.bar, p.entry
+                );
             }
             plane.counters.bar_pdes.fetch_add(1, Ordering::Relaxed);
-            m.schedule_walk(if p.bar == BarAperture::Bar2 { K_BAR2 } else { K_BAR1 }, trigger);
-            format!("fn70 {:?} entry={:#x} shift={} -> our root @{root:#x}, walk scheduled", p.bar, p.entry, p.level_shift)
+            m.schedule_walk(
+                if p.bar == BarAperture::Bar2 {
+                    K_BAR2
+                } else {
+                    K_BAR1
+                },
+                trigger,
+            );
+            format!(
+                "fn70 {:?} entry={:#x} shift={} -> our root @{root:#x}, walk scheduled",
+                p.bar, p.entry, p.level_shift
+            )
         }
         // ★★★ v3-refusals: the guest's sysmembar IS the host GPU's — the authored, unprivileged
         // `FB_FLUSH_GPU_CACHE(FB_FLUSH_YES)` (the verb that serves a Hopper+ guest's token-register
@@ -1678,7 +1960,10 @@ pub fn apply_statement(
             let r = rm.fb_flush();
             let n = plane.counters.sysmembars.fetch_add(1, Ordering::Relaxed) + 1;
             match r {
-                Ok(()) => format!("sysmembar #{n}: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in {} us", t.elapsed().as_micros()),
+                Ok(()) => format!(
+                    "sysmembar #{n}: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in {} us",
+                    t.elapsed().as_micros()
+                ),
                 Err(e) => {
                     plane.counters.refused.fetch_add(1, Ordering::Relaxed);
                     format!("sysmembar #{n}: host FB_FLUSH_GPU_CACHE REFUSED: {e:?}")
@@ -1693,10 +1978,18 @@ pub fn apply_statement(
             let had = m.table.root(key);
             m.table.clear_root(key);
             plane.counters.root_unsets.fetch_add(1, Ordering::Relaxed);
-            format!("unset pagedir {key:?}: root {} withdrawn — no walk reads it again", had.map_or("(none)".into(), |r| format!("{r:#x}")))
+            format!(
+                "unset pagedir {key:?}: root {} withdrawn — no walk reads it again",
+                had.map_or("(none)".into(), |r| format!("{r:#x}"))
+            )
         }
         MemStatement::Retire { client, vaspace } => {
-            let line = retire_mirror(m, plane, rm, VasKey((u64::from(client) << 32) | u64::from(vaspace)));
+            let line = retire_mirror(
+                m,
+                plane,
+                rm,
+                VasKey((u64::from(client) << 32) | u64::from(vaspace)),
+            );
             if std::env::var_os("KF_VAS_CENSUS").is_some() {
                 eprintln!("kf3: census {line}");
             }
@@ -1706,10 +1999,15 @@ pub fn apply_statement(
             let key = VasKey((u64::from(s.client.0) << 32) | u64::from(s.vaspace.0));
             let ap = match s.pdb_aperture {
                 Some(kf_arch::Aperture::Vidmem) => PdbAperture::Vidmem,
-                Some(kf_arch::Aperture::SysmemCoherent | kf_arch::Aperture::SysmemNonCoherent) => PdbAperture::Sysmem,
+                Some(kf_arch::Aperture::SysmemCoherent | kf_arch::Aperture::SysmemNonCoherent) => {
+                    PdbAperture::Sysmem
+                }
                 other => {
                     plane.counters.refused.fetch_add(1, Ordering::Relaxed);
-                    return format!("pagedir {key:?} pdb={:#x}: aperture {other:?} refused", s.pdb.0);
+                    return format!(
+                        "pagedir {key:?} pdb={:#x}: aperture {other:?} refused",
+                        s.pdb.0
+                    );
                 }
             };
             if m.table.target(key).is_none() {
@@ -1723,11 +2021,38 @@ pub fn apply_statement(
                     if let Ok(mut mm) = plane.mirrors.lock() {
                         mm.insert(
                             key,
-                            Mirror { space: sp.space, fb_base: sp.fb_base, fb_len: plane.fb_len, ram: sp.ram, rows: rows.clone(), ram_obj: sp.ram_obj, live: Default::default(), rings: sp.rings.clone(), kernel_vas: kernel_vas.clone() },
+                            Mirror {
+                                space: sp.space,
+                                fb_base: sp.fb_base,
+                                fb_len: plane.fb_len,
+                                ram: sp.ram,
+                                rows: rows.clone(),
+                                ram_obj: sp.ram_obj,
+                                live: Default::default(),
+                                rings: sp.rings.clone(),
+                                kernel_vas: kernel_vas.clone(),
+                            },
                         );
                     }
-                    plane.counters.mirrors_reused.fetch_add(1, Ordering::Relaxed);
-                    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows, reserved, Some(plane.ram), kernel_vas)));
+                    plane
+                        .counters
+                        .mirrors_reused
+                        .fetch_add(1, Ordering::Relaxed);
+                    m.table.insert(
+                        key,
+                        Target::Gpu(GpuMirror::new(
+                            HostVas {
+                                rm,
+                                space: sp.space,
+                                store,
+                                ram_obj: sp.ram_obj,
+                            },
+                            rows,
+                            reserved,
+                            Some(plane.ram),
+                            kernel_vas,
+                        )),
+                    );
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
                 }
@@ -1776,7 +2101,11 @@ mod tests {
         give_ring_slot(&slots, a);
         give_ring_slot(&slots, a);
         give_ring_slot(&slots, 0x1000);
-        assert_eq!(take_ring_slot(&slots), Some(a), "the released slot comes back first");
+        assert_eq!(
+            take_ring_slot(&slots),
+            Some(a),
+            "the released slot comes back first"
+        );
         assert_eq!(
             take_ring_slot(&slots),
             Some(RING_REGION_BASE + 2 * kf_chan::host::RING_BYTES),

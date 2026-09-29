@@ -320,17 +320,26 @@ fn note_semaphore(st: &mut CeState, sub: u32, m: u32, v: u32) {
         HOST_SEMAPHORE_C => s.host_c = v,
         HOST_SEMAPHORE_D if v & HOST_SEMAPHORE_D_OP_MASK == HOST_SEMAPHORE_D_OP_RELEASE => {
             let va = (u64::from(s.host_a & 0xFF) << 32) | u64::from(s.host_b & !3);
-            let r = Release { va, payload: s.host_c, kind: ReleaseKind::HostSemaphoreD };
+            let r = Release {
+                va,
+                payload: s.host_c,
+                kind: ReleaseKind::HostSemaphoreD,
+            };
             st.releases.push(r);
         }
         kf_abi::submit::fifo::SEM_ADDR_LO => s.sem_lo = v,
         kf_abi::submit::fifo::SEM_ADDR_HI => s.sem_hi = v,
         kf_abi::submit::fifo::SEM_PAYLOAD_LO => s.sem_payload = v,
         kf_abi::submit::fifo::SEM_EXECUTE
-            if v & kf_abi::submit::fifo::SEM_EXECUTE_OPERATION_MASK == kf_abi::submit::fifo::SEM_EXECUTE_OPERATION_RELEASE =>
+            if v & kf_abi::submit::fifo::SEM_EXECUTE_OPERATION_MASK
+                == kf_abi::submit::fifo::SEM_EXECUTE_OPERATION_RELEASE =>
         {
             let va = (u64::from(s.sem_hi & 0xFF) << 32) | u64::from(s.sem_lo & !3);
-            let r = Release { va, payload: s.sem_payload, kind: ReleaseKind::HostSemExecute };
+            let r = Release {
+                va,
+                payload: s.sem_payload,
+                kind: ReleaseKind::HostSemExecute,
+            };
             st.releases.push(r);
         }
         _ if sub > 4 || m < 0x100 => {}
@@ -346,7 +355,11 @@ fn note_semaphore(st: &mut CeState, sub: u32, m: u32, v: u32) {
                 _ => ReleaseKind::CeConditionalIntr,
             };
             let va = (u64::from(s.ce_a & upper) << 32) | u64::from(s.ce_b);
-            let r = Release { va, payload: s.ce_payload, kind };
+            let r = Release {
+                va,
+                payload: s.ce_payload,
+                kind,
+            };
             st.releases.push(r);
         }
         _ => {}
@@ -527,7 +540,11 @@ fn one_write(
     }
     if st.sw_subch & bit != 0 && m >= 0x100 {
         // A SW subchannel's own methods (host methods below 0x100 still apply to the channel).
-        return if m == SW_NO_OPERATION { Ok(()) } else { Err(Refusal::SwMethod { method: m }) };
+        return if m == SW_NO_OPERATION {
+            Ok(())
+        } else {
+            Err(Refusal::SwMethod { method: m })
+        };
     }
     // `MEM_OP_A..C` are operands of the `MEM_OP_D` that follows ("MEM_OP_D MUST be preceded by
     // MEM_OPs A-C", `clc56f.h`): held here, emitted with the D when its operation is forwarded.
@@ -605,11 +622,16 @@ fn one_write(
     // ⇒ Every Translated channel is a CE channel (the plane births no other kind), so subchannels
     // 0-4 are the CE here, always; 5-7 are software subchannels and must be bound to be used.
     if sub > 4 {
-        return Err(Refusal::UnboundSubchannel { subch: sub, method: m });
+        return Err(Refusal::UnboundSubchannel {
+            subch: sub,
+            method: m,
+        });
     }
     // ── CE methods ─────────────────────────────────────────────────────────────────────────
     match m {
-        ce::OFFSET_IN_UPPER => st.off_in = (st.off_in & 0xFFFF_FFFF) | (u64::from(v & upper_mask(st)) << 32),
+        ce::OFFSET_IN_UPPER => {
+            st.off_in = (st.off_in & 0xFFFF_FFFF) | (u64::from(v & upper_mask(st)) << 32)
+        }
         OFFSET_IN_LOWER => st.off_in = (st.off_in & !0xFFFF_FFFF) | u64::from(v),
         ce::OFFSET_OUT_UPPER => {
             st.off_out = (st.off_out & 0xFFFF_FFFF) | (u64::from(v & upper_mask(st)) << 32);
@@ -631,11 +653,19 @@ fn one_write(
                 && let Ok((src_len, dst_len)) = extents(st, v)
             {
                 let side = |phys: bool, mode: u32, at: u64, n: u64| {
-                    if phys { Operand::Physical(Target::from_bits(mode), at, n) } else { Operand::Virtual(at, n) }
+                    if phys {
+                        Operand::Physical(Target::from_bits(mode), at, n)
+                    } else {
+                        Operand::Virtual(at, n)
+                    }
                 };
                 let src = src_len.map(|n| side(src_phys, st.src_mode, st.off_in, n));
                 let dst = Some(side(dst_phys, st.dst_mode, st.off_out, dst_len));
-                st.launches.push(PhysLaunch { launch: v, src, dst });
+                st.launches.push(PhysLaunch {
+                    launch: v,
+                    src,
+                    dst,
+                });
             }
             if dst_phys && st.ce_class >= HOPPER_DMA_COPY_A && v & LAUNCH_MEMORY_SCRUB_ENABLE != 0 {
                 return launch_scrub_translated(cur, st, w, sub, v);
@@ -659,12 +689,23 @@ fn extents(st: &CeState, v: u32) -> Result<(Option<u64>, u64), Refusal> {
     let comp = u64::from(ce::remap_component_bytes(st.remap));
     let n_dst = ce::remap_num_dst_components(st.remap);
     let n_src = u64::from(((st.remap >> REMAP_NUM_SRC_SHIFT) & 0x3) + 1);
-    let (src_elem, dst_elem) = if remap { (comp * n_src, comp * u64::from(n_dst)) } else { (1, 1) };
+    let (src_elem, dst_elem) = if remap {
+        (comp * n_src, comp * u64::from(n_dst))
+    } else {
+        (1, 1)
+    };
     let reads_src = v & ce::LAUNCH_TRANSFER_MASK != ce::LAUNCH_TRANSFER_NONE
-        && (!remap || (0..n_dst).any(|c| ce::remap_dst_sel(st.remap, c) <= ce::REMAP_DST_SEL_SRC_MAX));
-    let lines = if v & ce::LAUNCH_MULTI_LINE_ENABLE != 0 { u64::from(st.line_count) } else { 1 };
+        && (!remap
+            || (0..n_dst).any(|c| ce::remap_dst_sel(st.remap, c) <= ce::REMAP_DST_SEL_SRC_MAX));
+    let lines = if v & ce::LAUNCH_MULTI_LINE_ENABLE != 0 {
+        u64::from(st.line_count)
+    } else {
+        1
+    };
     let ext = |elem: u64, pitch: u32| -> Result<u64, Refusal> {
-        let line = u64::from(st.line_len).checked_mul(elem).ok_or(Refusal::ExtentOverflow)?;
+        let line = u64::from(st.line_len)
+            .checked_mul(elem)
+            .ok_or(Refusal::ExtentOverflow)?;
         let span = match lines {
             0 | 1 => line,
             n => u64::from(pitch)
@@ -674,7 +715,11 @@ fn extents(st: &CeState, v: u32) -> Result<(Option<u64>, u64), Refusal> {
         };
         Ok(span.max(1))
     };
-    let src = if reads_src { Some(ext(src_elem, st.pitch_in)?) } else { None };
+    let src = if reads_src {
+        Some(ext(src_elem, st.pitch_in)?)
+    } else {
+        None
+    };
     Ok((src, ext(dst_elem, st.pitch_out)?))
 }
 
@@ -683,8 +728,11 @@ fn xlate(w: &dyn Window, mode: u32, phys: u64, len: u64) -> Result<u64, Refusal>
     if t == Target::Peer {
         return Err(Refusal::PeerOperand);
     }
-    w.translate(t, phys, len)
-        .ok_or(Refusal::Untranslatable { target: t, phys, len })
+    w.translate(t, phys, len).ok_or(Refusal::Untranslatable {
+        target: t,
+        phys,
+        len,
+    })
 }
 
 /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): `OFFSET_{IN,OUT}_UPPER` is `16:0` through
@@ -692,7 +740,11 @@ fn xlate(w: &dyn Window, mode: u32, phys: u64, len: u64) -> Result<u64, Refusal>
 /// `clc8b5.h:92,96`). `[measured GB203]` masking a Blackwell window VA to 17 bits sent the scrubber's
 /// zero-fill to `0x1fffe_0005_0000` instead of `0x1ff_fffe_0005_0000` — Xid 31 FAULT_PDE on our ring.
 const fn upper_mask(st: &CeState) -> u32 {
-    if st.ce_class >= HOPPER_DMA_COPY_A { 0x1FF_FFFF } else { 0x1_FFFF }
+    if st.ce_class >= HOPPER_DMA_COPY_A {
+        0x1FF_FFFF
+    } else {
+        0x1_FFFF
+    }
 }
 
 fn put_offset(cur: &mut Vec<u32>, st: &CeState, sub: u32, upper: u32, va: u64) {
@@ -721,7 +773,13 @@ const REMAP_BYTE_FILL_FROM_CONST_A: u32 = ce::REMAP_DST_SEL_CONST_A;
 /// engine: remap-enabled, `DST_X = CONST_A = 0`, 1-byte components (with remap disabled a scrub's
 /// element is one byte, so `LINE_LENGTH_IN` already counts bytes). The guest's remap registers
 /// are restored after the launch, exactly as its offsets are.
-fn launch_scrub_translated(cur: &mut Vec<u32>, st: &CeState, w: &dyn Window, sub: u32, v: u32) -> Result<(), Refusal> {
+fn launch_scrub_translated(
+    cur: &mut Vec<u32>,
+    st: &CeState,
+    w: &dyn Window,
+    sub: u32,
+    v: u32,
+) -> Result<(), Refusal> {
     if v & ce::LAUNCH_DST_PITCH == 0 {
         return Err(Refusal::BlockLinearPhysical);
     }
@@ -729,13 +787,19 @@ fn launch_scrub_translated(cur: &mut Vec<u32>, st: &CeState, w: &dyn Window, sub
     let (_, dst_len) = extents(st, v & !ce::LAUNCH_REMAP_ENABLE)?;
     let va = xlate(w, st.dst_mode, st.off_out, dst_len)?;
     emit(cur, sub, ce::SET_REMAP_CONST_A, 0);
-    emit(cur, sub, ce::SET_REMAP_COMPONENTS, REMAP_BYTE_FILL_FROM_CONST_A);
+    emit(
+        cur,
+        sub,
+        ce::SET_REMAP_COMPONENTS,
+        REMAP_BYTE_FILL_FROM_CONST_A,
+    );
     put_offset(cur, st, sub, ce::OFFSET_OUT_UPPER, va);
     emit(
         cur,
         sub,
         ce::LAUNCH_DMA,
-        (v & !(LAUNCH_MEMORY_SCRUB_ENABLE | ce::LAUNCH_SRC_PHYSICAL | ce::LAUNCH_DST_PHYSICAL)) | ce::LAUNCH_REMAP_ENABLE,
+        (v & !(LAUNCH_MEMORY_SCRUB_ENABLE | ce::LAUNCH_SRC_PHYSICAL | ce::LAUNCH_DST_PHYSICAL))
+            | ce::LAUNCH_REMAP_ENABLE,
     );
     put_offset(cur, st, sub, ce::OFFSET_OUT_UPPER, st.off_out);
     emit(cur, sub, ce::SET_REMAP_COMPONENTS, st.remap);
@@ -799,9 +863,18 @@ mod hwref_check {
             (MEM_OP_C, "NVC56F_MEM_OP_C"),
             (MEM_OP_D, "NVC56F_MEM_OP_D"),
             (OP_MEMBAR, "NVC56F_MEM_OP_D_OPERATION_MEMBAR"),
-            (OP_TLB_INVALIDATE, "NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE"),
-            (OP_TLB_INVALIDATE_TARGETED, "NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE_TARGETED"),
-            (OP_ACCESS_COUNTER_CLR, "NVC56F_MEM_OP_D_OPERATION_ACCESS_COUNTER_CLR"),
+            (
+                OP_TLB_INVALIDATE,
+                "NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE",
+            ),
+            (
+                OP_TLB_INVALIDATE_TARGETED,
+                "NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE_TARGETED",
+            ),
+            (
+                OP_ACCESS_COUNTER_CLR,
+                "NVC56F_MEM_OP_D_OPERATION_ACCESS_COUNTER_CLR",
+            ),
             (MEMBAR_TYPE_SYS, "NVC56F_MEM_OP_C_MEMBAR_TYPE_SYS_MEMBAR"),
             (LINE_COUNT, "NVC7B5_LINE_COUNT"),
             (OFFSET_IN_LOWER, "NVC7B5_OFFSET_IN_LOWER"),
@@ -814,8 +887,14 @@ mod hwref_check {
         ] {
             assert_eq!(u64::from(ours), class_val(name), "{name}");
         }
-        assert_eq!(u64::from(MEM_OP_A_SYSMEMBAR_EN), 1 << class_range("NVC56F_MEM_OP_A_TLB_INVALIDATE_SYSMEMBAR").1);
-        assert_eq!(u64::from(REMAP_NUM_SRC_SHIFT), class_range("NVC7B5_SET_REMAP_COMPONENTS_NUM_SRC_COMPONENTS").1);
+        assert_eq!(
+            u64::from(MEM_OP_A_SYSMEMBAR_EN),
+            1 << class_range("NVC56F_MEM_OP_A_TLB_INVALIDATE_SYSMEMBAR").1
+        );
+        assert_eq!(
+            u64::from(REMAP_NUM_SRC_SHIFT),
+            class_range("NVC7B5_SET_REMAP_COMPONENTS_NUM_SRC_COMPONENTS").1
+        );
         // The L2 operations forwarded verbatim: 0xd/0xe/0xf/0x10/0x15 from C56F, 0x11 (the
         // non-coherent sysmem invalidate) only C96F states.
         let l2 = [
@@ -828,7 +907,10 @@ mod hwref_check {
         ];
         assert_eq!(OPS_L2.map(u64::from).to_vec(), l2.map(class_val).to_vec());
         // The fast-scrub bit exists only from HOPPER_DMA_COPY_A; below it bit 23 is VPRMODE's.
-        assert_eq!(u64::from(LAUNCH_MEMORY_SCRUB_ENABLE), 1 << class_range("NVC8B5_LAUNCH_DMA_MEMORY_SCRUB_ENABLE").1);
+        assert_eq!(
+            u64::from(LAUNCH_MEMORY_SCRUB_ENABLE),
+            1 << class_range("NVC8B5_LAUNCH_DMA_MEMORY_SCRUB_ENABLE").1
+        );
         assert_eq!(class_range("NVC7B5_LAUNCH_DMA_VPRMODE"), (23, 22));
     }
 
@@ -844,10 +926,21 @@ mod hwref_check {
             (0xC9B5, "NVC8B5"),
             (0xCAB5, "NVC8B5"),
         ] {
-            let st = CeState { ce_class: class, ..CeState::default() };
+            let st = CeState {
+                ce_class: class,
+                ..CeState::default()
+            };
             let (hi, lo) = class_range(&format!("{header}_OFFSET_IN_UPPER_UPPER"));
-            assert_eq!(u64::from(upper_mask(&st)), ((1u64 << (hi - lo + 1)) - 1) << lo, "{class:#x}");
-            assert_eq!(class_range(&format!("{header}_OFFSET_OUT_UPPER_UPPER")), (hi, lo), "{class:#x}");
+            assert_eq!(
+                u64::from(upper_mask(&st)),
+                ((1u64 << (hi - lo + 1)) - 1) << lo,
+                "{class:#x}"
+            );
+            assert_eq!(
+                class_range(&format!("{header}_OFFSET_OUT_UPPER_UPPER")),
+                (hi, lo),
+                "{class:#x}"
+            );
         }
     }
 }

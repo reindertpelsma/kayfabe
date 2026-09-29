@@ -202,9 +202,8 @@ pub struct Cuda {
     pub(crate) cuGraphInstantiateWithFlags:
         Option<unsafe extern "C" fn(*mut *mut c_void, *mut c_void, u64) -> CUresult>,
     pub(crate) cuGraphLaunch: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult>,
-    pub(crate) cuGraphExecKernelNodeSetParams: Option<
-        unsafe extern "C" fn(*mut c_void, *mut c_void, *const KernelNodeParams) -> CUresult,
-    >,
+    pub(crate) cuGraphExecKernelNodeSetParams:
+        Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const KernelNodeParams) -> CUresult>,
     pub(crate) cuGraphExecDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
     pub(crate) cuGraphDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
     pub(crate) cuGraphUpload: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult>,
@@ -842,7 +841,9 @@ impl Cuda {
     pub fn stream_create(&self) -> Result<StreamHandle, CudaError> {
         let mut h: *mut c_void = core::ptr::null_mut();
         // SAFETY: one live out-pointer; the driver writes an opaque handle.
-        self.check("cuStreamCreate", unsafe { (self.cuStreamCreate)(&raw mut h, 0) })?;
+        self.check("cuStreamCreate", unsafe {
+            (self.cuStreamCreate)(&raw mut h, 0)
+        })?;
         Ok(StreamHandle(h as usize))
     }
 
@@ -861,7 +862,9 @@ impl Cuda {
     pub fn event_create(&self) -> Result<EventHandle, CudaError> {
         let mut h: *mut c_void = core::ptr::null_mut();
         // SAFETY: one live out-pointer.
-        self.check("cuEventCreate", unsafe { (self.cuEventCreate)(&raw mut h, 0) })?;
+        self.check("cuEventCreate", unsafe {
+            (self.cuEventCreate)(&raw mut h, 0)
+        })?;
         Ok(EventHandle(h as usize))
     }
 
@@ -939,11 +942,18 @@ impl Cuda {
     ///
     /// # Errors
     /// [`CudaError::Refused`].
-    pub(crate) fn pinned_alloc(&self, len: usize, what: &'static str) -> Result<PinnedBuf, CudaError> {
+    pub(crate) fn pinned_alloc(
+        &self,
+        len: usize,
+        what: &'static str,
+    ) -> Result<PinnedBuf, CudaError> {
         let mut p: *mut c_void = core::ptr::null_mut();
         // SAFETY: one live out-pointer; `len` is owned by the driver entirely.
         self.check(what, unsafe { (self.cuMemAllocHost)(&raw mut p, len) })?;
-        Ok(PinnedBuf { ptr: p as usize, len })
+        Ok(PinnedBuf {
+            ptr: p as usize,
+            len,
+        })
     }
 
     /// `cuMemHostGetDevicePointer_v2` — the DEVICE address of `buf[off]`, so a kernel can read
@@ -954,8 +964,15 @@ impl Cuda {
     ///
     /// # Panics
     /// If `off` leaves `buf`.
-    pub(crate) fn pinned_device_ptr(&self, buf: &PinnedBuf, off: usize) -> Result<CUdeviceptr, CudaError> {
-        assert!(off < buf.len, "pinned_device_ptr: offset leaves the pinned buffer");
+    pub(crate) fn pinned_device_ptr(
+        &self,
+        buf: &PinnedBuf,
+        off: usize,
+    ) -> Result<CUdeviceptr, CudaError> {
+        assert!(
+            off < buf.len,
+            "pinned_device_ptr: offset leaves the pinned buffer"
+        );
         let mut d: CUdeviceptr = 0;
         // SAFETY: one live out-pointer; `buf.ptr` is the base of a live `cuMemAllocHost`
         // allocation of this context, which is what the call requires.
@@ -1092,7 +1109,14 @@ impl Cuda {
         // SAFETY: `s` is ours; five live out-pointers. `deps` points at driver-owned storage
         // valid until the next capture call on `s`, and is read (once) before any.
         let r = unsafe {
-            f(s.0 as *mut c_void, &raw mut status, &raw mut id, &raw mut g, &raw mut deps, &raw mut n)
+            f(
+                s.0 as *mut c_void,
+                &raw mut status,
+                &raw mut id,
+                &raw mut g,
+                &raw mut deps,
+                &raw mut n,
+            )
         };
         self.check("cuStreamGetCaptureInfo_v2", r)?;
         if status != CU_STREAM_CAPTURE_STATUS_ACTIVE || n != 1 || deps.is_null() {
@@ -1115,7 +1139,10 @@ impl Cuda {
     /// # Errors
     /// [`CudaError`].
     pub fn graph_instantiate(&self, g: GraphHandle) -> Result<GraphExecHandle, CudaError> {
-        let f = Self::graph_fn(self.cuGraphInstantiateWithFlags, "cuGraphInstantiateWithFlags")?;
+        let f = Self::graph_fn(
+            self.cuGraphInstantiateWithFlags,
+            "cuGraphInstantiateWithFlags",
+        )?;
         let mut e: *mut c_void = core::ptr::null_mut();
         // SAFETY: `g` came from `stream_end_capture`; one live out-pointer.
         self.check("cuGraphInstantiateWithFlags", unsafe {
@@ -1131,7 +1158,9 @@ impl Cuda {
     pub fn graph_launch(&self, e: GraphExecHandle, s: StreamHandle) -> Result<(), CudaError> {
         let f = Self::graph_fn(self.cuGraphLaunch, "cuGraphLaunch")?;
         // SAFETY: both handles came from this binding.
-        self.check("cuGraphLaunch", unsafe { f(e.0 as *mut c_void, s.0 as *mut c_void) })
+        self.check("cuGraphLaunch", unsafe {
+            f(e.0 as *mut c_void, s.0 as *mut c_void)
+        })
     }
 
     /// `cuGraphExecKernelNodeSetParams` — replace the launch parameters (grid, block, shared
@@ -1152,7 +1181,10 @@ impl Cuda {
         params: &mut [Vec<u8>],
         what: &'static str,
     ) -> Result<(), CudaError> {
-        let set = Self::graph_fn(self.cuGraphExecKernelNodeSetParams, "cuGraphExecKernelNodeSetParams")?;
+        let set = Self::graph_fn(
+            self.cuGraphExecKernelNodeSetParams,
+            "cuGraphExecKernelNodeSetParams",
+        )?;
         let mut p: Vec<*mut c_void> = params
             .iter_mut()
             .map(|b| b.as_mut_ptr().cast::<c_void>())
@@ -1175,7 +1207,9 @@ impl Cuda {
         // one per by-value parameter of `f`, and the driver copies them during the call. `kp`
         // is a live, fully-initialised `CUDA_KERNEL_NODE_PARAMS_v2`; `e`/`node` came from
         // this binding and `node` belongs to the graph `e` was instantiated from.
-        self.check(what, unsafe { set(e.0 as *mut c_void, node.0 as *mut c_void, &raw const kp) })
+        self.check(what, unsafe {
+            set(e.0 as *mut c_void, node.0 as *mut c_void, &raw const kp)
+        })
     }
 
     /// `cuGraphUpload(e, s)` — move the instantiated graph's work descriptors to the device
@@ -1186,7 +1220,9 @@ impl Cuda {
     pub fn graph_upload(&self, e: GraphExecHandle, s: StreamHandle) -> Result<(), CudaError> {
         let f = Self::graph_fn(self.cuGraphUpload, "cuGraphUpload")?;
         // SAFETY: both handles came from this binding.
-        self.check("cuGraphUpload", unsafe { f(e.0 as *mut c_void, s.0 as *mut c_void) })
+        self.check("cuGraphUpload", unsafe {
+            f(e.0 as *mut c_void, s.0 as *mut c_void)
+        })
     }
 
     /// `cuEventRecordWithFlags(e, s, CU_EVENT_RECORD_EXTERNAL)` — under stream capture this
@@ -1294,7 +1330,9 @@ impl PinnedBuf {
         // SAFETY: the range is inside the live pinned allocation (asserted); `out` is a fresh
         // local of exactly `n` bytes, so the regions cannot overlap. The DMA that wrote the
         // range completed before the caller's completion observation (see the type doc).
-        unsafe { core::ptr::copy_nonoverlapping((self.ptr + off) as *const u8, out.as_mut_ptr(), n) };
+        unsafe {
+            core::ptr::copy_nonoverlapping((self.ptr + off) as *const u8, out.as_mut_ptr(), n)
+        };
         out
     }
 
@@ -1310,7 +1348,11 @@ impl PinnedBuf {
         // SAFETY: the range is inside the live pinned allocation (asserted) and `bytes` is a
         // distinct Rust slice; no queued copy reads it (`WalkKernel` writes only between walks).
         unsafe {
-            core::ptr::copy_nonoverlapping(bytes.as_ptr(), (self.ptr + off) as *mut u8, bytes.len());
+            core::ptr::copy_nonoverlapping(
+                bytes.as_ptr(),
+                (self.ptr + off) as *mut u8,
+                bytes.len(),
+            );
         }
     }
 }
@@ -1370,7 +1412,11 @@ impl CompletionFd {
     /// for a worker, whose only wait is its `epoll` (§35).
     #[must_use]
     pub fn wait_readable(&self, timeout_ms: i32) -> bool {
-        let mut p = PollFd { fd: self.raw(), events: POLLIN, revents: 0 };
+        let mut p = PollFd {
+            fd: self.raw(),
+            events: POLLIN,
+            revents: 0,
+        };
         // SAFETY: one live `pollfd`, count 1.
         let r = unsafe { poll(&raw mut p, 1, timeout_ms) };
         r > 0 && (p.revents & POLLIN) != 0
@@ -1405,7 +1451,10 @@ mod completion_fd_tests {
         assert_eq!(fd.drain(), 0, "a fresh fd has nothing pending");
         assert!(!fd.wait_readable(0), "and is not readable");
         completion_hostfn(usize::try_from(fd.raw()).unwrap() as *mut c_void);
-        assert!(fd.wait_readable(0), "the host function must make the fd readable");
+        assert!(
+            fd.wait_readable(0),
+            "the host function must make the fd readable"
+        );
         assert_eq!(fd.drain(), 1, "exactly one signal per walk");
         assert_eq!(
             fd.drain(),

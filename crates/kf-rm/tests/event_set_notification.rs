@@ -50,8 +50,8 @@ use kf_abi::eventnotify::{
     SILENT_NOTIFIERS,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, NOTIFY_SUBDEVICE_SLOTS, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, NOTIFY_SUBDEVICE_SLOTS, WantedTable};
 
 /// `RpcControlReq::HEADER` — `cap1b`'s own arithmetic: `paylen 60 - 20 = 40`.
 const PARAMS_AT: usize = 40;
@@ -59,9 +59,12 @@ const PARAMS_AT: usize = 40;
 /// Byte offset of `status` in the reply's control header.
 const CONTROL_STATUS_OFF: usize = 12;
 
-
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` carrying an event registration.
@@ -673,12 +676,8 @@ fn the_probe_admits_exactly_the_named_index_and_the_default_still_refuses_an_unl
     // 35 is served by the DEFAULT policy now, and by the delivered list rather than the
     // silent one. ⊘ Asserted from both sides so a future migration between the two lists
     // fails here: the two carry different arguments and only one of them is true.
-    assert!(kf_abi::eventnotify::is_delivered_notifier(
-        FIFO_EVENT_MTHD
-    ));
-    assert!(!kf_abi::eventnotify::is_silent_notifier(
-        FIFO_EVENT_MTHD
-    ));
+    assert!(kf_abi::eventnotify::is_delivered_notifier(FIFO_EVENT_MTHD));
+    assert!(!kf_abi::eventnotify::is_silent_notifier(FIFO_EVENT_MTHD));
     assert_eq!(
         policy()
             .respond(&arming_of(FIFO_EVENT_MTHD))
@@ -714,10 +713,7 @@ fn the_delivered_list_is_exactly_index_35_and_is_disjoint_from_the_silent_one() 
     use kf_abi::eventnotify::DELIVERED_NOTIFIERS;
     let indices: Vec<u32> = DELIVERED_NOTIFIERS.iter().map(|n| n.index).collect();
     assert_eq!(indices, vec![FIFO_EVENT_MTHD]);
-    assert_eq!(
-        kf_abi::eventnotify::NV2080_NOTIFIERS_FIFO_EVENT_MTHD,
-        35
-    );
+    assert_eq!(kf_abi::eventnotify::NV2080_NOTIFIERS_FIFO_EVENT_MTHD, 35);
     for n in DELIVERED_NOTIFIERS {
         assert!(
             n.why.len() > 80,
@@ -790,12 +786,24 @@ fn the_guest_raised_list_is_exactly_nvmls_event_set_and_the_shipping_policy_serv
     indices.sort_unstable();
     assert_eq!(indices, vec![37, 118, 155, 156, 159, 191, 192]);
     for n in GUEST_RAISED_NOTIFIERS {
-        assert!(n.why.contains("ogkm-580:"), "notifier {} names no CPU-RM producer", n.index);
-        assert!(!is_silent_notifier(n.index) && !is_delivered_notifier(n.index), "notifier {} is on two lists", n.index);
+        assert!(
+            n.why.contains("ogkm-580:"),
+            "notifier {} names no CPU-RM producer",
+            n.index
+        );
+        assert!(
+            !is_silent_notifier(n.index) && !is_delivered_notifier(n.index),
+            "notifier {} is on two lists",
+            n.index
+        );
     }
     let mut p = policy();
     for ev in [37u32, 118, 159, 155, 156, 191, 192] {
-        assert_eq!(p.respond(&arming_of(ev)).expect("served").rpc_result, 0, "nvidia-smi -l arms {ev}; bare metal answers NV_OK");
+        assert_eq!(
+            p.respond(&arming_of(ev)).expect("served").rpc_result,
+            0,
+            "nvidia-smi -l arms {ev}; bare metal answers NV_OK"
+        );
     }
     // RM's transition rule still holds for them: REPEAT over REPEAT is refused.
     assert_ne!(p.respond(&arming_of(37)).expect("claimed").rpc_result, 0);

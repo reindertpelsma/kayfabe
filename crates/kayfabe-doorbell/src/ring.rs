@@ -59,11 +59,11 @@ pub enum Push {
 }
 
 pub struct PrivRing {
-    slots: Box<[AtomicU64]>,     // packed RegWrite, one per slot
-    meta: Box<[AtomicU64]>,      // offset|bar|width, one per slot
-    ready: Box<[AtomicBool]>,    // slot is fully written and safe to apply
-    head: AtomicU64,             // next to apply (drainer only)
-    tail: AtomicU64,             // next to claim (producers CAS this)
+    slots: Box<[AtomicU64]>,  // packed RegWrite, one per slot
+    meta: Box<[AtomicU64]>,   // offset|bar|width, one per slot
+    ready: Box<[AtomicBool]>, // slot is fully written and safe to apply
+    head: AtomicU64,          // next to apply (drainer only)
+    tail: AtomicU64,          // next to claim (producers CAS this)
     poisoned: AtomicBool,
     high_water: AtomicU32,
     /// §5.4: *"`applied_seq` is a clean monotonic number other paths fence against."*
@@ -79,9 +79,18 @@ impl Default for PrivRing {
 impl PrivRing {
     pub fn new() -> PrivRing {
         PrivRing {
-            slots: (0..CAPACITY).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice(),
-            meta: (0..CAPACITY).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice(),
-            ready: (0..CAPACITY).map(|_| AtomicBool::new(false)).collect::<Vec<_>>().into_boxed_slice(),
+            slots: (0..CAPACITY)
+                .map(|_| AtomicU64::new(0))
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            meta: (0..CAPACITY)
+                .map(|_| AtomicU64::new(0))
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            ready: (0..CAPACITY)
+                .map(|_| AtomicBool::new(false))
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
             head: AtomicU64::new(0),
             tail: AtomicU64::new(0),
             poisoned: AtomicBool::new(false),

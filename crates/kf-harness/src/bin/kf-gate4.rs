@@ -13,19 +13,21 @@
 //!   produce no action at all.
 
 use kf_abi::submit::{SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, ce, gp_entry, method_header_inc};
+use kf_chan::completions::Completions;
 use kf_chan::host::{GuestUserd, HostRing, Publisher, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
 use kf_chan::translated::{Target, Window};
-use kf_chan::completions::Completions;
 use kf_chan::worker::{COMPLETIONS_TAG, WORKER_EFD_TAG, WorkerStats};
 use kf_core::{HostOps, HostSlice, Owner, Plane, Step, Translatable, VmCaps, Vmm};
 use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::Ledger as Checks;
+use kf_harness::publish::{Batching, Recorded, publish};
 use kf_harness::tables::Tree;
 use kf_host::HostRm;
-use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset as At, HostPageSize, Notifier, Poller, VolatileRegion};
-use kf_harness::publish::{Batching, Recorded, publish};
+use kf_linux_raw::{
+    Backing, CachePolicy, DevDir, HostOffset as At, HostPageSize, Notifier, Poller, VolatileRegion,
+};
 use kf_mem::ledger::HostVas;
 use kf_trap::{Action, Class, Route};
 use std::sync::Mutex;
@@ -97,7 +99,9 @@ fn gpa(c: u32, off: u64) -> u64 {
     R_CH + (pages - 1 - g) * 4096 + off % 4096
 }
 fn pattern(seed: u32) -> Vec<u8> {
-    (0..(COPY / 4) as u32).flat_map(|i| (seed ^ i).to_le_bytes()).collect()
+    (0..(COPY / 4) as u32)
+        .flat_map(|i| (seed ^ i).to_le_bytes())
+        .collect()
 }
 
 /// The walk kernel + our placements: what a split touches, behind one lock (a worker-side lock, never a
@@ -120,12 +124,20 @@ impl Shared<'_> {
     fn publish(&self, tag: &str) -> Result<kf_mem::apply::Applied, String> {
         let mut g = self.mm.lock().map_err(|_| "mm poisoned")?;
         g.walk.make_current().map_err(|e| e.to_string())?;
-        let layout = |gpa: u64, len: u64| gpa.checked_add(len).filter(|&e| e <= RAM_BYTES).map(|_| gpa);
+        let layout = |gpa: u64, len: u64| {
+            gpa.checked_add(len)
+                .filter(|&e| e <= RAM_BYTES)
+                .map(|_| gpa)
+        };
         let Mm { walk, target, .. } = &mut *g;
-        let p = publish(walk, 0, self.root, target, STORE_BYTES, &layout).map_err(|e| format!("{tag}: {e}"))?;
+        let p = publish(walk, 0, self.root, target, STORE_BYTES, &layout)
+            .map_err(|e| format!("{tag}: {e}"))?;
         let a = p.applied;
         if a.refused > 0 {
-            return Err(format!("{tag}: {} refused, first {:?}", a.refused, a.first_refusal));
+            return Err(format!(
+                "{tag}: {} refused, first {:?}",
+                a.refused, a.first_refusal
+            ));
         }
         Ok(a)
     }
@@ -139,7 +151,9 @@ impl GuestMemory for Io<'_, '_> {
     fn read(&mut self, at: u64, out: &mut [u8]) -> Result<(), String> {
         let (ram, off) = {
             let g = self.s.mm.lock().map_err(|_| "mm poisoned")?;
-            g.target.resolve(at, out.len() as u64).ok_or(format!("{at:#x} not mapped by us"))?
+            g.target
+                .resolve(at, out.len() as u64)
+                .ok_or(format!("{at:#x} not mapped by us"))?
         };
         if !ram {
             let g = self.s.mm.lock().map_err(|_| "mm poisoned")?;
@@ -150,7 +164,11 @@ impl GuestMemory for Io<'_, '_> {
             return Err(format!("unaligned guest-RAM read {off:#x}+{}", out.len()));
         }
         for (i, chunk) in out.chunks_exact_mut(4).enumerate() {
-            let w = self.s.ram.load_u32(At::new(off + 4 * i as u64)).map_err(|e| format!("{e:?}"))?;
+            let w = self
+                .s
+                .ram
+                .load_u32(At::new(off + 4 * i as u64))
+                .map_err(|e| format!("{e:?}"))?;
             chunk.copy_from_slice(&w.to_le_bytes());
         }
         Ok(())
@@ -158,10 +176,16 @@ impl GuestMemory for Io<'_, '_> {
 }
 impl GuestUserd for Io<'_, '_> {
     fn gp_put(&mut self) -> Result<u32, String> {
-        self.s.ram.load_u32(At::new(gpa(self.c, USERD + USERD_GP_PUT))).map_err(|e| format!("{e:?}"))
+        self.s
+            .ram
+            .load_u32(At::new(gpa(self.c, USERD + USERD_GP_PUT)))
+            .map_err(|e| format!("{e:?}"))
     }
     fn set_gp_get(&mut self, v: u32) -> Result<(), String> {
-        self.s.ram.store_u32(At::new(gpa(self.c, USERD + USERD_GP_GET)), v).map_err(|e| format!("{e:?}"))
+        self.s
+            .ram
+            .store_u32(At::new(gpa(self.c, USERD + USERD_GP_GET)), v)
+            .map_err(|e| format!("{e:?}"))
     }
 }
 impl Publisher for Io<'_, '_> {
@@ -170,7 +194,9 @@ impl Publisher for Io<'_, '_> {
         if pdb.is_some_and(|p| p != self.s.root) {
             return Err(format!("invalidate names {pdb:x?}, not the kernel root"));
         }
-        self.s.publish("at_split").map(|_| kf_chan::host::Split::Done)
+        self.s
+            .publish("at_split")
+            .map(|_| kf_chan::host::Split::Done)
     }
 }
 
@@ -183,7 +209,9 @@ impl Window for Windows {
         let end = phys.checked_add(len)?;
         match t {
             Target::LocalFb if end <= STORE_BYTES => Some(self.fb + phys),
-            Target::CoherentSysmem | Target::NonCoherentSysmem if end <= RAM_BYTES => Some(self.ram + phys),
+            Target::CoherentSysmem | Target::NonCoherentSysmem if end <= RAM_BYTES => {
+                Some(self.ram + phys)
+            }
             _ => None,
         }
     }
@@ -209,7 +237,11 @@ struct Channels<'a, 'b> {
 
 impl Channels<'_, '_> {
     fn slot(&self, host_token: u32) -> Option<(u32, &Mutex<(TranslatedChannel, Option<String>)>)> {
-        self.chans.iter().enumerate().find(|(_, (h, _))| *h == host_token).map(|(i, (_, m))| (i as u32, m))
+        self.chans
+            .iter()
+            .enumerate()
+            .find(|(_, (h, _))| *h == host_token)
+            .map(|(i, (_, m))| (i as u32, m))
     }
 }
 
@@ -244,7 +276,9 @@ impl HostOps for Channels<'_, '_> {
 
 impl Channels<'_, '_> {
     fn serve(&self, host_token: u32) {
-        let Some((c, slot)) = self.slot(host_token) else { return };
+        let Some((c, slot)) = self.slot(host_token) else {
+            return;
+        };
         let token = c + 1;
         // ★ The token's BUSY state is the exclusion; this lock must NEVER be contended.
         let mut g = match slot.try_lock() {
@@ -258,9 +292,20 @@ impl Channels<'_, '_> {
         if err.is_some() {
             return;
         }
-        let io = || Io { s: self.s, c: token - 1 };
+        let io = || Io {
+            s: self.s,
+            c: token - 1,
+        };
         let (mut mem, mut userd, mut publisher) = (io(), io(), io());
-        if let Err(e) = chan.pump(self.s.rm, self.done, &mut mem, &mut userd, &mut publisher, is_ce, self.win) {
+        if let Err(e) = chan.pump(
+            self.s.rm,
+            self.done,
+            &mut mem,
+            &mut userd,
+            &mut publisher,
+            is_ce,
+            self.win,
+        ) {
             *err = Some(format!("{e:?}"));
         }
     }
@@ -269,26 +314,56 @@ impl Channels<'_, '_> {
 #[allow(clippy::too_many_lines)]
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
+        .map_err(|e| e.to_string())?;
     let ce_class = rm.ce_class_id();
-    let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
+    let res = rm
+        .reserve_gpga(STORE_BYTES)
+        .map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;
-    let fd = rm.export_to_new_fd(store).map_err(|e| format!("export: {e:?}"))?;
-    let mut walk = WalkKernel::bring_up_on(WalkCfg::default(), kf_format_ver2(), kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf())).map_err(|e| e.to_string())?;
-    walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
+    let fd = rm
+        .export_to_new_fd(store)
+        .map_err(|e| format!("export: {e:?}"))?;
+    let mut walk = WalkKernel::bring_up_on(
+        WalkCfg::default(),
+        kf_format_ver2(),
+        kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf()),
+    )
+    .map_err(|e| e.to_string())?;
+    walk.import_store(fd.fd_number(), STORE_BYTES)
+        .map_err(|e| e.to_string())?;
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
-    let fb_base = rm.map_window(space, store, STORE_BYTES, true).map_err(|e| format!("identity window: {e:?}"))?;
+    let fb_base = rm
+        .map_window(space, store, STORE_BYTES, true)
+        .map_err(|e| format!("identity window: {e:?}"))?;
 
     let ram_fd = kf_linux_raw::SharedRam::create(RAM_BYTES).map_err(|e| format!("memfd: {e:?}"))?;
     let page = HostPageSize::query();
-    let backing = || Backing::SharedFile { fd: ram_fd.as_backing_fd(), offset: 0 };
-    let ram_view = kf_linux_raw::MappedRegion::map(backing(), RAM_BYTES, kf_linux_raw::HostProt::ReadWrite, CachePolicy::WriteBack, page)
-        .map_err(|e| format!("map ram: {e:?}"))?;
-    let ram_desc = rm.alloc_os_descriptor(&ram_view, At::new(0), RAM_BYTES).map_err(|e| format!("ram descriptor: {e:?}"))?;
-    let ram_base = rm.map_window(space, ram_desc, RAM_BYTES, true).map_err(|e| format!("ram window: {e:?}"))?;
+    let backing = || Backing::SharedFile {
+        fd: ram_fd.as_backing_fd(),
+        offset: 0,
+    };
+    let ram_view = kf_linux_raw::MappedRegion::map(
+        backing(),
+        RAM_BYTES,
+        kf_linux_raw::HostProt::ReadWrite,
+        CachePolicy::WriteBack,
+        page,
+    )
+    .map_err(|e| format!("map ram: {e:?}"))?;
+    let ram_desc = rm
+        .alloc_os_descriptor(&ram_view, At::new(0), RAM_BYTES)
+        .map_err(|e| format!("ram descriptor: {e:?}"))?;
+    let ram_base = rm
+        .map_window(space, ram_desc, RAM_BYTES, true)
+        .map_err(|e| format!("ram window: {e:?}"))?;
     // The view every thread shares: volatile word access, never a byte memcpy racing the guest.
-    let ram = VolatileRegion::map(backing(), RAM_BYTES, CachePolicy::WriteBack, page).map_err(|e| format!("ram view: {e:?}"))?;
-    let win = Windows { fb: fb_base, ram: ram_base };
+    let ram = VolatileRegion::map(backing(), RAM_BYTES, CachePolicy::WriteBack, page)
+        .map_err(|e| format!("ram view: {e:?}"))?;
+    let win = Windows {
+        fb: fb_base,
+        ram: ram_base,
+    };
     l.measure("windows", format!("fb={fb_base:#x} ram={ram_base:#x}"));
 
     // ── the guest kernel: channels in guest RAM, mapped by SYSMEM PTEs ───────────────────────
@@ -303,55 +378,124 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let root = tree.root;
     let put = |off: u64, words: &[u32]| -> Result<(), String> {
         for (i, x) in words.iter().enumerate() {
-            ram.store_u32(At::new(off + 4 * i as u64), *x).map_err(|e| format!("{e:?}"))?;
+            ram.store_u32(At::new(off + 4 * i as u64), *x)
+                .map_err(|e| format!("{e:?}"))?;
         }
         Ok(())
     };
     for c in 0..CHANNELS {
         w(src(c), &pattern(0xC000_0000 | (c << 20)))?;
-        w(DST + u64::from(c) * 0x10_0000, &vec![0u8; (u64::from(PER_CHANNEL) * COPY) as usize])?;
+        w(
+            DST + u64::from(c) * 0x10_0000,
+            &vec![0u8; (u64::from(PER_CHANNEL) * COPY) as usize],
+        )?;
         for p in 0..CH_STRIDE / 4096 {
             put(gpa(c, p * 4096), &[0u32; 1024])?;
         }
         let pitch = ce::LAUNCH_SRC_PITCH | ce::LAUNCH_DST_PITCH;
         for k in 0..PER_CHANNEL {
-            let mut seg = if k == 0 { m(4, SET_OBJECT, &[ce_class]) } else { Vec::new() };
+            let mut seg = if k == 0 {
+                m(4, SET_OBJECT, &[ce_class])
+            } else {
+                Vec::new()
+            };
             if c == 0 && k == SPLIT_AT {
-                seg.extend(m(0, 0x28, &[0, 0, lo(root) & 0xFFFF_F000, (9 << 27) | (hi(root) & 0x07FF_FFFF)]));
+                seg.extend(m(
+                    0,
+                    0x28,
+                    &[
+                        0,
+                        0,
+                        lo(root) & 0xFFFF_F000,
+                        (9 << 27) | (hi(root) & 0x07FF_FFFF),
+                    ],
+                ));
             }
             seg.extend(m(4, ce::SET_SRC_PHYS_MODE, &[0, 0]));
-            seg.extend(m(4, ce::OFFSET_IN_UPPER, &[hi(src(c)), lo(src(c)), hi(dst(c, k)), lo(dst(c, k))]));
+            seg.extend(m(
+                4,
+                ce::OFFSET_IN_UPPER,
+                &[hi(src(c)), lo(src(c)), hi(dst(c, k)), lo(dst(c, k))],
+            ));
             seg.extend(m(4, ce::LINE_LENGTH_IN, &[COPY as u32]));
-            seg.extend(m(4, ce::SET_SEMAPHORE_A, &[hi(va(c) + SEM), lo(va(c) + SEM), k + 1]));
-            seg.extend(m(4, ce::LAUNCH_DMA, &[ce::LAUNCH_TRANSFER_NON_PIPELINED
-                | ce::LAUNCH_FLUSH_ENABLE
-                | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
-                | ce::LAUNCH_SRC_PHYSICAL
-                | ce::LAUNCH_DST_PHYSICAL
-                | pitch]));
+            seg.extend(m(
+                4,
+                ce::SET_SEMAPHORE_A,
+                &[hi(va(c) + SEM), lo(va(c) + SEM), k + 1],
+            ));
+            seg.extend(m(
+                4,
+                ce::LAUNCH_DMA,
+                &[ce::LAUNCH_TRANSFER_NON_PIPELINED
+                    | ce::LAUNCH_FLUSH_ENABLE
+                    | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
+                    | ce::LAUNCH_SRC_PHYSICAL
+                    | ce::LAUNCH_DST_PHYSICAL
+                    | pitch],
+            ));
             let at = SEGS + u64::from(k) * SEG_STRIDE;
             put(gpa(c, at), &seg)?;
             let e = gp_entry(va(c) + at, 4 * seg.len() as u64).ok_or("gp entry")?;
-            put(gpa(c, GPFIFO + 8 * u64::from(k)), &[e as u32, (e >> 32) as u32])?;
+            put(
+                gpa(c, GPFIFO + 8 * u64::from(k)),
+                &[e as u32, (e >> 32) as u32],
+            )?;
         }
     }
 
-    let target = Recorded::new(Batching::new(HostVas { rm: &rm, space, store, ram_obj: Some(ram_desc) }, ram_fd.as_backing_fd()));
-    let mm = Mutex::new(Mm { walk, target, walks: Vec::new() });
-    let shared = Shared { rm: &rm, ram: &ram, mm: &mm, root };
+    let target = Recorded::new(Batching::new(
+        HostVas {
+            rm: &rm,
+            space,
+            store,
+            ram_obj: Some(ram_desc),
+        },
+        ram_fd.as_backing_fd(),
+    ));
+    let mm = Mutex::new(Mm {
+        walk,
+        target,
+        walks: Vec::new(),
+    });
+    let shared = Shared {
+        rm: &rm,
+        ram: &ram,
+        mm: &mm,
+        root,
+    };
     let boot = shared.publish("boot")?;
     let pages = (u64::from(CHANNELS) * CH_STRIDE / 4096) as usize;
-    l.check("kernel_vas_published_as_sysmem", boot.mapped == pages, format!("{} runs (sysmem rows), want {pages}", boot.mapped));
+    l.check(
+        "kernel_vas_published_as_sysmem",
+        boot.mapped == pages,
+        format!("{} runs (sysmem rows), want {pages}", boot.mapped),
+    );
     l.check(
         "scattered_sysmem_rows_placed_as_one_batch",
-        boot.batches == 1 && boot.batched_runs == pages && boot.map_calls == 1 && boot.batch_fallbacks == 0,
-        format!("batches={} batched_runs={} map_verbs={} fallbacks={} {:?}", boot.batches, boot.batched_runs, boot.map_calls, boot.batch_fallbacks, boot.first_batch_fallback),
+        boot.batches == 1
+            && boot.batched_runs == pages
+            && boot.map_calls == 1
+            && boot.batch_fallbacks == 0,
+        format!(
+            "batches={} batched_runs={} map_verbs={} fallbacks={} {:?}",
+            boot.batches,
+            boot.batched_runs,
+            boot.map_calls,
+            boot.batch_fallbacks,
+            boot.first_batch_fallback
+        ),
     );
     mm.lock().map_err(|_| "poisoned")?.walks.clear();
 
     // ── the doorbell plane: kf_core::Plane, for the host's family ─────────────────────────
     let vmm = Vmm::new();
-    let mut plane = Plane::for_family(&vmm, TOKEN_TABLE, (TOKEN_TABLE - 1) as u32, kf_chip::Family::Ampere, 16 << 20);
+    let mut plane = Plane::for_family(
+        &vmm,
+        TOKEN_TABLE,
+        (TOKEN_TABLE - 1) as u32,
+        kf_chip::Family::Ampere,
+        16 << 20,
+    );
     let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     let efd = Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?;
     let stats = WorkerStats::default();
@@ -364,7 +508,17 @@ fn run(l: &mut Checks) -> Result<(), String> {
         plane
             .allocate_channel(&mut caps, c + 1, Route::Translated, ht, Owner::Kernel)
             .map_err(|e| format!("token {}: {e:?}", c + 1))?;
-        chans.push((ht, Mutex::new((TranslatedChannel::new(TranslatedRing::new(va(c) + GPFIFO, ENTRIES, 0), host, c + 1), None))));
+        chans.push((
+            ht,
+            Mutex::new((
+                TranslatedChannel::new(
+                    TranslatedRing::new(va(c) + GPFIFO, ENTRIES, 0),
+                    host,
+                    c + 1,
+                ),
+                None,
+            )),
+        ));
     }
     let channels = Channels {
         s: &shared,
@@ -384,10 +538,16 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let outcome: Result<(), String> = std::thread::scope(|sc| {
         for _ in 0..WORKERS {
             let poller = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
-            poller.watch(efd.as_source_fd(), WORKER_EFD_TAG).map_err(|e| format!("watch: {e:?}"))?;
-            poller.watch(done.event_fd(), COMPLETIONS_TAG).map_err(|e| format!("watch: {e:?}"))?;
+            poller
+                .watch(efd.as_source_fd(), WORKER_EFD_TAG)
+                .map_err(|e| format!("watch: {e:?}"))?;
+            poller
+                .watch(done.event_fd(), COMPLETIONS_TAG)
+                .map_err(|e| format!("watch: {e:?}"))?;
             let (channels, stop, efd, done, stats) = (&channels, &stop, &efd, &done, &stats);
-            sc.spawn(move || kf_chan::worker::run(plane, channels, &poller, efd, done, stats, stop, &|_| {}));
+            sc.spawn(move || {
+                kf_chan::worker::run(plane, channels, &poller, efd, done, stats, stop, &|_| {})
+            });
         }
         // vCPUs: advance GP_PUT, then ring — exactly what the guest's store to the doorbell does.
         for c in 0..CHANNELS {
@@ -397,7 +557,9 @@ fn run(l: &mut Checks) -> Result<(), String> {
                 for k in 0..PER_CHANNEL {
                     let _ = ram.store_u32(At::new(gpa(c, USERD + USERD_GP_PUT)), k + 1);
                     kf_linux_raw::release_fence();
-                    if plane.trap_write(Class::Doorbell, 0, 0x90, u64::from(c + 1), 4) == Action::WakeWorker {
+                    if plane.trap_write(Class::Doorbell, 0, 0x90, u64::from(c + 1), 4)
+                        == Action::WakeWorker
+                    {
                         wakes_signalled.fetch_add(1, Ordering::Relaxed);
                         let _ = efd.signal();
                     }
@@ -428,9 +590,13 @@ fn run(l: &mut Checks) -> Result<(), String> {
         let deadline = t0 + std::time::Duration::from_secs(15);
         loop {
             let done = (0..CHANNELS).all(|c| {
-                ram.load_u32(At::new(gpa(c, USERD + USERD_GP_GET))).is_ok_and(|g| g == PER_CHANNEL)
+                ram.load_u32(At::new(gpa(c, USERD + USERD_GP_GET)))
+                    .is_ok_and(|g| g == PER_CHANNEL)
             });
-            let dead = channels.chans.iter().any(|(_, s)| s.try_lock().is_ok_and(|g| g.1.is_some()));
+            let dead = channels
+                .chans
+                .iter()
+                .any(|(_, s)| s.try_lock().is_ok_and(|g| g.1.is_some()));
             if done || dead || std::time::Instant::now() > deadline {
                 break;
             }
@@ -463,9 +629,29 @@ fn run(l: &mut Checks) -> Result<(), String> {
         ),
     );
     l.check("no_channel_died", errors.is_empty(), errors.join("; "));
-    l.check("translated_never_forged", channels.forged.load(Ordering::Relaxed) == 0 && channels.poisoned.load(Ordering::Relaxed) == 0, format!("forged={} poisoned={} (§8: the GPU writes a Translated completion)", channels.forged.load(Ordering::Relaxed), channels.poisoned.load(Ordering::Relaxed)));
-    l.check("pump_never_contended", channels.contended.load(Ordering::Relaxed) == 0, format!("{} contended serves", channels.contended.load(Ordering::Relaxed)));
-    l.check("hostile_rings_produce_no_action", hostile_actions.load(Ordering::Relaxed) == 0, format!("{} of 200000", hostile_actions.load(Ordering::Relaxed)));
+    l.check(
+        "translated_never_forged",
+        channels.forged.load(Ordering::Relaxed) == 0
+            && channels.poisoned.load(Ordering::Relaxed) == 0,
+        format!(
+            "forged={} poisoned={} (§8: the GPU writes a Translated completion)",
+            channels.forged.load(Ordering::Relaxed),
+            channels.poisoned.load(Ordering::Relaxed)
+        ),
+    );
+    l.check(
+        "pump_never_contended",
+        channels.contended.load(Ordering::Relaxed) == 0,
+        format!(
+            "{} contended serves",
+            channels.contended.load(Ordering::Relaxed)
+        ),
+    );
+    l.check(
+        "hostile_rings_produce_no_action",
+        hostile_actions.load(Ordering::Relaxed) == 0,
+        format!("{} of 200000", hostile_actions.load(Ordering::Relaxed)),
+    );
 
     let g = mm.lock().map_err(|_| "poisoned")?;
     g.walk.make_current().map_err(|e| e.to_string())?;
@@ -474,20 +660,39 @@ fn run(l: &mut Checks) -> Result<(), String> {
         let want = pattern(0xC000_0000 | (c << 20));
         for k in 0..PER_CHANNEL {
             let mut got = vec![0u8; COPY as usize];
-            g.walk.read_store(dst(c, k), &mut got).map_err(|e| e.to_string())?;
+            g.walk
+                .read_store(dst(c, k), &mut got)
+                .map_err(|e| e.to_string())?;
             if got != want {
                 bad.push(format!("ch{c}#{k}"));
             }
         }
     }
-    l.check("every_copy_landed", bad.is_empty(), format!("{} of {} wrong {:?}", bad.len(), CHANNELS * PER_CHANNEL, bad.iter().take(6).collect::<Vec<_>>()));
+    l.check(
+        "every_copy_landed",
+        bad.is_empty(),
+        format!(
+            "{} of {} wrong {:?}",
+            bad.len(),
+            CHANNELS * PER_CHANNEL,
+            bad.iter().take(6).collect::<Vec<_>>()
+        ),
+    );
     for c in 0..CHANNELS {
-        let gp_get = ram.load_u32(At::new(gpa(c, USERD + USERD_GP_GET))).map_err(|e| format!("{e:?}"))?;
-        let sem = ram.load_u32(At::new(gpa(c, SEM))).map_err(|e| format!("{e:?}"))?;
+        let gp_get = ram
+            .load_u32(At::new(gpa(c, USERD + USERD_GP_GET)))
+            .map_err(|e| format!("{e:?}"))?;
+        let sem = ram
+            .load_u32(At::new(gpa(c, SEM)))
+            .map_err(|e| format!("{e:?}"))?;
         let ok = gp_get == PER_CHANNEL && sem == PER_CHANNEL;
         l.check("channel_retired_and_released", ok, format!("ch{c}: GP_GET={gp_get} sem={sem} (in guest RAM at the SCATTERED page, written by the engine through the batch)"));
     }
-    l.check("split_walked_once_on_a_worker", g.walks == vec![Some(root)], format!("walks={:x?}", g.walks));
+    l.check(
+        "split_walked_once_on_a_worker",
+        g.walks == vec![Some(root)],
+        format!("walks={:x?}", g.walks),
+    );
     drop(g);
 
     // ── one PIECE of the batch: a single page in the middle goes, the batch object stays ─────────
@@ -496,17 +701,34 @@ fn run(l: &mut Checks) -> Result<(), String> {
     {
         let g = mm.lock().map_err(|_| "poisoned")?;
         g.walk.make_current().map_err(|e| e.to_string())?;
-        g.walk.write_store(PT_BASE, &tree.img.mem).map_err(|e| e.to_string())?;
+        g.walk
+            .write_store(PT_BASE, &tree.img.mem)
+            .map_err(|e| e.to_string())?;
     }
     let piece = shared.publish("piece")?;
     {
         let g = mm.lock().map_err(|_| "poisoned")?;
-        let booked = g.target.inner.bv.book.lock().map(|b| b.len()).unwrap_or(usize::MAX);
+        let booked = g
+            .target
+            .inner
+            .bv
+            .book
+            .lock()
+            .map(|b| b.len())
+            .unwrap_or(usize::MAX);
         let frees = g.target.inner.bv.frees.load(Ordering::Relaxed);
         l.check(
             "a_piece_of_a_batch_unmaps_alone",
-            piece.unmapped == 1 && piece.unmap_calls == 1 && booked == 1 && frees == 0 && g.target.resolve(hole, 4).is_none() && g.target.resolve(hole + 4096, 4).is_some(),
-            format!("unmapped={} unmap_verbs={} booked={booked} frees={frees}", piece.unmapped, piece.unmap_calls),
+            piece.unmapped == 1
+                && piece.unmap_calls == 1
+                && booked == 1
+                && frees == 0
+                && g.target.resolve(hole, 4).is_none()
+                && g.target.resolve(hole + 4096, 4).is_some(),
+            format!(
+                "unmapped={} unmap_verbs={} booked={booked} frees={frees}",
+                piece.unmapped, piece.unmap_calls
+            ),
         );
     }
 
@@ -520,16 +742,36 @@ fn run(l: &mut Checks) -> Result<(), String> {
     {
         let g = mm.lock().map_err(|_| "poisoned")?;
         g.walk.make_current().map_err(|e| e.to_string())?;
-        g.walk.write_store(PT_BASE, &tree.img.mem).map_err(|e| e.to_string())?;
+        g.walk
+            .write_store(PT_BASE, &tree.img.mem)
+            .map_err(|e| e.to_string())?;
     }
     let torn = shared.publish("teardown")?;
     let g = mm.lock().map_err(|_| "poisoned")?;
-    let booked = g.target.inner.bv.book.lock().map(|b| b.len()).unwrap_or(usize::MAX);
+    let booked = g
+        .target
+        .inner
+        .bv
+        .book
+        .lock()
+        .map(|b| b.len())
+        .unwrap_or(usize::MAX);
     let frees = g.target.inner.bv.frees.load(Ordering::Relaxed);
     l.check(
         "teardown_is_ranges_and_frees_the_batch",
-        torn.unmapped == pages - 1 && torn.range_unmaps == 2 && torn.unmap_calls == 2 && booked == 0 && frees == 1 && g.target.is_empty(),
-        format!("unmapped={} ranges={} unmap_verbs={} booked={booked} frees={frees} rows_left={}", torn.unmapped, torn.range_unmaps, torn.unmap_calls, g.target.len()),
+        torn.unmapped == pages - 1
+            && torn.range_unmaps == 2
+            && torn.unmap_calls == 2
+            && booked == 0
+            && frees == 1
+            && g.target.is_empty(),
+        format!(
+            "unmapped={} ranges={} unmap_verbs={} booked={booked} frees={frees} rows_left={}",
+            torn.unmapped,
+            torn.range_unmaps,
+            torn.unmap_calls,
+            g.target.len()
+        ),
     );
     Ok(())
 }

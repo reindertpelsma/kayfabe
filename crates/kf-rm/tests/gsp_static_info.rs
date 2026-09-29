@@ -34,8 +34,8 @@ use kf_abi::gspstaticinfo::{
     encode_gsp_static_info,
 };
 use kf_abi::versions::{BENCH_DRIVER, GspStaticInfoWire, table_for};
-use kf_rm::staticinfo::StaticInfoPolicy;
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::staticinfo::StaticInfoPolicy;
 
 /// Bytes 344..632 of the oracle's `GspStaticConfigInfo`: `numFBRegions = 5`, four bytes of
 /// alignment padding, then `fbRegion[0..5]` at a stride of 56.
@@ -144,7 +144,12 @@ fn policy() -> StaticInfoPolicy {
 fn boards() -> Vec<(String, std::sync::Arc<kf_rm::BoardFacts>)> {
     [ga106::FB_SIZE_MB, 6144]
         .into_iter()
-        .map(|mb| (format!("GA106@{mb}MiB"), std::sync::Arc::new(ga106::board_at(mb))))
+        .map(|mb| {
+            (
+                format!("GA106@{mb}MiB"),
+                std::sync::Arc::new(ga106::board_at(mb)),
+            )
+        })
         .collect()
 }
 
@@ -200,8 +205,16 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
     // ★ P4: both roots, at the capture's own offsets and values (`bar1PdeBase` 1664,
     // `bar2PdeBase` 1672 — the latter the PDB the guest's first BAR2 invalidate names,
     // `[cap3 #159728]` `MMU_INVALIDATE_PDB = 0x2f33920`).
-    assert_eq!(&body[1664..1672], &0x2_F1CA_C000u64.to_le_bytes()[..], "bar1PdeBase");
-    assert_eq!(&body[1672..1680], &0x2_F339_2000u64.to_le_bytes()[..], "bar2PdeBase");
+    assert_eq!(
+        &body[1664..1672],
+        &0x2_F1CA_C000u64.to_le_bytes()[..],
+        "bar1PdeBase"
+    );
+    assert_eq!(
+        &body[1672..1680],
+        &0x2_F339_2000u64.to_le_bytes()[..],
+        "bar2PdeBase"
+    );
     // Bytes 0..24 (`grCapsBits` + its alignment byte) and 292..344 (`SKUInfo`) are real in
     // the capture and left zero here, because this port does not advertise them.
     assert!(body[..24].iter().all(|b| *b == 0), "grCapsBits");
@@ -251,9 +264,10 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
 #[test]
 fn the_served_body_carries_a_non_zero_uuid_for_every_chip_row() {
     for (name, chip) in boards() {
-        let body = StaticInfoPolicy::new(chip.clone(), *table_for(BENCH_DRIVER).expect("bench ABI"))
-            .body()
-            .expect("every shipped chip row encodes");
+        let body =
+            StaticInfoPolicy::new(chip.clone(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+                .body()
+                .expect("every shipped chip row encodes");
         assert!(
             body[36..52].iter().any(|b| *b != 0),
             "{}: gidInfo.data is all zero, which the guest reads as NV_ERR_INVALID_STATE",
@@ -340,9 +354,10 @@ fn a_declared_name_lands_where_the_real_ga106_puts_its_own() {
 #[test]
 fn a_name_this_port_was_never_told_is_served_as_zero_for_every_chip_row() {
     for (name, chip) in boards() {
-        let body = StaticInfoPolicy::new(chip.clone(), *table_for(BENCH_DRIVER).expect("bench ABI"))
-            .body()
-            .expect("every shipped chip row encodes");
+        let body =
+            StaticInfoPolicy::new(chip.clone(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+                .body()
+                .expect("every shipped chip row encodes");
         assert!(
             body[1388..1516].iter().all(|b| *b == 0),
             "{}: a name was served without anyone declaring one — if a chip-row constant \
@@ -419,7 +434,10 @@ fn the_three_statements_of_the_framebuffer_size_agree() {
     // carried — is not in kf-rm in v3: the register plane serves it from the size the GSP
     // model was built with (`kf_chip::falcon_gsp::USABLE_FB_SIZE_IN_MB_ADDR`). What kf-rm can
     // still pin is that both of its statements are the same derivation of that size.
-    assert_eq!(chip.fb_length, kf_chip::falcon_gsp::fb_length_for(ga106::FB_SIZE_MB));
+    assert_eq!(
+        chip.fb_length,
+        kf_chip::falcon_gsp::fb_length_for(ga106::FB_SIZE_MB)
+    );
 }
 
 #[test]

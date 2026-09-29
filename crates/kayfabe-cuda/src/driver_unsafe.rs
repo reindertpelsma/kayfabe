@@ -660,7 +660,13 @@ impl Cuda {
     ///
     /// # Errors
     /// [`CudaError::Refused`].
-    pub fn memset_d8(&self, dst: CUdeviceptr, v: u8, n: usize, what: &'static str) -> Result<(), CudaError> {
+    pub fn memset_d8(
+        &self,
+        dst: CUdeviceptr,
+        v: u8,
+        n: usize,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
         // SAFETY: `dst` is a live device allocation of at least `n` bytes.
         self.check(what, unsafe { (self.cuMemsetD8)(dst, v, n) })
     }

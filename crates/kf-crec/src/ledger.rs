@@ -16,8 +16,8 @@
 //!    *at that site*. It says nothing about whether we produced the right answer, which is
 //!    what the row's `independent_oracle` field is for.
 
-use kf_arch::gsp::GspReg;
 use crate::gspreplay::{Divergence as LedgerRow, LEDGER, Observation};
+use kf_arch::gsp::GspReg;
 use kf_trace::Divergence;
 
 use crate::replay::{Note, ReplayResult, Txn};

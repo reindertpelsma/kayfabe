@@ -59,10 +59,22 @@ pub struct Offset(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HostVerb {
     AllocVaSpace,
-    AllocChannel { vas: Handle },
-    MapDma { vas: Handle, mem: Handle, offset: Offset, len: u64, read_only: bool },
-    Free { obj: Handle },
-    RingDoorbell { token: u32 },
+    AllocChannel {
+        vas: Handle,
+    },
+    MapDma {
+        vas: Handle,
+        mem: Handle,
+        offset: Offset,
+        len: u64,
+        read_only: bool,
+    },
+    Free {
+        obj: Handle,
+    },
+    RingDoorbell {
+        token: u32,
+    },
 }
 
 /// ⊘ The ONE bit of a guest-supplied leaf we translate beyond aperture/address/size.
@@ -116,7 +128,12 @@ impl VmmAddr {
     /// aliased this `VmmAddr`, the check fails and we refuse instead of dereferencing. §the
     /// owner's rule: *"unsafe must protect against memory bugs in safe"* — so this does not trust
     /// that safe code preserved anything.
-    pub fn checked(&self, registered_base: usize, registered_len: usize, want: usize) -> Option<usize> {
+    pub fn checked(
+        &self,
+        registered_base: usize,
+        registered_len: usize,
+        want: usize,
+    ) -> Option<usize> {
         let end = self.addr.checked_add(want)?;
         let reg_end = registered_base.checked_add(registered_len)?;
         if self.addr < registered_base || end > reg_end || want > self.len {

@@ -194,7 +194,12 @@ pub fn check(shape: ClaimShape) -> Result<usize, String> {
     // A vCPU that rings twice (the second ring is what perturbs the stamp under a claim), and a
     // worker that scans, claims and releases.
     let vcpu = Thread {
-        prog: [Some(Step::Ring), Some(Step::PublishIfOwed), Some(Step::Ring), Some(Step::PublishIfOwed)],
+        prog: [
+            Some(Step::Ring),
+            Some(Step::PublishIfOwed),
+            Some(Step::Ring),
+            Some(Step::PublishIfOwed),
+        ],
         pc: 0,
         owes_publish: false,
         holds_bit: false,
@@ -203,7 +208,12 @@ pub fn check(shape: ClaimShape) -> Result<usize, String> {
         observed_state: S::Idle,
     };
     let worker = Thread {
-        prog: [Some(Step::TakeBit), Some(Step::ClaimLoad), Some(Step::ClaimCas), Some(Step::Release)],
+        prog: [
+            Some(Step::TakeBit),
+            Some(Step::ClaimLoad),
+            Some(Step::ClaimCas),
+            Some(Step::Release),
+        ],
         pc: 0,
         owes_publish: false,
         holds_bit: false,
@@ -211,7 +221,13 @@ pub fn check(shape: ClaimShape) -> Result<usize, String> {
         observed_stamp: 0,
         observed_state: S::Idle,
     };
-    let w0 = World { state: S::Idle, stamp: 0, bit: false, queued: 0, served: 0 };
+    let w0 = World {
+        state: S::Idle,
+        stamp: 0,
+        bit: false,
+        queued: 0,
+        served: 0,
+    };
 
     let mut seen: HashSet<(World, Vec<Thread>)> = HashSet::new();
     let mut explored = 0usize;
@@ -222,7 +238,9 @@ pub fn check(shape: ClaimShape) -> Result<usize, String> {
             continue;
         }
         explored += 1;
-        let done = ts.iter().all(|t| t.pc as usize >= t.prog.len() || t.prog[t.pc as usize].is_none());
+        let done = ts
+            .iter()
+            .all(|t| t.pc as usize >= t.prog.len() || t.prog[t.pc as usize].is_none());
         if done {
             if let Err(why) = quiescent_invariant(&w, &ts) {
                 let t: Vec<String> = trace.iter().map(|(i, s)| format!("T{i}:{s:?}")).collect();
@@ -232,7 +250,9 @@ pub fn check(shape: ClaimShape) -> Result<usize, String> {
         }
         for i in 0..ts.len() {
             let pc = ts[i].pc as usize;
-            let Some(s) = ts[i].prog.get(pc).copied().flatten() else { continue };
+            let Some(s) = ts[i].prog.get(pc).copied().flatten() else {
+                continue;
+            };
             let (mut w2, mut ts2) = (w, ts.clone());
             step(&mut w2, &mut ts2[i], s, shape);
             ts2[i].pc += 1;

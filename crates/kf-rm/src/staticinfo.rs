@@ -103,7 +103,10 @@ impl StaticInfoPolicy {
     /// device-info reply is built from ([`crate::authored::engine_caps`]), so the two statements
     /// of "which engines exist" cannot disagree.
     #[must_use]
-    pub fn with_engine_caps(mut self, caps: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS]) -> StaticInfoPolicy {
+    pub fn with_engine_caps(
+        mut self,
+        caps: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
+    ) -> StaticInfoPolicy {
         self.engine_caps = caps;
         self
     }
@@ -209,9 +212,11 @@ impl StaticInfoPolicy {
             &kf_abi::generated::matrix::GSPSTATICCONFIGINFO,
             self.driver.driver_version(),
         )
-        .map_err(|_| kf_abi::gspstaticinfo::GspStaticInfoError::UnsupportedWire {
-            wire: self.driver.gsp_static_info_wire(),
-        })?;
+        .map_err(
+            |_| kf_abi::gspstaticinfo::GspStaticInfoError::UnsupportedWire {
+                wire: self.driver.gsp_static_info_wire(),
+            },
+        )?;
         kf_abi::gspstaticinfo::encode_gsp_static_info_at(
             &GspStaticInfo {
                 fb_regions: &self.board.fb_regions,

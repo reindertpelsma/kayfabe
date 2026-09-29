@@ -139,7 +139,6 @@ fn the_bench_driver_is_measured() {
     assert!(kf_abi::matrix::is_measured(kf_abi::versions::BENCH_DRIVER));
 }
 
-
 // =====================================================================================
 // ★★★ The transcoder on the REAL layouts (`kf_abi::matrix::transcode`, §4.5)
 // =====================================================================================
@@ -159,7 +158,8 @@ fn is_union(l: &Layout, container: &str) -> bool {
         .map(|(_, f)| (f.off, f.size))
         .collect();
     kids.sort_unstable();
-    kids.windows(2).any(|w| i64::from(w[0].0) + i64::from(w[0].1.max(0)) > i64::from(w[1].0))
+    kids.windows(2)
+        .any(|w| i64::from(w[0].0) + i64::from(w[0].1.max(0)) > i64::from(w[1].0))
 }
 
 /// The fields a round trip can state a value in: scalar leaves (a scalar array counts as a leaf:
@@ -171,7 +171,10 @@ fn fillable(l: &Layout) -> Vec<(&'static str, FieldAt)> {
             if *p == "." || p.ends_with("[]") || f.size <= 0 {
                 return false;
             }
-            let has_kids = l.fields.iter().any(|(q, _)| *q != *p && (parent(q) == *p || *q == format!("{p}[]")));
+            let has_kids = l
+                .fields
+                .iter()
+                .any(|(q, _)| *q != *p && (parent(q) == *p || *q == format!("{p}[]")));
             if has_kids {
                 return false;
             }
@@ -218,9 +221,13 @@ fn every_consumed_struct_round_trips_through_every_measured_layout() {
     let mut carried = 0usize;
     let mut failures = Vec::new();
     for runs in ALL_STRUCTS {
-        let Ok(b) = Resolved::of(runs, bench) else { continue };
+        let Ok(b) = Resolved::of(runs, bench) else {
+            continue;
+        };
         for &v in MEASURED {
-            let Ok(g) = Resolved::of(runs, v) else { continue };
+            let Ok(g) = Resolved::of(runs, v) else {
+                continue;
+            };
             if std::ptr::eq(g.layout, b.layout) {
                 continue;
             }
@@ -228,7 +235,9 @@ fn every_consumed_struct_round_trips_through_every_measured_layout() {
             let mut stated = Vec::new();
             let g_fill = fillable(g.layout);
             for (k, (p, bf)) in fillable(b.layout).into_iter().enumerate() {
-                let Some(gf) = g.layout.field(p) else { continue };
+                let Some(gf) = g.layout.field(p) else {
+                    continue;
+                };
                 if gf.size <= 0 || !g_fill.iter().any(|(q, _)| *q == p) {
                     continue;
                 }
@@ -241,12 +250,18 @@ fn every_consumed_struct_round_trips_through_every_measured_layout() {
                 stated.push((p, o));
             }
             let down = transcode(&b, &g, &body, &[]);
-            let back = down.as_ref().map_err(Clone::clone).and_then(|(d, _)| transcode(&g, &b, d, &[]));
+            let back = down
+                .as_ref()
+                .map_err(Clone::clone)
+                .and_then(|(d, _)| transcode(&g, &b, d, &[]));
             match back {
                 Ok((round, _)) => {
                     for (p, o) in &stated {
                         if round[*o] != body[*o] {
-                            failures.push(format!("{}.{p} at {v}: {} -> {}", runs.name, body[*o], round[*o]));
+                            failures.push(format!(
+                                "{}.{p} at {v}: {} -> {}",
+                                runs.name, body[*o], round[*o]
+                            ));
                         }
                     }
                     carried += 1;
@@ -259,8 +274,16 @@ fn every_consumed_struct_round_trips_through_every_measured_layout() {
             }
         }
     }
-    assert!(failures.is_empty(), "{} round trip failure(s):\n{}", failures.len(), failures.join("\n"));
-    assert!(carried > 100, "only {carried} (struct, version) pairs were carried — the matrix is not the committed one");
+    assert!(
+        failures.is_empty(),
+        "{} round trip failure(s):\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+    assert!(
+        carried > 100,
+        "only {carried} (struct, version) pairs were carried — the matrix is not the committed one"
+    );
 }
 
 /// ★ The served controls the kf-rm carry covers: the per-GPC and index-keyed arrays shrink at
@@ -290,7 +313,8 @@ fn the_reviewed_controls_carry_a_ga10x_body_to_every_measured_version() {
                     body[f.off()] = 1;
                 }
             }
-            let (d, _) = transcode(&b, &g, &body, &[]).unwrap_or_else(|e| panic!("{} down to {v}: {e}", runs.name));
+            let (d, _) = transcode(&b, &g, &body, &[])
+                .unwrap_or_else(|e| panic!("{} down to {v}: {e}", runs.name));
             assert_eq!(d.len(), g.size(), "{} at {v}", runs.name);
         }
     }
@@ -301,8 +325,8 @@ fn the_reviewed_controls_carry_a_ga10x_body_to_every_measured_version() {
 // =====================================================================================
 
 use kf_abi::inittables::{
-    INTR_CATEGORY_COUNT, INTR_INVALID_SUBTREE, IntrAtError, IntrTableEntry, encode_intr_kernel_table,
-    intr_kernel_table_at,
+    INTR_CATEGORY_COUNT, INTR_INVALID_SUBTREE, IntrAtError, IntrTableEntry,
+    encode_intr_kernel_table, intr_kernel_table_at,
 };
 
 fn mc_idx(name: &str, v: DriverVersion) -> Option<u64> {
@@ -323,7 +347,12 @@ fn mc_engine_idx_is_measured_at_every_tag() {
             .filter(|r| r.at(v).ok().flatten().is_some())
             .count();
         assert!(n > 50, "only {n} MC_ENGINE_IDX values at {v}");
-        for e in ["MC_ENGINE_IDX_GR0", "MC_ENGINE_IDX_CE0", "MC_ENGINE_IDX_GSP", "MC_ENGINE_IDX_SEC2"] {
+        for e in [
+            "MC_ENGINE_IDX_GR0",
+            "MC_ENGINE_IDX_CE0",
+            "MC_ENGINE_IDX_GSP",
+            "MC_ENGINE_IDX_SEC2",
+        ] {
             assert!(mc_idx(e, v).is_some(), "{e} unmeasured at {v}");
         }
     }
@@ -334,7 +363,13 @@ fn mc_engine_idx_is_measured_at_every_tag() {
 #[test]
 fn intr_table_engine_indices_are_carried_by_name_to_every_tag() {
     let bench = kf_abi::versions::BENCH_DRIVER;
-    let names = ["MC_ENGINE_IDX_GR0", "MC_ENGINE_IDX_CE0", "MC_ENGINE_IDX_GSP", "MC_ENGINE_IDX_SEC2", "MC_ENGINE_IDX_FIFO"];
+    let names = [
+        "MC_ENGINE_IDX_GR0",
+        "MC_ENGINE_IDX_CE0",
+        "MC_ENGINE_IDX_GSP",
+        "MC_ENGINE_IDX_SEC2",
+        "MC_ENGINE_IDX_FIFO",
+    ];
     let entries: Vec<IntrTableEntry> = names
         .iter()
         .enumerate()
@@ -364,15 +399,27 @@ fn intr_table_engine_indices_are_carried_by_name_to_every_tag() {
             let want = mc_idx(n, v).expect("measured");
             let got = u16::from_le_bytes([out[idx + i * el], out[idx + i * el + 1]]);
             assert_eq!(u64::from(got), want, "{n} at {v}");
-            let stall = u32::from_le_bytes(out[vs + i * el..vs + i * el + 4].try_into().expect("4"));
+            let stall =
+                u32::from_le_bytes(out[vs + i * el..vs + i * el + 4].try_into().expect("4"));
             assert_eq!(stall, 0x100 + i as u32, "vectorStall row {i} at {v}");
             if u64::from(got) != mc_idx(n, bench).expect("bench") {
                 translated += 1;
             }
         }
-        if let (Some(s), Some(e)) = (g.maybe("subtreeMap[].subtreeStart"), g.maybe("subtreeMap[].subtreeEnd")) {
-            let st = g.need("subtreeMap[]").expect("subtreeMap[]").bytes().expect("elem");
-            assert_eq!((out[s.off()], out[e.off()]), (INTR_INVALID_SUBTREE, INTR_INVALID_SUBTREE), "empty category 0 at {v}");
+        if let (Some(s), Some(e)) = (
+            g.maybe("subtreeMap[].subtreeStart"),
+            g.maybe("subtreeMap[].subtreeEnd"),
+        ) {
+            let st = g
+                .need("subtreeMap[]")
+                .expect("subtreeMap[]")
+                .bytes()
+                .expect("elem");
+            assert_eq!(
+                (out[s.off()], out[e.off()]),
+                (INTR_INVALID_SUBTREE, INTR_INVALID_SUBTREE),
+                "empty category 0 at {v}"
+            );
             for c in 1..INTR_CATEGORY_COUNT {
                 assert_eq!(
                     (out[s.off() + c * st], out[e.off() + c * st]),
@@ -382,7 +429,10 @@ fn intr_table_engine_indices_are_carried_by_name_to_every_tag() {
             }
         }
     }
-    assert!(translated > 0, "no tag renumbered any engine — the by-name path was never exercised");
+    assert!(
+        translated > 0,
+        "no tag renumbered any engine — the by-name path was never exercised"
+    );
 }
 
 /// ⊘ A subtree mask with a hole cannot be said as {start, end}: refused by name at every tag
@@ -397,7 +447,14 @@ fn a_non_contiguous_subtree_mask_is_refused_only_where_the_guest_has_start_end()
         let g = Resolved::of(runs, v).expect("layout");
         let r = intr_kernel_table_at(&body, v);
         if g.maybe("subtreeMap[].subtreeStart").is_some() {
-            assert_eq!(r, Err(IntrAtError::NonContiguousSubtree { category: 2, mask: 0b101 }), "{v}");
+            assert_eq!(
+                r,
+                Err(IntrAtError::NonContiguousSubtree {
+                    category: 2,
+                    mask: 0b101
+                }),
+                "{v}"
+            );
         } else {
             assert!(r.is_ok(), "{v}: {r:?}");
         }
@@ -410,13 +467,26 @@ fn a_non_contiguous_subtree_mask_is_refused_only_where_the_guest_has_start_end()
 #[test]
 fn the_video_caps_layout_resolves_across_the_610_rename() {
     for &v in MEASURED {
-        let Ok(t) = kf_abi::versions::table_for(v) else { continue };
-        for cmd in [kf_abi::videocaps::MSENC_GET_CAPS_V2, kf_abi::videocaps::BSP_GET_CAPS_V2] {
-            let has_cmd_struct = v >= DriverVersion { major: 550, minor: 40, patch: 7 } || cmd == kf_abi::videocaps::BSP_GET_CAPS_V2;
+        let Ok(t) = kf_abi::versions::table_for(v) else {
+            continue;
+        };
+        for cmd in [
+            kf_abi::videocaps::MSENC_GET_CAPS_V2,
+            kf_abi::videocaps::BSP_GET_CAPS_V2,
+        ] {
+            let has_cmd_struct =
+                v >= DriverVersion {
+                    major: 550,
+                    minor: 40,
+                    patch: 7,
+                } || cmd == kf_abi::videocaps::BSP_GET_CAPS_V2;
             let l = t.video_caps_layout(cmd);
             if has_cmd_struct {
                 let l = l.unwrap_or_else(|| panic!("{cmd:#x} has no layout at {v}"));
-                assert!(l.params_size >= 8 && l.instance_off + 4 <= l.params_size, "{cmd:#x} at {v}: {l:?}");
+                assert!(
+                    l.params_size >= 8 && l.instance_off + 4 <= l.params_size,
+                    "{cmd:#x} at {v}: {l:?}"
+                );
             }
         }
     }

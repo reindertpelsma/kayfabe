@@ -46,7 +46,9 @@ impl HostControls for Session<'_> {
     fn lacks_control(&self, cmd: u32) -> bool {
         matches!(
             self.0.host_abi().control_carry(cmd),
-            Err(kf_abi::hostabi::HostAbiError::Layout(kf_abi::matrix::LayoutError::NoStruct { .. }))
+            Err(kf_abi::hostabi::HostAbiError::Layout(
+                kf_abi::matrix::LayoutError::NoStruct { .. }
+            ))
         )
     }
 
@@ -59,7 +61,10 @@ impl HostControls for Session<'_> {
                     let h = self
                         .0
                         .raw_alloc(self.0.subdevice(), want, 0x9096, None, &mut [])
-                        .map_err(|e| HostRefusal { status: nv_status(&e), detail: format!("GF100_ZBC_CLEAR alloc: {e:?}") })?;
+                        .map_err(|e| HostRefusal {
+                            status: nv_status(&e),
+                            detail: format!("GF100_ZBC_CLEAR alloc: {e:?}"),
+                        })?;
                     self.0.remember(h, self.0.subdevice());
                     self.1 = Some(h);
                     h
@@ -70,13 +75,19 @@ impl HostControls for Session<'_> {
         };
         self.0
             .raw_control(object, cmd, params)
-            .map_err(|e| HostRefusal { status: nv_status(&e), detail: format!("{e:?}") })
+            .map_err(|e| HostRefusal {
+                status: nv_status(&e),
+                detail: format!("{e:?}"),
+            })
     }
 
     fn device_control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal> {
         self.0
             .raw_control(self.0.device(), cmd, params)
-            .map_err(|e| HostRefusal { status: nv_status(&e), detail: format!("{e:?}") })
+            .map_err(|e| HostRefusal {
+                status: nv_status(&e),
+                detail: format!("{e:?}"),
+            })
     }
 }
 

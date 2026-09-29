@@ -15,13 +15,20 @@ const QUEUE_TAIL: u64 = 0x008F_2C04;
 fn send(m: &dyn kf_arch::gsp::GspModel, st: &mut ArchBootState, words: &[u32]) -> Vec<BootStep> {
     let seq = m.boot_sequence();
     let ctx = BootContext::default();
-    let w = |off: u64, val: u64| RegWrite { bar: 0, off, val, reg: m.decode_reg(0, off) };
+    let w = |off: u64, val: u64| RegWrite {
+        bar: 0,
+        off,
+        val,
+        reg: m.decode_reg(0, off),
+    };
     let _ = seq.on_write(m, &w(EMEMC, 1 << 24), &ctx, st);
     for v in words {
         let _ = seq.on_write(m, &w(EMEMD, u64::from(*v)), &ctx, st);
     }
     let _ = seq.on_write(m, &w(QUEUE_TAIL, (words.len() as u64) * 4 - 4), &ctx, st);
-    seq.on_write(m, &w(QUEUE_HEAD, 0), &ctx, st).iter().collect()
+    seq.on_write(m, &w(QUEUE_HEAD, 0), &ctx, st)
+        .iter()
+        .collect()
 }
 
 fn packet(nvdm: u32, dwords: usize, boot_args: Option<u64>) -> Vec<u32> {
@@ -39,7 +46,10 @@ fn packet(nvdm: u32, dwords: usize, boot_args: Option<u64>) -> Vec<u32> {
 #[test]
 fn only_the_cot_boots_the_gsp_and_its_address_is_the_fmc_params() {
     let m = kf_chip::Family::Blackwell.gsp_model(0x3, 8192).unwrap();
-    assert_eq!(m.boot_sequence().boot_args_indirection(), Some(FMC_BOOT_PARAMS_BOOT_ARGS_OFFSET));
+    assert_eq!(
+        m.boot_sequence().boot_args_indirection(),
+        Some(FMC_BOOT_PARAMS_BOOT_ARGS_OFFSET)
+    );
     assert_eq!(FMC_BOOT_PARAMS_BOOT_ARGS_OFFSET, 48);
     let mut st = ArchBootState::default();
     // NVDM_TYPE_CAPS_QUERY / NVDM_TYPE_CLOCK_BOOST — short packets: FSP answers, no boot.
@@ -48,7 +58,14 @@ fn only_the_cot_boots_the_gsp_and_its_address_is_the_fmc_params() {
     // The COT (868 bytes): starts the FMC, loads GSP-RM, publishes the FMC params' address.
     let fmc = 0x1_2345_6000u64;
     let steps = send(&*m, &mut st, &packet(0x14, 217, Some(fmc)));
-    assert_eq!(steps, vec![BootStep::StartProcessor, BootStep::FirmwareLoaded, BootStep::PublishBootArgs(fmc)]);
+    assert_eq!(
+        steps,
+        vec![
+            BootStep::StartProcessor,
+            BootStep::FirmwareLoaded,
+            BootStep::PublishBootArgs(fmc)
+        ]
+    );
     // ⊘ A later short packet does NOT re-publish the COT the window still holds (a second open's
     // CAPS_QUERY before its own COT).
     assert!(send(&*m, &mut st, &packet(0x18, 3, None)).is_empty());

@@ -39,8 +39,8 @@ use kf_abi::pcibars::{
     bus_bar,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `ctl_20801803[]` — the 200 bytes an RTX 3060's GSP answered, as they sit in the capture.
 const ORACLE_PCI_BAR_PARAMS: &str = concat!(
@@ -90,7 +90,11 @@ fn pci_bar_len(b: &kf_rm::BoardFacts, index: usize) -> u64 {
 }
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` whose header asks for `cmd` with `params_size` bytes of params.

@@ -109,7 +109,10 @@ pub const FECS_RECORD_SIZE_WHY: Why = Why::Advertised(
 /// arrives from GSP, `rpcstructurecopy.c:1020`). It reproduces the real GA106's map exactly
 /// (`kf_abi::grstatic::GA106_TPC_TO_PES_MAP`), which is the test.
 #[must_use]
-pub fn tpc_to_pes_map(litter_tpc_per_gpc: u32, tpcs_per_pes: u32) -> Option<[u32; kf_abi::grstatic::MAX_TPC_PER_GPC]> {
+pub fn tpc_to_pes_map(
+    litter_tpc_per_gpc: u32,
+    tpcs_per_pes: u32,
+) -> Option<[u32; kf_abi::grstatic::MAX_TPC_PER_GPC]> {
     let mut map = [0u32; kf_abi::grstatic::MAX_TPC_PER_GPC];
     if tpcs_per_pes == 0 || litter_tpc_per_gpc as usize > map.len() {
         return None;
@@ -155,12 +158,23 @@ pub const GSP_DISP_VECTORS_WHY: Why = Why::Advertised(
 /// would make the guest's ISR demultiplex wrongly.
 pub fn with_gsp_and_disp_rows(mut table: Vec<IntrTableEntry>) -> Result<Vec<IntrTableEntry>, u32> {
     for v in [GSP_STALL_VECTOR, DISP_STALL_VECTOR] {
-        if table.iter().any(|e| e.vector_stall == v || e.vector_non_stall == v) {
+        if table
+            .iter()
+            .any(|e| e.vector_stall == v || e.vector_non_stall == v)
+        {
             return Err(v);
         }
     }
-    for (engine_idx, v) in [(MC_ENGINE_IDX_GSP, GSP_STALL_VECTOR), (MC_ENGINE_IDX_DISP, DISP_STALL_VECTOR)] {
-        table.push(IntrTableEntry { engine_idx, pmc_intr_mask: 0, vector_stall: v, vector_non_stall: INTR_VECTOR_INVALID });
+    for (engine_idx, v) in [
+        (MC_ENGINE_IDX_GSP, GSP_STALL_VECTOR),
+        (MC_ENGINE_IDX_DISP, DISP_STALL_VECTOR),
+    ] {
+        table.push(IntrTableEntry {
+            engine_idx,
+            pmc_intr_mask: 0,
+            vector_stall: v,
+            vector_non_stall: INTR_VECTOR_INVALID,
+        });
     }
     Ok(table)
 }
@@ -457,7 +471,9 @@ fn nv2080_of_rm(rm: u32) -> Option<u32> {
     use kf_abi::submit as s;
     match rm {
         0x01..=0x08 => Some(rm),
-        _ if s::rm_copy_index_of_engine_type(rm).is_some() => s::rm_copy_index_of_engine_type(rm).and_then(kf_chan_copy_engine_type),
+        _ if s::rm_copy_index_of_engine_type(rm).is_some() => {
+            s::rm_copy_index_of_engine_type(rm).and_then(kf_chan_copy_engine_type)
+        }
         _ if (s::RM_ENGINE_TYPE_NVDEC0..s::RM_ENGINE_TYPE_NVDEC0 + s::NVDEC_SIZE).contains(&rm) => {
             s::engine_type_nvdec(rm - s::RM_ENGINE_TYPE_NVDEC0)
         }
@@ -465,7 +481,9 @@ fn nv2080_of_rm(rm: u32) -> Option<u32> {
             s::engine_type_nvenc(rm - s::RM_ENGINE_TYPE_NVENC0)
         }
         // ★ v3-gfxset: RM `OFA0 = 0x3e` is NV2080 `OFA1` numerically — converted, never passed through.
-        _ if (s::RM_ENGINE_TYPE_OFA0..s::RM_ENGINE_TYPE_OFA0 + s::OFA_SIZE).contains(&rm) => s::engine_type_ofa(rm - s::RM_ENGINE_TYPE_OFA0),
+        _ if (s::RM_ENGINE_TYPE_OFA0..s::RM_ENGINE_TYPE_OFA0 + s::OFA_SIZE).contains(&rm) => {
+            s::engine_type_ofa(rm - s::RM_ENGINE_TYPE_OFA0)
+        }
         _ => None,
     }
 }
@@ -517,10 +535,20 @@ pub const ENGINE_LAYOUT_WHY: Why = Why::Advertised(
 /// # Errors
 /// [`LayoutRefusal`] for a list with a second GR (MIG, whose GR runlists this layout does not
 /// state). ⊘ Hopper was refused here too until 2026-09-26 (see [`fault_ids`]).
-pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> Result<Vec<FifoDeviceEntry>, LayoutRefusal> {
+pub fn engine_table(
+    family: Family,
+    engines: &[EngineKind],
+    grce_mask: u64,
+) -> Result<Vec<FifoDeviceEntry>, LayoutRefusal> {
     let (gr_fault, ce0_fault, host0) = fault_ids(family)?;
-    if engines.iter().any(|k| matches!(k, EngineKind::Graphics(i) if *i > 0)) {
-        return Err(LayoutRefusal { family, missing: "runlists for GR1..GR7 (MIG): this layout states GR0 only" });
+    if engines
+        .iter()
+        .any(|k| matches!(k, EngineKind::Graphics(i) if *i > 0))
+    {
+        return Err(LayoutRefusal {
+            family,
+            missing: "runlists for GR1..GR7 (MIG): this layout states GR0 only",
+        });
     }
     let esched = !matches!(family, Family::Turing);
     let grce = |i: u32| i < 64 && grce_mask & (1u64 << i) != 0;
@@ -540,7 +568,10 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
                 grce_seen += 1;
                 (Some(0), grce_seen)
             }
-            EngineKind::Copy(_) | EngineKind::VideoEncode(_) | EngineKind::VideoDecode(_) | EngineKind::OpticalFlow(_) => {
+            EngineKind::Copy(_)
+            | EngineKind::VideoEncode(_)
+            | EngineKind::VideoDecode(_)
+            | EngineKind::OpticalFlow(_) => {
                 let r = next_runlist;
                 next_runlist += 1;
                 (Some(r), 0)
@@ -576,18 +607,30 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
             }
             EngineKind::VideoEncode(i) | EngineKind::VideoDecode(i) => {
                 let encoder = matches!(kind, EngineKind::VideoEncode(_));
-                d[slot::ENG_DESC] = (if encoder { CLASS_OBJMSENC } else { CLASS_OBJBSP }) << 8 | i;
+                d[slot::ENG_DESC] = (if encoder {
+                    CLASS_OBJMSENC
+                } else {
+                    CLASS_OBJBSP
+                }) << 8
+                    | i;
                 d[slot::MMU_FAULT_ID] = video_fault_id(family, encoder, i).ok_or(LayoutRefusal {
                     family,
                     missing: "NV_PFAULT_MMU_ENG_ID_NVENC<i>/NVDEC<i> for this instance: the family's dev_fault.h names none",
                 })?;
                 if next_reset > 31 {
-                    return Err(LayoutRefusal { family, missing: "a free NV_PMC_DEVICE_ENABLE bit for a video engine (one 32-bit word)" });
+                    return Err(LayoutRefusal {
+                        family,
+                        missing: "a free NV_PMC_DEVICE_ENABLE bit for a video engine (one 32-bit word)",
+                    });
                 }
                 d[slot::RESET] = next_reset;
                 next_reset += 1;
                 d[slot::MC] = if encoder { MC_NVENC0 } else { MC_NVDEC0 } + i;
-                d[slot::DEV_TYPE_ENUM] = if encoder { DEV_TYPE_NVENC } else { DEV_TYPE_NVDEC };
+                d[slot::DEV_TYPE_ENUM] = if encoder {
+                    DEV_TYPE_NVENC
+                } else {
+                    DEV_TYPE_NVDEC
+                };
                 d[slot::INSTANCE_ID] = i;
                 pbdma_ids[0] = runlist.unwrap_or(0) + 1;
                 num_pbdmas = 1;
@@ -600,7 +643,10 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
                     missing: "NV_PFAULT_MMU_ENG_ID_OFA<i> for this instance: the family's dev_fault.h names none",
                 })?;
                 if next_reset > 31 {
-                    return Err(LayoutRefusal { family, missing: "a free NV_PMC_DEVICE_ENABLE bit for the OFA engine (one 32-bit word)" });
+                    return Err(LayoutRefusal {
+                        family,
+                        missing: "a free NV_PMC_DEVICE_ENABLE bit for the OFA engine (one 32-bit word)",
+                    });
                 }
                 d[slot::RESET] = next_reset;
                 next_reset += 1;
@@ -662,20 +708,42 @@ mod hwref_check {
     fn every_familys_fault_ids_are_its_die_groups_dev_fault_h() {
         for g in DieGroup::ALL {
             let (gr, ce0, host0) = fault_ids(g.family()).unwrap_or_else(|e| panic!("{g:?}: {e:?}"));
-            assert_eq!(u64::from(gr), val(g, "NV_PFAULT_MMU_ENG_ID_GRAPHICS"), "{g:?} GRAPHICS");
-            assert_eq!(u64::from(ce0), val(g, "NV_PFAULT_MMU_ENG_ID_CE0"), "{g:?} CE0");
-            assert_eq!(u64::from(host0), val(g, "NV_PFAULT_MMU_ENG_ID_HOST0"), "{g:?} HOST0");
+            assert_eq!(
+                u64::from(gr),
+                val(g, "NV_PFAULT_MMU_ENG_ID_GRAPHICS"),
+                "{g:?} GRAPHICS"
+            );
+            assert_eq!(
+                u64::from(ce0),
+                val(g, "NV_PFAULT_MMU_ENG_ID_CE0"),
+                "{g:?} CE0"
+            );
+            assert_eq!(
+                u64::from(host0),
+                val(g, "NV_PFAULT_MMU_ENG_ID_HOST0"),
+                "{g:?} HOST0"
+            );
             // The `CE0 + i` rule, for every CE the header names (Ada's stops at CE5: its CE6 slot is
             // NVJPG0; the rule is not asked past a die's own LCE count).
             for i in 1..20u64 {
-                if let Some(v) = table().resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_CE{i}")).value() {
-                    assert_eq!(v, kf_chip::hwref::HwValue::Val(u64::from(ce0) + i), "{g:?} CE{i}");
+                if let Some(v) = table()
+                    .resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_CE{i}"))
+                    .value()
+                {
+                    assert_eq!(
+                        v,
+                        kf_chip::hwref::HwValue::Val(u64::from(ce0) + i),
+                        "{g:?} CE{i}"
+                    );
                 }
             }
             for (encoder, name) in [(true, "NVENC"), (false, "NVDEC")] {
                 for i in 0..8u32 {
-                    let want = table().resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_{name}{i}")).value();
-                    let ours = video_fault_id(g.family(), encoder, i).map(|v| kf_chip::hwref::HwValue::Val(u64::from(v)));
+                    let want = table()
+                        .resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_{name}{i}"))
+                        .value();
+                    let ours = video_fault_id(g.family(), encoder, i)
+                        .map(|v| kf_chip::hwref::HwValue::Val(u64::from(v)));
                     // Every id we state is the header's; an id the header states and we do not is a
                     // named refusal at the caller (a die with more instances than the row).
                     if let Some(o) = ours {
@@ -686,8 +754,11 @@ mod hwref_check {
             // ★ v3-gfxset: OFA, held BOTH ways — an OFA the header states and we do not would be an
             // engine silently not advertised (keep_statable_ofa drops it), so it fails here too.
             for i in 0..4u32 {
-                let want = table().resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_OFA{i}")).value();
-                let ours = ofa_fault_id(g.family(), i).map(|v| kf_chip::hwref::HwValue::Val(u64::from(v)));
+                let want = table()
+                    .resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_OFA{i}"))
+                    .value();
+                let ours =
+                    ofa_fault_id(g.family(), i).map(|v| kf_chip::hwref::HwValue::Val(u64::from(v)));
                 assert_eq!(ours, want, "{g:?} OFA{i}");
             }
         }

@@ -482,7 +482,11 @@ const CAPS_ROWS: &[CapsRow] = &[
 /// below the oldest row. Policy lookup only; [`table_for`] adds the measured-tag rule.
 #[must_use]
 pub fn capabilities_for(version: DriverVersion) -> Option<&'static CapabilityTable> {
-    CAPS_ROWS.iter().rev().find(|r| r.from <= version).map(|r| r.caps)
+    CAPS_ROWS
+        .iter()
+        .rev()
+        .find(|r| r.from <= version)
+        .map(|r| r.caps)
 }
 
 /// Every capability allowlist a version can be admitted against, in boundary order — the
@@ -1660,12 +1664,14 @@ impl DriverAbiTable {
         // aliases of NVENC/NVDEC (`ctrl0080nvenc.h:96`, `ctrl0080nvdec.h`), which DWARF cannot
         // see — the layout is the old name's where it exists, the new name's after.
         let (runs, renamed) = match cmd {
-            crate::videocaps::MSENC_GET_CAPS_V2 => {
-                (&m::NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS, &m::NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS)
-            }
-            crate::videocaps::BSP_GET_CAPS_V2 => {
-                (&m::NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2, &m::NV0080_CTRL_NVDEC_GET_CAPS_PARAMS_V2)
-            }
+            crate::videocaps::MSENC_GET_CAPS_V2 => (
+                &m::NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS,
+                &m::NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS,
+            ),
+            crate::videocaps::BSP_GET_CAPS_V2 => (
+                &m::NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2,
+                &m::NV0080_CTRL_NVDEC_GET_CAPS_PARAMS_V2,
+            ),
             _ => return None,
         };
         let l = crate::matrix::Resolved::of(runs, self.version)
@@ -2321,9 +2327,15 @@ mod tests {
             at(545, 23, 8).map(|t| t.capabilities().note),
             Ok(crate::capability::CAPS_545_23_06.note)
         );
-        assert!(capabilities_for(DriverVersion { major: 535, minor: 104, patch: 4 }).is_none());
+        assert!(
+            capabilities_for(DriverVersion {
+                major: 535,
+                minor: 104,
+                patch: 4
+            })
+            .is_none()
+        );
     }
-
 
     /// The NVOS46 shape follows the MEASURED layout, on both sides of 580.65.06.
     #[test]

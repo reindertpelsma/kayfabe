@@ -23,7 +23,11 @@ const PARAMS_AT: usize = 40;
 const CONTROL_STATUS_OFF: usize = 12;
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` carrying `MC_SERVICE_INTERRUPTS` over a `0xAA` fill (so an unwritten byte
@@ -40,7 +44,14 @@ fn service_command(engines: u32, params_size: u32) -> RpcCommand {
     if params_size >= 4 {
         payload[PARAMS_AT..PARAMS_AT + 4].copy_from_slice(&engines.to_le_bytes());
     }
-    RpcCommand { function: RpcFunction::RmControl, code: 0x4c, sequence: 329, payload, elements: 1, delivered: Vec::new() }
+    RpcCommand {
+        function: RpcFunction::RmControl,
+        code: 0x4c,
+        sequence: 329,
+        payload,
+        elements: 1,
+        delivered: Vec::new(),
+    }
 }
 
 #[test]
@@ -50,7 +61,10 @@ fn the_control_is_in_the_served_universe() {
         Some(WantedTable::McServiceInterrupts)
     );
     assert!(WantedTable::ALL.contains(&WantedTable::McServiceInterrupts));
-    assert_eq!(WantedTable::McServiceInterrupts.params_size(), MC_SERVICE_INTERRUPTS_PARAMS_SIZE);
+    assert_eq!(
+        WantedTable::McServiceInterrupts.params_size(),
+        MC_SERVICE_INTERRUPTS_PARAMS_SIZE
+    );
 }
 
 #[test]
@@ -60,7 +74,11 @@ fn what_libcuda_sends_is_answered_ok_with_engines_echoed() {
         let cmd = service_command(engines, MC_SERVICE_INTERRUPTS_PARAMS_SIZE as u32);
         let reply = policy().respond(&cmd).expect("0x20801702 is served");
         assert_eq!(reply.rpc_result, 0, "the envelope says NV_OK");
-        let status = u32::from_le_bytes(reply.body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].try_into().unwrap());
+        let status = u32::from_le_bytes(
+            reply.body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                .try_into()
+                .unwrap(),
+        );
         assert_eq!(status, 0, "the control header's own status says NV_OK");
         let back = u32::from_le_bytes(reply.body[PARAMS_AT..PARAMS_AT + 4].try_into().unwrap());
         assert_eq!(
@@ -76,7 +94,12 @@ fn what_libcuda_sends_is_answered_ok_with_engines_echoed() {
 fn a_params_image_that_is_not_the_struct_is_refused() {
     for size in [0u32, 2, 8] {
         let cmd = service_command(MC_ENGINE_ID_ALL, size);
-        let reply = policy().respond(&cmd).expect("a WantedTable row answers, refusing by name");
-        assert_ne!(reply.rpc_result, 0, "params size {size} is not NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS");
+        let reply = policy()
+            .respond(&cmd)
+            .expect("a WantedTable row answers, refusing by name");
+        assert_ne!(
+            reply.rpc_result, 0,
+            "params size {size} is not NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS"
+        );
     }
 }

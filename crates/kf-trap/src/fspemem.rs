@@ -113,7 +113,8 @@ fn cursor_of(v: u32) -> u32 {
 }
 
 fn encode_cursor(dwords: u32) -> u32 {
-    (((dwords / DWORDS_PER_BLOCK) & BLK_MASK) << BLK_SHIFT) | (((dwords % DWORDS_PER_BLOCK) & OFFS_MASK) << OFFS_SHIFT)
+    (((dwords / DWORDS_PER_BLOCK) & BLK_MASK) << BLK_SHIFT)
+        | (((dwords % DWORDS_PER_BLOCK) & OFFS_MASK) << OFFS_SHIFT)
 }
 
 impl FspEmem {
@@ -126,7 +127,10 @@ impl FspEmem {
     /// Is `off` one of this port's registers?
     #[must_use]
     pub const fn owns(off: u64) -> bool {
-        matches!(off, EMEMC | EMEMD | QUEUE_HEAD | QUEUE_TAIL | MSGQ_HEAD | MSGQ_TAIL)
+        matches!(
+            off,
+            EMEMC | EMEMD | QUEUE_HEAD | QUEUE_TAIL | MSGQ_HEAD | MSGQ_TAIL
+        )
     }
 
     /// How many replies have been posted.
@@ -186,7 +190,8 @@ impl FspEmem {
         self.queue_head.store(tail, Ordering::Release);
         self.msgq_head.store(0, Ordering::Release);
         #[allow(clippy::cast_possible_truncation)]
-        self.msgq_tail.store((RESPONSE_DWORDS as u32 - 1) * 4, Ordering::Release);
+        self.msgq_tail
+            .store((RESPONSE_DWORDS as u32 - 1) * 4, Ordering::Release);
         self.replies.fetch_add(1, Ordering::Relaxed);
         FspWrite::Replied { nvdm_type }
     }
@@ -196,10 +201,16 @@ impl FspEmem {
     #[must_use]
     pub fn read(&self, off: u64) -> Option<u32> {
         Some(match off {
-            EMEMC => self.flags.load(Ordering::Acquire) | encode_cursor(self.cursor.load(Ordering::Acquire)),
+            EMEMC => {
+                self.flags.load(Ordering::Acquire)
+                    | encode_cursor(self.cursor.load(Ordering::Acquire))
+            }
             EMEMD => {
                 let c = self.cursor.load(Ordering::Acquire);
-                let v = self.reply.get(c as usize).map_or(0, |w| w.load(Ordering::Acquire));
+                let v = self
+                    .reply
+                    .get(c as usize)
+                    .map_or(0, |w| w.load(Ordering::Acquire));
                 if self.flags.load(Ordering::Acquire) & AINCR != 0 && c < CHANNEL_DWORDS {
                     self.cursor.store(c + 1, Ordering::Release);
                 }
@@ -241,9 +252,16 @@ mod tests {
             assert_eq!(f.write(EMEMD, *w), FspWrite::Taken);
         }
         let end = cursor_of(f.read(EMEMC).unwrap());
-        assert_eq!(end - start, 217, "_kfspWriteToEmem_GH100's autoincrement assert");
+        assert_eq!(
+            end - start,
+            217,
+            "_kfspWriteToEmem_GH100's autoincrement assert"
+        );
         f.write(QUEUE_TAIL, 217 * 4 - 4);
-        assert_eq!(f.write(QUEUE_HEAD, 0), FspWrite::Replied { nvdm_type: 0x14 });
+        assert_eq!(
+            f.write(QUEUE_HEAD, 0),
+            FspWrite::Replied { nvdm_type: 0x14 }
+        );
         // kfspIsResponseAvailable_GH100.
         let (h, t) = (f.read(MSGQ_HEAD).unwrap(), f.read(MSGQ_TAIL).unwrap());
         assert_ne!(h, t);
@@ -252,7 +270,11 @@ mod tests {
         // kfspReadPacket_GH100.
         f.write(EMEMC, ememc(false, true));
         let got: Vec<u32> = (0..size / 4).map(|_| f.read(EMEMD).unwrap()).collect();
-        assert_eq!(cursor_of(f.read(EMEMC).unwrap()), size / 4, "the read autoincrement assert");
+        assert_eq!(
+            cursor_of(f.read(EMEMC).unwrap()),
+            size / 4,
+            "the read autoincrement assert"
+        );
         f.write(MSGQ_TAIL, h);
         f.write(MSGQ_HEAD, h);
         // kfspGetPacketInfo_GH100: SOM && EOM = single packet; tag echoed.
@@ -265,10 +287,14 @@ mod tests {
         // byte 7 is the NVDM type, then NVDM_PAYLOAD_COMMAND_RESPONSE.
         let bytes: Vec<u8> = got.iter().flat_map(|w| w.to_le_bytes()).collect();
         assert_eq!(u32::from(bytes[7]), NVDM_TYPE_FSP_RESPONSE);
-        let rd = |o: usize| u32::from_le_bytes([bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]]);
+        let rd =
+            |o: usize| u32::from_le_bytes([bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]]);
         assert_eq!(rd(8 + 4), 0x14, "commandNvdmType = COT");
         assert_eq!(rd(8 + 8), FSP_OK);
-        assert!(bytes.len() - 7 >= 1 + 12, "kfspProcessCommandResponse_GH100's size check");
+        assert!(
+            bytes.len() - 7 >= 1 + 12,
+            "kfspProcessCommandResponse_GH100's size check"
+        );
         // And the channel is drained for the next send.
         assert_eq!(f.read(QUEUE_HEAD), f.read(QUEUE_TAIL));
         assert_eq!(f.read(MSGQ_HEAD), f.read(MSGQ_TAIL));
@@ -310,9 +336,17 @@ mod hwref_check {
     #[test]
     fn the_ememc_fields_are_each_fsp_die_groups_header() {
         for g in [DieGroup::Gh100, DieGroup::Gb10x, DieGroup::Gb20x] {
-            assert_eq!(range(g, "NV_PFSP_EMEMC_OFFS").1, u64::from(OFFS_SHIFT), "{g:?}");
+            assert_eq!(
+                range(g, "NV_PFSP_EMEMC_OFFS").1,
+                u64::from(OFFS_SHIFT),
+                "{g:?}"
+            );
             assert_eq!(mask(g, "NV_PFSP_EMEMC_OFFS"), u64::from(OFFS_MASK), "{g:?}");
-            assert_eq!(range(g, "NV_PFSP_EMEMC_BLK").1, u64::from(BLK_SHIFT), "{g:?}");
+            assert_eq!(
+                range(g, "NV_PFSP_EMEMC_BLK").1,
+                u64::from(BLK_SHIFT),
+                "{g:?}"
+            );
             assert_eq!(mask(g, "NV_PFSP_EMEMC_BLK"), u64::from(BLK_MASK), "{g:?}");
             assert_eq!(bit(g, "NV_PFSP_EMEMC_AINCW"), u64::from(AINCW), "{g:?}");
             assert_eq!(bit(g, "NV_PFSP_EMEMC_AINCR"), u64::from(AINCR), "{g:?}");

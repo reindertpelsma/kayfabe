@@ -31,15 +31,17 @@
 
 use kf_cuda::abi::{KfFormat, kf_format_ver2, kf_format_ver3};
 use kf_cuda::walk::{WalkCfg, WalkEntry, WalkKernel};
-use kf_harness::tables::{Tree, Tree3};
 use kf_harness::publish::Recorded;
+use kf_harness::tables::{Tree, Tree3};
 use kf_harness::{CeRig, Ledger as Checks};
 use kf_host::HostRm;
 use kf_linux_raw::{DevDir, Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey, WalkDone, Walker};
 use kf_trap::mmuinval::TRIGGER_BIT;
-use kf_trap::{Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture, PortWrite};
+use kf_trap::{
+    Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture, PortWrite,
+};
 use std::cell::RefCell;
 use std::sync::mpsc;
 
@@ -80,7 +82,9 @@ fn main() {
 }
 
 fn pattern(seed: u32) -> Vec<u8> {
-    (0..BYTES / 4).flat_map(|i| (seed ^ i).to_le_bytes()).collect()
+    (0..BYTES / 4)
+        .flat_map(|i| (seed ^ i).to_le_bytes())
+        .collect()
 }
 
 /// The guest's tables in either family's format.
@@ -91,7 +95,11 @@ enum GuestTree {
 
 impl GuestTree {
     fn new(v3: bool, base: u64) -> GuestTree {
-        if v3 { GuestTree::V3(Tree3::new(base, PT_BYTES)) } else { GuestTree::V2(Tree::new(base, PT_BYTES)) }
+        if v3 {
+            GuestTree::V3(Tree3::new(base, PT_BYTES))
+        } else {
+            GuestTree::V2(Tree::new(base, PT_BYTES))
+        }
     }
     fn map4k(&mut self, va: u64, phys: u64) {
         match self {
@@ -156,9 +164,16 @@ impl Walker for Timed {
     fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), String> {
         let t0 = std::time::Instant::now();
         let r = self.inner.submit(entries);
-        self.submit_ns.push(u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX));
+        self.submit_ns
+            .push(u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX));
         if r.is_ok() {
-            self.in_flight_at_return.push(!self.inner.kernel.gpu_done_now().map_err(|e| e.to_string())?);
+            self.in_flight_at_return.push(
+                !self
+                    .inner
+                    .kernel
+                    .gpu_done_now()
+                    .map_err(|e| e.to_string())?,
+            );
         }
         r
     }
@@ -199,7 +214,12 @@ struct VcpuSaw {
 /// ★ The vCPU: the guest's register sequence for each `fire`, back to back, then the guest's
 /// spin on the trigger until it reads 0 (or 5 s — the guest's own 4 s timeout, rounded up).
 /// ⊘ Nothing here blocks on the VA manager: a trap is atomics + one channel push + one wake.
-fn vcpu(port: &InvalidatePort, tx: &mpsc::Sender<InvalidateRequest>, wake: &Notifier, fires: &[Fire]) -> VcpuSaw {
+fn vcpu(
+    port: &InvalidatePort,
+    tx: &mpsc::Sender<InvalidateRequest>,
+    wake: &Notifier,
+    fires: &[Fire],
+) -> VcpuSaw {
     let mut saw = VcpuSaw::default();
     let r = port.regs();
     for f in fires {
@@ -272,7 +292,9 @@ fn round(
                 break;
             }
             let mut ready = ReadyTokens::new();
-            poller.wait(&mut ready, PollTimeout::Millis(20)).map_err(|e| format!("epoll: {e:?}"))?;
+            poller
+                .wait(&mut ready, PollTimeout::Millis(20))
+                .map_err(|e| format!("epoll: {e:?}"))?;
             for t in ready.iter() {
                 if t == TOKEN_REQ {
                     let _ = req_wake.drain();
@@ -301,19 +323,46 @@ fn round(
 
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
-    let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
-    l.measure("store", format!("store {:#x} {} MiB contiguous_aligned={}", res.handle, STORE_BYTES >> 20, res.contiguous_aligned));
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
+        .map_err(|e| e.to_string())?;
+    let res = rm
+        .reserve_gpga(STORE_BYTES)
+        .map_err(|e| format!("reserve: {e:?}"))?;
+    l.measure(
+        "store",
+        format!(
+            "store {:#x} {} MiB contiguous_aligned={}",
+            res.handle,
+            STORE_BYTES >> 20,
+            res.contiguous_aligned
+        ),
+    );
     phase(l, &rm, res.handle, "ver2", kf_format_ver2(), false)?;
     phase(l, &rm, res.handle, "ver3", kf_format_ver3(), true)?;
     Ok(())
 }
 
 #[allow(clippy::too_many_lines)]
-fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: bool) -> Result<(), String> {
-    let fd = rm.export_to_new_fd(store).map_err(|e| format!("{tag} export: {e:?}"))?;
-    let mut kernel = WalkKernel::bring_up_on(WalkCfg::default(), fmt, kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf())).map_err(|e| format!("{tag}: {e}"))?;
-    kernel.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| format!("{tag}: {e}"))?;
+fn phase(
+    l: &mut Checks,
+    rm: &HostRm,
+    store: u32,
+    tag: &str,
+    fmt: KfFormat,
+    v3: bool,
+) -> Result<(), String> {
+    let fd = rm
+        .export_to_new_fd(store)
+        .map_err(|e| format!("{tag} export: {e:?}"))?;
+    let mut kernel = WalkKernel::bring_up_on(
+        WalkCfg::default(),
+        fmt,
+        kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf()),
+    )
+    .map_err(|e| format!("{tag}: {e}"))?;
+    kernel
+        .import_store(fd.fd_number(), STORE_BYTES)
+        .map_err(|e| format!("{tag}: {e}"))?;
     let sync0 = kernel.ctx_sync_calls();
 
     // The guest kernel's tables: VA_A -> DATA_A, VA_B -> DATA_B; a SECOND space VA_C -> DATA_A.
@@ -331,41 +380,95 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     w(DATA_B, &vec![0u8; BYTES as usize])?;
     w(DATA_C, &vec![0u8; BYTES as usize])?;
 
-    let port = InvalidatePort::new(InvalidateRegs::from_usermode_base(USERMODE_BASE).ok_or("regs")?);
-    let space = rm.alloc_vaspace().map_err(|e| format!("{tag} vaspace: {e:?}"))?;
-    let space2 = rm.alloc_vaspace().map_err(|e| format!("{tag} vaspace2: {e:?}"))?;
-    let walker = Timed { inner: GpuWalker { kernel, perm: kf_mem::apply::PermPolicy::default() }, submit_ns: vec![], gpu_us: vec![], in_flight_at_return: vec![] };
+    let port =
+        InvalidatePort::new(InvalidateRegs::from_usermode_base(USERMODE_BASE).ok_or("regs")?);
+    let space = rm
+        .alloc_vaspace()
+        .map_err(|e| format!("{tag} vaspace: {e:?}"))?;
+    let space2 = rm
+        .alloc_vaspace()
+        .map_err(|e| format!("{tag} vaspace2: {e:?}"))?;
+    let walker = Timed {
+        inner: GpuWalker {
+            kernel,
+            perm: kf_mem::apply::PermPolicy::default(),
+        },
+        submit_ns: vec![],
+        gpu_us: vec![],
+        in_flight_at_return: vec![],
+    };
     let mut m: Mgr<'_> = VaManager::new(walker, STORE_BYTES, Box::new(|_, _| None));
-    let obs = |sp| Observed { host: Recorded::new(HostVas { rm, space: sp, store, ram_obj: None }), port: &port, busy_at_op: RefCell::new(vec![]) };
+    let obs = |sp| Observed {
+        host: Recorded::new(HostVas {
+            rm,
+            space: sp,
+            store,
+            ram_obj: None,
+        }),
+        port: &port,
+        busy_at_op: RefCell::new(vec![]),
+    };
     m.table.insert(K_MAIN, obs(space));
     m.table.insert(K_SECOND, obs(space2));
-    m.table.set_root(K_MAIN, tree.root(), PdbAperture::Vidmem).map_err(|e| format!("{e:?}"))?;
-    m.table.set_root(K_SECOND, tree2.root(), PdbAperture::Vidmem).map_err(|e| format!("{e:?}"))?;
+    m.table
+        .set_root(K_MAIN, tree.root(), PdbAperture::Vidmem)
+        .map_err(|e| format!("{e:?}"))?;
+    m.table
+        .set_root(K_SECOND, tree2.root(), PdbAperture::Vidmem)
+        .map_err(|e| format!("{e:?}"))?;
 
     let poller = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
     let req_wake = Notifier::create().map_err(|e| format!("notifier: {e:?}"))?;
     poller
-        .watch(std::os::fd::AsFd::as_fd(m.walker().inner.kernel.completion_fd()), TOKEN_WALK)
+        .watch(
+            std::os::fd::AsFd::as_fd(m.walker().inner.kernel.completion_fd()),
+            TOKEN_WALK,
+        )
         .map_err(|e| format!("watch walk fd: {e:?}"))?;
-    poller.watch(req_wake.as_source_fd(), TOKEN_REQ).map_err(|e| format!("watch req: {e:?}"))?;
-    let main_fire = [Fire { pdb: tree.root(), all_pdb: false }];
+    poller
+        .watch(req_wake.as_source_fd(), TOKEN_REQ)
+        .map_err(|e| format!("watch req: {e:?}"))?;
+    let main_fire = [Fire {
+        pdb: tree.root(),
+        all_pdb: false,
+    }];
 
     // ── Round 1: the first invalidate maps the guest's two ranges. ───────────────────────────
     let r1 = round(&mut m, &port, &poller, &req_wake, &main_fire)?;
     println!("MEASURE {tag}_round1 {r1:?}");
-    let mapped1: usize = r1.applied.iter().filter(|a| a.0 == K_MAIN).map(|a| a.1).sum();
+    let mapped1: usize = r1
+        .applied
+        .iter()
+        .filter(|a| a.0 == K_MAIN)
+        .map(|a| a.1)
+        .sum();
     l.check(
-        if v3 { "ver3_first_invalidate_maps_the_guest_ranges" } else { "ver2_first_invalidate_maps_the_guest_ranges" },
+        if v3 {
+            "ver3_first_invalidate_maps_the_guest_ranges"
+        } else {
+            "ver2_first_invalidate_maps_the_guest_ranges"
+        },
         mapped1 == 2 && r1.cleared == 1,
-        format!("mapped={mapped1} (want 2 coalesced) cleared={} stats={:?}", r1.cleared, m.stats),
+        format!(
+            "mapped={mapped1} (want 2 coalesced) cleared={} stats={:?}",
+            r1.cleared, m.stats
+        ),
     );
     l.check(
-        if v3 { "ver3_vcpu_saw_the_clear" } else { "ver2_vcpu_saw_the_clear" },
+        if v3 {
+            "ver3_vcpu_saw_the_clear"
+        } else {
+            "ver2_vcpu_saw_the_clear"
+        },
         r1.saw.cleared,
         format!("spin {} us, published {}", r1.saw.spin_us, r1.saw.published),
     );
     l.check(
-        if v3 { "ver3_completion_arrived_as_an_fd_wake" } else { "ver2_completion_arrived_as_an_fd_wake" },
+        if v3 {
+            "ver3_completion_arrived_as_an_fd_wake"
+        } else {
+            "ver2_completion_arrived_as_an_fd_wake"
+        },
         r1.collected == 1 && r1.walk_wakes >= 1,
         format!("walk wakes={} collected={}", r1.walk_wakes, r1.collected),
     );
@@ -373,14 +476,30 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     // (i) the CE copy, issued now that the trigger has cleared.
     let mut rig = CeRig::new(rm, space)?;
     let s = rig.copy(rm, VA_A, VA_B, BYTES)?;
-    l.check(if v3 { "ver3_copy1_completes_by_event" } else { "ver2_copy1_completes_by_event" }, s.seen_at_wake && s.ce_released, format!("{s:?}"));
+    l.check(
+        if v3 {
+            "ver3_copy1_completes_by_event"
+        } else {
+            "ver2_copy1_completes_by_event"
+        },
+        s.seen_at_wake && s.ce_released,
+        format!("{s:?}"),
+    );
     let rd = |m: &Mgr<'_>, at: u64| -> Result<Vec<u8>, String> {
         let mut got = vec![0u8; BYTES as usize];
-        m.walker().inner.kernel.read_store(at, &mut got).map_err(|e| e.to_string())?;
+        m.walker()
+            .inner
+            .kernel
+            .read_store(at, &mut got)
+            .map_err(|e| e.to_string())?;
         Ok(got)
     };
     l.check(
-        if v3 { "ver3_copy1_lands_where_the_guest_mapped_it" } else { "ver2_copy1_lands_where_the_guest_mapped_it" },
+        if v3 {
+            "ver3_copy1_lands_where_the_guest_mapped_it"
+        } else {
+            "ver2_copy1_lands_where_the_guest_mapped_it"
+        },
         rd(&m, DATA_B)? == pattern(0xA5A5_0000),
         "DATA_B == DATA_A pattern",
     );
@@ -389,20 +508,48 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     for i in 0..PAGES {
         tree.map4k(VA_B + i * 4096, DATA_C + i * 4096);
     }
-    m.walker().inner.kernel.write_store(PT_BASE, tree.bytes()).map_err(|e| e.to_string())?;
-    m.walker().inner.kernel.write_store(DATA_B, &vec![0u8; BYTES as usize]).map_err(|e| e.to_string())?;
+    m.walker()
+        .inner
+        .kernel
+        .write_store(PT_BASE, tree.bytes())
+        .map_err(|e| e.to_string())?;
+    m.walker()
+        .inner
+        .kernel
+        .write_store(DATA_B, &vec![0u8; BYTES as usize])
+        .map_err(|e| e.to_string())?;
     let r2 = round(&mut m, &port, &poller, &req_wake, &main_fire)?;
     println!("MEASURE {tag}_round2 {r2:?}");
-    let (mp, um): (usize, usize) = r2.applied.iter().filter(|a| a.0 == K_MAIN).fold((0, 0), |(x, y), a| (x + a.1, y + a.2));
+    let (mp, um): (usize, usize) = r2
+        .applied
+        .iter()
+        .filter(|a| a.0 == K_MAIN)
+        .fold((0, 0), |(x, y), a| (x + a.1, y + a.2));
     l.check(
-        if v3 { "ver3_remap_reconciles_before_the_clear" } else { "ver2_remap_reconciles_before_the_clear" },
+        if v3 {
+            "ver3_remap_reconciles_before_the_clear"
+        } else {
+            "ver2_remap_reconciles_before_the_clear"
+        },
         mp == 1 && um == 1 && r2.cleared == 1 && r2.saw.cleared,
         format!("mapped={mp} unmapped={um} cleared={}", r2.cleared),
     );
     let s = rig.copy(rm, VA_A, VA_B, BYTES)?;
-    l.check(if v3 { "ver3_copy2_completes_by_event" } else { "ver2_copy2_completes_by_event" }, s.seen_at_wake && s.ce_released, format!("{s:?}"));
     l.check(
-        if v3 { "ver3_copy2_follows_the_remap" } else { "ver2_copy2_follows_the_remap" },
+        if v3 {
+            "ver3_copy2_completes_by_event"
+        } else {
+            "ver2_copy2_completes_by_event"
+        },
+        s.seen_at_wake && s.ce_released,
+        format!("{s:?}"),
+    );
+    l.check(
+        if v3 {
+            "ver3_copy2_follows_the_remap"
+        } else {
+            "ver2_copy2_follows_the_remap"
+        },
         rd(&m, DATA_C)? == pattern(0xA5A5_0000) && rd(&m, DATA_B)?.iter().all(|&b| b == 0),
         "DATA_C == DATA_A pattern, DATA_B still zero",
     );
@@ -412,39 +559,100 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     // is still in flight — so the first completion must find it re-armed. A GPU that walked in
     // under the vCPU's inter-write gap would make this read cleared=2 superseded=0: a FAIL here
     // that names the timing, not the CAS.
-    let r3 = round(&mut m, &port, &poller, &req_wake, &[main_fire[0], main_fire[0]])?;
+    let r3 = round(
+        &mut m,
+        &port,
+        &poller,
+        &req_wake,
+        &[main_fire[0], main_fire[0]],
+    )?;
     println!("MEASURE {tag}_round3 {r3:?}");
     l.check(
-        if v3 { "ver3_a_rearmed_trigger_is_superseded_not_cleared" } else { "ver2_a_rearmed_trigger_is_superseded_not_cleared" },
+        if v3 {
+            "ver3_a_rearmed_trigger_is_superseded_not_cleared"
+        } else {
+            "ver2_a_rearmed_trigger_is_superseded_not_cleared"
+        },
         r3.saw.published == 2 && r3.superseded >= 1 && r3.cleared == 1 && r3.saw.cleared,
-        format!("published={} superseded={} cleared={}", r3.saw.published, r3.superseded, r3.cleared),
+        format!(
+            "published={} superseded={} cleared={}",
+            r3.saw.published, r3.superseded, r3.cleared
+        ),
     );
 
     // ── Round 4 (iv): a PDB no object carries. ───────────────────────────────────────────────
     let (missed0, walks0) = (m.stats.named_missed, m.stats.walks_submitted);
-    let r4 = round(&mut m, &port, &poller, &req_wake, &[Fire { pdb: STRANGER_PDB, all_pdb: false }])?;
+    let r4 = round(
+        &mut m,
+        &port,
+        &poller,
+        &req_wake,
+        &[Fire {
+            pdb: STRANGER_PDB,
+            all_pdb: false,
+        }],
+    )?;
     l.check(
-        if v3 { "ver3_named_missed_is_counted_and_cleared_without_a_walk" } else { "ver2_named_missed_is_counted_and_cleared_without_a_walk" },
-        m.stats.named_missed == missed0 + 1 && m.stats.walks_submitted == walks0 && r4.cleared == 1 && r4.saw.cleared,
-        format!("named_missed {}->{} walks {}->{}", missed0, m.stats.named_missed, walks0, m.stats.walks_submitted),
+        if v3 {
+            "ver3_named_missed_is_counted_and_cleared_without_a_walk"
+        } else {
+            "ver2_named_missed_is_counted_and_cleared_without_a_walk"
+        },
+        m.stats.named_missed == missed0 + 1
+            && m.stats.walks_submitted == walks0
+            && r4.cleared == 1
+            && r4.saw.cleared,
+        format!(
+            "named_missed {}->{} walks {}->{}",
+            missed0, m.stats.named_missed, walks0, m.stats.walks_submitted
+        ),
     );
 
     // ── Round 5 (v): ALL_PDB reconciles every rooted space — the second one's first map. ─────
-    let r5 = round(&mut m, &port, &poller, &req_wake, &[Fire { pdb: 0, all_pdb: true }])?;
+    let r5 = round(
+        &mut m,
+        &port,
+        &poller,
+        &req_wake,
+        &[Fire {
+            pdb: 0,
+            all_pdb: true,
+        }],
+    )?;
     println!("MEASURE {tag}_round5 {r5:?}");
-    let second = m.table.target(K_SECOND).and_then(|g| g.host.resolve(VA_C, u64::from(BYTES)));
+    let second = m
+        .table
+        .target(K_SECOND)
+        .and_then(|g| g.host.resolve(VA_C, u64::from(BYTES)));
     l.check(
-        if v3 { "ver3_all_pdb_reconciles_every_rooted_space" } else { "ver2_all_pdb_reconciles_every_rooted_space" },
+        if v3 {
+            "ver3_all_pdb_reconciles_every_rooted_space"
+        } else {
+            "ver2_all_pdb_reconciles_every_rooted_space"
+        },
         r5.cleared == 1 && second == Some((false, DATA_A)) && r5.applied.len() == 2,
         format!("applied={:?} second_resolves={second:?}", r5.applied),
     );
 
     // ── The whole phase: ordering, trap time, and the walk never blocking. ───────────────────
     let rounds = [&r1, &r2, &r3, &r4, &r5];
-    let trap_max_us = rounds.iter().flat_map(|r| r.saw.trap_ns.iter()).max().copied().unwrap_or(0) / 1000;
-    l.measure("trigger_trap", format!("{tag} worst={trap_max_us}us ceiling={TRAP_CEILING_US}us"));
+    let trap_max_us = rounds
+        .iter()
+        .flat_map(|r| r.saw.trap_ns.iter())
+        .max()
+        .copied()
+        .unwrap_or(0)
+        / 1000;
+    l.measure(
+        "trigger_trap",
+        format!("{tag} worst={trap_max_us}us ceiling={TRAP_CEILING_US}us"),
+    );
     l.check(
-        if v3 { "ver3_trigger_trap_is_under_the_ceiling" } else { "ver2_trigger_trap_is_under_the_ceiling" },
+        if v3 {
+            "ver3_trigger_trap_is_under_the_ceiling"
+        } else {
+            "ver2_trigger_trap_is_under_the_ceiling"
+        },
         trap_max_us < TRAP_CEILING_US,
         format!("worst trigger trap {trap_max_us} us"),
     );
@@ -483,12 +691,20 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
         ),
     );
     l.check(
-        if v3 { "ver3_every_host_op_ran_while_the_guest_saw_busy" } else { "ver2_every_host_op_ran_while_the_guest_saw_busy" },
+        if v3 {
+            "ver3_every_host_op_ran_while_the_guest_saw_busy"
+        } else {
+            "ver2_every_host_op_ran_while_the_guest_saw_busy"
+        },
         ops_all_busy(&m),
         format!("stats={:?}", m.stats),
     );
     l.check(
-        if v3 { "ver3_nothing_refused" } else { "ver2_nothing_refused" },
+        if v3 {
+            "ver3_nothing_refused"
+        } else {
+            "ver2_nothing_refused"
+        },
         m.stats.refusals.is_empty() && m.stats.unreconciled == 0 && m.stats.walks_refused == 0,
         format!("refusals={:?}", m.stats.refusals),
     );

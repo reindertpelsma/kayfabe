@@ -4,7 +4,7 @@
 
 use kf_chip::Family;
 use kf_trap::memmap::*;
-use kf_trap::trappolicy::{doorbell_for, PRAMIN_BASE, PRAMIN_LEN};
+use kf_trap::trappolicy::{PRAMIN_BASE, PRAMIN_LEN, doorbell_for};
 use kf_trap::vmm::Bar;
 
 /// ⊘ v3's `kf_chip::Family` has no Turing row yet (the old `classgen::Family` did) — every row it has.
@@ -27,7 +27,8 @@ fn the_map_tiles_every_bar_because_a_gap_is_an_accidental_read_exit() {
     for bar0 in [1 << 20, 8 << 20, 16 << 20, 64 << 20] {
         for f in FAMILIES {
             let m = memory_map(f, doorbell_for(f), bar0, 256 << 20, 32 << 20);
-            m.tiles().unwrap_or_else(|e| panic!("{f:?} bar0={bar0:#x}: {e}"));
+            m.tiles()
+                .unwrap_or_else(|e| panic!("{f:?} bar0={bar0:#x}: {e}"));
         }
     }
 }
@@ -39,7 +40,12 @@ fn the_current_product_target_has_no_read_exits_at_all() {
     // (raw client + cup3 + LLM, all TRAP_FILLS=0) and what the source review re-derived.
     for f in [Family::Turing, Family::Ampere, Family::Ada] {
         let m = map_for(f);
-        assert_eq!(m.read_exit_pages(), 0, "{f:?} grew a read exit: {:?}", m.read_exit_regions());
+        assert_eq!(
+            m.read_exit_pages(),
+            0,
+            "{f:?} grew a read exit: {:?}",
+            m.read_exit_regions()
+        );
         assert!(holes_for(f).is_empty(), "{f:?}");
     }
 }
@@ -57,7 +63,9 @@ fn hopper_and_blackwell_have_a_read_exit_and_each_one_is_NAMED() {
 
     for f in [Family::Hopper, Family::Blackwell] {
         for r in map_for(f).read_exit_regions() {
-            let Disposition::Hole { why } = r.how else { unreachable!() };
+            let Disposition::Hole { why } = r.how else {
+                unreachable!()
+            };
             // A hole must say WHICH register dragged the page in — the page costs 4 KiB of
             // implementation, so a reader must never have to guess what bought it.
             assert!(
@@ -66,7 +74,11 @@ fn hopper_and_blackwell_have_a_read_exit_and_each_one_is_NAMED() {
                 r.base
             );
             assert_eq!(r.len, PAGE, "a hole is exactly one page");
-            assert_eq!(r.base % PAGE, 0, "a hole must be page-aligned or KVM cannot express it");
+            assert_eq!(
+                r.base % PAGE,
+                0,
+                "a hole must be page-aligned or KVM cannot express it"
+            );
         }
     }
 }
@@ -78,13 +90,30 @@ fn pramin_is_plain_ram_and_the_window_latch_that_moves_it_is_not() {
     // therefore a plain B register we already trap. The trapped write does the mmap re-point
     // synchronously; the reads that follow hit correct memory with no exit.
     let m = map_for(Family::Ampere);
-    for off in [PRAMIN_BASE, PRAMIN_BASE + 0x1000, PRAMIN_BASE + PRAMIN_LEN - 4] {
-        assert_eq!(m.disposition_at(Bar(0), off), Some(Disposition::PlainRam), "{off:#x}");
+    for off in [
+        PRAMIN_BASE,
+        PRAMIN_BASE + 0x1000,
+        PRAMIN_BASE + PRAMIN_LEN - 4,
+    ] {
+        assert_eq!(
+            m.disposition_at(Bar(0), off),
+            Some(Disposition::PlainRam),
+            "{off:#x}"
+        );
     }
     // ★ KNOWN-POSITIVE: the latch itself must NOT be plain RAM, or the re-point never happens.
-    assert_eq!(m.disposition_at(Bar(0), 0x1700), Some(Disposition::ShadowWriteTrapped));
-    assert!(m.disposition_at(Bar(0), 0x1700).unwrap().write_exits(), "the latch write must exit");
-    assert!(!m.disposition_at(Bar(0), PRAMIN_BASE).unwrap().write_exits(), "PRAMIN must not exit");
+    assert_eq!(
+        m.disposition_at(Bar(0), 0x1700),
+        Some(Disposition::ShadowWriteTrapped)
+    );
+    assert!(
+        m.disposition_at(Bar(0), 0x1700).unwrap().write_exits(),
+        "the latch write must exit"
+    );
+    assert!(
+        !m.disposition_at(Bar(0), PRAMIN_BASE).unwrap().write_exits(),
+        "PRAMIN must not exit"
+    );
 }
 
 #[test]
@@ -93,14 +122,30 @@ fn the_counter_page_is_a_host_mapping_and_it_is_the_only_one() {
     // unprivileged host process (that is WHY it is exposed — it holds the doorbell), so it is the
     // only region we can alias to live host values instead of authoring.
     let m = map_for(Family::Ampere);
-    assert_eq!(m.disposition_at(Bar(0), VF_USERMODE_PAGE), Some(Disposition::HostPassthrough));
-    assert_eq!(m.disposition_at(Bar(0), VF_USERMODE_PAGE + 0x80), Some(Disposition::HostPassthrough),
-        "VF_TIME_0 must be inside it");
-    let c = m.regions.iter().filter(|r| r.how == Disposition::HostPassthrough).count();
-    assert_eq!(c, 1, "exactly one host-passthrough region; a second needs its own argument");
+    assert_eq!(
+        m.disposition_at(Bar(0), VF_USERMODE_PAGE),
+        Some(Disposition::HostPassthrough)
+    );
+    assert_eq!(
+        m.disposition_at(Bar(0), VF_USERMODE_PAGE + 0x80),
+        Some(Disposition::HostPassthrough),
+        "VF_TIME_0 must be inside it"
+    );
+    let c = m
+        .regions
+        .iter()
+        .filter(|r| r.how == Disposition::HostPassthrough)
+        .count();
+    assert_eq!(
+        c, 1,
+        "exactly one host-passthrough region; a second needs its own argument"
+    );
     // ⊘ And the timer page 0x9000 is NOT it — that is the non-GSP problem, and it is B with a
     // refreshed shadow because RM never maps 0x9000 to userspace.
-    assert_eq!(m.disposition_at(Bar(0), 0x9400), Some(Disposition::ShadowWriteTrapped));
+    assert_eq!(
+        m.disposition_at(Bar(0), 0x9400),
+        Some(Disposition::ShadowWriteTrapped)
+    );
 }
 
 #[test]
@@ -111,23 +156,37 @@ fn bar2_never_exits_and_bar1_never_exits_at_setup() {
         for r in m.regions.iter().filter(|r| r.bar == Bar(2)) {
             assert_eq!(r.how, Disposition::PlainRam, "{f:?}: BAR2 must never exit");
         }
-        let exiting: Vec<_> =
-            m.regions.iter().filter(|r| r.bar == Bar(1) && r.how.write_exits()).collect();
+        let exiting: Vec<_> = m
+            .regions
+            .iter()
+            .filter(|r| r.bar == Bar(1) && r.how.write_exits())
+            .collect();
         // ⊘⊘⊘ 2026-09-26 (`V3_BAR1_DOORBELL.md`): no family carves a BAR1 page at SETUP. The
         // Hopper+ view is where the guest's BAR1 PTEs put it and is overlaid at runtime
         // (`kf_trap::bar1db`); the old fixed `0x9_0000` page had no ogkm source.
         assert!(exiting.is_empty(), "{f:?}: BAR1 must not exit at setup");
         let bar1: Vec<_> = m.regions.iter().filter(|r| r.bar == Bar(1)).collect();
-        assert_eq!(bar1.len(), 1, "{f:?}: BAR1 is ONE memslot (THE_CONSTRAINTS §23)");
+        assert_eq!(
+            bar1.len(),
+            1,
+            "{f:?}: BAR1 is ONE memslot (THE_CONSTRAINTS §23)"
+        );
         assert_eq!(
             doorbell_for(f).follows_guest_bar1(),
             matches!(f, kf_chip::Family::Hopper | kf_chip::Family::Blackwell),
             "{f:?}"
         );
-        assert_eq!(doorbell_for(f).offset(), 0x90, "{f:?}: NVC361_NOTIFY_CHANNEL_PENDING, both BARs");
+        assert_eq!(
+            doorbell_for(f).offset(),
+            0x90,
+            "{f:?}: NVC361_NOTIFY_CHANNEL_PENDING, both BARs"
+        );
         // ★ No BAR1/BAR2 region may EVER read-exit, under any family.
         assert!(
-            m.regions.iter().filter(|r| r.bar != Bar(0)).all(|r| !r.how.read_exits()),
+            m.regions
+                .iter()
+                .filter(|r| r.bar != Bar(0))
+                .all(|r| !r.how.read_exits()),
             "{f:?}: a read exit outside BAR0"
         );
     }
@@ -144,14 +203,25 @@ fn known_positive_the_tiling_check_can_actually_fail() {
 
     let gapped = {
         let mut g = m.clone();
-        g.regions.retain(|r| !(r.bar == Bar(0) && r.base == PRAMIN_BASE));
+        g.regions
+            .retain(|r| !(r.bar == Bar(0) && r.base == PRAMIN_BASE));
         g
     };
-    let e = gapped.tiles().expect_err("⊘ a map missing PRAMIN must NOT tile");
-    assert!(e.contains("GAP"), "the error must name the failure mode, got: {e}");
+    let e = gapped
+        .tiles()
+        .expect_err("⊘ a map missing PRAMIN must NOT tile");
+    assert!(
+        e.contains("GAP"),
+        "the error must name the failure mode, got: {e}"
+    );
 
     // And an overlap must fail too, in the other direction.
-    m.regions.push(Region { bar: Bar(0), base: 0, len: PAGE, how: Disposition::PlainRam });
+    m.regions.push(Region {
+        bar: Bar(0),
+        base: 0,
+        len: PAGE,
+        how: Disposition::PlainRam,
+    });
     assert!(m.tiles().is_err(), "⊘ a duplicated region must NOT tile");
 }
 
@@ -179,15 +249,29 @@ struct RecordingVmm {
     slots: Mutex<Vec<(u64, u64, bool)>>, // (gpa, len, readonly)
 }
 impl VmmOps for RecordingVmm {
-    fn guest_read(&self, _: u64, _: &mut [u8]) -> Result<(), VmmError> { Ok(()) }
-    fn guest_write(&self, _: u64, _: &[u8]) -> Result<(), VmmError> { Ok(()) }
-    fn install_memslot(&self, gpa: u64, len: u64, _h: HostMapping, ro: bool) -> Result<SlotId, VmmError> {
+    fn guest_read(&self, _: u64, _: &mut [u8]) -> Result<(), VmmError> {
+        Ok(())
+    }
+    fn guest_write(&self, _: u64, _: &[u8]) -> Result<(), VmmError> {
+        Ok(())
+    }
+    fn install_memslot(
+        &self,
+        gpa: u64,
+        len: u64,
+        _h: HostMapping,
+        ro: bool,
+    ) -> Result<SlotId, VmmError> {
         let mut s = self.slots.lock().unwrap();
         s.push((gpa, len, ro));
         Ok(SlotId(s.len() as u32 - 1))
     }
-    fn remove_memslot(&self, _: SlotId) -> Result<(), VmmError> { Ok(()) }
-    fn raise_irq(&self, _: u32) -> Result<(), VmmError> { Ok(()) }
+    fn remove_memslot(&self, _: SlotId) -> Result<(), VmmError> {
+        Ok(())
+    }
+    fn raise_irq(&self, _: u32) -> Result<(), VmmError> {
+        Ok(())
+    }
     fn signal_worker(&self) {}
     fn signal_drainer(&self) {}
 }
@@ -211,11 +295,15 @@ fn the_seam_is_complete_enough_to_install_the_whole_map() {
         // ★ And the readonly flag IS the disposition — that is the whole translation.
         for (r, _) in &n {
             let gpa = bar_base(r.bar).unwrap() + r.base;
-            let (_, _, ro) = slots.iter().find(|(g, l, _)| *g == gpa && *l == r.len).unwrap();
+            let (_, _, ro) = slots
+                .iter()
+                .find(|(g, l, _)| *g == gpa && *l == r.len)
+                .unwrap();
             match r.how {
                 Disposition::PlainRam => assert!(!ro, "PRAMIN/BAR1/BAR2 must be r/w: {r:?}"),
-                Disposition::ShadowWriteTrapped | Disposition::HostPassthrough =>
-                    assert!(ro, "reads-from-DRAM/writes-exit must be READ-ONLY: {r:?}"),
+                Disposition::ShadowWriteTrapped | Disposition::HostPassthrough => {
+                    assert!(ro, "reads-from-DRAM/writes-exit must be READ-ONLY: {r:?}")
+                }
                 Disposition::Hole { .. } => unreachable!("a hole must not be installed"),
             }
         }
@@ -234,15 +322,31 @@ fn a_hole_is_installed_by_NOT_installing_it() {
     let m = map_for(Family::Hopper);
     install(&m, &vmm, bar_base, |r| Some(HostMapping(r.base))).unwrap();
     let covered = |v: &RecordingVmm, a: u64| {
-        v.slots.lock().unwrap().iter().any(|(g, l, _)| (*g..*g + *l).contains(&a))
+        v.slots
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(g, l, _)| (*g..*g + *l).contains(&a))
     };
-    assert!(!covered(&vmm, probe), "⊘ Hopper's FSP page must have NO memslot — that IS the trap");
-    assert!(covered(&vmm, probe - PAGE), "…and the page before it must still be backed");
+    assert!(
+        !covered(&vmm, probe),
+        "⊘ Hopper's FSP page must have NO memslot — that IS the trap"
+    );
+    assert!(
+        covered(&vmm, probe - PAGE),
+        "…and the page before it must still be backed"
+    );
     assert!(covered(&vmm, probe + PAGE), "…and the page after it");
 
     let vmm2 = RecordingVmm::default();
-    install(&map_for(Family::Ampere), &vmm2, bar_base, |r| Some(HostMapping(r.base))).unwrap();
-    assert!(covered(&vmm2, probe), "⊘ on Ampere 0x8F2000 is ordinary B and MUST be backed");
+    install(&map_for(Family::Ampere), &vmm2, bar_base, |r| {
+        Some(HostMapping(r.base))
+    })
+    .unwrap();
+    assert!(
+        covered(&vmm2, probe),
+        "⊘ on Ampere 0x8F2000 is ordinary B and MUST be backed"
+    );
 }
 
 #[test]
@@ -252,7 +356,11 @@ fn install_refuses_by_name_when_a_region_has_no_backing() {
     let m = map_for(Family::Ampere);
     let vmm = RecordingVmm::default();
     let r = install(&m, &vmm, bar_base, |r| {
-        if r.bar == Bar(0) && r.base == PRAMIN_BASE { None } else { Some(HostMapping(r.base)) }
+        if r.bar == Bar(0) && r.base == PRAMIN_BASE {
+            None
+        } else {
+            Some(HostMapping(r.base))
+        }
     });
     assert!(
         matches!(r, Err(kf_trap::vmm::VmmError::Unbacked { bar: 0, base, .. }) if base == PRAMIN_BASE),

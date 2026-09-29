@@ -191,7 +191,6 @@ pub const CONTROL_RMCTRL_FLAGS_OFF: usize = 24;
 /// Byte offset of `rmctrlAccessRight` in the same header.
 pub const CONTROL_RMCTRL_ACCESS_RIGHT_OFF: usize = 28;
 
-
 /// `NV_OK`.
 const NV_OK: u32 = 0;
 

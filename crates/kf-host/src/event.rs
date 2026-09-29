@@ -70,7 +70,11 @@ pub const NV2080_NOTIFIERS_CE10: u32 = 166;
 /// `cl2080_notification.h:247`).
 #[must_use]
 pub const fn notifier_ce(n: u32) -> u32 {
-    if n < 10 { NV2080_NOTIFIERS_CE0 + n } else { NV2080_NOTIFIERS_CE10 + n - 10 }
+    if n < 10 {
+        NV2080_NOTIFIERS_CE0 + n
+    } else {
+        NV2080_NOTIFIERS_CE10 + n - 10
+    }
 }
 
 /// `NV2080_NOTIFIERS_NVENC(x)` — `NVENC0..2` = 38..40, `NVENC3` = 183
@@ -131,12 +135,19 @@ impl HostRm {
             .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let node = CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?;
         let mut reg = [0u8; 4];
-        kf_abi::bringup::RegisterFd { ctl_fd: self.ctl.fd_number() }
-            .encode_into(&mut reg)
-            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, kf_abi::bringup::NV_ESC_REGISTER_FD, reg.len())
-            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        node.ioctl(req, &mut reg, &mut []).map_err(|e| ioctl_error(&e))?;
+        kf_abi::bringup::RegisterFd {
+            ctl_fd: self.ctl.fd_number(),
+        }
+        .encode_into(&mut reg)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let req = ioctl::readwrite(
+            NV_IOCTL_MAGIC,
+            kf_abi::bringup::NV_ESC_REGISTER_FD,
+            reg.len(),
+        )
+        .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+        node.ioctl(req, &mut reg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
         let key = u32::try_from(node.fd_number()).map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let mut arg = [0u8; ALLOC_OS_EVENT_SIZE];
         arg[0..4].copy_from_slice(&self.client.raw().to_le_bytes());
@@ -144,8 +155,13 @@ impl HostRm {
         arg[8..12].copy_from_slice(&key.to_le_bytes());
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_ALLOC_OS_EVENT, arg.len())
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        node.ioctl(req, &mut arg, &mut []).map_err(|e| ioctl_error(&e))?;
-        status_check(u32::from_le_bytes(arg[12..16].try_into().map_err(|_| RmError::Other(ABI_DECODE_FAILED))?))?;
+        node.ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        status_check(u32::from_le_bytes(
+            arg[12..16]
+                .try_into()
+                .map_err(|_| RmError::Other(ABI_DECODE_FAILED))?,
+        ))?;
         Ok(EventFd { node, key })
     }
 
@@ -165,7 +181,11 @@ impl HostRm {
     ) -> Result<u32, RmError> {
         let notify_index = notify_index
             | NV01_EVENT_WITHOUT_EVENT_DATA
-            | if nonstall { NV01_EVENT_NONSTALL_INTR } else { 0 };
+            | if nonstall {
+                NV01_EVENT_NONSTALL_INTR
+            } else {
+                0
+            };
         let mut params = [0u8; NV0005_PARAMS_SIZE];
         params[0..4].copy_from_slice(&self.client.raw().to_le_bytes());
         params[4..8].copy_from_slice(&source.to_le_bytes());
@@ -173,7 +193,16 @@ impl HostRm {
         params[12..16].copy_from_slice(&notify_index.to_le_bytes());
         params[16..24].copy_from_slice(&u64::from(ev.key).to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc_via(&ev.node, source, want, NV01_EVENT_OS_EVENT, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV0005_ALLOC_PARAMETERS)), &mut params)?;
+        let h = self.raw_alloc_via(
+            &ev.node,
+            source,
+            want,
+            NV01_EVENT_OS_EVENT,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV0005_ALLOC_PARAMETERS,
+            )),
+            &mut params,
+        )?;
         self.remember(h, source);
         Ok(h)
     }
@@ -187,7 +216,11 @@ impl HostRm {
         p[EVENT_OFF..EVENT_OFF + 4].copy_from_slice(&notify_index.to_le_bytes());
         p[ACTION_OFF..ACTION_OFF + 4].copy_from_slice(&action.to_le_bytes());
         p[NOTIFY_STATE_OFF] = 0;
-        self.raw_control(self.subdevice, NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION, &mut p)
+        self.raw_control(
+            self.subdevice,
+            NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION,
+            &mut p,
+        )
     }
 
     /// ★ Arm `notify_index` REPEAT for the session, once. Idempotent: a second caller (another
@@ -197,7 +230,10 @@ impl HostRm {
     /// # Errors
     /// The host's status on the first arm.
     pub fn arm_repeat(&self, notify_index: u32) -> Result<(), RmError> {
-        let mut armed = self.armed.lock().map_err(|_| RmError::Other(crate::NOT_ON_THIS_RUNG))?;
+        let mut armed = self
+            .armed
+            .lock()
+            .map_err(|_| RmError::Other(crate::NOT_ON_THIS_RUNG))?;
         if armed.contains(&notify_index) {
             return Ok(());
         }

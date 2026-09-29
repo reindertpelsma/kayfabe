@@ -66,7 +66,10 @@ pub trait HostControls {
     /// # Errors
     /// [`HostRefusal`].
     fn device_control(&mut self, cmd: u32, _params: &mut [u8]) -> Result<(), HostRefusal> {
-        Err(HostRefusal { status: None, detail: format!("{cmd:#x}: no device-level controls on this session") })
+        Err(HostRefusal {
+            status: None,
+            detail: format!("{cmd:#x}: no device-level controls on this session"),
+        })
     }
 
     /// ★ Does the HOST's driver version have no such control at all — measured, not inferred from
@@ -155,7 +158,9 @@ impl core::fmt::Display for HostFactsRefused {
                     write!(f, "realize chose {asked:?}, the host is {host:?}")?;
                 }
                 FieldCause::FamilyLayout(l) => write!(f, "no {:?} rule: {}", l.family, l.missing)?,
-                FieldCause::DependsOn(other) => write!(f, "depends on `{other}`, which was refused")?,
+                FieldCause::DependsOn(other) => {
+                    write!(f, "depends on `{other}`, which was refused")?
+                }
             }
         }
         Ok(())
@@ -166,7 +171,8 @@ impl std::error::Error for HostFactsRefused {}
 
 /// Issue `cmd` with `params` (already carrying its input), returning the reply.
 fn ask(host: &mut dyn HostControls, cmd: u32, mut params: Vec<u8>) -> Result<Vec<u8>, FieldCause> {
-    host.control(cmd, &mut params).map_err(|refused| FieldCause::Host { cmd, refused })?;
+    host.control(cmd, &mut params)
+        .map_err(|refused| FieldCause::Host { cmd, refused })?;
     Ok(params)
 }
 
@@ -199,8 +205,15 @@ fn info_list_request(size: usize, indices: &[u32]) -> Vec<u8> {
 /// # Errors
 /// [`FieldCause`].
 pub fn query_arch(host: &mut dyn HostControls) -> Result<(Family, u8), FieldCause> {
-    let r = ask(host, kf_chip::NV2080_CTRL_CMD_MC_GET_ARCH_INFO, zeroed(kf_chip::MC_GET_ARCH_INFO_SIZE))?;
-    Ok((hostfacts::derive_family(&r)?, hostfacts::derive_sub_revision(&r)?))
+    let r = ask(
+        host,
+        kf_chip::NV2080_CTRL_CMD_MC_GET_ARCH_INFO,
+        zeroed(kf_chip::MC_GET_ARCH_INFO_SIZE),
+    )?;
+    Ok((
+        hostfacts::derive_family(&r)?,
+        hostfacts::derive_sub_revision(&r)?,
+    ))
 }
 
 // =====================================================================================
@@ -222,20 +235,37 @@ pub fn query_arch(host: &mut dyn HostControls) -> Result<(Family, u8), FieldCaus
 #[must_use]
 pub fn classify_engine(nv2080_engine_type: u32) -> Option<(EngineKind, u32)> {
     if let Some(ce) = kf_abi::submit::copy_index_of_engine_type(nv2080_engine_type) {
-        return Some((EngineKind::Copy(ce), kf_abi::submit::RM_ENGINE_TYPE_COPY0 + ce));
+        return Some((
+            EngineKind::Copy(ce),
+            kf_abi::submit::RM_ENGINE_TYPE_COPY0 + ce,
+        ));
     }
     if let Some(i) = kf_abi::submit::nvenc_index_of_engine_type(nv2080_engine_type) {
-        return Some((EngineKind::VideoEncode(i), kf_abi::submit::RM_ENGINE_TYPE_NVENC0 + i));
+        return Some((
+            EngineKind::VideoEncode(i),
+            kf_abi::submit::RM_ENGINE_TYPE_NVENC0 + i,
+        ));
     }
     if let Some(i) = kf_abi::submit::nvdec_index_of_engine_type(nv2080_engine_type) {
-        return Some((EngineKind::VideoDecode(i), kf_abi::submit::RM_ENGINE_TYPE_NVDEC0 + i));
+        return Some((
+            EngineKind::VideoDecode(i),
+            kf_abi::submit::RM_ENGINE_TYPE_NVDEC0 + i,
+        ));
     }
     if let Some(i) = kf_abi::submit::ofa_index_of_engine_type(nv2080_engine_type) {
-        return Some((EngineKind::OpticalFlow(i), kf_abi::submit::RM_ENGINE_TYPE_OFA0 + i));
+        return Some((
+            EngineKind::OpticalFlow(i),
+            kf_abi::submit::RM_ENGINE_TYPE_OFA0 + i,
+        ));
     }
     match nv2080_engine_type {
-        0x01..=0x08 => Some((EngineKind::Graphics(nv2080_engine_type - 1), nv2080_engine_type)),
-        kf_abi::submit::NV2080_ENGINE_TYPE_SW => Some((EngineKind::Software, kf_abi::submit::RM_ENGINE_TYPE_SW)),
+        0x01..=0x08 => Some((
+            EngineKind::Graphics(nv2080_engine_type - 1),
+            nv2080_engine_type,
+        )),
+        kf_abi::submit::NV2080_ENGINE_TYPE_SW => {
+            Some((EngineKind::Software, kf_abi::submit::RM_ENGINE_TYPE_SW))
+        }
         _ => None,
     }
 }
@@ -249,10 +279,17 @@ pub fn classify_engine(nv2080_engine_type: u32) -> Option<(EngineKind, u32)> {
 pub fn query_engine_list(host: &mut dyn HostControls) -> Result<Vec<EngineKind>, FieldCause> {
     let cmd = hostfacts::NV2080_CTRL_CMD_GPU_GET_ENGINES_V2;
     let list = ask(host, cmd, zeroed(hostfacts::GET_ENGINES_V2_PARAMS_SIZE))?;
-    let kinds: Vec<EngineKind> =
-        hostfacts::derive_engine_list(&list)?.into_iter().filter_map(|t| classify_engine(t).map(|(k, _)| k)).collect();
-    if !kinds.iter().any(|k| matches!(k, EngineKind::Graphics(_))) || !kinds.iter().any(|k| matches!(k, EngineKind::Copy(_))) {
-        return Err(FieldCause::Reply(FactRefusal::Unservable { cmd, why: "the host lists no GR or no copy engine" }));
+    let kinds: Vec<EngineKind> = hostfacts::derive_engine_list(&list)?
+        .into_iter()
+        .filter_map(|t| classify_engine(t).map(|(k, _)| k))
+        .collect();
+    if !kinds.iter().any(|k| matches!(k, EngineKind::Graphics(_)))
+        || !kinds.iter().any(|k| matches!(k, EngineKind::Copy(_)))
+    {
+        return Err(FieldCause::Reply(FactRefusal::Unservable {
+            cmd,
+            why: "the host lists no GR or no copy engine",
+        }));
     }
     Ok(kinds)
 }
@@ -280,15 +317,21 @@ pub fn device_info_rule(engines: &[EngineKind], falcons: &[ConstructedFalcon]) -
                 // ★ A video engine's PRI block is its falcon's: the host's own `registerBase` for
                 // the same `engDesc` ([`query_video_falcons`]; `[measured]` GA106 NVENC0 `0x1c8000`,
                 // NVDEC0 `0x848000`). A kind with no falcon never reaches here — filtered at query.
-                EngineKind::VideoEncode(_) | EngineKind::VideoDecode(_) | EngineKind::OpticalFlow(_) => falcons
+                EngineKind::VideoEncode(_)
+                | EngineKind::VideoDecode(_)
+                | EngineKind::OpticalFlow(_) => falcons
                     .iter()
                     .find(|f| Some(f.eng_desc) == video_eng_desc(k))
-                    .map_or(DevicePriBase::NotADevice, |f| DevicePriBase::At(f.register_base)),
+                    .map_or(DevicePriBase::NotADevice, |f| {
+                        DevicePriBase::At(f.register_base)
+                    }),
                 EngineKind::Software => DevicePriBase::NotADevice,
             },
         })
         .collect();
-    DeviceInfoRow { pri_bases: Box::leak(rows.into_boxed_slice()) }
+    DeviceInfoRow {
+        pri_bases: Box::leak(rows.into_boxed_slice()),
+    }
 }
 
 /// ★★ v3-gfxset: the engine list with RM's `SW` pseudo-engine moved to the END — the one ordering
@@ -303,7 +346,11 @@ pub fn device_info_rule(engines: &[EngineKind], falcons: &[ConstructedFalcon]) -
 /// only because no advertised engine type sorted after `0x22`.
 #[must_use]
 pub fn software_last(mut kinds: Vec<EngineKind>) -> Vec<EngineKind> {
-    let sw: Vec<EngineKind> = kinds.iter().copied().filter(|k| *k == EngineKind::Software).collect();
+    let sw: Vec<EngineKind> = kinds
+        .iter()
+        .copied()
+        .filter(|k| *k == EngineKind::Software)
+        .collect();
     kinds.retain(|k| *k != EngineKind::Software);
     kinds.extend(sw);
     kinds
@@ -361,14 +408,24 @@ pub fn video_eng_desc(k: EngineKind) -> Option<u32> {
 ///
 /// # Errors
 /// [`FieldCause`] — the host's refusal, or a reply whose count overruns the table.
-pub fn query_video_falcons(host: &mut dyn HostControls, kinds: &[EngineKind]) -> Result<Vec<ConstructedFalcon>, FieldCause> {
+pub fn query_video_falcons(
+    host: &mut dyn HostControls,
+    kinds: &[EngineKind],
+) -> Result<Vec<ConstructedFalcon>, FieldCause> {
     use kf_abi::falconinfo as fi;
     let cmd = fi::NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO;
     let r = ask(host, cmd, zeroed(fi::FALCON_INFO_PARAMS_SIZE))?;
-    let rows = fi::decode_constructed_falcon_info(&r)
-        .map_err(|_| FieldCause::Reply(FactRefusal::Unservable { cmd, why: "falcon count overruns constructedFalconsTable[]" }))?;
+    let rows = fi::decode_constructed_falcon_info(&r).map_err(|_| {
+        FieldCause::Reply(FactRefusal::Unservable {
+            cmd,
+            why: "falcon count overruns constructedFalconsTable[]",
+        })
+    })?;
     let wanted: Vec<u32> = kinds.iter().filter_map(|&k| video_eng_desc(k)).collect();
-    Ok(rows.into_iter().filter(|f| wanted.contains(&f.eng_desc)).collect())
+    Ok(rows
+        .into_iter()
+        .filter(|f| wanted.contains(&f.eng_desc))
+        .collect())
 }
 
 /// ★ `gss_replay` — ask the host every `kf_abi::gssreplay::ROWS` request (authored: zero but the
@@ -395,7 +452,10 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
                 }
                 out.push(a);
             }
-            Err(e) => eprintln!("kf3: host facts: GSS {:#010x} {:x?} refused by the host ({e:?}) — not served", row.cmd, row.inputs),
+            Err(e) => eprintln!(
+                "kf3: host facts: GSS {:#010x} {:x?} refused by the host ({e:?}) — not served",
+                row.cmd, row.inputs
+            ),
         }
     }
     out
@@ -404,10 +464,16 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
 /// ★ `video_caps` — the host's `MSENC_GET_CAPS_V2` (instance 0; the id is documented ignored) and
 /// `BSP_GET_CAPS_V2` for every advertised decoder instance, asked on the host DEVICE with requests
 /// we author (`kf_abi::videocaps`). A refused one is left out (the guest's is then refused).
-pub fn query_video_caps(host: &mut dyn HostControls, kinds: &[EngineKind]) -> Vec<kf_abi::videocaps::CapsAnswer> {
+pub fn query_video_caps(
+    host: &mut dyn HostControls,
+    kinds: &[EngineKind],
+) -> Vec<kf_abi::videocaps::CapsAnswer> {
     use kf_abi::videocaps as vc;
     let mut asks: Vec<(u32, u32)> = Vec::new();
-    if kinds.iter().any(|k| matches!(k, EngineKind::VideoEncode(_))) {
+    if kinds
+        .iter()
+        .any(|k| matches!(k, EngineKind::VideoEncode(_)))
+    {
         asks.push((vc::MSENC_GET_CAPS_V2, 0));
     }
     for k in kinds {
@@ -421,9 +487,15 @@ pub fn query_video_caps(host: &mut dyn HostControls, kinds: &[EngineKind]) -> Ve
         match host.device_control(cmd, &mut p) {
             Ok(()) => {
                 let n = vc::caps_len(cmd).unwrap_or(0);
-                out.push(vc::CapsAnswer { cmd, instance, caps: p[..n].to_vec() });
+                out.push(vc::CapsAnswer {
+                    cmd,
+                    instance,
+                    caps: p[..n].to_vec(),
+                });
             }
-            Err(e) => eprintln!("kf3: host facts: {cmd:#x} instance {instance} refused by the host ({e:?}) — not served"),
+            Err(e) => eprintln!(
+                "kf3: host facts: {cmd:#x} instance {instance} refused by the host ({e:?}) — not served"
+            ),
         }
     }
     out
@@ -447,7 +519,10 @@ pub fn query_lce_pce_masks(host: &mut dyn HostControls) -> Result<Vec<u32>, Fiel
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_lce_pce_masks_over(host: &mut dyn HostControls, present: Option<u64>) -> Result<Vec<u32>, FieldCause> {
+pub fn query_lce_pce_masks_over(
+    host: &mut dyn HostControls,
+    present: Option<u64>,
+) -> Result<Vec<u32>, FieldCause> {
     let cmd = kf_abi::cepce::NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK;
     let highest = present.filter(|p| *p != 0).map(|p| 63 - p.leading_zeros());
     let mut replies: Vec<Option<Vec<u8>>> = Vec::new();
@@ -473,7 +548,9 @@ pub fn query_lce_pce_masks_over(host: &mut dyn HostControls, present: Option<u64
             Err(refused) if i == 0 => return Err(FieldCause::Host { cmd, refused }),
             // A PRESENT LCE the host refused is a hole too (served as `NoMaskForEngine`), said by name.
             Err(refused) if highest.is_some_and(|hi| i <= hi) => {
-                eprintln!("kf3: host facts: CE_GET_CE_PCE_MASK LCE{i} is present but refused ({refused:?}) — not served");
+                eprintln!(
+                    "kf3: host facts: CE_GET_CE_PCE_MASK LCE{i} is present but refused ({refused:?}) — not served"
+                );
                 replies.push(None);
             }
             Err(_) => {
@@ -500,7 +577,11 @@ pub fn query_intr_table(
     kinds: Result<&[authored::EngineKind], &FieldCause>,
     grce_mask: u64,
 ) -> Result<Vec<kf_abi::inittables::IntrTableEntry>, FieldCause> {
-    let s = ask(host, hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE, zeroed(hostfacts::MC_STATIC_INTR_TABLE_PARAMS_SIZE))?;
+    let s = ask(
+        host,
+        hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE,
+        zeroed(hostfacts::MC_STATIC_INTR_TABLE_PARAMS_SIZE),
+    )?;
     let kinds = kinds.map_err(|_| FieldCause::DependsOn("engines"))?;
     let mut table = hostfacts::derive_static_intr_table(&s)?;
     table.extend(authored::engine_notification_rows(kinds, grce_mask));
@@ -531,7 +612,11 @@ pub fn query_intr_subtree_map(
 /// `kf_abi::smcmode` — so each field asks its own).
 fn ask_gpu_info(host: &mut dyn HostControls, index: u32) -> Result<Vec<u8>, FieldCause> {
     use kf_abi::gpuinfo as g;
-    ask(host, g::NV2080_CTRL_CMD_GPU_GET_INFO_V2, info_list_request(g::GPU_GET_INFO_V2_PARAMS_SIZE, &[index]))
+    ask(
+        host,
+        g::NV2080_CTRL_CMD_GPU_GET_INFO_V2,
+        info_list_request(g::GPU_GET_INFO_V2_PARAMS_SIZE, &[index]),
+    )
 }
 
 /// ★ `USERMODE`'s register base: `DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET)` = `0xB80000`
@@ -551,9 +636,16 @@ static REG_BASES: &[RegBaseRow] = &[RegBaseRow {
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_chip_info(host: &mut dyn HostControls, sub_revision: u8) -> Result<ChipInfoRow, FieldCause> {
+pub fn query_chip_info(
+    host: &mut dyn HostControls,
+    sub_revision: u8,
+) -> Result<ChipInfoRow, FieldCause> {
     let cmp = hostfacts::derive_cmp_sku(&ask_gpu_info(host, hostfacts::GPU_INFO_INDEX_CMP_SKU)?)?;
-    Ok(ChipInfoRow { chip_sub_rev: sub_revision, is_cmp_sku: cmp, reg_bases: REG_BASES })
+    Ok(ChipInfoRow {
+        chip_sub_rev: sub_revision,
+        is_cmp_sku: cmp,
+        reg_bases: REG_BASES,
+    })
 }
 
 /// `NV2080_CTRL_GR_INFO_INDEX_LITTER_NUM_SLICES_PER_LTC` (`ogkm-580: ctrl0080gr.h`, `0x32`).
@@ -564,12 +656,18 @@ pub const GR_INFO_IDX_LITTER_NUM_SLICES_PER_LTC: usize = 0x32;
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_gr_info(host: &mut dyn HostControls, family: Family) -> Result<GrInfoProfile, FieldCause> {
+pub fn query_gr_info(
+    host: &mut dyn HostControls,
+    family: Family,
+) -> Result<GrInfoProfile, FieldCause> {
     use kf_abi::grinfo::GR_INFO_MAX_SIZE;
     let indices: Vec<u32> = (0..GR_INFO_MAX_SIZE as u32).collect();
     // The route at GR_GET_INFO_V2_ROUTE_OFF stays zero: TYPE_NONE, GR0.
     let req = info_list_request(hostfacts::GR_GET_INFO_V2_PARAMS_SIZE, &indices);
-    Ok(hostfacts::derive_gr_info(&ask(host, hostfacts::NV2080_CTRL_CMD_GR_GET_INFO_V2, req)?, family)?)
+    Ok(hostfacts::derive_gr_info(
+        &ask(host, hostfacts::NV2080_CTRL_CMD_GR_GET_INFO_V2, req)?,
+        family,
+    )?)
 }
 
 /// `memory_system` — L2 size, RAM type and LTC count from `FB_GET_INFO_V2`; slices per LTC
@@ -580,17 +678,27 @@ pub fn query_gr_info(host: &mut dyn HostControls, family: Family) -> Result<GrIn
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_memory_system(host: &mut dyn HostControls, gr_info: Option<&GrInfoProfile>) -> Result<MemorySystemRow, FieldCause> {
+pub fn query_memory_system(
+    host: &mut dyn HostControls,
+    gr_info: Option<&GrInfoProfile>,
+) -> Result<MemorySystemRow, FieldCause> {
     use kf_abi::fbinfo as fb;
     let req = info_list_request(
         fb::FB_GET_INFO_V2_PARAMS_SIZE,
-        &[fb::FB_INFO_INDEX_L2CACHE_SIZE, fb::FB_INFO_INDEX_RAM_TYPE, fb::FB_INFO_INDEX_LTC_COUNT],
+        &[
+            fb::FB_INFO_INDEX_L2CACHE_SIZE,
+            fb::FB_INFO_INDEX_RAM_TYPE,
+            fb::FB_INFO_INDEX_LTC_COUNT,
+        ],
     );
     let r = ask(host, fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, req)?;
-    let pairs = fb::decode_fb_info_pairs(&r)
-        .map_err(|_| FactRefusal::ShortReply { cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, len: r.len() })?;
+    let pairs = fb::decode_fb_info_pairs(&r).map_err(|_| FactRefusal::ShortReply {
+        cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2,
+        len: r.len(),
+    })?;
     let g = hostfacts::derive_fb_geometry(&pairs)?;
-    let lts = gr_info.ok_or(FieldCause::DependsOn("gr_info"))?.data[GR_INFO_IDX_LITTER_NUM_SLICES_PER_LTC];
+    let lts = gr_info.ok_or(FieldCause::DependsOn("gr_info"))?.data
+        [GR_INFO_IDX_LITTER_NUM_SLICES_PER_LTC];
     Ok(MemorySystemRow {
         comptag_policy: ComptagAllocationPolicy::Raw,
         disable_compbit_backing: false,
@@ -690,7 +798,8 @@ pub fn derive_chiplet_gpc_map(tpc_masks: &[(u32, u32)], tpc_counts: &[u32]) -> O
     let mut taken = vec![false; tpc_masks.len()];
     let mut map = Vec::with_capacity(tpc_counts.len());
     for &count in tpc_counts {
-        let i = (0..tpc_masks.len()).find(|&i| !taken[i] && tpc_masks[i].1.count_ones() == count)?;
+        let i =
+            (0..tpc_masks.len()).find(|&i| !taken[i] && tpc_masks[i].1.count_ones() == count)?;
         taken[i] = true;
         map.push(tpc_masks[i].0);
     }
@@ -711,7 +820,10 @@ pub fn derive_chiplet_gpc_map(tpc_masks: &[(u32, u32)], tpc_counts: &[u32]) -> O
 /// [`FieldCause`]; every cross-check between two host statements of one fact is a refusal,
 /// never a pick: the map against both count tables, SMs per TPC against `gr_info`, the TPC
 /// total against the SM order and against `tpcCount`.
-pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoProfile>) -> Result<GrGeometry, FieldCause> {
+pub fn query_gr_geometry(
+    host: &mut dyn HostControls,
+    gr_info: Option<&GrInfoProfile>,
+) -> Result<GrGeometry, FieldCause> {
     use kf_abi::grfsinfo::{self as fs, GrFsQuery, query_type};
     let gpc_mask = hostfacts::derive_gpc_mask(&ask(
         host,
@@ -720,7 +832,10 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
     )?)?;
     let unservable = |cmd, why| FieldCause::Reply(FactRefusal::Unservable { cmd, why });
     if gpc_mask as usize >= 1usize << kf_abi::grstatic::GR_MAX_GPC {
-        return Err(unservable(hostfacts::NV2080_CTRL_CMD_GR_GET_GPC_MASK, "gpcMask names a GPC past NV2080_CTRL_INTERNAL_GR_MAX_GPC"));
+        return Err(unservable(
+            hostfacts::NV2080_CTRL_CMD_GR_GET_GPC_MASK,
+            "gpcMask names a GPC past NV2080_CTRL_INTERNAL_GR_MAX_GPC",
+        ));
     }
     // ── the PHYSICAL facts, one per set bit ──
     let mut tpc_masks = Vec::new();
@@ -732,11 +847,21 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
         tpc_masks.push((gpc, hostfacts::derive_tpc_mask(&r, gpc)?));
         let mut z = zeroed(8);
         put32(&mut z, 0, gpc);
-        zcull_masks.push(match host.control(NV2080_CTRL_CMD_GR_GET_ZCULL_MASK, &mut z) {
-            Ok(()) => u32::from_le_bytes([z[4], z[5], z[6], z[7]]),
-            Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => u32::MAX,
-            Err(refused) => return Err(FieldCause::Host { cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_MASK, refused }),
-        });
+        zcull_masks.push(
+            match host.control(NV2080_CTRL_CMD_GR_GET_ZCULL_MASK, &mut z) {
+                Ok(()) => u32::from_le_bytes([z[4], z[5], z[6], z[7]]),
+                Err(HostRefusal {
+                    status: Some(NV_ERR_NOT_SUPPORTED),
+                    ..
+                }) => u32::MAX,
+                Err(refused) => {
+                    return Err(FieldCause::Host {
+                        cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_MASK,
+                        refused,
+                    });
+                }
+            },
+        );
     }
     // ⊘ `physGpcMask` is NOT asked: `GR_GET_PHYS_GPC_MASK` (0x20801232) is PRIVILEGED (export
     // flags 0x14, `g_subdevice_nvoc.c`) — `[measured 2026-09-26]` refused `0x1b` to a client
@@ -749,33 +874,53 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
     for gpc in 0..n {
         let mut req = zeroed(hostfacts::GR_NUM_TPCS_PARAMS_SIZE);
         put32(&mut req, 0, gpc);
-        let r = ask(host, hostfacts::NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC, req)?;
+        let r = ask(
+            host,
+            hostfacts::NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC,
+            req,
+        )?;
         tpc_counts.push(hostfacts::derive_num_tpcs(&r, gpc)?);
     }
     // ★ The map, asked EXACTLY as libcuda asks it in `cuInit` (one CHIPLET_GPC_MAP per logical
     // GPC, nothing else in the batch): the host answers its own logical order.
     let map_cmd = fs::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO;
-    let map_queries: Vec<GrFsQuery> = (0..n).map(|gpc| GrFsQuery { query_type: query_type::CHIPLET_GPC_MAP, input: gpc }).collect();
+    let map_queries: Vec<GrFsQuery> = (0..n)
+        .map(|gpc| GrFsQuery {
+            query_type: query_type::CHIPLET_GPC_MAP,
+            input: gpc,
+        })
+        .collect();
     let mut req = fs::build_request(&map_queries);
     let asked_map = match host.control(map_cmd, &mut req) {
         Ok(()) => {
             let a = hostfacts::derive_gr_fs_answers(&req, &map_queries)?;
-            a.iter().all(|&(st, _)| st == 0).then(|| a.iter().map(|&(_, phys)| phys).collect::<Vec<u32>>())
+            a.iter()
+                .all(|&(st, _)| st == 0)
+                .then(|| a.iter().map(|&(_, phys)| phys).collect::<Vec<u32>>())
         }
         Err(_) => None,
     };
     let chiplet_gpc_map = match asked_map {
         Some(m) => m,
-        None => derive_chiplet_gpc_map(&tpc_masks, &tpc_counts)
-            .ok_or(unservable(map_cmd, "no CHIPLET_GPC_MAP from the host, and the TPC counts match no physical GPC"))?,
+        None => derive_chiplet_gpc_map(&tpc_masks, &tpc_counts).ok_or(unservable(
+            map_cmd,
+            "no CHIPLET_GPC_MAP from the host, and the TPC counts match no physical GPC",
+        ))?,
     };
     // Each logical GPC names a distinct enabled physical GPC whose TPC population is its count.
     let mut seen = 0u32;
     for (l, &p) in chiplet_gpc_map.iter().enumerate() {
         let bit = 1u32.checked_shl(p).unwrap_or(0);
         let mask = tpc_masks.iter().find(|(g, _)| *g == p).map(|(_, m)| *m);
-        if bit == 0 || gpc_mask & bit == 0 || seen & bit != 0 || mask.map(u32::count_ones) != Some(tpc_counts[l]) {
-            return Err(unservable(map_cmd, "CHIPLET_GPC_MAP names a GPC outside gpcMask, twice, or of another TPC count"));
+        if bit == 0
+            || gpc_mask & bit == 0
+            || seen & bit != 0
+            || mask.map(u32::count_ones) != Some(tpc_counts[l])
+        {
+            return Err(unservable(
+                map_cmd,
+                "CHIPLET_GPC_MAP names a GPC outside gpcMask, twice, or of another TPC count",
+            ));
         }
         seen |= bit;
     }
@@ -789,13 +934,24 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
             Ok(()) => {
                 let (count, map) = hostfacts::derive_pes_info(&req, gpc)?;
                 if tpc_to_pes.is_some_and(|m| m != map) {
-                    return Err(unservable(hostfacts::NV2080_CTRL_CMD_GPU_GET_PES_INFO, "tpcToPesMap differs between two GPCs of one reply table"));
+                    return Err(unservable(
+                        hostfacts::NV2080_CTRL_CMD_GPU_GET_PES_INFO,
+                        "tpcToPesMap differs between two GPCs of one reply table",
+                    ));
                 }
                 tpc_to_pes = Some(map);
                 pes_counts.push(count);
             }
-            Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) if gpc == 0 => break,
-            Err(refused) => return Err(FieldCause::Host { cmd: hostfacts::NV2080_CTRL_CMD_GPU_GET_PES_INFO, refused }),
+            Err(HostRefusal {
+                status: Some(NV_ERR_NOT_SUPPORTED),
+                ..
+            }) if gpc == 0 => break,
+            Err(refused) => {
+                return Err(FieldCause::Host {
+                    cmd: hostfacts::NV2080_CTRL_CMD_GPU_GET_PES_INFO,
+                    refused,
+                });
+            }
         }
     }
     let pes = tpc_to_pes.map(|m| (pes_counts, m));
@@ -817,22 +973,42 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
     // ★ The optional batch: PPC and ROP masks per logical GPC, and the two syspipe words. A
     // refusal here is not a refused device — only those query types stay refused to the guest.
     let mut extra_queries = vec![
-        GrFsQuery { query_type: query_type::CHIPLET_SYSPIPE_MASK, input: 0 },
-        GrFsQuery { query_type: query_type::CHIPLET_GRAPHICS_SYSPIPE_MASK, input: 0 },
+        GrFsQuery {
+            query_type: query_type::CHIPLET_SYSPIPE_MASK,
+            input: 0,
+        },
+        GrFsQuery {
+            query_type: query_type::CHIPLET_GRAPHICS_SYSPIPE_MASK,
+            input: 0,
+        },
     ];
     for t in [query_type::PPC_MASK, query_type::ROP_MASK] {
-        extra_queries.extend((0..n).map(|gpc| GrFsQuery { query_type: t, input: gpc }));
+        extra_queries.extend((0..n).map(|gpc| GrFsQuery {
+            query_type: t,
+            input: gpc,
+        }));
     }
     let mut req = fs::build_request(&extra_queries);
     let fs_extra = match host.control(map_cmd, &mut req) {
         Ok(()) => {
             let a = hostfacts::derive_gr_fs_answers(&req, &extra_queries)?;
             let word = |i: usize| (a[i].0 == 0).then_some(a[i].1);
-            let answer = |i: usize| Some(if a[i].0 == 0 { HostFsAnswer::Word(a[i].1) } else { HostFsAnswer::Refused(a[i].0) });
+            let answer = |i: usize| {
+                Some(if a[i].0 == 0 {
+                    HostFsAnswer::Word(a[i].1)
+                } else {
+                    HostFsAnswer::Refused(a[i].0)
+                })
+            };
             match (word(0), word(1)) {
                 (Some(syspipe), Some(graphics_syspipe)) => Some(GrFsExtra {
-                    per_gpc: (0..n as usize).map(|g| (answer(2 + g), answer(2 + n as usize + g))).collect(),
-                    syspipe: kf_abi::grstatic::GrSyspipeMasks { syspipe, graphics_syspipe },
+                    per_gpc: (0..n as usize)
+                        .map(|g| (answer(2 + g), answer(2 + n as usize + g)))
+                        .collect(),
+                    syspipe: kf_abi::grstatic::GrSyspipeMasks {
+                        syspipe,
+                        graphics_syspipe,
+                    },
                 }),
                 _ => None,
             }
@@ -853,7 +1029,19 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
             why: "the TPC masks' population disagrees with the SM order's TPC count or with tpcCount",
         }));
     }
-    Ok(GrGeometry { gpc_mask, tpc_masks, zcull_masks, chiplet_gpc_map, tpc_counts, pes, gfx, fs_extra, tpcs, sms_per_tpc, caps })
+    Ok(GrGeometry {
+        gpc_mask,
+        tpc_masks,
+        zcull_masks,
+        chiplet_gpc_map,
+        tpc_counts,
+        pes,
+        gfx,
+        fs_extra,
+        tpcs,
+        sms_per_tpc,
+        caps,
+    })
 }
 
 /// ★ v3-gfx: `zbc_table_sizes` — `GET_ZBC_CLEAR_TABLE_SIZE` for each table type. The composition
@@ -862,7 +1050,9 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
 ///
 /// # Errors
 /// [`FieldCause`] — any other refusal, or an empty/inverted range.
-pub fn query_zbc_table_sizes(host: &mut dyn HostControls) -> Result<Option<[(u32, u32); 3]>, FieldCause> {
+pub fn query_zbc_table_sizes(
+    host: &mut dyn HostControls,
+) -> Result<Option<[(u32, u32); 3]>, FieldCause> {
     use kf_abi::zbc as z;
     let mut out = [(0, 0); 3];
     for t in z::TableType::ALL {
@@ -870,8 +1060,16 @@ pub fn query_zbc_table_sizes(host: &mut dyn HostControls) -> Result<Option<[(u32
         z::put(&mut p, 2, t.wire());
         match host.control(z::GET_ZBC_CLEAR_TABLE_SIZE, &mut p) {
             Ok(()) => {}
-            Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => return Ok(None),
-            Err(refused) => return Err(FieldCause::Host { cmd: z::GET_ZBC_CLEAR_TABLE_SIZE, refused }),
+            Err(HostRefusal {
+                status: Some(NV_ERR_NOT_SUPPORTED),
+                ..
+            }) => return Ok(None),
+            Err(refused) => {
+                return Err(FieldCause::Host {
+                    cmd: z::GET_ZBC_CLEAR_TABLE_SIZE,
+                    refused,
+                });
+            }
         }
         let (start, end) = (z::word(&p, 0).unwrap_or(0), z::word(&p, 1).unwrap_or(0));
         if start == 0 || end < start {
@@ -893,12 +1091,16 @@ pub const FORWARDED_FB_EXTRA_INDICES: [u32; 5] = [0x04, 0x14, 0x37, 0x2b, 0x38];
 ///
 /// # Errors
 /// Never today — kept fallible so a decode failure can become a named refusal.
-pub fn query_forwarded_fb_extra(host: &mut dyn HostControls) -> Result<Vec<(u32, u32)>, FieldCause> {
+pub fn query_forwarded_fb_extra(
+    host: &mut dyn HostControls,
+) -> Result<Vec<(u32, u32)>, FieldCause> {
     use kf_abi::fbinfo as fb;
     let mut out = Vec::new();
     for idx in FORWARDED_FB_EXTRA_INDICES {
         let mut req = info_list_request(fb::FB_GET_INFO_V2_PARAMS_SIZE, &[idx]);
-        if host.control(fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, &mut req).is_ok()
+        if host
+            .control(fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, &mut req)
+            .is_ok()
             && let Ok(pairs) = fb::decode_fb_info_pairs(&req)
             && let Some(&(i, d)) = pairs.first()
             && i == idx
@@ -918,10 +1120,14 @@ pub const NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO: u32 = 0x2080_1315;
 /// Never today.
 pub fn query_gpu_cache_info(host: &mut dyn HostControls) -> Result<Option<[u32; 4]>, FieldCause> {
     let mut p = zeroed(16);
-    Ok(host.control(NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO, &mut p).ok().map(|()| {
-        let w = |i: usize| u32::from_le_bytes([p[4 * i], p[4 * i + 1], p[4 * i + 2], p[4 * i + 3]]);
-        [w(0), w(1), w(2), w(3)]
-    }))
+    Ok(host
+        .control(NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO, &mut p)
+        .ok()
+        .map(|()| {
+            let w =
+                |i: usize| u32::from_le_bytes([p[4 * i], p[4 * i + 1], p[4 * i + 2], p[4 * i + 3]]);
+            [w(0), w(1), w(2), w(3)]
+        }))
 }
 
 /// ★ 2026-09-26: `gr_sm_issue_rate_modifier` — the host's nine speed selects from its unprivileged
@@ -933,9 +1139,13 @@ pub fn query_gr_sm_issue_rate_modifier(
 ) -> Option<[u8; kf_abi::grstatic::SM_ISSUE_RATE_MODIFIER_BYTES]> {
     use kf_abi::grstatic as g;
     let mut p = zeroed(g::GR_SM_ISSUE_RATE_MODIFIER_PARAMS_SIZE);
-    host.control(g::NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER, &mut p).ok()?;
+    host.control(g::NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER, &mut p)
+        .ok()?;
     let mut row = [0u8; g::SM_ISSUE_RATE_MODIFIER_BYTES];
-    row.copy_from_slice(&p[g::GR_SM_ISSUE_RATE_MODIFIER_OFF..g::GR_SM_ISSUE_RATE_MODIFIER_OFF + g::SM_ISSUE_RATE_MODIFIER_BYTES]);
+    row.copy_from_slice(
+        &p[g::GR_SM_ISSUE_RATE_MODIFIER_OFF
+            ..g::GR_SM_ISSUE_RATE_MODIFIER_OFF + g::SM_ISSUE_RATE_MODIFIER_BYTES],
+    );
     Some(row)
 }
 
@@ -962,8 +1172,14 @@ pub fn query_gr_zcull_info(
             }
             Ok(Some(row))
         }
-        Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => Ok(None),
-        Err(refused) => Err(FieldCause::Host { cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_INFO, refused }),
+        Err(HostRefusal {
+            status: Some(NV_ERR_NOT_SUPPORTED),
+            ..
+        }) => Ok(None),
+        Err(refused) => Err(FieldCause::Host {
+            cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_INFO,
+            refused,
+        }),
     }
 }
 
@@ -994,7 +1210,10 @@ pub fn query_gr_zcull_info(
 /// [`FieldCause`] — a litter the TPC-to-PES rule cannot use, or a profile `kf_abi` refuses to
 /// encode (a per-GPC TPC-row count that disagrees with `tpcCount`, a gfx mask outside the GPC
 /// mask, …).
-pub fn gr_static_from(g: &GrGeometry, info: &GrInfoProfile) -> Result<kf_abi::grstatic::GrStaticProfile, FieldCause> {
+pub fn gr_static_from(
+    g: &GrGeometry,
+    info: &GrInfoProfile,
+) -> Result<kf_abi::grstatic::GrStaticProfile, FieldCause> {
     use kf_abi::grstatic::{GpcRow, GrStaticProfile};
     let cmd = hostfacts::NV2080_CTRL_CMD_GR_GET_GPC_MASK;
     let unservable = |why| FieldCause::Reply(FactRefusal::Unservable { cmd, why });
@@ -1012,15 +1231,30 @@ pub fn gr_static_from(g: &GrGeometry, info: &GrInfoProfile) -> Result<kf_abi::gr
     };
     let mut gpcs = Vec::with_capacity(g.chiplet_gpc_map.len());
     for (l, &phys) in g.chiplet_gpc_map.iter().enumerate() {
-        let at = g.tpc_masks.iter().position(|(p, _)| *p == phys).ok_or(unservable("a logical GPC maps to a physical GPC outside gpcMask"))?;
-        let (ppc_mask, rop_mask) = g.fs_extra.as_ref().and_then(|x| x.per_gpc.get(l).copied()).unwrap_or((None, None));
+        let at = g
+            .tpc_masks
+            .iter()
+            .position(|(p, _)| *p == phys)
+            .ok_or(unservable(
+                "a logical GPC maps to a physical GPC outside gpcMask",
+            ))?;
+        let (ppc_mask, rop_mask) = g
+            .fs_extra
+            .as_ref()
+            .and_then(|x| x.per_gpc.get(l).copied())
+            .unwrap_or((None, None));
         gpcs.push(GpcRow {
             physical_id: phys,
             tpc_mask: g.tpc_masks[at].1,
-            tpc_count: *g.tpc_counts.get(l).ok_or(unservable("fewer tpcCount words than logical GPCs"))?,
+            tpc_count: *g
+                .tpc_counts
+                .get(l)
+                .ok_or(unservable("fewer tpcCount words than logical GPCs"))?,
             mmu_per_gpc: info.data[GR_INFO_IDX_LITTER_NUM_GPCMMU_PER_GPC],
             num_pes_per_gpc: match &g.pes {
-                Some((counts, _)) => *counts.get(l).ok_or(unservable("fewer numPesInGpc words than logical GPCs"))?,
+                Some((counts, _)) => *counts
+                    .get(l)
+                    .ok_or(unservable("fewer numPesInGpc words than logical GPCs"))?,
                 None => info.data[GR_INFO_IDX_LITTER_NUM_PES_PER_GPC],
             },
             zcull_mask: g.zcull_masks[at],
@@ -1043,7 +1277,9 @@ pub fn gr_static_from(g: &GrGeometry, info: &GrInfoProfile) -> Result<kf_abi::gr
     p.validate()
         .map_err(|_| unservable("the GR profile fails kf_abi's own validation"))?;
     if p.gpc_mask() != Ok(g.gpc_mask) {
-        return Err(unservable("the rows' physical ids do not rebuild the host's gpcMask"));
+        return Err(unservable(
+            "the rows' physical ids do not rebuild the host's gpcMask",
+        ));
     }
     Ok(p)
 }
@@ -1057,13 +1293,19 @@ pub fn query_gr_context_buffers(
     host: &mut dyn HostControls,
 ) -> Result<[ContextBuffer; CONTEXT_BUFFER_ID_COUNT], FieldCause> {
     let cmd = hostfacts::NV2080_CTRL_CMD_GR_GET_ENGINE_CONTEXT_PROPERTIES;
-    let mut out = [ContextBuffer { size: 0, alignment: 0 }; CONTEXT_BUFFER_ID_COUNT];
+    let mut out = [ContextBuffer {
+        size: 0,
+        alignment: 0,
+    }; CONTEXT_BUFFER_ID_COUNT];
     for (id, slot) in out.iter_mut().enumerate() {
         let mut req = zeroed(hostfacts::GR_CONTEXT_PROPERTIES_PARAMS_SIZE);
         put32(&mut req, hostfacts::GR_ROUTE_INFO_SIZE, id as u32);
         *slot = match host.control(cmd, &mut req) {
             Ok(()) => hostfacts::derive_context_buffer(Some(&req))?,
-            Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => hostfacts::derive_context_buffer(None)?,
+            Err(HostRefusal {
+                status: Some(NV_ERR_NOT_SUPPORTED),
+                ..
+            }) => hostfacts::derive_context_buffer(None)?,
             Err(refused) => return Err(FieldCause::Host { cmd, refused }),
         };
     }
@@ -1083,10 +1325,15 @@ pub const FORWARDED_GPU_INFO_INDICES: &[u32] = &[0x11];
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_forwarded_gpu_info(host: &mut dyn HostControls) -> Result<Vec<(u32, u32)>, FieldCause> {
+pub fn query_forwarded_gpu_info(
+    host: &mut dyn HostControls,
+) -> Result<Vec<(u32, u32)>, FieldCause> {
     let mut out = Vec::new();
     for &index in FORWARDED_GPU_INFO_INDICES {
-        out.push((index, hostfacts::derive_gpu_info_value(&ask_gpu_info(host, index)?, index)?));
+        out.push((
+            index,
+            hostfacts::derive_gpu_info_value(&ask_gpu_info(host, index)?, index)?,
+        ));
     }
     Ok(out)
 }
@@ -1112,15 +1359,20 @@ pub fn query_forwarded_fb_info(host: &mut dyn HostControls) -> Result<Vec<(u32, 
     use kf_abi::fbinfo as fb;
     let req = info_list_request(fb::FB_GET_INFO_V2_PARAMS_SIZE, FORWARDED_FB_INFO_INDICES);
     let r = ask(host, fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, req)?;
-    let pairs = fb::decode_fb_info_pairs(&r)
-        .map_err(|_| FactRefusal::ShortReply { cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, len: r.len() })?;
+    let pairs = fb::decode_fb_info_pairs(&r).map_err(|_| FactRefusal::ShortReply {
+        cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2,
+        len: r.len(),
+    })?;
     let mut out = Vec::new();
     for &index in FORWARDED_FB_INFO_INDICES {
         let d = pairs
             .iter()
             .find(|(i, _)| *i == index)
             .map(|(_, d)| *d)
-            .ok_or(FactRefusal::Missing { cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, index })?;
+            .ok_or(FactRefusal::Missing {
+                cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2,
+                index,
+            })?;
         out.push((index, d));
     }
     Ok(out)
@@ -1131,26 +1383,44 @@ pub fn query_forwarded_fb_info(host: &mut dyn HostControls) -> Result<Vec<(u32, 
 /// # Errors
 /// [`FieldCause`].
 pub fn query_smc_mode(host: &mut dyn HostControls) -> Result<kf_abi::smcmode::SmcMode, FieldCause> {
-    Ok(hostfacts::derive_smc_mode(&ask_gpu_info(host, hostfacts::GPU_INFO_INDEX_GPU_SMC_MODE)?)?)
+    Ok(hostfacts::derive_smc_mode(&ask_gpu_info(
+        host,
+        hostfacts::GPU_INFO_INDEX_GPU_SMC_MODE,
+    )?)?)
 }
 
 /// `pcie_max_gen`.
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_pcie_max_gen(host: &mut dyn HostControls) -> Result<kf_abi::businfo::PcieGen, FieldCause> {
+pub fn query_pcie_max_gen(
+    host: &mut dyn HostControls,
+) -> Result<kf_abi::businfo::PcieGen, FieldCause> {
     use kf_abi::businfo as bus;
-    let req = info_list_request(bus::BUS_GET_INFO_V2_PARAMS_SIZE, &[bus::BUS_INFO_INDEX_PCIE_GEN_INFO]);
-    Ok(hostfacts::derive_pcie_max_gen(&ask(host, bus::NV2080_CTRL_CMD_BUS_GET_INFO_V2, req)?)?)
+    let req = info_list_request(
+        bus::BUS_GET_INFO_V2_PARAMS_SIZE,
+        &[bus::BUS_INFO_INDEX_PCIE_GEN_INFO],
+    );
+    Ok(hostfacts::derive_pcie_max_gen(&ask(
+        host,
+        bus::NV2080_CTRL_CMD_BUS_GET_INFO_V2,
+        req,
+    )?)?)
 }
 
 /// `gsp_features`.
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_gsp_features(host: &mut dyn HostControls) -> Result<kf_abi::gspfeatures::GspFeatures, FieldCause> {
+pub fn query_gsp_features(
+    host: &mut dyn HostControls,
+) -> Result<kf_abi::gspfeatures::GspFeatures, FieldCause> {
     use kf_abi::gspfeatures as g;
-    let r = ask(host, g::NV2080_CTRL_CMD_GSP_GET_FEATURES, zeroed(g::GSP_GET_FEATURES_PARAMS_SIZE))?;
+    let r = ask(
+        host,
+        g::NV2080_CTRL_CMD_GSP_GET_FEATURES,
+        zeroed(g::GSP_GET_FEATURES_PARAMS_SIZE),
+    )?;
     Ok(hostfacts::derive_gsp_features(&r)?)
 }
 
@@ -1167,7 +1437,9 @@ pub const GPU_GET_SHORT_NAME_STRING_PARAMS_SIZE: usize = 64;
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_gpu_name(host: &mut dyn HostControls) -> Result<kf_abi::gspstaticinfo::GpuName, FieldCause> {
+pub fn query_gpu_name(
+    host: &mut dyn HostControls,
+) -> Result<kf_abi::gspstaticinfo::GpuName, FieldCause> {
     let cmd = NV2080_CTRL_CMD_GPU_GET_NAME_STRING;
     let r = ask(host, cmd, zeroed(GPU_GET_NAME_STRING_PARAMS_SIZE))?;
     Ok(hostfacts::derive_gpu_name(cmd, &r, 4)?)
@@ -1177,7 +1449,9 @@ pub fn query_gpu_name(host: &mut dyn HostControls) -> Result<kf_abi::gspstaticin
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_gpu_short_name(host: &mut dyn HostControls) -> Result<kf_abi::gspstaticinfo::GpuName, FieldCause> {
+pub fn query_gpu_short_name(
+    host: &mut dyn HostControls,
+) -> Result<kf_abi::gspstaticinfo::GpuName, FieldCause> {
     let cmd = NV2080_CTRL_CMD_GPU_GET_SHORT_NAME_STRING;
     let r = ask(host, cmd, zeroed(GPU_GET_SHORT_NAME_STRING_PARAMS_SIZE))?;
     Ok(hostfacts::derive_gpu_name(cmd, &r, 0)?)
@@ -1189,7 +1463,11 @@ pub fn query_gpu_short_name(host: &mut dyn HostControls) -> Result<kf_abi::gspst
 /// [`FieldCause`].
 pub fn query_has_c2c(host: &mut dyn HostControls) -> Result<bool, FieldCause> {
     use kf_abi::c2cinfo as c;
-    let r = ask(host, c::NV2080_CTRL_CMD_BUS_GET_C2C_INFO, zeroed(c::C2C_INFO_PARAMS_SIZE))?;
+    let r = ask(
+        host,
+        c::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
+        zeroed(c::C2C_INFO_PARAMS_SIZE),
+    )?;
     Ok(hostfacts::derive_has_c2c(&r)?)
 }
 
@@ -1198,9 +1476,15 @@ pub fn query_has_c2c(host: &mut dyn HostControls) -> Result<bool, FieldCause> {
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_ce_caps(host: &mut dyn HostControls) -> Result<kf_abi::cecaps::HostCeCaps, FieldCause> {
+pub fn query_ce_caps(
+    host: &mut dyn HostControls,
+) -> Result<kf_abi::cecaps::HostCeCaps, FieldCause> {
     use kf_abi::cecaps as c;
-    let r = ask(host, c::NV2080_CTRL_CMD_CE_GET_ALL_CAPS, zeroed(c::CE_GET_ALL_CAPS_PARAMS_SIZE))?;
+    let r = ask(
+        host,
+        c::NV2080_CTRL_CMD_CE_GET_ALL_CAPS,
+        zeroed(c::CE_GET_ALL_CAPS_PARAMS_SIZE),
+    )?;
     Ok(hostfacts::derive_ce_caps(&r)?)
 }
 
@@ -1215,7 +1499,10 @@ pub fn query_ce_caps(host: &mut dyn HostControls) -> Result<kf_abi::cecaps::Host
 pub fn query_vbios_version(host: &mut dyn HostControls) -> Result<Option<(u32, u8)>, FieldCause> {
     let req = info_list_request(
         hostfacts::BIOS_GET_INFO_V2_PARAMS_SIZE,
-        &[hostfacts::BIOS_INFO_INDEX_REVISION, hostfacts::BIOS_INFO_INDEX_OEM_REVISION],
+        &[
+            hostfacts::BIOS_INFO_INDEX_REVISION,
+            hostfacts::BIOS_INFO_INDEX_OEM_REVISION,
+        ],
     );
     Ok(ask(host, hostfacts::NV2080_CTRL_CMD_BIOS_GET_INFO_V2, req)
         .ok()
@@ -1229,11 +1516,20 @@ pub fn query_vbios_version(host: &mut dyn HostControls) -> Result<Option<(u32, u
 ///
 /// # Errors
 /// [`FieldCause::Reply`] for a reply of the wrong length.
-pub fn query_perf_level_info_v2(host: &mut dyn HostControls) -> Result<Option<Vec<u8>>, FieldCause> {
+pub fn query_perf_level_info_v2(
+    host: &mut dyn HostControls,
+) -> Result<Option<Vec<u8>>, FieldCause> {
     use kf_abi::cudartinit as c;
-    match ask(host, c::PERF_GET_LEVEL_INFO_V2, c::perf_level_info_v2_request()) {
+    match ask(
+        host,
+        c::PERF_GET_LEVEL_INFO_V2,
+        c::perf_level_info_v2_request(),
+    ) {
         Ok(r) if r.len() == c::PERF_GET_LEVEL_INFO_V2_PARAMS_SIZE => Ok(Some(r)),
-        Ok(r) => Err(FieldCause::Reply(FactRefusal::ShortReply { cmd: c::PERF_GET_LEVEL_INFO_V2, len: r.len() })),
+        Ok(r) => Err(FieldCause::Reply(FactRefusal::ShortReply {
+            cmd: c::PERF_GET_LEVEL_INFO_V2,
+            len: r.len(),
+        })),
         Err(FieldCause::Host { .. }) => Ok(None),
         Err(e) => Err(e),
     }
@@ -1244,7 +1540,10 @@ pub fn query_perf_level_info_v2(host: &mut dyn HostControls) -> Result<Option<Ve
 // =====================================================================================
 
 /// `conf_compute` — AUTHORED: confidential compute off (neither BAR1 nor PCIe trusted).
-pub const AUTHORED_CONF_COMPUTE: ConfComputeRow = ConfComputeRow { bar1_trusted: false, pcie_trusted: false };
+pub const AUTHORED_CONF_COMPUTE: ConfComputeRow = ConfComputeRow {
+    bar1_trusted: false,
+    pcie_trusted: false,
+};
 /// `bif_static` — AUTHORED: no C2C, one PCI function, no Gen4 claim, no GCx restore
 /// (`kf_abi::bifstatic`: every flag the encoder refuses to claim without a plane behind it).
 pub const AUTHORED_BIF_STATIC: BifStaticRow = BifStaticRow {
@@ -1254,7 +1553,9 @@ pub const AUTHORED_BIF_STATIC: BifStaticRow = BifStaticRow {
     gcx_pmu_cfg_space_restore: false,
 };
 /// `fifo_channels` — AUTHORED: the channel count per runlist is ours to set.
-pub const AUTHORED_FIFO_CHANNELS: FifoChannelsRow = FifoChannelsRow { channels_per_runlist: 0x0800 };
+pub const AUTHORED_FIFO_CHANNELS: FifoChannelsRow = FifoChannelsRow {
+    channels_per_runlist: 0x0800,
+};
 
 // =====================================================================================
 // The whole struct
@@ -1268,7 +1569,10 @@ pub const AUTHORED_FIFO_CHANNELS: FifoChannelsRow = FifoChannelsRow { channels_p
 ///
 /// # Errors
 /// [`HostFactsRefused`] — every refused field, in [`PROVENANCE`](crate::hostfacts::PROVENANCE) order.
-pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<HostFacts, HostFactsRefused> {
+pub fn query_host_facts(
+    host: &mut dyn HostControls,
+    family: Family,
+) -> Result<HostFacts, HostFactsRefused> {
     let arch = query_arch(host);
     let asked = family;
     let family = match &arch {
@@ -1283,18 +1587,24 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     // ★ The video falcons, then the list kept to the video engines the host's falcon table names.
     // A refused falcon query is not fatal to the device: it advertises no video engine, loudly.
     let video_falcons: Vec<ConstructedFalcon> = match &kinds {
-        Ok(k) if k.iter().any(|k| video_eng_desc(*k).is_some()) => match query_video_falcons(host, k) {
-            Ok(f) => f,
-            Err(e) => {
-                eprintln!("kf3: host facts: video engines NOT advertised — the host falcon table was refused: {e:?}");
-                Vec::new()
+        Ok(k) if k.iter().any(|k| video_eng_desc(*k).is_some()) => {
+            match query_video_falcons(host, k) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!(
+                        "kf3: host facts: video engines NOT advertised — the host falcon table was refused: {e:?}"
+                    );
+                    Vec::new()
+                }
             }
-        },
+        }
         _ => Vec::new(),
     };
     let kinds = kinds.map(|k| {
         k.into_iter()
-            .filter(|&k| video_eng_desc(k).is_none_or(|d| video_falcons.iter().any(|f| f.eng_desc == d)))
+            .filter(|&k| {
+                video_eng_desc(k).is_none_or(|d| video_falcons.iter().any(|f| f.eng_desc == d))
+            })
             .collect::<Vec<_>>()
     });
     let kinds = kinds.map(|k| software_last(keep_statable_ofa(asked, k)));
@@ -1313,13 +1623,16 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     // then the family's, authored from ogkm (`kf_chip::authored_intr_subtree_map`), and the source
     // used is printed. Where the host DOES report it, a disagreement with the authored map is
     // printed too (the live cross-check), and the host's own answer is served.
-    let lacks_subtree_map = host.lacks_control(hostfacts::NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP);
+    let lacks_subtree_map =
+        host.lacks_control(hostfacts::NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP);
     let intr_subtree_map = match (query_intr_subtree_map(host), &family) {
         (Ok(m), Ok(f)) => {
             if let Some(a) = kf_chip::authored_intr_subtree_map(*f)
                 && a != m
             {
-                eprintln!("kf3: host facts: intr_subtree_map: the host reports {m:x?}, ogkm's {f:?} rule says {a:x?} — serving the host's");
+                eprintln!(
+                    "kf3: host facts: intr_subtree_map: the host reports {m:x?}, ogkm's {f:?} rule says {a:x?} — serving the host's"
+                );
             }
             Ok(m)
         }
@@ -1345,7 +1658,8 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         Ok(k) => Ok(device_info_rule(k, &video_falcons)),
         Err(_) => Err(FieldCause::DependsOn("engines")),
     };
-    let gmmu_static: Result<kf_abi::gmmustatic::GmmuStaticRow, FieldCause> = Ok(authored::GMMU_STATIC);
+    let gmmu_static: Result<kf_abi::gmmustatic::GmmuStaticRow, FieldCause> =
+        Ok(authored::GMMU_STATIC);
     let gr_static = match (query_gr_geometry(host, gr_info.as_ref().ok()), &gr_info) {
         (Ok(g), Ok(info)) => gr_static_from(&g, info),
         (Err(e), _) => Err(e),
@@ -1360,7 +1674,8 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let forwarded_fb_info = query_forwarded_fb_info(host);
     let smc_mode = query_smc_mode(host);
     let pcie_max_gen = query_pcie_max_gen(host);
-    let ce_fault_method_buffer_size: Result<u32, FieldCause> = Ok(authored::CE_FAULT_METHOD_BUFFER_SIZE);
+    let ce_fault_method_buffer_size: Result<u32, FieldCause> =
+        Ok(authored::CE_FAULT_METHOD_BUFFER_SIZE);
     let gsp_features = query_gsp_features(host);
     let gpu_name = query_gpu_name(host);
     let gpu_short_name = query_gpu_short_name(host);
@@ -1368,7 +1683,10 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let perf_level_info_v2 = query_perf_level_info_v2(host);
     let gss_replay = query_gss_replay(host);
     let gr_sm_issue_rate_modifier = query_gr_sm_issue_rate_modifier(host);
-    let video_caps = kinds.as_deref().map(|k| query_video_caps(host, k)).unwrap_or_default();
+    let video_caps = kinds
+        .as_deref()
+        .map(|k| query_video_caps(host, k))
+        .unwrap_or_default();
 
     let mut refusals = Vec::new();
     macro_rules! take {
@@ -1376,7 +1694,10 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             match $field {
                 Ok(v) => Some(v),
                 Err(cause) => {
-                    refusals.push(FieldRefusal { field: stringify!($field), cause });
+                    refusals.push(FieldRefusal {
+                        field: stringify!($field),
+                        cause,
+                    });
                     None
                 }
             }
@@ -1484,7 +1805,9 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             constructed_falcons: if video_falcons.is_empty() {
                 FalconInventoryRow::NONE
             } else {
-                FalconInventoryRow { falcons: Box::leak(video_falcons.into_boxed_slice()) }
+                FalconInventoryRow {
+                    falcons: Box::leak(video_falcons.into_boxed_slice()),
+                }
             },
             memory_system,
             device_info,

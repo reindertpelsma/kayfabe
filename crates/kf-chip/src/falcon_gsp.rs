@@ -43,7 +43,6 @@
 use kf_arch::gsp::{BootSequence, GspModel, GspObservation, GspReg, LibosRegionLayout};
 use kf_gsp::FalconSecureBooterBoot;
 
-
 // ── BAR0 offsets ──────────────────────────────────────────────────────────────────
 // `ogkm-580: src/common/inc/swref/published/ampere/ga102/dev_gsp.h:27,29,38`
 // (`NV_PGSP_FALCON_MAILBOX0/1`, `NV_PGSP_QUEUE_HEAD(i) = 0x110c00+(i)*8`), the falcon
@@ -443,7 +442,9 @@ impl GspModel for FalconGspModel {
                 TU102_RISCV_IRQMASK => return Some(GspReg::GspRiscvIrqmask),
                 TU102_RISCV_IRQDEST => return Some(GspReg::GspRiscvIrqdest),
                 // GA102's offsets are not registers of this block.
-                GSP_RISCV_CPUCTL | GSP_RISCV_IRQMASK | GSP_RISCV_IRQDEST | GSP_RISCV_BCR_CTRL => return None,
+                GSP_RISCV_CPUCTL | GSP_RISCV_IRQMASK | GSP_RISCV_IRQDEST | GSP_RISCV_BCR_CTRL => {
+                    return None;
+                }
                 _ => {}
             }
         }
@@ -529,7 +530,9 @@ impl GspModel for FalconGspModel {
             // ★ w827: the core the guest last selected, VALID (`kf_arch::gsp::GspReg::GspRiscvBcrCtrl`);
             // never written = the reset value (FALCON, not VALID).
             GspReg::GspRiscvBcrCtrl if self.riscv == RiscvLayout::Tu102 => return None,
-            GspReg::GspRiscvBcrCtrl => obs.riscv_bcr_ctrl.map_or(0, |v| u64::from(v) | BCR_CTRL_VALID),
+            GspReg::GspRiscvBcrCtrl => obs
+                .riscv_bcr_ctrl
+                .map_or(0, |v| u64::from(v) | BCR_CTRL_VALID),
             GspReg::GspRiscvCpuctl => {
                 if !obs.riscv_active {
                     0
@@ -581,7 +584,9 @@ impl GspModel for FalconGspModel {
         match reg {
             GspReg::GspFalconDmatrfcmd | GspReg::Sec2FalconDmatrfcmd => Some(DMATRFCMD_IDLE),
             #[allow(clippy::cast_possible_truncation)]
-            GspReg::GspRiscvBcrCtrl if self.riscv == RiscvLayout::Ga102 => Some(u64::from(written as u32) | BCR_CTRL_VALID),
+            GspReg::GspRiscvBcrCtrl if self.riscv == RiscvLayout::Ga102 => {
+                Some(u64::from(written as u32) | BCR_CTRL_VALID)
+            }
             _ => None,
         }
     }
@@ -613,8 +618,13 @@ impl GspModel for FalconGspModel {
             FALCON_DMATRFBASE1 => FalconDma::Base1((value & DMATRFBASE1_MASK) as u32),
             FALCON_DMATRFMOFFS => FalconDma::MemOffset(v32),
             FALCON_DMATRFFBOFFS => FalconDma::SourceOffset(v32),
-            FALCON_DMATRFCMD => FalconDma::Transfer { dmem_load: value & (DMATRFCMD_IMEM | DMATRFCMD_WRITE) == 0 },
-            FALCON_DMEMC0 => FalconDma::DmemPort { addr: (value & DMEMC_ADDR_MASK) as u32, inc: value & DMEMC_AINCW != 0 },
+            FALCON_DMATRFCMD => FalconDma::Transfer {
+                dmem_load: value & (DMATRFCMD_IMEM | DMATRFCMD_WRITE) == 0,
+            },
+            FALCON_DMEMC0 => FalconDma::DmemPort {
+                addr: (value & DMEMC_ADDR_MASK) as u32,
+                inc: value & DMEMC_AINCW != 0,
+            },
             FALCON_DMEMD0 => FalconDma::DmemWord(v32),
             _ => return None,
         })
@@ -687,67 +697,170 @@ mod hwref_check {
                 (FALCON_DMATRFCMD, "NV_PFALCON_FALCON_DMATRFCMD"),
                 (QUEUE_HEAD0, "NV_PGSP_QUEUE_HEAD(0)"),
                 (QUEUE_HEAD_COUNT, "NV_PGSP_QUEUE_HEAD__SIZE_1"),
-                (GFW_BOOT_PLM, "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_PRIV_LEVEL_MASK"),
-                (GFW_BOOT_PROGRESS, "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_0_GFW_BOOT"),
+                (
+                    GFW_BOOT_PLM,
+                    "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_PRIV_LEVEL_MASK",
+                ),
+                (
+                    GFW_BOOT_PROGRESS,
+                    "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_0_GFW_BOOT",
+                ),
                 (WPR2_ADDR_LO, "NV_PFB_PRI_MMU_WPR2_ADDR_LO"),
                 (WPR2_ADDR_HI, "NV_PFB_PRI_MMU_WPR2_ADDR_HI"),
                 (BAR0_WINDOW_REG, "NV_PBUS_BAR0_WINDOW"),
             ] {
                 assert_eq!(ours, val(g, name), "{g:?} {name}");
             }
-            assert_eq!(val(g, "NV_PGSP_QUEUE_HEAD(1)") - val(g, "NV_PGSP_QUEUE_HEAD(0)"), 8, "{g:?}: stride");
-            assert_eq!((PRAMIN_BASE, PRAMIN_SIZE), (base(g, "NV_PRAMIN"), len(g, "NV_PRAMIN")), "{g:?}");
+            assert_eq!(
+                val(g, "NV_PGSP_QUEUE_HEAD(1)") - val(g, "NV_PGSP_QUEUE_HEAD(0)"),
+                8,
+                "{g:?}: stride"
+            );
+            assert_eq!(
+                (PRAMIN_BASE, PRAMIN_SIZE),
+                (base(g, "NV_PRAMIN"), len(g, "NV_PRAMIN")),
+                "{g:?}"
+            );
             let riscv = val(g, "NV_FALCON2_GSP_BASE");
             match layout {
                 RiscvLayout::Ga102 => {
-                    assert_eq!(GSP_RISCV_CPUCTL, riscv + val(g, "NV_PRISCV_RISCV_CPUCTL"), "{g:?}");
-                    assert_eq!(GSP_RISCV_IRQMASK, riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"), "{g:?}");
-                    assert_eq!(GSP_RISCV_IRQDEST, riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"), "{g:?}");
-                    assert_eq!(GSP_RISCV_BCR_CTRL, riscv + val(g, "NV_PRISCV_RISCV_BCR_CTRL"), "{g:?}");
+                    assert_eq!(
+                        GSP_RISCV_CPUCTL,
+                        riscv + val(g, "NV_PRISCV_RISCV_CPUCTL"),
+                        "{g:?}"
+                    );
+                    assert_eq!(
+                        GSP_RISCV_IRQMASK,
+                        riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"),
+                        "{g:?}"
+                    );
+                    assert_eq!(
+                        GSP_RISCV_IRQDEST,
+                        riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"),
+                        "{g:?}"
+                    );
+                    assert_eq!(
+                        GSP_RISCV_BCR_CTRL,
+                        riscv + val(g, "NV_PRISCV_RISCV_BCR_CTRL"),
+                        "{g:?}"
+                    );
                 }
                 RiscvLayout::Tu102 => {
-                    assert_eq!(TU102_RISCV_CORE_SWITCH_STATUS, riscv + val(g, "NV_PRISCV_RISCV_CORE_SWITCH_RISCV_STATUS"));
-                    assert_eq!(TU102_RISCV_IRQMASK, riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"), "{g:?}");
-                    assert_eq!(TU102_RISCV_IRQDEST, riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"), "{g:?}");
+                    assert_eq!(
+                        TU102_RISCV_CORE_SWITCH_STATUS,
+                        riscv + val(g, "NV_PRISCV_RISCV_CORE_SWITCH_RISCV_STATUS")
+                    );
+                    assert_eq!(
+                        TU102_RISCV_IRQMASK,
+                        riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"),
+                        "{g:?}"
+                    );
+                    assert_eq!(
+                        TU102_RISCV_IRQDEST,
+                        riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"),
+                        "{g:?}"
+                    );
                     // ⊘ No BCR_CTRL in the TU102 block — the model declines to decode it.
-                    assert!(crate::hwref::table().resolve(g, "NV_PRISCV_RISCV_BCR_CTRL").value().is_none(), "{g:?}");
+                    assert!(
+                        crate::hwref::table()
+                            .resolve(g, "NV_PRISCV_RISCV_BCR_CTRL")
+                            .value()
+                            .is_none(),
+                        "{g:?}"
+                    );
                 }
             }
         }
         // ★ Only GA102+ reads `NV_USABLE_FB_SIZE_IN_MB` (Turing and GA100 bind `_GP102`): the
         // headers of GA10x/AD10x publish it; Turing's and GA100's lineage does not.
         for g in [DieGroup::Ga10x, DieGroup::Ad10x] {
-            assert_eq!(USABLE_FB_SIZE_IN_MB_ADDR, val(g, "NV_USABLE_FB_SIZE_IN_MB"), "{g:?}");
+            assert_eq!(
+                USABLE_FB_SIZE_IN_MB_ADDR,
+                val(g, "NV_USABLE_FB_SIZE_IN_MB"),
+                "{g:?}"
+            );
         }
         for g in [DieGroup::Tu10x, DieGroup::Ga100] {
-            assert!(crate::hwref::table().resolve(g, "NV_USABLE_FB_SIZE_IN_MB").value().is_none(), "{g:?}");
+            assert!(
+                crate::hwref::table()
+                    .resolve(g, "NV_USABLE_FB_SIZE_IN_MB")
+                    .value()
+                    .is_none(),
+                "{g:?}"
+            );
         }
     }
 
     #[test]
     fn every_falcon_regime_encoding_is_its_die_groups_header_field() {
         for (g, layout) in SERVED {
-            assert_eq!(CPUCTL_STARTCPU, bit(g, "NV_PFALCON_FALCON_CPUCTL_STARTCPU"), "{g:?}");
-            assert_eq!(CPUCTL_HALTED, bit(g, "NV_PFALCON_FALCON_CPUCTL_HALTED"), "{g:?}");
-            assert_eq!(HWCFG2_RISCV_ENABLE, bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV"), "{g:?}");
-            assert_eq!(DMATRFCMD_IDLE, bit(g, "NV_PFALCON_FALCON_DMATRFCMD_IDLE"), "{g:?}");
-            assert_eq!(IRQSTAT_SWGEN0, bit(g, "NV_PFALCON_FALCON_IRQSTAT_SWGEN0"), "{g:?}");
+            assert_eq!(
+                CPUCTL_STARTCPU,
+                bit(g, "NV_PFALCON_FALCON_CPUCTL_STARTCPU"),
+                "{g:?}"
+            );
+            assert_eq!(
+                CPUCTL_HALTED,
+                bit(g, "NV_PFALCON_FALCON_CPUCTL_HALTED"),
+                "{g:?}"
+            );
+            assert_eq!(
+                HWCFG2_RISCV_ENABLE,
+                bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV"),
+                "{g:?}"
+            );
+            assert_eq!(
+                DMATRFCMD_IDLE,
+                bit(g, "NV_PFALCON_FALCON_DMATRFCMD_IDLE"),
+                "{g:?}"
+            );
+            assert_eq!(
+                IRQSTAT_SWGEN0,
+                bit(g, "NV_PFALCON_FALCON_IRQSTAT_SWGEN0"),
+                "{g:?}"
+            );
             assert_eq!(
                 GFW_BOOT_COMPLETED,
-                val(g, "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_0_GFW_BOOT_PROGRESS_COMPLETED"),
+                val(
+                    g,
+                    "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_0_GFW_BOOT_PROGRESS_COMPLETED"
+                ),
                 "{g:?}"
             );
             // WPR2: `_VAL` is 31:4 and holds `addr >> _ALIGNMENT`.
-            assert_eq!(range(g, "NV_PFB_PRI_MMU_WPR2_ADDR_LO_VAL"), (31, u64::from(WPR2_VAL_SHIFT)), "{g:?}");
-            assert_eq!(range(g, "NV_PFB_PRI_MMU_WPR2_ADDR_HI_VAL"), (31, u64::from(WPR2_VAL_SHIFT)), "{g:?}");
-            assert_eq!(u64::from(WPR2_ADDR_ALIGNMENT), val(g, "NV_PFB_PRI_MMU_WPR2_ADDR_LO_ALIGNMENT"), "{g:?}");
+            assert_eq!(
+                range(g, "NV_PFB_PRI_MMU_WPR2_ADDR_LO_VAL"),
+                (31, u64::from(WPR2_VAL_SHIFT)),
+                "{g:?}"
+            );
+            assert_eq!(
+                range(g, "NV_PFB_PRI_MMU_WPR2_ADDR_HI_VAL"),
+                (31, u64::from(WPR2_VAL_SHIFT)),
+                "{g:?}"
+            );
+            assert_eq!(
+                u64::from(WPR2_ADDR_ALIGNMENT),
+                val(g, "NV_PFB_PRI_MMU_WPR2_ADDR_LO_ALIGNMENT"),
+                "{g:?}"
+            );
             match layout {
                 RiscvLayout::Ga102 => {
-                    assert_eq!(RISCV_CPUCTL_ACTIVE, bit(g, "NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT"), "{g:?}");
-                    assert_eq!(BCR_CTRL_VALID, bit(g, "NV_PRISCV_RISCV_BCR_CTRL_VALID"), "{g:?}");
+                    assert_eq!(
+                        RISCV_CPUCTL_ACTIVE,
+                        bit(g, "NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT"),
+                        "{g:?}"
+                    );
+                    assert_eq!(
+                        BCR_CTRL_VALID,
+                        bit(g, "NV_PRISCV_RISCV_BCR_CTRL_VALID"),
+                        "{g:?}"
+                    );
                 }
                 RiscvLayout::Tu102 => {
-                    assert_eq!(TU102_RISCV_ACTIVE, bit(g, "NV_PRISCV_RISCV_CORE_SWITCH_RISCV_STATUS_ACTIVE_STAT"));
+                    assert_eq!(
+                        TU102_RISCV_ACTIVE,
+                        bit(g, "NV_PRISCV_RISCV_CORE_SWITCH_RISCV_STATUS_ACTIVE_STAT")
+                    );
                 }
             }
         }

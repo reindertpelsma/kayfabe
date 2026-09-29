@@ -48,8 +48,8 @@ use kf_abi::regaccessmap::{
     RegisterAccessMapError, RegisterAccessMapRow, USER_REGISTER_ACCESS_MAP_PARAMS_SIZE,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// The first 1277 bytes an RTX 3060's GSP answered: `userRegisterAccessMapSize`,
 /// `compressedSize`, and the whole gzip member. Everything after is zero.
@@ -137,9 +137,7 @@ fn every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept() {
     );
     assert!(unhex(ORACLE_PREFIX).len() <= ORACLE_DEEPEST_BYTE);
     // ⊘ The zero-extension in `oracle_params` is THIS FILE's, not the recorder's.
-    assert!(!kf_abi::oracle::field_is_captured(
-        0, row.psize, row.kept
-    ));
+    assert!(!kf_abi::oracle::field_is_captured(0, row.psize, row.kept));
 }
 
 /// The oracle's gzip stream on its own — `compressedData[..compressedSize]`.
@@ -168,7 +166,11 @@ fn chip() -> kf_rm::HostFacts {
 }
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// `RpcControlReq::HEADER`, as the capture's own arithmetic gives it: the reply's declared

@@ -92,18 +92,39 @@ pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channe
 ///
 /// # Errors
 /// The host's refusal, by name.
-pub fn birth_twin_in(rm: &HostRm, space: VaSpace, g: GuestChannel, join: Option<u32>) -> Result<Channel, String> {
-    if !is_copy_engine(g.engine) && g.engine != ENGINE_TYPE_GRAPHICS && !kf_abi::submit::is_video_engine_type(g.engine) {
-        return Err(format!("engine type {:#x}: only a copy engine, GR0 or a video engine has a passthrough twin", g.engine));
+pub fn birth_twin_in(
+    rm: &HostRm,
+    space: VaSpace,
+    g: GuestChannel,
+    join: Option<u32>,
+) -> Result<Channel, String> {
+    if !is_copy_engine(g.engine)
+        && g.engine != ENGINE_TYPE_GRAPHICS
+        && !kf_abi::submit::is_video_engine_type(g.engine)
+    {
+        return Err(format!(
+            "engine type {:#x}: only a copy engine, GR0 or a video engine has a passthrough twin",
+            g.engine
+        ));
     }
     let (userd_memory, userd_offset) = match g.userd {
         UserdAt::Store { store, off } => (store, off),
         UserdAt::Ram { ram, off } => (ram, off),
     };
-    let ring = RingSpec { gp_fifo_va: g.gpfifo_va, gp_fifo_entries: g.entries, userd_memory, userd_offset, err_notifier: g.err_ctx };
+    let ring = RingSpec {
+        gp_fifo_va: g.gpfifo_va,
+        gp_fifo_entries: g.entries,
+        userd_memory,
+        userd_offset,
+        err_notifier: g.err_ctx,
+    };
     match join {
-        Some(tsg) => rm.birth_member(tsg, g.engine, ring, false).map_err(|e| format!("birth into group {tsg:#x}: {e:?}")),
-        None => rm.birth_channel(space, g.engine, ring).map_err(|e| format!("birth: {e:?}")),
+        Some(tsg) => rm
+            .birth_member(tsg, g.engine, ring, false)
+            .map_err(|e| format!("birth into group {tsg:#x}: {e:?}")),
+        None => rm
+            .birth_channel(space, g.engine, ring)
+            .map_err(|e| format!("birth: {e:?}")),
     }
 }
 
@@ -136,30 +157,49 @@ pub fn engine_object(
         Kind::DmaCopy if is_copy_engine(engine) => Some(engine),
         Kind::DmaCopy if engine == ENGINE_TYPE_GRAPHICS => match declared_copy {
             Some(ce) if is_copy_engine(ce) => Some(ce),
-            _ => return Err(format!("class {class:#x} (DmaCopy) on a GR twin declares no copy engine ({declared_copy:?})")),
+            _ => {
+                return Err(format!(
+                    "class {class:#x} (DmaCopy) on a GR twin declares no copy engine ({declared_copy:?})"
+                ));
+            }
         },
         // ★ v3-gfx: 2D and inline-to-memory are GR-engine objects too (graphics UMDs put them on
         // their 3D channel); same authored `NV_GR_ALLOCATION_PARAMETERS` (`resource_list.h:2125-2140`).
-        Kind::Compute | Kind::ThreeD | Kind::TwoD | Kind::InlineToMemory if engine == ENGINE_TYPE_GRAPHICS => None,
+        Kind::Compute | Kind::ThreeD | Kind::TwoD | Kind::InlineToMemory
+            if engine == ENGINE_TYPE_GRAPHICS =>
+        {
+            None
+        }
         // ★ A video class on a twin of ITS engine: the instance is the twin's (never the guest's
         // params), so a class that does not match the twin's engine is refused here, by name.
         Kind::VideoEncoder if kf_abi::submit::nvenc_index_of_engine_type(engine).is_some() => {
             let i = kf_abi::submit::nvenc_index_of_engine_type(engine).unwrap_or(0);
-            return rm.alloc_video_object(chan, class, i).map_err(|e| format!("video encoder object {class:#x}: {e:?}"));
+            return rm
+                .alloc_video_object(chan, class, i)
+                .map_err(|e| format!("video encoder object {class:#x}: {e:?}"));
         }
         Kind::VideoDecoder if kf_abi::submit::nvdec_index_of_engine_type(engine).is_some() => {
             let i = kf_abi::submit::nvdec_index_of_engine_type(engine).unwrap_or(0);
-            return rm.alloc_video_object(chan, class, i).map_err(|e| format!("video decoder object {class:#x}: {e:?}"));
+            return rm
+                .alloc_video_object(chan, class, i)
+                .map_err(|e| format!("video decoder object {class:#x}: {e:?}"));
         }
         // ★ v3-gfxset: the optical-flow class on a twin of an OFA engine — the same authored
         // 12-byte `NV_OFA_ALLOCATION_PARAMETERS` (`nvos.h:3011-3016`), the twin's own instance.
         Kind::OpticalFlow if kf_abi::submit::ofa_index_of_engine_type(engine).is_some() => {
             let i = kf_abi::submit::ofa_index_of_engine_type(engine).unwrap_or(0);
-            return rm.alloc_video_object(chan, class, i).map_err(|e| format!("optical-flow object {class:#x}: {e:?}"));
+            return rm
+                .alloc_video_object(chan, class, i)
+                .map_err(|e| format!("optical-flow object {class:#x}: {e:?}"));
         }
-        k => return Err(format!("class {class:#x} ({k:?}) on a twin of engine {engine:#x}")),
+        k => {
+            return Err(format!(
+                "class {class:#x} ({k:?}) on a twin of engine {engine:#x}"
+            ));
+        }
     };
-    rm.alloc_engine_object(chan, class, copy).map_err(|e| format!("engine object {class:#x}: {e:?}"))
+    rm.alloc_engine_object(chan, class, copy)
+        .map_err(|e| format!("engine object {class:#x}: {e:?}"))
 }
 
 /// ★ Birth the host twin of a guest channel in `space`, give it the engine object its engine
@@ -176,10 +216,12 @@ pub fn birth(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channel, St
     // collision with the guest's own VAs would surface (named `0x51` at reconcile, never silent).
     match g.engine {
         ENGINE_TYPE_COPY0 => {
-            rm.alloc_ce_object(chan, g.engine).map_err(|e| format!("ce object: {e:?}"))?;
+            rm.alloc_ce_object(chan, g.engine)
+                .map_err(|e| format!("ce object: {e:?}"))?;
         }
         ENGINE_TYPE_GRAPHICS => {
-            rm.alloc_compute_object(chan).map_err(|e| format!("compute object: {e:?}"))?;
+            rm.alloc_compute_object(chan)
+                .map_err(|e| format!("compute object: {e:?}"))?;
         }
         other => return Err(format!("no engine object for engine type {other:#x}")),
     }

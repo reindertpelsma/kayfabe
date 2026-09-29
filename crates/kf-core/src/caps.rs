@@ -50,7 +50,12 @@ fn ix(t: Twin) -> usize {
 
 impl VmCaps {
     /// ⊘ Built from **what we told the guest**, not from a tuned constant.
-    pub fn from_declared(channels: u32, engine_objects: u32, address_spaces: u32, sysmem_leaves: u32) -> VmCaps {
+    pub fn from_declared(
+        channels: u32,
+        engine_objects: u32,
+        address_spaces: u32,
+        sysmem_leaves: u32,
+    ) -> VmCaps {
         VmCaps {
             caps: [channels, engine_objects, address_spaces, sysmem_leaves],
             live: [0; 4],
@@ -62,7 +67,11 @@ impl VmCaps {
         let i = ix(t);
         if self.live[i] >= self.caps[i] {
             self.refused[i] += 1;
-            return Err(Refusal::OverDeclaredCap { twin: t, cap: self.caps[i], asked: self.live[i] + 1 });
+            return Err(Refusal::OverDeclaredCap {
+                twin: t,
+                cap: self.caps[i],
+                asked: self.live[i] + 1,
+            });
         }
         self.live[i] += 1;
         Ok(())
@@ -94,7 +103,9 @@ impl VmCaps {
 /// > answer, not an error.**"*
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backing {
-    Backed { host_offset: u64 },
+    Backed {
+        host_offset: u64,
+    },
     /// ⊘ Named, never a hole. A hole returns plausible bytes and the guest proceeds on them.
     RefusedUnbackable,
 }
@@ -111,12 +122,18 @@ impl Aperture {
     /// is shared with every other process on that GPU.
     pub fn size_from_free(requested: u64, free_now: u64) -> Aperture {
         let len = requested.min(free_now);
-        Aperture { len, backed_len: len, refusals: 0 }
+        Aperture {
+            len,
+            backed_len: len,
+            refusals: 0,
+        }
     }
 
     pub fn back(&mut self, offset: u64, len: u64) -> Backing {
         match offset.checked_add(len) {
-            Some(end) if end <= self.backed_len => Backing::Backed { host_offset: offset },
+            Some(end) if end <= self.backed_len => Backing::Backed {
+                host_offset: offset,
+            },
             _ => {
                 self.refusals += 1;
                 Backing::RefusedUnbackable

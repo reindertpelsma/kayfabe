@@ -32,8 +32,8 @@ use kf_abi::fmbpromote::{
     PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 const PARAMS_AT: usize = 40;
 const CONTROL_STATUS_OFF: usize = 12;
@@ -94,7 +94,11 @@ fn command(body: &[u8]) -> RpcCommand {
 /// `(status, reply params)`. A refusal comes back as an empty body, which must never carry
 /// `NV_OK`.
 fn served(cmd: &RpcCommand) -> (u32, Vec<u8>) {
-    let mut p = InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"));
+    let mut p = InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    );
     let reply = p.respond(cmd).expect("the policy claims this control");
     if reply.body.is_empty() {
         assert_ne!(reply.rpc_result, 0, "an empty body must never carry NV_OK");

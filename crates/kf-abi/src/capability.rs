@@ -1712,8 +1712,16 @@ pub(crate) static CONTROLS_UNTIL_555_42_02: &[ControlEntry] = &[ControlEntry {
 /// [`CONTROLS_SHARED`] so the 535 table can leave them out; every boundary from 545.23.06 up
 /// names this block, so no existing table's surface changes.
 pub(crate) static CONTROLS_FROM_545_23_06: &[ControlEntry] = &[
-    ControlEntry { cmd: 0x00000288, name: "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x00de0001, name: "NV00DE_CTRL_CMD_REQUEST_DATA_POLL", origin: Origin::Nvproxy },
+    ControlEntry {
+        cmd: 0x00000288,
+        name: "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+        origin: Origin::Nvproxy,
+    },
+    ControlEntry {
+        cmd: 0x00de0001,
+        name: "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+        origin: Origin::Nvproxy,
+    },
 ];
 
 /// ★★★ [OWNER APPROVED 2026-09-28 — ruling 5] Controls added at 550.40.07
@@ -1721,20 +1729,52 @@ pub(crate) static CONTROLS_FROM_545_23_06: &[ControlEntry] = &[
 /// 545.23.08's SDK headers and present from 550.40.07 — moved out of [`CONTROLS_SHARED`];
 /// every boundary from 550.54.04 up names this block.
 pub(crate) static CONTROLS_FROM_550_40_07: &[ControlEntry] = &[
-    ControlEntry { cmd: 0x00000289, name: "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x00000290, name: "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x00801909, name: "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x20802068, name: "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE", origin: Origin::Nvproxy },
+    ControlEntry {
+        cmd: 0x00000289,
+        name: "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+        origin: Origin::Nvproxy,
+    },
+    ControlEntry {
+        cmd: 0x00000290,
+        name: "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+        origin: Origin::Nvproxy,
+    },
+    ControlEntry {
+        cmd: 0x00801909,
+        name: "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+        origin: Origin::Nvproxy,
+    },
+    ControlEntry {
+        cmd: 0x20802068,
+        name: "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
+        origin: Origin::Nvproxy,
+    },
 ];
 
 /// ★★★ [OWNER APPROVED 2026-09-28 — ruling 5] Allocation classes added at 550.40.07
 /// (`gvisor nvproxy: version.go:895-899`; `NV_MEMORY_EXPORT`, which nvproxy registers at 545,
 /// is `[measured]` absent from 545.23.08's class list too), moved out of [`CLASSES_SHARED`].
 pub(crate) static CLASSES_FROM_550_40_07: &[ClassEntry] = &[
-    ClassEntry { class: 0x000000e0, name: "NV_MEMORY_EXPORT", origin: Origin::Nvproxy },
-    ClassEntry { class: 0x000000f1, name: "NV_IMEX_SESSION", origin: Origin::Nvproxy },
-    ClassEntry { class: 0x000000fb, name: "NV_MEMORY_FABRIC_IMPORTED_REF", origin: Origin::Nvproxy },
-    ClassEntry { class: 0x0000a0bc, name: "NVENC_SW_SESSION", origin: Origin::Nvproxy },
+    ClassEntry {
+        class: 0x000000e0,
+        name: "NV_MEMORY_EXPORT",
+        origin: Origin::Nvproxy,
+    },
+    ClassEntry {
+        class: 0x000000f1,
+        name: "NV_IMEX_SESSION",
+        origin: Origin::Nvproxy,
+    },
+    ClassEntry {
+        class: 0x000000fb,
+        name: "NV_MEMORY_FABRIC_IMPORTED_REF",
+        origin: Origin::Nvproxy,
+    },
+    ClassEntry {
+        class: 0x0000a0bc,
+        name: "NVENC_SW_SESSION",
+        origin: Origin::Nvproxy,
+    },
 ];
 
 /// Added at 550.90.07 (`gvisor nvproxy: version.go:906`) and never removed, so every
@@ -1836,8 +1876,12 @@ pub static CAPS_545_23_06: CapabilityTable = CapabilityTable {
 /// nvproxy still has here and deletes at 555.42.02.
 pub static CAPS_550_54_04: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, CONTROLS_UNTIL_555_42_02],
-    own_classes: &[CLASSES_FROM_550_40_07, ],
+    own_controls: &[
+        CONTROLS_FROM_545_23_06,
+        CONTROLS_FROM_550_40_07,
+        CONTROLS_UNTIL_555_42_02,
+    ],
+    own_classes: &[CLASSES_FROM_550_40_07],
     note: "the C's ported set: nvproxy 575-ABI control map (compute-filtered) + its \
            575 class set MINUS the classes nvproxy adds after 550.54.04, + the six \
            Mode-2 GSP-RPC controls the ioctl boundary never saw, + \
@@ -1848,8 +1892,13 @@ pub static CAPS_550_54_04: CapabilityTable = CapabilityTable {
 /// 550.90.07 — `gvisor nvproxy: version.go:906`. Additive only.
 pub static CAPS_550_90_07: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, CONTROLS_UNTIL_555_42_02, CONTROLS_FROM_550_90_07],
-    own_classes: &[CLASSES_FROM_550_40_07, ],
+    own_controls: &[
+        CONTROLS_FROM_545_23_06,
+        CONTROLS_FROM_550_40_07,
+        CONTROLS_UNTIL_555_42_02,
+        CONTROLS_FROM_550_90_07,
+    ],
+    own_classes: &[CLASSES_FROM_550_40_07],
     note: "v550_90_07 adds NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE \
            (version.go:906) and changes nothing else this port carries",
 };
@@ -1861,8 +1910,12 @@ pub static CAPS_550_90_07: CapabilityTable = CapabilityTable {
 /// removal *operation* anywhere in this file: the block is simply not in the list.
 pub static CAPS_555_42_02: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, CONTROLS_FROM_550_90_07],
-    own_classes: &[CLASSES_FROM_550_40_07, ],
+    own_controls: &[
+        CONTROLS_FROM_545_23_06,
+        CONTROLS_FROM_550_40_07,
+        CONTROLS_FROM_550_90_07,
+    ],
+    own_classes: &[CLASSES_FROM_550_40_07],
     note: "★ SUBTRACTIVE: v555_42_02 deletes NVC36F_CTRL_GET_CLASS_ENGINEID \
            (version.go:933) and adds nothing this port carries",
 };
@@ -1870,7 +1923,12 @@ pub static CAPS_555_42_02: CapabilityTable = CapabilityTable {
 /// 560.28.03 — `gvisor nvproxy: version.go:945-977`.
 pub static CAPS_560_28_03: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, CONTROLS_FROM_550_90_07, CONTROLS_FROM_560_28_03],
+    own_controls: &[
+        CONTROLS_FROM_545_23_06,
+        CONTROLS_FROM_550_40_07,
+        CONTROLS_FROM_550_90_07,
+        CONTROLS_FROM_560_28_03,
+    ],
     own_classes: &[CLASSES_FROM_550_40_07, CLASSES_FROM_560_28_03],
     note: "v560_28_03 adds NVCDB0/NVCDD1/NVCDFA and the first Blackwell channel, \
            copy, graphics, compute and inline-to-memory classes, plus \
@@ -1880,12 +1938,18 @@ pub static CAPS_560_28_03: CapabilityTable = CapabilityTable {
 /// 570.86.15 — `gvisor nvproxy: version.go:990-1027`.
 pub static CAPS_570_86_15: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, 
+    own_controls: &[
+        CONTROLS_FROM_545_23_06,
+        CONTROLS_FROM_550_40_07,
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_DRAM_ENCRYPTION_570,
     ],
-    own_classes: &[CLASSES_FROM_550_40_07, CLASSES_FROM_560_28_03, CLASSES_FROM_570_86_15],
+    own_classes: &[
+        CLASSES_FROM_550_40_07,
+        CLASSES_FROM_560_28_03,
+        CLASSES_FROM_570_86_15,
+    ],
     note: "v570_86_15 adds the Blackwell B channel/copy/graphics/compute pair, \
            BLACKWELL_USERMODE_A, NVCFB7_VIDEO_ENCODER and the two DRAM-encryption \
            controls at their PRE-575 numbers",
@@ -1900,12 +1964,18 @@ pub static CAPS_570_86_15: CapabilityTable = CapabilityTable {
 /// resolving anything.
 pub static CAPS_575_51_02: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, 
+    own_controls: &[
+        CONTROLS_FROM_545_23_06,
+        CONTROLS_FROM_550_40_07,
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_FROM_575_51_02,
     ],
-    own_classes: &[CLASSES_FROM_550_40_07, CLASSES_FROM_560_28_03, CLASSES_FROM_570_86_15],
+    own_classes: &[
+        CLASSES_FROM_550_40_07,
+        CLASSES_FROM_560_28_03,
+        CLASSES_FROM_570_86_15,
+    ],
     note: "★ REPLACES: v575_51_02 deletes the two DRAM-encryption controls and re-adds \
            them one number lower, and adds NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2 \
            (version.go:1036-1053). No allocation class changes",
@@ -1921,12 +1991,15 @@ pub static CAPS_575_51_02: CapabilityTable = CapabilityTable {
 /// graphics-only row.
 pub static CAPS_580_65_06: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, 
+    own_controls: &[
+        CONTROLS_FROM_545_23_06,
+        CONTROLS_FROM_550_40_07,
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_FROM_575_51_02,
     ],
-    own_classes: &[CLASSES_FROM_550_40_07, 
+    own_classes: &[
+        CLASSES_FROM_550_40_07,
         CLASSES_FROM_560_28_03,
         CLASSES_FROM_570_86_15,
         CLASSES_FROM_580_65_06,
@@ -1943,12 +2016,15 @@ pub static CAPS_580_65_06: CapabilityTable = CapabilityTable {
 /// [`crate::versions::GspElementWire`]'s business, not this module's.
 pub static CAPS_610_43_02: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, 
+    own_controls: &[
+        CONTROLS_FROM_545_23_06,
+        CONTROLS_FROM_550_40_07,
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_FROM_575_51_02,
     ],
-    own_classes: &[CLASSES_FROM_550_40_07, 
+    own_classes: &[
+        CLASSES_FROM_550_40_07,
         CLASSES_FROM_560_28_03,
         CLASSES_FROM_570_86_15,
         CLASSES_FROM_580_65_06,
@@ -2285,9 +2361,7 @@ mod tests {
                 (535, 104, 5),
                 156,
                 74,
-                &[
-                    "NVC36F_CTRL_GET_CLASS_ENGINEID",
-                ],
+                &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "545.23.06",
@@ -3021,9 +3095,21 @@ mod tests {
         // ★ +18 on 2026-09-27 (v3-display): the display classes the guest's KERNEL allocates and
         // RPCs to us (`NVC372_DISPLAY_SW`, the C57x/C67x/C77x/CA7x display objects and their
         // core/window/window-immediate/cursor channels). SHARED, so every boundary moves by 18.
-        assert_eq!(at(550, 54, 4).all_classes().count(), 78 + 18, "classes at 550");
-        assert_eq!(at(560, 28, 3).all_classes().count(), 86 + 18, "classes at 560");
-        assert_eq!(at(570, 86, 15).all_classes().count(), 92 + 18, "classes at 570");
+        assert_eq!(
+            at(550, 54, 4).all_classes().count(),
+            78 + 18,
+            "classes at 550"
+        );
+        assert_eq!(
+            at(560, 28, 3).all_classes().count(),
+            86 + 18,
+            "classes at 560"
+        );
+        assert_eq!(
+            at(570, 86, 15).all_classes().count(),
+            92 + 18,
+            "classes at 570"
+        );
         assert_eq!(bench().all_classes().count(), 94 + 18, "classes at 580");
         assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");

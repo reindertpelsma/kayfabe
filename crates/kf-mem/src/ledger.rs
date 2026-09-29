@@ -86,10 +86,24 @@ pub fn desired_from_leaves(
             AP_VIDMEM => at
                 .checked_add(len)
                 .filter(|&e| e <= store_bytes)
-                .map(|_| Desired { va, len, off: at, ram: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE })
+                .map(|_| Desired {
+                    va,
+                    len,
+                    off: at,
+                    ram: false,
+                    kind: 0,
+                    perm: kf_host::MapPerm::READ_WRITE,
+                })
                 .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len }),
             AP_SYS_COHERENT | AP_SYS_NONCOHERENT => ram_offset(at, len)
-                .map(|off| Desired { va, len, off, ram: true, kind: 0, perm: kf_host::MapPerm::READ_WRITE })
+                .map(|off| Desired {
+                    va,
+                    len,
+                    off,
+                    ram: true,
+                    kind: 0,
+                    perm: kf_host::MapPerm::READ_WRITE,
+                })
                 .ok_or(LeafRefusal::NotGuestRam { va, gpa: at, len }),
             _ => Err(LeafRefusal::Aperture { va, ap }),
         })
@@ -305,7 +319,12 @@ impl HostVas<'_> {
     /// Rows that are not one VA-contiguous, same-kind, same-permission guest-RAM range (refused
     /// before any call),
     /// or the host's refusal. Either way nothing of ours is placed.
-    pub fn map_scattered(&self, ram_fd: std::os::fd::BorrowedFd<'_>, rows: &[Desired], defer: bool) -> Result<u32, String> {
+    pub fn map_scattered(
+        &self,
+        ram_fd: std::os::fd::BorrowedFd<'_>,
+        rows: &[Desired],
+        defer: bool,
+    ) -> Result<u32, String> {
         let first = rows.first().ok_or("empty batch")?;
         let mut next = first.va;
         let mut pieces: Vec<(u64, u64)> = Vec::with_capacity(rows.len());
@@ -313,7 +332,10 @@ impl HostVas<'_> {
             // ★ v3-roperm: ONE host map carries ONE permission set — a batch spanning a RO and a
             // RW row would widen one or narrow the other.
             if !d.ram || d.kind != first.kind || d.perm != first.perm || d.va != next {
-                return Err(format!("batch row {:#x}+{:#x} is not a VA-contiguous same-kind same-permission guest-RAM row", d.va, d.len));
+                return Err(format!(
+                    "batch row {:#x}+{:#x} is not a VA-contiguous same-kind same-permission guest-RAM row",
+                    d.va, d.len
+                ));
             }
             next = d.va.checked_add(d.len).ok_or("batch VA overflows")?;
             // Coalesce pieces that are also file-contiguous: fewer mappings to stitch.
@@ -323,8 +345,18 @@ impl HostVas<'_> {
             }
         }
         self.rm
-            .map_scattered(self.space, ram_fd, &pieces, first.va, defer, first.kind, first.perm)
-            .map_err(|e| format!("batch {:#x}+{:#x} ({} rows, {} pieces): {e:?}", first.va, next - first.va, rows.len(), pieces.len()))
+            .map_scattered(
+                self.space, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
+            )
+            .map_err(|e| {
+                format!(
+                    "batch {:#x}+{:#x} ({} rows, {} pieces): {e:?}",
+                    first.va,
+                    next - first.va,
+                    rows.len(),
+                    pieces.len()
+                )
+            })
     }
 }
 
@@ -336,7 +368,17 @@ impl MapTarget for HostVas<'_> {
         } else {
             self.store
         };
-        match self.rm.map_kind(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer, d.kind, d.perm) {
+        match self.rm.map_kind(
+            self.space,
+            obj,
+            kf_host::MapBacking::SharedSlice,
+            d.off,
+            d.len,
+            Some(d.va),
+            defer,
+            d.kind,
+            d.perm,
+        ) {
             Ok(_) => Ok(Mapped::Placed),
             // ★ P6: a FIXED map onto a VA host RM already holds satisfies the guest's statement —
             // the C's semantic (`nvkvm_gpu_emul.c:7935-7938`) — rather than stranding its

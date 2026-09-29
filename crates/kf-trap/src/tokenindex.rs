@@ -61,7 +61,10 @@ impl TokenIndex {
                 if chid >= 1 << Self::CHID_BITS {
                     return None;
                 }
-                Some((((value >> Self::RUNLIST_SHIFT) & Self::RUNLIST_MASK) << Self::CHID_BITS) | chid)
+                Some(
+                    (((value >> Self::RUNLIST_SHIFT) & Self::RUNLIST_MASK) << Self::CHID_BITS)
+                        | chid,
+                )
             }
         }
     }
@@ -72,7 +75,11 @@ impl TokenIndex {
     pub const fn of_channel(self, runlist: u32, chid: u32) -> Option<u32> {
         match self {
             TokenIndex::Vector { mask } => {
-                if chid & mask == chid { Some(chid) } else { None }
+                if chid & mask == chid {
+                    Some(chid)
+                } else {
+                    None
+                }
             }
             TokenIndex::RunlistVector => {
                 if chid >= 1 << Self::CHID_BITS || runlist > Self::RUNLIST_MASK {
@@ -116,7 +123,11 @@ mod tests {
         for x in [0u32, 1, 0x7, 0x0001_0007, 0x4000_0002, 0xFFFF_FFFF] {
             assert_eq!(v.of_doorbell(x), Some(x & 0xFFF));
         }
-        assert_eq!(v.of_channel(9, 5), Some(5), "the runlist is ignored: chids are device-unique");
+        assert_eq!(
+            v.of_channel(9, 5),
+            Some(5),
+            "the runlist is ignored: chids are device-unique"
+        );
         assert_eq!(v.of_channel(0, 0x1000), None);
         assert_eq!(v.table_len(), 4096);
     }
@@ -129,7 +140,11 @@ mod tests {
         let scrub = r.of_channel(1, 1).unwrap();
         let uvm = r.of_channel(2, 1).unwrap();
         assert_ne!(scrub, uvm);
-        assert_eq!((r.chid_of(scrub), r.chid_of(uvm)), (1, 1), "RC_TRIGGERED names the guest's chid");
+        assert_eq!(
+            (r.chid_of(scrub), r.chid_of(uvm)),
+            (1, 1),
+            "RC_TRIGGERED names the guest's chid"
+        );
         let token = |rl: u32, chid: u32| (1 << 30) | (rl << 16) | chid;
         assert_eq!(r.of_doorbell(token(1, 1)), Some(scrub));
         assert_eq!(r.of_doorbell(token(2, 1)), Some(uvm));
@@ -180,24 +195,74 @@ mod hwref_check {
 
     #[test]
     fn the_token_fields_are_each_die_groups_header() {
-        for g in [DieGroup::Tu10x, DieGroup::Ga100, DieGroup::Ga10x, DieGroup::Ad10x, DieGroup::Gh100] {
-            assert_eq!(mask(g, "NV_CTRL_VF_DOORBELL_VECTOR"), u64::from(TokenIndex::VECTOR_MASK), "{g:?}");
-            assert_eq!(range(g, "NV_CTRL_VF_DOORBELL_RUNLIST_ID"), (22, 16), "{g:?}");
+        for g in [
+            DieGroup::Tu10x,
+            DieGroup::Ga100,
+            DieGroup::Ga10x,
+            DieGroup::Ad10x,
+            DieGroup::Gh100,
+        ] {
+            assert_eq!(
+                mask(g, "NV_CTRL_VF_DOORBELL_VECTOR"),
+                u64::from(TokenIndex::VECTOR_MASK),
+                "{g:?}"
+            );
+            assert_eq!(
+                range(g, "NV_CTRL_VF_DOORBELL_RUNLIST_ID"),
+                (22, 16),
+                "{g:?}"
+            );
         }
         for g in [DieGroup::Gb10x, DieGroup::Gb20x] {
             let (hi, lo) = range(g, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_ID");
             assert_eq!(lo, u64::from(TokenIndex::RUNLIST_SHIFT), "{g:?}");
-            assert_eq!((1u64 << (hi - lo + 1)) - 1, u64::from(TokenIndex::RUNLIST_MASK), "{g:?}");
-            assert_eq!(mask(g, "NV_VIRTUAL_FUNCTION_DOORBELL_VECTOR"), u64::from(TokenIndex::VECTOR_MASK), "{g:?}");
+            assert_eq!(
+                (1u64 << (hi - lo + 1)) - 1,
+                u64::from(TokenIndex::RUNLIST_MASK),
+                "{g:?}"
+            );
+            assert_eq!(
+                mask(g, "NV_VIRTUAL_FUNCTION_DOORBELL_VECTOR"),
+                u64::from(TokenIndex::VECTOR_MASK),
+                "{g:?}"
+            );
             // `CHID_BITS` is the per-runlist channel RAM: `NV_CHRAM_CHANNEL__SIZE_1` = 2048.
-            assert_eq!(1u64 << TokenIndex::CHID_BITS, val(g, "NV_CHRAM_CHANNEL__SIZE_1"), "{g:?}");
+            assert_eq!(
+                1u64 << TokenIndex::CHID_BITS,
+                val(g, "NV_CHRAM_CHANNEL__SIZE_1"),
+                "{g:?}"
+            );
         }
         // ★ The RUNLIST_DOORBELL bit is where the two Blackwell die groups differ: 30:30 = 1 on GB20x;
         // on GB10x it is 22:22 with `_ENABLE` = 0 — INSIDE RUNLIST_ID and never set. Neither reaches
         // the index (`RUNLIST_MASK` stops at bit 22 and a GB10x runlist id < 64 leaves bit 22 clear).
-        assert_eq!(range(DieGroup::Gb20x, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL"), (30, 30));
-        assert_eq!(val(DieGroup::Gb20x, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL_ENABLE"), 1);
-        assert_eq!(range(DieGroup::Gb10x, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL"), (22, 22));
-        assert_eq!(val(DieGroup::Gb10x, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL_ENABLE"), 0);
+        assert_eq!(
+            range(
+                DieGroup::Gb20x,
+                "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL"
+            ),
+            (30, 30)
+        );
+        assert_eq!(
+            val(
+                DieGroup::Gb20x,
+                "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL_ENABLE"
+            ),
+            1
+        );
+        assert_eq!(
+            range(
+                DieGroup::Gb10x,
+                "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL"
+            ),
+            (22, 22)
+        );
+        assert_eq!(
+            val(
+                DieGroup::Gb10x,
+                "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL_ENABLE"
+            ),
+            0
+        );
     }
 }

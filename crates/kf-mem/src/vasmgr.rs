@@ -42,7 +42,7 @@
 //! that is ours: a diff whose maps were WITHHELD for slot capacity (`KFWR_V_PARTIAL`) is walked
 //! again at once, after its unmaps landed — its invalidate clears on that walk.
 
-use crate::apply::{ApplyCfg, Applied, DiffRun, apply_entry};
+use crate::apply::{Applied, ApplyCfg, DiffRun, apply_entry};
 use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
@@ -154,7 +154,12 @@ impl<T: MapTarget> VasTable<T> {
     /// An empty table over a store of `store_bytes`, with `slots` walker slots.
     #[must_use]
     pub fn new(store_bytes: u64, slots: u32) -> VasTable<T> {
-        VasTable { spaces: BTreeMap::new(), store_bytes, free_slots: (0..slots).rev().collect(), released: Vec::new() }
+        VasTable {
+            spaces: BTreeMap::new(),
+            store_bytes,
+            free_slots: (0..slots).rev().collect(),
+            released: Vec::new(),
+        }
     }
 
     /// Register an object and where its mappings land. It has no root yet. Re-registering a key
@@ -167,7 +172,14 @@ impl<T: MapTarget> VasTable<T> {
             self.released.push(s);
         }
         let slot = self.free_slots.pop();
-        self.spaces.insert(key, Space { root: None, target, slot });
+        self.spaces.insert(
+            key,
+            Space {
+                root: None,
+                target,
+                slot,
+            },
+        );
     }
 
     /// Forget an object, returning its target (the caller tears its mappings down through the
@@ -185,9 +197,17 @@ impl<T: MapTarget> VasTable<T> {
     ///
     /// # Errors
     /// [`RootRefusal`], by name.
-    pub fn set_root(&mut self, key: VasKey, pdb: u64, aperture: PdbAperture) -> Result<RootChange, RootRefusal> {
+    pub fn set_root(
+        &mut self,
+        key: VasKey,
+        pdb: u64,
+        aperture: PdbAperture,
+    ) -> Result<RootChange, RootRefusal> {
         let store = self.store_bytes;
-        let s = self.spaces.get_mut(&key).ok_or(RootRefusal::UnknownObject(key))?;
+        let s = self
+            .spaces
+            .get_mut(&key)
+            .ok_or(RootRefusal::UnknownObject(key))?;
         if aperture == PdbAperture::Sysmem {
             return Err(RootRefusal::SysmemRoot { key, pdb });
         }
@@ -233,19 +253,30 @@ impl<T: MapTarget> VasTable<T> {
     /// client's, before a `SET_PAGE_DIRECTORY` splits them).
     #[must_use]
     pub fn keys_for_pdb(&self, pdb: u64) -> Vec<VasKey> {
-        self.spaces.iter().filter(|(_, s)| s.root == Some(pdb)).map(|(&k, _)| k).collect()
+        self.spaces
+            .iter()
+            .filter(|(_, s)| s.root == Some(pdb))
+            .map(|(&k, _)| k)
+            .collect()
     }
 
     /// Every object that has a root — what `ALL_PDB` names.
     #[must_use]
     pub fn rooted(&self) -> Vec<VasKey> {
-        self.spaces.iter().filter(|(_, s)| s.root.is_some()).map(|(&k, _)| k).collect()
+        self.spaces
+            .iter()
+            .filter(|(_, s)| s.root.is_some())
+            .map(|(&k, _)| k)
+            .collect()
     }
 
     /// Every object held: `(key, root, slot)`, in key order (diagnostics).
     #[must_use]
     pub fn objects(&self) -> Vec<(VasKey, Option<u64>, Option<u32>)> {
-        self.spaces.iter().map(|(&k, s)| (k, s.root, s.slot)).collect()
+        self.spaces
+            .iter()
+            .map(|(&k, s)| (k, s.root, s.slot))
+            .collect()
     }
 
     /// Objects held.
@@ -358,22 +389,36 @@ impl Walker for GpuWalker {
             return Ok(None);
         };
         let r = &c.report;
-        r.validate().map_err(|e| format!("walk report refused: {e}"))?;
-        r.require_diff().map_err(|e| format!("walk report refused: {e}"))?;
+        r.validate()
+            .map_err(|e| format!("walk report refused: {e}"))?;
+        r.require_diff()
+            .map_err(|e| format!("walk report refused: {e}"))?;
         if r.truncated() {
             // ★ Which entries refused: `reserved2` carries each entry's own `KFWR_R_*` bits.
             let refusing: Vec<String> = r
                 .pdbs
                 .iter()
                 .filter(|p| p.refused_bits() != 0)
-                .map(|p| format!("pdb {:#x} slot {} refuse {:#x} need {}", p.pdb, p.slot(), p.refused_bits(), p.need()))
+                .map(|p| {
+                    format!(
+                        "pdb {:#x} slot {} refuse {:#x} need {}",
+                        p.pdb,
+                        p.slot(),
+                        p.refused_bits(),
+                        p.need()
+                    )
+                })
                 .collect();
             if std::env::var_os("KF_VAS_CENSUS").is_some() {
                 for (i, p) in r.pdbs.iter().enumerate() {
                     if p.refused_bits() != 0
                         && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
                     {
-                        eprintln!("kf3: census walk entry {i} pdb {:#x}: {}", p.pdb, run_census(&runs));
+                        eprintln!(
+                            "kf3: census walk entry {i} pdb {:#x}: {}",
+                            p.pdb,
+                            run_census(&runs)
+                        );
                     }
                 }
             }
@@ -392,7 +437,12 @@ impl Walker for GpuWalker {
                 if p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0
                     && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
                 {
-                    eprintln!("kf3: census overflow entry {i} pdb {:#x} slot {}: {}", p.pdb, p.slot(), run_census(&runs));
+                    eprintln!(
+                        "kf3: census overflow entry {i} pdb {:#x} slot {}: {}",
+                        p.pdb,
+                        p.slot(),
+                        run_census(&runs)
+                    );
                 }
             }
         }
@@ -432,11 +482,18 @@ impl Walker for GpuWalker {
                 }
             })
             .collect();
-        Ok(Some(WalkDone { generation: r.header.generation, nrun: r.runs.len(), entries, gpu_us: c.gpu_us }))
+        Ok(Some(WalkDone {
+            generation: r.header.generation,
+            nrun: r.runs.len(),
+            entries,
+            gpu_us: c.gpu_us,
+        }))
     }
 
     fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), String> {
-        self.kernel.ack(generation, codes).map_err(|e| e.to_string())
+        self.kernel
+            .ack(generation, codes)
+            .map_err(|e| e.to_string())
     }
 
     fn reset(&mut self, slot: u32) -> Result<(), String> {
@@ -480,8 +537,10 @@ fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
     let mut top_lens: Vec<(u64, usize)> = lens.into_iter().collect();
     top_lens.sort_by(|a, b| b.1.cmp(&a.1));
     top_lens.truncate(6);
-    let gib: Vec<String> =
-        gib.iter().map(|(g, (n, lo, hi))| format!("va{:#x}G:{n}(gpga {lo:#x}..{hi:#x})", g)).collect();
+    let gib: Vec<String> = gib
+        .iter()
+        .map(|(g, (n, lo, hi))| format!("va{:#x}G:{n}(gpga {lo:#x}..{hi:#x})", g))
+        .collect();
     let sample: Vec<String> = runs
         .iter()
         .step_by((runs.len() / 12).max(1))
@@ -523,9 +582,22 @@ fn maplog_batch(b: &Batch) -> String {
     let wants: Vec<String> = b
         .wants
         .iter()
-        .map(|(w, keys, _)| format!("{{{} -> [{}]}}", maplog_want(w), keys.iter().map(|k| format!("{:#x}", k.0)).collect::<Vec<_>>().join(" ")))
+        .map(|(w, keys, _)| {
+            format!(
+                "{{{} -> [{}]}}",
+                maplog_want(w),
+                keys.iter()
+                    .map(|k| format!("{:#x}", k.0))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            )
+        })
         .collect();
-    let walked: Vec<String> = b.walked.iter().map(|(k, (s, r))| format!("{:#x}=s{s}@{r:#x}", k.0)).collect();
+    let walked: Vec<String> = b
+        .walked
+        .iter()
+        .map(|(k, (s, r))| format!("{:#x}=s{s}@{r:#x}", k.0))
+        .collect();
     format!("wants=[{}] walked=[{}]", wants.join(" "), walked.join(" "))
 }
 
@@ -749,7 +821,11 @@ pub struct VaManager<W: Walker, T: MapTarget> {
 impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// A manager over a store of `store_bytes`. `ram_offset(gpa, len)` is the VMM's guest-RAM
     /// layout (the memfd offset of a sysmem leaf), `None` where it backs nothing contiguously.
-    pub fn new(walker: W, store_bytes: u64, ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>) -> Self {
+    pub fn new(
+        walker: W,
+        store_bytes: u64,
+        ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>,
+    ) -> Self {
         let slots = walker.slots();
         VaManager {
             table: VasTable::new(store_bytes, slots),
@@ -832,7 +908,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Some(s) => s.clone(),
                 None => {
                     // An object removed meanwhile has nothing of ours left in flight.
-                    let s = self.table.spaces.get(k).map_or(Settle::Live, |sp| sp.target.settle());
+                    let s = self
+                        .table
+                        .spaces
+                        .get(k)
+                        .map_or(Settle::Live, |sp| sp.target.settle());
                     seen.insert(*k, s.clone());
                     s
                 }
@@ -846,10 +926,21 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         acc
     }
 
-    fn complete_invalidate(&mut self, r: InvalidateRequest, at: std::time::Instant, trigger: &Trigger, out: &mut Reconciled) {
+    fn complete_invalidate(
+        &mut self,
+        r: InvalidateRequest,
+        at: std::time::Instant,
+        trigger: &Trigger,
+        out: &mut Reconciled,
+    ) {
         let o = trigger.complete(r.seq);
         if crate::maplog::on() {
-            eprintln!("kf3: maplog t={:.6} CLEAR inval seq={} {o:?} (arrive->clear {} us)", crate::maplog::t(), r.seq, at.elapsed().as_micros());
+            eprintln!(
+                "kf3: maplog t={:.6} CLEAR inval seq={} {o:?} (arrive->clear {} us)",
+                crate::maplog::t(),
+                r.seq,
+                at.elapsed().as_micros()
+            );
         }
         self.stats.outcome(o);
         let ns = ns_since(at);
@@ -877,7 +968,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Settle::Pending => self.awaiting.push((r, keys, at)),
                 Settle::Failed(e) => {
                     self.stats.unreconciled += 1;
-                    self.stats.refuse(format!("invalidate seq {}: target work failed after apply: {e}", r.seq));
+                    self.stats.refuse(format!(
+                        "invalidate seq {}: target work failed after apply: {e}",
+                        r.seq
+                    ));
                     out.unreconciled.push(r.seq);
                 }
             }
@@ -898,7 +992,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             if let Err(e) = self.walker.reset(s) {
                 // ⊘ The slot is NOT returned to the free list: reused unemptied, its next
                 // object's first diff would be taken against another object's placements.
-                self.stats.refuse(format!("slot {s} release refused: {e} — the slot is retired"));
+                self.stats.refuse(format!(
+                    "slot {s} release refused: {e} — the slot is retired"
+                ));
                 continue;
             }
             self.table.free_slots.insert(0, s);
@@ -913,10 +1009,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
                 crate::maplog::t(),
                 maplog_want(&Want::Invalidate(req, std::time::Instant::now())),
-                self.inflight.as_ref().map_or("none".to_string(), |b| format!("#{}", b.id))
+                self.inflight
+                    .as_ref()
+                    .map_or("none".to_string(), |b| format!("#{}", b.id))
             );
         }
-        self.pending.push(Want::Invalidate(req, std::time::Instant::now()));
+        self.pending
+            .push(Want::Invalidate(req, std::time::Instant::now()));
         self.pump(trigger);
     }
 
@@ -929,7 +1028,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
                 crate::maplog::t(),
                 maplog_want(&Want::Split { pdb, ticket }),
-                self.inflight.as_ref().map_or("none".to_string(), |b| format!("#{}", b.id))
+                self.inflight
+                    .as_ref()
+                    .map_or("none".to_string(), |b| format!("#{}", b.id))
             );
         }
         self.stats.splits += 1;
@@ -949,7 +1050,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
                 crate::maplog::t(),
                 maplog_want(&Want::Root(key)),
-                self.inflight.as_ref().map_or("none".to_string(), |b| format!("#{}", b.id))
+                self.inflight
+                    .as_ref()
+                    .map_or("none".to_string(), |b| format!("#{}", b.id))
             );
         }
         self.pending.push(Want::Root(key));
@@ -1019,14 +1122,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
         // Nothing of ours is named: nothing can be stale, so the clear is honest now.
         if crate::maplog::on() && !vacuous.is_empty() {
-            eprintln!("kf3: maplog t={:.6} vacuous invalidate(s) {vacuous:?} cleared without a walk (nothing of ours named)", crate::maplog::t());
+            eprintln!(
+                "kf3: maplog t={:.6} vacuous invalidate(s) {vacuous:?} cleared without a walk (nothing of ours named)",
+                crate::maplog::t()
+            );
         }
         for seq in vacuous {
             self.stats.outcome(trigger.complete(seq));
         }
         for k in no_slot {
             self.stats.no_slot += 1;
-            self.stats.refuse(format!("{k:?}: no walker slot left — its mappings cannot be diffed"));
+            self.stats.refuse(format!(
+                "{k:?}: no walker slot left — its mappings cannot be diffed"
+            ));
         }
         if batch.wants.is_empty() {
             return;
@@ -1034,12 +1142,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         if batch.walked.len() > MAX_SPACES_PER_WALK {
             self.refuse_batch(
                 &batch,
-                format!("{} objects in one walk; the walk kernel carries {MAX_SPACES_PER_WALK}", batch.walked.len()),
+                format!(
+                    "{} objects in one walk; the walk kernel carries {MAX_SPACES_PER_WALK}",
+                    batch.walked.len()
+                ),
             );
             return;
         }
-        let entries: Vec<WalkEntry> =
-            batch.walked.values().map(|&(slot, pdb)| WalkEntry { pdb, slot }).collect();
+        let entries: Vec<WalkEntry> = batch
+            .walked
+            .values()
+            .map(|&(slot, pdb)| WalkEntry { pdb, slot })
+            .collect();
         if entries.is_empty() {
             // Every named object lacks a slot: each want fails by name (no walk to wait for).
             self.refuse_batch(&batch, "no named object has a walker slot".to_string());
@@ -1054,7 +1168,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 self.stats.walks_submitted += 1;
                 batch.submitted = std::time::Instant::now();
                 if crate::maplog::on() {
-                    eprintln!("kf3: maplog t={:.6} walk#{} SUBMIT {}", crate::maplog::t(), batch.id, maplog_batch(&batch));
+                    eprintln!(
+                        "kf3: maplog t={:.6} walk#{} SUBMIT {}",
+                        crate::maplog::t(),
+                        batch.id,
+                        maplog_batch(&batch)
+                    );
                 }
                 self.inflight = Some(batch);
             }
@@ -1067,8 +1186,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
     /// The batch's objects (`key=slot@root`) and the table's size — for a refusal's name.
     fn batch_census(&self, b: &Batch) -> String {
-        let walked: Vec<String> =
-            b.walked.iter().map(|(k, (s, r))| format!("{:#x}=s{s}@{r:#x}", k.0)).collect();
+        let walked: Vec<String> = b
+            .walked
+            .iter()
+            .map(|(k, (s, r))| format!("{:#x}=s{s}@{r:#x}", k.0))
+            .collect();
         format!(
             "walked {}: {}; table {} objects, {} rooted, {} free slots",
             walked.len(),
@@ -1165,7 +1287,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             let Some(e) = by_slot.get(&slot) else {
                 failed.insert(key);
-                self.stats.refuse(format!("{key:?}: slot {slot} missing from the report"));
+                self.stats
+                    .refuse(format!("{key:?}: slot {slot} missing from the report"));
                 continue;
             };
             if space.root != Some(walked_root) {
@@ -1173,7 +1296,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 failed.insert(key);
                 rewalk.insert(key);
                 self.pending.push(Want::Root(key));
-                self.stats.refuse(format!("{key:?}: root {walked_root:#x} changed during the walk; re-walking"));
+                self.stats.refuse(format!(
+                    "{key:?}: root {walked_root:#x} changed during the walk; re-walking"
+                ));
                 continue;
             }
             if e.overflow {
@@ -1231,7 +1356,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     a.range_unmaps,
                     a.range_unmapped_runs,
                     a.batch_fallbacks,
-                    a.first_batch_fallback.as_deref().map(|w| format!(" (first: {w})")).unwrap_or_default()
+                    a.first_batch_fallback
+                        .as_deref()
+                        .map(|w| format!(" (first: {w})"))
+                        .unwrap_or_default()
                 );
             } else if let Some(w) = &a.first_batch_fallback {
                 eprintln!("kf3: mem batch fallback {key:?}: {w}");
@@ -1241,7 +1369,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     *slot = c;
                 }
             }
-            self.stats.timing.host_calls += (a.map_calls + a.unmap_calls) as u64 + u64::from(a.invalidated);
+            self.stats.timing.host_calls +=
+                (a.map_calls + a.unmap_calls) as u64 + u64::from(a.invalidated);
             self.stats.batches += a.batches as u64;
             self.stats.batched_runs += a.batched_runs as u64;
             self.stats.range_unmaps += a.range_unmaps as u64;
@@ -1258,9 +1387,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.priv_withheld_bytes += a.priv_withheld_bytes;
             self.stats.priv_mirrored += a.priv_mirrored as u64;
             if a.priv_mirrored > 0 {
-                static MIRRORED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                static MIRRORED: std::sync::atomic::AtomicU32 =
+                    std::sync::atomic::AtomicU32::new(0);
                 if MIRRORED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
-                    eprintln!("kf3: {key:?} root {walked_root:#x}: {} privileged run(s) mirrored — a guest-kernel space or CPU window", a.priv_mirrored);
+                    eprintln!(
+                        "kf3: {key:?} root {walked_root:#x}: {} privileged run(s) mirrored — a guest-kernel space or CPU window",
+                        a.priv_mirrored
+                    );
                 }
             }
             if a.priv_withheld > 0 {
@@ -1307,7 +1440,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         if let Err(e) = self.walker.ack(done.generation, codes) {
             // Nothing is committed: the next diff is taken against the same placements and
             // re-emits what landed — whose maps the host then answers as held. Named.
-            self.stats.refuse(format!("verdict for report {} refused: {e}", done.generation));
+            self.stats.refuse(format!(
+                "verdict for report {} refused: {e}",
+                done.generation
+            ));
         }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
         let mut requeue: Vec<(Want, std::time::Instant)> = Vec::new();
@@ -1331,10 +1467,14 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // channel past those would let it reach memory the guest no longer maps there.
                 // A root that moved during the walk is not a refusal: the split waits for the
                 // re-walk already queued (as a capacity-withheld diff does), never fails on it.
-                let hard = keys.iter().find(|k| failed.contains(k) && !absent_only.contains(k) && !rewalk.contains(k));
+                let hard = keys.iter().find(|k| {
+                    failed.contains(k) && !absent_only.contains(k) && !rewalk.contains(k)
+                });
                 let again = again || keys.iter().any(|k| rewalk.contains(k));
                 match (hard, bad) {
-                    (Some(k), _) => self.splits_done.push((*ticket, Err(format!("split {pdb:x?}: {k:?} did not apply")))),
+                    (Some(k), _) => self
+                        .splits_done
+                        .push((*ticket, Err(format!("split {pdb:x?}: {k:?} did not apply")))),
                     (None, _) if again => requeue.push((*w, *at)),
                     (None, Some(k)) => {
                         self.stats.splits_unsettled += 1;
@@ -1373,7 +1513,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     }
                     Settle::Failed(e) => {
                         self.stats.unreconciled += 1;
-                        self.stats.refuse(format!("invalidate seq {}: target work failed after apply: {e}", r.seq));
+                        self.stats.refuse(format!(
+                            "invalidate seq {}: target work failed after apply: {e}",
+                            r.seq
+                        ));
                         out.unreconciled.push(r.seq);
                     }
                 }
@@ -1497,7 +1640,14 @@ mod tests {
                             .cloned()
                             .unwrap_or_default()
                             .into_iter()
-                            .map(|(va, at, len, ap)| KfMapRun { va, gpga: at, len, flags: u32::from(ap), op: 1, pdb_index: 0 })
+                            .map(|(va, at, len, ap)| KfMapRun {
+                                va,
+                                gpga: at,
+                                len,
+                                flags: u32::from(ap),
+                                op: 1,
+                                pdb_index: 0,
+                            })
                             .collect();
                         w.sort_by_key(|r| r.va);
                         (*e, w)
@@ -1515,7 +1665,9 @@ mod tests {
                 self.queued = None;
                 return Err(e);
             }
-            let Some(q) = self.queued.take() else { return Ok(None) };
+            let Some(q) = self.queued.take() else {
+                return Ok(None);
+            };
             self.generation += 1;
             let mut entries = Vec::new();
             let mut last = Vec::new();
@@ -1528,17 +1680,37 @@ mod tests {
                     .iter()
                     .map(|m| crate::apply::PermPolicy::default().diff_run(m))
                     .collect();
-                let refused = if self.refuse_in == Some(e.pdb) { 0x2000 } else { 0 };
-                entries.push(EntryDiff { pdb: e.pdb, slot: e.slot, first, runs, partial: d.partial, overflow: d.overflow, refused });
+                let refused = if self.refuse_in == Some(e.pdb) {
+                    0x2000
+                } else {
+                    0
+                };
+                entries.push(EntryDiff {
+                    pdb: e.pdb,
+                    slot: e.slot,
+                    first,
+                    runs,
+                    partial: d.partial,
+                    overflow: d.overflow,
+                    refused,
+                });
                 first += d.runs.len();
                 last.push((e.slot, d.runs));
             }
             self.diff_runs.push(first);
             self.last = Some((self.generation, last));
-            Ok(Some(WalkDone { generation: self.generation, nrun: first, entries, gpu_us: 1 }))
+            Ok(Some(WalkDone {
+                generation: self.generation,
+                nrun: first,
+                entries,
+                gpu_us: 1,
+            }))
         }
         fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), String> {
-            assert!(self.queued.is_none(), "a verdict answers a COLLECTED report");
+            assert!(
+                self.queued.is_none(),
+                "a verdict answers a COLLECTED report"
+            );
             self.verdict = Some((generation, codes));
             Ok(())
         }
@@ -1586,9 +1758,15 @@ mod tests {
             if *self.refuse_map_at.borrow() == Some(d.va) {
                 return Err(format!("map {:#x}: refused (fake)", d.va));
             }
-            self.ops.borrow_mut().push((Op::Map(d.va, d.off, d.len), self.port.trigger().read() != 0));
+            self.ops
+                .borrow_mut()
+                .push((Op::Map(d.va, d.off, d.len), self.port.trigger().read() != 0));
             self.perms.borrow_mut().push((d.va, d.perm));
-            Ok(if self.held_at == Some(d.va) { Mapped::HeldByHost } else { Mapped::Placed })
+            Ok(if self.held_at == Some(d.va) {
+                Mapped::HeldByHost
+            } else {
+                Mapped::Placed
+            })
         }
         fn reserved(&self) -> Vec<(u64, u64)> {
             self.reserved.clone()
@@ -1597,11 +1775,15 @@ mod tests {
             if *self.refuse_unmap_at.borrow() == Some(va) {
                 return Err(format!("unmap {va:#x}: refused (fake)"));
             }
-            self.ops.borrow_mut().push((Op::Unmap(va), self.port.trigger().read() != 0));
+            self.ops
+                .borrow_mut()
+                .push((Op::Unmap(va), self.port.trigger().read() != 0));
             Ok(())
         }
         fn invalidate(&self) -> Result<(), String> {
-            self.ops.borrow_mut().push((Op::Invalidate, self.port.trigger().read() != 0));
+            self.ops
+                .borrow_mut()
+                .push((Op::Invalidate, self.port.trigger().read() != 0));
             Ok(())
         }
     }
@@ -1629,11 +1811,23 @@ mod tests {
     }
 
     fn rig() -> Rig {
-        let port = Arc::new(InvalidatePort::new(InvalidateRegs::from_usermode_base(0xBB_0000).unwrap()));
+        let port = Arc::new(InvalidatePort::new(
+            InvalidateRegs::from_usermode_base(0xBB_0000).unwrap(),
+        ));
         let tables: Tables = Rc::default();
         let ops: Rc<RefCell<Vec<(Op, bool)>>> = Rc::default();
-        let m = VaManager::new(ModelWalker::new(tables.clone()), STORE, Box::new(|gpa, _| Some(gpa)));
-        let mut r = Rig { m, port, tables, ops, perms: Rc::default() };
+        let m = VaManager::new(
+            ModelWalker::new(tables.clone()),
+            STORE,
+            Box::new(|gpa, _| Some(gpa)),
+        );
+        let mut r = Rig {
+            m,
+            port,
+            tables,
+            ops,
+            perms: Rc::default(),
+        };
         for k in [K_A, K_B] {
             let h = host(&r, None, Vec::new());
             r.m.table.insert(k, h);
@@ -1676,18 +1870,36 @@ mod tests {
     #[test]
     fn the_trigger_clears_only_after_the_host_mapping_is_committed() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x20_0000_0000, 0x0200_0000, 0x1_0000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x20_0000_0000, 0x0200_0000, 0x1_0000, 0)]);
         let req = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(req, r.port.trigger());
-        assert!(busy(&r.port), "busy after submit: the walk has not even run");
-        assert!(r.ops.borrow().is_empty(), "nothing mapped before the walk completes");
+        assert!(
+            busy(&r.port),
+            "busy after submit: the walk has not even run"
+        );
+        assert!(
+            r.ops.borrow().is_empty(),
+            "nothing mapped before the walk completes"
+        );
         assert_eq!(r.m.walker().submits, vec![vec![PDB_A]]);
 
         let out = r.m.on_walk_ready(r.port.trigger());
         assert_eq!(out.completed, vec![(req.seq, ClearOutcome::Cleared)]);
         assert!(!busy(&r.port), "cleared after the apply");
-        assert_eq!(ops(&r), vec![Op::Map(0x20_0000_0000, 0x0200_0000, 0x1_0000), Op::Invalidate], "one deferred map, then ONE invalidate");
-        assert!(r.ops.borrow().iter().all(|(_, b)| *b), "every host op ran while the guest still saw busy");
+        assert_eq!(
+            ops(&r),
+            vec![
+                Op::Map(0x20_0000_0000, 0x0200_0000, 0x1_0000),
+                Op::Invalidate
+            ],
+            "one deferred map, then ONE invalidate"
+        );
+        assert!(
+            r.ops.borrow().iter().all(|(_, b)| *b),
+            "every host op ran while the guest still saw busy"
+        );
     }
 
     /// ★★★★★ The point of the protocol: a second invalidate over UNCHANGED tables does nothing
@@ -1697,14 +1909,28 @@ mod tests {
         let mut r = rig();
         let mut leaves: Vec<(u64, u64, u64, u8)> = Vec::new();
         for i in 0..2000u64 {
-            leaves.push((0x1_0000_0000 + i * 0x1000, 0x10_0000 + i * 0x3000, 0x1000, 2));
+            leaves.push((
+                0x1_0000_0000 + i * 0x1000,
+                0x10_0000 + i * 0x3000,
+                0x1000,
+                2,
+            ));
             r.tables.borrow_mut().insert(PDB_A, leaves.clone());
             r.ops.borrow_mut().clear();
             let out = settle(&mut r, PDB_A);
             assert_eq!(out.completed.len(), 1);
-            assert_eq!(ops(&r), vec![Op::Map(0x1_0000_0000 + i * 0x1000, 0x10_0000 + i * 0x3000, 0x1000), Op::Invalidate]);
+            assert_eq!(
+                ops(&r),
+                vec![
+                    Op::Map(0x1_0000_0000 + i * 0x1000, 0x10_0000 + i * 0x3000, 0x1000),
+                    Op::Invalidate
+                ]
+            );
         }
-        assert!(r.m.walker().diff_runs.iter().all(|&n| n == 1), "every report is ONE run");
+        assert!(
+            r.m.walker().diff_runs.iter().all(|&n| n == 1),
+            "every report is ONE run"
+        );
         r.ops.borrow_mut().clear();
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1);
@@ -1722,9 +1948,14 @@ mod tests {
         h.settle = pending.clone();
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         let a = settle(&mut r, PDB_A);
-        assert!(a.completed.is_empty() && a.unreconciled.is_empty(), "applied, not cleared");
+        assert!(
+            a.completed.is_empty() && a.unreconciled.is_empty(),
+            "applied, not cleared"
+        );
         assert!(busy(&r.port), "the guest keeps polling — legal");
         assert_eq!((r.m.awaiting(), r.m.stats.deferred_clears), (1, 1));
         // A wake with the work still in flight changes nothing.
@@ -1738,7 +1969,9 @@ mod tests {
         assert_eq!(r.m.awaiting(), 0);
         // Another space's invalidate is never held behind it.
         *pending.borrow_mut() = Settle::Pending;
-        r.tables.borrow_mut().insert(PDB_B, vec![(0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x2000_0000, 0x0300_0000, 0x1000, 0)]);
         let b = settle(&mut r, PDB_B);
         assert_eq!(b.completed.len(), 1, "B's target is live: cleared at once");
     }
@@ -1751,20 +1984,29 @@ mod tests {
         h.settle = st.clone();
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         settle(&mut r, PDB_A);
         *st.borrow_mut() = Settle::Failed("overlay install refused (fake)".into());
         let out = r.m.on_targets(r.port.trigger());
         assert_eq!(out.unreconciled.len(), 1);
         assert!(busy(&r.port), "never cleared over work that did not land");
-        assert!(r.m.stats.refusals.iter().any(|w| w.contains("overlay install refused")));
+        assert!(
+            r.m.stats
+                .refusals
+                .iter()
+                .any(|w| w.contains("overlay install refused"))
+        );
         assert_eq!(r.m.awaiting(), 0);
     }
 
     #[test]
     fn a_wake_before_the_walk_finishes_changes_nothing() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         r.m.walker_mut().not_ready = 2;
         let req = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(req, r.port.trigger());
@@ -1784,7 +2026,10 @@ mod tests {
         r.m.on_invalidate(req, r.port.trigger());
         assert_eq!(r.m.stats.named_missed, 1);
         assert!(r.m.walker().submits.is_empty(), "nothing of ours to walk");
-        assert!(!busy(&r.port), "we hold nothing for it, so nothing can be stale");
+        assert!(
+            !busy(&r.port),
+            "we hold nothing for it, so nothing can be stale"
+        );
     }
 
     /// §5.5: A in flight, B arrives (the guest gave up on A). A's completion must NOT clear;
@@ -1792,11 +2037,15 @@ mod tests {
     #[test]
     fn a_rearmed_trigger_is_superseded_and_the_next_walk_clears_it() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         let a = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(a, r.port.trigger());
         // The guest rewrites its tables, then invalidates again while A's walk is in flight.
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0300_0000, 0x1000, 0)]);
         let b = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(b, r.port.trigger());
         assert_eq!(r.m.pending(), 1, "B waits for the NEXT walk");
@@ -1843,8 +2092,12 @@ mod tests {
     #[test]
     fn all_pdb_walks_and_applies_every_rooted_space() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
-        r.tables.borrow_mut().insert(PDB_B, vec![(0x2000_0000, 0x0210_0000, 0x2000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x2000_0000, 0x0210_0000, 0x2000, 0)]);
         let req = guest_invalidate(&r.port, 0, true);
         r.m.on_invalidate(req, r.port.trigger());
         assert_eq!(r.m.walker().submits.len(), 1);
@@ -1861,14 +2114,33 @@ mod tests {
     #[test]
     fn a_remap_unmaps_the_old_run_and_maps_the_new_one() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1100_0000, 0x0210_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0x1100_0000, 0x0210_0000, 0x1000, 0),
+            ],
+        );
         settle(&mut r, PDB_A);
         r.ops.borrow_mut().clear();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1100_0000, 0x0220_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0x1100_0000, 0x0220_0000, 0x1000, 0),
+            ],
+        );
         let out = settle(&mut r, PDB_A);
         let a = &out.applied[0].1;
         assert_eq!((a.mapped, a.unmapped), (1, 1));
-        assert_eq!(ops(&r), vec![Op::Unmap(0x1100_0000), Op::Map(0x1100_0000, 0x0220_0000, 0x1000), Op::Invalidate]);
+        assert_eq!(
+            ops(&r),
+            vec![
+                Op::Unmap(0x1100_0000),
+                Op::Map(0x1100_0000, 0x0220_0000, 0x1000),
+                Op::Invalidate
+            ]
+        );
         assert!(!busy(&r.port));
     }
 
@@ -1882,26 +2154,61 @@ mod tests {
         use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_READ_ONLY};
         const RO: u8 = KFWR_RF_READ_ONLY as u8;
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2)]);
         settle(&mut r, PDB_A);
-        assert_eq!(*r.perms.borrow(), vec![(0x1000_0000, kf_host::MapPerm::READ_WRITE)]);
+        assert_eq!(
+            *r.perms.borrow(),
+            vec![(0x1000_0000, kf_host::MapPerm::READ_WRITE)]
+        );
         r.ops.borrow_mut().clear();
         r.perms.borrow_mut().clear();
         // The downgrade: same VA, same guest page, READ_ONLY set.
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2 | RO)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2 | RO)]);
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1);
-        assert_eq!(ops(&r), vec![Op::Unmap(0x1000_0000), Op::Map(0x1000_0000, 0x0200_0000, 0x2000), Op::Invalidate]);
-        assert!(r.ops.borrow().iter().all(|(_, b)| *b), "the remap landed before the guest's invalidate cleared");
-        let ro = kf_host::MapPerm { read_only: true, ..kf_host::MapPerm::READ_WRITE };
-        assert_eq!(*r.perms.borrow(), vec![(0x1000_0000, ro)], "the host map is READ-ONLY");
+        assert_eq!(
+            ops(&r),
+            vec![
+                Op::Unmap(0x1000_0000),
+                Op::Map(0x1000_0000, 0x0200_0000, 0x2000),
+                Op::Invalidate
+            ]
+        );
+        assert!(
+            r.ops.borrow().iter().all(|(_, b)| *b),
+            "the remap landed before the guest's invalidate cleared"
+        );
+        let ro = kf_host::MapPerm {
+            read_only: true,
+            ..kf_host::MapPerm::READ_WRITE
+        };
+        assert_eq!(
+            *r.perms.borrow(),
+            vec![(0x1000_0000, ro)],
+            "the host map is READ-ONLY"
+        );
         assert!(!busy(&r.port));
         // Quiet once landed; ATOMIC_DISABLE is neither carried nor keyed by default
         // (`PermPolicy`: off until fault delivery exists), so its flip costs the host nothing.
         r.ops.borrow_mut().clear();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2 | RO | KFWR_RF_ATOMIC_DISABLE as u8)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![(
+                0x1000_0000,
+                0x0200_0000,
+                0x2000,
+                2 | RO | KFWR_RF_ATOMIC_DISABLE as u8,
+            )],
+        );
         settle(&mut r, PDB_A);
-        assert!(ops(&r).is_empty(), "ATOMIC_DISABLE is off by default: no host work");
+        assert!(
+            ops(&r).is_empty(),
+            "ATOMIC_DISABLE is off by default: no host work"
+        );
     }
 
     /// ★★★ v3-roperm — **A PRIVILEGED LEAF NEVER REACHES A USER TWIN**, and withholding it does not
@@ -1916,22 +2223,48 @@ mod tests {
         use kf_cuda::abi::KFWR_RF_PRIVILEGE;
         const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
         let mut r = rig();
-        let user = r.m.table.target(K_A).map(|t| t.user_twin.clone()).expect("the rig's space");
+        let user =
+            r.m.table
+                .target(K_A)
+                .map(|t| t.user_twin.clone())
+                .expect("the rig's space");
         user.set(true);
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 2), (0x2000_0000, 0x0300_0000, 0x2000, PRIV)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 2),
+                (0x2000_0000, 0x0300_0000, 0x2000, PRIV),
+            ],
+        );
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1);
-        assert!(!busy(&r.port), "withholding is not a failure: the guest's invalidate clears");
-        assert_eq!(ops(&r), vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate], "the privileged leaf never reached the host");
-        assert_eq!((r.m.stats.priv_withheld, r.m.stats.priv_withheld_bytes), (1, 0x2000));
-        assert!(r.m.stats.refusals.is_empty(), "not a refusal: {:?}", r.m.stats.refusals);
+        assert!(
+            !busy(&r.port),
+            "withholding is not a failure: the guest's invalidate clears"
+        );
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate],
+            "the privileged leaf never reached the host"
+        );
+        assert_eq!(
+            (r.m.stats.priv_withheld, r.m.stats.priv_withheld_bytes),
+            (1, 0x2000)
+        );
+        assert!(
+            r.m.stats.refusals.is_empty(),
+            "not a refusal: {:?}",
+            r.m.stats.refusals
+        );
         // Re-emitted (never committed) and withheld again; nothing else happens.
         r.ops.borrow_mut().clear();
         settle(&mut r, PDB_A);
         assert!(ops(&r).is_empty());
         assert_eq!(r.m.stats.priv_withheld, 2);
         // The guest drops the privileged leaf: nothing to unmap (it was never ours).
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 2)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 2)]);
         settle(&mut r, PDB_A);
         assert!(ops(&r).is_empty());
         assert_eq!(r.m.stats.priv_withheld, 2);
@@ -1944,19 +2277,36 @@ mod tests {
         use kf_cuda::abi::KFWR_RF_PRIVILEGE;
         const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
         let mut r = rig();
-        let user = r.m.table.target(K_A).map(|t| t.user_twin.clone()).expect("the rig's space");
+        let user =
+            r.m.table
+                .target(K_A)
+                .map(|t| t.user_twin.clone())
+                .expect("the rig's space");
         user.set(true);
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         settle(&mut r, PDB_A);
         r.ops.borrow_mut().clear();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, PRIV)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, PRIV)]);
         settle(&mut r, PDB_A);
-        assert_eq!(ops(&r), vec![Op::Unmap(0x1000_0000), Op::Invalidate], "user access withdrawn, nothing mapped in its place");
+        assert_eq!(
+            ops(&r),
+            vec![Op::Unmap(0x1000_0000), Op::Invalidate],
+            "user access withdrawn, nothing mapped in its place"
+        );
         assert_eq!(r.m.stats.priv_withheld, 1);
         r.ops.borrow_mut().clear();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         settle(&mut r, PDB_A);
-        assert_eq!(ops(&r), vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate]);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate]
+        );
     }
 
     /// ★★★ v3-roperm: a KERNEL space (Translated channels only) mirrors privileged leaves as
@@ -1967,14 +2317,23 @@ mod tests {
         use kf_cuda::abi::KFWR_RF_PRIVILEGE;
         const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
         let mut r = rig();
-        let user = r.m.table.target(K_A).map(|t| t.user_twin.clone()).expect("the rig's space");
+        let user =
+            r.m.table
+                .target(K_A)
+                .map(|t| t.user_twin.clone())
+                .expect("the rig's space");
         user.set(true);
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x2000_0000, 0x0300_0000, 0x2000, PRIV)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x2000_0000, 0x0300_0000, 0x2000, PRIV)]);
         settle(&mut r, PDB_A);
         assert!(ops(&r).is_empty());
         user.set(false); // its first Translated (guest-kernel) channel was born
         settle(&mut r, PDB_A);
-        assert_eq!(ops(&r), vec![Op::Map(0x2000_0000, 0x0300_0000, 0x2000), Op::Invalidate]);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x2000_0000, 0x0300_0000, 0x2000), Op::Invalidate]
+        );
         assert_eq!(r.m.stats.priv_withheld, 1, "withheld once, then placed");
         r.ops.borrow_mut().clear();
         settle(&mut r, PDB_A);
@@ -1989,7 +2348,10 @@ mod tests {
         r.m.on_invalidate(q, r.port.trigger());
         let out = r.m.on_walk_ready(r.port.trigger());
         assert_eq!(out.unreconciled, vec![q.seq]);
-        assert!(busy(&r.port), "an unreconciled invalidate must never read complete");
+        assert!(
+            busy(&r.port),
+            "an unreconciled invalidate must never read complete"
+        );
         assert_eq!(r.m.stats.walks_refused, 1);
         assert!(r.m.stats.refusals[0].contains("device fault"));
     }
@@ -2003,12 +2365,21 @@ mod tests {
         *h.refuse_map_at.borrow_mut() = Some(0x1000_0000);
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0x2000_0000, 0x0300_0000, 0x1000, 0),
+            ],
+        );
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.unreconciled.len(), 1);
         assert!(busy(&r.port));
         assert!(r.m.stats.refusals[0].contains("refused (fake)"));
-        assert_eq!(ops(&r), vec![Op::Map(0x2000_0000, 0x0300_0000, 0x1000), Op::Invalidate]);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x2000_0000, 0x0300_0000, 0x1000), Op::Invalidate]
+        );
         // The host recovers; the guest re-issues its invalidate.
         if let Some(t) = r.m.table.target(K_A) {
             *t.refuse_map_at.borrow_mut() = None;
@@ -2017,13 +2388,19 @@ mod tests {
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1);
         assert!(!busy(&r.port));
-        assert_eq!(ops(&r), vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate], "only the refused map, again");
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate],
+            "only the refused map, again"
+        );
     }
 
     #[test]
     fn a_leaf_outside_the_store_is_refused_and_the_trigger_stays_armed() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, STORE - 0x1000, 0x2000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, STORE - 0x1000, 0x2000, 0)]);
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.unreconciled.len(), 1);
         assert!(r.ops.borrow().is_empty(), "nothing mapped");
@@ -2033,18 +2410,37 @@ mod tests {
     #[test]
     fn roots_are_refused_by_name() {
         let mut r = rig();
-        assert!(matches!(r.m.table.set_root(K_A, 0x1000, PdbAperture::Sysmem), Err(RootRefusal::SysmemRoot { .. })));
-        assert!(matches!(r.m.table.set_root(K_A, STORE, PdbAperture::Vidmem), Err(RootRefusal::OutsideStore { .. })));
-        assert!(matches!(r.m.table.set_root(VasKey(99), 0x1000, PdbAperture::Vidmem), Err(RootRefusal::UnknownObject(_))));
-        assert_eq!(r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem), Ok(RootChange::Unchanged), "unchanged");
-        assert_eq!(r.m.table.set_root(K_A, 0x0110_0000, PdbAperture::Vidmem), Ok(RootChange::Moved { old: PDB_A }), "moved");
+        assert!(matches!(
+            r.m.table.set_root(K_A, 0x1000, PdbAperture::Sysmem),
+            Err(RootRefusal::SysmemRoot { .. })
+        ));
+        assert!(matches!(
+            r.m.table.set_root(K_A, STORE, PdbAperture::Vidmem),
+            Err(RootRefusal::OutsideStore { .. })
+        ));
+        assert!(matches!(
+            r.m.table.set_root(VasKey(99), 0x1000, PdbAperture::Vidmem),
+            Err(RootRefusal::UnknownObject(_))
+        ));
+        assert_eq!(
+            r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem),
+            Ok(RootChange::Unchanged),
+            "unchanged"
+        );
+        assert_eq!(
+            r.m.table.set_root(K_A, 0x0110_0000, PdbAperture::Vidmem),
+            Ok(RootChange::Moved { old: PDB_A }),
+            "moved"
+        );
     }
 
     /// Q10: a root change with no invalidate schedules a walk; nothing is cleared (nothing armed).
     #[test]
     fn a_root_change_schedules_a_walk_without_touching_the_trigger() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_B, vec![(0x3000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_B, vec![(0x3000_0000, 0x0200_0000, 0x1000, 0)]);
         r.m.schedule_walk(K_B, r.port.trigger());
         assert_eq!(r.m.walker().submits, vec![vec![PDB_B]]);
         let out = r.m.on_walk_ready(r.port.trigger());
@@ -2058,14 +2454,20 @@ mod tests {
     #[test]
     fn a_split_is_done_only_after_its_space_applies_and_leaves_the_trigger_alone() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
         r.m.on_split(Some(PDB_A), 7, r.port.trigger());
         assert!(r.m.take_splits().is_empty(), "not before the walk");
         assert!(r.ops.borrow().is_empty());
         let out = r.m.on_walk_ready(r.port.trigger());
         assert_eq!(out.applied[0].1.mapped, 1);
         assert_eq!(r.m.take_splits(), vec![(7, Ok(()))]);
-        assert_eq!(r.port.trigger().issued(), 0, "a split is not the BAR0 trigger");
+        assert_eq!(
+            r.port.trigger().issued(),
+            0,
+            "a split is not the BAR0 trigger"
+        );
         r.m.on_split(Some(0xdead_0000), 8, r.port.trigger());
         assert_eq!(r.m.take_splits(), vec![(8, Ok(()))]);
         assert_eq!(r.m.stats.split_missed, 1);
@@ -2094,13 +2496,32 @@ mod tests {
         *h.refuse_map_at.borrow_mut() = Some(0x1000_0000);
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0x2000_0000, 0x0300_0000, 0x1000, 0),
+            ],
+        );
         r.m.on_split(Some(PDB_A), 11, r.port.trigger());
         let _ = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(r.m.take_splits(), vec![(11, Ok(()))], "absence never kills the channel");
+        assert_eq!(
+            r.m.take_splits(),
+            vec![(11, Ok(()))],
+            "absence never kills the channel"
+        );
         assert_eq!(r.m.stats.splits_unsettled, 1);
-        assert!(r.m.stats.refusals.iter().any(|x| x.contains("refused (fake)")), "still refused BY NAME");
-        assert_eq!(ops(&r), vec![Op::Map(0x2000_0000, 0x0300_0000, 0x1000), Op::Invalidate]);
+        assert!(
+            r.m.stats
+                .refusals
+                .iter()
+                .any(|x| x.contains("refused (fake)")),
+            "still refused BY NAME"
+        );
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x2000_0000, 0x0300_0000, 0x1000), Op::Invalidate]
+        );
         // The host recovers: the next split re-emits ONLY the refused map, and settles.
         if let Some(t) = r.m.table.target(K_A) {
             *t.refuse_map_at.borrow_mut() = None;
@@ -2110,7 +2531,10 @@ mod tests {
         let _ = r.m.on_walk_ready(r.port.trigger());
         assert_eq!(r.m.take_splits(), vec![(12, Ok(()))]);
         assert_eq!(r.m.stats.splits_unsettled, 1, "settled now");
-        assert_eq!(ops(&r), vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate]);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate]
+        );
     }
 
     /// ⊘ v3-mapfix, the other side of the line: a refused UNMAP is NOT absence — a placement the
@@ -2118,7 +2542,9 @@ mod tests {
     #[test]
     fn a_refused_unmap_still_fails_the_split() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         r.m.on_split(Some(PDB_A), 21, r.port.trigger());
         let _ = r.m.on_walk_ready(r.port.trigger());
         assert_eq!(r.m.take_splits(), vec![(21, Ok(()))]);
@@ -2129,7 +2555,10 @@ mod tests {
         r.m.on_split(Some(PDB_A), 22, r.port.trigger());
         let _ = r.m.on_walk_ready(r.port.trigger());
         let s = r.m.take_splits();
-        assert!(matches!(&s[..], [(22, Err(e))] if e.contains("did not apply")), "{s:?}");
+        assert!(
+            matches!(&s[..], [(22, Err(e))] if e.contains("did not apply")),
+            "{s:?}"
+        );
         assert_eq!(r.m.stats.splits_unsettled, 0);
     }
 
@@ -2142,7 +2571,13 @@ mod tests {
         let h = host(&r, Some(0x1000_0000), Vec::new());
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1000_1000, 0x0300_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0x1000_1000, 0x0300_0000, 0x1000, 0),
+            ],
+        );
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1, "the guest's statement succeeds");
         let a = &out.applied[0].1;
@@ -2166,25 +2601,48 @@ mod tests {
         let h = host(&r, None, vec![(0xFF_0000_0000, 0x100_0000_0000)]);
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0xFF_0010_0000, 0x0300_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0xFF_0010_0000, 0x0300_0000, 0x1000, 0),
+            ],
+        );
         let q = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(q, r.port.trigger());
         let out = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(out.unreconciled, vec![q.seq], "the guest's statement is not acknowledged");
+        assert_eq!(
+            out.unreconciled,
+            vec![q.seq],
+            "the guest's statement is not acknowledged"
+        );
         assert!(busy(&r.port));
         // ★ v3-promote (Q11 ruling): the colliding leaf fails ALONE — the rest of the space
         // reconciles, and the host is never asked about the colliding VA.
         let ops: Vec<Op> = r.ops.borrow().iter().map(|(o, _)| o.clone()).collect();
-        assert!(ops.contains(&Op::Map(0x1000_0000, 0x0200_0000, 0x1000)), "the innocent leaf is mapped: {ops:?}");
-        assert!(!ops.iter().any(|o| matches!(o, Op::Map(va, ..) if *va >= 0xFF_0000_0000)), "the host was never asked about OUR range");
+        assert!(
+            ops.contains(&Op::Map(0x1000_0000, 0x0200_0000, 0x1000)),
+            "the innocent leaf is mapped: {ops:?}"
+        );
+        assert!(
+            !ops.iter()
+                .any(|o| matches!(o, Op::Map(va, ..) if *va >= 0xFF_0000_0000)),
+            "the host was never asked about OUR range"
+        );
         // ⊘ v3-diff: the colliding MAP is acknowledged FAILED (a difference retried by the next
         // diff), the innocent one APPLIED — the next walk re-emits only the colliding leaf.
         r.ops.borrow_mut().clear();
         let q = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(q, r.port.trigger());
         r.m.on_walk_ready(r.port.trigger());
-        assert!(r.ops.borrow().is_empty(), "the innocent leaf is not re-mapped; the colliding one never reaches the host");
-        assert_eq!(r.m.stats.vmm_overlaps, 2, "the collision is re-emitted and refused again, by name");
+        assert!(
+            r.ops.borrow().is_empty(),
+            "the innocent leaf is not re-mapped; the colliding one never reaches the host"
+        );
+        assert_eq!(
+            r.m.stats.vmm_overlaps, 2,
+            "the collision is re-emitted and refused again, by name"
+        );
         assert!(r.m.stats.refusals[0].contains("may never alias a VMM address"));
     }
 
@@ -2193,14 +2651,22 @@ mod tests {
     #[test]
     fn coverage_is_whole_guest_pages_never_rounded_past_them() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_1000, 0x0300_0000, 0x10, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_1000, 0x0300_0000, 0x10, 0)]);
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.unreconciled.len(), 1);
         assert!(r.ops.borrow().is_empty());
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_1000, 0x0200_1000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_1000, 0x0200_1000, 0x1000, 0)]);
         settle(&mut r, PDB_A);
-        assert_eq!(r.ops.borrow()[0].0, Op::Map(0x1000_1000, 0x0200_1000, 0x1000), "a 4 KiB leaf is ONE 4 KiB map");
+        assert_eq!(
+            r.ops.borrow()[0].0,
+            Op::Map(0x1000_1000, 0x0200_1000, 0x1000),
+            "a 4 KiB leaf is ONE 4 KiB map"
+        );
     }
 
     /// ★★ P6b ruling (c) — and the ROOT MOVE property of the diff: the slot is the OBJECT's, so
@@ -2209,14 +2675,29 @@ mod tests {
     #[test]
     fn a_moved_root_is_walked_at_the_next_sync_point_and_retires_the_old_rows() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1210_1000, 0x0200_0000, 0x1000, 0), (0x1210_2000, 0x0201_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1210_1000, 0x0200_0000, 0x1000, 0),
+                (0x1210_2000, 0x0201_0000, 0x1000, 0),
+            ],
+        );
         settle(&mut r, PDB_A);
         const NEW: u64 = 0x0020_0000;
         let ch = r.m.table.set_root(K_A, NEW, PdbAperture::Vidmem).unwrap();
         assert_eq!(ch, RootChange::Moved { old: PDB_A });
-        assert!(!ch.walk_now(), "a moved root is not walked at the statement");
+        assert!(
+            !ch.walk_now(),
+            "a moved root is not walked at the statement"
+        );
         r.ops.borrow_mut().clear();
-        r.tables.borrow_mut().insert(NEW, vec![(0x1210_1000, 0x0200_0000, 0x1000, 0), (0x5000_0000, 0x0400_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            NEW,
+            vec![
+                (0x1210_1000, 0x0200_0000, 0x1000, 0),
+                (0x5000_0000, 0x0400_0000, 0x1000, 0),
+            ],
+        );
         // An invalidate naming the OLD root names nothing of ours now.
         let old_q = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(old_q, r.port.trigger());
@@ -2225,7 +2706,11 @@ mod tests {
         assert_eq!(out.completed.len(), 1);
         assert_eq!(
             ops(&r),
-            vec![Op::Unmap(0x1210_2000), Op::Map(0x5000_0000, 0x0400_0000, 0x1000), Op::Invalidate],
+            vec![
+                Op::Unmap(0x1210_2000),
+                Op::Map(0x5000_0000, 0x0400_0000, 0x1000),
+                Op::Invalidate
+            ],
             "the migrated row is kept, the old root's other row retired, the new one mapped"
         );
     }
@@ -2236,9 +2721,21 @@ mod tests {
     fn a_partial_diff_walks_again_and_clears_only_when_complete() {
         let mut r = rig();
         r.m.walker_mut().cap = 2;
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0), (0x3000, 0x20_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000, 0x10_0000, 0x1000, 0),
+                (0x3000, 0x20_0000, 0x1000, 0),
+            ],
+        );
         settle(&mut r, PDB_A);
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x3000, 0x30_0000, 0x1000, 0), (0x5000, 0x40_0000, 0x1000, 0)]);
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x3000, 0x30_0000, 0x1000, 0),
+                (0x5000, 0x40_0000, 0x1000, 0),
+            ],
+        );
         r.ops.borrow_mut().clear();
         let q = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(q, r.port.trigger());
@@ -2251,7 +2748,14 @@ mod tests {
         assert_eq!(r.m.stats.partial, 1);
         assert_eq!(
             ops(&r),
-            vec![Op::Unmap(0x1000), Op::Unmap(0x3000), Op::Invalidate, Op::Map(0x3000, 0x30_0000, 0x1000), Op::Map(0x5000, 0x40_0000, 0x1000), Op::Invalidate]
+            vec![
+                Op::Unmap(0x1000),
+                Op::Unmap(0x3000),
+                Op::Invalidate,
+                Op::Map(0x3000, 0x30_0000, 0x1000),
+                Op::Map(0x5000, 0x40_0000, 0x1000),
+                Op::Invalidate
+            ]
         );
     }
 
@@ -2260,7 +2764,9 @@ mod tests {
     #[test]
     fn a_released_slot_is_empty_for_its_next_object() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
         settle(&mut r, PDB_A);
         let slot = r.m.table.slot(K_A).unwrap();
         assert!(r.m.remove(K_A).is_some());
@@ -2276,7 +2782,11 @@ mod tests {
         r.m.table.set_root(k, PDB_A, PdbAperture::Vidmem).unwrap();
         r.ops.borrow_mut().clear();
         settle(&mut r, PDB_A);
-        assert_eq!(ops(&r), vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate], "diffed against an EMPTY slot");
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate],
+            "diffed against an EMPTY slot"
+        );
     }
 
     /// ★ Owner ruling 2026-09-25: a walk that REFUSED leaves in a space fails that space by name
@@ -2285,14 +2795,25 @@ mod tests {
     #[test]
     fn a_walk_refusal_fails_the_space_by_name_and_applies_the_rest() {
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
         r.m.walker_mut().refuse_in = Some(PDB_A);
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.unreconciled.len(), 1);
         assert!(busy(&r.port), "not cleared over refused leaves");
-        assert_eq!(ops(&r), vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate], "the described leaf is applied");
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate],
+            "the described leaf is applied"
+        );
         assert_eq!(r.m.stats.walk_refused_spaces, 1);
-        assert!(r.m.stats.refusals.iter().any(|x| x.contains("REFUSED leaves")));
+        assert!(
+            r.m.stats
+                .refusals
+                .iter()
+                .any(|x| x.contains("REFUSED leaves"))
+        );
         // The refusal goes away: the space settles, and nothing is re-applied (it was acknowledged).
         r.m.walker_mut().refuse_in = None;
         r.ops.borrow_mut().clear();
@@ -2313,7 +2834,9 @@ mod tests {
         let h = host(&r, None, Vec::new());
         r.m.table.insert(k, h);
         assert_eq!(r.m.table.slot(k), None);
-        r.m.table.set_root(k, 0x0300_0000, PdbAperture::Vidmem).unwrap();
+        r.m.table
+            .set_root(k, 0x0300_0000, PdbAperture::Vidmem)
+            .unwrap();
         let q = guest_invalidate(&r.port, 0x0300_0000, false);
         r.m.on_invalidate(q, r.port.trigger());
         assert_eq!(r.m.stats.no_slot, 1);

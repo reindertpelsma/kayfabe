@@ -275,7 +275,8 @@ const CLK_LIST_WORD: usize = 2;
 const CLK_LIST_SIZE_WORD: usize = CLK_LIST_WORD + PERF_CLK_MAX_DOMAINS * CLK_INFO_WORDS;
 
 fn word(b: &[u8], w: usize) -> Option<u32> {
-    b.get(w * 4..w * 4 + 4).map(|x| u32::from_le_bytes([x[0], x[1], x[2], x[3]]))
+    b.get(w * 4..w * 4 + 4)
+        .map(|x| u32::from_le_bytes([x[0], x[1], x[2], x[3]]))
 }
 
 /// The question realize asks the host: `level = 4`, domains `{0x1, 0x10}`, list size 2 —
@@ -303,7 +304,9 @@ fn perf_in(b: &[u8]) -> Option<(u32, Vec<u32>)> {
     if n > PERF_CLK_MAX_DOMAINS {
         return None;
     }
-    let domains = (0..n).map(|i| word(b, CLK_LIST_WORD + i * CLK_INFO_WORDS + 1)).collect::<Option<Vec<_>>>()?;
+    let domains = (0..n)
+        .map(|i| word(b, CLK_LIST_WORD + i * CLK_INFO_WORDS + 1))
+        .collect::<Option<Vec<_>>>()?;
     Some((word(b, 0)?, domains))
 }
 
@@ -391,7 +394,10 @@ mod tests {
     fn the_host_splice_reproduces_the_ga106_oracle_and_refuses_another_question() {
         let req = perf_level_info_v2_request();
         let mut host = req.clone();
-        assert!(splice_cudart_init(PERF_GET_LEVEL_INFO_V2, &mut host), "oracle applies");
+        assert!(
+            splice_cudart_init(PERF_GET_LEVEL_INFO_V2, &mut host),
+            "oracle applies"
+        );
         let mut via_host = req.clone();
         assert!(splice_perf_level_info_v2(&mut via_host, &host));
         let mut via_oracle = req.clone();

@@ -92,7 +92,10 @@ impl Teardown {
             if s == Step::CloseDescriptor && self.next < ORDER.len() - 1 {
                 return Err(TeardownError::ClosedWithoutExplicitFree);
             }
-            return Err(TeardownError::OutOfOrder { attempted: s, expected });
+            return Err(TeardownError::OutOfOrder {
+                attempted: s,
+                expected,
+            });
         }
         self.next += 1;
         Ok(())

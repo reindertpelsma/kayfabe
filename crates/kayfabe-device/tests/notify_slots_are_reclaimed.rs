@@ -119,7 +119,10 @@ fn freeing_the_client_releases_its_slots() {
     }
     // Full: the next distinct subdevice is refused.
     let fresh = 0xc1e0_1000;
-    assert!(!served(&mut p, &arm(fresh, 0xb)), "precondition: the table is full");
+    assert!(
+        !served(&mut p, &arm(fresh, 0xb)),
+        "precondition: the table is full"
+    );
 
     p.respond(&free_client(0xc1e0_0000));
 

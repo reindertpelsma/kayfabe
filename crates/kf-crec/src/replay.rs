@@ -42,18 +42,15 @@
 //! Every record is walked. Guest-RAM reads from **unprojected** transactions are still
 //! installed into the oracle, because they are still ground truth about guest memory.
 
+use crate::gspreplay::{Observation, Projection};
 use kf_arch::gsp::GspReg;
 use kf_arch::ids::Gpa;
-use crate::gspreplay::{Observation, Projection};
-use kf_gsp::{
-    BootPhase, EchoOk, GspAbi, GspFault, GspFsm, QueueState, RpcCommand,
-    Transition,
-};
+use kf_gsp::{BootPhase, EchoOk, GspAbi, GspFault, GspFsm, QueueState, RpcCommand, Transition};
 use kf_trace::{Bar, IrqSpec, TraceEvent, Width};
 
 use crate::format::{CKind, CTrace};
-use kf_arch::gsp::GspModel;
 use crate::oracle::{Answer, OracleRam, ReconKind, Reconstruction, Unobserved};
+use kf_arch::gsp::GspModel;
 
 /// What one projected entry *is*, kept beside the [`TraceEvent`] the differential
 /// compares so a divergence can be reported in decoded terms.
@@ -404,13 +401,21 @@ impl<'a> Replay<'a> {
             // ── our side ──
             if write {
                 let res = fsm
-                    .mmio_write_with(&mut ram, self.gsp.as_ref(), policy.as_mut(), head.bar, head.a, head.b)
+                    .mmio_write_with(
+                        &mut ram,
+                        self.gsp.as_ref(),
+                        policy.as_mut(),
+                        head.bar,
+                        head.a,
+                        head.b,
+                    )
                     .and_then(|mut report| {
                         // ★ v3: a command doorbell is DEFERRED — the vCPU only counts it. The
                         // register drainer services it next; this replay IS the drainer, and runs
                         // it before the next record, which is the order the C (inline) produced.
                         while fsm.pending_command_doorbells() > 0 {
-                            let mut r = fsm.service_one_deferred_command(&mut ram, policy.as_mut())?;
+                            let mut r =
+                                fsm.service_one_deferred_command(&mut ram, policy.as_mut())?;
                             report.transitions.append(&mut r.transitions);
                             report.commands.append(&mut r.commands);
                             report.unserviced.append(&mut r.unserviced);

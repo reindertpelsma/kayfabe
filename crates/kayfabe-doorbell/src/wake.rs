@@ -48,7 +48,11 @@ impl WakeWord {
     #[inline]
     pub fn bump(&self) -> Wake {
         let prev = self.0.fetch_add(SEQ_ONE, Ordering::AcqRel);
-        if prev & POLLER_MASK != 0 { Wake::SignalOne } else { Wake::NoOne }
+        if prev & POLLER_MASK != 0 {
+            Wake::SignalOne
+        } else {
+            Wake::NoOne
+        }
     }
 
     /// Worker: read the sequence **before** scanning. §5.3: *"every `seen` load happens-before
@@ -76,7 +80,10 @@ impl WakeWord {
             if n >= MAX_WORKERS {
                 return false; // 8 bits is the cap; never wrap into the sequence
             }
-            match self.0.compare_exchange_weak(cur, cur + 1, Ordering::AcqRel, Ordering::Acquire) {
+            match self
+                .0
+                .compare_exchange_weak(cur, cur + 1, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => return true,
                 Err(seen_now) => cur = seen_now,
             }
@@ -87,7 +94,10 @@ impl WakeWord {
     #[inline]
     pub fn unpark(&self) {
         let prev = self.0.fetch_sub(1, Ordering::AcqRel);
-        debug_assert!(prev & POLLER_MASK != 0, "unpark() without a matching try_park()");
+        debug_assert!(
+            prev & POLLER_MASK != 0,
+            "unpark() without a matching try_park()"
+        );
     }
 
     #[inline]

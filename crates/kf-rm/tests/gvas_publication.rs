@@ -35,7 +35,10 @@ fn driver() -> kf_abi::versions::DriverAbiTable {
 }
 
 fn oracle_body() -> Vec<u8> {
-    let p = format!("{}/../kf-abi/tests/fixtures/ga106_ctl_20800a9f.bin", env!("CARGO_MANIFEST_DIR"));
+    let p = format!(
+        "{}/../kf-abi/tests/fixtures/ga106_ctl_20800a9f.bin",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let mut b = std::fs::read(&p).unwrap_or_else(|e| panic!("fixture {p} unreadable: {e}"));
     assert!(
         b.len() <= COPY_SERVER_RESERVED_PDES_PARAMS_SIZE,
@@ -82,10 +85,17 @@ fn the_chains_reply_to_a_publication_is_the_answering_links_own_reply_byte_for_b
             kf_rm::ObjectLinks::default(),
         );
         let through_chain = chain.respond(&cmd).expect("the chain answers");
-        let mut alone = kf_rm::inittables::InitTablePolicy::new(ga106::board(), ga106::host(), driver());
+        let mut alone =
+            kf_rm::inittables::InitTablePolicy::new(ga106::board(), ga106::host(), driver());
         let direct = alone.respond(&cmd).expect("InitTablePolicy answers");
-        assert_eq!(through_chain.rpc_result, direct.rpc_result, "0x{id:08x}: the chain changed the RESULT");
-        assert_eq!(through_chain.body, direct.body, "0x{id:08x}: the chain changed the reply BODY");
+        assert_eq!(
+            through_chain.rpc_result, direct.rpc_result,
+            "0x{id:08x}: the chain changed the RESULT"
+        );
+        assert_eq!(
+            through_chain.body, direct.body,
+            "0x{id:08x}: the chain changed the reply BODY"
+        );
         // Non-vacuity: this is a real, non-empty, served reply — not two matching refusals.
         assert_eq!(direct.rpc_result, 0);
         assert!(!direct.body.is_empty());
@@ -105,7 +115,10 @@ fn set_page_directory_reaches_the_ledger_until_the_memory_plane_answers_it() {
         ga106::board(),
         ga106::host(),
         driver(),
-        kf_rm::ChainLogs { unserviced: log.clone(), ..Default::default() },
+        kf_rm::ChainLogs {
+            unserviced: log.clone(),
+            ..Default::default()
+        },
         kf_rm::census::ControlCensusLog::new(),
         kf_rm::ObjectLinks::default(),
     );
@@ -117,7 +130,10 @@ fn set_page_directory_reaches_the_ledger_until_the_memory_plane_answers_it() {
         &body,
     );
     let reply = chain.respond(&cmd);
-    assert!(reply.is_none_or(|r| r.rpc_result != 0), "0x00801813 must not be answered NV_OK by a P3 chain");
+    assert!(
+        reply.is_none_or(|r| r.rpc_result != 0),
+        "0x00801813 must not be answered NV_OK by a P3 chain"
+    );
     assert_eq!(log.total(), 1, "the ledger names it");
 }
 
@@ -136,7 +152,10 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
         ga106::board(),
         ga106::host(),
         driver(),
-        kf_rm::ChainLogs { unserviced: log.clone(), ..Default::default() },
+        kf_rm::ChainLogs {
+            unserviced: log.clone(),
+            ..Default::default()
+        },
         kf_rm::census::ControlCensusLog::new(),
         kf_rm::ObjectLinks {
             objects: None,
@@ -149,17 +168,32 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
         },
     );
     // The publication: carried, held, and answered exactly as before.
-    let pub_cmd = control_command(0xc1e0_0004, 0x0000_5c01, NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES, &oracle_body());
+    let pub_cmd = control_command(
+        0xc1e0_0004,
+        0x0000_5c01,
+        NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
+        &oracle_body(),
+    );
     let r = chain.respond(&pub_cmd).expect("answered");
-    let mut alone = kf_rm::inittables::InitTablePolicy::new(ga106::board(), ga106::host(), driver());
+    let mut alone =
+        kf_rm::inittables::InitTablePolicy::new(ga106::board(), ga106::host(), driver());
     let direct = alone.respond(&pub_cmd).expect("InitTablePolicy answers");
-    assert_eq!((r.rpc_result, &r.body), (direct.rpc_result, &direct.body), "the reply is InitTablePolicy's");
+    assert_eq!(
+        (r.rpc_result, &r.body),
+        (direct.rpc_result, &direct.body),
+        "the reply is InitTablePolicy's"
+    );
     assert!(chain.holds_for_refresh(&pub_cmd), "held for the reconcile");
     // SET_PAGE_DIRECTORY: a vidmem root for VA space 0x5c00_0007.
     let mut p = vec![0u8; kf_abi::generated::ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE];
     p[0..8].copy_from_slice(&0x0123_4000u64.to_le_bytes());
     p[16..20].copy_from_slice(&0x5c00_0007u32.to_le_bytes());
-    let set = control_command(0xc1d0_000a, 0x5c00_0002, kf_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY, &p);
+    let set = control_command(
+        0xc1d0_000a,
+        0x5c00_0002,
+        kf_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY,
+        &p,
+    );
     let r = chain.respond(&set).expect("answered");
     assert_eq!(r.rpc_result, 0);
     assert!(chain.holds_for_refresh(&set));
@@ -168,7 +202,10 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
     assert_eq!(got.len(), 2);
     match got[1] {
         MemStatement::PageDir(st) => {
-            assert_eq!((st.client.0, st.vaspace.0, st.pdb.0), (0xc1d0_000a, 0x5c00_0007, 0x0123_4000));
+            assert_eq!(
+                (st.client.0, st.vaspace.0, st.pdb.0),
+                (0xc1d0_000a, 0x5c00_0007, 0x0123_4000)
+            );
         }
         ref other => panic!("wrong statement: {other:?}"),
     }
@@ -177,7 +214,14 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
     let mut b = vec![0u8; kf_rm::barpde::UPDATE_BAR_PDE_BODY_SIZE];
     b[0..4].copy_from_slice(&kf_rm::barpde::BAR_TYPE_2.to_le_bytes());
     b[8..16].copy_from_slice(&0x2_efbc_302u64.to_le_bytes());
-    let fn70 = RpcCommand { function: RpcFunction::UpdateBarPde, code: 0x46, sequence: 26, payload: b, elements: 1, delivered: Vec::new() };
+    let fn70 = RpcCommand {
+        function: RpcFunction::UpdateBarPde,
+        code: 0x46,
+        sequence: 26,
+        payload: b,
+        elements: 1,
+        delivered: Vec::new(),
+    };
     assert_eq!(chain.respond(&fn70).expect("answered").rpc_result, 0);
     assert!(chain.holds_for_refresh(&fn70));
     assert!(matches!(g2.lock().unwrap()[2], MemStatement::BarPde(p) if p.entry == 0x2_efbc_302));

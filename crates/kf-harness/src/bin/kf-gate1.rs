@@ -33,19 +33,41 @@ fn main() {
 
 fn run(l: &mut Ledger) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
+        .map_err(|e| e.to_string())?;
     l.measure("session", format!("driver {}", rm.driver_version()));
 
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
-    let data = rm.alloc_device_local(DATA_BYTES).map_err(|e| format!("data obj: {e:?}"))?;
-    let data_va = rm.map(space, data, kf_host::MapBacking::Dedicated, 0, DATA_BYTES, None, true).map_err(|e| format!("map data: {e:?}"))?;
-    rm.invalidate_tlb(space).map_err(|e| format!("invalidate: {e:?}"))?;
-    let (_dn, data_cpu) = rm.map_cpu(data, DATA_BYTES, CachePolicy::Uncached).map_err(|e| format!("cpu data: {e:?}"))?;
+    let data = rm
+        .alloc_device_local(DATA_BYTES)
+        .map_err(|e| format!("data obj: {e:?}"))?;
+    let data_va = rm
+        .map(
+            space,
+            data,
+            kf_host::MapBacking::Dedicated,
+            0,
+            DATA_BYTES,
+            None,
+            true,
+        )
+        .map_err(|e| format!("map data: {e:?}"))?;
+    rm.invalidate_tlb(space)
+        .map_err(|e| format!("invalidate: {e:?}"))?;
+    let (_dn, data_cpu) = rm
+        .map_cpu(data, DATA_BYTES, CachePolicy::Uncached)
+        .map_err(|e| format!("cpu data: {e:?}"))?;
     let at = HostOffset::new;
 
     let mut rig = CeRig::new(&rm, space)?;
     let chan = rig.channel();
-    l.measure("channel", format!("tsg={:#x} chan={:#x} token={:#x}", chan.tsg, chan.chan, chan.token));
+    l.measure(
+        "channel",
+        format!(
+            "tsg={:#x} chan={:#x} token={:#x}",
+            chan.tsg, chan.chan, chan.token
+        ),
+    );
     let mut armed = Vec::new();
     for n in 0..10u32 {
         armed.push(format!("CE{n}:{}", rig.arm(&rm, notifier_ce(n)).is_ok()));
@@ -54,21 +76,28 @@ fn run(l: &mut Ledger) -> Result<(), String> {
 
     // Source pattern once; each arm copies into its own zeroed 4 KiB destination.
     for i in 0..(COPY_LEN / 4) {
-        data_cpu.store_u32(at(u64::from(i) * 4), 0x5A00_0000 | i).map_err(|e| format!("{e:?}"))?;
+        data_cpu
+            .store_u32(at(u64::from(i) * 4), 0x5A00_0000 | i)
+            .map_err(|e| format!("{e:?}"))?;
     }
     let mut dst_slot = 0u64;
     let mut fresh_dst = |cpu: &kf_linux_raw::VolatileRegion| -> Result<u64, String> {
         dst_slot += 1;
         let off = (dst_slot % 15 + 1) * u64::from(COPY_LEN);
         for i in 0..(COPY_LEN / 4) {
-            cpu.store_u32(at(off + u64::from(i) * 4), 0).map_err(|e| format!("{e:?}"))?;
+            cpu.store_u32(at(off + u64::from(i) * 4), 0)
+                .map_err(|e| format!("{e:?}"))?;
         }
         Ok(off)
     };
     let bad_words = |cpu: &kf_linux_raw::VolatileRegion, off: u64| -> Result<u32, String> {
         let mut bad = 0;
         for i in 0..(COPY_LEN / 4) {
-            if cpu.load_u32(at(off + u64::from(i) * 4)).map_err(|e| format!("{e:?}"))? != 0x5A00_0000 | i {
+            if cpu
+                .load_u32(at(off + u64::from(i) * 4))
+                .map_err(|e| format!("{e:?}"))?
+                != 0x5A00_0000 | i
+            {
                 bad += 1;
             }
         }
@@ -76,22 +105,59 @@ fn run(l: &mut Ledger) -> Result<(), String> {
     };
 
     let quiet = rig.quiet_wakes(300)?;
-    l.measure("quiet", format!("wakes={quiet} in 300 ms with nothing submitted"));
+    l.measure(
+        "quiet",
+        format!("wakes={quiet} in 300 ms with nothing submitted"),
+    );
 
     let off = fresh_dst(&data_cpu)?;
     let s = rig.submit(&rm, data_va, data_va + off, COPY_LEN, Trigger::None, 300)?;
-    l.check("none_arm_work_completes", s.ce_released && s.fence_landed && bad_words(&data_cpu, off)? == 0, format!("{s:?}"));
-    l.measure("none_arm_wakes", format!("wakes={} (an edge with no trigger of ours = someone else's)", s.wakes));
+    l.check(
+        "none_arm_work_completes",
+        s.ce_released && s.fence_landed && bad_words(&data_cpu, off)? == 0,
+        format!("{s:?}"),
+    );
+    l.measure(
+        "none_arm_wakes",
+        format!(
+            "wakes={} (an edge with no trigger of ours = someone else's)",
+            s.wakes
+        ),
+    );
 
     let off = fresh_dst(&data_cpu)?;
-    let s = rig.submit(&rm, data_va, data_va + off, COPY_LEN, Trigger::CeInterrupt, 500)?;
-    l.check("ce_intr_arm_work_completes", s.ce_released && s.fence_landed && bad_words(&data_cpu, off)? == 0, format!("{s:?}"));
-    l.measure("ce_intr_arm_edge", format!("seen_at_wake={} wakes={} after_us={}", s.seen_at_wake, s.wakes, s.event_us));
+    let s = rig.submit(
+        &rm,
+        data_va,
+        data_va + off,
+        COPY_LEN,
+        Trigger::CeInterrupt,
+        500,
+    )?;
+    l.check(
+        "ce_intr_arm_work_completes",
+        s.ce_released && s.fence_landed && bad_words(&data_cpu, off)? == 0,
+        format!("{s:?}"),
+    );
+    l.measure(
+        "ce_intr_arm_edge",
+        format!(
+            "seen_at_wake={} wakes={} after_us={}",
+            s.seen_at_wake, s.wakes, s.event_us
+        ),
+    );
 
     let (mut seen, mut early, mut bad, mut lat) = (0u32, 0u32, 0u32, Vec::new());
     for _ in 0..NSI_REPS {
         let off = fresh_dst(&data_cpu)?;
-        let s = rig.submit(&rm, data_va, data_va + off, COPY_LEN, Trigger::HostNsi, 2000)?;
+        let s = rig.submit(
+            &rm,
+            data_va,
+            data_va + off,
+            COPY_LEN,
+            Trigger::HostNsi,
+            2000,
+        )?;
         if s.seen_at_wake {
             seen += 1;
             lat.push(s.event_us);
@@ -100,12 +166,25 @@ fn run(l: &mut Ledger) -> Result<(), String> {
         bad += bad_words(&data_cpu, off)?;
     }
     lat.sort_unstable();
-    let pct = |p: usize| lat.get((lat.len().saturating_sub(1)) * p / 100).copied().unwrap_or(0);
-    l.check("bytes_copied_by_engine", bad == 0, format!("{NSI_REPS} copies x {} words, {bad} wrong", COPY_LEN / 4));
+    let pct = |p: usize| {
+        lat.get((lat.len().saturating_sub(1)) * p / 100)
+            .copied()
+            .unwrap_or(0)
+    };
+    l.check(
+        "bytes_copied_by_engine",
+        bad == 0,
+        format!("{NSI_REPS} copies x {} words, {bad} wrong", COPY_LEN / 4),
+    );
     l.check(
         "nsi_completion_seen_at_wake",
         seen == NSI_REPS,
-        format!("{seen}/{NSI_REPS} fences read AT a wake; early_wakes={early}; us p50={} p90={} max={}", pct(50), pct(90), pct(100)),
+        format!(
+            "{seen}/{NSI_REPS} fences read AT a wake; early_wakes={early}; us p50={} p90={} max={}",
+            pct(50),
+            pct(90),
+            pct(100)
+        ),
     );
     Ok(())
 }

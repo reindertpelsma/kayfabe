@@ -52,14 +52,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use kf_crec::format::CKind;
+use kf_crec::gspreplay::Observation;
 use kf_crec::{
     Answer, CTrace, Fill, Note, ReconKind, Replay, ReplayResult, Verdict, bench_abi, cap1b_path,
     census, load_cap1, load_cap1b,
 };
+use kf_gsp::{BootPhase, GspFault, Transition};
 use kf_rm::inittables::WantedTable;
 use kf_rm::sweep::{SweepDisposition, triage_for};
-use kf_crec::gspreplay::Observation;
-use kf_gsp::{BootPhase, GspFault, Transition};
 
 #[path = "../../kf-rm/tests/support/ga106.rs"]
 mod ga106;
@@ -1062,8 +1062,7 @@ fn our_interrupt_kernel_table_is_byte_identical_to_a_real_ga106s_own_reply() {
         .commands
         .iter()
         .find(|(_, c)| {
-            control_cmd(c)
-                == Some(kf_abi::chipinfo::NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO)
+            control_cmd(c) == Some(kf_abi::chipinfo::NV2080_CTRL_CMD_INTERNAL_GPU_GET_CHIP_INFO)
         })
         .map(|(t, _)| *t)
         .expect("the guest asks for the chip identity");

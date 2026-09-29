@@ -43,9 +43,14 @@ impl ClassTable {
                     continue;
                 }
                 Some(&"V") => n(2).map(Row::V),
-                Some(&"F") => n(2).zip(n(3)).and_then(|(h, l)| Some(Row::F(u8::try_from(h).ok()?, u8::try_from(l).ok()?))),
+                Some(&"F") => n(2)
+                    .zip(n(3))
+                    .and_then(|(h, l)| Some(Row::F(u8::try_from(h).ok()?, u8::try_from(l).ok()?))),
                 Some(&"A") => n(2).zip(n(3)).map(|(b, s)| Row::A(b, s)),
-                Some(&"A2") => n(2).zip(n(3)).zip(n(4)).map(|((b, s1), s2)| Row::A2(b, s1, s2)),
+                Some(&"A2") => n(2)
+                    .zip(n(3))
+                    .zip(n(4))
+                    .map(|((b, s1), s2)| Row::A2(b, s1, s2)),
                 _ => None,
             };
             if let (Some(r), Some(name)) = (row, f.get(1)) {
@@ -90,7 +95,9 @@ impl ClassTable {
     #[must_use]
     pub fn a2(&self, class: u32, name: &str, a: u32, b: u32) -> Option<u32> {
         match self.rows.get(&Self::key(class, name))? {
-            Row::A2(base, s1, s2) => u32::try_from(base + u64::from(a) * s1 + u64::from(b) * s2).ok(),
+            Row::A2(base, s1, s2) => {
+                u32::try_from(base + u64::from(a) * s1 + u64::from(b) * s2).ok()
+            }
             _ => None,
         }
     }
@@ -101,7 +108,8 @@ impl ClassTable {
         match self.rows.get(&Self::key(class, name))? {
             Row::A(b, s) if *s > 0 => {
                 let m = u64::from(method);
-                (m >= *b && (m - b) % s == 0 && (m - b) / s < u64::from(n)).then(|| ((m - b) / s) as u32)
+                (m >= *b && (m - b) % s == 0 && (m - b) / s < u64::from(n))
+                    .then(|| ((m - b) / s) as u32)
             }
             _ => None,
         }
@@ -130,7 +138,11 @@ impl ClassTable {
 #[must_use]
 pub fn get(v: u32, (hi, lo): (u8, u8)) -> u32 {
     let width = u32::from(hi.saturating_sub(lo)) + 1;
-    let mask = if width >= 32 { u32::MAX } else { (1u32 << width) - 1 };
+    let mask = if width >= 32 {
+        u32::MAX
+    } else {
+        (1u32 << width) - 1
+    };
     (v >> lo) & mask
 }
 
@@ -138,7 +150,11 @@ pub fn get(v: u32, (hi, lo): (u8, u8)) -> u32 {
 #[must_use]
 pub fn put(v: u32, (hi, lo): (u8, u8), x: u32) -> u32 {
     let width = u32::from(hi.saturating_sub(lo)) + 1;
-    let mask = if width >= 32 { u32::MAX } else { (1u32 << width) - 1 };
+    let mask = if width >= 32 {
+        u32::MAX
+    } else {
+        (1u32 << width) - 1
+    };
     (v & !(mask << lo)) | ((x & mask) << lo)
 }
 
@@ -147,7 +163,10 @@ pub fn put(v: u32, (hi, lo): (u8, u8), x: u32) -> u32 {
 pub fn for_version(version: &str) -> Option<&'static ClassTable> {
     static V580_159_04: OnceLock<ClassTable> = OnceLock::new();
     match version {
-        "580.159.04" => Some(V580_159_04.get_or_init(|| ClassTable::parse(include_str!("../data/classes-580.159.04.tsv")))),
+        "580.159.04" => Some(
+            V580_159_04
+                .get_or_init(|| ClassTable::parse(include_str!("../data/classes-580.159.04.tsv"))),
+        ),
         _ => None,
     }
 }
@@ -169,7 +188,10 @@ mod tests {
         assert_eq!(t.notifier_field("__0_STATUS"), Some((31, 30)));
         assert_eq!(t.f(0xC67E, "SET_SIZE_HEIGHT"), Some((31, 16)));
         assert_eq!(t.a(0xC67D, "HEAD_SET_RASTER_SIZE", 1), Some(0x2064 + 0x400));
-        assert!(t.a(0xCA7E, "SET_CONTEXT_DMA_ISO", 0).is_none(), "GB20x names surfaces by address");
+        assert!(
+            t.a(0xCA7E, "SET_CONTEXT_DMA_ISO", 0).is_none(),
+            "GB20x names surfaces by address"
+        );
         assert!(t.a(0xCA7E, "SET_SURFACE_ADDRESS_LO_ISO", 0).is_some());
         assert_eq!(get(0x0438_0780, (31, 16)), 0x438);
         assert_eq!(put(0, (31, 30), 2), 0x8000_0000);

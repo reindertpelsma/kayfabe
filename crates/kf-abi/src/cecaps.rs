@@ -439,7 +439,10 @@ impl CeGeometry {
     /// the host's caps reply does not mark present — two descriptions of one die disagreeing,
     /// refused rather than answered with an empty caps row (which would positively claim a CE
     /// that can do nothing).
-    pub fn from_engines(engines: &[FifoDeviceEntry], host: &HostCeCaps) -> Result<Self, CeCapsError> {
+    pub fn from_engines(
+        engines: &[FifoDeviceEntry],
+        host: &HostCeCaps,
+    ) -> Result<Self, CeCapsError> {
         let present = present_of(engines)?;
         let mut caps = [CeCaps::NONE; MAX_CES];
         for (i, c) in caps.iter_mut().enumerate() {
@@ -447,7 +450,10 @@ impl CeGeometry {
                 continue;
             }
             if host.present & (1u64 << i) == 0 {
-                return Err(CeCapsError::NotOnHost { instance: i as u32, host_present: host.present });
+                return Err(CeCapsError::NotOnHost {
+                    instance: i as u32,
+                    host_present: host.present,
+                });
             }
             *c = host.physical(i);
         }
@@ -516,7 +522,10 @@ impl core::fmt::Display for CeCapsError {
                 "engine {engine} has INSTANCE_ID {instance}, past NV2080_CTRL_MAX_CES {max}: \
                  no capsTbl slot and no present bit exist for it"
             ),
-            Self::NotOnHost { instance, host_present } => write!(
+            Self::NotOnHost {
+                instance,
+                host_present,
+            } => write!(
                 f,
                 "the engine list advertises LCE{instance} but the host's CE_GET_ALL_CAPS marks \
                  present={host_present:#x}: two descriptions of one die disagree"
@@ -1012,8 +1021,15 @@ mod tests {
     #[test]
     fn an_lce_the_host_does_not_mark_present_refuses() {
         let e = CeGeometry::from_engines(&[lce_row("CE1", 1), lce_row("CE5", 5)], &ga106_host());
-        assert_eq!(e, Err(CeCapsError::NotOnHost { instance: 5, host_present: 0x0f }));
-        let g = CeGeometry::from_engines(&[lce_row("CE1", 1)], &ga106_host()).expect("CE1 is present");
+        assert_eq!(
+            e,
+            Err(CeCapsError::NotOnHost {
+                instance: 5,
+                host_present: 0x0f
+            })
+        );
+        let g =
+            CeGeometry::from_engines(&[lce_row("CE1", 1)], &ga106_host()).expect("CE1 is present");
         assert_eq!(g.present, 0b10);
         assert_eq!(g.grce, 0b10);
         assert_eq!(g.caps_for(0), CeCaps::NONE);

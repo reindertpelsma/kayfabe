@@ -23,7 +23,11 @@ fn observations(reg: GspReg, written: u64) -> Vec<GspObservation> {
     for stage in STAGES {
         for suspended in [false, true] {
             #[allow(clippy::cast_possible_truncation)]
-            let bcr = if reg == GspReg::GspRiscvBcrCtrl { Some(written as u32) } else { None };
+            let bcr = if reg == GspReg::GspRiscvBcrCtrl {
+                Some(written as u32)
+            } else {
+                None
+            };
             v.push(GspObservation {
                 stage,
                 wpr2_up: stage.wpr2_up(),
@@ -42,7 +46,9 @@ fn check(m: &dyn GspModel, name: &str) {
     let mut answered = 0;
     for reg in GspReg::FIXED {
         for &w in &written {
-            let Some(now) = m.answer_on_store(reg, w) else { continue };
+            let Some(now) = m.answer_on_store(reg, w) else {
+                continue;
+            };
             answered += 1;
             for obs in observations(reg, w) {
                 assert_eq!(
@@ -53,7 +59,10 @@ fn check(m: &dyn GspModel, name: &str) {
             }
         }
     }
-    assert!(answered > 0, "{name}: a sweep that reports zero must first report one");
+    assert!(
+        answered > 0,
+        "{name}: a sweep that reports zero must first report one"
+    );
     // ⊘⊘ The completion edges and everything the FSM's transitions move: NEVER on the store.
     for reg in [
         GspReg::GspFalconCpuctl,
@@ -65,11 +74,25 @@ fn check(m: &dyn GspModel, name: &str) {
         GspReg::GspFalconMailbox0,
         GspReg::GspFalconMailbox1,
     ] {
-        assert_eq!(m.answer_on_store(reg, 0x2), None, "{name}: {reg:?} orders an FSM effect — the drainer publishes it");
+        assert_eq!(
+            m.answer_on_store(reg, 0x2),
+            None,
+            "{name}: {reg:?} orders an FSM effect — the drainer publishes it"
+        );
     }
     // The two the w828 boot needed.
-    assert_eq!(m.answer_on_store(GspReg::GspFalconDmatrfcmd, 0x0000_0610) .map(|v| v & 0x3), Some(0x2), "{name}: DMATRFCMD reads IDLE, not FULL, the instant the command lands");
-    assert_eq!(m.answer_on_store(GspReg::GspRiscvBcrCtrl, 0).map(|v| v & 0x11), Some(0x1), "{name}: CORE_SELECT_FALCON acknowledged VALID at once");
+    assert_eq!(
+        m.answer_on_store(GspReg::GspFalconDmatrfcmd, 0x0000_0610)
+            .map(|v| v & 0x3),
+        Some(0x2),
+        "{name}: DMATRFCMD reads IDLE, not FULL, the instant the command lands"
+    );
+    assert_eq!(
+        m.answer_on_store(GspReg::GspRiscvBcrCtrl, 0)
+            .map(|v| v & 0x11),
+        Some(0x1),
+        "{name}: CORE_SELECT_FALCON acknowledged VALID at once"
+    );
 }
 
 #[test]

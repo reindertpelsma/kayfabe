@@ -29,7 +29,7 @@
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 
 /// One issued ioctl, as much of it as is cheap to keep.
 #[derive(Debug, Clone, Copy)]
@@ -116,7 +116,10 @@ static PROF_T0: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::n
 /// The sub-key: the control `cmd` for `NV_ESC_RM_CONTROL` (`NVOS54`, +8), the class for
 /// `NV_ESC_RM_ALLOC` (`NVOS21`/`NVOS64`, +12); 0 otherwise.
 fn sub_key(request: u64, arg: &[u8]) -> u32 {
-    let at = |o: usize| arg.get(o..o + 4).map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let at = |o: usize| {
+        arg.get(o..o + 4)
+            .map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    };
     if (request >> 8) & 0xff != u64::from(b'F') {
         return 0;
     }
@@ -130,7 +133,9 @@ fn sub_key(request: u64, arg: &[u8]) -> u32 {
 fn prof_add(request: u64, arg: &[u8], ns: u64) {
     let _ = PROF_T0.get_or_init(std::time::Instant::now);
     let key = (request, sub_key(request, arg));
-    let mut g = PROF_ROWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut g = PROF_ROWS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some((_, r)) = g.iter_mut().find(|(k, _)| *k == key) {
         r.0 += 1;
         r.1 += ns;
@@ -146,11 +151,20 @@ pub fn dump_prof(why: &str) {
     if mode() != PROF {
         return;
     }
-    let mut g: Vec<_> = PROF_ROWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let mut g: Vec<_> = PROF_ROWS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
     g.sort_by_key(|(_, r)| std::cmp::Reverse(r.1));
-    let (n, tot) = g.iter().fold((0u64, 0u64), |a, (_, r)| (a.0 + r.0, a.1 + r.1));
+    let (n, tot) = g
+        .iter()
+        .fold((0u64, 0u64), |a, (_, r)| (a.0 + r.0, a.1 + r.1));
     let wall = PROF_T0.get().map_or(0, |t| t.elapsed().as_micros() as u64);
-    eprintln!("IOCTL-PROF ★ {why}: ioctls={n} in_ioctl_us={} wall_since_first_us={wall} rows={}", tot / 1000, g.len());
+    eprintln!(
+        "IOCTL-PROF ★ {why}: ioctls={n} in_ioctl_us={} wall_since_first_us={wall} rows={}",
+        tot / 1000,
+        g.len()
+    );
     for ((req, sub), (c, ns, mx)) in &g {
         eprintln!(
             "IOCTL-PROF req={req:#010x} sub={sub:#010x} n={c} total_us={} avg_us={} max_us={}",
@@ -174,7 +188,11 @@ pub fn record_timed(request: u64, arg: &[u8], rc: i32, t0: Option<std::time::Ins
         return;
     }
     if let Some(t0) = t0 {
-        prof_add(request, arg, u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX));
+        prof_add(
+            request,
+            arg,
+            u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX),
+        );
     }
     let head_after = u32::from_le_bytes([
         arg.first().copied().unwrap_or(0),
@@ -195,7 +213,9 @@ pub fn record_timed(request: u64, arg: &[u8], rc: i32, t0: Option<std::time::Ins
             e.at_us, e.request, e.arg_len, e.rc, e.head_after
         );
     }
-    let mut g = RING_BUF.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut g = RING_BUF
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if g.len() == CAP {
         g.pop_front();
         DROPPED.fetch_add(1, Ordering::Relaxed);
@@ -211,7 +231,9 @@ pub fn dump(why: &str) {
         eprintln!("IOCTL-TRACE ⊘ NOT ARMED — set KF_IOCTL_TRACE=ring or =verbose. ({why})");
         return;
     }
-    let g = RING_BUF.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let g = RING_BUF
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let dropped = DROPPED.load(Ordering::Relaxed);
     eprintln!(
         "IOCTL-TRACE ★★★ {why}: {} entries, dropped={dropped} (cap {CAP})",

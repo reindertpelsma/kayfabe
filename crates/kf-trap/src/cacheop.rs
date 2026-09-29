@@ -72,8 +72,12 @@ impl CacheOp {
     /// How many ops there are (the size of a per-op array).
     pub const COUNT: usize = 4;
     /// All ops, by index.
-    pub const ALL: [CacheOp; CacheOp::COUNT] =
-        [CacheOp::FlushDirty, CacheOp::SysmemInvalidate, CacheOp::PeermemInvalidate, CacheOp::FbFlush];
+    pub const ALL: [CacheOp; CacheOp::COUNT] = [
+        CacheOp::FlushDirty,
+        CacheOp::SysmemInvalidate,
+        CacheOp::PeermemInvalidate,
+        CacheOp::FbFlush,
+    ];
 }
 
 /// `_PENDING` (bit 0) — the guest's request bit, and with `_OUTSTANDING` (bit 1) what it polls.
@@ -129,13 +133,29 @@ pub const MEMOP_MAX_OUTSTANDING: u32 = 140;
 pub fn token_registers(family: Family) -> &'static [TokenOp] {
     const GH100_STYLE: &[TokenOp] = &[
         // `NV_XAL_EP_UFLUSH_L2_FLUSH_DIRTY` / `_COMPLETED` (`pri_nv_xal_ep.h:28-33`).
-        TokenOp { start: 0x0010_F810, completed: 0x0010_F814, op: CacheOp::FlushDirty },
+        TokenOp {
+            start: 0x0010_F810,
+            completed: 0x0010_F814,
+            op: CacheOp::FlushDirty,
+        },
         // `NV_VIRTUAL_FUNCTION_PRIV_FUNC_L2_SYSMEM_INVALIDATE` / `_COMPLETED` (`dev_vm.h:28-33`).
-        TokenOp { start: 0x00B8_0F10, completed: 0x00B8_0F14, op: CacheOp::SysmemInvalidate },
+        TokenOp {
+            start: 0x00B8_0F10,
+            completed: 0x00B8_0F14,
+            op: CacheOp::SysmemInvalidate,
+        },
         // `…_L2_PEERMEM_INVALIDATE` / `_COMPLETED` (`dev_vm.h:34-39`).
-        TokenOp { start: 0x00B8_0F18, completed: 0x00B8_0F1C, op: CacheOp::PeermemInvalidate },
+        TokenOp {
+            start: 0x00B8_0F18,
+            completed: 0x00B8_0F1C,
+            op: CacheOp::PeermemInvalidate,
+        },
         // `NV_XAL_EP_UFLUSH_FB_FLUSH` / `_COMPLETED` (`pri_nv_xal_ep.h`, the sysmembar).
-        TokenOp { start: 0x0010_F800, completed: 0x0010_F804, op: CacheOp::FbFlush },
+        TokenOp {
+            start: 0x0010_F800,
+            completed: 0x0010_F804,
+            op: CacheOp::FbFlush,
+        },
     ];
     match family {
         Family::Turing | Family::Ampere | Family::Ada => &[],
@@ -184,7 +204,11 @@ pub const fn start_token(issued: u64) -> u32 {
 #[allow(clippy::cast_possible_truncation)]
 pub const fn completed_word(issued: u64, done: u64) -> u32 {
     let tok = (done as u32) & TOKEN_MASK;
-    if done >= issued { tok } else { tok | COMPLETED_BUSY }
+    if done >= issued {
+        tok
+    } else {
+        tok | COMPLETED_BUSY
+    }
 }
 
 /// The cache op a 32-bit write of `val` at `off` requests, if any.
@@ -193,7 +217,10 @@ pub fn decode(family: Family, off: u64, val: u32) -> Option<CacheOp> {
     if val & PENDING == 0 {
         return None;
     }
-    registers(family).iter().find(|(o, _)| u64::from(*o) == off).map(|(_, op)| *op)
+    registers(family)
+        .iter()
+        .find(|(o, _)| u64::from(*o) == off)
+        .map(|(_, op)| *op)
 }
 
 #[cfg(test)]
@@ -202,11 +229,24 @@ mod tests {
 
     #[test]
     fn ga10x_flush_dirty_and_invalidates_decode_only_with_pending() {
-        assert_eq!(decode(Family::Ampere, 0x70010, 1), Some(CacheOp::FlushDirty));
+        assert_eq!(
+            decode(Family::Ampere, 0x70010, 1),
+            Some(CacheOp::FlushDirty)
+        );
         assert_eq!(decode(Family::Ampere, 0x70010, 0), None);
-        assert_eq!(decode(Family::Turing, 0xB80F00, 1), Some(CacheOp::SysmemInvalidate));
-        assert_eq!(decode(Family::Ada, 0xB80F04, 1), Some(CacheOp::PeermemInvalidate));
-        assert_eq!(decode(Family::Ampere, 0x70004, 1), None, "0x70004 is the pre-Turing sysmem invalidate");
+        assert_eq!(
+            decode(Family::Turing, 0xB80F00, 1),
+            Some(CacheOp::SysmemInvalidate)
+        );
+        assert_eq!(
+            decode(Family::Ada, 0xB80F04, 1),
+            Some(CacheOp::PeermemInvalidate)
+        );
+        assert_eq!(
+            decode(Family::Ampere, 0x70004, 1),
+            None,
+            "0x70004 is the pre-Turing sysmem invalidate"
+        );
     }
 
     #[test]
@@ -225,9 +265,19 @@ mod tests {
 
     #[test]
     fn a_read_starts_the_op_and_the_guest_waits_until_the_host_finishes_it() {
-        assert_eq!(token_read(Family::Hopper, 0x10F810), Some(TokenRead::Start(CacheOp::FlushDirty)));
-        assert_eq!(token_read(Family::Blackwell, 0xB80F14), Some(TokenRead::Completed(CacheOp::SysmemInvalidate)));
-        assert_eq!(token_read(Family::Ampere, 0x10F810), None, "GA10x has no token protocol");
+        assert_eq!(
+            token_read(Family::Hopper, 0x10F810),
+            Some(TokenRead::Start(CacheOp::FlushDirty))
+        );
+        assert_eq!(
+            token_read(Family::Blackwell, 0xB80F14),
+            Some(TokenRead::Completed(CacheOp::SysmemInvalidate))
+        );
+        assert_eq!(
+            token_read(Family::Ampere, 0x10F810),
+            None,
+            "GA10x has no token protocol"
+        );
         // Idle device: COMPLETED reads IDLE, token 0 (the registers' _INIT values).
         assert_eq!(completed_word(0, 0), 0);
         // The guest READS the start register: request 1 is issued, token 1.
@@ -235,7 +285,10 @@ mod tests {
         let start = start_token(issued);
         assert_eq!(start, 1);
         // The host has not run it: BUSY, and within the window, so the driver WAITS.
-        assert!(driver_waits(start, completed_word(issued, 0)), "must not pass before the host op");
+        assert!(
+            driver_waits(start, completed_word(issued, 0)),
+            "must not pass before the host op"
+        );
         // The host verb returned: IDLE — the driver's loop exits on `bMemopBusy == FALSE`.
         assert!(!driver_waits(start, completed_word(issued, 1)));
     }
@@ -245,7 +298,10 @@ mod tests {
         let issued = u64::from(TOKEN_MASK) + 2; // token wrapped to 1
         let start = start_token(issued);
         assert_eq!(start, 1);
-        assert!(driver_waits(start, completed_word(issued, issued - 1)), "done = 0x7fffffff, one behind");
+        assert!(
+            driver_waits(start, completed_word(issued, issued - 1)),
+            "done = 0x7fffffff, one behind"
+        );
         assert!(!driver_waits(start, completed_word(issued, issued)));
     }
 
@@ -256,7 +312,10 @@ mod tests {
             for t in token_registers(f) {
                 for r in [t.start, t.completed] {
                     let page = u64::from(r) & !(crate::memmap::PAGE - 1);
-                    assert!(holes.iter().any(|(p, _)| *p == page), "{f:?}: {r:#x} must exit on READ");
+                    assert!(
+                        holes.iter().any(|(p, _)| *p == page),
+                        "{f:?}: {r:#x} must exit on READ"
+                    );
                 }
             }
         }

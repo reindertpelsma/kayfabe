@@ -11,10 +11,10 @@
 //! what the guest sees would be worse than none.
 
 use kf_abi::versions::{BENCH_DRIVER, table_for};
+use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 use kf_rm::unserviced::{
     UNSERVICED_SAMPLE_MAX, UnservicedCommand, UnservicedLedger, UnservicedLog,
 };
-use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 
 /// A `GSP_RM_CONTROL` whose header names `cmd`. 40 bytes is `RpcControlReq::HEADER`.
 fn control(cmd: u32) -> RpcCommand {

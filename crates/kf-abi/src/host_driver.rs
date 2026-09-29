@@ -397,14 +397,7 @@ mod tests {
             check(None).unwrap_err() != check(Some("")).unwrap_err(),
             "no-answer and a bad answer are different findings"
         );
-        for bad in [
-            "580",
-            "580.",
-            "580.159.04.1",
-            "580.x.04",
-            "v580.159.04",
-            "",
-        ] {
+        for bad in ["580", "580.", "580.159.04.1", "580.x.04", "v580.159.04", ""] {
             let msg = check(Some(bad)).unwrap_err().to_string();
             assert!(
                 msg.contains("refusing rather than assuming 580"),

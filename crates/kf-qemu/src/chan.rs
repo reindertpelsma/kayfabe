@@ -217,11 +217,22 @@ fn is_copy_engine(engine_type: u32) -> bool {
 /// ★ Q7: which unforgeable fact made a channel the guest kernel's (for the birth log).
 fn kernel_by(a: &ChannelAlloc) -> String {
     let stamp = match a.privilege {
-        Some(p) if p.is_kernel() => format!("PRIVILEGE=KERNEL{}", if p.uvm_owned { "+UVM_OWNED" } else { "" }),
-        Some(p) => format!("privilege={}{}", p.level, if p.uvm_owned { "+uvm_owned" } else { "" }),
+        Some(p) if p.is_kernel() => format!(
+            "PRIVILEGE=KERNEL{}",
+            if p.uvm_owned { "+UVM_OWNED" } else { "" }
+        ),
+        Some(p) => format!(
+            "privilege={}{}",
+            p.level,
+            if p.uvm_owned { "+uvm_owned" } else { "" }
+        ),
         None => "privilege=undecoded".into(),
     };
-    let internal = if kf_rm::chanlink::is_rm_internal_client(a.client) { " rm-internal" } else { "" };
+    let internal = if kf_rm::chanlink::is_rm_internal_client(a.client) {
+        " rm-internal"
+    } else {
+        ""
+    };
     format!("{stamp}{internal}")
 }
 
@@ -229,7 +240,12 @@ fn kernel_by(a: &ChannelAlloc) -> String {
 /// or through guest RAM (sysmem). ⊘ Four bytes each way — `CPU_MOVE_MAX_BYTES`, never data.
 enum UserdView {
     /// A 4 KiB CPU view of the store page holding USERD (`node` keeps the view's context alive).
-    Store { region: VolatileRegion, _node: kf_linux_raw::CharDevice, cookie: u64, at: u64 },
+    Store {
+        region: VolatileRegion,
+        _node: kf_linux_raw::CharDevice,
+        cookie: u64,
+        at: u64,
+    },
     /// Guest RAM.
     Ram { mem: RawRegion, at: usize },
 }
@@ -237,14 +253,23 @@ enum UserdView {
 impl UserdView {
     fn load(&self, off: u64) -> Result<u32, String> {
         match self {
-            UserdView::Store { region, at, .. } => region.load_u32(HostOffset::new(at + off)).map_err(|e| format!("{e:?}")),
-            UserdView::Ram { mem, at } => mem.load_u32(at + off as usize).ok_or_else(|| "guest-RAM USERD load".to_string()),
+            UserdView::Store { region, at, .. } => region
+                .load_u32(HostOffset::new(at + off))
+                .map_err(|e| format!("{e:?}")),
+            UserdView::Ram { mem, at } => mem
+                .load_u32(at + off as usize)
+                .ok_or_else(|| "guest-RAM USERD load".to_string()),
         }
     }
     fn store(&self, off: u64, v: u32) -> Result<(), String> {
         match self {
-            UserdView::Store { region, at, .. } => region.store_u32(HostOffset::new(at + off), v).map_err(|e| format!("{e:?}")),
-            UserdView::Ram { mem, at } => mem.store_u32(at + off as usize, v).then_some(()).ok_or_else(|| "guest-RAM USERD store".to_string()),
+            UserdView::Store { region, at, .. } => region
+                .store_u32(HostOffset::new(at + off), v)
+                .map_err(|e| format!("{e:?}")),
+            UserdView::Ram { mem, at } => mem
+                .store_u32(at + off as usize, v)
+                .then_some(())
+                .ok_or_else(|| "guest-RAM USERD store".to_string()),
         }
     }
 }
@@ -299,33 +324,63 @@ const VIEWS_MAX: usize = 8;
 
 impl StoreViews {
     const fn new() -> Self {
-        StoreViews { views: Vec::new(), armed: 0 }
+        StoreViews {
+            views: Vec::new(),
+            armed: 0,
+        }
     }
 
     fn view_for(&mut self, rm: &HostRm, store: u32, fb_len: u64, at: u64) -> Result<usize, String> {
-        if let Some(i) = self.views.iter().position(|v| at >= v.off && at < v.off + v.len) {
+        if let Some(i) = self
+            .views
+            .iter()
+            .position(|v| at >= v.off && at < v.off + v.len)
+        {
             return Ok(i);
         }
         let off = at & !(VIEW_BYTES - 1);
         let len = VIEW_BYTES.min(fb_len.saturating_sub(off));
         if len == 0 {
-            return Err(format!("store offset {at:#x} is past the store ({fb_len:#x})"));
+            return Err(format!(
+                "store offset {at:#x} is past the store ({fb_len:#x})"
+            ));
         }
         if self.views.len() >= VIEWS_MAX {
             let old = self.views.remove(0);
-            let _ = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: store, p_linear_address: old.cookie });
+            let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
+                h_memory: store,
+                p_linear_address: old.cookie,
+            });
         }
         let (node, cookie) = rm
             .arm_cpu_view(MapNode::Gpu, store, off, len, ViewAccess::ReadWrite)
             .map_err(|e| format!("view of store {off:#x}+{len:#x}: {e:?}"))?;
-        let region = VolatileRegion::map(Backing::DeviceFile { fd: node.as_fd() }, len, CachePolicy::Uncached, HostPageSize::query())
-            .map_err(|e| format!("view mmap: {e:?}"))?;
+        let region = VolatileRegion::map(
+            Backing::DeviceFile { fd: node.as_fd() },
+            len,
+            CachePolicy::Uncached,
+            HostPageSize::query(),
+        )
+        .map_err(|e| format!("view mmap: {e:?}"))?;
         self.armed += 1;
-        self.views.push(StoreSpan { off, len, region, _node: node, cookie });
+        self.views.push(StoreSpan {
+            off,
+            len,
+            region,
+            _node: node,
+            cookie,
+        });
         Ok(self.views.len() - 1)
     }
 
-    fn read(&mut self, rm: &HostRm, store: u32, fb_len: u64, off: u64, out: &mut [u8]) -> Result<(), String> {
+    fn read(
+        &mut self,
+        rm: &HostRm,
+        store: u32,
+        fb_len: u64,
+        off: u64,
+        out: &mut [u8],
+    ) -> Result<(), String> {
         let len = out.len() as u64;
         let mut done = 0u64;
         while done < len {
@@ -334,7 +389,10 @@ impl StoreViews {
             let v = &self.views[i];
             let n = (v.off + v.len - at).min(len - done);
             v.region
-                .copy_out(HostOffset::new(at - v.off), &mut out[done as usize..(done + n) as usize])
+                .copy_out(
+                    HostOffset::new(at - v.off),
+                    &mut out[done as usize..(done + n) as usize],
+                )
                 .map_err(|e| format!("store read {at:#x}: {e:?}"))?;
             done += n;
         }
@@ -343,7 +401,10 @@ impl StoreViews {
 
     fn release_all(&mut self, rm: &HostRm, store: u32) {
         for v in self.views.drain(..) {
-            let _ = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: store, p_linear_address: v.cookie });
+            let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
+                h_memory: store,
+                p_linear_address: v.cookie,
+            });
         }
     }
 }
@@ -371,16 +432,22 @@ impl GuestMemory for Mem<'_> {
                 // CPU view WE arm over the store slice our own row placed there.
                 let dst = &mut out[done as usize..(done + n) as usize];
                 let t0 = crate::prof::on().then(crate::prof::now_ns);
-                self.views.read(self.rm, self.store, self.mirror.fb_len, off, dst).map_err(|e| format!("{at_va:#x}: {e}"))?;
+                self.views
+                    .read(self.rm, self.store, self.mirror.fb_len, off, dst)
+                    .map_err(|e| format!("{at_va:#x}: {e}"))?;
                 crate::prof::VIEW_READS.fetch_add(1, Ordering::Relaxed);
                 crate::prof::VIEW_READ_BYTES.fetch_add(n, Ordering::Relaxed);
                 if let Some(t0) = t0 {
-                    crate::prof::VIEW_READ_NS.fetch_add(crate::prof::now_ns().saturating_sub(t0), Ordering::Relaxed);
+                    crate::prof::VIEW_READ_NS
+                        .fetch_add(crate::prof::now_ns().saturating_sub(t0), Ordering::Relaxed);
                 }
                 done += n;
                 continue;
             }
-            let (mem, at) = self.ram.at_file_offset(off, n).ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
+            let (mem, at) = self
+                .ram
+                .at_file_offset(off, n)
+                .ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
             let dst = &mut out[done as usize..(done + n) as usize];
             if !mem.read_into(at, dst) {
                 return Err(format!("{at_va:#x}: guest-RAM read"));
@@ -414,7 +481,8 @@ impl Publisher for VaSplit<'_> {
             None => Ok(Split::Pending),
             Some(r) => {
                 *self.ticket = None;
-                r.map(|()| Split::Done).map_err(|e| format!("split walk (pdb {pdb:x?}): {e}"))
+                r.map(|()| Split::Done)
+                    .map_err(|e| format!("split walk (pdb {pdb:x?}): {e}"))
             }
         }
     }
@@ -500,7 +568,11 @@ struct Slot {
 #[must_use]
 pub fn completion_probe_ms() -> Option<u64> {
     static MS: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
-    *MS.get_or_init(|| std::env::var("KF3_COMPLETION_PROBE").ok().map(|v| v.trim().parse().unwrap_or(1000)))
+    *MS.get_or_init(|| {
+        std::env::var("KF3_COMPLETION_PROBE")
+            .ok()
+            .map(|v| v.trim().parse().unwrap_or(1000))
+    })
 }
 
 /// ⊘ **FAULT INJECTION, default off: `KF3_INJECT_STALE_USERD=<n>`** — at every Translated birth,
@@ -511,7 +583,11 @@ pub fn completion_probe_ms() -> Option<u64> {
 #[must_use]
 pub fn inject_stale_userd() -> Option<u32> {
     static V: std::sync::OnceLock<Option<u32>> = std::sync::OnceLock::new();
-    *V.get_or_init(|| std::env::var("KF3_INJECT_STALE_USERD").ok().and_then(|v| v.trim().parse().ok()))
+    *V.get_or_init(|| {
+        std::env::var("KF3_INJECT_STALE_USERD")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+    })
 }
 
 /// One release, read back.
@@ -544,7 +620,9 @@ impl ReleaseRead {
 impl std::fmt::Display for ReleaseRead {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let verdict = match self.got {
-            Some(_) if self.r.kind == kf_chan::translated::ReleaseKind::CeReduction => "REDUCTION(value is op(old,payload))",
+            Some(_) if self.r.kind == kf_chan::translated::ReleaseKind::CeReduction => {
+                "REDUCTION(value is op(old,payload))"
+            }
             Some(v) if v == self.r.payload => "LANDED",
             Some(_) if !self.not_landed() => "OVERTAKEN(a later release of this word landed)",
             Some(_) => "NOT-LANDED",
@@ -580,19 +658,40 @@ struct ProbeRec {
 
 /// Read the 32-bit word at `va` of `mirror` through OUR placements. `views`: read vidmem
 /// through a store view (a worker only — it may arm one); `None` names it unread instead.
-fn probe_read(ram: &RamMap, mirror: &Mirror, views: Option<(&mut StoreViews, &HostRm, u32)>, r: kf_chan::translated::Release) -> ReleaseRead {
+fn probe_read(
+    ram: &RamMap,
+    mirror: &Mirror,
+    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    r: kf_chan::translated::Release,
+) -> ReleaseRead {
     match resolve_placed(&mirror.rows, r.va, 4) {
-        None => ReleaseRead { r, at: "UNPLACED".into(), got: None },
+        None => ReleaseRead {
+            r,
+            at: "UNPLACED".into(),
+            got: None,
+        },
         Some((true, off)) => {
-            let got = ram.at_file_offset(off, 4).and_then(|(m, at)| m.load_u32(at));
-            ReleaseRead { r, at: format!("ram+{off:#x}"), got }
+            let got = ram
+                .at_file_offset(off, 4)
+                .and_then(|(m, at)| m.load_u32(at));
+            ReleaseRead {
+                r,
+                at: format!("ram+{off:#x}"),
+                got,
+            }
         }
         Some((false, off)) => {
             let got = views.and_then(|(v, rm, store)| {
                 let mut b = [0u8; 4];
-                v.read(rm, store, mirror.fb_len, off, &mut b).ok().map(|()| u32::from_le_bytes(b))
+                v.read(rm, store, mirror.fb_len, off, &mut b)
+                    .ok()
+                    .map(|()| u32::from_le_bytes(b))
             });
-            ReleaseRead { r, at: format!("store+{off:#x}"), got }
+            ReleaseRead {
+                r,
+                at: format!("store+{off:#x}"),
+                got,
+            }
         }
     }
 }
@@ -600,7 +699,13 @@ fn probe_read(ram: &RamMap, mirror: &Mirror, views: Option<(&mut StoreViews, &Ho
 /// Hex of up to 16 bytes, as little-endian words where whole.
 fn hex16(b: &[u8]) -> String {
     b.chunks(4)
-        .map(|c| if c.len() == 4 { format!("{:08x}", u32::from_le_bytes([c[0], c[1], c[2], c[3]])) } else { format!("{c:02x?}") })
+        .map(|c| {
+            if c.len() == 4 {
+                format!("{:08x}", u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            } else {
+                format!("{c:02x?}")
+            }
+        })
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -615,7 +720,9 @@ fn probe_side(
     o: kf_chan::translated::Operand,
 ) -> (String, Option<Vec<u8>>) {
     match o {
-        kf_chan::translated::Operand::Physical(t, p, n) => probe_operand(ram, mirror, views, t, p, n),
+        kf_chan::translated::Operand::Physical(t, p, n) => {
+            probe_operand(ram, mirror, views, t, p, n)
+        }
         kf_chan::translated::Operand::Virtual(va, n) => {
             let len = n.min(16);
             match resolve_placed(&mirror.rows, va, len) {
@@ -626,7 +733,13 @@ fn probe_side(
                         let mut b = vec![0u8; n16];
                         m.read_into(at, &mut b).then_some(b)
                     });
-                    (format!("VA {va:#x}+{n:#x} -> ram+{off:#x} host[{}]", host.as_deref().map_or("unread".to_string(), hex16)), host)
+                    (
+                        format!(
+                            "VA {va:#x}+{n:#x} -> ram+{off:#x} host[{}]",
+                            host.as_deref().map_or("unread".to_string(), hex16)
+                        ),
+                        host,
+                    )
                 }
                 Some((false, off)) => {
                     let (s, b) = probe_operand(ram, mirror, views, Target::LocalFb, off, n);
@@ -655,26 +768,49 @@ fn probe_operand(
         Target::LocalFb => {
             let host = views.and_then(|(v, rm, store)| {
                 let mut b = vec![0u8; n];
-                v.read(rm, store, mirror.fb_len, phys, &mut b).ok().map(|()| b)
+                v.read(rm, store, mirror.fb_len, phys, &mut b)
+                    .ok()
+                    .map(|()| b)
             });
             let guest: Vec<String> = crate::mem::view_index()
                 .map(|ix| ix.guest_views(phys, n))
                 .unwrap_or_default()
                 .into_iter()
-                .map(|(w, at, b)| format!("{w}@{at:#x}={}", b.as_deref().map_or("unreadable".to_string(), hex16)))
+                .map(|(w, at, b)| {
+                    format!(
+                        "{w}@{at:#x}={}",
+                        b.as_deref().map_or("unreadable".to_string(), hex16)
+                    )
+                })
                 .collect();
-            let guest = if guest.is_empty() { "no guest CPU view of this page now".to_string() } else { guest.join(", ") };
+            let guest = if guest.is_empty() {
+                "no guest CPU view of this page now".to_string()
+            } else {
+                guest.join(", ")
+            };
             (
-                format!("FB+{phys:#x}+{len:#x} host[{}] guest-views[{guest}]", host.as_deref().map_or("unread".to_string(), hex16)),
+                format!(
+                    "FB+{phys:#x}+{len:#x} host[{}] guest-views[{guest}]",
+                    host.as_deref().map_or("unread".to_string(), hex16)
+                ),
                 host,
             )
         }
         Target::CoherentSysmem | Target::NonCoherentSysmem => {
-            let host = ram.file_range(phys, n as u64).and_then(|(_, off)| ram.at_file_offset(off, n as u64)).and_then(|(m, at)| {
-                let mut b = vec![0u8; n];
-                m.read_into(at, &mut b).then_some(b)
-            });
-            (format!("{t:?}+{phys:#x}+{len:#x} host[{}]", host.as_deref().map_or("unread".to_string(), hex16)), host)
+            let host = ram
+                .file_range(phys, n as u64)
+                .and_then(|(_, off)| ram.at_file_offset(off, n as u64))
+                .and_then(|(m, at)| {
+                    let mut b = vec![0u8; n];
+                    m.read_into(at, &mut b).then_some(b)
+                });
+            (
+                format!(
+                    "{t:?}+{phys:#x}+{len:#x} host[{}]",
+                    host.as_deref().map_or("unread".to_string(), hex16)
+                ),
+                host,
+            )
         }
         Target::Peer => (format!("Peer+{phys:#x}"), None),
     }
@@ -692,7 +828,12 @@ struct ChanScope {
 impl ChanScope {
     /// Does freeing `(client, object)` free the channel `key` (`(hClient, hChannel)`)?
     fn freed_by(self, key: (u32, u32), client: u32, object: u32) -> bool {
-        key.0 == client && (object == client || key.1 == object || self.tsg == Some(object) || self.parent == object || self.device == object)
+        key.0 == client
+            && (object == client
+                || key.1 == object
+                || self.tsg == Some(object)
+                || self.parent == object
+                || self.device == object)
     }
 }
 
@@ -845,17 +986,27 @@ impl ChanPlane {
         let completions = Completions::open(rm, tokens)?;
         let lce = host_ce - kf_abi::submit::ENGINE_TYPE_COPY0;
         completions.also(rm, kf_host::event::notifier_ce(lce))?;
-        eprintln!("kf3: channel plane: Translated rings on host COPY{lce} (engine {host_ce:#x}); completions on FIFO_EVENT_MTHD + CE{lce}");
+        eprintln!(
+            "kf3: channel plane: Translated rings on host COPY{lce} (engine {host_ce:#x}); completions on FIFO_EVENT_MTHD + CE{lce}"
+        );
         // ★ P5b §2.7: one non-stall event per HOST engine a twin can run on — GR0 and every copy
         // engine the host has (`CE_GET_CAPS_V2` answers for it). Realize-time host ioctls, never a
         // vCPU. A GRCE's completions announce on GR0's vector (it has no row of its own).
         let mut engines = Vec::new();
-        let mut kinds = vec![(kf_rm::authored::EngineKind::Graphics(0), NV2080_NOTIFIERS_GR0, kf_abi::submit::ENGINE_TYPE_GRAPHICS)];
+        let mut kinds = vec![(
+            kf_rm::authored::EngineKind::Graphics(0),
+            NV2080_NOTIFIERS_GR0,
+            kf_abi::submit::ENGINE_TYPE_GRAPHICS,
+        )];
         for i in 0..20u32 {
             if let Some(et) = kf_chan::passthrough::copy_engine_type(i)
                 && rm.ce_is_grce(et).is_ok()
             {
-                kinds.push((kf_rm::authored::EngineKind::Copy(i), kf_host::event::notifier_ce(i), et));
+                kinds.push((
+                    kf_rm::authored::EngineKind::Copy(i),
+                    kf_host::event::notifier_ce(i),
+                    et,
+                ));
             }
         }
         // ★ The video engines the served table advertises (it lists only the host's own): one
@@ -864,13 +1015,19 @@ impl ChanPlane {
         // the guest's NVENC/NVDEC OS events from it.
         for i in 0..kf_abi::submit::NVENC_SIZE {
             let kind = kf_rm::authored::EngineKind::VideoEncode(i);
-            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_nvenc(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+            if let (Some(et), Some(_)) = (
+                kf_abi::submit::engine_type_nvenc(i),
+                kf_rm::authored::non_stall_vector_for(intr_table, kind),
+            ) {
                 kinds.push((kind, kf_host::event::notifier_nvenc(i), et));
             }
         }
         for i in 0..kf_abi::submit::NVDEC_SIZE {
             let kind = kf_rm::authored::EngineKind::VideoDecode(i);
-            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_nvdec(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+            if let (Some(et), Some(_)) = (
+                kf_abi::submit::engine_type_nvdec(i),
+                kf_rm::authored::non_stall_vector_for(intr_table, kind),
+            ) {
                 kinds.push((kind, kf_host::event::notifier_nvdec(i), et));
             }
         }
@@ -878,14 +1035,21 @@ impl ChanPlane {
         // wakes the guest's OFA OS events — VK_NV_optical_flow's completion).
         for i in 0..kf_abi::submit::OFA_SIZE {
             let kind = kf_rm::authored::EngineKind::OpticalFlow(i);
-            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_ofa(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+            if let (Some(et), Some(_)) = (
+                kf_abi::submit::engine_type_ofa(i),
+                kf_rm::authored::non_stall_vector_for(intr_table, kind),
+            ) {
                 kinds.push((kind, kf_host::event::notifier_ofa(i), et));
             }
         }
         for (kind, notify, engine_type) in kinds {
-            let ev = rm.open_event_fd().map_err(|e| format!("{} event fd: {e:?}", kind.name()))?;
-            rm.alloc_os_event(rm.subdevice(), notify, true, &ev).map_err(|e| format!("{} os event: {e:?}", kind.name()))?;
-            rm.arm_repeat(notify).map_err(|e| format!("{} notify: {e:?}", kind.name()))?;
+            let ev = rm
+                .open_event_fd()
+                .map_err(|e| format!("{} event fd: {e:?}", kind.name()))?;
+            rm.alloc_os_event(rm.subdevice(), notify, true, &ev)
+                .map_err(|e| format!("{} os event: {e:?}", kind.name()))?;
+            rm.arm_repeat(notify)
+                .map_err(|e| format!("{} notify: {e:?}", kind.name()))?;
             let vector = kf_rm::authored::non_stall_vector_for(intr_table, kind);
             engines.push(EngineEvent {
                 name: kind.name(),
@@ -899,10 +1063,16 @@ impl ChanPlane {
         }
         eprintln!(
             "kf3: interrupt plane: host non-stall events -> guest vectors [{}]",
-            engines.iter().map(|e| format!("{}->{:x?}", e.name, e.vector)).collect::<Vec<_>>().join(" ")
+            engines
+                .iter()
+                .map(|e| format!("{}->{:x?}", e.name, e.vector))
+                .collect::<Vec<_>>()
+                .join(" ")
         );
         // ★ P5c: the RC fd (realize-time host ioctls, never a vCPU).
-        let rc_ev = rm.open_event_fd().map_err(|e| format!("RC event fd: {e:?}"))?;
+        let rc_ev = rm
+            .open_event_fd()
+            .map_err(|e| format!("RC event fd: {e:?}"))?;
         Ok(ChanPlane {
             rm,
             plane,
@@ -1001,7 +1171,10 @@ impl ChanPlane {
             // ⊘ Diagnostic only (and it writes a line from the vCPU — never on in production).
             let t = kf_mem::maplog::t();
             c.store((t * 1e6) as u64, Ordering::Relaxed);
-            let n = self.rung.get(idx as usize).map_or(0, |r| r.load(Ordering::Relaxed));
+            let n = self
+                .rung
+                .get(idx as usize)
+                .map_or(0, |r| r.load(Ordering::Relaxed));
             eprintln!("kf3: maplog t={t:.6} DOORBELL chid {idx:#x} #{n} reached={reached}");
         }
         if reached && let Some(c) = self.rang.get(idx as usize) {
@@ -1011,8 +1184,14 @@ impl ChanPlane {
 
     /// `(rung, reached)` for token `idx`, reset (a freed token's successor starts at zero).
     fn take_ledger(&self, idx: u32) -> (u64, u64) {
-        let r = self.rung.get(idx as usize).map_or(0, |c| c.swap(0, Ordering::Relaxed));
-        let f = self.rang.get(idx as usize).map_or(0, |c| c.swap(0, Ordering::Relaxed));
+        let r = self
+            .rung
+            .get(idx as usize)
+            .map_or(0, |c| c.swap(0, Ordering::Relaxed));
+        let f = self
+            .rang
+            .get(idx as usize)
+            .map_or(0, |c| c.swap(0, Ordering::Relaxed));
         (r, f)
     }
 
@@ -1021,7 +1200,9 @@ impl ChanPlane {
             if up {
                 e.live.fetch_add(1, Ordering::Relaxed);
             } else {
-                let _ = e.live.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+                let _ = e
+                    .live
+                    .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
             }
         }
     }
@@ -1029,19 +1210,30 @@ impl ChanPlane {
     /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
     fn defer(&self, what: &'static str, act: Act) -> ChanAnswer {
         let d = kf_gsp::Deferred::new();
-        let sent = self.acts.lock().ok().and_then(|a| a.as_ref().map(|tx| tx.send((act, d.clone(), what)).is_ok()));
+        let sent = self
+            .acts
+            .lock()
+            .ok()
+            .and_then(|a| a.as_ref().map(|tx| tx.send((act, d.clone(), what)).is_ok()));
         if sent == Some(true) {
             ChanAnswer::Deferred(d)
         } else {
-            ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: format!("{what}: the act thread is not running") }
+            ChanAnswer::Refused {
+                status: NV_ERR_INVALID_STATE,
+                why: format!("{what}: the act thread is not running"),
+            }
         }
     }
 
     /// The passthrough twins matching `f`, removed.
     fn take_pt(&self, f: impl Fn(&(u32, u32), &PtChan) -> bool) -> Vec<((u32, u32), PtChan)> {
-        let Ok(mut m) = self.pt.lock() else { return Vec::new() };
+        let Ok(mut m) = self.pt.lock() else {
+            return Vec::new();
+        };
         let keys: Vec<(u32, u32)> = m.iter().filter(|(k, v)| f(k, v)).map(|(k, _)| *k).collect();
-        keys.into_iter().filter_map(|k| m.remove(&k).map(|v| (k, v))).collect()
+        keys.into_iter()
+            .filter_map(|k| m.remove(&k).map(|v| (k, v)))
+            .collect()
     }
 
     /// ★ The drainer's entry: one statement from the served chain (`kf_rm::chanlink`). ⊘ Never
@@ -1050,8 +1242,17 @@ impl ChanPlane {
     pub fn statement(&self, st: ChanStatement) -> ChanAnswer {
         match st {
             ChanStatement::Alloc(a) => self.birth(a),
-            ChanStatement::Schedule { client, object, enable } => {
-                if let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) {
+            ChanStatement::Schedule {
+                client,
+                object,
+                enable,
+            } => {
+                if let Some(ht) = self
+                    .by_obj
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&(client, object)).copied())
+                {
                     return self.schedule_translated(client, object, ht, enable);
                 }
                 // ★ P6: a TSG schedule (`0xa06c0101`) over Translated members (nvidia-uvm's
@@ -1059,14 +1260,24 @@ impl ChanPlane {
                 let members: Vec<u32> = self
                     .by_obj
                     .lock()
-                    .map(|m| m.iter().filter(|(k, _)| k.0 == client).map(|(_, v)| *v).collect::<Vec<u32>>())
+                    .map(|m| {
+                        m.iter()
+                            .filter(|(k, _)| k.0 == client)
+                            .map(|(_, v)| *v)
+                            .collect::<Vec<u32>>()
+                    })
                     .unwrap_or_default()
                     .into_iter()
-                    .filter(|ht| self.slot(*ht).is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object))))
+                    .filter(|ht| {
+                        self.slot(*ht)
+                            .is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object)))
+                    })
                     .collect();
                 if !members.is_empty() {
                     for ht in members {
-                        if let ChanAnswer::Refused { status, why } = self.schedule_translated(client, object, ht, enable) {
+                        if let ChanAnswer::Refused { status, why } =
+                            self.schedule_translated(client, object, ht, enable)
+                        {
                             return ChanAnswer::Refused { status, why };
                         }
                     }
@@ -1078,7 +1289,9 @@ impl ChanPlane {
                     .lock()
                     .map(|m| {
                         m.iter()
-                            .filter(|(k, v)| k.0 == client && (k.1 == object || v.tsg == Some(object)))
+                            .filter(|(k, v)| {
+                                k.0 == client && (k.1 == object || v.tsg == Some(object))
+                            })
                             .map(|(k, v)| (*k, v.chan))
                             .collect()
                     })
@@ -1125,53 +1338,108 @@ impl ChanPlane {
                     }),
                 )
             }
-            ChanStatement::Bind { client, object, engine_type } => {
-                if let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) {
+            ChanStatement::Bind {
+                client,
+                object,
+                engine_type,
+            } => {
+                if let Some(ht) = self
+                    .by_obj
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&(client, object)).copied())
+                {
                     // ★ The guest's statement that this channel runs on a copy engine. Our twin's
                     // host TSG was bound to OUR engine at birth; a bind to anything but a copy
                     // engine contradicts the Translated route and is refused by name.
                     if !is_copy_engine(engine_type) {
                         return ChanAnswer::Refused {
                             status: NV_ERR_INVALID_STATE,
-                            why: format!("BIND of a Translated CE channel (host {ht:#x}) to engine {engine_type:#x}"),
+                            why: format!(
+                                "BIND of a Translated CE channel (host {ht:#x}) to engine {engine_type:#x}"
+                            ),
                         };
                     }
-                    eprintln!("kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (host {ht:#x})");
+                    eprintln!(
+                        "kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (host {ht:#x})"
+                    );
                     return ChanAnswer::Done;
                 }
                 // ★ P5b: the twin's TSG was bound to the guest's engine at birth; the guest's own
                 // BIND must name that engine (the runlist the guest computes its token from).
-                let twin = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token)));
+                let twin = self
+                    .pt
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token)));
                 match twin {
                     None => ChanAnswer::NotOurs,
                     Some((e, ht)) if e == engine_type => {
-                        eprintln!("kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (passthrough host {ht:#x})");
+                        eprintln!(
+                            "kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (passthrough host {ht:#x})"
+                        );
                         ChanAnswer::Done
                     }
                     Some((e, ht)) => ChanAnswer::Refused {
                         status: NV_ERR_INVALID_STATE,
-                        why: format!("BIND to engine {engine_type:#x} of a twin born on {e:#x} (host {ht:#x})"),
+                        why: format!(
+                            "BIND to engine {engine_type:#x} of a twin born on {e:#x} (host {ht:#x})"
+                        ),
                     },
                 }
             }
             ChanStatement::Token { client, object } => {
-                if let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) {
-                    return match self.slot(ht).and_then(|s| s.lock().ok().map(|g| g.guest_idx)) {
+                if let Some(ht) = self
+                    .by_obj
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&(client, object)).copied())
+                {
+                    return match self
+                        .slot(ht)
+                        .and_then(|s| s.lock().ok().map(|g| g.guest_idx))
+                    {
                         // ★ The token is OUR doorbell's vocabulary (we are the host): the table
                         // index, in the VECTOR field the trap masks (`kf_trap::trap`).
                         Some(idx) => ChanAnswer::Token(idx),
                         None => ChanAnswer::NotOurs,
                     };
                 }
-                match self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| v.idx)) {
+                match self
+                    .pt
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&(client, object)).map(|v| v.idx))
+                {
                     Some(idx) => ChanAnswer::Token(idx),
                     None => ChanAnswer::NotOurs,
                 }
             }
-            ChanStatement::EngineObject { client, parent, handle, class, copy_engine } => self.engine_object(client, parent, handle, class, copy_engine),
-            ChanStatement::Debugger { client, parent, handle, app_client, obj3d } => self.debugger(client, parent, handle, app_client, obj3d),
-            ChanStatement::DebuggerExceptionMask { client, object, mask } => {
-                let Some(h) = self.dbg.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| v.1)) else {
+            ChanStatement::EngineObject {
+                client,
+                parent,
+                handle,
+                class,
+                copy_engine,
+            } => self.engine_object(client, parent, handle, class, copy_engine),
+            ChanStatement::Debugger {
+                client,
+                parent,
+                handle,
+                app_client,
+                obj3d,
+            } => self.debugger(client, parent, handle, app_client, obj3d),
+            ChanStatement::DebuggerExceptionMask {
+                client,
+                object,
+                mask,
+            } => {
+                let Some(h) = self
+                    .dbg
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&(client, object)).map(|v| v.1))
+                else {
                     return ChanAnswer::NotOurs;
                 };
                 self.defer(
@@ -1182,7 +1450,13 @@ impl ChanPlane {
                     }),
                 )
             }
-            ChanStatement::CtxswPreemption { client, channel, flags, gfxp, cilp } => {
+            ChanStatement::CtxswPreemption {
+                client,
+                channel,
+                flags,
+                gfxp,
+                cilp,
+            } => {
                 // The guest's channel, or every twin of the guest's TSG — GR twins only: the mode
                 // is a GR context property (a CE twin in the group has none).
                 // ★ v3-gfxset: …unless the target HAS no GR twin. `[measured diag1, RTX 3070]` the
@@ -1202,7 +1476,8 @@ impl ChanPlane {
                                 .filter(|(k, v)| {
                                     k.0 == client
                                         && (k.1 == channel || v.tsg == Some(channel))
-                                        && (!gr_only || v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS)
+                                        && (!gr_only
+                                            || v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS)
                                 })
                                 .map(|(_, v)| v.chan)
                                 .collect()
@@ -1231,14 +1506,23 @@ impl ChanPlane {
                     }),
                 )
             }
-            ChanStatement::ZcullBind { client, channel, va, mode } => {
+            ChanStatement::ZcullBind {
+                client,
+                channel,
+                va,
+                mode,
+            } => {
                 // GR twins only (zcull is GR context state), the channel or its whole group.
                 let twins: Vec<kf_host::Channel> = self
                     .pt
                     .lock()
                     .map(|m| {
                         m.iter()
-                            .filter(|(k, v)| k.0 == client && (k.1 == channel || v.tsg == Some(channel)) && v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS)
+                            .filter(|(k, v)| {
+                                k.0 == client
+                                    && (k.1 == channel || v.tsg == Some(channel))
+                                    && v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS
+                            })
                             .map(|(_, v)| v.chan)
                             .collect()
                     })
@@ -1262,7 +1546,12 @@ impl ChanPlane {
                 let twins: Vec<kf_host::Channel> = self
                     .pt
                     .lock()
-                    .map(|m| m.iter().filter(|(k, v)| k.0 == client && v.tsg == Some(object)).map(|(_, v)| v.chan).collect())
+                    .map(|m| {
+                        m.iter()
+                            .filter(|(k, v)| k.0 == client && v.tsg == Some(object))
+                            .map(|(_, v)| v.chan)
+                            .collect()
+                    })
                     .unwrap_or_default();
                 if twins.is_empty() {
                     return ChanAnswer::NotOurs;
@@ -1271,13 +1560,25 @@ impl ChanPlane {
                     "timeslice",
                     Box::new(move |me: &ChanPlane| {
                         for c in &twins {
-                            me.rm.set_timeslice(*c, us).map_err(|e| (NV_ERR_INVALID_ARGUMENT, format!("twin host {:#x} SET_TIMESLICE {us}: {e:?}", c.token)))?;
+                            me.rm.set_timeslice(*c, us).map_err(|e| {
+                                (
+                                    NV_ERR_INVALID_ARGUMENT,
+                                    format!("twin host {:#x} SET_TIMESLICE {us}: {e:?}", c.token),
+                                )
+                            })?;
                         }
-                        Ok(format!("{client:#x}:{object:#x} SET_TIMESLICE {us} us on {} twin group(s)", twins.len()))
+                        Ok(format!(
+                            "{client:#x}:{object:#x} SET_TIMESLICE {us} us on {} twin group(s)",
+                            twins.len()
+                        ))
                     }),
                 )
             }
-            ChanStatement::CudaLimit { client, device, enable } => {
+            ChanStatement::CudaLimit {
+                client,
+                device,
+                enable,
+            } => {
                 let flip = self.cuda_limit.lock().ok().and_then(|mut g| {
                     if enable {
                         g.0.insert((client, device));
@@ -1305,27 +1606,69 @@ impl ChanPlane {
             // the Device's own free, which follows it, is what removes its row (see `free`).
             ChanStatement::CudaLimitDisable => ChanAnswer::Done,
             ChanStatement::Free { client, object } => self.free(client, object),
-            ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries, falcon_ctx } => {
+            ChanStatement::PromoteCtx {
+                chan_client,
+                object,
+                engine_type,
+                initialize,
+                with_va,
+                entries,
+                falcon_ctx,
+            } => {
                 if let (Some(fc), Ok(mut m)) = (falcon_ctx, self.pt.lock())
                     && let Some(v) = m.get_mut(&(chan_client, object))
                 {
                     v.falcon_ctx = Some(fc);
                 }
-                self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
+                self.promote_ctx(
+                    chan_client,
+                    object,
+                    engine_type,
+                    initialize,
+                    with_va,
+                    entries,
+                )
             }
-            ChanStatement::EvictCtx { chan_client, object, engine_type } => self.evict_ctx(chan_client, object, engine_type),
-            ChanStatement::Stop { client, object, immediate } => self.stop_channel(client, object, immediate),
-            ChanStatement::DisableChannels { client, disable, only_scheduling, rewind_gp_put, list } => {
-                self.disable_channels(client, disable, only_scheduling, rewind_gp_put, list.as_slice())
+            ChanStatement::EvictCtx {
+                chan_client,
+                object,
+                engine_type,
+            } => self.evict_ctx(chan_client, object, engine_type),
+            ChanStatement::Stop {
+                client,
+                object,
+                immediate,
+            } => self.stop_channel(client, object, immediate),
+            ChanStatement::DisableChannels {
+                client,
+                disable,
+                only_scheduling,
+                rewind_gp_put,
+                list,
+            } => self.disable_channels(
+                client,
+                disable,
+                only_scheduling,
+                rewind_gp_put,
+                list.as_slice(),
+            ),
+            ChanStatement::Preempt {
+                client,
+                object,
+                wait,
+            } => self.preempt_group(client, object, wait),
+            ChanStatement::EncoderSession { client, acquire } => {
+                self.encoder_session(client, acquire)
             }
-            ChanStatement::Preempt { client, object, wait } => self.preempt_group(client, object, wait),
-            ChanStatement::EncoderSession { client, acquire } => self.encoder_session(client, acquire),
         }
     }
 
     /// The Translated slot of `(client, object)`, if the plane owns one: its host token.
     fn translated_of(&self, client: u32, object: u32) -> Option<u32> {
-        self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied())
+        self.by_obj
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, object)).copied())
     }
 
     /// ★★★ v3-chanctl — **`STOP_CHANNEL`, served as authored host verbs on the twin.**
@@ -1365,7 +1708,12 @@ impl ChanPlane {
                 }),
             );
         }
-        let Some(chan) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| v.chan)) else {
+        let Some(chan) = self
+            .pt
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, object)).map(|v| v.chan))
+        else {
             return ChanAnswer::NotOurs;
         };
         self.defer(
@@ -1401,7 +1749,14 @@ impl ChanPlane {
     /// guest's (the guest's cursor is in its USERD, which the pump reads).
     /// ⊘ A list naming a channel the plane does not own is refused whole (nothing is half-done);
     /// a list naming none of ours is not ours.
-    fn disable_channels(&self, client: u32, disable: bool, only_scheduling: bool, rewind: bool, list: &[(u32, u32)]) -> ChanAnswer {
+    fn disable_channels(
+        &self,
+        client: u32,
+        disable: bool,
+        only_scheduling: bool,
+        rewind: bool,
+        list: &[(u32, u32)],
+    ) -> ChanAnswer {
         if list.is_empty() {
             // Vacuously true: RM disables nothing (the only in-tree caller never sends it).
             return ChanAnswer::Done;
@@ -1411,7 +1766,10 @@ impl ChanPlane {
         let mut unknown = Vec::new();
         {
             let Ok(m) = self.pt.lock() else {
-                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "twins poisoned".into(),
+                };
             };
             for &(c, h) in list {
                 if let Some(v) = m.get(&(c, h)) {
@@ -1429,13 +1787,18 @@ impl ChanPlane {
         if !unknown.is_empty() {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_STATE,
-                why: format!("DISABLE_CHANNELS names {} channel(s) with no host twin ({unknown:x?}); none disabled", unknown.len()),
+                why: format!(
+                    "DISABLE_CHANNELS names {} channel(s) with no host twin ({unknown:x?}); none disabled",
+                    unknown.len()
+                ),
             };
         }
         if rewind && !tr.is_empty() {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_ARGUMENT,
-                why: format!("DISABLE_CHANNELS bRewindGpPut on Translated channel(s) {tr:x?}: our host ring's GP_PUT is not the guest's"),
+                why: format!(
+                    "DISABLE_CHANNELS bRewindGpPut on Translated channel(s) {tr:x?}: our host ring's GP_PUT is not the guest's"
+                ),
             };
         }
         self.defer(
@@ -1503,14 +1866,26 @@ impl ChanPlane {
         let pt: Vec<kf_host::Channel> = self
             .pt
             .lock()
-            .map(|m| m.iter().filter(|(k, v)| k.0 == client && v.tsg == Some(object)).map(|(_, v)| v.chan).collect())
+            .map(|m| {
+                m.iter()
+                    .filter(|(k, v)| k.0 == client && v.tsg == Some(object))
+                    .map(|(_, v)| v.chan)
+                    .collect()
+            })
             .unwrap_or_default();
         // ⊘ Group membership from the scopes table, never a slot lock on the drainer.
         let scopes = self.scopes.lock().map(|m| m.clone()).unwrap_or_default();
         let tr: Vec<u32> = self
             .by_obj
             .lock()
-            .map(|m| m.iter().filter(|(k, _)| k.0 == client && scopes.get(k).is_some_and(|sc| sc.tsg == Some(object))).map(|(_, v)| *v).collect())
+            .map(|m| {
+                m.iter()
+                    .filter(|(k, _)| {
+                        k.0 == client && scopes.get(k).is_some_and(|sc| sc.tsg == Some(object))
+                    })
+                    .map(|(_, v)| *v)
+                    .collect()
+            })
             .unwrap_or_default();
         if pt.is_empty() && tr.is_empty() {
             return ChanAnswer::NotOurs;
@@ -1545,11 +1920,26 @@ impl ChanPlane {
     /// A promote that carries VAs (the UVM bind, after the object exists) is an ACT ordered behind
     /// any queued engine-object act, and requires the host GR object to exist.
     /// ⊘ Nothing is sent to the host and no guest byte is read or written.
-    fn promote_ctx(&self, client: u32, object: u32, engine_type: u32, initialize: u32, with_va: u32, entries: u32) -> ChanAnswer {
-        let Some((engine, ht)) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token))) else {
+    fn promote_ctx(
+        &self,
+        client: u32,
+        object: u32,
+        engine_type: u32,
+        initialize: u32,
+        with_va: u32,
+        entries: u32,
+    ) -> ChanAnswer {
+        let Some((engine, ht)) = self
+            .pt
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token)))
+        else {
             // A Translated (kernel CE) channel has no GR context and never promotes; a kernel GR
             // channel (RM's golden-image channel) is not born (P7) — both stay the FSM's refusal.
-            eprintln!("kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX: no passthrough twin — not ours (entries={entries})");
+            eprintln!(
+                "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX: no passthrough twin — not ours (entries={entries})"
+            );
             return ChanAnswer::NotOurs;
         };
         // ★ A VIDEO twin's promote is the falcon context (`_kflcnPromoteContext`,
@@ -1558,9 +1948,14 @@ impl ChanPlane {
         // twin — nothing sent, no guest byte touched.
         if kf_abi::submit::is_video_engine_type(engine) && engine_type == engine {
             let Ok(mut m) = self.pt.lock() else {
-                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "twins poisoned".into(),
+                };
             };
-            let Some(v) = m.get_mut(&(client, object)) else { return ChanAnswer::NotOurs };
+            let Some(v) = m.get_mut(&(client, object)) else {
+                return ChanAnswer::NotOurs;
+            };
             v.ctx.promotes += 1;
             eprintln!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (video falcon ctx, engine {engine:#x}) SATISFIED BY TWIN host {ht:#x}: entries={entries} host_objects={} — not forwarded",
@@ -1571,14 +1966,21 @@ impl ChanPlane {
         if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS || engine_type != engine {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_ARGUMENT,
-                why: format!("GPU_PROMOTE_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {ht:#x})"),
+                why: format!(
+                    "GPU_PROMOTE_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {ht:#x})"
+                ),
             };
         }
         if with_va == 0 {
             let Ok(mut m) = self.pt.lock() else {
-                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "twins poisoned".into(),
+                };
             };
-            let Some(v) = m.get_mut(&(client, object)) else { return ChanAnswer::NotOurs };
+            let Some(v) = m.get_mut(&(client, object)) else {
+                return ChanAnswer::NotOurs;
+            };
             v.ctx.initialized |= initialize;
             v.ctx.promotes += 1;
             eprintln!(
@@ -1627,13 +2029,21 @@ impl ChanPlane {
     /// `GPFIFO_SCHEDULE` disable, an authored verb), so that promise is the host's, and the
     /// binding is recorded UNBOUND.
     fn evict_ctx(&self, client: u32, object: u32, engine_type: u32) -> ChanAnswer {
-        let Some((engine, chan)) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan))) else {
+        let Some((engine, chan)) = self
+            .pt
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan)))
+        else {
             return ChanAnswer::NotOurs;
         };
         if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS || engine_type != engine {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_ARGUMENT,
-                why: format!("GPU_EVICT_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {:#x})", chan.token),
+                why: format!(
+                    "GPU_EVICT_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {:#x})",
+                    chan.token
+                ),
             };
         }
         self.defer(
@@ -1654,7 +2064,9 @@ impl ChanPlane {
     }
 
     fn schedule_translated(&self, client: u32, object: u32, ht: u32, enable: bool) -> ChanAnswer {
-        let Some(slot) = self.slot(ht) else { return ChanAnswer::NotOurs };
+        let Some(slot) = self.slot(ht) else {
+            return ChanAnswer::NotOurs;
+        };
         // ★ v3-chanctl: a STOPPED Translated channel's host ring was disabled and taken off its
         // runlist — re-enable it (host verbs: an act) before the pump may fetch again.
         if enable && slot.try_lock().is_ok_and(|g| g.stopped) {
@@ -1689,9 +2101,16 @@ impl ChanPlane {
                 g.scheduled = enable;
                 g.guest_idx
             }
-            Err(_) => return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "slot poisoned".into() },
+            Err(_) => {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "slot poisoned".into(),
+                };
+            }
         };
-        eprintln!("kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})");
+        eprintln!(
+            "kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})"
+        );
         // Work the guest queued before scheduling is picked up now.
         if enable && self.plane.ring_internal(idx) {
             let _ = self.wake.signal();
@@ -1702,16 +2121,27 @@ impl ChanPlane {
     /// ★ P5b: an engine object under a PASSTHROUGH twin — allocated on the twin with the guest's
     /// class (checked against the HOST family's generated set for the twin's engine) and params
     /// we author. Under a Translated channel it is a graph node only (our ring owns its object).
-    fn engine_object(&self, client: u32, parent: u32, handle: u32, class: u32, copy_engine: Option<u32>) -> ChanAnswer {
-        let Some((chan, engine, space, rows)) =
-            self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine, v.space, v.rows.clone())))
-        else {
+    fn engine_object(
+        &self,
+        client: u32,
+        parent: u32,
+        handle: u32,
+        class: u32,
+        copy_engine: Option<u32>,
+    ) -> ChanAnswer {
+        let Some((chan, engine, space, rows)) = self.pt.lock().ok().and_then(|m| {
+            m.get(&(client, parent))
+                .map(|v| (v.chan, v.engine, v.space, v.rows.clone()))
+        }) else {
             return ChanAnswer::NotOurs;
         };
         let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_CLASS,
-                why: format!("class {class:#x} is not an engine class of the host family {:?}", self.family),
+                why: format!(
+                    "class {class:#x} is not an engine class of the host family {:?}",
+                    self.family
+                ),
             };
         };
         self.defer(
@@ -1787,25 +2217,49 @@ impl ChanPlane {
     /// context is refused by name, as `DISABLE_CHANNELS` refuses another client's channel); the
     /// host session is allocated with params WE author, bound to that twin's host GR object. So the
     /// host session watches exactly the host context the guest's own context runs as.
-    fn debugger(&self, client: u32, parent: u32, handle: u32, app_client: u32, obj3d: u32) -> ChanAnswer {
+    fn debugger(
+        &self,
+        client: u32,
+        parent: u32,
+        handle: u32,
+        app_client: u32,
+        obj3d: u32,
+    ) -> ChanAnswer {
         if app_client != client {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_ARGUMENT,
-                why: format!("GT200_DEBUGGER in client {client:#x} over another client's ({app_client:#x}) object"),
+                why: format!(
+                    "GT200_DEBUGGER in client {client:#x} over another client's ({app_client:#x}) object"
+                ),
             };
         }
-        let host_obj = self.pt_objs.lock().ok().and_then(|m| m.get(&(client, obj3d)).copied()).and_then(|key| {
-            self.pt.lock().ok().and_then(|m| m.get(&key).and_then(|v| v.objects.get(&obj3d).copied()))
-        });
+        let host_obj = self
+            .pt_objs
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, obj3d)).copied())
+            .and_then(|key| {
+                self.pt
+                    .lock()
+                    .ok()
+                    .and_then(|m| m.get(&key).and_then(|v| v.objects.get(&obj3d).copied()))
+            });
         let host_obj = match host_obj {
             Some((h, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD)) => h,
             Some((_, k)) => {
-                return ChanAnswer::Refused { status: NV_ERR_INVALID_ARGUMENT, why: format!("GT200_DEBUGGER over {client:#x}:{obj3d:#x}, a {k:?} object — not GR") };
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_ARGUMENT,
+                    why: format!(
+                        "GT200_DEBUGGER over {client:#x}:{obj3d:#x}, a {k:?} object — not GR"
+                    ),
+                };
             }
             None => {
                 return ChanAnswer::Refused {
                     status: NV_ERR_INVALID_ARGUMENT,
-                    why: format!("GT200_DEBUGGER over {client:#x}:{obj3d:#x}: no passthrough twin holds that object"),
+                    why: format!(
+                        "GT200_DEBUGGER over {client:#x}:{obj3d:#x}: no passthrough twin holds that object"
+                    ),
                 };
             }
         };
@@ -1829,7 +2283,14 @@ impl ChanPlane {
             .lock()
             .map(|m| {
                 m.iter()
-                    .filter(|(k, v)| ChanScope { tsg: v.tsg, parent: v.parent, device: v.device }.freed_by(**k, client, object))
+                    .filter(|(k, v)| {
+                        ChanScope {
+                            tsg: v.tsg,
+                            parent: v.parent,
+                            device: v.device,
+                        }
+                        .freed_by(**k, client, object)
+                    })
                     .flat_map(|(_, v)| v.objects.values().map(|o| o.0).collect::<Vec<_>>())
                     .collect()
             })
@@ -1839,7 +2300,12 @@ impl ChanPlane {
             .lock()
             .ok()
             .and_then(|m| m.get(&(client, object)).copied())
-            .and_then(|key| self.pt.lock().ok().and_then(|m| m.get(&key).and_then(|v| v.objects.get(&object).map(|o| o.0))));
+            .and_then(|key| {
+                self.pt.lock().ok().and_then(|m| {
+                    m.get(&key)
+                        .and_then(|v| v.objects.get(&object).map(|o| o.0))
+                })
+            });
         let debuggers: Vec<u32> = self
             .dbg
             .lock()
@@ -1853,7 +2319,9 @@ impl ChanPlane {
                     })
                     .map(|(k, _)| *k)
                     .collect();
-                keys.into_iter().filter_map(|k| m.remove(&k).map(|v| v.1)).collect()
+                keys.into_iter()
+                    .filter_map(|k| m.remove(&k).map(|v| v.1))
+                    .collect()
             })
             .unwrap_or_default();
         // ★ w827: a freed Device (or client) takes its CUDA-limit row; the host limit goes off with
@@ -1873,7 +2341,13 @@ impl ChanPlane {
         self.free_channels(client, object, debuggers, limit_off)
     }
 
-    fn free_channels(&self, client: u32, object: u32, debuggers: Vec<u32>, limit_off: bool) -> ChanAnswer {
+    fn free_channels(
+        &self,
+        client: u32,
+        object: u32,
+        debuggers: Vec<u32>,
+        limit_off: bool,
+    ) -> ChanAnswer {
         // Translated channels: by object, or every one of the client's.
         // ★ v3-promote: a free of the channel, its group, its parent, its DEVICE or its client
         // takes the channel with it (the guest frees a subtree with ONE RPC) — for Translated
@@ -1888,7 +2362,11 @@ impl ChanPlane {
                     .keys()
                     .copied()
                     .filter(|k| {
-                        let sc = scopes.get(k).copied().unwrap_or(ChanScope { tsg: None, parent: k.1, device: k.1 });
+                        let sc = scopes.get(k).copied().unwrap_or(ChanScope {
+                            tsg: None,
+                            parent: k.1,
+                            device: k.1,
+                        });
                         sc.freed_by(*k, client, object)
                     })
                     .collect();
@@ -1898,17 +2376,41 @@ impl ChanPlane {
         if let Ok(mut m) = self.scopes.lock() {
             m.retain(|k, sc| !sc.freed_by(*k, client, object));
         }
-        let twins = self.take_pt(|k, v| ChanScope { tsg: v.tsg, parent: v.parent, device: v.device }.freed_by(*k, client, object));
+        let twins = self.take_pt(|k, v| {
+            ChanScope {
+                tsg: v.tsg,
+                parent: v.parent,
+                device: v.device,
+            }
+            .freed_by(*k, client, object)
+        });
         // Engine objects freed on their own (their twin still lives).
         let obj = if twins.is_empty() {
-            self.pt_objs.lock().ok().and_then(|mut m| m.remove(&(client, object))).and_then(|key| {
-                self.pt.lock().ok().and_then(|mut m| m.get_mut(&key).and_then(|v| v.objects.remove(&object).map(|o| o.0)))
-            })
+            self.pt_objs
+                .lock()
+                .ok()
+                .and_then(|mut m| m.remove(&(client, object)))
+                .and_then(|key| {
+                    self.pt.lock().ok().and_then(|mut m| {
+                        m.get_mut(&key)
+                            .and_then(|v| v.objects.remove(&object).map(|o| o.0))
+                    })
+                })
         } else {
             None
         };
-        let sessions = client == object && self.enc_sessions.lock().is_ok_and(|m| m.get(&client).is_some_and(|n| *n > 0));
-        if translated.is_empty() && twins.is_empty() && obj.is_none() && debuggers.is_empty() && !limit_off && !sessions {
+        let sessions = client == object
+            && self
+                .enc_sessions
+                .lock()
+                .is_ok_and(|m| m.get(&client).is_some_and(|n| *n > 0));
+        if translated.is_empty()
+            && twins.is_empty()
+            && obj.is_none()
+            && debuggers.is_empty()
+            && !limit_off
+            && !sessions
+        {
             return ChanAnswer::NotOurs;
         }
         if !twins.is_empty() {
@@ -1989,57 +2491,109 @@ impl ChanPlane {
         self.defer(
             "encoder session",
             Box::new(move |me: &ChanPlane| {
-                let held = me.enc_sessions.lock().map(|m| m.get(&client).copied().unwrap_or(0)).unwrap_or(0);
+                let held = me
+                    .enc_sessions
+                    .lock()
+                    .map(|m| m.get(&client).copied().unwrap_or(0))
+                    .unwrap_or(0);
                 if !acquire && held == 0 {
-                    return Ok(format!("{client:#x} NVENC session release with none held — no host call"));
+                    return Ok(format!(
+                        "{client:#x} NVENC session release with none held — no host call"
+                    ));
                 }
-                let cmd = if acquire { kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE } else { kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE };
+                let cmd = if acquire {
+                    kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE
+                } else {
+                    kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE
+                };
                 let mut p = [0u8; kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE];
-                me.rm.raw_control(me.rm.subdevice(), cmd, &mut p).map_err(|e| {
-                    let st = match e {
-                        kf_host::RmError::Other(s) if s < 0x4B00 => s,
-                        _ => NV_ERR_INVALID_STATE,
-                    };
-                    (st, format!("{client:#x} host NVENC session {}: {e:?}", if acquire { "acquire" } else { "release" }))
-                })?;
+                me.rm
+                    .raw_control(me.rm.subdevice(), cmd, &mut p)
+                    .map_err(|e| {
+                        let st = match e {
+                            kf_host::RmError::Other(s) if s < 0x4B00 => s,
+                            _ => NV_ERR_INVALID_STATE,
+                        };
+                        (
+                            st,
+                            format!(
+                                "{client:#x} host NVENC session {}: {e:?}",
+                                if acquire { "acquire" } else { "release" }
+                            ),
+                        )
+                    })?;
                 let now = me.enc_sessions.lock().map(|mut m| {
                     let c = m.entry(client).or_insert(0);
-                    if acquire { *c += 1 } else { *c = c.saturating_sub(1) }
+                    if acquire {
+                        *c += 1
+                    } else {
+                        *c = c.saturating_sub(1)
+                    }
                     *c
                 });
-                Ok(format!("{client:#x} NVENC session {} on the host (held now {now:?})", if acquire { "ACQUIRED" } else { "released" }))
+                Ok(format!(
+                    "{client:#x} NVENC session {} on the host (held now {now:?})",
+                    if acquire { "ACQUIRED" } else { "released" }
+                ))
             }),
         )
     }
 
     /// ★ v3-video: release every host NVENC slot a freed guest client still held.
     fn release_encoder_sessions(&self, client: u32) -> Vec<String> {
-        let n = self.enc_sessions.lock().ok().and_then(|mut m| m.remove(&client)).unwrap_or(0);
+        let n = self
+            .enc_sessions
+            .lock()
+            .ok()
+            .and_then(|mut m| m.remove(&client))
+            .unwrap_or(0);
         (0..n)
             .map(|_| {
                 let mut p = [0u8; kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE];
-                let r = self.rm.raw_control(self.rm.subdevice(), kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE, &mut p);
-                format!("NVENC session of freed client {client:#x} released on the host ({})", if r.is_ok() { "ok" } else { "REFUSED" })
+                let r = self.rm.raw_control(
+                    self.rm.subdevice(),
+                    kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE,
+                    &mut p,
+                );
+                format!(
+                    "NVENC session of freed client {client:#x} released on the host ({})",
+                    if r.is_ok() { "ok" } else { "REFUSED" }
+                )
             })
             .collect()
     }
 
     /// ★ v3-video: free a Passthrough twin — a member of a shared host group frees its channel,
     /// and the group goes with its LAST member; an ungrouped twin frees channel and group.
-    fn release_twin(&self, client: u32, guest_tsg: Option<u32>, ctx_share: u32, chan: kf_host::Channel) -> Result<(), kf_host::RmError> {
-        let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else { return self.rm.free_channel(chan) };
+    fn release_twin(
+        &self,
+        client: u32,
+        guest_tsg: Option<u32>,
+        ctx_share: u32,
+        chan: kf_host::Channel,
+    ) -> Result<(), kf_host::RmError> {
+        let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else {
+            return self.rm.free_channel(chan);
+        };
         let r = self.rm.free_member(chan);
-        let last = self.groups.lock().map_or(true, |mut m| match m.get_mut(&k) {
-            Some(g) if g.1 > 1 => {
-                g.1 -= 1;
-                false
-            }
-            _ => {
-                m.remove(&k);
-                true
-            }
-        });
-        if last { r.and(self.rm.free(chan.tsg)) } else { r }
+        let last = self
+            .groups
+            .lock()
+            .map_or(true, |mut m| match m.get_mut(&k) {
+                Some(g) if g.1 > 1 => {
+                    g.1 -= 1;
+                    false
+                }
+                _ => {
+                    m.remove(&k);
+                    true
+                }
+            });
+        if last {
+            r.and(self.rm.free(chan.tsg))
+        } else {
+            r
+        }
     }
 
     fn slot(&self, ht: u32) -> Option<Arc<Mutex<Slot>>> {
@@ -2052,7 +2606,10 @@ impl ChanPlane {
     fn birth(&self, a: ChannelAlloc) -> ChanAnswer {
         let engine = a.engine_type.unwrap_or(0);
         let refuse = |status: u32, why: String| {
-            eprintln!("kf3: chan {:#x}:{:#x} birth REFUSED: {why} (decl {a:x?})", a.client, a.handle);
+            eprintln!(
+                "kf3: chan {:#x}:{:#x} birth REFUSED: {why} (decl {a:x?})",
+                a.client, a.handle
+            );
             ChanAnswer::Refused { status, why }
         };
         let passthrough = !a.kernel_client;
@@ -2070,65 +2627,132 @@ impl ChanPlane {
         {
             return refuse(
                 NV_ERR_NOT_SUPPORTED,
-                format!("user channel on engine type {engine:#x}: only a copy engine, GR0 or a video engine has a passthrough twin"),
+                format!(
+                    "user channel on engine type {engine:#x}: only a copy engine, GR0 or a video engine has a passthrough twin"
+                ),
             );
         }
         let Some(vas) = a.vaspace else {
-            return refuse(NV_ERR_INVALID_STATE, format!("no VA space resolved (hVASpace={:#x}, parent {:#x})", a.h_vaspace, a.parent));
+            return refuse(
+                NV_ERR_INVALID_STATE,
+                format!(
+                    "no VA space resolved (hVASpace={:#x}, parent {:#x})",
+                    a.h_vaspace, a.parent
+                ),
+            );
         };
         // ★ v3-gfx: the VA space's OWN client (a dup'd space is keyed by its original).
         let key = VasKey((u64::from(a.vaspace_client) << 32) | u64::from(vas));
         let Some(mirror) = self.mirrors.lock().ok().and_then(|m| m.get(&key).cloned()) else {
-            return refuse(NV_ERR_INVALID_STATE, format!("VA space {key:?} has no mirror (no page-directory statement named it)"));
+            return refuse(
+                NV_ERR_INVALID_STATE,
+                format!("VA space {key:?} has no mirror (no page-directory statement named it)"),
+            );
         };
         let Some(chid) = a.chid else {
-            return refuse(NV_ERR_INVALID_STATE, format!("no guest chid in flags {:#x} (USERD_INDEX not fixed)", a.flags));
+            return refuse(
+                NV_ERR_INVALID_STATE,
+                format!(
+                    "no guest chid in flags {:#x} (USERD_INDEX not fixed)",
+                    a.flags
+                ),
+            );
         };
         // ★ 2026-09-26: the index is per family (`kf_trap::tokenindex`) — on Blackwell chids are per
         // runlist, and the runlist is the one the served FIFO table gives this engine (what the
         // guest's own token carries in RUNLIST_ID). Through Hopper the runlist is ignored.
-        let runlist = kf_rm::authored::runlist_of_engine_type(&self.engine_table, engine).unwrap_or(0);
+        let runlist =
+            kf_rm::authored::runlist_of_engine_type(&self.engine_table, engine).unwrap_or(0);
         let Some(idx) = self.plane.token_index.of_channel(runlist, chid) else {
-            return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("chid {chid:#x} (runlist {runlist}) outside the token table"));
+            return refuse(
+                NV_ERR_INSUFFICIENT_RESOURCES,
+                format!("chid {chid:#x} (runlist {runlist}) outside the token table"),
+            );
         };
         if (idx as usize) >= self.plane.tokens.len() {
-            return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("chid {chid:#x} outside the token table"));
+            return refuse(
+                NV_ERR_INSUFFICIENT_RESOURCES,
+                format!("chid {chid:#x} outside the token table"),
+            );
         }
         if passthrough {
             // ★ The guest's USERD, adopted AT CREATION (RM zeroes it — `rm_takes_a_guest_userd`):
             // a store slice, or guest RAM through the mirror's RAM object.
             let userd = match a.userd {
-                Some(kf_arch::UserdMem::Framebuffer { base, .. }) => kf_chan::passthrough::UserdAt::Store { store: self.store, off: base },
+                Some(kf_arch::UserdMem::Framebuffer { base, .. }) => {
+                    kf_chan::passthrough::UserdAt::Store {
+                        store: self.store,
+                        off: base,
+                    }
+                }
                 Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
-                    let (Some(ram), Some((_, off))) = (mirror.ram_obj, self.ram.file_range(base, 0x200)) else {
-                        return refuse(NV_ERR_NOT_SUPPORTED, format!("sysmem USERD at {base:#x}: no guest-RAM object or memfd offset"));
+                    let (Some(ram), Some((_, off))) =
+                        (mirror.ram_obj, self.ram.file_range(base, 0x200))
+                    else {
+                        return refuse(
+                            NV_ERR_NOT_SUPPORTED,
+                            format!(
+                                "sysmem USERD at {base:#x}: no guest-RAM object or memfd offset"
+                            ),
+                        );
                     };
                     kf_chan::passthrough::UserdAt::Ram { ram, off }
                 }
-                other => return refuse(NV_ERR_NOT_SUPPORTED, format!("USERD not declared as a physical descriptor ({other:?})")),
+                other => {
+                    return refuse(
+                        NV_ERR_NOT_SUPPORTED,
+                        format!("USERD not declared as a physical descriptor ({other:?})"),
+                    );
+                }
             };
             // ★ P5c: where the guest's error notifier record is, as an object + offset the host
             // can name — so the twin's RC record is written there by the HOST (its GSP), natively.
             let err_at: Option<(u32, u64, kf_arch::UserdMem)> = match a.error_notifier {
-                Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => match (mirror.ram_obj, self.ram.file_range(gpa, 16)) {
-                    (Some(ram), Some((_, off))) => Some((ram, off, kf_arch::UserdMem::Sysmem { base: gpa, size: 16 })),
-                    _ => {
-                        self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
-                        eprintln!("kf3: chan {:#x}:{:#x} RC-UNARMED: sysmem notifier @{gpa:#x} has no guest-RAM object/offset", a.client, a.handle);
-                        None
+                Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => {
+                    match (mirror.ram_obj, self.ram.file_range(gpa, 16)) {
+                        (Some(ram), Some((_, off))) => Some((
+                            ram,
+                            off,
+                            kf_arch::UserdMem::Sysmem {
+                                base: gpa,
+                                size: 16,
+                            },
+                        )),
+                        _ => {
+                            self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
+                            eprintln!(
+                                "kf3: chan {:#x}:{:#x} RC-UNARMED: sysmem notifier @{gpa:#x} has no guest-RAM object/offset",
+                                a.client, a.handle
+                            );
+                            None
+                        }
                     }
-                },
-                Some(kf_arch::fault::ErrorNotifier::Framebuffer { off }) => {
-                    Some((self.store, off, kf_arch::UserdMem::Framebuffer { base: off, size: 16 }))
                 }
+                Some(kf_arch::fault::ErrorNotifier::Framebuffer { off }) => Some((
+                    self.store,
+                    off,
+                    kf_arch::UserdMem::Framebuffer {
+                        base: off,
+                        size: 16,
+                    },
+                )),
                 Some(kf_arch::fault::ErrorNotifier::Unreachable) => {
                     self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
-                    eprintln!("kf3: chan {:#x}:{:#x} RC-UNARMED: the declared notifier is in an aperture we cannot name", a.client, a.handle);
+                    eprintln!(
+                        "kf3: chan {:#x}:{:#x} RC-UNARMED: the declared notifier is in an aperture we cannot name",
+                        a.client, a.handle
+                    );
                     None
                 }
                 None => None,
             };
-            let g0 = kf_chan::passthrough::GuestChannel { gpfifo_va: a.gpfifo_va, entries: a.entries.max(1), userd, engine, err_ctx: 0 };
+            let g0 = kf_chan::passthrough::GuestChannel {
+                gpfifo_va: a.gpfifo_va,
+                entries: a.entries.max(1),
+                userd,
+                engine,
+                err_ctx: 0,
+            };
             let space = mirror.space;
             let rows = mirror.rows.clone();
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
@@ -2219,7 +2843,10 @@ impl ChanPlane {
         // no privileged leaf was ever walked in a space that turned kernel this way (UVM's): they
         // live in RM-internal clients' spaces, which are kernel from creation (`kernel_vas_for`).
         if !mirror.kernel_vas.swap(true, Ordering::AcqRel) {
-            eprintln!("kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here", a.client, a.handle);
+            eprintln!(
+                "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
+                a.client, a.handle
+            );
         }
         self.defer(
             "birth translated",
@@ -2318,7 +2945,14 @@ impl ChanPlane {
     /// ★ P5c (act thread): the twin's host error context over the guest's notifier record, its
     /// RC event on the plane's RC fd, and a read view of the record. `None` (named, counted) when any
     /// step refuses — the twin is then born without one, and its faults stay silent.
-    fn arm_notifier(&self, client: u32, handle: u32, obj: u32, off: u64, at: kf_arch::UserdMem) -> Option<PtNotifier> {
+    fn arm_notifier(
+        &self,
+        client: u32,
+        handle: u32,
+        obj: u32,
+        off: u64,
+        at: kf_arch::UserdMem,
+    ) -> Option<PtNotifier> {
         let refuse = |why: String| {
             self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
             eprintln!("kf3: chan {client:#x}:{handle:#x} RC-UNARMED: {why}");
@@ -2338,7 +2972,13 @@ impl ChanPlane {
         match self.userd_view(Some(at)) {
             Ok(view) => {
                 self.rc_armed.fetch_add(1, Ordering::Relaxed);
-                let mut n = PtNotifier { ctx, view, reported: false, at_arm: [0; 4], guest_stop_write: false };
+                let mut n = PtNotifier {
+                    ctx,
+                    view,
+                    reported: false,
+                    at_arm: [0; 4],
+                    guest_stop_write: false,
+                };
                 n.at_arm = n.words().unwrap_or([0; 4]);
                 Some(n)
             }
@@ -2354,7 +2994,10 @@ impl ChanPlane {
     fn release_notifier(&self, n: PtNotifier) {
         let _ = self.rm.free(n.ctx);
         if let UserdView::Store { cookie, .. } = &n.view {
-            let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: self.store, p_linear_address: *cookie });
+            let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+                h_memory: self.store,
+                p_linear_address: *cookie,
+            });
         }
     }
 
@@ -2367,7 +3010,9 @@ impl ChanPlane {
         let mut found = Vec::new();
         if let Ok(mut m) = self.pt.lock() {
             for t in m.values_mut() {
-                let Some(n) = t.notifier.as_mut() else { continue };
+                let Some(n) = t.notifier.as_mut() else {
+                    continue;
+                };
                 if n.reported {
                     continue;
                 }
@@ -2375,7 +3020,8 @@ impl ChanPlane {
                 // half of word 3 and is written last.
                 let Some(w) = n.words() else { continue };
                 // ★ v3-chanctl: the guest's own post-STOP write is re-baselined, never reported.
-                if n.guest_stop_write && w != n.at_arm && w[2] == ROBUST_CHANNEL_PREEMPTIVE_REMOVAL {
+                if n.guest_stop_write && w != n.at_arm && w[2] == ROBUST_CHANNEL_PREEMPTIVE_REMOVAL
+                {
                     n.at_arm = w;
                     continue;
                 }
@@ -2407,7 +3053,9 @@ impl ChanPlane {
                         e.chid,
                         e.engine,
                         e.except_type,
-                        self.rung.get(e.chid as usize).map_or(0, |c| c.load(Ordering::Relaxed)),
+                        self.rung
+                            .get(e.chid as usize)
+                            .map_or(0, |c| c.load(Ordering::Relaxed)),
                         self.last_rung(e.chid)
                     );
                 }
@@ -2422,7 +3070,10 @@ impl ChanPlane {
 
     /// ★ P5c (drainer): the RC events waiting to be posted.
     pub fn take_rc(&self) -> Vec<RcEvent> {
-        self.rc_queue.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default()
+        self.rc_queue
+            .lock()
+            .map(|mut q| std::mem::take(&mut *q))
+            .unwrap_or_default()
     }
 
     /// ★ P5c (drainer): put back events the GSP queue could not take now (retried next pass).
@@ -2441,22 +3092,48 @@ impl ChanPlane {
                 let page = base & !0xFFF;
                 let (node, cookie) = self
                     .rm
-                    .arm_cpu_view(MapNode::Gpu, self.store, page, 0x1000, ViewAccess::ReadWrite)
+                    .arm_cpu_view(
+                        MapNode::Gpu,
+                        self.store,
+                        page,
+                        0x1000,
+                        ViewAccess::ReadWrite,
+                    )
                     .map_err(|e| format!("USERD view of store {page:#x}: {e:?}"))?;
-                let region = VolatileRegion::map(Backing::DeviceFile { fd: node.as_fd() }, 0x1000, CachePolicy::Uncached, HostPageSize::query())
-                    .map_err(|e| format!("USERD mmap: {e:?}"))?;
-                Ok(UserdView::Store { region, _node: node, cookie, at: base - page })
+                let region = VolatileRegion::map(
+                    Backing::DeviceFile { fd: node.as_fd() },
+                    0x1000,
+                    CachePolicy::Uncached,
+                    HostPageSize::query(),
+                )
+                .map_err(|e| format!("USERD mmap: {e:?}"))?;
+                Ok(UserdView::Store {
+                    region,
+                    _node: node,
+                    cookie,
+                    at: base - page,
+                })
             }
             Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
-                let b = self.ram.block_for(base, 0x200).ok_or_else(|| format!("USERD at guest-physical {base:#x}: no RAM block"))?;
-                Ok(UserdView::Ram { mem: b.mem, at: (base - b.gpa) as usize })
+                let b = self
+                    .ram
+                    .block_for(base, 0x200)
+                    .ok_or_else(|| format!("USERD at guest-physical {base:#x}: no RAM block"))?;
+                Ok(UserdView::Ram {
+                    mem: b.mem,
+                    at: (base - b.gpa) as usize,
+                })
             }
-            other => Err(format!("USERD not declared as a physical descriptor ({other:?})")),
+            other => Err(format!(
+                "USERD not declared as a physical descriptor ({other:?})"
+            )),
         }
     }
 
     fn retire(&self, ht: u32) {
-        let Some(slot) = self.slots.write().ok().and_then(|mut s| s.remove(&ht)) else { return };
+        let Some(slot) = self.slots.write().ok().and_then(|mut s| s.remove(&ht)) else {
+            return;
+        };
         let Ok(mut g) = slot.lock() else { return };
         // §5.2: free waits out BUSY. The slot lock is held, so no worker is inside the pump — but
         // one may still hold the TOKEN for a moment after it: retry on the act thread (never a
@@ -2472,7 +3149,10 @@ impl ChanPlane {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
         if !freed {
-            eprintln!("kf3: chan token {:#x} (host {ht:#x}) STRANDED: still BUSY after 200 ms", g.guest_idx);
+            eprintln!(
+                "kf3: chan token {:#x} (host {ht:#x}) STRANDED: still BUSY after 200 ms",
+                g.guest_idx
+            );
         }
         let freed_chan = self.rm.free_channel(g.chan.host().channel()).is_ok();
         // ★ v3-appfix J: the ring's 1 MiB object, its GPU mapping and its host BAR1 CPU view went
@@ -2481,7 +3161,11 @@ impl ChanPlane {
         // GPFIFO and USERD live in the object); the ring's VA slot is reused only when every step
         // of the release succeeded.
         let ring_va = g.chan.host().va();
-        let ring_line = if freed_chan { g.chan.release_host(self.rm) } else { None };
+        let ring_line = if freed_chan {
+            g.chan.release_host(self.rm)
+        } else {
+            None
+        };
         if ring_line.as_deref().is_some_and(|l| !l.contains("REFUSED")) {
             crate::mem::give_ring_slot(&g.mirror.rings, ring_va);
         }
@@ -2489,13 +3173,19 @@ impl ChanPlane {
             eprintln!("kf3: chan token {:#x} (host {ht:#x}) {l}", g.guest_idx);
         }
         if !freed_chan {
-            eprintln!("kf3: chan token {:#x} (host {ht:#x}): host channel free REFUSED — its ring is KEPT (the channel still names it)", g.guest_idx);
+            eprintln!(
+                "kf3: chan token {:#x} (host {ht:#x}): host channel free REFUSED — its ring is KEPT (the channel still names it)",
+                g.guest_idx
+            );
         }
         g.mirror.live.fetch_sub(1, Ordering::AcqRel);
         let armed = g.views.armed;
         g.views.release_all(self.rm, self.store);
         if let UserdView::Store { cookie, .. } = &g.userd {
-            let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: self.store, p_linear_address: *cookie });
+            let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+                h_memory: self.store,
+                p_linear_address: *cookie,
+            });
         }
         eprintln!(
             "kf3: DOORBELL-LEDGER tok={:#010x} route=translated emulated={} forwarded={} host={ht:#x}",
@@ -2505,15 +3195,24 @@ impl ChanPlane {
         );
         if completion_probe_ms().is_some() {
             for (f, reads) in &g.probe.done {
-                let now: Vec<String> = f.releases.iter().map(|r| probe_read(self.ram, &g.mirror, None, *r).to_string()).collect();
+                let now: Vec<String> = f
+                    .releases
+                    .iter()
+                    .map(|r| probe_read(self.ram, &g.mirror, None, *r).to_string())
+                    .collect();
                 eprintln!(
                     "kf3: PROBE-RETIRE tok={:#x} fence seq={} gp_get={:?} submit->seen={}us seen {}ms before retire; at completion [{}]; at retire [{}]",
                     g.guest_idx,
                     f.seq,
                     f.gp_get,
-                    f.completed.map_or(0, |c| c.duration_since(f.submitted).as_micros()),
+                    f.completed
+                        .map_or(0, |c| c.duration_since(f.submitted).as_micros()),
                     f.completed.map_or(0, |c| c.elapsed().as_millis()),
-                    reads.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "),
+                    reads
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("; "),
                     now.join("; ")
                 );
             }
@@ -2545,7 +3244,9 @@ impl ChanPlane {
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
     /// Returns whether anything reached the GPU.
     pub fn serve(&self, ht: u32) -> bool {
-        let Some(slot) = self.slot(ht) else { return false };
+        let Some(slot) = self.slot(ht) else {
+            return false;
+        };
         // ★ The token's BUSY state is the exclusion; this lock must never be contended.
         let Ok(mut g) = slot.try_lock() else {
             self.contended.fetch_add(1, Ordering::Relaxed);
@@ -2553,7 +3254,12 @@ impl ChanPlane {
         };
         let g = &mut *g;
         g.serves += 1;
-        if g.dead.is_some() || !g.scheduled || g.disabled || g.stopped || self.stop.load(Ordering::Acquire) {
+        if g.dead.is_some()
+            || !g.scheduled
+            || g.disabled
+            || g.stopped
+            || self.stop.load(Ordering::Acquire)
+        {
             return false;
         }
         g.last_put = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();
@@ -2563,10 +3269,20 @@ impl ChanPlane {
             if let UserdView::Store { region, at, .. } = &g.userd {
                 let nz: Vec<String> = (0..0x1000u64)
                     .step_by(4)
-                    .filter_map(|o| region.load_u32(HostOffset::new(o)).ok().filter(|v| *v != 0).map(|v| format!("+{o:#x}={v:#x}")))
+                    .filter_map(|o| {
+                        region
+                            .load_u32(HostOffset::new(o))
+                            .ok()
+                            .filter(|v| *v != 0)
+                            .map(|v| format!("+{o:#x}={v:#x}"))
+                    })
                     .take(16)
                     .collect();
-                eprintln!("kf3: chan token {:#x}: GP_PUT=0 at USERD+{at:#x}+0x8c; non-zero words in its page: [{}]", g.guest_idx, nz.join(" "));
+                eprintln!(
+                    "kf3: chan token {:#x}: GP_PUT=0 at USERD+{at:#x}+0x8c; non-zero words in its page: [{}]",
+                    g.guest_idx,
+                    nz.join(" ")
+                );
             }
         }
         let before = g.chan.counts().1;
@@ -2578,32 +3294,80 @@ impl ChanPlane {
         {
             g.probe.put_moved = Some((p, std::time::Instant::now()));
         }
-        let mut mem = Mem { mirror: &mirror, ram: self.ram, rm: self.rm, store: self.store, views: &mut g.views };
-        let win = SlotWindow { mirror: &mirror, ram: self.ram };
-        let mut split = VaSplit { inbox: &self.inbox, token: g.guest_idx, ticket: &mut g.split, requested: &mut g.splits };
-        let r = g.chan.pump(self.rm, &self.completions, &mut mem, &mut Userd(&g.userd), &mut split, is_any_ce_class, &win);
+        let mut mem = Mem {
+            mirror: &mirror,
+            ram: self.ram,
+            rm: self.rm,
+            store: self.store,
+            views: &mut g.views,
+        };
+        let win = SlotWindow {
+            mirror: &mirror,
+            ram: self.ram,
+        };
+        let mut split = VaSplit {
+            inbox: &self.inbox,
+            token: g.guest_idx,
+            ticket: &mut g.split,
+            requested: &mut g.splits,
+        };
+        let r = g.chan.pump(
+            self.rm,
+            &self.completions,
+            &mut mem,
+            &mut Userd(&g.userd),
+            &mut split,
+            is_any_ce_class,
+            &win,
+        );
         if probe {
             for f in g.chan.take_completed() {
-                let reads: Vec<ReleaseRead> =
-                    f.releases.iter().map(|r| probe_read(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), *r)).collect();
+                let reads: Vec<ReleaseRead> = f
+                    .releases
+                    .iter()
+                    .map(|r| {
+                        probe_read(
+                            self.ram,
+                            &mirror,
+                            Some((&mut g.views, self.rm, self.store)),
+                            *r,
+                        )
+                    })
+                    .collect();
                 let bad = reads.iter().any(ReleaseRead::not_landed);
-                let dt = f.completed.map_or(0, |c| c.duration_since(f.submitted).as_micros());
+                let dt = f
+                    .completed
+                    .map_or(0, |c| c.duration_since(f.submitted).as_micros());
                 // ★ v3-initrace: the data the launches moved, host side vs the guest's CPU views.
                 let mut data = Vec::new();
                 let mut copy_bad = false;
                 for l in &f.launches {
                     let (src, sb) = match l.src {
-                        Some(o) => probe_side(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), o),
+                        Some(o) => probe_side(
+                            self.ram,
+                            &mirror,
+                            Some((&mut g.views, self.rm, self.store)),
+                            o,
+                        ),
                         None => ("-".to_string(), None),
                     };
                     let (dst, db) = match l.dst {
-                        Some(o) => probe_side(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), o),
+                        Some(o) => probe_side(
+                            self.ram,
+                            &mirror,
+                            Some((&mut g.views, self.rm, self.store)),
+                            o,
+                        ),
                         None => ("-".to_string(), None),
                     };
                     let remap = l.launch & kf_abi::submit::ce::LAUNCH_REMAP_ENABLE != 0;
                     let differ = !remap && matches!((&sb, &db), (Some(a), Some(b)) if a != b);
                     copy_bad |= differ;
-                    data.push(format!("launch={:#x} src {src} dst {dst}{}", l.launch, if differ { " ⊘ DST != SRC" } else { "" }));
+                    data.push(format!(
+                        "launch={:#x} src {src} dst {dst}{}",
+                        l.launch,
+                        if differ { " ⊘ DST != SRC" } else { "" }
+                    ));
                 }
                 if g.probe.logged < 8 || bad || copy_bad {
                     g.probe.logged += 1;
@@ -2614,12 +3378,23 @@ impl ChanPlane {
                         f.seq,
                         f.gp_get,
                         g.last_put,
-                        reads.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "),
-                        if bad { " ⊘ A RELEASE DID NOT LAND WHERE OUR ROWS PLACE IT" } else { "" },
+                        reads
+                            .iter()
+                            .map(ToString::to_string)
+                            .collect::<Vec<_>>()
+                            .join("; "),
+                        if bad {
+                            " ⊘ A RELEASE DID NOT LAND WHERE OUR ROWS PLACE IT"
+                        } else {
+                            ""
+                        },
                         data.join("; ")
                     );
                 }
-                g.probe.put_at_done = Some((g.last_put, f.completed.unwrap_or_else(std::time::Instant::now)));
+                g.probe.put_at_done = Some((
+                    g.last_put,
+                    f.completed.unwrap_or_else(std::time::Instant::now),
+                ));
                 g.probe.dumped_guest = false;
                 if g.probe.done.len() >= 4 {
                     g.probe.done.pop_front();
@@ -2634,7 +3409,10 @@ impl ChanPlane {
                 ChanError::Userd(u) => format!("userd: {u}"),
                 ChanError::Publish(p) => format!("split: {p}"),
             };
-            eprintln!("kf3: chan token {:#x} ({:?}) DEAD: {why}", g.guest_idx, g.key);
+            eprintln!(
+                "kf3: chan token {:#x} ({:?}) DEAD: {why}",
+                g.guest_idx, g.key
+            );
             g.dead = Some(why);
             self.completions.clear(g.guest_idx);
         }
@@ -2646,11 +3424,21 @@ impl ChanPlane {
     #[must_use]
     pub fn pt_doorbells(&self, space: u32) -> String {
         // ⊘ try_lock: the VA thread must never wait on a lock the act thread may hold.
-        let Ok(m) = self.pt.try_lock() else { return "[pt busy]".into() };
+        let Ok(m) = self.pt.try_lock() else {
+            return "[pt busy]".into();
+        };
         let mut v: Vec<(u32, u32, u64)> = m
             .values()
             .filter(|t| t.space.space == space)
-            .map(|t| (t.idx, t.engine, self.rung.get(t.idx as usize).map_or(0, |c| c.load(Ordering::Relaxed))))
+            .map(|t| {
+                (
+                    t.idx,
+                    t.engine,
+                    self.rung
+                        .get(t.idx as usize)
+                        .map_or(0, |c| c.load(Ordering::Relaxed)),
+                )
+            })
             .collect();
         v.sort_unstable();
         format!(
@@ -2664,7 +3452,11 @@ impl ChanPlane {
 
     /// `KF3_MAPLOG`: when guest token `idx` last rang (seconds on the maplog clock), or `-`.
     fn last_rung(&self, idx: u32) -> String {
-        match self.rung_at_us.get(idx as usize).map_or(0, |c| c.load(Ordering::Relaxed)) {
+        match self
+            .rung_at_us
+            .get(idx as usize)
+            .map_or(0, |c| c.load(Ordering::Relaxed))
+        {
             0 => "-".into(),
             us => format!("{:.6}", us as f64 / 1e6),
         }
@@ -2677,16 +3469,23 @@ impl ChanPlane {
     /// condition. Guest-RAM words are re-read now; a vidmem word is named, not read (no view is
     /// armed off a worker). ⊘ `try_lock` only: a slot a worker holds is skipped this tick.
     pub fn probe_tick(&self, overdue: std::time::Duration) -> Vec<String> {
-        let Ok(s) = self.slots.read() else { return Vec::new() };
+        let Ok(s) = self.slots.read() else {
+            return Vec::new();
+        };
         let mut out = Vec::new();
         for (&ht, slot) in s.iter() {
             let Ok(mut g) = slot.try_lock() else { continue };
             let g = &mut *g;
             let infl = g.chan.probe_inflight();
-            let host_late = infl.first().is_some_and(|f| f.submitted.elapsed() > overdue);
+            let host_late = infl
+                .first()
+                .is_some_and(|f| f.submitted.elapsed() > overdue);
             let put_now = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();
             let get_now = g.userd.load(kf_abi::submit::USERD_GP_GET).ok();
-            let guest_silent = g.probe.put_at_done.is_some_and(|(p, at)| at.elapsed() > overdue && put_now == p);
+            let guest_silent = g
+                .probe
+                .put_at_done
+                .is_some_and(|(p, at)| at.elapsed() > overdue && put_now == p);
             let why = if host_late && !g.probe.dumped_host {
                 g.probe.dumped_host = true;
                 "HOST-FENCE-OVERDUE (submitted, never seen complete)"
@@ -2706,7 +3505,12 @@ impl ChanPlane {
                 g.key,
                 g.serves,
                 g.chan.last_gp_get(),
-                g.probe.put_moved.map_or("never".to_string(), |(p, at)| format!("{p} {}ms ago", at.elapsed().as_millis())),
+                g.probe
+                    .put_moved
+                    .map_or("never".to_string(), |(p, at)| format!(
+                        "{p} {}ms ago",
+                        at.elapsed().as_millis()
+                    )),
                 g.dead,
                 g.scheduled,
                 g.stopped,
@@ -2722,13 +3526,26 @@ impl ChanPlane {
                 ));
             }
             for (f, reads) in &g.probe.done {
-                let now: Vec<String> = f.releases.iter().map(|r| probe_read(self.ram, &mirror, None, *r).to_string()).collect();
+                let now: Vec<String> = f
+                    .releases
+                    .iter()
+                    .map(|r| probe_read(self.ram, &mirror, None, *r).to_string())
+                    .collect();
                 let data: Vec<String> = f
                     .launches
                     .iter()
                     .map(|l| {
-                        let side = |x: Option<kf_chan::translated::Operand>| x.map_or("-".to_string(), |o| probe_side(self.ram, &mirror, None, o).0);
-                        format!("launch={:#x} src {} dst {}", l.launch, side(l.src), side(l.dst))
+                        let side = |x: Option<kf_chan::translated::Operand>| {
+                            x.map_or("-".to_string(), |o| {
+                                probe_side(self.ram, &mirror, None, o).0
+                            })
+                        };
+                        format!(
+                            "launch={:#x} src {} dst {}",
+                            l.launch,
+                            side(l.src),
+                            side(l.dst)
+                        )
                     })
                     .collect();
                 lines.push(format!(
@@ -2750,13 +3567,16 @@ impl ChanPlane {
     /// Whether the channel behind `ht` can take work (a dead one cannot: §7 then poisons).
     #[must_use]
     pub fn alive(&self, ht: u32) -> bool {
-        self.slot(ht).is_some_and(|s| s.try_lock().map_or(true, |g| g.dead.is_none()))
+        self.slot(ht)
+            .is_some_and(|s| s.try_lock().map_or(true, |g| g.dead.is_none()))
     }
 
     /// `forwarded=` per token, for the boot log.
     #[must_use]
     pub fn counts(&self) -> Vec<TokenCount> {
-        let Ok(s) = self.slots.read() else { return Vec::new() };
+        let Ok(s) = self.slots.read() else {
+            return Vec::new();
+        };
         let mut v: Vec<TokenCount> = s
             .values()
             .filter_map(|slot| {
@@ -2792,16 +3612,42 @@ mod scope_tests {
     /// client's identical handles, a sibling channel, an unrelated object).
     #[test]
     fn a_group_device_or_client_free_takes_every_twin_under_it() {
-        let (c, dev, tsg, ch, sib) = (0xc1d0_000b, 0x5c00_0001, 0xcafe_0010, 0xcafe_0013, 0xcafe_0014);
-        let member = ChanScope { tsg: Some(tsg), parent: tsg, device: dev };
+        let (c, dev, tsg, ch, sib) = (
+            0xc1d0_000b,
+            0x5c00_0001,
+            0xcafe_0010,
+            0xcafe_0013,
+            0xcafe_0014,
+        );
+        let member = ChanScope {
+            tsg: Some(tsg),
+            parent: tsg,
+            device: dev,
+        };
         assert!(member.freed_by((c, ch), c, ch), "the channel itself");
         assert!(member.freed_by((c, ch), c, tsg), "its group");
-        assert!(member.freed_by((c, ch), c, dev), "its DEVICE (a group member's parent is the group)");
+        assert!(
+            member.freed_by((c, ch), c, dev),
+            "its DEVICE (a group member's parent is the group)"
+        );
         assert!(member.freed_by((c, ch), c, c), "its client");
-        assert!(!member.freed_by((c, ch), c, sib), "a sibling's free leaves it");
-        assert!(!member.freed_by((c, ch), 0xc1d0_000c, tsg), "another client's same handle");
-        assert!(!member.freed_by((c, ch), c, 0xdead_0001), "an unrelated object");
-        let bare = ChanScope { tsg: None, parent: dev, device: dev };
+        assert!(
+            !member.freed_by((c, ch), c, sib),
+            "a sibling's free leaves it"
+        );
+        assert!(
+            !member.freed_by((c, ch), 0xc1d0_000c, tsg),
+            "another client's same handle"
+        );
+        assert!(
+            !member.freed_by((c, ch), c, 0xdead_0001),
+            "an unrelated object"
+        );
+        let bare = ChanScope {
+            tsg: None,
+            parent: dev,
+            device: dev,
+        };
         assert!(bare.freed_by((c, ch), c, dev));
         assert!(!bare.freed_by((c, ch), c, tsg));
     }

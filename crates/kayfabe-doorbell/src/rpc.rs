@@ -57,7 +57,10 @@ pub const SURFACE: [(u32, &str, Disposition); 18] = [
 
 /// ★ Dispatch. Total over `u32` by construction — there is no "unhandled" arm.
 pub fn classify(function: u32) -> Disposition {
-    match SURFACE.iter().find(|(f, _, _)| *f == function && *f != u32::MAX) {
+    match SURFACE
+        .iter()
+        .find(|(f, _, _)| *f == function && *f != u32::MAX)
+    {
         Some((_, _, d)) => *d,
         // ⊘ ~210 ids, and this is the decision for all of them.
         None => Disposition::Refuse,
@@ -65,7 +68,10 @@ pub fn classify(function: u32) -> Disposition {
 }
 
 pub fn name_of(function: u32) -> Option<&'static str> {
-    SURFACE.iter().find(|(f, _, _)| *f == function && *f != u32::MAX).map(|(_, n, _)| *n)
+    SURFACE
+        .iter()
+        .find(|(f, _, _)| *f == function && *f != u32::MAX)
+        .map(|(_, n, _)| *n)
 }
 
 /// RM control commands, **with their dispositions** — §2.3.
@@ -130,15 +136,46 @@ pub const CONTROLS: [(u32, ControlDisposition); 33] = [
     (0x906f0106, ControlDisposition::ServedLocally),
     (0x2080a026, ControlDisposition::AdmittedUndispatched),
     // ⊘ The nine §2.3 refuses BY NAME.
-    (0x20800122, ControlDisposition::RefusedByName("GPU_EXEC_REG_OPS: arbitrary register peek/poke")),
-    (0xb0cc010a, ControlDisposition::RefusedByName("perf EXEC_REG_OPS: arbitrary register peek/poke")),
-    (0xb0cc0105, ControlDisposition::RefusedByName("ALLOC_PMA_STREAM: hardware performance counters")),
-    (0x83de0307, ControlDisposition::RefusedByName("DEBUG_SET_MODE_MMU_DEBUG: SM debugger")),
-    (0x20800177, ControlDisposition::RefusedByName("GPU_REPORT_NON_REPLAYABLE_FAULT: fault mechanism not modelled")),
-    (0x00e00102, ControlDisposition::RefusedByName("fabric/NVLink")),
-    (0x00f10003, ControlDisposition::RefusedByName("fabric/NVLink")),
-    (0x20803083, ControlDisposition::RefusedByName("fabric/NVLink")),
-    (0x20801702, ControlDisposition::RefusedByName("MC_SERVICE_INTERRUPTS: deliberately refused to cancel the guest's polling loop")),
+    (
+        0x20800122,
+        ControlDisposition::RefusedByName("GPU_EXEC_REG_OPS: arbitrary register peek/poke"),
+    ),
+    (
+        0xb0cc010a,
+        ControlDisposition::RefusedByName("perf EXEC_REG_OPS: arbitrary register peek/poke"),
+    ),
+    (
+        0xb0cc0105,
+        ControlDisposition::RefusedByName("ALLOC_PMA_STREAM: hardware performance counters"),
+    ),
+    (
+        0x83de0307,
+        ControlDisposition::RefusedByName("DEBUG_SET_MODE_MMU_DEBUG: SM debugger"),
+    ),
+    (
+        0x20800177,
+        ControlDisposition::RefusedByName(
+            "GPU_REPORT_NON_REPLAYABLE_FAULT: fault mechanism not modelled",
+        ),
+    ),
+    (
+        0x00e00102,
+        ControlDisposition::RefusedByName("fabric/NVLink"),
+    ),
+    (
+        0x00f10003,
+        ControlDisposition::RefusedByName("fabric/NVLink"),
+    ),
+    (
+        0x20803083,
+        ControlDisposition::RefusedByName("fabric/NVLink"),
+    ),
+    (
+        0x20801702,
+        ControlDisposition::RefusedByName(
+            "MC_SERVICE_INTERRUPTS: deliberately refused to cancel the guest's polling loop",
+        ),
+    ),
 ];
 
 pub fn control_disposition(cmd: u32) -> ControlDisposition {
@@ -147,7 +184,9 @@ pub fn control_disposition(cmd: u32) -> ControlDisposition {
         .find(|(c, _)| *c == cmd)
         .map(|(_, d)| *d)
         // ⊘ Default deny, by name.
-        .unwrap_or(ControlDisposition::RefusedByName("not on the allowlist — default deny"))
+        .unwrap_or(ControlDisposition::RefusedByName(
+            "not on the allowlist — default deny",
+        ))
 }
 
 /// ⊘ *Served* means answered. Admitted-undispatched and refused are both **not served**, and

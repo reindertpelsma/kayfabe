@@ -41,6 +41,7 @@ pub enum Translatable {
     /// The operand names something nothing binds, and no amount of waiting changes it.
     No,
 }
+use crate::REACT_ROUNDS;
 use crate::completion::Completion;
 use crate::leaf::{GuestRamLayout, HostSlice, LeafRefusal};
 use crate::lifetime::{Step, Teardown, TeardownError, WalkerState};
@@ -48,7 +49,6 @@ use crate::ring::PrivRing;
 use crate::token::{Claim, Release, Route, TokenWord};
 use crate::trap::{Action, Class, TrapPath};
 use crate::wake::WakeWord;
-use crate::REACT_ROUNDS;
 
 /// The host side. ⊘ Deliberately tiny: every method is a thing §9 says we **author**, never a
 /// guest value forwarded. *"We author every host call; our host-verb signatures do not accept a
@@ -120,7 +120,9 @@ impl Default for Vmm {
 
 impl Vmm {
     pub const fn new() -> Vmm {
-        Vmm { worker_wake: WakeWord::new() }
+        Vmm {
+            worker_wake: WakeWord::new(),
+        }
     }
 }
 
@@ -201,7 +203,11 @@ impl<'v> Plane<'v> {
     /// ⊘ §7 needs to know whether a channel is the guest's KERNEL or a user channel, because that
     /// selects the failure policy. It is recorded at allocation, never inferred at submit time.
     fn owner_of(&self, tok: u32) -> Owner {
-        if self.kernel_tokens.iter().any(|t| *t == tok) { Owner::Kernel } else { Owner::User }
+        if self.kernel_tokens.iter().any(|t| *t == tok) {
+            Owner::Kernel
+        } else {
+            Owner::User
+        }
     }
 
     /// ★ Twin allocation goes through §9.1's caps. ⊘ On a shared host GPU the driver enforces no
@@ -217,7 +223,11 @@ impl<'v> Plane<'v> {
         // ⊘ `[fable S7]` a guest-root-derived index must not panic the VMM.
         let idx = (tok & self.token_mask) as usize;
         if idx >= self.tokens.len() {
-            return Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: self.tokens.len() as u32, asked: tok });
+            return Err(Refusal::OverDeclaredCap {
+                twin: Twin::Channel,
+                cap: self.tokens.len() as u32,
+                asked: tok,
+            });
         }
         caps.acquire(Twin::Channel)?;
         // ⊘⊘ `[fable S3]` the return value is the point: a failed allocate leaves the OLD route
@@ -227,7 +237,11 @@ impl<'v> Plane<'v> {
             || self.tokens[idx].allocate_fresh(route, host_token);
         if !ok {
             caps.release(Twin::Channel);
-            return Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: 0, asked: tok });
+            return Err(Refusal::OverDeclaredCap {
+                twin: Twin::Channel,
+                cap: 0,
+                asked: tok,
+            });
         }
         // ⊘⊘⊘ `[fable S5]` kernel_tokens was STICKY: never removed on free, duplicated on reuse,
         // cleared only at teardown. A kernel chid, once freed and recycled to a user process,
@@ -247,7 +261,9 @@ impl<'v> Plane<'v> {
     /// forever.
     pub fn free_channel(&mut self, caps: &mut VmCaps, tok: u32) -> bool {
         let idx = (tok & self.token_mask) as usize;
-        let Some(w) = self.tokens.get(idx) else { return false };
+        let Some(w) = self.tokens.get(idx) else {
+            return false;
+        };
         // §5.2: free waits out BUSY before the twin may be dropped.
         if !w.retire() {
             return false;
@@ -294,7 +310,11 @@ impl<'v> Plane<'v> {
     /// ⊘ The walker reset is not an afterthought inside the sequence: without it the next driver
     /// instance's first diff reports *"unchanged"* and maps nothing — a second boot that faults
     /// for reasons the first did not.
-    pub fn teardown(&mut self, host: &dyn HostOps, walker: &mut WalkerState) -> Result<(), TeardownError> {
+    pub fn teardown(
+        &mut self,
+        host: &dyn HostOps,
+        walker: &mut WalkerState,
+    ) -> Result<(), TeardownError> {
         let mut t = Teardown::new();
         for step in crate::lifetime::ORDER {
             t.run(step)?;
@@ -309,8 +329,6 @@ impl<'v> Plane<'v> {
         debug_assert!(t.complete());
         Ok(())
     }
-
-
 
     /// ★★★ **What the VMM registers as trapped** — the whole answer, in one place.
     ///
@@ -365,7 +383,9 @@ impl<'v> Plane<'v> {
         self.bits.scan(scratch, limit);
         let mut served = 0;
         for &tok in scratch.iter() {
-            let Some(w) = self.tokens.get(tok as usize) else { continue };
+            let Some(w) = self.tokens.get(tok as usize) else {
+                continue;
+            };
             let Claim::Won(t) = w.claim() else { continue };
             let mut round = 0;
             loop {
@@ -409,22 +429,22 @@ impl<'v> Plane<'v> {
                     Disposition::Submit => {
                         submitted = true;
                         match t.route {
-                        Route::Translated => host.run_translated(t.host_token, seq),
-                        Route::Emulated => {
-                            host.run_emulated(t.host_token, seq);
-                            false
+                            Route::Translated => host.run_translated(t.host_token, seq),
+                            Route::Emulated => {
+                                host.run_emulated(t.host_token, seq);
+                                false
+                            }
+                            // ⊘ A passthrough token is rung INLINE on the vCPU and must never be
+                            // served here; reaching this arm means the classifier disagreed with the
+                            // token word.
+                            // ⊘ `[fable S4]` was `break` WITHOUT release(), wedging the token BUSY
+                            // forever so `retire()` never succeeded and the free path spun. Release
+                            // first, then leave.
+                            Route::Passthrough | Route::Unknown => {
+                                let _ = w.release(round, REACT_ROUNDS);
+                                break;
+                            }
                         }
-                        // ⊘ A passthrough token is rung INLINE on the vCPU and must never be
-                        // served here; reaching this arm means the classifier disagreed with the
-                        // token word.
-                        // ⊘ `[fable S4]` was `break` WITHOUT release(), wedging the token BUSY
-                        // forever so `retire()` never succeeded and the free path spun. Release
-                        // first, then leave.
-                        Route::Passthrough | Route::Unknown => {
-                            let _ = w.release(round, REACT_ROUNDS);
-                            break;
-                        }
-                    }
                     }
                     Disposition::RefuseAndPoison => {
                         host.refuse_and_poison(t.host_token);
@@ -464,7 +484,9 @@ impl<'v> Plane<'v> {
     pub fn drainer_pass(&self, host: &dyn HostOps, budget: usize) -> usize {
         let mut n = 0;
         while n < budget {
-            let Some((_seq, w)) = self.ring.peek() else { break };
+            let Some((_seq, w)) = self.ring.peek() else {
+                break;
+            };
             host.apply_register(w.bar, w.offset, w.value, w.width);
             self.ring.commit();
             n += 1;

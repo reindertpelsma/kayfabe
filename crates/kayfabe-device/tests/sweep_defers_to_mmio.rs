@@ -103,7 +103,9 @@ fn every_trap_path_returns_the_in_flight_count_to_zero() {
 #[test]
 fn a_permanently_trapping_guest_does_not_livelock_the_sweep() {
     // ⊘ Held for the WHOLE window: see `CENSUS`.
-    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     let before = kayfabe_device::plane::sweep_defer_census();
 
@@ -144,7 +146,9 @@ fn a_permanently_trapping_guest_does_not_livelock_the_sweep() {
 #[test]
 fn with_no_trap_in_flight_the_sweep_does_not_defer() {
     // ⊘ Held for the WHOLE window: see `CENSUS`.
-    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     let before = kayfabe_device::plane::sweep_defer_census();
     let mut r = p.pt_bytes();

@@ -60,7 +60,9 @@ impl Table {
         if let Some((&i, _)) = self.slots.iter().find(|(_, s)| **s == v) {
             return Ok(i);
         }
-        let free = (self.start..=self.end).find(|i| !self.slots.contains_key(i)).ok_or(())?;
+        let free = (self.start..=self.end)
+            .find(|i| !self.slots.contains_key(i))
+            .ok_or(())?;
         self.slots.insert(free, v);
         Ok(free)
     }
@@ -68,9 +70,21 @@ impl Table {
 
 /// The measured defaults (module docs).
 fn defaults(t: TableType) -> Vec<ZbcValue> {
-    let c = |fb: u32| ZbcValue { color_fb: [fb; 4], format: 0, ..ZbcValue::default() };
-    let d = |depth: u32| ZbcValue { depth, format: 1, ..ZbcValue::default() };
-    let s = |stencil: u32| ZbcValue { stencil, format: 1, ..ZbcValue::default() };
+    let c = |fb: u32| ZbcValue {
+        color_fb: [fb; 4],
+        format: 0,
+        ..ZbcValue::default()
+    };
+    let d = |depth: u32| ZbcValue {
+        depth,
+        format: 1,
+        ..ZbcValue::default()
+    };
+    let s = |stencil: u32| ZbcValue {
+        stencil,
+        format: 1,
+        ..ZbcValue::default()
+    };
     match t {
         TableType::Color => vec![c(0), c(0xffff_ffff), c(0x3f80_0000)],
         TableType::Depth => vec![d(0), d(0x3f80_0000)],
@@ -96,14 +110,21 @@ impl ZbcPolicy {
     /// A fresh per-VM table over the host's index ranges (`[(start, end); 3]` in
     /// [`TableType::ALL`] order), or a refusing link when the host has none.
     #[must_use]
-    pub fn new(driver: kf_abi::versions::DriverAbiTable, sizes: Option<[(u32, u32); 3]>) -> ZbcPolicy {
+    pub fn new(
+        driver: kf_abi::versions::DriverAbiTable,
+        sizes: Option<[(u32, u32); 3]>,
+    ) -> ZbcPolicy {
         let tables = sizes.map(|s| {
             TableType::ALL.map(|t| {
                 let (start, end) = s[t.wire() as usize - 1];
                 Table::new(start, end, &defaults(t))
             })
         });
-        ZbcPolicy { driver, tables, referenced: false }
+        ZbcPolicy {
+            driver,
+            tables,
+            referenced: false,
+        }
     }
 
     /// ★ The answer to one ZBC control's params (a pure function of the table, testable without
@@ -131,14 +152,32 @@ impl ZbcPolicy {
         let mut out = params.to_vec();
         match cmd {
             z::SET_ZBC_COLOR_CLEAR => {
-                let v = ZbcValue { color_fb: [w(0), w(1), w(2), w(3)], format: 0, ..ZbcValue::default() };
-                tables[0].add(v).map_err(|()| NV_ERR_INSUFFICIENT_RESOURCES)?;
+                let v = ZbcValue {
+                    color_fb: [w(0), w(1), w(2), w(3)],
+                    format: 0,
+                    ..ZbcValue::default()
+                };
+                tables[0]
+                    .add(v)
+                    .map_err(|()| NV_ERR_INSUFFICIENT_RESOURCES)?;
             }
             z::SET_ZBC_DEPTH_CLEAR => {
-                tables[1].add(ZbcValue { depth: w(0), format: w(1), ..ZbcValue::default() }).map_err(|()| NV_ERR_INSUFFICIENT_RESOURCES)?;
+                tables[1]
+                    .add(ZbcValue {
+                        depth: w(0),
+                        format: w(1),
+                        ..ZbcValue::default()
+                    })
+                    .map_err(|()| NV_ERR_INSUFFICIENT_RESOURCES)?;
             }
             z::SET_ZBC_STENCIL_CLEAR => {
-                tables[2].add(ZbcValue { stencil: w(0), format: w(1), ..ZbcValue::default() }).map_err(|()| NV_ERR_INSUFFICIENT_RESOURCES)?;
+                tables[2]
+                    .add(ZbcValue {
+                        stencil: w(0),
+                        format: w(1),
+                        ..ZbcValue::default()
+                    })
+                    .map_err(|()| NV_ERR_INSUFFICIENT_RESOURCES)?;
             }
             z::GET_ZBC_CLEAR_TABLE_SIZE => {
                 let t = TableType::from_wire(w(2)).ok_or(NV_ERR_INVALID_ARGUMENT)?;
@@ -177,28 +216,47 @@ impl CommandPolicy for ZbcPolicy {
         // nothing references it. Our table is per-VM and hardware never reads it (module docs),
         // so the statement is recorded and answered; nothing is flushed or forwarded.
         if req.cmd == SET_ZBC_REFERENCED_0080 || req.cmd == SET_ZBC_REFERENCED_2080 {
-            let at = if req.cmd == SET_ZBC_REFERENCED_0080 { 4 } else { 0 };
+            let at = if req.cmd == SET_ZBC_REFERENCED_0080 {
+                4
+            } else {
+                0
+            };
             self.referenced = cmd.payload.get(req.params_at + at).is_some_and(|b| *b != 0);
             let mut body = cmd.payload.clone();
             body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
-            return Some(Reply { rpc_result: NV_OK, body });
+            return Some(Reply {
+                rpc_result: NV_OK,
+                body,
+            });
         }
         if req.cmd >> 16 != 0x9096 {
             return None;
         }
-        let refuse = |status: u32| Some(Reply { rpc_result: status, body: Vec::new() });
+        let refuse = |status: u32| {
+            Some(Reply {
+                rpc_result: status,
+                body: Vec::new(),
+            })
+        };
         if kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
             return refuse(NV_ERR_NOT_SUPPORTED);
         }
-        let Some(params) = cmd.payload.get(req.params_at..req.params_at + req.params_size as usize) else {
+        let Some(params) = cmd
+            .payload
+            .get(req.params_at..req.params_at + req.params_size as usize)
+        else {
             return refuse(NV_ERR_INVALID_ARGUMENT);
         };
         match self.answer(req.cmd, params) {
             Ok(p) => {
                 let mut body = cmd.payload.clone();
-                body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                    .copy_from_slice(&NV_OK.to_le_bytes());
                 body[req.params_at..req.params_at + p.len()].copy_from_slice(&p);
-                Some(Reply { rpc_result: NV_OK, body })
+                Some(Reply {
+                    rpc_result: NV_OK,
+                    body,
+                })
             }
             Err(st) => refuse(st),
         }
@@ -233,12 +291,18 @@ mod tests {
         let mut q = vec![0u8; z::GET_SIZE_PARAMS_SIZE];
         z::put(&mut q, 2, 1);
         let r = p.answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &q).expect("size");
-        assert_eq!((z::word(&r, 0), z::word(&r, 1), z::word(&r, 2)), (Some(1), Some(30), Some(1)));
+        assert_eq!(
+            (z::word(&r, 0), z::word(&r, 1), z::word(&r, 2)),
+            (Some(1), Some(30), Some(1))
+        );
         assert_eq!(entry(&mut p, TableType::Color, 2).1[0..4], [0xffff_ffff; 4]);
         assert_eq!(entry(&mut p, TableType::Color, 3).1[0..4], [0x3f80_0000; 4]);
         assert_eq!(entry(&mut p, TableType::Depth, 2).1[8], 0x3f80_0000);
         assert_eq!(entry(&mut p, TableType::Stencil, 3).1[9], 0xff);
-        assert!(!entry(&mut p, TableType::Color, 4).0, "slot 4 is empty on a fresh table");
+        assert!(
+            !entry(&mut p, TableType::Color, 4).0,
+            "slot 4 is empty on a fresh table"
+        );
         // The host UMD's own SET (bytes from the measured trace): colorFB 0xff000000 x4, format 0x28.
         let mut s = vec![0u8; z::SET_COLOR_PARAMS_SIZE];
         for i in 0..4 {
@@ -252,7 +316,10 @@ mod tests {
         assert!(valid);
         assert_eq!(w[0..4], [0xff00_0000; 4]);
         assert_eq!(w[4..8], [0; 4], "colorDS reads back zero, as on the host");
-        assert!(!entry(&mut p, TableType::Color, 5).0, "the repeat SET was deduplicated");
+        assert!(
+            !entry(&mut p, TableType::Color, 5).0,
+            "the repeat SET was deduplicated"
+        );
     }
 
     /// ⊘ The table is finite and never spills: a full range answers INSUFFICIENT_RESOURCES; an
@@ -268,17 +335,35 @@ mod tests {
             p.answer(z::SET_ZBC_DEPTH_CLEAR, &s).expect("fits");
         }
         z::put(&mut s, 0, 0x9999);
-        assert_eq!(p.answer(z::SET_ZBC_DEPTH_CLEAR, &s), Err(NV_ERR_INSUFFICIENT_RESOURCES));
+        assert_eq!(
+            p.answer(z::SET_ZBC_DEPTH_CLEAR, &s),
+            Err(NV_ERR_INSUFFICIENT_RESOURCES)
+        );
         let mut q = vec![0u8; z::GET_ENTRY_PARAMS_SIZE];
         z::put(&mut q, 11, 16);
         z::put(&mut q, 13, 2);
-        assert_eq!(p.answer(z::GET_ZBC_CLEAR_TABLE_ENTRY, &q), Err(NV_ERR_INVALID_ARGUMENT));
+        assert_eq!(
+            p.answer(z::GET_ZBC_CLEAR_TABLE_ENTRY, &q),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
         z::put(&mut q, 11, 1);
         z::put(&mut q, 13, 4);
-        assert_eq!(p.answer(z::GET_ZBC_CLEAR_TABLE_ENTRY, &q), Err(NV_ERR_INVALID_ARGUMENT));
-        assert_eq!(p.answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &[0u8; 8]), Err(NV_ERR_INVALID_ARGUMENT));
-        assert_eq!(p.answer(z::SET_ZBC_CLEAR_TABLE, &[0u8; 60]), Err(NV_ERR_NOT_SUPPORTED));
+        assert_eq!(
+            p.answer(z::GET_ZBC_CLEAR_TABLE_ENTRY, &q),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        assert_eq!(
+            p.answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &[0u8; 8]),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        assert_eq!(
+            p.answer(z::SET_ZBC_CLEAR_TABLE, &[0u8; 60]),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
-        assert_eq!(ZbcPolicy::new(abi, None).answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &[0u8; 12]), Err(NV_ERR_NOT_SUPPORTED));
+        assert_eq!(
+            ZbcPolicy::new(abi, None).answer(z::GET_ZBC_CLEAR_TABLE_SIZE, &[0u8; 12]),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
     }
 }

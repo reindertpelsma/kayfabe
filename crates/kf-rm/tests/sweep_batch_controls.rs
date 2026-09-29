@@ -51,14 +51,18 @@ use kf_abi::gmmustatic::{
     NON_REPLAYABLE_SIZE_OFF, NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO, REPLAYABLE_SIZE_OFF,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `RpcControlReq::HEADER` — `cap1b`'s own arithmetic: `paylen 42 - psize 2 = 40`.
 const PARAMS_AT: usize = 40;
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` for `cmd` with `params_size` bytes of params.
@@ -117,8 +121,8 @@ fn the_conf_compute_reply_is_the_oracles_two_bytes() {
     //
     // ⊘ So this test can only be meaningful if the request is poisoned — which it is, with
     // 0xAA — because a policy that echoed the request would produce 0xAA 0xAA here.
-    let ours =
-        confcompute::encode_conf_compute_static_info(&ga106::host_facts().conf_compute).expect("encodes");
+    let ours = confcompute::encode_conf_compute_static_info(&ga106::host_facts().conf_compute)
+        .expect("encodes");
     assert_eq!(ours, vec![0u8, 0u8]);
     assert_eq!(ours.len(), CONF_COMPUTE_STATIC_INFO_PARAMS_SIZE);
 
@@ -158,7 +162,9 @@ fn a_trust_claim_this_port_cannot_back_is_unencodable() {
         );
     }
     // Non-vacuity: the combination this device actually claims does encode.
-    assert!(confcompute::encode_conf_compute_static_info(&ga106::host_facts().conf_compute).is_ok());
+    assert!(
+        confcompute::encode_conf_compute_static_info(&ga106::host_facts().conf_compute).is_ok()
+    );
 }
 
 // ══════════════════ 0x20800aac — KernelBif ══════════════════
@@ -280,7 +286,8 @@ const GMMU_ORACLE: [u8; 16] = [
 
 #[test]
 fn the_gmmu_static_reply_is_the_oracles_sixteen_bytes() {
-    let ours = gmmustatic::encode_gmmu_static_info(&ga106::host_facts().gmmu_static).expect("encodes");
+    let ours =
+        gmmustatic::encode_gmmu_static_info(&ga106::host_facts().gmmu_static).expect("encodes");
     assert_eq!(ours, GMMU_ORACLE.to_vec(), "byte for byte");
     assert_eq!(ours.len(), GMMU_STATIC_INFO_PARAMS_SIZE);
 

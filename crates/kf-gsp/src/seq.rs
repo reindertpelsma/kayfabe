@@ -30,8 +30,8 @@
 //! ranking.
 
 use kf_arch::gsp::{
-    AfterSuspend, ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep, BootStepKind,
-    BootSteps, FalconDma, GspModel, GspReg, RegWrite,
+    AfterSuspend, ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep,
+    BootStepKind, BootSteps, FalconDma, GspModel, GspReg, RegWrite,
 };
 
 /// Latch slot holding the secure-booter argument — see [`FalconSecureBooterBoot`].
@@ -180,7 +180,9 @@ impl BootSequence for FalconSecureBooterBoot {
                     // DMEM block `m` came from `base + f`, so DMEM offset 0 is at `base + f - m`.
                     let o = state.latch(LATCH_DMA_OFFS);
                     let (m, f) = (o >> 32, o & 0xFFFF_FFFF);
-                    let image = (state.latch(LATCH_DMA_BASE) << 8).checked_add(f).and_then(|a| a.checked_sub(m));
+                    let image = (state.latch(LATCH_DMA_BASE) << 8)
+                        .checked_add(f)
+                        .and_then(|a| a.checked_sub(m));
                     state.set_latch(LATCH_DMEM_IMAGE, image.map_or(0, |a| a.saturating_add(1)));
                 }
                 FalconDma::Transfer { dmem_load: false } => {}
@@ -195,11 +197,17 @@ impl BootSequence for FalconSecureBooterBoot {
                         state.set_latch(LATCH_BL_DATA, (data & !0xFFFF_FFFF) | u64::from(word));
                         state.set_latch(LATCH_BL_SEEN, seen | 1);
                     } else if addr == BL_DATA_DMA_BASE_HI {
-                        state.set_latch(LATCH_BL_DATA, (data & 0xFFFF_FFFF) | (u64::from(word) << 32));
+                        state.set_latch(
+                            LATCH_BL_DATA,
+                            (data & 0xFFFF_FFFF) | (u64::from(word) << 32),
+                        );
                         state.set_latch(LATCH_BL_SEEN, seen | 2);
                     }
                     if port >> 32 != 0 {
-                        state.set_latch(LATCH_PIO_PORT, (port & !0xFFFF_FFFF) | ((addr + 4) & 0xFFFF));
+                        state.set_latch(
+                            LATCH_PIO_PORT,
+                            (port & !0xFFFF_FFFF) | ((addr + 4) & 0xFFFF),
+                        );
                     }
                 }
             }

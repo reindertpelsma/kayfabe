@@ -1068,7 +1068,6 @@ pub fn encode_context_buffers_info(
     Ok(out)
 }
 
-
 // ── ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): the SM issue-rate modifier ──────────────────
 
 /// `NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER` — the unprivileged client control (flags

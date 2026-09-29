@@ -128,7 +128,10 @@ impl CardInfo {
     /// `/sys/bus/pci/devices/<bdf>` name and the form `cuDeviceGetByPCIBusId` accepts.
     #[must_use]
     pub fn bdf(&self) -> String {
-        format!("{:04x}:{:02x}:{:02x}.{:x}", self.domain, self.bus, self.slot, self.function)
+        format!(
+            "{:04x}:{:02x}:{:02x}.{:x}",
+            self.domain, self.bus, self.slot, self.function
+        )
     }
 
     /// Decode a whole `CARD_INFO` reply, keeping only valid entries.
@@ -1237,16 +1240,28 @@ mod tests {
         }
         assert_eq!(core::mem::size_of::<Ci>(), CardInfo::SIZE);
         assert_eq!(core::mem::offset_of!(Ci, pci_info), 4);
-        assert_eq!(core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, bus), 8);
-        assert_eq!(core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, slot), 9);
-        assert_eq!(core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, device_id), 14);
+        assert_eq!(
+            core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, bus),
+            8
+        );
+        assert_eq!(
+            core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, slot),
+            9
+        );
+        assert_eq!(
+            core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, device_id),
+            14
+        );
         assert_eq!(core::mem::offset_of!(Ci, gpu_id), 16);
         assert_eq!(core::mem::offset_of!(Ci, reg_size), 32);
         assert_eq!(core::mem::offset_of!(Ci, minor_number), 56);
 
         let mut b = vec![0u8; CardInfo::SIZE * 3];
         // entry 0: minor 1 on bus 0x41; entry 1: minor 0 on bus 0x01; entry 2 invalid.
-        for (i, (bus, minor, gpu)) in [(0x41u8, 1u32, 0x4100u32), (0x01, 0, 0x100)].iter().enumerate() {
+        for (i, (bus, minor, gpu)) in [(0x41u8, 1u32, 0x4100u32), (0x01, 0, 0x100)]
+            .iter()
+            .enumerate()
+        {
             let o = i * CardInfo::SIZE;
             b[o] = 1;
             b[o + 8] = *bus;
@@ -1265,10 +1280,16 @@ mod tests {
         let mut b = [0xAAu8; GpuIdInfoV2::SIZE];
         GpuIdInfoV2::encode_request(0x4100, &mut b).expect("encode");
         assert_eq!(&b[0..4], &0x4100u32.to_le_bytes());
-        assert!(b[4..].iter().all(|&x| x == 0), "every out field starts zero");
+        assert!(
+            b[4..].iter().all(|&x| x == 0),
+            "every out field starts zero"
+        );
         b[8..12].copy_from_slice(&0u32.to_le_bytes());
         b[12..16].copy_from_slice(&0u32.to_le_bytes());
         let r = GpuIdInfoV2::decode(&b).expect("decode");
-        assert_eq!((r.gpu_id, r.device_instance, r.sub_device_instance), (0x4100, 0, 0));
+        assert_eq!(
+            (r.gpu_id, r.device_instance, r.sub_device_instance),
+            (0x4100, 0, 0)
+        );
     }
 }

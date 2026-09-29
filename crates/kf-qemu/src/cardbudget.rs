@@ -40,7 +40,10 @@ impl Demand {
     #[must_use]
     pub fn of(guest_bar1: u64, guest_bar2: u64, store: u64) -> Demand {
         Demand {
-            bar1: guest_bar1.saturating_add(guest_bar2).saturating_add(PRAMIN_BYTES).saturating_add(OUR_HEADROOM),
+            bar1: guest_bar1
+                .saturating_add(guest_bar2)
+                .saturating_add(PRAMIN_BYTES)
+                .saturating_add(OUR_HEADROOM),
             store,
         }
     }
@@ -51,7 +54,13 @@ impl Demand {
 ///
 /// # Errors
 /// The refusal, naming every term.
-pub fn check(bdf: &str, host_bar1: u64, held: Demand, n_held: usize, want: Demand) -> Result<(), String> {
+pub fn check(
+    bdf: &str,
+    host_bar1: u64,
+    held: Demand,
+    n_held: usize,
+    want: Demand,
+) -> Result<(), String> {
     let total = held.bar1.saturating_add(want.bar1);
     if total > host_bar1 {
         return Err(format!(
@@ -79,12 +88,20 @@ static CARDS: Mutex<BTreeMap<String, (Demand, usize)>> = Mutex::new(BTreeMap::ne
 /// # Errors
 /// [`check`]'s refusal.
 pub fn admit(bdf: &str, host_bar1: u64, want: Demand) -> Result<(), String> {
-    let mut m = CARDS.lock().map_err(|_| "card budget registry poisoned".to_string())?;
+    let mut m = CARDS
+        .lock()
+        .map_err(|_| "card budget registry poisoned".to_string())?;
     let (held, n) = m.get(bdf).copied().unwrap_or_default();
     check(bdf, host_bar1, held, n, want)?;
     m.insert(
         bdf.to_string(),
-        (Demand { bar1: held.bar1 + want.bar1, store: held.store + want.store }, n + 1),
+        (
+            Demand {
+                bar1: held.bar1 + want.bar1,
+                store: held.store + want.store,
+            },
+            n + 1,
+        ),
     );
     Ok(())
 }
@@ -116,13 +133,19 @@ mod tests {
     fn two_default_devices_on_one_256_mib_card_are_refused_by_name() {
         let d = Demand::of(128 * MIB, 32 * MIB, 4096 * MIB);
         let e = check("0000:01:00.0", 256 * MIB, d, 1, d).expect_err("2 × 177 MiB > 256 MiB");
-        assert!(e.contains("0000:01:00.0") && e.contains("BAR1 budget exceeded"), "{e}");
+        assert!(
+            e.contains("0000:01:00.0") && e.contains("BAR1 budget exceeded"),
+            "{e}"
+        );
     }
 
     #[test]
     fn two_small_bar1_devices_share_one_card() {
         let d = Demand::of(64 * MIB, 32 * MIB, 4096 * MIB);
-        assert!(check("0000:01:00.0", 256 * MIB, d, 1, d).is_ok(), "2 × 113 MiB ≤ 256 MiB");
+        assert!(
+            check("0000:01:00.0", 256 * MIB, d, 1, d).is_ok(),
+            "2 × 113 MiB ≤ 256 MiB"
+        );
     }
 
     #[test]
@@ -130,7 +153,14 @@ mod tests {
         let d = Demand::of(128 * MIB, 32 * MIB, 8192 * MIB);
         admit("test:aa:00.0", 256 * MIB, d).expect("first card");
         admit("test:bb:00.0", 256 * MIB, d).expect("second card is its own budget");
-        assert!(admit("test:aa:00.0", 256 * MIB, d).is_err(), "the first card is now full");
-        assert_eq!(store_held("test:aa:00.0"), (8192 * MIB, 1), "a refusal is not admitted");
+        assert!(
+            admit("test:aa:00.0", 256 * MIB, d).is_err(),
+            "the first card is now full"
+        );
+        assert_eq!(
+            store_held("test:aa:00.0"),
+            (8192 * MIB, 1),
+            "a refusal is not admitted"
+        );
     }
 }

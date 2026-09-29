@@ -282,10 +282,15 @@ pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
             // driver that had to reopen something by path would fail HERE, not above.
             let (img2, root2, _) =
                 synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
-            match k
-                .upload(&img2.mem)
-                .and_then(|d| k.refresh_image(&d, &[WalkEntry { pdb: root2, slot: 0 }]))
-            {
+            match k.upload(&img2.mem).and_then(|d| {
+                k.refresh_image(
+                    &d,
+                    &[WalkEntry {
+                        pdb: root2,
+                        slot: 0,
+                    }],
+                )
+            }) {
                 Ok(r) => format!(
                     "PASS refused as expected ({why}); and the context SURVIVED it — a \
                      following refresh returned runs={} refusals={}",

@@ -30,9 +30,13 @@ impl Completions {
         let ev = rm.open_event_fd().map_err(|e| format!("event fd: {e:?}"))?;
         rm.alloc_os_event(rm.subdevice(), crate::host::FIFO_EVENT_MTHD, true, &ev)
             .map_err(|e| format!("os event: {e:?}"))?;
-        rm.arm_repeat(crate::host::FIFO_EVENT_MTHD).map_err(|e| format!("notify: {e:?}"))?;
+        rm.arm_repeat(crate::host::FIFO_EVENT_MTHD)
+            .map_err(|e| format!("notify: {e:?}"))?;
         let words = tokens.div_ceil(64);
-        Ok(Completions { ev, inflight: (0..words).map(|_| AtomicU64::new(0)).collect() })
+        Ok(Completions {
+            ev,
+            inflight: (0..words).map(|_| AtomicU64::new(0)).collect(),
+        })
     }
 
     /// ★ Also wake on engine `notify_index`'s non-stall notifier (e.g. `kf_host::notifier_ce(n)` for
@@ -41,8 +45,10 @@ impl Completions {
     /// # Errors
     /// The host's refusal, by name.
     pub fn also(&self, rm: &kf_host::HostRm, notify_index: u32) -> Result<(), String> {
-        rm.alloc_os_event(rm.subdevice(), notify_index, true, &self.ev).map_err(|e| format!("os event {notify_index}: {e:?}"))?;
-        rm.arm_repeat(notify_index).map_err(|e| format!("notify {notify_index}: {e:?}"))
+        rm.alloc_os_event(rm.subdevice(), notify_index, true, &self.ev)
+            .map_err(|e| format!("os event {notify_index}: {e:?}"))?;
+        rm.arm_repeat(notify_index)
+            .map_err(|e| format!("notify {notify_index}: {e:?}"))
     }
 
     /// The fd every worker's poller watches (level-triggered; a coalesced WAKE).

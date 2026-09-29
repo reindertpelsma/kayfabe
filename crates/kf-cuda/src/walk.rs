@@ -212,7 +212,11 @@ pub struct WalkEntry {
 }
 
 fn refused(what: &'static str, name: String) -> CudaError {
-    CudaError::Refused { what, code: 0, name }
+    CudaError::Refused {
+        what,
+        code: 0,
+        name,
+    }
 }
 
 /// What came back from one refresh.
@@ -410,7 +414,10 @@ impl Report {
             // process spun forever. With the default 2 GiB guest no GPA ever reached the span,
             // which is why it never fired. Peer and unknown apertures stay bounded (and are
             // refused downstream by aperture anyway).
-            let sysmem = matches!(r.aperture(), crate::abi::KFWR_AP_SYS_COHERENT | crate::abi::KFWR_AP_SYS_NONCOHERENT);
+            let sysmem = matches!(
+                r.aperture(),
+                crate::abi::KFWR_AP_SYS_COHERENT | crate::abi::KFWR_AP_SYS_NONCOHERENT
+            );
             if r.op != KFWR_OP_UNMAP
                 && !sysmem
                 && (r.gpga > self.gpga_span || r.len > self.gpga_span - r.gpga)
@@ -439,7 +446,9 @@ impl Report {
     /// [`ReportError::NotDiff`].
     pub fn require_diff(&self) -> Result<(), ReportError> {
         if (self.header.flags & KFWR_HF_DIFF) == 0 {
-            return Err(ReportError::NotDiff { flags: self.header.flags });
+            return Err(ReportError::NotDiff {
+                flags: self.header.flags,
+            });
         }
         Ok(())
     }
@@ -481,9 +490,20 @@ impl PinLayout {
         let rpdb = hdr + core::mem::size_of::<KfReportHeader>().next_multiple_of(64);
         let rrun = rpdb
             + (cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>()).next_multiple_of(64);
-        let lay = (rrun + cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>()).next_multiple_of(64);
+        let lay = (rrun + cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>())
+            .next_multiple_of(64);
         let total = lay + core::mem::size_of::<crate::abi::KfLayout>();
-        PinLayout { lay, pdbs, slots, ack, ack_code, hdr, rpdb, rrun, total }
+        PinLayout {
+            lay,
+            pdbs,
+            slots,
+            ack,
+            ack_code,
+            hdr,
+            rpdb,
+            rrun,
+            total,
+        }
     }
 }
 
@@ -695,7 +715,11 @@ impl WalkKernel {
     /// # Errors
     /// As [`WalkKernel::bring_up`]; a PCI address this process's CUDA cannot see is refused by
     /// name, never replaced by ordinal 0.
-    pub fn bring_up_on(cfg: WalkCfg, fmt: KfFormat, on: WalkDevice<'_>) -> Result<WalkKernel, CudaError> {
+    pub fn bring_up_on(
+        cfg: WalkCfg,
+        fmt: KfFormat,
+        on: WalkDevice<'_>,
+    ) -> Result<WalkKernel, CudaError> {
         let t0 = std::time::Instant::now();
         // ★★★★★ THE ABI GATE, and it is FIRST — before `dlopen`, so a skew can never be
         // mistaken for a CUDA problem or masked by one.
@@ -782,11 +806,23 @@ impl WalkKernel {
             return Err(CudaError::Refused {
                 what: "WalkKernel::bring_up (WalkCfg)",
                 code: 0,
-                name: format!("walk_pool {walk_pool} does not fit the diff's scratch ({KF_MAX_SCRATCH} runs = 4 × the pool)"),
+                name: format!(
+                    "walk_pool {walk_pool} does not fit the diff's scratch ({KF_MAX_SCRATCH} runs = 4 × the pool)"
+                ),
             });
         }
-        let cap = crate::capacity::Capacity::new(cfg.max_slots, cfg.walk_pool, cfg.slot_pool, cfg.runs_per_pdb, cfg.slot_default)
-            .map_err(|name| CudaError::Refused { what: "WalkKernel::bring_up (WalkCfg capacity)", code: 0, name })?;
+        let cap = crate::capacity::Capacity::new(
+            cfg.max_slots,
+            cfg.walk_pool,
+            cfg.slot_pool,
+            cfg.runs_per_pdb,
+            cfg.slot_default,
+        )
+        .map_err(|name| CudaError::Refused {
+            what: "WalkKernel::bring_up (WalkCfg capacity)",
+            code: 0,
+            name,
+        })?;
         let tbl_runs = walk_pool;
         let a = |bytes: usize, what: &'static str| -> Result<DevBuf, CudaError> {
             Ok(DevBuf {
@@ -794,9 +830,18 @@ impl WalkKernel {
             })
         };
         let dev = a(core::mem::size_of::<KfDev>(), "cuMemAlloc(KfDev)")?;
-        let walk = a(tbl_runs * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(walk)")?;
-        let com = a(cfg.slot_pool as usize * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(committed)")?;
-        let slot = a(cfg.max_slots as usize * core::mem::size_of::<KfSlot>(), "cuMemAlloc(slots)")?;
+        let walk = a(
+            tbl_runs * core::mem::size_of::<KfMapRun>(),
+            "cuMemAlloc(walk)",
+        )?;
+        let com = a(
+            cfg.slot_pool as usize * core::mem::size_of::<KfMapRun>(),
+            "cuMemAlloc(committed)",
+        )?;
+        let slot = a(
+            cfg.max_slots as usize * core::mem::size_of::<KfSlot>(),
+            "cuMemAlloc(slots)",
+        )?;
         let iscratch = a(walk_pool * 3 * 4, "cuMemAlloc(iscratch)")?;
         let pin_at = PinLayout::for_cfg(&cfg);
 
@@ -810,7 +855,10 @@ impl WalkKernel {
             ],
             stage: a(KF_MAX_FRONTIER * KF_ENT_BYTES, "cuMemAlloc(par.stage)")?,
             task: a(KF_MAX_FRONTIER * KF_ENT_BYTES, "cuMemAlloc(par.task)")?,
-            runstage: a(KF_MAX_SCRATCH * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(par.runstage)")?,
+            runstage: a(
+                KF_MAX_SCRATCH * core::mem::size_of::<KfMapRun>(),
+                "cuMemAlloc(par.runstage)",
+            )?,
             cnt: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.cnt)")?,
             off: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.off)")?,
             start: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.start)")?,
@@ -843,19 +891,33 @@ impl WalkKernel {
         let pdbs = DevBuf {
             ptr: cu.pinned_device_ptr(&pin, pin_at.pdbs)?,
         };
-        let slots = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.slots)? };
-        let ack = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.ack)? };
-        let ack_code = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.ack_code)? };
-        let lay = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.lay)? };
+        let slots = DevBuf {
+            ptr: cu.pinned_device_ptr(&pin, pin_at.slots)?,
+        };
+        let ack = DevBuf {
+            ptr: cu.pinned_device_ptr(&pin, pin_at.ack)?,
+        };
+        let ack_code = DevBuf {
+            ptr: cu.pinned_device_ptr(&pin, pin_at.ack_code)?,
+        };
+        let lay = DevBuf {
+            ptr: cu.pinned_device_ptr(&pin, pin_at.lay)?,
+        };
         // ★ 2026-09-25: the REPORT lives in the pinned buffer too — the diff kernels write it
         // straight into host memory, so a walk moves only the bytes its diff has (a one-run diff
         // is a few hundred bytes) and needs no read-back node. `[measured gate9, 50a6c9a9]` the
         // capacity-sized copy it replaces was 512 KiB of PCIe on every walk. The commit node reads
         // the previous report back from here (its entries' runs only).
         let (hdr, rpdb, rrun) = (
-            DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.hdr)? },
-            DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.rpdb)? },
-            DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.rrun)? },
+            DevBuf {
+                ptr: cu.pinned_device_ptr(&pin, pin_at.hdr)?,
+            },
+            DevBuf {
+                ptr: cu.pinned_device_ptr(&pin, pin_at.rpdb)?,
+            },
+            DevBuf {
+                ptr: cu.pinned_device_ptr(&pin, pin_at.rrun)?,
+            },
         );
         let done_fd = CompletionFd::new()?;
 
@@ -996,11 +1058,11 @@ impl WalkKernel {
         a.win = crate::abi::KfWin {
             base: gpga,
             len: gpga_len,
-                // ★ §39(c): in production these ARE the same number, and saying so here is
-                // the point. The single store is the whole of guest vidmem and all of it is
-                // mapped, so the bytes we may READ and the addresses a leaf may POINT AT
-                // coincide. They are separate fields because that coincidence is a property
-                // of THIS deployment, not of the walker -- a corpus image breaks it.
+            // ★ §39(c): in production these ARE the same number, and saying so here is
+            // the point. The single store is the whole of guest vidmem and all of it is
+            // mapped, so the bytes we may READ and the addresses a leaf may POINT AT
+            // coincide. They are separate fields because that coincidence is a property
+            // of THIS deployment, not of the walker -- a corpus image breaks it.
             span: gpga_len,
         };
         a.fmt = self.fmt;
@@ -1038,7 +1100,10 @@ impl WalkKernel {
     /// or when a slot is out of range or repeated (two entries may never commit into one slot).
     pub fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), CudaError> {
         let Some((gpga, gpga_len)) = self.store else {
-            return Err(refused("WalkKernel::submit", "no store imported (import_store first)".to_string()));
+            return Err(refused(
+                "WalkKernel::submit",
+                "no store imported (import_store first)".to_string(),
+            ));
         };
         self.retries_left = CAPACITY_RETRIES;
         self.submit_over(gpga, gpga_len, entries)
@@ -1048,12 +1113,21 @@ impl WalkKernel {
     ///
     /// # Errors
     /// As [`WalkKernel::submit`].
-    pub fn submit_image(&mut self, img: &DeviceImage, entries: &[WalkEntry]) -> Result<(), CudaError> {
+    pub fn submit_image(
+        &mut self,
+        img: &DeviceImage,
+        entries: &[WalkEntry],
+    ) -> Result<(), CudaError> {
         self.retries_left = CAPACITY_RETRIES;
         self.submit_over(img.ptr, img.len, entries)
     }
 
-    fn submit_over(&mut self, gpga: CUdeviceptr, gpga_len: u64, entries: &[WalkEntry]) -> Result<(), CudaError> {
+    fn submit_over(
+        &mut self,
+        gpga: CUdeviceptr,
+        gpga_len: u64,
+        entries: &[WalkEntry],
+    ) -> Result<(), CudaError> {
         if self.inflight.is_some() {
             return Err(refused(
                 "WalkKernel::submit",
@@ -1063,7 +1137,10 @@ impl WalkKernel {
         if entries.len() > KF_MAX_PDB {
             return Err(refused(
                 "WalkKernel::submit",
-                format!("the kernel walks {KF_MAX_PDB} entries at once and was handed {}", entries.len()),
+                format!(
+                    "the kernel walks {KF_MAX_PDB} entries at once and was handed {}",
+                    entries.len()
+                ),
             ));
         }
         let mut seen = std::collections::BTreeSet::new();
@@ -1071,7 +1148,10 @@ impl WalkKernel {
             if e.slot >= self.cfg.max_slots || !seen.insert(e.slot) {
                 return Err(refused(
                     "WalkKernel::submit",
-                    format!("slot {} is out of range (max {}) or repeated in one walk", e.slot, self.cfg.max_slots),
+                    format!(
+                        "slot {} is out of range (max {}) or repeated in one walk",
+                        e.slot, self.cfg.max_slots
+                    ),
                 ));
             }
         }
@@ -1142,7 +1222,10 @@ impl WalkKernel {
     /// Refused while a walk is in flight (the verdict must name the report that walk will read).
     pub fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), CudaError> {
         if self.inflight.is_some() {
-            return Err(refused("WalkKernel::ack", "a walk is in flight; the verdict answers the COLLECTED report".to_string()));
+            return Err(refused(
+                "WalkKernel::ack",
+                "a walk is in flight; the verdict answers the COLLECTED report".to_string(),
+            ));
         }
         self.pending_ack = Some((generation, codes));
         Ok(())
@@ -1155,7 +1238,13 @@ impl WalkKernel {
     /// Refused when the slot is out of range or [`KF_MAX_RESET`] releases are already pending.
     pub fn reset_slot(&mut self, slot: u32) -> Result<(), CudaError> {
         if slot >= self.cfg.max_slots || self.pending_resets.len() >= KF_MAX_RESET {
-            return Err(refused("WalkKernel::reset_slot", format!("slot {slot} (max {}) or too many pending", self.cfg.max_slots)));
+            return Err(refused(
+                "WalkKernel::reset_slot",
+                format!(
+                    "slot {slot} (max {}) or too many pending",
+                    self.cfg.max_slots
+                ),
+            ));
         }
         if !self.pending_resets.contains(&slot) {
             self.pending_resets.push(slot);
@@ -1249,8 +1338,12 @@ impl WalkKernel {
             }
         }
         self.inflight = None;
-        let submit_to_collect_us = u64::try_from(f.submitted.elapsed().as_micros()).unwrap_or(u64::MAX);
-        let gpu_us = self.cu.event_elapsed_us(self.ev_start, self.ev_copied).unwrap_or(0);
+        let submit_to_collect_us =
+            u64::try_from(f.submitted.elapsed().as_micros()).unwrap_or(u64::MAX);
+        let gpu_us = self
+            .cu
+            .event_elapsed_us(self.ev_start, self.ev_copied)
+            .unwrap_or(0);
         let at = self.pin_at;
         // ★ One decoder per report struct (`abi.rs`, `offset_of!`), shared with every other reader.
         let header = KfReportHeader::decode(&self.pin.read(at.hdr, KfReportHeader::BYTES));
@@ -1261,14 +1354,23 @@ impl WalkKernel {
         let nrun = header.run_count.min(self.cfg.run_capacity) as usize;
         let pdbs = KfPdbEntry::decode_all(&self.pin.read(at.rpdb, npdb * KfPdbEntry::BYTES));
         let runs = KfMapRun::decode_all(&self.pin.read(at.rrun, nrun * KfMapRun::BYTES));
-        let report = Report { header, pdbs, runs, gpga_span: f.gpga_len };
+        let report = Report {
+            header,
+            pdbs,
+            runs,
+            gpga_span: f.gpga_len,
+        };
         // ★ w829: a capacity refusal the pools can fix is fixed HERE and the same walk re-queued
         // — the caller never sees that report (it was never acked, so nothing of it is committed
         // and nothing committed is lost: the next diff is taken against the same placements).
         if self.capacity_retry(&report, &f)? {
             return Ok(None);
         }
-        Ok(Some(Collected { report, gpu_us, submit_to_collect_us }))
+        Ok(Some(Collected {
+            report,
+            gpu_us,
+            submit_to_collect_us,
+        }))
     }
 
     /// ★★★★★ w829 — **is this report's capacity refusal fixable, and if so, fix it and re-walk.**
@@ -1287,7 +1389,10 @@ impl WalkKernel {
     /// ⊘ Runs on the thread that collects (the VA manager's), never a vCPU; the device copy is
     /// queued, not waited for.
     fn capacity_retry(&mut self, r: &Report, f: &InFlight) -> Result<bool, CudaError> {
-        use crate::abi::{KFWR_R_BUDGET, KFWR_R_FRONTIER_CAP, KFWR_R_PDB_CAP, KFWR_R_RUN_CAP, KFWR_V_OVERFLOW, KFWR_V_PARTIAL};
+        use crate::abi::{
+            KFWR_R_BUDGET, KFWR_R_FRONTIER_CAP, KFWR_R_PDB_CAP, KFWR_R_RUN_CAP, KFWR_V_OVERFLOW,
+            KFWR_V_PARTIAL,
+        };
         let h = &r.header;
         let aborted = h.refuse_mask & (KFWR_R_BUDGET | KFWR_R_FRONTIER_CAP | KFWR_R_PDB_CAP) != 0;
         let mut fix = false;
@@ -1348,10 +1453,22 @@ impl WalkKernel {
                 (u64::from(m.from.cap) * run) as usize,
                 "cuMemcpyDtoDAsync(slot growth)",
             )?;
-            self.events.push(format!("capacity: slot {} grown {} → {} runs", m.slot, m.from.cap, m.to.cap));
+            self.events.push(format!(
+                "capacity: slot {} grown {} → {} runs",
+                m.slot, m.from.cap, m.to.cap
+            ));
         }
-        let needs: Vec<String> = r.pdbs.iter().filter(|p| p.need() > 0).map(|p| format!("s{}:{}", p.slot(), p.need())).collect();
-        self.events.push(format!("capacity: re-walk (needs {}); {}", needs.join(" "), self.cap.census()));
+        let needs: Vec<String> = r
+            .pdbs
+            .iter()
+            .filter(|p| p.need() > 0)
+            .map(|p| format!("s{}:{}", p.slot(), p.need()))
+            .collect();
+        self.events.push(format!(
+            "capacity: re-walk (needs {}); {}",
+            needs.join(" "),
+            self.cap.census()
+        ));
         let entries = core::mem::take(&mut self.last_entries);
         self.submit_over(f.gpga, f.gpga_len, &entries)?;
         Ok(true)
@@ -1433,14 +1550,23 @@ impl WalkKernel {
     ///
     /// # Errors
     /// [`CudaError`].
-    pub fn refresh_image(&mut self, img: &DeviceImage, entries: &[WalkEntry]) -> Result<Report, CudaError> {
+    pub fn refresh_image(
+        &mut self,
+        img: &DeviceImage,
+        entries: &[WalkEntry],
+    ) -> Result<Report, CudaError> {
         self.submit_image(img, entries)?;
         Ok(self.wait(10_000)?.report)
     }
 
     /// ★ P4b — bring the instantiated graph's by-value parameters up to `args`/`npdb`. A no-op
     /// (zero driver calls) when they already match, which is every walk in steady state.
-    fn update_graph(cu: &Cuda, g: &mut WalkGraph, args: &KfArgs, npdb: u32) -> Result<(), CudaError> {
+    fn update_graph(
+        cu: &Cuda,
+        g: &mut WalkGraph,
+        args: &KfArgs,
+        npdb: u32,
+    ) -> Result<(), CudaError> {
         let ab = param_bytes(args);
         if ab == g.baked_args && npdb == g.baked_npdb {
             return Ok(());
@@ -1453,7 +1579,16 @@ impl WalkKernel {
             if k.seed {
                 k.grid = npdb.div_ceil(128).max(1);
             }
-            cu.graph_exec_kernel_set(g.exec, k.node, k.f, k.grid, k.block, k.shm, &mut k.params, k.what)?;
+            cu.graph_exec_kernel_set(
+                g.exec,
+                k.node,
+                k.f,
+                k.grid,
+                k.block,
+                k.shm,
+                &mut k.params,
+                k.what,
+            )?;
         }
         g.baked_args = ab;
         g.baked_npdb = npdb;
@@ -1476,20 +1611,58 @@ impl WalkKernel {
         self.record(self.ev_start, rec.is_some())?;
         // ⊘ No pdb upload: `a.pdbs` IS the pinned stage `submit` wrote (see `pdbs`). Every
         // level's staging cursor is zeroed here, once (see `KF_USED_SLOTS`).
-        self.cu.memset_d8_async(s, self.par.used.ptr, 0, KF_USED_SLOTS * 4, "cuMemsetD8Async(used)")?;
+        self.cu.memset_d8_async(
+            s,
+            self.par.used.ptr,
+            0,
+            KF_USED_SLOTS * 4,
+            "cuMemsetD8Async(used)",
+        )?;
         // ★ COMMIT-ON-ACK first: the previous report and its verdict, before anything is walked
         // (the commit uses the run stage as scratch, which the walk then overwrites).
         let grid = u32::try_from(KF_MAX_PDB).unwrap_or(64);
-        self.kl(rec, self.f_commit, grid, KF_DIFF_BLOCK, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_commit_kernel)")?;
-        self.kl(rec, self.f_begin, 1, 1, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_begin_kernel)")?;
+        self.kl(
+            rec,
+            self.f_commit,
+            grid,
+            KF_DIFF_BLOCK,
+            0,
+            vec![param_bytes(args)],
+            "cuLaunchKernel(kf_commit_kernel)",
+        )?;
+        self.kl(
+            rec,
+            self.f_begin,
+            1,
+            1,
+            0,
+            vec![param_bytes(args)],
+            "cuLaunchKernel(kf_begin_kernel)",
+        )?;
         // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
         // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space. The serial
         // kernel stays in the PTX for the scoped path the .cu keeps; this walk is never scoped.
         let _ = self.f_walk;
         self.run_parallel(args, npdb, rec)?;
         // ★ The diff against the committed placements (one block per entry), then the dense report.
-        self.kl(rec, self.f_diff_slots, grid, KF_DIFF_BLOCK, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_diff_slots)")?;
-        self.kl(rec, self.f_diff_emit, grid, 256, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_diff_emit)")?;
+        self.kl(
+            rec,
+            self.f_diff_slots,
+            grid,
+            KF_DIFF_BLOCK,
+            0,
+            vec![param_bytes(args)],
+            "cuLaunchKernel(kf_diff_slots)",
+        )?;
+        self.kl(
+            rec,
+            self.f_diff_emit,
+            grid,
+            256,
+            0,
+            vec![param_bytes(args)],
+            "cuLaunchKernel(kf_diff_emit)",
+        )?;
         // ⊘ No read-back: the report was written into pinned host memory by the kernels.
         let _ = (s, at);
         let capturing = rec.is_some();
@@ -1523,7 +1696,8 @@ impl WalkKernel {
         mut params: Vec<Vec<u8>>,
         what: &'static str,
     ) -> Result<(), CudaError> {
-        self.cu.launch_args(self.stream, f, grid, block, shm, &mut params, what)?;
+        self.cu
+            .launch_args(self.stream, f, grid, block, shm, &mut params, what)?;
         if let Some(v) = rec {
             let node = self.cu.capture_leaf(self.stream)?;
             v.push(GraphKernel {
@@ -1552,8 +1726,17 @@ impl WalkKernel {
         let ab = || param_bytes(a);
         let par = &self.par;
         let shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8;
-        let [f_seed, f_expand, f_scan, f_compact, f_leaf, f_heads, f_bases, f_emit, f_join] =
-            self.f_par;
+        let [
+            f_seed,
+            f_expand,
+            f_scan,
+            f_compact,
+            f_leaf,
+            f_heads,
+            f_bases,
+            f_emit,
+            f_join,
+        ] = self.f_par;
         self.kl(
             rec,
             f_seed,
@@ -1570,7 +1753,11 @@ impl WalkKernel {
             let used = par.used.ptr + u64::from(k) * 4;
             let nin = par.nfr.ptr + (src as u64) * 4;
             let nout = par.nfr.ptr + ((src ^ 1) as u64) * 4;
-            let dst = if k + 1 < KF_DIRS { par.fr[src ^ 1].ptr } else { par.task.ptr };
+            let dst = if k + 1 < KF_DIRS {
+                par.fr[src ^ 1].ptr
+            } else {
+                par.task.ptr
+            };
             self.kl(
                 rec,
                 f_expand,
@@ -1662,7 +1849,12 @@ impl WalkKernel {
             1,
             KF_SCAN_BLOCK,
             0,
-            vec![p(par.cnt.ptr), p(ntask), p(par.off.ptr), p(par.nfr.ptr + 12)],
+            vec![
+                p(par.cnt.ptr),
+                p(ntask),
+                p(par.off.ptr),
+                p(par.nfr.ptr + 12),
+            ],
             "cuLaunchKernel(kf_par_scan tasks)",
         )?;
         self.kl(
@@ -1755,7 +1947,10 @@ impl WalkKernel {
     /// [`CudaError::Refused`] naming the import step that failed, or a second import.
     pub fn import_store(&mut self, fd: i32, bytes: u64) -> Result<(), CudaError> {
         if self.store.is_some() {
-            return Err(refused("import_store", "a store is already imported".to_string()));
+            return Err(refused(
+                "import_store",
+                "a store is already imported".to_string(),
+            ));
         }
         self.make_current()?;
         let n = usize::try_from(bytes).map_err(|_| CudaError::Refused {
@@ -1765,11 +1960,14 @@ impl WalkKernel {
         })?;
         // ⊘ `import_and_map` reports which of its four steps refused as a string; carried in
         // `name` verbatim so the step is not lost to a generic code.
-        let p = self.cu.import_and_map(self.device, fd, n).map_err(|name| CudaError::Refused {
-            what: "cuMemImportFromShareableHandle + cuMemMap",
-            code: 0,
-            name,
-        })?;
+        let p = self
+            .cu
+            .import_and_map(self.device, fd, n)
+            .map_err(|name| CudaError::Refused {
+                what: "cuMemImportFromShareableHandle + cuMemMap",
+                code: 0,
+                name,
+            })?;
         self.store = Some((p, bytes));
         Ok(())
     }
@@ -1787,7 +1985,10 @@ impl WalkKernel {
         };
         let end = off.checked_add(len as u64);
         if end.is_none_or(|e| e > bytes) {
-            return Err(refused(what, format!("[{off:#x}, +{len:#x}) leaves the {bytes:#x}-byte store")));
+            return Err(refused(
+                what,
+                format!("[{off:#x}, +{len:#x}) leaves the {bytes:#x}-byte store"),
+            ));
         }
         Ok(base + off)
     }
@@ -1821,14 +2022,21 @@ impl WalkKernel {
     /// Refused past [`KF_MAX_PDB`]; the CUDA error otherwise.
     pub fn debug_walk_runs(&self, entry: u32) -> Result<Vec<KfMapRun>, CudaError> {
         if entry as usize >= KF_MAX_PDB {
-            return Err(refused("WalkKernel::debug_walk_runs", format!("entry {entry}")));
+            return Err(refused(
+                "WalkKernel::debug_walk_runs",
+                format!("entry {entry}"),
+            ));
         }
         let Some(reg) = self.cap.prev_walk(entry as usize) else {
-            return Err(refused("WalkKernel::debug_walk_runs", format!("entry {entry}: no walk region")));
+            return Err(refused(
+                "WalkKernel::debug_walk_runs",
+                format!("entry {entry}: no walk region"),
+            ));
         };
         let mut buf = vec![0u8; reg.cap as usize * KfMapRun::BYTES];
         let at = self.walk.ptr + u64::from(reg.off) * KfMapRun::BYTES as u64;
-        self.cu.memcpy_d2h(&mut buf, at, "cuMemcpyDtoH(debug_walk_runs)")?;
+        self.cu
+            .memcpy_d2h(&mut buf, at, "cuMemcpyDtoH(debug_walk_runs)")?;
         Ok(KfMapRun::decode_all(&buf))
     }
 
@@ -1837,10 +2045,17 @@ impl WalkKernel {
     /// # Errors
     /// Refused by name outside the image; the CUDA error otherwise.
     pub fn read_image(&self, img: &DeviceImage, off: u64, buf: &mut [u8]) -> Result<(), CudaError> {
-        if off.checked_add(buf.len() as u64).is_none_or(|e| e > img.len) {
-            return Err(refused("WalkKernel::read_image", format!("[{off:#x}, +{:#x}) leaves the image", buf.len())));
+        if off
+            .checked_add(buf.len() as u64)
+            .is_none_or(|e| e > img.len)
+        {
+            return Err(refused(
+                "WalkKernel::read_image",
+                format!("[{off:#x}, +{:#x}) leaves the image", buf.len()),
+            ));
         }
-        self.cu.memcpy_d2h(buf, img.ptr + off, "cuMemcpyDtoH(read_image)")
+        self.cu
+            .memcpy_d2h(buf, img.ptr + off, "cuMemcpyDtoH(read_image)")
     }
 
     /// Write `bytes` into an uploaded image at `off`, bounds-checked against it.
@@ -1848,10 +2063,17 @@ impl WalkKernel {
     /// # Errors
     /// Refused by name outside the image; the CUDA error otherwise.
     pub fn write_image(&self, img: &DeviceImage, off: u64, bytes: &[u8]) -> Result<(), CudaError> {
-        if off.checked_add(bytes.len() as u64).is_none_or(|e| e > img.len) {
-            return Err(refused("WalkKernel::write_image", format!("[{off:#x}, +{:#x}) leaves the image", bytes.len())));
+        if off
+            .checked_add(bytes.len() as u64)
+            .is_none_or(|e| e > img.len)
+        {
+            return Err(refused(
+                "WalkKernel::write_image",
+                format!("[{off:#x}, +{:#x}) leaves the image", bytes.len()),
+            ));
         }
-        self.cu.memcpy_h2d(img.ptr + off, bytes, "cuMemcpyHtoD(write_image)")
+        self.cu
+            .memcpy_h2d(img.ptr + off, bytes, "cuMemcpyHtoD(write_image)")
     }
 
     /// Release an image returned by [`WalkKernel::upload`].

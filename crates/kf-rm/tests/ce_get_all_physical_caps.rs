@@ -33,8 +33,8 @@ use kf_abi::cecaps::{
 };
 use kf_abi::deviceinfo::DEV_TYPE_ENUM_LCE;
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `RpcControlReq::HEADER`.
 const PARAMS_AT: usize = 40;
@@ -46,7 +46,11 @@ fn chip() -> kf_rm::HostFacts {
 }
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` carrying `cmd_id` with a params body seeded `0xCD`.
@@ -237,9 +241,7 @@ fn present_is_the_same_engine_slice_the_device_info_table_serves() {
     let mut from_engines = 0u64;
     let mut names = Vec::new();
     for e in chip().engines {
-        if e.engine_data[kf_abi::deviceinfo::engine_info_type::DEV_TYPE_ENUM]
-            == DEV_TYPE_ENUM_LCE
-        {
+        if e.engine_data[kf_abi::deviceinfo::engine_info_type::DEV_TYPE_ENUM] == DEV_TYPE_ENUM_LCE {
             from_engines |=
                 1u64 << e.engine_data[kf_abi::deviceinfo::engine_info_type::INSTANCE_ID];
             names.push(e.name);

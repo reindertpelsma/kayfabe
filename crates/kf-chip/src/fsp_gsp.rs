@@ -14,8 +14,8 @@
 //! The body below is the old `kayfabe-chips/gb20x.rs` (the superset), with those three changes.
 
 use kf_arch::gsp::{
-    AfterSuspend, ArchBootState, BootPhase, BootContext, BootSequence, BootStageDesc, BootStep, BootStepKind, BootSteps,
-    GspModel, GspObservation, GspReg, LibosRegionLayout, RegWrite,
+    AfterSuspend, ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep,
+    BootStepKind, BootSteps, GspModel, GspObservation, GspReg, LibosRegionLayout, RegWrite,
 };
 
 // ── BAR0 offsets ──────────────────────────────────────────────────────────────────
@@ -261,7 +261,6 @@ const RMARGS_ID: u64 = 0x0000_524d_4152_4753;
 // ⊘ The old `WPR2_LO_UP`/`WPR2_HI_UP` (`0x02FF_E000`, self-described INVENTED) are gone: WPR2 is
 // derived from the framebuffer size, as the falcon model derives it.
 
-
 // ══════════════════════════════════════════════════════════════════════════════════════
 // The GB20x boot SEQUENCE
 // ══════════════════════════════════════════════════════════════════════════════════════
@@ -312,7 +311,9 @@ impl FspBoot {
     /// The regime.
     #[must_use]
     pub fn new(row: FspRow) -> FspBoot {
-        FspBoot { therm: row.therm_boot_scratch }
+        FspBoot {
+            therm: row.therm_boot_scratch,
+        }
     }
 
     /// Decode `NV_PFSP_EMEMC` into a byte cursor and an auto-increment flag.
@@ -419,8 +420,11 @@ impl BootSequence for FspBoot {
                 // the window keeps an earlier packet's bytes past a shorter one's end — so a
                 // second device open's CAPS_QUERY would have re-published the PREVIOUS life's
                 // boot-args pointer. The packet must be a COT and must reach the field.
-                let is_cot = state.window_read_u32(4).is_some_and(|w| w >> 24 == NVDM_TYPE_COT);
-                let reaches = (state.latch(LATCH_PACKET_TAIL) as usize).saturating_add(4) >= COT_BOOT_ARGS_OFF + 8;
+                let is_cot = state
+                    .window_read_u32(4)
+                    .is_some_and(|w| w >> 24 == NVDM_TYPE_COT);
+                let reaches = (state.latch(LATCH_PACKET_TAIL) as usize).saturating_add(4)
+                    >= COT_BOOT_ARGS_OFF + 8;
                 if !(is_cot && reaches) {
                     return BootSteps::none();
                 }
@@ -540,7 +544,11 @@ impl FspGspModel {
     /// The model.
     #[must_use]
     pub fn new(row: FspRow, fb_size_mb: u64) -> FspGspModel {
-        FspGspModel { boot: FspBoot::new(row), row, fb_size_mb }
+        FspGspModel {
+            boot: FspBoot::new(row),
+            row,
+            fb_size_mb,
+        }
     }
 
     /// Where this model puts a register. **`None` is the interesting answer**: it means
@@ -593,8 +601,12 @@ impl GspModel for FspGspModel {
             GSP_RISCV_IRQDEST => GspReg::GspRiscvIrqdest,
             GSP_RISCV_BCR_CTRL => GspReg::GspRiscvBcrCtrl,
             // ★★★★★ BOTH driver generations' WPR2 addresses — see [`WPR2_ADDR_LO`].
-            o if o == self.row.wpr2.0 || self.row.wpr2_alt.is_some_and(|a| a.0 == o) => GspReg::Wpr2AddrLo,
-            o if o == self.row.wpr2.1 || self.row.wpr2_alt.is_some_and(|a| a.1 == o) => GspReg::Wpr2AddrHi,
+            o if o == self.row.wpr2.0 || self.row.wpr2_alt.is_some_and(|a| a.0 == o) => {
+                GspReg::Wpr2AddrLo
+            }
+            o if o == self.row.wpr2.1 || self.row.wpr2_alt.is_some_and(|a| a.1 == o) => {
+                GspReg::Wpr2AddrHi
+            }
             #[allow(clippy::cast_possible_truncation)]
             q if (QUEUE_HEAD0..QUEUE_HEAD0 + QUEUE_HEAD_COUNT * 8).contains(&q)
                 && (q - QUEUE_HEAD0).is_multiple_of(8) =>
@@ -682,7 +694,9 @@ impl GspModel for FspGspModel {
             GspReg::GspFalconIrqsclr => 0,
             // ★ w827: the core the guest last selected, VALID (`kf_arch::gsp::GspReg::GspRiscvBcrCtrl`);
             // never written = the reset value (FALCON, not VALID).
-            GspReg::GspRiscvBcrCtrl => obs.riscv_bcr_ctrl.map_or(0, |v| u64::from(v) | BCR_CTRL_VALID),
+            GspReg::GspRiscvBcrCtrl => obs
+                .riscv_bcr_ctrl
+                .map_or(0, |v| u64::from(v) | BCR_CTRL_VALID),
             GspReg::GspRiscvCpuctl => {
                 if obs.riscv_active {
                     RISCV_CPUCTL_ACTIVE
@@ -704,7 +718,9 @@ impl GspModel for FspGspModel {
             }
             GspReg::Wpr2AddrHi => {
                 if obs.wpr2_up {
-                    crate::falcon_gsp::wpr2_reg(crate::falcon_gsp::gsp_fw_wpr_end_for(self.fb_size_mb))
+                    crate::falcon_gsp::wpr2_reg(crate::falcon_gsp::gsp_fw_wpr_end_for(
+                        self.fb_size_mb,
+                    ))
                 } else {
                     0
                 }
@@ -798,15 +814,34 @@ mod hwref_check {
                 assert_eq!(ours, val(g, name), "{g:?} {name}");
             }
             let riscv = val(g, "NV_FALCON2_GSP_BASE");
-            assert_eq!(GSP_RISCV_CPUCTL, riscv + val(g, "NV_PRISCV_RISCV_CPUCTL"), "{g:?}");
+            assert_eq!(
+                GSP_RISCV_CPUCTL,
+                riscv + val(g, "NV_PRISCV_RISCV_CPUCTL"),
+                "{g:?}"
+            );
             // GH100/GB10x resolve these through a PIN (`hwref::PINS`: `kflcnRiscvReadIntrStatus_GA102`).
-            assert_eq!(GSP_RISCV_IRQMASK, riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"), "{g:?}");
-            assert_eq!(GSP_RISCV_IRQDEST, riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"), "{g:?}");
-            assert_eq!(GSP_RISCV_BCR_CTRL, riscv + val(g, "NV_PRISCV_RISCV_BCR_CTRL"), "{g:?}");
+            assert_eq!(
+                GSP_RISCV_IRQMASK,
+                riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"),
+                "{g:?}"
+            );
+            assert_eq!(
+                GSP_RISCV_IRQDEST,
+                riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"),
+                "{g:?}"
+            );
+            assert_eq!(
+                GSP_RISCV_BCR_CTRL,
+                riscv + val(g, "NV_PRISCV_RISCV_BCR_CTRL"),
+                "{g:?}"
+            );
         }
         // The Hopper row has no gate of its own (`bar0::boot_regs` serves the static 0x200BC word).
         assert_eq!(FspRow::HOPPER.therm_boot_scratch, None);
-        assert_eq!(FspRow::BLACKWELL.therm_boot_scratch, Some(val(DieGroup::Gb20x, "NV_THERM_I2CS_SCRATCH")));
+        assert_eq!(
+            FspRow::BLACKWELL.therm_boot_scratch,
+            Some(val(DieGroup::Gb20x, "NV_THERM_I2CS_SCRATCH"))
+        );
     }
 
     /// ★ RATCHET — a known die-group gap, asserted so it cannot rot silently: `FspRow::BLACKWELL` is
@@ -818,26 +853,79 @@ mod hwref_check {
     #[test]
     fn ratchet_the_blackwell_fsp_row_carries_gb20x_boot_gate_for_gb10x_too() {
         let gb10x = val(DieGroup::Gb10x, "NV_THERM_I2CS_SCRATCH");
-        assert_ne!(FspRow::BLACKWELL.therm_boot_scratch, Some(gb10x), "fixed? delete this ratchet (inventory §gaps)");
-        assert_eq!(gb10x, crate::bar0::therm_i2cs_scratch(crate::arch::GB100), "the static row covers GB10x");
+        assert_ne!(
+            FspRow::BLACKWELL.therm_boot_scratch,
+            Some(gb10x),
+            "fixed? delete this ratchet (inventory §gaps)"
+        );
+        assert_eq!(
+            gb10x,
+            crate::bar0::therm_i2cs_scratch(crate::arch::GB100),
+            "the static row covers GB10x"
+        );
     }
 
     #[test]
     fn every_fsp_regime_encoding_is_its_die_groups_header_field() {
         for g in SERVED {
-            assert_eq!(CPUCTL_STARTCPU, bit(g, "NV_PFALCON_FALCON_CPUCTL_STARTCPU"), "{g:?}");
-            assert_eq!(CPUCTL_HALTED, bit(g, "NV_PFALCON_FALCON_CPUCTL_HALTED"), "{g:?}");
-            assert_eq!(HWCFG2_RISCV_ENABLE, bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV"), "{g:?}");
-            assert_eq!(HWCFG2_BR_PRIV_LOCKDOWN, bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV_BR_PRIV_LOCKDOWN"), "{g:?}");
-            assert_eq!(DMATRFCMD_IDLE, bit(g, "NV_PFALCON_FALCON_DMATRFCMD_IDLE"), "{g:?}");
-            assert_eq!(RISCV_CPUCTL_ACTIVE, bit(g, "NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT"), "{g:?}");
-            assert_eq!(RISCV_CPUCTL_HALTED, bit(g, "NV_PRISCV_RISCV_CPUCTL_HALTED"), "{g:?}");
-            assert_eq!(BCR_CTRL_VALID, bit(g, "NV_PRISCV_RISCV_BCR_CTRL_VALID"), "{g:?}");
-            assert_eq!(IRQSTAT_SWGEN0, bit(g, "NV_PFALCON_FALCON_IRQSTAT_SWGEN0"), "{g:?}");
-            assert_eq!(FSP_BOOT_COMPLETE_SUCCESS, val(g, "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE_STATUS_SUCCESS"));
-            assert_eq!(range(g, "NV_PFSP_EMEMC_OFFS"), (u64::from(EMEMC_OFFS_SHIFT) + 5, u64::from(EMEMC_OFFS_SHIFT)));
+            assert_eq!(
+                CPUCTL_STARTCPU,
+                bit(g, "NV_PFALCON_FALCON_CPUCTL_STARTCPU"),
+                "{g:?}"
+            );
+            assert_eq!(
+                CPUCTL_HALTED,
+                bit(g, "NV_PFALCON_FALCON_CPUCTL_HALTED"),
+                "{g:?}"
+            );
+            assert_eq!(
+                HWCFG2_RISCV_ENABLE,
+                bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV"),
+                "{g:?}"
+            );
+            assert_eq!(
+                HWCFG2_BR_PRIV_LOCKDOWN,
+                bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV_BR_PRIV_LOCKDOWN"),
+                "{g:?}"
+            );
+            assert_eq!(
+                DMATRFCMD_IDLE,
+                bit(g, "NV_PFALCON_FALCON_DMATRFCMD_IDLE"),
+                "{g:?}"
+            );
+            assert_eq!(
+                RISCV_CPUCTL_ACTIVE,
+                bit(g, "NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT"),
+                "{g:?}"
+            );
+            assert_eq!(
+                RISCV_CPUCTL_HALTED,
+                bit(g, "NV_PRISCV_RISCV_CPUCTL_HALTED"),
+                "{g:?}"
+            );
+            assert_eq!(
+                BCR_CTRL_VALID,
+                bit(g, "NV_PRISCV_RISCV_BCR_CTRL_VALID"),
+                "{g:?}"
+            );
+            assert_eq!(
+                IRQSTAT_SWGEN0,
+                bit(g, "NV_PFALCON_FALCON_IRQSTAT_SWGEN0"),
+                "{g:?}"
+            );
+            assert_eq!(
+                FSP_BOOT_COMPLETE_SUCCESS,
+                val(g, "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE_STATUS_SUCCESS")
+            );
+            assert_eq!(
+                range(g, "NV_PFSP_EMEMC_OFFS"),
+                (u64::from(EMEMC_OFFS_SHIFT) + 5, u64::from(EMEMC_OFFS_SHIFT))
+            );
             assert_eq!(EMEMC_OFFS_MASK, 0x3F);
-            assert_eq!(range(g, "NV_PFSP_EMEMC_BLK"), (u64::from(EMEMC_BLK_SHIFT) + 7, u64::from(EMEMC_BLK_SHIFT)));
+            assert_eq!(
+                range(g, "NV_PFSP_EMEMC_BLK"),
+                (u64::from(EMEMC_BLK_SHIFT) + 7, u64::from(EMEMC_BLK_SHIFT))
+            );
             assert_eq!(EMEMC_BLK_MASK, 0xFF);
             assert_eq!(EMEMC_AINCW, bit(g, "NV_PFSP_EMEMC_AINCW"), "{g:?}");
         }

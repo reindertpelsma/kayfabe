@@ -271,7 +271,6 @@ pub mod affinity;
 mod affinity_unsafe;
 pub mod bounds;
 pub mod cache;
-pub mod ioctltrace;
 pub mod census;
 mod chardev_unsafe;
 mod epoll_unsafe;
@@ -279,6 +278,7 @@ pub mod error;
 pub mod geometry;
 mod host_fd_unsafe;
 pub mod ioctl;
+pub mod ioctltrace;
 pub mod kvm_gate;
 mod kvm_unsafe;
 mod mapping_unsafe;
@@ -290,7 +290,6 @@ mod vcpu_unsafe;
 pub mod view;
 mod window_unsafe;
 
-
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
 pub use chardev_unsafe::{CharDevice, DevAccess, DevDir, Indirect, POINTER_FIELD_WIDTH};
@@ -299,8 +298,8 @@ pub use error::RawError;
 pub use host_fd_unsafe::{Notifier, SharedRam, descriptor_budget};
 pub use kvm_unsafe::{Kvm, KvmMemslot, KvmVm};
 pub use mapping_unsafe::{
-    Backing, HostProt, HostSpan, HugePageReport, MappedRegion, PlacementId, Reservation, VolatileRegion,
-    release_fence,
+    Backing, HostProt, HostSpan, HugePageReport, MappedRegion, PlacementId, Reservation,
+    VolatileRegion, release_fence,
 };
 pub use page_size::HostPageSize;
 pub use signal_unsafe::{

@@ -27,8 +27,8 @@ use kf_abi::smcmode::{
     NV2080_CTRL_CMD_INTERNAL_GPU_GET_SMC_MODE, SmcMode,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::inittables::{InitTablePolicy, WantedTable};
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::inittables::{InitTablePolicy, WantedTable};
 
 /// `RpcControlReq::HEADER`.
 const PARAMS_AT: usize = 40;
@@ -41,7 +41,11 @@ fn chip() -> kf_rm::HostFacts {
 }
 
 fn policy() -> InitTablePolicy {
-    InitTablePolicy::new(ga106::board(), ga106::host(), *table_for(BENCH_DRIVER).expect("bench ABI"))
+    InitTablePolicy::new(
+        ga106::board(),
+        ga106::host(),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
 }
 
 /// A `GSP_RM_CONTROL` carrying the guest's `0x20800a4c`.

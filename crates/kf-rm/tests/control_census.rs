@@ -28,8 +28,8 @@ use kf_abi::eventnotify::{
     NV2080_NOTIFIERS_POWER_RESUME,
 };
 use kf_abi::versions::{BENCH_DRIVER, table_for};
-use kf_rm::census::ControlCensusLog;
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
+use kf_rm::census::ControlCensusLog;
 
 /// `RpcControlReq::HEADER` — `cap1b`'s own arithmetic: `paylen 60 - 20 = 40`.
 const PARAMS_AT: usize = 40;
@@ -235,18 +235,17 @@ fn the_census_changes_no_byte_of_any_reply() {
     // without the census wrapper, must produce identical replies — result and body both.
     // The uncensused chain is the same sticky-guarded chain `served_policy` wraps.
     let (mut with, _census) = chain_with_census();
-    let mut without: Box<dyn CommandPolicy> =
-        Box::new(kf_rm::sticky::StickyAnswerGuard::new(
+    let mut without: Box<dyn CommandPolicy> = Box::new(kf_rm::sticky::StickyAnswerGuard::new(
+        driver(),
+        kf_rm::served_chain(
+            ga106::board(),
+            ga106::host(),
             driver(),
-            kf_rm::served_chain(
-                ga106::board(),
-                ga106::host(),
-                driver(),
-                kf_rm::ChainLogs::default(),
-                kf_abi::eventnotify::ProbeArmSet::default(),
-                kf_rm::ObjectLinks::default(),
-            ),
-        ));
+            kf_rm::ChainLogs::default(),
+            kf_abi::eventnotify::ProbeArmSet::default(),
+            kf_rm::ObjectLinks::default(),
+        ),
+    ));
     let arming = arming_params(NV2080_NOTIFIERS_POWER_RESUME, ACTION_REPEAT);
     let commands = [
         control_command(
@@ -312,7 +311,12 @@ fn a_plane_reports_the_probe_set_it_was_built_with() {
     assert!(!kf_abi::eventnotify::is_delivered_notifier(PROBED));
     assert!(!kf_abi::eventnotify::is_guest_raised_notifier(PROBED));
     let arming = arming_params(PROBED, ACTION_REPEAT);
-    let cmd = control_command(0xc1e0_0004, 0xabcd_2080, NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION, &arming);
+    let cmd = control_command(
+        0xc1e0_0004,
+        0xabcd_2080,
+        NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION,
+        &arming,
+    );
 
     let (mut stock, stock_census) = chain_with_census();
     assert!(
@@ -340,7 +344,10 @@ fn a_plane_reports_the_probe_set_it_was_built_with() {
          indistinguishable from a stock one — the exact misreading this field kills"
     );
     let r = probed.respond(&cmd).expect("the arming is answered");
-    assert_eq!(r.rpc_result, 0, "the chain consulted the census's probe set");
+    assert_eq!(
+        r.rpc_result, 0,
+        "the chain consulted the census's probe set"
+    );
 }
 
 // ── The channel-bind census: which copy engine the guest named ─────────────────────

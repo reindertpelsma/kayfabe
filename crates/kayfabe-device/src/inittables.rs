@@ -1380,7 +1380,6 @@ impl InitTablePolicy {
         released
     }
 
-
     /// The guest driver version this policy has latched off fn 1, if any.
     ///
     /// Exposed so a test can ask what was observed without reaching into the reply plane,

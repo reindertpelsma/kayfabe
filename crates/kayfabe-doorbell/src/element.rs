@@ -69,7 +69,10 @@ pub const LAYOUT_610: ElementLayout = ElementLayout {
     seq_num_off: 12,
     // ★ The field is gone. Not zero, not sentinel — gone.
     elem_count_off: None,
-    transport: TransportHdr::Mctp { mctp_off: 0, nvdm_off: 4 },
+    transport: TransportHdr::Mctp {
+        mctp_off: 0,
+        nvdm_off: 4,
+    },
 };
 
 /// `MCTP_HEADER_VERSION 3:0` — `src/nvidia/arch/nvalloc/common/inc/mctp_format.h:40`. Built as
@@ -92,7 +95,9 @@ pub const NVDM_TYPE_RM_RPC: u32 = 0x25;
 /// ⊘ Used by tests to build a known-positive; not a value we serve.
 pub const MCTP_WORDS_610: [u32; 2] = [
     MCTP_HEADER_VERSION_1 | MCTP_HEADER_SOM | MCTP_HEADER_EOM,
-    MCTP_MSG_HEADER_TYPE_VENDOR_PCI | (MCTP_MSG_HEADER_VENDOR_ID_NV << 8) | (NVDM_TYPE_RM_RPC << 24),
+    MCTP_MSG_HEADER_TYPE_VENDOR_PCI
+        | (MCTP_MSG_HEADER_VENDOR_ID_NV << 8)
+        | (NVDM_TYPE_RM_RPC << 24),
 ];
 
 /// ★ Select the row from the ELEMENT, not from a version number.
@@ -107,7 +112,10 @@ pub const MCTP_WORDS_610: [u32; 2] = [
 ///
 /// ⊘ `None` when there are not even two words to look at: a short buffer is refused, not guessed.
 pub fn detect_layout(elem: &[u8]) -> Option<ElementLayout> {
-    let w = |o: usize| elem.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let w = |o: usize| {
+        elem.get(o..o + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    };
     let (w0, w1) = (w(0)?, w(4)?);
     let is_mctp = (w0 & MCTP_HEADER_VERSION_MASK) == MCTP_HEADER_VERSION_1
         && (w1 & 0x7f) == MCTP_MSG_HEADER_TYPE_VENDOR_PCI
@@ -120,12 +128,14 @@ impl ElementLayout {
     /// from guest memory and a short buffer must refuse rather than read past it.
     pub fn seq_num(&self, elem: &[u8]) -> Option<u32> {
         let o = self.seq_num_off;
-        elem.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        elem.get(o..o + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
 
     pub fn checksum(&self, elem: &[u8]) -> Option<u32> {
         let o = self.checksum_off;
-        elem.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        elem.get(o..o + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
 
     /// ⊘ Returns `None` **both** when the field does not exist in this version and when the
@@ -133,7 +143,8 @@ impl ElementLayout {
     /// a read failure — which is why the descriptor carries `Option` rather than a magic value.
     pub fn elem_count(&self, elem: &[u8]) -> Option<u32> {
         let o = self.elem_count_off?;
-        elem.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        elem.get(o..o + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
 }
 

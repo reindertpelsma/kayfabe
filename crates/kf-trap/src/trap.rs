@@ -33,7 +33,7 @@ use crate::ring::{PrivRing, Push, RegWrite};
 use crate::shadow::WriteSemantics;
 use crate::timer::TimerRegs;
 use crate::token::{Route, TokenWord};
-use crate::wake::{WakeWord, Wake};
+use crate::wake::{Wake, WakeWord};
 
 /// Where an address falls. Generated per die/arch — §5: *"generated per die/arch; Hopper+ maps it
 /// over BAR1"*.
@@ -45,7 +45,10 @@ pub enum Class {
     /// needs.**
     UserspaceMappable,
     /// Guest root only.
-    Privileged { readable: bool, semantics: WriteSemantics },
+    Privileged {
+        readable: bool,
+        semantics: WriteSemantics,
+    },
 }
 
 /// What the caller must do after the trap returns. ⊘ The trap itself performs no syscall; it
@@ -101,9 +104,10 @@ impl TrapPath<'_> {
             // Anything that touches shared state here is reachable by an unprivileged guest
             // process at whatever rate it likes.
             Class::UserspaceMappable => Action::None,
-            Class::Privileged { readable, semantics } => {
-                self.privileged(readable, semantics, bar, off, val, width)
-            }
+            Class::Privileged {
+                readable,
+                semantics,
+            } => self.privileged(readable, semantics, bar, off, val, width),
         }
     }
 
@@ -125,7 +129,9 @@ impl TrapPath<'_> {
             // (2026-09-13): "passthrough doorbells are inline in vcpu, no queue, no worker."
             // ⚠ This is the one sanctioned inline store — it is a single MMIO write to a mapped
             // window, not work.
-            Route::Passthrough => Action::RingHostInline { host_token: t.host_token },
+            Route::Passthrough => Action::RingHostInline {
+                host_token: t.host_token,
+            },
 
             // ⊘⊘⊘ **RETURN DOING NOTHING AT ALL — no bit, no bump, no wake.**
             //
@@ -193,7 +199,12 @@ impl TrapPath<'_> {
             return Action::None;
         }
 
-        match self.ring.push(RegWrite { bar, offset: off, value: val, width }) {
+        match self.ring.push(RegWrite {
+            bar,
+            offset: off,
+            value: val,
+            width,
+        }) {
             Push::Queued(_) => match self.drainer_wake.bump() {
                 Wake::SignalOne => Action::WakeDrainer,
                 Wake::NoOne => Action::None,

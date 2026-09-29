@@ -82,7 +82,10 @@ impl Layout {
     /// A consumed field, or `None` if this layout does not have it.
     #[must_use]
     pub fn field(&self, path: &str) -> Option<FieldAt> {
-        self.fields.iter().find(|(p, _)| *p == path).map(|(_, f)| *f)
+        self.fields
+            .iter()
+            .find(|(p, _)| *p == path)
+            .map(|(_, f)| *f)
     }
 
     /// `sizeof` as a `usize`.
@@ -149,7 +152,9 @@ impl std::error::Error for Unmeasured {}
 /// Is `version` one of the measured tags?
 #[must_use]
 pub fn is_measured(version: DriverVersion) -> bool {
-    crate::generated::matrix::MEASURED.binary_search(&version).is_ok()
+    crate::generated::matrix::MEASURED
+        .binary_search(&version)
+        .is_ok()
 }
 
 fn find<T: Copy>(
@@ -173,7 +178,10 @@ impl StructRuns {
     ///
     /// # Errors
     /// [`Unmeasured`] for a version outside the committed sweep.
-    pub fn at(&'static self, version: DriverVersion) -> Result<Option<&'static Layout>, Unmeasured> {
+    pub fn at(
+        &'static self,
+        version: DriverVersion,
+    ) -> Result<Option<&'static Layout>, Unmeasured> {
         find(self.runs, self.name, version)
     }
 }
@@ -312,11 +320,13 @@ impl Resolved {
     /// # Errors
     /// [`LayoutError::Missing`] naming the struct, the path and the version.
     pub fn need(&self, path: &'static str) -> Result<FieldAt, LayoutError> {
-        self.layout.field(path).ok_or(LayoutError::Missing(MissingField {
-            strukt: self.strukt,
-            path,
-            version: self.version,
-        }))
+        self.layout
+            .field(path)
+            .ok_or(LayoutError::Missing(MissingField {
+                strukt: self.strukt,
+                path,
+                version: self.version,
+            }))
     }
 
     /// A field the consumer can do without (absent ⇒ skip).
@@ -373,11 +383,20 @@ impl fmt::Display for TranscodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Truncates { path, index } => {
-                write!(f, "{path}[{index}] carries data the target version's struct has no room for")
+                write!(
+                    f,
+                    "{path}[{index}] carries data the target version's struct has no room for"
+                )
             }
-            Self::Narrows { path } => write!(f, "{path} does not fit the target version's narrower field"),
-            Self::Unsupported { path } => write!(f, "{path} has a shape the transcoder does not carry"),
-            Self::Short { need, got } => write!(f, "body is {got} bytes, the source layout is {need}"),
+            Self::Narrows { path } => {
+                write!(f, "{path} does not fit the target version's narrower field")
+            }
+            Self::Unsupported { path } => {
+                write!(f, "{path} has a shape the transcoder does not carry")
+            }
+            Self::Short { need, got } => {
+                write!(f, "body is {got} bytes, the source layout is {need}")
+            }
         }
     }
 }
@@ -403,14 +422,20 @@ fn children<'a>(l: &'a Layout, parent: &str) -> Vec<(&'static str, FieldAt)> {
 }
 
 fn has_children(l: &Layout, path: &str) -> bool {
-    l.fields.iter().any(|(p, _)| *p != "." && parent_of(p) == path)
+    l.fields
+        .iter()
+        .any(|(p, _)| *p != "." && parent_of(p) == path)
 }
 
 /// Children overlap ⇒ the container is a union: carried as raw bytes.
 fn is_union(l: &Layout, path: &str) -> bool {
-    let mut offs: Vec<(u32, i32)> = children(l, path).iter().map(|(_, f)| (f.off, f.size)).collect();
+    let mut offs: Vec<(u32, i32)> = children(l, path)
+        .iter()
+        .map(|(_, f)| (f.off, f.size))
+        .collect();
     offs.sort_unstable();
-    offs.windows(2).any(|w| (w[0].0 as i64) + (w[0].1.max(0) as i64) > w[1].0 as i64)
+    offs.windows(2)
+        .any(|w| (w[0].0 as i64) + (w[0].1.max(0) as i64) > w[1].0 as i64)
 }
 
 /// ★★★ Carry `body`, encoded at the `from` layout, into the `to` layout **by field name**
@@ -436,12 +461,27 @@ pub fn transcode(
     truncatable: &[&str],
 ) -> Result<(Vec<u8>, Vec<&'static str>), TranscodeError> {
     if body.len() < from.size() {
-        return Err(TranscodeError::Short { need: from.size(), got: body.len() });
+        return Err(TranscodeError::Short {
+            need: from.size(),
+            got: body.len(),
+        });
     }
     let mut out = vec![0u8; to.size()];
     let mut dropped = Vec::new();
     // (path, from abs base of this instance, from elem-0 base, to abs base, to elem-0 base)
-    carry(from.layout, to.layout, "", 0, 0, 0, 0, body, &mut out, truncatable, &mut dropped)?;
+    carry(
+        from.layout,
+        to.layout,
+        "",
+        0,
+        0,
+        0,
+        0,
+        body,
+        &mut out,
+        truncatable,
+        &mut dropped,
+    )?;
     Ok((out, dropped))
 }
 
@@ -486,16 +526,48 @@ fn carry(
         match (ff.array(), tf.array()) {
             (Some((fe, fnn)), Some((te, tn))) => {
                 let el_path_f = format!("{fp}[]");
-                let struct_elems = fl.fields.iter().any(|(p, _)| *p == el_path_f.as_str()) && has_children(fl, &el_path_f);
+                let struct_elems = fl.fields.iter().any(|(p, _)| *p == el_path_f.as_str())
+                    && has_children(fl, &el_path_f);
                 for i in 0..fnn.min(tn) {
                     if struct_elems {
-                        let fe0 = fl.fields.iter().find(|(p, _)| *p == el_path_f.as_str()).map(|(_, f)| f.off()).unwrap_or(ff.off());
+                        let fe0 = fl
+                            .fields
+                            .iter()
+                            .find(|(p, _)| *p == el_path_f.as_str())
+                            .map(|(_, f)| f.off())
+                            .unwrap_or(ff.off());
                         let el_path_t = format!("{tp}[]");
-                        let te0 = tl.fields.iter().find(|(p, _)| *p == el_path_t.as_str()).map(|(_, f)| f.off()).unwrap_or(tf.off());
-                        let path: &'static str = fl.fields.iter().find(|(p, _)| *p == el_path_f.as_str()).map(|(p, _)| *p).unwrap_or(fp);
-                        carry(fl, tl, path, fa + i * fe, fe0, ta + i * te, te0, body, out, truncatable, dropped)?;
+                        let te0 = tl
+                            .fields
+                            .iter()
+                            .find(|(p, _)| *p == el_path_t.as_str())
+                            .map(|(_, f)| f.off())
+                            .unwrap_or(tf.off());
+                        let path: &'static str = fl
+                            .fields
+                            .iter()
+                            .find(|(p, _)| *p == el_path_f.as_str())
+                            .map(|(p, _)| *p)
+                            .unwrap_or(fp);
+                        carry(
+                            fl,
+                            tl,
+                            path,
+                            fa + i * fe,
+                            fe0,
+                            ta + i * te,
+                            te0,
+                            body,
+                            out,
+                            truncatable,
+                            dropped,
+                        )?;
                     } else {
-                        copy_scalar(&body[fa + i * fe..fa + (i + 1) * fe], &mut out[ta + i * te..ta + (i + 1) * te], fp)?;
+                        copy_scalar(
+                            &body[fa + i * fe..fa + (i + 1) * fe],
+                            &mut out[ta + i * te..ta + (i + 1) * te],
+                            fp,
+                        )?;
                     }
                 }
                 if fnn > tn {
@@ -509,8 +581,25 @@ fn carry(
                     }
                 }
             }
-            (None, None) if has_children(fl, fp) && has_children(tl, tp) && !is_union(fl, fp) && !is_union(tl, tp) => {
-                carry(fl, tl, fp, f_base, f_e0, t_base, t_e0, body, out, truncatable, dropped)?;
+            (None, None)
+                if has_children(fl, fp)
+                    && has_children(tl, tp)
+                    && !is_union(fl, fp)
+                    && !is_union(tl, tp) =>
+            {
+                carry(
+                    fl,
+                    tl,
+                    fp,
+                    f_base,
+                    f_e0,
+                    t_base,
+                    t_e0,
+                    body,
+                    out,
+                    truncatable,
+                    dropped,
+                )?;
             }
             (None, None) if has_children(fl, fp) || has_children(tl, tp) => {
                 // A union (or an aggregate on one side only): raw bytes, refusing a tail the
@@ -519,7 +608,10 @@ fn carry(
                 let n = fb.min(tb);
                 out[ta..ta + n].copy_from_slice(&body[fa..fa + n]);
                 if fb > tb && body[fa + tb..fa + fb].iter().any(|x| *x != 0) {
-                    return Err(TranscodeError::Truncates { path: fp, index: tb });
+                    return Err(TranscodeError::Truncates {
+                        path: fp,
+                        index: tb,
+                    });
                 }
             }
             (None, None) => {
@@ -551,7 +643,10 @@ mod tests {
     /// The measured list is strictly ascending, so `binary_search` is a valid membership test.
     #[test]
     fn measured_is_strictly_ascending() {
-        assert!(MEASURED.windows(2).all(|w| w[0] < w[1]), "MEASURED must be sorted");
+        assert!(
+            MEASURED.windows(2).all(|w| w[0] < w[1]),
+            "MEASURED must be sorted"
+        );
         assert!(!MEASURED.is_empty());
     }
 
@@ -563,12 +658,22 @@ mod tests {
         fn tiles<T>(name: &str, runs: &[Run<T>]) {
             let mut i = 0usize;
             for r in runs {
-                assert_eq!(r.first, MEASURED[i], "{name}: run starts off the measured grid");
-                let j = MEASURED.iter().position(|m| *m == r.last).expect("run ends on a tag");
+                assert_eq!(
+                    r.first, MEASURED[i],
+                    "{name}: run starts off the measured grid"
+                );
+                let j = MEASURED
+                    .iter()
+                    .position(|m| *m == r.last)
+                    .expect("run ends on a tag");
                 assert!(j >= i, "{name}: run ends before it starts");
                 i = j + 1;
             }
-            assert_eq!(i, MEASURED.len(), "{name}: runs do not reach the last measured tag");
+            assert_eq!(
+                i,
+                MEASURED.len(),
+                "{name}: runs do not reach the last measured tag"
+            );
         }
         for s in ALL_STRUCTS {
             tiles(s.name, s.runs);
@@ -613,7 +718,15 @@ mod tests {
     };
 
     fn res(l: &'static Layout) -> Resolved {
-        Resolved { layout: l, strukt: "S", version: DriverVersion { major: 1, minor: 0, patch: 0 } }
+        Resolved {
+            layout: l,
+            strukt: "S",
+            version: DriverVersion {
+                major: 1,
+                minor: 0,
+                patch: 0,
+            },
+        }
     }
 
     fn u32_at(b: &[u8], o: usize) -> u32 {
@@ -642,10 +755,18 @@ mod tests {
         for i in 0..3 {
             let o = 52 + 8 * i;
             assert_eq!(u32_at(&out, o), 10 + i as u32, "ent[{i}].id");
-            assert_eq!(u32_at(&out, o + 4), 0x7000 + i as u32, "ent[{i}].val widened u16 -> u32");
+            assert_eq!(
+                u32_at(&out, o + 4),
+                0x7000 + i as u32,
+                "ent[{i}].val widened u16 -> u32"
+            );
         }
         assert_eq!(u32_at(&out, 76), 0, "a target-only field stays zero");
-        assert_eq!(dropped, vec!["ent[].phys"], "the source-only field with data is reported");
+        assert_eq!(
+            dropped,
+            vec!["ent[].phys"],
+            "the source-only field with data is reported"
+        );
     }
 
     #[test]
@@ -654,9 +775,15 @@ mod tests {
         body[4 + 4 * 13..8 + 4 * 13].copy_from_slice(&1u32.to_le_bytes()); // mask[13]: a 14th GPC
         assert_eq!(
             transcode(&res(&FROM), &res(&TO), &body, &[]).map(|_| ()),
-            Err(TranscodeError::Truncates { path: "mask", index: 13 })
+            Err(TranscodeError::Truncates {
+                path: "mask",
+                index: 13
+            })
         );
-        assert!(transcode(&res(&FROM), &res(&TO), &body, &["mask"]).is_ok(), "declared truncatable");
+        assert!(
+            transcode(&res(&FROM), &res(&TO), &body, &["mask"]).is_ok(),
+            "declared truncatable"
+        );
         // An all-zero tail is not data: dropping it loses nothing.
         let zero = vec![0u8; FROM.size()];
         assert!(transcode(&res(&FROM), &res(&TO), &zero, &[]).is_ok());
@@ -690,6 +817,9 @@ mod tests {
         let e = s.at(between).expect_err("unmeasured must refuse");
         assert_eq!(e.version, between);
         assert!(e.to_string().contains("580.159.03"), "{e}");
-        assert!(e.to_string().contains("regen.sh"), "says how to measure it: {e}");
+        assert!(
+            e.to_string().contains("regen.sh"),
+            "says how to measure it: {e}"
+        );
     }
 }

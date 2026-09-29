@@ -251,7 +251,11 @@ impl PermPolicy {
     #[must_use]
     pub const fn key_perm(self) -> u32 {
         kf_cuda::abi::KFWR_RF_KEY_PERM_DEFAULT
-            | if self.carry_atomic_disable { kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE } else { 0 }
+            | if self.carry_atomic_disable {
+                kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE
+            } else {
+                0
+            }
     }
 
     /// The permissions a host row carries, decoded from a walk run's flags. The walker decodes
@@ -294,7 +298,10 @@ impl PermPolicy {
 /// wholly above a CPU window's extent has no CPU address: it is satisfied as HELD (nothing of
 /// ours placed); one crossing the extent is placed up to it.
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
-    let mut out = Applied { codes: vec![KFWR_ACK_APPLIED; runs.len()], ..Applied::default() };
+    let mut out = Applied {
+        codes: vec![KFWR_ACK_APPLIED; runs.len()],
+        ..Applied::default()
+    };
     let mut failed_unmaps: Vec<(u64, u64)> = Vec::new();
     // ★ `V3_BATCHED_MAP.md` §4: VA-adjacent unmaps go as ONE range (the union of exactly the
     // placements being removed, nothing else); a refused range falls back to one call per run,
@@ -308,9 +315,17 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
     }
     unmaps.sort_by_key(|&i| runs[i].va);
-    for group in contiguous_groups(&unmaps, |i| (runs[i].va, runs[i].len), |_, _| true, usize::MAX) {
+    for group in contiguous_groups(
+        &unmaps,
+        |i| (runs[i].va, runs[i].len),
+        |_, _| true,
+        usize::MAX,
+    ) {
         if group.len() >= 2 {
-            let (va, end) = (runs[group[0]].va, runs[group[group.len() - 1]].va + runs[group[group.len() - 1]].len);
+            let (va, end) = (
+                runs[group[0]].va,
+                runs[group[group.len() - 1]].va + runs[group[group.len() - 1]].len,
+            );
             out.unmap_calls += 1;
             match target.unmap_range(va, end - va, true) {
                 Ok(()) => {
@@ -341,8 +356,20 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     let mut pending: Vec<(usize, Desired)> = Vec::new();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
         // ★★★ Hopper+ internal MMIO FIRST: a usermode-page view is never a memory row.
-        if let Some(leaf) = cfg.usermode.and_then(|u| u.classify(r.ap, r.kind, r.at, r.len)) {
-            apply_usermode(target, r, leaf, extent, &reserved, &failed_unmaps, i, &mut out);
+        if let Some(leaf) = cfg
+            .usermode
+            .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
+        {
+            apply_usermode(
+                target,
+                r,
+                leaf,
+                extent,
+                &reserved,
+                &failed_unmaps,
+                i,
+                &mut out,
+            );
             continue;
         }
         // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
@@ -409,7 +436,13 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             continue;
         }
         if failed_unmaps.iter().any(|&(a, b)| d.va < b && a < end) {
-            out.refuse(i, format!("map {:#x}+{:#x}: over a placement whose unmap was refused", d.va, d.len));
+            out.refuse(
+                i,
+                format!(
+                    "map {:#x}+{:#x}: over a placement whose unmap was refused",
+                    d.va, d.len
+                ),
+            );
             continue;
         }
         pending.push((i, d));
@@ -421,9 +454,17 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     pending.sort_by_key(|&(_, d)| d.va);
     let idx: Vec<usize> = (0..pending.len()).collect();
     let same = |a: usize, b: usize| {
-        pending[a].1.ram && pending[b].1.ram && pending[a].1.kind == pending[b].1.kind && pending[a].1.perm == pending[b].1.perm
+        pending[a].1.ram
+            && pending[b].1.ram
+            && pending[a].1.kind == pending[b].1.kind
+            && pending[a].1.perm == pending[b].1.perm
     };
-    for group in contiguous_groups(&idx, |k| (pending[k].1.va, pending[k].1.len), same, BATCH_MAX_RUNS) {
+    for group in contiguous_groups(
+        &idx,
+        |k| (pending[k].1.va, pending[k].1.len),
+        same,
+        BATCH_MAX_RUNS,
+    ) {
         if group.len() >= 2 && pending[group[0]].1.ram {
             let rows: Vec<Desired> = group.iter().map(|&k| pending[k].1).collect();
             out.map_calls += 1;
@@ -444,13 +485,20 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 Ok(Mapped::Placed) => out.mapped += 1,
                 Ok(Mapped::HeldByHost) => {
                     // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
-                    eprintln!("kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)", d.va, d.len);
+                    eprintln!(
+                        "kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)",
+                        d.va, d.len
+                    );
                     out.held += 1;
                     out.codes[i] = KFWR_ACK_HELD;
                     // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
-                    static HELD_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                    static HELD_LOGGED: std::sync::atomic::AtomicU32 =
+                        std::sync::atomic::AtomicU32::new(0);
                     if HELD_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
-                        eprintln!("kf-mem: HELD-BY-HOST guest row {:#x}+{:#x} (ram={}) — host RM already maps that VA", d.va, d.len, d.ram);
+                        eprintln!(
+                            "kf-mem: HELD-BY-HOST guest row {:#x}+{:#x} (ram={}) — host RM already maps that VA",
+                            d.va, d.len, d.ram
+                        );
                     }
                 }
                 Err(e) => out.refuse(i, e),
@@ -509,9 +557,19 @@ fn apply_usermode(
             return;
         }
     };
-    let mut u = UsermodeRow { va: r.va, len: r.len, vf_rel };
+    let mut u = UsermodeRow {
+        va: r.va,
+        len: r.len,
+        vf_rel,
+    };
     if u.len == 0 || (u.va | u.len | u.vf_rel) & 0xFFF != 0 {
-        out.refuse(i, format!("usermode view {:#x}+{:#x} (page {vf_rel:#x}) is not whole 4 KiB pages", u.va, u.len));
+        out.refuse(
+            i,
+            format!(
+                "usermode view {:#x}+{:#x} (page {vf_rel:#x}) is not whole 4 KiB pages",
+                u.va, u.len
+            ),
+        );
         return;
     }
     if let Some(ext) = extent {
@@ -529,11 +587,23 @@ fn apply_usermode(
     let end = u.va.saturating_add(u.len);
     if let Some(&(a, b)) = reserved.iter().find(|&&(a, b)| u.va < b && a < end) {
         out.vmm_overlaps += 1;
-        out.refuse(i, format!("usermode view {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) (Q11)", u.va, u.len));
+        out.refuse(
+            i,
+            format!(
+                "usermode view {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) (Q11)",
+                u.va, u.len
+            ),
+        );
         return;
     }
     if failed_unmaps.iter().any(|&(a, b)| u.va < b && a < end) {
-        out.refuse(i, format!("usermode view {:#x}+{:#x}: over a placement whose unmap was refused", u.va, u.len));
+        out.refuse(
+            i,
+            format!(
+                "usermode view {:#x}+{:#x}: over a placement whose unmap was refused",
+                u.va, u.len
+            ),
+        );
         return;
     }
     match target.map_usermode(&u) {
@@ -578,29 +648,49 @@ mod tests {
             self.withhold_priv
         }
         fn map_batch(&self, rows: &[Desired], _: bool) -> Result<(), String> {
-            let Some(refuse) = self.batching else { return Err(crate::ledger::NOT_BATCHED.into()) };
+            let Some(refuse) = self.batching else {
+                return Err(crate::ledger::NOT_BATCHED.into());
+            };
             if rows.iter().any(|d| Some(d.va) == refuse) {
                 return Err("batch refused (fake)".into());
             }
             let len: u64 = rows.iter().map(|d| d.len).sum();
-            assert!(rows.iter().all(|d| d.perm == rows[0].perm), "a batch mixed permissions: {rows:x?}");
-            self.ops.borrow_mut().push(format!("batch {:#x}+{len:#x} x{}{}", rows[0].va, rows.len(), perm_tag(rows[0].perm)));
+            assert!(
+                rows.iter().all(|d| d.perm == rows[0].perm),
+                "a batch mixed permissions: {rows:x?}"
+            );
+            self.ops.borrow_mut().push(format!(
+                "batch {:#x}+{len:#x} x{}{}",
+                rows[0].va,
+                rows.len(),
+                perm_tag(rows[0].perm)
+            ));
             Ok(())
         }
         fn unmap_range(&self, va: u64, len: u64, _: bool) -> Result<(), String> {
-            let Some(refuse) = self.batching else { return Err(crate::ledger::NOT_BATCHED.into()) };
+            let Some(refuse) = self.batching else {
+                return Err(crate::ledger::NOT_BATCHED.into());
+            };
             if refuse.is_some_and(|r| r >= va && r < va + len) {
                 return Err("range refused (fake)".into());
             }
-            self.ops.borrow_mut().push(format!("unmap-range {va:#x}+{len:#x}"));
+            self.ops
+                .borrow_mut()
+                .push(format!("unmap-range {va:#x}+{len:#x}"));
             Ok(())
         }
         fn map(&self, d: &Desired, _: bool) -> Result<Mapped, String> {
             if self.refuse_map == Some(d.va) {
                 return Err("no (fake)".into());
             }
-            self.ops.borrow_mut().push(format!("map {:#x}+{:#x}{}", d.va, d.len, perm_tag(d.perm)));
-            Ok(if self.held_at == Some(d.va) { Mapped::HeldByHost } else { Mapped::Placed })
+            self.ops
+                .borrow_mut()
+                .push(format!("map {:#x}+{:#x}{}", d.va, d.len, perm_tag(d.perm)));
+            Ok(if self.held_at == Some(d.va) {
+                Mapped::HeldByHost
+            } else {
+                Mapped::Placed
+            })
         }
         fn unmap(&self, va: u64, _: bool) -> Result<(), String> {
             if self.refuse_unmap == Some(va) {
@@ -620,7 +710,9 @@ mod tests {
             if !self.traps_usermode {
                 return Ok(Mapped::HeldByHost); // the trait default's answer, recorded nowhere
             }
-            self.ops.borrow_mut().push(format!("trap {:#x}+{:#x} vf{:#x}", u.va, u.len, u.vf_rel));
+            self.ops
+                .borrow_mut()
+                .push(format!("trap {:#x}+{:#x} vf{:#x}", u.va, u.len, u.vf_rel));
             Ok(Mapped::Placed)
         }
     }
@@ -648,14 +740,37 @@ mod tests {
         }
     }
     fn m(va: u64, at: u64, len: u64) -> DiffRun {
-        DiffRun { unmap: false, va, len, at, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE, privileged: false }
+        DiffRun {
+            unmap: false,
+            va,
+            len,
+            at,
+            ap: 0,
+            held: false,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+            privileged: false,
+        }
     }
     fn u(va: u64, len: u64) -> DiffRun {
-        DiffRun { unmap: true, va, len, at: 0, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE, privileged: false }
+        DiffRun {
+            unmap: true,
+            va,
+            len,
+            at: 0,
+            ap: 0,
+            held: false,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+            privileged: false,
+        }
     }
 
     fn ram(va: u64, gpa: u64, len: u64) -> DiffRun {
-        DiffRun { ap: crate::ledger::AP_SYS_COHERENT, ..m(va, gpa, len) }
+        DiffRun {
+            ap: crate::ledger::AP_SYS_COHERENT,
+            ..m(va, gpa, len)
+        }
     }
 
     /// ★★★ `V3_BATCHED_MAP.md`: VA-contiguous guest-RAM runs (scattered in guest-physical memory)
@@ -663,15 +778,24 @@ mod tests {
     /// a lone run keeps the per-run verb. Every run is acknowledged APPLIED.
     #[test]
     fn va_contiguous_guest_ram_runs_map_as_one_batch() {
-        let t = Rec { batching: Some(None), ..Rec::default() };
+        let t = Rec {
+            batching: Some(None),
+            ..Rec::default()
+        };
         let runs = [
             ram(0x2_0000_2000, 0x7000, 0x1000), // out of VA order on purpose
             ram(0x2_0000_0000, 0x9000, 0x1000),
             ram(0x2_0000_1000, 0x3000, 0x1000),
             ram(0x2_0000_4000, 0x5000, 0x1000), // VA gap at 0x3000
             m(0x2_0000_5000, 0x10_0000, 0x1000), // vidmem: never batched
-            DiffRun { kind: 0x06, ..ram(0x2_0000_6000, 0xB000, 0x1000) },
-            DiffRun { kind: 0x06, ..ram(0x2_0000_7000, 0x1000, 0x1000) },
+            DiffRun {
+                kind: 0x06,
+                ..ram(0x2_0000_6000, 0xB000, 0x1000)
+            },
+            DiffRun {
+                kind: 0x06,
+                ..ram(0x2_0000_7000, 0x1000, 0x1000)
+            },
         ];
         let a = apply_entry(&t, &runs, &cfg());
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; runs.len()]);
@@ -685,7 +809,10 @@ mod tests {
                 "inval"
             ]
         );
-        assert_eq!((a.mapped, a.batches, a.batched_runs, a.map_calls), (7, 2, 5, 4));
+        assert_eq!(
+            (a.mapped, a.batches, a.batched_runs, a.map_calls),
+            (7, 2, 5, 4)
+        );
     }
 
     /// ★★ The host-driver axis: on a host with no per-map PTE kind (≤575.64.05) PITCH / GENERIC /
@@ -767,7 +894,12 @@ mod tests {
                 MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
                 MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
             };
-            let got = (fmt.bit_read_only, fmt.bit_atomic_disable, fmt.bit_volatile, fmt.bit_privilege);
+            let got = (
+                fmt.bit_read_only,
+                fmt.bit_atomic_disable,
+                fmt.bit_volatile,
+                fmt.bit_privilege,
+            );
             let want = match f.mmu_format() {
                 MmuFormat::Ver2 => (6, 7, 3, 5),
                 MmuFormat::Ver3 => {
@@ -775,7 +907,10 @@ mod tests {
                     (at(0x4), at(0x8), at(0x1), at(0x2))
                 }
             };
-            assert_eq!(got, want, "{f:?}: (RO, ATOMIC_DISABLE, VOLATILE, PRIVILEGE) PTE bit positions");
+            assert_eq!(
+                got, want,
+                "{f:?}: (RO, ATOMIC_DISABLE, VOLATILE, PRIVILEGE) PTE bit positions"
+            );
         }
     }
 
@@ -786,15 +921,39 @@ mod tests {
     #[test]
     fn permissions_reach_the_host_and_split_batches() {
         use kf_host::MapPerm;
-        let ro = MapPerm { read_only: true, ..MapPerm::READ_WRITE };
-        let t = Rec { batching: Some(None), ..Rec::default() };
+        let ro = MapPerm {
+            read_only: true,
+            ..MapPerm::READ_WRITE
+        };
+        let t = Rec {
+            batching: Some(None),
+            ..Rec::default()
+        };
         let runs = [
             ram(0x2_0000_0000, 0x9000, 0x1000),
             ram(0x2_0000_1000, 0x3000, 0x1000),
-            DiffRun { perm: ro, ..ram(0x2_0000_2000, 0x7000, 0x1000) }, // VA-adjacent, but RO
-            DiffRun { perm: ro, ..ram(0x2_0000_3000, 0x5000, 0x1000) },
-            DiffRun { perm: MapPerm { atomic_disable: true, ..ro }, ..ram(0x2_0000_4000, 0x6000, 0x1000) },
-            DiffRun { perm: MapPerm { volatile: true, ..MapPerm::READ_WRITE }, ..m(0x2_0000_5000, 0x10_0000, 0x1000) },
+            DiffRun {
+                perm: ro,
+                ..ram(0x2_0000_2000, 0x7000, 0x1000)
+            }, // VA-adjacent, but RO
+            DiffRun {
+                perm: ro,
+                ..ram(0x2_0000_3000, 0x5000, 0x1000)
+            },
+            DiffRun {
+                perm: MapPerm {
+                    atomic_disable: true,
+                    ..ro
+                },
+                ..ram(0x2_0000_4000, 0x6000, 0x1000)
+            },
+            DiffRun {
+                perm: MapPerm {
+                    volatile: true,
+                    ..MapPerm::READ_WRITE
+                },
+                ..m(0x2_0000_5000, 0x10_0000, 0x1000)
+            },
         ];
         let a = apply_entry(&t, &runs, &cfg());
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; runs.len()]);
@@ -810,23 +969,49 @@ mod tests {
         );
         // The same bits, decoded off a walk run's flags (KFWR_RF_*), family-free — under the
         // default policy (ATOMIC_DISABLE OFF) and with `KF3_CARRY_ATOMIC_DISABLE`.
-        use kf_cuda::abi::{
-            KFWR_RF_ATOMIC_DISABLE, KFWR_RF_KEY_PERM_DEFAULT, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE,
-        };
         use kf_cuda::abi::{AP_SYS, PS_64K, RF_AP, RF_KIND, RF_PS};
+        use kf_cuda::abi::{
+            KFWR_RF_ATOMIC_DISABLE, KFWR_RF_KEY_PERM_DEFAULT, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY,
+            KFWR_RF_VOLATILE,
+        };
         let off = PermPolicy::default();
-        let on = PermPolicy { carry_atomic_disable: true };
-        let sys_generic_64k = RF_AP.put(u32::from(AP_SYS)) | RF_KIND.put(0x06) | RF_PS.put(u32::from(PS_64K));
+        let on = PermPolicy {
+            carry_atomic_disable: true,
+        };
+        let sys_generic_64k =
+            RF_AP.put(u32::from(AP_SYS)) | RF_KIND.put(0x06) | RF_PS.put(u32::from(PS_64K));
         assert_eq!(sys_generic_64k, 2 | (0x06 << 16) | (1 << 8));
         assert_eq!(off.host_perm(sys_generic_64k), MapPerm::READ_WRITE);
         assert_eq!(off.host_perm(KFWR_RF_READ_ONLY), ro);
-        assert_eq!(off.host_perm(KFWR_RF_PRIVILEGE), MapPerm::READ_WRITE, "PRIVILEGE is never placeable");
+        assert_eq!(
+            off.host_perm(KFWR_RF_PRIVILEGE),
+            MapPerm::READ_WRITE,
+            "PRIVILEGE is never placeable"
+        );
         let all = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE;
-        assert_eq!(off.host_perm(all), MapPerm { read_only: true, atomic_disable: false, volatile: true }, "ATOMIC_DISABLE off by default");
-        assert_eq!(on.host_perm(all), MapPerm { read_only: true, atomic_disable: true, volatile: true });
+        assert_eq!(
+            off.host_perm(all),
+            MapPerm {
+                read_only: true,
+                atomic_disable: false,
+                volatile: true
+            },
+            "ATOMIC_DISABLE off by default"
+        );
+        assert_eq!(
+            on.host_perm(all),
+            MapPerm {
+                read_only: true,
+                atomic_disable: true,
+                volatile: true
+            }
+        );
         // ONE value decides both the key and the map: a bit carried is a bit keyed.
         assert_eq!(off.key_perm(), KFWR_RF_KEY_PERM_DEFAULT);
-        assert_eq!(on.key_perm(), KFWR_RF_KEY_PERM_DEFAULT | KFWR_RF_ATOMIC_DISABLE);
+        assert_eq!(
+            on.key_perm(),
+            KFWR_RF_KEY_PERM_DEFAULT | KFWR_RF_ATOMIC_DISABLE
+        );
         assert_eq!(off.key_perm() & KFWR_RF_ATOMIC_DISABLE, 0);
     }
 
@@ -838,12 +1023,19 @@ mod tests {
     #[test]
     fn diff_run_reads_every_flags_field_through_its_named_range() {
         use kf_cuda::abi::{
-            AP_PEER, AP_SYS, AP_SYS_NC, AP_VID, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_ATOMIC_DISABLE, KFWR_RF_HELD,
-            KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE, KfMapRun, PS_2M, PS_4K, PS_64K, PS_512M, RF_AP,
-            RF_KIND, RF_PS,
+            AP_PEER, AP_SYS, AP_SYS_NC, AP_VID, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_ATOMIC_DISABLE,
+            KFWR_RF_HELD, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE, KfMapRun, PS_2M,
+            PS_4K, PS_64K, PS_512M, RF_AP, RF_KIND, RF_PS,
         };
         use kf_host::MapPerm;
-        let base = KfMapRun { va: 0x2_0000_0000, gpga: 0x40_0000, len: 0x3000, flags: 0, op: KFWR_OP_MAP, pdb_index: 7 };
+        let base = KfMapRun {
+            va: 0x2_0000_0000,
+            gpga: 0x40_0000,
+            len: 0x3000,
+            flags: 0,
+            op: KFWR_OP_MAP,
+            pdb_index: 7,
+        };
         let plain = DiffRun {
             unmap: false,
             va: 0x2_0000_0000,
@@ -855,13 +1047,29 @@ mod tests {
             perm: MapPerm::READ_WRITE,
             privileged: false,
         };
-        let atomic_on = PermPolicy { carry_atomic_disable: true };
+        let atomic_on = PermPolicy {
+            carry_atomic_disable: true,
+        };
         assert_eq!(PermPolicy::default().diff_run(&base), plain);
-        let every_perm = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE;
-        let cases: [(u8, u8, u8); 4] = [(AP_VID, 0x00, PS_4K), (AP_PEER, 0xFF, PS_512M), (AP_SYS, 0x06, PS_64K), (AP_SYS_NC, 0xDB, PS_2M)];
+        let every_perm =
+            KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE;
+        let cases: [(u8, u8, u8); 4] = [
+            (AP_VID, 0x00, PS_4K),
+            (AP_PEER, 0xFF, PS_512M),
+            (AP_SYS, 0x06, PS_64K),
+            (AP_SYS_NC, 0xDB, PS_2M),
+        ];
         for (ap, kind, ps) in cases {
-            let flags = RF_AP.put(ap.into()) | RF_KIND.put(kind.into()) | RF_PS.put(ps.into()) | KFWR_RF_HELD | every_perm;
-            let m = KfMapRun { flags, op: KFWR_OP_UNMAP, ..base };
+            let flags = RF_AP.put(ap.into())
+                | RF_KIND.put(kind.into())
+                | RF_PS.put(ps.into())
+                | KFWR_RF_HELD
+                | every_perm;
+            let m = KfMapRun {
+                flags,
+                op: KFWR_OP_UNMAP,
+                ..base
+            };
             for (policy, atomic_disable) in [(PermPolicy::default(), false), (atomic_on, true)] {
                 assert_eq!(
                     policy.diff_run(&m),
@@ -870,7 +1078,11 @@ mod tests {
                         ap,
                         held: true,
                         kind,
-                        perm: MapPerm { read_only: true, atomic_disable, volatile: true },
+                        perm: MapPerm {
+                            read_only: true,
+                            atomic_disable,
+                            volatile: true
+                        },
                         privileged: true,
                         ..plain
                     },
@@ -880,16 +1092,53 @@ mod tests {
         }
         for bit in 0..32u32 {
             let want = match bit {
-                0..=2 => DiffRun { ap: 1 << bit, ..plain },
-                3 => DiffRun { perm: MapPerm { read_only: true, ..MapPerm::READ_WRITE }, ..plain },
-                4 => DiffRun { perm: MapPerm { atomic_disable: true, ..MapPerm::READ_WRITE }, ..plain },
-                5 => DiffRun { perm: MapPerm { volatile: true, ..MapPerm::READ_WRITE }, ..plain },
-                6 => DiffRun { privileged: true, ..plain },
-                16..=23 => DiffRun { kind: 1 << (bit - 16), ..plain },
-                31 => DiffRun { held: true, ..plain },
+                0..=2 => DiffRun {
+                    ap: 1 << bit,
+                    ..plain
+                },
+                3 => DiffRun {
+                    perm: MapPerm {
+                        read_only: true,
+                        ..MapPerm::READ_WRITE
+                    },
+                    ..plain
+                },
+                4 => DiffRun {
+                    perm: MapPerm {
+                        atomic_disable: true,
+                        ..MapPerm::READ_WRITE
+                    },
+                    ..plain
+                },
+                5 => DiffRun {
+                    perm: MapPerm {
+                        volatile: true,
+                        ..MapPerm::READ_WRITE
+                    },
+                    ..plain
+                },
+                6 => DiffRun {
+                    privileged: true,
+                    ..plain
+                },
+                16..=23 => DiffRun {
+                    kind: 1 << (bit - 16),
+                    ..plain
+                },
+                31 => DiffRun {
+                    held: true,
+                    ..plain
+                },
                 _ => plain,
             };
-            assert_eq!(atomic_on.diff_run(&KfMapRun { flags: 1 << bit, ..base }), want, "flags bit {bit}");
+            assert_eq!(
+                atomic_on.diff_run(&KfMapRun {
+                    flags: 1 << bit,
+                    ..base
+                }),
+                want,
+                "flags bit {bit}"
+            );
         }
     }
 
@@ -898,21 +1147,41 @@ mod tests {
     /// the entry applies. A kernel target (the default) maps it as before.
     #[test]
     fn a_user_twin_withholds_privileged_leaves_and_a_kernel_target_maps_them() {
-        let priv_leaf = DiffRun { privileged: true, ..m(0x2_0000_4000, 0x40_0000, 0x3000) };
+        let priv_leaf = DiffRun {
+            privileged: true,
+            ..m(0x2_0000_4000, 0x40_0000, 0x3000)
+        };
         let runs = [m(0x2_0000_0000, 0x10_0000, 0x1000), priv_leaf];
-        let user = Rec { withhold_priv: true, ..Rec::default() };
+        let user = Rec {
+            withhold_priv: true,
+            ..Rec::default()
+        };
         let a = apply_entry(&user, &runs, &cfg());
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_FAILED]);
-        assert_eq!((a.priv_withheld, a.priv_withheld_bytes, a.refused, a.mapped), (1, 0x3000, 0, 1));
+        assert_eq!(
+            (a.priv_withheld, a.priv_withheld_bytes, a.refused, a.mapped),
+            (1, 0x3000, 0, 1)
+        );
         assert!(a.refusals_are_absence() && a.first_refusal.is_none());
         assert_eq!(*user.ops.borrow(), vec!["map 0x200000000+0x1000", "inval"]);
         let kernel = Rec::default();
         let a = apply_entry(&kernel, &runs, &cfg());
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; 2]);
         assert_eq!((a.priv_withheld, a.priv_mirrored), (0, 1));
-        assert_eq!(*kernel.ops.borrow(), vec!["map 0x200000000+0x1000", "map 0x200004000+0x3000", "inval"]);
+        assert_eq!(
+            *kernel.ops.borrow(),
+            vec!["map 0x200000000+0x1000", "map 0x200004000+0x3000", "inval"]
+        );
         // An UNMAP of a (kernel-era) privileged placement still goes to the host.
-        let a = apply_entry(&user, &[DiffRun { unmap: true, privileged: true, ..u(0x2_0000_4000, 0x3000) }], &cfg());
+        let a = apply_entry(
+            &user,
+            &[DiffRun {
+                unmap: true,
+                privileged: true,
+                ..u(0x2_0000_4000, 0x3000)
+            }],
+            &cfg(),
+        );
         assert_eq!((a.unmapped, a.priv_withheld), (1, 0));
     }
 
@@ -921,12 +1190,30 @@ mod tests {
     /// APPLIED. Commit-on-ack is unchanged by batching.
     #[test]
     fn a_refused_batch_falls_back_to_exact_per_run_verdicts() {
-        let t = Rec { batching: Some(Some(0x1000_1000)), held_at: Some(0x1000_2000), refuse_map: Some(0x1000_1000), ..Rec::default() };
-        let runs = [ram(0x1000_0000, 0x4000, 0x1000), ram(0x1000_1000, 0x9000, 0x1000), ram(0x1000_2000, 0x2000, 0x1000)];
+        let t = Rec {
+            batching: Some(Some(0x1000_1000)),
+            held_at: Some(0x1000_2000),
+            refuse_map: Some(0x1000_1000),
+            ..Rec::default()
+        };
+        let runs = [
+            ram(0x1000_0000, 0x4000, 0x1000),
+            ram(0x1000_1000, 0x9000, 0x1000),
+            ram(0x1000_2000, 0x2000, 0x1000),
+        ];
         let a = apply_entry(&t, &runs, &cfg());
-        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD]);
-        assert_eq!(*t.ops.borrow(), vec!["map 0x10000000+0x1000", "map 0x10002000+0x1000", "inval"]);
-        assert_eq!((a.mapped, a.held, a.refused, a.batch_fallbacks), (1, 1, 1, 1));
+        assert_eq!(
+            a.codes,
+            vec![KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD]
+        );
+        assert_eq!(
+            *t.ops.borrow(),
+            vec!["map 0x10000000+0x1000", "map 0x10002000+0x1000", "inval"]
+        );
+        assert_eq!(
+            (a.mapped, a.held, a.refused, a.batch_fallbacks),
+            (1, 1, 1, 1)
+        );
         assert!(a.first_batch_fallback.unwrap().contains("batch refused"));
     }
 
@@ -934,61 +1221,175 @@ mod tests {
     /// the host); a refused range is retried run by run so every run is named.
     #[test]
     fn adjacent_unmaps_are_one_range_and_a_refused_range_goes_run_by_run() {
-        let t = Rec { batching: Some(None), ..Rec::default() };
-        let runs = [u(0x3000, 0x1000), u(0x1000, 0x2000), DiffRun { held: true, ..u(0x4000, 0x1000) }, u(0x9000, 0x1000)];
+        let t = Rec {
+            batching: Some(None),
+            ..Rec::default()
+        };
+        let runs = [
+            u(0x3000, 0x1000),
+            u(0x1000, 0x2000),
+            DiffRun {
+                held: true,
+                ..u(0x4000, 0x1000)
+            },
+            u(0x9000, 0x1000),
+        ];
         let a = apply_entry(&t, &runs, &cfg());
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; 4]);
-        assert_eq!(*t.ops.borrow(), vec!["unmap-range 0x1000+0x3000", "unmap 0x9000", "inval"]);
-        assert_eq!((a.unmapped, a.range_unmaps, a.range_unmapped_runs, a.unmap_calls, a.held_retired), (3, 1, 2, 2, 1));
+        assert_eq!(
+            *t.ops.borrow(),
+            vec!["unmap-range 0x1000+0x3000", "unmap 0x9000", "inval"]
+        );
+        assert_eq!(
+            (
+                a.unmapped,
+                a.range_unmaps,
+                a.range_unmapped_runs,
+                a.unmap_calls,
+                a.held_retired
+            ),
+            (3, 1, 2, 2, 1)
+        );
 
-        let t = Rec { batching: Some(Some(0x2000)), refuse_unmap: Some(0x2000), ..Rec::default() };
-        let a = apply_entry(&t, &[u(0x1000, 0x1000), u(0x2000, 0x1000), u(0x3000, 0x1000), m(0x2000, 0x5000, 0x1000)], &cfg());
-        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_APPLIED, KFWR_ACK_FAILED]);
-        assert_eq!(*t.ops.borrow(), vec!["unmap 0x1000", "unmap 0x3000", "inval"], "the map over the refused unmap is still blocked");
+        let t = Rec {
+            batching: Some(Some(0x2000)),
+            refuse_unmap: Some(0x2000),
+            ..Rec::default()
+        };
+        let a = apply_entry(
+            &t,
+            &[
+                u(0x1000, 0x1000),
+                u(0x2000, 0x1000),
+                u(0x3000, 0x1000),
+                m(0x2000, 0x5000, 0x1000),
+            ],
+            &cfg(),
+        );
+        assert_eq!(
+            a.codes,
+            vec![
+                KFWR_ACK_APPLIED,
+                KFWR_ACK_FAILED,
+                KFWR_ACK_APPLIED,
+                KFWR_ACK_FAILED
+            ]
+        );
+        assert_eq!(
+            *t.ops.borrow(),
+            vec!["unmap 0x1000", "unmap 0x3000", "inval"],
+            "the map over the refused unmap is still blocked"
+        );
         assert_eq!(a.batch_fallbacks, 1);
     }
 
     /// A batch never exceeds [`BATCH_MAX_RUNS`] runs.
     #[test]
     fn a_batch_is_capped() {
-        let t = Rec { batching: Some(None), ..Rec::default() };
+        let t = Rec {
+            batching: Some(None),
+            ..Rec::default()
+        };
         let n = BATCH_MAX_RUNS + 3;
-        let runs: Vec<DiffRun> = (0..n as u64).map(|k| ram(0x4_0000_0000 + k * 0x1000, (n as u64 - k) * 0x2000, 0x1000)).collect();
+        let runs: Vec<DiffRun> = (0..n as u64)
+            .map(|k| ram(0x4_0000_0000 + k * 0x1000, (n as u64 - k) * 0x2000, 0x1000))
+            .collect();
         let a = apply_entry(&t, &runs, &cfg());
         assert_eq!(a.batches, 2);
-        assert_eq!(t.ops.borrow()[0], format!("batch 0x400000000+{:#x} x{BATCH_MAX_RUNS}", BATCH_MAX_RUNS * 0x1000));
-        assert_eq!(t.ops.borrow()[1], format!("batch {:#x}+0x3000 x3", 0x4_0000_0000u64 + BATCH_MAX_RUNS as u64 * 0x1000));
+        assert_eq!(
+            t.ops.borrow()[0],
+            format!(
+                "batch 0x400000000+{:#x} x{BATCH_MAX_RUNS}",
+                BATCH_MAX_RUNS * 0x1000
+            )
+        );
+        assert_eq!(
+            t.ops.borrow()[1],
+            format!(
+                "batch {:#x}+0x3000 x3",
+                0x4_0000_0000u64 + BATCH_MAX_RUNS as u64 * 0x1000
+            )
+        );
     }
 
     #[test]
     fn unmaps_then_maps_then_one_invalidate() {
         let t = Rec::default();
-        let a = apply_entry(&t, &[m(0x2000, 0x10_0000, 0x1000), u(0x5000, 0x1000)], &cfg());
-        assert_eq!(*t.ops.borrow(), vec!["unmap 0x5000", "map 0x2000+0x1000", "inval"]);
+        let a = apply_entry(
+            &t,
+            &[m(0x2000, 0x10_0000, 0x1000), u(0x5000, 0x1000)],
+            &cfg(),
+        );
+        assert_eq!(
+            *t.ops.borrow(),
+            vec!["unmap 0x5000", "map 0x2000+0x1000", "inval"]
+        );
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_APPLIED]);
     }
 
     #[test]
     fn a_refused_unmap_blocks_the_map_over_it_and_both_stay_differences() {
-        let t = Rec { refuse_unmap: Some(0x2000), ..Rec::default() };
-        let a = apply_entry(&t, &[u(0x2000, 0x2000), m(0x3000, 0x10_0000, 0x1000), m(0x8000, 0x20_0000, 0x1000)], &cfg());
-        assert_eq!(a.codes, vec![KFWR_ACK_FAILED, KFWR_ACK_FAILED, KFWR_ACK_APPLIED]);
-        assert_eq!(*t.ops.borrow(), vec!["map 0x8000+0x1000", "inval"], "the blocked map was never attempted");
+        let t = Rec {
+            refuse_unmap: Some(0x2000),
+            ..Rec::default()
+        };
+        let a = apply_entry(
+            &t,
+            &[
+                u(0x2000, 0x2000),
+                m(0x3000, 0x10_0000, 0x1000),
+                m(0x8000, 0x20_0000, 0x1000),
+            ],
+            &cfg(),
+        );
+        assert_eq!(
+            a.codes,
+            vec![KFWR_ACK_FAILED, KFWR_ACK_FAILED, KFWR_ACK_APPLIED]
+        );
+        assert_eq!(
+            *t.ops.borrow(),
+            vec!["map 0x8000+0x1000", "inval"],
+            "the blocked map was never attempted"
+        );
         assert_eq!(a.refused, 2);
     }
 
     #[test]
     fn held_is_acknowledged_held_and_a_held_unmap_never_reaches_the_host() {
-        let t = Rec { held_at: Some(0x2000), ..Rec::default() };
-        let a = apply_entry(&t, &[DiffRun { held: true, ..u(0x9000, 0x1000) }, m(0x2000, 0x10_0000, 0x1000)], &cfg());
+        let t = Rec {
+            held_at: Some(0x2000),
+            ..Rec::default()
+        };
+        let a = apply_entry(
+            &t,
+            &[
+                DiffRun {
+                    held: true,
+                    ..u(0x9000, 0x1000)
+                },
+                m(0x2000, 0x10_0000, 0x1000),
+            ],
+            &cfg(),
+        );
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_HELD]);
-        assert_eq!(*t.ops.borrow(), vec!["map 0x2000+0x1000"], "no unmap call and no invalidate: nothing of ours changed");
+        assert_eq!(
+            *t.ops.borrow(),
+            vec!["map 0x2000+0x1000"],
+            "no unmap call and no invalidate: nothing of ours changed"
+        );
     }
 
     #[test]
     fn a_window_clips_at_its_extent_and_satisfies_what_lies_above() {
-        let t = Rec { extent: Some(0x10_0000), ..Rec::default() };
-        let a = apply_entry(&t, &[m(0xF_F000, 0x1000, 0x2000), m(0x20_0000, 0x4000, 0x1000)], &cfg());
+        let t = Rec {
+            extent: Some(0x10_0000),
+            ..Rec::default()
+        };
+        let a = apply_entry(
+            &t,
+            &[m(0xF_F000, 0x1000, 0x2000), m(0x20_0000, 0x4000, 0x1000)],
+            &cfg(),
+        );
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_HELD]);
         assert_eq!(t.ops.borrow()[0], "map 0xff000+0x1000");
         assert_eq!(a.clipped_bytes, 0x2000);
@@ -997,7 +1398,14 @@ mod tests {
     #[test]
     fn a_leaf_that_cannot_be_a_row_is_refused_by_name() {
         let t = Rec::default();
-        let a = apply_entry(&t, &[m(0x1000, (1 << 30) - 0x1000, 0x2000), m(0x1010, 0x1000, 0x1000)], &cfg());
+        let a = apply_entry(
+            &t,
+            &[
+                m(0x1000, (1 << 30) - 0x1000, 0x2000),
+                m(0x1010, 0x1000, 0x1000),
+            ],
+            &cfg(),
+        );
         assert_eq!(a.codes, vec![KFWR_ACK_FAILED, KFWR_ACK_FAILED]);
         assert!(a.first_refusal.unwrap().contains("OutsideStore"));
         assert!(t.ops.borrow().is_empty());
@@ -1007,20 +1415,44 @@ mod tests {
     // SYS_COHERENT (2), kind SMSKED_MESSAGE (0xF), address = NV_VIRTUAL_FUNCTION base 0x30000.
     const GH100_DB_VA: u64 = 0x0123_0000;
     fn gh100_db_leaf() -> DiffRun {
-        DiffRun { unmap: false, va: GH100_DB_VA, len: 0x1_0000, at: 0x3_0000, ap: 2, held: false, kind: 0x0F, perm: kf_host::MapPerm::READ_WRITE, privileged: false }
+        DiffRun {
+            unmap: false,
+            va: GH100_DB_VA,
+            len: 0x1_0000,
+            at: 0x3_0000,
+            ap: 2,
+            held: false,
+            kind: 0x0F,
+            perm: kf_host::MapPerm::READ_WRITE,
+            privileged: false,
+        }
     }
     fn hopper() -> ApplyCfg<'static> {
-        ApplyCfg { usermode: kf_chip::Family::Hopper.usermode_mmio(), ..cfg() }
+        ApplyCfg {
+            usermode: kf_chip::Family::Hopper.usermode_mmio(),
+            ..cfg()
+        }
     }
 
     #[test]
     fn gh100_bar1_doorbell_view_becomes_a_trap_never_guest_ram() {
-        let t = Rec { traps_usermode: true, ..Rec::default() };
-        let a = apply_entry(&t, &[gh100_db_leaf(), m(0x10_0000, 0x40_0000, 0x1000)], &hopper());
+        let t = Rec {
+            traps_usermode: true,
+            ..Rec::default()
+        };
+        let a = apply_entry(
+            &t,
+            &[gh100_db_leaf(), m(0x10_0000, 0x40_0000, 0x1000)],
+            &hopper(),
+        );
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_APPLIED]);
         assert_eq!(
             *t.ops.borrow(),
-            vec!["trap 0x1230000+0x10000 vf0x0", "map 0x100000+0x1000", "inval"],
+            vec![
+                "trap 0x1230000+0x10000 vf0x0",
+                "map 0x100000+0x1000",
+                "inval"
+            ],
             "the view is a trap; ordinary memory beside it still maps"
         );
         assert_eq!((a.usermode_trapped, a.mapped), (1, 1));
@@ -1034,15 +1466,25 @@ mod tests {
     fn gh100_gpu_va_doorbell_view_is_satisfied_unmirrored_by_default() {
         let t = Rec::default(); // a GPU VA space: the trait default
         let a = apply_entry(&t, &[gh100_db_leaf()], &hopper());
-        assert_eq!(a.codes, vec![KFWR_ACK_HELD], "satisfied (the invalidate clears) but not ours");
+        assert_eq!(
+            a.codes,
+            vec![KFWR_ACK_HELD],
+            "satisfied (the invalidate clears) but not ours"
+        );
         assert_eq!(a.usermode_unmirrored, 1);
-        assert!(t.ops.borrow().is_empty(), "no host mapping — above all not guest RAM at 0x30000");
+        assert!(
+            t.ops.borrow().is_empty(),
+            "no host mapping — above all not guest RAM at 0x30000"
+        );
     }
 
     #[test]
     fn ga10x_config_leaves_every_leaf_on_the_memory_path() {
         // `usermode: None` (Turing … Ada): byte-for-byte the pre-2026-09-26 behaviour.
-        let t = Rec { traps_usermode: true, ..Rec::default() };
+        let t = Rec {
+            traps_usermode: true,
+            ..Rec::default()
+        };
         let a = apply_entry(&t, &[gh100_db_leaf()], &cfg());
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED]);
         assert_eq!(*t.ops.borrow(), vec!["map 0x1230000+0x10000", "inval"]);
@@ -1051,22 +1493,51 @@ mod tests {
 
     #[test]
     fn priv_and_stray_internal_mmio_are_refused_and_plain_ram_at_0x30000_still_maps() {
-        let t = Rec { traps_usermode: true, ..Rec::default() };
-        let priv_leaf = DiffRun { at: 0x2000, len: 0x1000, ..gh100_db_leaf() };
-        let stray = DiffRun { va: 0x200_0000, at: 0x50_0000, len: 0x1000, ..gh100_db_leaf() };
-        let ram = DiffRun { va: 0x300_0000, at: 0x3_0000, len: 0x1000, ap: 2, kind: 0x00, ..gh100_db_leaf() };
+        let t = Rec {
+            traps_usermode: true,
+            ..Rec::default()
+        };
+        let priv_leaf = DiffRun {
+            at: 0x2000,
+            len: 0x1000,
+            ..gh100_db_leaf()
+        };
+        let stray = DiffRun {
+            va: 0x200_0000,
+            at: 0x50_0000,
+            len: 0x1000,
+            ..gh100_db_leaf()
+        };
+        let ram = DiffRun {
+            va: 0x300_0000,
+            at: 0x3_0000,
+            len: 0x1000,
+            ap: 2,
+            kind: 0x00,
+            ..gh100_db_leaf()
+        };
         let a = apply_entry(&t, &[priv_leaf, stray, ram], &hopper());
-        assert_eq!(a.codes, vec![KFWR_ACK_FAILED, KFWR_ACK_FAILED, KFWR_ACK_APPLIED]);
+        assert_eq!(
+            a.codes,
+            vec![KFWR_ACK_FAILED, KFWR_ACK_FAILED, KFWR_ACK_APPLIED]
+        );
         assert!(a.first_refusal.unwrap().contains("PRIV"));
         assert_eq!(*t.ops.borrow(), vec!["map 0x3000000+0x1000", "inval"]);
     }
 
     #[test]
     fn a_doorbell_view_above_the_bar1_extent_is_clipped_like_any_row() {
-        let t = Rec { traps_usermode: true, extent: Some(GH100_DB_VA + 0x8000), ..Rec::default() };
+        let t = Rec {
+            traps_usermode: true,
+            extent: Some(GH100_DB_VA + 0x8000),
+            ..Rec::default()
+        };
         let a = apply_entry(&t, &[gh100_db_leaf()], &hopper());
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED]);
-        assert_eq!(*t.ops.borrow(), vec!["trap 0x1230000+0x8000 vf0x0", "inval"]);
+        assert_eq!(
+            *t.ops.borrow(),
+            vec!["trap 0x1230000+0x8000 vf0x0", "inval"]
+        );
         assert_eq!(a.clipped_bytes, 0x8000);
     }
 }
