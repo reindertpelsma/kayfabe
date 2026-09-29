@@ -418,6 +418,7 @@ impl SharedPageArena {
         // SAFETY: `stat` is written only by the kernel through this call, and the fd is this
         // arena's own `memfd`, borrowed for the duration.
         let mut st: libc::stat = unsafe { std::mem::zeroed() };
+        // SAFETY: the arena owns this live descriptor and `st` is writable for the call.
         let rc = unsafe { libc::fstat(self.inner.file.as_backing_fd().as_raw_fd(), &mut st) };
         if rc != 0 {
             return Err(crate::error::last_syscall_error("fstat on the page arena"));

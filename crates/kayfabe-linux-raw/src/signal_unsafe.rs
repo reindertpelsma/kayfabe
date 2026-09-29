@@ -471,6 +471,7 @@ pub mod stall_alarm {
                     return;
                 }
                 d.set(true);
+                // SAFETY: sigset_t is an integer mask; sigemptyset initializes it before use.
                 let mut set: libc::sigset_t = unsafe { std::mem::zeroed() };
                 // SAFETY: `set` is a writable out-parameter of the right type.
                 unsafe {
@@ -633,6 +634,7 @@ pub mod stall_alarm {
     /// reads zero — this path works regardless.
     #[must_use]
     pub fn thread_switches() -> Option<(u64, u64)> {
+        // SAFETY: rusage contains only integer/timeval fields, all valid when zero.
         let mut ru: libc::rusage = unsafe { std::mem::zeroed() };
         // SAFETY: `ru` is a writable out-parameter of the right type living on this stack;
         // `RUSAGE_THREAD` scopes the answer to the calling thread.
