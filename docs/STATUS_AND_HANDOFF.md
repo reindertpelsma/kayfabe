@@ -17,14 +17,15 @@ this file.
   **Exact `d883d0eb`: 1683/0 crate tests, gates 9/9, KF3_RC=0, fresh FG_RC=0, thin 30/30**,
   terminal EXIT 2026-09-29 13:33:52 UTC on retained RTX 3060 `53004208`.
   All 96 evidence files are recovered and hash-checked in `traces/recovered_integration_20260929/`.
-  Ready for master/v3 promotion with documentation/evidence only after the tested revision.
+  **Promoted to master/v3 as `5c639f54`**, documentation/evidence only after the tested revision.
   Historical TU116 results do not certify the new candidate on Turing hardware.
 - **Separate benchmark candidate:** `2676902f` on `codex/benchmark-pid-2026-09-29` binds LLM
   perf counters to the launched QEMU PID/starttime, with GPU-free identity tests. GitHub-backed,
   not included in this merge bar or promotion. No production doorbell fast path or b3 module yet.
-- **Paguro state changed:** a later 2026-09-29 inventory reports `53076605` stopped/exited,
-  `GPU error, unable to start instance`, and direct SSH refused. This session did not stop it.
-  Its disk is retained; do not rely on the earlier Windows-running observation as current.
+- **Paguro recovered again, 2026-09-29:** at about 18:19 UTC, `53076605` reported stopped/exited,
+  `GPU error, unable to start instance`, and direct SSH refused. One start retry restored the host.
+  The verified Windows launcher reused the existing overlay/firmware/TPM state; QEMU PID 1564
+  started at 18:22 UTC and guest SSH returned Windows 10.0.26200.6584. Retained for Paguro; no reset.
 - **2026-09-29 checkpoint:** terminal network access is restored; GitHub, Vast and both boxes
   are reachable. The final run at **`61c49f14` passed: 1653/0 tests, gates 9/9, KF3_RC=0,
   fresh FG_RC=0, thin 30/30**, terminal EXIT on 2026-09-28 at 18:44:21 UTC. Evidence is now
