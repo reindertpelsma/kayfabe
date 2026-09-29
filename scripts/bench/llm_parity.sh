@@ -23,6 +23,7 @@
 # `LP_EXT lane=… ext_ms=… rc=…` per process. `llm_parity_summary.py` turns the files into tables.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$HERE/qemu_identity.sh"
 MODE=${1:-}; LANE=${2:-}
 SHORT_PROCS=${LP_SHORT_PROCS:-3}
 LONG=${LP_LONG-512,2048}
@@ -68,24 +69,30 @@ echo "LP_START lane=$LANE date=$(date -Is) model=$MODEL snapshot=[${SNAP% }] sho
 QLOG=${BENCH_DIR:-/workspace/bench}/run_${2:-none}_qemu.log   # hook mode: $2 is boot_capture's tag
 DEADF=$(mktemp -u /tmp/lp_dead_XXXXXX)
 ledger_sum() { grep -a 'DOORBELL-LEDGER' "$QLOG" 2>/dev/null | sed -n 's/.* forwarded=\([0-9]*\).*/\1/p' | awk '{s+=$1} END{print s+0}'; }
+counter_target_valid() { kf_qemu_identity_matches "${KF_QEMU_PID:-}" "${KF_QEMU_STARTTIME:-}"; }
+echo "LP_COUNTER_TARGET pid=${KF_QEMU_PID:-unset} starttime=${KF_QEMU_STARTTIME:-unset}"
 one() {  # $1 kind, $2 ntok, $3 proc, rest: env
     local k=$1 n=$2 i=$3; shift 3
     local t0 t1 out rc
     local cp="" pc="" d0=0
+    if [ "$MODE" = hook ] && [ -e "$DEADF" ]; then
+        echo "LP_SKIP lane=$LANE kind=$k ntok=$n proc=$i reason=channel-dead-earlier-in-this-boot"; return
+    fi
     if [ "$MODE" = hook ] && [ "${LP_COUNT:-1}" = 1 ]; then
         # per-process KVM exit count (a counting tracepoint, not a record) and the device's own
         # doorbell ledger (lines are printed as each channel is freed, i.e. at process exit)
-        d0=$(ledger_sum); cp=$(mktemp)
-        perf stat -e kvm:kvm_exit -x, -o "$cp" -p "$(pgrep -x qemu-system-x86 | head -1)" 2>/dev/null &
-        pc=$!
+        if counter_target_valid; then
+            d0=$(ledger_sum); cp=$(mktemp)
+            perf stat -e kvm:kvm_exit -x, -o "$cp" -p "$KF_QEMU_PID" 2>/dev/null &
+            pc=$!
+        else
+            echo "LP_COUNTERS_UNMEASURED lane=$LANE kind=$k ntok=$n proc=$i reason=missing-or-stale-qemu-identity"
+        fi
     fi
     # ⊘ w828 DEAD-CHANNEL GUARD (hook mode): when the device kills a guest channel (`chan token … DEAD`)
     # the guest's CUDA call spins forever on a completion that never comes; without this the matrix
     # sat out `timeout $TMO` (an hour) per remaining process. The watcher ends the process, names it,
     # and every later process of this boot is skipped as UNMEASURED.
-    if [ "$MODE" = hook ] && [ -e "$DEADF" ]; then
-        echo "LP_SKIP lane=$LANE kind=$k ntok=$n proc=$i reason=channel-dead-earlier-in-this-boot"; return
-    fi
     local wd=""
     if [ "$MODE" = hook ]; then
         local dead0; dead0=$(grep -a -c 'DEAD: ' "$QLOG" 2>/dev/null || true)
@@ -104,8 +111,12 @@ one() {  # $1 kind, $2 ntok, $3 proc, rest: env
     [ "$MODE" = hook ] && [ -e "$DEADF" ] && echo "LP_DEAD lane=$LANE kind=$k ntok=$n proc=$i $(cat "$DEADF")"
     if [ -n "$pc" ]; then
         kill -INT "$pc" 2>/dev/null; wait "$pc" 2>/dev/null; sleep 2
-        echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_KVM_EXITS=$(grep -a 'kvm_exit' "$cp" | cut -d, -f1)"
-        echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_DOORBELLS=$(( $(ledger_sum) - d0 ))"
+        if counter_target_valid; then
+            echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_KVM_EXITS=$(grep -a 'kvm_exit' "$cp" | cut -d, -f1)"
+            echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_DOORBELLS=$(( $(ledger_sum) - d0 ))"
+        else
+            echo "LP_COUNTERS_UNMEASURED lane=$LANE kind=$k ntok=$n proc=$i reason=qemu-identity-lost-during-sample"
+        fi
         rm -f "$cp"
     fi
     echo "$out" | grep -a '^LLM_\|^TORCH_' | sed "s/^/LP lane=$LANE kind=$k ntok=$n proc=$i /"
@@ -125,13 +136,21 @@ done
 # on the same process. ⊘ Recording every exit perturbs timing: this row is kind=perf, never a
 # parity row.
 if [ "$MODE" = hook ] && [ -n "${LP_PERF_NTOK:-}" ]; then
-    QPID=$(pgrep -x qemu-system-x86 | head -1)
+    if ! counter_target_valid; then
+        echo "LP_PERF_UNMEASURED reason=missing-or-stale-qemu-identity"
+        echo "LP_DONE lane=$LANE date=$(date -Is)"
+        exit 0
+    fi
     PD=${LP_PERF_DIR:-/tmp}/lp_perf_$$; mkdir -p "$PD"
-    perf kvm stat record -p "$QPID" -o "$PD/perf.data" >/dev/null 2>"$PD/rec.err" &
+    perf kvm stat record -p "$KF_QEMU_PID" -o "$PD/perf.data" >/dev/null 2>"$PD/rec.err" &
     PP=$!; sleep 2
     one perf "$LP_PERF_NTOK" 1 LLM_TIMELINE=1 LLM_MIN_NTOK=1 LLM_REPS=1
     kill -INT "$PP"; wait "$PP" 2>/dev/null
-    perf kvm stat report -i "$PD/perf.data" --event=vmexit 2>&1 | sed "s/^/LP_PERFKVM /" | head -40
+    if counter_target_valid; then
+        perf kvm stat report -i "$PD/perf.data" --event=vmexit 2>&1 | sed "s/^/LP_PERFKVM /" | head -40
+    else
+        echo "LP_PERF_UNMEASURED reason=qemu-identity-lost-during-sample"
+    fi
     echo "LP_PERF_ERR $(tail -2 "$PD/rec.err" | tr '\n' ' ')"
 fi
 echo "LP_DONE lane=$LANE date=$(date -Is)"

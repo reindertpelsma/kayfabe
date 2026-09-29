@@ -319,10 +319,15 @@ grep -E 'RmInitAdapter|Cannot (load state into|initialize) the device' "$DMESG" 
 # valid evidence, and losing it because an experiment failed would be the opposite of what
 # this file is for. The hook's own harness is what judges the hook.
 if [ -n "${POST_CAPTURE_HOOK:-}" ]; then
+  # boot_nvkvm execs QEMU, so QPID is this boot's actual process, never a global
+  # pgrep winner. Pass its identity to counter-collecting hooks. If a custom box
+  # helper did not exec QEMU, leave starttime empty so counters fail closed.
+  source "$SELFDIR/qemu_identity.sh"
+  QSTART=$(kf_qemu_starttime "$QPID") || QSTART=""
   say "running POST_CAPTURE_HOOK: $POST_CAPTURE_HOOK"
   {
     echo "=== POST_CAPTURE_HOOK $POST_CAPTURE_HOOK at $(date -Is) ==="
-    "$POST_CAPTURE_HOOK" "$TAG"
+    KF_QEMU_PID="$QPID" KF_QEMU_STARTTIME="$QSTART" "$POST_CAPTURE_HOOK" "$TAG"
     echo "HOOK_RC=$?"
   } >> "$PROBE" 2>&1
   say "hook finished: $(grep -c '^HOOK_RC=0$' "$PROBE" >/dev/null && echo rc=0 || echo 'rc!=0 — see the probe log')"
