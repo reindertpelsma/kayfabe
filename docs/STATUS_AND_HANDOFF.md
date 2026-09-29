@@ -14,7 +14,7 @@ this file.
   are reachable. The final run at **`61c49f14` passed: 1653/0 tests, gates 9/9, KF3_RC=0,
   fresh FG_RC=0, thin 30/30**, terminal EXIT on 2026-09-28 at 18:44:21 UTC. Evidence is now
   recovered locally in `traces/capability_535_545_audit_20260928/final-run/`. Changes after that
-  tested revision are documentation/evidence only. The candidate is ready to promote; the
+  tested revision are documentation/evidence only. **Promoted to master/v3 as `7c5b2a13`**; the
   earlier sandbox-blocked checkpoint is historical, not a failed test result.
 
 - **2026-09-28 owner decisions:** 535/545 capability extension approved, subject to the independent
@@ -24,7 +24,7 @@ this file.
 - **Recovery is preserved, not implicitly merged:** source/evidence at
   [`recovery/resume-2026-09-28`](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md),
   recovered Turing code at `recovery/vast-tuwork-2026-09-28` (`2825c42f`, code tree `576f5bb0`).
-  The Claude head `826ef957` has 30 commits beyond the baseline and needs its own combined merge bar.
+  The Claude head `826ef957` has 30 commits beyond the previous baseline and needs its own combined merge bar.
   Do not use those historical results to certify a new candidate. The fresh allowlist candidate
   starts from the published baseline, so it does not silently promote the other pending changes.
 - **Physical baseline access:** read-only SSH to `172.22.1.20` reports `Network is unreachable`

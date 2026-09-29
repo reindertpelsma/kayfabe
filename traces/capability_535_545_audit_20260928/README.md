@@ -1,6 +1,6 @@
 # 535/545 capability review — 2026-09-28
 
-**STATUS: AUDIT AND FINAL MERGE BAR PASSED; READY FOR PROMOTION, 2026-09-29.** Owner approved the extension on 2026-09-28, conditional on the
+**STATUS: PROMOTED TO MASTER/V3 AS `7c5b2a13`, 2026-09-29.** Owner approved the extension on 2026-09-28, conditional on the
 recommended independent review and normal exact-revision verification. No end-to-end old-driver
 support is claimed. The candidate is based on published master `8ab92bf4`, not the unverified
 combined Claude/recovered-Turing line.
