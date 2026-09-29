@@ -97,6 +97,10 @@ fn is_self_referential(path: &str) -> bool {
         // same self-references, not new consumers.
         || path.ends_with("crates/kf-abi/src/oracle.rs")
         || path.ends_with("crates/kf-abi/tests/truncated_row_reads.rs")
+        // As in the v3 guard: generated driver-ID measurements describe the ABI, not a
+        // captured reply's contents. Only this exact generated file is excluded; new
+        // consumers elsewhere still need a checked capture-reliance statement.
+        || path.ends_with("crates/kf-abi/src/generated/matrix.rs")
 }
 
 /// The forms a control id is written in here: `0x2080_0a40`, `0x20800a40`, `ctl_20800a40`,

@@ -622,10 +622,66 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
               re-decided — the five fields `kceGetPceConfigForLceType` copies out span 20 \
               bytes of a 28-byte reply and only 16 were kept",
     },
-    // ⊘ 2026-09-26: the two §16.56 rows (`0x20800a34`, `0x20800b03`) are REMOVED. Their only
-    // site was `tests/tests/admitted_is_served.rs` — a membership list, never a read — and that
-    // suite moved to `archive/tests/` with the pre-v3 tree, so nothing live names either id any
-    // more. `truncated_row_reads.rs` refuses a reliance statement nobody depends on, rightly.
+    // 2026-09-29: this retained grader's guard still scans ALL live Rust sources, including
+    // v3. Keep those consumers accounted for here, as in kf-abi's oracle, rather than narrowing
+    // the scan to hide them. The archived membership-only references no longer count; the
+    // live v3 answers below derive from host facts or the virtual display, not captured bytes.
+    CaptureReliance {
+        cmd: 0x2080_0a34,
+        read_end: 0,
+        sites: &[
+            "crates/kf-abi/src/grstatic.rs",
+            "crates/kf-rm/tests/init_tables.rs",
+            "crates/kf-crec/tests/cap1b_differential.rs",
+        ],
+        why: "NOT A READ of the capture. The answer is the host die's own \
+              GR_GET_SM_ISSUE_RATE_MODIFIER reply (a host fact queried at VM start); the \
+              truncated C row (64 of 72 bytes kept) is never decoded. The other two sites only \
+              name the id (the served-universe count and the replay's exception set)",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0a01,
+        read_end: 0,
+        sites: &["crates/kf-rm/src/display.rs"],
+        why: "NOT A READ of the capture. INTERNAL_DISPLAY_GET_STATIC_INFO is authored from the \
+              virtual display's own topology (heads, windows, channel count); the C row's missing \
+              four bytes are exactly `numDispChannels`, the field that once decoded to 0 — this \
+              port states it (81, one past the last cursor channel number) instead",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0a49,
+        read_end: 0,
+        sites: &["crates/kf-rm/src/display.rs"],
+        why: "NOT A READ. INTERNAL_DISPLAY_WRITE_INST_MEM is [IN]: the guest states where its display \
+              instance memory is; the link records the guest's own request and answers NV_OK",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0ac6,
+        read_end: 0,
+        sites: &["crates/kf-rm/src/display.rs"],
+        why: "NOT A READ. INIT_BRIGHTC_STATE_LOAD is [IN] (the guest's ACPI backlight data); the \
+              reply is the guest's own request with NV_OK",
+    },
+    CaptureReliance {
+        cmd: 0x2080_0adf,
+        read_end: 0,
+        sites: &["crates/kf-rm/src/display.rs"],
+        why: "NOT A READ. SET_STATIC_EDID_DATA is [IN] (a laptop's ACPI panel EDIDs); the reply is \
+              the guest's own request with NV_OK",
+    },
+    CaptureReliance {
+        cmd: 0x0073_0107,
+        read_end: 0,
+        sites: &[
+            "crates/kf-rm/src/display.rs",
+            "crates/kf-rm/tests/display_seat.rs",
+        ],
+        why: "NOT A READ of the capture. NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED is authored by the \
+              display model from its own connectors (`displayMask` = `displayMaskDDC` = the OR of \
+              the virtual monitors' display ids, `kf_disp::model` \"supported\"); the C row's \
+              missing four bytes are never decoded, and the two sites only name the id (the \
+              link's claim test and the served-chain seat test)",
+    },
 ];
 
 /// The reliance statement for `cmd`, if this tree has one.
