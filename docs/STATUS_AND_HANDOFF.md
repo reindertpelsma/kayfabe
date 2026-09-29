@@ -1,22 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
 **STATUS: LIVE, 2026-09-29.** The owner resolved the three implementation decisions in §3;
-work resumed, but remote verification/backup is currently blocked by the session's network sandbox.
+network access is restored and the audited candidate's final merge bar has passed at `61c49f14`.
 See `RESUME_2026-09-29.md` for the exact checkpoint. The historical campaign entries below are dated;
-the last published product baseline at this resumption is `8ab92bf4` (mc21). The single entry point for resuming work
+the prior published baseline was `8ab92bf4` (mc21). The single entry point for resuming work
 without any chat history. Decisions live in `docs/OWNER_RULINGS.md`; per-topic detail in the design docs
 named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then fix
 this file.
 
 ## 0. Current resumption — start here
 
-- **2026-09-29 checkpoint:** `/workspace/kayfabe` is now on `codex/resume-2026-09-29`, based on
-  the GitHub-backed candidate `10b725a6`. The prior recovery branch and the `/data` worktrees
-  are preserved. SSH fails with `socket: Operation not permitted`; GitHub/Vast CLI cannot resolve
-  their hosts. Do not infer that the boxes disappeared or the final bar failed. Its last observed
-  state was **1653/0 tests, gates 9/9, KF3_RC=0, FG_RC=0, 20/30 guest cases passing**, with the
-  suite still running at 2026-09-28 18:38:33 UTC. Completion is **unknown**, not promotion-ready.
-  No current box inventory, GitHub refresh, push or teardown was possible on 2026-09-29.
+- **2026-09-29 checkpoint:** terminal network access is restored; GitHub, Vast and both boxes
+  are reachable. The final run at **`61c49f14` passed: 1653/0 tests, gates 9/9, KF3_RC=0,
+  fresh FG_RC=0, thin 30/30**, terminal EXIT on 2026-09-28 at 18:44:21 UTC. Evidence is now
+  recovered locally in `traces/capability_535_545_audit_20260928/final-run/`. Changes after that
+  tested revision are documentation/evidence only. The candidate is ready to promote; the
+  earlier sandbox-blocked checkpoint is historical, not a failed test result.
 
 - **2026-09-28 owner decisions:** 535/545 capability extension approved, subject to the independent
   audit and exact-revision merge bar; **b3 patched host nvidia-uvm selected, full native host CUDA
@@ -35,8 +34,7 @@ this file.
 - **Allowlist audit complete:** full 550–610 before/after policy comparison plus compiler-derived
   checks for all 16 admitted controls from the previously unchecked shared groups. Both the
   pre-change golden and the two header fixtures were independently regenerated on the trusted
-  development host with byte-identical results. Final merge bar at `61c49f14` needs its terminal
-  evidence retrieved (completion currently unknown);
+  development host with byte-identical results. Final merge bar at `61c49f14` passed;
   see `traces/capability_535_545_audit_20260928/README.md` for exact revisions and limitations.
 - **Doorbell work is mechanism evidence, not production acceleration:** the GPU-free KVM probe
   verifies token-matched ioeventfd and unmatched MMIO fallback on a read-only memslot. No timers
@@ -47,11 +45,11 @@ this file.
   `design/V3_UVM_B3_IMPLEMENTATION.md`, then build the bounded host-only experiment. No b3 patch
   has been loaded. In particular, a UVM channel-memory reference alone does not prevent hardware
   state from being detached and freed; delayed userspace replies need explicit invalidation.
-- **Last verified box inventory, 2026-09-28:** `53080587` (GTX 1660 SUPER) was retired after
+- **Verified box inventory, 2026-09-29:** `53080587` (GTX 1660 SUPER) was retired after
   rechecking all 493 saved evidence hashes and its recovered source tree. Retained: `53004208`
   (RTX 3060, verification/next Kayfabe tests) and `53076605` (Paguro Windows). No new rentals.
-  Combined listed rate was approximately $0.5203/hour before additional fees. They may still
-  incur charges; current access is blocked. Preserve final-run evidence before any retirement.
+  Both retained instances are running, and Paguro's Windows QEMU remains live. Combined listed
+  rate is approximately $0.5203/hour before additional fees. Preserve evidence before retirement.
 - **Historical pause notes below are superseded by this resumption.** mc21 was promoted to
   `8ab92bf4`; older "awaiting promotion", "all boxes being destroyed", and open-choice lines below
   describe earlier points in the campaign, not current actions.
@@ -92,10 +90,11 @@ this file.
 
 Every promotion to master passed the merge bar (`scripts/bench/box/merge_check.sh`): all `kf-*` crate
 tests, v3 gates 9/9, a kf3 build of that exact revision, and the 30-arm thin-guest suite 30/30.
-Last published bar at resumption: **`4c48ca0c`** (mc21) — **1651 tests / 0 failed**, gates **9/9**,
-build and fast guest successful, thin suite **30/30**, RTX 3060 (GA106); `traces/v3_mc21/`.
-Published baseline `8ab92bf4` adds only evidence/docs to that tested code. New candidates require a
-new bar; this is not a current-run test claim.
+Latest completed bar: **`61c49f14`** — **1653 tests / 0 failed**, gates **9/9**, build and fresh
+fast guest successful, thin suite **30/30**, RTX 3060 (GA106), host 580.159.04;
+`traces/capability_535_545_audit_20260928/final-run/`. Only documentation/evidence follows that
+tested code. The preceding published baseline was `8ab92bf4` (mc21). New code candidates require
+their own bar; this pass does not certify the separately recovered Claude/Turing changes.
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|

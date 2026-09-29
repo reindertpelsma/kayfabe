@@ -1,6 +1,6 @@
 # 535/545 capability review — 2026-09-28
 
-**STATUS: AUDIT COMPLETE; FINAL COMBINED CANDIDATE NOT PROMOTED.** Owner approved the extension on 2026-09-28, conditional on the
+**STATUS: AUDIT AND FINAL MERGE BAR PASSED; READY FOR PROMOTION, 2026-09-29.** Owner approved the extension on 2026-09-28, conditional on the
 recommended independent review and normal exact-revision verification. No end-to-end old-driver
 support is claimed. The candidate is based on published master `8ab92bf4`, not the unverified
 combined Claude/recovered-Turing line.
@@ -71,9 +71,24 @@ the existing explicit privilege/exposure denials are not relaxed by this change.
 9/9, KF3_RC=0, thin suite **30/30**, no fail/crash/notrun, terminal EXIT at 18:19:28 UTC. Text
 evidence is in `first-run/`. **FG_RC=1:** the fat-image NBD partition did not appear, so the suite
 used the pre-existing 2026-09-27 thin image. The raw-client source/dependency closure was unchanged;
-the runner documents this exception, but it is not a fresh-image success. A fresh supported
-`KF_FROM_HOST=1` build/rerun is still planned before promoting the final combined candidate.
+the runner documents this exception, but it is not a fresh-image success. The final run below
+supersedes this limitation with a fresh supported `KF_FROM_HOST=1` image.
 
 The candidate subsequently adds the independently tested GPU-free ioeventfd probe and b3 preflight
-document; no additional production GPU code. Nevertheless the final combined revision needs its
-own recorded merge bar. Header extraction and policy tests are not end-to-end 535/545 guest tests.
+document; no additional production GPU code. Header extraction and policy tests are not
+end-to-end 535/545 guest tests.
+
+**Final run, exact `61c49f14603b390782b5dd46ea84f87846f0e28d`, same RTX 3060:**
+
+- Started 2026-09-28 18:24:39 UTC; terminal EXIT at **18:44:21 UTC**.
+- **1,653 tests passed, 0 failed; gates 9/9; KF3_RC=0.**
+- **FG_RC=0**, fresh host-derived guest: kernel 6.8.0-59-generic, NVIDIA 580.159.04.
+- **SUITE_RC=0; 30/30 passed; 0 fail, crash or notrun.**
+- Retrieved on 2026-09-29 after the session's network sandbox was disabled. The sandbox had
+  prevented observing completion, not stopped the remote job.
+- `final-run/` preserves the main/gate/build/image/suite text logs and all 30 guests' serial,
+  kernel-console and QEMU logs. Only text returned from the untrusted rental; no binaries or
+  account credentials were transferred. Later changes are documentation/evidence only.
+
+The golden/header fixtures were independently reproduced locally as described above. Hardware
+results are measurements from community hardware, not a security proof or a non-nested baseline.
