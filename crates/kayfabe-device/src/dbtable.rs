@@ -429,10 +429,10 @@ mod the_table_must_cover_the_whole_encoding {
 /// Every number the tree has is the wrong shape for the question. `worst_trap` is **per boot**
 /// and, by §41's own rule, *"NAMES THE SITE, NEVER THE CAUSE"*. `DBL_RATIO_X` measures a whole
 /// submit round trip (guest p50 ~512–683 us against a ~9 us native floor), not a trap. The only
-/// ioeventfd delta in the tree is from a **synthetic** QEMU spike device, not ours.
+/// asynchronous-doorbell delta in the tree is from a **synthetic** VMM spike device, not ours.
 ///
-/// ⇒ `docs/design/the_doorbell_ioeventfd_question.md` names this as the measurement that
-/// decides whether moving the doorbell to `KVM_IOEVENTFD` is worth anything. It is also the
+/// The archived doorbell-acceleration study names this as the measurement that
+/// decides whether asynchronous dispatch is worth anything. It is also the
 /// measurement `l2_qemu_adapter.md` Q5 deferred that decision behind — and never took.
 ///
 /// # ★ Why it belongs on the TABLE and costs no lookup

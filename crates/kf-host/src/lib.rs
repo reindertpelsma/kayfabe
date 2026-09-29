@@ -90,7 +90,7 @@ pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
 /// ★ The host driver's measured layout cannot carry this request (`kf_abi::hostabi`): a field the
 /// host's version does not have, a control with no row, a struct absent at that version. The
 /// reason is printed once per refusal (`kf-host: HOST-ABI REFUSED …`) — the status is only the class.
-pub const HOST_ABI_REFUSED: u32 = 0x4B71;
+pub const HOST_ABI_REFUSED: u32 = 0x4B72;
 /// The store reservation and which form RM granted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reservation {

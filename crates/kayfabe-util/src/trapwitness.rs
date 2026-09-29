@@ -1030,10 +1030,10 @@ impl Drop for TrapGuard {
                 // that are all seconds long**. Those demand opposite fixes, and the ledger has
                 // already recorded that *a count and a total cannot recover a distribution*.
                 let b = match us {
-                    ..=9_999 => 0,   // 1-10 ms
-                    ..=99_999 => 1,  // 10-100 ms
-                    ..=999_999 => 2, // 100 ms - 1 s
-                    _ => 3,          // over a second
+                    ..=9_999 => 0,          // 1-10 ms
+                    10_000..=99_999 => 1,   // 10-100 ms
+                    100_000..=999_999 => 2, // 100 ms - 1 s
+                    _ => 3,                 // over a second
                 };
                 SLOW_TRAP_BUCKETS[b].fetch_add(1, Ordering::Relaxed);
                 // ⊘ And the worst-per-site, so "which register" survives a later, larger trap

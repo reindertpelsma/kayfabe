@@ -94,8 +94,9 @@ want_all=0
 # step (`fuzz/` is archived), and the VBIOS/GMMU/TOKEN/PUSHBUFFER/USERD-CHID oracle
 # reached-count steps (their only emitters were in the archived `tests/`; measured VBIOS
 # ran=0 skipped=0 on the verification box). Deliberate, as this floor demands.
-GATE_STEPS_ALL_MIN=16
-GATE_STEPS_FAST_MIN=10
+# v3 dependency isolation + CI guard self-tests added during the CI repair.
+GATE_STEPS_ALL_MIN=17
+GATE_STEPS_FAST_MIN=11
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
 #
@@ -124,7 +125,7 @@ steps_raw=$(python3 - "$want_all" 2>"$deferred_note" <<'PY'
 import sys, yaml, json
 want_all = sys.argv[1] == "1"
 job = yaml.safe_load(open(".github/workflows/ci.yml"))["jobs"]["stable"]
-heavy = ("cargo build", "cargo test", "cargo clippy", "cargo fmt")
+heavy = ("cargo build", "cargo test", "cargo clippy", "cargo fmt", "bash scripts/ci/clippy.sh")
 # Steps that CONSUME an artifact a heavy step produces. Skipping the producer while
 # running the consumer reports a failure that says nothing about the tree — which is
 # exactly the kind of misleading red this script exists to prevent. Detected by the

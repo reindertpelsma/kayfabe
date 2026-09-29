@@ -14648,7 +14648,7 @@ fn ladder_main() -> std::process::ExitCode {
         }
         // ★★★★★ w755i — the CUDA-store ownership probe. Needs NO guest, NO QEMU, NO KVM:
         // a CUDA container answers it. See `kayfabe_isolate_host::cudastore`.
-        #[cfg(feature = "cuda-scratchpad")]
+        #[cfg(feature = "cuda-window")]
         if argv.iter().any(|a| a == "--cuda-store-probe") {
             return std::process::ExitCode::from(
                 u8::try_from(
@@ -14659,11 +14659,11 @@ fn ladder_main() -> std::process::ExitCode {
         }
         // ⊘ Without the feature the flag must SAY it is unavailable rather than falling
         // through into the ladder's parser and running something else entirely.
-        #[cfg(not(feature = "cuda-scratchpad"))]
+        #[cfg(not(feature = "cuda-window"))]
         if argv.iter().any(|a| a == "--cuda-store-probe") {
             println!(
                 "CS_RESULT=UNMEASURED:this binary was built without `--features \
-                 cuda-scratchpad`, so libcuda is not linked and the probe cannot run"
+                 cuda-window`, so libcuda is not linked and the probe cannot run"
             );
             return std::process::ExitCode::from(1);
         }

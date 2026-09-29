@@ -237,6 +237,8 @@ class Site:
     text: str = ""
     conflated: bool = False
     bare_hw: bool = False
+    # Full block for content-addressed CI debt; the display excerpt is not an identity.
+    body: str = ""
 
 
 # =====================================================================================
@@ -384,7 +386,7 @@ def sweep() -> list[Site]:
             )
             sites.append(
                 Site(rel, line, cls, words, tags, first[:150], conf,
-                     bare_hardware_claim(body))
+                     bare_hardware_claim(body), body)
             )
     return sites
 

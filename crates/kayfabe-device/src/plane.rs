@@ -7067,7 +7067,7 @@ impl RegPlane {
         // ★★★★★ **w795 — TIME THE DOORBELL, BY ROUTE.** See `DoorbellHistogram` for why this
         // is here, what it costs, and the §41 argument for paying it. ⊘ The span covers exactly
         // `port.ring` — the dword write or the queue push — and nothing around it, because the
-        // question the ioeventfd decision turns on is what THAT costs.
+        // question the asynchronous-doorbell decision turns on is what THAT costs.
         let t_ring = std::time::Instant::now();
         let report = {
             let port = self.doorbell.read().unwrap_or_else(|e| e.into_inner());

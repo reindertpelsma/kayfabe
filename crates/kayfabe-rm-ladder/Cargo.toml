@@ -20,6 +20,9 @@ version.workspace = true
 edition.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "kayfabe-rm-ladder"
 path = "src/main.rs"
