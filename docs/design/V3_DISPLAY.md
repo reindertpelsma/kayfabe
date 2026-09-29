@@ -8,7 +8,8 @@
 > replace a live core channel, serialized/short requests, an absent object seat, an injected
 > free refusal, successful parent/client frees and handle recycling. All `kf-rm` and `kf-disp`
 > tests pass locally. RM alloc has no fragmented/large-RPC path: short allocs remain refused,
-> not held. No transport claim set changed. Full combined hardware bar is still pending.
+> not held. No transport claim set changed. The full combined hardware bar passed at `d883d0eb`
+> (1683/0 tests, gates 9/9, fresh guest, thin 30/30; `traces/recovered_integration_20260929/`).
 > Display remains default-off; no scanout/desktop claim is added. Gaps (b)/(c) below remain.
 
 > ### ★ 2026-09-27 (later) — next step (1) DONE in code, GPU-free (`b11f96c6`, branch `local/display-step1` on `4c48ca0c`); NOT on the bench

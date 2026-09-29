@@ -1,7 +1,7 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
 **STATUS: LIVE, 2026-09-29.** The owner resolved the three implementation decisions in §3;
-network access is restored and the audited candidate's final merge bar has passed at `61c49f14`.
+network access is restored and the recovered integration's final merge bar has passed at `d883d0eb`.
 See `RESUME_2026-09-29.md` for the exact checkpoint. The historical campaign entries below are dated;
 the prior published baseline was `8ab92bf4` (mc21). The single entry point for resuming work
 without any chat history. Decisions live in `docs/OWNER_RULINGS.md`; per-topic detail in the design docs
@@ -10,13 +10,21 @@ this file.
 
 ## 0. Current resumption — start here
 
-- **2026-09-29 integration candidate:** `codex/recovered-integration-2026-09-29` combines the
+- **2026-09-29 integration verified:** `codex/recovered-integration-2026-09-29` combines the
   published allowlist baseline with Claude `826ef957` (merge `4e6e1fbf`) and recovered Turing
   code `576f5bb0` (merge `cd80712a`). Display allocation/free observation is moved to successful
   object application; rejected operations cannot replace/release live display channels.
-  All `kf-rm` and `kf-disp` tests pass locally, including four new whole-chain regressions.
-  **Not promoted:** the combined exact-revision hardware bar is next on retained RTX 3060
-  `53004208`. Historical TU116/Claude test results are not a new-candidate certification.
+  **Exact `d883d0eb`: 1683/0 crate tests, gates 9/9, KF3_RC=0, fresh FG_RC=0, thin 30/30**,
+  terminal EXIT 2026-09-29 13:33:52 UTC on retained RTX 3060 `53004208`.
+  All 96 evidence files are recovered and hash-checked in `traces/recovered_integration_20260929/`.
+  Ready for master/v3 promotion with documentation/evidence only after the tested revision.
+  Historical TU116 results do not certify the new candidate on Turing hardware.
+- **Separate benchmark candidate:** `2676902f` on `codex/benchmark-pid-2026-09-29` binds LLM
+  perf counters to the launched QEMU PID/starttime, with GPU-free identity tests. GitHub-backed,
+  not included in this merge bar or promotion. No production doorbell fast path or b3 module yet.
+- **Paguro state changed:** a later 2026-09-29 inventory reports `53076605` stopped/exited,
+  `GPU error, unable to start instance`, and direct SSH refused. This session did not stop it.
+  Its disk is retained; do not rely on the earlier Windows-running observation as current.
 - **2026-09-29 checkpoint:** terminal network access is restored; GitHub, Vast and both boxes
   are reachable. The final run at **`61c49f14` passed: 1653/0 tests, gates 9/9, KF3_RC=0,
   fresh FG_RC=0, thin 30/30**, terminal EXIT on 2026-09-28 at 18:44:21 UTC. Evidence is now
@@ -31,8 +39,8 @@ this file.
 - **Recovery is preserved, not implicitly merged:** source/evidence at
   [`recovery/resume-2026-09-28`](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md),
   recovered Turing code at `recovery/vast-tuwork-2026-09-28` (`2825c42f`, code tree `576f5bb0`).
-  The Claude head `826ef957` has 30 commits beyond the previous baseline, now integrated only in
-  the candidate above and still needing its own combined merge bar.
+  The Claude head `826ef957` has 30 commits beyond the previous baseline, integrated and verified
+  in the exact combined candidate above.
   Do not use those historical results to certify a new candidate. The fresh allowlist candidate
   starts from the published baseline, so it does not silently promote the other pending changes.
 - **Physical baseline access:** read-only SSH to `172.22.1.20` reports `Network is unreachable`
@@ -114,11 +122,12 @@ this file.
 
 Every promotion to master passed the merge bar (`scripts/bench/box/merge_check.sh`): all `kf-*` crate
 tests, v3 gates 9/9, a kf3 build of that exact revision, and the 30-arm thin-guest suite 30/30.
-Latest completed bar: **`61c49f14`** — **1653 tests / 0 failed**, gates **9/9**, build and fresh
+Latest completed bar: **`d883d0eb`** — **1683 tests / 0 failed**, gates **9/9**, build and fresh
 fast guest successful, thin suite **30/30**, RTX 3060 (GA106), host 580.159.04;
-`traces/capability_535_545_audit_20260928/final-run/`. Only documentation/evidence follows that
-tested code. The preceding published baseline was `8ab92bf4` (mc21). New code candidates require
-their own bar; this pass does not certify the separately recovered Claude/Turing changes.
+`traces/recovered_integration_20260929/`. Only documentation/evidence follows that tested code
+on the integration branch. This includes recovered Claude/Turing code plus the display lifecycle
+fix, tested on GA106; it does not substitute for a new Turing hardware run. New code candidates
+require their own bar. The preceding published allowlist baseline was `9c3d87fd`.
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
