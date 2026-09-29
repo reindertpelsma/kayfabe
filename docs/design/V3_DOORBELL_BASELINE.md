@@ -4,6 +4,15 @@
 host-side/ioeventfd work first, optional guest helper afterward. A modified guest NVIDIA driver
 remains a later option. No production doorbell route is changed here; no new GPU ratio is measured.
 
+**2026-09-29 harness candidate (`codex/benchmark-pid-2026-09-29`):** `boot_capture.sh` now gives
+its hook the launched QEMU PID and Linux process starttime. `llm_parity.sh` validates that pair
+before and after collecting counters; it never chooses the first global `pgrep` match. Missing,
+stale or lost identities are explicitly unmeasured. A GPU-free self-test passes with two concurrent
+QEMU-named dummy processes, invalid/missing identity fields and process exit. This tests attribution
+plumbing, not actual perf counter access or GPU throughput. The existing single-bench precondition
+remains; the change does not claim safe concurrent use of shared taps/images. Direct SSH to the
+physical host still times out on this date despite restored GitHub/Vast access.
+
 **Owner refinement, 2026-09-28:** no timer-based batching and no intentional delay. Ring as soon as
 the worker can act; allow only incidental coalescing of notifications already pending when it wakes.
 CUDA already batches work. Host ring count need not equal guest doorbell count, but the last
@@ -72,9 +81,9 @@ When access is restored:
 3. Reuse `scripts/bench/llm_parity.sh` and its identical host/guest runners. Compare eager and graph
    lanes, cold and warm timings, with identical model/prompt and output hashes. Use repeated paired
    runs rather than comparing unrelated boxes. A guest kernel transition is not itself a VM exit.
-4. Record doorbells/token and hardware VM exits separately. The current harness finds QEMU with
-   `pgrep ... | head -1`; **do not use that on a shared multi-VM host without binding collection to
-   the benchmark's exact PID**. Otherwise another VM's counters could be attributed to this run.
+4. Record doorbells/token and hardware VM exits separately. Use the 2026-09-29 attribution fix above;
+   older harness revisions find QEMU with `pgrep ... | head -1` and must not be used on a shared
+   multi-VM host. Do not mistake an explicit `UNMEASURED` counter result for zero exits.
 5. Measure the existing dummy trap floor separately. Then compare actual application throughput,
    CPU use and tail latency; an empty eventfd handler cannot stand in for GPU notification.
 
