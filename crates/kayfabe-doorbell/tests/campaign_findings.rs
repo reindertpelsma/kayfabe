@@ -308,10 +308,15 @@ fn the_class_sets_match_what_the_c_compiler_says_each_chip_lists() {
         o => panic!("unknown family {o}"),
     };
     // The generator also emits kinds this crate's table does not model (v3 `kf-chip` added
-    // twod / inline_to_memory / video_encoder / video_decoder, 2026-09-26): those rows are not
+    // twod / inline_to_memory / video_encoder / video_decoder / optical_flow): those rows are not
     // this table's to check, so they are skipped by name — an unknown NAME still panics.
-    const NOT_MODELLED_HERE: &[&str] =
-        &["twod", "inline_to_memory", "video_encoder", "video_decoder"];
+    const NOT_MODELLED_HERE: &[&str] = &[
+        "twod",
+        "inline_to_memory",
+        "video_encoder",
+        "video_decoder",
+        "optical_flow",
+    ];
     let kind = |s: &str| match s {
         "channel_gpfifo" => Some(Kind::ChannelGpfifo),
         "compute" => Some(Kind::Compute),

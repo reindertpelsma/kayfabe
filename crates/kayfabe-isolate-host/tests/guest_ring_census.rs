@@ -216,7 +216,7 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
     // long — one of the two live call sites is already wrapped that way, and a pattern that
     // spelled `self.` would have counted it as absent.
     let callers = body.matches(".alloc_channel_over_guest_ring(").count()
-        + body_of("src/bin/rmladder.rs")
+        + body_of("../kayfabe-rm-ladder/src/main.rs")
             .matches(".alloc_channel_over_guest_ring(")
             .count();
     assert_eq!(

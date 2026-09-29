@@ -219,7 +219,8 @@ fn the_isolates_address_space_has_exactly_one_mint() {
 /// particular runs *arms against* it.
 #[test]
 fn no_binary_mints_the_isolates_address_space() {
-    for bin in ["src/bin/rmladder.rs", "src/bin/isolate.rs"] {
+    // The grader moved to its own crate; its authority restrictions did not move.
+    for bin in ["../kayfabe-rm-ladder/src/main.rs", "src/bin/isolate.rs"] {
         let body = body_of(bin);
         assert!(
             !body.contains("ExecutorVas {"),

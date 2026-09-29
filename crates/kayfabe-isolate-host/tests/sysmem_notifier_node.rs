@@ -212,7 +212,7 @@ fn every_exit_has_its_own_token_and_its_own_reason() {
 /// probe, which are the paths a reader is likeliest to mistake for a pass.
 #[test]
 fn the_client_reports_its_state_on_every_path() {
-    let body = src("src/bin/rmladder.rs");
+    let body = src("../kayfabe-rm-ladder/src/main.rs");
     for token in [
         "Crit1State::ArmNotSelected",
         "Crit1State::ProbeNotBuilt",

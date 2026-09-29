@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Source-only helpers for attributing counters to the QEMU spawned by boot_capture.+# A PID alone can be recycled; capture and validate Linux /proc's starttime as well.
+# Source-only helpers for attributing counters to the QEMU spawned by boot_capture.
+# A PID alone can be recycled; capture and validate Linux /proc's starttime as well.
 kf_qemu_starttime() {
     local pid=${1:-} stat comm
     local -a fields
