@@ -22,7 +22,9 @@ BUILD="${2:-$(dirname "$QEMU")/qemu-build-kf3}"
 command -v cargo >/dev/null || { echo "⊘ cargo not on PATH (export PATH=\$HOME/.cargo/bin:\$PATH)"; exit 127; }
 echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(git -C "$REPO" rev-parse --short=8 HEAD)"
 ( cd "$REPO" && cargo build --release -p kf-qemu )
-ARCHIVE="$REPO/target/release/libkf_qemu.a"
+TARGET=${CARGO_TARGET_DIR:-$REPO/target}
+[[ "$TARGET" = /* ]] || TARGET="$REPO/$TARGET"
+ARCHIVE="$TARGET/release/libkf_qemu.a"
 [ -f "$ARCHIVE" ] || { echo "⊘ no archive at $ARCHIVE"; exit 1; }
 # ⊘ 2026-09-25: the ">30 min old ⇒ refuse" rule is gone. It refused every revision that changed no
 # Rust (a docs or scripts commit), and per-revision binaries need exactly those builds. What it

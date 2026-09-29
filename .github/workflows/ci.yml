@@ -61,6 +61,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --workspace
+      - name: Allow user namespaces for this CI checkout's test executables
+        run: python3 scripts/ci/runner_namespaces.py
       # (Deliberately not naming a test count here — it rots on every PR.)
       #
       # ★★ KAYFABE_NO_KVM=1 PINS THE OS-FREE CONFIGURATION. GitHub runners have no
@@ -98,6 +100,7 @@ jobs:
       # simply absent log is a DIFFERENT and louder answer than a real count of zero.
       - name: Test (OS-free configuration — KVM forced absent)
         run: |
+          set +e # GitHub invokes bash -e; capture the failed pipeline before returning its rc.
           set -uo pipefail
           log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
           KAYFABE_NO_KVM=1 cargo test --workspace --no-fail-fast 2>&1 | tee "$log"
@@ -106,9 +109,12 @@ jobs:
           if [ "$rc" -ne 0 ] && [ "${GITHUB_ACTIONS:-}" = true ]; then
             # Diagnose host policy refusals without disabling confinement or skipping tests.
             sysctl vm.memfd_noexec kernel.apparmor_restrict_unprivileged_userns || true
-            sudo dmesg | tail -80 || true
+            sudo dmesg | grep -E 'apparmor=|memfd' | tail -40 || true
           fi
           exit "$rc"
+      - name: Remove the CI-only namespace profile
+        if: always()
+        run: python3 scripts/ci/runner_namespaces.py --remove
       # ★★ KVM-gate non-vacuity. GitHub runners do NOT provide /dev/kvm, so the ~33
       # tests that need a real VM fd SKIP here — and a skip that nobody counts is the
       # "green instrument on an unexercised path" failure this repo cares most about
@@ -1817,4 +1823,9 @@ jobs:
           targets: x86_64-unknown-linux-musl   # the embedded isolate image; see the stable job
       - uses: Swatinem/rust-cache@v2
       - name: Test with the slow gate open (pushbuffer proptest fuzz + 16-thread stress soak)
-        run: KAYFABE_SLOW=1 cargo test --workspace
+        run: |
+          python3 scripts/ci/runner_namespaces.py
+          KAYFABE_SLOW=1 cargo test --workspace --no-fail-fast
+      - name: Remove the CI-only namespace profile
+        if: always()
+        run: python3 scripts/ci/runner_namespaces.py --remove

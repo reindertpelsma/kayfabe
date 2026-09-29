@@ -95,8 +95,9 @@ want_all=0
 # reached-count steps (their only emitters were in the archived `tests/`; measured VBIOS
 # ran=0 skipped=0 on the verification box). Deliberate, as this floor demands.
 # v3 dependency isolation + CI guard self-tests added during the CI repair.
-GATE_STEPS_ALL_MIN=17
-GATE_STEPS_FAST_MIN=11
+# The scoped CI namespace profile's setup and removal are explicit steps too.
+GATE_STEPS_ALL_MIN=19
+GATE_STEPS_FAST_MIN=13
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
 #

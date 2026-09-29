@@ -133,5 +133,6 @@ citation: ask whether its reason still holds before relying on it.
   only copy of unique work. Commit/push source and useful text evidence from trusted local storage;
   do not send account credentials or forward the SSH agent. The owner authorized taking over all
   instances in the recovery inventory and retiring those no longer needed, after preserving work.
-  Keep the requested Paguro Windows environment for its separate follow-up. The /dev/sdb SSD is
+  **Superseded 2026-09-29:** the owner authorized retiring the Paguro Windows box after saving
+  any unique work; retention is no longer required. The /dev/sdb SSD is
   spare workspace; regenerate/download caches, builds and VM images rather than lose unique work.

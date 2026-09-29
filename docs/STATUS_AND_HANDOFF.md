@@ -10,6 +10,15 @@ this file.
 
 ## 0. Current resumption — start here
 
+- **2026-09-29 CI repair in progress:** `codex/ci-repair-2026-09-29` contains the benchmark
+  process-identity fix and v3/retained-grader CI repairs. See `CI_V3.md` for test and lint scope.
+  Do not promote until CI and the exact-revision hardware bar finish; previous results below
+  do not certify this candidate. The live ioeventfd accelerator remains a subsequent experiment.
+- **2026-09-29 Paguro retirement:** the owner canceled the retention requirement. Source and
+  unique artifacts were re-audited and backed up in Paguro commits `bb8cf91` and `17a51b9` on
+  `recovery/resume-2026-09-28`; then instance `53076605` was destroyed. Vast inventory now contains
+  only `53004208` (RTX 3060, about $0.1661/hour) for Kayfabe checks. The Windows VM is no longer
+  running; its disposable images were not treated as irreplaceable work.
 - **2026-09-29 integration verified:** `codex/recovered-integration-2026-09-29` combines the
   published allowlist baseline with Claude `826ef957` (merge `4e6e1fbf`) and recovered Turing
   code `576f5bb0` (merge `cd80712a`). Display allocation/free observation is moved to successful
@@ -26,7 +35,7 @@ this file.
   accepts a core channel. NVKMS then stalls on `0xc67d:0` progress; no DRM node/connector.
   This is incomplete display, not an M1 pass. Evidence is hash-verified and preserved in
   `traces/recovered_display_20260929/`. Next display work remains engine/worker/notifiers.
-- **Paguro recovered again, 2026-09-29:** at about 18:19 UTC, `53076605` reported stopped/exited,
+- **Historical; superseded by retirement above. Paguro recovered again, 2026-09-29:** at about 18:19 UTC, `53076605` reported stopped/exited,
   `GPU error, unable to start instance`, and direct SSH refused. One start retry restored the host.
   The verified Windows launcher reused the existing overlay/firmware/TPM state; QEMU PID 1564
   started at 18:22 UTC and guest SSH returned Windows 10.0.26200.6584. Retained for Paguro; no reset.
@@ -50,8 +59,8 @@ this file.
   starts from the published baseline, so it does not silently promote the other pending changes.
 - **Physical baseline access:** read-only SSH to `172.22.1.20` reports `Network is unreachable`
   from this workspace on 2026-09-28. Prepare the protocol locally; do not label a Vast KVM VM as a
-  non-nested host. No physical-host session or display was changed. Paguro's retained Windows VM
-  on instance `53076605` is running and reserved for the separate Paguro chat.
+  non-nested host. No physical-host session or display was changed. The owner subsequently
+  requested the nested Vast ioeventfd experiment; label its results as nested, not physical-host.
 - **Allowlist audit complete:** full 550–610 before/after policy comparison plus compiler-derived
   checks for all 16 admitted controls from the previously unchecked shared groups. Both the
   pre-change golden and the two header fixtures were independently regenerated on the trusted
@@ -66,7 +75,7 @@ this file.
   `design/V3_UVM_B3_IMPLEMENTATION.md`, then build the bounded host-only experiment. No b3 patch
   has been loaded. In particular, a UVM channel-memory reference alone does not prevent hardware
   state from being detached and freed; delayed userspace replies need explicit invalidation.
-- **Verified box inventory, 2026-09-29:** `53080587` (GTX 1660 SUPER) was retired after
+- **Historical box inventory, superseded by retirement above (2026-09-29):** `53080587` (GTX 1660 SUPER) was retired after
   rechecking all 493 saved evidence hashes and its recovered source tree. Retained: `53004208`
   (RTX 3060, verification/next Kayfabe tests) and `53076605` (Paguro Windows). No new rentals.
   Both retained instances are running, and Paguro's Windows QEMU remains live. Combined listed

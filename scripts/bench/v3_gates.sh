@@ -13,7 +13,8 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 OUT=${1:-/root/prov/v3_gates.log}
-export PATH="$HOME/.cargo/bin:$PATH"
+TARGET=${CARGO_TARGET_DIR:-target}
+export PATH="$PATH:$HOME/.cargo/bin"
 {
   echo "V3_GATES_START $(date -Is)"
   echo "HEAD=$(git rev-parse --short=8 HEAD) dirty=$(git status --porcelain --untracked-files=no | wc -l)"
@@ -22,12 +23,15 @@ export PATH="$HOME/.cargo/bin:$PATH"
     echo "BUILD=FAIL"; echo "V3_GATES_EXIT pass=0 fail=all $(date -Is)"; exit 1
   fi
   pass=0; fail=0; failed=""
-  # Executables only: cargo also leaves `kf-gateN.d` dep files beside them (measured: a bare glob
-  # ran them as six extra "gates" — counted FAIL, correctly, but they are not gates).
-  for bin in $(ls target/release/kf-gate[0-9]* 2>/dev/null | grep -v '\.' | sort -V); do
-    [ -x "$bin" ] || continue
+  # Explicit census: a missing executable is a failure, never a zero-gate success.
+  # Respect the same target directory cargo just built into.
+  for n in {1..9}; do
+    bin="$TARGET/release/kf-gate$n"
     g=$(basename "$bin")
     echo "=== $g"
+    if [ ! -x "$bin" ]; then
+      echo "MISSING_GATE=$g"; fail=$((fail+1)); failed="$failed $g(missing)"; continue
+    fi
     out=$(timeout 180 "$bin" 2>&1); rc=$?
     echo "$out"
     v=$(echo "$out" | grep -E '^GATE[0-9]+_VERDICT=' | tail -1 | cut -d= -f2)
@@ -35,4 +39,5 @@ export PATH="$HOME/.cargo/bin:$PATH"
   done
   echo "V3_GATES_SUMMARY pass=$pass fail=$fail${failed:+ failed:$failed}"
   echo "V3_GATES_EXIT pass=$pass fail=$fail $(date -Is)"
+  [ "$pass" -eq 9 ] && [ "$fail" -eq 0 ]
 } 2>&1 | tee "$OUT"

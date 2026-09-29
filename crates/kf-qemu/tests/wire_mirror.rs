@@ -6,6 +6,40 @@ use std::collections::BTreeMap;
 use std::mem::{align_of, offset_of, size_of};
 use std::process::Command;
 
+fn c_fields(header: &str, name: &str) -> Vec<String> {
+    let body = header
+        .split(&format!("typedef struct {name} {{"))
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    // Drop block comments before splitting declarations (a comment may contain ';').
+    let mut clean = String::new();
+    let mut rest = body;
+    while let Some((before, comment)) = rest.split_once("/*") {
+        clean.push_str(before);
+        rest = comment.split_once("*/").expect("unterminated C comment").1;
+    }
+    clean.push_str(rest);
+    clean
+        .split(';')
+        .filter(|row| !row.trim().is_empty())
+        .flat_map(|row| {
+            let variables = row.trim().split_once(char::is_whitespace).unwrap().1;
+            variables
+                .split(',')
+                .map(|field| field.trim().split('[').next().unwrap().to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn c_field_census_sees_members_even_when_they_could_fit_in_padding() {
+    let header = "typedef struct X { uint8_t a, pad[3]; /* ; */ uint32_t b; uint8_t extra; } X;";
+    assert_eq!(c_fields(header, "X"), ["a", "pad", "b", "extra"]);
+}
+
 #[test]
 fn the_c_header_and_rust_seam_have_identical_layouts() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -59,6 +93,7 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
             let fields: Vec<_> = body.lines().filter_map(|line| line.trim().strip_prefix("pub ")
                 .and_then(|rest| rest.split_once(':').map(|(name, _)| name))).collect();
             assert_eq!(fields, [$(stringify!($field)),+], "uncovered Rust field");
+            assert_eq!(c_fields(&header, name), [$($cfield),+], "uncovered C field");
             $(value!(format!("{name}.{}", $cfield), format!("offsetof({name}, {})", $cfield), offset_of!($ty, $field));)+
         }};
     }

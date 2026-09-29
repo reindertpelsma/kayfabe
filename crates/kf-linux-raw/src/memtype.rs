@@ -295,6 +295,10 @@ pub fn classify_physical(base: u64, len: u64) -> Result<PhysClass, MemtypeError>
         path: IOMEM,
         why: e.to_string(),
     })?;
+    classify_physical_text(&text, base, len)
+}
+
+fn classify_physical_text(text: &str, base: u64, len: u64) -> Result<PhysClass, MemtypeError> {
     let end = base.saturating_add(len);
     // Every `System RAM` interval, and the deepest label covering `base`.
     let mut ram: Vec<(u64, u64)> = Vec::new();
@@ -850,6 +854,27 @@ fn rate(elapsed: Duration, reads: u64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn redacted_iomem_does_not_certify_a_page_as_ram() {
+        let redacted = "00000000-00000000 : System RAM\n";
+        assert!(
+            !classify_physical_text(redacted, 0, 4096)
+                .unwrap()
+                .system_ram
+        );
+        let visible = "00001000-00001fff : System RAM\n";
+        assert!(
+            classify_physical_text(visible, 0x1000, 4096)
+                .unwrap()
+                .system_ram
+        );
+        assert!(
+            !classify_physical_text(visible, 0x1000, 4097)
+                .unwrap()
+                .system_ram
+        );
+    }
 
     #[test]
     fn the_kernels_two_uncached_spellings_stay_distinct_and_both_coarsen_to_uncached() {

@@ -3,6 +3,22 @@
 **STATUS: LIVE, 2026-09-29.** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
+## CI host prerequisites (2026-09-29)
+
+The local unprivileged reproduction of GitHub's `execve/EACCES` failure produced
+an AppArmor denial: the generic `unprivileged_userns` profile refused the embedded
+memfd executable as a disconnected path. The identical test passed under a named
+profile restricted to its executable; the probe profile was then removed.
+`runner_namespaces.py` applies that prerequisite **only** to this GitHub checkout's
+`target/**` executables and removes it after tests. It does not disable AppArmor,
+change system sysctls, grant Linux capabilities or change product sandbox code.
+All namespace/isolate containment assertions remain active.
+
+Unprivileged `/proc/iomem` can redact RAM to `00000000-00000000`. The memory-type
+test now separates its always-run fail-closed assertion from the host-RAM positive
+control, which emits an explicit skipped marker if no complete RAM page is visible.
+Both raw-OS crates additionally test redacted, valid and short-range parser inputs.
+
 ## What remains mandatory
 
 `cargo test --workspace` still runs **all** retained and v3 workspace tests. No

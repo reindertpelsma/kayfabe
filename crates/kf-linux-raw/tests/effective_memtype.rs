@@ -415,13 +415,25 @@ fn the_gate_marker_survives_libtests_capture() {
 
 /// ★★ The instrument's **absence** answers, rather than being silently permissive.
 ///
-/// Every arm of [`memtype::effective_memtype`] is reachable and none of them is a pass by
-/// default. This runs anywhere, so it is the part continuous integration does execute.
+/// Unknown addresses must fail closed even when the physical address map is redacted.
 #[test]
 fn an_unreadable_instrument_never_reports_write_back() {
-    // Rule 2: ordinary memory. The address is one this process owns; the classification is
-    // structural and needs no mapping.
-    let ram_phys = first_system_ram().expect("a Linux host has System RAM in /proc/iomem");
+    // Rule 3 runs on every host, independently of the privileged positive control below.
+    assert_unknown_address_is_not_write_back();
+}
+
+#[test]
+fn visible_system_ram_satisfies_a_write_back_request() {
+    const NAME: &str = "visible_system_ram_satisfies_a_write_back_request";
+    let Some(ram_phys) = first_system_ram() else {
+        report(
+            NAME,
+            false,
+            "no complete RAM page visible in /proc/iomem (possibly redacted)",
+        );
+        return;
+    };
+    report(NAME, true, "");
     let m = memtype::effective_memtype(CachePolicy::WriteBack, ram_phys, 4096)
         .expect("/proc/iomem parses");
     assert!(
@@ -433,7 +445,9 @@ fn an_unreadable_instrument_never_reports_write_back() {
         "ordinary memory must satisfy a write-back request, and it reported {:?}",
         m.effective
     );
+}
 
+fn assert_unknown_address_is_not_write_back() {
     // Rule 3: a physical address in nothing at all. Not RAM, not reserved by anybody.
     // ⊘ The verdict must be UNKNOWN, and `holds()` must be false — a permissive default
     // here is the entire defect this module exists to prevent.
@@ -458,14 +472,18 @@ fn an_unreadable_instrument_never_reports_write_back() {
     );
 }
 
-/// The first `System RAM` interval's base, from the bus's own report.
+/// The first complete RAM page, never a redacted 00000000-00000000 placeholder.
 fn first_system_ram() -> Option<u64> {
     let text = fs::read_to_string("/proc/iomem").ok()?;
     for line in text.lines() {
         let (range, name) = line.trim_start().split_once(" : ")?;
         if name == "System RAM" {
-            let (lo, _) = range.split_once('-')?;
-            return u64::from_str_radix(lo, 16).ok();
+            let (lo, hi) = range.split_once('-')?;
+            let lo = u64::from_str_radix(lo, 16).ok()?;
+            let hi = u64::from_str_radix(hi, 16).ok()?;
+            if hi.checked_sub(lo).is_some_and(|span| span >= 4095) {
+                return Some(lo);
+            }
         }
     }
     None
