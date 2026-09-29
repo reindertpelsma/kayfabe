@@ -1,5 +1,12 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS: DISPLAY-ON MEASURED, INCOMPLETE, 2026-09-29.** At exact `d883d0eb` on RTX 3060,
+> the guest boots, `nvidia-smi` succeeds and the model records an accepted core channel.
+> NVKMS then repeatedly waits for `0xc67d:0` GPU progress; no `/dev/dri` or connected output
+> appears. Evidence: `traces/recovered_display_20260929/`. This is not an M1/scanout pass.
+> The next display work is the engine/worker/notifier path in steps (2)/(3), not a fabricated
+> completion. The default-off full merge bar below passed independently.
+
 > **STATUS: INTEGRATION CANDIDATE, 2026-09-29.** The step-(1) lifecycle gap (a) below is fixed:
 > the display control link no longer observes speculative allocs/frees. Its separate registry
 > is notified inside the object seat only after `RmObjects::apply` succeeds. `ObjectLinks` now

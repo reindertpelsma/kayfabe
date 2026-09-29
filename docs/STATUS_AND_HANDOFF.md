@@ -22,6 +22,10 @@ this file.
 - **Separate benchmark candidate:** `2676902f` on `codex/benchmark-pid-2026-09-29` binds LLM
   perf counters to the launched QEMU PID/starttime, with GPU-free identity tests. GitHub-backed,
   not included in this merge bar or promotion. No production doorbell fast path or b3 module yet.
+- **Display-on smoke at the same code:** guest boot and `nvidia-smi` pass, and the display model
+  accepts a core channel. NVKMS then stalls on `0xc67d:0` progress; no DRM node/connector.
+  This is incomplete display, not an M1 pass. Evidence is hash-verified and preserved in
+  `traces/recovered_display_20260929/`. Next display work remains engine/worker/notifiers.
 - **Paguro recovered again, 2026-09-29:** at about 18:19 UTC, `53076605` reported stopped/exited,
   `GPU error, unable to start instance`, and direct SSH refused. One start retry restored the host.
   The verified Windows launcher reused the existing overlay/firmware/TPM state; QEMU PID 1564
@@ -132,13 +136,13 @@ require their own bar. The preceding published allowlist baseline was `9c3d87fd`
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
-| Families | GA10x (GA106/GA104/GA102) 30/30; Ada AD106 30/30; Blackwell GB203 (RTX 5080) 30/30 + CUDA ladder; floor-swept boards (RTX 3060 Ti) 30/30. Turing, GA100, Hopper, GB10x: **source-derived only** (GA100/GB10B refused by name) | `design/V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md`, `V3_HW_BOUNDARY_INVENTORY.md` |
+| Families | GA10x (GA106/GA104/GA102) 30/30; Ada AD106 30/30; Blackwell GB203 (RTX 5080) 30/30 + CUDA ladder; floor-swept RTX 3060 Ti 30/30. TU116 recovered box head `d4ff6be8` (same source tree as `576f5bb0`) passed gates 9/9, thin 30/30 and guest CUDA ladder 4/4; not rerun on Turing at the new integration head. GA100, Hopper, GB10x remain source-derived only; GA100/GB10B refused by name | [Turing recovery evidence](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md), `design/V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md` |
 | Multi-GPU | distinct host GPUs in one VM work (8×3060 box); per-card BAR1 budget refused at realize | `design/V3_MULTI_GPU_AUDIT.md` |
-| CUDA apps | 58/65 nvkvm-pv apps at `670bd310`; fixes since (clpeak, torch_ai_bench, gpu_burn, BAR1-view leak) ⇒ expected ~61/65, **not re-measured**; the rest need UVM demand paging | `design/V3_APP_MATRIX.md` |
+| CUDA apps | 60/65 at `4c48ca0c`, 6/6 stream probes, 100/100 processes; four UVM-demand-paging failures plus CDP child-launch failure. Not rerun at the latest integration revision | `design/V3_APP_MATRIX.md` §R3 |
 | Graphics / video | nvkvm-pv's headless graphics set + 15 more items: **38/38** on an RTX 3070 (31 byte-identical to bare metal; OFA optical flow advertised); NVENC/NVDEC byte-exact. Per-call GPU waits are slow on nested boxes (`glFinish` 62 vs 9 µs) | `design/V3_GFX_TESTSET.md` (display-phase list §7), `V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
 | Memory plane | pooled walker capacity (no per-space 16k-run wall); batched host maps; big-PTE slot ownership; guest PTE read-only/volatile carried, PRIV leaves withheld from user twins; **every host map snoops the CPU cache** (`NVOS46_FLAGS_CACHE_SNOOP_ENABLE` — without it a CE read stale DRAM on bare-metal hosts; nested VM boxes hid it) | `design/V3_BUILD.md`, `V3_BATCHED_MAP.md`, `traces/v3_adasys/FINDING.txt` |
 | Refusals | audited host-vs-guest: forged completions removed (MC_SERVICE_INTERRUPTS, sysmembar flush); the rest classified | `design/V3_REFUSAL_AUDIT.md` |
-| Driver matrix | ★ (2026-09-27, the `v3-drivers` code on master since `5018bb57`) CUDA ladder 4/4 for guests 580.159.04 / 580.105.08 / 590.48.01 / 595.84 / 575.57.08 / 610.57.04; hosts 575.57.08 / 580.95.05 / 580.65.06 gates 9/9, thin 30/30, ladder 4/4, mixed pairs 4/4 — measured on `v3-drivers` heads before the merge (grid §6.0, derived from `traces/driver_matrix/walk/`); 535/545 capability rows held (§3.1). Earlier: 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
+| Driver matrix | ★ (2026-09-27, the `v3-drivers` code on master since `5018bb57`) CUDA ladder 4/4 for guests 580.159.04 / 580.105.08 / 590.48.01 / 595.84 / 575.57.08 / 610.57.04; hosts 575.57.08 / 580.95.05 / 580.65.06 gates 9/9, thin 30/30, ladder 4/4, mixed pairs 4/4 — measured on `v3-drivers` heads before the merge (grid §6.0, derived from `traces/driver_matrix/walk/`); 535/545 capability rows approved, independently audited and merged (§3.1); no 535/545 end-to-end application claim. Earlier: 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
 | LLM | decode ~0.29–0.31× host on nested vast boxes; the gap is mostly doorbell VM exits | `design/V3_BUILD.md`, `V3_GUEST_DOORBELL_MODULE.md` |
 | Hardware boundary | every hardware constant pinned to ogkm headers by 43 GPU-free tests; generator `tools/derive_hwref.sh` | `design/V3_HW_BOUNDARY_INVENTORY.md` |
 | Pre-v3 tree | archived under `archive/`; 16 `kayfabe-*` crates kept only because the 30-arm grader uses them | `archive/README.md` |

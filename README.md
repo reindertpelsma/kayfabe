@@ -21,9 +21,20 @@ It is written in Rust. The architecture is **v3** ([`ARCHITECTURE.md`](ARCHITECT
 [`docs/design/THE_ARCHITECTURE_v3.md`](docs/design/THE_ARCHITECTURE_v3.md)). The C research
 prototype that first proved the idea is frozen under [`archive/nvkvm/`](archive/README.md).
 
-## Status — 2026-09-26, `master` at `74dc3113`
+## Status — 2026-09-29
 
-> ⊘ **2026-09-27 — parts of this section are stale.** `master` is now `db038f5f` (v3-mc20: all
+The recovered Claude/Turing work and audited 535/545 capability rows are now on `master`.
+Exact code `d883d0eb` passed **1,683 tests, all nine GPU gates, fresh QEMU/guest builds,
+and the 30/30 thin-guest suite** on an RTX 3060; the promotion adds only docs and
+[verification evidence](traces/recovered_integration_20260929/README.md).
+Display is still default-off and unfinished. UVM fault delivery and production ioeventfd
+acceleration are not implemented. The latest real-app matrix remains **60/65** at `4c48ca0c`
+([app matrix](docs/design/V3_APP_MATRIX.md)); it was not rerun for this promotion.
+For current decisions and the resume point, use [status and handoff](docs/STATUS_AND_HANDOFF.md).
+
+The detailed overview below is historical (2026-09-26/27); newer dated measurements take precedence.
+
+> ⊘ **Historical 2026-09-27 update, superseded above.** `master` was `db038f5f` (v3-mc20: all
 > `kf-*` crate tests 1639 / 0, gates 9/9, thin guest 30/30 at `c0ef7b75`; `traces/v3_mc20/`). The
 > app matrix (`v3-apps2`) and the UVM research (`v3-uvm-research`) are on `master`. So is the fix
 > for the refused `UnifiedMemoryStreams` map (`62a50c44`, `v3-mapfix`). The app was re-run in the
