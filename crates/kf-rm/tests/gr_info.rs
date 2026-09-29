@@ -123,7 +123,7 @@ fn the_reply_carries_the_bytes_the_real_ga106_put_on_the_wire() {
     let params = &reply.body[PARAMS_AT..PARAMS_AT + KGR_GET_INFO_PARAMS_SIZE];
     assert_eq!(
         params,
-        GA106_GR_INFO.encode().expect("the GA106 row encodes"),
+        GA106_GR_INFO.encode(kf_abi::grinfo::GrInfoReaders::EVERY).expect("the GA106 row encodes"),
         "the reply is the chip row's encoding, unmodified in transit"
     );
     // ⊘ And not the poison. An echo would bring `0xAA` back, and `0xAAAAAAAA` at
@@ -153,7 +153,7 @@ fn the_answer_comes_from_the_chip_row_and_not_from_this_crate() {
 fn a_zero_max_subcontext_count_is_refused_rather_than_served() {
     // ★★★ The falsifier for the whole rung, observed on the RAW ENVELOPE.
     assert!(
-        GA106_GR_INFO.encode().is_ok(),
+        GA106_GR_INFO.encode(kf_abi::grinfo::GrInfoReaders::EVERY).is_ok(),
         "the real row still encodes, so the check below is not passing for the wrong reason"
     );
     let mut bad = chip();

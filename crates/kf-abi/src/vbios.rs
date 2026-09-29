@@ -92,7 +92,7 @@ use crate::generated::vbios::{
     BCRT30_RSA3K_SIG_SIZE, BIT_DATA_BIOSDATA_BINVER_SIZE_5, BIT_DATA_BIOSDATA_VERSION_2,
     BIT_DATA_FALCON_DATA_V2_SIZE_4, BIT_HEADER_ID, BIT_HEADER_SIGNATURE, BIT_HEADER_SIZE_OFFSET,
     BIT_TOKEN_BIOSDATA, BIT_TOKEN_FALCON_DATA, BIT_TOKEN_V1_00_SIZE_8,
-    FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER, FALCON_UCODE_DESC_V3_SIZE_44,
+    FALCON_APPLICATION_INTERFACE_ENTRY_ID_DMEMMAPPER, FALCON_UCODE_DESC_V2_SIZE_60, FALCON_UCODE_DESC_V3_SIZE_44,
     FALCON_UCODE_ENTRY_APPID_FIRMWARE_SEC_LIC, FALCON_UCODE_ENTRY_APPID_FWSEC_DBG,
     FALCON_UCODE_ENTRY_APPID_FWSEC_PROD, FALCON_UCODE_TABLE_ENTRY_V1_SIZE_6,
     FALCON_UCODE_TABLE_HDR_V1_SIZE_6, FALCON_UCODE_TABLE_HDR_V1_VERSION,
@@ -102,7 +102,8 @@ use crate::generated::vbios::{
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION,
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION_AVAILABLE,
     NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_SIZE, NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION,
-    NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3, NV_PCI_DATA_EXT_REV_11, NV_PCI_DATA_EXT_SIG,
+    NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2, NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3,
+    NV_PCI_DATA_EXT_REV_11, NV_PCI_DATA_EXT_SIG,
     OFFSETOF_PCI_DATA_EXT_STRUCT_LAST_IMAGE, OFFSETOF_PCI_DATA_EXT_STRUCT_LEN,
     OFFSETOF_PCI_DATA_EXT_STRUCT_REV, OFFSETOF_PCI_DATA_EXT_STRUCT_SIG,
     OFFSETOF_PCI_DATA_EXT_STRUCT_SUBIMAGE_LEN, OFFSETOF_PCI_DATA_STRUCT_CLASS_CODE,
@@ -243,6 +244,33 @@ pub struct VbiosProfile {
     pub vbios_oem_version: u8,
     /// The FWSEC ucode descriptor this profile declares.
     pub fwsec: FwsecProfile,
+    /// ★ 2026-09-28 — which FWSEC descriptor version the image carries: the one the guest's
+    /// HS-falcon HAL can run ([`FwsecDescVersion`]).
+    pub fwsec_desc: FwsecDescVersion,
+}
+
+/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 4) — **the FWSEC descriptor version, a
+/// family fact of the guest's HS-falcon HAL.**
+///
+/// The descriptor version decides the boot type (`ogkm-580: kernel_gsp_fwsec.c:1058-1080`): V2 →
+/// `KGSP_FLCN_UCODE_BOOT_WITH_LOADER` (`s_vbiosFillFlcnUcodeFromDescV2`, `:741`), V3 →
+/// `KGSP_FLCN_UCODE_BOOT_FROM_HS` (`s_vbiosFillFlcnUcodeFromDescV3`, `:908`). And each
+/// `kgspExecuteHsFalcon` runs only its own: `_TU102` (TU102 … TU117 **and GA100**,
+/// `generated/g_kernel_gsp_nvoc.c:1427-1445`) takes `WITH_LOADER` / `DIRECT` and answers anything
+/// else `NV_ERR_NOT_SUPPORTED` **without a print** (`kernel_gsp_falcon_tu102.c:327-338`); `_GA102`
+/// (GA102 … AD107) asserts `FROM_HS` (`kernel_gsp_falcon_ga102.c:186`).
+///
+/// `[measured TU116, 580.159.04, kf3 2939c0df]` a V3 image on Turing: *"kgspExecuteFwsec_TU102:
+/// failed to execute FWSEC cmd 0x15: status 0x56"* twice, then `RmInitAdapter failed!
+/// (0x62:0x56:2028)` (`traces/v3_turing/tu3_timer_2939c0df/`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FwsecDescVersion {
+    /// `FALCON_UCODE_DESC_V2` (60 bytes, no signatures in the descriptor): the image is copied to
+    /// two sysmem buffers and loaded by SEC2's generic bootloader through the falcon's PIO ports.
+    V2WithLoader,
+    /// `FALCON_UCODE_DESC_V3` (44 bytes + `SignatureCount` RSA-3K signatures): the image is DMA'd
+    /// by the falcon itself.
+    V3FromHs,
 }
 
 /// The FWSEC falcon ucode descriptor's self-declared geometry.
@@ -544,6 +572,7 @@ pub static VBIOS_PROFILES: &[VbiosProfile] = &[
         vbios_version: 0x9418_0000,
         vbios_oem_version: 0x00,
         fwsec: GENERATED_FWSEC,
+        fwsec_desc: FwsecDescVersion::V3FromHs,
     },
     // ★★ AD106 (Ada) — the SECOND generation, added 2026-07-30 to MEASURE what a second
     // generation costs rather than to assert it. It cost this row and nothing else in
@@ -565,6 +594,7 @@ pub static VBIOS_PROFILES: &[VbiosProfile] = &[
         vbios_version: 0x9518_0000,
         vbios_oem_version: 0x00,
         fwsec: GENERATED_FWSEC,
+        fwsec_desc: FwsecDescVersion::V3FromHs,
     },
 ];
 
@@ -629,7 +659,8 @@ const fn align_up(v: usize, to: usize) -> usize {
 ///
 /// The result is a complete PCI expansion ROM: signature at offset 0, one
 /// **base**-code-type image, a BIT table, a falcon ucode table naming FWSEC three
-/// ways, a V3 FWSEC descriptor, its signature blob, and the ucode payload —
+/// ways, a V3 FWSEC descriptor and its signature blob (or, for a `_TU102` HS HAL, a V2
+/// descriptor — [`FwsecDescVersion`]), and the ucode payload —
 /// padded to a whole number of [`PCI_ROM_IMAGE_BLOCK_SIZE`] blocks.
 ///
 /// # The FWSEC entry is declared under three application IDs
@@ -659,11 +690,14 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
 
     // ── Descriptor and payload geometry, validated against the driver's own
     //    inequalities before a single byte is written. ──────────────────────
-    if fw.signature_count == 0 {
+    // ★ 2026-09-28: V2 carries no signatures in the descriptor (the WITH_LOADER path copies code
+    // and data verbatim, `kernel_gsp_fwsec.c:705-866`); V3 carries `SignatureCount` of them.
+    let v3 = profile.fwsec_desc == FwsecDescVersion::V3FromHs;
+    if v3 && fw.signature_count == 0 {
         return Err(VbiosError::NoSignatures);
     }
-    let sig_total = usize::from(fw.signature_count) * BCRT30_RSA3K_SIG_SIZE;
-    let desc_size = FALCON_UCODE_DESC_V3_SIZE_44 + sig_total;
+    let sig_total = if v3 { usize::from(fw.signature_count) * BCRT30_RSA3K_SIG_SIZE } else { 0 };
+    let desc_size = if v3 { FALCON_UCODE_DESC_V3_SIZE_44 + sig_total } else { FALCON_UCODE_DESC_V2_SIZE_60 };
     // The descriptor states its own size in a 16-bit DRF field.
     let Ok(desc_size_u32) = u32::try_from(desc_size) else {
         return Err(VbiosError::DescriptorTooLarge { desc_size });
@@ -928,14 +962,13 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
     c.u8(ucode_table + 1, u8::try_from(hdr_size).unwrap_or(0));
     c.u8(ucode_table + 2, u8::try_from(entry_size).unwrap_or(0));
     c.u8(ucode_table + 3, u8::try_from(app_ids.len()).unwrap_or(0));
-    c.u8(
-        ucode_table + 4,
-        u8::try_from(NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3).unwrap_or(0),
-    );
-    c.u8(
-        ucode_table + 5,
-        u8::try_from(FALCON_UCODE_DESC_V3_SIZE_44).unwrap_or(0),
-    );
+    let (desc_version, desc_base_size) = if v3 {
+        (NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3, FALCON_UCODE_DESC_V3_SIZE_44)
+    } else {
+        (NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2, FALCON_UCODE_DESC_V2_SIZE_60)
+    };
+    c.u8(ucode_table + 4, u8::try_from(desc_version).unwrap_or(0));
+    c.u8(ucode_table + 5, u8::try_from(desc_base_size).unwrap_or(0));
     for (i, app) in app_ids.iter().enumerate() {
         let e = entries + i * entry_size;
         c.u8(e, *app);
@@ -943,26 +976,50 @@ pub fn build(profile: &VbiosProfile, wire: VbiosWire) -> Result<Vec<u8>, VbiosEr
         c.u32(e + 2, u32::try_from(desc).unwrap_or(0));
     }
 
-    // ── The FWSEC descriptor, V3 ("9d1w2b2w" = 44 bytes) ─────────────────────
     let vdesc = NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION
         .set(NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_FLAGS_VERSION_AVAILABLE)
-        | NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION
-            .set(NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3)
+        | NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION.set(desc_version)
         | NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_SIZE.set(desc_size_u32);
     c.u32(desc, vdesc);
-    c.u32(desc + 4, ucode_size); // StoredSize (already 256-aligned)
-    c.u32(desc + 8, fw.pkc_data_offset);
-    c.u32(desc + 12, fw.interface_offset);
-    c.u32(desc + 16, fw.imem_phys_base);
-    c.u32(desc + 20, fw.imem_load_size);
-    c.u32(desc + 24, fw.imem_virt_base);
-    c.u32(desc + 28, fw.dmem_phys_base);
-    c.u32(desc + 32, fw.dmem_load_size);
-    c.u16(desc + 36, fw.engine_id_mask);
-    c.u8(desc + 38, fw.ucode_id);
-    c.u8(desc + 39, fw.signature_count);
-    c.u16(desc + 40, fw.signature_versions);
-    c.u16(desc + 42, 0); // Reserved
+    if v3 {
+        // ── The FWSEC descriptor, V3 ("9d1w2b2w" = 44 bytes) ─────────────────
+        c.u32(desc + 4, ucode_size); // StoredSize (already 256-aligned)
+        c.u32(desc + 8, fw.pkc_data_offset);
+        c.u32(desc + 12, fw.interface_offset);
+        c.u32(desc + 16, fw.imem_phys_base);
+        c.u32(desc + 20, fw.imem_load_size);
+        c.u32(desc + 24, fw.imem_virt_base);
+        c.u32(desc + 28, fw.dmem_phys_base);
+        c.u32(desc + 32, fw.dmem_load_size);
+        c.u16(desc + 36, fw.engine_id_mask);
+        c.u8(desc + 38, fw.ucode_id);
+        c.u8(desc + 39, fw.signature_count);
+        c.u16(desc + 40, fw.signature_versions);
+        c.u16(desc + 42, 0); // Reserved
+    } else {
+        // ── The FWSEC descriptor, V2 ("15d" = 60 bytes) ──────────────────────
+        // ★ 2026-09-28 (Turing). `s_vbiosFillFlcnUcodeFromDescV2` (`kernel_gsp_fwsec.c:705-866`)
+        // reads code at `descOffset + descSize` and data `DMEMOffset` bytes further, so the same
+        // payload layout as V3 (`dataOffset = IMEMLoadSize`) holds with `DMEMOffset =
+        // IMEMLoadSize`; the DMEM interface table below is therefore where V3 has it. The
+        // secure/non-secure split is CHOSEN (the falcon that loads it is us): the upper half,
+        // 256-aligned as `imemSecSize = NV_ALIGN_UP(IMEMSecSize, 256)` would make it anyway.
+        let sec_size = (fw.imem_load_size / 2) & !(UCODE_ALIGN - 1);
+        c.u32(desc + 4, ucode_size); // StoredSize (already 256-aligned)
+        c.u32(desc + 8, ucode_size); // UncompressedSize: stored uncompressed
+        c.u32(desc + 12, 0); // VirtualEntry
+        c.u32(desc + 16, fw.interface_offset);
+        c.u32(desc + 20, fw.imem_phys_base);
+        c.u32(desc + 24, fw.imem_load_size);
+        c.u32(desc + 28, fw.imem_virt_base);
+        c.u32(desc + 32, fw.imem_virt_base + (fw.imem_load_size - sec_size)); // IMEMSecBase
+        c.u32(desc + 36, sec_size); // IMEMSecSize
+        c.u32(desc + 40, fw.imem_load_size); // DMEMOffset
+        c.u32(desc + 44, fw.dmem_phys_base);
+        c.u32(desc + 48, fw.dmem_load_size);
+        c.u32(desc + 52, 0); // altIMEMLoadSize
+        c.u32(desc + 56, 0); // altDMEMLoadSize
+    }
 
     // ── The signature blob ───────────────────────────────────────────────────
     // Structure, not secret: nothing outside our control ever reads these bytes.

@@ -40,12 +40,12 @@ use kf_abi::deviceinfo::DeviceInfoRow;
 use kf_abi::falconinfo::FalconInventoryRow;
 use kf_abi::fifochannels::FifoChannelsRow;
 use kf_abi::gmmustatic::GmmuStaticRow;
-use kf_abi::grinfo::GrInfoProfile;
+use kf_abi::grinfo::{GrInfoError, GrInfoProfile, GrInfoReaders};
 use kf_abi::grstatic::{CONTEXT_BUFFER_ID_COUNT, ContextBuffer, GrStaticProfile};
 use kf_abi::gspfeatures::GspFeatures;
 use kf_abi::gspstaticinfo::GpuName;
 use kf_abi::inittables::{FifoDeviceEntry, INTR_CATEGORY_COUNT, IntrTableEntry};
-use kf_abi::memsysconfig::MemorySystemRow;
+use kf_abi::memsysconfig::{MemorySystemRow, MemsysReaders};
 use kf_abi::regaccessmap::RegisterAccessMapRow;
 use kf_abi::smcmode::SmcMode;
 use kf_chip::Family;
@@ -779,13 +779,45 @@ pub fn derive_gr_fs_answers(reply: &[u8], asked: &[kf_abi::grfsinfo::GrFsQuery])
     Ok(out)
 }
 
+/// ★ 2026-09-28 — the GR-info readers `family`'s guest RM binds (the family row,
+/// [`Family::reads_gr_veid_step_size`], cites the HAL binding). Every refusal and every encode of
+/// the table goes through this, at realize and at serve.
+#[must_use]
+pub const fn gr_info_readers(family: Family) -> GrInfoReaders {
+    GrInfoReaders { veid_step_size: family.reads_gr_veid_step_size() }
+}
+
+/// ★ 2026-09-28 — the memory-system-config readers `family`'s guest RM binds
+/// ([`Family::reads_memsys_ltc_slices`]).
+#[must_use]
+pub const fn memsys_readers(family: Family) -> MemsysReaders {
+    MemsysReaders { ltc_slices: family.reads_memsys_ltc_slices() }
+}
+
+/// The refusal text for a GR info table RM's own readers would misread — naming the entry.
+/// ⊘ Until 2026-09-28 one text for all three zeros; TU116's first realize could not say which.
+const fn gr_info_why(e: GrInfoError) -> &'static str {
+    match e {
+        GrInfoError::MaxSubcontextCountZero => {
+            "GR info MAX_SUBCONTEXT_COUNT (0x2c) is zero; kfifoGetMaxSubcontextFromGr returns it as the subcontext count"
+        }
+        GrInfoError::LitterNumGpcsZero => {
+            "GR info LITTER_NUM_GPCS (0x14) is zero; every gpcId < maxNumGpcs bound fails"
+        }
+        GrInfoError::VeidStepSizeZero => {
+            "GR info LITTER_MIN_SUBCTX_PER_SMC_ENG (0x37) is zero, and this family's kgrmgrGetVeidsFromGpcCount multiplies by it"
+        }
+        GrInfoError::DisagreesWithGrStatic { .. } => "GR info disagrees with the GR static geometry",
+    }
+}
+
 /// The whole `GR_GET_INFO_V2` table, one row per index in index order (`data[i]` for
-/// `index == i`).
+/// `index == i`), validated against the readers `family`'s guest RM binds.
 ///
 /// # Errors
 /// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] when the reply is not the full
-/// table in index order, or fails [`GrInfoProfile::validate`].
-pub fn derive_gr_info(reply: &[u8]) -> Result<GrInfoProfile, FactRefusal> {
+/// table in index order, or fails [`GrInfoProfile::validate`] (naming the entry).
+pub fn derive_gr_info(reply: &[u8], family: Family) -> Result<GrInfoProfile, FactRefusal> {
     use kf_abi::grinfo::GR_INFO_MAX_SIZE;
     let cmd = NV2080_CTRL_CMD_GR_GET_INFO_V2;
     need(cmd, reply, GR_GET_INFO_V2_PARAMS_SIZE)?;
@@ -800,7 +832,7 @@ pub fn derive_gr_info(reply: &[u8]) -> Result<GrInfoProfile, FactRefusal> {
         *d = le32(reply, 8 + 8 * i).unwrap_or(0);
     }
     let p = GrInfoProfile { data };
-    p.validate().map_err(|_| FactRefusal::Unservable { cmd, why: "a GR info entry RM's own readers require non-zero is zero" })?;
+    p.validate(gr_info_readers(family)).map_err(|e| FactRefusal::Unservable { cmd, why: gr_info_why(e) })?;
     Ok(p)
 }
 

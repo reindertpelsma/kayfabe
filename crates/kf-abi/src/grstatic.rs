@@ -281,10 +281,27 @@ pub struct GpcRow {
     pub zcull_mask: u32,
     /// `GRMGR_GET_GR_FS_INFO` `PPC_MASK[logical]` — the physical PPC mask of this GPC, as the
     /// host answered it. `None`: not measured (the query type is then refused whole, loudly).
-    pub ppc_mask: Option<u32>,
+    pub ppc_mask: Option<HostFsAnswer>,
     /// `GRMGR_GET_GR_FS_INFO` `ROP_MASK[logical]` — the physical ROP mask of this GPC, as the
     /// host answered it. `None`: not measured.
-    pub rop_mask: Option<u32>,
+    pub rop_mask: Option<HostFsAnswer>,
+}
+
+/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 3) — one per-GPC `GRMGR_GET_GR_FS_INFO`
+/// answer, **as the host gave it**: its word, or its own per-query status.
+///
+/// ⊘ Until 2026-09-28 a per-query refusal was stored as "not measured" (`None`), so the guest's
+/// query took the whole control down while the host had answered `NV_OK` with one refused slot.
+/// `[measured TU116, 580.159.04]` the host answers `ROP_MASK` with `NV_ERR_NOT_SUPPORTED` (`0x56`)
+/// for every in-range GPC (`traces/real_tu116/grfs_probe_real_tu116_1660s.txt`); a GA104 / AD104
+/// host answers a word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostFsAnswer {
+    /// The host's word.
+    Word(u32),
+    /// The host's per-query status. Served as the same per-query status — a refusal a real GPU was
+    /// measured to make, `kf_abi::grfsinfo::QueryAnswer::RefusedByHardware`'s own rule.
+    Refused(u32),
 }
 
 /// `GRMGR_GET_GR_FS_INFO`'s two syspipe words, as the host answered them — `CHIPLET_SYSPIPE_MASK`

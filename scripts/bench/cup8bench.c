@@ -102,6 +102,10 @@ extern int cuLaunchKernel(CUfunction, unsigned, unsigned, unsigned,
 extern int cuCtxSynchronize(void);
 extern int cuGetErrorString(int, const char **);
 extern int cuModuleUnload(CUmodule);
+/* ★ 2026-09-28: the SM the PTX targets is asked of the driver (`ptx_for`, below). */
+extern int cuDeviceGetAttribute(int *, int, CUdevice);
+#define CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR 75
+#define CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR 76
 /* ★★★ w322 — THE EXTRA ALLOCATION MODES, and they are WEAK ON PURPOSE.
  *
  * w320's mechanism control used exactly one non-VRAM placement, `cuMemHostAlloc(DEVICEMAP)`,
@@ -223,6 +227,29 @@ static const char *BW_PTX =
 "$L_bwrdone:\n"
 "  mul.wide.u32 %rd6,%r5,4; add.s64 %rd7,%rd1,%rd6; st.global.f32 [%rd7],%f1;\n"
 "  ret;\n}\n";
+
+/* ★ 2026-09-28 (docs/design/V3_FAMILY_PORT_TURING.md §3): PTX JITs only for a `.target` at or
+ * below the device's SM, and the text above says sm_86 — `CUDA_ERROR_INVALID_PTX` (218) at
+ * cuModuleLoadData on Turing (sm_75) and GA100 (sm_80), ON BARE METAL (`traces/v3_turing/tu1_80e13bc5/`).
+ * Below 8.6 the target becomes the device's own SM (asked of the driver, never assumed); at 8.6
+ * and above the text is byte for byte what every run before this date loaded. */
+static const char *ptx_for(const char *ptx, CUdevice dev) {
+    int maj = 0, min = 0;
+    char *p, *t;
+    if (cuDeviceGetAttribute(&maj, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, dev) != CUDA_SUCCESS ||
+        cuDeviceGetAttribute(&min, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, dev) != CUDA_SUCCESS ||
+        maj < 1 || maj > 9 || min < 0 || min > 9 || maj * 10 + min >= 86) {
+        printf("PTX_TARGET=sm_86 (device cc %d.%d)\n", maj, min);
+        return ptx;
+    }
+    p = strdup(ptx);
+    t = p ? strstr(p, ".target sm_86") : NULL;
+    if (!t) { printf("PTX_TARGET=sm_86 (no rewrite)\n"); return ptx; }
+    t[11] = (char)('0' + maj);
+    t[12] = (char)('0' + min);
+    printf("PTX_TARGET=sm_%d%d (device cc %d.%d)\n", maj, min, maj, min);
+    return p;
+}
 
 /* ---- w322: allocation modes -------------------------------------------------------------
  * ⊘ `vram` is the DEFAULT and is byte-for-byte what every previous rung ran, so an arm that
@@ -516,6 +543,7 @@ int main(void){
     CUcontext ctx;
     t=now_ms(); CK(cuCtxCreate_v2(&ctx,CTXFLAGS,d)); printf("BENCH_CTX_MS=%.2f\n", now_ms()-t);
     CUmodule mod;
+    PTX = ptx_for(PTX, d); BW_PTX = ptx_for(BW_PTX, d);
     t=now_ms(); CK(cuModuleLoadData(&mod,PTX)); printf("BENCH_MODULE_MS=%.2f\n", now_ms()-t);
     CUfunction fn; CK(cuModuleGetFunction(&fn,mod,"mm"));
     fflush(stdout);

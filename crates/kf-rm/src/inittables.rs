@@ -2085,7 +2085,7 @@ impl CommandPolicy for InitTablePolicy {
             // divide-by-zero (`mem_mgr_gm107.c:211`). There is no answer that is safe by
             // default here; there is only a row that is right.
             WantedTable::MemorySystemStaticConfig => {
-                match memsysconfig::encode_memsys_static_config(&self.host.memory_system) {
+                match memsysconfig::encode_memsys_static_config(&self.host.memory_system, crate::hostfacts::memsys_readers(self.host.family)) {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
                 }
@@ -2468,7 +2468,7 @@ impl CommandPolicy for InitTablePolicy {
                 {
                     return refuse();
                 }
-                match self.host.gr_info.encode() {
+                match self.host.gr_info.encode(crate::hostfacts::gr_info_readers(self.host.family)) {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
                 }

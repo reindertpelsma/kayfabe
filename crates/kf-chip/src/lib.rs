@@ -216,6 +216,49 @@ impl Family {
         }
     }
 
+    /// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 1) — **does this family's RM read GR info's
+    /// `LITTER_MIN_SUBCTX_PER_SMC_ENG` (`0x37`, the VEID step size)?** Its one reader is
+    /// `kgrmgrGetVeidStepSize_IMPL` (`ogkm-580: kernel_graphics_manager.c:782-796`), whose one caller
+    /// is `kgrmgrGetVeidsFromGpcCount_GA100` (`*pVeidCount = gpcCount * veidStepSize`,
+    /// `kgrmgr_ga100.c:30-47`), bound for GA100 | GA10x | AD10x | GH100
+    /// (`generated/g_kernel_graphics_manager_nvoc.c:247-266`). Turing binds `_46f6a7`
+    /// (`NV_ERR_NOT_SUPPORTED`, reads nothing); every Blackwell die binds `_GB100` / `_GB10B`, which
+    /// size VEIDs from `MAX_SUBCONTEXT_COUNT` / `MAX_MIG_ENGINES` / `MAX_PARTITIONABLE_GPCS` instead
+    /// (`kgrmgr_gb100.c:30-75`). `[measured TU116, 580.159.04]` the host's GR info states 0 there.
+    #[must_use]
+    pub const fn reads_gr_veid_step_size(self) -> bool {
+        matches!(self, Family::Ampere | Family::Ada | Family::Hopper)
+    }
+
+    /// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 2) — **does this family's RM read the
+    /// memory-system config's `ltcCount × ltsPerLtcCount`?** The only readers are
+    /// `kmemsysIsPagePLCable_GA100` (`ogkm-580: kern_mem_sys_ga100.c:332-345`) and `_GA102`
+    /// (`kern_mem_sys_ga102.c:66-120`), bound for GA100 and GA102 … GA107 only
+    /// (`generated/g_kern_mem_sys_nvoc.c:558-577`); every other die binds `_84161d` (an assert,
+    /// `NV_TRUE`), and the VF variant reads nothing. `[measured TU116, 580.159.04]` the GR litter
+    /// `LITTER_NUM_SLICES_PER_LTC` the field is sourced from is 0 on Turing.
+    #[must_use]
+    pub const fn reads_memsys_ltc_slices(self) -> bool {
+        matches!(self, Family::Ampere)
+    }
+
+    /// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2, wall 4) — **the FWSEC descriptor version our
+    /// synthetic ROM carries: the one this family's `kgspExecuteHsFalcon` can run.** `_TU102`
+    /// (TU102 … TU117, and GA100) runs `BOOT_WITH_LOADER` / `BOOT_DIRECT` only ⇒ V2; `_GA102`
+    /// (GA102 … AD107) asserts `BOOT_FROM_HS` ⇒ V3 (`ogkm-580: generated/g_kernel_gsp_nvoc.c:1427-1445`,
+    /// `kernel_gsp_falcon_tu102.c:327-338`, `kernel_gsp_falcon_ga102.c:186`). Hopper / Blackwell
+    /// read no VBIOS (`kgspExtractVbiosFromRom_395e98`): V3, inert. ⊘ GA100 would need V2 too; it is
+    /// refused by name before any ROM is built ([`Family::gsp_model`]).
+    #[must_use]
+    pub const fn fwsec_desc(self) -> kf_abi::vbios::FwsecDescVersion {
+        match self {
+            Family::Turing => kf_abi::vbios::FwsecDescVersion::V2WithLoader,
+            Family::Ampere | Family::Ada | Family::Hopper | Family::Blackwell => {
+                kf_abi::vbios::FwsecDescVersion::V3FromHs
+            }
+        }
+    }
+
     /// How the GSP boots (`kgspBootstrap_*` HAL per family: falcon/booter through Ada, FSP after).
     #[must_use]
     pub const fn boot_style(self) -> BootStyle {

@@ -682,7 +682,7 @@ fn gr_info_has_no_capture_so_only_its_layout_round_trips() {
         reply[4 + 8 * i..8 + 8 * i].copy_from_slice(&(i as u32).to_le_bytes());
         reply[8 + 8 * i..12 + 8 * i].copy_from_slice(&d.to_le_bytes());
     }
-    assert_eq!(hostfacts::derive_gr_info(&reply).expect("well formed").data, f.gr_info.data);
+    assert_eq!(hostfacts::derive_gr_info(&reply, kf_chip::Family::Ampere).expect("well formed").data, f.gr_info.data);
 }
 
 /// ⊘ `gr_context_buffers` — NO capture. Checked: the query's mapping of RM's own

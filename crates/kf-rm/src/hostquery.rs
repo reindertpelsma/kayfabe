@@ -31,7 +31,7 @@ use kf_abi::deviceinfo::{DeviceInfoRow, DevicePriBase, EnginePriBase};
 use kf_abi::falconinfo::{ConstructedFalcon, FalconInventoryRow};
 use kf_abi::fifochannels::FifoChannelsRow;
 use kf_abi::grinfo::GrInfoProfile;
-use kf_abi::grstatic::{CONTEXT_BUFFER_ID_COUNT, ContextBuffer, TpcRow};
+use kf_abi::grstatic::{CONTEXT_BUFFER_ID_COUNT, ContextBuffer, HostFsAnswer, TpcRow};
 use kf_abi::memsysconfig::{ComptagAllocationPolicy, MemorySystemRow};
 use kf_abi::regaccessmap::RegisterAccessMapRow;
 use kf_chip::Family;
@@ -559,16 +559,17 @@ pub fn query_chip_info(host: &mut dyn HostControls, sub_revision: u8) -> Result<
 /// `NV2080_CTRL_GR_INFO_INDEX_LITTER_NUM_SLICES_PER_LTC` (`ogkm-580: ctrl0080gr.h`, `0x32`).
 pub const GR_INFO_IDX_LITTER_NUM_SLICES_PER_LTC: usize = 0x32;
 
-/// `gr_info` — the whole `GR_GET_INFO_V2` table, asked in index order on GR0.
+/// `gr_info` — the whole `GR_GET_INFO_V2` table, asked in index order on GR0, validated against
+/// the readers `family`'s guest RM binds ([`hostfacts::gr_info_readers`]).
 ///
 /// # Errors
 /// [`FieldCause`].
-pub fn query_gr_info(host: &mut dyn HostControls) -> Result<GrInfoProfile, FieldCause> {
+pub fn query_gr_info(host: &mut dyn HostControls, family: Family) -> Result<GrInfoProfile, FieldCause> {
     use kf_abi::grinfo::GR_INFO_MAX_SIZE;
     let indices: Vec<u32> = (0..GR_INFO_MAX_SIZE as u32).collect();
     // The route at GR_GET_INFO_V2_ROUTE_OFF stays zero: TYPE_NONE, GR0.
     let req = info_list_request(hostfacts::GR_GET_INFO_V2_PARAMS_SIZE, &indices);
-    Ok(hostfacts::derive_gr_info(&ask(host, hostfacts::NV2080_CTRL_CMD_GR_GET_INFO_V2, req)?)?)
+    Ok(hostfacts::derive_gr_info(&ask(host, hostfacts::NV2080_CTRL_CMD_GR_GET_INFO_V2, req)?, family)?)
 }
 
 /// `memory_system` — L2 size, RAM type and LTC count from `FB_GET_INFO_V2`; slices per LTC
@@ -654,8 +655,10 @@ pub struct GrGeometry {
 /// The host's answers to the optional `GRMGR_GET_GR_FS_INFO` batch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GrFsExtra {
-    /// `(ppcMask, ropMask)` per LOGICAL GPC; `None` where the host's per-query status refused.
-    pub per_gpc: Vec<(Option<u32>, Option<u32>)>,
+    /// `(ppcMask, ropMask)` per LOGICAL GPC, each the host's word or its own per-query status
+    /// (★ 2026-09-28: TU116 refuses `ROP_MASK` per query, `0x56`; that status is carried, not
+    /// dropped to "unmeasured").
+    pub per_gpc: Vec<(Option<HostFsAnswer>, Option<HostFsAnswer>)>,
     /// `CHIPLET_SYSPIPE_MASK` and `CHIPLET_GRAPHICS_SYSPIPE_MASK`.
     pub syspipe: kf_abi::grstatic::GrSyspipeMasks,
 }
@@ -825,9 +828,10 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
         Ok(()) => {
             let a = hostfacts::derive_gr_fs_answers(&req, &extra_queries)?;
             let word = |i: usize| (a[i].0 == 0).then_some(a[i].1);
+            let answer = |i: usize| Some(if a[i].0 == 0 { HostFsAnswer::Word(a[i].1) } else { HostFsAnswer::Refused(a[i].0) });
             match (word(0), word(1)) {
                 (Some(syspipe), Some(graphics_syspipe)) => Some(GrFsExtra {
-                    per_gpc: (0..n as usize).map(|g| (word(2 + g), word(2 + n as usize + g))).collect(),
+                    per_gpc: (0..n as usize).map(|g| (answer(2 + g), answer(2 + n as usize + g))).collect(),
                     syspipe: kf_abi::grstatic::GrSyspipeMasks { syspipe, graphics_syspipe },
                 }),
                 _ => None,
@@ -973,7 +977,7 @@ pub fn query_gr_zcull_info(
 /// | `tpc_count` | host `NUM_TPCS_FOR_GPC[l]` (= the mask's population, checked) |
 /// | `num_pes_per_gpc`, `tpc_to_pes_map` | host `GPU_GET_PES_INFO[l]`; host NOT_SUPPORTED → litter `NUM_PES_PER_GPC` + [`authored::tpc_to_pes_map`] |
 /// | `mmu_per_gpc` | host `LITTER_NUM_GPCMMU_PER_GPC` (no release-build control reports the array; logical, as the real replies fill it) |
-/// | `ppc_mask`, `rop_mask`, `syspipe_masks` | host GRMGR words, or `None` |
+/// | `ppc_mask`, `rop_mask`, `syspipe_masks` | host GRMGR words or per-query statuses, or `None` |
 /// | `gfx_gpc_mask`, `num_gfx_tpc` | host `GR_GET_GFX_GPC_AND_TPC_INFO` |
 /// | `tpcs`, `sms_per_tpc` | host SM order |
 /// | `caps` | host caps |
@@ -1335,7 +1339,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         Ok((_, sub)) => query_chip_info(host, *sub),
         Err(_) => Err(FieldCause::DependsOn("family")),
     };
-    let gr_info = query_gr_info(host);
+    let gr_info = query_gr_info(host, asked);
     let memory_system = query_memory_system(host, gr_info.as_ref().ok());
     let device_info = match &kinds {
         Ok(k) => Ok(device_info_rule(k, &video_falcons)),

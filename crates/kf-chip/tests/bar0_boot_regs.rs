@@ -101,7 +101,29 @@ fn the_vbios_carries_the_hosts_version_and_the_generated_geometry() {
         assert_eq!((p.vbios_version, p.vbios_oem_version), (0x9507_1d00, 0x28), "{fam:?}");
         assert_eq!(p.pci_device_id, 0x2803);
         assert_eq!(p.fwsec, kf_abi::vbios::GENERATED_FWSEC);
+        assert_eq!(p.fwsec_desc, fam.fwsec_desc(), "{fam:?}");
+        kf_abi::vbios::build(&p, kf_abi::vbios::VbiosWire::Tu102Bit).unwrap_or_else(|e| panic!("{fam:?}: {e:?}"));
     }
+}
+
+/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2 wall 4): Turing's `kgspExecuteHsFalcon_TU102` runs
+/// `BOOT_WITH_LOADER` / `BOOT_DIRECT` only ⇒ its ROM carries a V2 descriptor; GA10x / AD10x keep V3
+/// (`kgspExecuteHsFalcon_GA102` asserts `BOOT_FROM_HS`), byte for byte what they were served.
+#[test]
+fn the_fwsec_descriptor_version_is_the_one_the_familys_hs_hal_runs() {
+    use kf_abi::vbios::FwsecDescVersion::{V2WithLoader, V3FromHs};
+    assert_eq!(Family::Turing.fwsec_desc(), V2WithLoader);
+    for f in [Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
+        assert_eq!(f.fwsec_desc(), V3FromHs, "{f:?}");
+    }
+    let id = kf_chip::bar0::PciIdentity { vendor: 0x10de, device: 0x2504, class: [0, 0, 3] };
+    let ga = kf_chip::bar0::vbios_profile(Family::Ampere, id, (0x9418_0000, 0)).unwrap();
+    let row = kf_abi::vbios::profile_for_device_id(0x2504).unwrap();
+    assert_eq!(
+        kf_abi::vbios::build(&ga, kf_abi::vbios::VbiosWire::Tu102Bit).unwrap(),
+        kf_abi::vbios::build(row, kf_abi::vbios::VbiosWire::Tu102Bit).unwrap(),
+        "GA106's ROM is unchanged"
+    );
 }
 
 /// ★ A host without a VBIOS answer gets the NAMED neutral version, not another die's.

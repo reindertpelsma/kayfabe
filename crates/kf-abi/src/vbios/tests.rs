@@ -41,8 +41,11 @@ struct Parsed {
     bit_addr: usize,
     desc_offset: usize,
     desc_size: usize,
-    /// `signaturesTotalSize = descSize - 44` (`kernel_gsp_fwsec.c:985`).
+    /// `signaturesTotalSize = descSize - 44` (`kernel_gsp_fwsec.c:985`); 0 for V2.
     signatures_total_size: usize,
+    /// ★ 2026-09-28: the descriptor version the parser took (2 → `BOOT_WITH_LOADER`, 3 →
+    /// `BOOT_FROM_HS`, `kernel_gsp_fwsec.c:1058-1080`).
+    desc_version: u32,
     /// `pUcode->size = RM_ALIGN_UP(StoredSize, 256)` (`:912`).
     ucode_size: u32,
     ucode_id: u8,
@@ -182,7 +185,7 @@ fn parse(img: &[u8]) -> Result<Parsed, ParseFail> {
     let wide = token_size >= usize::from(BIT_TOKEN_V1_00_SIZE_8);
 
     let mut vbios_version_combined = 0u64;
-    let mut found: Option<(usize, usize, u8)> = None;
+    let mut found: Option<(usize, usize, u8, u32)> = None;
 
     for tok in 0..token_entries {
         let t = bit_addr + header_size + tok * token_size;
@@ -263,19 +266,25 @@ fn parse(img: &[u8]) -> Result<Parsed, ParseFail> {
             }
             let desc_version = NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION.get(vdesc);
             let desc_size = NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_SIZE.get(vdesc) as usize;
-            if desc_version != NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3
-                || desc_size < FALCON_UCODE_DESC_V3_SIZE_44
-            {
+            // `:653-668`: V2 at >= 60 bytes, V3 at >= 44, anything else skipped.
+            let v2_ok = desc_version == NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2
+                && desc_size >= FALCON_UCODE_DESC_V2_SIZE_60;
+            let v3_ok = desc_version == NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3
+                && desc_size >= FALCON_UCODE_DESC_V3_SIZE_44;
+            if !v2_ok && !v3_ok {
                 continue;
             }
-            found = Some((desc_offset, desc_size, app_id));
+            found = Some((desc_offset, desc_size, app_id, desc_version));
             break;
         }
         if found.is_some() {
             break;
         }
     }
-    let (desc_offset, desc_size, _app) = found.ok_or(ParseFail::NoFwsecDesc)?;
+    let (desc_offset, desc_size, _app, desc_version) = found.ok_or(ParseFail::NoFwsecDesc)?;
+    if desc_version == NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2 {
+        return fill_from_desc_v2(img, bios_size, expansion_rom_offset, bit_addr, desc_offset, desc_size, vbios_version_combined);
+    }
 
     // ── s_vbiosFillFlcnUcodeFromDescV3 (`:877-1021`) ─────────────────────────
     let stored_size = rd32(img, desc_offset + 4)?;
@@ -322,8 +331,58 @@ fn parse(img: &[u8]) -> Result<Parsed, ParseFail> {
         desc_offset,
         desc_size,
         signatures_total_size: desc_size - FALCON_UCODE_DESC_V3_SIZE_44,
+        desc_version,
         ucode_size: size,
         ucode_id,
+        vbios_version_combined,
+    })
+}
+
+/// ★ 2026-09-28 — `s_vbiosFillFlcnUcodeFromDescV2`, transcribed (`kernel_gsp_fwsec.c:705-866`):
+/// every inequality it tests, in its order, before it copies code and data into two sysmem buffers.
+fn fill_from_desc_v2(
+    img: &[u8],
+    bios_size: usize,
+    expansion_rom_offset: usize,
+    bit_addr: usize,
+    desc_offset: usize,
+    desc_size: usize,
+    vbios_version_combined: u64,
+) -> Result<Parsed, ParseFail> {
+    let bad = || ParseFail::BadUcodeOffsets;
+    let d = |o: usize| rd32(img, desc_offset + o);
+    let (stored_size, imem_phys_base, imem_load_size) = (d(4)?, d(20)?, d(24)?);
+    let (imem_sec_size, dmem_offset, dmem_phys_base, dmem_load_size) = (d(36)?, d(40)?, d(44)?, d(48)?);
+    // `imemNsSize = IMEMLoadSize - IMEMSecSize` is NvU32 arithmetic: a wrap is a garbage size.
+    if imem_sec_size > imem_load_size {
+        return Err(bad());
+    }
+    let code_aligned = imem_load_size.div_ceil(UCODE_ALIGN) * UCODE_ALIGN;
+    let data_aligned = dmem_load_size.div_ceil(UCODE_ALIGN) * UCODE_ALIGN;
+    let image_code = desc_offset.checked_add(desc_size).ok_or_else(bad)?;
+    if image_code >= bios_size || image_code + imem_load_size as usize > bios_size {
+        return Err(bad());
+    }
+    let image_data = image_code.checked_add(dmem_offset as usize).ok_or_else(bad)?;
+    if image_data >= bios_size || image_data + dmem_load_size as usize > bios_size {
+        return Err(bad());
+    }
+    if imem_phys_base >= code_aligned || imem_phys_base + imem_load_size > code_aligned {
+        return Err(bad());
+    }
+    if dmem_phys_base >= data_aligned || dmem_phys_base + dmem_load_size > data_aligned {
+        return Err(bad());
+    }
+    Ok(Parsed {
+        bios_size,
+        expansion_rom_offset,
+        bit_addr,
+        desc_offset,
+        desc_size,
+        signatures_total_size: 0,
+        desc_version: NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2,
+        ucode_size: stored_size.div_ceil(UCODE_ALIGN) * UCODE_ALIGN,
+        ucode_id: 0,
         vbios_version_combined,
     })
 }
@@ -1276,4 +1335,43 @@ fn every_shipped_profile_carries_a_walkable_interface_table() {
     }
     assert_eq!(checked, VBIOS_PROFILES.len());
     assert!(checked >= 2, "the table must exercise more than one row");
+}
+
+/// ★ 2026-09-28 (`V3_FAMILY_PORT_TURING.md` §2 wall 4) — **a V2 image for the `_TU102` HS HAL.**
+/// The same geometry and interface table, a 60-byte V2 descriptor with no signatures, parsed by the
+/// transcription of `s_vbiosFillFlcnUcodeFromDescV2`; the DMEM the driver patches is where V3 has
+/// it, so the FRTS command lands at the offsets the device reads back (`kf_gsp::boot`).
+#[test]
+fn a_v2_profile_builds_an_image_the_turing_parser_accepts() {
+    let mut p = *ga106();
+    p.fwsec_desc = FwsecDescVersion::V2WithLoader;
+    let img = build(&p, VbiosWire::Tu102Bit).expect("the V2 image builds");
+    let parsed = parse(&img).expect("the V2 image parses");
+    assert_eq!(parsed.desc_version, NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V2);
+    assert_eq!((parsed.desc_size, parsed.signatures_total_size), (FALCON_UCODE_DESC_V2_SIZE_60, 0));
+    assert_eq!(parsed.ucode_size, p.fwsec.imem_load_size + p.fwsec.dmem_load_size);
+    let d = |o: usize| u32::from_le_bytes(img[parsed.desc_offset + o..][..4].try_into().unwrap());
+    assert_eq!(d(40), p.fwsec.imem_load_size, "DMEMOffset: data follows the code, as in V3");
+    assert!(d(36) <= d(24) && d(36) % UCODE_ALIGN == 0, "IMEMSecSize fits and is 256-aligned");
+    let out = patch_interface_data(
+        &dmem_of(&img, &p),
+        FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS,
+        &fake_cmd_buffer(),
+        p.fwsec.interface_offset,
+    )
+    .expect("the same walkable interface table");
+    assert_eq!(out.mapper_at, p.fwsec.dmem_mapper_offset);
+    // The V3 image of the same row is unchanged by the V2 path's existence.
+    assert_eq!(parse(&good()).unwrap().desc_version, NV_BIT_FALCON_UCODE_DESC_HEADER_VDESC_VERSION_V3);
+}
+
+/// A V2 descriptor whose secure size exceeds its load size would make `imemNsSize` wrap.
+#[test]
+fn a_v2_descriptor_with_a_secure_part_larger_than_the_code_is_refused_by_the_transcription() {
+    let mut p = *ga106();
+    p.fwsec_desc = FwsecDescVersion::V2WithLoader;
+    let mut img = build(&p, VbiosWire::Tu102Bit).expect("builds");
+    let desc = parse(&img).unwrap().desc_offset;
+    img[desc + 36..desc + 40].copy_from_slice(&(p.fwsec.imem_load_size + 0x100).to_le_bytes());
+    assert_eq!(parse(&img), Err(ParseFail::BadUcodeOffsets));
 }
