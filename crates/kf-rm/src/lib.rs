@@ -106,16 +106,15 @@ pub struct ChainLogs {
 /// page-directory publication into the object model — `kayfabe_rmrpc::PublicationObserver`), is
 /// cut with the observer (`V3_P2_PORT_MAP.md` §1, rmrpc policy.rs: "Drop … PublicationObserver").
 ///
-/// ⚠ The link installed here must be the COMPOSABLE form ([`rmrpc::ObjectPolicy`]), which
-/// declines by default: [`rmrpc::GraphPolicy`] answers EVERY command, and installing it here
-/// would silence [`unserviced::UnservicedLedger`] permanently.
+/// The type enforces the COMPOSABLE form ([`rmrpc::ObjectPolicy`]), which declines by default:
+/// [`rmrpc::GraphPolicy`] answers EVERY command and would silence the ledger permanently.
 ///
 /// `Default` is the seat empty — the register-only configuration, in which the object verbs
 /// reach the ledger and are refused by name.
 #[derive(Default)]
 pub struct ObjectLinks {
     /// The object-model link.
-    pub objects: Option<Box<dyn kf_gsp::CommandPolicy>>,
+    pub objects: Option<rmrpc::ObjectPolicy>,
     /// ★ P4: the memory plane's inbox for the guest's address-space statements — fn 70
     /// ([`barpde::BarPdePolicy`]) and the page-directory controls ([`barpde::PageDirPolicy`]).
     /// `None` is the plane absent: fn 70 then reaches the object link (inert) as before, and the
@@ -130,7 +129,7 @@ pub struct ObjectLinks {
     /// displayless posture: `GET_IP_VERSION` reaches the ledger and is refused, and the guest
     /// amputates its display engine (`sweep.rs`). ★ Step (1) (2026-09-27): with a row, the link
     /// delegates to a `kf_disp::model::DisplayModel` built for the guest driver's derived layouts
-    /// and observes the display objects' allocs and frees (`tests/display_seat.rs`).
+    /// and observes accepted display-object allocs and frees (`tests/display_seat.rs`).
     pub display: Option<&'static kf_chip::display::DisplayRow>,
 }
 
@@ -370,7 +369,7 @@ pub fn served_chain(
 ) -> Box<dyn kf_gsp::CommandPolicy> {
     // ★★★ EXHAUSTIVE: a latch added to `ChainLogs` and not seated below is a compile error.
     let ChainLogs { unserviced, fault_buffer, os_events } = logs;
-    let ObjectLinks { objects, memory, channels, display } = links;
+    let ObjectLinks { mut objects, memory, channels, display } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
         .with_engine_caps(authored::engine_caps(&host.engines));
     if let (Some(n), Some(sn)) = (host.gpu_name, host.gpu_short_name.or(host.gpu_name)) {
@@ -378,11 +377,16 @@ pub fn served_chain(
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
     // ★ v3-display: the display link claims only its own controls, so its place is a matter of
-    // which link answers first; it goes first so no other link's refusal can shadow it. ★ Step (1):
-    // it also OBSERVES `GSP_RM_ALLOC`/`GSP_RM_FREE` (returning `None`), so the channel link and the
-    // object seat below still see every alloc and free, and the object seat answers them.
+    // which link answers first; it goes first so no other link's refusal can shadow it.
+    // Lifecycle observation belongs to the object seat AFTER acceptance, not to this front link:
+    // a rejected allocation must never displace a live display channel, nor a rejected free
+    // release one. Reassembly/held-fragment acknowledgements are not object acceptance either.
     if let Some(row) = display {
-        chain.push(Box::new(display::DisplayPolicy::new(driver, row)));
+        let policy = display::DisplayPolicy::new(driver, row);
+        if let Some(mut registry) = policy.registry() {
+            objects = objects.map(|p| p.with_accepted_observer(move |cmd| registry.observe(cmd)));
+        }
+        chain.push(Box::new(policy));
     }
     // ★ P5: the channel link is FIRST — ahead of the object seat (which terminates the alloc and
     // free it must see) and of the ledger (which would record its controls unserviced).
@@ -412,7 +416,9 @@ pub fn served_chain(
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         Box::new(inert::InertPolicy::new()),
     ]);
-    chain.extend(objects);
+    if let Some(objects) = objects {
+        chain.push(Box::new(objects));
+    }
     chain.push(Box::new(unserviced::UnservicedLedger::new(driver, unserviced)));
     Box::new(kf_gsp::PolicyChain::new(chain))
 }

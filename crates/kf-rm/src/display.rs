@@ -23,10 +23,11 @@
 //!   / NVC372) that the m0a run found refused at `0x730101`;
 //! - **refuses by name** a claimed control whose params are FINN-serialized (a layout the model
 //!   does not decode) or absent — the refusal set is exactly what the model claims;
-//! - **observes** (never answers) `GSP_RM_ALLOC` of the display classes and `GSP_RM_FREE`: a channel
+//! - **observes accepted** (never answers) `GSP_RM_ALLOC` of the display classes and `GSP_RM_FREE`: a channel
 //!   alloc is recorded in the model's registry ([`DisplayModel::alloc`]), a free releases it — also
 //!   when the freed object is the channel's display object, its device or its client, whose frees
-//!   take the channel with them. The object seat below still records and answers the object.
+//!   take the channel with them. The object seat records and accepts the complete event BEFORE
+//!   notifying the registry; rejected events and held fragments cannot mutate it.
 //!
 //! A guest driver version whose layouts this tree has not derived keeps the M0 answers below,
 //! exactly as before step (1) (the link then observes nothing).
@@ -170,9 +171,6 @@ pub struct DisplayPolicy {
     pub inst_mem: Option<InstMem>,
     /// Every display control the M0 path answered, in order (bounded: the first 256).
     pub seen: Vec<u32>,
-    /// `(hClient, hObject)` → `hParent` of every display object observed (bounded:
-    /// [`MAX_DISPLAY_OBJECTS`]) — the edges an ancestor's free follows.
-    objects: BTreeMap<(u32, u32), u32>,
     /// ★ The controls this link claims — the model's [`DisplayModel::claimed`] (or the M0 set),
     /// fixed at construction, so asking needs no lock.
     claimed: BTreeSet<u32>,
@@ -215,7 +213,13 @@ impl DisplayPolicy {
             Some(m) => lock(m).claimed().into_iter().collect(),
             None => M0_CONTROLS.into_iter().collect(),
         };
-        DisplayPolicy { driver, row, model, inst_mem: None, seen: Vec::new(), objects: BTreeMap::new(), claimed }
+        DisplayPolicy { driver, row, model, inst_mem: None, seen: Vec::new(), claimed }
+    }
+
+    /// The separate lifecycle observer. It is seated inside the object policy, not in
+    /// `respond`, so only successfully applied, fully reassembled events reach it.
+    pub(crate) fn registry(&self) -> Option<DisplayRegistry> {
+        self.model.clone().map(|model| DisplayRegistry { driver: self.driver, model, objects: BTreeMap::new() })
     }
 
     /// The model this link delegates to (a handle on the same registry), if any.
@@ -344,17 +348,34 @@ impl DisplayPolicy {
         }
     }
 
-    /// ★ Step (1): a display object's `GSP_RM_ALLOC`, OBSERVED — the object seat below records it
-    /// and answers; this records a channel in the model's registry and remembers the object's
-    /// parent edge.
+}
+
+/// The display object's accepted lifecycle, sharing only the model with the controls link.
+pub(crate) struct DisplayRegistry {
+    driver: kf_abi::versions::DriverAbiTable,
+    model: SharedDisplayModel,
+    /// `(hClient, hObject)` → `hParent`, bounded by `MAX_DISPLAY_OBJECTS`.
+    objects: BTreeMap<(u32, u32), u32>,
+}
+
+impl DisplayRegistry {
+    pub(crate) fn observe(&mut self, cmd: &RpcCommand) {
+        match cmd.function {
+            RpcFunction::RmAlloc => self.on_alloc(cmd),
+            RpcFunction::Free => self.on_free(cmd),
+            _ => {}
+        }
+    }
+
+    /// Record an allocation the object seat has already accepted.
     fn on_alloc(&mut self, cmd: &RpcCommand) {
-        let Some(m) = self.model.clone() else { return };
+        let m = self.model.clone();
         let body = cmd.wire_body();
         let Ok(h) = self.driver.decode_rpc_alloc(body) else { return };
         if !is_display_class(h.class) {
             return;
         }
-        // ⊘ A class the boundary refuses is refused by the object seat next: nothing comes to exist.
+        // Defensive checks for the model's input, even though the object seat already accepted it.
         if !self.driver.capabilities().alloc_class(kf_arch::ids::ClassId(h.class)).is_permitted() {
             return;
         }
@@ -409,12 +430,12 @@ impl DisplayPolicy {
         }
     }
 
-    /// ★ Step (1): a `GSP_RM_FREE`, OBSERVED. The guest's RM sends one per object
+    /// ★ Step (1): an accepted `GSP_RM_FREE`. The guest's RM sends one per object
     /// (`ogkm-580: rs_client.c:785-843` → `alloc_free.c:959-990`), children before their parent
     /// (`rs_client.c:1085-1092`), so a channel's own free is the usual case; a free of its display object, device or client takes it too (a hostile guest may
     /// free a parent alone, and the object seat drops the subtree).
     fn on_free(&mut self, cmd: &RpcCommand) {
-        let Some(m) = self.model.clone() else { return };
+        let m = self.model.clone();
         let Ok(f) = self.driver.decode_free(&cmd.payload) else { return };
         let (client, object) = (f.client, f.handle);
         let gone: BTreeSet<u32> = if object == client {
@@ -448,16 +469,8 @@ impl CommandPolicy for DisplayPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         match cmd.function {
             RpcFunction::RmControl => self.on_control(cmd),
-            // ★ Observed, never answered: the channel link and the object seat below see them as
-            // before, and the object seat answers.
-            RpcFunction::RmAlloc => {
-                self.on_alloc(cmd);
-                None
-            }
-            RpcFunction::Free => {
-                self.on_free(cmd);
-                None
-            }
+            // Lifecycle observation is attached to the object seat's accepted event,
+            // not to this speculative position at the front of the command chain.
             _ => None,
         }
     }
@@ -647,6 +660,7 @@ mod tests {
     fn display_allocs_are_tracked_and_frees_release_them() {
         let shared: SharedDisplayModel = Arc::new(Mutex::new(model_for(&abi(), &kf_chip::display::AMPERE).expect("derived")));
         let mut p = DisplayPolicy::over(abi(), &kf_chip::display::AMPERE, shared.clone());
+        let mut registry = p.registry().unwrap();
         let (c, dev, disp) = (0xc1d0_0001, 0xcafe_0001, 0xcafe_0070);
         // the core channel's pushbuffer is stated first (internal subdevice), then the objects
         let s = "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS";
@@ -657,16 +671,16 @@ mod tests {
         q.set("limit", 0xfff);
         q.set("valid", 1);
         assert_eq!(p.respond(&control(kf_disp::model::CHANNEL_PUSHBUFFER, 0, &q.buf)).map(|r| r.rpc_result), Some(NV_OK));
-        assert!(p.respond(&alloc(c, dev, disp, 0xC670, &[])).is_none(), "observed, never answered");
+        registry.observe(&alloc(c, dev, disp, 0xC670, &[]));
         let mut core = chan_params(false, 0);
         core[12..16].copy_from_slice(&0x40u32.to_le_bytes()); // offset
-        assert!(p.respond(&alloc(c, disp, 0xcafe_0d00, 0xC67D, &core)).is_none());
+        registry.observe(&alloc(c, disp, 0xcafe_0d00, 0xC67D, &core));
         for w in 0..8 {
-            assert!(p.respond(&alloc(c, disp, 0xcafe_0e00 + w, 0xC67E, &chan_params(false, w))).is_none());
-            assert!(p.respond(&alloc(c, disp, 0xcafe_0b00 + w, 0xC67B, &chan_params(false, w))).is_none());
+            registry.observe(&alloc(c, disp, 0xcafe_0e00 + w, 0xC67E, &chan_params(false, w)));
+            registry.observe(&alloc(c, disp, 0xcafe_0b00 + w, 0xC67B, &chan_params(false, w)));
         }
         for h in 0..4 {
-            assert!(p.respond(&alloc(c, disp, 0xcafe_0a00 + h, 0xC67A, &chan_params(true, h))).is_none());
+            registry.observe(&alloc(c, disp, 0xcafe_0a00 + h, 0xC67A, &chan_params(true, h)));
         }
         {
             let g = shared.lock().unwrap();
@@ -677,18 +691,18 @@ mod tests {
             assert!(g.statements.is_empty(), "the link drains the statements into the log");
         }
         // the channel's own free
-        assert!(p.respond(&free(c, disp, 0xcafe_0e03)).is_none());
+        registry.observe(&free(c, disp, 0xcafe_0e03));
         assert!(!shared.lock().unwrap().channels.contains_key(&(ChannelKind::Window, 3)));
         // a free of the display object takes every channel under it
-        assert!(p.respond(&free(c, dev, disp)).is_none());
+        registry.observe(&free(c, dev, disp));
         assert!(shared.lock().unwrap().channels.is_empty());
         // and a client's free takes whatever it still held
-        assert!(p.respond(&alloc(c, dev, disp, 0xC670, &[])).is_none());
-        assert!(p.respond(&alloc(c, disp, 0xcafe_0d00, 0xC67D, &chan_params(false, 0))).is_none());
+        registry.observe(&alloc(c, dev, disp, 0xC670, &[]));
+        registry.observe(&alloc(c, disp, 0xcafe_0d00, 0xC67D, &chan_params(false, 0)));
         assert_eq!(shared.lock().unwrap().channels.len(), 1);
-        assert!(p.respond(&free(c, 0, c)).is_none());
+        registry.observe(&free(c, 0, c));
         assert!(shared.lock().unwrap().channels.is_empty());
-        assert!(p.objects.is_empty(), "no parent edge outlives its client");
+        assert!(registry.objects.is_empty(), "no parent edge outlives its client");
     }
 
     /// ★ Hostile guest: an alloc that is not a display class, a channel instance the display does
@@ -696,27 +710,28 @@ mod tests {
     /// another client's free of the same handle releases nothing; the remembered edges are bounded.
     #[test]
     fn hostile_allocs_and_frees_are_bounded() {
-        let mut p = policy();
+        let p = policy();
         let m = p.model().unwrap();
+        let mut registry = p.registry().unwrap();
         let (c, disp) = (0xc1d0_0001, 0xcafe_0070);
-        p.respond(&alloc(c, 0xcafe_0001, 0xcafe_0e09, 0xC67E, &chan_params(false, 9)));
-        p.respond(&alloc(c, disp, 0xcafe_0a04, 0xC67A, &chan_params(true, 4)));
-        p.respond(&alloc(c, disp, 0xcafe_0e00, 0xC67E, &chan_params(false, 0)[..8]));
-        p.respond(&alloc(c, disp, 0xcafe_0e01, 0xC57E, &chan_params(false, 1)));
+        registry.observe(&alloc(c, 0xcafe_0001, 0xcafe_0e09, 0xC67E, &chan_params(false, 9)));
+        registry.observe(&alloc(c, disp, 0xcafe_0a04, 0xC67A, &chan_params(true, 4)));
+        registry.observe(&alloc(c, disp, 0xcafe_0e00, 0xC67E, &chan_params(false, 0)[..8]));
+        registry.observe(&alloc(c, disp, 0xcafe_0e01, 0xC57E, &chan_params(false, 1)));
         let mut ser = alloc(c, disp, 0xcafe_0e02, 0xC67E, &chan_params(false, 2));
         ser.payload[24..28].copy_from_slice(&(1u32 << 1).to_le_bytes());
-        p.respond(&ser);
-        p.respond(&alloc(c, disp, 0xcafe_00c0, 0xC0B5, &[0; 8]));
+        registry.observe(&ser);
+        registry.observe(&alloc(c, disp, 0xcafe_00c0, 0xC0B5, &[0; 8]));
         assert!(m.lock().unwrap().channels.is_empty(), "{:?}", m.lock().unwrap().channels);
-        assert!(p.respond(&alloc(c, disp, 0xcafe_0e07, 0xC67E, &chan_params(false, 7))).is_none());
-        p.respond(&free(0xc1d0_0002, disp, 0xcafe_0e07));
-        p.respond(&free(0xc1d0_0002, 0, 0xc1d0_0002));
+        registry.observe(&alloc(c, disp, 0xcafe_0e07, 0xC67E, &chan_params(false, 7)));
+        registry.observe(&free(0xc1d0_0002, disp, 0xcafe_0e07));
+        registry.observe(&free(0xc1d0_0002, 0, 0xc1d0_0002));
         assert_eq!(m.lock().unwrap().channels.len(), 1, "another client's free names another object");
         for i in 0..(MAX_DISPLAY_OBJECTS as u32 + 10) {
-            p.respond(&alloc(c, disp, 0xd000_0000 + i, 0xC372, &[]));
+            registry.observe(&alloc(c, disp, 0xd000_0000 + i, 0xC372, &[]));
         }
-        assert_eq!(p.objects.len(), MAX_DISPLAY_OBJECTS);
-        p.respond(&free(c, 0xcafe_0001, disp));
+        assert_eq!(registry.objects.len(), MAX_DISPLAY_OBJECTS);
+        registry.observe(&free(c, 0xcafe_0001, disp));
         assert!(m.lock().unwrap().channels.is_empty());
     }
 
@@ -727,7 +742,7 @@ mod tests {
         let mut p = m0_policy();
         assert!(p.model().is_none());
         assert!(p.respond(&alloc(0xc1d0_0001, 0xcafe_0070, 0xcafe_0d00, 0xC67D, &chan_params(false, 0))).is_none());
-        assert!(p.objects.is_empty());
+        assert!(p.registry().is_none());
         assert!(p.respond(&control(0x0073_0101, 0, &[0; 16])).is_none(), "not claimed without the model");
     }
 
@@ -756,10 +771,11 @@ mod tests {
         let first = ask(&mut p);
         assert!(first.iter().all(|a| matches!(a, Some(Ok(_)))), "claimed and answered OK: {first:?}");
         let (c, dev, disp) = (0xc1d0_0001, 0xcafe_0001, 0xcafe_0070);
-        assert!(p.respond(&alloc(c, dev, disp, 0xC670, &[])).is_none());
-        assert!(p.respond(&alloc(c, disp, 0xcafe_0d00, 0xC67D, &chan_params(false, 0))).is_none());
+        let mut registry = p.registry().unwrap();
+        registry.observe(&alloc(c, dev, disp, 0xC670, &[]));
+        registry.observe(&alloc(c, disp, 0xcafe_0d00, 0xC67D, &chan_params(false, 0)));
         assert_eq!(ask(&mut p), first, "unchanged while a channel is live");
-        assert!(p.respond(&free(c, dev, disp)).is_none());
+        registry.observe(&free(c, dev, disp));
         assert_eq!(ask(&mut p), first, "unchanged after the free");
     }
 }

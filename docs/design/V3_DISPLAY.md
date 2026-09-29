@@ -1,5 +1,16 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS: INTEGRATION CANDIDATE, 2026-09-29.** The step-(1) lifecycle gap (a) below is fixed:
+> the display control link no longer observes speculative allocs/frees. Its separate registry
+> is notified inside the object seat only after `RmObjects::apply` succeeds. `ObjectLinks` now
+> requires the composable `ObjectPolicy` type, so this acceptance boundary is structural.
+> Whole-chain regression tests cover undeclared clients, conflicting allocations that would
+> replace a live core channel, serialized/short requests, an absent object seat, an injected
+> free refusal, successful parent/client frees and handle recycling. All `kf-rm` and `kf-disp`
+> tests pass locally. RM alloc has no fragmented/large-RPC path: short allocs remain refused,
+> not held. No transport claim set changed. Full combined hardware bar is still pending.
+> Display remains default-off; no scanout/desktop claim is added. Gaps (b)/(c) below remain.
+
 > ### ★ 2026-09-27 (later) — next step (1) DONE in code, GPU-free (`b11f96c6`, branch `local/display-step1` on `4c48ca0c`); NOT on the bench
 > **What step (1) now does** (`crates/kf-rm/src/display.rs`). Still only with `display=on`; with the
 > default (off) the display link is never built, so a default-off device answers exactly as before
@@ -37,13 +48,14 @@
 >
 > **What remains of step (1)** — nothing GPU-free. On the bench (the M1 grade, §5): with `display=on`,
 > NVKMS gets past `0x730101` and the unserviced ledger holds no NV0073 / NV5070 / NVC370 / NVC372 id.
-> Known gaps, each small and bounded: (a) ⊘ *corrected 2026-09-28 (review): the effect is wider than
+> Known gaps, each small and bounded: (a) ⊘ *FIXED in the 2026-09-29 integration candidate above;
+> historical diagnosis, corrected 2026-09-28 (review): the effect is wider than
 > first written.* An alloc is observed before the object seat answers it, and a free likewise. An alloc
 > the seat then refuses **replaces** a live channel's registry entry at the same `(kind, instance)` (new
 > handle, GET/PUT and pushbuffer), after which the real channel's own free no longer matches it
 > (`DisplayModel::free` keys on `(client, handle)`); a free the seat refuses still releases the entry.
 > Only `display=on`, only a crafted guest, the harm stays in that guest's own display, and nothing reads
-> the registry yet. The fix belongs with step (3): record on the seat's answer, not before it. (b) a
+> the registry yet. The fix records on accepted object application, not before it. (b) a
 > claimed control is answered whatever object it names (`hObject`'s class is not checked);
 > (c) `kf-qemu` does not hold the model yet — step (3) must take the `SharedDisplayModel`
 > (`DisplayPolicy::over` / `DisplayPolicy::model`) across `ReselectAtFn1` rebuilds of the chain, and move

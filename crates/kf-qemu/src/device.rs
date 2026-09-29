@@ -464,7 +464,7 @@ impl Device {
                     chain_logs.clone(),
                     census.clone(),
                     kf_rm::ObjectLinks {
-                        objects: Some(Box::new(objects)),
+                        objects: Some(objects),
                         // ★ P4: fn 70 and the page-directory statements go to the VA thread's inbox;
                         // their replies are held until it has settled them.
                         memory: Some(kf_rm::MemoryLink {

@@ -10,11 +10,18 @@ this file.
 
 ## 0. Current resumption — start here
 
+- **2026-09-29 integration candidate:** `codex/recovered-integration-2026-09-29` combines the
+  published allowlist baseline with Claude `826ef957` (merge `4e6e1fbf`) and recovered Turing
+  code `576f5bb0` (merge `cd80712a`). Display allocation/free observation is moved to successful
+  object application; rejected operations cannot replace/release live display channels.
+  All `kf-rm` and `kf-disp` tests pass locally, including four new whole-chain regressions.
+  **Not promoted:** the combined exact-revision hardware bar is next on retained RTX 3060
+  `53004208`. Historical TU116/Claude test results are not a new-candidate certification.
 - **2026-09-29 checkpoint:** terminal network access is restored; GitHub, Vast and both boxes
   are reachable. The final run at **`61c49f14` passed: 1653/0 tests, gates 9/9, KF3_RC=0,
   fresh FG_RC=0, thin 30/30**, terminal EXIT on 2026-09-28 at 18:44:21 UTC. Evidence is now
-  recovered locally in `traces/capability_535_545_audit_20260928/final-run/`. Changes after that
-  tested revision are documentation/evidence only. **Promoted to master/v3 as `7c5b2a13`**; the
+  recovered locally in `traces/capability_535_545_audit_20260928/final-run/`. Changes through the
+  published `9c3d87fd` are documentation/evidence only. **Promoted to master/v3 as `7c5b2a13`**; the
   earlier sandbox-blocked checkpoint is historical, not a failed test result.
 
 - **2026-09-28 owner decisions:** 535/545 capability extension approved, subject to the independent
@@ -24,7 +31,8 @@ this file.
 - **Recovery is preserved, not implicitly merged:** source/evidence at
   [`recovery/resume-2026-09-28`](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md),
   recovered Turing code at `recovery/vast-tuwork-2026-09-28` (`2825c42f`, code tree `576f5bb0`).
-  The Claude head `826ef957` has 30 commits beyond the previous baseline and needs its own combined merge bar.
+  The Claude head `826ef957` has 30 commits beyond the previous baseline, now integrated only in
+  the candidate above and still needing its own combined merge bar.
   Do not use those historical results to certify a new candidate. The fresh allowlist candidate
   starts from the published baseline, so it does not silently promote the other pending changes.
 - **Physical baseline access:** read-only SSH to `172.22.1.20` reports `Network is unreachable`

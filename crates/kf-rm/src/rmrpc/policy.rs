@@ -273,6 +273,9 @@ struct Bridge {
     inert: u64,
     held: u64,
     page_dirs: u64,
+    /// Called only after a complete, translated object event has been accepted. A held
+    /// fragment's NV_OK is a transport acknowledgement, not an accepted allocation.
+    accepted: Option<Box<dyn FnMut(&RpcCommand) + Send>>,
 }
 
 impl Bridge {
@@ -286,6 +289,7 @@ impl Bridge {
             inert: 0,
             held: 0,
             page_dirs: 0,
+            accepted: None,
         }
     }
 
@@ -294,33 +298,31 @@ impl Bridge {
         objects: &mut dyn RmObjects,
         cmd: &RpcCommand,
     ) -> Result<Translation, BridgeRefusal> {
-        let mut alloc_params: Option<Vec<u8>> = None;
         let abi = &self.abi;
         let guest_os = self.guest_os;
-        let translated = self.reasm.accept(abi, cmd).and_then(|r| {
+        let outcome = self.reasm.accept(abi, cmd).and_then(|r| {
             let whole: &RpcCommand = match &r {
                 Reassembled::Whole => cmd,
                 Reassembled::Held => return Ok(Translation::Held),
                 Reassembled::Complete(full) => full,
             };
             let t = translate(abi, guest_os, whole)?;
-            if matches!(t, Translation::Event(RmEvent::Alloc { .. })) {
-                alloc_params = super::alloc_params_window(abi, whole.wire_body()).map(<[u8]>::to_vec);
+            match t {
+                Translation::Event(ev) => {
+                    let params = if matches!(ev, RmEvent::Alloc { .. }) {
+                        super::alloc_params_window(abi, whole.wire_body()).unwrap_or(&[])
+                    } else {
+                        &[]
+                    };
+                    objects.apply(ev, params).map_err(BridgeRefusal::Objects)?;
+                    if let Some(accepted) = &mut self.accepted {
+                        accepted(whole);
+                    }
+                }
+                Translation::PageDir(st) => objects.page_dir(st).map_err(BridgeRefusal::Objects)?,
+                Translation::Inert | Translation::Held => {}
             }
             Ok(t)
-        });
-        let outcome = translated.and_then(|t| match t {
-            Translation::Event(ev) => {
-                objects
-                    .apply(ev, alloc_params.as_deref().unwrap_or(&[]))
-                    .map_err(BridgeRefusal::Objects)?;
-                Ok(t)
-            }
-            Translation::PageDir(st) => {
-                objects.page_dir(st).map_err(BridgeRefusal::Objects)?;
-                Ok(t)
-            }
-            Translation::Inert | Translation::Held => Ok(t),
         });
         match &outcome {
             Ok(Translation::Event(_)) => self.applied = self.applied.saturating_add(1),
@@ -500,6 +502,14 @@ pub const OBJECT_VERBS: &[kf_gsp::RpcFunction] = &[
 ];
 
 impl ObjectPolicy {
+    /// Attach the display registry at the acceptance boundary, after reassembly and
+    /// `RmObjects::apply`, never at a speculative/held RPC reply. This observer cannot
+    /// answer or change an object verdict.
+    pub(crate) fn with_accepted_observer(mut self, observer: impl FnMut(&RpcCommand) + Send + 'static) -> Self {
+        self.bridge.accepted = Some(Box::new(observer));
+        self
+    }
+
     /// Build the link over `objects`.
     #[must_use]
     pub fn over(abi: &DriverAbiTable, guest_os: GuestOs, objects: Box<dyn RmObjects>, limits: ReasmLimits) -> ObjectPolicy {
