@@ -37,7 +37,7 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
   - **Queued:** the UVM guest fault plane (`design/V3_UVM_DEMAND_PAGING.md` §5, "What the guest must see"); CDP child launch;
     display leftovers (cursor, scaled windows, 16-bit/YUV, the §7 display apps); the rest of the driver
     matrix (570 UVM first-channel wall; hosts 535/590/595/610); re-running the app and graphics matrices
-    at this master; the `cuda/walk` tidy-up (§4.6); Turing on hardware.
+    at this master; Turing on hardware.
   - **Boxes:** only `53004208` (RTX 3060, ssh alias `v3060`), retained for verification. Nothing on it
     is the only copy of anything.
 
@@ -294,8 +294,12 @@ must pass to another session.
 4. **Host GPU wedge after QEMU exit** seen once on an RTX 3090 (GFW boot "progress 0xff", recovered by
    FLR). Watch for recurrence — if the VMM can leave the host GPU unusable, that is a host-side defect.
 5. **Turing on hardware** (owner: later, if time).
-6. **`cuda/walk` tidy-up:** Rust decodes `KfMapRun` by hand-written byte offsets in places (use one
-   decoder per `#[repr(C)]` struct via `offset_of!`); name the per-format bit ranges after `dev_mmu.h`.
+6. ~~**`cuda/walk` tidy-up**~~ **DONE 2026-09-28, on master:** one `offset_of!` decoder per walk-report
+   struct, `read_struct` gone (`17009a4f`); run-flag bit ranges named after `kf_walk.h`, no magic
+   shifts at the readers (`30d0ee77`); the VER2/VER3 descriptors are checked field by field against
+   each die group's `dev_mmu.h` (`kf-mem/tests/walk_format_vs_ogkm.rs`). What remains is VER3
+   (Hopper/Blackwell) semantics, not tidiness: the PDE PCF sparse encodings and the unmapped-big-PTE
+   case (`design/V3_HW_BOUNDARY_INVENTORY.md` rows for VER3; item 3 above).
 7. Re-run the full CUDA app matrix at the current master (the 58/65 predates several fixes).
 8. **Display** (started: M0 on `v3-display`, in the v3-mc21 candidate — §0, §2), then a desktop, then
    **Windows** (roadmap).
