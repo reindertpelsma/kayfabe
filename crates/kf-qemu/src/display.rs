@@ -985,7 +985,10 @@ impl Device {
             refusals_logged: 0,
         };
         let mut next_vblank: [Option<(Instant, Duration)>; MAX_HEADS] = [None; MAX_HEADS];
-        let mut scan = ScanState::default();
+        let mut scan = ScanState {
+            trace,
+            ..ScanState::default()
+        };
         let mut queue: VecDeque<Queued> = VecDeque::new();
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
@@ -1468,6 +1471,26 @@ struct ScanState {
     last: Option<Instant>,
     serial: u64,
     refusals_logged: u32,
+    /// `KF3_DISPLAY_TRACE`: each copy's source, and a digest of what it copied.
+    trace: bool,
+}
+
+/// FNV-1a over a frame's visible pixels as R,G,B bytes — the digest `kfdisp_probe` prints for its
+/// patterns (`KFDISP_PATTERN_A_FNV`), so a trace line says WHICH surface the copy read.
+fn fnv_rgb_xrgb8888(bytes: &[u8], stride: usize, width: usize, height: usize) -> u64 {
+    let mut h: u64 = 1_469_598_103_934_665_603;
+    for y in 0..height {
+        let Some(row) = bytes.get(y * stride..y * stride + width * 4) else {
+            return 0;
+        };
+        for px in row.chunks_exact(4) {
+            for b in [px[2], px[1], px[0]] {
+                h ^= u64::from(b);
+                h = h.wrapping_mul(1_099_511_628_211);
+            }
+        }
+    }
+    h
 }
 
 impl ScanState {
@@ -1494,6 +1517,19 @@ impl ScanState {
         };
         self.done = n;
         if let Some(f) = &self.frames[slot] {
+            if self.trace && (n <= 8 || n % 50 == 0) {
+                let (w, h, st) = (
+                    plan.width as usize,
+                    plan.height as usize,
+                    plan.row_bytes as usize,
+                );
+                let fnv = if plan.format == kf_disp::scanout::PixelFormat::Xrgb8888 {
+                    fnv_rgb_xrgb8888(&f.read(0, st * h), st, w, h)
+                } else {
+                    0
+                };
+                eprintln!("kf3: display: TRACE scanout copy {n} done: {w}x{h} fnv={fnv:016x}");
+            }
             self.serial += 1;
             dp.console.publish(
                 slot,
@@ -1560,6 +1596,21 @@ impl ScanState {
                 return;
             }
         };
+        if self.trace && (n <= 8 || n % 50 == 0) {
+            eprintln!(
+                "kf3: display: TRACE scanout copy {n}: window {} head {} iso {:#x} +{:#x} -> {:?} base {:#x} limit {:#x} -> src {:#x} pitch {} rows {}",
+                so.window,
+                so.head,
+                so.handle,
+                so.offset,
+                dma.target,
+                dma.base,
+                dma.limit,
+                plan.src,
+                plan.src_pitch,
+                plan.rows
+            );
+        }
         let Some(gpu) = io.gpu.as_ref() else {
             self.done = n;
             return;

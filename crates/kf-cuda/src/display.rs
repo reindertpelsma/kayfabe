@@ -52,6 +52,16 @@ impl Frame {
     pub fn is_empty(&self) -> bool {
         self.buf.len() == 0
     }
+
+    /// A copy of `n` bytes at `off` — for a diagnostic digest of a frame whose copy COMPLETED
+    /// (the console reads the same bytes to show them). ⊘ Never while a copy targets the frame.
+    ///
+    /// # Panics
+    /// If the range leaves the frame.
+    #[must_use]
+    pub fn read(&self, off: usize, n: usize) -> Vec<u8> {
+        self.buf.read(off, n)
+    }
 }
 
 impl std::fmt::Debug for Frame {
