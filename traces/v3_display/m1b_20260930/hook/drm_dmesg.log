@@ -1,0 +1,63 @@
+[   29.439943] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[   29.446075] [drm] [nvidia-drm] [GPU ID 0x00000002] Loading driver
+[   30.317613] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   30.317698] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   30.335653] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   30.339774] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   30.341035] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   30.341042] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   30.620000] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   30.620837] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   30.623819] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   30.623823] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   30.623824] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   30.623826] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   30.628835] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   30.628840] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   30.641783] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00015; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   30.641788] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   30.641792] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   30.644400] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   30.648591] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00016; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   30.671804] nvidia-modeset: WARNING: GPU:0: Failed to register display hotplug handler: 0x56
+
+[   30.673151] nvidia-modeset: WARNING: GPU:0: Failed to register DisplayPort interrupt handler: 0x56
+
+[   30.674634] nvidia-modeset: WARNING: GPU:0: Failed to enable HDMI FRL retrain notifications (subdevice: 0) (error: 0x56)
+[   30.997407] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:02.0 on minor 0
+[   30.997647] nvidia 0000:00:02.0: vgaarb: deactivate vga console
+[   30.997961] Console: switching to colour dummy device 80x25
+[   31.032086] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[   31.051682] ------------[ cut here ]------------
+[   31.051685] WARNING: CPU: 2 PID: 1629 at /tmp/makeself.V1JkENCw/NVIDIA-Linux-x86_64-580.159.04/kernel-open/nvidia-drm/nvidia-drm-crtc.h:335 __nv_drm_handle_flip_event+0x18e/0x1a0 [nvidia_drm]
+[   31.051731] Modules linked in: nvidia_drm(OE+) nvidia_modeset(OE) nvidia_uvm(OE) nvidia(OE) binfmt_misc kvm_intel nls_iso8859_1 ppdev kvm video irqbypass parport_pc wmi ecc parport input_leds joydev serio_raw sch_fq_codel dm_multipath msr efi_pstore nfnetlink dmi_sysfs ip_tables x_tables autofs4 btrfs blake2b_generic raid10 raid456 async_raid6_recov async_memcpy async_pq async_xor async_tx xor raid6_pq libcrc32c raid1 raid0 crct10dif_pclmul crc32_pclmul polyval_clmulni polyval_generic ghash_clmulni_intel sha256_ssse3 ahci sha1_ssse3 psmouse vga16fb libahci vgastate aesni_intel crypto_simd cryptd [last unloaded: nvidia(OE)]
+[   31.051794] CPU: 2 PID: 1629 Comm: nvidia-modeset/ Tainted: G           OE      6.8.0-142-generic #142-Ubuntu
+[   31.051821] Hardware name: QEMU Standard PC (Q35 + ICH9, 2009), BIOS rel-1.17.0-0-gb52ca86e094d-prebuilt.qemu.org 04/01/2014
+[   31.051823] RIP: 0010:__nv_drm_handle_flip_event+0x18e/0x1a0 [nvidia_drm]
+[   31.051833] Code: 4d 89 77 10 4d 89 ef e8 30 5c 00 00 49 8b 45 10 49 8d 4d 10 48 8d 50 f0 48 39 cb 75 b0 e9 f9 fe ff ff 4c 89 ef e8 d2 dc 18 e8 <0f> 0b e9 e2 fe ff ff 66 66 2e 0f 1f 84 00 00 00 00 00 90 90 90 90
+[   31.051835] RSP: 0018:ffffcb2440f9bdb0 EFLAGS: 00010246
+[   31.051863] RAX: 0000000000000000 RBX: ffff8afe4231b808 RCX: 0000000000000000
+[   31.051864] RDX: 0000000000000000 RSI: 0000000000000000 RDI: 0000000000000000
+[   31.051866] RBP: ffffcb2440f9bdf0 R08: 0000000000000000 R09: 0000000000000000
+[   31.051867] R10: 0000000000000000 R11: 0000000000000000 R12: ffff8afe4231b800
+[   31.051868] R13: ffff8afe4231b818 R14: ffff8afe42bf0000 R15: ffff8afe48866000
+[   31.051869] FS:  0000000000000000(0000) GS:ffff8affb7b00000(0000) knlGS:0000000000000000
+[   31.051871] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[   31.051872] CR2: 00007e16a91c54c0 CR3: 000000010775c001 CR4: 0000000000370ef0
+[   31.051978] Call Trace:
+[   31.052031]  <TASK>
+[   31.052037]  nv_drm_handle_flip_occurred+0x4f/0x80 [nvidia_drm]
+[   31.052046]  nv_drm_event_callback+0xb3/0xd0 [nvidia_drm]
+[   31.052052]  nvKmsKapiHandleEventQueueChange+0xa7/0xe0 [nvidia_modeset]
+[   31.052109]  ? nvkms_kapi_event_kthread_q_callback+0xe/0x20 [nvidia_modeset]
+[   31.052134]  ? _main_loop+0x82/0x140 [nvidia_modeset]
+[   31.052162]  ? __pfx__main_loop+0x10/0x10 [nvidia_modeset]
+[   31.052190]  ? kthread+0xf2/0x120
+[   31.052224]  ? __pfx_kthread+0x10/0x10
+[   31.052255]  ? ret_from_fork+0x47/0x70
+[   31.052283]  ? __pfx_kthread+0x10/0x10
+[   31.052285]  ? ret_from_fork_asm+0x1b/0x30
+[   31.052313]  </TASK>
+[   31.052314] ---[ end trace 0000000000000000 ]---
+[   31.116365] Console: switching to colour frame buffer device 240x67
+[   31.133177] nvidia 0000:00:02.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
