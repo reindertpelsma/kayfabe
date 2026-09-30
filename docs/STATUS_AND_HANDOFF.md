@@ -33,8 +33,8 @@ fix this file. Entries below the first are dated history.
     3. **X11 desktops:** `GF100_DISP_SW` option A or B (recommendation B, §0 below).
   - **Next, in order (suggested):** (1) UVM after the owner's answers: diagnose the 30 s stall, run
     `conjugateGradientUM`, the Bug-1624521 negative control, the merge bar EFS off/on, merge. (2) A per-token
-    LLM time breakdown on nested boxes: doorbells explain ~22 of the ~58 ms/token gap; the rest is
-    unattributed (offered to the owner, not started). (2b) The owner's **doorbell pump** idea
+    LLM time breakdown on nested boxes: doorbells explain ~22 of the ~58 ms/token gap of PyTorch eager; the
+    rest is unattributed (offered to the owner, not started). ★ llama.cpp is already 0.92× there (§1 LLM row). (2b) The owner's **doorbell pump** idea
     (`design/V3_DOORBELL_IOEVENTFD.md` §8b, design only): stage 1 ≈ the spin's +16–18 % without an
     always-busy core; stage 2 makes doorbells exitless while pumping, with a stock guest. (3) R4's remainder. (4) §4 items 10–12. (5) Driver
     matrix continuation. (6) Windows last.
@@ -246,7 +246,7 @@ master's code passed the same bar on a TU116, plus the CUDA ladder (`traces/v3_t
 | Memory plane | pooled walker capacity (no per-space 16k-run wall); batched host maps; big-PTE slot ownership; guest PTE read-only/volatile carried, PRIV leaves withheld from user twins; **every host map snoops the CPU cache** (`NVOS46_FLAGS_CACHE_SNOOP_ENABLE` — without it a CE read stale DRAM on bare-metal hosts; nested VM boxes hid it) | `design/V3_BUILD.md`, `V3_BATCHED_MAP.md`, `traces/v3_adasys/FINDING.txt` |
 | Refusals | audited host-vs-guest: forged completions removed (MC_SERVICE_INTERRUPTS, sysmembar flush); the rest classified | `design/V3_REFUSAL_AUDIT.md` |
 | Driver matrix | ★ (2026-09-27, the `v3-drivers` code on master since `5018bb57`) CUDA ladder 4/4 for guests 580.159.04 / 580.105.08 / 590.48.01 / 595.84 / 575.57.08 / 610.57.04; hosts 575.57.08 / 580.95.05 / 580.65.06 gates 9/9, thin 30/30, ladder 4/4, mixed pairs 4/4 — measured on `v3-drivers` heads before the merge (grid §6.0, derived from `traces/driver_matrix/walk/`); 535/545 capability rows approved, independently audited and merged (§3.1); no 535/545 end-to-end application claim. Earlier: 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
-| LLM | decode ~0.29–0.31× host on nested vast boxes; the gap is mostly doorbell VM exits | `design/V3_BUILD.md`, `V3_GUEST_DOORBELL_MODULE.md` |
+| LLM | ★ (2026-09-30, found in the R3 evidence) **llama.cpp: 0.92× host decode, 0.96× prefill** (Qwen2.5-1.5B Q4_K_M, `llama-bench`, nested RTX 3060, trapped doorbells, kf3 `4c48ca0c`; ~4 600 doorbells for ~200 tokens + prefill). **PyTorch eager, Qwen2-0.5B: 0.29×** (0.32× fast path) — the worst case, ~1 084 doorbells per token. Per-token doorbell cost dominates only launch-per-op workloads | `design/V3_BUILD.md`, `V3_GUEST_DOORBELL_MODULE.md` |
 | Hardware boundary | every hardware constant pinned to ogkm headers by 43 GPU-free tests; generator `tools/derive_hwref.sh` | `design/V3_HW_BOUNDARY_INVENTORY.md` |
 | Pre-v3 tree | archived under `archive/`; 16 `kayfabe-*` crates kept only because the 30-arm grader uses them | `archive/README.md` |
 

@@ -70,17 +70,20 @@ Not working or not done:
   process, which maps the page and replays it with correct data while ordinary host CUDA keeps
   working ([b3](docs/design/V3_UVM_B3_IMPLEMENTATION.md), tools only). Injecting the fault into the
   stock guest driver is in progress on branch `v3-uvm-guest`.
-- **Performance.** LLM decode runs at **0.29×** the same box's host tok/s (**0.32×** with the opt-in
-  doorbell fast path), with guest text identical to host text. The model rings about 1,084 doorbells
-  per token; on these nested boxes each one costs the vCPU about 20 µs (15.7 µs with the fast path),
-  about 22 ms of the ~58 ms per-token gap. The rest of the gap is not broken down yet. Non-nested
-  hardware has not been measured for kayfabe. The C prototype of **this same design** — nvkvm Mode 2:
-  the stock guest driver on an emulated GPU with every doorbell trapped, *not* the paravirtual nvkvm-pv —
-  reached **1.05× host** llama.cpp decode on a bare-metal RTX 3050, so trapped doorbells did not prevent
-  parity there (its copies ran on the CPU, so that result speaks to the doorbell cost, not the copy
-  path). An optional
-  guest doorbell module that removes the exit is designed, not built
-  ([fast path](docs/design/V3_DOORBELL_IOEVENTFD.md), [module](docs/design/V3_GUEST_DOORBELL_MODULE.md)).
+- **Performance depends on how often an app rings the doorbell.** llama.cpp (Qwen2.5-1.5B Q4_K_M,
+  `llama-bench`) runs at **0.92× host decode and 0.96× host prefill** in the guest, on a nested box with
+  every doorbell trapped: it submits a whole token's work at once, about 4,600 doorbells for ~200 tokens
+  plus prefill (kf3 `4c48ca0c`, RTX 3060; `traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/`,
+  `m20/llama_bench.*`). The worst case is PyTorch eager on a 0.5B model, which launches every op
+  separately: about 1,084 doorbells per token and **0.29×** host decode (**0.32×** with the opt-in doorbell
+  fast path). On these nested boxes each doorbell costs the vCPU about 20 µs (15.7 µs with the fast path),
+  about 22 ms of that model's ~58 ms per-token gap; the rest is not broken down yet. Non-nested hardware
+  has not been measured for kayfabe. The C prototype of **this same design** — nvkvm Mode 2: the stock
+  guest driver on an emulated GPU with every doorbell trapped, *not* the paravirtual nvkvm-pv — reached
+  **1.05× host** llama.cpp decode on a bare-metal RTX 3050 (its copies ran on the CPU, so that result
+  speaks to the doorbell cost, not the copy path). An optional guest doorbell module that removes the
+  exit is designed, not built ([fast path](docs/design/V3_DOORBELL_IOEVENTFD.md),
+  [module](docs/design/V3_GUEST_DOORBELL_MODULE.md)).
 - **X11 desktops are partial:** they need a display class (`GF100_DISP_SW`) whose host policy awaits
   an owner decision.
 - **Windows guests** are the last roadmap step. Only research exists.
@@ -102,7 +105,7 @@ matrix (535 → 610, every family) → Windows.
 | CUDA / real apps | Yes | matmul, llama.cpp | `cup8` bit-exact; 61/65 apps |
 | Graphics | Yes, incl. display | No | Headless Vulkan/EGL/GLX, bit-identical; display opt-in (Mint Cinnamon on Wayland) |
 | Video engines | NVENC | No | NVENC/NVDEC, byte-identical |
-| LLM decode vs host | 0.99–1.00× | ~parity, but the CPU copied the data | 0.29× nested (0.32× with the doorbell fast path); bare metal not measured |
+| LLM decode vs host | 0.99–1.00× | ~parity, but the CPU copied the data | llama.cpp 0.92× (nested, trapped doorbells); PyTorch eager 0.5B 0.29× (0.32× with the fast path); bare metal not measured |
 | Multi-tenant isolation | Not a security boundary | None | The design goal; two-VM sharing not yet measured |
 
 The nvkvm-pv and archive columns are carried from earlier measurements and were not re-measured
