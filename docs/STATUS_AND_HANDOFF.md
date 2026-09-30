@@ -38,8 +38,13 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
     display leftovers (cursor, scaled windows, 16-bit/YUV, the §7 display apps); the rest of the driver
     matrix (570 UVM first-channel wall; hosts 535/590/595/610); re-running the app and graphics matrices
     at this master; Turing on hardware.
-  - **Boxes:** only `53004208` (RTX 3060, ssh alias `v3060`), retained for verification. Nothing on it
-    is the only copy of anything.
+  - **Turing at this master (2026-09-30, `traces/v3_turing_master/`):** GTX 1660 SUPER (TU116), merge
+    bar at `1915bd71` (code `3f67ed95`): tests 1742/0, gates 9/9, bare 30/30, thin 30/30; CUDA ladder
+    host 4/4 and guest 4/4.
+  - **Boxes (2026-09-30):** `53004208` (RTX 3060, alias `v3060`, retained; the CDP agent's box);
+    `53562843` (GTX 1660 SUPER, alias `vtu`, the `v3-ramobj` bar); plus one box per agent (UVM guest
+    plane, app/graphics matrix R4), each registered with the reaper. Nothing on any box is the only
+    copy of anything.
 
 - **2026-09-29 CI repair in progress:** `codex/ci-repair-2026-09-29` contains the benchmark
   process-identity fix and v3/retained-grader CI repairs. See `CI_V3.md` for test and lint scope.
@@ -172,12 +177,12 @@ bare-metal suite **30/30**, fresh fast guest, thin suite **30/30** on the rerun 
 display lane pixel-exact; RTX 3060 (GA106), host 580.159.04; `traces/v3_cifix/`. Only evidence
 follows that code on master. New code candidates require their own bar. The bar before it was the
 recovered integration **`d883d0eb`** (1683 / 0, 9/9, 30/30; `traces/recovered_integration_20260929/`),
-which included the recovered Turing code but was tested on GA106 only — no Turing hardware run
-certifies the current master.
+which included the recovered Turing code but was tested on GA106 only. ★ Turing since: the current
+master's code passed the same bar on a TU116, plus the CUDA ladder (`traces/v3_turing_master/`).
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
-| Families | GA10x (GA106/GA104/GA102) 30/30; Ada AD106 30/30; Blackwell GB203 (RTX 5080) 30/30 + CUDA ladder; floor-swept RTX 3060 Ti 30/30. TU116 recovered box head `d4ff6be8` (same source tree as `576f5bb0`) passed gates 9/9, thin 30/30 and guest CUDA ladder 4/4; not rerun on Turing at the new integration head. GA100, Hopper, GB10x remain source-derived only; GA100/GB10B refused by name | [Turing recovery evidence](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md), `design/V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md` |
+| Families | GA10x (GA106/GA104/GA102) 30/30; Ada AD106 30/30; Blackwell GB203 (RTX 5080) 30/30 + CUDA ladder; floor-swept RTX 3060 Ti 30/30. TU116 (GTX 1660 SUPER) at master `1915bd71` (code `3f67ed95`, 2026-09-30): tests 1742/0, gates 9/9, bare 30/30, thin 30/30, CUDA ladder host 4/4 + guest 4/4 (`traces/v3_turing_master/`). GA100, Hopper, GB10x remain source-derived only; GA100/GB10B refused by name | [Turing recovery evidence](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md), `design/V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md` |
 | Multi-GPU | distinct host GPUs in one VM work (8×3060 box); per-card BAR1 budget refused at realize | `design/V3_MULTI_GPU_AUDIT.md` |
 | CUDA apps | 60/65 at `4c48ca0c`, 6/6 stream probes, 100/100 processes; four UVM-demand-paging failures plus CDP child-launch failure. Not rerun at the latest integration revision | `design/V3_APP_MATRIX.md` §R3 |
 | Graphics / video | nvkvm-pv's headless graphics set + 15 more items: **38/38** on an RTX 3070 (31 byte-identical to bare metal; OFA optical flow advertised); NVENC/NVDEC byte-exact. Per-call GPU waits are slow on nested boxes (`glFinish` 62 vs 9 µs) | `design/V3_GFX_TESTSET.md` (display-phase list §7), `V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
