@@ -17,6 +17,11 @@ OUT=${DISPLAY_RES_DIR:-$BENCH/display/$TAG}; mkdir -p "$OUT"
 MON=$BENCH/run_${TAG}.mon
 say(){ echo "DISPLAY_$*"; }
 gq(){ timeout "${2:-60}" "$G" "$1" 2>&1 | tr -d '\r'; }
+# ⊘ `[measured m2a/m2b]` gq's `tr` BLOCK-buffers into a file: show.log stayed empty until the probe
+# EXITED, so "wait for SHOWING=A, then screendump" grabbed the frame AFTER the probe restored fbcon —
+# while the trace proved every copy of A and B pixel-exact. A line-buffered twin for the one step
+# whose output is read while it runs.
+gql(){ timeout "${2:-60}" "$G" "$1" 2>&1 | stdbuf -oL tr -d '\r'; }
 
 # the probe ships at run time (a harness fix never needs a re-provisioned image)
 tar -C "$HERE" -cf - kfdisp_probe.c | $G 'mkdir -p ~/display && tar -xf - -C ~/display' \
@@ -49,7 +54,7 @@ grep -q '^KFDISP_SUMMARY connected=[1-9]' "$OUT/list.log" && say "CONNECTED=yes 
 
 # 3. set a mode from a known pattern, flip, and grade the host's screendump
 HOLD=${DISPLAY_HOLD_S:-20}; FLIPS=${DISPLAY_FLIPS:-120}
-( gq "sudo ~/display/kfdisp_probe show $card $HOLD $FLIPS" $((HOLD + 60)) > "$OUT/show.log" ) &
+( gql "sudo ~/display/kfdisp_probe show $card $HOLD $FLIPS" $((HOLD + 60)) > "$OUT/show.log" ) &
 SP=$!
 # wait until the guest says it is showing A (or the show fails), then capture
 for i in $(seq 1 60); do grep -q '^KFDISP_SHOWING=A\|^KFDISP_FAIL' "$OUT/show.log" 2>/dev/null && break; sleep 1; done
@@ -59,6 +64,7 @@ mode=$(sed -n 's/^KFDISP_MODE \([0-9]*\)x\([0-9]*\)@.*/\1 \2/p' "$OUT/show.log")
 HAS_CONSOLE=no; grep -q 'kf3: display console registered' "$BENCH/run_${TAG}_qemu.log" 2>/dev/null && HAS_CONSOLE=yes
 if grep -q '^KFDISP_SHOWING=A' "$OUT/show.log" && [ -n "$mode" ] && [ -S "$MON" ] && [ "$HAS_CONSOLE" = yes ]; then
     sleep 1   # one more vblank at least, so the scanout copy of A is the latest frame
+    grep -q '^KFDISP_RESTORED' "$OUT/show.log" && say "SCREENDUMP_LATE (the probe already restored its CRTC)"
     python3 - "$MON" "$OUT/screendump.ppm" <<'PY'
 import socket, sys, time
 s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.settimeout(10)

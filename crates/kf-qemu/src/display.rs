@@ -384,6 +384,10 @@ pub struct DispCounters {
     pub scanouts: AtomicU64,
     /// Scanouts refused (a surface the console cannot copy, by name in the log).
     pub scanout_refused: AtomicU64,
+    /// Microseconds from queueing a scanout copy to observing its completion: the sum and the max.
+    pub scanout_us_total: AtomicU64,
+    /// The longest one.
+    pub scanout_us_max: AtomicU64,
 }
 
 /// Console frame slots: one the console shows, one ready, one the GPU fills.
@@ -1512,10 +1516,15 @@ impl ScanState {
 
     /// The copy in flight completed: publish its frame to the console.
     fn completed(&mut self, dp: &DisplayPlane) {
-        let Some((n, slot, plan, _)) = self.inflight.take() else {
+        let Some((n, slot, plan, t0)) = self.inflight.take() else {
             return;
         };
         self.done = n;
+        let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+        dp.counters
+            .scanout_us_total
+            .fetch_add(us, Ordering::Relaxed);
+        dp.counters.scanout_us_max.fetch_max(us, Ordering::Relaxed);
         if let Some(f) = &self.frames[slot] {
             if self.trace && (n <= 8 || n % 50 == 0) {
                 let (w, h, st) = (
