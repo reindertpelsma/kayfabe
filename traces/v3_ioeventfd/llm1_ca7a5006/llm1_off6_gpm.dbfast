@@ -1,0 +1,30 @@
+dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us]
+device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+START 2026-09-30T12:35:46+00:00 tag=llm1 qb=/workspace/bench/kf3-bins/ca7a5006/qemu-system-x86_64 order=prov,on,off,spin,on,off rev=ca7a5006 (NESTED)
+[2026-09-30T12:35:46+00:00] LPB_START tag=llm1_prov qb=/workspace/bench/kf3-bins/ca7a5006/qemu-system-x86_64 steps=gprov,hprov,host rev=ca7a5006
+[2026-09-30T12:42:58+00:00] GPROV_RC=0 [2026-09-30T12:42:58+00:00] GUEST_LLM_DONE rc=0
+[2026-09-30T12:46:27+00:00] HPROV_RC=0 HOST_LLM_TOK_PER_S=16.12   (generate() wall only — the SAME basis the guest hook reports)
+[2026-09-30T12:51:21+00:00] HOST_RC=0
+[2026-09-30T12:51:21+00:00] LPB_DONE
+DBLLM_STEP 1 prov rc=0 2026-09-30T12:51:21+00:00
+[2026-09-30T12:51:21+00:00] LPB_START tag=llm1_on2 qb=/workspace/bench/kf3-bins/ca7a5006/qemu-system-x86_64 steps=guest_pm rev=ca7a5006
+[2026-09-30T13:07:17+00:00] GUEST_PM_RC=0
+[2026-09-30T13:07:17+00:00] LPB_DONE
+DBLLM_STEP 2 on rc=0 2026-09-30T13:07:17+00:00
+[2026-09-30T13:07:17+00:00] LPB_START tag=llm1_off3 qb=/workspace/bench/kf3-bins/ca7a5006/qemu-system-x86_64 steps=guest_pm rev=ca7a5006
+[2026-09-30T13:24:31+00:00] GUEST_PM_RC=0
+[2026-09-30T13:24:31+00:00] LPB_DONE
+DBLLM_STEP 3 off rc=0 2026-09-30T13:24:31+00:00
+[2026-09-30T13:24:31+00:00] LPB_START tag=llm1_spin4 qb=/workspace/bench/kf3-bins/ca7a5006/qemu-system-x86_64 steps=guest_pm rev=ca7a5006
+[2026-09-30T13:39:26+00:00] GUEST_PM_RC=0
+[2026-09-30T13:39:26+00:00] LPB_DONE
+DBLLM_STEP 4 spin rc=0 2026-09-30T13:39:26+00:00
+[2026-09-30T13:39:26+00:00] LPB_START tag=llm1_on5 qb=/workspace/bench/kf3-bins/ca7a5006/qemu-system-x86_64 steps=guest_pm rev=ca7a5006
+[2026-09-30T13:55:24+00:00] GUEST_PM_RC=0
+[2026-09-30T13:55:24+00:00] LPB_DONE
+DBLLM_STEP 5 on rc=0 2026-09-30T13:55:24+00:00
+[2026-09-30T13:55:24+00:00] LPB_START tag=llm1_off6 qb=/workspace/bench/kf3-bins/ca7a5006/qemu-system-x86_64 steps=guest_pm rev=ca7a5006
+[2026-09-30T14:12:44+00:00] GUEST_PM_RC=0
+[2026-09-30T14:12:44+00:00] LPB_DONE
+DBLLM_STEP 6 off rc=0 2026-09-30T14:12:44+00:00
+EXIT rc=0 2026-09-30T14:12:44+00:00

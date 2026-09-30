@@ -1,0 +1,17 @@
+# KF_DBFAST_BENCH=1 cargo test --release -p kf-chan --test dbfast_bench — vast 53510558 (RTX 3060 box,
+# EPYC 7K62, NESTED), rev ca7a5006, 2026-09-30 after the LLM lanes (box idle).
+DBFAST-BENCH A: ns per guest doorbell store, 40000 stores in a loop (wall time of the vCPU loop / 40000)
+  others_registered  trapped_ns  ioeventfd_ns  ratio  deliveries  stores/delivery
+                  0       17572         13658    1.3       27447              1.5
+                 15       17565         14134    1.2       28638              1.4
+                127       21158         17773    1.2       38780              1.0
+                511       33293         31997    1.0       39964              1.0
+DBFAST-BENCH B: eventfd signal -> drainer delivery, 3000 doorbells one at a time, 20-400 us apart
+  scenario                                   p50_us   p99_us   max_us  reg_writes_applied
+  idle drainer (no register traffic)            45.5     91.2    573.1  0
+  2k reg writes/s, 20 us apply (~4% busy)       43.6     77.3    231.8  2063
+  10k reg writes/s, 20 us apply (~20% busy)     17.9     34.2    113.6  9594
+  10k reg writes/s, 60 us apply (~60% busy)     20.3     63.0    168.3  9731
+  idle drainer + 500 us spin-after-delivery      2.5     10.3     42.3  0
+  10k reg/s 20 us + 500 us spin-after-delivery     3.3     23.0    108.8  9193
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.68s

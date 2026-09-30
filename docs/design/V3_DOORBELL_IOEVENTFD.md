@@ -5,7 +5,8 @@
 KF3_RC=0, bare metal 30/30, thin suite 30/30 OFF **and** 30/30 ON (GA106); CUDA ladder 4/4 OFF = 4/4 ON
 (GA106 at `43293417`, which differs only by the default-off spin knob and a never-reached discard path; GB206 at `b351af9d` = the
 final code); the whole bar and the ON lane also on Blackwell GB206 (§7.6). Measured on nested Vast boxes: a doorbell store costs the vCPU ~4–5 µs
-less (§7.2); LLM decode **+7–11 %** (0.29× → 0.32× of host) for ~⅙ of a core in the drainer (§7.5).
+less (§7.2); LLM decode **+9–10 %** (0.29× → 0.32× of host, two alternated pairs) for ~⅙ of a core in
+the drainer, **+16–18 %** with the bounded-spin experiment for a whole core (§7.5).
 Default **OFF** (`-device kf3-gpu,…,doorbell-ioeventfd=on` turns it on) until a non-nested host is
 measured (§7.x). ⊘ Nothing here is a non-nested result: every number is from a Vast KVM box (itself a
 KVM guest) or from the development workspace (also virtualized), and is labelled **nested**.
@@ -242,6 +243,9 @@ GPU-free on the same box (`dbfast_bench` A, a minimal harness exit): trapped 17.
 | … with 2 000 register writes/s at 20 µs each | 40.0 µs | 67.3 µs |
 | … with 10 000/s at 20 µs (the drainer mostly awake) | 12.8 µs | 23.5 µs |
 | … with 10 000/s at 60 µs (a doorbell waits behind an apply) | 18.6 µs | 62.5 µs |
+| ★ repeated at `ca7a5006`: idle drainer | 45.5 µs | 91.2 µs |
+| ★ … idle drainer + spin-after-delivery (`KF3_DBFAST_SPIN_US`'s loop) | **2.5 µs** | **10.3 µs** |
+| ★ … 10 000/s at 20 µs + spin | **3.3 µs** | 23.0 µs |
 
 ⇒ ★ **The fast path is only as fast as the drainer's wake-up, and on this nested box an idle drainer
 wakes in ~46 µs** (a cross-CPU wake-up in a nested guest). The trapped path rings the twin inside the
@@ -287,10 +291,10 @@ ON, OFF, spin, ON, OFF (each: 2 processes × {512, 2048} tokens, one cold + one 
 every process's counters bound to the launched QEMU (`qemu_identity.sh`). Evidence:
 `traces/v3_ioeventfd/llm1_ca7a5006/`.
 
-| warm decode, tok/s (2 processes each) | host (the box's OS) | OFF | ON | ON + spin 100 µs |
+| warm decode, tok/s (2 processes per boot) | host (the box's OS) | OFF (boots 3, 6) | ON (boots 2, 5) | ON + spin 100 µs (boot 4) |
 |---|---|---|---|---|
-| 512 tokens | 42.24 | 12.20 (12.12–12.27) | **13.58** (13.58–13.59), +11.3 % | **14.17** (13.86–14.48), +16.1 % |
-| 2048 tokens | 41.94 | 12.34 (12.15–12.54) | **13.21** (13.20–13.21), +7.0 % | **14.34** (14.29–14.39), +16.2 % |
+| 512 tokens | 42.24 | 12.20 / 12.23 | **13.58 / 13.41** — mean **+10.5 %** | **14.17** — +16.0 % |
+| 2048 tokens | 41.94 | 12.34 / 11.92 | **13.21 / 13.16** — mean **+8.7 %** | **14.34** — +18.2 % |
 | guest / host | — | 0.29 | **0.32** | **0.34** |
 | doorbells per 2048-token process (cold + warm) | — | 4 442 060 | 4 442 077 | 4 442 078 (≈1 084 per token) |
 | KVM exits per 2048-token process | — | 5.38 M | 5.34 M | 5.29 M (the store still exits, §7.2) |
@@ -299,13 +303,13 @@ CPU per 2048-token process (`LLM_THREAD_CPU`, utime+stime of the identified QEMU
 
 | thread class | OFF | ON | ON + spin 100 µs |
 |---|---|---|---|
-| `kf3-drainer` | 0.4–0.5 s | **54.0–54.5 s** (~17 % of a core over ~318 s) | **270 s** (~93 % of a core over ~290 s) |
-| `qemu` (this build names no vCPU thread: vCPUs + main loop + I/O) | 355–372 s | 339–341 s | 315 s |
+| `kf3-drainer` | 0.4–0.5 s | **52–55 s** (~17 % of a core over ~318 s) | **270 s** (~93 % of a core over ~290 s) |
+| `qemu` (this build names no vCPU thread: vCPUs + main loop + I/O) | 355–381 s | 339–342 s | 315 s |
 | `kf3-worker*` | 0.7 s | 0.6–0.7 s | 0.6–0.8 s |
 | **total** | ~360 s | ~395 s (+10 %) | ~587 s (+63 %) |
 
-⇒ On this nested box the fast path buys **+7–11 % LLM decode** (0.29× → 0.32× of host) for **about one
-sixth of a core** in the drainer, which wakes once per doorbell (11.1 M wakes for 11.1 M doorbells in
+⇒ On this nested box the fast path buys **+9–10 % LLM decode** (0.29× → 0.32× of host; the two
+alternated ON/OFF pairs agree within ~1–3 %) for **about one sixth of a core** in the drainer, which wakes once per doorbell (11.1 M wakes for 11.1 M doorbells in
 the ON boot: essentially no coalescing at ~14 000 doorbells/s — CUDA already batches). The bounded
 spin buys **+16 %** (0.34×) by removing that wake-up, for **a whole core** while decoding: the
 vCPU-side saving is the same (§7.2); what the spin adds is the drainer ringing ~40 µs sooner.
