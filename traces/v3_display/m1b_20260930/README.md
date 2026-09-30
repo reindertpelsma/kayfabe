@@ -24,6 +24,10 @@ Open, both flip EVENTS (not flip completion):
    (`__will_generate_flip_event`, "Hardware generates flip event for only those planes which were
    active previously"); the engine raised AWAKEN for the newly enabled window.
 2. At 67.9 s, after the probe exited (fbdev restore): `Flip event timeout on head 0`.
+   ⊘ SUPERSEDED 2026-09-30 by `../m1c_20260930/README.md`: not the fbdev restore — the kernel's
+   removal of the probe's framebuffer at DRM file close disables the plane in a blocking commit
+   for which no notifier exists, so no flip event can come (a real-GPU behaviour of nvidia-drm);
+   the probe now restores its CRTC before exiting.
 
 Harness: `PATTERN_MATCH=absent` — the hook's `screendump … kf0` made QEMU abort
 (`Unexpected error in object_property_find_err()`, `run_m1b_qemu.log.gz` tail): kf0 has no graphic
