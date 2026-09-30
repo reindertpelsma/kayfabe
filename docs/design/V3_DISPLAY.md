@@ -1,5 +1,29 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS: M1 AND M2 MET ON HARDWARE, 2026-09-30 (branch `v3-display2`; display stays
+> default-off).** RTX 3060 (GA106), host + guest 580.159.04, vast 53505783.
+> - **M1** (`traces/v3_display/m1b_20260930/`, `m1c_20260930/`): the emulated NVDisplay engine (worker
+>   thread, never a vCPU) consumes the core and window pushbuffers, arms, latches flips at a host vblank
+>   timer and writes notifiers/semaphores only after the state they report is armed. Guest:
+>   `/dev/dri/card0` + `renderD128`, `DVI-D-1 connected` 1920x1080@60 (7 modes), 4 CRTCs with primary /
+>   overlay / cursor planes, fbcon at 1920x1080, **0** `waiting for GPU progress`, 120/120 flips at
+>   59.98 Hz, no kernel WARN. Flip AWAKEN follows nvidia-drm's rule (only for a window that scanned a
+>   surface on an active head before the update, and only when the new state asks for it).
+> - **M2** (`traces/v3_display/m2c_20260930/`, proof of the copies in `m2b_20260930/`): each flip of the
+>   window the console shows is copied by the GPU (`cuMemcpy2DAsync`, the display plane's own context
+>   and stream) out of the store into page-locked frames a QEMU graphic console shows zero-copy
+>   (`kf3_display_frame`, ABI 9); the flip's notifier, its semaphore release and GET wait for that copy
+>   to complete. **`screendump … kf0` is pixel-exact against the probe's pattern (1920x1080)**, flips
+>   at 60.01 Hz, `nvidia-smi` `Display Active : Enabled`, 0 flip-event timeouts, 0 DRM WARNs.
+> - Known limits: pitch surfaces only — block-linear and system-memory surfaces are refused by name
+>   (the X driver's desktop surfaces need the block-linear copy: M3); one console, on the lowest running
+>   head, showing its lowest enabled window (no overlay/cursor composition). A client that exits with
+>   its framebuffer on the plane logs nvidia-drm's own "Flip event timeout" (no notifier exists for a
+>   disabled layer; real GPUs log the same — `m1c` README).
+> - Next: M3 (desktop session on the virtual monitor, GPU-accelerated, screenshot-verified).
+
+> ⊘ **SUPERSEDED 2026-09-30 by the M1/M2 block above** (the `0xc67d:0` GPU-progress wait is gone
+> since the engine consumes the core channel; `/dev/dri` and a connected output exist).
 > **STATUS: DISPLAY-ON MEASURED, INCOMPLETE, 2026-09-29.** At exact `d883d0eb` on RTX 3060,
 > the guest boots, `nvidia-smi` succeeds and the model records an accepted core channel.
 > NVKMS then repeatedly waits for `0xc67d:0` GPU progress; no `/dev/dri` or connected output
