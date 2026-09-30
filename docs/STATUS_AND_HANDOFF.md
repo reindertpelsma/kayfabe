@@ -36,6 +36,10 @@ fix this file. Entries below the first are dated history.
     LLM time breakdown on nested boxes: doorbells explain ~22 of the ~58 ms/token gap; the rest is
     unattributed (offered to the owner, not started). (3) R4's remainder. (4) §4 items 10–12. (5) Driver
     matrix continuation. (6) Windows last.
+  - **CI flake (2026-09-30):** GitHub CI failed once at `8644e477` (a README-only commit) in
+    `kf-util`'s `a_blocking_section_outside_a_trap_is_not_a_violation_and_is_not_recorded`: it compared a
+    process-global row count that a parallel sibling test writes to (run 36771653449: before 1, after 3).
+    Test-only fix on branch **`v3-flakefix`** (`101b1f7e`, kf-util 55/55 locally) — merge it first on Friday.
   - **Durability:** everything is on GitHub. The dev host's local-only branches and two uncommitted Codex
     worktrees are backed up as `backup/host-2026-09-30/*` (13 branches, secret-scanned, not reviewed). Two
     unpushable research-repo corrections are `archive/nvkvm-unpushed-2026-09-30/`. **All vast boxes are
