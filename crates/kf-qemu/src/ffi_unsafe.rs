@@ -7,7 +7,9 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 8;
+/// ★ 9 (2026-09-30): the doorbell fast path — [`kf3_doorbell_page_offset`], [`kf3_set_ioeventfd`],
+/// [`kf3_doorbell_site`].
+pub const KF3_ABI: u32 = 9;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -457,6 +459,57 @@ pub extern "C" fn kf3_bar1_overlay_done(h: *mut c_void, seq: u64, rc: i32) {
 pub extern "C" fn kf3_bar1_usermode_write(h: *mut c_void, vf_rel: u64, val: u64, width: u32) {
     if let Some(d) = dev(h) {
         d.bar1_usermode_write(vf_rel, val, u8::try_from(width).unwrap_or(4));
+    }
+}
+
+/// ★ ABI 9: the doorbell register's offset inside the 64 KiB usermode page (the same register
+/// through BAR0's usermode piece and through every Hopper+ BAR1 view of it) — what the C device's
+/// memory listener looks for to report doorbell sites. -1 on a bad handle.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_doorbell_page_offset(h: *mut c_void) -> i64 {
+    dev(h).map_or(-1, |d| {
+        i64::try_from(d.plane.doorbell.offset()).unwrap_or(-1)
+    })
+}
+
+/// ★ ABI 9 (`docs/design/V3_DOORBELL_IOEVENTFD.md`): turn the doorbell FAST PATH on — hand the device
+/// the C device's `KVM_IOEVENTFD` verb and the placement budget (`doorbell-ioeventfd-max`). Called
+/// only when the `doorbell-ioeventfd` property is on; without it every doorbell stays trapped.
+/// Returns 0, or -1 (bad handle, null verb, already on).
+///
+/// # Safety
+/// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime, must only
+/// issue `KVM_IOEVENTFD` with the arguments given, and must not retain the fd.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_set_ioeventfd(
+    h: *mut c_void,
+    f: Option<crate::raw_unsafe::IoeventfdFn>,
+    opaque: *mut c_void,
+    budget: u32,
+) -> i32 {
+    let (Some(d), Some(f)) = (dev(h), f) else {
+        return -1;
+    };
+    // SAFETY: forwarded from this function's contract.
+    let hook = unsafe { crate::raw_unsafe::IoeventfdHook::adopt(f, opaque) };
+    if d.enable_doorbell_fast_path(hook, budget as usize) {
+        0
+    } else {
+        -1
+    }
+}
+
+/// ★ ABI 9: a doorbell register became visible (`add` = 1) at guest-physical `gpa`, or went away
+/// (`add` = 0) — the C device's memory listener (main loop, BQL held), for BAR0's usermode piece and
+/// every Hopper+ BAR1 view. Never on a vCPU's MMIO path.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
+    if let Some(d) = dev(h) {
+        if add != 0 {
+            d.dbfast.site_add(gpa);
+        } else {
+            d.dbfast.site_del(gpa);
+        }
     }
 }
 

@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KF3_ABI 8
+#define KF3_ABI 9
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -46,5 +46,13 @@ int32_t kf3_bar1_follows_guest(void *h);
 int32_t kf3_set_bar1_overlay(void *h, Kf3OverlayFn f, void *opaque, uint32_t slots);
 void kf3_bar1_overlay_done(void *h, uint64_t seq, int32_t rc);
 void kf3_bar1_usermode_write(void *h, uint64_t vf_rel, uint64_t val, uint32_t width);
+/* ★ ABI 9 (docs/design/V3_DOORBELL_IOEVENTFD.md): the doorbell fast path. The device's KVM_IOEVENTFD
+ * verb (0 or -errno; any non-vCPU thread), the doorbell register's offset inside the usermode page, and
+ * the doorbell sites the memory listener sees (BAR0's usermode piece, Hopper+ BAR1 views). */
+typedef int32_t (*Kf3IoeventfdFn)(void *opaque, uint64_t gpa, uint32_t len, uint64_t datamatch, int32_t fd,
+                                  uint32_t assign);
+int64_t kf3_doorbell_page_offset(void *h);
+int32_t kf3_set_ioeventfd(void *h, Kf3IoeventfdFn f, void *opaque, uint32_t budget);
+void kf3_doorbell_site(void *h, uint64_t gpa, uint32_t add);
 void kf3_unrealize(void *h);
 #endif

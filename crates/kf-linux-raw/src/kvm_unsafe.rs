@@ -58,6 +58,40 @@ const KVM_SET_USER_MEMORY_REGION: libc::c_ulong =
 /// `KVM_CAP_NR_MEMSLOTS` — how many memslots this VM may hold at once.
 const KVM_CAP_NR_MEMSLOTS: libc::c_ulong = 10;
 
+/// `_IOW(KVMIO, 0x79, struct kvm_ioeventfd)` — 64 bytes.
+const KVM_IOEVENTFD: libc::c_ulong = (1 << 30) | ((64 as libc::c_ulong) << 16) | 0xAE79;
+/// `KVM_CAP_IOEVENTFD`.
+const KVM_CAP_IOEVENTFD: libc::c_ulong = 36;
+/// `KVM_IOEVENTFD_FLAG_DATAMATCH` — signal only for a store of exactly `datamatch`.
+const KVM_IOEVENTFD_FLAG_DATAMATCH: u32 = 1 << 0;
+/// `KVM_IOEVENTFD_FLAG_DEASSIGN`.
+const KVM_IOEVENTFD_FLAG_DEASSIGN: u32 = 1 << 2;
+
+/// `_IOW(KVMIO, 0x67, struct kvm_coalesced_mmio_zone)` — 16 bytes.
+const KVM_REGISTER_COALESCED_MMIO: libc::c_ulong =
+    (1 << 30) | ((16 as libc::c_ulong) << 16) | 0xAE67;
+
+/// `struct kvm_coalesced_mmio_zone` — `{ __u64 addr; __u32 size; __u32 pad_or_pio; }`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+struct CoalescedZone {
+    addr: u64,
+    size: u32,
+    pio: u32,
+}
+
+/// `struct kvm_ioeventfd` — `include/uapi/linux/kvm.h`. 64 bytes; the request encodes it.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct IoEventFd {
+    datamatch: u64,
+    addr: u64,
+    len: u32,
+    fd: i32,
+    flags: u32,
+    pad: [u8; 36],
+}
+
 /// The only API version KVM has ever shipped as stable, and the one every kernel since
 /// 2.6.22 reports. A different number is not a version to adapt to — the uapi structs
 /// below would mean something else — so it is a loud refusal.
@@ -464,6 +498,118 @@ impl KvmVm {
         ioctl_ptr(self.fd.as_raw_fd(), &region)
     }
 
+    /// Whether this kernel implements `KVM_IOEVENTFD` at all (`KVM_CAP_IOEVENTFD`).
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn has_ioeventfd(&self) -> Result<bool, RawError> {
+        Ok(self.check_extension(KVM_CAP_IOEVENTFD)? > 0)
+    }
+
+    /// ★★ Assign (`assign`) or deassign one **4-byte, DATAMATCH, MMIO** ioeventfd: a guest
+    /// store of exactly `value` to `gpa` signals `fd` inside the kernel and returns to the
+    /// guest with **no exit to userspace**; every other value or width still exits
+    /// (`docs/design/V3_DOORBELL_IOEVENTFD.md`).
+    ///
+    /// The kernel's own refusals are the point of this door and are returned untouched:
+    /// `EEXIST` — the same `(gpa, 4, value)` is already registered (on this or another fd);
+    /// `ENOENT` on a deassign that names nothing; `ENOSPC` — the MMIO bus is full of
+    /// NON-ioeventfd devices (`NR_IOBUS_DEVS`; ⊘ ioeventfds themselves are excluded from that
+    /// count, `virt/kvm/kvm_main.c` *"exclude ioeventfd which is limited by maximum fd"*);
+    /// `ENOMEM`. ★ After a deassign returns, the kernel has finished every signal the old
+    /// registration could make (`kvm_io_bus_unregister_dev` swaps the bus under SRCU and waits
+    /// for the grace period), which is what lets a caller drain the fd one last time and know
+    /// nothing more can arrive.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] carrying the kernel's `errno`.
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5) — a deassign waits for an SRCU grace
+    /// period of every vCPU of this VM.
+    pub fn ioeventfd(
+        &self,
+        gpa: u64,
+        value: u32,
+        fd: BorrowedFd<'_>,
+        assign: bool,
+    ) -> Result<(), RawError> {
+        lockwitness::assert_lock_free("KVM_IOEVENTFD");
+        leafwitness::assert_leaf_free("KVM_IOEVENTFD");
+        let rec = IoEventFd {
+            datamatch: u64::from(value),
+            addr: gpa,
+            len: 4,
+            fd: fd.as_raw_fd(),
+            flags: KVM_IOEVENTFD_FLAG_DATAMATCH
+                | if assign {
+                    0
+                } else {
+                    KVM_IOEVENTFD_FLAG_DEASSIGN
+                },
+            pad: [0; 36],
+        };
+        // SAFETY: `rec` is a live `#[repr(C)]` value in this frame with exactly the field order
+        // and widths of the kernel's `struct kvm_ioeventfd` (64 bytes, asserted by the test
+        // below and encoded in the request's own size bits), so the kernel reads exactly the
+        // bytes this borrow covers. The direction is `_IOW`: nothing is written back. `fd` is a
+        // borrowed live descriptor; the kernel takes its own reference to the eventfd behind it
+        // (`eventfd_ctx_fdget`) and never retains the number. `self.fd` is live for this call.
+        let rc = unsafe {
+            libc::ioctl(
+                self.fd.as_raw_fd(),
+                KVM_IOEVENTFD as _,
+                core::ptr::from_ref(&rec),
+            )
+        };
+        if rc < 0 {
+            return Err(last_syscall_error("KVM_IOEVENTFD"));
+        }
+        Ok(())
+    }
+
+    /// Register one coalesced-MMIO zone `[gpa, gpa+size)` (`KVM_REGISTER_COALESCED_MMIO`).
+    ///
+    /// ★ Here for ONE reason: each zone is a **non-ioeventfd** device on the kernel's MMIO bus,
+    /// and that bus refuses its 1001st such device with `ENOSPC` — for an ioeventfd too
+    /// (`virt/kvm/kvm_main.c`, `kvm_io_bus_register_dev`: `dev_count - ioeventfd_count >
+    /// NR_IOBUS_DEVS - 1`). Ioeventfds alone never reach that limit (they are excluded from the
+    /// count), so this is the only way a test can make the KERNEL refuse a doorbell registration
+    /// and prove the refused token still works through the trap.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] carrying the kernel's `errno` (`ENOSPC` once the bus is full).
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn register_coalesced_mmio(&self, gpa: u64, size: u32) -> Result<(), RawError> {
+        lockwitness::assert_lock_free("KVM_REGISTER_COALESCED_MMIO");
+        leafwitness::assert_leaf_free("KVM_REGISTER_COALESCED_MMIO");
+        let zone = CoalescedZone {
+            addr: gpa,
+            size,
+            pio: 0,
+        };
+        // SAFETY: `zone` is a live `#[repr(C)]` value in this frame with the kernel's
+        // `struct kvm_coalesced_mmio_zone` layout (16 bytes, the size the request encodes and the
+        // test below asserts); the direction is `_IOW`, so the kernel only reads it. `self.fd` is
+        // live for this call.
+        let rc = unsafe {
+            libc::ioctl(
+                self.fd.as_raw_fd(),
+                KVM_REGISTER_COALESCED_MMIO as _,
+                core::ptr::from_ref(&zone),
+            )
+        };
+        if rc < 0 {
+            return Err(last_syscall_error("KVM_REGISTER_COALESCED_MMIO"));
+        }
+        Ok(())
+    }
+
     /// Remove the memslot numbered `slot` (`memory_size = 0`).
     ///
     /// # Errors
@@ -690,6 +836,41 @@ mod tests {
             32,
             "KVM_SET_USER_MEMORY_REGION's _IOC_SIZE field"
         );
+    }
+
+    /// `struct kvm_ioeventfd` is 64 bytes and `KVM_IOEVENTFD` says so — the same guard as the
+    /// memslot record above, for the doorbell fast path's one ioctl
+    /// (`docs/design/V3_DOORBELL_IOEVENTFD.md`). The flag bits are retyped from
+    /// `include/uapi/linux/kvm.h` (`kvm_ioeventfd_flag_nr_datamatch = 0`, `_deassign = 2`).
+    #[test]
+    fn the_ioeventfd_uapi_size_and_flags_are_the_ones_the_kernel_declares() {
+        assert_eq!(
+            core::mem::size_of::<IoEventFd>(),
+            64,
+            "struct kvm_ioeventfd"
+        );
+        assert_eq!(
+            (KVM_IOEVENTFD >> 16) & 0x3FFF,
+            64,
+            "KVM_IOEVENTFD's _IOC_SIZE"
+        );
+        assert_eq!(KVM_IOEVENTFD & 0xFFFF, 0xAE79, "KVMIO, nr 0x79");
+        assert_eq!(KVM_IOEVENTFD >> 30, 1, "_IOW");
+        assert_eq!(
+            (KVM_IOEVENTFD_FLAG_DATAMATCH, KVM_IOEVENTFD_FLAG_DEASSIGN),
+            (0b1, 0b100)
+        );
+        assert_eq!(core::mem::offset_of!(IoEventFd, addr), 8);
+        assert_eq!(core::mem::offset_of!(IoEventFd, len), 16);
+        assert_eq!(core::mem::offset_of!(IoEventFd, fd), 20);
+        assert_eq!(core::mem::offset_of!(IoEventFd, flags), 24);
+        assert_eq!(
+            core::mem::size_of::<CoalescedZone>(),
+            16,
+            "kvm_coalesced_mmio_zone"
+        );
+        assert_eq!((KVM_REGISTER_COALESCED_MMIO >> 16) & 0x3FFF, 16);
+        assert_eq!(KVM_REGISTER_COALESCED_MMIO & 0xFFFF, 0xAE67);
     }
 
     #[test]

@@ -113,9 +113,146 @@ impl TokenIndex {
     }
 }
 
+/// ★★★ 2026-09-30 — **the exact 32-bit value the GUEST writes to the doorbell for its channel
+/// `(runlist, chid)`** (`docs/design/V3_DOORBELL_IOEVENTFD.md` §3): what a KVM `DATAMATCH`
+/// ioeventfd must equal, byte for byte, for the fast path to take that channel's doorbells.
+///
+/// [`TokenIndex`] only needs to *find a slot* from a value (it masks, as hardware does). A datamatch
+/// needs the reverse, and exactly: the guest RM builds the token itself —
+/// `kchannelCtrlCmdGpfifoGetWorkSubmitToken_IMPL` → `kfifoGenerateWorkSubmitTokenHal_*`, never the
+/// GSP — as `RUNLIST_ID | VECTOR`, plus `RUNLIST_DOORBELL = _ENABLE` on GB20x. The HAL a die group
+/// binds is a code fact (`ogkm-580: generated/g_kernel_fifo_nvoc.c:636-656`: TU10x → `_TU102`;
+/// GA100…AD10x and GH100 → `_GA100`; GB20x → `_GB202`; the rest → `_GB100`), and each body names
+/// its fields through ONE header family (`kernel_fifo_tu102.c:116-117`, `kernel_fifo_ga100.c:226-227`
+/// use `NV_CTRL_VF_DOORBELL_*`; `kernel_fifo_gb100.c:114-115`, `kernel_fifo_gb202.c:73-76` use
+/// `NV_VIRTUAL_FUNCTION_DOORBELL_*`) — so the per-die-group row below is `(HAL, header prefix,
+/// sets RUNLIST_DOORBELL)` and every bit position comes from the generated hwref table.
+///
+/// ⊘ A value this predicts wrongly costs only speed, never correctness: the guest's real value then
+/// matches no ioeventfd and takes the trapped path, which masks it into the same slot. That is why
+/// a registration is checked with [`GuestTokenFormat::value`] ∘ [`TokenIndex::of_doorbell`] ==
+/// [`TokenIndex::of_channel`] before it is made — a value that would land in ANOTHER slot is refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestTokenFormat {
+    /// `RUNLIST_ID` `(hi, lo)`.
+    runlist: (u32, u32),
+    /// `VECTOR` (the chid) `(hi, lo)`.
+    vector: (u32, u32),
+    /// Bits the HAL sets on every token (GB202's `RUNLIST_DOORBELL_ENABLE`).
+    always: u32,
+}
+
+/// Which token HAL each die group's guest RM binds, and how that body names its fields.
+/// `(die group, HAL, header prefix, sets RUNLIST_DOORBELL = _ENABLE)`.
+const TOKEN_HALS: [(kf_chip::hwref::DieGroup, &str, &str, bool); 7] = {
+    use kf_chip::hwref::DieGroup as G;
+    [
+        (G::Tu10x, "TU102", "NV_CTRL_VF_DOORBELL", false),
+        (G::Ga100, "GA100", "NV_CTRL_VF_DOORBELL", false),
+        (G::Ga10x, "GA100", "NV_CTRL_VF_DOORBELL", false),
+        (G::Ad10x, "GA100", "NV_CTRL_VF_DOORBELL", false),
+        (G::Gh100, "GA100", "NV_CTRL_VF_DOORBELL", false),
+        (G::Gb10x, "GB100", "NV_VIRTUAL_FUNCTION_DOORBELL", false),
+        (G::Gb20x, "GB202", "NV_VIRTUAL_FUNCTION_DOORBELL", true),
+    ]
+};
+
+impl GuestTokenFormat {
+    /// The guest's token layout for die group `g`, every field from the hwref table.
+    ///
+    /// # Errors
+    /// The name that did not resolve (an ambiguous or absent field is a refusal, never a guess —
+    /// the caller then leaves every doorbell on the trapped path).
+    pub fn for_die_group(g: kf_chip::hwref::DieGroup) -> Result<GuestTokenFormat, String> {
+        let t = kf_chip::hwref::table();
+        let &(_, hal, prefix, sets_rd) = TOKEN_HALS
+            .iter()
+            .find(|(d, ..)| *d == g)
+            .ok_or_else(|| format!("{g:?}: no token HAL row"))?;
+        let range = |field: &str| -> Result<(u32, u32), String> {
+            let name = format!("{prefix}_{field}");
+            let (hi, lo) = t
+                .range(g, &name)
+                .map_err(|r| format!("{g:?} ({hal}): {name} does not resolve: {r:?}"))?;
+            match (u32::try_from(hi), u32::try_from(lo)) {
+                (Ok(hi), Ok(lo)) if hi < 32 && lo <= hi => Ok((hi, lo)),
+                _ => Err(format!("{g:?}: {name} = {hi}:{lo} is not a 32-bit field")),
+            }
+        };
+        let runlist = range("RUNLIST_ID")?;
+        let vector = range("VECTOR")?;
+        let always = if sets_rd {
+            let (hi, lo) = range("RUNLIST_DOORBELL")?;
+            let name = format!("{prefix}_RUNLIST_DOORBELL_ENABLE");
+            let en = t
+                .value(g, &name)
+                .map_err(|r| format!("{g:?} ({hal}): {name} does not resolve: {r:?}"))?;
+            let width = hi - lo + 1;
+            let en = u32::try_from(en)
+                .ok()
+                .filter(|v| width == 32 || *v < (1 << width))
+                .ok_or_else(|| format!("{g:?}: {name} = {en:#x} does not fit {hi}:{lo}"))?;
+            en << lo
+        } else {
+            0
+        };
+        Ok(GuestTokenFormat {
+            runlist,
+            vector,
+            always,
+        })
+    }
+
+    const fn fits(v: u32, (hi, lo): (u32, u32)) -> bool {
+        let width = hi - lo + 1;
+        width >= 32 || v < (1 << width)
+    }
+
+    /// The value the guest writes for its channel `(runlist, chid)`, or `None` when either does
+    /// not fit its field (the guest cannot have produced such a token).
+    #[must_use]
+    pub const fn value(self, runlist: u32, chid: u32) -> Option<u32> {
+        if !Self::fits(runlist, self.runlist) || !Self::fits(chid, self.vector) {
+            return None;
+        }
+        Some((runlist << self.runlist.1) | (chid << self.vector.1) | self.always)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ Every die group: the predicted value is what its HAL body computes (hand-written here from
+    /// the four ogkm bodies, independently of the hwref derivation above), and the device's own
+    /// index finds the channel's slot from it — the precondition for registering it at all.
+    #[test]
+    fn the_guest_token_is_runlist_or_chid_and_gb20x_sets_bit_30() {
+        use kf_chip::hwref::DieGroup as G;
+        for g in G::ALL {
+            let f = GuestTokenFormat::for_die_group(g).expect("resolves");
+            let bit30 = if g == G::Gb20x { 1 << 30 } else { 0 };
+            for (rl, chid) in [
+                (0u32, 0u32),
+                (0, 1),
+                (13, 1),
+                (2, 0x7FF),
+                (0x7F, 0x7FF),
+                (9, 0x42),
+            ] {
+                let v = f.value(rl, chid).expect("fits");
+                assert_eq!(v, (rl << 16) | chid | bit30, "{g:?} ({rl}, {chid:#x})");
+                let r = TokenIndex::RunlistVector;
+                assert_eq!(
+                    r.of_doorbell(v),
+                    r.of_channel(rl, chid),
+                    "{g:?}: the guest's own value must find the slot its channel was born in"
+                );
+            }
+            assert_eq!(f.value(0x80, 1), None, "{g:?}: RUNLIST_ID is 7 bits");
+            assert_eq!(f.value(0, 0x1000), None, "{g:?}: VECTOR is 12 bits");
+        }
+    }
 
     #[test]
     fn vector_is_the_old_mask_byte_for_byte() {

@@ -12,6 +12,7 @@
 
 use crate::raw_unsafe::RawRegion;
 use kf_arch::gsp::{GspModel, GspReg};
+use kf_chan::dbfast::{DbFast, Delivered};
 use kf_chip::Family;
 use kf_chip::bar0::{
     Bar0Facts, BootReg, ConfigWord, boot_regs, config_words, fb_layout, pcie_link_caps,
@@ -20,7 +21,7 @@ use kf_chip::bar0::{
 use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
 use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
-use kf_trap::{Action, Class, WriteSemantics};
+use kf_trap::{Action, Class, Route, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -190,6 +191,10 @@ pub struct Device {
     drainer_efd: &'static Notifier,
     /// ★ P5: the channel plane (the guest kernel's CE channels, Translated).
     pub chans: &'static crate::chan::ChanPlane,
+    /// ★ 2026-09-30: the doorbell fast path (`docs/design/V3_DOORBELL_IOEVENTFD.md`) — a KVM
+    /// ioeventfd per live token, serviced by THIS device's register drainer. Off (every doorbell
+    /// trapped) until the C device's `doorbell-ioeventfd` property hands it the KVM verb.
+    pub dbfast: &'static DbFast,
     /// The workers' counters.
     pub worker_stats: kf_chan::worker::WorkerStats,
     /// ★ P5 §2.7: the CPU interrupt tree (atomic; applied synchronously on the vCPU).
@@ -459,6 +464,23 @@ impl Device {
         let drainer_efd: &'static Notifier = Box::leak(Box::new(
             Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
         ));
+        // ★ 2026-09-30: the doorbell fast path. Its poller IS the drainer's readiness set (the drainer
+        // waits on doorbell eventfds with its other work); its kick is the drainer's own wake. The
+        // guest's token layout comes from the die group's HAL + the hwref table; unresolved ⇒ every
+        // doorbell stays trapped (named here).
+        let dbfast: &'static DbFast = Box::leak(Box::new(DbFast::new(0, drainer_efd)?));
+        let token_fmt = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
+            .map_err(|e| format!("{e:?}"))
+            .and_then(kf_trap::tokenindex::GuestTokenFormat::for_die_group);
+        let token_fmt = match token_fmt {
+            Ok(f) => Some(f),
+            Err(e) => {
+                eprintln!(
+                    "kf3: doorbell fast path: the guest's token layout does not resolve ({e}) — every doorbell stays TRAPPED"
+                );
+                None
+            }
+        };
         let mirrors = crate::mem::Mirrors::default();
         let chans: &'static crate::chan::ChanPlane =
             Box::leak(Box::new(crate::chan::ChanPlane::new(
@@ -474,6 +496,8 @@ impl Device {
                 family,
                 &host.intr_table,
                 &host.engines,
+                dbfast,
+                token_fmt,
             )?));
         chans.start()?;
         // ★ The served chain (census → sticky guard → init tables, static info, guest sys info,
@@ -698,6 +722,7 @@ impl Device {
             vbios,
             worker_efd,
             chans,
+            dbfast,
             worker_stats: kf_chan::worker::WorkerStats::default(),
             intr: kf_trap::cpuintr::CpuIntr::new(family, kf_trap::memmap::VF_USERMODE_PAGE)
                 .ok_or("CPU interrupt tree: the usermode base is below the PRIV delta")?,
@@ -1557,10 +1582,10 @@ impl Device {
     /// ★ The register drainer's loop: apply the privileged ring in order, park on its own wake
     /// word when empty. Runs on ONE thread (an ordered ring drained by many is not ordered).
     pub fn drainer_loop(&self) {
-        let poller = match Poller::create() {
-            Ok(p) => p,
-            Err(_) => return,
-        };
+        // ★ 2026-09-30: ONE readiness set for the drainer's wake AND every doorbell eventfd the fast
+        // path registers (`DbFast::poller`, tags >= `DB_TAG_BASE`): a doorbell wakes the drainer
+        // exactly as a privileged write does, and is never queued behind a timer.
+        let poller = self.dbfast.poller();
         if poller.watch(self.drainer_efd.as_source_fd(), 0).is_err() {
             return;
         }
@@ -1610,6 +1635,10 @@ impl Device {
                     self.prof_print();
                 }
             }
+            // ★ Doorbells first — never behind register work (and again before every privileged
+            // write is applied, `HostOps::apply_register`). One non-blocking poll; no syscall when
+            // nothing is registered.
+            self.dbfast.service_ready(self);
             let seen = self.plane.drainer_wake.seen();
             if self.plane.drainer_pass(self, 256) > 0 {
                 if after_timeout {
@@ -1640,6 +1669,7 @@ impl Device {
                 self.prof.drainer.busy(tw.saturating_sub(busy_from));
             }
             let got = poller.wait(&mut ready, PollTimeout::Millis(50));
+            let t_wake = std::time::Instant::now();
             if prof {
                 busy_from = crate::prof::now_ns();
                 let timed_out = matches!(got, Ok(0));
@@ -1654,7 +1684,26 @@ impl Device {
             }
             self.plane.drainer_wake.unpark();
             let _ = self.drainer_efd.drain();
+            // ★ The doorbells this wait reported: delivered now, before anything else.
+            if got.is_ok() {
+                self.dbfast.on_ready(&ready, t_wake, self);
+            }
         }
+    }
+
+    /// ★ ABI 9: the C device turned the doorbell fast path on (`doorbell-ioeventfd=on`).
+    pub fn enable_doorbell_fast_path(
+        &self,
+        hook: crate::raw_unsafe::IoeventfdHook,
+        budget: usize,
+    ) -> bool {
+        self.dbfast.set_budget(budget);
+        let on = self.dbfast.enable(Box::new(hook));
+        eprintln!(
+            "kf3: doorbell fast path {} — KVM ioeventfd per live token (Passthrough AND Translated), serviced by the register drainer; budget {budget} placements; unmatched/unregistered doorbells stay trapped",
+            if on { "ON" } else { "REFUSED (already on)" }
+        );
+        on
     }
 
     /// One line of counters and the GSP phase — for the boot log, never a decision input.
@@ -1827,8 +1876,9 @@ impl Device {
             ic.held.load(o),
             ic.out_of_range.load(o)
         );
+        let db = format!(" {}", self.dbfast.status());
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}] gsp_refusals[{refusals}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -2158,6 +2208,35 @@ impl GuestRam for Ram<'_> {
     }
 }
 
+/// ★★ 2026-09-30 — **a doorbell the fast path delivered, handled exactly as the trap handles it**
+/// (`docs/design/V3_DOORBELL_IOEVENTFD.md` §4). The register drainer calls this with the value the
+/// guest stored (the ioeventfd's DATAMATCH guarantees it): the SAME doorbell arm of the SAME trap
+/// path decides — a Passthrough token rings its twin inline HERE on the drainer; a Translated/
+/// Emulated token is stamped RUNG, published and a worker woken; a dead or unknown one does nothing.
+/// ⊘ Only the transport differs from `bar0_write`; nothing here reads a pushbuffer or a cursor.
+impl kf_chan::dbfast::Sink for Device {
+    fn deliver(&self, idx: u32, value: u32, _tag: u64) -> Delivered {
+        let off = u32::try_from(kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset())
+            .unwrap_or(u32::MAX);
+        let route = self.plane.tokens.get(idx as usize).map(|w| w.load().route);
+        match self
+            .plane
+            .trap_write(Class::Doorbell, 0, off, u64::from(value), 4)
+        {
+            Action::RingHostInline { host_token } => Delivered::Rang {
+                reached: self.rm.doorbell(host_token).is_ok(),
+            },
+            Action::WakeWorker => {
+                let _ = self.worker_efd.signal();
+                Delivered::Handed
+            }
+            // Already RUNG (or owned) — the pending ring covers it, exactly as on the trap.
+            _ if matches!(route, Some(Route::Translated | Route::Emulated)) => Delivered::Handed,
+            _ => Delivered::Absorbed,
+        }
+    }
+}
+
 /// ★ The host side of the plane, as the device serves it. P2: the register drainer's writes go to
 /// the GSP FSM; channel verbs arrive with P5 (`kf-chan`).
 impl HostOps for Device {
@@ -2169,6 +2248,10 @@ impl HostOps for Device {
     }
     fn run_emulated(&self, _host_token: u32, _up_to_seq: u64) {}
     fn apply_register(&self, bar: u8, offset: u32, value: u64, _width: u8) {
+        // ★ 2026-09-30: every doorbell already signalled is delivered BEFORE this privileged write
+        // is applied — a vCPU's doorbell and its later register write keep their order, as the trap
+        // kept it (`docs/design/V3_DOORBELL_IOEVENTFD.md` §4). Before the GSP lock: never under it.
+        self.dbfast.service_ready(self);
         let prof = crate::prof::on();
         let t_apply = if prof { crate::prof::now_ns() } else { 0 };
         let is_qhead = prof && bar == 0 && u64::from(offset) == self.qhead_off;
