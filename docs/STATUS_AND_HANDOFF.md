@@ -38,6 +38,9 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
     display leftovers (cursor, scaled windows, 16-bit/YUV, the §7 display apps); the rest of the driver
     matrix (570 UVM first-channel wall; hosts 535/590/595/610); re-running the app and graphics matrices
     at this master; Turing on hardware.
+  - **`v3-ramobj` merged (2026-09-30):** kf3 no longer caches a transient "guest RAM not registered
+    yet" for the VM's life — the cause of the one `--timer` failure in the `3f67ed95` bar (§4.9). Bar at
+    `f442980e` on TU116: 1744/0, 9/9, bare 30/30, thin 30/30 (`traces/v3_ramobj/`).
   - **Turing at this master (2026-09-30, `traces/v3_turing_master/`):** GTX 1660 SUPER (TU116), merge
     bar at `1915bd71` (code `3f67ed95`): tests 1742/0, gates 9/9, bare 30/30, thin 30/30; CUDA ladder
     host 4/4 and guest 4/4.
@@ -318,7 +321,8 @@ must pass to another session.
    hit that gap. The `OnceLock` then cached "no RAM" for the VM's life; the two retries took 2 and
    0 µs, i.e. the cached error, where a real import takes ~1.8 s. Fix on branch **`v3-ramobj`**
    (`once_after`: the fd is read once, outside the cell; "not yet" is never cached; prewarm retries
-   next tick) — pending the merge bar. Residual: other `RamMap` readers can still observe a
+   next tick) — ★ **MERGED 2026-09-30** after its bar at `f442980e` on TU116 (1744/0, 9/9, bare 30/30,
+   thin 30/30; `traces/v3_ramobj/`). Residual: other `RamMap` readers can still observe a
    mid-transaction topology (a refusal by name, not a cached one); fixing that needs the
    listener's `begin`/`commit` staging in `kf3.c`. The text below is the original,
    superseded hypothesis.
