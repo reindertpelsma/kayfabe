@@ -1890,7 +1890,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -1906,6 +1906,8 @@ impl Device {
             va.priv_withheld,
             va.priv_withheld_bytes,
             va.priv_mirrored,
+            va.sked_placed,
+            va.sked_held,
             mc.bar_pdes.load(o),
             mc.roots.load(o),
             mc.root_moves.load(o),

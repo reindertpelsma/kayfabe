@@ -8,6 +8,7 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
 
 ## 0. Current resumption — start here
 
+- **2026-09-30 — `v3-cdp` (not merged): CUDA dynamic parallelism works in a kf3 guest.** The child grid never ran because the guest's SKED-reflected page (libcuda's `UVM_MAP_DYNAMIC_PARALLELISM_REGION`, kind `SMSKED_MESSAGE`) was mirrored as a memory row; fix `46509dce` places it as a message-kind host mapping. At kf3 `090b20d9` (RTX 3060) every CDP launch shape runs its child and `cdpSimpleQuicksort` passes (128/1 000/10 000); merge bar passed at `2830988f` (1752/0, gates 9/9, KF3_RC=0, bare 30/30, thin 30/30; later commits evidence/docs only); app matrix there 61/65 + 6/6. `design/V3_CDP.md`, `traces/v3_cdp/`.
 - **2026-09-30 — master and v3 = `b32aa046`.** Landed since `5c639f54`:
   - **CI repair** (`v3-ci`, `bf6e7640`): first green GitHub CI; the hardware bar is now fail-closed and
     includes a bare-metal suite (`scripts/bench/box/merge_check.sh`, run from a repo checkout).
@@ -34,7 +35,7 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
     kf-rm refuses unknown classes; B = keep refusing it, which leaves X11 partial. Recommendation: B
     now; try a kayfabe-serviced vblank next; A only with a headless guard. (3) b3 registration
     ownership (NVIDIA Bug 1624521) for mutually untrusting VMMs on one GPU: now or later.
-  - **Queued:** the UVM guest fault plane (`design/V3_UVM_DEMAND_PAGING.md` §5, "What the guest must see"); CDP child launch;
+  - **Queued:** the UVM guest fault plane (`design/V3_UVM_DEMAND_PAGING.md` §5, "What the guest must see"); CDP child launch (⊘ answered on `v3-cdp`, first line of §0);
     display leftovers (cursor, scaled windows, 16-bit/YUV, the §7 display apps); the rest of the driver
     matrix (570 UVM first-channel wall; hosts 535/590/595/610); re-running the app and graphics matrices
     at this master; Turing on hardware.

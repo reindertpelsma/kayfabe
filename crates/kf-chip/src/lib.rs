@@ -24,6 +24,7 @@ pub mod fsp_gsp;
 pub mod host_classes;
 pub mod hwref;
 pub mod ptekind;
+pub mod sked;
 pub mod usermode;
 
 pub use classes::{ClassSet, Kind, classes_for, is_any_dma_copy_class};

@@ -143,6 +143,26 @@ pub struct UsermodeRow {
     pub vf_rel: u64,
 }
 
+/// ★★★ **A walked leaf that is a SKED-reflected page, not memory** — the message kind over the VIDEO
+/// or SYSTEM_NON_COHERENT aperture ([`kf_chip::sked`], `docs/design/V3_CDP.md`). A GPU write
+/// through it launches a grid in the writing context (CUDA dynamic parallelism); its address names
+/// nothing. ⊘ Never a [`Desired`] row: mapped as memory (the pre-2026-09-30 path: the store at the
+/// leaf's address, kind PITCH) a device-side launch became an ordinary store into guest vidmem and
+/// no child grid ever ran (`[measured 2026-09-30]` `child_ran=0` at `3f67ed95`, `V3_CDP.md` §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SkedRow {
+    /// Guest VA.
+    pub va: u64,
+    /// Bytes (whole 4 KiB pages).
+    pub len: u64,
+    /// The store offset the host PTE names. The hardware ignores it; it is the guest's own address
+    /// for a VIDEO leaf (inside the store, like any row) and the store's first page for a
+    /// SYSTEM_NON_COHERENT one, so the host PTE never names host or guest-RAM physical memory.
+    pub off: u64,
+    /// ★★★ v3-roperm: the guest leaf's permissions, carried like a memory row's.
+    pub perm: kf_host::MapPerm,
+}
+
 /// ★★★ **Whether a target's accepted work is live yet** (ruling 2026-09-26 (5),
 /// `V3_BAR1_DOORBELL.md` §3.1). A target whose verb only QUEUES the change (the Hopper+ BAR1
 /// doorbell overlay, made by QEMU's main loop) answers [`Settle::Pending`] until it lands; the VA
@@ -205,6 +225,27 @@ pub trait MapTarget {
     fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
         let _ = u;
         Ok(Mapped::HeldByHost)
+    }
+
+    /// ★★★ Place a [`SkedRow`]: a host mapping of the MESSAGE kind at `s.va`, so a GPU write through
+    /// the VA reaches the host GPU's scheduler exactly as it would on bare metal (`V3_CDP.md`).
+    /// [`Mapped::Placed`] is OURS: its later UNMAP reaches [`MapTarget::unmap`] /
+    /// [`MapTarget::unmap_range`] at `s.va`.
+    ///
+    /// ⊘ **The default REFUSES, by name.** A SKED page answered "satisfied" with no host mapping
+    /// is exactly the defect this verb exists for: the parent grid ends, the child never runs and
+    /// every wait on the parent's stream hangs. A target that can place one (a host GPU VA space)
+    /// implements it; a CPU window cannot express one and keeps the refusal (no producer of a
+    /// SKED leaf in a BAR aperture is known: RM maps a compute object only for DMA).
+    ///
+    /// # Errors
+    /// The target's refusal, by name.
+    fn map_sked(&self, s: &SkedRow, defer: bool) -> Result<Mapped, String> {
+        let _ = defer;
+        Err(format!(
+            "SKED-reflected leaf {:#x}+{:#x}: this target cannot place a message-kind mapping",
+            s.va, s.len
+        ))
     }
 
     /// ★★★ **Place VA-contiguous guest-RAM rows with ONE host placement** (`V3_BATCHED_MAP.md`).
@@ -386,6 +427,29 @@ impl MapTarget for HostVas<'_> {
             // is reported as such and acknowledged HELD.
             Err(kf_host::RmError::Other(kf_host::VA_ALREADY_MAPPED)) => Ok(Mapped::HeldByHost),
             Err(e) => Err(format!("map {:#x}+{:#x}: {e:?}", d.va, d.len)),
+        }
+    }
+
+    fn map_sked(&self, s: &SkedRow, defer: bool) -> Result<Mapped, String> {
+        // ★ The host verb RM itself uses for this page is a DMA map of a compute object
+        // (`kgrobjGetMemInterMapParams_IMPL`); its PTE is VIDEO + the message kind + an ignored
+        // address. OUR store slice with the kind overridden to SMSKED_MESSAGE writes the same PTE
+        // and needs no host object whose lifetime a guest controls. ⊘ Hosts below 580.65.06
+        // have no per-map kind: the NVOS46 carry refuses it by name (`HOST_ABI_REFUSED`).
+        match self.rm.map_kind(
+            self.space,
+            self.store,
+            kf_host::MapBacking::SharedSlice,
+            s.off,
+            s.len,
+            Some(s.va),
+            defer,
+            kf_chip::sked::PTE_KIND_SMSKED_MESSAGE,
+            s.perm,
+        ) {
+            Ok(_) => Ok(Mapped::Placed),
+            Err(kf_host::RmError::Other(kf_host::VA_ALREADY_MAPPED)) => Ok(Mapped::HeldByHost),
+            Err(e) => Err(format!("map SKED {:#x}+{:#x}: {e:?}", s.va, s.len)),
         }
     }
 

@@ -98,6 +98,11 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     fn withholds_privileged(&self) -> bool {
         self.inner.withholds_privileged()
     }
+    // ★ v3-cdp: forwarded EXPLICITLY (the trait default refuses); never a recorded row — a
+    // SKED-reflected page is not memory a reader may resolve through.
+    fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
+        self.inner.map_sked(s, defer)
+    }
 }
 
 /// ★ `V3_BATCHED_MAP.md`: a host space that places VA-contiguous guest-RAM runs as batches
@@ -154,6 +159,10 @@ impl MapTarget for Batching<'_> {
     }
     fn invalidate(&self) -> Result<(), String> {
         self.bv.vas.invalidate()
+    }
+    // ★ v3-cdp: the production verb; its unmap is the whole-mapping one (`unmap_run` with no length).
+    fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
+        self.bv.vas.map_sked(s, defer)
     }
 }
 

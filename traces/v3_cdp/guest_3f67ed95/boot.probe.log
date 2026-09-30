@@ -1,0 +1,81 @@
+=== boot_capture tag=cdpp_g3f67_a at 2026-09-30T17:57:04+00:00 ===
+=== source revision: 82d18bab ===
+=== qemu binary: -rwxr-xr-x 1 root root 88578808 Sep 30 16:42 /workspace/bench/kf3-bins/3f67ed95/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kf-cdp/scripts/bench/boot_nvkvm.sh  sha256=0f19b0c944f9e441
+    used: /root/kf-cdp/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Sep 30 17:57:11 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 30 17:57 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 30 17:57 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 30 17:57 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 30 17:57 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 30 17:57 .
+drwxr-xr-x 18 root root   4000 Sep 30 17:57 ..
+cr--------  1 root root 240, 1 Sep 30 17:57 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 30 17:57 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kf-cdp/scripts/cdp/cdp_hook.sh at 2026-09-30T17:57:13+00:00 ===
+CDPH guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled
+=== CDPH run mode=0 sched=auto trace=1 2026-09-30T17:57:17+00:00
+CDPP mode=0 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.040 t_child=-1.000 t_streamquery_ok=0.040 t_eventquery_ok=0.040 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0 memcpy=0
+CDPP RESULT mode=0 sched=auto OK
+rc=0
+  kf3 lines=1127 guest dmesg lines=24 xid=0
+=== CDPH run mode=4 sched=auto trace=1 2026-09-30T17:57:25+00:00
+CDPP mode=4 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.043 t_child=-1.000 t_streamquery_ok=-1.000 t_eventquery_ok=-1.000 (-1 = not within 5 s)
+CDPP WATCHDOG: cudaDeviceSynchronize did not return in 20 s
+rc=137
+bash: line 1:  1982 Killed                  sudo timeout -k 5 45 env NVDIFF_OUT=/tmp/probe_4_auto_t.jsonl LD_PRELOAD=/tmp/nvdiff_shim.so /tmp/cdp_probe 4 auto 2>&1
+  kf3 lines=1128 guest dmesg lines=29 xid=0
+CDPH_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=102
+GUEST_DMESG_AFTER_NVRM=99
+GUEST_DMESG_WORKLOAD_DELTA=74
+=== HOST dmesg delta for this boot (watermark 1534 → 1534) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

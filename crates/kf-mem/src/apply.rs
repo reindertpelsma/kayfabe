@@ -11,7 +11,8 @@
 //!
 //! ⊘ **No O(placements) work here.** Everything below is proportional to the DIFF.
 
-use crate::ledger::{Desired, MapTarget, Mapped, UsermodeRow, desired_from_leaves};
+use crate::ledger::{Desired, MapTarget, Mapped, SkedRow, UsermodeRow, desired_from_leaves};
+use kf_chip::sked::MessageLeaf;
 use kf_chip::usermode::{UsermodeLeaf, UsermodeMmio};
 use kf_cuda::abi::{KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD};
 
@@ -103,6 +104,11 @@ pub struct Applied {
     /// ★ Usermode-page views satisfied WITHOUT a host mapping (a GPU VA view — see
     /// [`MapTarget::map_usermode`]'s default).
     pub usermode_unmirrored: usize,
+    /// ★★★ v3-cdp: SKED-reflected pages placed as message-kind host mappings
+    /// ([`MapTarget::map_sked`], `V3_CDP.md`) — included in `map_calls`, not in `mapped`.
+    pub sked_placed: usize,
+    /// ★ v3-cdp: SKED-reflected pages a target answered "already held by the host" (not ours).
+    pub sked_held: usize,
     /// ★ `V3_BATCHED_MAP.md`: map verbs issued to the target (a batch counts ONE).
     pub map_calls: usize,
     /// Unmap verbs issued to the target (a range counts ONE).
@@ -372,6 +378,20 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             );
             continue;
         }
+        // ★★★ v3-cdp: a SKED-reflected page is never a memory row either — it is placed as a
+        // message-kind mapping (`V3_CDP.md`). ⊘ Only that case is diverted: a SYS_COH message leaf
+        // on a family with no usermode MMIO (Turing … Ada: no producer is known) keeps its
+        // pre-existing path, unchanged.
+        if kf_chip::sked::message_leaf(r.ap, r.kind) == Some(MessageLeaf::SkedReflected) {
+            let at = SkedAt {
+                extent,
+                reserved: &reserved,
+                failed_unmaps: &failed_unmaps,
+                withhold_privileged,
+            };
+            apply_sked(target, r, cfg, &at, i, &mut out);
+            continue;
+        }
         // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
         // isolation: an unprivileged guest channel must not reach what the guest kernel marked
         // privileged, and the host cannot express the bit). Withheld, counted, named.
@@ -505,7 +525,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             }
         }
     }
-    if out.mapped + out.unmapped + out.usermode_trapped > 0 {
+    if out.mapped + out.unmapped + out.usermode_trapped + out.sked_placed > 0 {
         match target.invalidate() {
             Ok(()) => out.invalidated = true,
             Err(e) => {
@@ -518,6 +538,128 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
     }
     out
+}
+
+/// What [`apply_sked`] checks a row against — the entry's own bounds.
+struct SkedAt<'a> {
+    extent: Option<u64>,
+    reserved: &'a [(u64, u64)],
+    failed_unmaps: &'a [(u64, u64)],
+    withhold_privileged: bool,
+}
+
+/// ★★★ v3-cdp — **one SKED-reflected leaf** (`V3_CDP.md`): bounded like any row (whole pages,
+/// inside the store, a CPU window's extent, never over OUR placements), then handed to the target's
+/// [`MapTarget::map_sked`] — never turned into memory.
+fn apply_sked(
+    target: &dyn MapTarget,
+    r: &DiffRun,
+    cfg: &ApplyCfg<'_>,
+    at: &SkedAt<'_>,
+    i: usize,
+    out: &mut Applied,
+) {
+    // ★★★ v3-roperm: the same policy as a memory leaf — a user twin never gets a leaf the guest
+    // kernel marked privileged.
+    if r.privileged {
+        if at.withhold_privileged {
+            out.withhold_privileged(i, r);
+            return;
+        }
+        out.priv_mirrored += 1;
+    }
+    // The hardware ignores the address. A VIDEO leaf keeps the guest's own (bounded by the store
+    // like any vidmem row); a SYSTEM_NON_COHERENT one names the store's first page, so the host PTE
+    // never names host or guest-RAM physical memory (`SkedRow::off`).
+    let off = if r.ap == crate::ledger::AP_VIDMEM {
+        r.at
+    } else {
+        0
+    };
+    let mut s = SkedRow {
+        va: r.va,
+        len: r.len,
+        off,
+        perm: r.perm,
+    };
+    let m = cfg.grain.wrapping_sub(1);
+    if s.len == 0 || (s.va | s.len | s.off) & m != 0 {
+        out.refuse(
+            i,
+            format!(
+                "SKED-reflected leaf {:#x}+{:#x} (at {:#x}) is not whole {:#x}-byte pages",
+                s.va, s.len, s.off, cfg.grain
+            ),
+        );
+        return;
+    }
+    if s.off.checked_add(s.len).is_none_or(|e| e > cfg.store_bytes) {
+        out.refuse(
+            i,
+            format!(
+                "SKED-reflected leaf {:#x}+{:#x} names {:#x}, outside the store",
+                s.va, s.len, s.off
+            ),
+        );
+        return;
+    }
+    if let Some(ext) = at.extent {
+        if s.va >= ext {
+            out.clipped_bytes += s.len;
+            out.codes[i] = KFWR_ACK_HELD;
+            return;
+        }
+        let end = s.va.saturating_add(s.len);
+        if end > ext {
+            out.clipped_bytes += end - ext;
+            s.len = ext - s.va;
+        }
+    }
+    let end = s.va.saturating_add(s.len);
+    if let Some(&(a, b)) = at.reserved.iter().find(|&&(a, b)| s.va < b && a < end) {
+        out.vmm_overlaps += 1;
+        out.refuse(
+            i,
+            format!(
+                "SKED-reflected leaf {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) (Q11)",
+                s.va, s.len
+            ),
+        );
+        return;
+    }
+    if at.failed_unmaps.iter().any(|&(a, b)| s.va < b && a < end) {
+        out.refuse(
+            i,
+            format!(
+                "SKED-reflected leaf {:#x}+{:#x}: over a placement whose unmap was refused",
+                s.va, s.len
+            ),
+        );
+        return;
+    }
+    out.map_calls += 1;
+    match target.map_sked(&s, true) {
+        Ok(Mapped::Placed) => {
+            out.sked_placed += 1;
+            static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
+                eprintln!(
+                    "kf-mem: SKED-REFLECTED leaf {:#x}+{:#x} (ap={} at={:#x}) placed as a message-kind host mapping — device-side launches through it reach the host scheduler",
+                    s.va, s.len, r.ap, r.at
+                );
+            }
+        }
+        Ok(Mapped::HeldByHost) => {
+            out.held += 1;
+            out.sked_held += 1;
+            out.codes[i] = KFWR_ACK_HELD;
+            eprintln!(
+                "kf-mem: SKED-reflected leaf {:#x}+{:#x} HELD BY HOST (host RM already maps that VA)",
+                s.va, s.len
+            );
+        }
+        Err(e) => out.refuse(i, e),
+    }
 }
 
 /// ★★★ One usermode-page view (`V3_BAR1_DOORBELL.md` §4): bounded like any row, then handed to
@@ -642,8 +784,32 @@ mod tests {
         batching: Option<Option<u64>>,
         /// ★ v3-roperm: a user twin (withholds privileged leaves).
         withhold_priv: bool,
+        /// ★ v3-cdp: refuse a SKED placement at this VA.
+        refuse_sked: Option<u64>,
+        /// OUR VMM placements (a guest leaf over one is refused before the target is asked).
+        reserved: Vec<(u64, u64)>,
     }
     impl MapTarget for Rec {
+        fn reserved(&self) -> Vec<(u64, u64)> {
+            self.reserved.clone()
+        }
+        fn map_sked(&self, s: &SkedRow, _: bool) -> Result<Mapped, String> {
+            if self.refuse_sked == Some(s.va) {
+                return Err("sked refused (fake)".into());
+            }
+            self.ops.borrow_mut().push(format!(
+                "sked {:#x}+{:#x} @{:#x}{}",
+                s.va,
+                s.len,
+                s.off,
+                perm_tag(s.perm)
+            ));
+            Ok(if self.held_at == Some(s.va) {
+                Mapped::HeldByHost
+            } else {
+                Mapped::Placed
+            })
+        }
         fn withholds_privileged(&self) -> bool {
             self.withhold_priv
         }
@@ -1539,5 +1705,195 @@ mod tests {
             vec!["trap 0x1230000+0x8000 vf0x0", "inval"]
         );
         assert_eq!(a.clipped_bytes, 0x8000);
+    }
+
+    // ★★★ v3-cdp (`V3_CDP.md`). The leaf the walker reported in a kf3 guest for libcuda's
+    // `UVM_MAP_DYNAMIC_PARALLELISM_REGION` (`traces/v3_cdp/`): 4 KiB, aperture VIDEO, address 0,
+    // kind SMSKED_MESSAGE — UVM's `make_sked_reflected_pte_turing`.
+    const SKED_VA: u64 = 0x75b4_70c0_0000;
+    fn sked_leaf(ap: u8, at: u64) -> DiffRun {
+        DiffRun {
+            ap,
+            kind: kf_chip::sked::PTE_KIND_SMSKED_MESSAGE,
+            ..m(SKED_VA, at, 0x1000)
+        }
+    }
+
+    /// ★★★★★ THE CDP DEFECT: a SKED-reflected leaf reaches the target as a message-kind placement,
+    /// never as memory. ⊘ Before v3-cdp it went down the memory path — the store at the leaf's
+    /// address (0), kind PITCH — so a device-side launch was an ordinary store into guest vidmem
+    /// page 0 and the child never ran (`V3_CDP.md` §3).
+    #[test]
+    fn a_sked_reflected_leaf_is_a_message_kind_placement_never_memory() {
+        for ap in [crate::ledger::AP_VIDMEM, crate::ledger::AP_SYS_NONCOHERENT] {
+            let t = Rec::default();
+            let a = apply_entry(
+                &t,
+                &[sked_leaf(ap, 0), m(0x2_0000_0000, 0x10_0000, 0x1000)],
+                &cfg(),
+            );
+            assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; 2], "ap {ap}");
+            assert_eq!(
+                *t.ops.borrow(),
+                vec![
+                    "sked 0x75b470c00000+0x1000 @0x0",
+                    "map 0x200000000+0x1000",
+                    "inval"
+                ],
+                "ap {ap}: the SKED page is placed by `map_sked`; memory beside it still maps"
+            );
+            assert_eq!((a.sked_placed, a.mapped, a.refused), (1, 1, 0));
+        }
+    }
+
+    /// ★ The address is ignored by the hardware: a VIDEO leaf keeps the guest's own (RM's
+    /// compute-object page names `4 KiB * ChID`), bounded by the store like any vidmem row; a
+    /// SYSTEM_NON_COHERENT one (Hopper+ UVM) names the store's first page — never guest RAM.
+    #[test]
+    fn a_sked_leaf_names_the_store_never_guest_ram() {
+        let t = Rec::default();
+        let a = apply_entry(
+            &t,
+            &[
+                sked_leaf(crate::ledger::AP_VIDMEM, 0x5000),
+                DiffRun {
+                    va: SKED_VA + 0x10_0000,
+                    ..sked_leaf(crate::ledger::AP_SYS_NONCOHERENT, 0x1234_5000)
+                },
+            ],
+            &cfg(),
+        );
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; 2]);
+        assert_eq!(
+            *t.ops.borrow(),
+            vec![
+                "sked 0x75b470c00000+0x1000 @0x5000",
+                "sked 0x75b470d00000+0x1000 @0x0",
+                "inval"
+            ]
+        );
+        // Outside the store, not whole pages, over one of OUR placements: refused by name.
+        let t = Rec {
+            reserved: vec![(SKED_VA + 0x20_0000, SKED_VA + 0x30_0000)],
+            ..Rec::default()
+        };
+        let a = apply_entry(
+            &t,
+            &[
+                sked_leaf(crate::ledger::AP_VIDMEM, (1 << 30) - 0x800),
+                DiffRun {
+                    len: 0x800,
+                    va: SKED_VA + 0x10_0000,
+                    ..sked_leaf(crate::ledger::AP_VIDMEM, 0)
+                },
+                DiffRun {
+                    va: SKED_VA + 0x20_0000,
+                    ..sked_leaf(crate::ledger::AP_VIDMEM, 0)
+                },
+            ],
+            &cfg(),
+        );
+        assert_eq!(a.codes, vec![KFWR_ACK_FAILED; 3]);
+        assert_eq!((a.refused, a.vmm_overlaps, a.sked_placed), (3, 1, 0));
+        assert!(t.ops.borrow().is_empty(), "nothing placed, no invalidate");
+    }
+
+    /// ⊘ A target that cannot place a message-kind mapping REFUSES it by name (the trait default)
+    /// — "satisfied with no mapping" is exactly the silent hang this verb exists for.
+    #[test]
+    fn a_target_without_a_sked_verb_refuses_the_page_by_name() {
+        struct Plain;
+        impl MapTarget for Plain {
+            fn map(&self, _: &Desired, _: bool) -> Result<Mapped, String> {
+                panic!("a SKED page must never reach the memory verb")
+            }
+            fn unmap(&self, _: u64, _: bool) -> Result<(), String> {
+                Ok(())
+            }
+            fn invalidate(&self) -> Result<(), String> {
+                panic!("nothing was placed")
+            }
+        }
+        let a = apply_entry(&Plain, &[sked_leaf(crate::ledger::AP_VIDMEM, 0)], &cfg());
+        assert_eq!(a.codes, vec![KFWR_ACK_FAILED]);
+        assert!(
+            a.first_refusal
+                .as_deref()
+                .is_some_and(|w| w.contains("SKED-reflected")),
+            "{:?}",
+            a.first_refusal
+        );
+    }
+
+    /// ★ v3-roperm's policy holds for a SKED page too: a user twin never gets a leaf the guest kernel
+    /// marked privileged; a kernel space mirrors it. A host that already holds the VA satisfies it.
+    #[test]
+    fn a_privileged_sked_leaf_is_withheld_from_a_user_twin() {
+        let privileged = DiffRun {
+            privileged: true,
+            ..sked_leaf(crate::ledger::AP_VIDMEM, 0)
+        };
+        let user = Rec {
+            withhold_priv: true,
+            ..Rec::default()
+        };
+        let a = apply_entry(&user, &[privileged], &cfg());
+        assert_eq!(
+            (a.codes[0], a.priv_withheld, a.sked_placed),
+            (KFWR_ACK_FAILED, 1, 0)
+        );
+        assert!(user.ops.borrow().is_empty());
+        let kernel = Rec::default();
+        let a = apply_entry(&kernel, &[privileged], &cfg());
+        assert_eq!(
+            (a.codes[0], a.priv_mirrored, a.sked_placed),
+            (KFWR_ACK_APPLIED, 1, 1)
+        );
+        let held = Rec {
+            held_at: Some(SKED_VA),
+            ..Rec::default()
+        };
+        let a = apply_entry(&held, &[sked_leaf(crate::ledger::AP_VIDMEM, 0)], &cfg());
+        assert_eq!((a.codes[0], a.sked_held, a.held), (KFWR_ACK_HELD, 1, 1));
+        assert_eq!(
+            *held.ops.borrow(),
+            vec!["sked 0x75b470c00000+0x1000 @0x0"],
+            "held is not ours: no invalidate for it"
+        );
+        let refused = Rec {
+            refuse_sked: Some(SKED_VA),
+            ..Rec::default()
+        };
+        let a = apply_entry(&refused, &[sked_leaf(crate::ledger::AP_VIDMEM, 0)], &cfg());
+        assert_eq!((a.codes[0], a.refused), (KFWR_ACK_FAILED, 1));
+    }
+
+    /// ★ On Hopper+ the two message-kind leaves take their own paths: SYS_COH over the usermode
+    /// page is the doorbell view (a trap on BAR1, unmirrored on a GPU space), SYS_NONCOH is UVM's
+    /// SKED page. On Turing … Ada a SYS_COH message leaf keeps its pre-existing path (above).
+    #[test]
+    fn on_hopper_the_doorbell_view_and_the_sked_page_never_mix() {
+        let t = Rec {
+            traps_usermode: true,
+            ..Rec::default()
+        };
+        let a = apply_entry(
+            &t,
+            &[
+                gh100_db_leaf(),
+                sked_leaf(crate::ledger::AP_SYS_NONCOHERENT, 0),
+            ],
+            &hopper(),
+        );
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; 2]);
+        assert_eq!(
+            *t.ops.borrow(),
+            vec![
+                "trap 0x1230000+0x10000 vf0x0",
+                "sked 0x75b470c00000+0x1000 @0x0",
+                "inval"
+            ]
+        );
+        assert_eq!((a.usermode_trapped, a.sked_placed), (1, 1));
     }
 }
