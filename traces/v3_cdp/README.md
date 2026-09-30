@@ -29,5 +29,19 @@ line-count watermark cannot see new lines once the host's dmesg ring is full (`V
 
 ## Merge bar
 
-Pending at the time this README was first written; the result is appended below by the commit that
-adds `merge_check/`.
+**PASSED at `2830988f`** (the branch head then: the fix `46509dce` + harness scripts + docs/evidence),
+`scripts/bench/box/merge_check.sh v3-cdp cdp_2830988f`, run from a repo checkout on the same box,
+18:23:29 → 18:49:00 UTC (`merge_check/mergecheck_2830988f.tgz`: the bar's log and every stage's log):
+
+```
+HEAD=2830988f183c2475a89acc989523a977c5671ab4
+TESTS passed 1752 failed 0            (master 1742 + the 10 new GPU-free tests)
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0   KF3_BUILT …/kf3-bins/2830988f/qemu-system-x86_64
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-09-30T18:49:00+00:00
+```
+
+Commits after `2830988f` on `v3-cdp` add evidence and docs only.

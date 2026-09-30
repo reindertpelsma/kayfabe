@@ -1,10 +1,10 @@
 # V3 CDP — CUDA dynamic parallelism: why the child grid never ran, and the fix
 
-**STATUS: ANSWERED + FIXED, 2026-09-30 — branch `v3-cdp`.** Fix commit `46509dce`; every hardware
-number below was measured with the kf3 binary of `090b20d9` (= `46509dce` + harness scripts, no code
-change) unless it names another revision. Box: vast 53004208 (ssh `v3060`), RTX 3060 GA106, nested
-KVM, host and guest driver 580.159.04 (open). Evidence: `traces/v3_cdp/` (its README names every run
-and revision). Merge bar: §5.3.
+**STATUS: ANSWERED + FIXED, 2026-09-30 — branch `v3-cdp`, merge bar passed at `2830988f` (§5.3).**
+Fix commit `46509dce`; every CDP number below was measured with the kf3 binary of `090b20d9`
+(= `46509dce` + harness scripts, no code change) unless it names another revision. Box: vast 53004208
+(ssh `v3060`), RTX 3060 GA106, nested KVM, host and guest driver 580.159.04 (open). Evidence:
+`traces/v3_cdp/` (its README names every run and revision).
 
 Every NVIDIA source citation is to `ogkm-580` (`research_clones/ogkm-580.159.04`, the bench's own
 driver); paths start at that tree's root.
@@ -170,8 +170,11 @@ The ioctl trace of the fixed mode-4 run is in lockstep with bare metal (§2.2, l
 
 ### 5.3 The merge bar
 
-See `traces/v3_cdp/README.md` §Merge bar for the run at the branch head (crate tests, gates 9/9,
-kf3 build, bare 30/30, thin 30/30).
+**Passed at `2830988f`** (the fix + harness scripts + this note's first version), 2026-09-30
+18:23–18:49 UTC, same box: crate tests **1752 / 0** (master's 1742 + the 10 new ones), gates **9/9**,
+`KF3_RC=0`, bare-metal suite **30/30**, `FG_RC=0`, thin suite **30/30** (`traces/v3_cdp/README.md`
+§Merge bar, `merge_check/mergecheck_2830988f.tgz`). ⚠ Neither the gates nor the thin suite run
+libcuda, so they exercise the unchanged memory path, not `map_sked`; §5.1–5.2 are the SKED evidence.
 
 ## 6. What is and is not established
 

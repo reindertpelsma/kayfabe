@@ -8,7 +8,7 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
 
 ## 0. Current resumption — start here
 
-- **2026-09-30 — `v3-cdp` (not merged): CUDA dynamic parallelism works in a kf3 guest.** The child grid never ran because the guest's SKED-reflected page (libcuda's `UVM_MAP_DYNAMIC_PARALLELISM_REGION`, kind `SMSKED_MESSAGE`) was mirrored as a memory row; fix `46509dce` places it as a message-kind host mapping. At kf3 `090b20d9` (RTX 3060) every CDP launch shape runs its child and `cdpSimpleQuicksort` passes (128/1 000/10 000); merge bar: `traces/v3_cdp/README.md`. `design/V3_CDP.md`.
+- **2026-09-30 — `v3-cdp` (not merged): CUDA dynamic parallelism works in a kf3 guest.** The child grid never ran because the guest's SKED-reflected page (libcuda's `UVM_MAP_DYNAMIC_PARALLELISM_REGION`, kind `SMSKED_MESSAGE`) was mirrored as a memory row; fix `46509dce` places it as a message-kind host mapping. At kf3 `090b20d9` (RTX 3060) every CDP launch shape runs its child and `cdpSimpleQuicksort` passes (128/1 000/10 000); merge bar passed at `2830988f` (1752/0, gates 9/9, KF3_RC=0, bare 30/30, thin 30/30; later commits evidence/docs only). `design/V3_CDP.md`, `traces/v3_cdp/`.
 - **2026-09-30 — master and v3 = `b32aa046`.** Landed since `5c639f54`:
   - **CI repair** (`v3-ci`, `bf6e7640`): first green GitHub CI; the hardware bar is now fail-closed and
     includes a bare-metal suite (`scripts/bench/box/merge_check.sh`, run from a repo checkout).
