@@ -112,6 +112,8 @@ jobs:
             sudo dmesg | grep -E 'apparmor=|memfd' | tail -40 || true
           fi
           exit "$rc"
+      - name: Containment suite with a privileged external observer
+        run: python3 scripts/ci/privileged_sandbox.py
       - name: Remove the CI-only namespace profile
         if: always()
         run: python3 scripts/ci/runner_namespaces.py --remove
@@ -1826,6 +1828,7 @@ jobs:
         run: |
           python3 scripts/ci/runner_namespaces.py
           KAYFABE_SLOW=1 cargo test --workspace --no-fail-fast
+          python3 scripts/ci/privileged_sandbox.py
       - name: Remove the CI-only namespace profile
         if: always()
         run: python3 scripts/ci/runner_namespaces.py --remove
