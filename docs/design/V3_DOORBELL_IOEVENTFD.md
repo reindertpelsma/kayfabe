@@ -188,6 +188,32 @@ timeouts, 0 failed deassigns (three runs).
 
 *(filled in as the runs land; each row carries its revision and box)*
 
+### 7.x The protocol for a NON-nested host (not yet reachable, 2026-09-30)
+
+A physical host was not reachable from this workspace on 2026-09-28/29 (`V3_DOORBELL_BASELINE.md`,
+"Non-nested baseline protocol" — its steps 1–5 still govern: shared-host exclusions, recording the
+exact configuration, stock host CUDA control first, paired repeated runs, counters bound to the
+launched QEMU). On top of them, the fast path adds exactly this, on ONE host, strictly serial:
+
+1. Provision as for any box (`scripts/bench/box/provision_full.sh`) and run the merge bar at the
+   candidate revision (`merge_check.sh`: tests, gates 9/9, kf3 build, bare-metal 30/30, thin 30/30
+   with the fast path OFF — the property's default). Record `nproc`, CPU model, `uname -r`,
+   `cat /sys/module/kvm*/parameters/*`, and that `/proc/cpuinfo` has no `hypervisor` flag.
+2. `bash scripts/bench/dbfast_lane.sh <tag>` from that checkout: thin suite ON (30/30 expected),
+   guest-timed doorbell stores ON/OFF (`DBL_EXIT` rows: `probe` = the transport alone, `unknown` =
+   the trapped reference in the same boot, `dummy_*` = the exit floors), the CUDA ladder OFF/ON
+   (`CL_ROW` grades + `cup8bench` per-launch `GUEST_BSUM`), and the GPU-free rows (A: vCPU cost per
+   store vs same-address registrations; B: signal→drainer delivery under register traffic).
+3. LLM decode, paired and repeated: `llm_parity_box.sh <tag> <kf3 bin> gprov,hprov,host` once, then
+   alternate `KF3_DEV_EXTRA=doorbell-ioeventfd=on llm_parity_box.sh <tag>_onN <bin> guest_pm` and the
+   same without `KF3_DEV_EXTRA` (`_offN`), N = 1..3. Read `LLM_RUN … decode_tok_s=` (warm, 512 and 2048; `llm_parity_summary.py` tabulates),
+   `LLM_KVM_EXITS`, `LLM_DOORBELLS`, `LLM_THREAD_CPU` (vcpu/drainer/workers ms) per process, and the
+   status line's `dbfast[…]` (`wake_to_deliver` p50/p99, coalescing = `doorbells/wakes`).
+4. Optionally the spin experiment (`KF3_DBFAST_SPIN_US=50` and `=200` with the fast path ON): tok/s
+   against drainer CPU; it becomes a default only if the gain is worth a core.
+5. Report ratios per box (guest/host on the same box), never across boxes, and label every row
+   **non-nested** only when step 1's `hypervisor` check says so.
+
 ## 8. Side question: could the guest's token simply EQUAL the host twin's token?
 
 *(Asked 2026-09-30: then the real host doorbell page could be mapped straight into the guest with no

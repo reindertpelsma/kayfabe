@@ -295,6 +295,9 @@ enum Cmd {
     Remove {
         tag: u64,
         ack: mpsc::SyncSender<FastLedger>,
+        /// Drop the final count instead of delivering it (a registration replaced under a live
+        /// token: its count predates the token's current generation).
+        discard: bool,
     },
 }
 
@@ -532,7 +535,13 @@ impl DbFast {
             r.placed -= old.placed.len();
             let _ = self.poller.unwatch(old.efd.as_source_fd());
             let (ack, _) = mpsc::sync_channel(1);
-            self.send(Cmd::Remove { tag: old.tag, ack });
+            // Its last count predates the token word the caller just installed: discarded, never
+            // delivered to the new generation.
+            self.send(Cmd::Remove {
+                tag: old.tag,
+                ack,
+                discard: true,
+            });
             c.live_regs.fetch_sub(1, Ordering::Relaxed);
         }
         r.next += 1;
@@ -597,7 +606,11 @@ impl DbFast {
         let _ = self.poller.unwatch(reg.efd.as_source_fd());
         let (ack, done) = mpsc::sync_channel(1);
         let t0 = Instant::now();
-        self.send(Cmd::Remove { tag: reg.tag, ack });
+        self.send(Cmd::Remove {
+            tag: reg.tag,
+            ack,
+            discard: false,
+        });
         c.deregistered.fetch_add(1, Ordering::Relaxed);
         c.live_regs.fetch_sub(1, Ordering::Relaxed);
         match done.recv_timeout(ACK_TIMEOUT) {
@@ -711,13 +724,18 @@ impl DbFast {
                         },
                     );
                 }
-                Cmd::Remove { tag, ack } => {
+                Cmd::Remove { tag, ack, discard } => {
                     let mut ledger = FastLedger::default();
                     if let Some(mut l) = side.live.remove(&tag) {
                         // ★ The FINAL drain: every KVM placement is gone, so this count is the last
-                        // one this registration can ever have. Delivered like any other.
-                        let t0 = Instant::now();
-                        self.drain_and_deliver(&mut l, tag, sink, t0);
+                        // one this registration can ever have. Delivered like any other — unless the
+                        // registration was replaced under a live token (then discarded).
+                        if discard {
+                            let _ = l.efd.drain();
+                        } else {
+                            let t0 = Instant::now();
+                            self.drain_and_deliver(&mut l, tag, sink, t0);
+                        }
                         ledger = l.ledger;
                     }
                     let _ = ack.send(ledger);
@@ -1090,6 +1108,27 @@ mod tests {
             1,
             "the old eventfd's stray count was never read"
         );
+    }
+
+    /// ⊘ A birth over a live registration (its free never came): the old registration is removed
+    /// and its pending count DISCARDED — it predates the token word the new birth installed, so
+    /// delivering it would ring the new generation for an old store.
+    #[test]
+    fn a_registration_replaced_under_a_live_token_never_delivers_its_old_count() {
+        let f = Arc::new(DbFast::new(8, kick()).unwrap());
+        f.enable(Box::new(Arc::new(FakeKvm::default())));
+        f.site_add(0x90);
+        let s = Arc::new(Rec::default());
+        f.register(4, 0x4);
+        let old = efd_of(&f, 4);
+        old.signal().unwrap();
+        f.register(4, 0x4); // no deregister in between
+        assert_eq!(f.counters.double_register.load(Ordering::Relaxed), 1);
+        assert_eq!(pump(&f, &*s), 0, "the old count is discarded, the new fd is quiet");
+        assert!(s.got.lock().unwrap().is_empty());
+        efd_of(&f, 4).signal().unwrap();
+        assert_eq!(pump(&f, &*s), 1, "the new registration delivers");
+        assert_eq!(f.live(), (1, 1));
     }
 
     #[test]
