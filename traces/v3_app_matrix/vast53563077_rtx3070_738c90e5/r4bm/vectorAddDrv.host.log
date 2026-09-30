@@ -1,0 +1,7 @@
+=== vectorAddDrv side=host start=2026-09-30T18:46:54+00:00 host=ubuntu cmd: cd /opt/apps/bundle/samples && ./vectorAddDrv
+Vector Addition (Driver API)
+> Using CUDA Device [0]: NVIDIA GeForce RTX 3070
+> findModulePath found file at <./vectorAdd_kernel64.fatbin>
+> initCUDA loading module: <./vectorAdd_kernel64.fatbin>
+Result = PASS
+=== end rc=0 secs=2 2026-09-30T18:46:56+00:00

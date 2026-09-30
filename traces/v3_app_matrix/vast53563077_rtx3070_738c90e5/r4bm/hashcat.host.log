@@ -1,0 +1,32 @@
+=== hashcat side=host start=2026-09-30T19:01:58+00:00 host=ubuntu cmd: hashcat --potfile-disable -O -m 0 -a 3 e4726719b68b205913167f0975d977ee '?l?l?l?l?l?l' 2>&1 | tail -30
+Initialized device kernels and memory[2KStarting self-test. Please be patient...[2KFinished self-test[2KStarting autotune. Please be patient...[2KFinished autotune                                                          [2K[33mThe wordlist or mask that you are using is too small.[0m
+[33mThis means that hashcat cannot use the full parallel power of your device(s).[0m
+[33mUnless you supply more work, your cracking speed will drop.[0m
+[33mFor tips on supplying more work, see: https://hashcat.net/faq/morework[0m
+[33m[0m
+                                                          [s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit =>                                                           [33mApproaching final keyspace - workload adjusted.[0m
+[33m[0m
+[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit =>                                                           e4726719b68b205913167f0975d977ee:kayfab
+                                                          
+Session..........: hashcat
+Status...........: Cracked
+Hash.Mode........: 0 (MD5)
+Hash.Target......: e4726719b68b205913167f0975d977ee
+Time.Started.....: Wed Sep 30 19:02:14 2026 (0 secs)
+Time.Estimated...: Wed Sep 30 19:02:14 2026 (0 secs)
+Kernel.Feature...: Optimized Kernel
+Guess.Mask.......: ?l?l?l?l?l?l [6]
+Guess.Queue......: 1/1 (100.00%)
+Speed.#1.........:  7782.6 MH/s (0.16ms) @ Accel:512 Loops:338 Thr:32 Vec:8
+Recovered........: 1/1 (100.00%) Digests
+Progress.........: 91712582/308915776 (29.69%)
+Rejected.........: 0/91712582 (0.00%)
+Restore.Point....: 128529/456976 (28.13%)
+Restore.Sub.#1...: Salt:0 Amplifier:0-338 Iteration:0-338
+Candidate.Engine.: Device Generator
+Candidates.#1....: sabidu -> xpplab
+Hardware.Mon.#1..: Temp: 50c Fan: 30% Util:  0% Core:1725MHz Mem:6801MHz Bus:16
+
+Started: Wed Sep 30 19:01:58 2026
+[2KStopped: Wed Sep 30 19:02:15 2026
+=== end rc=0 secs=18 2026-09-30T19:02:16+00:00

@@ -1,0 +1,4 @@
+=== sha256 side=host start=2026-09-30T18:49:08+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/sha256
+METRIC sha256_MHs 988.2
+CHECK ok
+=== end rc=0 secs=3 2026-09-30T18:49:11+00:00
