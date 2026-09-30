@@ -1,5 +1,29 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **NEXT — owner direction 2026-10-01 (design only, nothing built): (1) a STOCK guest display with no
+> guest-side tweaks, then (2) a VMM-agnostic display BROKER instead of QEMU's UI — both before Windows.**
+> What the M1–M3 lanes still change inside the guest (`scripts/bench/display/`), and what each needs:
+> - `modprobe nvidia-drm modeset=1 fbdev=1` by hand after boot → test a packaged driver loading at boot
+>   (Ubuntu's `modprobe.d` already sets `modeset=1`); the bench loads the driver over ssh.
+> - X11's `xorg.conf` pins the BusID: the VM runs `-vga none` and kf3 shows no firmware framebuffer, so no
+>   device is `boot_vga` and Xorg cannot choose (Wayland enumerates DRM and needs no pin) → **kf3 must be
+>   the boot display**: a UEFI GOP (and a legacy VGA path) over a kf-disp linear framebuffer, handed over
+>   to the NVIDIA driver when it loads. ★ Windows needs this regardless: its installer, boot and safe mode
+>   run on the GOP framebuffer before `nvlddmkm` starts. The largest item (~1–2 weeks, estimate).
+> - X11 desktops need `GF100_DISP_SW` (owner choice A/B, `STATUS_AND_HANDOFF.md` §0).
+> - The lightdm autologin is a bench convenience, not a display requirement.
+> - Leftovers for daily use: cursor plane, scaled windows, 16-bit/YUV surfaces, mode lists and
+>   resize (hotplug with a new EDID when the broker's window changes size).
+> **Broker:** adopt nvkvm-pv's display broker protocol (`nvkvm-pv docs/reference/broker-protocol.md`,
+> design + threat model `docs/internal/broker-design.md`): the VMM holds one unix socket; scanout buffers
+> cross as dma-buf fds (`ATTACH`, `SCM_RIGHTS`) and come back as `RELEASE`; the broker sends `SURFACE`
+> (window size — drives resize), keyboard/pointer/focus input, and capability bits; input never blocks
+> on rendering. kayfabe's side: export kf-disp's scanout surfaces (host GPU memory) as dma-bufs through
+> the host driver's dma-buf exporter, and inject the broker's input through the VMM's input device (the
+> one VMM-specific part). It replaces the QEMU console as the product path (the console stays for tests
+> and screendumps), works for VMMs with no display stack, and keeps the display-server connection out
+> of the VMM (privilege separation, the broker's original reason).
+
 > **STATUS: M3 MET FOR THE WAYLAND DESKTOP; X11 DESKTOP PARTIAL — 2026-09-30 (branch `v3-display2`;
 > display stays default-off).** RTX 3060 (GA106), host + guest 580.159.04, vast 53505783.
 > - ★ **Merged with the doorbell fast path as `v3-mc22` (2026-09-30), KF3 ABI 10** (`traces/v3_mc22/`):

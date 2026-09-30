@@ -65,7 +65,9 @@ citation: ask whether its reason still holds before relying on it.
    Turing and newer** (host driver × guest driver × GPU arch), not one bench die. Vast VM offers seen on
    2026-09-28: TU116 (GTX 1660 S/Ti) and TU106 (RTX 2060 S), GA10x, AD10x and GB20x in number; **no
    GA100, GH100 or GB10x as VMs** — those rows stay source-derived until such a host is available.
-6. Windows guest last.
+6. Windows guest last. ★ **Refined 2026-10-01 (owner):** before Windows, the display must work with a
+   **stock guest and no guest-side tweaks**, and frames should leave through a **VMM-agnostic broker**
+   rather than QEMU's SDL/GTK UI (`design/V3_DISPLAY.md`, the NEXT note at the top).
 - ⊘ *Superseded 2026-09-28 by the refinement of item 5 (Turing is on the arch axis, so it runs on
   hardware before the sweep):* Later, if time: **Turing** on hardware (its GSP model is source-derived only).
 - **All working, verified work lands on master.** Nothing verified may be stranded on a branch.
