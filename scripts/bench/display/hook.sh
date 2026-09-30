@@ -79,4 +79,7 @@ else
 fi
 wait $SP
 grep '^KFDISP_' "$OUT/show.log" | sed 's/^/DISPLAY_/'
+# ★ after the probe exited (its restore + close are inside that exit): nvidia-drm's own complaints.
+# A missing flip event is a timeout here; an event nobody expected is a WARN (`cut here`).
+say "FLIP_EVENT_TIMEOUTS=$(gq 'sudo dmesg | grep -c "Flip event timeout"') DRM_WARNS=$(gq 'sudo dmesg | grep -c "cut here"')"
 say "HOOK_DONE"

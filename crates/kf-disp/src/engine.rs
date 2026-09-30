@@ -895,6 +895,15 @@ impl Engine {
         // (`ogkm-580: kernel-open/nvidia-drm/nvidia-drm-modeset.c:93-135`), and WARNs on any other
         // (`[measured m1b]` the first fbdev modeset: `WARN_ON(nv_flip == NULL)`). Snapshotted before
         // any member of the group — the core among them — is armed.
+        // ⊘ The rule's other half is the NEW state's notifier (`complete`): a window flipped to NO
+        // surface is programmed with no notifier (`nvkms-evo3.c:3901-3904`, the KAPI sets one only
+        // for a non-NULL surface, `nvkms-kapi.c:2956-2970`, `:3175-3189`), so it raises nothing,
+        // although nvidia-drm counted an event for it. `[measured m1c]` that is the one "Flip event
+        // timeout" of the lane: the probe exited with its framebuffer on the plane, the kernel's
+        // `atomic_remove_fb` disabled the plane in a blocking commit, and nvidia-drm waited 3 s for
+        // an event no hardware sends — real GPUs log the same (NVIDIA/open-gpu-kernel-modules#1361,
+        // "framebuffer removal on DRM file close"). Raising an event there instead would be a
+        // completion for work that has no notifier; the probe restores its CRTC instead.
         let was_active: Vec<(u32, bool)> = members
             .iter()
             .map(|n| (*n, self.window_was_active(*n, &heads_before)))
