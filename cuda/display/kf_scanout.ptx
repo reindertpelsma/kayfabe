@@ -6,8 +6,9 @@
 // 4-byte words. Each word is read from its block-linear address in the guest's surface (the store)
 // and written, pitch-linear, into the page-locked frame the QEMU console shows. The address is
 // kf_disp::scanout::bl_offset, which is the reference this file must match:
-//   in a GOB (64 bytes x 8 rows): x[3:0] -> bits 3:0, y[0] -> bit 4, x[4] -> bit 5,
-//   y[2:1] -> bits 7:6, x[5] -> bit 8;  gob = ((block_y * gobs_per_row + gob_x) << bh) + gob_in_block
+//   in a GOB (64 bytes x 8 rows): x[3:0] -> bits 3:0, y[1:0] -> bits 5:4, x[4] -> bit 6,
+//   y[2] -> bit 7, x[5] -> bit 8;  gob = ((block_y * gobs_per_row + gob_x) << bh) + gob_in_block
+//   (measured m3b against the X server's own screenshot; see bl_offset)
 // The display worker runs a self-test of this kernel against that reference at bring-up.
 //
 // NOTE: Bounds are the HOST's job (kf_disp::scanout::plan + DisplayGpu::scanout_block_linear): every
@@ -53,10 +54,10 @@
 	shl.b32 	%r11, %r11, %r5;
 	sub.u32 	%r11, %r11, 1;		// (1 << bh) - 1
 	and.b32 	%r12, %r9, %r11;	// gob_in_block
-	and.b32 	%r13, %r8, 6;
-	shl.b32 	%r13, %r13, 5;		// y[2:1] -> bits 7:6
-	and.b32 	%r14, %r8, 1;
-	shl.b32 	%r14, %r14, 4;		// y[0] -> bit 4
+	and.b32 	%r13, %r8, 3;
+	shl.b32 	%r13, %r13, 4;		// y[1:0] -> bits 5:4
+	and.b32 	%r14, %r8, 4;
+	shl.b32 	%r14, %r14, 5;		// y[2] -> bit 7
 	or.b32 	%r15, %r13, %r14;	// the row's part of the in-GOB offset
 	mul.wide.u32 	%rd3, %r10, %r4;	// block_y * gobs_per_row
 	cvt.u64.u32 	%rd4, %r12;		// gob_in_block
@@ -79,7 +80,7 @@ $L_word:
 	and.b32 	%r21, %r19, 32;
 	shl.b32 	%r21, %r21, 3;		// x[5] -> bit 8
 	and.b32 	%r22, %r19, 16;
-	shl.b32 	%r22, %r22, 1;		// x[4] -> bit 5
+	shl.b32 	%r22, %r22, 2;		// x[4] -> bit 6
 	and.b32 	%r23, %r19, 15;		// x[3:0]
 	or.b32 	%r24, %r21, %r22;
 	or.b32 	%r24, %r24, %r23;

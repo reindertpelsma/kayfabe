@@ -128,6 +128,13 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "pre_console",
     ),
     ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE", "echo"),
+    // ★ M3 (`[measured m3b]` the X server's "(EE) NVIDIA(0): Failed to allocate display software
+    // resources"): the NV9072 display-SW object's constructor asks physical RM which displays are
+    // active and how many heads exist (`disp_sw.c:44-101`), and refuses a head or display outside them.
+    (
+        "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
+        "active_devices",
+    ),
 ];
 
 /// The display classes a chip lists (a copy of the chip row's, so this crate owns its inputs).
@@ -804,6 +811,20 @@ impl DisplayModel {
                 p.set("channelState", state);
                 Ok(p.buf)
             }
+            "active_devices" => {
+                // the displays the ARMED state lights (the worker publishes them), and the heads
+                let mut p = self.view(
+                    "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS",
+                    params,
+                )?;
+                let lit = (0..self.heads as usize)
+                    .filter_map(|h| self.ports.lit_sor(h))
+                    .filter_map(|sor| self.connectors.iter().find(|c| c.or_index == sor))
+                    .fold(0u32, |m, c| m | c.display_id);
+                p.set("displayMask", u64::from(lit));
+                p.set("numHeads", u64::from(self.heads));
+                Ok(p.buf)
+            }
             "pre_console" => {
                 let mut p = self.view(
                     "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS",
@@ -1054,6 +1075,24 @@ mod tests {
         assert_eq!(ask(&mut m, 3), 0, "SOR 2 has no connector");
         m.ports.set_lit_sor(3, None);
         assert_eq!(ask(&mut m, 3), 0, "idle again");
+        // the display-SW object's constructor query: the lit displays, and the heads
+        let s = "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS";
+        let devices = |m: &mut DisplayModel| {
+            let r = m
+                .control(
+                    cmd(
+                        m,
+                        "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
+                    ),
+                    &vec![0; size(m, s)],
+                )
+                .unwrap()
+                .unwrap();
+            (get(m, s, &r, "displayMask"), get(m, s, &r, "numHeads"))
+        };
+        assert_eq!(devices(&mut m), (0, 4), "nothing lit");
+        m.ports.set_lit_sor(3, Some(0));
+        assert_eq!(devices(&mut m), (0x100, 4), "DFP-0 on head 3");
     }
 
     /// A custom EDID shadows the monitor's until cleared (NVKMS clears on every read,
@@ -1169,7 +1208,7 @@ mod tests {
         let m = model();
         let set = m.claimed();
         assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
-        assert_eq!(set.len(), 38);
+        assert_eq!(set.len(), 39);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));

@@ -138,18 +138,24 @@ pub const GOB_BYTES: u64 = 512;
 
 /// ★ The byte offset of surface byte `(x_bytes, y)` in a block-linear surface `gobs_per_row` GOBs
 /// wide with `2^bh` GOBs per block — the reference the scanout kernel (`cuda/display/kf_scanout.ptx`)
-/// implements. Inside a GOB: `x[3:0]`, `y[0]`, `x[4]`, `y[2:1]`, `x[5]` from bit 0 up (the 16-byte x
-/// 2-row sector swizzle of every NVIDIA GPU since Fermi); GOBs stack `2^bh` high into a block, blocks
-/// run row-major.
+/// implements. Inside a 64-byte x 8-row GOB, from bit 0 up: `x[3:0]`, `y[1:0]`, `x[4]`, `y[2]`,
+/// `x[5]` — 32-byte sectors of 16 bytes x 2 rows, stacked two high before the next 16 bytes across.
+/// GOBs stack `2^bh` high into a block; blocks run row-major.
+///
+/// ⊘ `[measured m3b, 2026-09-30, GA106 / 580.159.04]` NOT the often-quoted Tegra X1 order
+/// (`x[4]` at bit 5, `y[1]` at bit 6): with that order the console's copy of the NVIDIA X driver's
+/// block-linear desktop differed from the X server's own root-window screenshot in 23 208 pixels,
+/// every one a 16-byte chunk displaced by (±16 bytes, ∓2 rows); with bits 5 and 6 exchanged it
+/// matched in all 2 073 600.
 #[must_use]
 pub fn bl_offset(x_bytes: u64, y: u64, gobs_per_row: u64, bh: u32) -> u64 {
     let (gob_x, gob_y) = (x_bytes >> 6, y >> 3);
     let (block_y, in_block) = (gob_y >> bh, gob_y & ((1 << bh) - 1));
     let gob = ((block_y * gobs_per_row + gob_x) << bh) + in_block;
     let in_gob = ((x_bytes & 32) << 3)
-        | ((y & 6) << 5)
-        | ((x_bytes & 16) << 1)
-        | ((y & 1) << 4)
+        | ((y & 4) << 5)
+        | ((x_bytes & 16) << 2)
+        | ((y & 3) << 4)
         | (x_bytes & 15);
     gob * GOB_BYTES + in_gob
 }
@@ -402,14 +408,15 @@ mod tests {
         assert_eq!(f.of(0x1E), None, "I8");
     }
 
-    /// ★ The GOB swizzle, bit by bit (`x[3:0] y[0] x[4] y[2:1] x[5]`), and GOBs stacked into blocks.
+    /// ★ The GOB swizzle, bit by bit (`x[3:0] y[1:0] x[4] y[2] x[5]`, measured in m3b), and GOBs
+    /// stacked into blocks.
     #[test]
     fn the_block_linear_reference_is_the_nvidia_gob_swizzle() {
         assert_eq!(bl_offset(0, 0, 1, 0), 0);
         assert_eq!(bl_offset(15, 0, 1, 0), 15, "x[3:0] -> bits 3:0");
         assert_eq!(bl_offset(0, 1, 1, 0), 16, "y[0] -> bit 4");
-        assert_eq!(bl_offset(16, 0, 1, 0), 32, "x[4] -> bit 5");
-        assert_eq!(bl_offset(0, 2, 1, 0), 64, "y[1] -> bit 6");
+        assert_eq!(bl_offset(0, 2, 1, 0), 32, "y[1] -> bit 5");
+        assert_eq!(bl_offset(16, 0, 1, 0), 64, "x[4] -> bit 6");
         assert_eq!(bl_offset(0, 4, 1, 0), 128, "y[2] -> bit 7");
         assert_eq!(bl_offset(32, 0, 1, 0), 256, "x[5] -> bit 8");
         assert_eq!(bl_offset(63, 7, 1, 0), 511, "the GOB's last byte");

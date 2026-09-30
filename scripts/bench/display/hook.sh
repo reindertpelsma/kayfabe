@@ -140,6 +140,8 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     gq "$XENV import -window root /tmp/xroot.png && echo IMPORT_OK" 60 > "$OUT/xroot.log"
     $G 'cat /tmp/xroot.png' > "$OUT/xroot.png" 2>/dev/null
     gq 'cat /var/log/Xorg.0.log' 60 > "$OUT/Xorg.0.log"
+    gq 'tail -120 /home/ubuntu/.xsession-errors 2>&1' 60 > "$OUT/xsession-errors.log"
+    gq "$XENV vulkaninfo --summary 2>&1 | head -60" 60 > "$OUT/vulkaninfo.log"
     gq 'sudo journalctl -b -u lightdm --no-pager | tail -60' 60 > "$OUT/lightdm_journal.log"
     say "XORG_LOG errors=$(grep -c '(EE)' "$OUT/Xorg.0.log") nvidia=$(grep -c 'NVIDIA(0)' "$OUT/Xorg.0.log") $(grep -m1 'NVIDIA(0): Setting mode' "$OUT/Xorg.0.log" | cut -c1-120)"
     for f in desk_1 desk_vkcube desk_2; do
