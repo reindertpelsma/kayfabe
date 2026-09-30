@@ -1,13 +1,136 @@
 # b3: opt-in external fault service in host nvidia-uvm
 
-**STATUS: IMPLEMENTATION PREFLIGHT, 2026-09-28.** The owner selected b3 and requires full ordinary
-host CUDA coexistence. No kernel patch has been built or loaded in this resumption. N4 takeover
-is no longer the next experiment. This narrows the implementation and verification order; it does
-not claim managed-memory support is implemented.
+**STATUS: HOST-ONLY PROOF DONE — PASSING ON HARDWARE, 2026-09-30.** The owner selected b3 and
+requires full ordinary host CUDA coexistence. The opt-in nvidia-uvm patch is **built and measured**
+(`tools/uvm_efs/`, evidence `traces/v3_uvm_b3/`): a real compute kernel faults in an EFS VA space,
+the fault is delivered to the registering process instead of being cancelled, the process maps the
+page, a replay completes the kernel with correct data; a scoped cancel fails only that VA space;
+native host CUDA (matmul + real managed-memory demand paging) is unaffected throughout. This is the
+**privileged half only** — no guest, no kayfabe VMM. Per the owner's standing rule this does **not**
+claim guest managed-memory support; that needs the guest fault plane (`V3_UVM_DEMAND_PAGING.md`
+§13) wired on top. The preflight below (2026-09-28) is preserved; where the experiment settled one
+of its open questions the answer is folded in **above** it, in "§0 Result".
 
 Reference: NVIDIA open-gpu-kernel-modules 580.159.04, commit
 `b81d58ee0224d1d290bef1c080592b619e184042`. Paths below are relative to that source. Kayfabe's
 shared reference checkout was read only. Latest historical research is `v3-uvm-e6pp` at `c6765f5c`.
+
+## §0 Result — the built patch and what the host-only experiment measured (2026-09-30)
+
+Built from source on a rented GA106 box, host **open 580.159.04** (`nvidia-uvm.ko` sha256
+`2ca52cad872382e6…`, patch sha256 `c4b06fb9…`), Linux 6.8.0-59, CUDA 12.6. Full matrix, kernel
+shutdown accounting, Xid census and latency in `traces/v3_uvm_b3/`.
+
+### 0.1 The patch (`tools/uvm_efs/patch/`, ~1.3 kLoC: one new source + ~90 lines of hooks)
+
+A per-`va_space` mode, **EXTERNAL FAULT SERVICE (EFS)**, entirely in `uvm_efs.c` plus a handful of
+hook lines in stock files. Off unless the admin loads the module with `uvm_efs_enable=1` **and** a
+UVM file opts in at `UVM_INITIALIZE` (`UVM_INIT_FLAGS_EXTERNAL_FAULT_SERVICE`, which then **requires**
+HMM off — `DISABLE_HMM` or `MULTI_PROCESS_SHARING_MODE`). In such a VA space, a replayable fault
+that stock UVM would mark fatal because no UVM range can service it
+(`service_fault_batch_dispatch`, `NV_ERR_INVALID_ADDRESS`) is diverted: its `clc369` packet is
+copied into a bounded per-file table, the file's owner is woken, and the access stays pending in
+hardware. The owner reads records (`UVM_EFS_WAIT`) and resolves them (`UVM_EFS_RESOLVE`, REPLAY or
+CANCEL). Everything else — managed faults, fatal fault *types*, prefetch faults, non-replayable
+faults, every other VA space, every other process — is untouched stock code. The three hook sites
+are the batch dispatch's `else` branch, `uvm_api_initialize`, and the teardown paths.
+
+★ **The publish executor is the stock external-mapping ioctls, and it was exercised two ways.** The
+owner's process maps a faulted page with `cuMemCreate` + `cuMemMap` (libcuda ⇒
+`UVM_MAP_EXTERNAL_ALLOCATION`), *or* — the kayfabe shape — with kayfabe's **own** RM vidmem placed
+through `UVM_CREATE_EXTERNAL_RANGE` + `UVM_MAP_EXTERNAL_ALLOCATION` on the EFS file directly
+(`efs_fault … raw`, `RESULT PASS`, `DATA bad=0`). Both replay to correct data. This is the
+§4 conclusion — the twin VAS is UVM-owned and the publish executor moves to the external-mapping
+ioctls — shown end to end on hardware.
+
+### 0.2 The registration / lifetime proof (task item 1, now checked and measured)
+
+*Which object keeps what alive.* The records live in `uvm_efs_va_space_t`, allocated **before**
+`uvm_va_space_create` and attached **before** the file is published, so no fault can ever be
+attributed to an EFS VA space that lacks EFS state. It is freed at the very end of
+`uvm_va_space_destroy`, after the fault bottom-halves were flushed — i.e. it lives exactly as long
+as the `uvm_va_space_t`, which lives as long as the file. A `UVM_EFS_WAIT`/`RESOLVE` ioctl holds a
+file reference (it runs on the fd), so no resolve can race the destroy. A record holds **no** pointer
+into a UVM or RM object: it names its GPU by `uvm_gpu_id_t` + UUID and remembers the GPU VA space
+*generation*. `remove_gpu_va_space` bumps that generation under the VA-space write lock and drops
+the GPU's records; a later resolve of a stale id finds the generation moved and does nothing. So an
+EFS record never keeps hardware channel state alive and never outlives the page directory it would
+act on — the preflight's "a UVM channel-memory reference alone does not keep hardware channel state
+alive" concern is respected by holding **no** such reference.
+
+*On VMM exit / crash.* Measured: a process SIGKILLed with a fault parked
+(`efs_fault crash`) tears down through `uvm_release → uvm_va_space_destroy`. The **first** step of
+that path, before stock UVM stops any channel, is `uvm_efs_va_space_shutdown`, which stops accepting
+records, cancels the timeout work synchronously, and cancels every parked fault in hardware. The
+kernel logged `parked_at_shutdown=1 hw_cancelled=1` for that tgid and `nvidia-smi` was healthy
+afterward (`dmesg_efs_shutdown.txt`). So a dead VMM leaves the GPU in exactly the state stock UVM
+would: the faulting channel RCs (Xid 31), nothing is wedged, no record survives.
+
+*On channel teardown while a fault is pending.* Measured (`efs_fault ctxdestroy`): destroying the
+CUDA context while a fault is parked completes cleanly (`CTXDESTROY_COMPLETED CUDA_SUCCESS`),
+**bounded by the EFS timeout** (~4 s here) — the context holds the GPU until the parked fault is
+resolved or the kernel's deadline cancels it, then teardown proceeds. This answers
+`V3_UVM_DEMAND_PAGING.md` §10 Q2 ("can a context with parked faults be timed-sliced off, or does it
+hold the GPU"): it holds until answered, and the kernel timeout guarantees a bound. In the
+integrated product the guest services its own fault in tens of µs, so this bound is a safety net,
+not the common path.
+
+*With a second unrelated host CUDA process running.* Measured (`coexist` = tiled sgemm + real
+`cudaMallocManaged` demand paging, EFS-unaware): **203.6 vs 211.9 iters/s idle (96%)**,
+`managed_bad=0`, run concurrently with five back-to-back `efs_fault service 128` (all `RESULT PASS`,
+`DATA bad=0`). The ordinary process's managed-memory faults are serviced by stock UVM the whole
+time — EFS diverts **only** the opted-in VA space's faults (its records are in a different file's
+`efs` struct; attribution is stock UVM's own instance-pointer→channel→va_space map). A batch whose
+every fault was parked is not replayed (a replay would only re-raise them); while records are parked
+a periodic safety replay keeps any overflow-dropped fault of another tenant moving
+(`g_safety_replays` > 0 in the timeout run).
+
+### 0.3 Authorization boundary — what was enforced, and the one item still open
+
+Enforced and measured (`efs_auth RESULT PASS`): EFS is refused unless the module is enabled
+(`NV_ERR_NOT_SUPPORTED`) and the file asked for HMM-off (`NV_ERR_INVALID_ARGUMENT` otherwise);
+`WAIT`/`RESOLVE` on a non-EFS file are `NV_ERR_NOT_SUPPORTED`; **only the initializing thread group**
+may `WAIT`/`RESOLVE` — a forked child sharing the inherited fd is refused
+(`NV_ERR_INSUFFICIENT_PERMISSIONS`), so a passed EFS fd does not delegate fault service; a
+fabricated/never-issued record id is `stale`, no action. The `RESOLVE` ABI carries **only**
+kernel-issued opaque ids — never an instance pointer, PDB or host address — and every hardware
+action uses the packet and PDB the kernel saved itself. A compromised VMM can therefore only park
+its own faults (bounded by the timeout), replay GPU-wide (which re-raises only its own parked
+accesses), and cancel via ids the kernel issued for its own VA space; it cannot read or act on
+another VA space's records.
+
+⊘ **Not closed, and it is the same gap the preflight and `V3_UVM_DEMAND_PAGING.md` §12.5 already
+name.** EFS reuses stock `UVM_REGISTER_GPU_VASPACE`/`UVM_REGISTER_CHANNEL`, which carry the Bug
+1624521 TODO: RM's `Dup`/`Retain` path does **not** verify that the caller owns the supplied
+`hClient`/handle. EFS does not *worsen* this — a fault is still attributed by stock UVM to whichever
+va_space the channel was registered in, and delivered only to that file, only to the initializing
+tgid — but it does not *close* it either. For the single-VMM product path (the VMM is the RM client
+that created the objects) this is the intended flow. For **multiple mutually-untrusting VMMs sharing
+one GPU**, an object-ownership check at registration (compare the registering fd's process, or a
+capability token, against the RM client that owns the handle) is still required before b3 is relied
+on for VM-to-VM isolation. That is an RM/UVM-interface question for the owner, unchanged by this
+experiment, and it is **not** a blocker for the host-only proof or for a single guest.
+
+### 0.4 Latency (GPU PTIMER-calibrated, `service 256`, quiet box)
+
+`hw access→packet` p50 1.8 µs · `packet→parked` (UVM bottom half + divert) p50 94.5 µs ·
+`parked→user` (wake + `WAIT`) p50 36.8 µs · **`DELIVERY` packet→user p50 131.2 µs, p99 206.1 µs** ·
+`map (cuMemMap)` p50 143 µs · `user→replay` p50 153 µs · `total access→done` p50 288.8 µs,
+p99 370.7 µs. A 32-page run measured delivery p50 ≈ 83 µs; under concurrent coexistence pressure
+delivery held p50 ≈ 90–117 µs. The negative control (pre-mapped, `efs_fault negative`) took **zero**
+faults. The whole run produced 6 Xid-31 events, all from the six deliberately **unserviced** cases
+(2× stock, cancel, timeout, crash, ctxdestroy); **zero** on any serviced run.
+
+### 0.5 What this does and does not establish
+
+Establishes, on hardware: the divert/park/deliver/map/replay/cancel/timeout/teardown mechanism; the
+opt-in and per-tgid authority; the external-mapping publish executor (libcuda's and kayfabe's own RM
+objects); and full native host-CUDA coexistence including managed-memory demand paging. Does **not**
+establish: anything guest-side (no guest, no VMM ran); multi-VMM VA-space-ownership authentication
+(§0.3); the graphics page-kind and per-call TLB-cost questions of §4.4 (compute pages only here);
+non-replayable/CE-fault handling (the shader path only). Next is the guest fault plane
+(`V3_UVM_DEMAND_PAGING.md` §13) injected into a stock guest, which is where a guest-managed-memory
+claim would first be earned.
 
 ## First boundary to establish: authority, not fault delivery
 
@@ -117,7 +240,16 @@ Write the ownership and launch setup down before using its success/failure to ju
 
 ## Current next action
 
-Finish the precise RM sharing/credential/FD-lifetime trace, then implement and adversarially test
-the smallest authenticated opt-in path. Only after that add diversion/replay. No further product
-choice is needed from the owner; host CUDA coexistence and the limited privileged exception are
-settled. Implementation feasibility and safety remain obligations of this work.
+⊘ **SUPERSEDED 2026-09-30 by §0 Result.** The opt-in path *and* diversion/replay/cancel/timeout/
+teardown were implemented and adversarially tested together on hardware; the case table above is
+satisfied for the compute-shader path except the two items §0.3/§0.5 keep open. The registration
+row's "foreign same-UID/different-UID object" authentication is the one deliberately **not** closed:
+§0.3 explains it is the pre-existing stock Bug-1624521 gap, needed only for multiple mutually-
+untrusting VMMs, and it is an owner/RM-interface question, not host-only-proof work.
+
+Next, in order: (1) the **guest fault plane** (`V3_UVM_DEMAND_PAGING.md` §13) — inject the guest's
+`clc369` packet + interrupt, let stock guest UVM service and replay, mirror the mapping — wired onto
+this EFS host source; only when a guest `cudaMallocManaged` first touch completes correctly is a
+guest-managed-memory claim earned. (2) The graphics **page-kind** and per-call **TLB-cost** checks
+of §4.4 (compute pages only were mapped here). (3) **Non-replayable/CE** fault handling (§4/step 4),
+a separate path from this shader proof. (4) For multi-VMM, the object-ownership check of §0.3.
