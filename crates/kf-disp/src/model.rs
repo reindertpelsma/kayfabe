@@ -120,9 +120,10 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
     ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
     ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
-    // ★ M1 (`[measured m1a]` the ledger held 0x20800a76 after nvidia-drm's fbdev took the console):
-    // the VGA console save/restore around a console switch (`unix_console.c:74-140`). Our virtual
-    // engine has no VGA console and no VBIOS mode to save: `bReturnEarly`, nothing to restore.
+    // ★ M1 (`[measured m1a, 2026-09-30, GA106 / 580.159.04]` the ledger held 0x20800a76 after
+    // nvidia-drm's fbdev took the console): the VGA console save/restore around a console switch
+    // (`unix_console.c:74-140`). Our virtual engine has no VGA console and no VBIOS mode to save:
+    // `bReturnEarly`, nothing to restore.
     (
         "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE",
         "pre_console",
@@ -130,11 +131,13 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE", "echo"),
     // ★ M3: the NV9072 (GF100_DISP_SW) display-SW object's constructor asks physical RM which
     // displays are active and how many heads exist (`disp_sw.c:44-101`). ⊘ REFUSED BY NAME, and
-    // that is measured: `[m3c]` answering it lets the X driver and GL allocate the object, whose
-    // methods are SOFTWARE methods RM services when the host engine traps them — but the guest's
-    // channels run on the host GPU, whose RM has no such object: 186 host `Xid 32` (invalid
-    // pushbuffer stream), glxgears at 1.3 FPS, vkQueueSubmit failing. Refused (`[m3b]`), X logs
-    // "Failed to allocate display software resources" and GL runs vsync-locked at 60 FPS.
+    // that is measured: `[m3c, 2026-09-30, kf3 at 4475b9fe]` answering it lets the X driver and GL
+    // allocate the object, whose methods are SOFTWARE methods RM services when the host engine
+    // traps them — but the guest's channels run on the host GPU, whose RM has no such object: 186
+    // host `Xid 32` (invalid pushbuffer stream), glxgears at 1.3 FPS, vkQueueSubmit failing
+    // (commit `9adb26a8`; no m3c trace is committed). Refused
+    // (`[m3b, 2026-09-30, GA106 / 580.159.04]`), X logs "Failed to allocate display software
+    // resources" and GL runs vsync-locked at 60 FPS.
     (
         "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
         "no_display_sw",

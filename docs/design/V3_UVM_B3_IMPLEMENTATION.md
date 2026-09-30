@@ -43,7 +43,7 @@ through `UVM_CREATE_EXTERNAL_RANGE` + `UVM_MAP_EXTERNAL_ALLOCATION` on the EFS f
 §4 conclusion — the twin VAS is UVM-owned and the publish executor moves to the external-mapping
 ioctls — shown end to end on hardware.
 
-### 0.2 The registration / lifetime proof (task item 1, now checked and measured)
+### 0.2 The registration / lifetime proof (task item 1, now checked and measured 2026-09-30)
 
 *Which object keeps what alive.* The records live in `uvm_efs_va_space_t`, allocated **before**
 `uvm_va_space_create` and attached **before** the file is published, so no fault can ever be
@@ -58,7 +58,7 @@ EFS record never keeps hardware channel state alive and never outlives the page 
 act on — the preflight's "a UVM channel-memory reference alone does not keep hardware channel state
 alive" concern is respected by holding **no** such reference.
 
-*On VMM exit / crash.* Measured: a process SIGKILLed with a fault parked
+*On VMM exit / crash.* Measured 2026-09-30: a process SIGKILLed with a fault parked
 (`efs_fault crash`) tears down through `uvm_release → uvm_va_space_destroy`. The **first** step of
 that path, before stock UVM stops any channel, is `uvm_efs_va_space_shutdown`, which stops accepting
 records, cancels the timeout work synchronously, and cancels every parked fault in hardware. The
@@ -75,8 +75,8 @@ hold the GPU"): it holds until answered, and the kernel timeout guarantees a bou
 integrated product the guest services its own fault in tens of µs, so this bound is a safety net,
 not the common path.
 
-*With a second unrelated host CUDA process running.* Measured (`coexist` = tiled sgemm + real
-`cudaMallocManaged` demand paging, EFS-unaware): **203.6 vs 211.9 iters/s idle (96%)**,
+*With a second unrelated host CUDA process running.* Measured 2026-09-30 (`coexist` = tiled sgemm +
+real `cudaMallocManaged` demand paging, EFS-unaware): **203.6 vs 211.9 iters/s idle (96%)**,
 `managed_bad=0`, run concurrently with five back-to-back `efs_fault service 128` (all `RESULT PASS`,
 `DATA bad=0`). The ordinary process's managed-memory faults are serviced by stock UVM the whole
 time — EFS diverts **only** the opted-in VA space's faults (its records are in a different file's
@@ -87,8 +87,8 @@ a periodic safety replay keeps any overflow-dropped fault of another tenant movi
 
 ### 0.3 Authorization boundary — what was enforced, and the one item still open
 
-Enforced and measured (`efs_auth RESULT PASS`): EFS is refused unless the module is enabled
-(`NV_ERR_NOT_SUPPORTED`) and the file asked for HMM-off (`NV_ERR_INVALID_ARGUMENT` otherwise);
+Enforced and measured 2026-09-30 (`efs_auth RESULT PASS`): EFS is refused unless the module is
+enabled (`NV_ERR_NOT_SUPPORTED`) and the file asked for HMM-off (`NV_ERR_INVALID_ARGUMENT` otherwise);
 `WAIT`/`RESOLVE` on a non-EFS file are `NV_ERR_NOT_SUPPORTED`; **only the initializing thread group**
 may `WAIT`/`RESOLVE` — a forked child sharing the inherited fd is refused
 (`NV_ERR_INSUFFICIENT_PERMISSIONS`), so a passed EFS fd does not delegate fault service; a
@@ -116,10 +116,19 @@ experiment, and it is **not** a blocker for the host-only proof or for a single 
 `hw access→packet` p50 1.8 µs · `packet→parked` (UVM bottom half + divert) p50 94.5 µs ·
 `parked→user` (wake + `WAIT`) p50 36.8 µs · **`DELIVERY` packet→user p50 131.2 µs, p99 206.1 µs** ·
 `map (cuMemMap)` p50 143 µs · `user→replay` p50 153 µs · `total access→done` p50 288.8 µs,
-p99 370.7 µs. A 32-page run measured delivery p50 ≈ 83 µs; under concurrent coexistence pressure
-delivery held p50 ≈ 90–117 µs. The negative control (pre-mapped, `efs_fault negative`) took **zero**
-faults. The whole run produced 6 Xid-31 events, all from the six deliberately **unserviced** cases
-(2× stock, cancel, timeout, crash, ctxdestroy); **zero** on any serviced run.
+p99 370.7 µs. A 32-page run measured delivery p50 ≈ 83 µs (`efs_fault service 32`, 2026-09-30,
+`run_full.log`); under concurrent coexistence pressure delivery held p50 ≈ 90–117 µs
+(`clean_reruns.txt`, the five `service 128` re-runs at `c94601d9`). The negative control
+(pre-mapped, `efs_fault negative`) took **zero** faults. The whole run produced 6 Xid-31 events,
+all from the six deliberately **unserviced** cases (2× stock, cancel, timeout, crash, ctxdestroy);
+**zero** on any serviced run.
+
+⚠ **Of the `service 256` figures above, only `hw access→packet` is in a committed log** (found
+2026-09-30, attributing this paragraph for the claim ledger). `run_full.log` section E — the
+`service 256` "quiet box, larger sample" run, 2026-09-30, PTIMER-calibrated — reads `packet→parked`
+p50 58.5 µs, `parked→user` p50 15.1 µs, DELIVERY p50 73.7 µs / p99 98.8 µs, map p50 125.0 µs,
+`user→replay` p50 135.2 µs, total p50 208.9 µs / p99 244.7 µs. The run behind the other figures
+above is not committed.
 
 ### 0.5 What this does and does not establish
 

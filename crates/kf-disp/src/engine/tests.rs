@@ -477,10 +477,11 @@ fn acquire_modes() {
     );
 }
 
-/// ★ `[measured m1a]` NVKMS kicks PUT to the end of the ring, then writes the wrap JUMP there and
-/// kicks PUT = 0: that pass decodes no method at all, and GET must still follow the JUMP to 0 —
-/// otherwise NVKMS, filling the ring from 0 up to just below the stuck GET, waits forever
-/// (`Error while waiting for GPU progress: 0x0000c67d:0 2:0:4040:4032`).
+/// ★ `[measured m1a, 2026-09-30, GA106 / 580.159.04]` NVKMS kicks PUT to the end of the ring,
+/// then writes the wrap JUMP there and kicks PUT = 0: that pass decodes no method at all, and GET
+/// must still follow the JUMP to 0 — otherwise NVKMS, filling the ring from 0 up to just below the
+/// stuck GET, waits forever (`Error while waiting for GPU progress: 0x0000c67d:0 2:0:4040:4032`,
+/// `traces/v3_display/m1a_20260930/`).
 #[test]
 fn a_jump_only_pass_moves_get_to_its_target() {
     let mut e = engine();
@@ -507,10 +508,11 @@ fn a_jump_only_pass_moves_get_to_its_target() {
     assert_eq!(e.exceptions, 0);
 }
 
-/// ★ `[measured m1b]` nvidia-drm queues a flip event only for planes that were active before the
-/// commit ("Hardware generates flip event for only those planes which were active previously",
-/// `nvidia-drm-modeset.c:93-135`). So: the first flip of a window (no surface before) writes its
-/// notifier but raises no AWAKEN; the next flip, with the window scanning on an active head, does.
+/// ★ `[measured m1b, 2026-09-30, GA106 / 580.159.04]` nvidia-drm queues a flip event only for
+/// planes that were active before the commit ("Hardware generates flip event for only those planes
+/// which were active previously", `nvidia-drm-modeset.c:93-135`). So: the first flip of a window
+/// (no surface before) writes its notifier but raises no AWAKEN; the next flip, with the window
+/// scanning on an active head, does.
 #[test]
 fn the_flip_event_is_raised_only_for_a_window_that_was_active() {
     let mut e = engine();
@@ -656,7 +658,8 @@ fn a_running_head_lights_the_sor_that_names_it() {
 
 /// ★ M3: a head shows EVERY enabled window it owns, back to front by `DEPTH` (smaller is closer to
 /// the front), each where its window-immediate `SET_POINT_OUT` puts it, inside the head's
-/// `VIEWPORT_SIZE_IN` — weston puts its clients on the overlay window (`[measured m3g]`).
+/// `VIEWPORT_SIZE_IN` — weston puts its clients on the overlay window
+/// (`[measured m3g, 2026-09-30, GA106 / 580.159.04]`).
 #[test]
 fn a_head_composes_its_windows_back_to_front() {
     let mut e = engine();

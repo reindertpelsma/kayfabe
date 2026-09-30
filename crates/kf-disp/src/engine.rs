@@ -646,7 +646,8 @@ impl Engine {
             // ⊘ A pass that decodes NO write (the wrap JUMP NVKMS writes at the end of the ring, NOPs,
             // SET_SUBDEVICE_MASK) still moves the fetch pointer: GET follows it, or NVKMS — which
             // waits for GET to pass its PUT after a wrap (`nvEvoMakeRoom`) — waits forever
-            // (`[measured m1a]` GET 4040 : PUT 4032, the JUMP's own offset).
+            // (`[measured m1a, 2026-09-30, GA106 / 580.159.04]` GET 4040 : PUT 4032, the JUMP's
+            // own offset).
             if c.queue.is_empty() {
                 c.get = c.decoded;
             }
@@ -897,13 +898,15 @@ impl Engine {
         // an active head BEFORE this update: nvidia-drm queues events only for "planes which were
         // active previously" — "Hardware generates flip event for only those planes"
         // (`ogkm-580: kernel-open/nvidia-drm/nvidia-drm-modeset.c:93-135`), and WARNs on any other
-        // (`[measured m1b]` the first fbdev modeset: `WARN_ON(nv_flip == NULL)`). Snapshotted before
-        // any member of the group — the core among them — is armed.
+        // (`[measured m1b, 2026-09-30, GA106 / 580.159.04]` the first fbdev modeset:
+        // `WARN_ON(nv_flip == NULL)`). Snapshotted before any member of the group — the core among
+        // them — is armed.
         // ⊘ The rule's other half is the NEW state's notifier (`complete`): a window flipped to NO
         // surface is programmed with no notifier (`nvkms-evo3.c:3901-3904`, the KAPI sets one only
         // for a non-NULL surface, `nvkms-kapi.c:2956-2970`, `:3175-3189`), so it raises nothing,
-        // although nvidia-drm counted an event for it. `[measured m1c]` that is the one "Flip event
-        // timeout" of the lane: the probe exited with its framebuffer on the plane, the kernel's
+        // although nvidia-drm counted an event for it.
+        // `[measured m1c, 2026-09-30, GA106 / 580.159.04]` that is the one "Flip event timeout" of
+        // the lane: the probe exited with its framebuffer on the plane, the kernel's
         // `atomic_remove_fb` disabled the plane in a blocking commit, and nvidia-drm waited 3 s for
         // an event no hardware sends — real GPUs log the same (NVIDIA/open-gpu-kernel-modules#1361,
         // "framebuffer removal on DRM file close"). Raising an event there instead would be a

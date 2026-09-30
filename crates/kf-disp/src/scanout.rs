@@ -590,8 +590,8 @@ mod tests {
         assert_eq!(f.of(0x1E), None, "I8");
     }
 
-    /// ★ The GOB swizzle, bit by bit (`x[3:0] y[1:0] x[4] y[2] x[5]`, measured in m3b), and GOBs
-    /// stacked into blocks.
+    /// ★ The GOB swizzle, bit by bit (`x[3:0] y[1:0] x[4] y[2] x[5]`, measured in m3b, 2026-09-30,
+    /// GA106 / 580.159.04), and GOBs stacked into blocks.
     #[test]
     fn the_block_linear_reference_is_the_nvidia_gob_swizzle() {
         assert_eq!(bl_offset(0, 0, 1, 0), 0);

@@ -44,7 +44,13 @@ The build/run scripts are `tools/uvm_efs/box/{provision,build_efs,run_experiment
 `hw_access→packet` p50 1.8 µs · `packet→parked` p50 94.5 µs · `parked→user` p50 36.8 µs ·
 **`DELIVERY packet→user` p50 131.2 µs, p99 206.1 µs** · `map (cuMemMap)` p50 143 µs ·
 `user→replay` p50 153 µs · `total access→done` p50 288.8 µs, p99 370.7 µs. A lighter 32-page run
-measured delivery p50 ≈ 83 µs; under concurrent coexistence pressure delivery held p50 ≈ 90–117 µs.
+measured delivery p50 ≈ 83 µs (`efs_fault service 32`, 2026-09-30, `run_full.log`); under
+concurrent coexistence pressure delivery held p50 ≈ 90–117 µs (`clean_reruns.txt`, at `c94601d9`).
+
+⚠ Of the `service 256` figures above, only `hw_access→packet` is in a committed log: `run_full.log`
+section E (the `service 256` "quiet box, larger sample" run, 2026-09-30) reads DELIVERY p50 73.7 µs /
+p99 98.8 µs and `total access→done` p50 208.9 µs / p99 244.7 µs. The run behind the other figures
+is not committed (found 2026-09-30, attributing this paragraph for the claim ledger).
 
 ## The test-only verification fix
 

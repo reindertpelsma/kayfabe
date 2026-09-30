@@ -2692,7 +2692,10 @@ impl CommandPolicy for InitTablePolicy {
                 let gen_info =
                     kf_abi::businfo::PcieGenInfo::fully_trained(self.host.pcie_max_gen).encode();
                 // `0x14` is `0x2d`'s deprecated name and RM answers it with the same word
-                // (`[measured]`, `kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO`)
+                // (`kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO`), idle and loaded —
+                // `[measured 2026-08-08, real GA106, R22]`
+                // `traces/real_ga106/rmladder_r22_businfo_sweep_real_ga106.txt:38,63` and
+                // `traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt:37,62`.
                 let answers = [
                     (kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN_INFO, gen_info),
                     (kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO, gen_info),
