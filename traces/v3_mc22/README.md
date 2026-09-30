@@ -86,3 +86,18 @@ after them. On the merged tree all of them pass except one: the **claim-ledger g
 `traces/v3_display/m2c_20260930/README.md`; b3 UVM: `docs/design/V3_UVM_B3_IMPLEMENTATION.md`,
 `traces/v3_uvm_b3/README.md`). The unsafe ratchet — the other thing the red step hid — is the one
 this merge corrects (`kf-cuda` 75, `kf-qemu` 44; see above).
+
+### `mc22b_b84250b8/` — ★ the merge bar at the code head (`b84250b8` = `213d5e00` + traces only)
+
+Same script, same box, run after the drainer fix: 15:08 → 15:32 UTC, **`EXIT rc=0`** (`mc22b.log`).
+
+| Bar item | Result | File |
+|---|---|---|
+| every `kf-*` crate test (`--no-fail-fast`) | **1742 passed / 0 failed** (+1 = `the_status_line_never_waits_on_the_registry_lock`) | `mc22b.log`, `mc22b_tests.log.xz` |
+| v3 gates | **9/9** | `mc22b_gates.log` |
+| kf3 build of this revision | `KF3_RC=0`, `kf3-bins/b84250b8/` | `mc22b_kf3.log.xz` |
+| bare metal, same box | **BARE_SUITE_PASS=30** FAIL=0 CRASH=0 | `mc22b_host.log` |
+| fast guest rebuilt | `FG_RC=0` | `mc22b_fg.log` |
+| 30-arm thin-guest suite, budget 180 | **FAST_SUITE_PASS=30 FAIL=0 CRASH=0 NOTRUN=0** | `mc22b_suite.out` |
+
+The lanes below all run from this bar's verify worktree, i.e. on `kf3-bins/b84250b8/`.

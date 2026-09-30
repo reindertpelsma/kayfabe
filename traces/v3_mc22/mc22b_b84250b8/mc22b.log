@@ -1,0 +1,15 @@
+START 2026-09-30T15:08:20+00:00
+Preparing worktree (detached HEAD b84250b8)
+Updating files:  66% (6509/9733)Updating files:  67% (6522/9733)Updating files:  68% (6619/9733)Updating files:  69% (6716/9733)Updating files:  70% (6814/9733)Updating files:  71% (6911/9733)Updating files:  72% (7008/9733)Updating files:  73% (7106/9733)Updating files:  74% (7203/9733)Updating files:  75% (7300/9733)Updating files:  76% (7398/9733)Updating files:  77% (7495/9733)Updating files:  78% (7592/9733)Updating files:  79% (7690/9733)Updating files:  80% (7787/9733)Updating files:  81% (7884/9733)Updating files:  82% (7982/9733)Updating files:  83% (8079/9733)Updating files:  84% (8176/9733)Updating files:  85% (8274/9733)Updating files:  86% (8371/9733)Updating files:  87% (8468/9733)Updating files:  88% (8566/9733)Updating files:  89% (8663/9733)Updating files:  90% (8760/9733)Updating files:  91% (8858/9733)Updating files:  92% (8955/9733)Updating files:  93% (9052/9733)Updating files:  94% (9150/9733)Updating files:  95% (9247/9733)Updating files:  96% (9344/9733)Updating files:  97% (9442/9733)Updating files:  98% (9539/9733)Updating files:  99% (9636/9733)Updating files: 100% (9733/9733)Updating files: 100% (9733/9733), done.
+HEAD is now at b84250b8 traces(v3_mc22): merge bar at 871a93dc — tests 1741/0, gates 9/9, KF3_RC=0, bare 30/30, FG_RC=0, thin 30/30
+HEAD=b84250b8a94b98b1954d5bba7dfc77e7fd748b17 CHECKOUT=/workspace/bench/verify-worktrees/mc22b.fguhyV
+TESTS passed 1742 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/b84250b8/qemu-system-x86_64 rev=b84250b8 mtime=2026-09-30 15:10:34.092672744 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-09-30T15:32:24+00:00
