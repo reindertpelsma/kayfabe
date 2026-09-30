@@ -115,6 +115,12 @@ pub unsafe extern "C" fn kf3_realize(
     match Device::realize(&cfg) {
         Ok(d) => {
             let d: &'static Device = Box::leak(Box::new(d));
+            // ★ The guest fault plane (off by default) binds to the device before any thread that
+            // could reach it runs.
+            if let Err(e) = d.start_fault_plane() {
+                write_err(err, err_len, &e);
+                return -1;
+            }
             if std::thread::Builder::new()
                 .name("kf3-drainer".into())
                 .spawn(move || d.drainer_loop())

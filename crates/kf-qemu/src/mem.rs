@@ -453,6 +453,9 @@ pub enum Target {
     Bar1(Bar1Target),
     /// A host GPU VA space mirroring a guest one (the Translated plane's target).
     Gpu(GpuMirror),
+    /// ★ A guest-UVM space's mirror in EFS mode (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0): a host space
+    /// owned by host UVM, mapped through UVM's external-mapping ioctls.
+    Efs(EfsMirror),
 }
 
 /// ★ P5: OUR placements in one mirrored host VA space, `va → (len, offset, ram)` — the rows the
@@ -811,6 +814,122 @@ impl MapTarget for GpuMirror {
     }
 }
 
+/// ★★★ **EFS mode — the channel window** (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0): where host UVM
+/// maps a twin's OWN context buffers at `UVM_REGISTER_CHANNEL` (`uvm_user_channel.c`
+/// `create_va_range` finds a free VA inside it for each resource; one window serves every channel
+/// of the space). It is the hole host RM uses for its own placements in an RM-owned twin
+/// (`kf_host::channel::HOST_HOLE_LO`), minus kf's ring region, which an EFS space never has:
+/// `[1 TiB − 64 GiB, 1 TiB − 4 GiB)`. ⊘ It must stay below `1 TiB` — GR's global context pointers
+/// are `VA >> 8` in 32-bit fields (`kf_host::GUEST_VA_RANGES`' measured reason). A guest leaf over
+/// it is refused by name ([`MapTarget::reserved`]): the guest never aliases a host context buffer.
+pub const EFS_CHANNEL_WINDOW: (u64, u64) = (kf_host::channel::HOST_HOLE_LO, RING_REGION_BASE);
+
+/// ★ EFS mode: the two `UVM_CREATE_EXTERNAL_RANGE`s that cover every guest-usable VA except the
+/// channel window — `[64 KiB, window)` and `[window end, 2^47)` (the CPU-VA ceiling UVM's user
+/// allocations live under). A guest leaf outside them fails to map and is refused by name.
+pub const EFS_EXTERNAL_RANGES: [(u64, u64); 2] = [
+    (64 << 10, EFS_CHANNEL_WINDOW.0),
+    (EFS_CHANNEL_WINDOW.1, 1 << 47),
+];
+
+/// ★★★ **A guest-UVM space's mirror in EFS mode** — the publish executor swapped to host UVM's
+/// external-mapping ioctls (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0 "executor"). The host space is
+/// fault-capable and externally owned, so RM builds no page tables in it and refuses its own map
+/// verbs there; every row is `UVM_MAP_EXTERNAL_ALLOCATION` of OUR store or OUR guest-RAM object.
+///
+/// - Each map/unmap is synchronous in host UVM (PTE writes and the TLB invalidate completed before
+///   the ioctl returns — `uvm_map_external.c` `uvm_tracker_wait_deinit`), so there is no deferred
+///   invalidate: [`MapTarget::invalidate`] has nothing left to do.
+/// - ⊘ UVM maps with the backing object's OWN PTE kind (no per-map kind override on this path):
+///   PITCH and GENERIC (identical for every access CUDA makes) are placed; any other kind is
+///   refused by name (`V3_UVM_DEMAND_PAGING.md` §4.4's open question, out of scope).
+/// - A user twin: privileged guest leaves are withheld, as for every RM-owned user twin.
+pub struct EfsMirror {
+    /// The host UVM session that owns the space.
+    pub session: std::sync::Arc<kf_host::efs::EfsSession>,
+    /// The store (guest VRAM) object.
+    pub store: u32,
+    /// The guest-RAM object, if one is registered.
+    pub ram_obj: Option<u32>,
+    /// Our placements (see [`PlacedRows`]).
+    pub rows: PlacedRows,
+    /// The channel window (host context buffers).
+    pub reserved: Vec<(u64, u64)>,
+    /// Host UVM calls this space has cost.
+    pub calls: SpaceCalls,
+}
+
+impl EfsMirror {
+    fn host_line(&self) -> String {
+        let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        format!(
+            "host UVM over its life: {} map(s) in {} ms, {} unmap(s) in {} ms",
+            g(&self.calls.maps),
+            g(&self.calls.map_ns) / 1_000_000,
+            g(&self.calls.unmaps),
+            g(&self.calls.unmap_ns) / 1_000_000
+        )
+    }
+}
+
+impl MapTarget for EfsMirror {
+    fn withholds_privileged(&self) -> bool {
+        true
+    }
+    fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
+        if d.kind != kf_chip::PTE_KIND_PITCH && d.kind != kf_chip::PTE_KIND_GENERIC {
+            return Err(format!(
+                "map {:#x}+{:#x}: PTE kind {:#x} — an EFS space maps through host UVM with the backing object's own kind; only PITCH/GENERIC are expressible (refused by name)",
+                d.va, d.len, d.kind
+            ));
+        }
+        let obj = if d.ram {
+            self.ram_obj
+                .ok_or_else(|| format!("map {:#x}: guest-RAM row and no RAM object", d.va))?
+        } else {
+            self.store
+        };
+        let t = std::time::Instant::now();
+        let r = self.session.map(d.va, d.len, obj, d.off, d.perm);
+        self.calls.maps.fetch_add(1, Ordering::Relaxed);
+        self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        r.map_err(|e| {
+            format!(
+                "UVM map {:#x}+{:#x} (obj {obj:#x}+{:#x}): {e:?}",
+                d.va, d.len, d.off
+            )
+        })?;
+        if let Ok(mut rows) = self.rows.write() {
+            rows.insert(d.va, (d.len, d.off, d.ram));
+        }
+        Ok(Mapped::Placed)
+    }
+    fn unmap(&self, va: u64, _defer: bool) -> Result<(), String> {
+        // ⊘ Forget the row FIRST (as `GpuMirror::unmap`): no reader resolves through a mapping
+        // being torn down; NO row = nothing of ours there, no host call.
+        let row = match self.rows.write() {
+            Ok(mut r) => match r.remove(&va) {
+                Some(row) => row,
+                None => return Ok(()),
+            },
+            Err(_) => return Err(format!("unmap {va:#x}: placement rows poisoned")),
+        };
+        let t = std::time::Instant::now();
+        let r = self.session.unmap(va, row.0);
+        self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
+        self.calls
+            .unmap_ns
+            .fetch_add(ns_since(t), Ordering::Relaxed);
+        r.map_err(|e| format!("UVM unmap {va:#x}+{:#x}: {e:?}", row.0))
+    }
+    fn invalidate(&self) -> Result<(), String> {
+        Ok(())
+    }
+    fn reserved(&self) -> Vec<(u64, u64)> {
+        self.reserved.clone()
+    }
+}
+
 /// ★ P5: one mirrored guest VA space as the channel plane sees it — the host space, its two
 /// windows (`THE_TRANSLATED_PLANE.md` §2, §6, §12: in EVERY host VAS we create), and our rows.
 #[derive(Clone)]
@@ -838,6 +957,10 @@ pub struct Mirror {
     /// Translated channel here; the memory plane's [`GpuMirror`] reads it to decide whether a
     /// privileged guest leaf may be mirrored.
     pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// ★ EFS mode (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0): the host UVM session that owns this space.
+    /// `Some` ⇒ the space is UVM-owned: no windows, no rings, and a GR twin must be registered
+    /// with host UVM before it can be scheduled. `None` for every RM-owned mirror.
+    pub efs: Option<std::sync::Arc<kf_host::efs::EfsSession>>,
 }
 
 /// ★★★ v3-roperm: a mirror's starting classification — KERNEL for one of the guest RM's own
@@ -884,6 +1007,7 @@ impl MapTarget for Target {
             Target::Window(w) => w.map(d, defer),
             Target::Bar1(b) => b.map(d, defer),
             Target::Gpu(g) => g.map(d, defer),
+            Target::Efs(e) => e.map(d, defer),
         }
     }
     // ★ `V3_BATCHED_MAP.md`: forwarded EXPLICITLY — a trait default here would silently answer
@@ -893,6 +1017,7 @@ impl MapTarget for Target {
             Target::Window(w) => w.map_batch(rows, defer),
             Target::Bar1(b) => b.win.map_batch(rows, defer),
             Target::Gpu(g) => g.map_batch(rows, defer),
+            Target::Efs(e) => e.map_batch(rows, defer),
         }
     }
     fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
@@ -900,6 +1025,7 @@ impl MapTarget for Target {
             Target::Window(w) => w.unmap_range(va, len, defer),
             Target::Bar1(b) => b.win.unmap_range(va, len, defer),
             Target::Gpu(g) => g.unmap_range(va, len, defer),
+            Target::Efs(e) => e.unmap_range(va, len, defer),
         }
     }
     fn reserved(&self) -> Vec<(u64, u64)> {
@@ -907,6 +1033,7 @@ impl MapTarget for Target {
             Target::Window(w) => w.reserved(),
             Target::Bar1(b) => b.win.reserved(),
             Target::Gpu(g) => g.reserved(),
+            Target::Efs(e) => e.reserved(),
         }
     }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
@@ -914,6 +1041,7 @@ impl MapTarget for Target {
             Target::Window(w) => w.unmap(va, defer),
             Target::Bar1(b) => b.unmap(va, defer),
             Target::Gpu(g) => g.unmap(va, defer),
+            Target::Efs(e) => e.unmap(va, defer),
         }
     }
     fn invalidate(&self) -> Result<(), String> {
@@ -921,6 +1049,7 @@ impl MapTarget for Target {
             Target::Window(w) => w.invalidate(),
             Target::Bar1(b) => b.win.invalidate(),
             Target::Gpu(g) => g.invalidate(),
+            Target::Efs(e) => e.invalidate(),
         }
     }
     fn va_extent(&self) -> Option<u64> {
@@ -928,12 +1057,13 @@ impl MapTarget for Target {
             Target::Window(w) => w.va_extent(),
             Target::Bar1(b) => b.win.va_extent(),
             Target::Gpu(g) => g.va_extent(),
+            Target::Efs(e) => e.va_extent(),
         }
     }
     fn settle(&self) -> Settle {
         match self {
             Target::Bar1(b) => b.settle(),
-            Target::Window(_) | Target::Gpu(_) => Settle::Live,
+            Target::Window(_) | Target::Gpu(_) | Target::Efs(_) => Settle::Live,
         }
     }
     fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
@@ -944,6 +1074,7 @@ impl MapTarget for Target {
             Target::Bar1(b) => b.map_usermode(u),
             // ★ A GPU VA view of the doorbell: NOT MIRRORED (the trait default, `V3_BAR1_DOORBELL.md` §5).
             Target::Gpu(g) => g.map_usermode(u),
+            Target::Efs(e) => e.map_usermode(u),
         }
     }
     // ★ v3-roperm: forwarded EXPLICITLY (a trait default here would mirror privileged leaves into
@@ -952,6 +1083,7 @@ impl MapTarget for Target {
         match self {
             Target::Window(_) | Target::Bar1(_) => false,
             Target::Gpu(g) => g.withholds_privileged(),
+            Target::Efs(e) => e.withholds_privileged(),
         }
     }
 }
@@ -1436,6 +1568,10 @@ pub struct MemPlane {
     pub fb_len: u64,
     /// ★ P5c: retired host spaces ready for reuse (VA thread only).
     spares: Mutex<Vec<Spare>>,
+    /// ★ The guest fault plane (`V3_UVM_GUEST_FAULT_PLANE.md`) — `Some` only when `KF3_UVM_EFS=1`
+    /// and the host's b3 module answered the probe; then a FAULT-CAPABLE guest VA space gets an
+    /// EFS-mode mirror ([`EfsMirror`]). `None`: every mirror is RM-owned, exactly as before.
+    pub fault: Option<&'static crate::faultplane::FaultPlane>,
 }
 
 impl MemPlane {
@@ -1514,6 +1650,7 @@ impl MemPlane {
                 mirrors,
                 fb_len: layout.fb_length,
                 spares: Mutex::new(Vec::new()),
+                fault: None,
             },
             ops("BAR1", bar1_win, bar1_scratch, None),
             ops("BAR2", bar2_win, bar2_scratch, None),
@@ -1679,6 +1816,7 @@ fn create_mirror(
                         live: Default::default(),
                         rings: rings.clone(),
                         kernel_vas: kernel_vas.clone(),
+                        efs: None,
                     },
                 );
             }
@@ -1701,6 +1839,7 @@ fn create_mirror(
                         live: Default::default(),
                         rings: rings.clone(),
                         kernel_vas: kernel_vas.clone(),
+                        efs: None,
                     },
                 );
             }
@@ -1819,6 +1958,136 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
     }
 }
 
+/// ★★★ **An EFS-mode mirror for a FAULT-CAPABLE guest VA space** (`V3_UVM_GUEST_FAULT_PLANE.md`
+/// §3.0 "create"): a host `FERMI_VASPACE_A` that is fault-capable and externally owned, registered
+/// in its own EFS UVM file, two external ranges covering every guest-usable VA but the channel
+/// window, and the fault plane's waiter for it. ⊘ No store or RAM window and no ring region: no
+/// Translated channel lives in a guest-UVM space (a birth there is refused by name), and those
+/// windows would put VMM addresses in a space the guest's user channels run in.
+///
+/// Returns the log line, or the refusal (everything made so far is released).
+fn create_efs_mirror(
+    m: &mut Manager,
+    plane: &MemPlane,
+    rm: &'static HostRm,
+    store: u32,
+    key: VasKey,
+    fault: &'static crate::faultplane::FaultPlane,
+) -> Result<String, String> {
+    let t0 = std::time::Instant::now();
+    let vas = rm
+        .alloc_vaspace_uvm()
+        .map_err(|e| format!("pagedir {key:?}: EFS host VA space refused: {e:?}"))?;
+    let session = match rm.efs_session(vas) {
+        Ok(s) => std::sync::Arc::new(s),
+        Err(e) => {
+            let _ = rm.free(vas);
+            return Err(format!("pagedir {key:?}: EFS session refused: {e}"));
+        }
+    };
+    for (lo, hi) in EFS_EXTERNAL_RANGES {
+        if let Err(e) = session.create_range(lo, hi - lo) {
+            drop(session);
+            let _ = rm.free(vas);
+            return Err(format!(
+                "pagedir {key:?}: UVM_CREATE_EXTERNAL_RANGE [{lo:#x}, {hi:#x}) refused: {e:?}"
+            ));
+        }
+    }
+    let ram_obj = match plane.guest_ram_object(rm) {
+        Ok((o, _)) => Some(o),
+        Err(e) => {
+            eprintln!("kf3: {key:?} (EFS): {e} — its sysmem leaves will be refused");
+            None
+        }
+    };
+    if let Err(e) = fault.add_space(key, session.clone()) {
+        drop(session);
+        let _ = rm.free(vas);
+        return Err(format!("pagedir {key:?}: {e}"));
+    }
+    let rows = PlacedRows::default();
+    let space = kf_host::VaSpace {
+        space: vas,
+        range: 0,
+        guest: Default::default(),
+    };
+    if let Ok(mut mm) = plane.mirrors.lock() {
+        mm.insert(
+            key,
+            Mirror {
+                space,
+                fb_base: 0,
+                fb_len: 0,
+                ram: None,
+                rows: rows.clone(),
+                ram_obj,
+                live: Default::default(),
+                rings: RingSlots::default(),
+                kernel_vas: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                efs: Some(session.clone()),
+            },
+        );
+    }
+    m.table.insert(
+        key,
+        Target::Efs(EfsMirror {
+            session,
+            store,
+            ram_obj,
+            rows,
+            reserved: vec![EFS_CHANNEL_WINDOW],
+            calls: SpaceCalls::default(),
+        }),
+    );
+    plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
+    Ok(format!(
+        "{key:?} EFS mirror space={vas:#x}: host-UVM-owned, external ranges {:#x?}, channel window [{:#x}, {:#x}) ({} us)",
+        EFS_EXTERNAL_RANGES,
+        EFS_CHANNEL_WINDOW.0,
+        EFS_CHANNEL_WINDOW.1,
+        t0.elapsed().as_micros()
+    ))
+}
+
+/// ★ Retire an EFS-mode mirror with no live twin: the waiter stops, host UVM unregisters the space
+/// (and closes its file when the last reference goes — EFS then cancels anything parked), and the
+/// RM space is freed. ⊘ Never a spare: its host UVM state is per guest space.
+fn retire_efs(
+    plane: &MemPlane,
+    rm: &'static HostRm,
+    key: VasKey,
+    e: EfsMirror,
+    live: u64,
+) -> String {
+    if live > 0 {
+        plane
+            .counters
+            .mirrors_kept_live
+            .fetch_add(1, Ordering::Relaxed);
+        // ⚠ KEPT with its twins (as an RM-owned mirror is): its waiter keeps serving them. The
+        // teardown when the last twin goes is the missing second half (§3.0 "teardown").
+        // The space's session stays open through the fault plane's reference.
+        return format!(
+            "retire {key:?}: {live} live channel(s) still run in EFS space {:#x} — KEPT ({})",
+            e.session.vaspace(),
+            e.host_line()
+        );
+    }
+    if let Some(f) = plane.fault {
+        f.remove_space(key);
+    }
+    let rows = e.rows.read().map_or(0, |r| r.len());
+    let unreg = e.session.unregister_vaspace();
+    let vas = e.session.vaspace();
+    let host = e.host_line();
+    drop(e);
+    let _ = rm.free(vas);
+    format!(
+        "retire {key:?}: EFS space {vas:#x} ({rows} row(s)) unregistered from host UVM ({unreg:?}) and freed — {host}"
+    )
+}
+
 /// ★ P5c: the guest freed VA space `key` — unmap OUR rows (deferred, one invalidate) and keep the
 /// host space and its windows as a spare. ⊘ A space a live channel still runs in is never
 /// recycled (nor freed): it is kept, named.
@@ -1831,12 +2100,14 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         .counters
         .mirrors_retired
         .fetch_add(1, Ordering::Relaxed);
-    let Target::Gpu(g) = target else {
-        return format!("retire {key:?}: not a GPU mirror — kept");
-    };
     let live = mirror
         .as_ref()
         .map_or(0, |mi| mi.live.load(Ordering::Acquire));
+    let g = match target {
+        Target::Gpu(g) => g,
+        Target::Efs(e) => return retire_efs(plane, rm, key, e, live),
+        _ => return format!("retire {key:?}: not a GPU mirror — kept"),
+    };
     if live > 0 {
         plane
             .counters
@@ -1893,6 +2164,7 @@ fn vas_census(m: &Manager) -> String {
     for (k, root, slot) in objs {
         let rows = match m.table.target(k) {
             Some(Target::Gpu(g)) => g.rows.read().map_or(usize::MAX, |r| r.len()),
+            Some(Target::Efs(e)) => e.rows.read().map_or(usize::MAX, |r| r.len()),
             _ => 0,
         };
         out.push_str(&format!(
@@ -1977,6 +2249,9 @@ pub fn apply_statement(
             let key = VasKey((u64::from(client) << 32) | u64::from(vaspace));
             let had = m.table.root(key);
             m.table.clear_root(key);
+            if let Some(f) = plane.fault {
+                f.set_root(key, None);
+            }
             plane.counters.root_unsets.fetch_add(1, Ordering::Relaxed);
             format!(
                 "unset pagedir {key:?}: root {} withdrawn — no walk reads it again",
@@ -2010,6 +2285,22 @@ pub fn apply_statement(
                     );
                 }
             };
+            // ★ EFS mode (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0): a guest-UVM space (allocated
+            // fault-capable and externally owned) gets a host-UVM-owned mirror when the fault plane
+            // is on. ⊘ Every other space, and every space when the plane is off: unchanged.
+            let efs = match plane.fault {
+                Some(f) if s.fault_capable && m.table.target(key).is_none() => Some(f),
+                _ => None,
+            };
+            if let Some(f) = efs {
+                match create_efs_mirror(m, plane, rm, store, key, f) {
+                    Ok(line) => eprintln!("kf3: {line}"),
+                    Err(line) => {
+                        plane.counters.refused.fetch_add(1, Ordering::Relaxed);
+                        return line;
+                    }
+                }
+            }
             if m.table.target(key).is_none() {
                 let reused = plane.spares.lock().ok().and_then(|mut v| v.pop());
                 if let Some(sp) = reused {
@@ -2031,6 +2322,7 @@ pub fn apply_statement(
                                 live: Default::default(),
                                 rings: sp.rings.clone(),
                                 kernel_vas: kernel_vas.clone(),
+                                efs: None,
                             },
                         );
                     }
@@ -2060,6 +2352,9 @@ pub fn apply_statement(
             match m.table.set_root(key, s.pdb.0, ap) {
                 Ok(change) => {
                     plane.counters.roots.fetch_add(1, Ordering::Relaxed);
+                    if let Some(f) = plane.fault {
+                        f.set_root(key, Some(s.pdb.0));
+                    }
                     // ★ P6b ruling (c): a FIRST root is walked now (Q10); a MOVED root at the next
                     // synchronisation point naming the space — its entries are written by the
                     // guest only after this statement's reply (`RootChange`'s rustdoc).

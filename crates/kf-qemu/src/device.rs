@@ -220,6 +220,10 @@ pub struct Device {
     /// ★ v3-display: the emulated NVDisplay (`display=on`), leaked for the process so the vCPU path
     /// holds a plain reference (`crate::display`). `None`: the displayless posture, unchanged.
     pub display: Option<&'static crate::display::DisplayPlane>,
+    /// ★ The guest fault plane (`docs/design/V3_UVM_GUEST_FAULT_PLANE.md`): `Some` only when
+    /// `KF3_UVM_EFS=1` and the host's b3 nvidia-uvm answered the probe. `None`: default, and every
+    /// code path is the one that ran before the plane existed (§6).
+    pub fault: Option<&'static crate::faultplane::FaultPlane>,
 }
 
 impl Device {
@@ -288,8 +292,16 @@ impl Device {
         // ★★★ v3-roperm: the permission policy — ONE value for the walker's diff key and the host
         // map. ATOMIC_DISABLE is carried only under `KF3_CARRY_ATOMIC_DISABLE=1`: enable it once
         // replayable-fault delivery exists (`kf_mem::apply::PermPolicy`).
+        // ★ The guest fault plane (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0, §6) — DEFAULT OFF.
+        // `KF3_UVM_EFS=1` asks for it; the host's b3 module must answer the probe; the die group's
+        // facts and the replayable vector must resolve. Any refusal is ONE named line and the
+        // device runs exactly the paths it ran before.
+        let fault = fault_plane_for(rm, &host, architecture, implementation);
         let perm = kf_mem::apply::PermPolicy {
-            carry_atomic_disable: std::env::var("KF3_CARRY_ATOMIC_DISABLE").is_ok_and(|v| v == "1"),
+            // ★ With faults delivered, a GPU atomic on an atomic-disabled page is a fault the guest
+            // services (the reason the bit was withheld, `kf_mem::apply::PermPolicy`).
+            carry_atomic_disable: fault.is_some()
+                || std::env::var("KF3_CARRY_ATOMIC_DISABLE").is_ok_and(|v| v == "1"),
         };
         eprintln!(
             "kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE {} (key_perm={:#x})",
@@ -503,6 +515,9 @@ impl Device {
                 token_fmt,
             )?));
         chans.start()?;
+        if let Some(f) = fault {
+            chans.set_fault(f);
+        }
         // ★ The served chain (census → sticky guard → init tables, static info, guest sys info,
         // inert, the object seat, the unserviced ledger). The object seat is the host-free graph
         // (`GraphObjects`): it answers ALLOC/FREE/DUP from the object model and refuses every
@@ -511,6 +526,13 @@ impl Device {
         // ⚠ The guest OS is DECLARED, never sniffed (it is a `#define` in the guest driver's build,
         // invisible on the wire); this device answers as a Linux guest.
         let chain_logs = kf_rm::ChainLogs::default();
+        // ★ The guest's replayable-buffer registration reaches the fault plane synchronously, on
+        // the drainer, before the reply (`V3_UVM_GUEST_FAULT_PLANE.md` §3.1).
+        if let Some(f) = fault {
+            chain_logs
+                .fault_buffer
+                .on_registration(Box::new(move |r| f.register(r)));
+        }
         let census = kf_rm::census::ControlCensusLog::new();
         // ★ v3-display (`docs/design/V3_DISPLAY.md` §4.1): the chip's display row, when asked for.
         // ⊘ A chip whose bare metal has no display engine (GA100, GH100, GB10x datacenter) is
@@ -629,7 +651,7 @@ impl Device {
 
         // ★ P4: the windows, their scratch, the PRAMIN views (armed HERE, off every vCPU), the
         // invalidate port; and the VA manager with OUR BAR2 aperture as its first object.
-        let (mem, bar1_ops, bar2_ops) = crate::mem::MemPlane::build(
+        let (mut mem, bar1_ops, bar2_ops) = crate::mem::MemPlane::build(
             rm,
             family,
             store.handle,
@@ -640,6 +662,7 @@ impl Device {
             inbox,
             mirrors,
         )?;
+        mem.fault = fault;
         let walker = kf_mem::vasmgr::GpuWalker { kernel, perm };
         // ★ 2026-09-26 (`V3_BAR1_DOORBELL.md` §7 T1's NEGATIVE CONTROL, `V3_FAMILY_PORT_BLACKWELL.md`):
         // `KF3_NEGCTL_NO_BAR1_DOORBELL=1` runs a Hopper+ family WITHOUT the BAR1 usermode-view
@@ -769,7 +792,21 @@ impl Device {
             qhead_off,
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             display: display_plane,
+            fault,
         })
+    }
+
+    /// ★ Bind the fault plane to this device (once it is leaked, before any guest code runs) and
+    /// start its resolver. A no-op with the plane off.
+    ///
+    /// # Errors
+    /// The resolver thread's spawn.
+    pub fn start_fault_plane(&'static self) -> Result<(), String> {
+        let Some(f) = self.fault else {
+            return Ok(());
+        };
+        f.bind(self);
+        f.start()
     }
 
     /// The BAR0 memory map for the C device to build (family-scoped: shadow / plain RAM /
@@ -1052,6 +1089,25 @@ impl Device {
             && let Some(v) = self.mem.invalidate_write(off, val as u32)
         {
             self.shadow_store(off, u64::from(v), 4);
+            return;
+        }
+        // ★ The guest fault plane's `GET`/`PUT` (`V3_UVM_GUEST_FAULT_PLANE.md` §3.2): `GET` applied
+        // HERE, lock-free — the read-back shows the pointer, and the level is re-evaluated (the
+        // guest's re-arm ends with this write "to force the re-evaluation"). `PUT` is ours (`R--`):
+        // a guest write to it changes nothing. Never the privileged ring.
+        if !doorbell
+            && !in_usermode
+            && width == 4
+            && let Some(f) = self.fault
+            && let Some(reg) = f.ring.decode(off)
+        {
+            if reg == kf_trap::faultring::Reg::Get {
+                let (shown, raise) = f.get_write(val as u32);
+                self.shadow_store(off, u64::from(shown), 4);
+                if raise {
+                    self.latch_and_deliver(f.vector);
+                }
+            }
             return;
         }
         // ★ P5 §2.7: the CPU interrupt tree — applied HERE, synchronously and lock-free (§5.5: the
@@ -1654,6 +1710,7 @@ impl Device {
             return;
         }
         let mut beat = (std::time::Instant::now(), String::new());
+        let mut fault_beat = String::new();
         // ★ The GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+ guest reads
         // them after every RPC poll. Stored on this thread (never a vCPU) every 0.5 s — well inside
         // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
@@ -1699,6 +1756,20 @@ impl Device {
                     eprintln!("{now}");
                 }
                 beat = (std::time::Instant::now(), now);
+                if let Some(f) = self.fault {
+                    let (d, u) = f.outstanding();
+                    let line = format!(
+                        "kf3: fault plane: {} outstanding(delivered={d} held={u}) ring(get={} put={} entries={})",
+                        f.counters.line(),
+                        f.ring.get(),
+                        f.ring.put(),
+                        f.ring.entries()
+                    );
+                    if line != fault_beat {
+                        eprintln!("{line}");
+                        fault_beat = line;
+                    }
+                }
             }
             if crate::prof::on() {
                 let m = self.prof.marks.load(Ordering::Relaxed);
@@ -2320,6 +2391,103 @@ impl Device {
 
 /// ★ P5c: the RC fd's poller tag, past every engine's (`OTHER_TAG_BASE + engine index`).
 const RC_TAG_OFFSET: u64 = 1 << 16;
+
+/// ★ The device, as the fault plane writes to the guest (`crate::faultplane::FaultSink`): shadow
+/// words, the interrupt tree, and packets into guest RAM — every one callable from any thread,
+/// none blocking.
+impl crate::faultplane::FaultSink for Device {
+    fn shadow(&self, off: u64, val: u32) {
+        self.shadow_store(off, u64::from(val), 4);
+    }
+    fn raise(&self, vector: u32) {
+        self.latch_and_deliver(vector);
+    }
+    fn write_entry(&self, gpa: u64, words: &[u32; 8]) -> bool {
+        let Some(b) = self.ram.block_for(gpa, 32) else {
+            return false;
+        };
+        let Ok(off) = usize::try_from(gpa - b.gpa) else {
+            return false;
+        };
+        let bytes = kf_abi::faultpacket::to_bytes(words);
+        // Dwords 0–6, then — ordered after them — dword 7, which carries VALID: the guest spins
+        // on VALID and then parses the whole entry (`kf_abi::faultpacket`'s ordering section).
+        if !b.mem.write_from(off, &bytes[..28]) {
+            return false;
+        }
+        std::sync::atomic::fence(Ordering::Release);
+        b.mem
+            .store_u32(off + 28, words[kf_abi::faultpacket::VALID_DWORD])
+    }
+    fn is_guest_ram(&self, gpa: u64, len: u64) -> bool {
+        self.ram.block_for(gpa, len).is_some()
+    }
+}
+
+/// ★ Build the guest fault plane when asked for and possible (`V3_UVM_GUEST_FAULT_PLANE.md` §6).
+/// `None` — with one named line when it was asked for — keeps every path as before.
+fn fault_plane_for(
+    rm: &'static kf_host::HostRm,
+    host: &kf_rm::HostFacts,
+    architecture: u32,
+    implementation: u32,
+) -> Option<&'static crate::faultplane::FaultPlane> {
+    if !std::env::var("KF3_UVM_EFS").is_ok_and(|v| v == "1") {
+        return None;
+    }
+    let refuse = |why: String| {
+        eprintln!(
+            "kf3: UVM EFS REFUSED: {why} — the guest fault plane stays OFF (every path as without KF3_UVM_EFS)"
+        );
+        None
+    };
+    let q = match rm.efs_probe() {
+        Ok(q) => q,
+        Err(e) => return refuse(e.to_string()),
+    };
+    let consts = match kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
+        .map_err(|e| format!("{e:?}"))
+        .and_then(kf_chip::fault::FaultConsts::for_group)
+    {
+        Ok(c) => c,
+        Err(e) => return refuse(format!("the die group's fault facts: {e}")),
+    };
+    /// `MC_ENGINE_IDX_REPLAYABLE_FAULT` (`ogkm-580: engine_idx.h:101`).
+    const MC_ENGINE_IDX_REPLAYABLE_FAULT: u16 = 59;
+    let Some(vector) = host
+        .intr_table
+        .iter()
+        .find(|e| {
+            e.engine_idx == MC_ENGINE_IDX_REPLAYABLE_FAULT
+                && e.vector_stall != kf_abi::inittables::INTR_VECTOR_INVALID
+        })
+        .map(|e| e.vector_stall)
+    else {
+        return refuse("the host's interrupt table has no REPLAYABLE_FAULT vector".into());
+    };
+    let gpcs = u32::try_from(host.gr_static.gpcs.len()).unwrap_or(0);
+    let Some(priv_base) =
+        kf_trap::memmap::VF_USERMODE_PAGE.checked_sub(kf_trap::mmuinval::USERMODE_ABOVE_PRIV)
+    else {
+        return refuse("the usermode base is below the PRIV delta".into());
+    };
+    let f: &'static crate::faultplane::FaultPlane = Box::leak(Box::new(
+        crate::faultplane::FaultPlane::new(consts, priv_base, vector, gpcs),
+    ));
+    eprintln!(
+        "kf3: UVM EFS ON — guest fault plane: {:?}, GET/PUT at BAR0 {:#x}/{:#x} (PTR mask {:#x}), replayable vector {vector}, {gpcs} GPCs, GRAPHICS engine id {}; host EFS ABI {} (max {} parked, timeout {} ms, skipDivertedReplays={})",
+        consts.group,
+        f.ring.get_off(),
+        f.ring.put_off(),
+        consts.ptr_mask,
+        consts.mmu_eng_id_graphics,
+        q.abi_version,
+        q.max_records,
+        q.timeout_ms,
+        q.skip_diverted_replays
+    );
+    Some(f)
+}
 
 /// Guest RAM as the GSP FSM reads it — through the blocks QEMU registered.
 struct Ram<'a>(&'a Device);

@@ -109,6 +109,36 @@ pub struct FaultBufferLog {
     total: Arc<AtomicU64>,
     shadow_total: Arc<AtomicU64>,
     access_cntr_total: Arc<AtomicU64>,
+    /// ★ The LATEST decoded replayable registration and its generation (bumped per registration)
+    /// — what the guest fault plane (`V3_UVM_GUEST_FAULT_PLANE.md` §3.1) follows. ⊘ Separate from
+    /// the capped sample: the sample stops at [`FAULT_BUFFER_SAMPLE_MAX`], the buffer in use
+    /// never may.
+    latest: Arc<Mutex<Option<FaultBufferRegistration>>>,
+    generation: Arc<AtomicU64>,
+    /// ★ Who is told, synchronously, when a replayable registration decodes
+    /// ([`FaultBufferLog::on_registration`]).
+    hook: RegistrationHookCell,
+}
+
+/// ★ A listener for replayable registrations — the guest fault plane
+/// (`V3_UVM_GUEST_FAULT_PLANE.md` §3.1). Called on the drainer, inside the served `0x20800a9b`,
+/// BEFORE its reply: the guest's UVM reads `GET`/`PUT` once right after the registration, so the
+/// plane's reset of both must already be visible. ⊘ It must not block (the drainer holds the GSP
+/// lock): bookkeeping and shadow stores only.
+pub type RegistrationHook = Box<dyn Fn(&FaultBufferRegistration) + Send + Sync>;
+
+/// The set-once cell holding the hook (its own type so the log keeps its `Debug`).
+#[derive(Clone, Default)]
+struct RegistrationHookCell(Arc<std::sync::OnceLock<RegistrationHook>>);
+
+impl core::fmt::Debug for RegistrationHookCell {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(if self.0.get().is_some() {
+            "RegistrationHook(set)"
+        } else {
+            "RegistrationHook(none)"
+        })
+    }
 }
 
 /// How many registrations are remembered.
@@ -153,6 +183,26 @@ impl FaultBufferLog {
         self.access_cntr_total.load(Ordering::Relaxed)
     }
 
+    /// ★ How many replayable registrations DECODED so far — a change means a new buffer.
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
+    }
+
+    /// ★ Install the registration listener (once; a second call is refused and returns `false`).
+    pub fn on_registration(&self, hook: RegistrationHook) -> bool {
+        self.hook.0.set(hook).is_ok()
+    }
+
+    /// ★ The latest decoded replayable registration (the buffer the guest uses now).
+    #[must_use]
+    pub fn latest(&self) -> Option<FaultBufferRegistration> {
+        self.latest
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// The registrations remembered, in arrival order.
     #[must_use]
     pub fn sample(&self) -> Vec<FaultBufferNote> {
@@ -181,6 +231,13 @@ impl FaultBufferLog {
             FaultBufferNote::AccessCntrRegistered(_)
             | FaultBufferNote::AccessCntrMalformed { .. } => {
                 self.access_cntr_total.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        if let FaultBufferNote::Registered(r) = &note {
+            *self.latest.lock().unwrap_or_else(|e| e.into_inner()) = Some(r.clone());
+            self.generation.fetch_add(1, Ordering::AcqRel);
+            if let Some(h) = self.hook.0.get() {
+                h(r);
             }
         }
         let mut s = self.seen.lock().unwrap_or_else(|e| e.into_inner());
@@ -253,3 +310,51 @@ impl CommandObserver for FaultBufferRecorder {
 }
 
 kf_util::assert_send_sync!(FaultBufferNote, FaultBufferLog, FaultBufferRecorder);
+
+#[cfg(test)]
+mod latest_tests {
+    use super::*;
+
+    fn reg(size: u32, page: u64) -> FaultBufferRegistration {
+        FaultBufferRegistration {
+            h_client: 1,
+            h_object: 2,
+            size,
+            pages: vec![page],
+        }
+    }
+
+    /// ★ The latest registration survives past the capped sample, and each registration bumps
+    /// the generation; malformed ones and the other buffers do not.
+    #[test]
+    fn the_latest_registration_outlives_the_sample() {
+        let log = FaultBufferLog::new();
+        assert_eq!((log.generation(), log.latest()), (0, None));
+        for i in 0..(FAULT_BUFFER_SAMPLE_MAX as u64 + 3) {
+            log.note(FaultBufferNote::Registered(reg(4096, 0x1000 * (i + 1))));
+        }
+        assert_eq!(log.generation(), FAULT_BUFFER_SAMPLE_MAX as u64 + 3);
+        assert_eq!(
+            log.latest().map(|r| r.pages[0]),
+            Some(0x1000 * (FAULT_BUFFER_SAMPLE_MAX as u64 + 3))
+        );
+        log.note(FaultBufferNote::Malformed { len: 3 });
+        log.note(FaultBufferNote::ShadowMalformed { len: 3 });
+        assert_eq!(log.generation(), FAULT_BUFFER_SAMPLE_MAX as u64 + 3);
+    }
+
+    /// ★ The listener hears every decoded replayable registration, synchronously, and nothing
+    /// else; it can be installed once.
+    #[test]
+    fn the_listener_hears_each_registration() {
+        let log = FaultBufferLog::new();
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let h = heard.clone();
+        assert!(log.on_registration(Box::new(move |r| h.lock().unwrap().push(r.pages[0]))));
+        assert!(!log.on_registration(Box::new(|_| {})), "set once");
+        log.note(FaultBufferNote::Registered(reg(4096, 0x5000)));
+        log.note(FaultBufferNote::Malformed { len: 3 });
+        log.note(FaultBufferNote::Registered(reg(4096, 0x6000)));
+        assert_eq!(*heard.lock().unwrap(), vec![0x5000, 0x6000]);
+    }
+}

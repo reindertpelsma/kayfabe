@@ -102,6 +102,13 @@ struct PtChan {
     /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
     /// the host's own falcon context is steered onto (see `ChanPlane::engine_object`).
     falcon_ctx: Option<(u64, u64)>,
+    /// ★ EFS mode (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0, §3.5): the guest VA space it runs in, the
+    /// host UVM session owning that space's mirror (`None`: an RM-owned mirror), the guest's own
+    /// instance block + VEID (what a fault packet names), and whether host UVM registered it.
+    key: VasKey,
+    efs: Option<Arc<kf_host::efs::EfsSession>>,
+    ident: Option<kf_chip::fault::GuestFaultIdentity>,
+    efs_registered: bool,
 }
 
 /// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
@@ -469,6 +476,8 @@ struct VaSplit<'a> {
     token: u32,
     ticket: &'a mut Option<u64>,
     requested: &'a mut u64,
+    /// ★ The guest fault plane, when on: the guest's replay/cancel goes there.
+    fault: Option<&'static crate::faultplane::FaultPlane>,
 }
 impl Publisher for VaSplit<'_> {
     fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String> {
@@ -484,6 +493,23 @@ impl Publisher for VaSplit<'_> {
                 r.map(|()| Split::Done)
                     .map_err(|e| format!("split walk (pdb {pdb:x?}): {e}"))
             }
+        }
+    }
+
+    /// ★ `V3_UVM_GUEST_FAULT_PLANE.md` §3.7: queued for the plane's resolver (no host call on the
+    /// worker, which holds its channel's slot lock). With the plane off, exactly the behaviour
+    /// before it existed (the trait default's rule).
+    fn fault(&mut self, op: kf_chan::translated::FaultOp) -> Result<(), String> {
+        match (self.fault, op) {
+            (Some(f), op) => {
+                f.guest_op(op);
+                Ok(())
+            }
+            (None, kf_chan::translated::FaultOp::CancelInstance { .. }) => Err(
+                "GP100_UVM_SW FAULT_CANCEL with no fault plane behind it (refused, as Refusal::SwMethod was)"
+                    .to_string(),
+            ),
+            (None, _) => Ok(()),
         }
     }
 }
@@ -960,6 +986,11 @@ pub struct ChanPlane {
     pub rc_seen: AtomicU64,
     /// Wakes of the RC fd.
     pub rc_wakes: AtomicU64,
+    /// ★ The guest fault plane (`V3_UVM_GUEST_FAULT_PLANE.md`), set once at realize when it is on.
+    fault: std::sync::OnceLock<&'static crate::faultplane::FaultPlane>,
+    /// ★ EFS mode: twins registered with host UVM, by host channel handle → (session, guest space)
+    /// — unregistered before their free.
+    efs_twins: Mutex<HashMap<u32, (Arc<kf_host::efs::EfsSession>, VasKey)>>,
 }
 
 impl ChanPlane {
@@ -1128,7 +1159,65 @@ impl ChanPlane {
             rc_wakes: AtomicU64::new(0),
             dbfast,
             token_fmt,
+            fault: std::sync::OnceLock::new(),
+            efs_twins: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// ★ Hand the plane the guest fault plane (realize, once, before the guest runs).
+    pub fn set_fault(&self, f: &'static crate::faultplane::FaultPlane) {
+        let _ = self.fault.set(f);
+    }
+
+    /// ★★ EFS mode (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0 "twin channels"): a GR twin in a
+    /// host-UVM-owned space is schedulable only once host UVM has mapped and bound its context —
+    /// RM refuses `kchannelIsSchedulable` otherwise (`ogkm-580: kernel_channel.c:2200-2206`). So it
+    /// is registered (`UVM_REGISTER_CHANNEL`, its context buffers mapped in the channel window)
+    /// before its first schedule, and from then represents its guest space's faults (§3.5).
+    /// **Act thread**; no lock held across the ioctl. `Ok(None)`: nothing to do.
+    fn efs_register(&self, k: (u32, u32)) -> Result<Option<String>, String> {
+        let (chan, key, session, ident) = {
+            let m = self.pt.lock().map_err(|_| "twins poisoned".to_string())?;
+            let Some(v) = m.get(&k) else {
+                return Ok(None);
+            };
+            let Some(session) = v.efs.clone() else {
+                return Ok(None);
+            };
+            if v.efs_registered || v.engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS {
+                return Ok(None);
+            }
+            (v.chan, v.key, session, v.ident)
+        };
+        let (lo, hi) = crate::mem::EFS_CHANNEL_WINDOW;
+        session
+            .register_channel(chan.chan, lo, hi - lo)
+            .map_err(|e| format!("host {:#x}: UVM_REGISTER_CHANNEL: {e:?}", chan.token))?;
+        if let Ok(mut m) = self.pt.lock()
+            && let Some(v) = m.get_mut(&k)
+        {
+            v.efs_registered = true;
+        }
+        if let Ok(mut m) = self.efs_twins.lock() {
+            m.insert(chan.chan, (session, key));
+        }
+        let rep = match (self.fault.get(), ident) {
+            (Some(f), Some(w)) => {
+                f.note_twin(key, chan.chan, w);
+                format!(
+                    "represents {key:?}'s faults as guest instance {:#x} ({:?}) VEID {}",
+                    w.inst_addr, w.inst, w.veid
+                )
+            }
+            (_, None) => {
+                "the guest stated NO instance block this port can name — its space's faults cannot be attributed to it".into()
+            }
+            (None, _) => "no fault plane".into(),
+        };
+        Ok(Some(format!(
+            "EFS: GR twin host {:#x} registered with host UVM (context in [{lo:#x}, {hi:#x})), {rep}",
+            chan.token
+        )))
     }
 
     /// ★ **Act thread**: give the channel just born on token `idx` — `(runlist, chid)` in the guest's
@@ -1355,6 +1444,16 @@ impl ChanPlane {
                     "schedule",
                     Box::new(move |me: &ChanPlane| {
                         let mut restarted = 0;
+                        // ★ EFS mode: a GR twin in a host-UVM-owned space is registered with host
+                        // UVM before its group's first schedule (`ChanPlane::efs_register`).
+                        let mut efs = Vec::new();
+                        if enable {
+                            for (k, _) in &twins {
+                                if let Some(line) = me.efs_register(*k).map_err(|e| (NV_ERR_INVALID_STATE, e))? {
+                                    efs.push(line);
+                                }
+                            }
+                        }
                         // ★ v3-video: twins of one guest TSG share ONE host group — schedule it once.
                         let mut groups_done = std::collections::HashSet::new();
                         for (k, c) in &twins {
@@ -1386,7 +1485,11 @@ impl ChanPlane {
                                 me.rm.schedule_enable(*c, enable).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x}: {e:?}", c.token)))?;
                             }
                         }
-                        Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
+                        Ok(format!(
+                            "{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP){}",
+                            twins.len(),
+                            efs.iter().map(|l| format!("; {l}")).collect::<String>()
+                        ))
                     }),
                 )
             }
@@ -2633,6 +2736,23 @@ impl ChanPlane {
         ctx_share: u32,
         chan: kf_host::Channel,
     ) -> Result<(), kf_host::RmError> {
+        // ★ EFS mode: host UVM lets go of the channel before RM frees it.
+        let efs = self
+            .efs_twins
+            .lock()
+            .ok()
+            .and_then(|mut m| m.remove(&chan.chan));
+        if let Some((session, key)) = efs {
+            if let Some(f) = self.fault.get() {
+                f.forget_twin(key, chan.chan);
+            }
+            if let Err(e) = session.unregister_channel(chan.chan) {
+                eprintln!(
+                    "kf3: EFS: UVM_UNREGISTER_CHANNEL of twin host {:#x} refused: {e:?}",
+                    chan.token
+                );
+            }
+        }
         let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else {
             return self.rm.free_channel(chan);
         };
@@ -2816,6 +2936,10 @@ impl ChanPlane {
             };
             let space = mirror.space;
             let rows = mirror.rows.clone();
+            // ★ EFS mode: the host UVM session of the space, and the guest's own identity for the
+            // packets its faults become (`V3_UVM_GUEST_FAULT_PLANE.md` §3.5).
+            let efs = mirror.efs.clone();
+            let ident = crate::faultplane::guest_identity(a.instance, a.subctx_id);
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
             let live = mirror.live.clone();
@@ -2876,6 +3000,10 @@ impl ChanPlane {
                             space,
                             rows,
                             falcon_ctx: None,
+                            key,
+                            efs,
+                            ident,
+                            efs_registered: false,
                         });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
@@ -2895,6 +3023,17 @@ impl ChanPlane {
                         kernel_by(&a)
                     ))
                 }),
+            );
+        }
+        // ⊘ EFS mode: a guest-UVM space's mirror is host-UVM-owned — no windows, no ring region, and
+        // RM maps nothing there. A guest-KERNEL channel in one is refused by name (none is expected:
+        // guest nvidia-uvm runs its own channels in its own kernel space, `nv_gpu_ops.c:2542`).
+        if mirror.efs.is_some() {
+            return refuse(
+                NV_ERR_NOT_SUPPORTED,
+                format!(
+                    "guest-KERNEL channel in guest-UVM space {key:?} (EFS-mode mirror: no windows, no rings)"
+                ),
             );
         }
         let entries = a.entries.max(1);
@@ -3386,6 +3525,7 @@ impl ChanPlane {
             token: g.guest_idx,
             ticket: &mut g.split,
             requested: &mut g.splits,
+            fault: self.fault.get().copied(),
         };
         let r = g.chan.pump(
             self.rm,
