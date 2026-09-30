@@ -1,0 +1,5 @@
+[ 7568.007707] nvidia-uvm:  EFS VA space of tgid 125081 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=0 deduped=0 delivered=0 replayed=0 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=0
+[ 7609.689277] nvidia-uvm:  EFS VA space of tgid 125081 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=1054 deduped=1917 delivered=1054 replayed=1054 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=69
+[ 7809.974058] NVRM: GPU at PCI:0000:00:07: GPU-459d2c69-156c-43e9-34db-733876f9671e
+[ 7809.974180] NVRM: Xid (PCI:0000:00:07): 31, pid=125081, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC0 GPCCLIENT_T1_6 faulted @ 0x76e2_ac520000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_WRITE
+[ 7810.559753] nvidia-uvm:  EFS VA space of tgid 125081 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=34505 deduped=269555 delivered=34505 replayed=34489 cancelled=0 timed_out=16 refused_full=0 refused_closing=0 stale=16 gpu_gone=0 hw_replays=2519

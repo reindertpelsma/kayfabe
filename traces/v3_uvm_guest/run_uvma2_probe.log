@@ -1,0 +1,143 @@
+=== boot_capture tag=uvma2 at 2026-09-30T20:12:59+00:00 ===
+=== source revision: a103f254 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88825960 Sep 30 20:12 /workspace/bench/kf3-bins/a103f254/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=0f19b0c944f9e441
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Sep 30 20:13:06 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 30 20:13 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 30 20:13 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 30 20:13 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 30 20:13 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 30 20:13 .
+drwxr-xr-x 18 root root   4000 Sep 30 20:13 ..
+cr--------  1 root root 240, 1 Sep 30 20:13 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 30 20:13 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/uvm_apps_hook.sh at 2026-09-30T20:13:08+00:00 ===
+UVMAPPS_HOOK_START 2026-09-30T20:13:08+00:00 tag=uvma2 rev=a103f254 KF3_UVM_EFS=1
+UnifiedMemoryPerf UnifiedMemoryStreams attach_verify conjugateGradientUM lib 
+=== app UnifiedMemoryStreams 2026-09-30T20:14:37+00:00
+Task [1], thread [3] executing on device (256)
+Task [3], thread [2] executing on device (493)
+Task [4], thread [0] executing on device (887)
+Task [5], thread [2] executing on host (64)
+Task [6], thread [3] executing on device (346)
+Task [7], thread [1] executing on device (855)
+Task [8], thread [0] executing on device (536)
+Task [9], thread [1] executing on device (497)
+Task [10], thread [0] executing on device (375)
+Task [11], thread [3] executing on device (626)
+Task [12], thread [2] executing on device (766)
+Task [13], thread [1] executing on host (64)
+Task [14], thread [0] executing on device (712)
+Task [15], thread [0] executing on device (960)
+Task [16], thread [3] executing on host (64)
+Task [17], thread [0] executing on device (116)
+Task [18], thread [1] executing on device (235)
+Task [19], thread [3] executing on device (393)
+Task [20], thread [2] executing on device (156)
+Task [21], thread [2] executing on device (352)
+Task [22], thread [2] executing on device (755)
+Task [23], thread [2] executing on device (952)
+Task [24], thread [2] executing on device (292)
+Task [25], thread [2] executing on device (584)
+Task [26], thread [2] executing on device (245)
+Task [27], thread [0] executing on device (518)
+Task [28], thread [0] executing on device (696)
+Task [29], thread [0] executing on device (392)
+Task [30], thread [0] executing on device (842)
+Task [31], thread [0] executing on device (495)
+Task [32], thread [0] executing on device (367)
+Task [33], thread [0] executing on device (446)
+Task [34], thread [3] executing on device (709)
+Task [35], thread [3] executing on device (537)
+Task [36], thread [3] executing on device (659)
+Task [37], thread [0] executing on host (64)
+Task [38], thread [0] executing on device (231)
+Task [39], thread [1] executing on device (390)
+All Done!
+UVMAPP_RC=0
+UVMAPP app=UnifiedMemoryStreams verdict=PASS rc=0 secs=10
+--- guest NVRM Xid lines new in this app:
+--- HOST Xid lines new in this app:
+=== app conjugateGradientUM 2026-09-30T20:14:48+00:00
+./conjugateGradientUM: error while loading shared libraries: libnvJitLink.so.12: cannot open shared object file: No such file or directory
+UVMAPP_RC=127
+UVMAPP app=conjugateGradientUM verdict=FAIL rc=127 secs=0
+--- guest NVRM Xid lines new in this app:
+--- HOST Xid lines new in this app:
+=== app attach_verify 2026-09-30T20:14:49+00:00
+attach_verify: 4 buffers x 1048576 elements, 0 mismatched
+attach_verify(global): 0 mismatched
+RESULT: CORRECT
+UVMAPP_RC=0
+UVMAPP app=attach_verify verdict=PASS rc=0 secs=88
+--- guest NVRM Xid lines new in this app:
+--- HOST Xid lines new in this app:
+=== app UnifiedMemoryPerf 2026-09-30T20:16:19+00:00
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Running ........................................................
+
+Overall Time For matrixMultiplyPerf 
+
+Printing Average of 20 measurements in (ms)
+Size_KB	 UMhint	UMhntAs	 UMeasy	  0Copy	MemCopy	CpAsync	CpHpglk	CpPglAs
+4	  8.683	 10.768	  3.797	  0.072	  0.253	  0.246	  0.256	  0.242
+16	 12.678	 13.234	  4.884	  0.084	  0.264	  0.260	  0.265	  0.233
+64	  8.389	 12.736	 32.016	  0.131	  0.296	  0.291	  0.280	  0.270
+256	 17.643	 18.746	 74.134	  0.526	  0.481	  0.467	  0.438	  0.409
+1024	 14.119	 18.693	131.211	  3.335	  1.532	  1.472	  1.382	  1.294
+4096	 27.058	 32.108	395.301	 24.251	  7.514	  7.548	  6.999	  6.919
+16384	 97.744	106.789	1423.743	177.648	 37.601	 37.247	 34.186	 34.200
+
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+UVMAPP_RC=0
+UVMAPP app=UnifiedMemoryPerf verdict=PASS rc=0 secs=135
+--- guest NVRM Xid lines new in this app:
+--- HOST Xid lines new in this app:
+UVMAPPS_HOOK_DONE 2026-09-30T20:18:35+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=100
+GUEST_DMESG_AFTER_NVRM=97
+GUEST_DMESG_WORKLOAD_DELTA=72
+=== HOST dmesg delta for this boot (watermark 803 → 807) ===
+HOST_DMESG_LINES=4
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

@@ -25,6 +25,9 @@ reachable from this workspace on 2026-09-30.
 | uvmg6 | `aeaebe33` | ★ **`gpufirst` ok bad=0**; `cpuinit` 719; `malloc` ok | the first guest managed-memory result with correct data: 679 faults diverted → delivered → serviced by the guest → replayed (79 host replays), zero cancels. `cpuinit` hit a split/park race (fixed next) |
 | uvmg7 | `c849f68d` | ★★ **all modes ok bad=0** — `gpufirst cpuinit prefetch advise malloc gpufirst cpuinit` | 3 499 records delivered, 265 host replays, 0 cancels, 0 host errors, **zero Xid** (`run_uvmg7_hostdmesg.log`: only the EFS shutdown accounting lines, `diverted=replayed` for every space) |
 
+| uvma1 | `b272168c` | apps: `attach_verify` **PASS**; `UnifiedMemoryPerf` **FAIL 719** after 197 s | 35 559 faults delivered/replayed, then the host timed out 16 parked records (`timed_out=16` in `run_uvma1_hostdmesg.log`, 30 s EFS timeout) → Xid 31 → RC: the guest's servicing stalled for 30 s (cause open). UnifiedMemoryStreams/conjugateGradientUM not built (no cuBLAS on the box) |
+| uvma2 | `a103f254` (`KF3_FAULTLOG`+`KF3_MAPLOG`) | apps: `UnifiedMemoryStreams` **PASS**, `attach_verify` **PASS**, `UnifiedMemoryPerf` **PASS** (135 s); `conjugateGradientUM` not run (`libnvJitLink.so.12` missing on the box, host too) | UnifiedMemoryPerf: 79 713 faults delivered and replayed, 5 818 host replays, 0 timed out, **0 Xid** — so the uvma1 failure is intermittent, not deterministic. Host (bare-metal) baseline in `driver_uvma2.log`: the same three PASS |
+
 `run_uvmg6_qemu.filtered.log.gz` / `run_uvmg7_qemu.filtered.log.gz` are the device logs with the
 per-page lines (`maplog … MAP va=`, `DOORBELL`, `faultlog DELIVER`, `faultlog EFSMAP`) removed for
 size; the fault-plane timeline (`SPLIT-FAST`, `SPLIT-EARLY`, `POINT-MAP`, `GUEST-OP`, `RESOLVE`,
@@ -37,5 +40,9 @@ size; the fault-plane timeline (`SPLIT-FAST`, `SPLIT-EARLY`, `POINT-MAP`, `GUEST
   guest's stock nvidia-uvm servicing real host replayable faults delivered by kf3 (`uvmg7`).
 - ⊘ It needs the §3.8a experiment (a CPU point walk of parked pages beside the GPU walker) — a
   constraint change (owner ruling A.1/A.11) for the owner to rule on before anything lands.
-- ⊘ Not yet run: the four apps (M3), the merge bar (M4), the Bug 1624521 negative control (E-S1),
-  a non-nested host.
+- M3 partial: `attach_verify`, `UnifiedMemoryStreams`, `UnifiedMemoryPerf` pass in the guest
+  (uvma2), but `UnifiedMemoryPerf` failed once (uvma1: a 30 s servicing stall); conjugateGradientUM
+  never ran (box library gap). `run_uvma2_qemu.nomaplog.log.gz` keeps every non-maplog line of that
+  diagnostic run; `run_uvma1_qemu.log.gz` is uvma1's device log minus the per-write BAR0 lines.
+- ⊘ Not yet run: conjugateGradientUM, the merge bar (M4), the Bug 1624521 negative control (E-S1,
+  tooling committed), a non-nested host.

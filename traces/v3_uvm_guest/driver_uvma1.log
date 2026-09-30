@@ -1,0 +1,76 @@
+START 2026-09-30T20:05:57+00:00 rev=b272168c tag=uvma1 mode=efs
+HEAD=b272168c4866205d2a98439ceb87692fec5c56ac
+KF3_BUILT /workspace/bench/kf3-bins/b272168c/qemu-system-x86_64 rev=b272168c mtime=2026-09-30 20:06:23.112588857 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+Note: switching to '9c688d7ff78455ed42e345124d1495aad6bf66de'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+UVMAPPS_BUILD_FAILED UnifiedMemoryStreams
+UnifiedMemoryStreams.cu:46:10: fatal error: cublas_v2.h: No such file or directory
+   46 | #include <cublas_v2.h>
+      |          ^~~~~~~~~~~~~
+compilation terminated.
+make: *** [Makefile:382: UnifiedMemoryStreams.o] Error 255
+UVMAPPS_BUILT UnifiedMemoryPerf
+UVMAPPS_BUILD_FAILED conjugateGradientUM
+main.cpp:40:10: fatal error: cublas_v2.h: No such file or directory
+   40 | #include <cublas_v2.h>
+      |          ^~~~~~~~~~~~~
+compilation terminated.
+make: *** [Makefile:349: main.o] Error 255
+UVMAPPS_BUILT attach_verify
+/workspace/bench/uvmapps: UnifiedMemoryPerf attach_verify lib  /workspace/bench/uvmapps/lib: libcudart.so.12 
+UVMAPPS_BUILD_DONE
+=== HOST (bare-metal) baseline, patched module loaded, not opted in
+HOSTAPP app=attach_verify rc=0 last=attach_verify(global): 0 mismatched|RESULT: CORRECT|
+HOSTAPP app=UnifiedMemoryStreams rc=127 last=timeout: failed to run command ‘./UnifiedMemoryStreams’: No such file or directory|
+HOSTAPP app=conjugateGradientUM rc=127 last=timeout: failed to run command ‘./conjugateGradientUM’: No such file or directory|
+HOSTAPP app=UnifiedMemoryPerf rc=0 last=|NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.|
+[ 6520.906081] NVRM: Xid (PCI:0000:00:07): 31, pid=118804, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7b96_26000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[ 6752.860177] NVRM: Xid (PCI:0000:00:07): 109, pid=120205, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+[ 6752.867177] NVRM: Xid (PCI:0000:00:07): 31, pid=120205, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_6 faulted @ 0x7ed7_90880000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+LANE_RC=0
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf00003); GET=PUT=0
+kf3: fault plane: regs=1/0refused spaces=0(0 retired) records=0 delivered=0 raises(put=0 get=0) get_writes=0 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=0 host=0 ids=0) cancels(guest=0 ids=0) empty_ops=0 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: VasKey(13965662497559019527) EFS mirror space=0xcafe0045: host-UVM-owned, external ranges [
+kf3: act schedule: 0xc1d0000c:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x100000 (Vid) VEID 63 (17023 us, off the GSP lock)
+kf3: fault plane: regs=1/0refused spaces=1(0 retired) records=0 delivered=0 raises(put=0 get=0) get_writes=2 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=0 host=0 ids=0) cancels(guest=0 ids=0) empty_ops=0 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: fault plane: regs=1/0refused spaces=1(1 retired) records=1054 delivered=1054 raises(put=566 get=9) get_writes=296 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=79 host=69 ids=1054) cancels(guest=0 ids=0) empty_ops=10 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=1054 put=1054 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf0009a); GET=PUT=0
+kf3: VasKey(13965662549098627079) EFS mirror space=0xcafe00ac: host-UVM-owned, external ranges [
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=1054 delivered=1054 raises(put=566 get=9) get_writes=298 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=79 host=69 ids=1054) cancels(guest=0 ids=0) empty_ops=10 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d00018:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x130000 (Vid) VEID 63 (16808 us, off the GSP lock)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=1092 delivered=1092 raises(put=585 get=9) get_writes=374 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=98 host=88 ids=1092) cancels(guest=0 ids=0) empty_ops=10 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=38 put=38 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=1094 delivered=1094 raises(put=586 get=9) get_writes=378 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=99 host=89 ids=1094) cancels(guest=0 ids=0) empty_ops=10 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=40 put=40 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=1214 delivered=1214 raises(put=606 get=9) get_writes=458 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=119 host=109 ids=1214) cancels(guest=0 ids=0) empty_ops=10 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=160 put=160 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=1696 delivered=1696 raises(put=838 get=9) get_writes=618 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=159 host=149 ids=1696) cancels(guest=0 ids=0) empty_ops=10 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=642 put=642 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=2896 delivered=2896 raises(put=1537 get=9) get_writes=1098 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=279 host=269 ids=2896) cancels(guest=0 ids=0) empty_ops=10 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=1842 put=1842 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=6019 delivered=6019 raises(put=3124 get=21) get_writes=2306 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=581 host=571 ids=6019) cancels(guest=0 ids=0) empty_ops=10 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=4965 put=4965 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=10153 delivered=10153 raises(put=3813 get=48) get_writes=3426 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=875 host=852 ids=10153) cancels(guest=0 ids=0) empty_ops=23 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=2827 put=2827 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=17131 delivered=17131 raises(put=4306 get=66) get_writes=5290 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=1355 host=1310 ids=17131) cancels(guest=0 ids=0) empty_ops=45 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=3533 put=3533 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=22005 delivered=22005 raises(put=4656 get=84) get_writes=6602 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=1694 host=1632 ids=22005) cancels(guest=0 ids=0) empty_ops=62 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=2135 put=2135 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=28452 delivered=28452 raises(put=5121 get=89) get_writes=8412 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=2154 host=2074 ids=28426) cancels(guest=0 ids=0) empty_ops=80 stale=0 host_errors=0 outstanding(delivered=26 held=0) ring(get=2310 put=2310 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=35155 delivered=35155 raises(put=5626 get=90) get_writes=10388 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=2656 host=2556 ids=35140) cancels(guest=0 ids=0) empty_ops=100 stale=0 host_errors=0 outstanding(delivered=15 held=0) ring(get=2741 put=2741 entries=6272)
+kf3: fault plane: regs=2/0refused spaces=2(2 retired) records=35559 delivered=35559 raises(put=5658 get=90) get_writes=10520 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=2691 host=2588 ids=35559) cancels(guest=0 ids=0) empty_ops=103 stale=16 host_errors=0 outstanding(delivered=0 held=0) ring(get=3145 put=3145 entries=6272)
+--- the LAST fault-plane heartbeat:
+kf3: fault plane: regs=2/0refused spaces=2(2 retired) records=35559 delivered=35559 raises(put=5658 get=90) get_writes=10520 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=2691 host=2588 ids=35559) cancels(guest=0 ids=0) empty_ops=103 stale=16 host_errors=0 outstanding(delivered=0 held=0) ring(get=3145 put=3145 entries=6272)
+--- hook verdicts:
+UVMAPP app=attach_verify verdict=PASS rc=0 secs=7
+UVMAPP app=UnifiedMemoryStreams verdict=FAIL rc=127 secs=1
+UVMAPP app=conjugateGradientUM verdict=FAIL rc=127 secs=0
+UVMAPP app=UnifiedMemoryPerf verdict=FAIL rc=1 secs=197
+EXIT rc=0 2026-09-30T20:11:06+00:00
+EXIT rc=0 2026-09-30T20:11:06+00:00

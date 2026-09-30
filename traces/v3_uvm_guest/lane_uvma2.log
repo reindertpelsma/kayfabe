@@ -1,0 +1,153 @@
+START 2026-09-30T20:12:29+00:00 tag=uvma2 mode=efs rev=a103f254364b9809302b689b8c8f4b0eb88d7d4c
+loaded /root/efs/patched/nvidia-uvm.ko sha=b4bdee93fdfc151b enable=1 timeout_ms=30000
+um_probe md5=1c21bdadd3fd52f7da7adc01d6275163
+[boot_capture:uvma2] BINARY kf3-bin-rev:a103f254  (/workspace/bench/kf3-bins/a103f254/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:uvma2] host dmesg watermark: 803 lines
+[boot_capture:uvma2] booting (extra args: none)
+== kf3 binary: /workspace/bench/kf3-bins/a103f254/qemu-system-x86_64 (rev a103f254)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+[boot_capture:uvma2] guest is up after 29s
+[boot_capture:uvma2] module unloaded and ring buffer cleared; loading cold
+[boot_capture:uvma2] opening the device (this is what runs RmInitAdapter)
+[boot_capture:uvma2] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_uvma2_dmesg.log
+[boot_capture:uvma2] --- the verdict lines ---
+[boot_capture:uvma2] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/uvm_apps_hook.sh
+[boot_capture:uvma2] hook finished: rc=0
+[boot_capture:uvma2] guest dmesg after workload: 100 lines (97 NVRM), delta 72 → /workspace/bench/run_uvma2_dmesg_after.log
+[boot_capture:uvma2] host dmesg delta: 4 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_uvma2_hostdmesg.log
+[boot_capture:uvma2] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:uvma2] census present (kf3):
+    kf3: family=Ampere phase=Halted trapped=218894 applied=6305 refused=8 serviced=2350 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=755 walks=17496/17496 cleared=755 superseded=0 named_missed=16 unreconciled=0 mapped=38944 unmapped=20665 clipped=0x0 held=0 vmm_overlaps=0 p
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=3 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=218 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=1023 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=8 emulated=0 forwarded=8 host=0x22 trap=8 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=13 emulated=0 forwarded=13 host=0x21 trap=13 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=17 emulated=0 forwarded=17 host=0x20 trap=17 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=29 emulated=0 forwarded=29 host=0x1f trap=29 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=141 emulated=0 forwarded=141 host=0x1e trap=141 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=103 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=97 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=505 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=3 emulated=0 forwarded=3 host=0x22 trap=3 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=3 emulated=0 forwarded=3 host=0x21 trap=3 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=3 emulated=0 forwarded=3 host=0x20 trap=3 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=3 emulated=0 forwarded=3 host=0x1f trap=3 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=114 emulated=0 forwarded=114 host=0x1e trap=114 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=56 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1023 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=4853 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1023 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=27989 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=981 emulated=0 forwarded=981 host=0x25 trap=981 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=137 emulated=0 forwarded=137 host=0x24 trap=137 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=153 emulated=0 forwarded=153 host=0x23 trap=153 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=137 emulated=0 forwarded=137 host=0x22 trap=137 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=459 emulated=0 forwarded=459 host=0x21 trap=459 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=175 emulated=0 forwarded=175 host=0x20 trap=175 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=263 emulated=0 forwarded=263 host=0x1f trap=263 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=478 emulated=0 forwarded=478 host=0x1e trap=478 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=121 emulated=0 forwarded=121 host=0x10029 trap=121 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=242 emulated=0 forwarded=242 host=0x10028 trap=242 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=722 emulated=0 forwarded=722 host=0x10027 trap=722 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=1528 emulated=0 forwarded=1528 host=0x10026 trap=1528 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=81 emulated=0 forwarded=81 host=0x2002d trap=81 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=161 emulated=0 forwarded=161 host=0x2002c trap=161 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=401 emulated=0 forwarded=401 host=0x2002b trap=401 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1321 emulated=0 forwarded=1321 host=0x2002a trap=1321 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=300 host=0x10018 fast=0
+[boot_capture:uvma2] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_uvma2_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:uvma2] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:uvma2]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:uvma2] done. serial=/workspace/bench/run_uvma2_serial.log qemu=/workspace/bench/run_uvma2_qemu.log dmesg=/workspace/bench/run_uvma2_dmesg.log dmesg_after=/workspace/bench/run_uvma2_dmesg_after.log probe=/workspace/bench/run_uvma2_probe.log hostdmesg=/workspace/bench/run_uvma2_hostdmesg.log
+BOOT_CAPTURE_RC=0
+--- kf3 fault-plane / EFS lines (/workspace/bench/run_uvma2_qemu.log):
+kf3: UVM EFS ON — guest fault plane: Ga10x, GET/PUT at BAR0 0xb83028/0xb8302c (PTR mask 0xfffff), replayable vector 64, 3 GPCs, GRAPHICS engine id 64; host EFS ABI 1 (max 1024 parked, timeout 30000 ms, skipDivertedReplays=true)
+kf3: fault plane: regs=0/0refused spaces=0(0 retired) records=0 delivered=0 raises(put=0 get=0) get_writes=0 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=0 host=0 ids=0) cancels(guest=0 ids=0) empty_ops=0 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=0)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf00003); GET=PUT=0
+kf3: VasKey(13965662497559019527) EFS mirror space=0xcafe0046 client=0xc1d004ae: host-UVM-owned, external ranges [
+kf3: fault plane: regs=1/0refused spaces=1(0 retired) records=0 delivered=0 raises(put=0 get=0) get_writes=2 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=0 host=0 ids=0) cancels(guest=0 ids=0) empty_ops=0 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d0000c:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x140000 (Vid) VEID 63 (16631 us, off the GSP lock)
+kf3: fault plane: regs=1/0refused spaces=1(0 retired) records=3480 delivered=3480 raises(put=377 get=10) get_writes=980 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=311 host=206 ids=3446) cancels(guest=0 ids=0) empty_ops=105 stale=0 host_errors=0 outstanding(delivered=34 held=0) ring(get=3446 put=3480 entries=6272)
+kf3: maplog t=8037.891205 STATEMENT retire VasKey(13965662497559019527): EFS space 0xcafe0046 (1017 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 1868 map(s) in 5542 ms, 388 unmap(s) in 21 ms
+kf3: fault plane: regs=1/0refused spaces=1(1 retired) records=4162 delivered=4162 raises(put=466 get=12) get_writes=1242 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=392 host=258 ids=4162) cancels(guest=0 ids=0) empty_ops=134 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=4162 put=4162 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf000a1); GET=PUT=0
+kf3: VasKey(13965662549098627079) EFS mirror space=0xcafe00ae client=0xc1d004ae: host-UVM-owned, external ranges [
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=4162 delivered=4162 raises(put=466 get=12) get_writes=1244 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=392 host=258 ids=4162) cancels(guest=0 ids=0) empty_ops=134 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d00018:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x170000 (Vid) VEID 63 (17460 us, off the GSP lock)
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=4606 delivered=4606 raises(put=513 get=17) get_writes=1394 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=436 host=289 ids=4606) cancels(guest=0 ids=0) empty_ops=147 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=444 put=444 entries=6272)
+kf3: maplog t=8128.364781 STATEMENT retire VasKey(13965662549098627079): EFS space 0xcafe00ae (15241 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 15470 map(s) in 83643 ms, 153 unmap(s) in 13 ms
+kf3: fault plane: regs=2/0refused spaces=2(2 retired) records=5148 delivered=5148 raises(put=573 get=20) get_writes=1594 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=495 host=327 ids=5148) cancels(guest=0 ids=0) empty_ops=168 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=986 put=986 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf00138); GET=PUT=0
+kf3: VasKey(13965662600638234631) EFS mirror space=0xcafe0116 client=0xc1d004ae: host-UVM-owned, external ranges [
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=5148 delivered=5148 raises(put=573 get=20) get_writes=1596 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=495 host=327 ids=5148) cancels(guest=0 ids=0) empty_ops=168 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d00024:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x140000 (Vid) VEID 63 (16988 us, off the GSP lock)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=5188 delivered=5188 raises(put=593 get=20) get_writes=1676 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=515 host=347 ids=5188) cancels(guest=0 ids=0) empty_ops=168 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=40 put=40 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=5308 delivered=5308 raises(put=616 get=21) get_writes=1758 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=536 host=367 ids=5308) cancels(guest=0 ids=0) empty_ops=169 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=160 put=160 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=5742 delivered=5742 raises(put=675 get=21) get_writes=1940 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=594 host=405 ids=5722) cancels(guest=0 ids=0) empty_ops=189 stale=0 host_errors=0 outstanding(delivered=20 held=0) ring(get=582 put=594 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=5823 delivered=5823 raises(put=687 get=21) get_writes=1986 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=610 host=414 ids=5823) cancels(guest=0 ids=0) empty_ops=196 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=675 put=675 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=6269 delivered=6269 raises(put=770 get=31) get_writes=2186 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=673 host=452 ids=6264) cancels(guest=0 ids=0) empty_ops=221 stale=0 host_errors=0 outstanding(delivered=5 held=0) ring(get=1119 put=1121 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=7365 delivered=7365 raises(put=962 get=44) get_writes=2654 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=817 host=554 ids=7365) cancels(guest=0 ids=0) empty_ops=263 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=2217 put=2217 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=10108 delivered=10108 raises(put=1384 get=61) get_writes=3794 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=1167 host=795 ids=10085) cancels(guest=0 ids=0) empty_ops=372 stale=0 host_errors=0 outstanding(delivered=23 held=0) ring(get=4937 put=4960 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=11040 delivered=11040 raises(put=1535 get=71) get_writes=4228 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=1300 host=881 ids=11040) cancels(guest=0 ids=0) empty_ops=419 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=5892 put=5892 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=13258 delivered=13258 raises(put=1861 get=103) get_writes=5206 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=1600 host=1038 ids=13246) cancels(guest=0 ids=0) empty_ops=562 stale=0 host_errors=0 outstanding(delivered=12 held=0) ring(get=1835 put=1838 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=17149 delivered=17149 raises(put=2422 get=156) get_writes=6966 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=2140 host=1316 ids=17149) cancels(guest=0 ids=0) empty_ops=824 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=5729 put=5729 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=20744 delivered=20744 raises(put=2959 get=206) get_writes=8616 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=2642 host=1576 ids=20744) cancels(guest=0 ids=0) empty_ops=1066 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=3052 put=3052 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=24712 delivered=24712 raises(put=3541 get=273) get_writes=10400 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=3183 host=1857 ids=24712) cancels(guest=0 ids=0) empty_ops=1326 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=748 put=748 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=26463 delivered=26463 raises(put=3796 get=302) get_writes=11186 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=3426 host=1987 ids=26463) cancels(guest=0 ids=0) empty_ops=1439 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=2499 put=2499 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=27526 delivered=27526 raises(put=3954 get=310) get_writes=11642 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=3567 host=2060 ids=27512) cancels(guest=0 ids=0) empty_ops=1506 stale=0 host_errors=0 outstanding(delivered=14 held=0) ring(get=3554 put=3562 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=32065 delivered=32065 raises(put=4605 get=363) get_writes=13702 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=4188 host=2394 ids=32051) cancels(guest=0 ids=0) empty_ops=1794 stale=0 host_errors=0 outstanding(delivered=14 held=0) ring(get=1823 put=1829 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=35390 delivered=35390 raises(put=5070 get=393) get_writes=15176 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=4634 host=2632 ids=35358) cancels(guest=0 ids=0) empty_ops=2002 stale=0 host_errors=0 outstanding(delivered=32 held=0) ring(get=5131 put=5154 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=40049 delivered=40049 raises(put=5719 get=440) get_writes=17240 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=5258 host=2963 ids=40041) cancels(guest=0 ids=0) empty_ops=2295 stale=0 host_errors=0 outstanding(delivered=8 held=0) ring(get=3533 put=3541 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=44237 delivered=44237 raises(put=6273 get=473) get_writes=18978 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=5786 host=3244 ids=44237) cancels(guest=0 ids=0) empty_ops=2542 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=1457 put=1457 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=48139 delivered=48139 raises(put=6839 get=510) get_writes=20730 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=6320 host=3524 ids=48120) cancels(guest=0 ids=0) empty_ops=2796 stale=0 host_errors=0 outstanding(delivered=19 held=0) ring(get=5347 put=5359 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=52626 delivered=52626 raises(put=7464 get=580) get_writes=22688 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=6917 host=3843 ids=52604) cancels(guest=0 ids=0) empty_ops=3073 stale=0 host_errors=0 outstanding(delivered=22 held=0) ring(get=3561 put=3574 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=56474 delivered=56474 raises(put=7934 get=628) get_writes=24216 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=7365 host=4114 ids=56468) cancels(guest=0 ids=0) empty_ops=3251 stale=0 host_errors=0 outstanding(delivered=6 held=0) ring(get=1149 put=1150 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=61033 delivered=61033 raises(put=8492 get=665) get_writes=26056 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=7902 host=4444 ids=61024) cancels(guest=0 ids=0) empty_ops=3457 stale=0 host_errors=0 outstanding(delivered=9 held=0) ring(get=5709 put=5709 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=64731 delivered=64731 raises(put=8948 get=699) get_writes=27530 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=8335 host=4705 ids=64719) cancels(guest=0 ids=0) empty_ops=3628 stale=0 host_errors=0 outstanding(delivered=12 held=0) ring(get=3135 put=3135 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=69404 delivered=69404 raises(put=9542 get=755) get_writes=29478 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=8909 host=5043 ids=69383) cancels(guest=0 ids=0) empty_ops=3866 stale=0 host_errors=0 outstanding(delivered=21 held=0) ring(get=1528 put=1536 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=73106 delivered=73106 raises(put=10008 get=782) get_writes=30984 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=9356 host=5307 ids=73106) cancels(guest=0 ids=0) empty_ops=4049 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=5238 put=5238 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=77048 delivered=77048 raises(put=10559 get=830) get_writes=32746 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=9892 host=5589 ids=77040) cancels(guest=0 ids=0) empty_ops=4303 stale=0 host_errors=0 outstanding(delivered=8 held=0) ring(get=2900 put=2908 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=81703 delivered=81703 raises(put=11183 get=898) get_writes=34778 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=10503 host=5917 ids=81703) cancels(guest=0 ids=0) empty_ops=4586 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=1291 put=1291 entries=6272)
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=84861 delivered=84861 raises(put=11613 get=949) get_writes=36174 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=10924 host=6145 ids=84861) cancels(guest=0 ids=0) empty_ops=4779 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=4449 put=4449 entries=6272)
+kf3: maplog t=8264.174727 STATEMENT retire VasKey(13965662600638234631): EFS space 0xcafe0116 (2018 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 30042 map(s) in 70550 ms, 18816 unmap(s) in 1014 ms
+kf3: fault plane: regs=3/0refused spaces=3(3 retired) records=84861 delivered=84861 raises(put=11613 get=949) get_writes=36178 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=10926 host=6145 ids=84861) cancels(guest=0 ids=0) empty_ops=4781 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=4449 put=4449 entries=6272)
+--- the LAST fault-plane heartbeat:
+kf3: fault plane: regs=3/0refused spaces=3(3 retired) records=84861 delivered=84861 raises(put=11613 get=949) get_writes=36178 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=10926 host=6145 ids=84861) cancels(guest=0 ids=0) empty_ops=4781 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=4449 put=4449 entries=6272)
+--- hook verdicts:
+UVMAPP app=UnifiedMemoryStreams verdict=PASS rc=0 secs=10
+UVMAPP app=conjugateGradientUM verdict=FAIL rc=127 secs=0
+UVMAPP app=attach_verify verdict=PASS rc=0 secs=88
+UVMAPP app=UnifiedMemoryPerf verdict=PASS rc=0 secs=135
+EXIT rc=0 2026-09-30T20:18:42+00:00

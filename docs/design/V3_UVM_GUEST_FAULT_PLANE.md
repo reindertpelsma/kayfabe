@@ -13,6 +13,35 @@ the first one is milestone M2 (§9).
 
 ## Stop note — where the work stands (update this first, every time)
 
+- **★ 2026-09-30 20:20 UTC — PAUSED (owner pause until Friday). Resume here.** Branch
+  `v3-uvm-guest` (never merged; do not merge without the owner's §3.8a ruling). Box `53564695`
+  **destroyed**; nothing lives only on a box — every result is in `traces/v3_uvm_guest/` (README =
+  the run ledger with revisions).
+  - **Done:** M1 (`0a7a1439`), M1a–M1c (`ed20bd06`), M1d–M1e (`6e9b5bb4`, `UVM_MM_INITIALIZE`
+    `89b1ac24`), M1f (`6f5e0674`), M1g = the §3.8a experiment (`b875595a`…`c849f68d`),
+    **M2 `[meas]` `uvmg7` at `c849f68d`**: `um_probe gpufirst cpuinit prefetch advise malloc`
+    (×2 for the first two) all `ok bad=0`, 3 499 faults delivered and replayed, 0 cancels, 0 Xid.
+  - **M3 partial `[meas]`:** `attach_verify` **PASS** (uvma1 `b272168c`, uvma2 `a103f254`),
+    `UnifiedMemoryStreams` **PASS** (uvma2); `UnifiedMemoryPerf` **FAIL 719** after 197 s and 35 559
+    delivered faults (uvma1: the host timed out 16 parked records after 30 s — `timed_out=16` — i.e.
+    the guest's servicing stalled for 30 s; cause not yet found; uvma2 re-ran it with
+    `KF3_FAULTLOG=1 KF3_MAPLOG=1` and it **PASSED**: 79 713 faults, 0 timed out, 0 Xid — so the
+    failure is intermittent); `conjugateGradientUM` **NOT RUN**
+    (the box's CUDA install lacked `libnvJitLink.so.12`; a build issue, host and guest alike).
+  - **Next step, exactly:** rent a GA10x box (README recipe), `provision_full.sh` + the EFS build
+    (`tools/uvm_efs/box/build_efs.sh`), `apt-get install libcublas-dev-12-6 libcusparse-dev-12-6
+    libnvjitlink-dev-12-6`, then `scripts/bench/uvm_apps_build.sh` and a DIAG run of
+    `UnifiedMemoryPerf` alone (`HOOK=uvm_apps_hook.sh UVM_APPS=UnifiedMemoryPerf`,
+    `KF3_FAULTLOG=1 KF3_MAPLOG=1`); find what held the guest's servicing for 30 s (suspects: a
+    split or register invalidate NOT naming the faulting space, still waiting on the GPU walker
+    while GR is held — §3.8a limit (b)); then conjugateGradientUM; then E-S1
+    (`scripts/bench/uvm_es1_hook.sh`, built, not yet run) and E-B (merge bar, EFS off and on).
+  - **Open owner questions:** (1) **§3.8a** — may the fault path read guest page-table words on the
+    CPU (read-only store views) beside the GPU walker while a fault is parked? It is the only
+    GR-free route found; without it EFS demand paging deadlocks by construction (`uvmg4`). (2) The
+    availability finding of §3.8a: a parked fault holds the host GPU's GR engine for every tenant,
+    bounded by the ~4.3 s ctxsw watchdog — acceptable for the b3 host-privilege posture? (3) Bug
+    1624521 (unchanged, E-S1 tooling ready).
 - **2026-09-30 20:05 UTC — M2 reached, M3 next.** Branch head carries M1a–M1f (packet codec,
   FaultRing, rewriter split, EFS session incl. `UVM_MM_INITIALIZE`, the kf-qemu plane) and the §3.8a
   experiment. `[meas]` `uvmg7` at `c849f68d`: `um_probe gpufirst cpuinit prefetch advise malloc`
