@@ -1,5 +1,8 @@
 # Status in detail — what runs, what does not, and where it was measured
 
+> **Latest merge bar, 2026-09-30:** exact `afb552ea` passed 1754/0 crate tests, gates 9/9, a kf3
+> build, bare metal 30/30 and thin 30/30 on RTX 3060 ([evidence](../traces/v3_mc23/README.md)). §0
+> below is the README's status in full, with every source. ⊘ *Superseded 2026-09-30 by the line above:*
 > **Latest merge bar, 2026-09-29:** exact `d883d0eb` passed 1683/0 crate tests, gates 9/9,
 > fresh QEMU/guest builds and thin 30/30 on RTX 3060. The recovered Claude/Turing code,
 > approved 535/545 capability audit and display acceptance fix are published on master/v3.
@@ -32,6 +35,80 @@ All hardware results come from rented vast.ai boxes. Those boxes are **themselve
 so every kayfabe guest is nested; that inflates the cost of a VM exit by roughly 10–40× (see §4).
 The host driver is NVIDIA **580.159.04 (open)**, and the guest runs the stock driver from the
 same `.run`. "Bare metal" means the same program on the same box's host, with no kayfabe.
+
+## 0. Current status in full (2026-09-30) — the README's summary, with its sources
+
+
+`master` is the code of `afb552ea`, which passed the full hardware merge bar on an RTX 3060: all
+**1,754** `kf-*` crate tests, the **nine GPU gates**, a kf3 build, and the 30-arm raw client both on
+**bare metal (30/30)** and in the **thin guest (30/30)** ([evidence](../traces/v3_mc23/README.md)).
+GitHub CI is green, including the slow suite. For current decisions and the resume point, see
+[status and handoff](STATUS_AND_HANDOFF.md).
+
+**Research stage, published so the approach can be read and argued with.** There is no install path
+and no stable interface. Every result below was measured on rented vast.ai boxes that are themselves
+KVM guests (so the guest under test is *nested*), host driver 580.159.04 (open) unless noted.
+
+What works (each line names its evidence):
+
+- **Every GPU family from Turing to Blackwell runs the stock driver.** At the current code, TU116
+  (GTX 1660 SUPER), AD104 (RTX 4000 Ada) and GB205 (RTX 5070) each pass the merge bar and the CUDA
+  ladder in the guest ([Turing](../traces/v3_turing_master/README.md),
+  [Ada, Blackwell](../traces/v3_families_master/README.md)); GA106 is the everyday bench. Earlier
+  revisions also passed on GA104, GA102, AD106, GB203 and GB206, and on a floor-swept RTX 3060 Ti.
+  Hopper, GA100 and GB10x are derived from the open driver's source only (no hardware was available);
+  GA100 and GB10B are refused by name.
+- **CUDA is correct:** `cup3` returns 43, `cup8` (2048² matmul) returns `BAD=0 MAXERR=0`, and every
+  timed iteration of `cup8bench` verifies.
+- **Real applications: 61 of 65 pass** in the guest (host: 65/65), plus 6/6 stream probes, and
+  100 CUDA processes run in one boot. These include PyTorch (a CNN training step with the same digest
+  as the host), Hugging Face generate, llama.cpp (tokens identical to the host), CuPy, hashcat,
+  Blender CUDA+OptiX, Geekbench, clpeak, gpu_burn and the CUDA samples, including dynamic
+  parallelism ([app matrix](design/V3_APP_MATRIX.md), [CDP](design/V3_CDP.md)).
+- **Headless graphics: nvkvm-pv's headless test set plus 15 more items, 38/38**, 31 of them
+  byte-identical to bare metal: Vulkan, EGL, and GLX through Xvfb + VirtualGL
+  ([test set](design/V3_GFX_TESTSET.md)). **NVENC and NVDEC output is byte-identical** to bare
+  metal.
+- **Display (opt-in, `display=on`):** the guest's own NVIDIA display driver drives an emulated
+  monitor — pixel-exact 1920×1080 scanout at 60 Hz, Linux Mint's Cinnamon desktop on Wayland with
+  `vkcube` in a window, weston, and Xorg with the NVIDIA X driver
+  ([display](design/V3_DISPLAY.md)).
+- **Multi-GPU:** one kf3 device per host GPU. Two *distinct* host GPUs were measured in one guest,
+  run one at a time and concurrently.
+- **Driver matrix:** guests 575.57.08, 580.105.08, 580.159.04, 590.48.01, 595.84 and 610.57.04 pass
+  the CUDA ladder; hosts 575.57.08, 580.65.06 and 580.95.05 pass the gates, the thin suite and the
+  ladder ([driver matrix](design/V3_DRIVER_MATRIX.md)).
+
+Not working or not done:
+
+- **Four apps need UVM demand paging** (managed memory faulted in on first touch). The host half
+  is proven: an opt-in patch to the host's open nvidia-uvm delivers a real GPU fault to the owning
+  process, which maps the page and replays it with correct data while ordinary host CUDA keeps
+  working ([b3](design/V3_UVM_B3_IMPLEMENTATION.md), tools only). Injecting the fault into the
+  stock guest driver is in progress on branch `v3-uvm-guest`.
+- **Performance depends on how often an app rings the doorbell.** llama.cpp (Qwen2.5-1.5B Q4_K_M,
+  `llama-bench`) runs at **0.92× host decode and 0.96× host prefill** in the guest, on a nested box with
+  every doorbell trapped: it submits a whole token's work at once, about 4,600 doorbells for ~200 tokens
+  plus prefill (kf3 `4c48ca0c`, RTX 3060; `traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/`,
+  `m20/llama_bench.*`). The worst case is PyTorch eager on a 0.5B model, which launches every op
+  separately: about 1,084 doorbells per token and **0.29×** host decode (**0.32×** with the opt-in doorbell
+  fast path). On these nested boxes each doorbell costs the vCPU about 20 µs (15.7 µs with the fast path),
+  about 22 ms of that model's ~58 ms per-token gap; the rest is not broken down yet. Non-nested hardware
+  has not been measured for kayfabe. The C prototype of **this same design** — nvkvm Mode 2: the stock
+  guest driver on an emulated GPU with every doorbell trapped, *not* the paravirtual nvkvm-pv — reached
+  **1.05× host** llama.cpp decode on a bare-metal RTX 3050 (its copies ran on the CPU, so that result
+  speaks to the doorbell cost, not the copy path). An optional guest doorbell module that removes the
+  exit is designed, not built ([fast path](design/V3_DOORBELL_IOEVENTFD.md),
+  [module](design/V3_GUEST_DOORBELL_MODULE.md)).
+- **X11 desktops are partial:** they need a display class (`GF100_DISP_SW`) whose host policy awaits
+  an owner decision.
+- **Windows guests** are the last roadmap step. Only research exists.
+- **Not yet measured:** two VMs sharing one GPU, and a fully rootless end-to-end boot. The design
+  targets a host side that needs no root; the UVM patch is the one privileged piece, opt-in.
+
+**Roadmap, in order (owner, 2026-09-26):** apps → the headless-graphics test set from nvkvm-pv →
+display and a desktop (Linux Mint) → doorbell performance and Blackwell *(in parallel)* → the driver
+matrix (535 → 610, every family) → Windows.
 
 ## 1. Boot and the thin-guest suite
 
