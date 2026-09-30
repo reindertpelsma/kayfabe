@@ -291,11 +291,12 @@ fn zero_userd_clears_the_channel_size_and_no_further() {
     assert!(zero_userd(&mut p, 512).unwrap_err().contains("+0x88"));
 }
 
-/// ★ `V3_UVM_GUEST_FAULT_PLANE.md` §3.7 — a replay `MEM_OP` becomes a walk THEN a fault step, and
-/// when it ends its GP entry the retirement rides on the LAST piece (the fault step), so the
-/// guest's `GP_GET` never passes the replay before the plane has acted.
+/// ★ `V3_UVM_GUEST_FAULT_PLANE.md` §3.7/§3.8a — a replay `MEM_OP` becomes a fault step alone (its
+/// dummy-PDB invalidate announces no table change, and a walk would need the GR engine a parked
+/// fault holds), and when it ends its GP entry the retirement rides on it, so the guest's `GP_GET`
+/// never passes the replay before the plane has acted.
 #[test]
-fn a_replay_is_a_walk_then_a_fault_step_and_retires_last() {
+fn a_replay_is_a_fault_step_and_retires_last() {
     let mut mem = Mem::default();
     let mut a = m(4, 0, &[CE_CLASS]);
     a.extend(m(4, ce::LAUNCH_DMA, &[0]));
@@ -313,8 +314,5 @@ fn a_replay_is_a_walk_then_a_fault_step_and_retires_last() {
             Next::Idle => "I".into(),
         })
         .collect();
-    assert_eq!(
-        shape,
-        ["SNone", "WSome(0)None", "FReplay { ack_all: false }Some(1)"]
-    );
+    assert_eq!(shape, ["SNone", "FReplay { ack_all: false }Some(1)"]);
 }

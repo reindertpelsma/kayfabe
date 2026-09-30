@@ -55,19 +55,15 @@ fn uvm_cancel_va(pdb: u64, va: u64, engine: u32) -> Vec<u32> {
     )
 }
 
+/// ★ A replay `MEM_OP` becomes the replay alone: its dummy-PDB invalidate announces no table
+/// change, and walking it would need the GR engine a parked fault holds (design §3.8a,
+/// `[measured uvmg5]`).
 #[test]
-fn a_uvm_replay_is_an_invalidate_then_a_replay() {
+fn a_uvm_replay_is_the_replay_alone() {
     for ack_all in [false, true] {
         let mut st = CeState::default();
         let out = rewrite(&uvm_replay(ack_all), is_ce, &mut st, &W).unwrap();
-        assert_eq!(
-            out,
-            vec![
-                Piece::Invalidate { pdb: Some(0) },
-                Piece::Fault(FaultOp::Replay { ack_all })
-            ],
-            "the dummy-PDB invalidate stays (a vacuous walk), the replay follows it"
-        );
+        assert_eq!(out, vec![Piece::Fault(FaultOp::Replay { ack_all })]);
     }
 }
 
@@ -78,16 +74,13 @@ fn a_uvm_cancel_names_its_page_and_space() {
     let out = rewrite(&uvm_cancel_va(pdb, va, 67), is_ce, &mut st, &W).unwrap();
     assert_eq!(
         out,
-        vec![
-            Piece::Invalidate { pdb: Some(pdb) },
-            Piece::Fault(FaultOp::CancelVa {
-                pdb: Some(pdb),
-                pdb_aperture: 0,
-                va,
-                access: 7,
-                engine: 67
-            })
-        ]
+        vec![Piece::Fault(FaultOp::CancelVa {
+            pdb: Some(pdb),
+            pdb_aperture: 0,
+            va,
+            access: 7,
+            engine: 67
+        })]
     );
 }
 
@@ -113,9 +106,8 @@ fn work_before_the_replay_stays_before_it() {
     let mut st = CeState::default();
     let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
     assert!(matches!(out[0], Piece::Words(_)));
-    assert_eq!(out[1], Piece::Invalidate { pdb: Some(0) });
-    assert_eq!(out[2], Piece::Fault(FaultOp::Replay { ack_all: false }));
-    assert_eq!(out.len(), 3);
+    assert_eq!(out[1], Piece::Fault(FaultOp::Replay { ack_all: false }));
+    assert_eq!(out.len(), 2);
 }
 
 /// `uvm_hal_pascal_cancel_faults_global/targeted` — `GP100_UVM_SW` `FAULT_CANCEL_{A,B,C}`

@@ -2252,17 +2252,37 @@ impl PtReader {
                         p_linear_address: old.cookie,
                     });
                 }
-                let (node, cookie) = self
-                    .rm
-                    .arm_cpu_view(MapNode::Gpu, self.store, base, len, ViewAccess::ReadOnly)
-                    .ok()?;
-                let region = kf_linux_raw::VolatileRegion::map(
+                // The verb and access the Translated plane's GPFIFO views use (`chan.rs`
+                // `StoreViews`); only words are read through it.
+                let (node, cookie) = match self.rm.arm_cpu_view(
+                    MapNode::Gpu,
+                    self.store,
+                    base,
+                    len,
+                    ViewAccess::ReadWrite,
+                ) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("kf3: EFS PtReader: view of store {base:#x}+{len:#x}: {e:?}");
+                        return None;
+                    }
+                };
+                let region = match kf_linux_raw::VolatileRegion::map(
                     Backing::DeviceFile { fd: node.as_fd() },
                     len,
                     kf_linux_raw::CachePolicy::Uncached,
                     HostPageSize::query(),
-                )
-                .ok()?;
+                ) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("kf3: EFS PtReader: view mmap {base:#x}+{len:#x}: {e:?}");
+                        let _ = self.rm.release_cpu_view(CpuViewRelease {
+                            h_memory: self.store,
+                            p_linear_address: cookie,
+                        });
+                        return None;
+                    }
+                };
                 self.armed += 1;
                 self.views.push(PtView {
                     off: base,

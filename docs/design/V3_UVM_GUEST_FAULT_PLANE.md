@@ -274,6 +274,49 @@ have cancelled it as fatal: never parked for nobody.
   records at the replay piece (one split per root) before resolving — the belt to the braces above,
   off by default, used only if a hardware run shows a replay racing its own mapping.
 
+### 3.8a ★★★ The GR engine is held while a fault is parked — the walker cannot run (MEASURED)
+
+**`[meas]` uvmg4, 2026-09-30, `d178a737`, box `vuvm` (RTX 3060, nested), `KF3_FAULTLOG=1 KF3_MAPLOG=1`,
+`traces/v3_uvm_guest/run_uvmg4_qemu.log.gz`.** `um_probe gpufirst`: 14 faults delivered at
+`t=5419.8899`; the guest's servicing invalidate reached its split at `5419.891` and the walk kernel
+was submitted — and it completed only at `5424.1997`, **4.3 s later**, 7 ms after the host's ctxsw
+watchdog killed every twin of the context (`RC-SEEN … except_type=0x6d`, host `Xid 109 CTX SWITCH
+TIMEOUT` then `Xid 31 … FAULT_PDE`). The mapping landed at `5424.2007`, the replay came at
+`5424.2023` — ordered correctly, and 4.3 s too late. ⇒ **A GR context stalled on a PARKED
+replayable fault cannot be context-switched out on this GPU, so no other GR work runs — including
+kf3's walk kernel — until the fault is replayed or cancelled.** The b3 host-only proof already
+shows it from the other side: `coexist` lost ~3 s of GR time during a 3 s park
+(`traces/v3_uvm_b3/run_full.log` §D2, 134.7 vs 211.9 iters/s over 8 s) — recorded there as a PASS
+because the data were right.
+
+Consequences:
+1. **Design:** §3.8's "the split walks, then the replay" deadlocks by construction: the walk needs
+   GR, GR is held until the replay, the replay waits for the split. Fault servicing must be
+   **GR-free end to end**.
+2. **Isolation / availability (owner):** while ANY EFS fault is parked, every GR context on the host
+   GPU is stalled (other VMs, host CUDA). The bound is the host's ctxsw watchdog (~4.3 s, then the
+   faulted context is RC'd), not `uvm_efs_timeout_ms`. A guest that never replays can therefore
+   stall the host GPU's GR for ~4 s per fault. This is a property of replayable faults on this
+   hardware, not of kf3; it belongs in §5 and in the b3 host-privilege review.
+
+**The experiment (this branch, `b875595a` onward, for the owner — ruling A.1/A.11):** while a
+guest-UVM space has parked faults, its parked pages are translated **on the CPU** with the walk
+kernel's own rules (`kf_cuda::point`, the `kf_walk.cu` decode transcribed off the same `KfFormat`
+descriptor) reading guest page-table words through read-only CPU views of OUR store
+(`mem::PtReader`, the verb the Translated plane uses for a vidmem GPFIFO), and placed with the
+same host verb (`EfsMirror::place`, now idempotent):
+- at a split naming that space: point-map its parked pages, release the split at once, and
+  schedule a GPU walk of the space that reconciles everything else once GR is free;
+- before every guest replay: the resolver waits (≤ 2 s) for the VA thread to point-map every
+  parked page, then `RESOLVE(REPLAY)`.
+Rows placed this way are "fast rows" until a GPU walk maps the same leaf (no UVM call — the
+placement is identical); a later split naming the space re-validates the rest and takes down any
+the guest no longer maps (a GPU walk never removes a row it did not place).
+⚠ Known limits of the experiment: (a) changes in the SAME invalidate other than the parked pages
+(e.g. an unmap) reach the host only with the reconciling GPU walk, after the replay; (b) any other
+split or register invalidate issued while faults are parked waits for GR; (c) it reads guest
+page-table words on the CPU beside the GPU walker — a constraint change the owner must rule on.
+
 ### 3.9 Rows 6/7 — prefetch toggle and access counters
 
 - `MMU_PAGE_FAULT_CTRL` (prefetch faults): recorded, plain shadow, not mirrored (EFS never diverts

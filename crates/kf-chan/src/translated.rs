@@ -730,18 +730,23 @@ fn one_write(
             if !cur.is_empty() {
                 out.push(Piece::Words(std::mem::take(cur)));
             }
+            // ★ A MEM_OP whose REPLAY field is not NONE is a replay or cancel COMMAND
+            // (`uvm_hal_volta_replay_faults`, `uvm_hal_volta_cancel_faults_va`): its TLB-invalidate
+            // half names a dummy PDB at VA 0 (the replay: "to force the PDB into the MMU PDB_ID
+            // cache", `uvm_pascal_host.c:260-266`) or the faulting VA (the cancel) — it announces
+            // no page-table change, so there is nothing for the mirror to walk. It becomes the
+            // fault op alone. ⊘ `[measured uvmg5]` walking it anyway deadlocked the replay: the
+            // walk kernel needs the GR engine, which a parked fault holds (design §3.8a).
+            if let Some(op) = fault_op_of_invalidate(st.mem_op_a, st.mem_op_b, st.mem_op_c, v) {
+                out.push(Piece::Fault(op));
+                return Ok(());
+            }
             let all = st.mem_op_c & 1 != 0;
             let lo = u64::from(st.mem_op_c & 0xFFFF_F000);
             let hi = u64::from(v & 0x07FF_FFFF) << 32;
             out.push(Piece::Invalidate {
                 pdb: (!all).then_some(hi | lo),
             });
-            // ★ The same invalidate may carry a REPLAY or CANCEL (`uvm_hal_volta_replay_faults`,
-            // `uvm_hal_volta_cancel_faults_va`): split it out AFTER the invalidate, so the walk the
-            // invalidate asks for is published before the plane replays (§3.8).
-            if let Some(op) = fault_op_of_invalidate(st.mem_op_a, st.mem_op_b, st.mem_op_c, v) {
-                out.push(Piece::Fault(op));
-            }
             return Ok(());
         }
         if OPS_L2.contains(&op) {
