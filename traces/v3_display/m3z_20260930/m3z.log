@@ -1,0 +1,209 @@
+START 2026-09-30T12:58:33+00:00
+REV c0a35924
+TESTS_RC=0
+TESTS passed 666 failed 0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/c0a35924/qemu-system-x86_64 rev=c0a35924 mtime=2026-09-30 12:59:01.590589059 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+DISPLAY_LANE_START tag=m3z rev=c0a35924 2026-09-30T12:59:01+00:00
+[boot_capture:m3z] BINARY kf3-bin-rev:c0a35924  (/workspace/bench/kf3-bins/c0a35924/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:m3z] host dmesg watermark: 1401 lines
+[boot_capture:m3z] booting (extra args: -vga none -vnc 127.0.0.1:0)
+== kf3 binary: /workspace/bench/kf3-bins/c0a35924/qemu-system-x86_64 (rev c0a35924)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on
+[boot_capture:m3z] guest is up after 35s
+[boot_capture:m3z] module unloaded and ring buffer cleared; loading cold
+[boot_capture:m3z] opening the device (this is what runs RmInitAdapter)
+[boot_capture:m3z] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_m3z_dmesg.log
+[boot_capture:m3z] --- the verdict lines ---
+[boot_capture:m3z] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/display/hook.sh
+[boot_capture:m3z] hook finished: rc=0
+[boot_capture:m3z] guest dmesg after workload: 150 lines (130 NVRM), delta 122 → /workspace/bench/run_m3z_dmesg_after.log
+[boot_capture:m3z] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_m3z_hostdmesg.log
+[boot_capture:m3z] pre-poweroff guest command: sudo sync; echo s | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1; echo u | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1
+[boot_capture:m3z] pre-poweroff rc=0
+[boot_capture:m3z] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:m3z] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=321031 applied=7888 refused=4 serviced=5678 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=5175 walks=5201/5201 cleared=5175 superseded=0 named_missed=2 unreconciled=0 mapped=12772 unmapped=12454 clipped=0x0 held=0 vmm_overlaps=0 p
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10028
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033
+    DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=0 emulated=0 forwarded=0 host=0x32
+    DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033
+    DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=0 emulated=0 forwarded=0 host=0x32
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=2 emulated=0 forwarded=2 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002f
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=3 emulated=0 forwarded=3 host=0x2c
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=3 emulated=0 forwarded=3 host=0x31
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=5 emulated=0 forwarded=5 host=0x30
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=6 emulated=0 forwarded=6 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002f
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=3 emulated=0 forwarded=3 host=0x2c
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=3 emulated=0 forwarded=3 host=0x31
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=6 emulated=0 forwarded=6 host=0x30
+    DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033
+    DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=0 emulated=0 forwarded=0 host=0x32
+    DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033
+    DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=0 emulated=0 forwarded=0 host=0x32
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=2 emulated=0 forwarded=2 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002f
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=3 emulated=0 forwarded=3 host=0x2c
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=3 emulated=0 forwarded=3 host=0x31
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=5 emulated=0 forwarded=5 host=0x30
+    DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033
+    DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=0 emulated=0 forwarded=0 host=0x32
+    DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033
+    DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=0 emulated=0 forwarded=0 host=0x32
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=2 emulated=0 forwarded=2 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002f
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=3 emulated=0 forwarded=3 host=0x2c
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=3 emulated=0 forwarded=3 host=0x31
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=5 emulated=0 forwarded=5 host=0x30
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002f
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=4 emulated=0 forwarded=4 host=0x31
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=6 emulated=0 forwarded=6 host=0x30
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=7 emulated=0 forwarded=7 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=3 emulated=0 forwarded=3 host=0x2c
+    DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=21 emulated=0 forwarded=21 host=0x2b
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=1712 emulated=0 forwarded=1712 host=0x2a
+    DOORBELL-LEDGER tok=0x00000807 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002e
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002f
+    DOORBELL-LEDGER tok=0x0000080a route=passthrough rung=6 emulated=0 forwarded=6 host=0x10031
+    DOORBELL-LEDGER tok=0x0000100b route=passthrough rung=4 emulated=0 forwarded=4 host=0x20032
+    DOORBELL-LEDGER tok=0x0000100c route=passthrough rung=1 emulated=0 forwarded=1 host=0x20033
+    DOORBELL-LEDGER tok=0x00000006 route=passthrough rung=4 emulated=0 forwarded=4 host=0x2d
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=9 emulated=0 forwarded=9 host=0x30
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=5 emulated=0 forwarded=5 host=0x35
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1167 emulated=0 forwarded=1167 host=0x34
+    DOORBELL-LEDGER tok=0x00000804 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002b
+    DOORBELL-LEDGER tok=0x00001005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002c
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=352 emulated=0 forwarded=352 host=0x2a
+    DOORBELL-LEDGER tok=0x0000100c route=passthrough rung=1 emulated=0 forwarded=1 host=0x20033
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=6 emulated=0 forwarded=6 host=0x35
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1613 emulated=0 forwarded=1613 host=0x34
+    DOORBELL-LEDGER tok=0x0000080a route=passthrough rung=7 emulated=0 forwarded=7 host=0x10031
+    DOORBELL-LEDGER tok=0x0000100b route=passthrough rung=11 emulated=0 forwarded=11 host=0x20032
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=12 emulated=0 forwarded=12 host=0x30
+    DOORBELL-LEDGER tok=0x00000807 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002e
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002f
+    DOORBELL-LEDGER tok=0x00000006 route=passthrough rung=4 emulated=0 forwarded=4 host=0x2d
+    DOORBELL-LEDGER tok=0x00000807 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002e
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002f
+    DOORBELL-LEDGER tok=0x0000080a route=passthrough rung=0 emulated=0 forwarded=0 host=0x10031
+    DOORBELL-LEDGER tok=0x0000100b route=passthrough rung=0 emulated=0 forwarded=0 host=0x20032
+    DOORBELL-LEDGER tok=0x00000006 route=passthrough rung=4 emulated=0 forwarded=4 host=0x2d
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=2 emulated=0 forwarded=2 host=0x30
+    DOORBELL-LEDGER tok=0x00000804 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002b
+    DOORBELL-LEDGER tok=0x00001005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002c
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=190 emulated=0 forwarded=190 host=0x2a
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=1071 host=0x10028
+[boot_capture:m3z] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_m3z_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:m3z] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:m3z]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:m3z] done. serial=/workspace/bench/run_m3z_serial.log qemu=/workspace/bench/run_m3z_qemu.log dmesg=/workspace/bench/run_m3z_dmesg.log dmesg_after=/workspace/bench/run_m3z_dmesg_after.log probe=/workspace/bench/run_m3z_probe.log hostdmesg=/workspace/bench/run_m3z_hostdmesg.log
+DISPLAY_GPU_PROGRESS_ERRORS_AFTER=0
+DISPLAY_FLIP_EVENT_TIMEOUTS_AFTER=1
+DISPLAY_DRM_WARNS_AFTER=0
+DISPLAY_HOST_XID=0 
+DISPLAY_PROBE_BUILD=ok
+DISPLAY_DRM_MODPROBE rc=0 
+DISPLAY_DRM_NODES by-path card0 renderD128 
+DISPLAY_DRM_DMESG_LINES=32 displayless=0
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_COUNTS connectors=1 crtcs=4 encoders=1 fbs=0
+DISPLAY_KFDISP_CONNECTOR id=126 type=DVI-D-1 status=connected modes=7 preferred=1920x1080@60
+DISPLAY_KFDISP_PLANE id=49 type=primary crtcs=0x1 formats=13
+DISPLAY_KFDISP_PLANE id=54 type=cursor crtcs=0x1 formats=1
+DISPLAY_KFDISP_PLANE id=61 type=overlay crtcs=0x1 formats=13
+DISPLAY_KFDISP_PLANE id=68 type=primary crtcs=0x2 formats=13
+DISPLAY_KFDISP_PLANE id=73 type=cursor crtcs=0x2 formats=1
+DISPLAY_KFDISP_PLANE id=80 type=overlay crtcs=0x2 formats=13
+DISPLAY_KFDISP_PLANE id=87 type=primary crtcs=0x4 formats=13
+DISPLAY_KFDISP_PLANE id=92 type=cursor crtcs=0x4 formats=1
+DISPLAY_KFDISP_PLANE id=99 type=overlay crtcs=0x4 formats=13
+DISPLAY_KFDISP_PLANE id=106 type=primary crtcs=0x8 formats=13
+DISPLAY_KFDISP_PLANE id=111 type=cursor crtcs=0x8 formats=1
+DISPLAY_KFDISP_PLANE id=118 type=overlay crtcs=0x8 formats=13
+DISPLAY_KFDISP_SUMMARY connected=1 primary=4 overlay=4 cursor=4
+DISPLAY_MODETEST_CONNECTED=1 modes_1080p=1
+DISPLAY_SMI_DISPLAY  Display Mode : Requested functionality has been deprecated Display Attached : Yes Display Active : Enabled Persistence Mode : Disabled Addressing Mode : HMM 
+DISPLAY_GPU_PROGRESS_ERRORS=0
+DISPLAY_CONNECTED=yes card=/dev/dri/card0
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_MODE 1920x1080@60 clock=148500 connector=126 crtc=60
+DISPLAY_KFDISP_PATTERN_A_FNV=b46ca47163518677 pitch=7680
+DISPLAY_KFDISP_PATTERN_B_FNV=d42aac677e43ad67
+DISPLAY_KFDISP_SETCRTC_OK ms=10.1
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=59.48
+DISPLAY_KFDISP_SHOWING=A hold_s=20
+DISPLAY_KFDISP_RESTORED=ok fb=128
+DISPLAY_FLIP_EVENT_TIMEOUTS=0 DRM_WARNS=0
+DISPLAY_DESKTOP_CONF busid=PCI:0:2:0 session=cinnamon env=[] DESK_CONF_OK 
+DISPLAY_DESKTOP_SESSION=yes (rc=0  xorg_starts=/var/log/Xorg.0.log.old:1 /var/log/Xorg.0.log:1 )
+DISPLAY_GLX_RENDERER NVIDIA GeForce RTX 3060/PCIe/SSE2 DIRECT=Yes
+DISPLAY_GLXGEARS 282 frames in 5.0 seconds = 56.274 FPS 282 frames in 5.0 seconds = 56.265 FPS 
+DISPLAY_GLXGEARS_NOVSYNC 294 frames in 5.0 seconds = 58.649 FPS
+DISPLAY_VKCUBE_PM0 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=134
+DISPLAY_VKCUBE_PM1 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=1
+DISPLAY_VKCUBE_PM2 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=134
+DISPLAY_VKCUBE Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu VKCUBE_RC=134
+DISPLAY_XORG_LOG errors=3 nvidia=38 [    72.179] (II) NVIDIA(0): Setting mode "DFP-0:nvidia-auto-select"
+DISPLAY_SHOT desk_1 md5=9c3b4a98aba2 bytes=6220817
+DISPLAY_SHOT desk_vkcube md5=9c3b4a98aba2 bytes=6220817
+DISPLAY_SHOT desk_2 md5=9c3b4a98aba2 bytes=6220817
+DISPLAY_DESKTOP_GPU_PROGRESS_ERRORS=0 XID=0
+DISPLAY_DESKTOP_CRASHES 1 cinnamon[2788]: segfault at 0 ip 000076dd46b57f19 sp 00007ffcceccb9b0 error 6 in libnvidia-glcore.so.580.159.04[76dd46400000+c00000]
+DISPLAY_CINNAMON_WAYLAND_SESSION=[cinnamon-wayland] (cinnamon-wayland.desktop weston.desktop )
+DISPLAY_CINNAMON_WAYLAND up=yes socket=[wayland-0] rc=0 
+DISPLAY_CINNAMON_WAYLAND_VKCUBE Selected GPU 0: NVIDIA GeForce RTX 3060 RC=124
+DISPLAY_CINNAMON_WAYLAND_CRASHES 1
+DISPLAY_SHOT cw_1 md5=0add3f1ad312
+DISPLAY_SHOT cw_vkcube md5=de84216b76d7
+DISPLAY_WESTON started  alive=yes
+DISPLAY_VKCUBE_WAYLAND Selected GPU 0: NVIDIA GeForce RTX 3060 RC=124
+DISPLAY_SIMPLE_EGL RC=124 
+DISPLAY_SHOT weston_1 md5=fc5ea534e166
+DISPLAY_SHOT weston_vkcube md5=01be6e8e17c1
+DISPLAY_SHOT weston_egl md5=ff3b17f2b1ac
+DISPLAY_WESTON_GPU_PROGRESS_ERRORS=0
+DISPLAY_HOOK_DONE
+DISPLAY_LANE_EXIT rc=0 2026-09-30T13:03:35+00:00
+LANE_RC=0
+EXIT 2026-09-30T13:03:35+00:00
