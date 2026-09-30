@@ -1063,7 +1063,9 @@ mod the_vcpu_allowlist {
 
     #[test]
     fn a_blocking_section_outside_a_trap_is_not_a_violation_and_is_not_recorded() {
-        let before = vcpu_blocking_rows().len();
+        // ⊘ No count comparison: the row registry is process-global, and the sibling test
+        // `blocking_inside_a_trap_is_recorded_…` records two rows from another test thread at the
+        // same time (GitHub CI run 36771653449: before 1, after 3). What this test owns is its site.
         let _s = BlockingSection::enter("unit-test-off-trap");
         assert!(
             !vcpu_blocking_rows()
@@ -1071,7 +1073,6 @@ mod the_vcpu_allowlist {
                 .any(|r| r.0 == "unit-test-off-trap"),
             "off-trap blocking is the CORRECT shape and must not be reported as a violation"
         );
-        assert_eq!(vcpu_blocking_rows().len(), before);
     }
 
     #[test]
