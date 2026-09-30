@@ -1,0 +1,10 @@
+# SKED placements in the batched boot ap_m21cdp_b1 (kf3 2830988f): the per-leaf line is printed for the first 64 only; the stats line counts all
+SKED-REFLECTED lines: 64
+last stats: sked=109/0held
+HELD-BY-HOST SKED lines: 0
+map SKED refusals: 0
+kf-mem: SKED-REFLECTED leaf 0x78f1dac00000+0x1000 (ap=0 at=0x0) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x731828c00000+0x1000 (ap=0 at=0x0) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x7ed74ac00000+0x1000 (ap=0 at=0x0) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x7b3adec00000+0x1000 (ap=0 at=0x0) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-mem: SKED-REFLECTED leaf 0x7de8f6c00000+0x1000 (ap=0 at=0x0) placed as a message-kind host mapping — device-side launches through it reach the host scheduler

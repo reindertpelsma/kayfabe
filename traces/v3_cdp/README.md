@@ -15,6 +15,7 @@ stderr of the boot.
 | `guest_exp1_6498628f` | experiment: keep kind `0xF` on the host map + log the leaf — 18:00 | `6498628f` (branch `v3-cdp-exp1`, not for merge) | modes 4 (auto/spin/block), 1, 2, 3 OK; quicksort OK; leaf logged `0x75b470c00000+0x1000 ap=0 at=0x0 kind=0xf` |
 | `guest_fix_090b20d9` | the fix: probe 4 (traced), 1, 2, 3, 4:spin, 4:block, 0 (traced); quicksort 128 / 1 000 / 10 000 — 18:13 | `090b20d9` (= fix `46509dce` + scripts) | all OK; `sked=10/0held`; host kernel log empty |
 | `guest_fix_090b20d9/app_lane` | `apps_matrix.sh guest cdpfix_090b20d9 cdpSimpleQuicksort` (R3's harness) — 18:17 | `090b20d9` | `verdict=PASS rc=0 secs=7 guest_xid=0` |
+| `app_matrix_2830988f` | the full matrix (`apps_matrix.sh host`, then `guest m21cdp all`, `APPS_PER_BOOT=100`), 18:49–19:34 | `2830988f` (the bar's binary) | host 71/71; guest one boot **67/71 = 61/65 + 6/6 probes**, the UVM four fail (alone too); `sked=109/0held` (`sked_census_b1.txt`) |
 | `nvdiff/` | `nvdiff.py diff` of the traces; `uvm_map_dynamic_parallelism_region.txt` decodes UVM ioctl 65 in each | — | noise floor 0; host vs guest lockstep except 2 classified STATUS rows, and at `3f67ed95` 14× `MC_SERVICE_INTERRUPTS` during the hang |
 | `jobs/` | the three job logs (`JOB_START … JOB_EXIT`), with the build lines | — | — |
 

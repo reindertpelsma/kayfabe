@@ -1,0 +1,105 @@
+JOB_START cdpD 2026-09-30T18:24:39+00:00
+2830988f V3_CDP: the cause, the fix and the measurements; traces/v3_cdp evidence; V3_APP_MATRIX R3 and handoff §0 folded
+-rwxr-xr-x 1 root root 88591048 Sep 30 18:27 /workspace/bench/kf3-bins/2830988f/qemu-system-x86_64
+[apps_matrix 2026-09-30T18:49:20+00:00] START side=host run=m21cdp rev=2830988f apps=71
+APPRES side=host app=nvidia_smi verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=deviceQuery verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=vectorAdd verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=vectorAddDrv verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=matrixMul verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=matrixMulDrv verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=bandwidthTest verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=simpleStreams verdict=PASS rc=0 secs=4 quiet=0 note=-
+APPRES side=host app=asyncAPI verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=simpleAtomicIntrinsics verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=simpleCallback verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=simpleOccupancy verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=simpleZeroCopy verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=simpleCooperativeGroups verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=concurrentKernels verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=simpleIPC verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=UnifiedMemoryStreams verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=UnifiedMemoryPerf verdict=PASS rc=0 secs=19 quiet=1 note=-
+APPRES side=host app=conjugateGradientUM verdict=PASS rc=0 secs=3 quiet=1 note=warn:Test Summary: Error amount = 0.000000, result = SUCCESS
+APPRES side=host app=cudaTensorCoreGemm verdict=PASS rc=0 secs=4 quiet=1 note=-
+APPRES side=host app=bf16TensorCoreGemm verdict=PASS rc=0 secs=7 quiet=0 note=-
+APPRES side=host app=globalToShmemAsyncCopy verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=cdpSimpleQuicksort verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=graphMemoryNodes verdict=PASS rc=0 secs=4 quiet=1 note=-
+APPRES side=host app=simpleCudaGraphs verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=simpleCUBLAS verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=simpleCUFFT verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=conjugateGradient verdict=PASS rc=0 secs=2 quiet=0 note=warn:Test Summary: Error amount = 0.000000
+APPRES side=host app=MersenneTwisterGP11213 verdict=PASS rc=0 secs=3 quiet=1 note=warn:Max absolute error: 0.000000E+00
+APPRES side=host app=reduction verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=sortingNetworks verdict=PASS rc=0 secs=9 quiet=0 note=-
+APPRES side=host app=scan verdict=PASS rc=0 secs=4 quiet=0 note=-
+APPRES side=host app=histogram verdict=PASS rc=0 secs=4 quiet=0 note=-
+APPRES side=host app=BlackScholes verdict=PASS rc=0 secs=3 quiet=0 note=warn:Max absolute error: 1.192093E-05
+APPRES side=host app=fastWalshTransform verdict=PASS rc=0 secs=6 quiet=0 note=-
+APPRES side=host app=transpose verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=stream_triad verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=reduce verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=nbody verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=blackscholes verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=mandelbrot verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=conv2d verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=sgemm_cublas verdict=PASS rc=0 secs=4 quiet=1 note=-
+APPRES side=host app=fft_cufft verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=sha256 verdict=PASS rc=0 secs=4 quiet=1 note=-
+APPRES side=host app=memcpy2d verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=attach_verify verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=stream_default verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=stream_created verdict=PASS rc=0 secs=3 quiet=1 note=-
+APPRES side=host app=stream_nonblocking verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=stream_perthread verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=stream_two verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=stream_created2nd verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=gpu_burn verdict=PASS rc=0 secs=99 quiet=0 note=warn:cuInit returned 0 (no error)
+APPRES side=host app=torch_correct verdict=PASS rc=0 secs=8 quiet=1 note=-
+APPDIG side=host app=torch_correct DIGEST cnn_train_step 763c693a5a53f948
+APPRES side=host app=torch_ai_bench verdict=PASS rc=0 secs=39 quiet=1 note=-
+APPRES side=host app=hf_generate verdict=PASS rc=0 secs=10 quiet=1 note=-
+APPDIG side=host app=hf_generate OUTSHA hf_generate 0d973108a6251e14
+APPRES side=host app=cupy verdict=PASS rc=0 secs=4 quiet=1 note=-
+APPRES side=host app=llama_cpp_gen verdict=PASS rc=0 secs=4 quiet=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU instead
+APPDIG side=host app=llama_cpp_gen OUTSHA llama_cpp caf613a5d956b7e3
+APPRES side=host app=llama_bench verdict=PASS rc=0 secs=4 quiet=0 note=-
+APPRES side=host app=vulkaninfo verdict=PASS rc=0 secs=3 quiet=0 note=-
+APPRES side=host app=vkpeak verdict=PASS rc=0 secs=395 quiet=0 note=-
+APPRES side=host app=egl_offscreen verdict=PASS rc=0 secs=25 quiet=0 note=-
+APPRES side=host app=clinfo verdict=PASS rc=0 secs=5 quiet=0 note=-
+APPRES side=host app=clpeak verdict=PASS rc=0 secs=134 quiet=0 note=-
+APPRES side=host app=nvenc_h264 verdict=PASS rc=0 secs=5 quiet=0 note=-
+APPRES side=host app=nvenc_hevc verdict=PASS rc=0 secs=6 quiet=0 note=-
+APPRES side=host app=nvdec_h264 verdict=PASS rc=0 secs=8 quiet=0 note=-
+APPRES side=host app=hashcat verdict=PASS rc=0 secs=6 quiet=0 note=warn:[33mThis means that hashcat cannot use the full parallel power of your device(s).[0m
+APPRES side=host app=blender_cycles verdict=PASS rc=0 secs=9 quiet=0 note=-
+APPRES side=host app=geekbench_gpu verdict=PASS rc=0 secs=64 quiet=0 note=warn: unknown error (internal code 35)
+[apps_matrix 2026-09-30T19:06:09+00:00] HOST_DONE 71 pass / 74 rows
+[apps_matrix 2026-09-30T19:06:09+00:00] START side=guest run=m21cdp rev=2830988f apps=71
+[apps_matrix 2026-09-30T19:06:09+00:00] kf3 binary: /workspace/bench/kf3-bins/2830988f/qemu-system-x86_64
+[apps_matrix 2026-09-30T19:28:17+00:00] boot ap_m21cdp_b1 rc=0 apps=[nvidia_smi deviceQuery vectorAdd vectorAddDrv matrixMul matrixMulDrv bandwidthTest simpleStreams asyncAPI simpleAtomicIntrinsics simpleCallback simpleOccupancy simpleZeroCopy simpleCooperativeGroups concurrentKernels simpleIPC UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM cudaTensorCoreGemm bf16TensorCoreGemm globalToShmemAsyncCopy cdpSimpleQuicksort graphMemoryNodes simpleCudaGraphs simpleCUBLAS simpleCUFFT conjugateGradient MersenneTwisterGP11213 reduction sortingNetworks scan histogram BlackScholes fastWalshTransform transpose stream_triad reduce nbody blackscholes mandelbrot conv2d sgemm_cublas fft_cufft sha256 memcpy2d attach_verify stream_default stream_created stream_nonblocking stream_perthread stream_two stream_created2nd gpu_burn torch_correct torch_ai_bench hf_generate cupy llama_cpp_gen llama_bench vulkaninfo vkpeak egl_offscreen clinfo clpeak nvenc_h264 nvenc_hevc nvdec_h264 hashcat blender_cycles geekbench_gpu] :: /workspace/bench/run_ap_m21cdp_b1_probe.log:APPRES side=guest app=UnifiedMemoryStreams verdict=FAIL rc=134 secs=5 quiet=0 note=CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_STATUS_EXECUTION
+[apps_matrix 2026-09-30T19:29:47+00:00] boot ap_m21cdp_i_UnifiedMemoryPerf rc=0 apps=[UnifiedMemoryPerf] :: /workspace/bench/run_ap_m21cdp_i_UnifiedMemoryPerf_probe.log:APPS_HOOK tag=ap_m21cdp_i_UnifiedMemoryPerf apps=[UnifiedMemoryPerf] guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled /workspace/bench/r
+[apps_matrix 2026-09-30T19:31:24+00:00] boot ap_m21cdp_i_UnifiedMemoryStreams rc=0 apps=[UnifiedMemoryStreams] :: /workspace/bench/run_ap_m21cdp_i_UnifiedMemoryStreams_probe.log:APPRES side=guest app=UnifiedMemoryStreams verdict=FAIL rc=139 secs=14 quiet=0 note=CUDA error at UnifiedMemoryStreams.cu:221 code=13(CU
+[apps_matrix 2026-09-30T19:32:55+00:00] boot ap_m21cdp_i_attach_verify rc=0 apps=[attach_verify] :: /workspace/bench/run_ap_m21cdp_i_attach_verify_probe.log:APPS_HOOK tag=ap_m21cdp_i_attach_verify apps=[attach_verify] guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled /workspace/bench/run_ap_m21cdp
+[apps_matrix 2026-09-30T19:34:30+00:00] boot ap_m21cdp_i_conjugateGradientUM rc=0 apps=[conjugateGradientUM] :: /workspace/bench/run_ap_m21cdp_i_conjugateGradientUM_probe.log:APPS_HOOK tag=ap_m21cdp_i_conjugateGradientUM apps=[conjugateGradientUM] guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled /workspace/b
+[apps_matrix 2026-09-30T19:34:30+00:00] GUEST_DONE batched: 67 pass / 71;  isolated re-runs: 0
+0 pass / 4
+== host
+71
+APPDIG side=host app=torch_correct DIGEST cnn_train_step 763c693a5a53f948
+APPDIG side=host app=hf_generate OUTSHA hf_generate 0d973108a6251e14
+APPDIG side=host app=llama_cpp_gen OUTSHA llama_cpp caf613a5d956b7e3
+== guest
+67
+APPRES side=guest app=UnifiedMemoryStreams verdict=FAIL rc=134 secs=5 quiet=0 note=CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_STATUS_EXECUTION_FAILED) "cublasDgemv(handle[tid + 1], CUBLAS_OP_N, t.size, t.size, &one, t.data, t.siz boot=ap_m21cdp_b1 guest_xid=0 kf3_lines=1178 kf3_refusals=3
+APPRES side=guest app=UnifiedMemoryPerf verdict=FAIL rc=1 secs=3 quiet=1 note=Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)"  boot=ap_m21cdp_b1 guest_xid=0 kf3_lines=1159 kf3_refusals=2
+APPRES side=guest app=conjugateGradientUM verdict=FAIL rc=0 secs=3 quiet=1 note=Test Summary: Error amount = 1.000000, result = SUCCESS boot=ap_m21cdp_b1 guest_xid=0 kf3_lines=1213 kf3_refusals=2
+APPRES side=guest app=attach_verify verdict=FAIL rc=1 secs=2 quiet=0 note=FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure) boot=ap_m21cdp_b1 guest_xid=0 kf3_lines=1095 kf3_refusals=2
+== isolated
+APPRES side=guest app=UnifiedMemoryPerf verdict=FAIL rc=1 secs=5 quiet=0 note=Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)"  boot=ap_m21cdp_i_UnifiedMemoryPerf guest_xid=0 kf3_lines=1188 kf3_refusals=12
+APPRES side=guest app=UnifiedMemoryStreams verdict=FAIL rc=139 secs=14 quiet=0 note=CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_STATUS_EXECUTION_FAILED) "cublasDgemv(handle[tid + 1], CUBLAS_OP_N, t.size, t.size, &one, t.data, t.siz boot=ap_m21cdp_i_UnifiedMemoryStreams guest_xid=0 kf3_lines=1210 kf3_refusals=12
+APPRES side=guest app=attach_verify verdict=FAIL rc=1 secs=6 quiet=0 note=FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure) boot=ap_m21cdp_i_attach_verify guest_xid=0 kf3_lines=1128 kf3_refusals=12
+APPRES side=guest app=conjugateGradientUM verdict=FAIL rc=0 secs=11 quiet=1 note=Test Summary: Error amount = 1.000000, result = SUCCESS boot=ap_m21cdp_i_conjugateGradientUM guest_xid=0 kf3_lines=1245 kf3_refusals=12
+JOB_EXIT cdpD rc=0 2026-09-30T19:34:30+00:00

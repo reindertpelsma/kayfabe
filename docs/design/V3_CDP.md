@@ -15,7 +15,9 @@ probe it cites stay true; their cause is §3 here) and the *"CDP child launch"* 
 
 ## 0. The answer
 
-libcuda gives every context one 4 KiB **SKED-reflected page** (`UVM_MAP_DYNAMIC_PARALLELISM_REGION`).
+libcuda gives every context one 4 KiB **SKED-reflected page** (`UVM_MAP_DYNAMIC_PARALLELISM_REGION`;
+`[measured]` in every probe run including mode 0, and 109 placements in one boot of the 71-row app
+matrix — §5.4 — so every CUDA context, not only CDP programs, carries one).
 A device-side launch is a GPU *write through that page*: its PTE carries the message kind
 `SMSKED_MESSAGE`, and the GMMU delivers the write to the scheduler (SKED) instead of memory. The guest's
 UVM writes that PTE into the guest's page tables; kayfabe's walker carried it (kind included) to the
@@ -23,7 +25,8 @@ host, and `kf_mem::apply` turned it into an **ordinary memory row** — the stor
 (0), mapped with kind **PITCH**, because `host_pte_kind` maps every kind it does not know to PITCH.
 On the host twin the device runtime's launch was therefore a plain store into guest vidmem: no child
 grid ever started, the parent grid (which completes only after its children) never completed, and
-every wait on its stream hung — silently: no fault, no RC, no Xid, no non-OK status anywhere.
+every wait on its stream hung — silently: no fault, no RC, no host Xid (the host kernel log is empty),
+and no non-OK RM status beyond two unrelated, already-classified ones that the passing mode 0 shows too.
 
 The fix places a SKED-reflected leaf as what it is: a host mapping with the message kind
 (`MapTarget::map_sked`, §4). With it, every launch shape of the probe runs its child with correct
@@ -154,7 +157,7 @@ is never held across a host call.
 
 | run | result |
 |---|---|
-| mode 4 auto / spin / block (device-created stream) | `child_ran=1`, `out[1]=0xc0ffee`, `RESULT OK`, stream query OK at ≈45 ms |
+| mode 4 auto / spin / block (device-created stream) | `child_ran=1`, `out[1]=0xc0ffee`, `RESULT OK`; the stream query turns OK 45–60 ms after the launch (bare metal, same box: 9–11 ms) |
 | mode 1 (NULL stream), 2 (fire-and-forget), 3 (tail launch) | `RESULT OK` |
 | mode 0 (no device launch) | `RESULT OK` |
 | `cdpSimpleQuicksort` 128 / 1 000 / 10 000 elements | `Validating results: OK`, rc 0 |
@@ -176,12 +179,31 @@ The ioctl trace of the fixed mode-4 run is in lockstep with bare metal (§2.2, l
 §Merge bar, `merge_check/mergecheck_2830988f.tgz`). ⚠ Neither the gates nor the thin suite run
 libcuda, so they exercise the unchanged memory path, not `map_sked`; §5.1–5.2 are the SKED evidence.
 
+### 5.4 The full app matrix at the bar's revision
+
+`apps_matrix.sh host|guest m21cdp all` with kf3 `2830988f` (the bar's own binary), 18:49–19:34 UTC,
+same box, same harness and predicates as R3 (`traces/v3_cdp/app_matrix_2830988f/`):
+
+| run | result | R3 (`4c48ca0c`) |
+|---|---|---|
+| host (bare metal) | **71/71** | 71/71 |
+| guest, no PM, ONE boot | **67/71 = 61/65 apps + 6/6 stream probes** | 66/71 = 60/65 + 6/6 |
+| guest, each non-PASS alone | the same 4 fail alone | the same 5 |
+
+- The four failures are R3's UVM demand-paging four, with R3's signatures (`UnifiedMemoryStreams`,
+  `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`). `cdpSimpleQuicksort` passes in the
+  batched boot too. Output digests equal the host's for `torch_correct`, `hf_generate`, `llama_cpp_gen`.
+- ★ The batched boot placed **109** SKED pages, none held or refused (`sked=109/0held`,
+  `sked_census_b1.txt`): every CUDA context in the matrix went through `map_sked`, so this run is a
+  regression test of the new path across the whole matrix, not only of CDP.
+
 ## 6. What is and is not established
 
 **Established (measured, 2026-09-30, GA106, 580.159.04 both sides):** the cause (§3's A/B isolates the
 kind); the fix makes all four CDP launch shapes run their child with correct output and
-`cdpSimpleQuicksort` pass at three sizes, with the control plane in lockstep with bare metal; the four
-refusals are not CDP's.
+`cdpSimpleQuicksort` pass at three sizes, with the control plane in lockstep with bare metal; every
+CUDA context maps a SKED page and the whole app matrix passes through the new path with no new failure
+(61/65, §5.4); the four refusals are not CDP's.
 
 **Not established:**
 - **Hopper and Blackwell.** UVM's SYS_NONCOH SKED leaf takes the new path only in GPU-free tests; no

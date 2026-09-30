@@ -2,9 +2,9 @@
 
 **STATUS: LIVE, 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
 measured 01:20–02:39 UTC): 60/65 apps work, 6/6 stream probes, 100/100 processes in one boot.**
-★ *2026-09-30 (`v3-cdp`, §R3's 2026-09-30 bullet): `cdpSimpleQuicksort` PASSES at kf3 `090b20d9` — the
-CDP child never ran because the guest's SKED-reflected page was mapped as memory; fixed. Only that app
-was re-run at that revision.*
+★ *2026-09-30 (`v3-cdp`, §R3's 2026-09-30 bullet): the CDP child never ran because the guest's
+SKED-reflected page was mapped as memory; fixed. Full matrix at kf3 `2830988f` (branch `v3-cdp`, not yet
+on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failures are the UVM four.*
 ⊘ *Superseded by §R3 (the headline below is R2's):* **LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
@@ -41,8 +41,10 @@ mode, one boot; `m20seq` = 100 `vectorAdd` processes in one boot; `all_logs.tgz`
   (`child_ran=1`, `out[1]=0xc0ffee`); `cdpSimpleQuicksort` validates at 128 / 1 000 / 10 000 elements;
   the app-matrix lane gives `verdict=PASS rc=0 secs=7`; the ioctl trace is in lockstep with bare metal.
   The `kf3_refusals=4` of every CDP boot are the per-init set every app shows (`V3_CDP.md` §2.3) — not CDP's.
-  Evidence: `traces/v3_cdp/`. ⊘ Not re-run at `090b20d9`: the rest of the matrix (so the 60/65 headline
-  stands as R3's, with this one app now passing).
+  **Full matrix re-run at kf3 `2830988f`** (the bar's revision, 18:49–19:34 UTC, same box, same harness):
+  host **71/71**; guest, one boot, no PM **67/71 = 61/65 apps + 6/6 probes** — the four failures are the
+  UVM four above, failing alone too; digests equal the host's; the boot placed 109 SKED pages (every CUDA
+  context has one), none refused. Evidence: `traces/v3_cdp/` (`app_matrix_2830988f/`).
 - ⊘ *Superseded 2026-09-30 for the CAUSE by the line above (its measurements stand):* **2026-09-28 recovery correction (folded onto master 2026-09-30):** the bisect finished: quicksort
   passes at `0667b784` and times out at its successor `56032c46` (the MC_SERVICE_INTERRUPTS completion
   fix). A dedicated CDP probe on the older revision reports successful synchronization **without
