@@ -63,8 +63,9 @@ fi
 if [ ! -d /root/ogkm/.git ]; then
   git clone -q --depth 1 --filter=blob:none --sparse -b 580.159.04 \
       https://github.com/NVIDIA/open-gpu-kernel-modules.git /root/ogkm && \
-  git -C /root/ogkm sparse-checkout set kernel-open/nvidia-uvm kernel-open/common/inc
+  git -C /root/ogkm sparse-checkout set kernel-open/nvidia-uvm kernel-open/common/inc src/common/sdk/nvidia/inc
 fi
+git -C /root/ogkm sparse-checkout set kernel-open/nvidia-uvm kernel-open/common/inc src/common/sdk/nvidia/inc 2>/dev/null
 echo "OGKM_RC=$? ogkm_head=$(git -C /root/ogkm rev-parse HEAD 2>&1)"
 DKMS_SRC=/usr/src/nvidia-580.159.04
 if [ -d "$DKMS_SRC/nvidia-uvm" ]; then

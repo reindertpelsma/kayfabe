@@ -40,6 +40,17 @@ extern "C" __global__ void touch_seq(unsigned int *base, unsigned int n_pages, u
     out[1] = 0xD0D0D0D0u;
 }
 
+// Gather word 0 of the first n_chunks pages through the faulting VA, for raw-mode verification
+// (the CUDA runtime cannot read those UVM-ioctl-mapped VAs from the host).
+extern "C" __global__ void gather_word0(unsigned int *base, unsigned int n_chunks,
+                                        unsigned long long page_words, unsigned int *out)
+{
+    if (threadIdx.x != 0 || blockIdx.x != 0)
+        return;
+    for (unsigned int c = 0; c < n_chunks; ++c)
+        out[c] = base[(unsigned long long)c * page_words];
+}
+
 // Clock calibration: write %globaltimer to host memory continuously until the host sets
 // stop[0]; the host samples it against CLOCK_REALTIME.
 extern "C" __global__ void clock_spin(volatile unsigned long long *slot, volatile unsigned int *stop)

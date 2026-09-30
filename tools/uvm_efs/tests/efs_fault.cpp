@@ -399,7 +399,9 @@ int main(int argc, char **argv)
     prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
     prop.location.id = 0;
     CK(cuMemGetAllocationGranularity(&g_gran, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
-    g_nchunks = std::min(n, 8u);
+    // Store modes verify word 0 of every page, so each page needs its own physical chunk (no
+    // aliasing). Read mode intentionally aliases a small pre-filled pool and accounts for it.
+    g_nchunks = (op == 0) ? n : std::min(n, 8u);
     CK(cuMemAddressReserve(&g_base, (size_t)n * g_gran, g_gran, 0, 0));
     CK(cuMemAddressReserve(&g_alias, (size_t)g_nchunks * g_gran, g_gran, 0, 0));
     CUmemAccessDesc acc;
@@ -502,7 +504,31 @@ int main(int argc, char **argv)
     unsigned out[4];
     CK(cuMemcpyDtoH(out, g_out, sizeof(out)));
     unsigned bad = 0;
-    if (op == 0) {
+    if (op == 0 && g_raw_map) {
+        // Pages are backed by our own RM vidmem mapped through the UVM ioctls, which the CUDA
+        // runtime does not track, so cuMemcpyDtoH cannot read g_base. Read word 0 of each backing
+        // chunk with a device kernel launched over the SAME EFS VA (already replayed and mapped):
+        // a GPU load through g_base is the honest check that the mapping the replay used is live.
+        CUdeviceptr scratch;
+        CK(cuMemAlloc(&scratch, (size_t)g_nchunks * sizeof(unsigned)));
+        CUfunction gather;
+        if (cuModuleGetFunction(&gather, g_mod, "gather_word0") == CUDA_SUCCESS) {
+            unsigned nc = g_nchunks;
+            unsigned long long pw = g_gran / 4;
+            CUdeviceptr base = g_base;
+            void *ga[] = {&base, &nc, &pw, &scratch};
+            CK(cuLaunchKernel(gather, 1, 1, 1, 1, 1, 1, 0, stream, ga, NULL));
+            CK(cuStreamSynchronize(stream));
+            std::vector<unsigned> got(g_nchunks);
+            CK(cuMemcpyDtoH(got.data(), scratch, g_nchunks * sizeof(unsigned)));
+            // page c (c < g_nchunks) wrote 0xC0DE0000|c into chunk c word 0; later aliasing pages
+            // overwrote it, so accept any valid 0xC0DE marker.
+            for (unsigned c = 0; c < g_nchunks; c++)
+                if ((got[c] & 0xFFFF0000u) != 0xC0DE0000u)
+                    ++bad;
+        }
+    }
+    else if (op == 0) {
         for (unsigned p = 0; p < n; p++) {
             unsigned v = 0;
             // read back through the faulting VA itself: it is mapped now
