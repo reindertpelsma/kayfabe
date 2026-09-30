@@ -1,5 +1,7 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
+★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
+guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
 **STATUS: LIVE, 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
 measured 01:20–02:39 UTC): 60/65 apps work, 6/6 stream probes, 100/100 processes in one boot.**
 ★ *2026-09-30 (`v3-cdp`, §R3's 2026-09-30 bullet): the CDP child never ran because the guest's
@@ -8,6 +10,27 @@ on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failur
 ⊘ *Superseded by §R3 (the headline below is R2's):* **LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
+
+## R4 — re-run at kf3 `738c90e5` (code of `3f67ed95`, before the CDP fix), RTX 3070, 2026-09-30 — PARTIAL
+
+**[M]** Box vast `53563077` (destroyed), **RTX 3070 (GA104, 8 GiB)**, EPYC 7532, **nested** KVM, host + guest
+580.159.04 open; kf3 `kf3-bins/738c90e5` (sha256 `fe3270ef…a69e0eeda`); guest `fb-mb=6144`, 16 GiB, 6 vCPUs;
+same harness and shapes as R3. Evidence: `traces/v3_app_matrix/vast53563077_rtx3070_738c90e5/`. ⊘ The
+measured code **predates the CDP fix** (`46509dce`, merged as `afb552ea`), so it does not certify master
+`cb0bae8f`/`8644e477`; the CDP result of record stays `2830988f`'s 61/65 (above).
+
+| run | result | vs R3 (`4c48ca0c`, RTX 3060) |
+|---|---|---|
+| host (bare metal) | **71/71**, 0 host Xid | same |
+| guest, fast path OFF, no PM, all 71 rows in one boot + every non-PASS app alone | **60/65 apps + 6/6 probes**; the same 5 fail alone | **identical** |
+| guest PM (one boot), 100 processes, the `doorbell-ioeventfd=on` lane | **not run** — the owner paused work; the PM boot was stopped before its first app | — |
+
+- Failures, alone, classified against bare metal (which passes all five): the UVM four (`UnifiedMemoryStreams`,
+  `UnifiedMemoryPerf`, `conjugateGradientUM` — silent `Error amount = 1.000000` — `attach_verify`): host **Xid 31**,
+  kf3 `RC host twin … except_type=0x1f`, 0 guest Xid; refusal ledger = the boot baseline plus GSP
+  `0x83de030c` (as R3). `cdpSimpleQuicksort`: TIMEOUT, no Xid, no RC, no extra refusal (fixed after this code).
+- Digests equal this box's bare metal: `torch_correct`, `hf_generate`, `llama_cpp_gen`. No regression vs R3.
+- 0 of 6 boots show §4.9's startup-race signature (`no fd-backed guest RAM block`).
 
 ## R3 — re-run at master (kf3 `4c48ca0c`, 2026-09-28)
 

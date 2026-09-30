@@ -1,5 +1,6 @@
 # V3 headless-graphics test set — nvkvm-pv's headless graphics workloads on kayfabe v3
 
+★ *2026-09-30 (§0, R4): bare metal 38/38 on a new RTX 3070 box at `738c90e5`; the guest set was not re-run.*
 **STATUS: LIVE, 2026-09-26 (branch `v3-gfxset`; the head to merge is `d06833f0` = master `59cc98a9` + this
 branch).** Measured on one RTX 3070 (GA104, vast 52775275, destroyed after the run; every result is in
 `traces/v3_gfxset/`). **All 38 items pass at `d06833f0` (`gs3`, 38/38)**: nvkvm-pv's 25 headless rows in 23
@@ -15,6 +16,17 @@ Roadmap item 2 (`docs/STATUS_DETAIL.md` §7): *"the headless-graphics test set f
 on kayfabe v3. Read with `V3_HEADLESS_GRAPHICS.md` (the five-step lane this set extends) and
 `V3_VIDEO_ENGINES.md` (NVENC/NVDEC). Legend: **[E]** read in source at the cited place, **[M]** measured,
 with the run named.
+
+---
+
+## 0. R4 — 2026-09-30, kf3 `738c90e5` (code of `3f67ed95`): BARE METAL ONLY — the guest runs were not run
+
+**[M]** Box vast `53563077` (destroyed), RTX 3070 (GA104, the `gs3` card model), nested KVM, host 580.159.04; guest
+image provisioned at `738c90e5` (`GSET_PROVISIONED=yes`, 0 build failures). Evidence: `traces/v3_gfxset/r4_738c90e5/`.
+- Bare metal in the image's userspace: run 1 **38/38 PASS**, run 2 (noise floor) **35/35 PASS**, **0 host Xid**;
+  11 of 12 extra Cycles noise runs (`nd/h2` hit the nbd partition race).
+- ⊘ **The guest set was NOT run, OFF or ON** — the owner paused work first. The result of record stays `gs3`
+  (38/38 at `d06833f0`); nothing here certifies a later revision in the guest.
 
 ---
 
