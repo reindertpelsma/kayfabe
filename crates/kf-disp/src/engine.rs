@@ -1167,6 +1167,39 @@ pub struct Scanout {
     pub block_height_log2: u32,
     /// `SET_PARAMS.FORMAT`.
     pub format: u32,
+    /// Where the window sits in the head's composition space (window-immediate
+    /// `SET_POINT_OUT(0)`).
+    pub out_x: u32,
+    /// Output row.
+    pub out_y: u32,
+    /// The window's output size (`SET_SIZE_OUT`; the console does not scale: it shows `SIZE_IN`
+    /// clipped to this).
+    pub out_width: u32,
+    /// Output height.
+    pub out_height: u32,
+    /// `SET_COMPOSITION_CONTROL.DEPTH` — smaller is closer to the front (`nvkms-evo3.c:4813`).
+    pub depth: u32,
+    /// `SET_COMPOSITION_CONSTANT_ALPHA.K1` / `.K2`.
+    pub k1: u32,
+    /// K2.
+    pub k2: u32,
+    /// `SET_COMPOSITION_FACTOR_SELECT` `SRC_COLOR_FACTOR_NO_MATCH_SELECT` (color key disabled).
+    pub src_factor: u32,
+    /// `DST_COLOR_FACTOR_NO_MATCH_SELECT`.
+    pub dst_factor: u32,
+}
+
+/// ★ What a head shows: its composition space and every enabled window, BACK TO FRONT.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Composition {
+    /// The head.
+    pub head: u32,
+    /// `HEAD_SET_VIEWPORT_SIZE_IN` — the composed image the windows land in.
+    pub width: u32,
+    /// Its height.
+    pub height: u32,
+    /// Enabled windows, deepest first.
+    pub layers: Vec<Scanout>,
 }
 
 /// The window-class methods a scanout reads — resolved from the derived table; `None` for a family
@@ -1181,12 +1214,20 @@ pub struct ScanVocab {
     pitch0: (u32, (u8, u8)),
     params: (u32, (u8, u8)),
     storage: (u32, (u8, u8)),
+    size_out: (u32, (u8, u8), (u8, u8)),
+    comp_depth: (u32, (u8, u8)),
+    comp_alpha: (u32, (u8, u8), (u8, u8)),
+    comp_factor: (u32, (u8, u8), (u8, u8)),
+    /// Window-immediate `SET_POINT_OUT(0)`.
+    point_out: (u32, (u8, u8), (u8, u8)),
+    /// Core `HEAD_SET_VIEWPORT_SIZE_IN(head)`: base, stride, width, height.
+    viewport_in: (u32, u32, (u8, u8), (u8, u8)),
 }
 
 impl ScanVocab {
-    /// Resolve for window class `win`.
+    /// Resolve for window class `win`, window-immediate class `winim` and core class `core`.
     #[must_use]
-    pub fn resolve(t: &ClassTable, win: u32) -> Option<ScanVocab> {
+    pub fn resolve(t: &ClassTable, win: u32, winim: u32, core: u32) -> Option<ScanVocab> {
         let wh = |n: &str| -> Option<(u32, (u8, u8), (u8, u8))> {
             Some((
                 t.v(win, n)?,
@@ -1213,6 +1254,42 @@ impl ScanVocab {
                 t.v(win, "SET_STORAGE")?,
                 t.f(win, "SET_STORAGE_BLOCK_HEIGHT")?,
             ),
+            size_out: wh("SET_SIZE_OUT")?,
+            comp_depth: (
+                t.v(win, "SET_COMPOSITION_CONTROL")?,
+                t.f(win, "SET_COMPOSITION_CONTROL_DEPTH")?,
+            ),
+            comp_alpha: (
+                t.v(win, "SET_COMPOSITION_CONSTANT_ALPHA")?,
+                t.f(win, "SET_COMPOSITION_CONSTANT_ALPHA_K1")?,
+                t.f(win, "SET_COMPOSITION_CONSTANT_ALPHA_K2")?,
+            ),
+            comp_factor: (
+                t.v(win, "SET_COMPOSITION_FACTOR_SELECT")?,
+                t.f(
+                    win,
+                    "SET_COMPOSITION_FACTOR_SELECT_SRC_COLOR_FACTOR_NO_MATCH_SELECT",
+                )?,
+                t.f(
+                    win,
+                    "SET_COMPOSITION_FACTOR_SELECT_DST_COLOR_FACTOR_NO_MATCH_SELECT",
+                )?,
+            ),
+            point_out: (
+                t.a(winim, "SET_POINT_OUT", 0)?,
+                t.f(winim, "SET_POINT_OUT_X")?,
+                t.f(winim, "SET_POINT_OUT_Y")?,
+            ),
+            viewport_in: {
+                let b = t.a(core, "HEAD_SET_VIEWPORT_SIZE_IN", 0)?;
+                let s = t.a(core, "HEAD_SET_VIEWPORT_SIZE_IN", 1)? - b;
+                (
+                    b,
+                    s,
+                    t.f(core, "HEAD_SET_VIEWPORT_SIZE_IN_WIDTH")?,
+                    t.f(core, "HEAD_SET_VIEWPORT_SIZE_IN_HEIGHT")?,
+                )
+            },
         })
     }
 }
@@ -1221,7 +1298,39 @@ impl Engine {
     /// ★ What head `head` scans out now (its lowest enabled window), or `None`.
     #[must_use]
     pub fn scanout(&self, sv: &ScanVocab, head: u32) -> Option<Scanout> {
-        (0..self.windows).find_map(|w| {
+        (0..self.windows).find_map(|w| self.window_scan(sv, head, w))
+    }
+
+    /// ★ Everything head `head` shows: its composition space and its enabled windows, back to front
+    /// (deepest `DEPTH` first; equal depths in window order). `None` when no window is enabled.
+    #[must_use]
+    pub fn composition(&self, sv: &ScanVocab, head: u32) -> Option<Composition> {
+        let mut layers: Vec<Scanout> = (0..self.windows)
+            .filter_map(|w| self.window_scan(sv, head, w))
+            .collect();
+        if layers.is_empty() {
+            return None;
+        }
+        layers.sort_by(|a, b| b.depth.cmp(&a.depth).then(a.window.cmp(&b.window)));
+        let core = self.chans[0].as_ref();
+        let (vb, vs, vw, vh) = sv.viewport_in;
+        let vp = core.map_or(0, |c| c.armed(vb + head * vs));
+        let (mut width, mut height) = (fld(vp, vw), fld(vp, vh));
+        if width == 0 || height == 0 {
+            // no viewport stated: the deepest window's output size
+            (width, height) = (layers[0].out_width, layers[0].out_height);
+        }
+        Some(Composition {
+            head,
+            width,
+            height,
+            layers,
+        })
+    }
+
+    /// Window `w` as head `head` scans it, if it is the head's and enabled.
+    fn window_scan(&self, sv: &ScanVocab, head: u32, w: u32) -> Option<Scanout> {
+        {
             if self.owner_head(w) != Some(head) {
                 return None;
             }
@@ -1234,6 +1343,15 @@ impl Engine {
             let (sm, sw, sh) = sv.size;
             let (im, iw, ih) = sv.size_in;
             let (pm, px, py) = sv.point_in;
+            let (om, ow, oh) = sv.size_out;
+            let imm = self
+                .chans
+                .get(ChannelKind::WindowImm.channel_number(w) as usize)
+                .and_then(|c| c.as_ref());
+            let (qm, qx, qy) = sv.point_out;
+            let point_out = imm.map_or(0, |i| i.armed(qm));
+            let alpha = c.armed(sv.comp_alpha.0);
+            let factor = c.armed(sv.comp_factor.0);
             Some(Scanout {
                 window: w,
                 head,
@@ -1250,8 +1368,17 @@ impl Engine {
                 pitch: fld(c.armed(sv.pitch0.0), sv.pitch0.1),
                 block_height_log2: fld(c.armed(sv.storage.0), sv.storage.1),
                 format: fld(c.armed(sv.params.0), sv.params.1),
+                out_x: fld(point_out, qx),
+                out_y: fld(point_out, qy),
+                out_width: fld(c.armed(om), ow),
+                out_height: fld(c.armed(om), oh),
+                depth: fld(c.armed(sv.comp_depth.0), sv.comp_depth.1),
+                k1: fld(alpha, sv.comp_alpha.1),
+                k2: fld(alpha, sv.comp_alpha.2),
+                src_factor: fld(factor, sv.comp_factor.1),
+                dst_factor: fld(factor, sv.comp_factor.2),
             })
-        })
+        }
     }
 }
 

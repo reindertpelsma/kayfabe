@@ -16,12 +16,12 @@ use crate::driver_unsafe::{
     CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, Func, PinnedBuf, StreamHandle,
 };
 
-/// ★ The block-linear scanout kernel, hand-written PTX (`cuda/display/kf_scanout.ptx`), JIT-compiled
-/// at the plane's bring-up; its address function is `kf_disp::scanout::bl_offset`.
+/// ★ The display plane's kernels, hand-written PTX (`cuda/display/kf_scanout.ptx`), JIT-compiled at
+/// the plane's bring-up; the block-linear address function is `kf_disp::scanout::bl_offset`.
 pub static SCANOUT_PTX: &[u8] = include_bytes!("../../../cuda/display/kf_scanout.ptx");
 
-/// The kernel's entry point.
-pub const SCANOUT_ENTRY: &str = "kf_bl_to_pitch";
+/// The compose kernel's entry point: one window into the head's staging frame.
+pub const COMPOSE_ENTRY: &str = "kf_compose";
 
 /// ★ The display worker's GPU context with the store imported.
 pub struct DisplayGpu {
@@ -33,8 +33,10 @@ pub struct DisplayGpu {
     stream: StreamHandle,
     /// Readable once the last queued scanout copy completed (`cuLaunchHostFunc` after it).
     done: CompletionFd,
-    /// The block-linear kernel, or why it did not load (block-linear scanouts are refused by it).
-    bl: Result<Func, String>,
+    /// The compose kernel, or why it did not load (every scanout is refused by it).
+    compose: Result<Func, String>,
+    /// The device staging frame the windows compose into: address and bytes.
+    staging: Option<(CUdeviceptr, usize)>,
 }
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
@@ -79,71 +81,77 @@ impl std::fmt::Debug for Frame {
     }
 }
 
-/// ★ A block-linear surface's rectangle to un-swizzle into a frame (bounds are checked before a
-/// byte moves): the kernel reads `[src, src + extent)` of whole blocks.
+/// ★ One window's compose-kernel program (the mirror of `kf_disp::scanout::LayerPlan`): every read
+/// is bounded by `extent` inside the store and every write by the frame, before it is queued.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BlRect {
-    /// Store offset of the surface's first block.
+pub struct ComposeLayer {
+    /// Store offset of the first byte the kernel addresses.
     pub src: u64,
-    /// Bytes of whole blocks the rectangle's rows lie in.
+    /// Bytes from `src` the kernel may read.
     pub extent: u64,
-    /// The surface's width in GOBs.
-    pub gobs_per_row: u32,
-    /// log2 GOBs per block (0..=5).
+    /// Block-linear (else pitch).
+    pub block_linear: bool,
+    /// Pitch in bytes, or GOBs per row.
+    pub pitch: u32,
+    /// log2 GOBs per block.
     pub block_height_log2: u32,
-    /// The rectangle's first byte column (a multiple of 4).
+    /// The rectangle's first byte column (block-linear).
     pub x0_bytes: u32,
-    /// Its first row.
+    /// Its first row (block-linear).
     pub y0: u32,
-    /// 4-byte words per row.
-    pub words: u32,
+    /// Pixels per row.
+    pub width: u32,
     /// Rows.
     pub rows: u32,
-    /// The frame's pitch in bytes.
-    pub dst_pitch: u64,
+    /// Output column in the frame.
+    pub ox: u32,
+    /// Output row.
+    pub oy: u32,
+    /// `bit0` alpha, `bit1` swap red/blue, `bit2` opaque.
+    pub flags: u32,
+    /// Blend coefficients (see `kf_compose`).
+    pub a_s: i32,
+    /// See `a_s`.
+    pub b_s: i32,
+    /// See `a_s`.
+    pub a_d: i32,
+    /// See `a_s`.
+    pub b_d: i32,
 }
 
-impl BlRect {
-    /// ⊘ The kernel's reads stay inside `extent` and its writes inside `dst_len` — or the refusal.
-    fn check(&self, dst_len: usize) -> Result<(), String> {
-        let r = *self;
-        if r.rows == 0 || r.words == 0 || r.rows > 16384 || r.block_height_log2 > 5 {
-            return Err(format!("{r:?} is not a copyable rectangle"));
+impl ComposeLayer {
+    /// ⊘ The kernel's reads stay inside `extent` and its writes inside a `fw` x `fh` frame.
+    fn check(&self, fw: u32, fh: u32) -> Result<(), String> {
+        let l = *self;
+        let fits = |a: u32, n: u32, room: u32| u64::from(a) + u64::from(n) <= u64::from(room);
+        if l.rows == 0 || l.width == 0 || l.rows > 16384 || l.width > 16384 {
+            return Err(format!("{l:?} is not a composable rectangle"));
         }
-        let row = u64::from(r.words) * 4;
-        if r.x0_bytes % 4 != 0 || u64::from(r.x0_bytes) + row > u64::from(r.gobs_per_row) * 64 {
-            return Err(format!("{r:?}: the rows leave the surface's GOB columns"));
+        if !fits(l.ox, l.width, fw) || !fits(l.oy, l.rows, fh) {
+            return Err(format!("{l:?} leaves the {fw}x{fh} frame"));
         }
-        let rows_per_block = 8u64 << r.block_height_log2;
-        let need = (u64::from(r.y0) + u64::from(r.rows)).div_ceil(rows_per_block)
-            * u64::from(r.gobs_per_row)
-            * (512u64 << r.block_height_log2);
-        if need > r.extent {
-            return Err(format!("{r:?}: the rows need {need:#x} bytes of blocks"));
-        }
-        let last = u64::from(r.rows - 1)
-            .checked_mul(r.dst_pitch)
-            .and_then(|x| x.checked_add(row));
-        if r.dst_pitch < row || last.is_none_or(|l| l > dst_len as u64) {
-            return Err(format!("{r:?}: the rows leave the {dst_len:#x}-byte frame"));
+        let row = u64::from(l.width) * 4;
+        let need = if l.block_linear {
+            if l.block_height_log2 > 5
+                || l.x0_bytes % 4 != 0
+                || u64::from(l.x0_bytes) + row > u64::from(l.pitch) * 64
+            {
+                return Err(format!("{l:?}: the rows leave the surface's GOB columns"));
+            }
+            (u64::from(l.y0) + u64::from(l.rows)).div_ceil(8u64 << l.block_height_log2)
+                * u64::from(l.pitch)
+                * (512u64 << l.block_height_log2)
+        } else {
+            if u64::from(l.pitch) < row {
+                return Err(format!("{l:?}: a row is wider than the pitch"));
+            }
+            u64::from(l.rows - 1) * u64::from(l.pitch) + row
+        };
+        if need > l.extent {
+            return Err(format!("{l:?}: the rows need {need:#x} bytes"));
         }
         Ok(())
     }
-}
-
-/// ★ A pitch-linear rectangle to copy out of the store (bounds are checked before a byte moves).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PitchRect {
-    /// Store offset of the first pixel of the first row.
-    pub src: u64,
-    /// The surface's pitch in bytes.
-    pub src_pitch: u64,
-    /// Bytes per row to copy.
-    pub row_bytes: u64,
-    /// Rows.
-    pub rows: u32,
-    /// The frame's pitch in bytes (at least `row_bytes`).
-    pub dst_pitch: u64,
 }
 
 impl std::fmt::Debug for DisplayGpu {
@@ -177,10 +185,10 @@ impl DisplayGpu {
         let done = CompletionFd::new()?;
         let mut ptx = SCANOUT_PTX.to_vec();
         ptx.push(0);
-        let bl = cu
+        let compose = cu
             .module_load(&ptx)
-            .and_then(|m| cu.module_function(m, SCANOUT_ENTRY))
-            .map_err(|e| format!("the block-linear scanout kernel did not load: {e}"));
+            .and_then(|m| cu.module_function(m, COMPOSE_ENTRY))
+            .map_err(|e| format!("the compose kernel did not load: {e}"));
         Ok(DisplayGpu {
             cu,
             ctx,
@@ -188,7 +196,8 @@ impl DisplayGpu {
             store: None,
             stream,
             done,
-            bl,
+            compose,
+            staging: None,
         })
     }
 
@@ -222,124 +231,159 @@ impl DisplayGpu {
         self.cu.pinned_free(f.buf, "cuMemFreeHost(display frame)")
     }
 
-    /// ★ Queue the copy of pitch-linear rectangle `r` of the store into `dst` (one 2D copy on the
-    /// display stream), then a host signal on [`Self::completion_fd`]: the GPU moves every byte;
-    /// nothing is read by the CPU here.
+    /// ★ Start a `w` x `h` composition: the device staging frame (grown when too small) cleared to
+    /// black on the display stream — what no window covers is black, as on a real head.
     ///
     /// # Errors
-    /// Refused by name when any byte of the source leaves the store or of the destination leaves
-    /// the frame; the CUDA error otherwise.
-    pub fn scanout_pitch(&self, r: PitchRect, dst: &Frame) -> Result<(), CudaError> {
-        let what = "DisplayGpu::scanout_pitch";
-        if r.rows == 0
-            || r.row_bytes == 0
-            || r.row_bytes > r.src_pitch
-            || r.row_bytes > r.dst_pitch
-            || r.rows > 16384
-        {
-            return Err(refused(what, format!("{r:?} is not a copyable rectangle")));
+    /// [`CudaError`]; an empty or oversized frame is refused.
+    pub fn compose_begin(&mut self, w: u32, h: u32) -> Result<(), CudaError> {
+        let what = "DisplayGpu::compose_begin";
+        let n = usize::try_from(u64::from(w) * u64::from(h) * 4)
+            .map_err(|_| refused(what, format!("{w}x{h}")))?;
+        if n == 0 || w > 16384 || h > 16384 {
+            return Err(refused(what, format!("a {w}x{h} frame")));
         }
-        let last = u64::from(r.rows - 1);
-        let span = |pitch: u64| {
-            last.checked_mul(pitch)
-                .and_then(|x| x.checked_add(r.row_bytes))
-                .ok_or_else(|| refused(what, format!("{r:?} overflows")))
-        };
-        let (src_len, dst_len) = (span(r.src_pitch)?, span(r.dst_pitch)?);
-        if dst_len > dst.len() as u64 {
-            return Err(refused(
-                what,
-                format!(
-                    "{dst_len:#x} bytes do not fit the {:#x}-byte frame",
-                    dst.len()
-                ),
+        if self.staging.is_none_or(|(_, len)| len < n) {
+            if let Some((p, _)) = self.staging.take() {
+                // the stream drains first: a queued compose may still write the old staging
+                self.cu.ctx_synchronize()?;
+                self.cu.mem_free(p);
+            }
+            self.staging = Some((
+                self.cu.mem_alloc_zeroed(n, "cuMemAlloc(display staging)")?,
+                n,
             ));
         }
-        let usz = |x: u64| usize::try_from(x).map_err(|_| refused(what, format!("{x:#x}")));
-        let src = self.at(r.src, usz(src_len)?, what)?;
-        self.cu.memcpy2d_d2h_async(
+        let (p, _) = self.staging.unwrap_or((0, 0));
+        self.cu
+            .memset_d8_async(self.stream, p, 0, n, "cuMemsetD8Async(display staging)")
+    }
+
+    /// ★ Queue window `l` of the composition begun by [`Self::compose_begin`] (`w` x `h`).
+    ///
+    /// # Errors
+    /// Refused by name when the kernel did not load, a read would leave the store or the layer's
+    /// extent, or a write the frame; the CUDA error otherwise.
+    pub fn compose_layer(&self, l: &ComposeLayer, w: u32, h: u32) -> Result<(), CudaError> {
+        let what = "DisplayGpu::compose_layer";
+        l.check(w, h).map_err(|e| refused(what, e))?;
+        let n = usize::try_from(l.extent).map_err(|_| refused(what, format!("{l:?}")))?;
+        let src = self.at(l.src, n, what)?;
+        self.launch_compose(src, l, w, h, what)
+    }
+
+    /// ★ End the composition: the staging frame is copied into `dst` (tight, `w * 4` bytes a row),
+    /// then the host signal on [`Self::completion_fd`]. Only the GPU moves the bytes.
+    ///
+    /// # Errors
+    /// Refused by name when the frame is smaller than the composition; the CUDA error otherwise.
+    pub fn compose_finish(&self, w: u32, h: u32, dst: &Frame) -> Result<(), CudaError> {
+        let what = "DisplayGpu::compose_finish";
+        let n = usize::try_from(u64::from(w) * u64::from(h) * 4)
+            .map_err(|_| refused(what, format!("{w}x{h}")))?;
+        let Some((p, len)) = self.staging else {
+            return Err(refused(what, "no composition was begun".into()));
+        };
+        if n > len || n > dst.len() {
+            return Err(refused(what, format!("{n:#x} bytes do not fit")));
+        }
+        self.cu.memcpy_d2h_async(
             self.stream,
             &dst.buf,
             0,
-            usz(r.dst_pitch)?,
-            src,
-            usz(r.src_pitch)?,
-            usz(r.row_bytes)?,
-            r.rows as usize,
-            "cuMemcpy2DAsync(scanout)",
+            p,
+            n,
+            "cuMemcpyDtoHAsync(display frame)",
         )?;
         self.cu.launch_host_signal(self.stream, &self.done)
     }
 
-    /// ★ Queue the un-swizzle of block-linear rectangle `r` of the store into `dst` (the kernel on the
-    /// display stream, writing the page-locked frame through its device mapping), then the host
-    /// signal on [`Self::completion_fd`]. The CPU reads nothing.
-    ///
-    /// # Errors
-    /// Refused by name when the kernel did not load, or any byte it would read leaves the store or
-    /// the rectangle's blocks, or any byte it would write leaves the frame; the CUDA error otherwise.
-    pub fn scanout_block_linear(&self, r: BlRect, dst: &Frame) -> Result<(), CudaError> {
-        let what = "DisplayGpu::scanout_block_linear";
-        r.check(dst.len()).map_err(|e| refused(what, e))?;
-        let n = usize::try_from(r.extent).map_err(|_| refused(what, format!("{r:?}")))?;
-        let src = self.at(r.src, n, what)?;
-        self.launch_bl(src, r, dst, what)?;
-        self.cu.launch_host_signal(self.stream, &self.done)
-    }
-
-    /// The kernel launch itself (one CTA per row, 256 threads striding the row's words).
-    fn launch_bl(
+    /// The compose kernel launch (one CTA per row, 256 threads striding the row).
+    fn launch_compose(
         &self,
         src: CUdeviceptr,
-        r: BlRect,
-        dst: &Frame,
+        l: &ComposeLayer,
+        w: u32,
+        h: u32,
         what: &'static str,
     ) -> Result<(), CudaError> {
-        let f = *self.bl.as_ref().map_err(|e| refused(what, e.clone()))?;
-        let dptr = self.cu.pinned_device_ptr(&dst.buf, 0)?;
-        let dpitch =
-            u32::try_from(r.dst_pitch).map_err(|_| refused(what, format!("{r:?} pitch")))?;
+        let f = *self
+            .compose
+            .as_ref()
+            .map_err(|e| refused(what, e.clone()))?;
+        let Some((dst, _)) = self.staging else {
+            return Err(refused(what, "no composition was begun".into()));
+        };
+        let u = |x: u32| x.to_le_bytes().to_vec();
+        let i = |x: i32| x.to_le_bytes().to_vec();
         let mut params = vec![
             src.to_le_bytes().to_vec(),
-            dptr.to_le_bytes().to_vec(),
-            r.x0_bytes.to_le_bytes().to_vec(),
-            r.y0.to_le_bytes().to_vec(),
-            r.words.to_le_bytes().to_vec(),
-            r.gobs_per_row.to_le_bytes().to_vec(),
-            r.block_height_log2.to_le_bytes().to_vec(),
-            dpitch.to_le_bytes().to_vec(),
+            dst.to_le_bytes().to_vec(),
+            u(u32::from(l.block_linear)),
+            u(l.pitch),
+            u(l.block_height_log2),
+            u(l.x0_bytes),
+            u(l.y0),
+            u(l.width),
+            u(l.ox),
+            u(l.oy),
+            u(w * 4),
+            u(w),
+            u(h),
+            u(l.flags),
+            i(l.a_s),
+            i(l.b_s),
+            i(l.a_d),
+            i(l.b_d),
         ];
         self.cu
-            .launch_args(self.stream, f, r.rows, 256, 0, &mut params, what)
+            .launch_args(self.stream, f, l.rows, 256, 0, &mut params, what)
     }
 
-    /// ★ Bring-up self-test of the block-linear kernel on SYNTHETIC data (never guest memory): upload
-    /// `surface` to a scratch allocation, run the kernel over rectangle `r` (its `src` is ignored),
-    /// wait, and return the frame's bytes — the caller compares them with the reference.
+    /// ★ Bring-up self-test of the compose kernel on SYNTHETIC data (never guest memory): upload
+    /// `surface` to a scratch allocation, compose layer `l` (its `src` is ignored) into a `w` x `h`
+    /// frame, wait, and return the frame's bytes — the caller compares them with the reference.
     ///
     /// # Errors
-    /// [`CudaError`]; a rectangle that leaves `surface` is refused.
-    pub fn selftest_block_linear(&self, surface: &[u8], r: BlRect) -> Result<Vec<u8>, CudaError> {
-        let what = "DisplayGpu::selftest_block_linear";
-        let len = usize::try_from(u64::from(r.rows) * r.dst_pitch)
-            .map_err(|_| refused(what, format!("{r:?}")))?;
-        if r.extent > surface.len() as u64 {
-            return Err(refused(what, format!("{r:?} leaves the synthetic surface")));
+    /// [`CudaError`]; a layer that leaves `surface` or the frame is refused.
+    pub fn selftest_compose(
+        &mut self,
+        surface: &[u8],
+        l: &ComposeLayer,
+        w: u32,
+        h: u32,
+    ) -> Result<Vec<u8>, CudaError> {
+        let what = "DisplayGpu::selftest_compose";
+        if l.extent > surface.len() as u64 {
+            return Err(refused(what, format!("{l:?} leaves the synthetic surface")));
         }
-        r.check(len).map_err(|e| refused(what, e))?;
+        l.check(w, h).map_err(|e| refused(what, e))?;
         self.make_current()?;
+        let len = usize::try_from(u64::from(w) * u64::from(h) * 4)
+            .map_err(|_| refused(what, format!("{w}x{h}")))?;
         let scratch = self
             .cu
-            .mem_alloc_zeroed(surface.len(), "cuMemAlloc(bl selftest)")?;
+            .mem_alloc_zeroed(surface.len(), "cuMemAlloc(compose selftest)")?;
         let out = (|| {
             self.cu
-                .memcpy_h2d(scratch, surface, "cuMemcpyHtoD(bl selftest)")?;
+                .memcpy_h2d(scratch, surface, "cuMemcpyHtoD(compose selftest)")?;
             let frame = self.frame(len)?;
             let run = self
-                .launch_bl(scratch, r, &frame, what)
+                .compose_begin(w, h)
+                .and_then(|()| self.launch_compose(scratch, l, w, h, what))
+                .and_then(|()| {
+                    let (p, _) = self.staging.unwrap_or((0, 0));
+                    self.cu.memcpy_d2h_async(
+                        self.stream,
+                        &frame.buf,
+                        0,
+                        p,
+                        len,
+                        "cuMemcpyDtoHAsync(compose selftest)",
+                    )
+                })
                 .and_then(|()| self.cu.ctx_synchronize());
             let bytes = run.map(|()| frame.read(0, len));
-            // the kernel is done (or failed): the frame can go
             let freed = self.release_frame(frame);
             let bytes = bytes?;
             freed?;
@@ -440,6 +484,9 @@ impl Drop for DisplayGpu {
     fn drop(&mut self) {
         // the stream drains (every queued host signal with it) before the context goes
         self.cu.stream_destroy(self.stream);
+        if let Some((p, _)) = self.staging.take() {
+            self.cu.mem_free(p);
+        }
         self.cu.ctx_destroy(self.ctx);
     }
 }
@@ -448,13 +495,17 @@ impl Drop for DisplayGpu {
 mod tests {
     use super::*;
 
-    /// ⊘ The launch passes EIGHT by-value parameters (two u64 then six u32) in this order; the PTX
-    /// entry must declare exactly those — a drift is a wild pointer on the GPU, not a type error.
+    /// ⊘ The compose launch passes EIGHTEEN by-value parameters (two u64, twelve u32, four s32) in
+    /// this order; the PTX entry must declare exactly those — a drift is a wild pointer on the GPU.
     #[test]
-    fn the_scanout_kernel_declares_the_parameters_the_launch_passes() {
+    fn the_compose_kernel_declares_the_parameters_the_launch_passes() {
         let ptx = std::str::from_utf8(SCANOUT_PTX).unwrap();
+        assert!(
+            ptx.is_ascii(),
+            "the PTX parser refuses other bytes, even in comments"
+        );
         let head = ptx
-            .split(&format!(".visible .entry {SCANOUT_ENTRY}("))
+            .split(&format!(".visible .entry {COMPOSE_ENTRY}("))
             .nth(1)
             .expect("the entry");
         let params: Vec<(&str, &str)> = head
@@ -467,56 +518,77 @@ mod tests {
                 (w[1], w[2].rsplit('_').next().unwrap())
             })
             .collect();
-        assert_eq!(
-            params,
-            [
-                (".u64", "src"),
-                (".u64", "dst"),
-                (".u32", "x0b"),
-                (".u32", "y0"),
-                (".u32", "words"),
-                (".u32", "gpr"),
-                (".u32", "bh"),
-                (".u32", "dpitch"),
-            ]
+        let want = [
+            (".u64", "src"),
+            (".u64", "dst"),
+            (".u32", "layout"),
+            (".u32", "pitch"),
+            (".u32", "bh"),
+            (".u32", "x0b"),
+            (".u32", "y0"),
+            (".u32", "width"),
+            (".u32", "ox"),
+            (".u32", "oy"),
+            (".u32", "dpitch"),
+            (".u32", "fw"),
+            (".u32", "fh"),
+            (".u32", "flags"),
+            (".s32", "as"),
+            (".s32", "bs"),
+            (".s32", "ad"),
+            (".s32", "bd"),
+        ];
+        assert_eq!(params, want);
+        assert!(
+            ptx.contains(".target sm_75"),
+            "Turing+ JIT target (sec. 21)"
         );
-        assert!(ptx.contains(".target sm_75"), "Turing+ JIT target (§21)");
     }
 
-    /// The host-side bounds of a block-linear launch: the reads stay in whole blocks, the writes in
-    /// the frame.
+    /// The host-side bounds of a compose launch: reads in the layer's extent, writes in the frame.
     #[test]
-    fn a_block_linear_launch_is_bounded_before_it_is_queued() {
-        let r = BlRect {
+    fn a_compose_launch_is_bounded_before_it_is_queued() {
+        let bl = ComposeLayer {
             src: 0,
             extent: 9 * 120 * 16 * 512,
-            gobs_per_row: 120,
+            block_linear: true,
+            pitch: 120,
             block_height_log2: 4,
             x0_bytes: 0,
             y0: 0,
-            words: 1920,
+            width: 1920,
             rows: 1080,
-            dst_pitch: 7680,
+            ox: 0,
+            oy: 0,
+            flags: 4,
+            a_s: 255,
+            b_s: 0,
+            a_d: 0,
+            b_d: 0,
         };
-        assert_eq!(r.check(7680 * 1080), Ok(()));
-        assert!(
-            r.check(7680 * 1080 - 1).is_err(),
-            "one byte short of the frame"
-        );
-        let mut t = r;
+        assert_eq!(bl.check(1920, 1080), Ok(()));
+        assert!(bl.check(1919, 1080).is_err(), "wider than the frame");
+        let mut t = bl;
         t.extent -= 1;
+        assert!(t.check(1920, 1080).is_err(), "one byte short of the blocks");
+        let mut t = bl;
+        t.pitch = 119;
+        assert!(t.check(1920, 1080).is_err(), "rows wider than the surface");
+        let mut t = bl;
+        (t.ox, t.width) = (1800, 250);
         assert!(
-            t.check(7680 * 1080).is_err(),
-            "one byte short of the blocks"
+            t.check(1920, 1080).is_err(),
+            "unclipped past the right edge"
         );
-        let mut t = r;
-        t.gobs_per_row = 119;
-        assert!(t.check(7680 * 1080).is_err(), "rows wider than the surface");
-        let mut t = r;
-        t.x0_bytes = 2;
-        assert!(t.check(7680 * 1080).is_err(), "not word-aligned");
-        let mut t = r;
-        t.block_height_log2 = 6;
-        assert!(t.check(7680 * 1080).is_err());
+        let p = ComposeLayer {
+            block_linear: false,
+            pitch: 7680,
+            extent: 1079 * 7680 + 7680,
+            ..bl
+        };
+        assert_eq!(p.check(1920, 1080), Ok(()));
+        let mut t = p;
+        t.pitch = 7676;
+        assert!(t.check(1920, 1080).is_err(), "a row wider than the pitch");
     }
 }

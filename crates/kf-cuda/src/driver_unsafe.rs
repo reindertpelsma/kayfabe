@@ -176,7 +176,6 @@ pub struct Cuda {
         unsafe extern "C" fn(CUdeviceptr, *const c_void, usize, *mut c_void) -> CUresult,
     pub(crate) cuMemcpyDtoHAsync:
         unsafe extern "C" fn(*mut c_void, CUdeviceptr, usize, *mut c_void) -> CUresult,
-    pub(crate) cuMemcpy2DAsync: unsafe extern "C" fn(*const Memcpy2D, *mut c_void) -> CUresult,
     pub(crate) cuMemcpyDtoDAsync:
         unsafe extern "C" fn(CUdeviceptr, CUdeviceptr, usize, *mut c_void) -> CUresult,
     pub(crate) cuMemsetD8Async:
@@ -396,7 +395,6 @@ impl Cuda {
             cuMemHostGetDevicePointer: sym!("cuMemHostGetDevicePointer_v2"),
             cuMemcpyHtoDAsync: sym!("cuMemcpyHtoDAsync_v2"),
             cuMemcpyDtoHAsync: sym!("cuMemcpyDtoHAsync_v2"),
-            cuMemcpy2DAsync: sym!("cuMemcpy2DAsync_v2"),
             cuMemcpyDtoDAsync: sym!("cuMemcpyDtoDAsync_v2"),
             cuMemsetD8Async: sym!("cuMemsetD8Async"),
             // ⚠ Versioned names, as everywhere here. `cuStreamBeginCapture` (unsuffixed) is the
@@ -1075,70 +1073,6 @@ impl Cuda {
         })
     }
 
-    /// ★ `cuMemcpy2DAsync_v2`: `rows` rows of `row_bytes` from device `src` (pitch `src_pitch`) into
-    /// `buf` at `off` (pitch `dst_pitch`), in `stream` — one call, the copy engine walks the pitches.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    ///
-    /// # Panics
-    /// If any destination byte leaves `buf`, or a row is wider than either pitch.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn memcpy2d_d2h_async(
-        &self,
-        s: StreamHandle,
-        buf: &PinnedBuf,
-        off: usize,
-        dst_pitch: usize,
-        src: CUdeviceptr,
-        src_pitch: usize,
-        row_bytes: usize,
-        rows: usize,
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        assert!(
-            row_bytes <= dst_pitch && row_bytes <= src_pitch,
-            "{what}: a row is wider than its pitch"
-        );
-        let last = rows
-            .checked_sub(1)
-            .and_then(|r| r.checked_mul(dst_pitch))
-            .and_then(|x| x.checked_add(row_bytes))
-            .and_then(|x| x.checked_add(off));
-        assert!(
-            rows > 0 && last.is_some_and(|e| e <= buf.len),
-            "{what}: the rows leave the pinned buffer"
-        );
-        let p = Memcpy2D {
-            src_x_in_bytes: 0,
-            src_y: 0,
-            src_memory_type: CU_MEMORYTYPE_DEVICE,
-            pad0: 0,
-            src_host: core::ptr::null(),
-            src_device: src,
-            src_array: core::ptr::null_mut(),
-            src_pitch,
-            dst_x_in_bytes: 0,
-            dst_y: 0,
-            dst_memory_type: CU_MEMORYTYPE_HOST,
-            pad1: 0,
-            dst_host: (buf.ptr + off) as *mut c_void,
-            dst_device: 0,
-            dst_array: core::ptr::null_mut(),
-            dst_pitch,
-            width_in_bytes: row_bytes,
-            height: rows,
-        };
-        // SAFETY: `p` is a fully initialised `CUDA_MEMCPY2D` (padding named and zeroed) that lives
-        // across the call (the driver copies the descriptor before returning); every destination
-        // byte lies inside the pinned allocation (asserted above), which the caller does not free
-        // or hand out until the host signal queued after this copy has run. The source is a device
-        // address the caller bounded against its own allocation.
-        self.check(what, unsafe {
-            (self.cuMemcpy2DAsync)(&raw const p, s.0 as *mut c_void)
-        })
-    }
-
     /// ★ Whether every graph entry point the walk's one-call submission needs resolved.
     #[must_use]
     pub fn has_graph_api(&self) -> bool {
@@ -1401,37 +1335,6 @@ impl StreamHandle {
 /// An opaque CUDA event handle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EventHandle(usize);
-
-/// `CUDA_MEMCPY2D` (`cuda.h`), field for field. ⊘ Every padding byte is a NAMED field set to zero
-/// (`rust_struct_padding_crosses_the_abi_uninitialised`): the driver reads the whole struct.
-#[repr(C)]
-pub(crate) struct Memcpy2D {
-    src_x_in_bytes: usize,
-    src_y: usize,
-    src_memory_type: c_uint,
-    pad0: c_uint,
-    src_host: *const c_void,
-    src_device: CUdeviceptr,
-    src_array: *mut c_void,
-    src_pitch: usize,
-    dst_x_in_bytes: usize,
-    dst_y: usize,
-    dst_memory_type: c_uint,
-    pad1: c_uint,
-    dst_host: *mut c_void,
-    dst_device: CUdeviceptr,
-    dst_array: *mut c_void,
-    dst_pitch: usize,
-    width_in_bytes: usize,
-    height: usize,
-}
-
-// `sizeof(CUDA_MEMCPY2D)` on LP64: 16 eight-byte words.
-const _: () = assert!(core::mem::size_of::<Memcpy2D>() == 128);
-
-/// `CU_MEMORYTYPE_HOST` / `CU_MEMORYTYPE_DEVICE`.
-const CU_MEMORYTYPE_HOST: c_uint = 1;
-const CU_MEMORYTYPE_DEVICE: c_uint = 2;
 
 /// ★ Page-locked host memory the walk's async copies land in. `pub(crate)` on purpose: its
 /// bytes are written by DMA **after** the call that queued the copy returns, so reading them

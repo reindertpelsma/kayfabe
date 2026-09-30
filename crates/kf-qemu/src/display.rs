@@ -31,13 +31,13 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
-use kf_cuda::display::{BlRect, DisplayGpu, Frame, PitchRect};
-use kf_disp::engine::{Acquire, Effect, Engine, PbLoc, ScanVocab, Scanout, Vocab};
+use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
+use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::model::{ChannelKind, Statement, Waker};
 use kf_disp::ports::{EventReg, Ports};
 use kf_disp::regs::Regs;
-use kf_disp::scanout::{CopyPlan, ScanFormats, SurfaceLayout};
+use kf_disp::scanout::{LayerPlan, ScanFormats};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_rm::display::SharedDisplayModel;
 use std::collections::VecDeque;
@@ -631,7 +631,7 @@ impl DisplayPlane {
         gpu.import_store(store_fd, store_bytes)
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
         let engine = Engine::new(vocab, row.heads, row.windows);
-        let scan = ScanVocab::resolve(t, classes.window);
+        let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);
         let formats = ScanFormats::resolve(t, classes.window);
         Ok(DisplayPlane {
             model,
@@ -953,12 +953,13 @@ impl Device {
             return;
         }
         // ★ M3: the block-linear scanout kernel proves itself on synthetic data before any guest copy
-        let bl_ok = gpu.as_ref().map(|g| {
-            let r = selftest_block_linear(g);
+        let mut gpu = gpu;
+        let bl_ok = gpu.as_mut().map(|g| {
+            let r = selftest_compose(g);
             match &r {
-                Ok(()) => eprintln!("kf3: display: block-linear scanout kernel self-test PASSED"),
+                Ok(()) => eprintln!("kf3: display: compose kernel self-test PASSED"),
                 Err(e) => eprintln!(
-                    "kf3: display: block-linear scanout kernel self-test FAILED: {e} — block-linear surfaces will be refused"
+                    "kf3: display: compose kernel self-test FAILED: {e} — the console will show nothing"
                 ),
             }
             r
@@ -1185,11 +1186,13 @@ impl Device {
             // surface, and every completion from that flip on waits for that copy to COMPLETE (the
             // flip-complete notifier and the release that frees the old surface, then GET): the
             // queue below keeps effect order and holds each item until its copy is done.
-            let console = console_scanout(&engine, dp);
+            let console = console_composition(&engine, dp);
             scan.active = console.is_some();
             for e in effects {
                 if let Effect::Latched { window } = &e
-                    && console.is_some_and(|c| c.window == *window)
+                    && console
+                        .as_ref()
+                        .is_some_and(|c| c.layers.iter().any(|l| l.window == *window))
                 {
                     scan.barrier = scan.started + 1;
                     scan.want = true;
@@ -1217,7 +1220,7 @@ impl Device {
                 scan.want = true;
             }
             if scan.want && scan.inflight.is_none() {
-                scan.start(&mut io, console);
+                scan.start(&mut io, console.as_ref());
             }
             // 7. completions, IN ORDER — each after the state it reports and the copy it follows
             while queue.front().is_some_and(|q| q.need <= scan.done) {
@@ -1434,14 +1437,37 @@ fn engine_idle(engine: &Engine, dp: &DisplayPlane, chn: u32) -> bool {
     !engine.waiting(chn) && dp.ports.idle(chn)
 }
 
-/// ★ M2: what the console shows — the lowest running head's scanned-out window, if any.
-fn console_scanout(engine: &Engine, dp: &DisplayPlane) -> Option<Scanout> {
+/// ★ What the console shows — the lowest running head's composition (every enabled window it owns,
+/// back to front), if any.
+fn console_composition(engine: &Engine, dp: &DisplayPlane) -> Option<Composition> {
     let sv = dp.scan.as_ref()?;
     engine
         .heads_armed()
         .iter()
         .filter(|m| m.period_ns > 0)
-        .find_map(|m| engine.scanout(sv, m.head))
+        .find_map(|m| engine.composition(sv, m.head))
+}
+
+/// The kf-cuda mirror of a planned layer.
+fn compose_layer(l: &LayerPlan) -> ComposeLayer {
+    ComposeLayer {
+        src: l.src,
+        extent: l.extent,
+        block_linear: l.block_linear,
+        pitch: l.pitch,
+        block_height_log2: l.block_height_log2,
+        x0_bytes: l.x0_bytes,
+        y0: l.y0,
+        width: l.width,
+        rows: l.rows,
+        ox: l.ox,
+        oy: l.oy,
+        flags: l.flags,
+        a_s: l.a_s,
+        b_s: l.b_s,
+        a_d: l.a_d,
+        b_d: l.b_d,
+    }
 }
 
 /// An effect or a GET on the worker's completion queue.
@@ -1478,8 +1504,8 @@ struct ScanState {
     want: bool,
     /// The console showed a surface at the last pass (the refresh clock runs only then).
     active: bool,
-    /// The copy in flight: its number, slot, plan and start.
-    inflight: Option<(u64, usize, CopyPlan, Instant)>,
+    /// The copy in flight: its number, slot, frame size and start.
+    inflight: Option<(u64, usize, (u32, u32), Instant)>,
     /// Page-locked frames per slot — grown, never freed while the device lives ([`ConsoleShare`]).
     frames: [Option<Frame>; SLOTS],
     retired: Vec<Frame>,
@@ -1489,51 +1515,95 @@ struct ScanState {
     refusals_logged: u32,
     /// `KF3_DISPLAY_TRACE`: each copy's source, and a digest of what it copied.
     trace: bool,
-    /// The block-linear kernel's bring-up self-test verdict (block-linear scanouts are refused by
-    /// its failure).
+    /// The compose kernel's bring-up self-test verdict (the console shows nothing on its failure).
     bl_ok: Option<Result<(), String>>,
 }
 
-/// ★ Run the block-linear scanout kernel on a SYNTHETIC surface and compare every word with the
-/// reference address function (`kf_disp::scanout::bl_offset`) — at bring-up, before any guest copy.
-fn selftest_block_linear(gpu: &DisplayGpu) -> Result<(), String> {
-    // 4 GOBs wide, 2-GOB blocks, 3 block rows; a rectangle offset in both axes
+/// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, then a
+/// premultiplied-alpha pixel blended over it — and compare with the reference address function
+/// (`kf_disp::scanout::bl_offset`) and the blend arithmetic, at bring-up, before any guest copy.
+fn selftest_compose(gpu: &mut DisplayGpu) -> Result<(), String> {
+    // 4 GOBs wide, 2-GOB blocks, 3 block rows; a rectangle offset in both axes, landing at (5, 2)
     let (gpr, bh, block_rows) = (4u32, 1u32, 3u64);
     let extent = block_rows * u64::from(gpr) * (512 << bh);
     let surface: Vec<u8> = (0..extent)
         .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
         .collect();
-    let (x0_bytes, y0, words, rows) = (4u32, 3u32, 62u32, 37u32);
-    let r = BlRect {
+    let (x0_bytes, y0, width, rows, ox, oy, fw, fh) = (4u32, 3u32, 62u32, 37u32, 5, 2, 70, 40);
+    let l = ComposeLayer {
         src: 0,
         extent,
-        gobs_per_row: gpr,
+        block_linear: true,
+        pitch: gpr,
         block_height_log2: bh,
         x0_bytes,
         y0,
-        words,
+        width,
         rows,
-        dst_pitch: u64::from(words) * 4,
+        ox,
+        oy,
+        flags: 4,
+        a_s: 255,
+        b_s: 0,
+        a_d: 0,
+        b_d: 0,
     };
     let got = gpu
-        .selftest_block_linear(&surface, r)
+        .selftest_compose(&surface, &l, fw, fh)
         .map_err(|e| format!("did not run: {e}"))?;
-    for y in 0..rows {
-        for b in 0..words * 4 {
-            let at = kf_disp::scanout::bl_offset(
-                u64::from(x0_bytes + b),
-                u64::from(y0 + y),
-                u64::from(gpr),
-                bh,
-            );
-            let want = surface[at as usize];
-            let have = got[(y * words * 4 + b) as usize];
+    for y in 0..fh {
+        for x in 0..fw * 4 {
+            let inside = (ox * 4..(ox + width) * 4).contains(&x) && (oy..oy + rows).contains(&y);
+            let want = if inside {
+                let at = kf_disp::scanout::bl_offset(
+                    u64::from(x0_bytes + x - ox * 4),
+                    u64::from(y0 + y - oy),
+                    u64::from(gpr),
+                    bh,
+                );
+                surface[at as usize]
+            } else {
+                0 // the staging frame is cleared to black
+            };
+            let have = got[(y * fw * 4 + x) as usize];
             if want != have {
                 return Err(format!(
-                    "row {y} byte {b}: the kernel wrote {have:#04x}, the reference says {want:#04x}"
+                    "frame ({}, {y}) byte {}: the kernel wrote {have:#04x}, the reference says {want:#04x}",
+                    x / 4,
+                    x % 4
                 ));
             }
         }
+    }
+    // a premultiplied ARGB pixel (a = 0x80) over black: out = src*1 + 0*(1 - a)
+    let px = [0x40u8, 0x20, 0x10, 0x80]; // B G R A
+    let one = ComposeLayer {
+        src: 0,
+        extent: 4,
+        block_linear: false,
+        pitch: 4,
+        block_height_log2: 0,
+        x0_bytes: 0,
+        y0: 0,
+        width: 1,
+        rows: 1,
+        ox: 0,
+        oy: 0,
+        flags: 1,
+        a_s: 255,
+        b_s: 0,
+        a_d: 255,
+        b_d: -255,
+    };
+    let got = gpu
+        .selftest_compose(&px, &one, 1, 1)
+        .map_err(|e| format!("did not run (blend): {e}"))?;
+    if got[..3] != px[..3] {
+        return Err(format!(
+            "the blend wrote {:?}, not {:?}",
+            &got[..3],
+            &px[..3]
+        ));
     }
     Ok(())
 }
@@ -1575,7 +1645,7 @@ impl ScanState {
 
     /// The copy in flight completed: publish its frame to the console.
     fn completed(&mut self, dp: &DisplayPlane) {
-        let Some((n, slot, plan, t0)) = self.inflight.take() else {
+        let Some((n, slot, (w, h), t0)) = self.inflight.take() else {
             return;
         };
         self.done = n;
@@ -1586,16 +1656,8 @@ impl ScanState {
         dp.counters.scanout_us_max.fetch_max(us, Ordering::Relaxed);
         if let Some(f) = &self.frames[slot] {
             if self.trace && (n <= 8 || n % 50 == 0) {
-                let (w, h, st) = (
-                    plan.width as usize,
-                    plan.height as usize,
-                    plan.row_bytes as usize,
-                );
-                let fnv = if plan.format == kf_disp::scanout::PixelFormat::Xrgb8888 {
-                    fnv_rgb_xrgb8888(&f.read(0, st * h), st, w, h)
-                } else {
-                    0
-                };
+                let (wu, hu, st) = (w as usize, h as usize, w as usize * 4);
+                let fnv = fnv_rgb_xrgb8888(&f.read(0, st * hu), st, wu, hu);
                 eprintln!("kf3: display: TRACE scanout copy {n} done: {w}x{h} fnv={fnv:016x}");
             }
             self.serial += 1;
@@ -1603,10 +1665,10 @@ impl ScanState {
                 slot,
                 FrameView {
                     addr: f.addr(),
-                    width: plan.width,
-                    height: plan.height,
-                    stride: u32::try_from(plan.row_bytes).unwrap_or(0),
-                    format: plan.format as u32,
+                    width: w,
+                    height: h,
+                    stride: w * 4,
+                    format: kf_disp::scanout::PixelFormat::Xrgb8888 as u32,
                     serial: self.serial,
                 },
             );
@@ -1635,56 +1697,73 @@ impl ScanState {
         }
     }
 
-    /// ★ Start the next copy of what the console shows. A copy that cannot be made (nothing shown,
-    /// a surface refused by name) completes at once: the flip it follows still completes — the
-    /// engine latched it; only the console keeps its previous frame.
-    fn start(&mut self, io: &mut Io<'_>, console: Option<Scanout>) {
+    /// ★ Start the next copy of what the console shows: every enabled window of the head composed,
+    /// back to front, into the device staging frame, then copied into a free console frame. A copy
+    /// that cannot be made (nothing shown, no kernel) completes at once — the flip it follows still
+    /// completes (the engine latched it); only the console keeps its previous frame. A window that
+    /// cannot be composed is refused by name and left out.
+    fn start(&mut self, io: &mut Io<'_>, console: Option<&Composition>) {
         self.want = false;
         self.last = Some(Instant::now());
         self.started += 1;
         let n = self.started;
         let dp = io.dp;
-        let Some(so) = console else {
+        let Some(comp) = console else {
             self.done = n;
             return;
         };
-        let dma = match io.resolve(so.client, so.handle, so.chn) {
-            Ok(d) => d,
-            Err(e) => {
-                self.refuse(dp, &e);
-                self.done = n;
-                return;
-            }
-        };
-        let plan = match kf_disp::scanout::plan(&so, &dma, &dp.formats) {
-            Ok(p) => p,
-            Err(r) => {
-                self.refuse(dp, &r.0);
-                self.done = n;
-                return;
-            }
-        };
-        if self.trace && (n <= 8 || n % 50 == 0) {
-            eprintln!(
-                "kf3: display: TRACE scanout copy {n}: window {} head {} iso {:#x} +{:#x} -> {:?} base {:#x} limit {:#x} -> src {:#x} pitch {} rows {}",
-                so.window,
-                so.head,
-                so.handle,
-                so.offset,
-                dma.target,
-                dma.base,
-                dma.limit,
-                plan.src,
-                plan.src_pitch,
-                plan.rows
-            );
+        if let Some(Err(e)) = &self.bl_ok {
+            let e = format!("the compose kernel failed its self-test ({e})");
+            self.refuse(dp, &e);
+            self.done = n;
+            return;
         }
-        let Some(gpu) = io.gpu.as_ref() else {
+        let (w, h) = (comp.width, comp.height);
+        if w == 0 || h == 0 || u64::from(w) * u64::from(h) > kf_disp::scanout::MAX_PIXELS {
+            self.refuse(dp, &format!("a {w}x{h} composition"));
+            self.done = n;
+            return;
+        }
+        // plan every window (each bounded by its own context DMA) before the GPU sees one
+        let mut layers = Vec::new();
+        for so in &comp.layers {
+            let planned = io.resolve(so.client, so.handle, so.chn).and_then(|dma| {
+                kf_disp::scanout::plan_layer(so, &dma, &dp.formats, w, h).map_err(|r| r.0)
+            });
+            match planned {
+                Ok(Some(l)) => {
+                    if self.trace && (n <= 8 || n % 50 == 0) {
+                        eprintln!(
+                            "kf3: display: TRACE scanout copy {n}: window {} depth {} iso {:#x} -> src {:#x} {} pitch {} {}x{} at ({}, {}) flags {:#x} blend ({},{})/({},{})",
+                            so.window,
+                            so.depth,
+                            so.handle,
+                            l.src,
+                            if l.block_linear { "BL" } else { "pitch" },
+                            l.pitch,
+                            l.width,
+                            l.rows,
+                            l.ox,
+                            l.oy,
+                            l.flags,
+                            l.a_s,
+                            l.b_s,
+                            l.a_d,
+                            l.b_d
+                        );
+                    }
+                    layers.push(l);
+                }
+                Ok(None) => {}
+                Err(e) => self.refuse(dp, &e),
+            }
+        }
+        let slot = dp.console.free_slot();
+        let need = w as usize * h as usize * 4;
+        let Some(gpu) = io.gpu.as_mut() else {
             self.done = n;
             return;
         };
-        let slot = dp.console.free_slot();
-        let need = usize::try_from(plan.frame_bytes()).unwrap_or(usize::MAX);
         if self.frames[slot].as_ref().is_none_or(|f| f.len() < need) {
             let cap = if need <= FRAME_SMALL {
                 FRAME_SMALL
@@ -1708,48 +1787,21 @@ impl ScanState {
             self.done = n;
             return;
         };
-        let queued = match plan.layout {
-            SurfaceLayout::Pitch => {
-                let r = PitchRect {
-                    src: plan.src,
-                    src_pitch: plan.src_pitch,
-                    row_bytes: plan.row_bytes,
-                    rows: plan.rows,
-                    dst_pitch: plan.row_bytes,
-                };
-                gpu.scanout_pitch(r, frame)
-                    .map_err(|e| format!("the copy of {r:?}: {e}"))
-            }
-            SurfaceLayout::BlockLinear {
-                gobs_per_row,
-                block_height_log2,
-                x0_bytes,
-                y0,
-                extent,
-            } => match &self.bl_ok {
-                Some(Ok(())) => {
-                    let r = BlRect {
-                        src: plan.src,
-                        extent,
-                        gobs_per_row,
-                        block_height_log2,
-                        x0_bytes,
-                        y0,
-                        words: u32::try_from(plan.row_bytes / 4).unwrap_or(0),
-                        rows: plan.rows,
-                        dst_pitch: plan.row_bytes,
-                    };
-                    gpu.scanout_block_linear(r, frame)
-                        .map_err(|e| format!("the block-linear copy of {r:?}: {e}"))
-                }
-                Some(Err(e)) => Err(format!(
-                    "a block-linear surface: the kernel failed its self-test ({e})"
-                )),
-                None => Err("a block-linear surface: the kernel was not self-tested".into()),
-            },
-        };
+        let queued = gpu
+            .compose_begin(w, h)
+            .map_err(|e| format!("composition {w}x{h}: {e}"))
+            .and_then(|()| {
+                layers.iter().try_for_each(|l| {
+                    gpu.compose_layer(&compose_layer(l), w, h)
+                        .map_err(|e| format!("window {}: {e}", l.window))
+                })
+            })
+            .and_then(|()| {
+                gpu.compose_finish(w, h, frame)
+                    .map_err(|e| format!("the frame copy: {e}"))
+            });
         match queued {
-            Ok(()) => self.inflight = Some((n, slot, plan, Instant::now())),
+            Ok(()) => self.inflight = Some((n, slot, (w, h), Instant::now())),
             Err(e) => {
                 self.refuse(dp, &e);
                 self.done = n;

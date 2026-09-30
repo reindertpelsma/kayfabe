@@ -49,7 +49,7 @@ impl PixelFormat {
 /// class table (never hard-coded per family).
 #[derive(Debug, Clone)]
 pub struct ScanFormats {
-    map: Vec<(u32, PixelFormat)>,
+    map: Vec<(u32, PixelFormat, bool)>,
 }
 
 impl ScanFormats {
@@ -57,18 +57,26 @@ impl ScanFormats {
     #[must_use]
     pub fn resolve(t: &ClassTable, win: u32) -> ScanFormats {
         let names = [
-            ("SET_PARAMS_FORMAT_A8R8G8B8", PixelFormat::Xrgb8888),
-            ("SET_PARAMS_FORMAT_X8R8G8B8", PixelFormat::Xrgb8888),
-            ("SET_PARAMS_FORMAT_A8B8G8R8", PixelFormat::Xbgr8888),
-            ("SET_PARAMS_FORMAT_X8B8G8R8", PixelFormat::Xbgr8888),
-            ("SET_PARAMS_FORMAT_R5G6B5", PixelFormat::Rgb565),
-            ("SET_PARAMS_FORMAT_A2R10G10B10", PixelFormat::Xrgb2101010),
-            ("SET_PARAMS_FORMAT_A2B10G10R10", PixelFormat::Xbgr2101010),
+            ("SET_PARAMS_FORMAT_A8R8G8B8", PixelFormat::Xrgb8888, true),
+            ("SET_PARAMS_FORMAT_X8R8G8B8", PixelFormat::Xrgb8888, false),
+            ("SET_PARAMS_FORMAT_A8B8G8R8", PixelFormat::Xbgr8888, true),
+            ("SET_PARAMS_FORMAT_X8B8G8R8", PixelFormat::Xbgr8888, false),
+            ("SET_PARAMS_FORMAT_R5G6B5", PixelFormat::Rgb565, false),
+            (
+                "SET_PARAMS_FORMAT_A2R10G10B10",
+                PixelFormat::Xrgb2101010,
+                true,
+            ),
+            (
+                "SET_PARAMS_FORMAT_A2B10G10R10",
+                PixelFormat::Xbgr2101010,
+                true,
+            ),
         ];
         ScanFormats {
             map: names
                 .iter()
-                .filter_map(|(n, f)| Some((t.v(win, n)?, *f)))
+                .filter_map(|(n, f, a)| Some((t.v(win, n)?, *f, *a)))
                 .collect(),
         }
     }
@@ -76,7 +84,16 @@ impl ScanFormats {
     /// The console format of `SET_PARAMS.FORMAT` value `v`.
     #[must_use]
     pub fn of(&self, v: u32) -> Option<PixelFormat> {
-        self.map.iter().find(|(x, _)| *x == v).map(|(_, f)| *f)
+        self.map
+            .iter()
+            .find(|(x, _, _)| *x == v)
+            .map(|(_, f, _)| *f)
+    }
+
+    /// Does format `v` carry alpha (`A8…`, `A2…`)?
+    #[must_use]
+    pub fn has_alpha(&self, v: u32) -> bool {
+        self.map.iter().any(|(x, _, a)| *x == v && *a)
     }
 }
 
@@ -290,6 +307,162 @@ fn plan_block_linear(
     })
 }
 
+/// ★ One window's program for the compose kernel (`cuda/display/kf_scanout.ptx`, `kf_compose`):
+/// where to read (bounded), where it lands in the head's frame (clipped), and how it blends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LayerPlan {
+    /// The window.
+    pub window: u32,
+    /// Store offset the kernel reads from: the rectangle's first pixel (pitch) or the surface's
+    /// first block (block-linear).
+    pub src: u64,
+    /// Bytes from `src` the kernel may read.
+    pub extent: u64,
+    /// Block-linear (else pitch).
+    pub block_linear: bool,
+    /// Pitch in bytes (pitch), or GOBs per row (block-linear).
+    pub pitch: u32,
+    /// log2 GOBs per block (block-linear).
+    pub block_height_log2: u32,
+    /// The rectangle's first byte column and row (block-linear; 0 for pitch — `src` is there).
+    pub x0_bytes: u32,
+    /// Its first row.
+    pub y0: u32,
+    /// Pixels per row, after clipping to the output size and the frame.
+    pub width: u32,
+    /// Rows, likewise.
+    pub rows: u32,
+    /// Where the rectangle's first pixel lands in the frame.
+    pub ox: u32,
+    /// Its row in the frame.
+    pub oy: u32,
+    /// `bit0` the source has alpha, `bit1` swap red/blue, `bit2` opaque (store the source word).
+    pub flags: u32,
+    /// Source factor `as + bs * alpha / 255` and destination factor `ad + bd * alpha / 255`.
+    pub a_s: i32,
+    /// See `a_s`.
+    pub b_s: i32,
+    /// See `a_s`.
+    pub a_d: i32,
+    /// See `a_s`.
+    pub b_d: i32,
+}
+
+/// A `SET_COMPOSITION_FACTOR_SELECT` selector as `(a, b)` of `a + b * source_alpha / 255` (both
+/// selector tables share their encodings: `clc67e.h:215-264`); the frame below is opaque, so a
+/// `…_TIMES_DST` factor is its constant.
+fn factor(sel: u32, k1: i32, k2: i32) -> Option<(i32, i32)> {
+    Some(match sel {
+        0 => (0, 0),        // ZERO
+        1 => (255, 0),      // ONE
+        2 => (k1, 0),       // K1
+        3 => (k2, 0),       // K2
+        4 => (255 - k1, 0), // NEG_K1
+        5 => (0, k1),       // K1_TIMES_SRC
+        6 => (k1, 0),       // K1_TIMES_DST
+        7 => (255, -k1),    // NEG_K1_TIMES_SRC
+        8 => (255 - k1, 0), // NEG_K1_TIMES_DST
+        _ => return None,
+    })
+}
+
+/// ★ Plan window `s` of a `fw` x `fh` composition: [`plan`]'s bounds, then its position, clipping
+/// and blend. `Ok(None)` for a window wholly outside the frame.
+///
+/// # Errors
+/// [`plan`]'s refusals; a format the compose kernel cannot read (it moves 32-bit pixels); a
+/// composition factor it does not know.
+pub fn plan_layer(
+    s: &Scanout,
+    dma: &CtxDma,
+    formats: &ScanFormats,
+    fw: u32,
+    fh: u32,
+) -> Result<Option<LayerPlan>, Refused> {
+    let c = plan(s, dma, formats)?;
+    let no = |why: String| {
+        Err(Refused(format!(
+            "window {} head {}: {why}",
+            s.window, s.head
+        )))
+    };
+    let swap = match c.format {
+        PixelFormat::Xrgb8888 => false,
+        PixelFormat::Xbgr8888 => true,
+        f => {
+            return no(format!(
+                "{f:?} is not composable (the kernel moves 32-bit 8888 pixels)"
+            ));
+        }
+    };
+    if s.out_x >= fw || s.out_y >= fh {
+        return Ok(None);
+    }
+    let clip = |n: u32, out: u32, room: u32| n.min(if out == 0 { n } else { out }).min(room);
+    let width = clip(c.width, s.out_width, fw - s.out_x);
+    let rows = clip(c.rows, s.out_height, fh - s.out_y);
+    if width == 0 || rows == 0 {
+        return Ok(None);
+    }
+    let (k1, k2) = (
+        i32::try_from(s.k1.min(255)).unwrap_or(255),
+        i32::try_from(s.k2.min(255)).unwrap_or(255),
+    );
+    // ⊘ a window whose factor word was never programmed (both ZERO) would erase what lies below;
+    // NVKMS programs it with every flip (`UpdateComposition`), so an all-zero word is read as opaque
+    let (src_sel, dst_sel) = if s.src_factor == 0 && s.dst_factor == 0 {
+        (1, 0)
+    } else {
+        (s.src_factor, s.dst_factor)
+    };
+    let (Some((a_s, b_s)), Some((a_d, b_d))) = (factor(src_sel, k1, k2), factor(dst_sel, k1, k2))
+    else {
+        return no(format!(
+            "composition factors {:#x}/{:#x} are not known",
+            s.src_factor, s.dst_factor
+        ));
+    };
+    let alpha = formats.has_alpha(s.format);
+    let opaque = (a_s, b_s, a_d, b_d) == (255, 0, 0, 0);
+    let flags = u32::from(alpha) | (u32::from(swap) << 1) | (u32::from(opaque) << 2);
+    let (block_linear, pitch, bh, x0_bytes, y0, extent) = match c.layout {
+        SurfaceLayout::Pitch => (
+            false,
+            u32::try_from(c.src_pitch).map_err(|_| Refused("pitch".into()))?,
+            0,
+            0,
+            0,
+            u64::from(rows - 1) * c.src_pitch + u64::from(width) * 4,
+        ),
+        SurfaceLayout::BlockLinear {
+            gobs_per_row,
+            block_height_log2,
+            x0_bytes,
+            y0,
+            extent,
+        } => (true, gobs_per_row, block_height_log2, x0_bytes, y0, extent),
+    };
+    Ok(Some(LayerPlan {
+        window: s.window,
+        src: c.src,
+        extent,
+        block_linear,
+        pitch,
+        block_height_log2: bh,
+        x0_bytes,
+        y0,
+        width,
+        rows,
+        ox: s.out_x,
+        oy: s.out_y,
+        flags,
+        a_s,
+        b_s,
+        a_d,
+        b_d,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,6 +488,15 @@ mod tests {
             pitch: 7680 / 64,
             block_height_log2: 0,
             format: 0xE6,
+            out_x: 0,
+            out_y: 0,
+            out_width: 1920,
+            out_height: 1080,
+            depth: 255,
+            k1: 255,
+            k2: 0,
+            src_factor: 1,
+            dst_factor: 0,
         }
     }
 
@@ -488,5 +670,53 @@ mod tests {
         t.x = 1;
         t.width = 1919;
         assert!(why(t, dma).contains("4-byte words"));
+    }
+
+    /// ★ M3 composition: an opaque full-screen window is one opaque store per pixel; a premultiplied
+    /// ARGB overlay blends (`src*K1 + dst*(1 - K1*a)`), lands at its `POINT_OUT` and is clipped to
+    /// its output size and the frame; a window outside the frame is nothing.
+    #[test]
+    fn layers_are_positioned_clipped_and_blended() {
+        let f = formats();
+        let dma = vid(0x4000_0000, 64 << 20);
+        let full = plan_layer(&fb1080(), &dma, &f, 1920, 1080)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (full.width, full.rows, full.ox, full.oy),
+            (1920, 1080, 0, 0)
+        );
+        assert_eq!(full.flags, 4, "opaque, no alpha, no swap");
+        assert_eq!((full.src, full.pitch), (0x4001_0000, 7680));
+        assert_eq!(full.extent, 1079 * 7680 + 7680);
+        let mut o = fb1080();
+        (o.width, o.height, o.out_width, o.out_height) = (250, 250, 250, 250);
+        (o.out_x, o.out_y, o.format) = (100, 50, 0xCF); // A8R8G8B8
+        (o.src_factor, o.dst_factor, o.k1) = (2, 7, 255); // K1 / NEG_K1_TIMES_SRC: premultiplied
+        let l = plan_layer(&o, &dma, &f, 1920, 1080).unwrap().unwrap();
+        assert_eq!((l.ox, l.oy, l.width, l.rows), (100, 50, 250, 250));
+        assert_eq!(l.flags, 1, "alpha, blended");
+        assert_eq!((l.a_s, l.b_s, l.a_d, l.b_d), (255, 0, 255, -255));
+        (o.out_x, o.out_y) = (1800, 1000);
+        let c = plan_layer(&o, &dma, &f, 1920, 1080).unwrap().unwrap();
+        assert_eq!((c.width, c.rows), (120, 80), "clipped to the frame");
+        (o.out_x, o.out_y) = (1920, 0);
+        assert_eq!(plan_layer(&o, &dma, &f, 1920, 1080), Ok(None));
+        (o.out_x, o.src_factor) = (0, 9);
+        assert!(
+            plan_layer(&o, &dma, &f, 1920, 1080)
+                .unwrap_err()
+                .0
+                .contains("not known")
+        );
+        let mut r = fb1080();
+        r.format = 0xE8; // R5G6B5
+        r.pitch = 3840 / 64;
+        assert!(
+            plan_layer(&r, &dma, &f, 1920, 1080)
+                .unwrap_err()
+                .0
+                .contains("composable")
+        );
     }
 }

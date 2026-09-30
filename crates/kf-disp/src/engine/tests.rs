@@ -578,9 +578,10 @@ fn the_flip_event_is_raised_only_for_a_window_that_was_active() {
 #[test]
 fn a_head_scans_out_its_lowest_enabled_window() {
     let mut e = engine();
-    let sv = ScanVocab::resolve(t(), WIN).expect("GA10x window surfaces are context DMAs");
+    let sv =
+        ScanVocab::resolve(t(), WIN, IMM, CORE).expect("GA10x window surfaces are context DMAs");
     assert!(
-        ScanVocab::resolve(t(), 0xCA7E).is_none(),
+        ScanVocab::resolve(t(), 0xCA7E, 0xCA7B, 0xCA7D).is_none(),
         "GB20x names surfaces by address (M5)"
     );
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
@@ -651,4 +652,62 @@ fn a_running_head_lights_the_sor_that_names_it() {
         .m(m(CORE, "UPDATE"), 0);
     e.step(0, &c.bytes(), c.put(), &mut all_ok);
     assert_eq!(e.lit_sors(), vec![None; 4], "detached");
+}
+
+/// ★ M3: a head shows EVERY enabled window it owns, back to front by `DEPTH` (smaller is closer to
+/// the front), each where its window-immediate `SET_POINT_OUT` puts it, inside the head's
+/// `VIEWPORT_SIZE_IN` — weston puts its clients on the overlay window (`[measured m3g]`).
+#[test]
+fn a_head_composes_its_windows_back_to_front() {
+    let mut e = engine();
+    let sv = ScanVocab::resolve(t(), WIN, IMM, CORE).unwrap();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 2, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 3, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 3, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 1, 2);
+    c.m(ma(CORE, "WINDOW_SET_CONTROL", 3), 1)
+        .m(
+            ma(CORE, "HEAD_SET_VIEWPORT_SIZE_IN", 1),
+            (1080 << 16) | 1920,
+        )
+        .m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    let window = |iso: u32, depth: u32, w: u32, h: u32| {
+        let mut r = Ring::new();
+        r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), iso);
+        r.m(m(WIN, "SET_SIZE"), (h << 16) | w);
+        r.m(m(WIN, "SET_SIZE_IN"), (h << 16) | w);
+        r.m(m(WIN, "SET_SIZE_OUT"), (h << 16) | w);
+        r.m(
+            m(WIN, "SET_COMPOSITION_CONTROL"),
+            put(0, fl(WIN, "SET_COMPOSITION_CONTROL_DEPTH"), depth),
+        );
+        r.m(
+            m(WIN, "SET_PRESENT_CONTROL"),
+            put(0, fl(WIN, "SET_PRESENT_CONTROL_BEGIN_MODE"), 1),
+        );
+        r.m(m(WIN, "UPDATE"), 0);
+        r
+    };
+    let back = window(0xa0, 255, 1920, 1080);
+    let front = window(0xb0, 0, 250, 250);
+    e.step(3, &back.bytes(), back.put(), &mut all_ok);
+    e.step(4, &front.bytes(), front.put(), &mut all_ok);
+    let mut imm = Ring::new();
+    imm.m(ma(IMM, "SET_POINT_OUT", 0), (50 << 16) | 100)
+        .m(m(IMM, "UPDATE"), 0);
+    e.step(36, &imm.bytes(), imm.put(), &mut all_ok);
+    let comp = e.composition(&sv, 1).expect("head 1 shows two windows");
+    assert_eq!((comp.width, comp.height), (1920, 1080), "the viewport");
+    let order: Vec<u32> = comp.layers.iter().map(|l| l.window).collect();
+    assert_eq!(order, vec![2, 3], "deepest first");
+    let f = &comp.layers[1];
+    assert_eq!(
+        (f.out_x, f.out_y, f.out_width, f.out_height),
+        (100, 50, 250, 250)
+    );
+    assert_eq!(f.handle, 0xb0);
+    assert_eq!(e.composition(&sv, 0), None, "head 0 shows nothing");
 }
