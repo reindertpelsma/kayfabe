@@ -1,0 +1,67 @@
+S0_START 2026-09-30T17:57:30+00:00 rev=738c90e5
+BOX_RC=0
+DRIVER_RC=0
+TREE_RC=0
+LADDER_RC=0
+FG_RC=0
+KF3_RC=0
+READY driver=580.159.04
+STEP img_copy START 2026-09-30T18:06:31+00:00
+STEP img_copy RC=0 2026-09-30T18:06:38+00:00
+-rw-r--r-- 1 root root 6205603840 Sep 30 18:04 /workspace/bench/guest.qcow2
+-rw-r--r-- 1 root root 6205603840 Sep 30 18:06 /workspace/bench/guest_apps.qcow2
+STEP gfx_host START 2026-09-30T18:06:38+00:00
+STEP gfx_host RC=0 2026-09-30T18:07:06+00:00
+  gfx_host| NEEDRESTART-SVC: user@0.service
+  gfx_host| NEEDRESTART-SVC: user@0.service
+  gfx_host| BUILD_GFX_OK ba6b9be88d18
+  gfx_host| [2026-09-30T18:07:06+00:00] GFX_HOST_PROVISIONED=yes
+STEP bundle START 2026-09-30T18:07:06+00:00
+STEP bundle RC=0 2026-09-30T18:19:12+00:00
+  bundle| BUILD_clpeak=ok
+  bundle| BUILD_vkpeak=ok
+  bundle| BUNDLE 2.1G 1349697284B  sha=f25767eec17ed254
+  bundle| BUILD_BUNDLE_DONE
+BUNDLE 2.1G 1349697284B  sha=f25767eec17ed254
+STEP setup_host START 2026-09-30T18:19:12+00:00
+STEP setup_host RC=0 2026-09-30T18:22:28+00:00
+  setup_host| SETUP_blender=ok
+  setup_host| SETUP_geekbench=ok
+  setup_host| /dev/root       194G   54G  141G  28% /
+  setup_host| SETUP_SIDE_DONE
+SETUP_apt=ok
+SETUP_torch=ok
+SETUP_pylibs=ok
+IMPORT_OK 2.6.0+cu124 0.21.0+cu124 4.46.3 13.3.0
+HF_MODEL_CACHED
+SETUP_gguf=ok
+SETUP_blender=ok
+SETUP_geekbench=ok
+SETUP_SIDE_DONE
+STEP guest_apps START 2026-09-30T18:22:28+00:00
+STEP guest_apps RC=0 2026-09-30T18:31:40+00:00
+  guest_apps|   guest: SETUP_SIDE_DONE
+  guest_apps| 6.8.0-142-generic
+  guest_apps| 580.159.04
+  guest_apps| [2026-09-30T18:31:40+00:00] GUEST_APPS_DONE
+STEP gfx_guest START 2026-09-30T18:31:40+00:00
+STEP gfx_guest RC=0 2026-09-30T18:37:11+00:00
+  gfx_guest| kernel_before=6.8.0-142-generic
+  gfx_guest| kernel_after=6.8.0-142-generic
+  gfx_guest| provisioner_rev=738c90e5
+  gfx_guest| [2026-09-30T18:37:11+00:00] GUEST_GFX_DONE rc=0
+STEP gset_prov START 2026-09-30T18:37:11+00:00
+STEP gset_prov RC=0 2026-09-30T18:46:45+00:00
+  gset_prov| kernel_before=6.8.0-142-generic
+  gset_prov| kernel_after=6.8.0-142-generic
+  gset_prov| provisioner_rev=738c90e5
+  gset_prov| [gset-prov 2026-09-30T18:46:45+00:00] GSET_PROVISION_DONE rc=0
+GSET_PROVISIONED=yes
+date=2026-09-30T18:46:39+00:00
+image=/workspace/bench/guest.qcow2
+build_failures=0
+kernel_before=6.8.0-142-generic
+kernel_after=6.8.0-142-generic
+provisioner_rev=738c90e5
+/dev/root       194G   76G  119G  39% /
+S0_EXIT rc=0 2026-09-30T18:46:45+00:00
