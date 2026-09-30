@@ -53,6 +53,16 @@ const WAIT_MAX: u32 = kf_abi::uvmefs::UVM_EFS_MAX_WAIT_RECORDS;
 /// Ids per resolve (`UVM_EFS_MAX_RESOLVE_RECORDS`).
 const RESOLVE_MAX: usize = kf_abi::uvmefs::UVM_EFS_MAX_RESOLVE_RECORDS as usize;
 
+/// ★ `KF3_FAULTLOG=1` — a diagnostic timeline of the fault plane on the `KF3_MAPLOG` clock
+/// (`kf_mem::maplog::t`, host uptime seconds): every record delivered or cancelled, every guest
+/// op and the resolves it became, the host's parked/undelivered counts every 2 s, and every EFS
+/// map/unmap (`crate::mem::EfsMirror`). Default OFF; never a decision input.
+#[must_use]
+pub fn faultlog() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_FAULTLOG").is_some())
+}
+
 /// ★ One EFS file as the plane uses it — [`kf_host::efs::EfsSession`] on a host, a double in tests.
 pub trait EfsFile: Send + Sync {
     /// `UVM_EFS_WAIT`: up to `max` records, blocking at most `timeout_us`.
@@ -65,6 +75,10 @@ pub trait EfsFile: Send + Sync {
     /// # Errors
     /// The host's refusal, by name.
     fn resolve(&self, ids: &[u64], action: u32) -> Result<(u32, u32), String>;
+    /// The host's view of this file, one line (diagnostics only; `None` when unavailable).
+    fn query_line(&self) -> Option<String> {
+        None
+    }
 }
 
 impl EfsFile for kf_host::efs::EfsSession {
@@ -73,6 +87,13 @@ impl EfsFile for kf_host::efs::EfsSession {
     }
     fn resolve(&self, ids: &[u64], action: u32) -> Result<(u32, u32), String> {
         kf_host::efs::EfsSession::resolve(self, ids, action).map_err(|e| format!("{e:?}"))
+    }
+    fn query_line(&self) -> Option<String> {
+        let q = kf_host::efs::EfsSession::query(self).ok()?;
+        Some(format!(
+            "parked={} undelivered={} ctr={:?}",
+            q.num_parked, q.num_undelivered, q.counters
+        ))
     }
 }
 
@@ -545,7 +566,18 @@ impl FaultPlane {
 
     fn wait_loop(&self, key: VasKey, file: Arc<dyn EfsFile>, stop: Arc<AtomicBool>) {
         let mut errors = 0u64;
+        let mut last_q = (std::time::Instant::now(), String::new());
         while !stop.load(Ordering::Acquire) && !self.stop.load(Ordering::Acquire) {
+            if faultlog() && last_q.0.elapsed() >= std::time::Duration::from_secs(2) {
+                let q = file.query_line().unwrap_or_else(|| "query refused".into());
+                if q != last_q.1 {
+                    eprintln!(
+                        "kf3: faultlog t={:.6} EFSQ {key:?} {q}",
+                        kf_mem::maplog::t()
+                    );
+                }
+                last_q = (std::time::Instant::now(), q);
+            }
             match file.wait(WAIT_MAX, WAIT_US) {
                 Ok(recs) => {
                     self.counters
@@ -576,7 +608,7 @@ impl FaultPlane {
                 return;
             };
             sp.undelivered.extend(recs);
-            let cancel = self.drain_into_ring(buffer.as_ref(), sp);
+            let cancel = self.drain_into_ring(key, buffer.as_ref(), sp);
             (sp.file.clone(), cancel)
         };
         if !cancel.is_empty() {
@@ -586,7 +618,7 @@ impl FaultPlane {
 
     /// Under the plane lock: move `sp.undelivered` into the ring while it has room. Returns the ids
     /// to cancel.
-    fn drain_into_ring(&self, buffer: Option<&Buffer>, sp: &mut Space) -> Vec<u64> {
+    fn drain_into_ring(&self, key: VasKey, buffer: Option<&Buffer>, sp: &mut Space) -> Vec<u64> {
         let mut cancel = Vec::new();
         if sp.undelivered.is_empty() {
             return cancel;
@@ -642,6 +674,25 @@ impl FaultPlane {
                 cancel.push(rec.id);
                 continue;
             }
+            if faultlog() {
+                eprintln!(
+                    "kf3: faultlog t={:.6} DELIVER {key:?} id={:#x} addr={:#x} access={} mask={:#x} fault={} client_type={} client={} gpc={} utlb={} host_ve={} n={} -> slot {put} as inst {:#x} veid {}",
+                    kf_mem::maplog::t(),
+                    rec.id,
+                    rec.address,
+                    rec.access_type,
+                    rec.access_type_mask,
+                    rec.fault_type,
+                    rec.client_type,
+                    rec.client_id,
+                    rec.gpc_id,
+                    rec.utlb_id,
+                    rec.ve_id,
+                    rec.num_instances,
+                    who.inst_addr,
+                    who.veid
+                );
+            }
             sp.delivered.push(Delivered {
                 id: rec.id,
                 page: rec.address & !(PAGE - 1),
@@ -656,10 +707,26 @@ impl FaultPlane {
             // The shadow first, so a raise from either side finds the guest's read-back current.
             std::sync::atomic::fence(Ordering::SeqCst);
             sink.shadow(self.ring.put_off(), put);
-            if self.ring.publish_put(put) == Eval::Pending {
+            let ev = self.ring.publish_put(put);
+            if ev == Eval::Pending {
                 self.counters.put_raises.fetch_add(1, Ordering::Relaxed);
                 sink.raise(self.vector);
             }
+            if faultlog() {
+                eprintln!(
+                    "kf3: faultlog t={:.6} PUT {start}->{put} get={} {ev:?} held={}",
+                    kf_mem::maplog::t(),
+                    self.ring.get(),
+                    sp.undelivered.len()
+                );
+            }
+        }
+        if faultlog() && !cancel.is_empty() {
+            eprintln!(
+                "kf3: faultlog t={:.6} CANCEL-UNDELIVERABLE {key:?} {} id(s)",
+                kf_mem::maplog::t(),
+                cancel.len()
+            );
         }
         cancel
     }
@@ -667,7 +734,22 @@ impl FaultPlane {
     /// `RESOLVE(action)` of `ids`, in chunks. No lock held.
     fn resolve_now(&self, file: &dyn EfsFile, ids: &[u64], action: u32) {
         for chunk in ids.chunks(RESOLVE_MAX) {
-            match file.resolve(chunk, action) {
+            let t0 = std::time::Instant::now();
+            let r = file.resolve(chunk, action);
+            if faultlog() {
+                eprintln!(
+                    "kf3: faultlog t={:.6} RESOLVE {} {} id(s) -> {r:?} in {} us",
+                    kf_mem::maplog::t(),
+                    if action == UVM_EFS_ACTION_REPLAY {
+                        "REPLAY"
+                    } else {
+                        "CANCEL"
+                    },
+                    chunk.len(),
+                    t0.elapsed().as_micros()
+                );
+            }
+            match r {
                 Ok((_, stale)) => {
                     self.counters
                         .stale
@@ -709,6 +791,14 @@ impl FaultPlane {
                 match job {
                     Job::Op(op) => {
                         let plan = plan_op(&mut self.lock(), op);
+                        if faultlog() {
+                            eprintln!(
+                                "kf3: faultlog t={:.6} GUEST-OP {op:x?} -> {} host call(s) over {} id(s)",
+                                kf_mem::maplog::t(),
+                                plan.len(),
+                                plan.iter().map(|p| p.1.len()).sum::<usize>()
+                            );
+                        }
                         if plan.is_empty() {
                             self.counters.ops_empty.fetch_add(1, Ordering::Relaxed);
                         }

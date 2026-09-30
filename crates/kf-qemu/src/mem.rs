@@ -893,6 +893,20 @@ impl MapTarget for EfsMirror {
         let r = self.session.map(d.va, d.len, obj, d.off, d.perm);
         self.calls.maps.fetch_add(1, Ordering::Relaxed);
         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        if crate::faultplane::faultlog() {
+            eprintln!(
+                "kf3: faultlog t={:.6} EFSMAP space={:#x} va={:#x} len={:#x} {}+{:#x} kind={:#x} perm={:?} -> {r:?} in {} us",
+                kf_mem::maplog::t(),
+                self.session.vaspace(),
+                d.va,
+                d.len,
+                if d.ram { "ram" } else { "store" },
+                d.off,
+                d.kind,
+                d.perm,
+                t.elapsed().as_micros()
+            );
+        }
         r.map_err(|e| {
             format!(
                 "UVM map {:#x}+{:#x} (obj {obj:#x}+{:#x}): {e:?}",
@@ -920,6 +934,15 @@ impl MapTarget for EfsMirror {
         self.calls
             .unmap_ns
             .fetch_add(ns_since(t), Ordering::Relaxed);
+        if crate::faultplane::faultlog() {
+            eprintln!(
+                "kf3: faultlog t={:.6} EFSUNMAP space={:#x} va={:#x} len={:#x} -> {r:?}",
+                kf_mem::maplog::t(),
+                self.session.vaspace(),
+                va,
+                row.0
+            );
+        }
         r.map_err(|e| format!("UVM unmap {va:#x}+{:#x}: {e:?}", row.0))
     }
     fn invalidate(&self) -> Result<(), String> {
