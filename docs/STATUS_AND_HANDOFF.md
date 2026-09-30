@@ -44,6 +44,9 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
   - **`v3-ramobj` merged (2026-09-30):** kf3 no longer caches a transient "guest RAM not registered
     yet" for the VM's life — the cause of the one `--timer` failure in the `3f67ed95` bar (§4.9). Bar at
     `f442980e` on TU116: 1744/0, 9/9, bare 30/30, thin 30/30 (`traces/v3_ramobj/`).
+  - **Ada AD104 (RTX 4000 Ada) and Blackwell GB205 (RTX 5070) at this master (2026-09-30,
+    `traces/v3_families_master/`):** merge bar 1744/0 resp. 1742/0, gates 9/9, bare 30/30, thin 30/30;
+    CUDA ladder host 4/4 and guest 4/4 on both. Two dies not measured before.
   - **Turing at this master (2026-09-30, `traces/v3_turing_master/`):** GTX 1660 SUPER (TU116), merge
     bar at `1915bd71` (code `3f67ed95`): tests 1742/0, gates 9/9, bare 30/30, thin 30/30; CUDA ladder
     host 4/4 and guest 4/4.
@@ -188,7 +191,7 @@ master's code passed the same bar on a TU116, plus the CUDA ladder (`traces/v3_t
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
-| Families | GA10x (GA106/GA104/GA102) 30/30; Ada AD106 30/30; Blackwell GB203 (RTX 5080) 30/30 + CUDA ladder; floor-swept RTX 3060 Ti 30/30. TU116 (GTX 1660 SUPER) at master `1915bd71` (code `3f67ed95`, 2026-09-30): tests 1742/0, gates 9/9, bare 30/30, thin 30/30, CUDA ladder host 4/4 + guest 4/4 (`traces/v3_turing_master/`). GA100, Hopper, GB10x remain source-derived only; GA100/GB10B refused by name | [Turing recovery evidence](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md), `design/V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md` |
+| Families | GA10x (GA106/GA104/GA102) 30/30; Ada AD106 30/30, **AD104 (RTX 4000 Ada) at master 2026-09-30: bar + ladder 4/4**; Blackwell GB203 (RTX 5080) 30/30 + CUDA ladder, **GB205 (RTX 5070) at master 2026-09-30: bar + ladder 4/4** (`traces/v3_families_master/`); floor-swept RTX 3060 Ti 30/30. TU116 (GTX 1660 SUPER) at master `1915bd71` (code `3f67ed95`, 2026-09-30): tests 1742/0, gates 9/9, bare 30/30, thin 30/30, CUDA ladder host 4/4 + guest 4/4 (`traces/v3_turing_master/`). GA100, Hopper, GB10x remain source-derived only; GA100/GB10B refused by name | [Turing recovery evidence](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md), `design/V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md` |
 | Multi-GPU | distinct host GPUs in one VM work (8×3060 box); per-card BAR1 budget refused at realize | `design/V3_MULTI_GPU_AUDIT.md` |
 | CUDA apps | 60/65 at `4c48ca0c`, 6/6 stream probes, 100/100 processes; four UVM-demand-paging failures plus CDP child-launch failure. Not rerun at the latest integration revision | `design/V3_APP_MATRIX.md` §R3 |
 | Graphics / video | nvkvm-pv's headless graphics set + 15 more items: **38/38** on an RTX 3070 (31 byte-identical to bare metal; OFA optical flow advertised); NVENC/NVDEC byte-exact. Per-call GPU waits are slow on nested boxes (`glFinish` 62 vs 9 µs) | `design/V3_GFX_TESTSET.md` (display-phase list §7), `V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
