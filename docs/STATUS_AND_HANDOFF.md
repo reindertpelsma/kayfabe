@@ -38,6 +38,9 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
     display leftovers (cursor, scaled windows, 16-bit/YUV, the §7 display apps); the rest of the driver
     matrix (570 UVM first-channel wall; hosts 535/590/595/610); re-running the app and graphics matrices
     at this master; Turing on hardware.
+  - **CI at `fc2dadc4` (2026-09-30): all three jobs green**, including the **slow** job (the whole suite
+    with the soaks, `KAYFABE_SLOW=1`), dispatched as run 36760547434. First green slow run since the CI
+    repair; the scheduled runs of 09-28…09-30 had failed at pre-repair revisions.
   - **`v3-ramobj` merged (2026-09-30):** kf3 no longer caches a transient "guest RAM not registered
     yet" for the VM's life — the cause of the one `--timer` failure in the `3f67ed95` bar (§4.9). Bar at
     `f442980e` on TU116: 1744/0, 9/9, bare 30/30, thin 30/30 (`traces/v3_ramobj/`).
