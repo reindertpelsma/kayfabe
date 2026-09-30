@@ -164,20 +164,18 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     gq 'sudo systemctl stop lightdm; echo rc=$?' 60 > "$OUT/lightdm_stop.log"
 fi
 
-# 5. ★ M3 Wayland (DISPLAY_WESTON=1): with no X server holding the head — Vulkan straight to the
-#    display (VK_KHR_display), then weston on the DRM backend (nvidia-drm KMS -> the virtual engine)
+# 5. ★ M3 Wayland (DISPLAY_WESTON=1): with no X server holding the head —
+#    weston on the DRM backend (nvidia-drm KMS -> the virtual engine)
 #    with Vulkan and EGL clients presenting through it; graded by host screendumps
 if [ "${DISPLAY_WESTON:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
     gq 'sudo systemctl stop lightdm 2>/dev/null; sleep 2; echo ok' 30 > /dev/null
-    ( gq "sudo timeout 12 vkcube --wsi display --c 400 2>&1 | tail -12; echo RC=\${PIPESTATUS[0]}" 40 > "$OUT/vkcube_display.log" ) &
-    VP=$!; sleep 6; shot "$OUT/vk_display.ppm"; wait $VP
-    say "VKCUBE_DISPLAY $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/vkcube_display.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/vkcube_display.log")"
+    # (Ubuntu's vkcube is built without VK_KHR_display — `[measured m3f]` it has no --wsi option)
     gq "sudo rm -rf /run/kfw && sudo mkdir -m 700 /run/kfw && sudo sh -c 'XDG_RUNTIME_DIR=/run/kfw LIBSEAT_BACKEND=builtin nohup weston --backend=drm --continue-without-input --socket=kfw --log=/tmp/weston.log >/dev/null 2>&1 &' && echo started" 30 > "$OUT/weston_start.log"
     sleep 10
     WENV='sudo env XDG_RUNTIME_DIR=/run/kfw WAYLAND_DISPLAY=kfw'
     say "WESTON $(tr '\n' ' ' < "$OUT/weston_start.log") alive=$(gq 'pgrep -x weston >/dev/null && echo yes || echo no')"
     shot "$OUT/weston_1.ppm"
-    ( gq "$WENV timeout 12 vkcube --wsi wayland --c 400 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 40 > "$OUT/vkcube_wayland.log" ) &
+    ( gq "$WENV timeout 12 vkcube-wayland --c 400 2>&1 | tail -6; echo RC=\${PIPESTATUS[0]}" 40 > "$OUT/vkcube_wayland.log" ) &
     VP=$!; sleep 6; shot "$OUT/weston_vkcube.ppm"; wait $VP
     say "VKCUBE_WAYLAND $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/vkcube_wayland.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/vkcube_wayland.log")"
     ( gq "$WENV timeout 10 weston-simple-egl 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/simple_egl.log" ) &
@@ -185,7 +183,7 @@ if [ "${DISPLAY_WESTON:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; 
     say "SIMPLE_EGL $(tail -2 "$OUT/simple_egl.log" | tr '\n' ' ')"
     gq 'sudo tail -120 /tmp/weston.log' 30 > "$OUT/weston.log"
     gq 'sudo pkill -x weston; echo ok' 30 > /dev/null
-    for f in vk_display weston_1 weston_vkcube weston_egl; do
+    for f in weston_1 weston_vkcube weston_egl; do
         [ -s "$OUT/$f.ppm" ] && say "SHOT $f md5=$(md5sum < "$OUT/$f.ppm" | cut -c1-12)" || say "SHOT $f absent"
     done
     say "WESTON_GPU_PROGRESS_ERRORS=$(gq 'sudo dmesg | grep -c "waiting for GPU progress"')"
