@@ -41,7 +41,8 @@ fix this file. Entries below the first are dated history.
   - **CI flake (2026-09-30):** GitHub CI failed once at `8644e477` (a README-only commit) in
     `kf-util`'s `a_blocking_section_outside_a_trap_is_not_a_violation_and_is_not_recorded`: it compared a
     process-global row count that a parallel sibling test writes to (run 36771653449: before 1, after 3).
-    Test-only fix on branch **`v3-flakefix`** (`101b1f7e`, kf-util 55/55 locally) — merge it first on Friday.
+    Test-only fix `101b1f7e` (`v3-flakefix`, inside `#[cfg(test)]`, CI green) — ★ MERGED the same evening
+    after the flake hit master twice more (`baba8084`, `c51b43cc`; the same SHAs passed on v3).
   - **Durability:** everything is on GitHub. The dev host's local-only branches and two uncommitted Codex
     worktrees are backed up as `backup/host-2026-09-30/*` (13 branches, secret-scanned, not reviewed). Two
     unpushable research-repo corrections are `archive/nvkvm-unpushed-2026-09-30/`. **All vast boxes are
