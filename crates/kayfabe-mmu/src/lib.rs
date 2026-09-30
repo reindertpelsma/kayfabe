@@ -2031,11 +2031,10 @@ mod the_epoch_a_vcpu_may_read {
     fn a_content_change_moves_the_global_epoch() {
         let before = any_table_change_epoch();
         let mut t = AddressTable::owned_by(PDB);
-        assert_eq!(
-            any_table_change_epoch(),
-            before,
-            "constructing a table changes no content, so it must not move the epoch"
-        );
+        // ⊘ Not "the GLOBAL epoch did not move": the epoch is process-global and other tests
+        // move it in parallel (CI run 36777795448: 54 vs 53), and over-reporting is allowed
+        // anyway (above). What construction must not do is change THIS table's content.
+        assert_eq!(t.generation(), 0, "constructing a table changes no content");
 
         // The same act `taddr_generation_moves_exactly_on_a_content_change` uses as its
         // positive control, so the two tests cannot disagree about what a change is.
