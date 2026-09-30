@@ -437,8 +437,10 @@ impl DisplayPlane {
 
     /// ★★ **THE vCPU PATH** for a write in the display aperture. Lock-free: atomics, shadow stores,
     /// at most one eventfd write. `store` stores a 32-bit shadow word; `plain` stores the guest's
-    /// write at its own width.
-    pub fn trap_write(&self, off: u64, val: u64, width: u8, store: &dyn Fn(u64, u32), plain: &dyn Fn(u64, u64, u8)) {
+    /// write at its own width. Returns `true` when the write ENABLED an event that is already pending
+    /// — the caller then raises the display interrupt, as a level-triggered source would.
+    #[must_use]
+    pub fn trap_write(&self, off: u64, val: u64, width: u8, store: &dyn Fn(u64, u32), plain: &dyn Fn(u64, u64, u8)) -> bool {
         self.counters.writes.fetch_add(1, Ordering::Relaxed);
         #[allow(clippy::cast_possible_truncation)]
         let v = val as u32;
@@ -463,9 +465,13 @@ impl DisplayPlane {
             DispWrite::Event(r) => {
                 self.ports.guest_write(r, v);
                 self.publish_events(store);
+                if let EventReg::HeadTimingEn(h) = r {
+                    return self.ports.rm_head_timing(h) != 0;
+                }
             }
             DispWrite::Plain => plain(off, val, width),
         }
+        false
     }
 
     /// ★ Publish every event register and the ISR's derived summary registers — from any thread.
@@ -642,6 +648,7 @@ impl Device {
             return;
         }
         let trace = std::env::var("KF3_DISPLAY_TRACE").is_ok_and(|v| v == "1");
+        engine.trace = trace;
         eprintln!("kf3: display worker up — engine {} heads / {} windows, caps page published", dp.map.heads, dp.map.windows);
         let store = |o: u64, v: u32| self.shadow_store(o, u64::from(v), 4);
         let mut io = Io { dev: self, dp, gpu, layout, inst: None, img: None, notifier_finished, refusals_logged: 0 };
@@ -796,6 +803,9 @@ impl Device {
                             io.write(dma, offset + 4, &n[4..16])?;
                             io.write(dma, offset, &io.notifier_finished.to_le_bytes())
                         });
+                        if trace {
+                            eprintln!("kf3: display: TRACE notify chn {chn} handle {handle:#x} +{offset:#x} awaken={awaken} -> {r:?}");
+                        }
                         match r {
                             Ok(()) => {
                                 dp.counters.notifies.fetch_add(1, Ordering::Relaxed);
@@ -816,6 +826,9 @@ impl Device {
                             let b = value.to_le_bytes();
                             io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
                         });
+                        if trace {
+                            eprintln!("kf3: display: TRACE release chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} -> {r:?}");
+                        }
                         match r {
                             Ok(()) => {
                                 dp.counters.releases.fetch_add(1, Ordering::Relaxed);
@@ -845,7 +858,12 @@ impl Device {
                             eprintln!("kf3: display: head {} {} raster {}x{} period {} us", m.head, if active { "ACTIVE" } else { "idle" }, m.raster.0, m.raster.1, m.period_ns / 1000);
                         }
                     }
-                    Effect::Latched { .. } => {}
+                    Effect::Latched { window } => {
+                        if trace {
+                            eprintln!("kf3: display: TRACE window {window} latched");
+                        }
+                    }
+                    Effect::Trace(line) => eprintln!("kf3: display: TRACE {line}"),
                     Effect::Exception { chn, at, what } => {
                         dp.counters.exceptions.fetch_add(1, Ordering::Relaxed);
                         eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");

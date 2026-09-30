@@ -99,6 +99,8 @@ pub enum Effect {
         /// Window index.
         window: u32,
     },
+    /// A trace line (only when [`Engine::trace`] is on).
+    Trace(String),
     /// Channel `chn` stopped at byte `at`: the named reason. Nothing after it is executed.
     Exception {
         /// Channel number.
@@ -215,6 +217,9 @@ pub struct Vocab {
     w_acq_mode: (u8, u8),
     w_acq_value: u32,
     w_acq_value_hi: Option<u32>,
+    /// The window's first ISO surface word — a context DMA handle (C5x–C9x) or the surface address's
+    /// low word with its ENABLE bit (CAx): non-zero iff the window scans a surface.
+    w_iso0: u32,
     // window-immediate and cursor
     i_update: u32,
     i_ilk_window: (u8, u8),
@@ -301,6 +306,10 @@ impl Vocab {
             w_acq_mode: f(win, "SET_ACQ_SEMAPHORE_CONTROL_ACQ_MODE")?,
             w_acq_value: v(win, "SET_ACQ_SEMAPHORE_VALUE")?,
             w_acq_value_hi: t.v(win, "SET_ACQ_SEMAPHORE_VALUE_HI"),
+            w_iso0: t
+                .a(win, "SET_CONTEXT_DMA_ISO", 0)
+                .or_else(|| t.a(win, "SET_SURFACE_ADDRESS_LO_ISO", 0))
+                .ok_or_else(|| miss(&format!("NV{win:04X}_SET_CONTEXT_DMA_ISO(0) / SET_SURFACE_ADDRESS_LO_ISO(0)")))?,
             i_update: v(imm, "UPDATE")?,
             i_ilk_window: f(imm, "UPDATE_INTERLOCK_WITH_WINDOW")?,
             k_update: v(cur, "UPDATE")?,
@@ -410,6 +419,8 @@ pub struct Engine {
     pub methods: u64,
     /// Exceptions raised (boot log).
     pub exceptions: u64,
+    /// Emit [`Effect::Trace`] lines (update arrivals, groups, latches).
+    pub trace: bool,
 }
 
 impl Engine {
@@ -424,6 +435,7 @@ impl Engine {
             updates: 0,
             methods: 0,
             exceptions: 0,
+            trace: false,
         }
     }
 
@@ -619,6 +631,9 @@ impl Engine {
                 let ilk = interlock_set(&vocab, c, l.write.data);
                 c.stage = Stage::Interlock { update: l.write.data, ilk };
                 c.get = l.header;
+                if self.trace {
+                    st.effects.push(Effect::Trace(format!("chn {n} UPDATE {:#x} at {:#x} waits for {ilk:#x}", l.write.data, l.header)));
+                }
                 return any;
             }
             c.assy[(m / 4) as usize] = l.write.data;
@@ -701,6 +716,9 @@ impl Engine {
                 c.stage = Stage::Latch { update, head: park, group: set };
             }
         }
+        if self.trace {
+            st.effects.push(Effect::Trace(format!("group {group:?} ready, latch {}", park.map_or("now".to_string(), |h| format!("at head {h}'s vblank")))));
+        }
         if park.is_none() {
             self.latch_group(group, st, acquired);
         }
@@ -723,12 +741,30 @@ impl Engine {
             }
         }
         let heads_before = self.heads_armed();
-        for &n in &members {
-            self.complete(n, st);
+        // ★ A window's flip raises its FLIP event (AWAKEN) only if the window was scanning a surface on
+        // an active head BEFORE this update: nvidia-drm queues events only for "planes which were
+        // active previously" — "Hardware generates flip event for only those planes"
+        // (`ogkm-580: kernel-open/nvidia-drm/nvidia-drm-modeset.c:93-135`), and WARNs on any other
+        // (`[measured m1b]` the first fbdev modeset: `WARN_ON(nv_flip == NULL)`). Snapshotted before
+        // any member of the group — the core among them — is armed.
+        let was_active: Vec<(u32, bool)> = members.iter().map(|n| (*n, self.window_was_active(*n, &heads_before))).collect();
+        if self.trace {
+            st.effects.push(Effect::Trace(format!("latch {members:?} (previously active: {was_active:?})")));
+        }
+        for &(n, active) in &was_active {
+            self.complete(n, active, st);
         }
         if self.heads_armed() != heads_before {
             st.effects.push(Effect::Heads);
         }
+    }
+
+    /// Was channel `n` a window scanning a surface on an active head (per `heads`)?
+    fn window_was_active(&self, n: u32, heads: &[HeadMode]) -> bool {
+        let Some(c) = self.chans.get(n as usize).and_then(|c| c.as_ref()) else { return false };
+        c.kind == ChannelKind::Window
+            && c.armed(self.vocab.w_iso0) != 0
+            && self.owner_head(c.instance).is_some_and(|h| heads.iter().any(|m| m.head == h && m.period_ns > 0))
     }
 
     /// The acquire a window's pending flip waits on, if any.
@@ -757,7 +793,9 @@ impl Engine {
     }
 
     /// ★ Complete channel `n`'s update: ARM, then state its completions, then consume the UPDATE.
-    fn complete(&mut self, n: u32, st: &mut Step) {
+    /// `was_active`: a window that scanned a surface on an active head before the update (only then
+    /// does its notifier raise the flip event).
+    fn complete(&mut self, n: u32, was_active: bool, st: &mut Step) {
         let v = self.vocab.clone();
         let Some(c) = self.chans.get_mut(n as usize).and_then(|c| c.as_mut()) else { return };
         let Stage::Latch { .. } = c.stage else { return };
@@ -814,7 +852,7 @@ impl Engine {
                         client: c.client,
                         handle,
                         offset: u64::from(fld(ctl, v.n_offset)) * 16,
-                        awaken: fld(ctl, v.n_mode) == v.n_mode_awaken,
+                        awaken: was_active && fld(ctl, v.n_mode) == v.n_mode_awaken,
                     });
                 }
             }

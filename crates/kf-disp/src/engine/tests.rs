@@ -228,8 +228,9 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
     let s = e.vblank(1, &mut |a: &Acquire| a.satisfied_by(sem));
     assert!(s.effects.is_empty(), "another head's vblank latches nothing");
     let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
+    // the window had no surface before this flip: the notifier is written, the flip EVENT is not
     match s.effects.as_slice() {
-        [Effect::Latched { window: 0 }, Effect::Release { handle: 0xcafe_0b00, offset: 64, value: 0xd00d_d00d, wide: false, .. }, Effect::Notify { chn: 1, handle: 0xcafe_00f0, offset: 16, awaken: true, .. }] => {}
+        [Effect::Latched { window: 0 }, Effect::Release { handle: 0xcafe_0b00, offset: 64, value: 0xd00d_d00d, wide: false, .. }, Effect::Notify { chn: 1, handle: 0xcafe_00f0, offset: 16, awaken: false, .. }] => {}
         other => panic!("{other:?}"),
     }
     assert!(s.gets.contains(&(1, 1, w.put())));
@@ -349,4 +350,41 @@ fn a_jump_only_pass_moves_get_to_its_target() {
     let s = e.step(0, &bytes(&ring), 8, &mut all_ok);
     assert_eq!(s.gets, vec![(0, 1, 8)]);
     assert_eq!(e.exceptions, 0);
+}
+
+/// ★ `[measured m1b]` nvidia-drm queues a flip event only for planes that were active before the
+/// commit ("Hardware generates flip event for only those planes which were active previously",
+/// `nvidia-drm-modeset.c:93-135`). So: the first flip of a window (no surface before) writes its
+/// notifier but raises no AWAKEN; the next flip, with the window scanning on an active head, does.
+#[test]
+fn the_flip_event_is_raised_only_for_a_window_that_was_active() {
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 1).m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    let flip = |w: &mut Ring, surface: u32| {
+        w.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), surface);
+        w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0x99);
+        w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(0, fl(WIN, "SET_NOTIFIER_CONTROL_MODE"), 1));
+        w.m(m(WIN, "SET_INTERLOCK_FLAGS"), put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1));
+        w.m(m(WIN, "UPDATE"), 0);
+    };
+    // the modeset's own window update (interlocked with the core): no surface before -> no event
+    let mut w = Ring::new();
+    flip(&mut w, 0x5000);
+    let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    assert!(s.effects.iter().any(|x| matches!(x, Effect::Notify { chn: 1, awaken: false, .. })), "{:?}", s.effects);
+    // a plain flip now: previously active -> the event
+    let at = w.put();
+    w.m(m(WIN, "SET_INTERLOCK_FLAGS"), 0);
+    w.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x6000);
+    w.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    assert!(s.effects.is_empty(), "parked for vblank");
+    let _ = at;
+    let s = e.vblank(0, &mut all_ok);
+    assert!(s.effects.iter().any(|x| matches!(x, Effect::Notify { chn: 1, awaken: true, .. })), "{:?}", s.effects);
 }

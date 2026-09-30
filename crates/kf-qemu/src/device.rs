@@ -983,7 +983,10 @@ impl Device {
         if let Some(dp) = self.display
             && dp.map.owns(off)
         {
-            dp.trap_write(off, val, width, &|o, v| self.shadow_store(o, u64::from(v), 4), &|o, v, w| self.shadow_store(o, v, w));
+            if dp.trap_write(off, val, width, &|o, v| self.shadow_store(o, u64::from(v), 4), &|o, v, w| self.shadow_store(o, v, w)) {
+                dp.counters.irqs.fetch_add(1, Ordering::Relaxed);
+                self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
+            }
             return;
         }
         // ★ The BAR0 doorbell is live on EVERY family — on Hopper+ too: RM rings kernel channels
@@ -1866,7 +1869,22 @@ impl Device {
             ic.raised.load(o),
             ic.held.load(o),
             ic.out_of_range.load(o)
-        );
+        ) + &self.display.map_or_else(String::new, |dp| {
+            let d = &dp.counters;
+            format!(
+                " disp[writes={} puts={} methods={} updates={} notifies={} releases={} vblanks={} irqs={} exceptions={} refused={}]",
+                d.writes.load(o),
+                dp.ports.puts_posted.load(o),
+                d.methods.load(o),
+                d.updates.load(o),
+                d.notifies.load(o),
+                d.releases.load(o),
+                d.vblanks.load(o),
+                d.irqs.load(o),
+                d.exceptions.load(o),
+                d.refused.load(o)
+            )
+        });
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,
