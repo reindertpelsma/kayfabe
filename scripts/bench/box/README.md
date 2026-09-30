@@ -71,6 +71,10 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF
 
 - Wait for the `EXIT` line, never for "the file stopped growing": a killed job and a running one look the
   same (see CLAUDE.md's operational traps).
+- ⊘ `FG_RC=1` with "nbd0p1 … would not mount": the fat-guest image's ext4 journals need recovery after a
+  guest that did not shut down cleanly (`dmesg`: "recovery required on readonly filesystem"). Connect it
+  read-write with `qemu-nbd` and run `e2fsck -p` on the root AND /boot partitions, then rebuild. Never
+  promote on a suite that ran a stale initrd when the raw-client crates changed.
 - A merge to master needs `TESTS … failed 0`, `V3_GATES_SUMMARY pass=9`, `KF3_RC=0`,
   `FAST_SUITE_PASS=30` on the **exact revision** promoted (docs-only commits on top are fine; say so).
 - *[2026-09-27]* A `REBOOT_NEEDED` line in `prov.log` means an unattended upgrade installed a kernel
