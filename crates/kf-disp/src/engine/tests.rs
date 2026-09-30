@@ -320,3 +320,33 @@ fn acquire_modes() {
     assert!(a(2, 5, true).satisfied_by(5));
     assert!(!a(9, 5, true).satisfied_by(5), "an unknown mode never holds");
 }
+
+/// ★ `[measured m1a]` NVKMS kicks PUT to the end of the ring, then writes the wrap JUMP there and
+/// kicks PUT = 0: that pass decodes no method at all, and GET must still follow the JUMP to 0 —
+/// otherwise NVKMS, filling the ring from 0 up to just below the stuck GET, waits forever
+/// (`Error while waiting for GPU progress: 0x0000c67d:0 2:0:4040:4032`).
+#[test]
+fn a_jump_only_pass_moves_get_to_its_target() {
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    let m0 = ma(CORE, "HEAD_SET_VIEWPORT_POINT_IN", 0);
+    let mut ring = vec![0u32; 1024];
+    let mut at = 0usize;
+    while at + 8 <= 4040 {
+        ring[at / 4] = (1 << 18) | m0;
+        ring[at / 4 + 1] = at as u32;
+        at += 8;
+    }
+    let bytes = |r: &Vec<u32>| -> Vec<u8> { r.iter().flat_map(|w| w.to_le_bytes()).collect() };
+    let s = e.step(0, &bytes(&ring), at as u32, &mut all_ok);
+    assert_eq!(s.gets, vec![(0, 1, at as u32)]);
+    ring[at / 4] = 1 << 29; // JUMP 0
+    let s = e.step(0, &bytes(&ring), 0, &mut all_ok);
+    assert_eq!(s.gets, vec![(0, 1, 0)], "GET follows the JUMP");
+    // and the next pass runs from the ring's start
+    ring[0] = (1 << 18) | m0;
+    ring[1] = 7;
+    let s = e.step(0, &bytes(&ring), 8, &mut all_ok);
+    assert_eq!(s.gets, vec![(0, 1, 8)]);
+    assert_eq!(e.exceptions, 0);
+}

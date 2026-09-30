@@ -37,6 +37,14 @@ card=$(gq 'for c in /sys/class/drm/card[0-9]*; do [ -e "$c/device/driver" ] && b
 card=${card:-/dev/dri/card0}
 gq "sudo ~/display/kfdisp_probe list $card" > "$OUT/list.log"
 grep '^KFDISP_' "$OUT/list.log" | sed 's/^/DISPLAY_/'
+# ★ M1 evidence (V3_DISPLAY.md §5): the stock tools' own view of the KMS device, and the guest's
+# display state as nvidia-smi reports it; the GPU-progress wait errors counted (the m1 grade needs 0)
+gq "sudo modetest -M nvidia-drm -c 2>&1 | head -60" 60 > "$OUT/modetest_c.log"
+gq "sudo modetest -M nvidia-drm -p 2>&1 | head -80" 60 > "$OUT/modetest_p.log"
+gq "nvidia-smi -q 2>&1 | grep -iA2 'display' | head -20" 60 > "$OUT/smi_display.log"
+say "MODETEST_CONNECTED=$(grep -c '[[:space:]]connected[[:space:]]' "$OUT/modetest_c.log") modes_1080p=$(grep -c '1920x1080' "$OUT/modetest_c.log")"
+say "SMI_DISPLAY $(tr '\n' ' ' < "$OUT/smi_display.log" | tr -s ' ' | head -c 300)"
+say "GPU_PROGRESS_ERRORS=$(gq 'sudo dmesg | grep -c "waiting for GPU progress"')"
 grep -q '^KFDISP_SUMMARY connected=[1-9]' "$OUT/list.log" && say "CONNECTED=yes card=$card" || { say "CONNECTED=no card=$card"; exit 0; }
 
 # 3. set a mode from a known pattern, flip, and grade the host's screendump

@@ -544,6 +544,13 @@ impl Engine {
         if !over {
             c.queue.extend(groups);
             c.decoded = end;
+            // ⊘ A pass that decodes NO write (the wrap JUMP NVKMS writes at the end of the ring, NOPs,
+            // SET_SUBDEVICE_MASK) still moves the fetch pointer: GET follows it, or NVKMS — which
+            // waits for GET to pass its PUT after a wrap (`nvEvoMakeRoom`) — waits forever
+            // (`[measured m1a]` GET 4040 : PUT 4032, the JUMP's own offset).
+            if c.queue.is_empty() {
+                c.get = c.decoded;
+            }
         }
         if over || err.is_some() {
             let what = match err {

@@ -120,6 +120,11 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
     ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
     ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
+    // ★ M1 (`[measured m1a]` the ledger held 0x20800a76 after nvidia-drm's fbdev took the console):
+    // the VGA console save/restore around a console switch (`unix_console.c:74-140`). Our virtual
+    // engine has no VGA console and no VBIOS mode to save: `bReturnEarly`, nothing to restore.
+    ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE", "pre_console"),
+    ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE", "echo"),
 ];
 
 /// The display classes a chip lists (a copy of the chip row's, so this crate owns its inputs).
@@ -784,6 +789,11 @@ impl DisplayModel {
                 p.set("channelState", state);
                 Ok(p.buf)
             }
+            "pre_console" => {
+                let mut p = self.view("NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS", params)?;
+                p.set("bReturnEarly", 1);
+                Ok(p.buf)
+            }
             "mode_possible" => {
                 // A virtual head has no isochronous memory pool to exhaust: every mode NVKMS validated
                 // against the EDID and the pixel-clock limit is possible. The bandwidth numbers are
@@ -1075,7 +1085,7 @@ mod tests {
         let m = model();
         let set = m.claimed();
         assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
-        assert_eq!(set.len(), 36);
+        assert_eq!(set.len(), 38);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));

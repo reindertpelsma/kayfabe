@@ -839,16 +839,8 @@ mod tests {
             .chain(0x2080_0a00..0x2080_0b00)
             .filter(|c| p.claims(*c))
             .collect();
-        assert_eq!(
-            claimed.len(),
-            30 + 6,
-            "the NVKMS bring-up set and the six internal controls"
-        );
-        assert_eq!(
-            claimed.iter().copied().collect::<BTreeSet<u32>>(),
-            *p.claimed(),
-            "nothing claimed outside the set"
-        );
+        assert_eq!(claimed.len(), 32 + 6, "the NVKMS bring-up set (with the console pair) and the six internal controls");
+        assert_eq!(claimed.iter().copied().collect::<BTreeSet<u32>>(), *p.claimed(), "nothing claimed outside the set");
         for cmd in &claimed {
             let r = p
                 .respond(&control(*cmd, SERIALIZED, &[0; 16]))
