@@ -1,0 +1,64 @@
+=== boot_capture tag=ap_cdpfix_090b20d9_b1 at 2026-09-30T18:16:35+00:00 ===
+=== source revision: 090b20d9 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88591048 Sep 30 18:12 /workspace/bench/kf3-bins/090b20d9/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kf-cdp/scripts/bench/boot_nvkvm.sh  sha256=0f19b0c944f9e441
+    used: /root/kf-cdp/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Sep 30 18:16:55 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 30 18:16 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 30 18:16 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 30 18:16 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 30 18:16 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 30 18:16 .
+drwxr-xr-x 18 root root   4000 Sep 30 18:16 ..
+cr--------  1 root root 240, 1 Sep 30 18:16 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 30 18:16 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kf-cdp/scripts/apps/apps_hook.sh at 2026-09-30T18:16:59+00:00 ===
+APPS_HOOK tag=ap_cdpfix_090b20d9_b1 apps=[cdpSimpleQuicksort] guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled
+APPS_GUEST_DRM rc=0 4 
+APPRES side=guest app=cdpSimpleQuicksort verdict=PASS rc=0 secs=7 quiet=1 note=- boot=ap_cdpfix_090b20d9_b1 guest_xid=0 kf3_lines=1150 kf3_refusals=11
+APPS_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=76
+GUEST_DMESG_AFTER_NVRM=70
+GUEST_DMESG_WORKLOAD_DELTA=48
+=== HOST dmesg delta for this boot (watermark 1534 → 1534) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

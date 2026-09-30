@@ -1,0 +1,4 @@
+records: A=443 B=443   opcode-aligned ratio=1.000000
+symbols: A handles=110 ptrs=142   B handles=110 ptrs=142
+classification census: {'handle': 856, 'ptr': 617, 'addrlike': 169}
+RESULT: NO DIVERGENCE (after canonicalisation)

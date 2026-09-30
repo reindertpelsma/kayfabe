@@ -1,0 +1,128 @@
+JOB_START cdpC 2026-09-30T18:12:34+00:00
+090b20d9 scripts/cdp: cdpSimpleQuicksort at a chosen size (qs:N) on bare metal and in the guest
+BUILD rc=0 secs=24
+KF3_BUILT /workspace/bench/kf3-bins/090b20d9/qemu-system-x86_64 rev=090b20d9 mtime=2026-09-30 18:12:59.021051245 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+CDPH_START 2026-09-30T18:12:59+00:00 tag=host_b runs=[qs:1000 qs:10000] scripts=090b20d9 host_driver=580.159.04
+/root/kf-cdp/scripts/cdp/cdp_probe.cu(88): warning #550-D: variable "te" was set but never used
+    double tp = -1, tc = -1, te = -1, tq = -1, tev = -1;
+                             ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+CDP_BUILD ok probe=fb7b85fa1aa0 shim=0b6d172be1f5 src=d788df89fef2
+=== host cdpSimpleQuicksort -num_items=1000 2026-09-30T18:13:01+00:00
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Initializing data:
+Running quicksort on 1000 elements
+Launching kernel on the GPU
+Validating results: OK
+rc=0
+=== host cdpSimpleQuicksort -num_items=10000 2026-09-30T18:13:03+00:00
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Initializing data:
+Running quicksort on 10000 elements
+Launching kernel on the GPU
+Validating results: OK
+rc=0
+host kernel log since start: 1 lines, 0 Xid
+CDPH_EXIT rc=0 2026-09-30T18:13:06+00:00
+CDPG_START 2026-09-30T18:13:06+00:00 bin=/workspace/bench/kf3-bins/090b20d9/qemu-system-x86_64 tag=gfix_a runs=[4:auto:1 1:auto 2:auto 3:auto 4:spin 4:block 0:auto:1 qs qs:1000 qs:10000] scripts=090b20d9
+/root/kf-cdp/scripts/cdp/cdp_probe.cu(88): warning #550-D: variable "te" was set but never used
+    double tp = -1, tc = -1, te = -1, tq = -1, tev = -1;
+                             ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+CDP_BUILD ok probe=054eea5e6f8c shim=0b6d172be1f5 src=d788df89fef2
+boot_capture rc=0; kf3 rev stamp: /workspace/apps/results/cdpp/gfix_a/boot.driver.log:kf3-bin-rev:090b20d9
+host kernel log since start: 1 lines, 0 Xid
+=== CDPH run mode=4 sched=auto trace=1 2026-09-30T18:14:28+00:00
+CDPP mode=4 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.060 t_child=0.060 t_streamquery_ok=0.060 t_eventquery_ok=0.060 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=auto OK
+rc=0
+=== CDPH run mode=1 sched=auto trace=0 2026-09-30T18:14:36+00:00
+CDPP mode=1 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.044 t_child=0.044 t_streamquery_ok=0.047 t_eventquery_ok=0.047 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=1 sched=auto OK
+rc=0
+=== CDPH run mode=2 sched=auto trace=0 2026-09-30T18:14:39+00:00
+CDPP mode=2 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.046 t_child=0.046 t_streamquery_ok=0.046 t_eventquery_ok=0.046 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=2 sched=auto OK
+rc=0
+=== CDPH run mode=3 sched=auto trace=0 2026-09-30T18:14:42+00:00
+CDPP mode=3 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.040 t_child=0.040 t_streamquery_ok=0.040 t_eventquery_ok=0.040 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=3 sched=auto OK
+rc=0
+=== CDPH run mode=4 sched=spin trace=0 2026-09-30T18:14:46+00:00
+CDPP mode=4 sched=spin setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.045 t_child=0.045 t_streamquery_ok=0.045 t_eventquery_ok=0.045 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=spin OK
+rc=0
+=== CDPH run mode=4 sched=block trace=0 2026-09-30T18:14:49+00:00
+CDPP mode=4 sched=block setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=1 parent_end=1 | t_parent_end=0.045 t_child=0.045 t_streamquery_ok=0.045 t_eventquery_ok=0.045 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0xc0ffee memcpy=0
+CDPP RESULT mode=4 sched=block OK
+rc=0
+=== CDPH run mode=0 sched=auto trace=1 2026-09-30T18:14:52+00:00
+CDPP mode=0 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.045 t_child=-1.000 t_streamquery_ok=0.045 t_eventquery_ok=0.045 (-1 = not within 5 s)
+CDPP sync err=0 took=0.000 s
+CDPP out[0]=0xbeef out[1]=0 memcpy=0
+CDPP RESULT mode=0 sched=auto OK
+rc=0
+=== CDPH cdpSimpleQuicksort (default) 2026-09-30T18:14:56+00:00
+QS GPU Device 0: "Ampere" with compute capability 8.6
+QS 
+QS Initializing data:
+QS Running quicksort on 128 elements
+QS Launching kernel on the GPU
+QS Validating results: OK
+QS rc=0
+=== CDPH cdpSimpleQuicksort -num_items=1000 2026-09-30T18:15:00+00:00
+QS GPU Device 0: "Ampere" with compute capability 8.6
+QS 
+QS Initializing data:
+QS Running quicksort on 1000 elements
+QS Launching kernel on the GPU
+QS Validating results: OK
+QS rc=0
+=== CDPH cdpSimpleQuicksort -num_items=10000 2026-09-30T18:15:03+00:00
+CDPG_EXIT rc=0 2026-09-30T18:15:19+00:00
+[apps_matrix 2026-09-30T18:15:19+00:00] START side=guest run=cdpfix_090b20d9 rev=090b20d9 apps=1
+[apps_matrix 2026-09-30T18:15:19+00:00] kf3 binary: /workspace/bench/kf3-bins/090b20d9/qemu-system-x86_64
+[apps_matrix 2026-09-30T18:17:29+00:00] boot ap_cdpfix_090b20d9_b1 rc=0 apps=[cdpSimpleQuicksort] :: /workspace/bench/run_ap_cdpfix_090b20d9_b1_probe.log:APPS_HOOK tag=ap_cdpfix_090b20d9_b1 apps=[cdpSimpleQuicksort] guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled /workspace/bench/run_ap_cdpfix_09
+scripts/apps/apps_matrix.sh: line 79: /workspace/apps/results/cdpfix_090b20d9/guest_isolated.res: No such file or directory
+[apps_matrix 2026-09-30T18:17:29+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+APPRES side=guest app=cdpSimpleQuicksort verdict=PASS rc=0 secs=7 quiet=1 note=- boot=ap_cdpfix_090b20d9_b1 guest_xid=0 kf3_lines=1150 kf3_refusals=11
+JOB_EXIT cdpC rc=0 2026-09-30T18:17:29+00:00

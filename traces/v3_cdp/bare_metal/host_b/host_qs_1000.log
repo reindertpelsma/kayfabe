@@ -1,0 +1,7 @@
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Initializing data:
+Running quicksort on 1000 elements
+Launching kernel on the GPU
+Validating results: OK
+rc=0
