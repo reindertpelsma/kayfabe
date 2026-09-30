@@ -1421,7 +1421,24 @@ jobs:
           # from an older `libcuda` would turn a missing experiment into a missing walker.
           # Existing v3 adapters were approved in OWNER_RULINGS A6 / CLAUDE.md.
           # This migration records their current surface; no new privilege is added.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:73 kf-cuda:73 kf-qemu:36"
+          #
+          # ★★ `kf-linux-raw` 73 -> 75 and `kf-qemu` 36 -> 42, 2026-09-30 (`v3-ioeventfd`,
+          # `docs/design/V3_DOORBELL_IOEVENTFD.md`) — the doorbell fast path's kernel doors.
+          #   kf-linux-raw `kvm_unsafe.rs` (+2): `KvmVm::ioeventfd` and
+          #     `KvmVm::register_coalesced_mmio` — one `ioctl` each on a live `#[repr(C)]` record
+          #     whose size the request encodes (`struct kvm_ioeventfd` 64 B, `struct
+          #     kvm_coalesced_mmio_zone` 16 B, both asserted by
+          #     `the_ioeventfd_uapi_size_and_flags_are_the_ones_the_kernel_declares`); `_IOW`, the
+          #     kernel only reads it and keeps no pointer (it takes its own eventfd reference).
+          #   kf-qemu `raw_unsafe.rs` (+4): `IoeventfdHook` — `unsafe impl Send`/`Sync` (the
+          #     opaque is the C device, which lives for the process; the verb is one `ioctl` with
+          #     no lock), `unsafe fn adopt` (the C verb's contract), and the one `unsafe { }` call
+          #     of the verb (a borrowed live fd for the whole call; the kernel never keeps the
+          #     number). `ffi_unsafe.rs` (+2): `kf3_set_ioeventfd` (`unsafe extern "C" fn`, the
+          #     same contract forwarded) and its `unsafe { adopt }`.
+          #   ⊘ No new power: the verb only assigns/deassigns ioeventfds on QEMU's own VM, and a
+          #     refusal is an errno the token survives on the trapped path.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:73 kf-qemu:42"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

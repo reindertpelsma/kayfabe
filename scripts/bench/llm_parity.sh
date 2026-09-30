@@ -70,11 +70,39 @@ QLOG=${BENCH_DIR:-/workspace/bench}/run_${2:-none}_qemu.log   # hook mode: $2 is
 DEADF=$(mktemp -u /tmp/lp_dead_XXXXXX)
 ledger_sum() { grep -a 'DOORBELL-LEDGER' "$QLOG" 2>/dev/null | sed -n 's/.* forwarded=\([0-9]*\).*/\1/p' | awk '{s+=$1} END{print s+0}'; }
 counter_target_valid() { kf_qemu_identity_matches "${KF_QEMU_PID:-}" "${KF_QEMU_STARTTIME:-}"; }
+# ★ 2026-09-30 (V3_DOORBELL_IOEVENTFD.md §7): CPU time of the identified QEMU's threads, by class —
+# `vcpu` (CPU n/KVM), `drainer` (kf3-drainer), `workers` (kf3-worker*), `kf3` (other kf3-*), `qemu`
+# (everything else) — as `class=ticks` words (utime+stime, stat fields 14-15). Read only when the
+# identity still matches; a stale PID reads as nothing, never as zero.
+thread_cpu() {
+    local p=${KF_QEMU_PID:-} f line comm rest
+    [ -n "$p" ] || return 0
+    for f in /proc/"$p"/task/*/stat; do
+        line=$(cat "$f" 2>/dev/null) || continue
+        comm=${line#*(}; comm=${comm%)*}; rest=${line##*) }
+        # shellcheck disable=SC2086
+        set -- $rest
+        case "$comm" in
+            CPU\ */KVM) echo "vcpu $(( ${12} + ${13} ))" ;;
+            kf3-drainer) echo "drainer $(( ${12} + ${13} ))" ;;
+            kf3-worker*) echo "workers $(( ${12} + ${13} ))" ;;
+            kf3-*) echo "kf3 $(( ${12} + ${13} ))" ;;
+            *) echo "qemu $(( ${12} + ${13} ))" ;;
+        esac
+    done | awk '{t[$1]+=$2} END {for (k in t) printf "%s=%d ", k, t[k]}'
+}
+cpu_delta() {  # $1 before, $2 after ("class=ticks ..." words) → "class_ms=… …"
+    local hz; hz=$(getconf CLK_TCK 2>/dev/null || echo 100)
+    awk -v a="$1" -v b="$2" -v hz="$hz" 'BEGIN {
+        n = split(a, x, " "); for (i = 1; i <= n; i++) { split(x[i], kv, "="); A[kv[1]] = kv[2] }
+        n = split(b, y, " "); for (i = 1; i <= n; i++) { split(y[i], kv, "="); B[kv[1]] = kv[2] }
+        for (k in B) printf "%s_ms=%d ", k, (B[k] - A[k]) * 1000 / hz }'
+}
 echo "LP_COUNTER_TARGET pid=${KF_QEMU_PID:-unset} starttime=${KF_QEMU_STARTTIME:-unset}"
 one() {  # $1 kind, $2 ntok, $3 proc, rest: env
     local k=$1 n=$2 i=$3; shift 3
     local t0 t1 out rc
-    local cp="" pc="" d0=0
+    local cp="" pc="" d0=0 tc0=""
     if [ "$MODE" = hook ] && [ -e "$DEADF" ]; then
         echo "LP_SKIP lane=$LANE kind=$k ntok=$n proc=$i reason=channel-dead-earlier-in-this-boot"; return
     fi
@@ -82,7 +110,7 @@ one() {  # $1 kind, $2 ntok, $3 proc, rest: env
         # per-process KVM exit count (a counting tracepoint, not a record) and the device's own
         # doorbell ledger (lines are printed as each channel is freed, i.e. at process exit)
         if counter_target_valid; then
-            d0=$(ledger_sum); cp=$(mktemp)
+            d0=$(ledger_sum); cp=$(mktemp); tc0=$(thread_cpu)
             perf stat -e kvm:kvm_exit -x, -o "$cp" -p "$KF_QEMU_PID" 2>/dev/null &
             pc=$!
         else
@@ -113,6 +141,7 @@ one() {  # $1 kind, $2 ntok, $3 proc, rest: env
         kill -INT "$pc" 2>/dev/null; wait "$pc" 2>/dev/null; sleep 2
         if counter_target_valid; then
             echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_KVM_EXITS=$(grep -a 'kvm_exit' "$cp" | cut -d, -f1)"
+            [ -n "$tc0" ] && echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_THREAD_CPU $(cpu_delta "$tc0" "$(thread_cpu)")"
             echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_DOORBELLS=$(( $(ledger_sum) - d0 ))"
         else
             echo "LP_COUNTERS_UNMEASURED lane=$LANE kind=$k ntok=$n proc=$i reason=qemu-identity-lost-during-sample"

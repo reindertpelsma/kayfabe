@@ -658,6 +658,19 @@ impl DbFast {
         r.placed -= gone;
     }
 
+    /// The eventfd of live registration `tag` — for measurements and tests only: signalling it is
+    /// exactly what the kernel's ioeventfd does on a matching guest store.
+    #[must_use]
+    pub fn efd_for_bench(&self, tag: u64) -> Option<Arc<Notifier>> {
+        self.reg
+            .lock()
+            .ok()?
+            .regs
+            .values()
+            .find(|r| r.tag == tag)
+            .map(|r| Arc::clone(&r.efd))
+    }
+
     /// The sites mapped now.
     #[must_use]
     pub fn sites(&self) -> Vec<u64> {

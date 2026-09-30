@@ -1703,7 +1703,41 @@ impl Device {
             "kf3: doorbell fast path {} — KVM ioeventfd per live token (Passthrough AND Translated), serviced by the register drainer; budget {budget} placements; unmatched/unregistered doorbells stay trapped",
             if on { "ON" } else { "REFUSED (already on)" }
         );
+        if on {
+            self.register_probe();
+        }
         on
+    }
+
+    /// ⊘ MEASUREMENT ONLY (`KF3_DBFAST_PROBE=<hex value>`, default unset): register the fast path for
+    /// a doorbell value whose slot no channel can occupy (e.g. `0x007f07ff`: runlist 0x7F, which no
+    /// engine is on), so a guest tool can time a store that is matched in the kernel against the
+    /// same store trapped (fast path off) — both then do nothing (`Route::Unknown`), so the
+    /// difference is the transport alone (`docs/design/V3_DOORBELL_IOEVENTFD.md` §7). Refused by
+    /// name if the slot holds a live token.
+    fn register_probe(&self) {
+        let Some(raw) = std::env::var("KF3_DBFAST_PROBE").ok() else {
+            return;
+        };
+        let Some(value) = u32::from_str_radix(raw.trim_start_matches("0x"), 16).ok() else {
+            eprintln!("kf3: KF3_DBFAST_PROBE={raw:?} is not a hex value — no probe");
+            return;
+        };
+        let Some(idx) = self.plane.token_index.of_doorbell(value) else {
+            eprintln!("kf3: KF3_DBFAST_PROBE {value:#010x} names no slot — no probe");
+            return;
+        };
+        let route = self.plane.tokens.get(idx as usize).map(|w| w.load().route);
+        if route != Some(Route::Unknown) {
+            eprintln!(
+                "kf3: KF3_DBFAST_PROBE {value:#010x}: slot {idx:#x} is live ({route:?}) — REFUSED"
+            );
+            return;
+        }
+        eprintln!(
+            "kf3: ⚠ MEASUREMENT PROBE KF3_DBFAST_PROBE: doorbell value {value:#010x} (slot {idx:#x}, no channel) registered with the fast path: {:?}",
+            self.dbfast.register(idx, value)
+        );
     }
 
     /// One line of counters and the GSP phase — for the boot log, never a decision input.
