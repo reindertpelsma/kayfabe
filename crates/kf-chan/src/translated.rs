@@ -71,6 +71,121 @@ const REMAP_NUM_SRC_SHIFT: u32 = 20;
 pub const GP100_UVM_SW: u32 = 0xc076;
 /// `NVC076_NO_OPERATION` (`clc076.h:36`).
 const SW_NO_OPERATION: u32 = 0x100;
+/// `NVC076_FAULT_CANCEL_A` — `INST_APERTURE` 1:0, `INST_LOW` 31:12 (`clc076.h:40-47`).
+const SW_FAULT_CANCEL_A: u32 = 0x104;
+/// `NVC076_FAULT_CANCEL_B` — `INST_HI` 31:0.
+const SW_FAULT_CANCEL_B: u32 = 0x108;
+/// `NVC076_FAULT_CANCEL_C` — `CLIENT_ID` 5:0, `GPC_ID` 10:6, `MODE` 31:30 (`TARGETED` 0,
+/// `GLOBAL` 1). The TRIGGER: A and B are its operands (`uvm_pascal_host.c:343-363` pushes A, B, C).
+const SW_FAULT_CANCEL_C: u32 = 0x10c;
+/// `NVC076_FAULT_CANCEL_C_MODE` 31:30, `_GLOBAL` = 1.
+const SW_FAULT_CANCEL_C_MODE_GLOBAL: u32 = 1;
+
+/// `NVC56F_MEM_OP_C_TLB_INVALIDATE_REPLAY` 4:2 — `NONE` 0, `START` 1, `START_ACK_ALL` 2,
+/// `CANCEL_TARGETED` 3, `CANCEL_GLOBAL` 4, `CANCEL_VA_GLOBAL` 5 — the same field and values in
+/// `C36F`, `C46F`, `C56F` and `C86F` (`kf_chip` hwref `class` rows; UVM's Blackwell HAL inherits
+/// the `C36F` encodings, `uvm_hal.c`).
+const MEM_OP_C_REPLAY_SHIFT: u32 = 2;
+const MEM_OP_C_REPLAY_MASK: u32 = 0x7;
+const REPLAY_START: u32 = 1;
+const REPLAY_START_ACK_ALL: u32 = 2;
+const REPLAY_CANCEL_TARGETED: u32 = 3;
+const REPLAY_CANCEL_GLOBAL: u32 = 4;
+const REPLAY_CANCEL_VA_GLOBAL: u32 = 5;
+/// `NVC56F_MEM_OP_C_TLB_INVALIDATE_ACCESS_TYPE` 9:7.
+const MEM_OP_C_ACCESS_TYPE_SHIFT: u32 = 7;
+/// `NVC56F_MEM_OP_C_TLB_INVALIDATE_PDB_APERTURE` 11:10.
+const MEM_OP_C_PDB_APERTURE_SHIFT: u32 = 10;
+/// `NVC56F_MEM_OP_A_TLB_INVALIDATE_CANCEL_TARGET_CLIENT_UNIT_ID` 5:0 and `_GPC_ID` 10:6.
+const MEM_OP_A_CANCEL_CLIENT_MASK: u32 = 0x3f;
+const MEM_OP_A_CANCEL_GPC_SHIFT: u32 = 6;
+const MEM_OP_A_CANCEL_GPC_MASK: u32 = 0x1f;
+/// `…_CANCEL_MMU_ENGINE_ID`: 6:0 through `C56F`, 8:0 from `C86F` — decoded at the wider width,
+/// whose top bits the narrower classes leave zero in a cancel.
+const MEM_OP_A_CANCEL_ENGINE_MASK: u32 = 0x1ff;
+
+/// ★★★ **A fault-plane operation the guest's KERNEL channel asked for** (`docs/design/
+/// V3_UVM_GUEST_FAULT_PLANE.md` §3.7): the `REPLAY` field of a `MEM_OP` TLB invalidate, or a
+/// `GP100_UVM_SW` `FAULT_CANCEL`. ⊘ Never forwarded: a TLB invalidate is a privileged host method
+/// and the SW class has no engine. The worker hands it to the fault plane, which acts only on
+/// THIS VM's own EFS records — the op is a statement of intent, never an address the host uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FaultOp {
+    /// `REPLAY_START` / `REPLAY_START_ACK_ALL` — re-issue every pending faulting access.
+    Replay {
+        /// `START_ACK_ALL` (also acknowledge).
+        ack_all: bool,
+    },
+    /// `REPLAY_CANCEL_VA_GLOBAL` — cancel the faulting accesses to one page of one VA space.
+    CancelVa {
+        /// The VA space's page directory (guest address), `PDB = ONE`; `None` for `PDB_ALL`.
+        pdb: Option<u64>,
+        /// `PDB_APERTURE` (raw).
+        pdb_aperture: u32,
+        /// The page (`TARGET_ADDR`).
+        va: u64,
+        /// `ACCESS_TYPE` (raw 3-bit: `VIRT_ALL` 7, `VIRT_WRITE_AND_ATOMIC` 6, …).
+        access: u32,
+        /// `CANCEL_MMU_ENGINE_ID`.
+        engine: u32,
+    },
+    /// `REPLAY_CANCEL_GLOBAL` — cancel every pending fault.
+    CancelGlobal,
+    /// `REPLAY_CANCEL_TARGETED` — cancel the faults of one GPC/client.
+    CancelTargeted {
+        /// `CANCEL_TARGET_GPC_ID`.
+        gpc: u32,
+        /// `CANCEL_TARGET_CLIENT_UNIT_ID`.
+        client: u32,
+    },
+    /// `GP100_UVM_SW` `FAULT_CANCEL_{A,B,C}` — cancel the faults of the channel whose instance block
+    /// is named (all of them, or one GPC/client's).
+    CancelInstance {
+        /// The instance block (4 KiB aligned).
+        inst: u64,
+        /// `INST_APERTURE` (raw).
+        aperture: u32,
+        /// `MODE_GLOBAL` (else `TARGETED`).
+        global: bool,
+        /// `GPC_ID` (targeted).
+        gpc: u32,
+        /// `CLIENT_ID` (targeted).
+        client: u32,
+    },
+}
+
+/// The fault op a `MEM_OP_D` TLB invalidate carries, from its three operand words — `None` when
+/// `REPLAY` is `NONE` (an ordinary invalidate) or a value no class header names.
+#[must_use]
+pub fn fault_op_of_invalidate(
+    mem_op_a: u32,
+    mem_op_b: u32,
+    mem_op_c: u32,
+    mem_op_d: u32,
+) -> Option<FaultOp> {
+    let replay = (mem_op_c >> MEM_OP_C_REPLAY_SHIFT) & MEM_OP_C_REPLAY_MASK;
+    Some(match replay {
+        REPLAY_START => FaultOp::Replay { ack_all: false },
+        REPLAY_START_ACK_ALL => FaultOp::Replay { ack_all: true },
+        REPLAY_CANCEL_VA_GLOBAL => {
+            let all = mem_op_c & 1 != 0;
+            let pdb = u64::from(mem_op_c & 0xFFFF_F000) | (u64::from(mem_op_d & 0x07FF_FFFF) << 32);
+            FaultOp::CancelVa {
+                pdb: (!all).then_some(pdb),
+                pdb_aperture: (mem_op_c >> MEM_OP_C_PDB_APERTURE_SHIFT) & 0x3,
+                va: u64::from(mem_op_a & 0xFFFF_F000) | (u64::from(mem_op_b) << 32),
+                access: (mem_op_c >> MEM_OP_C_ACCESS_TYPE_SHIFT) & 0x7,
+                engine: mem_op_a & MEM_OP_A_CANCEL_ENGINE_MASK,
+            }
+        }
+        REPLAY_CANCEL_GLOBAL => FaultOp::CancelGlobal,
+        REPLAY_CANCEL_TARGETED => FaultOp::CancelTargeted {
+            gpc: (mem_op_a >> MEM_OP_A_CANCEL_GPC_SHIFT) & MEM_OP_A_CANCEL_GPC_MASK,
+            client: mem_op_a & MEM_OP_A_CANCEL_CLIENT_MASK,
+        },
+        _ => return None,
+    })
+}
 
 /// `NVC7B5_SET_*_PHYS_MODE_TARGET` — `clc7b5.h:67-71`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,6 +267,10 @@ pub struct CeState {
     /// ★ v3-initrace: the data-moving launches since the last take, as the guest wrote them
     /// (before our rewrite) — the completion probe reads their bytes back.
     pub launches: PhysLaunches,
+    /// ★ `GP100_UVM_SW` `FAULT_CANCEL_A` / `_B` as last written — the operands of `_C`.
+    pub sw_cancel_a: u32,
+    /// See [`Self::sw_cancel_a`].
+    pub sw_cancel_b: u32,
 }
 
 /// ★ v3-initrace (diagnostic record only): one side of a launch, as the guest named it.
@@ -377,6 +496,10 @@ pub enum Piece {
         /// The named root (guest FB/phys address), or `None` for all spaces.
         pdb: Option<u64>,
     },
+    /// ★ The guest asked the fault plane for a replay or a cancel here (the invalidate that carried
+    /// it, if any, is the [`Piece::Invalidate`] just before). Everything before it must COMPLETE
+    /// first; nothing after it runs until the plane has acted.
+    Fault(FaultOp),
 }
 
 /// Why a segment could not be forwarded. Refused by name, never guessed.
@@ -417,8 +540,10 @@ pub enum Refusal {
         /// The method.
         method: u32,
     },
-    /// A `GP100_UVM_SW` method with work behind it (`FAULT_CANCEL_*`, `CLEAR_FAULTED_*`): the fault
-    /// plane that would serve it does not exist yet — refused rather than silently dropped.
+    /// A `GP100_UVM_SW` method with work behind it that no plane serves — `CLEAR_FAULTED_*`
+    /// (non-replayable faults, `V3_UVM_GUEST_FAULT_PLANE.md` §3.10) and any method the class does
+    /// not name — refused rather than silently dropped. ★ `FAULT_CANCEL_*` is not here any more: it
+    /// becomes a [`Piece::Fault`] whose disposition is the worker's.
     SwMethod {
         /// The method.
         method: u32,
@@ -540,10 +665,34 @@ fn one_write(
     }
     if st.sw_subch & bit != 0 && m >= 0x100 {
         // A SW subchannel's own methods (host methods below 0x100 still apply to the channel).
-        return if m == SW_NO_OPERATION {
-            Ok(())
-        } else {
-            Err(Refusal::SwMethod { method: m })
+        return match m {
+            SW_NO_OPERATION => Ok(()),
+            // ★ The fault plane's cancel by instance block: A and B are held, C is the trigger and
+            // becomes a split (`V3_UVM_GUEST_FAULT_PLANE.md` §3.7). Its disposition — act, or
+            // refuse when no plane stands behind it — is the worker's, not the rewriter's.
+            SW_FAULT_CANCEL_A => {
+                st.sw_cancel_a = v;
+                Ok(())
+            }
+            SW_FAULT_CANCEL_B => {
+                st.sw_cancel_b = v;
+                Ok(())
+            }
+            SW_FAULT_CANCEL_C => {
+                if !cur.is_empty() {
+                    out.push(Piece::Words(std::mem::take(cur)));
+                }
+                out.push(Piece::Fault(FaultOp::CancelInstance {
+                    inst: u64::from(st.sw_cancel_a & 0xFFFF_F000)
+                        | (u64::from(st.sw_cancel_b) << 32),
+                    aperture: st.sw_cancel_a & 0x3,
+                    global: (v >> 30) & 0x3 == SW_FAULT_CANCEL_C_MODE_GLOBAL,
+                    gpc: (v >> MEM_OP_A_CANCEL_GPC_SHIFT) & MEM_OP_A_CANCEL_GPC_MASK,
+                    client: v & MEM_OP_A_CANCEL_CLIENT_MASK,
+                }));
+                Ok(())
+            }
+            _ => Err(Refusal::SwMethod { method: m }),
         };
     }
     // `MEM_OP_A..C` are operands of the `MEM_OP_D` that follows ("MEM_OP_D MUST be preceded by
@@ -587,6 +736,12 @@ fn one_write(
             out.push(Piece::Invalidate {
                 pdb: (!all).then_some(hi | lo),
             });
+            // ★ The same invalidate may carry a REPLAY or CANCEL (`uvm_hal_volta_replay_faults`,
+            // `uvm_hal_volta_cancel_faults_va`): split it out AFTER the invalidate, so the walk the
+            // invalidate asks for is published before the plane replays (§3.8).
+            if let Some(op) = fault_op_of_invalidate(st.mem_op_a, st.mem_op_b, st.mem_op_c, v) {
+                out.push(Piece::Fault(op));
+            }
             return Ok(());
         }
         if OPS_L2.contains(&op) {
@@ -883,6 +1038,13 @@ mod hwref_check {
             (PITCH_OUT, "NVC7B5_PITCH_OUT"),
             (GP100_UVM_SW, "GP100_UVM_SW"),
             (SW_NO_OPERATION, "NVC076_NO_OPERATION"),
+            (SW_FAULT_CANCEL_A, "NVC076_FAULT_CANCEL_A"),
+            (SW_FAULT_CANCEL_B, "NVC076_FAULT_CANCEL_B"),
+            (SW_FAULT_CANCEL_C, "NVC076_FAULT_CANCEL_C"),
+            (
+                SW_FAULT_CANCEL_C_MODE_GLOBAL,
+                "NVC076_FAULT_CANCEL_C_MODE_GLOBAL",
+            ),
             (HOPPER_DMA_COPY_A, "HOPPER_DMA_COPY_A"),
         ] {
             assert_eq!(u64::from(ours), class_val(name), "{name}");
@@ -912,6 +1074,85 @@ mod hwref_check {
             1 << class_range("NVC8B5_LAUNCH_DMA_MEMORY_SCRUB_ENABLE").1
         );
         assert_eq!(class_range("NVC7B5_LAUNCH_DMA_VPRMODE"), (23, 22));
+    }
+
+    /// ★ `V3_UVM_GUEST_FAULT_PLANE.md` §3.7 — the replay/cancel fields, held to EVERY channel
+    /// class that defines them (C36F Volta … C86F Hopper; UVM's Blackwell HAL inherits the C36F
+    /// encodings), and the `GP100_UVM_SW` cancel's operand fields.
+    #[test]
+    fn the_replay_and_cancel_fields_are_every_classs() {
+        for c in ["NVC36F", "NVC46F", "NVC56F", "NVC86F"] {
+            let r = |f: &str| class_range(&format!("{c}_{f}"));
+            let v = |f: &str| class_val(&format!("{c}_{f}"));
+            assert_eq!(
+                r("MEM_OP_C_TLB_INVALIDATE_REPLAY"),
+                (
+                    u64::from(MEM_OP_C_REPLAY_SHIFT + 2),
+                    u64::from(MEM_OP_C_REPLAY_SHIFT)
+                ),
+                "{c}"
+            );
+            for (ours, name) in [
+                (REPLAY_START, "MEM_OP_C_TLB_INVALIDATE_REPLAY_START"),
+                (
+                    REPLAY_START_ACK_ALL,
+                    "MEM_OP_C_TLB_INVALIDATE_REPLAY_START_ACK_ALL",
+                ),
+                (
+                    REPLAY_CANCEL_TARGETED,
+                    "MEM_OP_C_TLB_INVALIDATE_REPLAY_CANCEL_TARGETED",
+                ),
+                (
+                    REPLAY_CANCEL_GLOBAL,
+                    "MEM_OP_C_TLB_INVALIDATE_REPLAY_CANCEL_GLOBAL",
+                ),
+                (
+                    REPLAY_CANCEL_VA_GLOBAL,
+                    "MEM_OP_C_TLB_INVALIDATE_REPLAY_CANCEL_VA_GLOBAL",
+                ),
+            ] {
+                assert_eq!(u64::from(ours), v(name), "{c} {name}");
+            }
+            assert_eq!(
+                r("MEM_OP_C_TLB_INVALIDATE_ACCESS_TYPE"),
+                (
+                    u64::from(MEM_OP_C_ACCESS_TYPE_SHIFT) + 2,
+                    u64::from(MEM_OP_C_ACCESS_TYPE_SHIFT)
+                )
+            );
+            assert_eq!(
+                r("MEM_OP_C_TLB_INVALIDATE_PDB_APERTURE"),
+                (
+                    u64::from(MEM_OP_C_PDB_APERTURE_SHIFT) + 1,
+                    u64::from(MEM_OP_C_PDB_APERTURE_SHIFT)
+                )
+            );
+            assert_eq!(
+                r("MEM_OP_A_TLB_INVALIDATE_CANCEL_TARGET_CLIENT_UNIT_ID"),
+                (5, 0)
+            );
+            assert_eq!(
+                r("MEM_OP_A_TLB_INVALIDATE_CANCEL_TARGET_GPC_ID"),
+                (
+                    u64::from(MEM_OP_A_CANCEL_GPC_SHIFT) + 4,
+                    u64::from(MEM_OP_A_CANCEL_GPC_SHIFT)
+                )
+            );
+            let (hi, lo) = r("MEM_OP_A_TLB_INVALIDATE_CANCEL_MMU_ENGINE_ID");
+            assert_eq!(lo, 0);
+            assert!(
+                (1u64 << (hi + 1)) - 1 <= u64::from(MEM_OP_A_CANCEL_ENGINE_MASK),
+                "{c}: engine id {hi}:{lo} fits the mask decoded"
+            );
+            assert_eq!(r("MEM_OP_A_TLB_INVALIDATE_TARGET_ADDR_LO"), (31, 12));
+            assert_eq!(r("MEM_OP_B_TLB_INVALIDATE_TARGET_ADDR_HI"), (31, 0));
+        }
+        assert_eq!(class_range("NVC076_FAULT_CANCEL_A_INST_APERTURE"), (1, 0));
+        assert_eq!(class_range("NVC076_FAULT_CANCEL_A_INST_LOW"), (31, 12));
+        assert_eq!(class_range("NVC076_FAULT_CANCEL_B_INST_HI"), (31, 0));
+        assert_eq!(class_range("NVC076_FAULT_CANCEL_C_CLIENT_ID"), (5, 0));
+        assert_eq!(class_range("NVC076_FAULT_CANCEL_C_GPC_ID"), (10, 6));
+        assert_eq!(class_range("NVC076_FAULT_CANCEL_C_MODE"), (31, 30));
     }
 
     #[test]

@@ -11,7 +11,7 @@
 //! ⊘ `GP_GET` is NOT owned here. It is the runner's to author, and only on COMPLETION: a guest
 //! that sees `GP_GET` advance may reuse the GPFIFO slot and the pushbuffer behind it.
 
-use crate::translated::{CeState, IsCeClass, Piece, Refusal, Release, Window, rewrite};
+use crate::translated::{CeState, FaultOp, IsCeClass, Piece, Refusal, Release, Window, rewrite};
 use kf_abi::submit::{GP_ENTRY_SIZE, gp_entry_decode};
 use std::collections::VecDeque;
 
@@ -46,6 +46,16 @@ pub enum Next {
         /// The named root, or `None` for `PDB_ALL`.
         pdb: Option<u64>,
         /// The guest `GP_GET` to author once the walk is done, if the split ended its entry.
+        retires: Option<u32>,
+    },
+    /// ★ The guest asked the fault plane for a replay or cancel here
+    /// (`docs/design/V3_UVM_GUEST_FAULT_PLANE.md` §3.7). Before anything after it runs: wait for
+    /// everything already submitted to COMPLETE (a replay must follow the servicing work the guest
+    /// ordered before it), then hand `op` to the plane. Then call [`TranslatedRing::next`] again.
+    Fault {
+        /// What the guest asked for.
+        op: FaultOp,
+        /// The guest `GP_GET` to author once the plane has acted, if the op ended its entry.
         retires: Option<u32>,
     },
     /// Nothing to do: the cursor has reached the guest's `GP_PUT`.
@@ -170,6 +180,7 @@ impl TranslatedRing {
                 return Ok(match p {
                     Piece::Words(words) => Next::Submit { words, retires },
                     Piece::Invalidate { pdb } => Next::Walk { pdb, retires },
+                    Piece::Fault(op) => Next::Fault { op, retires },
                 });
             }
             if let Some(g) = self.pending_retires.take() {

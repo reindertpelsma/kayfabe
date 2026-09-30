@@ -27,6 +27,7 @@ pub mod bar1db;
 pub mod bitmap;
 pub mod cacheop;
 pub mod cpuintr;
+pub mod faultring;
 pub mod fspemem;
 pub mod memmap;
 pub mod mmuinval;

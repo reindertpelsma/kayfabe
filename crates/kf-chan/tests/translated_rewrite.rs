@@ -267,8 +267,13 @@ fn a_block_linear_physical_operand_is_refused() {
 }
 
 /// UVM binds `GP100_UVM_SW` on a subchannel of its kernel channels: its SET_OBJECT and NOPs are
-/// consumed (no host object stands behind it), its fault methods refused by name, and any other
-/// foreign class refused — never forwarded to a host channel that would fault on it.
+/// consumed (no host object stands behind it), and any other foreign class refused — never
+/// forwarded to a host channel that would fault on it.
+///
+/// ⊘ 2026-09-30 (`V3_UVM_GUEST_FAULT_PLANE.md` §3.7): `FAULT_CANCEL_A..C` is no longer refused HERE
+/// — it becomes a `Piece::Fault(CancelInstance)` whose disposition is the worker's publisher; the
+/// publisher with no fault plane behind it refuses it by name, as the rewriter used to
+/// (`kf_chan::host::Publisher::fault`'s default). `CLEAR_FAULTED` is still refused here.
 #[test]
 fn the_uvm_sw_class_is_consumed_and_foreign_classes_are_refused() {
     let mut pb = setup();
@@ -287,8 +292,24 @@ fn the_uvm_sw_class_is_consumed_and_foreign_classes_are_refused() {
     pb.extend(m(5, 0x104, &[0, 0, 0])); // FAULT_CANCEL_A..C
     let mut st = CeState::default();
     assert_eq!(
+        rewrite(&pb, is_ce, &mut st, &W).map(|p| p.last().cloned()),
+        Ok(Some(Piece::Fault(
+            kf_chan::translated::FaultOp::CancelInstance {
+                inst: 0,
+                aperture: 0,
+                global: false,
+                gpc: 0,
+                client: 0
+            }
+        )))
+    );
+    let mut pb = setup();
+    pb.extend(m(5, 0, &[kf_chan::translated::GP100_UVM_SW]));
+    pb.extend(m(5, 0x110, &[0, 0])); // CLEAR_FAULTED_A..B
+    let mut st = CeState::default();
+    assert_eq!(
         rewrite(&pb, is_ce, &mut st, &W),
-        Err(Refusal::SwMethod { method: 0x104 })
+        Err(Refusal::SwMethod { method: 0x110 })
     );
     let pb = m(2, 0, &[0xc7c0]);
     let mut st = CeState::default();

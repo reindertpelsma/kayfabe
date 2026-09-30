@@ -80,6 +80,7 @@ fn a_split_holds_the_rest_of_its_segment_and_retirement_follows_the_last_piece()
         .map(|s| match s {
             Next::Submit { retires, .. } => format!("S{retires:?}"),
             Next::Walk { pdb, retires } => format!("W{pdb:x?}{retires:?}"),
+            Next::Fault { op, retires } => format!("F{op:?}{retires:?}"),
             Next::Idle => "I".into(),
         })
         .collect();
@@ -288,4 +289,32 @@ fn zero_userd_clears_the_channel_size_and_no_further() {
     assert_eq!(zero_userd(&mut p, 0x8e).unwrap(), 0x8c, "whole words only");
     let mut p = Page([0xAA; 4096], Some(0x88));
     assert!(zero_userd(&mut p, 512).unwrap_err().contains("+0x88"));
+}
+
+/// ★ `V3_UVM_GUEST_FAULT_PLANE.md` §3.7 — a replay `MEM_OP` becomes a walk THEN a fault step, and
+/// when it ends its GP entry the retirement rides on the LAST piece (the fault step), so the
+/// guest's `GP_GET` never passes the replay before the plane has acted.
+#[test]
+fn a_replay_is_a_walk_then_a_fault_step_and_retires_last() {
+    let mut mem = Mem::default();
+    let mut a = m(4, 0, &[CE_CLASS]);
+    a.extend(m(4, ce::LAUNCH_DMA, &[0]));
+    // `uvm_hal_volta_replay_faults`: PDB_ONE at 0 (dummy), PTE_ONLY, REPLAY_START, TARGETED.
+    a.extend(m(0, 0x28, &[0, 0, (1 << 7) | (1 << 2), 0xa << 27]));
+    seg(&mut mem, 0, PB, &a);
+    let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+    let steps = drain(&mut r, 1, &mut mem);
+    let shape: Vec<String> = steps
+        .iter()
+        .map(|s| match s {
+            Next::Submit { retires, .. } => format!("S{retires:?}"),
+            Next::Walk { pdb, retires } => format!("W{pdb:x?}{retires:?}"),
+            Next::Fault { op, retires } => format!("F{op:?}{retires:?}"),
+            Next::Idle => "I".into(),
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        ["SNone", "WSome(0)None", "FReplay { ack_all: false }Some(1)"]
+    );
 }

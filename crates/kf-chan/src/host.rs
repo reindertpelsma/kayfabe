@@ -488,6 +488,37 @@ pub trait Publisher {
     /// # Errors
     /// A failed walk or a refused publish.
     fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String>;
+
+    /// ★ The guest's replay or cancel (`docs/design/V3_UVM_GUEST_FAULT_PLANE.md` §3.7), after
+    /// everything before it completed. Acts on THIS VM's own fault records only; never a wait on a
+    /// vCPU (the worker calls it).
+    ///
+    /// ⊘ The default is the device with NO fault plane, and it is exactly the behaviour before the
+    /// plane existed: a `MEM_OP` replay/cancel field was dropped with its invalidate (nothing was
+    /// ever delivered, so there is nothing to replay or cancel) ⇒ `Ok`; a `GP100_UVM_SW`
+    /// `FAULT_CANCEL` was refused by name (`Refusal::SwMethod`) ⇒ `Err`.
+    ///
+    /// # Errors
+    /// A cancel no plane can serve, or the plane's refusal.
+    fn fault(&mut self, op: crate::translated::FaultOp) -> Result<(), String> {
+        match op {
+            crate::translated::FaultOp::CancelInstance { .. } => Err(
+                "GP100_UVM_SW FAULT_CANCEL with no fault plane behind it (refused, as \
+                 Refusal::SwMethod was)"
+                    .to_string(),
+            ),
+            _ => Ok(()),
+        }
+    }
+}
+
+/// What a suspended Translated channel waits to do once its fence completes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AtSplit {
+    /// Walk this root (`None` = every space) and publish.
+    Walk(Option<u64>),
+    /// Hand this op to the fault plane.
+    Fault(crate::translated::FaultOp),
 }
 
 /// Why a Translated channel stopped. It is dead after any of these.
@@ -539,9 +570,11 @@ pub struct TranslatedChannel {
     host: HostRing,
     token: u32,
     retire: VecDeque<(u32, u32)>,
-    suspended: Option<(u32, Option<u64>, Option<u32>)>,
+    suspended: Option<(u32, AtSplit, Option<u32>)>,
     stash: Option<Next>,
     walks: u64,
+    /// ★ Fault-plane ops handed over (`Next::Fault`).
+    faults: u64,
     submissions: u64,
     last_gp_get: Option<u32>,
     /// ★ v3-initrace: `Some` only while the completion probe is on.
@@ -598,6 +631,7 @@ impl TranslatedChannel {
             suspended: None,
             stash: None,
             walks: 0,
+            faults: 0,
             submissions: 0,
             last_gp_get: None,
             probe: None,
@@ -652,6 +686,12 @@ impl TranslatedChannel {
         (self.ring.entries_fetched(), self.submissions, self.walks)
     }
 
+    /// Fault-plane ops (replay / cancel) this channel handed over.
+    #[must_use]
+    pub fn faults(&self) -> u64 {
+        self.faults
+    }
+
     /// The last `GP_GET` authored to the guest.
     #[must_use]
     pub fn last_gp_get(&self) -> Option<u32> {
@@ -695,15 +735,23 @@ impl TranslatedChannel {
             // clears, so this cannot race a mark by another thread.
             done_edge.clear(self.token);
         }
-        if let Some((seq, pdb, retires)) = self.suspended {
+        if let Some((seq, at, retires)) = self.suspended {
             if !reached(done, seq) {
                 return Ok(Pumped::Waiting);
             }
-            if publisher.invalidated(pdb).map_err(ChanError::Publish)? == Split::Pending {
-                // ★ The walk runs on the VA thread; its completion rings this token again.
-                return Ok(Pumped::Waiting);
+            match at {
+                AtSplit::Walk(pdb) => {
+                    if publisher.invalidated(pdb).map_err(ChanError::Publish)? == Split::Pending {
+                        // ★ The walk runs on the VA thread; its completion rings this token again.
+                        return Ok(Pumped::Waiting);
+                    }
+                    self.walks += 1;
+                }
+                AtSplit::Fault(op) => {
+                    publisher.fault(op).map_err(ChanError::Publish)?;
+                    self.faults += 1;
+                }
             }
-            self.walks += 1;
             self.suspended = None;
             if let Some(g) = retires {
                 self.author(userd, g)?;
@@ -753,11 +801,48 @@ impl TranslatedChannel {
                                     self.ring.take_launches(),
                                 );
                             }
-                            self.suspended = Some((seq, pdb, retires));
+                            self.suspended = Some((seq, AtSplit::Walk(pdb), retires));
                             return Ok(Pumped::Waiting);
                         }
                         Err(Busy) => {
                             self.stash = Some(Next::Walk { pdb, retires });
+                            break Pumped::Waiting;
+                        }
+                    }
+                }
+                Next::Fault { op, retires } => {
+                    // ★ Nothing of ours in flight and nothing pushed since the last completed
+                    // fence: everything before the op has completed, so act now — the common case,
+                    // a replay right behind the walk its own invalidate asked for.
+                    if !pushed && last_retire.is_none() && self.host.idle() {
+                        publisher.fault(op).map_err(ChanError::Publish)?;
+                        self.faults += 1;
+                        if let Some(g) = retires {
+                            self.author(userd, g)?;
+                        }
+                        continue;
+                    }
+                    // Otherwise the same shape as a walk: fence, suspend, act on completion.
+                    done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
+                    match self.host.fence(rm).map_err(ChanError::Host)? {
+                        Ok(seq) => {
+                            let g0 = last_retire.take();
+                            if let Some(g) = g0 {
+                                self.retire.push_back((seq, g));
+                            }
+                            if let Some(p) = self.probe.as_mut() {
+                                p.submitted(
+                                    seq,
+                                    g0,
+                                    self.ring.take_releases(),
+                                    self.ring.take_launches(),
+                                );
+                            }
+                            self.suspended = Some((seq, AtSplit::Fault(op), retires));
+                            return Ok(Pumped::Waiting);
+                        }
+                        Err(Busy) => {
+                            self.stash = Some(Next::Fault { op, retires });
                             break Pumped::Waiting;
                         }
                     }
