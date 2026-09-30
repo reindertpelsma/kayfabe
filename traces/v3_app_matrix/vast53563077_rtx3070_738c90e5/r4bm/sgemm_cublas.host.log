@@ -1,0 +1,4 @@
+=== sgemm_cublas side=host start=2026-09-30T18:49:03+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/sgemm_cublas
+METRIC sgemm_cublas_TFLOPs 12.08
+CHECK ok
+=== end rc=0 secs=3 2026-09-30T18:49:06+00:00

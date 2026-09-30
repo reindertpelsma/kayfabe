@@ -1,0 +1,62 @@
+=== geekbench_gpu side=host start=2026-09-30T19:02:25+00:00 host=ubuntu cmd: cd /opt/apps/data/geekbench && ./geekbench6 --gpu OpenCL 2>&1 | tail -60
+
+Geekbench 6 requires an active internet connection and automatically uploads 
+benchmark results to the Geekbench Browser.
+
+Upgrade to Geekbench 6 Pro to enable offline use and unlock other features:
+
+  https://store.primatelabs.com/v6
+
+Enter your Geekbench 6 Pro license using the following command line:
+
+  ./geekbench6 --unlock <email> <key>
+
+System Information
+  Operating System              Ubuntu 22.04.5 LTS
+  Kernel                        Linux 6.8.0-59-generic x86_64
+  Model                         QEMU Standard PC (i440FX + PIIX, 1996)
+  Motherboard                   N/A
+  BIOS                          EFI Development Kit II / OVMF 0.0.0
+
+CPU Information
+  Name                          AMD EPYC 7532
+  Topology                      30 Processors, 30 Cores
+  Identifier                    AuthenticAMD Family 23 Model 49 Stepping 0
+  Base Frequency                2.40 GHz
+  L1 Instruction Cache          64.0 KB
+  L1 Data Cache                 64.0 KB
+  L2 Cache                      512 KB
+  L3 Cache                      16.0 MB
+  Instruction Sets              sse2 sse3 pclmul fma3 sse41 aesni avx avx2 shani
+
+Memory Information
+  Size                          198 GB
+
+OpenCL Information
+  Platform Vendor               NVIDIA Corporation
+  Platform Name                 NVIDIA CUDA
+  Device Vendor                 NVIDIA Corporation
+  Device Name                   NVIDIA GeForce RTX 3070
+  Device Driver Version         580.159 .04
+  Maximum Frequency             1725 MHz
+  Compute Units                 46
+  Device Memory                 7.66 GB
+
+
+OpenCL
+  Running Background Blur
+6 warnings generated.
+  Running Face Detection
+  Running Horizon Detection
+  Running Edge Detection
+  Running Gaussian Blur
+  Running Feature Matching
+  Running Stereo Matching
+  Running Particle Physics
+
+
+Uploading results to the Geekbench Browser. This could take a minute or two 
+depending on the speed of your internet connection.
+
+ unknown error (internal code 35)
+=== end rc=0 secs=62 2026-09-30T19:03:27+00:00

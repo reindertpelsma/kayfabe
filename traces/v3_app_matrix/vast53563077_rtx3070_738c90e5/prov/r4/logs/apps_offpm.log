@@ -1,0 +1,2 @@
+[apps_matrix 2026-09-30T20:17:15+00:00] START side=guest run=r4offpm rev=738c90e5 apps=71
+[apps_matrix 2026-09-30T20:17:15+00:00] kf3 binary: /workspace/bench/kf3-bins/738c90e5/qemu-system-x86_64

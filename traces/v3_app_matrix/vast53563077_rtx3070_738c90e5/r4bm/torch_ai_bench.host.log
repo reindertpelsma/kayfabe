@@ -1,0 +1,18 @@
+=== torch_ai_bench side=host start=2026-09-30T18:51:15+00:00 host=ubuntu cmd: /opt/apps/venv/bin/python /opt/apps/bundle/share/ai_bench.py
+[ai] device NVIDIA GeForce RTX 3070 torch 2.6.0+cu124
+METRIC torch_matmul_fp32_TFLOPs 15.22
+CHECK torch_matmul_fp32_TFLOPs ok
+METRIC torch_matmul_fp16_TFLOPs 44.42
+CHECK torch_matmul_fp16_TFLOPs ok
+METRIC resnet50_infer_imgs 856.16
+CHECK resnet50_infer_imgs ok
+METRIC resnet50_infer_amp_imgs 1551.22
+CHECK resnet50_infer_amp_imgs ok
+METRIC resnet50_train_imgs 277.40
+CHECK resnet50_train_imgs ok
+METRIC vit_b16_infer_imgs 267.74
+CHECK vit_b16_infer_imgs ok
+METRIC bert_infer_seqs 438.07
+CHECK bert_infer_seqs ok
+[ai] done
+=== end rc=0 secs=29 2026-09-30T18:51:44+00:00

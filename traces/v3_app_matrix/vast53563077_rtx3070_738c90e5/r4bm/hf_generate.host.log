@@ -1,0 +1,12 @@
+=== hf_generate side=host start=2026-09-30T18:51:44+00:00 host=ubuntu cmd: HF_MODEL=Qwen/Qwen2-0.5B-Instruct /opt/apps/venv/bin/python /opt/apps/bundle/share/hf_generate.py
+/opt/apps/venv/lib/python3.10/site-packages/transformers/generation/configuration_utils.py:590: UserWarning: `do_sample` is set to `False`. However, `temperature` is set to `0.7` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `temperature`.
+  warnings.warn(
+/opt/apps/venv/lib/python3.10/site-packages/transformers/generation/configuration_utils.py:595: UserWarning: `do_sample` is set to `False`. However, `top_p` is set to `0.8` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `top_p`.
+  warnings.warn(
+/opt/apps/venv/lib/python3.10/site-packages/transformers/generation/configuration_utils.py:612: UserWarning: `do_sample` is set to `False`. However, `top_k` is set to `20` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `top_k`.
+  warnings.warn(
+HF_TEXT= The sky appears to be blue because of the way light travels through the atmosphere. When sunlight enters the Earth's atmosphere, it is scattered by tiny particles such as dust and ice crystals. These particles scatter the light into different colors depending on their size and shape. As a result, s
+HF_NTOK=64
+OUTSHA hf_generate 0d973108a6251e14
+CHECK hf_generate ok
+=== end rc=0 secs=8 2026-09-30T18:51:52+00:00

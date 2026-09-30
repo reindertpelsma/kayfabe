@@ -1,0 +1,22 @@
+=== transpose side=host start=2026-09-30T18:48:46+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/transpose
+Transpose Starting...
+
+GPU Device 0: "Ampere" with compute capability 8.6
+
+> Device 0: "NVIDIA GeForce RTX 3070"
+> SM Capability 8.6 detected:
+> [NVIDIA GeForce RTX 3070] has 46 MP(s) x 128 (Cores/MP) = 5888 (Cores)
+> Compute performance scaling factor = 1.00
+
+Matrix size: 1024x1024 (64x64 tiles), tile size: 16x16, block size: 16x16
+
+transpose simple copy       , Throughput = 345.3777 GB/s, Time = 0.02262 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose shared memory copy, Throughput = 343.6664 GB/s, Time = 0.02273 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose naive             , Throughput = 284.8915 GB/s, Time = 0.02742 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose coalesced         , Throughput = 341.0547 GB/s, Time = 0.02291 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose optimized         , Throughput = 343.9763 GB/s, Time = 0.02271 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose coarse-grained    , Throughput = 344.4130 GB/s, Time = 0.02268 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose fine-grained      , Throughput = 343.8213 GB/s, Time = 0.02272 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+transpose diagonal          , Throughput = 327.8640 GB/s, Time = 0.02383 ms, Size = 1048576 fp32 elements, NumDevsUsed = 1, Workgroup = 256
+Test passed
+=== end rc=0 secs=2 2026-09-30T18:48:48+00:00

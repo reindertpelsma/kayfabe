@@ -1,0 +1,25 @@
+=== vkpeak side=host start=2026-09-30T18:52:06+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/vkpeak 0
+device       = NVIDIA GeForce RTX 3070
+
+fp32-scalar  = 15394.52 GFLOPS
+fp32-vec4    = 15221.45 GFLOPS
+
+fp16-scalar  = 22956.15 GFLOPS
+fp16-vec4    = 16985.40 GFLOPS
+fp16-matrix  = 91924.87 GFLOPS
+
+fp64-scalar  = 363.36 GFLOPS
+fp64-vec4    = 362.31 GFLOPS
+
+int32-scalar = 11549.34 GIOPS
+int32-vec4   = 11309.09 GIOPS
+
+int16-scalar = 9006.79 GIOPS
+int16-vec4   = 8357.96 GIOPS
+
+int8-dotprod = 10899.78 GIOPS
+int8-matrix  = 181501.42 GIOPS
+
+bf16-dotprod = 0.00 GFLOPS
+bf16-matrix  = 45774.26 GFLOPS
+=== end rc=0 secs=451 2026-09-30T18:59:37+00:00
