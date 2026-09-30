@@ -128,12 +128,16 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "pre_console",
     ),
     ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE", "echo"),
-    // ★ M3 (`[measured m3b]` the X server's "(EE) NVIDIA(0): Failed to allocate display software
-    // resources"): the NV9072 display-SW object's constructor asks physical RM which displays are
-    // active and how many heads exist (`disp_sw.c:44-101`), and refuses a head or display outside them.
+    // ★ M3: the NV9072 (GF100_DISP_SW) display-SW object's constructor asks physical RM which
+    // displays are active and how many heads exist (`disp_sw.c:44-101`). ⊘ REFUSED BY NAME, and
+    // that is measured: `[m3c]` answering it lets the X driver and GL allocate the object, whose
+    // methods are SOFTWARE methods RM services when the host engine traps them — but the guest's
+    // channels run on the host GPU, whose RM has no such object: 186 host `Xid 32` (invalid
+    // pushbuffer stream), glxgears at 1.3 FPS, vkQueueSubmit failing. Refused (`[m3b]`), X logs
+    // "Failed to allocate display software resources" and GL runs vsync-locked at 60 FPS.
     (
         "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
-        "active_devices",
+        "no_display_sw",
     ),
 ];
 
@@ -811,20 +815,8 @@ impl DisplayModel {
                 p.set("channelState", state);
                 Ok(p.buf)
             }
-            "active_devices" => {
-                // the displays the ARMED state lights (the worker publishes them), and the heads
-                let mut p = self.view(
-                    "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS",
-                    params,
-                )?;
-                let lit = (0..self.heads as usize)
-                    .filter_map(|h| self.ports.lit_sor(h))
-                    .filter_map(|sor| self.connectors.iter().find(|c| c.or_index == sor))
-                    .fold(0u32, |m, c| m | c.display_id);
-                p.set("displayMask", u64::from(lit));
-                p.set("numHeads", u64::from(self.heads));
-                Ok(p.buf)
-            }
+            // see NAMED_CONTROLS: the display-SW object is not offered
+            "no_display_sw" => Err(NV_ERR_NOT_SUPPORTED),
             "pre_console" => {
                 let mut p = self.view(
                     "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS",
@@ -1075,24 +1067,18 @@ mod tests {
         assert_eq!(ask(&mut m, 3), 0, "SOR 2 has no connector");
         m.ports.set_lit_sor(3, None);
         assert_eq!(ask(&mut m, 3), 0, "idle again");
-        // the display-SW object's constructor query: the lit displays, and the heads
+        // the display-SW object's constructor query is refused by name (its software methods would
+        // trap on the host GPU): claimed, so it never reaches the ledger as unserviced
+        let c = cmd(
+            &m,
+            "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
+        );
+        assert!(m.claims(c));
         let s = "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS";
-        let devices = |m: &mut DisplayModel| {
-            let r = m
-                .control(
-                    cmd(
-                        m,
-                        "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
-                    ),
-                    &vec![0; size(m, s)],
-                )
-                .unwrap()
-                .unwrap();
-            (get(m, s, &r, "displayMask"), get(m, s, &r, "numHeads"))
-        };
-        assert_eq!(devices(&mut m), (0, 4), "nothing lit");
-        m.ports.set_lit_sor(3, Some(0));
-        assert_eq!(devices(&mut m), (0x100, 4), "DFP-0 on head 3");
+        assert_eq!(
+            m.control(c, &vec![0; size(&m, s)]),
+            Some(Err(NV_ERR_NOT_SUPPORTED))
+        );
     }
 
     /// A custom EDID shadows the monitor's until cleared (NVKMS clears on every read,

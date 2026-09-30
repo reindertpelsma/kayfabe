@@ -128,6 +128,14 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     say "GLX_RENDERER $(grep -m1 'OpenGL renderer string' "$OUT/glxinfo.log" | cut -d: -f2- | sed 's/^ *//') DIRECT=$(grep -m1 'direct rendering' "$OUT/glxinfo.log" | cut -d: -f2 | tr -d ' ')"
     gq "$XENV timeout 15 glxgears -info 2>&1 | tail -8" 30 > "$OUT/glxgears.log"
     say "GLXGEARS $(grep 'frames in' "$OUT/glxgears.log" | tail -2 | tr '\n' ' ')"
+    gq "$XENV __GL_SYNC_TO_VBLANK=0 timeout 12 glxgears 2>&1 | tail -3" 30 > "$OUT/glxgears_novsync.log"
+    say "GLXGEARS_NOVSYNC $(grep 'frames in' "$OUT/glxgears_novsync.log" | tail -1)"
+    # Vulkan presentation in each present mode (0 IMMEDIATE, 1 MAILBOX, 2 FIFO): which ones the
+    # guest's WSI can create and run on the virtual monitor
+    for pm in 0 1 2; do
+        gq "$XENV timeout 10 vkcube --c 240 --present_mode $pm 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/vkcube_pm$pm.log"
+        say "VKCUBE_PM$pm $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/vkcube_pm$pm.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/vkcube_pm$pm.log")"
+    done
     ( gq "$XENV timeout 25 vkcube --c 1200 2>&1 | tail -20; echo VKCUBE_RC=\${PIPESTATUS[0]}" 45 > "$OUT/vkcube.log" ) &
     VP=$!
     sleep 8

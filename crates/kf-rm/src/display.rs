@@ -850,8 +850,9 @@ mod tests {
             .collect();
         assert_eq!(
             claimed.len(),
-            32 + 6,
-            "the NVKMS bring-up set (with the console pair) and the six internal controls"
+            33 + 6,
+            "the NVKMS bring-up set (with the console pair and the display-SW object's query) and \
+             the six internal controls"
         );
         assert_eq!(
             claimed.iter().copied().collect::<BTreeSet<u32>>(),
