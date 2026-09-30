@@ -135,7 +135,11 @@ impl Acquire {
     /// Does `current` (read from the semaphore) satisfy the acquire?
     #[must_use]
     pub fn satisfied_by(&self, current: u64) -> bool {
-        let (cur, want) = if self.wide { (current, self.value) } else { (current & 0xFFFF_FFFF, self.value & 0xFFFF_FFFF) };
+        let (cur, want) = if self.wide {
+            (current, self.value)
+        } else {
+            (current & 0xFFFF_FFFF, self.value & 0xFFFF_FFFF)
+        };
         match self.mode {
             0 => cur == want,
             // CGEQ: circular (wrapping) greater-or-equal
@@ -242,14 +246,26 @@ impl Vocab {
         let miss = |n: &str| Unresolved(n.to_string());
         let v = |cl: u32, n: &str| t.v(cl, n).ok_or_else(|| miss(&format!("NV{cl:04X}_{n}")));
         let f = |cl: u32, n: &str| t.f(cl, n).ok_or_else(|| miss(&format!("NV{cl:04X}_{n}")));
-        let fa0 = |cl: u32, n: &str| t.fa(cl, n, 0).ok_or_else(|| miss(&format!("NV{cl:04X}_{n}(0)")));
+        let fa0 = |cl: u32, n: &str| {
+            t.fa(cl, n, 0)
+                .ok_or_else(|| miss(&format!("NV{cl:04X}_{n}(0)")))
+        };
         let arr = |cl: u32, n: &str| -> Result<(u32, u32), Unresolved> {
-            let b = t.a(cl, n, 0).ok_or_else(|| miss(&format!("NV{cl:04X}_{n}(i)")))?;
-            let s = t.a(cl, n, 1).ok_or_else(|| miss(&format!("NV{cl:04X}_{n}(i)")))? - b;
+            let b = t
+                .a(cl, n, 0)
+                .ok_or_else(|| miss(&format!("NV{cl:04X}_{n}(i)")))?;
+            let s = t
+                .a(cl, n, 1)
+                .ok_or_else(|| miss(&format!("NV{cl:04X}_{n}(i)")))?
+                - b;
             Ok((b, s))
         };
-        let assy = r.v("NV_UDISP_FE_CHN_ASSY_BASEADR_CORE").ok_or_else(|| miss("NV_UDISP_FE_CHN_ASSY_BASEADR_CORE"))?;
-        let armed = r.v("NV_UDISP_FE_CHN_ARMED_BASEADR_CORE").ok_or_else(|| miss("NV_UDISP_FE_CHN_ARMED_BASEADR_CORE"))?;
+        let assy = r
+            .v("NV_UDISP_FE_CHN_ASSY_BASEADR_CORE")
+            .ok_or_else(|| miss("NV_UDISP_FE_CHN_ASSY_BASEADR_CORE"))?;
+        let armed = r
+            .v("NV_UDISP_FE_CHN_ARMED_BASEADR_CORE")
+            .ok_or_else(|| miss("NV_UDISP_FE_CHN_ARMED_BASEADR_CORE"))?;
         let win_stride = r
             .a("NV_UDISP_FE_CHN_ASSY_BASEADR_WIN", 1)
             .zip(r.a("NV_UDISP_FE_CHN_ASSY_BASEADR_WIN", 0))
@@ -309,7 +325,11 @@ impl Vocab {
             w_iso0: t
                 .a(win, "SET_CONTEXT_DMA_ISO", 0)
                 .or_else(|| t.a(win, "SET_SURFACE_ADDRESS_LO_ISO", 0))
-                .ok_or_else(|| miss(&format!("NV{win:04X}_SET_CONTEXT_DMA_ISO(0) / SET_SURFACE_ADDRESS_LO_ISO(0)")))?,
+                .ok_or_else(|| {
+                    miss(&format!(
+                        "NV{win:04X}_SET_CONTEXT_DMA_ISO(0) / SET_SURFACE_ADDRESS_LO_ISO(0)"
+                    ))
+                })?,
             i_update: v(imm, "UPDATE")?,
             i_ilk_window: f(imm, "UPDATE_INTERLOCK_WITH_WINDOW")?,
             k_update: v(cur, "UPDATE")?,
@@ -320,7 +340,11 @@ impl Vocab {
     }
 
     fn space(&self, kind: ChannelKind) -> u32 {
-        if kind == ChannelKind::Core { self.core_space } else { self.other_space }
+        if kind == ChannelKind::Core {
+            self.core_space
+        } else {
+            self.other_space
+        }
     }
 
     fn update_of(&self, kind: ChannelKind) -> u32 {
@@ -337,7 +361,11 @@ impl Vocab {
 type ChanSet = u128;
 
 fn bit(chn: u32) -> ChanSet {
-    if (chn as usize) < CHANNELS { 1u128 << chn } else { 0 }
+    if (chn as usize) < CHANNELS {
+        1u128 << chn
+    } else {
+        0
+    }
 }
 
 /// Where a pending update stands.
@@ -349,7 +377,11 @@ enum Stage {
     /// it waits for.
     Interlock { update: u32, ilk: ChanSet },
     /// The group `group` is ready; waiting for head `head`'s vblank (`None`: only an acquire).
-    Latch { update: u32, head: Option<u32>, group: ChanSet },
+    Latch {
+        update: u32,
+        head: Option<u32>,
+        group: ChanSet,
+    },
 }
 
 /// One live channel.
@@ -372,7 +404,15 @@ struct Chan {
 }
 
 impl Chan {
-    fn new(kind: ChannelKind, instance: u32, client: u32, life: u32, pb: Option<PbLoc>, offset: u32, space: u32) -> Chan {
+    fn new(
+        kind: ChannelKind,
+        instance: u32,
+        client: u32,
+        life: u32,
+        pb: Option<PbLoc>,
+        offset: u32,
+        space: u32,
+    ) -> Chan {
         let words = (space / 4) as usize;
         Chan {
             kind,
@@ -452,7 +492,15 @@ impl Engine {
 
     /// ★ A channel came into being (the control link accepted its alloc): GET = PUT = `offset`, empty
     /// state. A previous life of the same number is discarded.
-    pub fn alloc(&mut self, kind: ChannelKind, instance: u32, client: u32, life: u32, pb: Option<PbLoc>, offset: u32) -> Option<u32> {
+    pub fn alloc(
+        &mut self,
+        kind: ChannelKind,
+        instance: u32,
+        client: u32,
+        life: u32,
+        pb: Option<PbLoc>,
+        offset: u32,
+    ) -> Option<u32> {
         let chn = self.channel_number(kind, instance)?;
         let space = self.vocab.space(kind);
         self.chans[chn as usize] = Some(Chan::new(kind, instance, client, life, pb, offset, space));
@@ -481,7 +529,13 @@ impl Engine {
 
     /// ★ Feed channel `chn` the pushbuffer bytes `pb` (its whole ring) up to `put`, and run every
     /// channel whose update became ready. `acquired` answers an acquire against guest memory.
-    pub fn step(&mut self, chn: u32, pb: &[u8], put: u32, acquired: &mut dyn FnMut(&Acquire) -> bool) -> Step {
+    pub fn step(
+        &mut self,
+        chn: u32,
+        pb: &[u8],
+        put: u32,
+        acquired: &mut dyn FnMut(&Acquire) -> bool,
+    ) -> Step {
         let mut st = Step::default();
         self.decode(chn, pb, put, &mut st);
         self.run(&mut st, acquired);
@@ -490,17 +544,38 @@ impl Engine {
 
     /// ★ A cursor PIO write (`off` inside the cursor channel's user area) — applied at once; an
     /// `Update` is an update like any other.
-    pub fn cursor_write(&mut self, head: u32, off: u32, val: u32, acquired: &mut dyn FnMut(&Acquire) -> bool) -> Step {
+    pub fn cursor_write(
+        &mut self,
+        head: u32,
+        off: u32,
+        val: u32,
+        acquired: &mut dyn FnMut(&Acquire) -> bool,
+    ) -> Step {
         let mut st = Step::default();
-        let Some(chn) = self.channel_number(ChannelKind::Cursor, head) else { return st };
+        let Some(chn) = self.channel_number(ChannelKind::Cursor, head) else {
+            return st;
+        };
         let space = self.vocab.other_space;
         if let Some(c) = self.chans[chn as usize].as_mut() {
             if off % 4 != 0 || off >= space {
                 self.exceptions += 1;
-                st.effects.push(Effect::Exception { chn, at: 0, what: format!("cursor PIO write at {off:#x} is outside its {space:#x}-byte method space") });
+                st.effects.push(Effect::Exception {
+                    chn,
+                    at: 0,
+                    what: format!(
+                        "cursor PIO write at {off:#x} is outside its {space:#x}-byte method space"
+                    ),
+                });
                 return st;
             }
-            c.queue.push_back(Located { write: pushbuf::MethodWrite { method: off, data: val }, header: 0, end: 0 });
+            c.queue.push_back(Located {
+                write: pushbuf::MethodWrite {
+                    method: off,
+                    data: val,
+                },
+                header: 0,
+                end: 0,
+            });
         }
         self.run(&mut st, acquired);
         st
@@ -537,17 +612,25 @@ impl Engine {
                 groups.push(group);
             }
         }
-        groups.into_iter().map(|g| (0..CHANNELS as u32).filter(|n| g & bit(*n) != 0).collect()).collect()
+        groups
+            .into_iter()
+            .map(|g| (0..CHANNELS as u32).filter(|n| g & bit(*n) != 0).collect())
+            .collect()
     }
 
     /// Is any update waiting for an acquire without a vblank to re-check it?
     #[must_use]
     pub fn acquire_pending(&self) -> bool {
-        self.chans.iter().flatten().any(|c| matches!(c.stage, Stage::Latch { head: None, .. }))
+        self.chans
+            .iter()
+            .flatten()
+            .any(|c| matches!(c.stage, Stage::Latch { head: None, .. }))
     }
 
     fn decode(&mut self, chn: u32, pb: &[u8], put: u32, st: &mut Step) {
-        let Some(c) = self.chans.get_mut(chn as usize).and_then(|c| c.as_mut()) else { return };
+        let Some(c) = self.chans.get_mut(chn as usize).and_then(|c| c.as_mut()) else {
+            return;
+        };
         if c.halted || c.decoded == put {
             return;
         }
@@ -566,10 +649,20 @@ impl Engine {
         }
         if over || err.is_some() {
             let what = match err {
-                _ if over => format!("more than {MAX_QUEUE} undispatched methods (a PUT that ignored GET)"),
-                Some(DecodeError::BadOpcode { word, .. }) => format!("opcode {} in word {word:#010x}", word >> 29),
-                Some(DecodeError::Truncated { .. }) => "a method's data runs past PUT or the pushbuffer".to_string(),
-                Some(DecodeError::BadPointers) => format!("PUT {put:#x} / GET {:#x} outside the {}-byte pushbuffer", c.decoded, pb.len()),
+                _ if over => {
+                    format!("more than {MAX_QUEUE} undispatched methods (a PUT that ignored GET)")
+                }
+                Some(DecodeError::BadOpcode { word, .. }) => {
+                    format!("opcode {} in word {word:#010x}", word >> 29)
+                }
+                Some(DecodeError::Truncated { .. }) => {
+                    "a method's data runs past PUT or the pushbuffer".to_string()
+                }
+                Some(DecodeError::BadPointers) => format!(
+                    "PUT {put:#x} / GET {:#x} outside the {}-byte pushbuffer",
+                    c.decoded,
+                    pb.len()
+                ),
                 Some(DecodeError::Runaway) => "a JUMP cycle".to_string(),
                 None => String::new(),
             };
@@ -607,7 +700,9 @@ impl Engine {
     /// Run channel `n` until it stops. Returns whether it consumed anything.
     fn exec(&mut self, n: u32, st: &mut Step) -> bool {
         let vocab = self.vocab.clone();
-        let Some(c) = self.chans.get_mut(n as usize).and_then(|c| c.as_mut()) else { return false };
+        let Some(c) = self.chans.get_mut(n as usize).and_then(|c| c.as_mut()) else {
+            return false;
+        };
         if c.halted || c.stage != Stage::Running {
             return false;
         }
@@ -623,16 +718,25 @@ impl Engine {
                 st.effects.push(Effect::Exception {
                     chn: n,
                     at: l.header,
-                    what: format!("method {m:#x} outside the {space:#x}-byte method space of {:?} {}", c.kind, c.instance),
+                    what: format!(
+                        "method {m:#x} outside the {space:#x}-byte method space of {:?} {}",
+                        c.kind, c.instance
+                    ),
                 });
                 return any;
             }
             if m == update {
                 let ilk = interlock_set(&vocab, c, l.write.data);
-                c.stage = Stage::Interlock { update: l.write.data, ilk };
+                c.stage = Stage::Interlock {
+                    update: l.write.data,
+                    ilk,
+                };
                 c.get = l.header;
                 if self.trace {
-                    st.effects.push(Effect::Trace(format!("chn {n} UPDATE {:#x} at {:#x} waits for {ilk:#x}", l.write.data, l.header)));
+                    st.effects.push(Effect::Trace(format!(
+                        "chn {n} UPDATE {:#x} at {:#x} waits for {ilk:#x}",
+                        l.write.data, l.header
+                    )));
                 }
                 return any;
             }
@@ -653,12 +757,19 @@ impl Engine {
     /// The first set of channels stopped at an UPDATE whose interlocks are all satisfied.
     fn ready_group(&self) -> Option<Vec<u32>> {
         let pending: ChanSet = (0..CHANNELS as u32)
-            .filter(|n| matches!(self.chans[*n as usize].as_ref().map(|c| c.stage), Some(Stage::Interlock { .. })))
+            .filter(|n| {
+                matches!(
+                    self.chans[*n as usize].as_ref().map(|c| c.stage),
+                    Some(Stage::Interlock { .. })
+                )
+            })
             .fold(0, |m, n| m | bit(n));
         if pending == 0 {
             return None;
         }
-        let live: ChanSet = (0..CHANNELS as u32).filter(|n| self.chans[*n as usize].is_some()).fold(0, |m, n| m | bit(n));
+        let live: ChanSet = (0..CHANNELS as u32)
+            .filter(|n| self.chans[*n as usize].is_some())
+            .fold(0, |m, n| m | bit(n));
         for start in 0..CHANNELS as u32 {
             if pending & bit(start) == 0 {
                 continue;
@@ -670,7 +781,8 @@ impl Engine {
                 let mut want = 0;
                 for n in 0..CHANNELS as u32 {
                     if group & bit(n) != 0
-                        && let Some(Stage::Interlock { ilk, .. }) = self.chans[n as usize].as_ref().map(|c| c.stage)
+                        && let Some(Stage::Interlock { ilk, .. }) =
+                            self.chans[n as usize].as_ref().map(|c| c.stage)
                     {
                         want |= ilk & live;
                     }
@@ -686,22 +798,38 @@ impl Engine {
                 group = next;
             }
             if ready {
-                return Some((0..CHANNELS as u32).filter(|n| group & bit(*n) != 0).collect());
+                return Some(
+                    (0..CHANNELS as u32)
+                        .filter(|n| group & bit(*n) != 0)
+                        .collect(),
+                );
             }
         }
         None
     }
 
     /// A group is ready: latch it now, or park it for a vblank / an acquire.
-    fn group_ready(&mut self, group: &[u32], st: &mut Step, acquired: &mut dyn FnMut(&Acquire) -> bool) {
+    fn group_ready(
+        &mut self,
+        group: &[u32],
+        st: &mut Step,
+        acquired: &mut dyn FnMut(&Acquire) -> bool,
+    ) {
         // a non-tearing window on an active head latches at that head's vblank (with the group)
         let heads = self.heads_armed();
         let mut vblank_head = None;
         for &n in group {
-            let Some(c) = self.chans[n as usize].as_ref() else { continue };
-            if c.kind == ChannelKind::Window && fld(c.a(self.vocab.w_present), self.vocab.w_present_begin) == self.vocab.w_present_non_tearing {
+            let Some(c) = self.chans[n as usize].as_ref() else {
+                continue;
+            };
+            if c.kind == ChannelKind::Window
+                && fld(c.a(self.vocab.w_present), self.vocab.w_present_begin)
+                    == self.vocab.w_present_non_tearing
+            {
                 let owner = self.owner_head(c.instance);
-                if let Some(h) = owner.filter(|h| heads.iter().any(|m| m.head == *h && m.period_ns > 0)) {
+                if let Some(h) =
+                    owner.filter(|h| heads.iter().any(|m| m.head == *h && m.period_ns > 0))
+                {
                     vblank_head = Some(vblank_head.unwrap_or(h));
                 }
             }
@@ -713,11 +841,18 @@ impl Engine {
             if let Some(c) = self.chans[n as usize].as_mut()
                 && let Stage::Interlock { update, .. } = c.stage
             {
-                c.stage = Stage::Latch { update, head: park, group: set };
+                c.stage = Stage::Latch {
+                    update,
+                    head: park,
+                    group: set,
+                };
             }
         }
         if self.trace {
-            st.effects.push(Effect::Trace(format!("group {group:?} ready, latch {}", park.map_or("now".to_string(), |h| format!("at head {h}'s vblank")))));
+            st.effects.push(Effect::Trace(format!(
+                "group {group:?} ready, latch {}",
+                park.map_or("now".to_string(), |h| format!("at head {h}'s vblank"))
+            )));
         }
         if park.is_none() {
             self.latch_group(group, st, acquired);
@@ -725,9 +860,22 @@ impl Engine {
     }
 
     /// Latch the members of `group` that are in the Latch stage, if every acquire among them holds.
-    fn latch_group(&mut self, group: &[u32], st: &mut Step, acquired: &mut dyn FnMut(&Acquire) -> bool) {
-        let members: Vec<u32> =
-            group.iter().copied().filter(|n| matches!(self.chans[*n as usize].as_ref().map(|c| c.stage), Some(Stage::Latch { .. }))).collect();
+    fn latch_group(
+        &mut self,
+        group: &[u32],
+        st: &mut Step,
+        acquired: &mut dyn FnMut(&Acquire) -> bool,
+    ) {
+        let members: Vec<u32> = group
+            .iter()
+            .copied()
+            .filter(|n| {
+                matches!(
+                    self.chans[*n as usize].as_ref().map(|c| c.stage),
+                    Some(Stage::Latch { .. })
+                )
+            })
+            .collect();
         if members.is_empty() {
             return;
         }
@@ -747,9 +895,14 @@ impl Engine {
         // (`ogkm-580: kernel-open/nvidia-drm/nvidia-drm-modeset.c:93-135`), and WARNs on any other
         // (`[measured m1b]` the first fbdev modeset: `WARN_ON(nv_flip == NULL)`). Snapshotted before
         // any member of the group — the core among them — is armed.
-        let was_active: Vec<(u32, bool)> = members.iter().map(|n| (*n, self.window_was_active(*n, &heads_before))).collect();
+        let was_active: Vec<(u32, bool)> = members
+            .iter()
+            .map(|n| (*n, self.window_was_active(*n, &heads_before)))
+            .collect();
         if self.trace {
-            st.effects.push(Effect::Trace(format!("latch {members:?} (previously active: {was_active:?})")));
+            st.effects.push(Effect::Trace(format!(
+                "latch {members:?} (previously active: {was_active:?})"
+            )));
         }
         for &(n, active) in &was_active {
             self.complete(n, active, st);
@@ -761,10 +914,14 @@ impl Engine {
 
     /// Was channel `n` a window scanning a surface on an active head (per `heads`)?
     fn window_was_active(&self, n: u32, heads: &[HeadMode]) -> bool {
-        let Some(c) = self.chans.get(n as usize).and_then(|c| c.as_ref()) else { return false };
+        let Some(c) = self.chans.get(n as usize).and_then(|c| c.as_ref()) else {
+            return false;
+        };
         c.kind == ChannelKind::Window
             && c.armed(self.vocab.w_iso0) != 0
-            && self.owner_head(c.instance).is_some_and(|h| heads.iter().any(|m| m.head == h && m.period_ns > 0))
+            && self
+                .owner_head(c.instance)
+                .is_some_and(|h| heads.iter().any(|m| m.head == h && m.period_ns > 0))
     }
 
     /// The acquire a window's pending flip waits on, if any.
@@ -786,7 +943,11 @@ impl Engine {
             client: c.client,
             handle,
             offset: u64::from(fld(ctl, v.w_acq_offset)) * 16,
-            value: if wide { u64::from(hi) << 32 | u64::from(c.a(v.w_acq_value)) } else { u64::from(c.a(v.w_acq_value)) },
+            value: if wide {
+                u64::from(hi) << 32 | u64::from(c.a(v.w_acq_value))
+            } else {
+                u64::from(c.a(v.w_acq_value))
+            },
             wide,
             mode: fld(ctl, v.w_acq_mode),
         })
@@ -797,7 +958,9 @@ impl Engine {
     /// does its notifier raise the flip event).
     fn complete(&mut self, n: u32, was_active: bool, st: &mut Step) {
         let v = self.vocab.clone();
-        let Some(c) = self.chans.get_mut(n as usize).and_then(|c| c.as_mut()) else { return };
+        let Some(c) = self.chans.get_mut(n as usize).and_then(|c| c.as_mut()) else {
+            return;
+        };
         let Stage::Latch { .. } = c.stage else { return };
         // 1. arm
         let mut changed = Vec::new();
@@ -882,7 +1045,13 @@ impl Engine {
         let v = &self.vocab;
         (0..self.heads)
             .map(|h| {
-                let Some(core) = self.chans[0].as_ref() else { return HeadMode { head: h, period_ns: 0, raster: (0, 0) } };
+                let Some(core) = self.chans[0].as_ref() else {
+                    return HeadMode {
+                        head: h,
+                        period_ns: 0,
+                        raster: (0, 0),
+                    };
+                };
                 let pclk = core.armed(v.c_pclk.0 + h * v.c_pclk.1);
                 let mut hz = u64::from(fld(pclk, v.c_pclk_hz));
                 if fld(pclk, v.c_pclk_adj) == 1 {
@@ -890,8 +1059,16 @@ impl Engine {
                 }
                 let rs = core.armed(v.c_raster_size.0 + h * v.c_raster_size.1);
                 let (w, ht) = (fld(rs, v.c_raster_w), fld(rs, v.c_raster_h));
-                let period_ns = if hz == 0 || w == 0 || ht == 0 { 0 } else { u64::from(w) * u64::from(ht) * 1_000_000_000 / hz };
-                HeadMode { head: h, period_ns, raster: (w, ht) }
+                let period_ns = if hz == 0 || w == 0 || ht == 0 {
+                    0
+                } else {
+                    u64::from(w) * u64::from(ht) * 1_000_000_000 / hz
+                };
+                HeadMode {
+                    head: h,
+                    period_ns,
+                    raster: (w, ht),
+                }
             })
             .collect()
     }
@@ -912,7 +1089,10 @@ impl Engine {
     /// Is channel `chn` stopped at an update (busy even with nothing left to decode)?
     #[must_use]
     pub fn waiting(&self, chn: u32) -> bool {
-        self.chans.get(chn as usize).and_then(|c| c.as_ref()).is_some_and(|c| c.stage != Stage::Running)
+        self.chans
+            .get(chn as usize)
+            .and_then(|c| c.as_ref())
+            .is_some_and(|c| c.stage != Stage::Running)
     }
 }
 
@@ -920,9 +1100,15 @@ impl Engine {
 fn interlock_set(v: &Vocab, c: &Chan, update: u32) -> ChanSet {
     let mut s = 0;
     let cursors = |flags: u32, first: (u8, u8)| -> ChanSet {
-        (0..8u32).filter(|h| flags >> (u32::from(first.1) + h) & 1 == 1).fold(0, |m, h| m | bit(ChannelKind::Cursor.channel_number(h)))
+        (0..8u32)
+            .filter(|h| flags >> (u32::from(first.1) + h) & 1 == 1)
+            .fold(0, |m, h| m | bit(ChannelKind::Cursor.channel_number(h)))
     };
-    let windows = |flags: u32| -> ChanSet { (0..32u32).filter(|w| flags >> w & 1 == 1).fold(0, |m, w| m | bit(ChannelKind::Window.channel_number(w))) };
+    let windows = |flags: u32| -> ChanSet {
+        (0..32u32)
+            .filter(|w| flags >> w & 1 == 1)
+            .fold(0, |m, w| m | bit(ChannelKind::Window.channel_number(w)))
+    };
     match c.kind {
         ChannelKind::Core => {
             s |= cursors(c.a(v.c_interlock), v.c_ilk_cursor0);
@@ -933,7 +1119,8 @@ fn interlock_set(v: &Vocab, c: &Chan, update: u32) -> ChanSet {
                 s |= bit(0);
             }
             s |= cursors(c.a(v.w_interlock), v.w_ilk_cursor0);
-            s |= windows(c.a(v.w_window_interlock)) & !bit(ChannelKind::Window.channel_number(c.instance));
+            s |= windows(c.a(v.w_window_interlock))
+                & !bit(ChannelKind::Window.channel_number(c.instance));
             if fld(update, v.w_update_ilk_winim) == 1 {
                 s |= bit(ChannelKind::WindowImm.channel_number(c.instance));
             }
@@ -944,7 +1131,9 @@ fn interlock_set(v: &Vocab, c: &Chan, update: u32) -> ChanSet {
             }
         }
         ChannelKind::Cursor => {
-            if v.k_ilk_core.is_some_and(|f| fld(c.a(v.k_interlock), f) == 1) {
+            if v.k_ilk_core
+                .is_some_and(|f| fld(c.a(v.k_interlock), f) == 1)
+            {
                 s |= bit(0);
             }
             s |= windows(c.a(v.k_window_interlock));

@@ -175,7 +175,13 @@ impl Layout {
     ///
     /// # Errors
     /// [`Miss`], by name.
-    pub fn resolve(&self, image: &[u8], client: u32, handle: u32, chn: u32) -> Result<CtxDma, Miss> {
+    pub fn resolve(
+        &self,
+        image: &[u8],
+        client: u32,
+        handle: u32,
+        chn: u32,
+    ) -> Result<CtxDma, Miss> {
         if handle == 0 {
             return Err(Miss::NullHandle);
         }
@@ -193,7 +199,9 @@ impl Layout {
         for i in 0..n {
             let e = u64::from((start + i) & (n - 1));
             let at = self.hash_base + e * 8;
-            let (Some(obj), Some(ctx)) = (word(at), word(at + 4)) else { return Err(Miss::NoTable) };
+            let (Some(obj), Some(ctx)) = (word(at), word(at + 4)) else {
+                return Err(Miss::NoTable);
+            };
             if obj != handle {
                 continue;
             }
@@ -212,7 +220,10 @@ impl Layout {
     /// The context DMA object at `instance` (32-byte units, `disp_inst_mem.c:640-650`).
     fn object(&self, image: &[u8], instance: u32) -> Result<CtxDma, Miss> {
         let at = u64::from(instance) << 5;
-        if at <= self.hash_base + self.hash_bytes - 1 || at < self.obj_base || at + 20 > self.obj_limit + 1 {
+        if at <= self.hash_base + self.hash_bytes - 1
+            || at < self.obj_base
+            || at + 20 > self.obj_limit + 1
+        {
             return Err(Miss::BadInstance(instance));
         }
         let w = |i: u64| -> Result<u32, Miss> {
@@ -234,7 +245,8 @@ impl Layout {
         };
         let g = crate::class::get;
         let base = (u64::from(g(w2, self.base_hi)) << 32 | u64::from(g(w1, self.base_lo))) << 8;
-        let limit = ((u64::from(g(w4, self.limit_hi)) << 32 | u64::from(g(w3, self.limit_lo))) << 8) | 0xFF;
+        let limit =
+            ((u64::from(g(w4, self.limit_hi)) << 32 | u64::from(g(w3, self.limit_lo))) << 8) | 0xFF;
         if limit < base {
             return Err(Miss::BadInstance(instance));
         }
@@ -253,11 +265,22 @@ pub(crate) mod tests {
     use super::*;
 
     pub(crate) fn layout() -> Layout {
-        Layout::from_regs(&Regs::for_ip("580.159.04", 0x0401_0000).unwrap()).expect("derived layout")
+        Layout::from_regs(&Regs::for_ip("580.159.04", 0x0401_0000).unwrap())
+            .expect("derived layout")
     }
 
     /// Write what `instmemCommitContextDma_v03_00` + `_instmemAddHashEntry` write, into `img`.
-    pub(crate) fn bind(img: &mut [u8], l: &Layout, client: u32, handle: u32, chn: u32, inst32: u32, node: u32, base: u64, limit: u64) {
+    pub(crate) fn bind(
+        img: &mut [u8],
+        l: &Layout,
+        client: u32,
+        handle: u32,
+        chn: u32,
+        inst32: u32,
+        node: u32,
+        base: u64,
+        limit: u64,
+    ) {
         let mut e = l.hash(client, handle, chn) as usize;
         loop {
             let at = e * 8;
@@ -270,7 +293,13 @@ pub(crate) mod tests {
         img[e * 8..e * 8 + 4].copy_from_slice(&handle.to_le_bytes());
         img[e * 8 + 4..e * 8 + 8].copy_from_slice(&ctx.to_le_bytes());
         let o = (inst32 as usize) << 5;
-        let words = [node | (1 << 2), (base >> 8) as u32, (base >> 40) as u32, (limit >> 8) as u32, (limit >> 40) as u32];
+        let words = [
+            node | (1 << 2),
+            (base >> 8) as u32,
+            (base >> 40) as u32,
+            (limit >> 8) as u32,
+            (limit >> 40) as u32,
+        ];
         for (i, w) in words.iter().enumerate() {
             img[o + 4 * i..o + 4 * i + 4].copy_from_slice(&w.to_le_bytes());
         }
@@ -286,16 +315,50 @@ pub(crate) mod tests {
         assert_eq!(l.inst_bytes(), 0x1_0000);
         let mut img = vec![0u8; 0x1_0000];
         let c = 0xc1d0_0015;
-        bind(&mut img, &l, c, 0xcaf0_0010, 0, 0x100, 2, 0x1_2345_6000, 0x1_2345_6fff);
+        bind(
+            &mut img,
+            &l,
+            c,
+            0xcaf0_0010,
+            0,
+            0x100,
+            2,
+            0x1_2345_6000,
+            0x1_2345_6fff,
+        );
         // a handle chosen to collide with the first on channel 0
-        let other = (0..0xFFFFu32).map(|x| 0xbee0_0000 | x).find(|h| l.hash(c, *h, 0) == l.hash(c, 0xcaf0_0010, 0)).unwrap();
-        bind(&mut img, &l, c, other, 0, 0x101, 1, 0x4000_0000, 0x4000_ffff);
+        let other = (0..0xFFFFu32)
+            .map(|x| 0xbee0_0000 | x)
+            .find(|h| l.hash(c, *h, 0) == l.hash(c, 0xcaf0_0010, 0))
+            .unwrap();
+        bind(
+            &mut img,
+            &l,
+            c,
+            other,
+            0,
+            0x101,
+            1,
+            0x4000_0000,
+            0x4000_ffff,
+        );
         let a = l.resolve(&img, c, 0xcaf0_0010, 0).unwrap();
-        assert_eq!((a.target, a.base, a.limit, a.writable), (Target::Sysmem, 0x1_2345_6000, 0x1_2345_6fff, true));
+        assert_eq!(
+            (a.target, a.base, a.limit, a.writable),
+            (Target::Sysmem, 0x1_2345_6000, 0x1_2345_6fff, true)
+        );
         let b = l.resolve(&img, c, other, 0).unwrap();
         assert_eq!((b.target, b.base), (Target::Vidmem, 0x4000_0000));
-        assert_eq!(l.resolve(&img, c, 0xcaf0_0010, 1), Err(Miss::NotBound), "bound to channel 0 only");
-        assert_eq!(l.resolve(&img, c + 1, 0xcaf0_0010, 0), Err(Miss::NotBound), "another client");
+        assert_eq!(
+            l.resolve(&img, c, 0xcaf0_0010, 1),
+            Err(Miss::NotBound),
+            "bound to channel 0 only"
+        );
+        assert_eq!(
+            l.resolve(&img, c + 1, 0xcaf0_0010, 0),
+            Err(Miss::NotBound),
+            "another client"
+        );
         assert_eq!(l.resolve(&img, c, 0, 0), Err(Miss::NullHandle));
         assert_eq!(a.span(0x10, 0x10), Some(0x1_2345_6010));
         assert_eq!(a.span(0xff0, 0x11), None, "one byte past the limit");

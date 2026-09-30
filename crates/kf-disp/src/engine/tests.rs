@@ -19,14 +19,19 @@ fn classes() -> Classes {
 
 fn engine() -> Engine {
     let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();
-    Engine::new(Vocab::resolve(t(), &classes(), &r).expect("GA10x vocabulary"), 4, 8)
+    Engine::new(
+        Vocab::resolve(t(), &classes(), &r).expect("GA10x vocabulary"),
+        4,
+        8,
+    )
 }
 
 fn m(cl: u32, n: &str) -> u32 {
     t().v(cl, n).unwrap_or_else(|| panic!("NV{cl:04X}_{n}"))
 }
 fn ma(cl: u32, n: &str, i: u32) -> u32 {
-    t().a(cl, n, i).unwrap_or_else(|| panic!("NV{cl:04X}_{n}({i})"))
+    t().a(cl, n, i)
+        .unwrap_or_else(|| panic!("NV{cl:04X}_{n}({i})"))
 }
 fn fl(cl: u32, n: &str) -> (u8, u8) {
     t().f(cl, n).unwrap_or_else(|| panic!("NV{cl:04X}_{n}"))
@@ -60,7 +65,11 @@ fn all_ok(_: &Acquire) -> bool {
 }
 
 fn pb() -> Option<PbLoc> {
-    Some(PbLoc { sysmem: true, addr: 0x1000_0000, bytes: 4096 })
+    Some(PbLoc {
+        sysmem: true,
+        addr: 0x1000_0000,
+        bytes: 4096,
+    })
 }
 
 /// Core notifier: SET_CONTEXT_DMA_NOTIFIER, SET_NOTIFIER_CONTROL(offset idx, WRITE_AWAKEN, NOTIFY).
@@ -74,9 +83,16 @@ fn core_notifier(r: &mut Ring, handle: u32, idx: u32) {
 
 /// A head raster + pixel clock (1080p60: 2200×1125 at 148.5 MHz) and window `w` owned by `head`.
 fn modeset(r: &mut Ring, head: u32, w: u32) {
-    let rs = put(put(0, fl(CORE, "HEAD_SET_RASTER_SIZE_WIDTH"), 2200), fl(CORE, "HEAD_SET_RASTER_SIZE_HEIGHT"), 1125);
+    let rs = put(
+        put(0, fl(CORE, "HEAD_SET_RASTER_SIZE_WIDTH"), 2200),
+        fl(CORE, "HEAD_SET_RASTER_SIZE_HEIGHT"),
+        1125,
+    );
     r.m(ma(CORE, "HEAD_SET_RASTER_SIZE", head), rs);
-    r.m(ma(CORE, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", head), 148_500_000);
+    r.m(
+        ma(CORE, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", head),
+        148_500_000,
+    );
     r.m(ma(CORE, "WINDOW_SET_CONTROL", w), head);
 }
 
@@ -102,7 +118,11 @@ fn init_methods_are_consumed_through_the_wrap() {
         }
         let bytes: Vec<u8> = ring.iter().flat_map(|w| w.to_le_bytes()).collect();
         let s = e.step(0, &bytes, put_off as u32, &mut all_ok);
-        assert!(s.effects.is_empty(), "no UPDATE, no effect: {:?}", s.effects);
+        assert!(
+            s.effects.is_empty(),
+            "no UPDATE, no effect: {:?}",
+            s.effects
+        );
         assert_eq!(s.gets, vec![(0, 1, put_off as u32)]);
         total += n;
         if put_off + 8 > 4040 {
@@ -123,17 +143,39 @@ fn a_core_update_arms_then_notifies() {
     let mut r = Ring::new();
     r.m(ma(CORE, "WINDOW_SET_CONTROL", 1), 0);
     core_notifier(&mut r, 0xcafe_0001, 2);
-    r.m(m(CORE, "SET_INTERLOCK_FLAGS"), 0).m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 0).m(m(CORE, "UPDATE"), 0);
+    r.m(m(CORE, "SET_INTERLOCK_FLAGS"), 0)
+        .m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 0)
+        .m(m(CORE, "UPDATE"), 0);
     let s = e.step(0, &r.bytes(), r.put(), &mut all_ok);
     match s.effects.as_slice() {
-        [Effect::CoreArmed(w), Effect::Notify { chn: 0, client: CLIENT, handle: 0xcafe_0001, offset: 32, awaken: true }] => {
-            assert!(w.contains(&(ma(CORE, "WINDOW_SET_CONTROL", 1), 0)) || !w.iter().any(|(o, _)| *o == ma(CORE, "WINDOW_SET_CONTROL", 1)));
-            assert!(w.iter().any(|(o, v)| *o == m(CORE, "SET_CONTEXT_DMA_NOTIFIER") && *v == 0xcafe_0001));
+        [
+            Effect::CoreArmed(w),
+            Effect::Notify {
+                chn: 0,
+                client: CLIENT,
+                handle: 0xcafe_0001,
+                offset: 32,
+                awaken: true,
+            },
+        ] => {
+            assert!(
+                w.contains(&(ma(CORE, "WINDOW_SET_CONTROL", 1), 0))
+                    || !w
+                        .iter()
+                        .any(|(o, _)| *o == ma(CORE, "WINDOW_SET_CONTROL", 1))
+            );
+            assert!(
+                w.iter()
+                    .any(|(o, v)| *o == m(CORE, "SET_CONTEXT_DMA_NOTIFIER") && *v == 0xcafe_0001)
+            );
         }
         other => panic!("{other:?}"),
     }
     assert_eq!(s.gets, vec![(0, 1, r.put())]);
-    assert_eq!(e.armed(ChannelKind::Core, 0, m(CORE, "SET_CONTEXT_DMA_NOTIFIER")), Some(0xcafe_0001));
+    assert_eq!(
+        e.armed(ChannelKind::Core, 0, m(CORE, "SET_CONTEXT_DMA_NOTIFIER")),
+        Some(0xcafe_0001)
+    );
     assert_eq!(e.updates, 1);
 }
 
@@ -156,18 +198,31 @@ fn an_interlocked_group_waits_for_every_member() {
     c.m(m(CORE, "UPDATE"), 0);
     let s = e.step(0, &c.bytes(), c.put(), &mut all_ok);
     assert!(s.effects.is_empty(), "{:?}", s.effects);
-    assert!(s.gets.contains(&(0, 1, at_update)), "GET stands before the UPDATE: {:?}", s.gets);
+    assert!(
+        s.gets.contains(&(0, 1, at_update)),
+        "GET stands before the UPDATE: {:?}",
+        s.gets
+    );
     assert!(e.waiting(0));
     // the immediate channel (interlocked with its window) arrives first — still waiting
     let mut i = Ring::new();
-    i.m(m(IMM, "UPDATE"), put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1));
+    i.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
     let s = e.step(33, &i.bytes(), i.put(), &mut all_ok);
     assert!(s.effects.is_empty());
     // the window: interlocked with core and its immediate channel
     let mut w = Ring::new();
-    w.m(m(WIN, "SET_INTERLOCK_FLAGS"), put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1));
+    w.m(
+        m(WIN, "SET_INTERLOCK_FLAGS"),
+        put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1),
+    );
     w.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 0);
-    w.m(m(WIN, "UPDATE"), put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1));
+    w.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
     let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
     let kinds: Vec<&str> = s
         .effects
@@ -180,8 +235,17 @@ fn an_interlocked_group_waits_for_every_member() {
             _ => "other",
         })
         .collect();
-    assert_eq!(kinds, vec!["armed", "notify", "latched", "heads"], "{:?}", s.effects);
-    assert!(s.gets.contains(&(0, 1, c.put())) && s.gets.contains(&(1, 1, w.put())) && s.gets.contains(&(33, 1, i.put())));
+    assert_eq!(
+        kinds,
+        vec!["armed", "notify", "latched", "heads"],
+        "{:?}",
+        s.effects
+    );
+    assert!(
+        s.gets.contains(&(0, 1, c.put()))
+            && s.gets.contains(&(1, 1, w.put()))
+            && s.gets.contains(&(33, 1, i.put()))
+    );
     assert!(!e.waiting(0) && !e.waiting(1) && !e.waiting(33));
     let h = e.heads_armed();
     assert_eq!(h[0].raster, (2200, 1125));
@@ -202,14 +266,27 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
     e.step(0, &c.bytes(), c.put(), &mut all_ok);
     let mut w = Ring::new();
     w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
-    w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1), fl(WIN, "SET_NOTIFIER_CONTROL_MODE"), 1));
+    w.m(
+        m(WIN, "SET_NOTIFIER_CONTROL"),
+        put(
+            put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1),
+            fl(WIN, "SET_NOTIFIER_CONTROL_MODE"),
+            1,
+        ),
+    );
     // acquire: semaphore at 16-byte slot 3 must EQUAL 0xf473f473
     w.m(m(WIN, "SET_CONTEXT_DMA_ACQ_SEMAPHORE"), 0xcafe_0a00);
-    w.m(m(WIN, "SET_ACQ_SEMAPHORE_CONTROL"), put(0, fl(WIN, "SET_ACQ_SEMAPHORE_CONTROL_OFFSET"), 3));
+    w.m(
+        m(WIN, "SET_ACQ_SEMAPHORE_CONTROL"),
+        put(0, fl(WIN, "SET_ACQ_SEMAPHORE_CONTROL_OFFSET"), 3),
+    );
     w.m(m(WIN, "SET_ACQ_SEMAPHORE_VALUE"), 0xf473_f473);
     // release: 0xd00dd00d at slot 4
     w.m(m(WIN, "SET_CONTEXT_DMA_SEMAPHORE"), 0xcafe_0b00);
-    w.m(m(WIN, "SET_SEMAPHORE_CONTROL"), put(0, fl(WIN, "SET_SEMAPHORE_CONTROL_OFFSET"), 4));
+    w.m(
+        m(WIN, "SET_SEMAPHORE_CONTROL"),
+        put(0, fl(WIN, "SET_SEMAPHORE_CONTROL_OFFSET"), 4),
+    );
     w.m(m(WIN, "SET_SEMAPHORE_RELEASE"), 0xd00d_d00d);
     let at = w.put();
     w.m(m(WIN, "UPDATE"), 0);
@@ -226,11 +303,30 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
     assert!(e.waiting(1));
     sem = 0xf473_f473;
     let s = e.vblank(1, &mut |a: &Acquire| a.satisfied_by(sem));
-    assert!(s.effects.is_empty(), "another head's vblank latches nothing");
+    assert!(
+        s.effects.is_empty(),
+        "another head's vblank latches nothing"
+    );
     let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
     // the window had no surface before this flip: the notifier is written, the flip EVENT is not
     match s.effects.as_slice() {
-        [Effect::Latched { window: 0 }, Effect::Release { handle: 0xcafe_0b00, offset: 64, value: 0xd00d_d00d, wide: false, .. }, Effect::Notify { chn: 1, handle: 0xcafe_00f0, offset: 16, awaken: false, .. }] => {}
+        [
+            Effect::Latched { window: 0 },
+            Effect::Release {
+                handle: 0xcafe_0b00,
+                offset: 64,
+                value: 0xd00d_d00d,
+                wide: false,
+                ..
+            },
+            Effect::Notify {
+                chn: 1,
+                handle: 0xcafe_00f0,
+                offset: 16,
+                awaken: false,
+                ..
+            },
+        ] => {}
         other => panic!("{other:?}"),
     }
     assert!(s.gets.contains(&(1, 1, w.put())));
@@ -245,7 +341,21 @@ fn flips_without_an_active_head_latch_at_once() {
     w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0x77);
     w.m(m(WIN, "UPDATE"), 0);
     let s = e.step(3, &w.bytes(), w.put(), &mut all_ok);
-    assert!(matches!(s.effects.as_slice(), [Effect::Latched { window: 2 }, Effect::Notify { chn: 3, handle: 0x77, .. }]), "{:?}", s.effects);
+    assert!(
+        matches!(
+            s.effects.as_slice(),
+            [
+                Effect::Latched { window: 2 },
+                Effect::Notify {
+                    chn: 3,
+                    handle: 0x77,
+                    ..
+                }
+            ]
+        ),
+        "{:?}",
+        s.effects
+    );
 }
 
 /// ⊘ Hostile guest: a method outside the method space, a bad opcode and a JUMP cycle each stop
@@ -256,9 +366,18 @@ fn hostile_streams_stop_the_channel_by_name() {
     let mut e = engine();
     e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
     let mut w = Ring::new();
-    w.m(m(WIN, "SET_PRESENT_CONTROL"), 0).m(0x800, 1).m(m(WIN, "UPDATE"), 0);
+    w.m(m(WIN, "SET_PRESENT_CONTROL"), 0)
+        .m(0x800, 1)
+        .m(m(WIN, "UPDATE"), 0);
     let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
-    assert!(matches!(s.effects.as_slice(), [Effect::Exception { chn: 1, at: 8, .. }]), "{:?}", s.effects);
+    assert!(
+        matches!(
+            s.effects.as_slice(),
+            [Effect::Exception { chn: 1, at: 8, .. }]
+        ),
+        "{:?}",
+        s.effects
+    );
     assert!(s.gets.contains(&(1, 1, 8)));
     let s = e.step(1, &w.bytes(), w.put() + 8, &mut all_ok);
     assert!(s.effects.is_empty(), "halted: nothing runs");
@@ -267,19 +386,36 @@ fn hostile_streams_stop_the_channel_by_name() {
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     let mut bad = vec![0u8; 4096];
     bad[0..4].copy_from_slice(&(7u32 << 29).to_le_bytes());
-    assert!(matches!(e.step(0, &bad, 4, &mut all_ok).effects.as_slice(), [Effect::Exception { .. }]));
+    assert!(matches!(
+        e.step(0, &bad, 4, &mut all_ok).effects.as_slice(),
+        [Effect::Exception { .. }]
+    ));
     let mut e = engine();
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     let mut cyc = vec![0u8; 4096];
     cyc[0..4].copy_from_slice(&(1u32 << 29).to_le_bytes());
-    assert!(matches!(e.step(0, &cyc, 8, &mut all_ok).effects.as_slice(), [Effect::Exception { .. }]));
+    assert!(matches!(
+        e.step(0, &cyc, 8, &mut all_ok).effects.as_slice(),
+        [Effect::Exception { .. }]
+    ));
     let mut e = engine();
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
-    assert!(matches!(e.step(0, &[0u8; 4096], 8192, &mut all_ok).effects.as_slice(), [Effect::Exception { .. }]));
+    assert!(matches!(
+        e.step(0, &[0u8; 4096], 8192, &mut all_ok)
+            .effects
+            .as_slice(),
+        [Effect::Exception { .. }]
+    ));
     assert_eq!(e.exceptions, 1);
     // a channel number the display does not have is not allocated
-    assert!(e.alloc(ChannelKind::Window, 8, CLIENT, 1, pb(), 0).is_none());
-    assert!(e.alloc(ChannelKind::Cursor, 4, CLIENT, 1, None, 0).is_none());
+    assert!(
+        e.alloc(ChannelKind::Window, 8, CLIENT, 1, pb(), 0)
+            .is_none()
+    );
+    assert!(
+        e.alloc(ChannelKind::Cursor, 4, CLIENT, 1, None, 0)
+            .is_none()
+    );
 }
 
 /// A group never waits on a channel that is not allocated (the core interlocks with windows NVKMS
@@ -290,9 +426,14 @@ fn an_unallocated_interlock_target_does_not_block() {
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     let mut c = Ring::new();
     core_notifier(&mut c, 0x1, 0);
-    c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 0xFF).m(m(CORE, "UPDATE"), 0);
+    c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 0xFF)
+        .m(m(CORE, "UPDATE"), 0);
     let s = e.step(0, &c.bytes(), c.put(), &mut all_ok);
-    assert!(s.effects.iter().any(|x| matches!(x, Effect::Notify { .. })), "{:?}", s.effects);
+    assert!(
+        s.effects.iter().any(|x| matches!(x, Effect::Notify { .. })),
+        "{:?}",
+        s.effects
+    );
 }
 
 /// Cursor PIO: an Update arms the cursor channel at once; a write outside its space is refused.
@@ -313,13 +454,27 @@ fn cursor_pio_updates_arm() {
 /// The acquire modes: EQ, CGEQ (wrapping), STRICT_GEQ; 32-bit compares ignore the high word.
 #[test]
 fn acquire_modes() {
-    let a = |mode, value, wide| Acquire { chn: 1, client: 0, handle: 1, offset: 0, value, wide, mode };
+    let a = |mode, value, wide| Acquire {
+        chn: 1,
+        client: 0,
+        handle: 1,
+        offset: 0,
+        value,
+        wide,
+        mode,
+    };
     assert!(a(0, 5, false).satisfied_by(0xFFFF_FFFF_0000_0005));
     assert!(!a(0, 5, false).satisfied_by(6));
     assert!(a(1, 0xFFFF_FFF0, false).satisfied_by(2), "CGEQ wraps");
-    assert!(!a(2, 0xFFFF_FFF0, false).satisfied_by(2), "STRICT_GEQ does not");
+    assert!(
+        !a(2, 0xFFFF_FFF0, false).satisfied_by(2),
+        "STRICT_GEQ does not"
+    );
     assert!(a(2, 5, true).satisfied_by(5));
-    assert!(!a(9, 5, true).satisfied_by(5), "an unknown mode never holds");
+    assert!(
+        !a(9, 5, true).satisfied_by(5),
+        "an unknown mode never holds"
+    );
 }
 
 /// ★ `[measured m1a]` NVKMS kicks PUT to the end of the ring, then writes the wrap JUMP there and
@@ -363,20 +518,38 @@ fn the_flip_event_is_raised_only_for_a_window_that_was_active() {
     e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
     let mut c = Ring::new();
     modeset(&mut c, 0, 0);
-    c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 1).m(m(CORE, "UPDATE"), 0);
+    c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 1)
+        .m(m(CORE, "UPDATE"), 0);
     e.step(0, &c.bytes(), c.put(), &mut all_ok);
     let flip = |w: &mut Ring, surface: u32| {
         w.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), surface);
         w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0x99);
-        w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(0, fl(WIN, "SET_NOTIFIER_CONTROL_MODE"), 1));
-        w.m(m(WIN, "SET_INTERLOCK_FLAGS"), put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1));
+        w.m(
+            m(WIN, "SET_NOTIFIER_CONTROL"),
+            put(0, fl(WIN, "SET_NOTIFIER_CONTROL_MODE"), 1),
+        );
+        w.m(
+            m(WIN, "SET_INTERLOCK_FLAGS"),
+            put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1),
+        );
         w.m(m(WIN, "UPDATE"), 0);
     };
     // the modeset's own window update (interlocked with the core): no surface before -> no event
     let mut w = Ring::new();
     flip(&mut w, 0x5000);
     let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
-    assert!(s.effects.iter().any(|x| matches!(x, Effect::Notify { chn: 1, awaken: false, .. })), "{:?}", s.effects);
+    assert!(
+        s.effects.iter().any(|x| matches!(
+            x,
+            Effect::Notify {
+                chn: 1,
+                awaken: false,
+                ..
+            }
+        )),
+        "{:?}",
+        s.effects
+    );
     // a plain flip now: previously active -> the event
     let at = w.put();
     w.m(m(WIN, "SET_INTERLOCK_FLAGS"), 0);
@@ -386,5 +559,16 @@ fn the_flip_event_is_raised_only_for_a_window_that_was_active() {
     assert!(s.effects.is_empty(), "parked for vblank");
     let _ = at;
     let s = e.vblank(0, &mut all_ok);
-    assert!(s.effects.iter().any(|x| matches!(x, Effect::Notify { chn: 1, awaken: true, .. })), "{:?}", s.effects);
+    assert!(
+        s.effects.iter().any(|x| matches!(
+            x,
+            Effect::Notify {
+                chn: 1,
+                awaken: true,
+                ..
+            }
+        )),
+        "{:?}",
+        s.effects
+    );
 }

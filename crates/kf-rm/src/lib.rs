@@ -167,7 +167,13 @@ impl core::fmt::Debug for ObjectLinks {
             .field("objects", &self.objects.is_some())
             .field("memory", &self.memory.is_some())
             .field("channels", &self.channels.is_some())
-            .field("display", &self.display.as_ref().map(|d| (d.row.chips, d.model.is_some())))
+            .field(
+                "display",
+                &self
+                    .display
+                    .as_ref()
+                    .map(|d| (d.row.chips, d.model.is_some())),
+            )
             .finish()
     }
 }

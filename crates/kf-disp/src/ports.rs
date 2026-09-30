@@ -82,7 +82,9 @@ impl Ports {
     /// ★ **vCPU**: the guest wrote PUT for channel number `chn`. Lock-free: one store. `false` for a
     /// channel number the display does not have (the write is then counted and dropped).
     pub fn post_put(&self, chn: u32, put: u32) -> bool {
-        let Some(c) = self.chan(chn) else { return false };
+        let Some(c) = self.chan(chn) else {
+            return false;
+        };
         c.put.store(put, Ordering::Release);
         self.puts_posted.fetch_add(1, Ordering::Relaxed);
         true
@@ -133,7 +135,9 @@ impl Ports {
     /// ★ **Worker**: publish GET for channel `chn`, IF the channel is still the life `life`. `false`
     /// when it was freed (or reborn) meanwhile — nothing is published then.
     pub fn publish_get(&self, chn: u32, life: u32, get: u32) -> bool {
-        let Some(c) = self.chan(chn) else { return false };
+        let Some(c) = self.chan(chn) else {
+            return false;
+        };
         if c.life.load(Ordering::Acquire) != life {
             return false;
         }
@@ -144,7 +148,8 @@ impl Ports {
     /// Is channel `chn` idle — allocated, and everything posted consumed and published?
     #[must_use]
     pub fn idle(&self, chn: u32) -> bool {
-        self.chan(chn).is_some_and(|c| c.get.load(Ordering::Acquire) == c.put.load(Ordering::Acquire))
+        self.chan(chn)
+            .is_some_and(|c| c.get.load(Ordering::Acquire) == c.put.load(Ordering::Acquire))
     }
 }
 
@@ -212,7 +217,9 @@ impl Ports {
     /// `RM_INTR_DISPATCH`: bit h = head h has an RM head-timing event pending.
     #[must_use]
     pub fn rm_dispatch(&self, heads: usize) -> u32 {
-        (0..heads.min(MAX_HEADS)).filter(|h| self.rm_head_timing(*h) != 0).fold(0, |m, h| m | (1 << h))
+        (0..heads.min(MAX_HEADS))
+            .filter(|h| self.rm_head_timing(*h) != 0)
+            .fold(0, |m, h| m | (1 << h))
     }
 
     /// `RM_INTR_STAT_CTRL_DISP`: AWAKEN (any window or core AWAKEN pending) and WIN_SEM, at the
@@ -220,7 +227,9 @@ impl Ports {
     #[must_use]
     pub fn rm_ctrl_disp(&self, awaken_bit: u8, win_sem_bit: Option<u8>) -> u32 {
         let mut v = 0;
-        if self.awaken_win.load(Ordering::Acquire) != 0 || self.awaken_other.load(Ordering::Acquire) != 0 {
+        if self.awaken_win.load(Ordering::Acquire) != 0
+            || self.awaken_other.load(Ordering::Acquire) != 0
+        {
             v |= 1 << awaken_bit;
         }
         if let Some(b) = win_sem_bit
@@ -259,12 +268,18 @@ mod tests {
         assert!(p.idle(0));
         p.post_put(0, 0x80);
         p.release(0);
-        assert!(!p.publish_get(0, g, 0x80), "freed: the old life's GET is discarded");
+        assert!(
+            !p.publish_get(0, g, 0x80),
+            "freed: the old life's GET is discarded"
+        );
         let g2 = p.allocate(0, 0).unwrap();
         assert_ne!(g, g2);
         assert!(!p.publish_get(0, g, 0x10), "reborn: still discarded");
         assert!(p.publish_get(0, g2, 0));
-        assert!(!p.post_put(NUM_CHANNELS as u32, 4), "a channel number past the file is refused");
+        assert!(
+            !p.post_put(NUM_CHANNELS as u32, 4),
+            "a channel number past the file is refused"
+        );
     }
 
     /// ★ The worker sets, the guest write-1-clears, and the ISR's first reads are derived.
@@ -277,7 +292,11 @@ mod tests {
         assert_eq!(p.event(EventReg::AwakenWin), 0);
         assert_eq!(p.rm_ctrl_disp(8, Some(9)), 0);
         p.raise(EventReg::HeadTiming(1), 0b10);
-        assert_eq!(p.rm_dispatch(4), 0, "a disabled head event does not reach RM");
+        assert_eq!(
+            p.rm_dispatch(4),
+            0,
+            "a disabled head event does not reach RM"
+        );
         p.guest_write(EventReg::HeadTimingEn(1), 0b10);
         assert_eq!(p.rm_dispatch(4), 0b10);
         assert_eq!(p.rm_head_timing(1), 0b10);

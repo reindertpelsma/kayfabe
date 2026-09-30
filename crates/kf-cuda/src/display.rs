@@ -24,12 +24,19 @@ pub struct DisplayGpu {
 
 impl std::fmt::Debug for DisplayGpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DisplayGpu").field("device", &self.device).field("store_bytes", &self.store.map(|s| s.1)).finish()
+        f.debug_struct("DisplayGpu")
+            .field("device", &self.device)
+            .field("store_bytes", &self.store.map(|s| s.1))
+            .finish()
     }
 }
 
 fn refused(what: &'static str, name: String) -> CudaError {
-    CudaError::Refused { what, code: 0, name }
+    CudaError::Refused {
+        what,
+        code: 0,
+        name,
+    }
 }
 
 impl DisplayGpu {
@@ -42,7 +49,12 @@ impl DisplayGpu {
         cu.init()?;
         let device = cu.device_by_pci_bus_id(bdf)?;
         let ctx = cu.ctx_create(device)?;
-        Ok(DisplayGpu { cu, ctx, device, store: None })
+        Ok(DisplayGpu {
+            cu,
+            ctx,
+            device,
+            store: None,
+        })
     }
 
     /// Make this context current on the calling thread (the worker calls it once, at its top).
@@ -59,23 +71,40 @@ impl DisplayGpu {
     /// [`CudaError`], naming the import step that refused; a second import is refused.
     pub fn import_store(&mut self, fd: i32, bytes: u64) -> Result<(), CudaError> {
         if self.store.is_some() {
-            return Err(refused("DisplayGpu::import_store", "a store is already imported".into()));
+            return Err(refused(
+                "DisplayGpu::import_store",
+                "a store is already imported".into(),
+            ));
         }
         self.make_current()?;
-        let n = usize::try_from(bytes).map_err(|_| refused("DisplayGpu::import_store", format!("{bytes:#x} does not fit usize")))?;
+        let n = usize::try_from(bytes).map_err(|_| {
+            refused(
+                "DisplayGpu::import_store",
+                format!("{bytes:#x} does not fit usize"),
+            )
+        })?;
         let p = self
             .cu
             .import_and_map(self.device, fd, n)
-            .map_err(|name| CudaError::Refused { what: "cuMemImportFromShareableHandle + cuMemMap (display)", code: 0, name })?;
+            .map_err(|name| CudaError::Refused {
+                what: "cuMemImportFromShareableHandle + cuMemMap (display)",
+                code: 0,
+                name,
+            })?;
         self.store = Some((p, bytes));
         Ok(())
     }
 
     /// The store address of `[off, off+len)`, refused by name unless wholly inside the store.
     fn at(&self, off: u64, len: usize, what: &'static str) -> Result<CUdeviceptr, CudaError> {
-        let Some((base, bytes)) = self.store else { return Err(refused(what, "no store imported".into())) };
+        let Some((base, bytes)) = self.store else {
+            return Err(refused(what, "no store imported".into()));
+        };
         if off.checked_add(len as u64).is_none_or(|e| e > bytes) {
-            return Err(refused(what, format!("[{off:#x}, +{len:#x}) leaves the {bytes:#x}-byte store")));
+            return Err(refused(
+                what,
+                format!("[{off:#x}, +{len:#x}) leaves the {bytes:#x}-byte store"),
+            ));
         }
         Ok(base + off)
     }
@@ -87,7 +116,8 @@ impl DisplayGpu {
     /// Refused by name outside the store; the CUDA error otherwise.
     pub fn read_store(&self, off: u64, buf: &mut [u8]) -> Result<(), CudaError> {
         let src = self.at(off, buf.len(), "DisplayGpu::read_store")?;
-        self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(display read_store)")
+        self.cu
+            .memcpy_d2h(buf, src, "cuMemcpyDtoH(display read_store)")
     }
 
     /// ★ Write `bytes` into the store at `off` (a video-memory notifier or semaphore release).
@@ -96,7 +126,8 @@ impl DisplayGpu {
     /// Refused by name outside the store; the CUDA error otherwise.
     pub fn write_store(&self, off: u64, bytes: &[u8]) -> Result<(), CudaError> {
         let dst = self.at(off, bytes.len(), "DisplayGpu::write_store")?;
-        self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(display write_store)")
+        self.cu
+            .memcpy_h2d(dst, bytes, "cuMemcpyHtoD(display write_store)")
     }
 
     /// ★ Zero `[off, off+len)` of the store (the guest's display instance memory when it is stated:
@@ -105,9 +136,11 @@ impl DisplayGpu {
     /// # Errors
     /// Refused by name outside the store; the CUDA error otherwise.
     pub fn zero_store(&self, off: u64, len: u64) -> Result<(), CudaError> {
-        let n = usize::try_from(len).map_err(|_| refused("DisplayGpu::zero_store", format!("{len:#x}")))?;
+        let n = usize::try_from(len)
+            .map_err(|_| refused("DisplayGpu::zero_store", format!("{len:#x}")))?;
         let dst = self.at(off, n, "DisplayGpu::zero_store")?;
-        self.cu.memset_d8(dst, 0, n, "cuMemsetD8(display zero_store)")
+        self.cu
+            .memset_d8(dst, 0, n, "cuMemsetD8(display zero_store)")
     }
 }
 

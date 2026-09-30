@@ -120,7 +120,14 @@ pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Optio
                 }
                 for i in 0..count {
                     let method = if opcode == 0 { offset + 4 * i } else { offset };
-                    out.push(Located { write: MethodWrite { method, data: word(at + 4 + 4 * i) }, header: at, end });
+                    out.push(Located {
+                        write: MethodWrite {
+                            method,
+                            data: word(at + 4 + 4 * i),
+                        },
+                        header: at,
+                        end,
+                    });
                 }
                 visited += count;
                 at = end;
@@ -206,7 +213,12 @@ mod tests {
         let b = pb(&[0, method(2, 0x204), 7, 8, method(1, 0x200), 1]);
         let (g, get, err) = decode_groups(&b, 0, 24);
         assert_eq!((get, err), (24, None));
-        assert_eq!(g.iter().map(|l| (l.write.method, l.header, l.end)).collect::<Vec<_>>(), vec![(0x204, 4, 16), (0x208, 4, 16), (0x200, 16, 24)]);
+        assert_eq!(
+            g.iter()
+                .map(|l| (l.write.method, l.header, l.end))
+                .collect::<Vec<_>>(),
+            vec![(0x204, 4, 16), (0x208, 4, 16), (0x200, 16, 24)]
+        );
     }
 
     /// A JUMP wraps the ring; a JUMP cycle is a Runaway, never a hang; a truncated header, a bad

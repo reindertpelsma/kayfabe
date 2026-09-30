@@ -123,7 +123,10 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     // ★ M1 (`[measured m1a]` the ledger held 0x20800a76 after nvidia-drm's fbdev took the console):
     // the VGA console save/restore around a console switch (`unix_console.c:74-140`). Our virtual
     // engine has no VGA console and no VBIOS mode to save: `bReturnEarly`, nothing to restore.
-    ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE", "pre_console"),
+    (
+        "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE",
+        "pre_console",
+    ),
     ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE", "echo"),
 ];
 
@@ -778,7 +781,11 @@ impl DisplayModel {
                 // ★ idle = the engine has consumed (and published the effects of) everything the guest
                 // posted: GET == PUT on the shared ports — a PUT is visible here the instant the vCPU
                 // stored it, a GET only after its notifier/semaphore/armed state is out.
-                let state = match self.classes.channel_kind(class).and_then(|kd| self.channels.get(&(kd, inst))) {
+                let state = match self
+                    .classes
+                    .channel_kind(class)
+                    .and_then(|kd| self.channels.get(&(kd, inst)))
+                {
                     Some(ch) if self.ports.idle(ch.kind.channel_number(ch.instance)) => {
                         k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_IDLE")?
                     }
@@ -790,7 +797,10 @@ impl DisplayModel {
                 Ok(p.buf)
             }
             "pre_console" => {
-                let mut p = self.view("NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS", params)?;
+                let mut p = self.view(
+                    "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS",
+                    params,
+                )?;
                 p.set("bReturnEarly", 1);
                 Ok(p.buf)
             }
@@ -837,12 +847,31 @@ impl DisplayModel {
             return false;
         };
         let pb = self.pushbuffers.get(&(class, inst)).copied();
-        let life = self.ports.allocate(kind.channel_number(inst), offset).unwrap_or(0);
+        let life = self
+            .ports
+            .allocate(kind.channel_number(inst), offset)
+            .unwrap_or(0);
         self.channels.insert(
             (kind, inst),
-            Channel { class, kind, instance: inst, client, handle, pb, offset, life },
+            Channel {
+                class,
+                kind,
+                instance: inst,
+                client,
+                handle,
+                pb,
+                offset,
+                life,
+            },
         );
-        self.state(Statement::ChannelAllocated { kind, instance: inst, offset, client, pb, life });
+        self.state(Statement::ChannelAllocated {
+            kind,
+            instance: inst,
+            offset,
+            client,
+            pb,
+            life,
+        });
         true
     }
 
@@ -856,7 +885,10 @@ impl DisplayModel {
         if let Some(k) = key {
             self.channels.remove(&k);
             self.ports.release(k.0.channel_number(k.1));
-            self.state(Statement::ChannelFreed { kind: k.0, instance: k.1 });
+            self.state(Statement::ChannelFreed {
+                kind: k.0,
+                instance: k.1,
+            });
         }
         key.is_some()
     }
@@ -873,7 +905,10 @@ impl DisplayModel {
         for k in &keys {
             self.channels.remove(k);
             self.ports.release(k.0.channel_number(k.1));
-            self.state(Statement::ChannelFreed { kind: k.0, instance: k.1 });
+            self.state(Statement::ChannelFreed {
+                kind: k.0,
+                instance: k.1,
+            });
         }
         keys.len()
     }
@@ -1045,11 +1080,25 @@ mod tests {
             .unwrap();
         assert_eq!(get(&m, s, &r, "channelState"), 1, "IDLE");
         m.ports.post_put(0, 0x40);
-        let r = m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf).unwrap().unwrap();
-        assert_eq!(get(&m, s, &r, "channelState"), 0x40, "BUSY: the guest posted a PUT the engine has not consumed");
+        let r = m
+            .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            get(&m, s, &r, "channelState"),
+            0x40,
+            "BUSY: the guest posted a PUT the engine has not consumed"
+        );
         assert!(m.ports.publish_get(0, life, 0x40));
-        let r = m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf).unwrap().unwrap();
-        assert_eq!(get(&m, s, &r, "channelState"), 1, "IDLE once the engine published GET");
+        let r = m
+            .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            get(&m, s, &r, "channelState"),
+            1,
+            "IDLE once the engine published GET"
+        );
         m.free(0xc1d0_0001, 0xc67d_0000);
         let r = m
             .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)

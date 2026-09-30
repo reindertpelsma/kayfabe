@@ -511,11 +511,21 @@ impl Device {
         // walker's context keeps its own import).
         let display_plane: Option<&'static crate::display::DisplayPlane> = match display_row {
             Some(row) => {
-                let export = rm.export_to_new_fd(store.handle).map_err(|e| format!("display=on: store export: {e:?}"))?;
-                let plane = crate::display::DisplayPlane::build(row, table, &bdf, export.fd_number(), fb_length)?;
+                let export = rm
+                    .export_to_new_fd(store.handle)
+                    .map_err(|e| format!("display=on: store export: {e:?}"))?;
+                let plane = crate::display::DisplayPlane::build(
+                    row,
+                    table,
+                    &bdf,
+                    export.fd_number(),
+                    fb_length,
+                )?;
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
-                eprintln!("kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on {bdf}");
+                eprintln!(
+                    "kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on {bdf}"
+                );
                 Some(Box::leak(Box::new(plane)))
             }
             None => None,
@@ -560,7 +570,10 @@ impl Device {
                         // ★ P5: channel allocs, GPFIFO_SCHEDULE, the token and frees reach the plane,
                         // on the drainer; each answer IS the plane's act.
                         channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
-                        display: display_row.map(|row| kf_rm::DisplaySeat { row, model: display_plane.map(|p| p.model.clone()) }),
+                        display: display_row.map(|row| kf_rm::DisplaySeat {
+                            row,
+                            model: display_plane.map(|p| p.model.clone()),
+                        }),
                     },
                 )
             })
@@ -809,7 +822,9 @@ impl Device {
 
     /// The 32-bit word the shadow holds at `off` (0 when no piece covers it).
     pub(crate) fn shadow_word(&self, off: u64) -> u32 {
-        self.piece_for(off).and_then(|(p, rel)| p.mem.load_u32(rel)).unwrap_or(0)
+        self.piece_for(off)
+            .and_then(|(p, rel)| p.mem.load_u32(rel))
+            .unwrap_or(0)
     }
 
     pub(crate) fn shadow_store(&self, off: u64, val: u64, width: u8) {
@@ -983,7 +998,13 @@ impl Device {
         if let Some(dp) = self.display
             && dp.map.owns(off)
         {
-            if dp.trap_write(off, val, width, &|o, v| self.shadow_store(o, u64::from(v), 4), &|o, v, w| self.shadow_store(o, v, w)) {
+            if dp.trap_write(
+                off,
+                val,
+                width,
+                &|o, v| self.shadow_store(o, u64::from(v), 4),
+                &|o, v, w| self.shadow_store(o, v, w),
+            ) {
                 dp.counters.irqs.fetch_add(1, Ordering::Relaxed);
                 self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
             }

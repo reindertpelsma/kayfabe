@@ -45,7 +45,10 @@ impl CapsPage {
     /// The word at byte offset `off` of the page.
     #[must_use]
     pub fn word(&self, off: u32) -> u32 {
-        self.words.iter().find(|(o, _)| *o == off).map_or(0, |(_, v)| *v)
+        self.words
+            .iter()
+            .find(|(o, _)| *o == off)
+            .map_or(0, |(_, v)| *v)
     }
 }
 
@@ -53,15 +56,31 @@ impl CapsPage {
 ///
 /// # Errors
 /// [`Missing`] naming the first name the derived tables lack — never a default.
-pub fn page(t: &ClassTable, r: &Regs, caps: u32, heads: u32, windows: u32) -> Result<CapsPage, Missing> {
+pub fn page(
+    t: &ClassTable,
+    r: &Regs,
+    caps: u32,
+    heads: u32,
+    windows: u32,
+) -> Result<CapsPage, Missing> {
     let m = |n: String| Missing(n);
     let v = |n: &str| t.v(caps, n).ok_or_else(|| m(format!("NV{caps:04X}_{n}")));
-    let fa = |n: &str, i: u32| t.fa(caps, n, i).ok_or_else(|| m(format!("NV{caps:04X}_{n}({i})")));
+    let fa = |n: &str, i: u32| {
+        t.fa(caps, n, i)
+            .ok_or_else(|| m(format!("NV{caps:04X}_{n}({i})")))
+    };
     let f = |n: &str| t.f(caps, n).ok_or_else(|| m(format!("NV{caps:04X}_{n}")));
-    let a = |n: &str, i: u32| t.a(caps, n, i).ok_or_else(|| m(format!("NV{caps:04X}_{n}({i})")));
-    let (hi, lo) = r.f("NV_PDISP_FE_SW").ok_or_else(|| m("NV_PDISP_FE_SW".into()))?;
+    let a = |n: &str, i: u32| {
+        t.a(caps, n, i)
+            .ok_or_else(|| m(format!("NV{caps:04X}_{n}({i})")))
+    };
+    let (hi, lo) = r
+        .f("NV_PDISP_FE_SW")
+        .ok_or_else(|| m("NV_PDISP_FE_SW".into()))?;
     if hi < lo || (hi - lo + 1) as usize != PAGE {
-        return Err(m(format!("NV_PDISP_FE_SW {lo:#x}..={hi:#x} is not one {PAGE:#x}-byte page")));
+        return Err(m(format!(
+            "NV_PDISP_FE_SW {lo:#x}..={hi:#x} is not one {PAGE:#x}-byte page"
+        )));
     }
     let mut w: std::collections::BTreeMap<u32, u32> = std::collections::BTreeMap::new();
     let mut set = |off: u32, field: (u8, u8), x: u32| {
@@ -84,7 +103,11 @@ pub fn page(t: &ClassTable, r: &Regs, caps: u32, heads: u32, windows: u32) -> Re
         .ok_or_else(|| m("NVC573_SOR_CLK_CAP_TMDS_MAX_INIT".into()))?;
     for s in 0..heads {
         let cap = a("SOR_CAP", s)?;
-        for fld in ["SOR_CAP_SINGLE_TMDS_A", "SOR_CAP_SINGLE_TMDS_B", "SOR_CAP_DUAL_TMDS"] {
+        for fld in [
+            "SOR_CAP_SINGLE_TMDS_A",
+            "SOR_CAP_SINGLE_TMDS_B",
+            "SOR_CAP_DUAL_TMDS",
+        ] {
             set(cap, f(fld)?, 1);
         }
         if let Some(frl) = t.f(caps, "SOR_CAP_HDMI_FRL") {
@@ -94,15 +117,33 @@ pub fn page(t: &ClassTable, r: &Regs, caps: u32, heads: u32, windows: u32) -> Re
     }
     // heads: NVKMS's NVC373_HEAD_CLK_CAP work-around = v05_01's NV_PDISP_FE_SW_HEAD_CLK_CAP
     let rt = r.table();
-    let clk0 = rt.a_in("v05_01", "NV_PDISP_FE_SW_HEAD_CLK_CAP", 0).ok_or_else(|| m("v05_01 NV_PDISP_FE_SW_HEAD_CLK_CAP".into()))?;
-    let clk1 = rt.a_in("v05_01", "NV_PDISP_FE_SW_HEAD_CLK_CAP", 1).ok_or_else(|| m("v05_01 NV_PDISP_FE_SW_HEAD_CLK_CAP".into()))?;
-    let pmax = rt.f_in("v05_01", "NV_PDISP_FE_SW_HEAD_CLK_CAP_PCLK_MAX").ok_or_else(|| m("…HEAD_CLK_CAP_PCLK_MAX".into()))?;
-    let pinit = rt.v_in("v05_01", "NV_PDISP_FE_SW_HEAD_CLK_CAP_PCLK_MAX_INIT").ok_or_else(|| m("…PCLK_MAX_INIT".into()))?;
-    let pmax = (u8::try_from(pmax.0).map_err(|_| m("PCLK_MAX hi".into()))?, u8::try_from(pmax.1).map_err(|_| m("PCLK_MAX lo".into()))?);
+    let clk0 = rt
+        .a_in("v05_01", "NV_PDISP_FE_SW_HEAD_CLK_CAP", 0)
+        .ok_or_else(|| m("v05_01 NV_PDISP_FE_SW_HEAD_CLK_CAP".into()))?;
+    let clk1 = rt
+        .a_in("v05_01", "NV_PDISP_FE_SW_HEAD_CLK_CAP", 1)
+        .ok_or_else(|| m("v05_01 NV_PDISP_FE_SW_HEAD_CLK_CAP".into()))?;
+    let pmax = rt
+        .f_in("v05_01", "NV_PDISP_FE_SW_HEAD_CLK_CAP_PCLK_MAX")
+        .ok_or_else(|| m("…HEAD_CLK_CAP_PCLK_MAX".into()))?;
+    let pinit = rt
+        .v_in("v05_01", "NV_PDISP_FE_SW_HEAD_CLK_CAP_PCLK_MAX_INIT")
+        .ok_or_else(|| m("…PCLK_MAX_INIT".into()))?;
+    let pmax = (
+        u8::try_from(pmax.0).map_err(|_| m("PCLK_MAX hi".into()))?,
+        u8::try_from(pmax.1).map_err(|_| m("PCLK_MAX lo".into()))?,
+    );
     for h in 0..heads {
         let off = clk0 + u64::from(h) * (clk1 - clk0);
-        let rel = off.checked_sub(lo).filter(|r| *r < PAGE as u64).ok_or_else(|| m(format!("HEAD_CLK_CAP({h}) {off:#x} is outside the page")))?;
-        set(rel as u32, pmax, u32::try_from(pinit).map_err(|_| m("PCLK_MAX_INIT".into()))?);
+        let rel = off
+            .checked_sub(lo)
+            .filter(|r| *r < PAGE as u64)
+            .ok_or_else(|| m(format!("HEAD_CLK_CAP({h}) {off:#x} is outside the page")))?;
+        set(
+            rel as u32,
+            pmax,
+            u32::try_from(pinit).map_err(|_| m("PCLK_MAX_INIT".into()))?,
+        );
     }
     // windows: the CSC stages NVKMS programs
     for i in 0..windows {
@@ -123,7 +164,10 @@ pub fn page(t: &ClassTable, r: &Regs, caps: u32, heads: u32, windows: u32) -> Re
             return Err(m(format!("caps word at {off:#x} is outside the page")));
         }
     }
-    Ok(CapsPage { base: lo, words: w.into_iter().filter(|(_, v)| *v != 0).collect() })
+    Ok(CapsPage {
+        base: lo,
+        words: w.into_iter().filter(|(_, v)| *v != 0).collect(),
+    })
 }
 
 #[cfg(test)]

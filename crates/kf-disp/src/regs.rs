@@ -109,7 +109,10 @@ impl Regs {
     /// no lineage or the guest driver's version has no derived table.
     #[must_use]
     pub fn for_ip(version: &str, ip_version: u32) -> Option<Regs> {
-        Some(Regs { t: table_for(version)?, lineage: lineage(ip_version)? })
+        Some(Regs {
+            t: table_for(version)?,
+            lineage: lineage(ip_version)?,
+        })
     }
 
     fn row(&self, name: &str) -> Option<Row> {
@@ -212,7 +215,10 @@ impl Regs {
 pub fn table_for(version: &str) -> Option<&'static RegTable> {
     static V580_159_04: OnceLock<RegTable> = OnceLock::new();
     match version {
-        "580.159.04" => Some(V580_159_04.get_or_init(|| RegTable::parse(include_str!("../data/regs-580.159.04.tsv")))),
+        "580.159.04" => Some(
+            V580_159_04
+                .get_or_init(|| RegTable::parse(include_str!("../data/regs-580.159.04.tsv"))),
+        ),
         _ => None,
     }
 }
@@ -232,17 +238,43 @@ mod tests {
     fn ga10x_registers_are_the_headers() {
         let r = ga10x();
         assert_eq!(r.v("NV_UDISP_FE_CHN_ASSY_BASEADR_CORE"), Some(0x0068_0000));
-        assert_eq!(r.v("NV_UDISP_FE_CHN_ARMED_BASEADR_CORE"), Some(0x0068_0000 + 32768));
-        assert_eq!(r.a("NV_UDISP_FE_CHN_ASSY_BASEADR_WIN", 3), Some(0x0069_3000));
-        assert_eq!(r.a("NV_UDISP_FE_CHN_ASSY_BASEADR_WINIM", 0), Some(0x006B_0000));
-        assert_eq!(r.a("NV_UDISP_FE_CHN_ASSY_BASEADR_CURS", 2), Some(0x006D_A000));
+        assert_eq!(
+            r.v("NV_UDISP_FE_CHN_ARMED_BASEADR_CORE"),
+            Some(0x0068_0000 + 32768)
+        );
+        assert_eq!(
+            r.a("NV_UDISP_FE_CHN_ASSY_BASEADR_WIN", 3),
+            Some(0x0069_3000)
+        );
+        assert_eq!(
+            r.a("NV_UDISP_FE_CHN_ASSY_BASEADR_WINIM", 0),
+            Some(0x006B_0000)
+        );
+        assert_eq!(
+            r.a("NV_UDISP_FE_CHN_ASSY_BASEADR_CURS", 2),
+            Some(0x006D_A000)
+        );
         assert_eq!(r.v("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP"), Some(0x0061_1C30));
-        assert_eq!(r.f32("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP_AWAKEN"), Some((8, 8)));
-        assert_eq!(r.f32("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP_WIN_SEM"), Some((9, 9)), "v04_01");
+        assert_eq!(
+            r.f32("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP_AWAKEN"),
+            Some((8, 8))
+        );
+        assert_eq!(
+            r.f32("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP_WIN_SEM"),
+            Some((9, 9)),
+            "v04_01"
+        );
         assert_eq!(r.v("NV_PDISP_FE_EVT_STAT_AWAKEN_WIN"), Some(0x0061_1858));
         assert_eq!(r.v("NV_PDISP_FE_EVT_STAT_AWAKEN_OTHER"), Some(0x0061_185C));
-        assert_eq!(r.a("NV_PDISP_FE_EVT_STAT_HEAD_TIMING", 1), Some(0x0061_1804));
-        assert_eq!(r.a("NV_PDISP_FE_CORE_HEAD_STATE", 1), Some(0x0061_2078 + 0x800), "v04_00");
+        assert_eq!(
+            r.a("NV_PDISP_FE_EVT_STAT_HEAD_TIMING", 1),
+            Some(0x0061_1804)
+        );
+        assert_eq!(
+            r.a("NV_PDISP_FE_CORE_HEAD_STATE", 1),
+            Some(0x0061_2078 + 0x800),
+            "v04_00"
+        );
         assert_eq!(r.f("NV_PDISP_FE_SW"), Some((0x0064_0FFF, 0x0064_0000)));
         assert_eq!(r.v("NV_PDISP_FE_CHNSTATUS_CORE"), Some(0x0061_0630));
         assert_eq!(r.a("NV_PDISP_FE_CHNSTATUS_WIN", 1), Some(0x0061_0668));
@@ -256,13 +288,30 @@ mod tests {
     #[test]
     fn nothing_is_guessed() {
         let r = ga10x();
-        assert_eq!(r.a("NV_UDISP_FE_CHN_ASSY_BASEADR", 1), None, "non-linear in the header");
+        assert_eq!(
+            r.a("NV_UDISP_FE_CHN_ASSY_BASEADR", 1),
+            None,
+            "non-linear in the header"
+        );
         assert_eq!(r.v("NV_PDISP_NO_SUCH_REGISTER"), None);
-        assert!(Regs::for_ip("580.159.04", 0x0300_0000).is_none(), "no lineage for Volta");
-        assert!(Regs::for_ip("535.309.01", 0x0401_0000).is_none(), "an underived driver");
+        assert!(
+            Regs::for_ip("580.159.04", 0x0300_0000).is_none(),
+            "no lineage for Volta"
+        );
+        assert!(
+            Regs::for_ip("535.309.01", 0x0401_0000).is_none(),
+            "an underived driver"
+        );
         let tu = Regs::for_ip("580.159.04", 0x0400_0000).unwrap();
-        assert_eq!(tu.f32("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP_WIN_SEM"), None, "Turing has no WinSem");
-        assert_eq!(tu.v("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP"), Some(0x0061_1C30));
+        assert_eq!(
+            tu.f32("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP_WIN_SEM"),
+            None,
+            "Turing has no WinSem"
+        );
+        assert_eq!(
+            tu.v("NV_PDISP_FE_RM_INTR_STAT_CTRL_DISP"),
+            Some(0x0061_1C30)
+        );
     }
 
     /// ★ Within every lineage, a name two directories define carries the SAME value in both — so

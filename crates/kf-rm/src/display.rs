@@ -246,8 +246,13 @@ impl DisplayPolicy {
     /// The model is re-targeted to this driver's derived layouts (a rebuild for the guest's own
     /// version); a driver with no derived layouts gets the M0 link and the plane sees nothing.
     #[must_use]
-    pub fn over_shared(driver: kf_abi::versions::DriverAbiTable, row: &'static kf_chip::display::DisplayRow, shared: &SharedDisplayModel) -> DisplayPolicy {
-        let Some(layouts) = kf_disp::layout::for_version(&driver.driver_version().to_string()) else {
+    pub fn over_shared(
+        driver: kf_abi::versions::DriverAbiTable,
+        row: &'static kf_chip::display::DisplayRow,
+        shared: &SharedDisplayModel,
+    ) -> DisplayPolicy {
+        let Some(layouts) = kf_disp::layout::for_version(&driver.driver_version().to_string())
+        else {
             eprintln!(
                 "kf-rm: display: no derived display layouts for guest driver {} — answering the M0 set only; the display \
                  plane sees nothing",
@@ -258,7 +263,11 @@ impl DisplayPolicy {
         {
             let mut g = lock(shared);
             if g.layouts().version != layouts.version {
-                eprintln!("kf-rm: display: the plane's model re-targeted {} -> {}", g.layouts().version, layouts.version);
+                eprintln!(
+                    "kf-rm: display: the plane's model re-targeted {} -> {}",
+                    g.layouts().version,
+                    layouts.version
+                );
                 g.retarget(layouts);
             }
         }
@@ -839,8 +848,16 @@ mod tests {
             .chain(0x2080_0a00..0x2080_0b00)
             .filter(|c| p.claims(*c))
             .collect();
-        assert_eq!(claimed.len(), 32 + 6, "the NVKMS bring-up set (with the console pair) and the six internal controls");
-        assert_eq!(claimed.iter().copied().collect::<BTreeSet<u32>>(), *p.claimed(), "nothing claimed outside the set");
+        assert_eq!(
+            claimed.len(),
+            32 + 6,
+            "the NVKMS bring-up set (with the console pair) and the six internal controls"
+        );
+        assert_eq!(
+            claimed.iter().copied().collect::<BTreeSet<u32>>(),
+            *p.claimed(),
+            "nothing claimed outside the set"
+        );
         for cmd in &claimed {
             let r = p
                 .respond(&control(*cmd, SERIALIZED, &[0; 16]))
@@ -919,7 +936,11 @@ mod tests {
             assert_eq!(g.channels.len(), 1 + 8 + 8 + 4);
             let core = &g.channels[&(ChannelKind::Core, 0)];
             assert_eq!((core.handle, core.offset), (0xcafe_0d00, 0x40));
-            assert_eq!((g.ports.get(0), g.ports.put(0)), (0x40, 0x40), "the shared ports start at the alloc's offset");
+            assert_eq!(
+                (g.ports.get(0), g.ports.put(0)),
+                (0x40, 0x40),
+                "the shared ports start at the alloc's offset"
+            );
             assert_eq!(core.pb.map(|b| b.phys), Some(0x1234_5000));
             assert!(
                 g.statements.is_empty(),
@@ -955,23 +976,45 @@ mod tests {
     /// shared model keeps what the plane will read.
     #[test]
     fn an_attached_plane_gets_the_statements_and_a_wake() {
-        let shared: SharedDisplayModel = Arc::new(Mutex::new(model_for(&abi(), &kf_chip::display::AMPERE).expect("derived")));
+        let shared: SharedDisplayModel = Arc::new(Mutex::new(
+            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+        ));
         let woke = Arc::new(std::sync::atomic::AtomicU32::new(0));
         {
             let w = woke.clone();
-            shared.lock().unwrap().attach_plane(kf_disp::model::Waker(Arc::new(move || {
-                w.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            })));
+            shared
+                .lock()
+                .unwrap()
+                .attach_plane(kf_disp::model::Waker(Arc::new(move || {
+                    w.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                })));
         }
         let p = DisplayPolicy::over_shared(abi(), &kf_chip::display::AMPERE, &shared);
         let mut registry = p.registry().unwrap();
-        registry.observe(&alloc(0xc1d0_0001, 0xcafe_0070, 0xcafe_0d00, 0xC67D, &chan_params(false, 0)));
+        registry.observe(&alloc(
+            0xc1d0_0001,
+            0xcafe_0070,
+            0xcafe_0d00,
+            0xC67D,
+            &chan_params(false, 0),
+        ));
         assert_eq!(woke.load(std::sync::atomic::Ordering::Relaxed), 1);
         // a rebuild (ReselectAtFn1) over the same model: the statement is still there for the plane
         let p2 = DisplayPolicy::over_shared(abi(), &kf_chip::display::AMPERE, &shared);
         assert!(Arc::ptr_eq(&p2.model().unwrap(), &shared));
         let st = shared.lock().unwrap().take_statements();
-        assert!(matches!(st.as_slice(), [Statement::ChannelAllocated { kind: ChannelKind::Core, instance: 0, life: 1, .. }]), "{st:?}");
+        assert!(
+            matches!(
+                st.as_slice(),
+                [Statement::ChannelAllocated {
+                    kind: ChannelKind::Core,
+                    instance: 0,
+                    life: 1,
+                    ..
+                }]
+            ),
+            "{st:?}"
+        );
     }
 
     /// ★ Hostile guest: an alloc that is not a display class, a channel instance the display does
