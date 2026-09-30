@@ -1,0 +1,14 @@
+START 2026-09-30T12:36:21+00:00
+Preparing worktree (detached HEAD b351af9d)
+HEAD is now at b351af9d evidence(doorbell): merge bar at ca7a5006 (final code) passed — 1701/0, 9/9, KF3_RC=0, bare 30/30, thin 30/30
+HEAD=b351af9d7ad6d578fa4a3488add104895482e560 CHECKOUT=/workspace/bench/verify-worktrees/mgb1.2OYdkc
+TESTS passed 1701 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/b351af9d/qemu-system-x86_64 rev=b351af9d mtime=2026-09-30 12:40:10.681556704 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-09-30T12:59:37+00:00

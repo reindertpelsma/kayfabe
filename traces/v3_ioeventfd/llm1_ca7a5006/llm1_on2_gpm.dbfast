@@ -1,0 +1,3 @@
+dbfast[ON regs=2 placed=2/256 sites=1 doorbells=11118909 wakes=11105239 rang=11103250 handed=1989 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=2107/11112492 max_batch=2 wake_to_deliver[n=11105239 p50=1.3us p99=2.6us max=1005.8us]
+/workspace/bench/run_llm1_on2_gpm_qemu.log:doorbell fast path ON
+/workspace/bench/llm/llm1_on2_gpm_driver.log:device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,doorbell-ioeventfd=on
