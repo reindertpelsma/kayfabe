@@ -1482,6 +1482,10 @@ impl Device {
         };
         let pt_perm = m.walker().perm;
         let pt_per_map_kind = self.rm.host_abi().per_map_pte_kind();
+        // ★ §3.8a: splits naming a guest-UVM space that went to the GPU walker — if that space's
+        // faults become parked while one waits, the walker cannot finish it (GR is held), so it is
+        // completed here instead. `(ticket, root, keys)`.
+        let mut efs_watch: Vec<(u64, u64, Vec<kf_mem::vasmgr::VasKey>)> = Vec::new();
         let mut last_seq: Option<u64> = None;
         let mut taken = 0u64;
         let mut logged = 0u32;
@@ -1605,6 +1609,9 @@ impl Device {
                         }
                         continue;
                     }
+                    if !efs_keys.is_empty() {
+                        efs_watch.push((ticket, root, efs_keys.iter().map(|(k, _)| *k).collect()));
+                    }
                     // No fault parked in this space: its fast rows are re-validated before the GPU
                     // walk (a GPU walk never takes down a row it did not place).
                     for (k, _) in &efs_keys {
@@ -1622,6 +1629,42 @@ impl Device {
                     }
                 }
                 m.on_split(pdb, ticket, trigger);
+            }
+            // ★★ §3.8a: a watched split whose space's faults are NOW parked cannot be finished by
+            // the GPU walker — finish it here (the walker's own completion later is a no-op: the
+            // ticket's token is gone by then and nobody reads the second result).
+            if let (Some(fp), Some(pt)) = (self.mem.fault, pt.as_mut())
+                && !efs_watch.is_empty()
+            {
+                let parked = fp.parked();
+                efs_watch.retain(|(ticket, root, keys)| {
+                    let hit: Vec<&(kf_mem::vasmgr::VasKey, Option<u64>, Vec<u64>)> = parked
+                        .iter()
+                        .filter(|(k, _, p)| keys.contains(k) && !p.is_empty())
+                        .collect();
+                    if hit.is_empty() {
+                        return true;
+                    }
+                    for (k, _, pages) in hit {
+                        if let Some(crate::mem::Target::Efs(e)) = m.table.target(*k) {
+                            let r = crate::mem::efs_point_map(
+                                e, &pt_fmt, *root, pages, pt, &self.mem, pt_perm, pt_per_map_kind,
+                            );
+                            if crate::faultplane::faultlog() {
+                                eprintln!(
+                                    "kf3: faultlog t={:.6} SPLIT-EARLY ticket={ticket} {k:?} root={root:#x} {r:?}",
+                                    kf_mem::maplog::t()
+                                );
+                            }
+                        }
+                    }
+                    if let Some(tok) = self.mem.inbox.finish_split(*ticket, Ok(()))
+                        && self.plane.ring_internal(tok)
+                    {
+                        let _ = self.worker_efd.signal();
+                    }
+                    false
+                });
             }
             // ★★ §3.8a: the fault plane's resolver is about to replay — place every parked page on
             // the CPU first (the replay must find them mapped; the GPU walker cannot run now).
@@ -1667,6 +1710,7 @@ impl Device {
                 );
             }
             for (ticket, res) in m.take_splits() {
+                efs_watch.retain(|(t, _, _)| *t != ticket);
                 if let Err(e) = &res {
                     eprintln!(
                         "kf3: mem t={:.3}s split ticket {ticket} REFUSED: {e}",

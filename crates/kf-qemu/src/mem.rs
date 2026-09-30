@@ -1536,13 +1536,18 @@ impl Inbox {
 
     /// ★ P6, the VA thread: `ticket` finished. Returns the guest token to ring.
     pub fn finish_split(&self, ticket: u64, r: Result<(), String>) -> Option<u32> {
+        // ★ §3.8a: a split the fault path already finished early is finished again by the walker
+        // later — the ticket's token is gone by then, and the second result is not recorded (no
+        // reader would ever take it).
+        let tok = self
+            .split_tokens
+            .lock()
+            .ok()
+            .and_then(|mut m| m.remove(&ticket))?;
         if let Ok(mut m) = self.split_results.lock() {
             m.insert(ticket, r);
         }
-        self.split_tokens
-            .lock()
-            .ok()
-            .and_then(|mut m| m.remove(&ticket))
+        Some(tok)
     }
 
     /// ★ P6, a WORKER: `ticket`'s outcome, once (`None`: still running).
