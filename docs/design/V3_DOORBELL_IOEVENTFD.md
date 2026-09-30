@@ -145,8 +145,10 @@ histograms).
 
 - ⊘ **KVM does not cap ioeventfds at 1 000.** `NR_IOBUS_DEVS` (1000) excludes them:
   `kvm_io_bus_register_dev` refuses only when `dev_count - ioeventfd_count > NR_IOBUS_DEVS - 1`,
-  commented *"exclude ioeventfd which is limited by maximum fd"* (`linux: virt/kvm/kvm_main.c`,
-  present since 2016). A registration is refused with `ENOSPC` only when the MMIO bus holds 1 000
+  commented *"exclude ioeventfd which is limited by maximum fd"* (`linux: virt/kvm/kvm_main.c:5989-5991`
+  in the 7.1-rc tree read here). ★ Confirmed on the bench kernel (6.8.0-59, `dbfast_exhaust`,
+  2026-09-30, `traces/v3_ioeventfd/dbl1_43293417/`): with 6 ioeventfds already registered the bus
+  refused only its **1001st** coalesced-MMIO zone — the ioeventfds did not count. A registration is refused with `ENOSPC` only when the MMIO bus holds 1 000
   **non**-ioeventfd devices (coalesced-MMIO zones, in-kernel devices) — and the exhaustion test does
   exactly that to provoke it. What binds ioeventfds on a modern kernel is **the descriptor limit**
   (one eventfd per token) and memory.
@@ -161,7 +163,7 @@ histograms).
   `dbfast[refused(budget= kvm= enospc= eexist= fd=)]` (all).
 - **Why the C device issues `KVM_IOEVENTFD` itself.** QEMU's `memory_region_add_eventfd` would follow
   BAR moves for free, but `kvm_mem_ioeventfd_add` calls `abort()` on any kernel refusal
-  (`accel/kvm/kvm-all.c`) — a refused registration would kill the VM instead of leaving the token
+  (`qemu-10.2.4: accel/kvm/kvm-all.c:1889-1905`) — a refused registration would kill the VM instead of leaving the token
   trapped. So `kf3_ioeventfd` calls `kvm_vm_ioctl(KVM_IOEVENTFD)` directly and returns the errno, and
   the listener reports doorbell **sites** (BAR0's usermode piece; every Hopper+ BAR1 view alias of the
   usermode page) so registrations follow the guest's BAR programming (`region_del` then
@@ -272,6 +274,38 @@ the spin's awake drainer) and **batched launches are faster with the spin** (19�
 mode spans 26–76 µs across boots); the first run's +19 % is one sample of that spread, not a result.
 
 LLM decode (the `llm_parity` lane, ON vs OFF and the spin experiment): §7.5.
+
+### 7.5 LLM decode and CPU cost (Qwen2-0.5B eager, `llm_parity` guest_pm lane, `ca7a5006`)
+
+`scripts/bench/dbfast_llm.sh llm1` on the RTX 3060 box: one host lane, then guest boots in the order
+ON, OFF, spin, ON, OFF (each: 2 processes × {512, 2048} tokens, one cold + one warm `generate()`),
+every process's counters bound to the launched QEMU (`qemu_identity.sh`). Evidence:
+`traces/v3_ioeventfd/llm1_ca7a5006/`.
+
+| warm decode, tok/s (2 processes each) | host (the box's OS) | OFF | ON | ON + spin 100 µs |
+|---|---|---|---|---|
+| 512 tokens | 42.24 | 12.20 (12.12–12.27) | **13.58** (13.58–13.59), +11.3 % | **14.17** (13.86–14.48), +16.1 % |
+| 2048 tokens | 41.94 | 12.34 (12.15–12.54) | **13.21** (13.20–13.21), +7.0 % | **14.34** (14.29–14.39), +16.2 % |
+| guest / host | — | 0.29 | **0.32** | **0.34** |
+| doorbells per 2048-token process (cold + warm) | — | 4 442 060 | 4 442 077 | 4 442 078 (≈1 084 per token) |
+| KVM exits per 2048-token process | — | 5.38 M | 5.34 M | 5.29 M (the store still exits, §7.2) |
+
+CPU per 2048-token process (`LLM_THREAD_CPU`, utime+stime of the identified QEMU's threads):
+
+| thread class | OFF | ON | ON + spin 100 µs |
+|---|---|---|---|
+| `kf3-drainer` | 0.4–0.5 s | **54.0–54.5 s** (~17 % of a core over ~318 s) | **270 s** (~93 % of a core over ~290 s) |
+| `qemu` (this build names no vCPU thread: vCPUs + main loop + I/O) | 355–372 s | 339–341 s | 315 s |
+| `kf3-worker*` | 0.7 s | 0.6–0.7 s | 0.6–0.8 s |
+| **total** | ~360 s | ~395 s (+10 %) | ~587 s (+63 %) |
+
+⇒ On this nested box the fast path buys **+7–11 % LLM decode** (0.29× → 0.32× of host) for **about one
+sixth of a core** in the drainer, which wakes once per doorbell (11.1 M wakes for 11.1 M doorbells in
+the ON boot: essentially no coalescing at ~14 000 doorbells/s — CUDA already batches). The bounded
+spin buys **+16 %** (0.34×) by removing that wake-up, for **a whole core** while decoding: the
+vCPU-side saving is the same (§7.2); what the spin adds is the drainer ringing ~40 µs sooner.
+⊘ The spin stays an experiment knob (default off): a core per busy VM is a policy decision, and on a
+non-nested host the wake-up it hides should be far cheaper (a hypothesis until §7.x is run).
 
 ### 7.x The protocol for a NON-nested host (not yet reachable, 2026-09-30)
 
