@@ -949,6 +949,13 @@ pub struct ChanPlane {
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
     pub rc_unarmed: AtomicU64,
+    /// ★ 2026-09-30: the doorbell fast path (`kf_chan::dbfast`, `V3_DOORBELL_IOEVENTFD.md`): every
+    /// born channel — Passthrough AND Translated — registers its guest token; every free removes it
+    /// before the twin goes.
+    dbfast: &'static kf_chan::dbfast::DbFast,
+    /// The guest's token layout (the DATAMATCH value of a channel `(runlist, chid)`); `None` ⇒ no
+    /// registration is ever made and every doorbell stays trapped.
+    token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
     /// RC records seen on a twin's notifier (host-written).
     pub rc_seen: AtomicU64,
     /// Wakes of the RC fd.
@@ -974,6 +981,8 @@ impl ChanPlane {
         family: kf_chip::Family,
         intr_table: &[kf_abi::inittables::IntrTableEntry],
         engine_table: &[kf_abi::inittables::FifoDeviceEntry],
+        dbfast: &'static kf_chan::dbfast::DbFast,
+        token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
     ) -> Result<ChanPlane, String> {
         // ★ Authored, never the guest's engine number: the first HOST copy engine that is not a
         // graphics CE. ⊘ A GRCE shares the GR runlist and routes subchannels 0-3 to GR — RM's
@@ -1117,7 +1126,50 @@ impl ChanPlane {
             rc_unarmed: AtomicU64::new(0),
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
+            dbfast,
+            token_fmt,
         })
+    }
+
+    /// ★ **Act thread**: give the channel just born on token `idx` — `(runlist, chid)` in the guest's
+    /// own numbering — its doorbell fast path. Called AFTER its token word is installed (until the
+    /// KVM placement lands, the trap serves it) and with NO plane lock held (the fast path may wait
+    /// on the drainer). The value is refused unless the device's own index finds `idx` from it — a
+    /// value naming another slot would deliver another channel's doorbells. Returns the birth
+    /// line's `fast=` field.
+    fn fast_register(&self, idx: u32, runlist: u32, chid: u32) -> String {
+        if !self.dbfast.enabled() {
+            return "fast=off".into();
+        }
+        let Some(v) = self.token_fmt.and_then(|f| f.value(runlist, chid)) else {
+            return format!("fast=unencodable(runlist {runlist}, chid {chid:#x})");
+        };
+        if self.plane.token_index.of_doorbell(v) != Some(idx) {
+            return format!("fast=refused(value {v:#010x} names another slot)");
+        }
+        match self.dbfast.register(idx, v) {
+            kf_chan::dbfast::RegOutcome::Off => "fast=off".into(),
+            kf_chan::dbfast::RegOutcome::Refused => {
+                format!("fast=refused(value {v:#010x}: no eventfd)")
+            }
+            kf_chan::dbfast::RegOutcome::Registered {
+                placed,
+                refused,
+                sites,
+                ..
+            } => format!("fast=on value={v:#010x} placed={placed}/{sites} refused={refused}"),
+        }
+    }
+
+    /// The `DOORBELL-LEDGER` fields a removed fast-path registration contributes.
+    fn fast_fields(l: Option<kf_chan::dbfast::FastLedger>) -> String {
+        match l {
+            None => " fast=0".into(),
+            Some(l) => format!(
+                " fast={} fast_wakes={} fast_forwarded={} fast_absorbed={} fast_failed={} fast_sites={} fast_refused={}",
+                l.doorbells, l.wakes, l.forwarded, l.absorbed, l.failed, l.sites, l.refused
+            ),
+        }
     }
 
     /// ★ P5b: start the ACT thread — every host act a statement implies runs here, in statement
@@ -2453,6 +2505,10 @@ impl ChanPlane {
                     line.push(format!("translated host {ht:#x}"));
                 }
                 for ((c, h), t) in twins {
+                    // ★ The fast path goes FIRST: its placements removed, its eventfd's last count
+                    // delivered (to the token word, retired on the drainer at the statement — so
+                    // absorbed), acknowledged — only then may the twin go and the token be reborn.
+                    let fast = me.dbfast.deregister(t.idx);
                     let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
                     t.live.fetch_sub(1, Ordering::AcqRel);
                     // The error context goes AFTER its channel (host RM refuses freeing a context
@@ -2464,12 +2520,17 @@ impl ChanPlane {
                     // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
                     // of a Passthrough token IS a host doorbell, so `emulated` is only the rings
                     // that failed to reach the host — never a CPU executor.
-                    let (rung, reached) = me.take_ledger(t.idx);
+                    // `rung`/`forwarded` cover BOTH transports (the grader's rule is per token and
+                    // must not lose the doorbells the trap no longer sees); `trap=`/`fast=` split them.
+                    let (trap_rung, trap_reached) = me.take_ledger(t.idx);
+                    let (f_rung, f_fwd) = fast.map_or((0, 0), |l| (l.doorbells - l.absorbed, l.forwarded));
+                    let (rung, reached) = (trap_rung + f_rung, trap_reached + f_fwd);
                     eprintln!(
-                        "kf3: DOORBELL-LEDGER tok={:#010x} route=passthrough rung={rung} emulated={} forwarded={reached} host={:#x}",
+                        "kf3: DOORBELL-LEDGER tok={:#010x} route=passthrough rung={rung} emulated={} forwarded={reached} host={:#x} trap={trap_rung}{}",
                         t.idx,
                         rung - reached.min(rung),
-                        t.chan.token
+                        t.chan.token,
+                        Self::fast_fields(fast)
                     );
                     line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
                 }
@@ -2820,8 +2881,11 @@ impl ChanPlane {
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
                     me.engine_live(engine, true);
                     let _ = me.take_ledger(idx);
+                    // ★ After the token word and the twin: until its placement lands, the trap
+                    // serves this token; after, its eventfd does. No lock is held here.
+                    let fast = me.fast_register(idx, runlist, chid);
                     Ok(format!(
-                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {} rc={rc}",
+                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {} rc={rc} {fast}",
                         a.client,
                         a.handle,
                         chan.token,
@@ -2929,8 +2993,11 @@ impl ChanPlane {
                     m.insert((a.client, a.handle), ChanScope { tsg: a.tsg, parent: a.parent, device: a.device });
                 }
                 me.births.fetch_add(1, Ordering::Relaxed);
+                // ★ The kernel channels' doorbells (CeUtils, UVM) take the fast path too: only the
+                // transport changes — the drainer stamps RUNG and wakes a worker, as the trap did.
+                let fast = me.fast_register(idx, runlist, chid);
                 Ok(format!(
-                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B",
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B {fast}",
                     a.client,
                     a.handle,
                     a.gpfifo_va,
@@ -3134,6 +3201,14 @@ impl ChanPlane {
         let Some(slot) = self.slots.write().ok().and_then(|mut s| s.remove(&ht)) else {
             return;
         };
+        // ★ The fast path goes FIRST, with NO slot lock held (it waits for the drainer's ack, and a
+        // statement on the drainer may lock a slot): placements removed, the eventfd's last count
+        // handed to the still-live token (its worker sees `scheduled == false`), acknowledged.
+        let fast = match slot.lock() {
+            Ok(g) => Some(g.guest_idx),
+            Err(_) => None,
+        }
+        .and_then(|idx| self.dbfast.deregister(idx));
         let Ok(mut g) = slot.lock() else { return };
         // §5.2: free waits out BUSY. The slot lock is held, so no worker is inside the pump — but
         // one may still hold the TOKEN for a moment after it: retry on the act thread (never a
@@ -3188,10 +3263,11 @@ impl ChanPlane {
             });
         }
         eprintln!(
-            "kf3: DOORBELL-LEDGER tok={:#010x} route=translated emulated={} forwarded={} host={ht:#x}",
+            "kf3: DOORBELL-LEDGER tok={:#010x} route=translated emulated={} forwarded={} host={ht:#x}{}",
             g.guest_idx,
             u64::from(g.dead.is_some() && g.chan.counts().0 == 0),
-            g.chan.counts().0
+            g.chan.counts().0,
+            Self::fast_fields(fast)
         );
         if completion_probe_ms().is_some() {
             for (f, reads) in &g.probe.done {

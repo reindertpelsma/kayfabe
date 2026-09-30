@@ -16,6 +16,10 @@
  *    guest's own BAR1 PTEs put them: Rust's VA thread asks for a write-trapped overlay at that
  *    offset (kf3_bar1_overlay, a main-loop bottom half) before the guest's invalidate clears
  *    (docs/design/V3_BAR1_DOORBELL.md).
+ *  - ★ 2026-09-30, doorbell fast path (property doorbell-ioeventfd, default off;
+ *    docs/design/V3_DOORBELL_IOEVENTFD.md): Rust registers one KVM ioeventfd (DATAMATCH = the
+ *    guest's token) per live channel at every place the doorbell register is mapped, through
+ *    kf3_ioeventfd below; its register drainer services the eventfds. Unmatched values still trap.
  *  - MSI-X lives in its own BAR. Interrupts (P5, V3_P5_PORT_MAP.md §2.7): Rust owns one eventfd
  *    per vector (kf3_irq_fd); this device registers each as a KVM irqfd on the vector's MSI route
  *    when the guest unmasks it (msix vector notifiers, virtio-pci's pattern). A raise is then one
@@ -40,6 +44,7 @@
 #include "qemu/main-loop.h"
 #include "qemu/thread.h"
 #include "ui/console.h"
+#include <linux/kvm.h>
 #include "kf3.h"
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
@@ -113,9 +118,18 @@ struct Kf3State {
     bool dummy_bar;
     /* v3-display (docs/design/V3_DISPLAY.md): the virtual NVDisplay; off = the displayless posture */
     bool display;
-    /* ★ ABI 9 (M2): the console the display's frames are shown on, and the frame it shows */
+    /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
+     * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
     Kf3Frame shown;
+    /* ★ ABI 10 (v3-ioeventfd's 9, docs/design/V3_DOORBELL_IOEVENTFD.md): the doorbell fast path —
+     * one KVM ioeventfd per live guest token, serviced by the register drainer. Default OFF until
+     * measured. Main loop only (realize, the memory listener, exit), BQL held. */
+    bool db_ioeventfd;
+    uint32_t db_ioeventfd_max;       /* placements (tokens x doorbell sites) held at once */
+    MemoryRegion *um_mr;             /* BAR0's usermode piece (the host passthrough page) */
+    int64_t db_page_off;             /* the doorbell's offset inside the usermode page */
+    uint64_t db_sites_added, db_sites_removed;
     MemoryRegion dummy_pages[3];
     EventNotifier dummy_efd;   /* page 2's KVM ioeventfd — nobody reads it */
 };
@@ -223,6 +237,7 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
             if (!kf3_host_rom(s, p, name, r->len, errp)) {
                 return false;
             }
+            s->um_mr = &p->mr;
         } else if (r->how == 0) {
             /* PLAIN RAM (§53.1 A) — PRAMIN: Rust's window, re-pointed inside the trapped
              * window-base write. ram_device: KVM maps it, and kf3_is_guest_ram skips it. */
@@ -514,10 +529,64 @@ static bool kf3_is_guest_ram(MemoryRegionSection *sec)
            !memory_region_is_ram_device(sec->mr) && sec->mr->ram_block != NULL;
 }
 
+/* ── the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md) ────────────────────────────
+ * Rust keeps the registrations; this file only (a) issues KVM_IOEVENTFD for it — directly, so a
+ * refusal is a returned errno the token survives on the trapped path, never QEMU's abort() in
+ * kvm_mem_ioeventfd_add — and (b) reports where the doorbell register is mapped: BAR0's usermode
+ * piece and every Hopper+ BAR1 view alias of the usermode page. A BAR move or a decode toggle is a
+ * region_del then a region_add, so registrations follow the guest's own BAR programming. */
+
+/* Any non-vCPU thread (the channel act thread, the main loop). kvm_vm_ioctl takes no QEMU lock. */
+static int32_t kf3_ioeventfd(void *opaque, uint64_t gpa, uint32_t len, uint64_t datamatch, int32_t fd,
+                             uint32_t assign)
+{
+    struct kvm_ioeventfd iofd = {
+        .datamatch = datamatch,
+        .addr = gpa,
+        .len = len,
+        .fd = fd,
+        .flags = KVM_IOEVENTFD_FLAG_DATAMATCH | (assign ? 0 : KVM_IOEVENTFD_FLAG_DEASSIGN),
+    };
+    int r;
+
+    (void)opaque;
+    if (!kvm_enabled()) {
+        return -ENOSYS;
+    }
+    r = kvm_vm_ioctl(kvm_state, KVM_IOEVENTFD, &iofd);
+    return r < 0 ? r : 0;
+}
+
+/* Main loop (or a vCPU in a PCI config write), BQL held: does this section map the doorbell? */
+static void kf3_db_section(Kf3State *s, MemoryRegionSection *sec, bool add)
+{
+    uint64_t lo, hi, gpa;
+
+    if (!s->db_ioeventfd || s->db_page_off < 0 || !s->h) {
+        return;
+    }
+    if (sec->mr != s->um_mr && !(s->bar1_um_len && sec->mr == &s->bar1_um.mr)) {
+        return;
+    }
+    lo = sec->offset_within_region;
+    hi = lo + int128_get64(sec->size);
+    if ((uint64_t)s->db_page_off < lo || (uint64_t)s->db_page_off + 4 > hi) {
+        return;
+    }
+    gpa = sec->offset_within_address_space + ((uint64_t)s->db_page_off - lo);
+    kf3_doorbell_site(s->h, gpa, add ? 1 : 0);
+    if (add) {
+        s->db_sites_added++;
+    } else {
+        s->db_sites_removed++;
+    }
+}
+
 static void kf3_region_add(MemoryListener *l, MemoryRegionSection *sec)
 {
     Kf3State *s = container_of(l, Kf3State, listener);
     uint8_t *hva;
+    kf3_db_section(s, sec, true);
     if (!kf3_is_guest_ram(sec)) {
         return;
     }
@@ -532,6 +601,7 @@ static void kf3_region_add(MemoryListener *l, MemoryRegionSection *sec)
 static void kf3_region_del(MemoryListener *l, MemoryRegionSection *sec)
 {
     Kf3State *s = container_of(l, Kf3State, listener);
+    kf3_db_section(s, sec, false);
     if (kf3_is_guest_ram(sec)) {
         kf3_ram_del(s->h, sec->offset_within_address_space);
     }
@@ -752,6 +822,21 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         pci_set_long(c + off, val);
     }
 
+    /* ★ ABI 10 (v3-ioeventfd's 9): the doorbell fast path, only on request. Enabled BEFORE the
+     * listener registers, so its replay of the current sections reports the doorbell sites already
+     * mapped. */
+    s->db_page_off = -1;
+    if (s->db_ioeventfd) {
+        if (!s->um_mr) {
+            error_setg(errp, "kf3: doorbell-ioeventfd=on, but BAR0 has no usermode passthrough piece");
+            return;
+        }
+        s->db_page_off = kf3_doorbell_page_offset(s->h);
+        if (s->db_page_off < 0 || kf3_set_ioeventfd(s->h, kf3_ioeventfd, s, s->db_ioeventfd_max) != 0) {
+            error_setg(errp, "kf3: Rust refused the doorbell fast path");
+            return;
+        }
+    }
     s->listener = (MemoryListener){
         .name = "kf3-guest-ram",
         .region_add = kf3_region_add,
@@ -777,9 +862,11 @@ static void kf3_dev_exit(PCIDevice *pci)
     if (s->h) {
         kf3_status(s->h, st, sizeof(st));
         info_report("%s bar12_reads=%" PRIu64 " bar12_writes=%" PRIu64 " irq_routes=%" PRIu64
-                    " irq_route_fail=%" PRIu64 " bar1_ov_applied=%" PRIu64 " bar1_ov_failed=%" PRIu64, st,
+                    " irq_route_fail=%" PRIu64 " bar1_ov_applied=%" PRIu64 " bar1_ov_failed=%" PRIu64
+                    " db_sites_added=%" PRIu64 " db_sites_removed=%" PRIu64, st,
                     qatomic_read(&s->bar12_reads), qatomic_read(&s->bar12_writes),
-                    s->irq_routes, s->irq_route_fail, s->bar1_ov_applied, s->bar1_ov_failed);
+                    s->irq_routes, s->irq_route_fail, s->bar1_ov_applied, s->bar1_ov_failed,
+                    s->db_sites_added, s->db_sites_removed);
         memory_listener_unregister(&s->listener);
         if (s->con) {
             /* the console stops reading the display's frames before the device goes */
@@ -805,6 +892,9 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_STRING("guest-driver", Kf3State, guest_driver),
     DEFINE_PROP_BOOL("dummy-bar", Kf3State, dummy_bar, false),
     DEFINE_PROP_BOOL("display", Kf3State, display, false),
+    /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
+    DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
+    DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),
 };
 
 static void kf3_class_init(ObjectClass *klass, const void *data)

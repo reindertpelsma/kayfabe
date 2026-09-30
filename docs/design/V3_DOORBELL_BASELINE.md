@@ -1,6 +1,31 @@
 # Doorbell baseline and ioeventfd prerequisites
 
-**STATUS: RESEARCH / MECHANISM PROBE, 2026-09-28.** Owner selected a non-nested baseline and
+> ★ **UPDATED 2026-09-30 — the production fast path is BUILT on `v3-ioeventfd`:
+> `docs/design/V3_DOORBELL_IOEVENTFD.md`.** Read that document for the design, its tests and the
+> nested measurements; this one stays the mechanism probe and the acceptance criteria it was built
+> against. Three things below are superseded or corrected there, folded here so this text does not
+> read as current:
+> - ⊘ *"initially accelerate passthrough only"* (below, and in "Proposed composition") — **superseded
+>   by the owner, 2026-09-30:** every doorbell (Passthrough AND Translated/Emulated) takes the
+>   eventfd transport, serviced on the **register drainer**; only the transport changes, the trap's
+>   own arm decides (`V3_DOORBELL_IOEVENTFD.md` §0, §1).
+> - ⊘ *"a proposed first implementation drains one ordinary per-channel eventfd counter"* — built as
+>   one eventfd **per registration** (a re-born token gets a new one: the generation), drained before
+>   acting, with a final drain before removal is acknowledged (§4 there).
+> - ⚠ *"Bound fd/device registration counts"* — the bound that exists in the kernel is NOT the
+>   1 000-device MMIO bus: ioeventfds are excluded from `NR_IOBUS_DEVS`; descriptors and
+>   same-address dispatch cost are what bind (§5 there). A registration the kernel refuses (tested
+>   with the real `ENOSPC`, `EMFILE` and the budget) leaves its token on the trapped path.
+> - The non-nested protocol below still stands and gains the fast-path ON/OFF lane
+>   (`scripts/bench/dbfast_lane.sh`, `scripts/bench/dbfast_llm.sh`, `V3_DOORBELL_IOEVENTFD.md` §7.x).
+> - ★ **Measured 2026-09-30 (NESTED vast boxes; `traces/v3_ioeventfd/`):** identical verdicts ON and
+>   OFF (merge bar, thin 30/30, CUDA ladder 4/4; GA106 and Blackwell GB206); a doorbell store costs
+>   the vCPU ~15.7 µs matched vs ~20.4 µs trapped; LLM decode +9–10 % (0.29× → 0.32× of host) for
+>   ~⅙ core in the drainer; the drainer's wake-up (~46 µs idle, nested) is the price, which the
+>   default-off `KF3_DBFAST_SPIN_US` experiment removes (+16–18 %) for a whole core.
+
+**STATUS: RESEARCH / MECHANISM PROBE, 2026-09-28 — the production path it specified is built
+(2026-09-30, above).** Owner selected a non-nested baseline and
 host-side/ioeventfd work first, optional guest helper afterward. A modified guest NVIDIA driver
 remains a later option. No production doorbell route is changed here; no new GPU ratio is measured.
 

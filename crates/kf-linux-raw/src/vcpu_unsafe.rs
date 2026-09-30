@@ -858,6 +858,125 @@ mod tests {
         }
     }
 
+    /// A guest that stores `tokens` in order to `doorbell`, then halts:
+    /// `C7 05 <doorbell> <token>` per store, `F4` at the end.
+    fn doorbell_stores(doorbell: u32, tokens: &[u32]) -> Vec<u8> {
+        let d = doorbell.to_le_bytes();
+        let mut v = Vec::new();
+        for t in tokens {
+            let t = t.to_le_bytes();
+            v.extend_from_slice(&[0xC7, 0x05, d[0], d[1], d[2], d[3], t[0], t[1], t[2], t[3]]);
+        }
+        v.push(0xF4);
+        v
+    }
+
+    /// ★★★ **Token-matched ioeventfd on a READ-ONLY memslot, with exact fallback** — the
+    /// mechanism the doorbell fast path rests on (`docs/design/V3_DOORBELL_IOEVENTFD.md`),
+    /// driven by a real guest: the doorbell page is a read-only slot (kf3's usermode page is a
+    /// ROM device over the host window), two tokens are routed, and every other store must
+    /// still exit to userspace **in order, with its exact value**, while the backing never
+    /// changes. Then one route is removed and its token falls back to the exit, and re-added.
+    /// (The C probe `tools/probes/kvm_ioeventfd_readonly.c`, as a Rust test of the door the
+    /// product's GPU-free tests use.)
+    #[test]
+    fn datamatch_ioeventfd_on_a_read_only_slot_signals_its_token_and_everything_else_exits() {
+        crate::require_kvm!(
+            "datamatch_ioeventfd_on_a_read_only_slot_signals_its_token_and_everything_else_exits"
+        );
+        const A: u32 = 0x0001_0007;
+        const B: u32 = 0x4003_0001;
+        const UNKNOWN: u32 = 0x5566_7788;
+        const SENTINEL: u32 = 0xDECA_FBAD;
+        let page = HostPageSize::query().bytes();
+        let (code_gpa, db_gpa) = (page, 2 * page);
+        let doorbell = db_gpa + 0x90;
+        let kvm = kvm();
+        let vm = Arc::new(kvm.create_vm().expect("vm"));
+        vm.set_tss_addr_if_supported().expect("tss");
+        assert!(vm.has_ioeventfd().expect("cap"), "KVM_CAP_IOEVENTFD");
+        let image = doorbell_stores(
+            u32::try_from(doorbell).expect("below 4 GiB"),
+            &[A, B, UNKNOWN],
+        );
+        let (_cw, _code) = one_page(&vm, 0, code_gpa, &image);
+        let mut fill = vec![0u8; 0x94];
+        fill[0x90..0x94].copy_from_slice(&SENTINEL.to_le_bytes());
+        let (dw, _db) = one_page_prot(&vm, 1, db_gpa, &fill, true);
+        let a = crate::Notifier::create().expect("eventfd a");
+        let b = crate::Notifier::create().expect("eventfd b");
+
+        let mut vcpu = KvmVcpu::create(&kvm, Arc::clone(&vm), 0).expect("vcpu");
+        let mut run = |routed: &[u32]| -> Vec<u32> {
+            // Re-enter at the top each time: one vCPU (a second `KVM_CREATE_VCPU` of id 0 is
+            // the kernel's EEXIST), fresh registers.
+            vcpu.enter_flat_protected_mode(code_gpa, 0).expect("pm");
+            let mut exits = Vec::new();
+            loop {
+                match vcpu.run().expect("run") {
+                    VcpuExit::Halted => break,
+                    VcpuExit::Mmio {
+                        gpa,
+                        len: 4,
+                        is_write: true,
+                        data,
+                    } if gpa == doorbell => {
+                        exits.push(u32::from_le_bytes([data[0], data[1], data[2], data[3]]));
+                    }
+                    other => panic!("unexpected exit {other:?} (routed {routed:x?})"),
+                }
+            }
+            exits
+        };
+        // No routes: all three exit, in order.
+        assert_eq!(run(&[]), vec![A, B, UNKNOWN]);
+        assert_eq!((a.drain().unwrap(), b.drain().unwrap()), (0, 0));
+        // Both routed: only the unknown value exits; each eventfd counted its own token once.
+        vm.ioeventfd(doorbell, A, a.as_source_fd(), true)
+            .expect("assign a");
+        vm.ioeventfd(doorbell, B, b.as_source_fd(), true)
+            .expect("assign b");
+        assert_eq!(run(&[A, B]), vec![UNKNOWN]);
+        assert_eq!((a.drain().unwrap(), b.drain().unwrap()), (1, 1));
+        // A second registration of the same (gpa, value) is the kernel's EEXIST.
+        assert_eq!(
+            vm.ioeventfd(doorbell, A, b.as_source_fd(), true)
+                .unwrap_err(),
+            RawError::Syscall {
+                call: "KVM_IOEVENTFD",
+                errno: Some(libc::EEXIST)
+            }
+        );
+        // A deassigned: A falls back to the exit, B stays routed.
+        vm.ioeventfd(doorbell, A, a.as_source_fd(), false)
+            .expect("deassign a");
+        assert_eq!(run(&[B]), vec![A, UNKNOWN]);
+        assert_eq!((a.drain().unwrap(), b.drain().unwrap()), (0, 1));
+        // Reassigned.
+        vm.ioeventfd(doorbell, A, a.as_source_fd(), true)
+            .expect("reassign a");
+        assert_eq!(run(&[A, B]), vec![UNKNOWN]);
+        assert_eq!((a.drain().unwrap(), b.drain().unwrap()), (1, 1));
+        // ★ The read-only backing never took a single store, routed or not.
+        let mut back = [0u8; 4];
+        dw.read_into(HostOffset::new(0x90), &mut back)
+            .expect("read back");
+        assert_eq!(u32::from_le_bytes(back), SENTINEL);
+        // Deassigning something never assigned is the kernel's ENOENT.
+        vm.ioeventfd(doorbell, A, a.as_source_fd(), false)
+            .expect("deassign a");
+        vm.ioeventfd(doorbell, B, b.as_source_fd(), false)
+            .expect("deassign b");
+        assert_eq!(
+            vm.ioeventfd(doorbell, B, b.as_source_fd(), false)
+                .unwrap_err(),
+            RawError::Syscall {
+                call: "KVM_IOEVENTFD",
+                errno: Some(libc::ENOENT)
+            }
+        );
+    }
+
     /// The load-completion path: a value we supply at the exit is what the guest goes on
     /// to store. Without this, an MMIO read handler could return anything and no test
     /// would know.

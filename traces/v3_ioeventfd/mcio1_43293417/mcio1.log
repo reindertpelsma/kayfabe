@@ -1,0 +1,15 @@
+START 2026-09-30T10:44:49+00:00
+Preparing worktree (detached HEAD 43293417)
+Updating files:  80% (7531/9335)Updating files:  81% (7562/9335)Updating files:  82% (7655/9335)Updating files:  83% (7749/9335)Updating files:  84% (7842/9335)Updating files:  85% (7935/9335)Updating files:  86% (8029/9335)Updating files:  87% (8122/9335)Updating files:  88% (8215/9335)Updating files:  89% (8309/9335)Updating files:  90% (8402/9335)Updating files:  91% (8495/9335)Updating files:  92% (8589/9335)Updating files:  93% (8682/9335)Updating files:  94% (8775/9335)Updating files:  95% (8869/9335)Updating files:  96% (8962/9335)Updating files:  97% (9055/9335)Updating files:  98% (9149/9335)Updating files:  99% (9242/9335)Updating files: 100% (9335/9335)Updating files: 100% (9335/9335), done.
+HEAD is now at 43293417 test(doorbell): real-KVM exhaustion + measurement harness; measurement probe; lane CPU accounting; design doc
+HEAD=43293417045f707795d162898ccc2a359d021604 CHECKOUT=/workspace/bench/verify-worktrees/mcio1.1JT6I5
+TESTS passed 1700 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/43293417/qemu-system-x86_64 rev=43293417 mtime=2026-09-30 10:48:45.230304178 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-09-30T11:10:15+00:00

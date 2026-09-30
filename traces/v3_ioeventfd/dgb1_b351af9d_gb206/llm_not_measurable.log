@@ -1,0 +1,24 @@
+START 2026-09-30T13:30:48+00:00 tag=llmgb qb=/workspace/bench/kf3-bins/b351af9d/qemu-system-x86_64 order=prov,on,off rev=b351af9d (NESTED)
+[2026-09-30T13:30:48+00:00] LPB_START tag=llmgb_prov qb=/workspace/bench/kf3-bins/b351af9d/qemu-system-x86_64 steps=gprov,hprov,host rev=b351af9d
+[2026-09-30T13:37:58+00:00] GPROV_RC=0 [2026-09-30T13:37:58+00:00] GUEST_LLM_DONE rc=0
+[2026-09-30T13:40:00+00:00] HPROV_RC=1 
+[2026-09-30T13:40:37+00:00] HOST_RC=0
+[2026-09-30T13:40:37+00:00] LPB_DONE
+DBLLM_STEP 1 prov rc=0 2026-09-30T13:40:38+00:00
+[2026-09-30T13:40:38+00:00] LPB_START tag=llmgb_on2 qb=/workspace/bench/kf3-bins/b351af9d/qemu-system-x86_64 steps=guest_pm rev=b351af9d
+=== pre-caching the model so the graded run is not a network test
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 3573.50it/s]
+MODEL_CACHED=yes
+
+=== ★★★★★ THE BASELINE — same runner, same prompt, same NTOK, on the real GPU
+    HOST_LLM_DEVICE=cuda
+    HOST_LLM_PARAM_DEVICE=cuda
+    HOST_LLM_RATIO_ELIGIBLE=1
+    HOST_LLM_EXC=RuntimeError: CUDA error: no kernel image is available for execution on the device
+    HOST_LLM_TEXT=
+    HOST_LLM_TEXT_SHA256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    HOST_LLM_OK=0
+    HOST_LLM_TOKENS=0
+    HOST_LLM_MS=-1.0
+    HOST_LLM_RC=1
+HOSTLLM_RC=1 ⊘ no usable baseline (LLM_MS=-1.0 LLM_TOKENS=0)

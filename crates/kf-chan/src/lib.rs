@@ -9,8 +9,12 @@
 //! - **Emulated** — executed by the VMM worker through the host RM client (§37).
 //!
 //! Completions arrive as host events on an fd (`kf-host::event`), never inline.
+//!
+//! ★ [`dbfast`] (2026-09-30): the doorbell's optional fast TRANSPORT — a KVM ioeventfd per live
+//! token, serviced by the register drainer, handled exactly as the trap handles it.
 
 pub mod completions;
+pub mod dbfast;
 pub mod host;
 pub mod passthrough;
 pub mod ring;

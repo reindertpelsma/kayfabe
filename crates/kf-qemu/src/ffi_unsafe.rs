@@ -7,7 +7,12 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 9;
+/// ★ 10 (2026-09-30, `v3-mc22`): the union of two INDEPENDENT 9s — `v3-display2`'s frame hand-off
+/// ([`Kf3Frame`], [`kf3_display_frame`]) and `v3-ioeventfd`'s doorbell fast path
+/// ([`kf3_doorbell_page_offset`], [`kf3_set_ioeventfd`], [`kf3_doorbell_site`]). The two 9s name
+/// different surfaces, so an archive from either branch must fail the device's check: one new
+/// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
+pub const KF3_ABI: u32 = 10;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -470,7 +475,8 @@ pub extern "C" fn kf3_bar1_usermode_write(h: *mut c_void, vf_rel: u64, val: u64,
     }
 }
 
-/// ★ ABI 9: one frame of the virtual display for QEMU's console (`display=on`).
+/// ★ ABI 10 (`v3-display2`'s 9): one frame of the virtual display for QEMU's console
+/// (`display=on`).
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Kf3Frame {
@@ -488,10 +494,10 @@ pub struct Kf3Frame {
     pub serial: u64,
 }
 
-/// ★ ABI 9 (QEMU's main thread, the console's `gfx_update`): the newest frame of the virtual
-/// display. `0` and `*out` filled — the memory stays valid, and is not written, until the next call
-/// (the worker never fills the frame the console shows); `-1` before the first frame, or without a
-/// display.
+/// ★ ABI 10 (`v3-display2`'s 9; QEMU's main thread, the console's `gfx_update`): the newest frame
+/// of the virtual display. `0` and `*out` filled — the memory stays valid, and is not written, until
+/// the next call (the worker never fills the frame the console shows); `-1` before the first frame,
+/// or without a display.
 ///
 /// # Safety
 /// `out` is writable.
@@ -514,6 +520,57 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
     // SAFETY: `out` is writable (caller contract).
     unsafe { *out = fr };
     0
+}
+
+/// ★ ABI 10 (`v3-ioeventfd`'s 9): the doorbell register's offset inside the 64 KiB usermode page
+/// (the same register through BAR0's usermode piece and through every Hopper+ BAR1 view of it) —
+/// what the C device's memory listener looks for to report doorbell sites. -1 on a bad handle.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_doorbell_page_offset(h: *mut c_void) -> i64 {
+    dev(h).map_or(-1, |d| {
+        i64::try_from(d.plane.doorbell.offset()).unwrap_or(-1)
+    })
+}
+
+/// ★ ABI 10 (`v3-ioeventfd`'s 9, `docs/design/V3_DOORBELL_IOEVENTFD.md`): turn the doorbell FAST
+/// PATH on — hand the device the C device's `KVM_IOEVENTFD` verb and the placement budget
+/// (`doorbell-ioeventfd-max`). Called only when the `doorbell-ioeventfd` property is on; without it
+/// every doorbell stays trapped. Returns 0, or -1 (bad handle, null verb, already on).
+///
+/// # Safety
+/// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime, must only
+/// issue `KVM_IOEVENTFD` with the arguments given, and must not retain the fd.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_set_ioeventfd(
+    h: *mut c_void,
+    f: Option<crate::raw_unsafe::IoeventfdFn>,
+    opaque: *mut c_void,
+    budget: u32,
+) -> i32 {
+    let (Some(d), Some(f)) = (dev(h), f) else {
+        return -1;
+    };
+    // SAFETY: forwarded from this function's contract.
+    let hook = unsafe { crate::raw_unsafe::IoeventfdHook::adopt(f, opaque) };
+    if d.enable_doorbell_fast_path(hook, budget as usize) {
+        0
+    } else {
+        -1
+    }
+}
+
+/// ★ ABI 10 (`v3-ioeventfd`'s 9): a doorbell register became visible (`add` = 1) at
+/// guest-physical `gpa`, or went away (`add` = 0) — the C device's memory listener (main loop, BQL
+/// held), for BAR0's usermode piece and every Hopper+ BAR1 view. Never on a vCPU's MMIO path.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
+    if let Some(d) = dev(h) {
+        if add != 0 {
+            d.dbfast.site_add(gpa);
+        } else {
+            d.dbfast.site_del(gpa);
+        }
+    }
 }
 
 /// Stop the device's threads (the device itself lives for the process).

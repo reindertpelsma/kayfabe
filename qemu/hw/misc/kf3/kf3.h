@@ -1,11 +1,17 @@
 /* The kf3_* surface of libkf_qemu.a (crates/kf-qemu/src/ffi_unsafe.rs). Keep in lockstep: the
- * device refuses an archive whose kf3_abi_version() differs from KF3_ABI. */
+ * device refuses an archive whose kf3_abi_version() differs from KF3_ABI, and
+ * crates/kf-qemu/tests/wire_mirror.rs compiles every Rust layout, entry point and callback type
+ * against the declarations below (a name on one side only, or a differing signature, fails it). */
 #ifndef KF3_H
 #define KF3_H
 #include <stdint.h>
 #include <stddef.h>
 
-#define KF3_ABI 9
+/* ★ 10 (2026-09-30, v3-mc22): the union of two INDEPENDENT 9s — v3-display2's frame hand-off
+ * (Kf3Frame, kf3_display_frame) and v3-ioeventfd's doorbell fast path (Kf3IoeventfdFn,
+ * kf3_doorbell_page_offset, kf3_set_ioeventfd, kf3_doorbell_site). The two 9s name DIFFERENT
+ * surfaces, so an archive from either branch must be refused here: one new number above both. */
+#define KF3_ABI 10
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -19,7 +25,7 @@ typedef struct Kf3Region {
     uint64_t base, len;
 } Kf3Region;
 
-/* ★ ABI 9: one frame of the virtual display (display=on). `data` stays valid and unwritten until
+/* ★ ABI 10 (v3-display2's 9): one frame of the virtual display (display=on). `data` stays valid and unwritten until
  * the next kf3_display_frame call. format: 1 xrgb8888, 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10. */
 typedef struct Kf3Frame {
     uint8_t* data;   /* (spelled for the wire-mirror census) */
@@ -54,7 +60,17 @@ int32_t kf3_bar1_follows_guest(void *h);
 int32_t kf3_set_bar1_overlay(void *h, Kf3OverlayFn f, void *opaque, uint32_t slots);
 void kf3_bar1_overlay_done(void *h, uint64_t seq, int32_t rc);
 void kf3_bar1_usermode_write(void *h, uint64_t vf_rel, uint64_t val, uint32_t width);
-/* ★ ABI 9: the newest display frame, for the console's gfx_update (main thread); -1 = none yet. */
+/* ★ ABI 10 (v3-display2's 9): the newest display frame, for the console's gfx_update (main thread);
+ * -1 = none yet. */
 int32_t kf3_display_frame(void *h, Kf3Frame *out);
+/* ★ ABI 10 (v3-ioeventfd's 9; docs/design/V3_DOORBELL_IOEVENTFD.md): the doorbell fast path. The
+ * device's KVM_IOEVENTFD verb (0 or -errno; any non-vCPU thread), the doorbell register's offset
+ * inside the usermode page, and the doorbell sites the memory listener sees (BAR0's usermode piece,
+ * Hopper+ BAR1 views). */
+typedef int32_t (*Kf3IoeventfdFn)(void *opaque, uint64_t gpa, uint32_t len, uint64_t datamatch, int32_t fd,
+                                  uint32_t assign);
+int64_t kf3_doorbell_page_offset(void *h);
+int32_t kf3_set_ioeventfd(void *h, Kf3IoeventfdFn f, void *opaque, uint32_t budget);
+void kf3_doorbell_site(void *h, uint64_t gpa, uint32_t add);
 void kf3_unrealize(void *h);
 #endif

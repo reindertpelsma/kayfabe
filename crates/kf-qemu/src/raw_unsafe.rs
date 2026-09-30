@@ -172,3 +172,70 @@ impl OverlayHook {
         }
     }
 }
+
+/// ★ 2026-09-30 — the C device's `KVM_IOEVENTFD` verb (`docs/design/V3_DOORBELL_IOEVENTFD.md`):
+/// assign (`assign` = 1) or deassign one `len`-byte `DATAMATCH` MMIO ioeventfd for `datamatch` at
+/// guest-physical `gpa`, signalling `fd`. Returns 0, or the kernel's negative errno. Thread-safe
+/// (`kvm_vm_ioctl` takes no QEMU lock); called from the channel act thread and the main loop, never
+/// from a vCPU or the register drainer.
+pub type IoeventfdFn = unsafe extern "C" fn(
+    opaque: *mut core::ffi::c_void,
+    gpa: u64,
+    len: u32,
+    datamatch: u64,
+    fd: i32,
+    assign: u32,
+) -> i32;
+
+/// The registered ioeventfd verb and its opaque device pointer.
+#[derive(Debug, Clone, Copy)]
+pub struct IoeventfdHook {
+    f: IoeventfdFn,
+    opaque: *mut core::ffi::c_void,
+}
+
+// SAFETY: `opaque` is the C device's state, which lives for the process (the device is never freed —
+// `kf3_unrealize` only stops threads); the verb makes one `ioctl` on QEMU's VM descriptor and takes
+// no lock, so any thread may call it.
+unsafe impl Send for IoeventfdHook {}
+// SAFETY: as above.
+unsafe impl Sync for IoeventfdHook {}
+
+impl IoeventfdHook {
+    /// Adopt the C device's verb.
+    ///
+    /// # Safety
+    /// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime, must
+    /// only issue `KVM_IOEVENTFD` with the arguments given, and must not retain `fd`.
+    #[must_use]
+    pub unsafe fn adopt(f: IoeventfdFn, opaque: *mut core::ffi::c_void) -> IoeventfdHook {
+        IoeventfdHook { f, opaque }
+    }
+}
+
+impl kf_chan::dbfast::Ioeventfd for IoeventfdHook {
+    fn set(
+        &self,
+        gpa: u64,
+        value: u32,
+        fd: std::os::fd::BorrowedFd<'_>,
+        assign: bool,
+    ) -> Result<(), i32> {
+        use std::os::fd::AsRawFd;
+        // SAFETY: the contract `adopt` was given; `fd` is a live borrowed descriptor for the whole
+        // call, and the kernel takes its own reference to the eventfd behind it (never the number).
+        match unsafe {
+            (self.f)(
+                self.opaque,
+                gpa,
+                4,
+                u64::from(value),
+                fd.as_raw_fd(),
+                u32::from(assign),
+            )
+        } {
+            0 => Ok(()),
+            e => Err(e.saturating_neg()),
+        }
+    }
+}

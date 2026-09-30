@@ -46,7 +46,8 @@
 > - **M2** (`traces/v3_display/m2c_20260930/`, proof of the copies in `m2b_20260930/`): each flip of the
 >   window the console shows is copied by the GPU (`cuMemcpy2DAsync`, the display plane's own context
 >   and stream) out of the store into page-locked frames a QEMU graphic console shows zero-copy
->   (`kf3_display_frame`, ABI 9); the flip's notifier, its semaphore release and GET wait for that copy
+>   (`kf3_display_frame`, ABI 9 on `v3-display2` — ⊘ **10** since the `v3-mc22` merge, whose doorbell fast path had
+>   taken 9 independently); the flip's notifier, its semaphore release and GET wait for that copy
 >   to complete. **`screendump … kf0` is pixel-exact against the probe's pattern (1920x1080)**, flips
 >   at 60.01 Hz, `nvidia-smi` `Display Active : Enabled`, 0 flip-event timeouts, 0 DRM WARNs.
 > - Known limits: pitch surfaces only — block-linear and system-memory surfaces are refused by name
