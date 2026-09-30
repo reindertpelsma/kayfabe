@@ -9,6 +9,7 @@
 #     F   <name> <hi> <lo>               a bit field `hi:lo`
 #     A   <name> <base> <stride>         a one-parameter macro `X(i)` = base + i*stride
 #     A2  <name> <base> <s1> <s2>        a two-parameter macro `X(a,b)` = base + a*s1 + b*s2
+#     FA  <name> <hi0> <lo0> <stride>    a one-parameter bit field `X(i)` = (hi0+i*s):(lo0+i*s)
 # Classes: every family's core/window/window-immediate/cursor channel and caps class the display plane
 # serves (Turing C57x, Ampere C67x, Ada C77D + C67x, Blackwell GB20x CA7x), plus NV_DISP_NOTIFIER.
 # ⊘ Names are matched on PREFIX, never on bodies; the compiler evaluates every body. A body is taken
@@ -55,6 +56,9 @@ for line in open(macros):
         print(f'  printf("V\\t{n}\\t%llu\\n", {u}({n}));')
     elif arity == 1 and ':' not in body:
         print(f'  printf("A\\t{n}\\t%llu\\t%llu\\n", {u}({n}(0)), {u}({n}(1))-{u}({n}(0)));')
+    elif arity == 1 and '?' not in body:
+        # an indexed bit field `X(i)` = (hi0+i*s):(lo0+i*s) — e.g. INTERLOCK_WITH_WINDOW(i)
+        print(f'  printf("FA\\t{n}\\t%llu\\t%llu\\t%llu\\n", {u}(1?{n}(0)), {u}(0?{n}(0)), {u}(0?{n}(1))-{u}(0?{n}(0)));')
     elif arity == 2 and ':' not in body:
         print(f'  printf("A2\\t{n}\\t%llu\\t%llu\\t%llu\\n", {u}({n}(0,0)), {u}({n}(1,0))-{u}({n}(0,0)), {u}({n}(0,1))-{u}({n}(0,0)));')
 print('  return 0; }')

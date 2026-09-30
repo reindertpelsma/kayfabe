@@ -139,6 +139,11 @@ pub unsafe extern "C" fn kf3_realize(
                 write_err(err, err_len, "could not start the completion-probe thread");
                 return -1;
             }
+            // ★ v3-display: the display worker (`display=on` only).
+            if d.display.is_some() && std::thread::Builder::new().name("kf3-display".into()).spawn(move || d.display_loop()).is_err() {
+                write_err(err, err_len, "could not start the display worker thread");
+                return -1;
+            }
             // ★ P4: the VA-manager thread — the one owner of the GPU walker.
             if std::thread::Builder::new()
                 .name("kf3-vamgr".into())

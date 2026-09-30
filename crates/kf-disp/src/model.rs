@@ -20,7 +20,9 @@
 
 use crate::edid::Monitor;
 use crate::layout::{Layouts, Params};
+use crate::ports::Ports;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// `NV_OK`.
 pub const NV_OK: u32 = 0;
@@ -241,10 +243,11 @@ pub struct Channel {
     pub handle: u32,
     /// Its pushbuffer (`None` for the cursor PIO channel).
     pub pb: Option<Pushbuffer>,
-    /// GET (byte offset) — what the user page's `+0x4` reads back.
-    pub get: u32,
-    /// PUT (byte offset) — the last value the guest wrote to `+0x0`.
-    pub put: u32,
+    /// The initial GET = PUT (byte offset) the alloc stated. ⊘ The live GET/PUT are the shared
+    /// [`Ports`] words — the vCPU posts PUT there and the engine publishes GET — never a copy here.
+    pub offset: u32,
+    /// The allocation generation [`Ports::allocate`] minted for this life.
+    pub life: u32,
 }
 
 /// The guest's display instance memory (`WRITE_INST_MEM`).
@@ -285,6 +288,12 @@ pub enum Statement {
         instance: u32,
         /// Initial GET/PUT.
         offset: u32,
+        /// The allocating client (the context-DMA hash key).
+        client: u32,
+        /// Its pushbuffer, as `CHANNEL_PUSHBUFFER` stated it (`None`: PIO, or never stated).
+        pb: Option<Pushbuffer>,
+        /// The generation the shared ports minted for this life.
+        life: u32,
     },
     /// A display channel was freed.
     ChannelFreed {
@@ -321,6 +330,28 @@ pub struct DisplayModel {
     pub statements_dropped: u64,
     /// Every display control answered (the first 512), for the log.
     pub seen: Vec<u32>,
+    /// ★ The lock-free state shared with the vCPU and the display worker (PUT/GET, events).
+    pub ports: Arc<Ports>,
+    /// ★ The display plane's wake: set when a plane consumes [`Self::statements`]; the control link
+    /// then leaves them queued and calls it (after dropping the lock) instead of logging them.
+    waker: Option<Waker>,
+}
+
+/// The display plane's wake (an eventfd write, in the plane) — callable from any thread.
+#[derive(Clone)]
+pub struct Waker(pub Arc<dyn Fn() + Send + Sync>);
+
+impl core::fmt::Debug for Waker {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("Waker")
+    }
+}
+
+impl Waker {
+    /// Wake the plane.
+    pub fn wake(&self) {
+        (self.0)();
+    }
 }
 
 impl DisplayModel {
@@ -356,7 +387,26 @@ impl DisplayModel {
             statements: Vec::new(),
             statements_dropped: 0,
             seen: Vec::new(),
+            ports: Arc::new(Ports::default()),
+            waker: None,
         }
+    }
+
+    /// ★ Attach the display plane: it drains [`Self::statements`] itself and is woken through `wake`.
+    pub fn attach_plane(&mut self, wake: Waker) {
+        self.waker = Some(wake);
+    }
+
+    /// The plane's wake, if a plane is attached (the control link calls it after dropping the lock).
+    #[must_use]
+    pub fn waker(&self) -> Option<Waker> {
+        self.waker.clone()
+    }
+
+    /// ★ Answer with another driver version's `layouts` (a `ReselectAtFn1` rebuild for the guest's
+    /// own version). Everything stated so far is kept; the ports and the plane stay attached.
+    pub fn retarget(&mut self, layouts: &'static Layouts) {
+        self.l = layouts;
     }
 
     /// ★ Hostile guest: how many instances of `kind` this display has — the bound every
@@ -720,12 +770,13 @@ impl DisplayModel {
                 let mut p = self.view("NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS", params)?;
                 let class = p.get("channelClass").unwrap_or(0) as u32;
                 let inst = p.get("channelInstance").unwrap_or(0) as u32;
-                let state = match self
-                    .classes
-                    .channel_kind(class)
-                    .and_then(|kd| self.channels.get(&(kd, inst)))
-                {
-                    Some(ch) if ch.get == ch.put => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_IDLE")?,
+                // ★ idle = the engine has consumed (and published the effects of) everything the guest
+                // posted: GET == PUT on the shared ports — a PUT is visible here the instant the vCPU
+                // stored it, a GET only after its notifier/semaphore/armed state is out.
+                let state = match self.classes.channel_kind(class).and_then(|kd| self.channels.get(&(kd, inst))) {
+                    Some(ch) if self.ports.idle(ch.kind.channel_number(ch.instance)) => {
+                        k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_IDLE")?
+                    }
                     Some(_) => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_BUSY")?,
                     None => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_DEALLOC")?,
                 };
@@ -776,24 +827,12 @@ impl DisplayModel {
             return false;
         };
         let pb = self.pushbuffers.get(&(class, inst)).copied();
+        let life = self.ports.allocate(kind.channel_number(inst), offset).unwrap_or(0);
         self.channels.insert(
             (kind, inst),
-            Channel {
-                class,
-                kind,
-                instance: inst,
-                client,
-                handle,
-                pb,
-                get: offset,
-                put: offset,
-            },
+            Channel { class, kind, instance: inst, client, handle, pb, offset, life },
         );
-        self.state(Statement::ChannelAllocated {
-            kind,
-            instance: inst,
-            offset,
-        });
+        self.state(Statement::ChannelAllocated { kind, instance: inst, offset, client, pb, life });
         true
     }
 
@@ -806,10 +845,8 @@ impl DisplayModel {
             .map(|(k, _)| *k);
         if let Some(k) = key {
             self.channels.remove(&k);
-            self.state(Statement::ChannelFreed {
-                kind: k.0,
-                instance: k.1,
-            });
+            self.ports.release(k.0.channel_number(k.1));
+            self.state(Statement::ChannelFreed { kind: k.0, instance: k.1 });
         }
         key.is_some()
     }
@@ -825,10 +862,8 @@ impl DisplayModel {
             .collect();
         for k in &keys {
             self.channels.remove(k);
-            self.state(Statement::ChannelFreed {
-                kind: k.0,
-                instance: k.1,
-            });
+            self.ports.release(k.0.channel_number(k.1));
+            self.state(Statement::ChannelFreed { kind: k.0, instance: k.1 });
         }
         keys.len()
     }
@@ -990,6 +1025,7 @@ mod tests {
         assert!(m.alloc(0xc1d0_0001, 0xc67d_0000, 0xC67D, &vec![0; size(&m, s)]));
         let ch = &m.channels[&(ChannelKind::Core, 0)];
         assert_eq!(ch.pb.map(|p| p.phys), Some(0x1234_5000));
+        let life = ch.life;
         let s = "NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS";
         let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
         q.set("channelClass", 0xC67D);
@@ -998,12 +1034,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(get(&m, s, &r, "channelState"), 1, "IDLE");
-        m.channels.get_mut(&(ChannelKind::Core, 0)).unwrap().put = 0x40;
-        let r = m
-            .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
-            .unwrap()
-            .unwrap();
-        assert_eq!(get(&m, s, &r, "channelState"), 0x40, "BUSY");
+        m.ports.post_put(0, 0x40);
+        let r = m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf).unwrap().unwrap();
+        assert_eq!(get(&m, s, &r, "channelState"), 0x40, "BUSY: the guest posted a PUT the engine has not consumed");
+        assert!(m.ports.publish_get(0, life, 0x40));
+        let r = m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf).unwrap().unwrap();
+        assert_eq!(get(&m, s, &r, "channelState"), 1, "IDLE once the engine published GET");
         m.free(0xc1d0_0001, 0xc67d_0000);
         let r = m
             .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)

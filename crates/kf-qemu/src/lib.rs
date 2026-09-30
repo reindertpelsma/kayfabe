@@ -10,6 +10,7 @@
 pub mod cardbudget;
 pub mod chan;
 pub mod device;
+pub mod display;
 pub mod ffi_unsafe;
 pub mod hostfacts;
 pub mod mem;

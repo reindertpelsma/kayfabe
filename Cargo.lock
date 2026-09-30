@@ -330,6 +330,7 @@ dependencies = [
  "kf-chip",
  "kf-core",
  "kf-cuda",
+ "kf-disp",
  "kf-gsp",
  "kf-host",
  "kf-linux-raw",

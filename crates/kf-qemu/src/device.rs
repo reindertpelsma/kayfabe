@@ -176,7 +176,7 @@ pub struct Device {
     fsp: Option<kf_trap::fspemem::FspEmem>,
     /// The NVDM type of the last command FSP acknowledged (status line).
     fsp_replies_type: std::sync::atomic::AtomicU32,
-    ram: &'static crate::mem::RamMap,
+    pub(crate) ram: &'static crate::mem::RamMap,
     gsp: Mutex<Gsp>,
     /// ★ w828: the SAME register model the drainer's FSM answers from, shared lock-free with the
     /// vCPU for ONE question — [`GspModel::answer_on_store`] (what a register reads back the
@@ -199,7 +199,7 @@ pub struct Device {
     irq_lines: Vec<Notifier>,
     /// Interrupt counters for the boot log.
     pub irq_counts: IrqCounts,
-    stop: AtomicBool,
+    pub(crate) stop: AtomicBool,
     /// Boot-log counters.
     pub counters: Counters,
     /// ★ P5c: the VA timing at the previous heartbeat (the heartbeat prints the window).
@@ -212,6 +212,9 @@ pub struct Device {
     qhead_off: u64,
     /// Held replies' queue-head stamps, oldest first (drainer only) — for [`crate::prof`].
     held_stamps: Mutex<std::collections::VecDeque<u64>>,
+    /// ★ v3-display: the emulated NVDisplay (`display=on`), leaked for the process so the vCPU path
+    /// holds a plain reference (`crate::display`). `None`: the displayless posture, unchanged.
+    pub display: Option<&'static crate::display::DisplayPlane>,
 }
 
 impl Device {
@@ -503,6 +506,20 @@ impl Device {
         } else {
             None
         };
+        // ★ v3-display step (3): the plane — the shared model the served chain answers from across
+        // `ReselectAtFn1` rebuilds, and its own GPU context over the store (a second export: the
+        // walker's context keeps its own import).
+        let display_plane: Option<&'static crate::display::DisplayPlane> = match display_row {
+            Some(row) => {
+                let export = rm.export_to_new_fd(store.handle).map_err(|e| format!("display=on: store export: {e:?}"))?;
+                let plane = crate::display::DisplayPlane::build(row, table, &bdf, export.fd_number(), fb_length)?;
+                // the export node stays open for the process (CUDA holds the import)
+                std::mem::forget(export);
+                eprintln!("kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on {bdf}");
+                Some(Box::leak(Box::new(plane)))
+            }
+            None => None,
+        };
         // ★ The chain is built through a RECIPE (`V3_DRIVER_MATRIX.md` §4.2): every table-dependent
         // link is constructed from the table handed in, so `ReselectAtFn1` can rebuild it for the
         // guest's own version at fn 1 when the version was defaulted. The shared state (logs,
@@ -543,7 +560,7 @@ impl Device {
                         // ★ P5: channel allocs, GPFIFO_SCHEDULE, the token and frees reach the plane,
                         // on the drainer; each answer IS the plane's act.
                         channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
-                        display: display_row,
+                        display: display_row.map(|row| kf_rm::DisplaySeat { row, model: display_plane.map(|p| p.model.clone()) }),
                     },
                 )
             })
@@ -713,6 +730,7 @@ impl Device {
             bar1_overlay,
             qhead_off,
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
+            display: display_plane,
         })
     }
 
@@ -771,6 +789,14 @@ impl Device {
         if let Ok(mut g) = self.gsp.lock() {
             self.publish(&mut g);
         }
+        // ★ v3-display: the engine's static registers — the caps page NVKMS maps and parses, each
+        // cursor's `Free` — and the event registers' initial (derived) values.
+        if let Some(dp) = self.display {
+            for (o, v) in dp.static_words() {
+                self.shadow_store(o, u64::from(v), 4);
+            }
+            dp.publish_events(&|o, v| self.shadow_store(o, u64::from(v), 4));
+        }
     }
 
     fn piece_for(&self, off: u64) -> Option<(Piece, usize)> {
@@ -781,7 +807,12 @@ impl Device {
         (rel < p.mem.len()).then_some((p, rel))
     }
 
-    fn shadow_store(&self, off: u64, val: u64, width: u8) {
+    /// The 32-bit word the shadow holds at `off` (0 when no piece covers it).
+    pub(crate) fn shadow_word(&self, off: u64) -> u32 {
+        self.piece_for(off).and_then(|(p, rel)| p.mem.load_u32(rel)).unwrap_or(0)
+    }
+
+    pub(crate) fn shadow_store(&self, off: u64, val: u64, width: u8) {
         match self.piece_for(off) {
             Some((p, rel)) => {
                 p.mem.store(rel, val, width);
@@ -946,6 +977,15 @@ impl Device {
     fn bar0_write_inner(&self, off: u64, val: u64, width: u8) {
         self.counters.trapped.fetch_add(1, Ordering::Relaxed);
         self.counters.last_off.store(off, Ordering::Relaxed);
+        // ★ v3-display: the display aperture is the plane's — PUT posted to its worker, W1C applied
+        // here, a plain store otherwise; lock-free, and never the privileged ring (the GSP state
+        // machine owns no display register). `None` (display off): unchanged.
+        if let Some(dp) = self.display
+            && dp.map.owns(off)
+        {
+            dp.trap_write(off, val, width, &|o, v| self.shadow_store(o, u64::from(v), 4), &|o, v, w| self.shadow_store(o, v, w));
+            return;
+        }
         // ★ The BAR0 doorbell is live on EVERY family — on Hopper+ too: RM rings kernel channels
         // through its own BAR0 mapping (`kfifoRingChannelDoorBell_GH100` → GV100 →
         // `GPU_VREG_WR32`), and a client without `bBar1Mapping` gets the BAR0 view

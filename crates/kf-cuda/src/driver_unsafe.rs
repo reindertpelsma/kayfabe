@@ -803,6 +803,16 @@ impl Cuda {
         })
     }
 
+    /// `cuMemsetD8_v2` over `n` bytes (synchronous, the legacy stream).
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn memset_d8(&self, dst: CUdeviceptr, v: u8, n: usize, what: &'static str) -> Result<(), CudaError> {
+        // SAFETY: `dst` is a live device mapping of at least `n` bytes — every caller bounds
+        // `[dst, dst+n)` against the mapping it came from before calling.
+        self.check(what, unsafe { (self.cuMemsetD8)(dst, v, n) })
+    }
+
     /// `cuMemsetD8Async` over `n` bytes, in `stream`.
     ///
     /// # Errors
