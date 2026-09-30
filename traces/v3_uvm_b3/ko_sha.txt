@@ -1,0 +1,2 @@
+2ca52cad872382e6aef17bfe4b1ccc6d
+c4b06fb93a6f2826a920de45941c6fb0ee354d689e7cae37ee9941ad73296d65  /root/kayfabe/tools/uvm_efs/patch/nvidia_uvm_efs_580.159.04.patch
