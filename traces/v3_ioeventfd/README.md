@@ -7,3 +7,4 @@ itself (nested), Linux 6.8.0-59-generic, host driver 580.159.04 (open). Design a
 | dir | revision | what |
 |---|---|---|
 | `mcio1_43293417/` | `43293417` | `merge_check.sh` — crate tests 1700/0, gates 9/9, KF3_RC=0, bare metal 30/30, FG_RC=0, thin suite 30/30 (fast path OFF = the property's default). `mcio1.log` is the verdict; `merge_check_detail.tar.gz` holds the stage logs |
+| `dbl1_43293417/` | `43293417` | `dbfast_lane.sh dbl1` — thin suite **ON 30/30** (823 passthrough doorbells, all by eventfd, 0 trapped; CeUtils Translated doorbells handed by the drainer); guest-timed doorbell stores ON/OFF (`DBL_EXIT`); CUDA ladder OFF 4/4 and ON 4/4 with `cup8bench` per-launch rows; GPU-free tests + bench A/B on the box. `dbl1.log` is the summary; the tarballs hold the suite/ladder/probe outputs and sample QEMU logs |
