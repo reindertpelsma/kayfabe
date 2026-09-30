@@ -715,6 +715,11 @@ pub struct VaStats {
     /// ★ v3-roperm: PRIVILEGED map runs mirrored (guest-kernel spaces, CPU windows) — with
     /// [`VaStats::priv_withheld`], every privileged leaf the walker reported.
     pub priv_mirrored: u64,
+    /// ★★★ v3-cdp: SKED-reflected pages placed as message-kind host mappings (`V3_CDP.md`) — one
+    /// per CUDA context that loaded a device-runtime module.
+    pub sked_placed: u64,
+    /// ★ v3-cdp: SKED-reflected pages the host already held (not ours).
+    pub sked_held: u64,
 }
 
 /// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
@@ -1386,6 +1391,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.priv_withheld += a.priv_withheld as u64;
             self.stats.priv_withheld_bytes += a.priv_withheld_bytes;
             self.stats.priv_mirrored += a.priv_mirrored as u64;
+            self.stats.sked_placed += a.sked_placed as u64;
+            self.stats.sked_held += a.sked_held as u64;
             if a.priv_mirrored > 0 {
                 static MIRRORED: std::sync::atomic::AtomicU32 =
                     std::sync::atomic::AtomicU32::new(0);
@@ -1554,7 +1561,9 @@ mod tests {
 
     /// The guest's tables, as the model walker "walks" them: root → leaves `(va, at, len, ap)`.
     /// Shared so a test can change them between invalidates, as the guest would.
-    type Tables = Rc<RefCell<BTreeMap<u64, Vec<(u64, u64, u64, u8)>>>>;
+    /// `(va, gpga, len, run flags)` per root — the flags a walk run carries (`KFWR_RF_*`: the
+    /// aperture in bits 0..2, the permissions, ★ v3-cdp the KIND in bits 16..23).
+    type Tables = Rc<RefCell<BTreeMap<u64, Vec<(u64, u64, u64, u32)>>>>;
 
     /// ★ The walker, as the PROTOCOL'S RUST MODEL (`kf_cuda::diffmodel`) — the same spec
     /// `kf-gate9` holds the GPU kernel to. Commit on ack happens at the next submit, as on the GPU.
@@ -1640,11 +1649,11 @@ mod tests {
                             .cloned()
                             .unwrap_or_default()
                             .into_iter()
-                            .map(|(va, at, len, ap)| KfMapRun {
+                            .map(|(va, at, len, flags)| KfMapRun {
                                 va,
                                 gpga: at,
                                 len,
-                                flags: u32::from(ap),
+                                flags,
                                 op: 1,
                                 pdb_index: 0,
                             })
@@ -1726,6 +1735,8 @@ mod tests {
     #[derive(Debug, Clone, PartialEq, Eq)]
     enum Op {
         Map(u64, u64, u64),
+        /// ★ v3-cdp: a SKED-reflected placement `(va, store offset, len)`.
+        Sked(u64, u64, u64),
         Unmap(u64),
         Invalidate,
     }
@@ -1770,6 +1781,13 @@ mod tests {
         }
         fn reserved(&self) -> Vec<(u64, u64)> {
             self.reserved.clone()
+        }
+        fn map_sked(&self, s: &crate::ledger::SkedRow, _defer: bool) -> Result<Mapped, String> {
+            self.ops.borrow_mut().push((
+                Op::Sked(s.va, s.off, s.len),
+                self.port.trigger().read() != 0,
+            ));
+            Ok(Mapped::Placed)
         }
         fn unmap(&self, va: u64, _defer: bool) -> Result<(), String> {
             if *self.refuse_unmap_at.borrow() == Some(va) {
@@ -1907,7 +1925,7 @@ mod tests {
     #[test]
     fn host_work_is_the_diff_not_the_space() {
         let mut r = rig();
-        let mut leaves: Vec<(u64, u64, u64, u8)> = Vec::new();
+        let mut leaves: Vec<(u64, u64, u64, u32)> = Vec::new();
         for i in 0..2000u64 {
             leaves.push((
                 0x1_0000_0000 + i * 0x1000,
@@ -2152,7 +2170,7 @@ mod tests {
     #[test]
     fn a_rw_to_ro_downgrade_reaches_the_host_as_a_read_only_remap() {
         use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_READ_ONLY};
-        const RO: u8 = KFWR_RF_READ_ONLY as u8;
+        const RO: u32 = KFWR_RF_READ_ONLY;
         let mut r = rig();
         r.tables
             .borrow_mut()
@@ -2201,7 +2219,7 @@ mod tests {
                 0x1000_0000,
                 0x0200_0000,
                 0x2000,
-                2 | RO | KFWR_RF_ATOMIC_DISABLE as u8,
+                2 | RO | KFWR_RF_ATOMIC_DISABLE,
             )],
         );
         settle(&mut r, PDB_A);
@@ -2221,7 +2239,7 @@ mod tests {
     #[test]
     fn a_privileged_leaf_is_withheld_from_a_user_twin_and_the_invalidate_still_clears() {
         use kf_cuda::abi::KFWR_RF_PRIVILEGE;
-        const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
+        const PRIV: u32 = KFWR_RF_PRIVILEGE;
         let mut r = rig();
         let user =
             r.m.table
@@ -2270,12 +2288,69 @@ mod tests {
         assert_eq!(r.m.stats.priv_withheld, 2);
     }
 
+    /// ★★★ v3-cdp — **the SKED page end to end, through the diff protocol** (`V3_CDP.md`): the
+    /// guest's `UVM_MAP_DYNAMIC_PARALLELISM_REGION` leaf (VIDEO, address 0, kind SMSKED_MESSAGE)
+    /// is placed as a message-kind mapping BEFORE the guest's invalidate clears; it is committed
+    /// (quiet afterwards); a page re-kinded in place is unmapped and placed again as memory (KIND is
+    /// part of run identity); and the guest dropping it takes it down.
+    #[test]
+    fn a_sked_page_is_placed_before_the_invalidate_clears_and_follows_the_guest() {
+        use kf_cuda::abi::RF_KIND;
+        const VA: u64 = 0x75b4_70c0_0000;
+        let sked = RF_KIND.put(u32::from(kf_chip::sked::PTE_KIND_SMSKED_MESSAGE));
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(VA, 0, 0x1000, sked)]);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1);
+        assert!(!busy(&r.port), "the invalidate clears");
+        assert_eq!(
+            r.ops.borrow().clone(),
+            vec![(Op::Sked(VA, 0, 0x1000), true), (Op::Invalidate, true)],
+            "placed by the SKED verb (never Map), while the trigger still read busy"
+        );
+        assert_eq!(r.m.stats.sked_placed, 1);
+        // Committed: the next invalidate costs the host nothing.
+        r.ops.borrow_mut().clear();
+        settle(&mut r, PDB_A);
+        assert!(ops(&r).is_empty());
+        // Re-kinded in place (the guest reuses the VA for memory): unmapped, then mapped as memory.
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(VA, 0x0200_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        assert_eq!(
+            ops(&r),
+            vec![
+                Op::Unmap(VA),
+                Op::Map(VA, 0x0200_0000, 0x1000),
+                Op::Invalidate
+            ]
+        );
+        // And back; then dropped.
+        r.ops.borrow_mut().clear();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(VA, 0, 0x1000, sked)]);
+        settle(&mut r, PDB_A);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Unmap(VA), Op::Sked(VA, 0, 0x1000), Op::Invalidate]
+        );
+        r.ops.borrow_mut().clear();
+        r.tables.borrow_mut().insert(PDB_A, vec![]);
+        settle(&mut r, PDB_A);
+        assert_eq!(ops(&r), vec![Op::Unmap(VA), Op::Invalidate]);
+        assert!(r.m.stats.refusals.is_empty(), "{:?}", r.m.stats.refusals);
+    }
+
     /// ★★★ v3-roperm: a user mapping the guest turns PRIVILEGED in place (same VA, same page) is
     /// taken away from the user twin; turned back, it is placed again.
     #[test]
     fn a_privilege_flip_takes_the_page_away_from_a_user_twin_and_gives_it_back() {
         use kf_cuda::abi::KFWR_RF_PRIVILEGE;
-        const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
+        const PRIV: u32 = KFWR_RF_PRIVILEGE;
         let mut r = rig();
         let user =
             r.m.table
@@ -2315,7 +2390,7 @@ mod tests {
     #[test]
     fn a_kernel_space_mirrors_privileged_leaves_even_ones_it_withheld_before_it_turned_kernel() {
         use kf_cuda::abi::KFWR_RF_PRIVILEGE;
-        const PRIV: u8 = KFWR_RF_PRIVILEGE as u8;
+        const PRIV: u32 = KFWR_RF_PRIVILEGE;
         let mut r = rig();
         let user =
             r.m.table

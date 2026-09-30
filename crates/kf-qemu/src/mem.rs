@@ -562,6 +562,10 @@ pub struct GpuMirror {
     /// then it is a USER twin and WITHHOLDS them (`MapTarget::withholds_privileged`). Shared with
     /// the channel plane's [`Mirror::kernel_vas`].
     pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// ★★★ v3-cdp: OUR SKED-reflected placements, `va → len` (`MapTarget::map_sked`,
+    /// `V3_CDP.md`). ⊘ Kept OUT of [`GpuMirror::rows`]: a SKED page is not memory, so no reader may
+    /// resolve a guest VA through it; it is here so an unmap and the retire take it down.
+    pub sked: Mutex<std::collections::BTreeMap<u64, u64>>,
 }
 
 /// ★ `V3_BATCHED_MAP.md`: what one mirrored space cost in host RM calls over its life — the
@@ -634,6 +638,7 @@ impl GpuMirror {
             bv: kf_mem::batch::BatchedVas::new(vas),
             calls: SpaceCalls::default(),
             kernel_vas,
+            sked: Mutex::new(std::collections::BTreeMap::new()),
         }
     }
 
@@ -657,6 +662,17 @@ impl GpuMirror {
             .unwrap_or_default();
         let before = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
         let mut refused = 0usize;
+        // ★★★ v3-cdp: the SKED-reflected placements first (whole-mapping unmaps; never batched).
+        let sked: Vec<u64> = self
+            .sked
+            .lock()
+            .map(|m| m.keys().copied().collect())
+            .unwrap_or_default();
+        for &va in &sked {
+            if self.unmap(va, true).is_err() {
+                refused += 1;
+            }
+        }
         let mut k = 0;
         while k < rows.len() {
             let mut j = k + 1;
@@ -677,7 +693,7 @@ impl GpuMirror {
         // pieces (`rs_client.c:1342-1395`) — the space is being retired, nothing may keep them.
         let _ = self.bv.drain();
         let after = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
-        (rows.len(), refused, after - before)
+        (rows.len() + sked.len(), refused, after - before)
     }
 }
 
@@ -739,7 +755,37 @@ impl MapTarget for GpuMirror {
     fn reserved(&self) -> Vec<(u64, u64)> {
         self.reserved.clone()
     }
+    fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
+        let t = std::time::Instant::now();
+        let m = self.vas.map_sked(s, defer);
+        self.calls.maps.fetch_add(1, Ordering::Relaxed);
+        self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        let m = m?;
+        // ★ Only a mapping WE placed is ours to take down; never a row a reader resolves through.
+        if m == Mapped::Placed
+            && let Ok(mut k) = self.sked.lock()
+        {
+            k.insert(s.va, s.len);
+        }
+        Ok(m)
+    }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
+        // ★★★ v3-cdp: a SKED-reflected placement of ours: a whole-mapping unmap (never batched).
+        let sked = self.sked.lock().ok().and_then(|mut k| k.remove(&va));
+        if let Some(len) = sked {
+            let t = std::time::Instant::now();
+            let r = self.vas.unmap(va, defer);
+            self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
+            self.calls
+                .unmap_ns
+                .fetch_add(ns_since(t), Ordering::Relaxed);
+            if r.is_err()
+                && let Ok(mut k) = self.sked.lock()
+            {
+                k.insert(va, len);
+            }
+            return r;
+        }
         // ⊘ Forget the row FIRST: a reader must never resolve through a mapping being torn down.
         // ★ v3-video: NO row = nothing of OURS is mapped there — a leaf the host held (host RM's
         // own buffer) or one the channel plane handed to host RM (a steered falcon context). A
@@ -789,14 +835,28 @@ impl MapTarget for GpuMirror {
                     .collect()
             })
             .unwrap_or_default();
+        // ★★★ v3-cdp: the range takes any SKED-reflected placement of ours inside it down too.
+        let sked_removed: Vec<(u64, u64)> = self
+            .sked
+            .lock()
+            .map(|mut k| {
+                let keys: Vec<u64> = k.range(va..end).map(|(&v, _)| v).collect();
+                keys.into_iter()
+                    .filter_map(|v| k.remove(&v).map(|l| (v, l)))
+                    .collect()
+            })
+            .unwrap_or_default();
         let t = std::time::Instant::now();
         let r = self.bv.unmap_range(va, len, defer);
         self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
         self.calls.ranges.fetch_add(1, Ordering::Relaxed);
-        if r.is_err()
-            && let Ok(mut rows) = self.rows.write()
-        {
-            rows.extend(removed);
+        if r.is_err() {
+            if let Ok(mut rows) = self.rows.write() {
+                rows.extend(removed);
+            }
+            if let Ok(mut k) = self.sked.lock() {
+                k.extend(sked_removed);
+            }
         }
         self.calls
             .unmap_ns
@@ -934,6 +994,15 @@ impl MapTarget for Target {
         match self {
             Target::Bar1(b) => b.settle(),
             Target::Window(_) | Target::Gpu(_) => Settle::Live,
+        }
+    }
+    // ★★★ v3-cdp: forwarded EXPLICITLY. A GPU mirror places a SKED-reflected page; a CPU window
+    // keeps the trait default — a refusal by name (it cannot express a message-kind mapping).
+    fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
+        match self {
+            Target::Window(w) => w.map_sked(s, defer),
+            Target::Bar1(b) => b.win.map_sked(s, defer),
+            Target::Gpu(g) => g.map_sked(s, defer),
         }
     }
     fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
