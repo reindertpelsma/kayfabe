@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-09-28.** Every ruling the owner made in the 2026-09-25 … 09-28 working sessions,
+**STATUS: LIVE, 2026-09-30.** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -95,6 +95,19 @@ citation: ask whether its reason still holds before relying on it.
   performance objective in itself. Notification counts need not match host MMIO ring counts;
   eventual GPU notification or translated/emulated queue inspection must never be lost.
 - **BAR1 doorbell (Hopper+):** must follow where RM places it — built (`V3_BAR1_DOORBELL.md`).
+- **Refined 2026-09-30 (owner, in the session):**
+  - *ioeventfd is for every doorbell, not only passthrough:* "doorbells always need to be forwarded as
+    quickly as possible", so the non-blocking register drainer is the right place; it rings the host twin
+    inline for Passthrough and hands Translated/Emulated tokens on. (This is what `v3-mc22` built:
+    `design/V3_DOORBELL_IOEVENTFD.md`; still default **off** pending a non-nested measurement.)
+  - *Nested is a real deployment, not an edge case* ("think microVM containers"). The owner expects the
+    guest helper module to bring a nested doorbell to about **1–2 µs**, which they consider sufficient
+    for parity. ⚠ Hypothesis: the helper is still design-only and unmeasured.
+  - *Why the C reached host parity despite trapping every doorbell:* its 1.05× (llama.cpp 49.9 vs
+    47.5 tok/s) was measured on **bare metal**, an RTX 3050 kiosk PC (`docs/archive/STATUS_DETAIL_pre_v3.md`
+    "Hardware"), not on a nested Vast box. On bare metal a KVM exit costs a few µs, not the ~15–50 µs of
+    a nested box, so ioeventfd alone may reach parity there. Bare metal is also the most useful case for
+    Windows guests. ⚠ Hypothesis until a non-nested host is measured (§D "baseline first").
 
 ## E. UVM demand paging (2026-09-26)
 

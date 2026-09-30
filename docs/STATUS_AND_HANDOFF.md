@@ -1,14 +1,45 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-09-29.** The owner resolved the three implementation decisions in §3;
-network access is restored and the recovered integration's final merge bar has passed at `d883d0eb`.
-See `RESUME_2026-09-29.md` for the exact checkpoint. The historical campaign entries below are dated;
-the prior published baseline was `8ab92bf4` (mc21). The single entry point for resuming work
-without any chat history. Decisions live in `docs/OWNER_RULINGS.md`; per-topic detail in the design docs
-named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then fix
-this file.
+**STATUS: LIVE, 2026-09-30.** Master = **`b32aa046`**: the code of `3f67ed95`, which passed the full
+merge bar (§0 first entry), plus evidence. The single entry point for resuming work without any chat
+history. Decisions live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per-topic
+detail in the design docs named below. ⊘ When this file and a design doc disagree, the design doc's
+dated STATUS wins — then fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
+
+- **2026-09-30 — master and v3 = `b32aa046`.** Landed since `5c639f54`:
+  - **CI repair** (`v3-ci`, `bf6e7640`): first green GitHub CI; the hardware bar is now fail-closed and
+    includes a bare-metal suite (`scripts/bench/box/merge_check.sh`, run from a repo checkout).
+  - **Display M1–M3** (`v3-display2`): the emulated display (`display=on`, default **off**) drives a
+    virtual monitor. Pixel-exact 1920x1080 scanout, 120/120 flips at 60 Hz, Mint's Cinnamon Wayland
+    desktop with vkcube; weston; Xorg with the NVIDIA driver. X11 Cinnamon/Vulkan need
+    `GF100_DISP_SW` (owner choice below). `design/V3_DISPLAY.md`, `traces/v3_display/`.
+  - **Doorbell fast path** (`v3-ioeventfd`): one KVM ioeventfd per live token, drained off the vCPU,
+    Passthrough rung inline, Translated handed on. Default **off** (`doorbell-ioeventfd=on`). Nested
+    boxes only: LLM decode 0.29× → 0.32× of host. `design/V3_DOORBELL_IOEVENTFD.md`.
+  - **UVM b3 host-only proof** (`v3-uvm-b3`, tools only): the opt-in nvidia-uvm patch delivers a real
+    compute fault to the owning process, which maps the page and replays to correct data, alongside
+    native host CUDA. No guest fault plane yet. `design/V3_UVM_B3_IMPLEMENTATION.md`, `traces/v3_uvm_b3/`.
+  - **Bars:** `v3-mc22` (display + fast path, KF3 ABI 10) passed at `b84250b8`
+    (`traces/v3_mc22/`). Then `3f67ed95` (lint fixes plus claim-ledger citations, no behaviour change;
+    GitHub CI run 36744304349 green): tests **1742/0**, gates **9/9**, KF3_RC=0, bare **30/30**,
+    FG_RC=0, and the display lane pixel-exact. The thin suite was **29/30** on the first run: `--timer`
+    CeUtils timeout on the first boot after a stray QEMU was SIGKILLed on the same GPU (§4.9). It was
+    **30/30** on the rerun at the same revision. `traces/v3_cifix/`.
+  - **Open owner choices:** (1) build the guest doorbell helper now, or first measure a non-nested
+    host? Needs a physical host: `172.22.1.20` was still `Network is unreachable` from this workspace
+    on 2026-09-30, and the RTX 3050 kiosk PC's address is not recorded in the repo.
+    (2) `GF100_DISP_SW` (X11 desktops): A = allocate a host object for it, which breaks the rule that
+    kf-rm refuses unknown classes; B = keep refusing it, which leaves X11 partial. Recommendation: B
+    now; try a kayfabe-serviced vblank next; A only with a headless guard. (3) b3 registration
+    ownership (NVIDIA Bug 1624521) for mutually untrusting VMMs on one GPU: now or later.
+  - **Queued:** the UVM guest fault plane (`design/V3_UVM_DEMAND_PAGING.md` §13); CDP child launch;
+    display leftovers (cursor, scaled windows, 16-bit/YUV, the §7 display apps); the rest of the driver
+    matrix (570 UVM first-channel wall; hosts 535/590/595/610); re-running the app and graphics matrices
+    at this master; the `cuda/walk` tidy-up (§4.6); Turing on hardware.
+  - **Boxes:** only `53004208` (RTX 3060, ssh alias `v3060`), retained for verification. Nothing on it
+    is the only copy of anything.
 
 - **2026-09-29 CI repair in progress:** `codex/ci-repair-2026-09-29` contains the benchmark
   process-identity fix and v3/retained-grader CI repairs. See `CI_V3.md` for test and lint scope.
@@ -136,12 +167,13 @@ this file.
 
 Every promotion to master passed the merge bar (`scripts/bench/box/merge_check.sh`): all `kf-*` crate
 tests, v3 gates 9/9, a kf3 build of that exact revision, and the 30-arm thin-guest suite 30/30.
-Latest completed bar: **`d883d0eb`** — **1683 tests / 0 failed**, gates **9/9**, build and fresh
-fast guest successful, thin suite **30/30**, RTX 3060 (GA106), host 580.159.04;
-`traces/recovered_integration_20260929/`. Only documentation/evidence follows that tested code
-on the integration branch. This includes recovered Claude/Turing code plus the display lifecycle
-fix, tested on GA106; it does not substitute for a new Turing hardware run. New code candidates
-require their own bar. The preceding published allowlist baseline was `9c3d87fd`.
+Latest completed bar: **`3f67ed95`** (2026-09-30) — **1742 tests / 0 failed**, gates **9/9**, kf3 build,
+bare-metal suite **30/30**, fresh fast guest, thin suite **30/30** on the rerun (29/30 first run, §4.9),
+display lane pixel-exact; RTX 3060 (GA106), host 580.159.04; `traces/v3_cifix/`. Only evidence
+follows that code on master. New code candidates require their own bar. The bar before it was the
+recovered integration **`d883d0eb`** (1683 / 0, 9/9, 30/30; `traces/recovered_integration_20260929/`),
+which included the recovered Turing code but was tested on GA106 only — no Turing hardware run
+certifies the current master.
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
@@ -267,6 +299,15 @@ must pass to another session.
 7. Re-run the full CUDA app matrix at the current master (the 58/65 predates several fixes).
 8. **Display** (started: M0 on `v3-display`, in the v3-mc21 candidate — §0, §2), then a desktop, then
    **Windows** (roadmap).
+9. **CeUtils timeout on the first guest init after a killed VMM** (2026-09-30, `traces/v3_cifix/`, seen once).
+   At 16:37:56Z a stray QEMU (a kf3 binary of `bf6e7640` left by an earlier mis-launched chain) was
+   killed on the RTX 3060 (`kill`, then `kill -9`). The merge check started at 16:38; its bare-metal
+   suite used the host GPU in between and passed 30/30. The thin suite's first arm, `--timer`, was the
+   first kf3 guest boot after the kill, and it timed out: guest `memmgrMemSet` returned NV_ERR_TIMEOUT
+   at 150.7 s, then `ce_utils.c:349` asserted (`lastCompletedPayload == lastSubmittedPayload`). The
+   other 29 arms and a full 30-arm rerun passed. Open question: can state left by a killed VMM stall
+   the next guest's first CeUtils completion, even though host-side clients work? If so, it is a
+   host-side defect in the same class as §4.4. First step: kill a VMM mid-arm, then boot one arm.
 
 ## 5. How work was run (so it can be run again)
 
