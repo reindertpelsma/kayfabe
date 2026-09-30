@@ -1,0 +1,15 @@
+START 2026-09-30T14:42:48+00:00
+Preparing worktree (detached HEAD 871a93dc)
+Updating files:  76% (7471/9721)Updating files:  77% (7486/9721)Updating files:  78% (7583/9721)Updating files:  79% (7680/9721)Updating files:  80% (7777/9721)Updating files:  81% (7875/9721)Updating files:  82% (7972/9721)Updating files:  83% (8069/9721)Updating files:  84% (8166/9721)Updating files:  85% (8263/9721)Updating files:  86% (8361/9721)Updating files:  87% (8458/9721)Updating files:  88% (8555/9721)Updating files:  89% (8652/9721)Updating files:  90% (8749/9721)Updating files:  91% (8847/9721)Updating files:  92% (8944/9721)Updating files:  93% (9041/9721)Updating files:  94% (9138/9721)Updating files:  95% (9235/9721)Updating files:  96% (9333/9721)Updating files:  97% (9430/9721)Updating files:  98% (9527/9721)Updating files:  99% (9624/9721)Updating files: 100% (9721/9721)Updating files: 100% (9721/9721), done.
+HEAD is now at 871a93dc merge v3-ioeventfd (ef760b7a) into master 145cca8c as v3-mc22: display + doorbell fast path, KF3 ABI 10
+HEAD=871a93dc314944ced7628232bc14afa0a080d548 CHECKOUT=/workspace/bench/verify-worktrees/mc22.7IthFe
+TESTS passed 1741 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/871a93dc/qemu-system-x86_64 rev=871a93dc mtime=2026-09-30 14:45:06.161553948 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-09-30T15:06:48+00:00
