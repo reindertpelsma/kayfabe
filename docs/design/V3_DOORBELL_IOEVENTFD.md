@@ -409,6 +409,54 @@ kayfabe never has.** Sourced from ogkm-580.159.04:
 ⇒ Equal tokens buy nothing while the page must still be trapped (or matched per token, as this
 fast path does); the fast path and the optional guest helper remain the routes.
 
+## 8b. Proposal (owner, 2026-09-30): an adaptive doorbell PUMP — DESIGN ONLY, not built or measured
+
+**The owner's idea:** *"detect if our drainer is saturated with doorbells; if so a worker (or small
+thread) jumps in to ring the doorbell in a tight loop until the ring pressure lowers … the amount of
+doorbells doesn't matter, or when it is rung — only that when it is rung, queued work is eventually
+read. The requirement for a doorbell is very weak; that's why ioeventfd may freely miss doorbells that
+rang before the thread was awoken."* That weak contract (§D of `OWNER_RULINGS.md`: counts need not
+match, eventual notification must never be lost) is exactly what makes a pump legal. Checked against the
+code (2026-09-30): the Passthrough arm of the drainer (`Sink::deliver` → `RingHostInline` →
+`rm.doorbell(host_token)`, `kf-qemu/src/device.rs`) does nothing but ring — no memory-plane step — so
+an extra or late ring of a live Passthrough token is harmless by construction.
+
+**What the measurements say it can buy (nested RTX 3060, §7):** a doorbell costs the vCPU ~20 µs
+trapped, ~15.7 µs with ioeventfd, and the GPU hears of it only after the drainer wakes (~46 µs idle);
+LLM decode rings ~1 084 per token (~22 ms of the ~58 ms/token gap).
+
+- **Stage 1 — pump on pressure (host-only, small).** When the drainer sees sustained doorbell traffic,
+  a pump thread takes over: it rings every live Passthrough token of this VM and inspects every
+  Translated token's `GP_PUT` in a loop (the eventfd deliveries are coalesced while it runs), and hands
+  back to the idle drainer when no `GP_PUT` has advanced for T µs, after one final full sweep. ⇒ It
+  removes the drainer's wake-up — the `KF3_DBFAST_SPIN_US` experiment already measured that effect,
+  **+16–18 % (0.29× → 0.34×)** — but burns a core only under load, not always. It does **not** remove the
+  vCPU exit (~15.7 µs per doorbell), the larger cost.
+- **Stage 2 — exitless while pumping (host-only, bigger).** Also stop the exit: while the pump runs,
+  swap the usermode page's memslot from read-only (stores exit) to a **private writable page**, so the
+  guest's doorbell stores land in memory without an exit; the pump finds work by polling `GP_PUT`, never
+  by seeing the store. Swap back (then one final sweep) when pressure drops. ⇒ Targets most of the
+  ~22 ms/token doorbell cost on nested hosts **with a stock guest**. Isolation is preserved: the guest's
+  stores land in a private page, and the pump rings only this VM's own tokens. Constraints to solve:
+  - the same 4 KiB page carries the guest RM's clock, `NV_VIRTUAL_FUNCTION_TIME_0/1` at `+0x80/+0x84`
+    (`kf-trap/src/timer.rs`); in the private page the pump must keep it fresh (a stalled pump freezes
+    guest time — RM timeouts would stop firing);
+  - §4's ordering (every doorbell already signalled is delivered before a later trapped register
+    write) becomes **sweep-before-apply**: a full sweep precedes every trapped register write;
+  - Hopper+ BAR1 usermode views (`V3_BAR1_DOORBELL.md`) need the same swap;
+  - memslot swaps run on the drainer/pump thread, never a vCPU (ruling A4), with hysteresis;
+  - a core per busy VM is a policy choice, as for the spin knob.
+- **Guest-module variant (optional, owner: "the best patch is to ensure the doorbell token matches").**
+  A stock guest's token cannot be made equal to the host twin's (§8: the guest picks chids from its own
+  heap, host chids are a shared heap, and the Translated kernel channels share the register). A guest
+  module or patched driver can translate instead: a per-token table gives the host token, Passthrough
+  stores go straight to the real page (no exit, no pump), Translated tokens keep the trapped page
+  (`V3_GUEST_DOORBELL_MODULE.md`). All guest patches stay optional.
+
+**Measure before building beyond stage 1:** the `dbfast_llm.sh` lane (tok/s, exits per token, CPU per
+thread) for OFF / ioeventfd / pump / exitless-pump, nested and — when one is reachable — non-nested,
+where exits are cheap and the gain should be smaller.
+
 ## 9. Known limits and follow-ups
 
 - **The trap path's own load→ring window** (pre-existing, unchanged): a vCPU that loaded a
