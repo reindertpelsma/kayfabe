@@ -1,0 +1,1 @@
+[   79.215320] cinnamon[2788]: segfault at 0 ip 00007b2f4eb57f19 sp 00007ffd9c637ec0 error 6 in libnvidia-glcore.so.580.159.04[7b2f4e400000+c00000] likely on CPU 5 (core 5, socket 0)

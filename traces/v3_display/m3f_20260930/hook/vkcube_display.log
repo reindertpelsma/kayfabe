@@ -1,0 +1,13 @@
+  vkcube	[--use_staging] [--validate] [--validate-checks-disabled]
+	[--break] [--c <framecount>] [--suppress_popups]
+	[--incremental_present] [--display_timing]
+	[--gpu_number <index of physical device>]
+	[--present_mode <present mode enum>]
+	[--width <width>] [--height <height>]
+	[--force_errors]
+	<present_mode_enum>
+		VK_PRESENT_MODE_IMMEDIATE_KHR = 0
+		VK_PRESENT_MODE_MAILBOX_KHR = 1
+		VK_PRESENT_MODE_FIFO_KHR = 2
+		VK_PRESENT_MODE_FIFO_RELAXED_KHR = 3
+RC=1
