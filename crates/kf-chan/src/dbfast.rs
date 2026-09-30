@@ -266,6 +266,11 @@ pub struct Counters {
     pub live_regs: AtomicU64,
     /// KVM placements live now.
     pub live_placed: AtomicU64,
+    /// Doorbell sites mapped now. ★ `v3-mc22`: written under the registry lock by the thread that
+    /// changes the set, read without it by [`DbFast::status`] — the drainer's heartbeat prints that
+    /// line, and the registry lock is held across `KVM_IOEVENTFD` (each one an SRCU grace period in
+    /// the kernel), so reading the set there would park the doorbell servicer behind the main loop.
+    pub live_sites: AtomicU64,
 }
 
 /// One live registration, the act thread's view.
@@ -640,6 +645,10 @@ impl DbFast {
         if !r.sites.insert(gpa) {
             return;
         }
+        self.counters.live_sites.store(
+            u64::try_from(r.sites.len()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
         let mut placed = r.placed;
         let idxs: Vec<u32> = r.regs.keys().copied().collect();
         for idx in idxs {
@@ -657,6 +666,10 @@ impl DbFast {
         if !r.sites.remove(&gpa) {
             return;
         }
+        self.counters.live_sites.store(
+            u64::try_from(r.sites.len()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
         let idxs: Vec<u32> = r.regs.keys().copied().collect();
         let mut gone = 0;
         for idx in idxs {
@@ -684,7 +697,8 @@ impl DbFast {
             .map(|r| Arc::clone(&r.efd))
     }
 
-    /// The sites mapped now.
+    /// The sites mapped now. ⊘ Takes the registry lock, which is held across `KVM_IOEVENTFD`: never
+    /// on the drainer ([`Self::status`] reads [`Counters::live_sites`] instead).
     #[must_use]
     pub fn sites(&self) -> Vec<u64> {
         self.reg
@@ -848,7 +862,7 @@ impl DbFast {
             c.live_regs.load(o),
             c.live_placed.load(o),
             self.budget(),
-            self.sites().len(),
+            c.live_sites.load(o),
             c.doorbells.load(o),
             c.wakes.load(o),
             c.rang.load(o),
@@ -934,6 +948,35 @@ mod tests {
 
     fn pump(f: &DbFast, s: &dyn Sink) -> usize {
         f.service_ready(s)
+    }
+
+    /// ★ `v3-mc22`: the status line never waits on the registry lock. The drainer prints it every
+    /// 2 s, and the main loop and the act thread hold that lock across `KVM_IOEVENTFD` (an SRCU
+    /// grace period each) — a status line that took it parked the doorbell servicer behind them.
+    #[test]
+    fn the_status_line_never_waits_on_the_registry_lock() {
+        let f = Arc::new(DbFast::new(16, kick()).unwrap());
+        assert!(f.enable(Box::new(Arc::new(FakeKvm::default()))));
+        f.site_add(0x1000_0090);
+        f.site_add(0x2000_0090);
+        f.site_add(0x2000_0090); // idempotent
+        f.site_del(0x1000_0090);
+        // Another thread mid-ioctl, as far as the drainer can tell.
+        let held = f.reg.lock().unwrap();
+        let (tx, rx) = mpsc::channel();
+        let g = Arc::clone(&f);
+        std::thread::spawn(move || {
+            let _ = tx.send(g.status());
+        });
+        let line = rx.recv_timeout(Duration::from_secs(5));
+        drop(held);
+        let line = line.expect("status() waited on the registry lock");
+        assert!(line.contains(" sites=1 "), "{line}");
+        assert_eq!(
+            f.sites(),
+            vec![0x2000_0090],
+            "the count agrees with the set"
+        );
     }
 
     #[test]
