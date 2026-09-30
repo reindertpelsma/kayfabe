@@ -1,6 +1,6 @@
 # v3-mc22 — display + doorbell fast path, merged (evidence)
 
-**STATUS: LIVE, 2026-09-30 — IN PROGRESS (runs are added as they finish).**
+**STATUS: LIVE, 2026-09-30 — COMPLETE. Every run below passed; the verdict is at the end.**
 Merge candidate `v3-mc22` = master `145cca8c` (the display work, `v3-display2` code `c0a35924`, and
 the b3 UVM tools) + `origin/v3-ioeventfd` `ef760b7a` (the doorbell ioeventfd fast path, code
 `ca7a5006`).
@@ -120,3 +120,34 @@ Run from the `mc22b` verify worktree (kf3 `b84250b8`), 15:32 → 16:00 UTC, **`E
   (`traces/v3_ioeventfd/dbl3_ca7a5006/`).
 - `mc22dbl_detail.tar.xz`: the lane's suite/ladder outputs and every rung's probe log;
   `mc22dbl_qemu_sample.tar.xz`: four QEMU logs (two busy suite arms, `cup8bench` OFF and ON).
+
+### `display_b84250b8/` — the display lane (`scripts/bench/display/lane.sh`, `display=on`), twice
+
+Run from the same verify worktree (kf3 `b84250b8`) by `mc22_lanes.sh` (this directory's driver:
+waits for the bar's `EXIT rc=0`, then the lanes strictly serially), `-vga none`, localhost VNC.
+
+| run | device line | M1 | M2 | rest |
+|---|---|---|---|---|
+| `mc22disp` (fast path at its default, off) | `…,id=kf0,display=on` | `DVI-D-1 connected` 1920x1080@60 (7 modes), `modetest` connected, `Display Active : Enabled` | **`PATTERN_MATCH=yes (pixel-exact 1920x1080)`**, flips **120/120** at 60.03 Hz | 0 GPU-progress errors, 0 flip-event timeouts, 0 DRM WARNs, 0 host Xid, `DISPLAY_LANE_EXIT rc=0` |
+| `mc22dispon` (**`doorbell-ioeventfd=on`**) | `…,id=kf0,display=on,doorbell-ioeventfd=on` | same | **`PATTERN_MATCH=yes (pixel-exact 1920x1080)`**, flips **120/120** at 59.91 Hz | same zeros, `DISPLAY_LANE_EXIT rc=0` |
+
+- With both on, one QEMU log carries `kf3: display console registered (head 0 of kf0)`, `kf3: doorbell
+  fast path ON`, and the merged status line with both segments:
+  `disp[… methods=23285 updates=140 notifies=135 vblanks=2816 irqs=134 exceptions=0 refused=0
+  scanouts=347 scanout_refused=0 …]` and `dbfast[ON … doorbells=6 … handed=6 … refused(…all 0) …]` —
+  the guest kernel's CE channels' doorbells went by eventfd while the display engine ran.
+- **Re-verified off the box** (both runs at rev `b84250b8`, 2026-09-30): both screendumps hash to
+  `8d80f3f1…4938431` (`mc22disp_screendumps.sha256`), equal to the reference built here from
+  `kfdisp_probe.c` (`cc -DKFDISP_NO_DRM`, `ppm 1920 1080 a`) and to `traces/v3_display/m2c_20260930/`'s. The copied
+  `mc22dispon` screendump is pixel-identical to that reference; `screendump_mc22dispon.png` is it,
+  lossless. No executable was copied back (the host-built `kfdisp_ppm` was excluded).
+- `*_evidence.tar.xz`: the hook's logs and the boot's `run_<tag>_*` logs (probe, dmesg before/after,
+  host dmesg, QEMU, serial, rev).
+
+## Verdict
+
+**Promote `v3-mc22`.** Code head `213d5e00` (merge `871a93dc` + the drainer fix); every commit after it
+is `traces/` only. On that code, on one box, in order: the full merge bar (tests 1742/0, gates 9/9,
+KF3_RC=0, bare metal 30/30, FG_RC=0, thin suite 30/30 with both features at their defaults), the fast
+path ON (thin suite 30/30, CUDA ladder OFF 4/4 = ON 4/4), and the display lane M1/M2 with the fast path
+off and on. Not measured here: Hopper+ (BAR1 doorbell views) and any other die — this box is GA106.

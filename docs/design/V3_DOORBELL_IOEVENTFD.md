@@ -9,6 +9,10 @@ Vast boxes: a doorbell store costs the vCPU ~4–5 µs less (§7.2); LLM decode 
 bounded-spin experiment for a whole core (§7.5). Default **OFF** (`-device kf3-gpu,…,doorbell-ioeventfd=on` turns it on) until a non-nested host is
 measured (§7.x). ⊘ Nothing here is a non-nested result: every number is from a Vast KVM box (itself a
 KVM guest) or from the development workspace (also virtualized), and is labelled **nested**.
+★ **Merged with the display work as `v3-mc22` (2026-09-30), KF3 ABI 10:** merge bar 30/30 OFF, thin
+suite **30/30 ON**, CUDA ladder **OFF 4/4 = ON 4/4**, and the display lane M1/M2 with the fast path ON
+(GA106, nested, `traces/v3_mc22/`). The merge also removed the drainer's one wait on another thread:
+the status line no longer takes the registry lock (`Counters::live_sites`).
 
 ## 0. Owner direction, in order (binding; `docs/OWNER_RULINGS.md` §D)
 

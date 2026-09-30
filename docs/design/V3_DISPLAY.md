@@ -2,6 +2,9 @@
 
 > **STATUS: M3 MET FOR THE WAYLAND DESKTOP; X11 DESKTOP PARTIAL — 2026-09-30 (branch `v3-display2`;
 > display stays default-off).** RTX 3060 (GA106), host + guest 580.159.04, vast 53505783.
+> - ★ **Merged with the doorbell fast path as `v3-mc22` (2026-09-30), KF3 ABI 10** (`traces/v3_mc22/`):
+>   the merge bar 30/30, and M1/M2 again at the merged revision — pixel-exact 1920x1080, 120/120 flips —
+>   with `doorbell-ioeventfd` off **and on** (vast 53004208, GA106).
 > - **Mint's desktop on the virtual monitor** (`traces/v3_display/m3i_20260930/`): lightdm autologin
 >   into Cinnamon's Wayland session — muffin drives the emulated display through nvidia-drm KMS and
 >   renders with the NVIDIA EGL/GBM stack on the RTX 3060; `vkcube-wayland` (Vulkan) runs in a
