@@ -2,12 +2,11 @@
 
 **STATUS: BUILT, GPU-FREE-TESTED AND HARDWARE-VERIFIED (nested), 2026-09-30. Branch `v3-ioeventfd`
 (off `v3-ci`).** Merge bar at `ca7a5006` (the final code revision): crate tests 1701/0, gates 9/9,
-KF3_RC=0, bare metal 30/30, thin suite 30/30 OFF **and** 30/30 ON (GA106); CUDA ladder 4/4 OFF = 4/4 ON
-(GA106 at `43293417`, which differs only by the default-off spin knob and a never-reached discard path; GB206 at `b351af9d` = the
-final code); the whole bar and the ON lane also on Blackwell GB206 (§7.6). Measured on nested Vast boxes: a doorbell store costs the vCPU ~4–5 µs
-less (§7.2); LLM decode **+9–10 %** (0.29× → 0.32× of host, two alternated pairs) for ~⅙ of a core in
-the drainer, **+16–18 %** with the bounded-spin experiment for a whole core (§7.5).
-Default **OFF** (`-device kf3-gpu,…,doorbell-ioeventfd=on` turns it on) until a non-nested host is
+KF3_RC=0, bare metal 30/30, thin suite 30/30 OFF **and** 30/30 ON (GA106); CUDA ladder 4/4 OFF = 4/4
+ON (GA106, GB206); the whole bar and the ON lane also on Blackwell GB206 (§7.6). Measured on nested
+Vast boxes: a doorbell store costs the vCPU ~4–5 µs less (§7.2); LLM decode **+9–10 %** (0.29× →
+0.32× of host, two alternated pairs) for ~⅙ of a core in the drainer, **+16–18 %** with the
+bounded-spin experiment for a whole core (§7.5). Default **OFF** (`-device kf3-gpu,…,doorbell-ioeventfd=on` turns it on) until a non-nested host is
 measured (§7.x). ⊘ Nothing here is a non-nested result: every number is from a Vast KVM box (itself a
 KVM guest) or from the development workspace (also virtualized), and is labelled **nested**.
 
@@ -102,8 +101,9 @@ path but matches no ioeventfd: it traps, and the trap serves it (tested).
 
 **Threads.** The channel **act** thread registers at birth and deregisters at free (it may sleep: a
 KVM deassign waits for an SRCU grace period); the **main loop** (the C device's memory listener)
-reports doorbell sites; the **register drainer** services eventfds. No vCPU touches any of it, and
-the drainer never makes a KVM ioctl, never waits for another thread, and has no timer.
+reports doorbell sites; the **register drainer** services eventfds. No vCPU MMIO trap touches any of
+it (a BAR move runs the listener on whichever thread commits it, §5), and the drainer never makes a
+KVM ioctl, never waits for another thread, and has no timer.
 
 **Registration** (act thread, after the token word and the twin exist): create an eventfd → watch
 it in the drainer's epoll set → queue `Add` for the drainer → place a `KVM_IOEVENTFD` (4 bytes,
@@ -189,7 +189,10 @@ histograms).
 
 Local result (development workspace, Linux 7.0.0-34-generic, itself virtualized): all pass; the churn
 test split ~46 % trapped / 54 % eventfd over 136–157 rounds with 0 late fast rings, 0 acknowledgement
-timeouts, 0 failed deassigns (three runs).
+timeouts, 0 failed deassigns (three runs). On the bench box (6.8.0-59, `dbfast_lane.sh … gpufree`,
+2026-09-30): all pass inside the 1700/1701-test merge bars too; the churn test ran **1 406** rounds
+(trapped 4 050 + eventfd 15 950 = 20 000 and 3 660 + 16 340 = 20 000) with 0 late fast rings; the fd
+arm refused after 1 009 extra descriptors (that shell's `RLIMIT_NOFILE`).
 
 ## 7. Measurements — ALL NESTED
 
@@ -203,7 +206,7 @@ Evidence: `traces/v3_ioeventfd/`. ⊘ Not one number here is non-nested.
 |---|---|---|
 | crate tests / v3 gates / kf3 build / bare metal | 1700/0, 9/9, KF3_RC=0, 30/30 (`merge_check` at `43293417`); ★ **1701/0, 9/9, KF3_RC=0, 30/30 at `ca7a5006`, the final code revision** | — (the gates run no QEMU) |
 | thin guest suite, budget 180 s | **30/30** (merge bar, both revisions) | **30/30** at `43293417` and **30/30 at `ca7a5006`** (`dbfast_lane.sh`); arm times equal within 1 s |
-| CUDA ladder, fat guest (cup2, cup3, cup8, cup8bench) | **4/4** | **4/4**; per-token `forwarded>0`, `emulated=0` for every guest token |
+| CUDA ladder, fat guest (cup2, cup3, cup8, cup8bench) | **4/4** (at `43293417` and at `ca7a5006`) | **4/4** at both revisions; at `ca7a5006` all 96 ledger rows (64 passthrough, 32 translated) `emulated=0` |
 | where passthrough doorbells went (thin suite, all 30 arms) | trapped | **823 of 823 by eventfd, 0 trapped** (84 ledger rows) — the datamatch prediction is exact on GA106 / 580 |
 | Translated (CeUtils, UVM kernel channels) | trapped | by eventfd, handed by the drainer (e.g. `--concurrency`: 830 hand-offs). `cup8bench` boot: CeUtils `0x801` 52 doorbells in 45 wakes; UVM-owned (`PRIVILEGE=KERNEL+UVM_OWNED`) `0x803` 201 in 160, `0x804`/`0x1005`/`0x1006` 1 each — every one `fast_forwarded`, `emulated=0` |
 

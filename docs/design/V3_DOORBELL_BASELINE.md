@@ -17,7 +17,12 @@
 >   same-address dispatch cost are what bind (§5 there). A registration the kernel refuses (tested
 >   with the real `ENOSPC`, `EMFILE` and the budget) leaves its token on the trapped path.
 > - The non-nested protocol below still stands and gains the fast-path ON/OFF lane
->   (`scripts/bench/dbfast_lane.sh`, `V3_DOORBELL_IOEVENTFD.md` §7).
+>   (`scripts/bench/dbfast_lane.sh`, `scripts/bench/dbfast_llm.sh`, `V3_DOORBELL_IOEVENTFD.md` §7.x).
+> - ★ **Measured 2026-09-30 (NESTED vast boxes; `traces/v3_ioeventfd/`):** identical verdicts ON and
+>   OFF (merge bar, thin 30/30, CUDA ladder 4/4; GA106 and Blackwell GB206); a doorbell store costs
+>   the vCPU ~15.7 µs matched vs ~20.4 µs trapped; LLM decode +9–10 % (0.29× → 0.32× of host) for
+>   ~⅙ core in the drainer; the drainer's wake-up (~46 µs idle, nested) is the price, which the
+>   default-off `KF3_DBFAST_SPIN_US` experiment removes (+16–18 %) for a whole core.
 
 **STATUS: RESEARCH / MECHANISM PROBE, 2026-09-28 — the production path it specified is built
 (2026-09-30, above).** Owner selected a non-nested baseline and
