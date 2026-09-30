@@ -3,7 +3,8 @@
 # CDP probe per RUNS entry (`cdp_hook.sh`). A poisoned CUDA context answers 999 to every later
 # process in the same boot, so put the run that may hang LAST.
 #   BIN : a kf3 QEMU (kf3-bins/<rev>/qemu-system-x86_64)
-#   RUNS: space-separated `mode:sched[:t]` (t = nvdiff ioctl trace) or `qs` (cdpSimpleQuicksort)
+#   RUNS: space-separated `mode:sched[:t]` (t = nvdiff ioctl trace), `qs` or `qs:N` (cdpSimpleQuicksort
+#         [-num_items=N])
 # Results: /workspace/apps/results/cdpp/<TAG>/ — per run: <name>.log, .kf3.log, .guest_dmesg.log,
 # .jsonl; per boot: boot.*.log, qemu.log.zst, host_kernel.log (journalctl since start: the host
 # dmesg ring on a long-lived box is full, so boot_capture.sh's line-count watermark reads 0 lines).

@@ -16,10 +16,11 @@ echo "CDPH guest=$($G 'nvidia-smi --query-gpu=name,driver_version,persistence_mo
 for spec in ${CDP_RUNS:-4:auto}; do
   q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
   d0=$($G 'sudo dmesg | wc -l' 2>/dev/null | tr -d '\r'); d0=${d0:-0}
-  if [ "$spec" = qs ]; then
-    name=qs
-    echo "=== CDPH cdpSimpleQuicksort $(date -Is)"
-    timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/cdpSimpleQuicksort 2>&1; echo rc=$?' 2>&1 | sed 's/^/QS /' | tee "$OUT/$name.log"
+  if [ "${spec%%:*}" = qs ]; then
+    # `qs` = the app matrix's invocation; `qs:N` = -num_items=N (deeper recursion, more launches)
+    n=${spec#qs}; n=${n#:}; name=qs${n:+_$n}; arg=${n:+-num_items=$n}
+    echo "=== CDPH cdpSimpleQuicksort ${arg:-(default)} $(date -Is)"
+    timeout 90 "$G" "sudo timeout -k 5 60 /opt/apps/bundle/samples/cdpSimpleQuicksort $arg 2>&1; echo rc=\$?" 2>&1 | sed 's/^/QS /' | tee "$OUT/$name.log"
   else
     IFS=: read -r m s t <<<"$spec"
     name=probe_${m}_${s}${t:+_t}

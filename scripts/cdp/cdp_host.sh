@@ -2,7 +2,8 @@
 # cdp_host.sh TAG "RUNS" — the BARE-METAL control on the bench box: the CDP probe (and, with
 # spec `qs`, cdpSimpleQuicksort) run directly on the host GPU, serialized on the bench lock.
 #   RUNS: space-separated `mode:sched[:t]` (t = record every /dev/nvidia* ioctl with the nvdiff
-#         shim) or `qs`. Results: /workspace/apps/results/cdpp/<TAG>/ (host_*.log, *.jsonl).
+#         shim), `qs` or `qs:N` (cdpSimpleQuicksort -num_items=N).
+#   Results: /workspace/apps/results/cdpp/<TAG>/ (host_*.log, *.jsonl, host_kernel.log).
 # Writes CDPH_START … CDPH_EXIT rc= lines; a file without the EXIT line is a killed job.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"
@@ -13,9 +14,10 @@ bash "$HERE/cdp_build.sh" "$OUT/bin" || { echo "CDPH_EXIT rc=3 $(date -Is)"; exi
 T0=$(date +%s)
 exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
 for spec in $RUNS; do
-  if [ "$spec" = qs ]; then
-    echo "=== host cdpSimpleQuicksort $(date -Is)"
-    timeout -k 5 60 /workspace/apps/bundle/samples/cdpSimpleQuicksort 2>&1 | tee "$OUT/host_qs.log"; echo "rc=${PIPESTATUS[0]}" | tee -a "$OUT/host_qs.log"
+  if [ "${spec%%:*}" = qs ]; then
+    n=${spec#qs}; n=${n#:}; arg=${n:+-num_items=$n}
+    echo "=== host cdpSimpleQuicksort ${arg:-(default)} $(date -Is)"
+    timeout -k 5 60 /workspace/apps/bundle/samples/cdpSimpleQuicksort $arg 2>&1 | tee "$OUT/host_qs${n:+_$n}.log"; echo "rc=${PIPESTATUS[0]}" | tee -a "$OUT/host_qs${n:+_$n}.log"
     continue
   fi
   IFS=: read -r m s t <<<"$spec"
