@@ -8,6 +8,7 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
 
 ## 0. Current resumption — start here
 
+- **2026-09-30 — UVM guest fault plane (branch `v3-uvm-guest`, NOT merged):** guest `cudaMallocManaged` demand paging works with correct data in a kf3 guest on the b3 host (`um_probe` all modes `ok bad=0`, 3 499 faults, zero Xid, `c849f68d`), default off (`KF3_UVM_EFS=1`); it needs an owner ruling on a CPU point walk of parked pages, because a parked fault holds the host GR engine (`design/V3_UVM_GUEST_FAULT_PLANE.md` §3.8a, `traces/v3_uvm_guest/`).
 - **2026-09-30 — master and v3 = `b32aa046`.** Landed since `5c639f54`:
   - **CI repair** (`v3-ci`, `bf6e7640`): first green GitHub CI; the hardware bar is now fail-closed and
     includes a bare-metal suite (`scripts/bench/box/merge_check.sh`, run from a repo checkout).

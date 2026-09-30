@@ -1,0 +1,72 @@
+=== boot_capture tag=uvmg4 at 2026-09-30T19:30:54+00:00 ===
+=== source revision: d178a737 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88746080 Sep 30 19:30 /workspace/bench/kf3-bins/d178a737/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=0f19b0c944f9e441
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Sep 30 19:31:01 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 30 19:31 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 30 19:31 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 30 19:30 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 30 19:30 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 30 19:31 .
+drwxr-xr-x 18 root root   4000 Sep 30 19:31 ..
+cr--------  1 root root 240, 1 Sep 30 19:31 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 30 19:31 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/uvm_guest_hook.sh at 2026-09-30T19:31:03+00:00 ===
+UVMG_HOOK_START 2026-09-30T19:31:03+00:00 tag=uvmg4 rev=d178a737 bin_md5=1c21bdadd3fd52f7da7adc01d6275163 KF3_UVM_EFS=1
+--- host nvidia-uvm EFS parameters:
+uvm_efs_enable=1 uvm_efs_timeout_ms=30000 uvm_efs_max_records=1024 
+=== mode gpufirst 2026-09-30T19:31:04+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK gpufirst FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+UM_RC=2
+--- guest NVRM/Xid/uvm lines new in this mode:
+[   37.815489] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+[ 5424.125513] NVRM: Xid (PCI:0000:00:07): 109, pid=116940, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+[ 5424.132522] NVRM: Xid (PCI:0000:00:07): 31, pid=116940, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x740d_2c000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+UVMG_HOOK_DONE 2026-09-30T19:31:15+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=52
+GUEST_DMESG_AFTER_NVRM=49
+GUEST_DMESG_WORKLOAD_DELTA=24
+=== HOST dmesg delta for this boot (watermark 765 → 771) ===
+HOST_DMESG_LINES=6
+HOST_DMESG_NVRM=3
+HOST_DMESG_XID=2

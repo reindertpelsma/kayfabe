@@ -1,0 +1,14 @@
+[ 4751.751706] nvidia-uvm:  EFS VA space of tgid 114064 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=0 deduped=0 delivered=0 replayed=0 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=0
+[ 4870.706952] nvidia-uvm:  EFS VA space of tgid 114064 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=0 deduped=0 delivered=0 replayed=0 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=0
+[ 4959.270238] NVRM: GPU at PCI:0000:00:07: GPU-459d2c69-156c-43e9-34db-733876f9671e
+[ 4959.270255] NVRM: Xid (PCI:0000:00:07): 109, pid=114064, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+
+[ 4959.277269] NVRM: Xid (PCI:0000:00:07): 31, pid=114064, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x773e_10000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[ 4959.793916] nvidia-uvm:  EFS VA space of tgid 114064 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=14 deduped=121 delivered=14 replayed=14 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=1
+[ 4988.489782] NVRM: Xid (PCI:0000:00:07): 109, pid=114064, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+
+[ 4988.496967] NVRM: Xid (PCI:0000:00:07): 31, pid=114064, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7c62_48800000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+[ 4988.797567] nvidia-uvm:  EFS VA space of tgid 114064 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=56 deduped=2147 delivered=56 replayed=56 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=1
+[ 5012.561325] nvidia-uvm:  EFS VA space of tgid 114064 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=0 deduped=0 delivered=0 replayed=0 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=0
+[ 5038.106103] nvidia-uvm:  EFS VA space of tgid 114064 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=0 deduped=0 delivered=0 replayed=0 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=0
+[ 5064.817625] nvidia-uvm:  EFS VA space of tgid 114064 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=0 deduped=0 delivered=0 replayed=0 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=0

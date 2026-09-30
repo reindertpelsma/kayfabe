@@ -1,7 +1,10 @@
 # V3_UVM_GUEST_FAULT_PLANE — the guest side of UVM demand paging on the b3 host proof
 
-**STATUS: DESIGN-ONLY, 2026-09-30 — branch `v3-uvm-guest` (from master `a295e2ce`).** Nothing below is
-built or measured yet unless a line says `[meas]`. This is the kf3 side of b3: the stock guest
+**STATUS: LIVE — BUILT AND MEASURED (M1–M2), 2026-09-30 — branch `v3-uvm-guest` (from master
+`a295e2ce`).** ★ M2 reached at `c849f68d`: guest `cudaMallocManaged` buffers, GPU-first and
+CPU-initialised, complete with correct data in a kf3 guest (`traces/v3_uvm_guest/`). ⚠ It depends on
+§3.8a, an experiment that reads guest page-table words on the CPU beside the GPU walker — a
+constraint change awaiting the owner (ruling A.1/A.11). Lines not marked `[meas]` are design. This is the kf3 side of b3: the stock guest
 nvidia-uvm must see its own replayable faults, and its replay and cancel must become scoped host
 EFS actions. The host half (the opt-in nvidia-uvm patch) is built and proven host-only
 (`V3_UVM_B3_IMPLEMENTATION.md` §0, `traces/v3_uvm_b3/`). The specification this note implements is
@@ -10,6 +13,14 @@ the first one is milestone M2 (§9).
 
 ## Stop note — where the work stands (update this first, every time)
 
+- **2026-09-30 20:05 UTC — M2 reached, M3 next.** Branch head carries M1a–M1f (packet codec,
+  FaultRing, rewriter split, EFS session incl. `UVM_MM_INITIALIZE`, the kf-qemu plane) and the §3.8a
+  experiment. `[meas]` `uvmg7` at `c849f68d`: `um_probe gpufirst cpuinit prefetch advise malloc`
+  (twice) all `ok bad=0`, 3 499 faults delivered and replayed, zero cancels, zero Xid. The finding
+  that shaped it (§3.8a): **a parked replayable fault holds the host GPU's GR engine**, so fault
+  servicing must be GR-free; the walk kernel deadlocked it (`uvmg4`). Next: M3 (the four apps), then
+  E-S1 and the merge bar with EFS off and on. Box `53564695` (`vuvm`) is up with the patched module
+  loaded.
 - **2026-09-30 18:10 UTC.** Design written from source (ogkm 580.159.04 `b81d58e`, this tree at
   `a295e2ce`). Box `53564695` (RTX 3060, alias `vuvm`, nested Vast KVM VM) rented and provisioning
   (`provision_full.sh`). Next: M1a–M1e GPU-free code (§9), then the EFS-mode twin on hardware (E-T1).
@@ -434,14 +445,15 @@ Hardware (box `vuvm`, then evidence under `traces/v3_uvm_guest/`):
 
 | # | milestone | done? |
 |---|---|---|
-| M1 | this note, pushed | this commit |
-| M1a | `kf-abi`: `faultpacket`, `uvmefs` (+ tests) | |
-| M1b | `kf-trap::faultring` (+ Dekker test) | |
-| M1c | rewriter/ring/pump: `Piece::Fault`, `Next::Fault`, `Publisher::fault` (+ tests) | |
-| M1d | `kf-linux-raw::uvm`, `kf-host::efs` (probe, session, register, map/unmap, wait, resolve) | |
-| M1e | `kf-rm`: `fault_capable`, `instanceMem`, `subctxId` decodes | |
-| M1f | `kf-qemu`: EFS mirror + UVM `MapTarget`, twin registration, FaultPlane, efs-wait, vCPU arm | |
-| M2 | E-T1 then **E-M2 correct data** — the first guest managed-memory claim | |
+| M1 | this note, pushed | `0a7a1439` |
+| M1a | `kf-abi`: `faultpacket`, `uvmefs` (+ tests) | `ed20bd06` |
+| M1b | `kf-trap::faultring` (+ Dekker test) | `ed20bd06` |
+| M1c | rewriter/ring/pump: `Piece::Fault`, `Next::Fault`, `Publisher::fault` (+ tests) | `ed20bd06`; replay/cancel `MEM_OP` = the op alone since `aeaebe33` |
+| M1d | `kf-linux-raw::uvm`, `kf-host::efs` (probe, session, register, map/unmap, wait, resolve) | `6e9b5bb4`; `UVM_MM_INITIALIZE` `89b1ac24` |
+| M1e | `kf-rm`: `fault_capable`, `instanceMem`, `subctxId` decodes | `6e9b5bb4` |
+| M1f | `kf-qemu`: EFS mirror + UVM `MapTarget`, twin registration, FaultPlane, efs-wait, vCPU arm | `6f5e0674` |
+| M1g | §3.8a GR-free servicing (CPU point walk of parked pages, early splits) — **experiment** | `b875595a`…`c849f68d` |
+| M2 | E-T1 then **E-M2 correct data** — the first guest managed-memory claim | ★ `[meas]` `uvmg7` at `c849f68d` (E-T1 folded into it: the EFS twin ran every mode) |
 | M3 | E-A: the four apps correct (non-replayable §3.10 only if measured necessary) | |
 | M4 | E-B: merge bar at the head, EFS off and on | |
 

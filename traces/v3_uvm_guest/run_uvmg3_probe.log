@@ -1,0 +1,129 @@
+=== boot_capture tag=uvmg3 at 2026-09-30T19:20:26+00:00 ===
+=== source revision: 89b1ac24 ===
+=== qemu binary: -rwxr-xr-x 1 root root 88734832 Sep 30 19:19 /workspace/bench/kf3-bins/89b1ac24/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=0f19b0c944f9e441
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Sep 30 19:20:34 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 30 19:20 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 30 19:20 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 30 19:20 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 30 19:20 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 30 19:20 .
+drwxr-xr-x 18 root root   4000 Sep 30 19:20 ..
+cr--------  1 root root 240, 1 Sep 30 19:20 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 30 19:20 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/uvm_guest_hook.sh at 2026-09-30T19:20:35+00:00 ===
+UVMG_HOOK_START 2026-09-30T19:20:35+00:00 tag=uvmg3 rev=89b1ac24 bin_md5=1c21bdadd3fd52f7da7adc01d6275163 KF3_UVM_EFS=1
+--- host nvidia-uvm EFS parameters:
+uvm_efs_enable=1 uvm_efs_timeout_ms=30000 uvm_efs_max_records=1024 
+=== mode malloc 2026-09-30T19:20:36+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK malloc ok bad=0
+UM_RC=0
+--- guest NVRM/Xid/uvm lines new in this mode:
+[  111.299858] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+=== mode gpufirst 2026-09-30T19:22:02+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK gpufirst FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+UM_RC=2
+--- guest NVRM/Xid/uvm lines new in this mode:
+[  111.299858] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  200.407923] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+[ 4959.270255] NVRM: Xid (PCI:0000:00:07): 109, pid=114064, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+[ 4959.277269] NVRM: Xid (PCI:0000:00:07): 31, pid=114064, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x773e_10000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+=== mode cpuinit 2026-09-30T19:23:31+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK cpuinit FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+UM_RC=2
+--- guest NVRM/Xid/uvm lines new in this mode:
+[  111.299858] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  200.407923] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  229.660777] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+[ 4988.489782] NVRM: Xid (PCI:0000:00:07): 109, pid=114064, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+[ 4988.496967] NVRM: Xid (PCI:0000:00:07): 31, pid=114064, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7c62_48800000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+=== mode prefetch 2026-09-30T19:23:59+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK prefetch ok bad=0
+UM_RC=0
+--- guest NVRM/Xid/uvm lines new in this mode:
+[  111.299858] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  200.407923] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  229.660777] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  253.399797] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+=== mode advise 2026-09-30T19:24:23+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK advise ok bad=0
+UM_RC=0
+--- guest NVRM/Xid/uvm lines new in this mode:
+[  111.299858] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  200.407923] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  229.660777] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  253.399797] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  278.938501] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+=== mode malloc 2026-09-30T19:24:49+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK malloc ok bad=0
+UM_RC=0
+--- guest NVRM/Xid/uvm lines new in this mode:
+[  111.299858] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  200.407923] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  229.660777] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  253.399797] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  278.938501] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  305.643771] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+UVMG_HOOK_DONE 2026-09-30T19:25:15+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=172
+GUEST_DMESG_AFTER_NVRM=169
+GUEST_DMESG_WORKLOAD_DELTA=144
+=== HOST dmesg delta for this boot (watermark 751 → 765) ===
+HOST_DMESG_LINES=14
+HOST_DMESG_NVRM=5
+HOST_DMESG_XID=4

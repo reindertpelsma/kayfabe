@@ -1,0 +1,8 @@
+[ 6663.076854] nvidia-uvm:  EFS VA space of tgid 120205 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=0 deduped=0 delivered=0 replayed=0 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=0
+[ 6704.685907] nvidia-uvm:  EFS VA space of tgid 120205 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=679 deduped=542 delivered=679 replayed=679 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=79
+[ 6752.860164] NVRM: GPU at PCI:0000:00:07: GPU-459d2c69-156c-43e9-34db-733876f9671e
+[ 6752.860177] NVRM: Xid (PCI:0000:00:07): 109, pid=120205, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+
+[ 6752.867177] NVRM: Xid (PCI:0000:00:07): 31, pid=120205, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_6 faulted @ 0x7ed7_90880000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[ 6753.237705] nvidia-uvm:  EFS VA space of tgid 120205 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=294 deduped=586 delivered=294 replayed=294 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=9
+[ 6838.161628] nvidia-uvm:  EFS VA space of tgid 120205 shut down: parked_at_shutdown=0 hw_cancelled=0 diverted=0 deduped=0 delivered=0 replayed=0 cancelled=0 timed_out=0 refused_full=0 refused_closing=0 stale=0 gpu_gone=0 hw_replays=0

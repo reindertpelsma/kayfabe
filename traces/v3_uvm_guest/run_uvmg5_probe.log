@@ -1,0 +1,93 @@
+=== boot_capture tag=uvmg5 at 2026-09-30T19:47:28+00:00 ===
+=== source revision: b875595a ===
+=== qemu binary: -rwxr-xr-x 1 root root 88820208 Sep 30 19:46 /workspace/bench/kf3-bins/b875595a/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=0f19b0c944f9e441
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Wed Sep 30 19:47:36 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 30 19:47 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 30 19:47 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 30 19:47 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 30 19:47 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 30 19:47 .
+drwxr-xr-x 18 root root   4000 Sep 30 19:47 ..
+cr--------  1 root root 240, 1 Sep 30 19:47 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 30 19:47 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/uvm_guest_hook.sh at 2026-09-30T19:47:38+00:00 ===
+UVMG_HOOK_START 2026-09-30T19:47:38+00:00 tag=uvmg5 rev=b875595a bin_md5=1c21bdadd3fd52f7da7adc01d6275163 KF3_UVM_EFS=1
+--- host nvidia-uvm EFS parameters:
+uvm_efs_enable=1 uvm_efs_timeout_ms=30000 uvm_efs_max_records=1024 
+=== mode gpufirst 2026-09-30T19:47:38+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK gpufirst FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+UM_RC=2
+--- guest NVRM/Xid/uvm lines new in this mode:
+[   41.923900] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+[ 6422.216814] NVRM: Xid (PCI:0000:00:07): 109, pid=118804, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+[ 6422.223636] NVRM: Xid (PCI:0000:00:07): 31, pid=118804, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7daa_7c000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+=== mode cpuinit 2026-09-30T19:47:53+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK cpuinit FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+UM_RC=2
+--- guest NVRM/Xid/uvm lines new in this mode:
+[   41.923900] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  141.010642] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+[ 6520.899262] NVRM: Xid (PCI:0000:00:07): 109, pid=118804, name=qemu-system-x86, channel 0x0000001e, errorString CTX SWITCH TIMEOUT, Info 0x6c00f
+[ 6520.906081] NVRM: Xid (PCI:0000:00:07): 31, pid=118804, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7b96_26000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+=== mode malloc 2026-09-30T19:49:33+00:00
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK malloc ok bad=0
+UM_RC=0
+--- guest NVRM/Xid/uvm lines new in this mode:
+[   41.923900] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  141.010642] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[  151.996223] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+--- guest UVM fault counters:
+--- HOST Xid lines new in this mode:
+UVMG_HOOK_DONE 2026-09-30T19:49:43+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=100
+GUEST_DMESG_AFTER_NVRM=97
+GUEST_DMESG_WORKLOAD_DELTA=72
+=== HOST dmesg delta for this boot (watermark 771 → 782) ===
+HOST_DMESG_LINES=11
+HOST_DMESG_NVRM=5
+HOST_DMESG_XID=4

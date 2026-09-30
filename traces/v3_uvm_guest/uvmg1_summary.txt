@@ -1,0 +1,7 @@
+kf3-bin-rev:a4beda33
+CHECK malloc FAIL cudaMalloc(&x, n * sizeof(float)) -> 401 (the operation cannot be performed in the present state)
+CHECK gpufirst FAIL cudaMallocManaged(&x, n * sizeof(float)) -> 401 (the operation cannot be performed in the present state)
+CHECK cpuinit FAIL cudaMallocManaged(&x, n * sizeof(float)) -> 401 (the operation cannot be performed in the present state)
+CHECK prefetch FAIL cudaMallocManaged(&x, n * sizeof(float)) -> 401 (the operation cannot be performed in the present state)
+CHECK advise FAIL cudaMallocManaged(&x, n * sizeof(float)) -> 401 (the operation cannot be performed in the present state)
+CHECK malloc FAIL cudaMalloc(&x, n * sizeof(float)) -> 401 (the operation cannot be performed in the present state)

@@ -1,0 +1,246 @@
+START 2026-09-30T19:56:57+00:00 tag=uvmg7 mode=efs rev=c849f68dfa930a69ad28c197630f0a9b96bd721d
+loaded /root/efs/patched/nvidia-uvm.ko sha=b4bdee93fdfc151b enable=1 timeout_ms=30000
+um_probe md5=1c21bdadd3fd52f7da7adc01d6275163
+[boot_capture:uvmg7] BINARY kf3-bin-rev:c849f68d  (/workspace/bench/kf3-bins/c849f68d/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:uvmg7] host dmesg watermark: 790 lines
+[boot_capture:uvmg7] booting (extra args: none)
+== kf3 binary: /workspace/bench/kf3-bins/c849f68d/qemu-system-x86_64 (rev c849f68d)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+[boot_capture:uvmg7] guest is up after 29s
+[boot_capture:uvmg7] module unloaded and ring buffer cleared; loading cold
+[boot_capture:uvmg7] opening the device (this is what runs RmInitAdapter)
+[boot_capture:uvmg7] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_uvmg7_dmesg.log
+[boot_capture:uvmg7] --- the verdict lines ---
+[boot_capture:uvmg7] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/uvm_guest_hook.sh
+[boot_capture:uvmg7] hook finished: rc=0
+[boot_capture:uvmg7] guest dmesg after workload: 196 lines (193 NVRM), delta 168 → /workspace/bench/run_uvmg7_dmesg_after.log
+[boot_capture:uvmg7] host dmesg delta: 8 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_uvmg7_hostdmesg.log
+[boot_capture:uvmg7] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:uvmg7] census present (kf3):
+    kf3: family=Ampere phase=Halted trapped=67826 applied=11670 refused=16 serviced=3759 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=1615 walks=2675/2675 cleared=1615 superseded=0 named_missed=36 unreconciled=0 mapped=48144 unmapped=2766 clipped=0x0 held=0 vmm_overlaps=0 p
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=25 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=381 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=120 emulated=0 forwarded=120 host=0x1e trap=120 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=56 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=25 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=404 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=115 emulated=0 forwarded=115 host=0x1e trap=115 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=56 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=25 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=243 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=2 emulated=0 forwarded=2 host=0x1f trap=2 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=115 emulated=0 forwarded=115 host=0x1e trap=115 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=56 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=209 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=115 emulated=0 forwarded=115 host=0x1e trap=115 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=48 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=1 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=197 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=120 emulated=0 forwarded=120 host=0x1e trap=120 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=9 emulated=0 forwarded=9 host=0x2002a trap=9 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=50 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=25 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=398 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=120 emulated=0 forwarded=120 host=0x1e trap=120 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=56 host=0x10018 fast=0
+    DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=25 host=0x1001c fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+    DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=422 host=0x1001a fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=1 emulated=0 forwarded=1 host=0x22 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=1 emulated=0 forwarded=1 host=0x21 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1f trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=115 emulated=0 forwarded=115 host=0x1e trap=115 fast=0
+    DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+    DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=56 host=0x10018 fast=0
+[boot_capture:uvmg7] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_uvmg7_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:uvmg7] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:uvmg7]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:uvmg7] done. serial=/workspace/bench/run_uvmg7_serial.log qemu=/workspace/bench/run_uvmg7_qemu.log dmesg=/workspace/bench/run_uvmg7_dmesg.log dmesg_after=/workspace/bench/run_uvmg7_dmesg_after.log probe=/workspace/bench/run_uvmg7_probe.log hostdmesg=/workspace/bench/run_uvmg7_hostdmesg.log
+BOOT_CAPTURE_RC=0
+--- kf3 fault-plane / EFS lines (/workspace/bench/run_uvmg7_qemu.log):
+kf3: UVM EFS ON — guest fault plane: Ga10x, GET/PUT at BAR0 0xb83028/0xb8302c (PTR mask 0xfffff), replayable vector 64, 3 GPCs, GRAPHICS engine id 64; host EFS ABI 1 (max 1024 parked, timeout 30000 ms, skipDivertedReplays=true)
+kf3: fault plane: regs=0/0refused spaces=0(0 retired) records=0 delivered=0 raises(put=0 get=0) get_writes=0 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=0 host=0 ids=0) cancels(guest=0 ids=0) empty_ops=0 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=0)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf00003); GET=PUT=0
+kf3: fault plane: regs=1/0refused spaces=0(0 retired) records=0 delivered=0 raises(put=0 get=0) get_writes=0 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=0 host=0 ids=0) cancels(guest=0 ids=0) empty_ops=0 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: VasKey(13965662497559019527) EFS mirror space=0xcafe0044: host-UVM-owned, external ranges [
+kf3: act schedule: 0xc1d0000c:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662497559019527)'s faults as guest instance 0x170000 (Vid) VEID 63 (17045 us, off the GSP lock)
+kf3: fault plane: regs=1/0refused spaces=1(0 retired) records=0 delivered=0 raises(put=0 get=0) get_writes=2 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=0 host=0 ids=0) cancels(guest=0 ids=0) empty_ops=0 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: maplog t=7013.210284 STATEMENT retire VasKey(13965662497559019527): EFS space 0xcafe0044 (132 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 277 map(s) in 790 ms, 63 unmap(s) in 4 ms
+kf3: fault plane: regs=1/0refused spaces=1(1 retired) records=668 delivered=668 raises(put=118 get=11) get_writes=364 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=105 host=77 ids=668) cancels(guest=0 ids=0) empty_ops=28 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=668 put=668 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf0009a); GET=PUT=0
+kf3: VasKey(13965662549098627079) EFS mirror space=0xcafe00ab: host-UVM-owned, external ranges [
+kf3: fault plane: regs=2/0refused spaces=2(1 retired) records=668 delivered=668 raises(put=118 get=11) get_writes=366 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=105 host=77 ids=668) cancels(guest=0 ids=0) empty_ops=28 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d00018:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662549098627079)'s faults as guest instance 0x160000 (Vid) VEID 63 (18295 us, off the GSP lock)
+kf3: maplog t=7108.435022 STATEMENT retire VasKey(13965662549098627079): EFS space 0xcafe00ab (16388 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 16542 map(s) in 89369 ms, 72 unmap(s) in 5 ms
+kf3: fault plane: regs=2/0refused spaces=2(2 retired) records=1606 delivered=1606 raises(put=209 get=13) get_writes=614 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=188 host=125 ids=1606) cancels(guest=0 ids=0) empty_ops=63 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=938 put=938 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf00131); GET=PUT=0
+kf3: VasKey(13965662600638234631) EFS mirror space=0xcafe0113: host-UVM-owned, external ranges [
+kf3: fault plane: regs=3/0refused spaces=3(2 retired) records=1606 delivered=1606 raises(put=209 get=13) get_writes=616 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=188 host=125 ids=1606) cancels(guest=0 ids=0) empty_ops=63 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d00024:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662600638234631)'s faults as guest instance 0x150000 (Vid) VEID 63 (17585 us, off the GSP lock)
+kf3: maplog t=7202.043069 STATEMENT retire VasKey(13965662600638234631): EFS space 0xcafe0113 (16058 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 16092 map(s) in 87903 ms, 34 unmap(s) in 2 ms
+kf3: fault plane: regs=3/0refused spaces=3(3 retired) records=1606 delivered=1606 raises(put=209 get=13) get_writes=620 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=190 host=125 ids=1606) cancels(guest=0 ids=0) empty_ops=65 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf001c8); GET=PUT=0
+kf3: VasKey(13965662652177842183) EFS mirror space=0xcafe017c: host-UVM-owned, external ranges [
+kf3: fault plane: regs=4/0refused spaces=4(3 retired) records=1606 delivered=1606 raises(put=209 get=13) get_writes=622 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=190 host=125 ids=1606) cancels(guest=0 ids=0) empty_ops=65 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d00030:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662652177842183)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662652177842183)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662652177842183)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662652177842183)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662652177842183)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662652177842183)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662652177842183)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662652177842183)'s faults as guest instance 0x130000 (Vid) VEID 63 (16772 us, off the GSP lock)
+kf3: maplog t=7223.036712 STATEMENT retire VasKey(13965662652177842183): EFS space 0xcafe017c (3177 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 3187 map(s) in 17276 ms, 10 unmap(s) in 0 ms
+kf3: fault plane: regs=4/0refused spaces=4(4 retired) records=1606 delivered=1606 raises(put=209 get=13) get_writes=626 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=192 host=125 ids=1606) cancels(guest=0 ids=0) empty_ops=67 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf0025f); GET=PUT=0
+kf3: VasKey(13965662703717449735) EFS mirror space=0xcafe01e5: host-UVM-owned, external ranges [
+kf3: fault plane: regs=5/0refused spaces=5(4 retired) records=1606 delivered=1606 raises(put=209 get=13) get_writes=628 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=192 host=125 ids=1606) cancels(guest=0 ids=0) empty_ops=67 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d0003c:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662703717449735)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662703717449735)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662703717449735)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662703717449735)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662703717449735)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662703717449735)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662703717449735)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662703717449735)'s faults as guest instance 0x160000 (Vid) VEID 63 (17186 us, off the GSP lock)
+kf3: maplog t=7243.357529 STATEMENT retire VasKey(13965662703717449735): EFS space 0xcafe01e5 (3106 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 3116 map(s) in 16774 ms, 10 unmap(s) in 0 ms
+kf3: fault plane: regs=5/0refused spaces=5(5 retired) records=1606 delivered=1606 raises(put=209 get=13) get_writes=632 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=194 host=125 ids=1606) cancels(guest=0 ids=0) empty_ops=69 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf002f8); GET=PUT=0
+kf3: VasKey(13965662755257057287) EFS mirror space=0xcafe024e: host-UVM-owned, external ranges [
+kf3: fault plane: regs=6/0refused spaces=6(5 retired) records=1606 delivered=1606 raises(put=209 get=13) get_writes=634 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=194 host=125 ids=1606) cancels(guest=0 ids=0) empty_ops=69 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d00048:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662755257057287)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662755257057287)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662755257057287)'s faults as guest instance 0x110000 (Vid) VEID 63; EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662755257057287)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662755257057287)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662755257057287)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662755257057287)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662755257057287)'s faults as guest instance 0x150000 (Vid) VEID 63 (17171 us, off the GSP lock)
+kf3: maplog t=7265.255666 STATEMENT retire VasKey(13965662755257057287): EFS space 0xcafe024e (3344 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 3480 map(s) in 17995 ms, 62 unmap(s) in 4 ms
+kf3: fault plane: regs=6/0refused spaces=6(6 retired) records=2317 delivered=2317 raises(put=335 get=28) get_writes=1030 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=317 host=206 ids=2317) cancels(guest=0 ids=0) empty_ops=111 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=711 put=711 entries=6272)
+kf3: fault plane: replayable buffer registered — 6272 entries over 49 guest page(s) (client 0xc1d0000a object 0xcaf0038f); GET=PUT=0
+kf3: VasKey(13965662806796664839) EFS mirror space=0xcafe02b6: host-UVM-owned, external ranges [
+kf3: fault plane: regs=7/0refused spaces=7(6 retired) records=2317 delivered=2317 raises(put=335 get=28) get_writes=1032 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=317 host=206 ids=2317) cancels(guest=0 ids=0) empty_ops=111 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=0 put=0 entries=6272)
+kf3: act schedule: 0xc1d00054:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP); EFS: GR twin host 0x22 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662806796664839)'s faults as guest instance 0x140000 (Vid) VEID 63; EFS: GR twin host 0x20 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662806796664839)'s faults as guest instance 0x120000 (Vid) VEID 63; EFS: GR twin host 0x25 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662806796664839)'s faults as guest instance 0x170000 (Vid) VEID 63; EFS: GR twin host 0x1e registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662806796664839)'s faults as guest instance 0x100000 (Vid) VEID 63; EFS: GR twin host 0x23 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662806796664839)'s faults as guest instance 0x150000 (Vid) VEID 63; EFS: GR twin host 0x21 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662806796664839)'s faults as guest instance 0x130000 (Vid) VEID 63; EFS: GR twin host 0x24 registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662806796664839)'s faults as guest instance 0x160000 (Vid) VEID 63; EFS: GR twin host 0x1f registered with host UVM (context in [0xf000000000, 0xff00000000)), represents VasKey(13965662806796664839)'s faults as guest instance 0x110000 (Vid) VEID 63 (17231 us, off the GSP lock)
+kf3: maplog t=7286.347708 STATEMENT retire VasKey(13965662806796664839): EFS space 0xcafe02b6 (3166 row(s)) unregistered from host UVM (Ok(())) and freed — host UVM over its life: 3326 map(s) in 16917 ms, 74 unmap(s) in 4 ms
+kf3: fault plane: regs=7/0refused spaces=7(7 retired) records=3499 delivered=3499 raises(put=447 get=33) get_writes=1314 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=414 host=265 ids=3499) cancels(guest=0 ids=0) empty_ops=149 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=1182 put=1182 entries=6272)
+--- the LAST fault-plane heartbeat:
+kf3: fault plane: regs=7/0refused spaces=7(7 retired) records=3499 delivered=3499 raises(put=447 get=33) get_writes=1314 cancelled(no_buffer=0 no_channel=0 refused=0 write=0) replays(guest=414 host=265 ids=3499) cancels(guest=0 ids=0) empty_ops=149 stale=0 host_errors=0 outstanding(delivered=0 held=0) ring(get=1182 put=1182 entries=6272)
+--- hook verdicts:
+CHECK gpufirst ok bad=0
+UM_RC=0
+CHECK cpuinit ok bad=0
+UM_RC=0
+CHECK prefetch ok bad=0
+UM_RC=0
+CHECK advise ok bad=0
+UM_RC=0
+CHECK malloc ok bad=0
+UM_RC=0
+CHECK gpufirst ok bad=0
+UM_RC=0
+CHECK cpuinit ok bad=0
+UM_RC=0
+EXIT rc=0 2026-09-30T20:02:22+00:00
