@@ -1601,6 +1601,22 @@ impl Device {
         let mut busy_from = crate::prof::now_ns();
         // ★ w827: the last wait ended by TIMEOUT — did the pass after it find work?
         let mut after_timeout = false;
+        // ⊘ EXPERIMENT KNOB, default OFF (`KF3_DBFAST_SPIN_US`): after a doorbell was delivered, poll
+        // for more (non-blocking) for up to this long before parking — §48.2's bounded
+        // spin-then-park. It never delays an action (it only lets the drainer act without a wake-up)
+        // and is bounded by the last delivery, so an idle device never spins. Measured before it may
+        // become a default (`docs/design/V3_DOORBELL_IOEVENTFD.md` §7).
+        let spin = std::env::var("KF3_DBFAST_SPIN_US")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|us| *us > 0 && *us <= 1000)
+            .map(std::time::Duration::from_micros);
+        if let Some(d) = spin {
+            eprintln!(
+                "kf3: ⚠ EXPERIMENT KF3_DBFAST_SPIN_US: the drainer polls doorbells for {d:?} after each delivery before parking"
+            );
+        }
+        let mut last_delivery: Option<std::time::Instant> = None;
         while !self.stop.load(Ordering::Acquire) {
             if let Some([gsprm, libos]) = heartbeat
                 && hb_at.elapsed() >= std::time::Duration::from_millis(500)
@@ -1638,7 +1654,9 @@ impl Device {
             // ★ Doorbells first — never behind register work (and again before every privileged
             // write is applied, `HostOps::apply_register`). One non-blocking poll; no syscall when
             // nothing is registered.
-            self.dbfast.service_ready(self);
+            if self.dbfast.service_ready(self) > 0 && spin.is_some() {
+                last_delivery = Some(std::time::Instant::now());
+            }
             let seen = self.plane.drainer_wake.seen();
             if self.plane.drainer_pass(self, 256) > 0 {
                 if after_timeout {
@@ -1659,6 +1677,15 @@ impl Device {
             }
             after_timeout = false;
             self.deliver_rc();
+            // The experiment's bounded spin: only while doorbells are flowing, only if the privileged
+            // ring is empty (register work never waits behind it), and never past the bound.
+            if let (Some(d), Some(t)) = (spin, last_delivery)
+                && t.elapsed() < d
+                && self.plane.ring.occupancy() == 0
+            {
+                std::hint::spin_loop();
+                continue;
+            }
             if !self.plane.drainer_wake.try_park(seen) {
                 continue;
             }
@@ -1685,8 +1712,8 @@ impl Device {
             self.plane.drainer_wake.unpark();
             let _ = self.drainer_efd.drain();
             // ★ The doorbells this wait reported: delivered now, before anything else.
-            if got.is_ok() {
-                self.dbfast.on_ready(&ready, t_wake, self);
+            if got.is_ok() && self.dbfast.on_ready(&ready, t_wake, self) > 0 && spin.is_some() {
+                last_delivery = Some(std::time::Instant::now());
             }
         }
     }

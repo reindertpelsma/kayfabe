@@ -183,11 +183,20 @@ fn bench_b_signal_to_drainer_delivery_under_register_traffic() {
     println!(
         "  scenario                                   p50_us   p99_us   max_us  reg_writes_applied"
     );
-    for (name, rate, apply_us) in [
-        ("idle drainer (no register traffic)", 0u64, 0u64),
-        ("2k reg writes/s, 20 us apply (~4% busy)", 2_000, 20),
-        ("10k reg writes/s, 20 us apply (~20% busy)", 10_000, 20),
-        ("10k reg writes/s, 60 us apply (~60% busy)", 10_000, 60),
+    // (name, register writes/s, apply cost µs, spin-after-delivery µs — the device's
+    // `KF3_DBFAST_SPIN_US` experiment; 0 = off, the default).
+    for (name, rate, apply_us, spin_us) in [
+        ("idle drainer (no register traffic)", 0u64, 0u64, 0u64),
+        ("2k reg writes/s, 20 us apply (~4% busy)", 2_000, 20, 0),
+        ("10k reg writes/s, 20 us apply (~20% busy)", 10_000, 20, 0),
+        ("10k reg writes/s, 60 us apply (~60% busy)", 10_000, 60, 0),
+        ("idle drainer + 500 us spin-after-delivery", 0, 0, 500),
+        (
+            "10k reg/s 20 us + 500 us spin-after-delivery",
+            10_000,
+            20,
+            500,
+        ),
     ] {
         let plane = plane();
         let c = caps();
@@ -248,10 +257,21 @@ fn bench_b_signal_to_drainer_delivery_under_register_traffic() {
             std::thread::spawn(move || {
                 let poller = f.poller();
                 poller.watch(drainer_efd.as_source_fd(), 0).expect("watch");
+                let spin = Duration::from_micros(spin_us);
+                let mut last: Option<Instant> = None;
                 while !stop.load(Ordering::Acquire) {
-                    f.service_ready(&*sink);
+                    if f.service_ready(&*sink) > 0 {
+                        last = Some(Instant::now());
+                    }
                     let seen = plane.drainer_wake.seen();
                     if plane.drainer_pass(&*host, 256) > 0 {
+                        continue;
+                    }
+                    if let Some(t) = last
+                        && t.elapsed() < spin
+                        && plane.ring.occupancy() == 0
+                    {
+                        std::hint::spin_loop();
                         continue;
                     }
                     if !plane.drainer_wake.try_park(seen) {
@@ -262,8 +282,8 @@ fn bench_b_signal_to_drainer_delivery_under_register_traffic() {
                     let t = Instant::now();
                     plane.drainer_wake.unpark();
                     let _ = drainer_efd.drain();
-                    if got.is_ok() {
-                        f.on_ready(&ready, t, &*sink);
+                    if got.is_ok() && f.on_ready(&ready, t, &*sink) > 0 {
+                        last = Some(Instant::now());
                     }
                 }
             })
