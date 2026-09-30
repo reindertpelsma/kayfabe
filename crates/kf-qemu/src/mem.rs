@@ -2296,6 +2296,10 @@ pub fn apply_statement(
                 match create_efs_mirror(m, plane, rm, store, key, f) {
                     Ok(line) => eprintln!("kf3: {line}"),
                     Err(line) => {
+                        // ⊘ Printed HERE, not only returned: the VA thread's statement log is
+                        // capped, and a refused EFS mirror is the whole story of the channel
+                        // refusal that follows ("no mirror").
+                        eprintln!("kf3: EFS mirror REFUSED: {line}");
                         plane.counters.refused.fetch_add(1, Ordering::Relaxed);
                         return line;
                     }

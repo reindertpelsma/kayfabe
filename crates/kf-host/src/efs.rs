@@ -397,7 +397,9 @@ impl EfsSession {
             .map_err(|_| RmError::Other(crate::ABI_DECODE_FAILED))?
             .min(max) as usize;
         records
-            .chunks_exact(u::EFS_RECORD_SIZE)
+            .as_chunks::<{ u::EFS_RECORD_SIZE }>()
+            .0
+            .iter()
             .take(n)
             .map(|c| u::decode_efs_record(c).map_err(|_| RmError::Other(crate::ABI_DECODE_FAILED)))
             .collect()
