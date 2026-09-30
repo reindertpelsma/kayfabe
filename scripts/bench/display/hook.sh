@@ -104,13 +104,15 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     busid=$(printf 'PCI:%d:%d:%d' "0x${b:-0}" "0x${d:-0}" "0x${f:-0}")
     gq 'ls /usr/share/xsessions/' > "$OUT/xsessions.log"
     session=$(sed -n 's/^\(cinnamon[a-z0-9-]*\)\.desktop$/\1/p' "$OUT/xsessions.log" | head -1)
-    session=${session:-cinnamon}
+    session=${DISPLAY_SESSION:-${session:-cinnamon}}
     DESK=$(mktemp -d); trap 'rm -rf "$DESK"' EXIT
+    # an experiment's session environment (e.g. __GL_SYNC_TO_VBLANK=0), via the user's ~/.xsessionrc
+    if [ -n "${DISPLAY_SESSION_ENV:-}" ]; then echo "export $DISPLAY_SESSION_ENV" > "$DESK/xsessionrc"; else : > "$DESK/xsessionrc"; fi
     sed "s/@BUSID@/$busid/" "$HERE/desktop/xorg.conf.in" > "$DESK/xorg.conf"
     sed "s/@SESSION@/$session/g" "$HERE/desktop/50-kf-autologin.conf.in" > "$DESK/50-kf-autologin.conf"
-    tar -C "$DESK" -cf - xorg.conf 50-kf-autologin.conf | $G 'rm -rf ~/desk && mkdir -p ~/desk && tar -xf - -C ~/desk'
-    gq 'sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
-    say "DESKTOP_CONF busid=$busid session=$session $(tr '\n' ' ' < "$OUT/desk_conf.log")"
+    tar -C "$DESK" -cf - xorg.conf 50-kf-autologin.conf xsessionrc | $G 'rm -rf ~/desk && mkdir -p ~/desk && tar -xf - -C ~/desk'
+    gq 'sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && cp ~/desk/xsessionrc ~/.xsessionrc && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
+    say "DESKTOP_CONF busid=$busid session=$session env=[${DISPLAY_SESSION_ENV:-}] $(tr '\n' ' ' < "$OUT/desk_conf.log")"
     gq 'sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/lightdm_start.log"
     # the session: Xorg up, then a Cinnamon process of the autologin user (≤ 90 s)
     XENV='sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority'
@@ -167,10 +169,10 @@ fi
 #    with Vulkan and EGL clients presenting through it; graded by host screendumps
 if [ "${DISPLAY_WESTON:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
     gq 'sudo systemctl stop lightdm 2>/dev/null; sleep 2; echo ok' 30 > /dev/null
-    ( gq "sudo timeout 12 vkcube --wsi display --c 400 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 40 > "$OUT/vkcube_display.log" ) &
+    ( gq "sudo timeout 12 vkcube --wsi display --c 400 2>&1 | tail -12; echo RC=\${PIPESTATUS[0]}" 40 > "$OUT/vkcube_display.log" ) &
     VP=$!; sleep 6; shot "$OUT/vk_display.ppm"; wait $VP
     say "VKCUBE_DISPLAY $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/vkcube_display.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/vkcube_display.log")"
-    gq "sudo rm -rf /run/kfw && sudo mkdir -m 700 /run/kfw && sudo sh -c 'XDG_RUNTIME_DIR=/run/kfw LIBSEAT_BACKEND=builtin nohup weston --backend=drm --tty=3 --continue-without-input --socket=kfw --log=/tmp/weston.log >/dev/null 2>&1 &' && echo started" 30 > "$OUT/weston_start.log"
+    gq "sudo rm -rf /run/kfw && sudo mkdir -m 700 /run/kfw && sudo sh -c 'XDG_RUNTIME_DIR=/run/kfw LIBSEAT_BACKEND=builtin nohup weston --backend=drm --continue-without-input --socket=kfw --log=/tmp/weston.log >/dev/null 2>&1 &' && echo started" 30 > "$OUT/weston_start.log"
     sleep 10
     WENV='sudo env XDG_RUNTIME_DIR=/run/kfw WAYLAND_DISPLAY=kfw'
     say "WESTON $(tr '\n' ' ' < "$OUT/weston_start.log") alive=$(gq 'pgrep -x weston >/dev/null && echo yes || echo no')"
