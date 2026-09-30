@@ -263,6 +263,14 @@ pub struct FaultPlane {
     stop: AtomicBool,
     /// Counters.
     pub counters: FaultCounters,
+    /// ★ §3.8a — the point-map rendezvous with the VA thread: a replay waits until the pages it
+    /// is about to replay are placed on the host by the CPU point walk (the GPU walker cannot run
+    /// while they are parked). `point_req` counts requests, `point_done` the last one served.
+    point_req: AtomicU64,
+    point_done: Mutex<u64>,
+    point_cv: Condvar,
+    /// Wakes the VA thread (set once at realize).
+    vamgr_wake: OnceLock<Box<dyn Fn() + Send + Sync>>,
 }
 
 /// Why a registration is refused — the plane then stays unregistered and every record cancels.
@@ -380,7 +388,88 @@ impl FaultPlane {
             jobs_cv: Condvar::new(),
             stop: AtomicBool::new(false),
             counters: FaultCounters::default(),
+            point_req: AtomicU64::new(0),
+            point_done: Mutex::new(0),
+            point_cv: Condvar::new(),
+            vamgr_wake: OnceLock::new(),
         }
+    }
+
+    /// Hand the plane the VA thread's wake (realize, once).
+    pub fn set_vamgr_wake(&self, wake: Box<dyn Fn() + Send + Sync>) {
+        let _ = self.vamgr_wake.set(wake);
+    }
+
+    /// ★ Every space with parked records (delivered or held back): `(key, root, pages)`. A
+    /// non-empty answer means the host GPU's GR engine is held by a faulted context (§3.8a).
+    #[must_use]
+    pub fn parked(&self) -> Vec<(VasKey, Option<u64>, Vec<u64>)> {
+        let g = self.lock();
+        g.spaces
+            .iter()
+            .filter(|(_, s)| !s.delivered.is_empty() || !s.undelivered.is_empty())
+            .map(|(k, s)| {
+                let mut pages: Vec<u64> = s
+                    .delivered
+                    .iter()
+                    .map(|d| d.page)
+                    .chain(s.undelivered.iter().map(|r| r.address & !(PAGE - 1)))
+                    .collect();
+                pages.sort_unstable();
+                pages.dedup();
+                (*k, s.root, pages)
+            })
+            .collect()
+    }
+
+    /// The parked pages of `key` (empty: none).
+    #[must_use]
+    pub fn parked_pages(&self, key: VasKey) -> Vec<u64> {
+        self.parked()
+            .into_iter()
+            .find(|(k, _, _)| *k == key)
+            .map(|(_, _, p)| p)
+            .unwrap_or_default()
+    }
+
+    /// ★ VA thread: the newest point-map request not yet served, if any.
+    #[must_use]
+    pub fn point_map_requested(&self) -> Option<u64> {
+        let req = self.point_req.load(Ordering::Acquire);
+        let done = *self.point_done.lock().unwrap_or_else(|e| e.into_inner());
+        (req > done).then_some(req)
+    }
+
+    /// ★ VA thread: requests up to `req` are served.
+    pub fn point_map_done(&self, req: u64) {
+        let mut d = self.point_done.lock().unwrap_or_else(|e| e.into_inner());
+        if req > *d {
+            *d = req;
+        }
+        drop(d);
+        self.point_cv.notify_all();
+    }
+
+    /// Resolver: ask the VA thread to place the parked pages, and wait (bounded) until it has.
+    fn point_map_and_wait(&self) -> bool {
+        let Some(wake) = self.vamgr_wake.get() else {
+            return false;
+        };
+        let want = self.point_req.fetch_add(1, Ordering::AcqRel) + 1;
+        wake();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let mut d = self.point_done.lock().unwrap_or_else(|e| e.into_inner());
+        while *d < want {
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            d = self
+                .point_cv
+                .wait_timeout(d, deadline - now)
+                .map_or_else(|e| e.into_inner().0, |r| r.0);
+        }
+        true
     }
 
     /// Bind the device (once, right after it is leaked — before any guest code runs).
@@ -790,6 +879,18 @@ impl FaultPlane {
             for job in jobs {
                 match job {
                     Job::Op(op) => {
+                        // ★ §3.8a: before a replay, the pages it replays are placed by the VA
+                        // thread's CPU point walk — the GPU walker cannot run while they are parked.
+                        if matches!(op, FaultOp::Replay { .. }) && !self.parked().is_empty() {
+                            let served = self.point_map_and_wait();
+                            if faultlog() {
+                                eprintln!(
+                                    "kf3: faultlog t={:.6} POINT-MAP before replay {}",
+                                    kf_mem::maplog::t(),
+                                    if served { "served" } else { "NOT served (2 s)" }
+                                );
+                            }
+                        }
                         let plan = plan_op(&mut self.lock(), op);
                         if faultlog() {
                             eprintln!(

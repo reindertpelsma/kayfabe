@@ -663,6 +663,12 @@ impl Device {
             mirrors,
         )?;
         mem.fault = fault;
+        if let Some(f) = fault {
+            let inbox = mem.inbox.clone();
+            f.set_vamgr_wake(Box::new(move || {
+                let _ = inbox.wake.signal();
+            }));
+        }
         let walker = kf_mem::vasmgr::GpuWalker { kernel, perm };
         // ★ 2026-09-26 (`V3_BAR1_DOORBELL.md` §7 T1's NEGATIVE CONTROL, `V3_FAMILY_PORT_BLACKWELL.md`):
         // `KF3_NEGCTL_NO_BAR1_DOORBELL=1` runs a Hopper+ family WITHOUT the BAR1 usermode-view
@@ -1463,6 +1469,19 @@ impl Device {
             return;
         }
         let trigger = self.mem.port.trigger();
+        // ★ §3.8a (the guest fault plane, EFS mode only): the CPU point walk's reader and the
+        // format it decodes — used only while a guest fault is parked, when the GPU walker cannot
+        // run (the GR engine is held by the faulted context).
+        let mut pt = self
+            .mem
+            .fault
+            .map(|_| crate::mem::PtReader::new(self.rm, self.store.handle, self.mem.fb_len));
+        let pt_fmt = match self.family.mmu_format() {
+            kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
+            kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
+        };
+        let pt_perm = m.walker().perm;
+        let pt_per_map_kind = self.rm.host_abi().per_map_pte_kind();
         let mut last_seq: Option<u64> = None;
         let mut taken = 0u64;
         let mut logged = 0u32;
@@ -1536,7 +1555,102 @@ impl Device {
             // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
             // wait on the worker that asked.
             for (ticket, pdb) in self.mem.inbox.take_split_requests() {
+                // ★★ §3.8a: a split naming a guest-UVM space whose OWN faults are parked cannot
+                // wait for the GPU walker — the GR engine is held by the faulted context
+                // (`[measured uvmg4]`: 4.3 s, then Xid 109). Its parked pages are placed from the
+                // guest's tables on the CPU, the split completes NOW, and a GPU walk of the space
+                // is scheduled to reconcile everything else once the replay frees GR.
+                if let (Some(fp), Some(pt), Some(root)) = (self.mem.fault, pt.as_mut(), pdb) {
+                    let efs_keys: Vec<(kf_mem::vasmgr::VasKey, Vec<u64>)> = m
+                        .table
+                        .objects()
+                        .into_iter()
+                        .filter(|(k, r, _)| {
+                            *r == Some(root)
+                                && matches!(m.table.target(*k), Some(crate::mem::Target::Efs(_)))
+                        })
+                        .map(|(k, _, _)| (k, fp.parked_pages(k)))
+                        .collect();
+                    if efs_keys.iter().any(|(_, p)| !p.is_empty()) {
+                        for (k, pages) in &efs_keys {
+                            if let Some(crate::mem::Target::Efs(e)) = m.table.target(*k) {
+                                let stale =
+                                    crate::mem::efs_revalidate(e, &pt_fmt, root, pt, &self.mem);
+                                let r = crate::mem::efs_point_map(
+                                    e,
+                                    &pt_fmt,
+                                    root,
+                                    pages,
+                                    pt,
+                                    &self.mem,
+                                    pt_perm,
+                                    pt_per_map_kind,
+                                );
+                                if crate::faultplane::faultlog() {
+                                    eprintln!(
+                                        "kf3: faultlog t={:.6} SPLIT-FAST ticket={ticket} {k:?} root={root:#x} {r:?} stale={stale} views={}",
+                                        kf_mem::maplog::t(),
+                                        pt.armed
+                                    );
+                                }
+                            }
+                        }
+                        if let Some(tok) = self.mem.inbox.finish_split(ticket, Ok(()))
+                            && self.plane.ring_internal(tok)
+                        {
+                            let _ = self.worker_efd.signal();
+                        }
+                        for (k, _) in efs_keys {
+                            m.schedule_walk(k, trigger);
+                        }
+                        continue;
+                    }
+                    // No fault parked in this space: its fast rows are re-validated before the GPU
+                    // walk (a GPU walk never takes down a row it did not place).
+                    for (k, _) in &efs_keys {
+                        if let Some(crate::mem::Target::Efs(e)) = m.table.target(*k)
+                            && e.fast.lock().is_ok_and(|f| !f.is_empty())
+                        {
+                            let stale = crate::mem::efs_revalidate(e, &pt_fmt, root, pt, &self.mem);
+                            if stale > 0 && crate::faultplane::faultlog() {
+                                eprintln!(
+                                    "kf3: faultlog t={:.6} REVALIDATE {k:?} took down {stale} stale fast row(s)",
+                                    kf_mem::maplog::t()
+                                );
+                            }
+                        }
+                    }
+                }
                 m.on_split(pdb, ticket, trigger);
+            }
+            // ★★ §3.8a: the fault plane's resolver is about to replay — place every parked page on
+            // the CPU first (the replay must find them mapped; the GPU walker cannot run now).
+            if let (Some(fp), Some(pt)) = (self.mem.fault, pt.as_mut())
+                && let Some(req) = fp.point_map_requested()
+            {
+                for (k, root, pages) in fp.parked() {
+                    if let (Some(root), Some(crate::mem::Target::Efs(e))) =
+                        (root, m.table.target(k))
+                    {
+                        let r = crate::mem::efs_point_map(
+                            e,
+                            &pt_fmt,
+                            root,
+                            &pages,
+                            pt,
+                            &self.mem,
+                            pt_perm,
+                            pt_per_map_kind,
+                        );
+                        if crate::faultplane::faultlog() {
+                            eprintln!(
+                                "kf3: faultlog t={:.6} POINT-MAP req={req} {k:?} root={root:#x} {r:?}",
+                                kf_mem::maplog::t()
+                            );
+                        }
+                    }
+                }
+                fp.point_map_done(req);
             }
             let r = m.on_walk_ready(trigger);
             // ★ Ruling 2026-09-26 (5): a BAR1 doorbell overlay the main loop has now made live (or

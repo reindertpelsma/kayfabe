@@ -857,6 +857,12 @@ pub struct EfsMirror {
     pub reserved: Vec<(u64, u64)>,
     /// Host UVM calls this space has cost.
     pub calls: SpaceCalls,
+    /// ★ Rows placed by the fault path's CPU point walk (`efs_point_map`) that no GPU walk has
+    /// confirmed yet, by VA. A GPU walk's MAP over one confirms it; a later split re-validates the
+    /// rest against the guest's tables (`efs_revalidate`) and unmaps what the guest no longer maps.
+    pub fast: Mutex<std::collections::BTreeMap<u64, u64>>,
+    /// The permissions each row was placed with (a permission change is a new placement).
+    pub perms: Mutex<std::collections::BTreeMap<u64, kf_host::MapPerm>>,
 }
 
 impl EfsMirror {
@@ -872,17 +878,75 @@ impl EfsMirror {
     }
 }
 
-impl MapTarget for EfsMirror {
-    fn withholds_privileged(&self) -> bool {
-        true
-    }
-    fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
+impl EfsMirror {
+    /// ★ Place `d` — the one host verb both the GPU walker's MAP and the fault path's point walk
+    /// use. An IDENTICAL row already placed (same VA, length, backing) is not placed again (the
+    /// GPU walk that follows a point walk maps the same leaf): no UVM call, no transient unmap.
+    /// A new placement replaces what it covers on the host, so the rows it covers are dropped.
+    fn place(&self, d: &Desired, fast: bool) -> Result<Mapped, String> {
         if d.kind != kf_chip::PTE_KIND_PITCH && d.kind != kf_chip::PTE_KIND_GENERIC {
             return Err(format!(
                 "map {:#x}+{:#x}: PTE kind {:#x} — an EFS space maps through host UVM with the backing object's own kind; only PITCH/GENERIC are expressible (refused by name)",
                 d.va, d.len, d.kind
             ));
         }
+        let same = self
+            .rows
+            .read()
+            .ok()
+            .and_then(|r| r.get(&d.va).copied())
+            .is_some_and(|(len, off, ram)| (len, off, ram) == (d.len, d.off, d.ram));
+        if same && !self.perm_changed(d) {
+            if let Ok(mut f) = self.fast.lock() {
+                if fast {
+                    f.entry(d.va).or_insert(d.len);
+                } else {
+                    f.remove(&d.va);
+                }
+            }
+            return Ok(Mapped::Placed);
+        }
+        self.map_uvm(d)?;
+        let end = d.va.saturating_add(d.len);
+        if let Ok(mut rows) = self.rows.write() {
+            let covered: Vec<u64> = rows
+                .range(d.va..end)
+                .filter(|(va, (len, _, _))| va.saturating_add(*len) <= end)
+                .map(|(va, _)| *va)
+                .collect();
+            for va in covered {
+                rows.remove(&va);
+            }
+            rows.insert(d.va, (d.len, d.off, d.ram));
+        }
+        if let Ok(mut f) = self.fast.lock() {
+            let covered: Vec<u64> = f
+                .range(d.va..end)
+                .filter(|(va, len)| va.saturating_add(**len) <= end)
+                .map(|(va, _)| *va)
+                .collect();
+            for va in covered {
+                f.remove(&va);
+            }
+            if fast {
+                f.insert(d.va, d.len);
+            }
+        }
+        if let Ok(mut p) = self.perms.lock() {
+            p.insert(d.va, d.perm);
+        }
+        Ok(Mapped::Placed)
+    }
+
+    fn perm_changed(&self, d: &Desired) -> bool {
+        self.perms
+            .lock()
+            .ok()
+            .and_then(|p| p.get(&d.va).copied())
+            .is_some_and(|p| p != d.perm)
+    }
+
+    fn map_uvm(&self, d: &Desired) -> Result<(), String> {
         let obj = if d.ram {
             self.ram_obj
                 .ok_or_else(|| format!("map {:#x}: guest-RAM row and no RAM object", d.va))?
@@ -912,11 +976,16 @@ impl MapTarget for EfsMirror {
                 "UVM map {:#x}+{:#x} (obj {obj:#x}+{:#x}): {e:?}",
                 d.va, d.len, d.off
             )
-        })?;
-        if let Ok(mut rows) = self.rows.write() {
-            rows.insert(d.va, (d.len, d.off, d.ram));
-        }
-        Ok(Mapped::Placed)
+        })
+    }
+}
+
+impl MapTarget for EfsMirror {
+    fn withholds_privileged(&self) -> bool {
+        true
+    }
+    fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
+        self.place(d, false)
     }
     fn unmap(&self, va: u64, _defer: bool) -> Result<(), String> {
         // ⊘ Forget the row FIRST (as `GpuMirror::unmap`): no reader resolves through a mapping
@@ -928,6 +997,12 @@ impl MapTarget for EfsMirror {
             },
             Err(_) => return Err(format!("unmap {va:#x}: placement rows poisoned")),
         };
+        if let Ok(mut f) = self.fast.lock() {
+            f.remove(&va);
+        }
+        if let Ok(mut p) = self.perms.lock() {
+            p.remove(&va);
+        }
         let t = std::time::Instant::now();
         let r = self.session.unmap(va, row.0);
         self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
@@ -2061,6 +2136,8 @@ fn create_efs_mirror(
             rows,
             reserved: vec![EFS_CHANNEL_WINDOW],
             calls: SpaceCalls::default(),
+            fast: Mutex::new(std::collections::BTreeMap::new()),
+            perms: Mutex::new(std::collections::BTreeMap::new()),
         }),
     );
     plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
@@ -2109,6 +2186,236 @@ fn retire_efs(
     format!(
         "retire {key:?}: EFS space {vas:#x} ({rows} row(s)) unregistered from host UVM ({unreg:?}) and freed — {host}"
     )
+}
+
+/// ★★★ **Guest page-table words, read by the CPU through views of OUR store** — the fault path's
+/// reader (`V3_UVM_GUEST_FAULT_PLANE.md` §3.8a). While a guest fault is parked the GR engine is
+/// held by the faulted context (`[measured uvmg4]`: a walk kernel waited 4.3 s, then the host's
+/// ctxsw watchdog killed the twin), so the pages the fault names are translated here instead, with
+/// the walk kernel's own rules (`kf_cuda::point`). The same verb the Translated plane uses for a
+/// vidmem GPFIFO (`NV_ESC_RM_MAP_MEMORY` of the store on the host's BAR1, READ-ONLY here): OUR
+/// mapping of OUR object. ⊘ Only page-table WORDS are read, a handful per faulted page.
+pub struct PtReader {
+    rm: &'static HostRm,
+    store: u32,
+    fb_len: u64,
+    views: Vec<PtView>,
+    /// Views armed so far (the report's count of how often a view was paid for).
+    pub armed: u64,
+}
+
+struct PtView {
+    off: u64,
+    len: u64,
+    region: kf_linux_raw::VolatileRegion,
+    _node: CharDevice,
+    cookie: u64,
+}
+
+/// A view's span (page tables are 4 KiB and scattered: small views, a few of them).
+const PT_VIEW_BYTES: u64 = 64 << 10;
+/// Views kept; the oldest is released beyond this.
+const PT_VIEWS_MAX: usize = 16;
+
+impl PtReader {
+    /// A reader over `store` (`fb_len` bytes).
+    #[must_use]
+    pub fn new(rm: &'static HostRm, store: u32, fb_len: u64) -> PtReader {
+        PtReader {
+            rm,
+            store,
+            fb_len,
+            views: Vec::new(),
+            armed: 0,
+        }
+    }
+
+    /// The little-endian word at store offset `off`, or `None` (outside the store, or the view
+    /// could not be armed).
+    pub fn read64(&mut self, off: u64) -> Option<u64> {
+        if !off.is_multiple_of(8) || off.checked_add(8)? > self.fb_len {
+            return None;
+        }
+        let i = match self
+            .views
+            .iter()
+            .position(|v| off >= v.off && off + 8 <= v.off + v.len)
+        {
+            Some(i) => i,
+            None => {
+                let base = off & !(PT_VIEW_BYTES - 1);
+                let len = PT_VIEW_BYTES.min(self.fb_len - base);
+                if self.views.len() >= PT_VIEWS_MAX {
+                    let old = self.views.remove(0);
+                    let _ = self.rm.release_cpu_view(CpuViewRelease {
+                        h_memory: self.store,
+                        p_linear_address: old.cookie,
+                    });
+                }
+                let (node, cookie) = self
+                    .rm
+                    .arm_cpu_view(MapNode::Gpu, self.store, base, len, ViewAccess::ReadOnly)
+                    .ok()?;
+                let region = kf_linux_raw::VolatileRegion::map(
+                    Backing::DeviceFile { fd: node.as_fd() },
+                    len,
+                    kf_linux_raw::CachePolicy::Uncached,
+                    HostPageSize::query(),
+                )
+                .ok()?;
+                self.armed += 1;
+                self.views.push(PtView {
+                    off: base,
+                    len,
+                    region,
+                    _node: node,
+                    cookie,
+                });
+                self.views.len() - 1
+            }
+        };
+        let v = &self.views[i];
+        let mut b = [0u8; 8];
+        v.region
+            .copy_out(HostOffset::new(off - v.off), &mut b)
+            .ok()?;
+        Some(u64::from_le_bytes(b))
+    }
+}
+
+impl Drop for PtReader {
+    fn drop(&mut self) {
+        for v in self.views.drain(..) {
+            let _ = self.rm.release_cpu_view(CpuViewRelease {
+                h_memory: self.store,
+                p_linear_address: v.cookie,
+            });
+        }
+    }
+}
+
+/// What a point map did, for the log.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PointMapped {
+    /// Pages looked up.
+    pub looked: usize,
+    /// Leaves placed (a leaf covering several pages counts once).
+    pub placed: usize,
+    /// Pages the guest's tables do not map.
+    pub unmapped: usize,
+    /// Pages refused (unreadable table, foreign aperture, privileged or unplaceable leaf).
+    pub refused: usize,
+    /// Fast rows the guest no longer maps, taken down.
+    pub stale: usize,
+}
+
+/// ★ Translate each of `pages` in the space `key` (root `pdb`) on the CPU and place what the
+/// guest's tables map — the fault path's GR-free mirror step (§3.8a). Leaves become rows exactly as
+/// a GPU walk's MAP would (`desired_from_leaves`, `host_pte_kind`, `PermPolicy::host_perm`);
+/// privileged leaves are withheld (a user twin).
+#[allow(clippy::too_many_arguments)]
+pub fn efs_point_map(
+    e: &EfsMirror,
+    fmt: &kf_cuda::abi::KfFormat,
+    pdb: u64,
+    pages: &[u64],
+    rd: &mut PtReader,
+    plane: &MemPlane,
+    perm: kf_mem::apply::PermPolicy,
+    per_map_kind: bool,
+) -> PointMapped {
+    use kf_cuda::point::{Point, lookup};
+    let mut out = PointMapped::default();
+    let mut done: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+    for &va in pages {
+        out.looked += 1;
+        match lookup(fmt, pdb, va, &mut |off| rd.read64(off)) {
+            Point::Leaf(l) => {
+                if !done.insert(l.va) {
+                    continue;
+                }
+                if l.flags & kf_cuda::abi::KFWR_RF_PRIVILEGE != 0 {
+                    out.refused += 1;
+                    continue;
+                }
+                let ap = kf_cuda::point::aperture(&l);
+                let rows = kf_mem::ledger::desired_from_leaves(
+                    [(l.va, l.addr, l.bytes, ap)],
+                    plane.fb_len,
+                    &|gpa, len| plane.ram.file_range(gpa, len).map(|(_, o)| o),
+                );
+                let d = match rows {
+                    Ok(v) if v.len() == 1 => {
+                        let kind = ((l.flags >> kf_cuda::abi::KFWR_RF_KIND_SHIFT)
+                            & kf_cuda::abi::KFWR_RF_KIND_MASK)
+                            as u8;
+                        Desired {
+                            kind: kf_mem::apply::host_pte_kind(kind, v[0].ram, per_map_kind),
+                            perm: perm.host_perm(l.flags),
+                            ..v[0]
+                        }
+                    }
+                    _ => {
+                        out.refused += 1;
+                        continue;
+                    }
+                };
+                match e.place(&d, true) {
+                    Ok(_) => out.placed += 1,
+                    Err(why) => {
+                        out.refused += 1;
+                        eprintln!("kf3: EFS point map {va:#x}: {why}");
+                    }
+                }
+            }
+            Point::Unmapped => out.unmapped += 1,
+            Point::Refused(why) => {
+                out.refused += 1;
+                eprintln!("kf3: EFS point lookup {va:#x} (root {pdb:#x}): {why}");
+            }
+        }
+    }
+    out
+}
+
+/// ★ Re-validate the fast rows of `e` against the guest's tables: a row the guest no longer maps
+/// the same way is taken down (a GPU walk never will — it never placed it). Cheap: a handful of
+/// rows, each a point lookup. Returns how many were taken down.
+pub fn efs_revalidate(
+    e: &EfsMirror,
+    fmt: &kf_cuda::abi::KfFormat,
+    pdb: u64,
+    rd: &mut PtReader,
+    plane: &MemPlane,
+) -> usize {
+    use kf_cuda::point::{Point, lookup};
+    let fast: Vec<(u64, u64)> = e
+        .fast
+        .lock()
+        .map(|f| f.iter().map(|(a, b)| (*a, *b)).collect())
+        .unwrap_or_default();
+    let mut stale = 0;
+    for (va, len) in fast {
+        let row = e.rows.read().ok().and_then(|r| r.get(&va).copied());
+        let keep = match (lookup(fmt, pdb, va, &mut |off| rd.read64(off)), row) {
+            (Point::Leaf(l), Some((rlen, off, ram))) => {
+                let ap = kf_cuda::point::aperture(&l);
+                let want = kf_mem::ledger::desired_from_leaves(
+                    [(l.va, l.addr, l.bytes, ap)],
+                    plane.fb_len,
+                    &|gpa, n| plane.ram.file_range(gpa, n).map(|(_, o)| o),
+                );
+                matches!(want, Ok(v) if v.len() == 1 && (v[0].va, v[0].len, v[0].off, v[0].ram) == (va, rlen, off, ram))
+            }
+            _ => false,
+        };
+        if !keep {
+            stale += 1;
+            let _ = e.unmap(va, false);
+            let _ = len;
+        }
+    }
+    stale
 }
 
 /// ★ P5c: the guest freed VA space `key` — unmap OUR rows (deferred, one invalidate) and keep the
