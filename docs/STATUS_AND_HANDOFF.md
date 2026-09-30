@@ -34,7 +34,9 @@ fix this file. Entries below the first are dated history.
   - **Next, in order (suggested):** (1) UVM after the owner's answers: diagnose the 30 s stall, run
     `conjugateGradientUM`, the Bug-1624521 negative control, the merge bar EFS off/on, merge. (2) A per-token
     LLM time breakdown on nested boxes: doorbells explain ~22 of the ~58 ms/token gap; the rest is
-    unattributed (offered to the owner, not started). (3) R4's remainder. (4) §4 items 10–12. (5) Driver
+    unattributed (offered to the owner, not started). (2b) The owner's **doorbell pump** idea
+    (`design/V3_DOORBELL_IOEVENTFD.md` §8b, design only): stage 1 ≈ the spin's +16–18 % without an
+    always-busy core; stage 2 makes doorbells exitless while pumping, with a stock guest. (3) R4's remainder. (4) §4 items 10–12. (5) Driver
     matrix continuation. (6) Windows last.
   - **CI flake (2026-09-30):** GitHub CI failed once at `8644e477` (a README-only commit) in
     `kf-util`'s `a_blocking_section_outside_a_trap_is_not_a_violation_and_is_not_recorded`: it compared a
