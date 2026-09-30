@@ -42,7 +42,14 @@ fix this file. Entries below the first are dated history.
     `kf-util`'s `a_blocking_section_outside_a_trap_is_not_a_violation_and_is_not_recorded`: it compared a
     process-global row count that a parallel sibling test writes to (run 36771653449: before 1, after 3).
     Test-only fix `101b1f7e` (`v3-flakefix`, inside `#[cfg(test)]`, CI green) — ★ MERGED the same evening
-    after the flake hit master twice more (`baba8084`, `c51b43cc`; the same SHAs passed on v3).
+    after the flake hit master twice more (`baba8084`, `c51b43cc`; the same SHAs passed on v3). A second
+    test of the same class then failed master at `2f4ad7c8` (`kayfabe-mmu`'s global epoch, 54 vs 53); it and
+    `kayfabe-util`'s identical copy of the first are fixed by `fa4b29aa` (`v3-flakefix2`, test-only, CI
+    green), merged. ⚠ **The class:** a test that compares a PROCESS-GLOBAL counter exactly while sibling
+    tests change it in parallel. Unobserved but same-shaped, to audit: `kf-util` `lock.rs`
+    `the_allowed_acquisitions_are_not_reported` (`in_trap_census() == before`) and `trapwitness.rs`
+    `the_enumerated_exception_mints_inside_a_trap_and_counts_itself` (`== before + 1`), plus their
+    `kayfabe-util` copies.
   - **Durability:** everything is on GitHub. The dev host's local-only branches and two uncommitted Codex
     worktrees are backed up as `backup/host-2026-09-30/*` (13 branches, secret-scanned, not reviewed). Two
     unpushable research-repo corrections are `archive/nvkvm-unpushed-2026-09-30/`. **All vast boxes are
