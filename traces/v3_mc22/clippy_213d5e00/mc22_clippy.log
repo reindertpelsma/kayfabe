@@ -1,0 +1,76 @@
+START 2026-09-30T15:07:07+00:00 rev=213d5e00 rustc 1.98.1 (48a229cea 2026-09-01) clippy 0.1.98 (48a229ceae 2026-09-01)
+    Checking kf-util v0.1.0 (/root/kf-mc22-src/crates/kf-util)
+    Checking kayfabe-util v0.1.0 (/root/kf-mc22-src/crates/kayfabe-util)
+   Compiling serde_core v1.0.229
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+   Compiling zmij v1.0.23
+    Checking winnow v1.0.4
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling target-triple v1.0.1
+    Checking toml_writer v1.1.2+spec-1.1.0
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking itoa v1.0.18
+    Checking memchr v2.8.3
+    Checking glob v0.3.4
+    Checking termcolor v1.4.1
+   Compiling libc v0.2.189
+    Checking kayfabe-doorbell v0.1.0 (/root/kf-mc22-src/crates/kayfabe-doorbell)
+    Checking kf-arch v0.1.0 (/root/kf-mc22-src/crates/kf-arch)
+    Checking kf-cuda v0.1.0 (/root/kf-mc22-src/crates/kf-cuda)
+    Checking kayfabe-arch v0.1.0 (/root/kf-mc22-src/crates/kayfabe-arch)
+    Checking kayfabe-completion v0.1.0 (/root/kf-mc22-src/crates/kayfabe-completion)
+   Compiling kayfabe-isolate-host v0.1.0 (/root/kf-mc22-src/crates/kayfabe-isolate-host)
+    Checking kayfabe-cuda v0.1.0 (/root/kf-mc22-src/crates/kayfabe-cuda)
+    Checking kf-abi v0.1.0 (/root/kf-mc22-src/crates/kf-abi)
+    Checking kayfabe-abi v0.1.0 (/root/kf-mc22-src/crates/kayfabe-abi)
+    Checking kayfabe-vmm v0.1.0 (/root/kf-mc22-src/crates/kayfabe-vmm)
+   Compiling syn v3.0.3
+    Checking kf-trace v0.1.0 (/root/kf-mc22-src/crates/kf-trace)
+    Checking kayfabe-isolate v0.1.0 (/root/kf-mc22-src/crates/kayfabe-isolate)
+    Checking kayfabe-mmu v0.1.0 (/root/kf-mc22-src/crates/kayfabe-mmu)
+    Checking kf-linux-raw v0.1.0 (/root/kf-mc22-src/crates/kf-linux-raw)
+    Checking kayfabe-linux-raw v0.1.0 (/root/kf-mc22-src/crates/kayfabe-linux-raw)
+    Checking serde_spanned v1.1.1
+    Checking toml_datetime v1.1.1+spec-1.1.0
+    Checking toml v1.1.3+spec-1.1.0
+    Checking kayfabe-trace v0.1.0 (/root/kf-mc22-src/crates/kayfabe-trace)
+    Checking kayfabe-gsp v0.1.0 (/root/kf-mc22-src/crates/kayfabe-gsp)
+    Checking kayfabe-mocks v0.1.0 (/root/kf-mc22-src/crates/kayfabe-mocks)
+    Checking kayfabe-device v0.1.0 (/root/kf-mc22-src/crates/kayfabe-device)
+    Checking kayfabe-chips v0.1.0 (/root/kf-mc22-src/crates/kayfabe-chips)
+   Compiling serde_derive v1.0.229
+    Checking trybuild v1.0.118
+    Checking kf-gsp v0.1.0 (/root/kf-mc22-src/crates/kf-gsp)
+    Checking kf-host v0.1.0 (/root/kf-mc22-src/crates/kf-host)
+    Checking kf-chip v0.1.0 (/root/kf-mc22-src/crates/kf-chip)
+    Checking kf-disp v0.1.0 (/root/kf-mc22-src/crates/kf-disp)
+    Checking kf-trap v0.1.0 (/root/kf-mc22-src/crates/kf-trap)
+    Checking kf-crec v0.1.0 (/root/kf-mc22-src/crates/kf-crec)
+    Checking kf-core v0.1.0 (/root/kf-mc22-src/crates/kf-core)
+    Checking kf-mem v0.1.0 (/root/kf-mc22-src/crates/kf-mem)
+    Checking kf-rm v0.1.0 (/root/kf-mc22-src/crates/kf-rm)
+    Checking kf-chan v0.1.0 (/root/kf-mc22-src/crates/kf-chan)
+    Checking kf-harness v0.1.0 (/root/kf-mc22-src/crates/kf-harness)
+    Checking kf-qemu v0.1.0 (/root/kf-mc22-src/crates/kf-qemu)
+warning: kayfabe-isolate-host@0.1.0: embedded isolate image: 918440 bytes, x86_64-unknown-linux-musl
+    Checking kayfabe-rm-ladder v0.1.0 (/root/kf-mc22-src/crates/kayfabe-rm-ladder)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.58s
+NEW crates/kf-cuda/src/display.rs|clippy::manual_is_multiple_of|bc3b41c406a760c22b054142cb4f6b67ed23e0575d4a38f895d1ce0cd64b3035: manual implementation of `.is_multiple_of()` ::                 || l.x0_bytes % 4 != 0
+NEW crates/kf-disp/src/caps.rs|clippy::for_kv_map|9943a949a20b9902b58e9ba0a766be26a2c7c11cb31ccda5e042acd6ff9190a9: you seem to want to iterate on a map's keys ::     for (off, _) in w.iter() {
+NEW crates/kf-disp/src/class.rs|clippy::unnecessary_lazy_evaluations|53fa920c9c7488d265e04ca29df06b532b6a0e92ada13591b0a18dd6bfd0e107: unnecessary closure used with `bool::then` ::                 (h < 32 && l <= h).then(|| (h as u8, l as u8))
+NEW crates/kf-disp/src/engine.rs|clippy::manual_is_multiple_of|4e9b105dfa2ca340f56d5f1f34d1bf9d62ae68df62921e13290b8acaf4648497: manual implementation of `.is_multiple_of()` ::             if off % 4 != 0 || off >= space {
+NEW crates/kf-disp/src/engine.rs|clippy::type_complexity|45922ccd3c1f4c5f4f496392963fa3d825435f844616e5555dadeb612440f069: very complex type used. Consider factoring parts into `type` definitions ::         let wh = |n: &str| -> Option<(u32, (u8, u8), (u8, u8))> {
+NEW crates/kf-disp/src/inst.rs|clippy::int_plus_one|4ba2e7eb48a6234545dd671b02ce22dc4740defa7ca4f6e1df962760f891e7a1: unnecessary `>= y + 1` or `x - 1 >=` ::         if at <= self.hash_base + self.hash_bytes - 1
+NEW crates/kf-disp/src/inst.rs|clippy::too_many_arguments|e84e182f3ee4e0e2c7b9a0b8918be8ffcc6c141505e0523e464180095d3d8949: this function has too many arguments (9/7) ::     pub(crate) fn bind(         img: &mut [u8],         l: &Layout,         client: u32,         handle: u32,         chn: u32,         inst32: u32,         node: u32,         base: u64,         limit: u64,     ) {
+NEW crates/kf-disp/src/regs.rs|clippy::unnecessary_lazy_evaluations|53fa920c9c7488d265e04ca29df06b532b6a0e92ada13591b0a18dd6bfd0e107: unnecessary closure used with `bool::then` ::                 (h < 32 && l <= h).then(|| (h as u8, l as u8))
+NEW crates/kf-disp/src/scanout.rs|clippy::manual_is_multiple_of|a98cdeb43b05f7802ad6f7cdb006640aaff63c3ea86929b1cd0697108f93dcb9: manual implementation of `.is_multiple_of()` ::     if x0_bytes % 4 != 0 || row_bytes % 4 != 0 {
+NEW crates/kf-qemu/src/display.rs|clippy::chunks_exact_to_as_chunks|119e7c1c75c6d1cdfa67dca1268da1318f77a0b48ed7a313f263adb9aba5db88: using `chunks_exact` with a constant chunk size ::         for px in row.chunks_exact(4) {
+NEW crates/kf-qemu/src/display.rs|clippy::manual_is_multiple_of|181d58a2031485241421319dd94283214e7eb195df235adb1eacfceaad901646: manual implementation of `.is_multiple_of()` ::                     if self.trace && (n <= 8 || n % 50 == 0) {
+NEW crates/kf-qemu/src/display.rs|clippy::manual_is_multiple_of|37145fa805aa57e15c557d394951534e26a8445bdca6c634e20c5267452f5737: manual implementation of `.is_multiple_of()` ::             if t % 2 == 0 {
+NEW crates/kf-qemu/src/display.rs|clippy::needless_range_loop|db7ef70f817b91fb7f360fccdadea6d8537cf0ad324b7abbfa3b5834689817a3: the loop variable `h` is used to index `next_vblank` ::             for h in 0..dp.map.heads as usize {
+NEW crates/kf-qemu/src/display.rs|clippy::type_complexity|84757a57289591b1f2567b1ea0c81b72098242497b67bfbc9059408f8197d5ba: very complex type used. Consider factoring parts into `type` definitions ::     core_head_state: Option<(u64, u64, (u8, u8), u32, u32)>,
+clippy: existing-debt=413 new=14 resolved=4
+CLIPPY_RC=1 2026-09-30T15:07:22+00:00

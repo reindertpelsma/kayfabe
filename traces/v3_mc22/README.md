@@ -62,3 +62,27 @@ worktree of the branch on the box), 14:42 → 15:06 UTC, **`EXIT rc=0`** (`mc22.
 | bare metal, same box | **BARE_SUITE_PASS=30** FAIL=0 CRASH=0 | `mc22_host.log` |
 | fast guest rebuilt | `FG_RC=0` | `mc22_fg.log` |
 | 30-arm thin-guest suite, budget 180 | **FAST_SUITE_PASS=30 FAIL=0 CRASH=0 NOTRUN=0** | `mc22_suite.out` |
+
+### `clippy_213d5e00/` — the CI Clippy debt gate on the code head `213d5e00`
+
+`bash scripts/ci/clippy.sh` (the CI step itself: `cargo clippy --workspace --all-targets --locked`, then
+`debt.py` against `scripts/ci/clippy-debt.json`), rustc/clippy 1.98.1, 45 crates checked in a fresh
+target dir: **`existing-debt=413 new=14 resolved=4`, `CLIPPY_RC=1`**.
+
+⊘ **All 14 NEW sites are the display work's, byte-for-byte the list master's own CI run reported**
+(run 36719275120 on `145cca8c`: `kf-cuda/src/display.rs`, `kf-disp/src/{caps,class,engine,inst,regs,scanout}.rs`,
+`kf-qemu/src/display.rs`). None is in a file this merge or the fast path touched (`wire_mirror.rs`,
+`dbfast.rs`, `device.rs`, `ffi_unsafe.rs` are clean). So the merge neither adds nor clears Clippy
+debt: CI on this branch stays red at the Clippy step exactly as on master, until the display work's 14
+sites are fixed or baselined.
+
+⊘ **What that red step hid, on BOTH parents — measured here by running every later CI gate step
+locally on the merged tree** (`ci.yml` steps 12–22, extracted from the workflow and run as written):
+master's CI (`145cca8c`) stopped at Clippy and `v3-ioeventfd`'s (`ef760b7a`) at `cargo fmt --check`
+(one `dbfast.rs` test hunk — `cargo fmt` in this merge fixes it), so neither ever reached the gates
+after them. On the merged tree all of them pass except one: the **claim-ledger gate**
+(`debt.py claims`) reports `new=16`, every one in a file byte-identical to master (display:
+`kf-disp/src/{engine,engine/tests,model,scanout}.rs`, `kf-rm/src/inittables.rs`,
+`traces/v3_display/m2c_20260930/README.md`; b3 UVM: `docs/design/V3_UVM_B3_IMPLEMENTATION.md`,
+`traces/v3_uvm_b3/README.md`). The unsafe ratchet — the other thing the red step hid — is the one
+this merge corrects (`kf-cuda` 75, `kf-qemu` 44; see above).
