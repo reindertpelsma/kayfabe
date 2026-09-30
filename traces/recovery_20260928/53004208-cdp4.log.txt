@@ -1,0 +1,85 @@
+JOB4_START 2026-09-28T03:12:18+00:00
+CDP_STEP_START 2026-09-28T03:12:18+00:00 rev=0667b784 run=cdpm_0667b784 apps=[cdpSimpleQuicksort] scripts=/root/wt-cdp
+build tree /root/wt-bisect at 0667b784 KF3_MAPLOG: every inline doorbell and every host non-stall wake, on the maplog clock (diagnostic only)
+BUILD rc=0 secs=21
+KF3_BUILT /workspace/bench/kf3-bins/0667b784/qemu-system-x86_64 rev=0667b784 mtime=2026-09-28 03:12:40.278980226 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[apps_matrix 2026-09-28T03:12:40+00:00] START side=guest run=cdpm_0667b784 rev=23eefa42 apps=1
+[apps_matrix 2026-09-28T03:12:40+00:00] kf3 binary: /workspace/bench/kf3-bins/0667b784/qemu-system-x86_64
+[apps_matrix 2026-09-28T03:14:08+00:00] boot ap_cdpm_0667b784_b1 rc=0 apps=[cdpSimpleQuicksort] :: /workspace/bench/run_ap_cdpm_0667b784_b1_probe.log:APPS_HOOK tag=ap_cdpm_0667b784_b1 apps=[cdpSimpleQuicksort] guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled /workspace/bench/run_ap_cdpm_0667b784
+scripts/apps/apps_matrix.sh: line 79: /workspace/apps/results/cdpm_0667b784/guest_isolated.res: No such file or directory
+[apps_matrix 2026-09-28T03:14:08+00:00] GUEST_DONE batched: 1 pass / 1;  isolated re-runs: 0 pass / 0
+== results
+APPRES side=guest app=cdpSimpleQuicksort verdict=PASS rc=0 secs=11 quiet=2 note=- boot=ap_cdpm_0667b784_b1 guest_xid=0 kf3_lines=1181 kf3_refusals=4
+CDP_STEP_EXIT rc=0 2026-09-28T03:14:08+00:00
+CDP_STEP_START 2026-09-28T03:14:08+00:00 rev=56032c46 run=cdpm_56032c46 apps=[cdpSimpleQuicksort] scripts=/root/wt-cdp
+build tree /root/wt-bisect at 56032c46 v3-mapfix: serve MC_SERVICE_INTERRUPTS — its refusal forged completions (clpeak FAULT_PDE)
+BUILD rc=0 secs=21
+KF3_BUILT /workspace/bench/kf3-bins/56032c46/qemu-system-x86_64 rev=56032c46 mtime=2026-09-28 03:14:30.309210731 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[apps_matrix 2026-09-28T03:14:30+00:00] START side=guest run=cdpm_56032c46 rev=23eefa42 apps=1
+[apps_matrix 2026-09-28T03:14:30+00:00] kf3 binary: /workspace/bench/kf3-bins/56032c46/qemu-system-x86_64
+[apps_matrix 2026-09-28T03:16:54+00:00] boot ap_cdpm_56032c46_b1 rc=0 apps=[cdpSimpleQuicksort] :: /workspace/bench/run_ap_cdpm_56032c46_b1_probe.log:APPS_HOOK tag=ap_cdpm_56032c46_b1 apps=[cdpSimpleQuicksort] guest=NVIDIA GeForce RTX 3060, 580.159.04, Disabled /workspace/bench/run_ap_cdpm_56032c46
+scripts/apps/apps_matrix.sh: line 79: /workspace/apps/results/cdpm_56032c46/guest_isolated.res: No such file or directory
+[apps_matrix 2026-09-28T03:16:54+00:00] GUEST_DONE batched: 0 pass / 1;  isolated re-runs: 0 pass / 0
+== results
+APPRES side=guest app=cdpSimpleQuicksort verdict=TIMEOUT rc=124 secs=61 quiet=56 note=- boot=ap_cdpm_56032c46_b1 guest_xid=0 kf3_lines=1251 kf3_refusals=4
+CDP_STEP_EXIT rc=0 2026-09-28T03:16:54+00:00
+CDPB_START 2026-09-28T03:16:54+00:00 bin=/workspace/bench/kf3-bins/0667b784/qemu-system-x86_64 tag=g0667_a runs=[4:spin 3:auto 2:auto 1:auto 4:block]
+boot rc=0
+=== CDPH run mode=4 sched=spin 2026-09-28T03:17:52+00:00
+CDPP mode=4 sched=spin setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.039 t_child=-1.000 t_streamquery_ok=-1.000 t_eventquery_ok=-1.000 (-1 = not within 5 s)
+CDPP sync err=0 took=1.001 s
+CDPP out[0]=0 out[1]=0 memcpy=0
+CDPP RESULT mode=4 sched=spin BAD
+rc=137
+=== CDPH run mode=3 sched=auto 2026-09-28T03:18:44+00:00
+CDPP mode=3 sched=auto setflags=999
+CDPP hostalloc err=999
+rc=2
+=== CDPH run mode=2 sched=auto 2026-09-28T03:19:16+00:00
+CDPP mode=2 sched=auto setflags=999
+CDPP hostalloc err=999
+rc=2
+=== CDPH run mode=1 sched=auto 2026-09-28T03:19:17+00:00
+CDPP mode=1 sched=auto setflags=999
+CDPP hostalloc err=999
+rc=2
+=== CDPH run mode=4 sched=block 2026-09-28T03:19:18+00:00
+CDPP mode=4 sched=block setflags=999
+CDPP hostalloc err=999
+rc=2
+CDPH_DONE
+CDPB_EXIT 2026-09-28T03:19:33+00:00
+CDPB_START 2026-09-28T03:19:33+00:00 bin=/workspace/bench/kf3-bins/56032c46/qemu-system-x86_64 tag=g5603_m3 runs=[3:auto 0:auto]
+boot rc=0
+=== CDPH run mode=3 sched=auto 2026-09-28T03:20:31+00:00
+CDPP mode=3 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.037 t_child=-1.000 t_streamquery_ok=-1.000 t_eventquery_ok=-1.000 (-1 = not within 5 s)
+CDPP WATCHDOG: cudaDeviceSynchronize did not return in 20 s
+rc=137
+=== CDPH run mode=0 sched=auto 2026-09-28T03:21:22+00:00
+CDPP mode=0 sched=auto setflags=999
+CDPP hostalloc err=999
+rc=2
+CDPH_DONE
+CDPB_EXIT 2026-09-28T03:22:19+00:00
+CDPB_START 2026-09-28T03:22:19+00:00 bin=/workspace/bench/kf3-bins/56032c46/qemu-system-x86_64 tag=g5603_m2 runs=[2:auto 0:auto]
+boot rc=0
+=== CDPH run mode=2 sched=auto 2026-09-28T03:23:17+00:00
+CDPP mode=2 sched=auto setflags=0
+CDPP setup sync=0
+CDPP launched err=0
+CDPP flags parent_started=1 child_ran=0 parent_end=1 | t_parent_end=0.051 t_child=-1.000 t_streamquery_ok=-1.000 t_eventquery_ok=-1.000 (-1 = not within 5 s)
+CDPP WATCHDOG: cudaDeviceSynchronize did not return in 20 s
+rc=137
+=== CDPH run mode=0 sched=auto 2026-09-28T03:24:09+00:00
+CDPP mode=0 sched=auto setflags=999
+CDPP hostalloc err=999
+rc=2
+CDPH_DONE
+CDPB_EXIT 2026-09-28T03:25:06+00:00
+JOB4_EXIT 2026-09-28T03:25:06+00:00

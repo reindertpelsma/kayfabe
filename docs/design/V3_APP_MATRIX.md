@@ -28,7 +28,16 @@ mode, one boot; `m20seq` = 100 `vectorAdd` processes in one boot; `all_logs.tgz`
 - **Still failing, the UVM demand-paging four** (host twin RC `except_type=0x1f` = Xid 31 in `m20/triage.txt`):
   `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM` (silent wrong answer, `Error amount =
   1.000000`), `attach_verify` — the owner-decision route (`STATUS_AND_HANDOFF.md` §3.2).
-- ⊘ **REGRESSION: `cdpSimpleQuicksort`** (CUDA dynamic parallelism) **PASSED in R2** and now TIMES OUT
+- **2026-09-28 recovery correction (folded onto master 2026-09-30):** the bisect finished: quicksort
+  passes at `0667b784` and times out at its successor `56032c46` (the MC_SERVICE_INTERRUPTS completion
+  fix). A dedicated CDP probe on the older revision reports successful synchronization **without
+  executing its child** (`child_ran=0`, wrong output, `RESULT ... BAD`); the bare-metal control runs the
+  child correctly. At `56032c46` the parent runs, the child does not, and synchronization hits its
+  watchdog. ⇒ R2's PASS rode on the forged completion; the child has never run in a guest. Do not
+  revert the completion fix to regain the label; diagnose child execution with fresh-boot controls.
+  Logs: `traces/recovery_20260928/53004208-cdp4.log.txt` (+ `-cdp-host.log.txt`, the bare-metal
+  control); probe source in the bundle on branch `recovery/resume-2026-09-28`.
+- ⊘ *Superseded by the correction above:* **REGRESSION: `cdpSimpleQuicksort`** (CUDA dynamic parallelism) **PASSED in R2** and now TIMES OUT
   (60 s, quiet, no guest Xid, no kf3 RC line) — batched, alone and with PM. Host PASS. Being bisected over
   the 75 first-parent master revisions `670bd310..4c48ca0c` (2026-09-28, branch `local/cdpfix` of the
   cloud session; result will be folded in here, above this line).
