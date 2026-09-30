@@ -31,15 +31,17 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
-use kf_cuda::display::DisplayGpu;
-use kf_disp::engine::{Acquire, Effect, Engine, PbLoc, Vocab};
+use kf_cuda::display::{DisplayGpu, Frame, PitchRect};
+use kf_disp::engine::{Acquire, Effect, Engine, PbLoc, ScanVocab, Scanout, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::model::{ChannelKind, Statement, Waker};
 use kf_disp::ports::{EventReg, Ports};
 use kf_disp::regs::Regs;
+use kf_disp::scanout::{CopyPlan, ScanFormats};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_rm::display::SharedDisplayModel;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -378,6 +380,153 @@ pub struct DispCounters {
     pub irqs: AtomicU64,
     /// Vblanks ticked.
     pub vblanks: AtomicU64,
+    /// Scanout copies completed (M2): frames the console can show.
+    pub scanouts: AtomicU64,
+    /// Scanouts refused (a surface the console cannot copy, by name in the log).
+    pub scanout_refused: AtomicU64,
+}
+
+/// Console frame slots: one the console shows, one ready, one the GPU fills.
+const SLOTS: usize = 3;
+/// "No slot" in [`ConsoleShare`]'s state word.
+const NO_SLOT: u32 = 0xF;
+
+fn pack(front: u32, ready: u32) -> u32 {
+    (front & 0xF) | ((ready & 0xF) << 4)
+}
+
+fn unpack(s: u32) -> (u32, u32) {
+    (s & 0xF, (s >> 4) & 0xF)
+}
+
+/// One published frame's description (the slot's frame memory is the worker's).
+#[derive(Debug, Default)]
+struct FrameSlot {
+    addr: AtomicUsize,
+    width: AtomicU32,
+    height: AtomicU32,
+    stride: AtomicU32,
+    format: AtomicU32,
+    serial: AtomicU64,
+}
+
+/// ★ What the console reads: a frame's host address, geometry, format and serial.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FrameView {
+    /// Host address of the first pixel (page-locked memory the worker owns for the process).
+    pub addr: usize,
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// Bytes per row.
+    pub stride: u32,
+    /// [`kf_disp::scanout::PixelFormat`] code.
+    pub format: u32,
+    /// Increases with every frame the worker publishes.
+    pub serial: u64,
+}
+
+/// ★★ M2 — the frames the display worker hands QEMU's console, lock-free (`V3_DISPLAY.md` §4.6).
+///
+/// Triple buffering in one atomic word `(front, ready)`: the console takes `ready` as its new
+/// `front` ([`ConsoleShare::take`]); the worker fills a slot that is NEITHER (there is always one,
+/// three slots minus two), then publishes it as `ready`, dropping an untaken older one. The console
+/// can only move `ready` to `front`, so the slot the GPU is writing is never the one on screen.
+/// ⊘ Frame memory is never freed while the device lives (a screendump may still hold a pixman image
+/// of an old front after the console moved on — a stale read is harmless, a freed page is not).
+#[derive(Debug)]
+pub struct ConsoleShare {
+    state: AtomicU32,
+    slots: [FrameSlot; SLOTS],
+    /// Milliseconds (since the plane's start) of the console's last request — the refresh rate
+    /// follows demand.
+    demand_ms: AtomicU64,
+    epoch: Instant,
+}
+
+impl Default for ConsoleShare {
+    fn default() -> ConsoleShare {
+        ConsoleShare {
+            state: AtomicU32::new(pack(NO_SLOT, NO_SLOT)),
+            slots: core::array::from_fn(|_| FrameSlot::default()),
+            demand_ms: AtomicU64::new(0),
+            epoch: Instant::now(),
+        }
+    }
+}
+
+impl ConsoleShare {
+    /// ★ **Console (QEMU's main thread)**: the newest frame — the ready one becomes the front — or
+    /// `None` before the first. The returned memory stays valid and unwritten until the next call.
+    pub fn take(&self) -> Option<FrameView> {
+        let now = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
+        self.demand_ms.store(now.max(1), Ordering::Relaxed);
+        loop {
+            let s = self.state.load(Ordering::Acquire);
+            let (front, ready) = unpack(s);
+            let show = if ready == NO_SLOT { front } else { ready };
+            if show == NO_SLOT {
+                return None;
+            }
+            if ready != NO_SLOT
+                && self
+                    .state
+                    .compare_exchange(s, pack(ready, NO_SLOT), Ordering::AcqRel, Ordering::Acquire)
+                    .is_err()
+            {
+                continue;
+            }
+            let sl = &self.slots[show as usize];
+            return Some(FrameView {
+                addr: sl.addr.load(Ordering::Acquire),
+                width: sl.width.load(Ordering::Acquire),
+                height: sl.height.load(Ordering::Acquire),
+                stride: sl.stride.load(Ordering::Acquire),
+                format: sl.format.load(Ordering::Acquire),
+                serial: sl.serial.load(Ordering::Acquire),
+            });
+        }
+    }
+
+    /// **Worker**: a slot neither shown nor ready — the next copy's target.
+    fn free_slot(&self) -> usize {
+        let (front, ready) = unpack(self.state.load(Ordering::Acquire));
+        (0..SLOTS as u32)
+            .find(|i| *i != front && *i != ready)
+            .unwrap_or(0) as usize
+    }
+
+    /// **Worker**: describe slot `i`'s finished frame, then make it the ready one.
+    fn publish(&self, i: usize, f: FrameView) {
+        let sl = &self.slots[i];
+        sl.addr.store(f.addr, Ordering::Release);
+        sl.width.store(f.width, Ordering::Release);
+        sl.height.store(f.height, Ordering::Release);
+        sl.stride.store(f.stride, Ordering::Release);
+        sl.format.store(f.format, Ordering::Release);
+        sl.serial.store(f.serial, Ordering::Release);
+        let mut s = self.state.load(Ordering::Acquire);
+        loop {
+            let (front, _) = unpack(s);
+            match self.state.compare_exchange(
+                s,
+                pack(front, i as u32),
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return,
+                Err(now) => s = now,
+            }
+        }
+    }
+
+    /// Did the console ask for a frame within the last `ms` milliseconds?
+    fn wanted_within(&self, ms: u64) -> bool {
+        let last = self.demand_ms.load(Ordering::Relaxed);
+        let now = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
+        last != 0 && now.saturating_sub(last) <= ms
+    }
 }
 
 /// What the worker takes at its start.
@@ -404,6 +553,13 @@ pub struct DisplayPlane {
     cursor: [CursorPorts; MAX_HEADS],
     /// Counters.
     pub counters: DispCounters,
+    /// ★ M2: the frames QEMU's console shows.
+    pub console: ConsoleShare,
+    /// The window-class methods a scanout reads (`None`: the family's windows name surfaces by
+    /// address — no console yet, M5).
+    scan: Option<ScanVocab>,
+    /// The window formats the console can show.
+    formats: ScanFormats,
 }
 
 impl std::fmt::Debug for DisplayPlane {
@@ -471,6 +627,8 @@ impl DisplayPlane {
         gpu.import_store(store_fd, store_bytes)
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
         let engine = Engine::new(vocab, row.heads, row.windows);
+        let scan = ScanVocab::resolve(t, classes.window);
+        let formats = ScanFormats::resolve(t, classes.window);
         Ok(DisplayPlane {
             model,
             ports,
@@ -485,6 +643,9 @@ impl DisplayPlane {
             })),
             cursor: core::array::from_fn(|_| CursorPorts::default()),
             counters: DispCounters::default(),
+            console: ConsoleShare::default(),
+            scan,
+            formats,
         })
     }
 
@@ -795,6 +956,17 @@ impl Device {
             eprintln!("kf3: display: epoll watch refused — the display plane is DOWN");
             return;
         }
+        // ★ M2: the scanout copies' completion (`cuLaunchHostFunc` after each copy) wakes the worker
+        if let Some(g) = &gpu
+            && poller
+                .watch(std::os::fd::AsFd::as_fd(g.completion_fd()), 2)
+                .is_err()
+        {
+            eprintln!(
+                "kf3: display: epoll watch of the scanout completion refused — the display plane is DOWN"
+            );
+            return;
+        }
         let trace = std::env::var("KF3_DISPLAY_TRACE").is_ok_and(|v| v == "1");
         engine.trace = trace;
         eprintln!(
@@ -813,6 +985,8 @@ impl Device {
             refusals_logged: 0,
         };
         let mut next_vblank: [Option<(Instant, Duration)>; MAX_HEADS] = [None; MAX_HEADS];
+        let mut scan = ScanState::default();
+        let mut queue: VecDeque<Queued> = VecDeque::new();
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
@@ -825,6 +999,9 @@ impl Device {
             }
             if engine.acquire_pending() {
                 deadline = deadline.min(now + Duration::from_millis(2));
+            }
+            if let Some(t) = scan.refresh_due(dp) {
+                deadline = deadline.min(t);
             }
             let ms = u32::try_from(deadline.saturating_duration_since(now).as_millis())
                 .unwrap_or(50)
@@ -985,12 +1162,77 @@ impl Device {
                 effects.extend(s.effects);
                 gets.extend(s.gets);
             }
-            // 6. effects, IN ORDER — each completion after the state it reports
+            // 6. ★ M2: the scanout. A flip of the window the console shows needs a copy of its NEW
+            // surface, and every completion from that flip on waits for that copy to COMPLETE (the
+            // flip-complete notifier and the release that frees the old surface, then GET): the
+            // queue below keeps effect order and holds each item until its copy is done.
+            let console = console_scanout(&engine, dp);
+            scan.active = console.is_some();
             for e in effects {
+                if let Effect::Latched { window } = &e
+                    && console.is_some_and(|c| c.window == *window)
+                {
+                    scan.barrier = scan.started + 1;
+                    scan.want = true;
+                }
+                queue.push_back(Queued {
+                    need: scan.barrier,
+                    item: Item::Effect(e),
+                });
+            }
+            for (chn, life, get) in gets {
+                queue.push_back(Queued {
+                    need: scan.barrier,
+                    item: Item::Get(chn, life, get),
+                });
+            }
+            if io
+                .gpu
+                .as_ref()
+                .is_some_and(|g| g.completion_fd().drain() > 0)
+            {
+                scan.completed(dp);
+            }
+            scan.give_up_if_stuck(dp);
+            if console.is_some() && scan.refresh_due(dp).is_some_and(|t| t <= Instant::now()) {
+                scan.want = true;
+            }
+            if scan.want && scan.inflight.is_none() {
+                scan.start(&mut io, console);
+            }
+            // 7. completions, IN ORDER — each after the state it reports and the copy it follows
+            while queue.front().is_some_and(|q| q.need <= scan.done) {
+                let Some(Queued { item, .. }) = queue.pop_front() else {
+                    break;
+                };
+                let e = match item {
+                    Item::Effect(e) => e,
+                    Item::Get(chn, life, get) => {
+                        if published_get[chn as usize] == get && dp.ports.get(chn) == get {
+                            continue;
+                        }
+                        if dp.ports.publish_get(chn, life, get) {
+                            published_get[chn as usize] = get;
+                            if let Some((kind, inst)) = chan_of(chn) {
+                                store(dp.map.user_base(kind, inst) + dp.map.get, get);
+                                self.display_chan_status(
+                                    kind,
+                                    inst,
+                                    Some(engine_idle(&engine, dp, chn)),
+                                );
+                            }
+                        }
+                        continue;
+                    }
+                };
                 match e {
                     Effect::CoreArmed(words) => {
                         for (m, v) in words {
                             store(dp.map.core_armed + u64::from(m), v);
+                        }
+                        // the display each head lights (`SYSTEM_GET_ACTIVE`), from the state just armed
+                        for (h, sor) in engine.lit_sors().into_iter().enumerate() {
+                            dp.ports.set_lit_sor(h, sor);
                         }
                     }
                     Effect::Notify {
@@ -1113,19 +1355,6 @@ impl Device {
             }
             dp.counters.updates.store(engine.updates, Ordering::Relaxed);
             dp.counters.methods.store(engine.methods, Ordering::Relaxed);
-            // 7. GETs — after every effect of the methods before them
-            for (chn, life, get) in gets {
-                if published_get[chn as usize] == get && dp.ports.get(chn) == get {
-                    continue;
-                }
-                if dp.ports.publish_get(chn, life, get) {
-                    published_get[chn as usize] = get;
-                    if let Some((kind, inst)) = chan_of(chn) {
-                        store(dp.map.user_base(kind, inst) + dp.map.get, get);
-                        self.display_chan_status(kind, inst, Some(engine_idle(&engine, dp, chn)));
-                    }
-                }
-            }
             // 8. the display interrupt — after the registers it announces
             if raised {
                 dp.publish_events(&store);
@@ -1135,6 +1364,10 @@ impl Device {
                 }
             }
         }
+        // ⊘ QEMU's console may still point at a frame after the worker stops (its main loop refreshes
+        // until it ends): the frames and their context stay mapped until the process exits.
+        std::mem::forget(scan);
+        std::mem::forget(io.gpu.take());
     }
 
     /// Publish a channel's CHNCTL allocation bit and CHNSTATUS state: `Some(idle)` allocated, `None`
@@ -1180,6 +1413,197 @@ fn chan_of(chn: u32) -> Option<(ChannelKind, u32)> {
 
 fn engine_idle(engine: &Engine, dp: &DisplayPlane, chn: u32) -> bool {
     !engine.waiting(chn) && dp.ports.idle(chn)
+}
+
+/// ★ M2: what the console shows — the lowest running head's scanned-out window, if any.
+fn console_scanout(engine: &Engine, dp: &DisplayPlane) -> Option<Scanout> {
+    let sv = dp.scan.as_ref()?;
+    engine
+        .heads_armed()
+        .iter()
+        .filter(|m| m.period_ns > 0)
+        .find_map(|m| engine.scanout(sv, m.head))
+}
+
+/// An effect or a GET on the worker's completion queue.
+enum Item {
+    Effect(Effect),
+    Get(u32, u32, u32),
+}
+
+/// A queued completion: `item`, held until scanout copy number `need` completed.
+struct Queued {
+    need: u64,
+    item: Item,
+}
+
+/// How long a scanout copy may take before the flips behind it stop waiting for it.
+const STUCK_COPY: Duration = Duration::from_secs(2);
+
+/// A frame the console shows up to 1080p fits here; a larger mode grows the slot once, to the max.
+const FRAME_SMALL: usize = 1920 * 1080 * 4;
+/// The largest frame ([`kf_disp::scanout::MAX_PIXELS`] at 4 bytes).
+const FRAME_MAX: usize = kf_disp::scanout::MAX_PIXELS as usize * 4;
+
+/// ★ M2 — the worker's scanout copies (`V3_DISPLAY.md` §4.6). One copy in flight at a time, on the
+/// plane's own stream; its completion is the `cuLaunchHostFunc` signal queued after it.
+#[derive(Default)]
+struct ScanState {
+    /// Copies started and completed; a flip of the console window makes every completion after it
+    /// wait for copy `started + 1` — the first one that starts after the flip latched.
+    started: u64,
+    done: u64,
+    /// The copy number items queued now wait for.
+    barrier: u64,
+    /// A copy is wanted (a flip of the console window, or the refresh clock).
+    want: bool,
+    /// The console showed a surface at the last pass (the refresh clock runs only then).
+    active: bool,
+    /// The copy in flight: its number, slot, plan and start.
+    inflight: Option<(u64, usize, CopyPlan, Instant)>,
+    /// Page-locked frames per slot — grown, never freed while the device lives ([`ConsoleShare`]).
+    frames: [Option<Frame>; SLOTS],
+    retired: Vec<Frame>,
+    /// When the last copy started.
+    last: Option<Instant>,
+    serial: u64,
+    refusals_logged: u32,
+}
+
+impl ScanState {
+    /// When the next refresh copy is due — front-buffer rendering (fbcon, an X server drawing into
+    /// its scanout surface) changes pixels with no flip: 30 Hz while the console is watched, 4 Hz
+    /// otherwise (a screendump still sees a recent frame). `None` while a copy is in flight or
+    /// nothing is shown.
+    fn refresh_due(&self, dp: &DisplayPlane) -> Option<Instant> {
+        if !self.active || self.inflight.is_some() {
+            return None;
+        }
+        let every = if dp.console.wanted_within(2000) {
+            Duration::from_millis(33)
+        } else {
+            Duration::from_millis(250)
+        };
+        Some(self.last.map_or_else(Instant::now, |t| t + every))
+    }
+
+    /// The copy in flight completed: publish its frame to the console.
+    fn completed(&mut self, dp: &DisplayPlane) {
+        let Some((n, slot, plan, _)) = self.inflight.take() else {
+            return;
+        };
+        self.done = n;
+        if let Some(f) = &self.frames[slot] {
+            self.serial += 1;
+            dp.console.publish(
+                slot,
+                FrameView {
+                    addr: f.addr(),
+                    width: plan.width,
+                    height: plan.height,
+                    stride: u32::try_from(plan.row_bytes).unwrap_or(0),
+                    format: plan.format as u32,
+                    serial: self.serial,
+                },
+            );
+            dp.counters.scanouts.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// ⊘ A copy whose completion never came (a CUDA fault loses the host signal): after
+    /// [`STUCK_COPY`] the flips behind it complete anyway — a display that stops is worse than a
+    /// console that misses a frame. The slot is not published.
+    fn give_up_if_stuck(&mut self, dp: &DisplayPlane) {
+        if let Some((n, _, _, t)) = self.inflight
+            && t.elapsed() > STUCK_COPY
+        {
+            self.inflight = None;
+            self.done = n;
+            self.refuse(dp, &format!("copy {n} did not complete in {STUCK_COPY:?}"));
+        }
+    }
+
+    fn refuse(&mut self, dp: &DisplayPlane, why: &str) {
+        dp.counters.scanout_refused.fetch_add(1, Ordering::Relaxed);
+        if self.refusals_logged < 16 {
+            self.refusals_logged += 1;
+            eprintln!("kf3: display: scanout REFUSED {why}");
+        }
+    }
+
+    /// ★ Start the next copy of what the console shows. A copy that cannot be made (nothing shown,
+    /// a surface refused by name) completes at once: the flip it follows still completes — the
+    /// engine latched it; only the console keeps its previous frame.
+    fn start(&mut self, io: &mut Io<'_>, console: Option<Scanout>) {
+        self.want = false;
+        self.last = Some(Instant::now());
+        self.started += 1;
+        let n = self.started;
+        let dp = io.dp;
+        let Some(so) = console else {
+            self.done = n;
+            return;
+        };
+        let dma = match io.resolve(so.client, so.handle, so.chn) {
+            Ok(d) => d,
+            Err(e) => {
+                self.refuse(dp, &e);
+                self.done = n;
+                return;
+            }
+        };
+        let plan = match kf_disp::scanout::plan(&so, &dma, &dp.formats) {
+            Ok(p) => p,
+            Err(r) => {
+                self.refuse(dp, &r.0);
+                self.done = n;
+                return;
+            }
+        };
+        let Some(gpu) = io.gpu.as_ref() else {
+            self.done = n;
+            return;
+        };
+        let slot = dp.console.free_slot();
+        let need = usize::try_from(plan.frame_bytes()).unwrap_or(usize::MAX);
+        if self.frames[slot].as_ref().is_none_or(|f| f.len() < need) {
+            let cap = if need <= FRAME_SMALL {
+                FRAME_SMALL
+            } else {
+                FRAME_MAX
+            };
+            match gpu.frame(cap) {
+                Ok(f) => {
+                    if let Some(old) = self.frames[slot].replace(f) {
+                        self.retired.push(old);
+                    }
+                }
+                Err(e) => {
+                    self.refuse(dp, &format!("a {cap:#x}-byte console frame: {e}"));
+                    self.done = n;
+                    return;
+                }
+            }
+        }
+        let Some(frame) = self.frames[slot].as_ref() else {
+            self.done = n;
+            return;
+        };
+        let r = PitchRect {
+            src: plan.src,
+            src_pitch: plan.src_pitch,
+            row_bytes: plan.row_bytes,
+            rows: plan.rows,
+            dst_pitch: plan.row_bytes,
+        };
+        match gpu.scanout_pitch(r, frame) {
+            Ok(()) => self.inflight = Some((n, slot, plan, Instant::now())),
+            Err(e) => {
+                self.refuse(dp, &format!("the copy of {r:?}: {e}"));
+                self.done = n;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1247,5 +1671,57 @@ mod tests {
         assert_eq!(m.classify(0x0061_1C30), DispWrite::ReadOnly);
         assert_eq!(m.classify(0x0061_1EC0), DispWrite::ReadOnly);
         assert_eq!(m.classify(0x0061_2078), DispWrite::Plain);
+    }
+
+    fn frame(addr: usize, serial: u64) -> FrameView {
+        FrameView {
+            addr,
+            width: 1920,
+            height: 1080,
+            stride: 7680,
+            format: 1,
+            serial,
+        }
+    }
+
+    /// ★ M2 triple buffering: the console only ever takes the newest READY frame; the worker's next
+    /// target is never the one shown nor the one ready; an untaken frame is replaced, not queued.
+    #[test]
+    fn the_console_takes_the_newest_frame_and_the_gpu_never_writes_the_shown_one() {
+        let c = ConsoleShare::default();
+        assert_eq!(c.take(), None, "no frame before the first copy");
+        let a = c.free_slot();
+        c.publish(a, frame(0x1000, 1));
+        let shown = c.take().unwrap();
+        assert_eq!((shown.addr, shown.serial), (0x1000, 1));
+        assert_eq!(
+            c.take().unwrap().serial,
+            1,
+            "nothing new: the same front again"
+        );
+        // two copies complete before the console asks: the second replaces the first
+        let b = c.free_slot();
+        assert_ne!(b, a, "never the shown slot");
+        c.publish(b, frame(0x2000, 2));
+        let d = c.free_slot();
+        assert!(d != a && d != b, "neither shown nor ready");
+        c.publish(d, frame(0x3000, 3));
+        let e = c.free_slot();
+        assert_ne!(e, a, "the shown slot is still the console's");
+        assert_ne!(e, d, "the ready slot is not a target");
+        assert_eq!(
+            c.take().unwrap().serial,
+            3,
+            "the newest, never the stale one"
+        );
+        for _ in 0..100 {
+            let (front, ready) = unpack(c.state.load(Ordering::Acquire));
+            let t = c.free_slot() as u32;
+            assert!(t != front && t != ready);
+            c.publish(t as usize, frame(0x4000, 4));
+            if t % 2 == 0 {
+                c.take();
+            }
+        }
     }
 }

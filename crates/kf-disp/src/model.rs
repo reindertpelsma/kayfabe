@@ -612,8 +612,16 @@ impl DisplayModel {
                 Ok(p.buf)
             }
             "active" => {
+                // ★ the connector on the SOR the head's ARMED state drives while its raster runs (the
+                // worker publishes it, `Engine::lit_sors`); 0 when the head lights nothing — as at boot
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS", params)?;
-                p.set("displayId", 0); // nothing is lit at boot
+                let head = p.get("head").unwrap_or(u64::MAX);
+                let id = usize::try_from(head)
+                    .ok()
+                    .and_then(|h| self.ports.lit_sor(h))
+                    .and_then(|sor| self.connectors.iter().find(|c| c.or_index == sor))
+                    .map_or(0, |c| c.display_id);
+                p.set("displayId", u64::from(id));
                 Ok(p.buf)
             }
             "boot_displays" => {
@@ -1019,6 +1027,33 @@ mod tests {
             m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q.buf),
             Some(Err(NV_ERR_INVALID_ARGUMENT))
         );
+    }
+
+    /// ★ `SYSTEM_GET_ACTIVE` reports what the engine's ARMED state lights (the worker publishes it
+    /// into the shared ports): nothing at boot, the connector on the head's SOR while it runs, and
+    /// nothing again once the head goes idle. A head the engine does not have answers 0.
+    #[test]
+    fn get_active_reports_the_display_the_armed_state_lights() {
+        let mut m = model();
+        let s = "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS";
+        let ask = |m: &mut DisplayModel, head: u64| {
+            let mut q = Params::new(m.layouts(), s, &vec![0; size(m, s)]).unwrap();
+            q.set("head", head);
+            let r = m
+                .control(cmd(m, "NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE"), &q.buf)
+                .unwrap()
+                .unwrap();
+            get(m, s, &r, "displayId")
+        };
+        assert_eq!(ask(&mut m, 3), 0, "nothing is lit at boot");
+        m.ports.set_lit_sor(3, Some(0));
+        assert_eq!(ask(&mut m, 3), 0x100, "head 3 drives SOR 0 -> connector 0");
+        assert_eq!(ask(&mut m, 0), 0, "head 0 lights nothing");
+        assert_eq!(ask(&mut m, 99), 0, "a head we do not have");
+        m.ports.set_lit_sor(3, Some(2));
+        assert_eq!(ask(&mut m, 3), 0, "SOR 2 has no connector");
+        m.ports.set_lit_sor(3, None);
+        assert_eq!(ask(&mut m, 3), 0, "idle again");
     }
 
     /// A custom EDID shadows the monitor's until cleared (NVKMS clears on every read,

@@ -52,6 +52,9 @@ pub struct Ports {
     pub head_timing_en: [AtomicU32; MAX_HEADS],
     /// Per head: frames scanned out (`NV_PDISP_RG_DPCA(h)` FRM_CNT, and the LOADV counter).
     pub frames: [AtomicU32; MAX_HEADS],
+    /// Per head: the SOR it lights, plus one (0 = none) — the worker publishes it from the ARMED core
+    /// state, the model's `SYSTEM_GET_ACTIVE` answers from it.
+    lit_sor: [AtomicU32; MAX_HEADS],
     /// PUT writes posted by vCPUs (boot-log counter).
     pub puts_posted: AtomicU64,
     /// W1C writes applied by vCPUs (boot-log counter).
@@ -68,6 +71,7 @@ impl Default for Ports {
             head_timing: core::array::from_fn(|_| AtomicU32::new(0)),
             head_timing_en: core::array::from_fn(|_| AtomicU32::new(0)),
             frames: core::array::from_fn(|_| AtomicU32::new(0)),
+            lit_sor: core::array::from_fn(|_| AtomicU32::new(0)),
             puts_posted: AtomicU64::new(0),
             w1c_writes: AtomicU64::new(0),
         }
@@ -75,6 +79,23 @@ impl Default for Ports {
 }
 
 impl Ports {
+    /// ★ **Worker**: publish the SOR head `h` lights (`None` = no display).
+    pub fn set_lit_sor(&self, h: usize, sor: Option<u32>) {
+        if let Some(a) = self.lit_sor.get(h) {
+            a.store(sor.map_or(0, |s| s.saturating_add(1)), Ordering::Release);
+        }
+    }
+
+    /// The SOR head `h` lights, if any (`SYSTEM_GET_ACTIVE`).
+    #[must_use]
+    pub fn lit_sor(&self, h: usize) -> Option<u32> {
+        self.lit_sor
+            .get(h)
+            .map(|a| a.load(Ordering::Acquire))
+            .filter(|v| *v != 0)
+            .map(|v| v - 1)
+    }
+
     fn chan(&self, chn: u32) -> Option<&ChanPort> {
         self.chans.get(chn as usize)
     }

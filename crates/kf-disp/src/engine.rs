@@ -189,6 +189,8 @@ pub struct Vocab {
     c_raster_size: (u32, u32),
     c_raster_w: (u8, u8),
     c_raster_h: (u8, u8),
+    c_sor_control: (u32, u32),
+    c_sor_owner: (u8, u8),
     c_ilk_cursor0: (u8, u8),
     // notifier control fields (core and window share the layout; the window has no NOTIFY field)
     n_mode: (u8, u8),
@@ -292,6 +294,8 @@ impl Vocab {
             c_raster_size: arr(core, "HEAD_SET_RASTER_SIZE")?,
             c_raster_w: f(core, "HEAD_SET_RASTER_SIZE_WIDTH")?,
             c_raster_h: f(core, "HEAD_SET_RASTER_SIZE_HEIGHT")?,
+            c_sor_control: arr(core, "SOR_SET_CONTROL")?,
+            c_sor_owner: f(core, "SOR_SET_CONTROL_OWNER_MASK")?,
             c_ilk_cursor0: fa0(core, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CURSOR")?,
             n_mode: f(core, "SET_NOTIFIER_CONTROL_MODE")?,
             n_mode_awaken: v(core, "SET_NOTIFIER_CONTROL_MODE_WRITE_AWAKEN")?,
@@ -1102,6 +1106,152 @@ impl Engine {
             .get(chn as usize)
             .and_then(|c| c.as_ref())
             .is_some_and(|c| c.stage != Stage::Running)
+    }
+}
+
+impl Engine {
+    /// ★ Per head, the SOR it lights: the lowest SOR whose ARMED `SOR_SET_CONTROL.OWNER_MASK` names
+    /// the head, while the head's raster runs — what `NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE` reports
+    /// (as the connector on that SOR). `None` for an idle head or one no SOR drives.
+    #[must_use]
+    pub fn lit_sors(&self) -> Vec<Option<u32>> {
+        let v = &self.vocab;
+        let heads = self.heads_armed();
+        (0..self.heads)
+            .map(|h| {
+                let core = self.chans[0].as_ref()?;
+                if !heads.iter().any(|m| m.head == h && m.period_ns > 0) {
+                    return None;
+                }
+                (0..self.heads).find(|s| {
+                    let ctl = core.armed(v.c_sor_control.0 + s * v.c_sor_control.1);
+                    h < 8 && fld(ctl, v.c_sor_owner) & (1 << h) != 0
+                })
+            })
+            .collect()
+    }
+}
+
+/// ★ What a head scans out: the first enabled window it owns, read from the ARMED state (M2's scanout
+/// copy source). Raw class values — the plane resolves the context DMA and bounds every byte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Scanout {
+    /// Window index.
+    pub window: u32,
+    /// The owning head.
+    pub head: u32,
+    /// The window's channel number and client (the context-DMA hash key).
+    pub chn: u32,
+    /// Client.
+    pub client: u32,
+    /// The ISO context DMA handle (`SET_CONTEXT_DMA_ISO(0)`).
+    pub handle: u32,
+    /// Byte offset into it (`SET_OFFSET(0)` is in 256-byte units, `nvCtxDmaOffsetFromBytes`).
+    pub offset: u64,
+    /// The source rectangle (`SET_SIZE_IN`).
+    pub width: u32,
+    /// Height of the source rectangle.
+    pub height: u32,
+    /// Its origin in the surface (`SET_POINT_IN`).
+    pub x: u32,
+    /// Origin row.
+    pub y: u32,
+    /// The surface's own size (`SET_SIZE`).
+    pub surface_width: u32,
+    /// The surface's height.
+    pub surface_height: u32,
+    /// `SET_PLANAR_STORAGE(0).PITCH`: 64-byte units (pitch) or blocks (block-linear) — the
+    /// context DMA's KIND decides which (`nvkms-evo3.c:4065-4085`).
+    pub pitch: u32,
+    /// `SET_STORAGE.BLOCK_HEIGHT` (log2 GOBs per block, block-linear only).
+    pub block_height_log2: u32,
+    /// `SET_PARAMS.FORMAT`.
+    pub format: u32,
+}
+
+/// The window-class methods a scanout reads — resolved from the derived table; `None` for a family
+/// whose windows name surfaces by address (GB20x `CA7E`, M5).
+#[derive(Debug, Clone, Copy)]
+pub struct ScanVocab {
+    iso0: u32,
+    offset0: u32,
+    size: (u32, (u8, u8), (u8, u8)),
+    size_in: (u32, (u8, u8), (u8, u8)),
+    point_in: (u32, (u8, u8), (u8, u8)),
+    pitch0: (u32, (u8, u8)),
+    params: (u32, (u8, u8)),
+    storage: (u32, (u8, u8)),
+}
+
+impl ScanVocab {
+    /// Resolve for window class `win`.
+    #[must_use]
+    pub fn resolve(t: &ClassTable, win: u32) -> Option<ScanVocab> {
+        let wh = |n: &str| -> Option<(u32, (u8, u8), (u8, u8))> {
+            Some((
+                t.v(win, n)?,
+                t.f(win, &format!("{n}_WIDTH"))?,
+                t.f(win, &format!("{n}_HEIGHT"))?,
+            ))
+        };
+        Some(ScanVocab {
+            iso0: t.a(win, "SET_CONTEXT_DMA_ISO", 0)?,
+            offset0: t.a(win, "SET_OFFSET", 0)?,
+            size: wh("SET_SIZE")?,
+            size_in: wh("SET_SIZE_IN")?,
+            point_in: (
+                t.a(win, "SET_POINT_IN", 0)?,
+                t.f(win, "SET_POINT_IN_X")?,
+                t.f(win, "SET_POINT_IN_Y")?,
+            ),
+            pitch0: (
+                t.a(win, "SET_PLANAR_STORAGE", 0)?,
+                t.f(win, "SET_PLANAR_STORAGE_PITCH")?,
+            ),
+            params: (t.v(win, "SET_PARAMS")?, t.f(win, "SET_PARAMS_FORMAT")?),
+            storage: (
+                t.v(win, "SET_STORAGE")?,
+                t.f(win, "SET_STORAGE_BLOCK_HEIGHT")?,
+            ),
+        })
+    }
+}
+
+impl Engine {
+    /// ★ What head `head` scans out now (its lowest enabled window), or `None`.
+    #[must_use]
+    pub fn scanout(&self, sv: &ScanVocab, head: u32) -> Option<Scanout> {
+        (0..self.windows).find_map(|w| {
+            if self.owner_head(w) != Some(head) {
+                return None;
+            }
+            let chn = ChannelKind::Window.channel_number(w);
+            let c = self.chans.get(chn as usize)?.as_ref()?;
+            let handle = c.armed(sv.iso0);
+            if handle == 0 {
+                return None;
+            }
+            let (sm, sw, sh) = sv.size;
+            let (im, iw, ih) = sv.size_in;
+            let (pm, px, py) = sv.point_in;
+            Some(Scanout {
+                window: w,
+                head,
+                chn,
+                client: c.client,
+                handle,
+                offset: u64::from(c.armed(sv.offset0)) << 8,
+                width: fld(c.armed(im), iw),
+                height: fld(c.armed(im), ih),
+                x: fld(c.armed(pm), px),
+                y: fld(c.armed(pm), py),
+                surface_width: fld(c.armed(sm), sw),
+                surface_height: fld(c.armed(sm), sh),
+                pitch: fld(c.armed(sv.pitch0.0), sv.pitch0.1),
+                block_height_log2: fld(c.armed(sv.storage.0), sv.storage.1),
+                format: fld(c.armed(sv.params.0), sv.params.1),
+            })
+        })
     }
 }
 

@@ -21,8 +21,14 @@ export PRE_POWEROFF_GUEST_CMD=${PRE_POWEROFF_GUEST_CMD:-"sudo sync; echo s | sud
 exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
 echo "DISPLAY_LANE_START tag=$TAG rev=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)"
 bash "$REPO/scripts/bench/boot_capture.sh" "$TAG" -- -vga none -vnc "${DISPLAY_VNC:-127.0.0.1:0}"
-# the whole guest dmesg at the end of the boot — every display error, not only the hook's slice
-[ -s "/workspace/bench/run_${TAG}_dmesg_after.log" ] && grep -c 'waiting for GPU progress' "/workspace/bench/run_${TAG}_dmesg_after.log" | sed 's/^/DISPLAY_GPU_PROGRESS_ERRORS_AFTER=/'
+# ⊘ boot_capture's status, taken HERE: `[measured m1b, m1c]` it used to be read after the grep below,
+# whose `-c` exits 1 when it counts ZERO errors — so a clean boot reported `DISPLAY_LANE_EXIT rc=1`.
 rc=$?
+# the whole guest dmesg at the end of the boot — every display error, not only the hook's slice
+if [ -s "/workspace/bench/run_${TAG}_dmesg_after.log" ]; then
+    echo "DISPLAY_GPU_PROGRESS_ERRORS_AFTER=$(grep -c 'waiting for GPU progress' "/workspace/bench/run_${TAG}_dmesg_after.log")"
+    echo "DISPLAY_FLIP_EVENT_TIMEOUTS_AFTER=$(grep -c 'Flip event timeout' "/workspace/bench/run_${TAG}_dmesg_after.log")"
+    echo "DISPLAY_DRM_WARNS_AFTER=$(grep -c 'cut here' "/workspace/bench/run_${TAG}_dmesg_after.log")"
+fi
 grep -a '^DISPLAY_' "/workspace/bench/run_${TAG}_probe.log" 2>/dev/null
 echo "DISPLAY_LANE_EXIT rc=$rc $(date -Is)"

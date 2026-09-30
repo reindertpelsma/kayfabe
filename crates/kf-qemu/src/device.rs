@@ -1893,7 +1893,7 @@ impl Device {
         ) + &self.display.map_or_else(String::new, |dp| {
             let d = &dp.counters;
             format!(
-                " disp[writes={} puts={} methods={} updates={} notifies={} releases={} vblanks={} irqs={} exceptions={} refused={}]",
+                " disp[writes={} puts={} methods={} updates={} notifies={} releases={} vblanks={} irqs={} exceptions={} refused={} scanouts={} scanout_refused={}]",
                 d.writes.load(o),
                 dp.ports.puts_posted.load(o),
                 d.methods.load(o),
@@ -1903,7 +1903,9 @@ impl Device {
                 d.vblanks.load(o),
                 d.irqs.load(o),
                 d.exceptions.load(o),
-                d.refused.load(o)
+                d.refused.load(o),
+                d.scanouts.load(o),
+                d.scanout_refused.load(o)
             )
         });
         format!(

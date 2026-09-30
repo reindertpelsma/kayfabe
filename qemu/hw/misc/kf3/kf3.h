@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KF3_ABI 8
+#define KF3_ABI 9
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -18,6 +18,14 @@ typedef struct Kf3Region {
     uint8_t bar, how, pad[6];   /* how: 0 plain RAM, 1 shadow+write trap, 2 host passthrough, 3 hole */
     uint64_t base, len;
 } Kf3Region;
+
+/* ★ ABI 9: one frame of the virtual display (display=on). `data` stays valid and unwritten until
+ * the next kf3_display_frame call. format: 1 xrgb8888, 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10. */
+typedef struct Kf3Frame {
+    uint8_t* data;   /* (spelled for the wire-mirror census) */
+    uint32_t width, height, stride, format;
+    uint64_t serial;
+} Kf3Frame;
 
 uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md). */
@@ -46,5 +54,7 @@ int32_t kf3_bar1_follows_guest(void *h);
 int32_t kf3_set_bar1_overlay(void *h, Kf3OverlayFn f, void *opaque, uint32_t slots);
 void kf3_bar1_overlay_done(void *h, uint64_t seq, int32_t rc);
 void kf3_bar1_usermode_write(void *h, uint64_t vf_rel, uint64_t val, uint32_t width);
+/* ★ ABI 9: the newest display frame, for the console's gfx_update (main thread); -1 = none yet. */
+int32_t kf3_display_frame(void *h, Kf3Frame *out);
 void kf3_unrealize(void *h);
 #endif

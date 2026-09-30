@@ -572,3 +572,83 @@ fn the_flip_event_is_raised_only_for_a_window_that_was_active() {
         s.effects
     );
 }
+
+/// ★ M2: what a head scans out is its lowest enabled window's ARMED surface — the fields NVKMS's
+/// `EvoFlipC3Common` programs (`nvkms-evo3.c:3990-4085`), in their raw units.
+#[test]
+fn a_head_scans_out_its_lowest_enabled_window() {
+    let mut e = engine();
+    let sv = ScanVocab::resolve(t(), WIN).expect("GA10x window surfaces are context DMAs");
+    assert!(
+        ScanVocab::resolve(t(), 0xCA7E).is_none(),
+        "GB20x names surfaces by address (M5)"
+    );
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 2, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 3, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 1, 2);
+    c.m(ma(CORE, "WINDOW_SET_CONTROL", 3), 1)
+        .m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert_eq!(e.scanout(&sv, 1), None, "no window scans yet");
+    let mut w = Ring::new();
+    w.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0xabc);
+    w.m(ma(WIN, "SET_OFFSET", 0), 0x100);
+    w.m(m(WIN, "SET_SIZE"), (1080 << 16) | 1920);
+    w.m(m(WIN, "SET_SIZE_IN"), (1080 << 16) | 1920);
+    w.m(ma(WIN, "SET_PLANAR_STORAGE", 0), 7680 >> 6);
+    w.m(m(WIN, "SET_PARAMS"), m(WIN, "SET_PARAMS_FORMAT_X8R8G8B8"));
+    w.m(
+        m(WIN, "SET_PRESENT_CONTROL"),
+        put(0, fl(WIN, "SET_PRESENT_CONTROL_BEGIN_MODE"), 1),
+    );
+    w.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(4, &w.bytes(), w.put(), &mut all_ok);
+    assert!(
+        s.effects
+            .iter()
+            .any(|x| matches!(x, Effect::Latched { window: 3 })),
+        "an immediate flip latches at once"
+    );
+    let so = e.scanout(&sv, 1).expect("head 1 scans window 3");
+    assert_eq!(
+        (so.window, so.chn, so.handle, so.offset),
+        (3, 4, 0xabc, 0x10000)
+    );
+    assert_eq!(
+        (so.width, so.height, so.surface_width, so.pitch),
+        (1920, 1080, 1920, 120)
+    );
+    assert_eq!(so.format, 0xE6, "X8R8G8B8");
+    assert_eq!(e.scanout(&sv, 0), None);
+}
+
+/// ★ `SYSTEM_GET_ACTIVE`'s source: a head lights the SOR whose ARMED `OWNER_MASK` names it, only
+/// while its raster runs; an SOR owned by an idle head lights nothing, and detaching it (owner none)
+/// goes dark again.
+#[test]
+fn a_running_head_lights_the_sor_that_names_it() {
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    assert_eq!(e.lit_sors(), vec![None; 4], "nothing at boot");
+    let owner = |head_mask: u32| put(0, fl(CORE, "SOR_SET_CONTROL_OWNER_MASK"), head_mask);
+    let mut c = Ring::new();
+    // SOR 1 names head 2, but head 2 has no raster yet
+    c.m(ma(CORE, "SOR_SET_CONTROL", 1), owner(1 << 2))
+        .m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert_eq!(
+        e.lit_sors(),
+        vec![None; 4],
+        "an owner without a raster lights nothing"
+    );
+    modeset(&mut c, 2, 4);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert_eq!(e.lit_sors(), vec![None, None, Some(1), None]);
+    c.m(ma(CORE, "SOR_SET_CONTROL", 1), owner(0))
+        .m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert_eq!(e.lit_sors(), vec![None; 4], "detached");
+}

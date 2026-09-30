@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 8;
+pub const KF3_ABI: u32 = 9;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -468,6 +468,52 @@ pub extern "C" fn kf3_bar1_usermode_write(h: *mut c_void, vf_rel: u64, val: u64,
     if let Some(d) = dev(h) {
         d.bar1_usermode_write(vf_rel, val, u8::try_from(width).unwrap_or(4));
     }
+}
+
+/// ★ ABI 9: one frame of the virtual display for QEMU's console (`display=on`).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Kf3Frame {
+    /// First pixel: page-locked host memory the display worker owns for the process.
+    pub data: *mut u8,
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// Bytes per row.
+    pub stride: u32,
+    /// `kf_disp::scanout::PixelFormat` code (1 xrgb8888, 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10).
+    pub format: u32,
+    /// Increases with every new frame.
+    pub serial: u64,
+}
+
+/// ★ ABI 9 (QEMU's main thread, the console's `gfx_update`): the newest frame of the virtual
+/// display. `0` and `*out` filled — the memory stays valid, and is not written, until the next call
+/// (the worker never fills the frame the console shows); `-1` before the first frame, or without a
+/// display.
+///
+/// # Safety
+/// `out` is writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -> i32 {
+    let (Some(d), false) = (dev(h), out.is_null()) else {
+        return -1;
+    };
+    let Some(f) = d.display.and_then(|dp| dp.console.take()) else {
+        return -1;
+    };
+    let fr = Kf3Frame {
+        data: f.addr as *mut u8,
+        width: f.width,
+        height: f.height,
+        stride: f.stride,
+        format: f.format,
+        serial: f.serial,
+    };
+    // SAFETY: `out` is writable (caller contract).
+    unsafe { *out = fr };
+    0
 }
 
 /// Stop the device's threads (the device itself lives for the process).

@@ -1,7 +1,7 @@
 //! Compile the repository-owned C seam and compare every carried Rust field's layout.
 //! This uses the actual QEMU header, needs no QEMU build, and never opens a GPU.
 
-use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3Identity, Kf3Region};
+use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3Frame, Kf3Identity, Kf3Region};
 use std::collections::BTreeMap;
 use std::mem::{align_of, offset_of, size_of};
 use std::process::Command;
@@ -45,7 +45,7 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let header = std::fs::read_to_string(root.join("qemu/hw/misc/kf3/kf3.h")).unwrap();
     let rust = include_str!("../src/ffi_unsafe.rs");
-    let names = ["Kf3Identity", "Kf3Region"];
+    let names = ["Kf3Identity", "Kf3Region", "Kf3Frame"];
     let declared: Vec<_> = rust
         .split("#[repr(C)]")
         .skip(1)
@@ -101,6 +101,8 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
         subsystem_vendor => "subsystem_vendor", subsystem => "subsystem",
         class => "class_code", revision => "revision", pad => "pad", bar0_bytes => "bar0_bytes"]);
     layout!(Kf3Region, [bar => "bar", how => "how", pad => "pad", base => "base", len => "len"]);
+    layout!(Kf3Frame, [data => "data", width => "width", height => "height", stride => "stride",
+        format => "format", serial => "serial"]);
     value!("abi", "KF3_ABI", KF3_ABI);
     program.push_str("return 0; }\n");
     let nonce = std::time::SystemTime::now()
