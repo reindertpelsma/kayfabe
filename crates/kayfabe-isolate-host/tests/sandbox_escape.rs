@@ -565,6 +565,30 @@ fn the_sandboxed_child_lives_in_its_own_user_namespace() {
                 ),
             }
         }
+        // ★ 2026-09-30: an UNPRIVILEGED parent cannot read a non-dumpable child's
+        // /proc/<pid>/ns (PR_SET_DUMPABLE 0 makes it root-owned) — GitHub's runners are
+        // exactly that. Then the comparison is impossible, not failed: record it as a SKIP on
+        // the same SANDBOX-GATE floor (never a silent pass), release the child, and stop.
+        // As root (the bench), unreadability is still a FAILURE below.
+        // The effective uid, read from /proc (no unsafe, no libc dependency in this test).
+        let euid_is_root = std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|s| {
+                s.lines()
+                    .find(|l| l.starts_with("Uid:"))
+                    .and_then(|l| l.split_whitespace().nth(2).map(|e| e == "0"))
+            })
+            .unwrap_or(false);
+        if !differed.contains(&"user") && !euid_is_root {
+            kayfabe_linux_raw::sandbox::report_gate(
+                "the_sandboxed_child_lives_in_its_own_user_namespace",
+                false,
+                "read a non-dumpable child's /proc/<pid>/ns (needs root; this runner is unprivileged)",
+            );
+            drop(child.stdin.take());
+            let _ = child.wait();
+            return;
+        }
         assert!(
             differed.contains(&"user"),
             "the user namespace — the one the ptrace refusal rests on — could not be \
