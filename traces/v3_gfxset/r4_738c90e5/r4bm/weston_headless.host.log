@@ -1,0 +1,30 @@
+=== weston_headless side=host start=2026-09-30T19:11:25+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+[19:11:25.652] Command line: weston --backend=headless --renderer=gl --width=1280 --height=720 --idle-time=0 --socket=gset-a --debug --log=/var/tmp/gfxset/out/host/weston_headless.d/weston_gset-a.log
+[19:11:25.677] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/gl-renderer.so'
+[19:11:25.728] EGL version: 1.5
+[19:11:25.728] EGL vendor: NVIDIA
+[19:11:25.790] GL version: OpenGL ES 3.2 NVIDIA 580.159.04
+[19:11:25.790] GL vendor: NVIDIA Corporation
+[19:11:25.790] GL renderer: NVIDIA GeForce RTX 3070/PCIe/SSE2
+[19:11:25.848] GL ES 3.2 - renderer features:
+-rw-r--r-- 1 ubuntu ubuntu 72530 Sep 30 19:11 /var/tmp/gfxset/out/host/weston_headless.d/desktop.png
+[19:11:34.411] Command line: weston --backend=headless --renderer=gl --width=1280 --height=720 --idle-time=0 --socket=gset-b --config=/var/tmp/gfxset/out/host/weston_headless.d/det.ini --debug --log=/var/tmp/gfxset/out/host/weston_headless.d/weston_gset-b.log
+[19:11:34.420] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/gl-renderer.so'
+[19:11:34.501] EGL version: 1.5
+[19:11:34.502] EGL vendor: NVIDIA
+[19:11:34.585] GL version: OpenGL ES 3.2 NVIDIA 580.159.04
+[19:11:34.585] GL vendor: NVIDIA Corporation
+[19:11:34.585] GL renderer: NVIDIA GeForce RTX 3070/PCIe/SSE2
+[19:11:34.586] GL ES 3.2 - renderer features:
+WL_SCENE_SIZE 512x384
+WL_SCENE_EGL_VENDOR NVIDIA
+WL_SCENE_RENDERER NVIDIA GeForce RTX 3070/PCIe/SSE2
+WL_SCENE_HASH ad584bcbbd263ea5
+WL_SCENE_DISTINCT 8
+WL_SCENE_GLERR 0x0
+WL_SCENE_READY
+GSET_DIG side=host item=weston_headless key=client_readback val=ad584bcbbd263ea5
+GSET_DIG side=host item=weston_headless key=composite val=b860a1823df1ebc8
+GSET_VAL side=host item=weston_headless key=renderer val=GL_renderer:_NVIDIA_GeForce_RTX_3070/PCIe/SSE2
+GSET_OK
+=== end rc=0 secs=13 2026-09-30T19:11:38+00:00
