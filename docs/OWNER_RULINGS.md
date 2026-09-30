@@ -105,7 +105,10 @@ citation: ask whether its reason still holds before relying on it.
     for parity. ⚠ Hypothesis: the helper is still design-only and unmeasured.
   - *Why the C reached host parity despite trapping every doorbell:* its 1.05× (llama.cpp 49.9 vs
     47.5 tok/s) was measured on **bare metal**, an RTX 3050 kiosk PC (`docs/archive/STATUS_DETAIL_pre_v3.md`
-    "Hardware"), not on a nested Vast box. On bare metal a KVM exit costs a few µs, not the ~15–50 µs of
+    "Hardware"), not on a nested Vast box. ★ (owner, 2026-09-30) That C is **nvkvm Mode 2 — the same shape
+    as kayfabe** (stock guest driver, emulated GPU + fake GSP, trapped doorbells), **not nvkvm-pv**; that is
+    why it is the relevant baseline. Its copy-engine work ran on the CPU, so it speaks to the doorbell cost,
+    not the copy path. On bare metal a KVM exit costs a few µs, not the ~15–50 µs of
     a nested box, so ioeventfd alone may reach parity there. Bare metal is also the most useful case for
     Windows guests. ⚠ Hypothesis until a non-nested host is measured (§D "baseline first").
 

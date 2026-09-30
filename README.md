@@ -74,7 +74,11 @@ Not working or not done:
   doorbell fast path), with guest text identical to host text. The model rings about 1,084 doorbells
   per token; on these nested boxes each one costs the vCPU about 20 µs (15.7 µs with the fast path),
   about 22 ms of the ~58 ms per-token gap. The rest of the gap is not broken down yet. Non-nested
-  hardware has not been measured (the C prototype reached 1.05× on a bare-metal RTX 3050). An optional
+  hardware has not been measured for kayfabe. The C prototype of **this same design** — nvkvm Mode 2:
+  the stock guest driver on an emulated GPU with every doorbell trapped, *not* the paravirtual nvkvm-pv —
+  reached **1.05× host** llama.cpp decode on a bare-metal RTX 3050, so trapped doorbells did not prevent
+  parity there (its copies ran on the CPU, so that result speaks to the doorbell cost, not the copy
+  path). An optional
   guest doorbell module that removes the exit is designed, not built
   ([fast path](docs/design/V3_DOORBELL_IOEVENTFD.md), [module](docs/design/V3_GUEST_DOORBELL_MODULE.md)).
 - **X11 desktops are partial:** they need a display class (`GF100_DISP_SW`) whose host policy awaits
