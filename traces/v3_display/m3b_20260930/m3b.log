@@ -1,0 +1,117 @@
+START 2026-09-30T11:33:13+00:00
+REV d43dbcdd
+TESTS_RC=0
+TESTS passed 664 failed 0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/d43dbcdd/qemu-system-x86_64 rev=d43dbcdd mtime=2026-09-30 11:34:06.227066875 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+DISPLAY_LANE_START tag=m3b rev=d43dbcdd 2026-09-30T11:34:06+00:00
+[boot_capture:m3b] BINARY kf3-bin-rev:d43dbcdd  (/workspace/bench/kf3-bins/d43dbcdd/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:m3b] host dmesg watermark: 826 lines
+[boot_capture:m3b] booting (extra args: -vga none -vnc 127.0.0.1:0)
+== kf3 binary: /workspace/bench/kf3-bins/d43dbcdd/qemu-system-x86_64 (rev d43dbcdd)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on
+[boot_capture:m3b] guest is up after 36s
+[boot_capture:m3b] module unloaded and ring buffer cleared; loading cold
+[boot_capture:m3b] opening the device (this is what runs RmInitAdapter)
+[boot_capture:m3b] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_m3b_dmesg.log
+[boot_capture:m3b] --- the verdict lines ---
+[boot_capture:m3b] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/display/hook.sh
+[boot_capture:m3b] hook finished: rc=0
+[boot_capture:m3b] guest dmesg after workload: 106 lines (86 NVRM), delta 78 → /workspace/bench/run_m3b_dmesg_after.log
+[boot_capture:m3b] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_m3b_hostdmesg.log
+[boot_capture:m3b] pre-poweroff guest command: sudo sync; echo s | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1; echo u | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1
+[boot_capture:m3b] pre-poweroff rc=0
+[boot_capture:m3b] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:m3b] guest did not power down in 30s (a wedged vcpu cannot); asking QEMU to quit on /workspace/bench/run_m3b.mon
+[boot_capture:m3b] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=60222 applied=3819 refused=4 serviced=1921 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=1430 walks=1446/1446 cleared=1430 superseded=0 named_missed=2 unreconciled=0 mapped=3965 unmapped=3546 clipped=0x0 held=0 vmm_overlaps=0 priv
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10028
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2c
+    DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033
+    DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=0 emulated=0 forwarded=0 host=0x32
+    DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033
+    DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034
+    DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=0 emulated=0 forwarded=0 host=0x32
+    DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=2 emulated=0 forwarded=2 host=0x1002d
+    DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002f
+    DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=3 emulated=0 forwarded=3 host=0x2c
+    DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=3 emulated=0 forwarded=3 host=0x31
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=5 emulated=0 forwarded=5 host=0x30
+    DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=19 emulated=0 forwarded=19 host=0x2b
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=1420 emulated=0 forwarded=1420 host=0x2a
+[boot_capture:m3b] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_m3b_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:m3b] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:m3b]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:m3b] done. serial=/workspace/bench/run_m3b_serial.log qemu=/workspace/bench/run_m3b_qemu.log dmesg=/workspace/bench/run_m3b_dmesg.log dmesg_after=/workspace/bench/run_m3b_dmesg_after.log probe=/workspace/bench/run_m3b_probe.log hostdmesg=/workspace/bench/run_m3b_hostdmesg.log
+DISPLAY_GPU_PROGRESS_ERRORS_AFTER=0
+DISPLAY_FLIP_EVENT_TIMEOUTS_AFTER=1
+DISPLAY_DRM_WARNS_AFTER=0
+DISPLAY_PROBE_BUILD=ok
+DISPLAY_DRM_MODPROBE rc=0 
+DISPLAY_DRM_NODES by-path card0 renderD128 
+DISPLAY_DRM_DMESG_LINES=32 displayless=0
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_COUNTS connectors=1 crtcs=4 encoders=1 fbs=0
+DISPLAY_KFDISP_CONNECTOR id=126 type=DVI-D-1 status=connected modes=7 preferred=1920x1080@60
+DISPLAY_KFDISP_PLANE id=49 type=primary crtcs=0x1 formats=13
+DISPLAY_KFDISP_PLANE id=54 type=cursor crtcs=0x1 formats=1
+DISPLAY_KFDISP_PLANE id=61 type=overlay crtcs=0x1 formats=13
+DISPLAY_KFDISP_PLANE id=68 type=primary crtcs=0x2 formats=13
+DISPLAY_KFDISP_PLANE id=73 type=cursor crtcs=0x2 formats=1
+DISPLAY_KFDISP_PLANE id=80 type=overlay crtcs=0x2 formats=13
+DISPLAY_KFDISP_PLANE id=87 type=primary crtcs=0x4 formats=13
+DISPLAY_KFDISP_PLANE id=92 type=cursor crtcs=0x4 formats=1
+DISPLAY_KFDISP_PLANE id=99 type=overlay crtcs=0x4 formats=13
+DISPLAY_KFDISP_PLANE id=106 type=primary crtcs=0x8 formats=13
+DISPLAY_KFDISP_PLANE id=111 type=cursor crtcs=0x8 formats=1
+DISPLAY_KFDISP_PLANE id=118 type=overlay crtcs=0x8 formats=13
+DISPLAY_KFDISP_SUMMARY connected=1 primary=4 overlay=4 cursor=4
+DISPLAY_MODETEST_CONNECTED=1 modes_1080p=1
+DISPLAY_SMI_DISPLAY  Display Mode : Requested functionality has been deprecated Display Attached : Yes Display Active : Enabled Persistence Mode : Disabled Addressing Mode : HMM 
+DISPLAY_GPU_PROGRESS_ERRORS=0
+DISPLAY_CONNECTED=yes card=/dev/dri/card0
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_MODE 1920x1080@60 clock=148500 connector=126 crtc=60
+DISPLAY_KFDISP_PATTERN_A_FNV=b46ca47163518677 pitch=7680
+DISPLAY_KFDISP_PATTERN_B_FNV=d42aac677e43ad67
+DISPLAY_KFDISP_SETCRTC_OK ms=5.5
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=57.94
+DISPLAY_KFDISP_SHOWING=A hold_s=20
+DISPLAY_KFDISP_RESTORED=ok fb=128
+DISPLAY_FLIP_EVENT_TIMEOUTS=0 DRM_WARNS=0
+DISPLAY_DESKTOP_CONF busid=PCI:0:2:0 session=cinnamon DESK_CONF_OK 
+DISPLAY_DESKTOP_SESSION=yes (rc=0  xorg_starts=/var/log/Xorg.0.log.old:1 /var/log/Xorg.0.log:1 )
+DISPLAY_GLX_RENDERER NVIDIA GeForce RTX 3060/PCIe/SSE2 DIRECT=Yes
+DISPLAY_GLXGEARS 299 frames in 5.0 seconds = 59.770 FPS 299 frames in 5.0 seconds = 59.790 FPS 
+DISPLAY_VKCUBE Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu VKCUBE_RC=134
+DISPLAY_XORG_LOG errors=3 nvidia=38 [    73.413] (II) NVIDIA(0): Setting mode "DFP-0:nvidia-auto-select"
+DISPLAY_SHOT desk_1 md5=e6469ecf36f9 bytes=6220817
+DISPLAY_SHOT desk_vkcube md5=e6469ecf36f9 bytes=6220817
+DISPLAY_SHOT desk_2 md5=e6469ecf36f9 bytes=6220817
+DISPLAY_DESKTOP_GPU_PROGRESS_ERRORS=0 XID=0
+DISPLAY_HOOK_DONE
+DISPLAY_LANE_EXIT rc=0 2026-09-30T11:37:19+00:00
+LANE_RC=0
+EXIT 2026-09-30T11:37:19+00:00

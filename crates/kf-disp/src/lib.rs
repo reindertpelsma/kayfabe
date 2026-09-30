@@ -12,13 +12,24 @@
 //!
 //! This crate holds the parts that are pure logic and GPU-free:
 //! - [`class`] — the display classes' methods, fields and caps registers, derived from ogkm;
+//! - [`regs`] — the display engine's BAR0 registers, derived from ogkm's `dev_disp.h` per family;
+//! - [`caps`] — the capabilities page our virtual engine presents, authored from the caps class;
 //! - [`edid`] — the virtual monitor's EDID (authored, never captured);
 //! - [`layout`] — the wire layouts, derived from ogkm by compiling its headers;
 //! - [`model`] — the physical-RM side: the controls' answers and the channel registry;
-//! - [`pushbuf`] — the bounded NVDisplay DMA pushbuffer decoder.
+//! - [`ports`] — the lock-free state the vCPU, the control link and the worker share;
+//! - [`pushbuf`] — the bounded NVDisplay DMA pushbuffer decoder;
+//! - [`engine`] — the emulated front end: channels, interlocked updates, arming, completions;
+//! - [`inst`] — context-DMA resolution through the guest's display instance memory.
 
+pub mod caps;
 pub mod class;
 pub mod edid;
+pub mod engine;
+pub mod inst;
 pub mod layout;
 pub mod model;
+pub mod ports;
 pub mod pushbuf;
+pub mod regs;
+pub mod scanout;

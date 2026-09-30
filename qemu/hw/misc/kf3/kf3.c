@@ -39,6 +39,7 @@
 #include "qemu/event_notifier.h"
 #include "qemu/main-loop.h"
 #include "qemu/thread.h"
+#include "ui/console.h"
 #include "kf3.h"
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
@@ -112,6 +113,9 @@ struct Kf3State {
     bool dummy_bar;
     /* v3-display (docs/design/V3_DISPLAY.md): the virtual NVDisplay; off = the displayless posture */
     bool display;
+    /* ★ ABI 9 (M2): the console the display's frames are shown on, and the frame it shows */
+    QemuConsole *con;
+    Kf3Frame shown;
     MemoryRegion dummy_pages[3];
     EventNotifier dummy_efd;   /* page 2's KVM ioeventfd — nobody reads it */
 };
@@ -592,6 +596,50 @@ static void kf3_vector_release(PCIDevice *pci, unsigned v)
 
 /* ── realize / exit ─────────────────────────────────────────────────────────────────────── */
 
+/* ── the virtual display's console (M2, docs/design/V3_DISPLAY.md §4.6) ─────────────────────
+ * Zero-copy: the surface wraps the frame the display worker's GPU copy filled (page-locked host
+ * memory Rust keeps mapped for the process). kf3_display_frame hands over the newest one; the
+ * worker never writes the frame shown, so the pixels under this surface only change when a later
+ * call replaces it. Main thread, BQL held — nothing here waits on the worker. */
+static pixman_format_code_t kf3_pixman_format(uint32_t f)
+{
+    switch (f) {
+    case 1: return PIXMAN_x8r8g8b8;
+    case 2: return PIXMAN_x8b8g8r8;
+    case 3: return PIXMAN_r5g6b5;
+    case 4: return PIXMAN_x2r10g10b10;
+    case 5: return PIXMAN_x2b10g10r10;
+    default: return 0;
+    }
+}
+
+static void kf3_gfx_update(void *opaque)
+{
+    Kf3State *s = opaque;
+    Kf3Frame f;
+    pixman_format_code_t fmt;
+
+    if (!s->h || kf3_display_frame(s->h, &f) != 0 || f.serial == s->shown.serial) {
+        return;
+    }
+    fmt = kf3_pixman_format(f.format);
+    if (!fmt || !f.data || f.width == 0 || f.height == 0 || f.stride < f.width ||
+        (f.stride & 3) != 0) {
+        return;
+    }
+    if (f.data != s->shown.data || f.width != s->shown.width || f.height != s->shown.height ||
+        f.stride != s->shown.stride || f.format != s->shown.format) {
+        dpy_gfx_replace_surface(s->con, qemu_create_displaysurface_from((int)f.width, (int)f.height,
+                                                                         fmt, (int)f.stride, f.data));
+    }
+    s->shown = f;
+    dpy_gfx_update_full(s->con);
+}
+
+static const GraphicHwOps kf3_gfx_ops = {
+    .gfx_update = kf3_gfx_update,
+};
+
 static void kf3_dev_realize(PCIDevice *pci, Error **errp)
 {
     Kf3State *s = KF3(pci);
@@ -712,6 +760,12 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     };
     memory_listener_register(&s->listener, &address_space_memory);
 
+    if (s->display) {
+        s->con = graphic_console_init(DEVICE(pci), 0, &kf3_gfx_ops, s);
+        info_report("kf3: display console registered (head 0 of %s)",
+                    DEVICE(pci)->id ? DEVICE(pci)->id : "kf3-gpu");
+    }
+
     kf3_status(s->h, err, sizeof(err));
     info_report("%s (BAR0 pieces=%u)", err, s->n_pieces);
 }
@@ -727,6 +781,11 @@ static void kf3_dev_exit(PCIDevice *pci)
                     qatomic_read(&s->bar12_reads), qatomic_read(&s->bar12_writes),
                     s->irq_routes, s->irq_route_fail, s->bar1_ov_applied, s->bar1_ov_failed);
         memory_listener_unregister(&s->listener);
+        if (s->con) {
+            /* the console stops reading the display's frames before the device goes */
+            graphic_console_close(s->con);
+            s->con = NULL;
+        }
         kf3_unrealize(s->h);
     }
     if (s->msix_vectors > 0) {

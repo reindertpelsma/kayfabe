@@ -68,7 +68,7 @@ fn chain_with_objects(
         }),
         memory: None,
         channels: None,
-        display: display.then_some(&kf_chip::display::AMPERE),
+        display: display.then(|| (&kf_chip::display::AMPERE).into()),
     };
     kf_rm::served_policy(
         ga106::board(),
@@ -332,6 +332,17 @@ fn claimed() -> Vec<(u32, Vec<u8>)> {
             x if Some(x) == l.k32("NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED") => {
                 Some("NV0073_CTRL_SYSTEM_GET_SUPPORTED_PARAMS")
             }
+            x if Some(x) == l.k32("NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE") => {
+                Some("NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS")
+            }
+            x if Some(x) == l.k32("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE") => {
+                Some("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE_PARAMS")
+            }
+            x if Some(x)
+                == l.k32("NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES") =>
+            {
+                Some("NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS")
+            }
             _ => None,
         };
         if let Some(s) = s {
@@ -348,8 +359,8 @@ fn default_off_every_claimed_control_still_reaches_the_ledger() {
     let set = claimed();
     assert_eq!(
         set.len(),
-        30 + 6,
-        "the NVKMS bring-up set and the six internal controls"
+        33 + 6,
+        "the NVKMS bring-up set (with the console pair and the display-SW object's query) and the six internal controls"
     );
     let log = kf_rm::unserviced::UnservicedLog::new();
     let mut c = chain(false, &log);

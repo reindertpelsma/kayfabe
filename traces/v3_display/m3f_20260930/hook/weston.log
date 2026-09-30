@@ -1,0 +1,100 @@
+Date: 2026-09-30 UTC
+[12:04:44.725] weston 13.0.0
+               https://wayland.freedesktop.org
+               Bug reports to: https://gitlab.freedesktop.org/wayland/weston/issues/
+               Build: 13.0.0
+[12:04:44.751] Command line: weston --backend=drm --continue-without-input --socket=kfw --log=/tmp/weston.log
+[12:04:44.751] OS: Linux, 6.8.0-142-generic, #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026, x86_64
+[12:04:44.751] Flight recorder: enabled
+[12:04:44.751] Starting with no config file.
+[12:04:44.751] Output repaint window is 7 ms maximum.
+[12:04:44.753] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/drm-backend.so'
+[12:04:44.763] initializing drm backend
+[12:04:44.763] Trying libseat launcher...
+[12:04:44.764] [seatd/seat.c:39] Created VT-bound seat seat0
+[12:04:44.765] [seatd/server.c:145] New client connected (pid: 4213, uid: 0, gid: 0)
+[12:04:44.765] [libseat/backend/seatd.c:633] Started embedded seatd
+[12:04:44.765] [seatd/seat.c:170] Added client 7 to seat0
+[12:04:44.765] [seatd/seat.c:480] Opened client 7 on seat0
+[12:04:44.765] [libseat/libseat.c:62] Seat opened with backend 'builtin'
+[12:04:44.766] [libseat/backend/seatd.c:212] Enabling seat
+[12:04:44.766] libseat: session control granted
+[12:04:44.769] using /dev/dri/card0
+[12:04:44.769] DRM: supports atomic modesetting
+[12:04:44.769] DRM: supports GBM modifiers
+[12:04:44.769] DRM: does not support async page flipping
+[12:04:44.769] DRM: supports picture aspect ratio
+[12:04:44.772] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/gl-renderer.so'
+[12:04:44.912] Using rendering device: /dev/dri/renderD128
+[12:04:44.912] EGL version: 1.5
+[12:04:44.912] EGL vendor: NVIDIA
+[12:04:44.912] EGL client APIs: OpenGL_ES OpenGL
+[12:04:44.912] EGL features:
+               EGL Wayland extension: yes
+               context priority: yes
+               buffer age: yes
+               partial update: yes
+               swap buffers with damage: yes
+               configless context: yes
+               surfaceless context: yes
+               dmabuf support: modifiers
+[12:04:45.283] GL version: OpenGL ES 3.2 NVIDIA 580.159.04
+[12:04:45.283] GLSL version: OpenGL ES GLSL ES 3.20
+[12:04:45.283] GL vendor: NVIDIA Corporation
+[12:04:45.283] GL renderer: NVIDIA GeForce RTX 3060/PCIe/SSE2
+[12:04:45.294] GL ES 3.2 - renderer features:
+               read-back format: ARGB8888
+               glReadPixels supports y-flip: no
+               wl_shm 10 bpc formats: yes
+               wl_shm 16 bpc formats: yes
+               wl_shm half-float formats: no
+               internal R and RG formats: yes
+               OES_EGL_image_external: yes
+[12:04:45.294] Using GL renderer
+[12:04:45.313] event0  - Power Button: is tagged by udev as: Keyboard
+[12:04:45.313] event0  - Power Button: device is a keyboard
+[12:04:45.317] event1  - AT Translated Set 2 keyboard: is tagged by udev as: Keyboard
+[12:04:45.318] event1  - AT Translated Set 2 keyboard: device is a keyboard
+[12:04:45.322] event3  - VirtualPS/2 VMware VMMouse: is tagged by udev as: Mouse
+[12:04:45.322] event3  - VirtualPS/2 VMware VMMouse: device is a pointer
+[12:04:45.326] event2  - VirtualPS/2 VMware VMMouse: is tagged by udev as: Mouse
+[12:04:45.327] event2  - VirtualPS/2 VMware VMMouse: device is a pointer
+[12:04:45.342] libinput: configuring device "Power Button".
+[12:04:45.342] libinput: configuring device "AT Translated Set 2 keyboard".
+[12:04:45.342] libinput: configuring device "VirtualPS/2 VMware VMMouse".
+[12:04:45.342] libinput: configuring device "VirtualPS/2 VMware VMMouse".
+[12:04:45.342] input device event2 has no enabled output associated (none named), skipping calibration for now.
+[12:04:45.372] DRM: head 'DVI-D-1' found, connector 126 is connected, EDID make 'KFB', model 'kayfabe', serial '1'
+               Supported EOTF modes: SDR
+[12:04:45.373] Registered plugin API 'weston_drm_output_api_v1' of size 40
+[12:04:45.373] Registered plugin API 'weston_drm_virtual_output_api_v2' of size 48
+[12:04:45.373] Color manager: no-op
+[12:04:45.373] Output 'DVI-D-1' attempts EOTF mode: SDR
+[12:04:45.373] Output 'DVI-D-1' using color profile: stock sRGB color profile
+[12:04:45.373] Chosen EGL config details: id:  24 rgba: 8 8 8 0 buf: 24 dep:  0 stcl: 0 int: 0-1 type: win|pbf vis_id: XRGB8888 (0x34325258)
+[12:04:45.409] Output DVI-D-1 (crtc 60) video modes:
+               1920x1080@60.0, preferred, current, 148.5 MHz
+               1680x1050@60.0, 146.2 MHz
+               1600x900@60.0, 108.0 MHz
+               1280x1024@60.0, 108.0 MHz
+               1024x768@60.0, 65.0 MHz
+               800x600@60.3, 40.0 MHz
+               640x480@59.9, 25.2 MHz
+[12:04:45.409] associating input device event0 with output DVI-D-1 (none by udev)
+[12:04:45.409] associating input device event1 with output DVI-D-1 (none by udev)
+[12:04:45.409] associating input device event3 with output DVI-D-1 (none by udev)
+[12:04:45.409] associating input device event2 with output DVI-D-1 (none by udev)
+[12:04:45.409] Output 'DVI-D-1' enabled with head(s) DVI-D-1
+[12:04:45.409] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: yes
+               cursor planes: yes
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: yes
+               color operations: no
+               presentation clock: CLOCK_MONOTONIC, id 1
+               presentation clock resolution: 0.000000001 s
+[12:04:45.410] Loading module '/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so'
+[12:04:45.411] launching '/usr/libexec/weston-keyboard'
+[12:04:45.415] launching '/usr/libexec/weston-desktop-shell'

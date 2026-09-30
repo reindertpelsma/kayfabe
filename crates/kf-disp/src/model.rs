@@ -20,7 +20,9 @@
 
 use crate::edid::Monitor;
 use crate::layout::{Layouts, Params};
+use crate::ports::Ports;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// `NV_OK`.
 pub const NV_OK: u32 = 0;
@@ -118,6 +120,25 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
     ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
     ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
+    // ★ M1 (`[measured m1a]` the ledger held 0x20800a76 after nvidia-drm's fbdev took the console):
+    // the VGA console save/restore around a console switch (`unix_console.c:74-140`). Our virtual
+    // engine has no VGA console and no VBIOS mode to save: `bReturnEarly`, nothing to restore.
+    (
+        "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE",
+        "pre_console",
+    ),
+    ("NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_UNIX_CONSOLE", "echo"),
+    // ★ M3: the NV9072 (GF100_DISP_SW) display-SW object's constructor asks physical RM which
+    // displays are active and how many heads exist (`disp_sw.c:44-101`). ⊘ REFUSED BY NAME, and
+    // that is measured: `[m3c]` answering it lets the X driver and GL allocate the object, whose
+    // methods are SOFTWARE methods RM services when the host engine traps them — but the guest's
+    // channels run on the host GPU, whose RM has no such object: 186 host `Xid 32` (invalid
+    // pushbuffer stream), glxgears at 1.3 FPS, vkQueueSubmit failing. Refused (`[m3b]`), X logs
+    // "Failed to allocate display software resources" and GL runs vsync-locked at 60 FPS.
+    (
+        "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
+        "no_display_sw",
+    ),
 ];
 
 /// The display classes a chip lists (a copy of the chip row's, so this crate owns its inputs).
@@ -241,10 +262,11 @@ pub struct Channel {
     pub handle: u32,
     /// Its pushbuffer (`None` for the cursor PIO channel).
     pub pb: Option<Pushbuffer>,
-    /// GET (byte offset) — what the user page's `+0x4` reads back.
-    pub get: u32,
-    /// PUT (byte offset) — the last value the guest wrote to `+0x0`.
-    pub put: u32,
+    /// The initial GET = PUT (byte offset) the alloc stated. ⊘ The live GET/PUT are the shared
+    /// [`Ports`] words — the vCPU posts PUT there and the engine publishes GET — never a copy here.
+    pub offset: u32,
+    /// The allocation generation [`Ports::allocate`] minted for this life.
+    pub life: u32,
 }
 
 /// The guest's display instance memory (`WRITE_INST_MEM`).
@@ -285,6 +307,12 @@ pub enum Statement {
         instance: u32,
         /// Initial GET/PUT.
         offset: u32,
+        /// The allocating client (the context-DMA hash key).
+        client: u32,
+        /// Its pushbuffer, as `CHANNEL_PUSHBUFFER` stated it (`None`: PIO, or never stated).
+        pb: Option<Pushbuffer>,
+        /// The generation the shared ports minted for this life.
+        life: u32,
     },
     /// A display channel was freed.
     ChannelFreed {
@@ -321,6 +349,28 @@ pub struct DisplayModel {
     pub statements_dropped: u64,
     /// Every display control answered (the first 512), for the log.
     pub seen: Vec<u32>,
+    /// ★ The lock-free state shared with the vCPU and the display worker (PUT/GET, events).
+    pub ports: Arc<Ports>,
+    /// ★ The display plane's wake: set when a plane consumes [`Self::statements`]; the control link
+    /// then leaves them queued and calls it (after dropping the lock) instead of logging them.
+    waker: Option<Waker>,
+}
+
+/// The display plane's wake (an eventfd write, in the plane) — callable from any thread.
+#[derive(Clone)]
+pub struct Waker(pub Arc<dyn Fn() + Send + Sync>);
+
+impl core::fmt::Debug for Waker {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("Waker")
+    }
+}
+
+impl Waker {
+    /// Wake the plane.
+    pub fn wake(&self) {
+        (self.0)();
+    }
 }
 
 impl DisplayModel {
@@ -356,7 +406,26 @@ impl DisplayModel {
             statements: Vec::new(),
             statements_dropped: 0,
             seen: Vec::new(),
+            ports: Arc::new(Ports::default()),
+            waker: None,
         }
+    }
+
+    /// ★ Attach the display plane: it drains [`Self::statements`] itself and is woken through `wake`.
+    pub fn attach_plane(&mut self, wake: Waker) {
+        self.waker = Some(wake);
+    }
+
+    /// The plane's wake, if a plane is attached (the control link calls it after dropping the lock).
+    #[must_use]
+    pub fn waker(&self) -> Option<Waker> {
+        self.waker.clone()
+    }
+
+    /// ★ Answer with another driver version's `layouts` (a `ReselectAtFn1` rebuild for the guest's
+    /// own version). Everything stated so far is kept; the ports and the plane stay attached.
+    pub fn retarget(&mut self, layouts: &'static Layouts) {
+        self.l = layouts;
     }
 
     /// ★ Hostile guest: how many instances of `kind` this display has — the bound every
@@ -554,8 +623,16 @@ impl DisplayModel {
                 Ok(p.buf)
             }
             "active" => {
+                // ★ the connector on the SOR the head's ARMED state drives while its raster runs (the
+                // worker publishes it, `Engine::lit_sors`); 0 when the head lights nothing — as at boot
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS", params)?;
-                p.set("displayId", 0); // nothing is lit at boot
+                let head = p.get("head").unwrap_or(u64::MAX);
+                let id = usize::try_from(head)
+                    .ok()
+                    .and_then(|h| self.ports.lit_sor(h))
+                    .and_then(|sor| self.connectors.iter().find(|c| c.or_index == sor))
+                    .map_or(0, |c| c.display_id);
+                p.set("displayId", u64::from(id));
                 Ok(p.buf)
             }
             "boot_displays" => {
@@ -720,17 +797,32 @@ impl DisplayModel {
                 let mut p = self.view("NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS", params)?;
                 let class = p.get("channelClass").unwrap_or(0) as u32;
                 let inst = p.get("channelInstance").unwrap_or(0) as u32;
+                // ★ idle = the engine has consumed (and published the effects of) everything the guest
+                // posted: GET == PUT on the shared ports — a PUT is visible here the instant the vCPU
+                // stored it, a GET only after its notifier/semaphore/armed state is out.
                 let state = match self
                     .classes
                     .channel_kind(class)
                     .and_then(|kd| self.channels.get(&(kd, inst)))
                 {
-                    Some(ch) if ch.get == ch.put => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_IDLE")?,
+                    Some(ch) if self.ports.idle(ch.kind.channel_number(ch.instance)) => {
+                        k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_IDLE")?
+                    }
                     Some(_) => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_BUSY")?,
                     None => k("NVC370_CTRL_GET_CHANNEL_INFO_STATE_DEALLOC")?,
                 };
                 p.set("IsChannelInDebugMode", 0);
                 p.set("channelState", state);
+                Ok(p.buf)
+            }
+            // see NAMED_CONTROLS: the display-SW object is not offered
+            "no_display_sw" => Err(NV_ERR_NOT_SUPPORTED),
+            "pre_console" => {
+                let mut p = self.view(
+                    "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS",
+                    params,
+                )?;
+                p.set("bReturnEarly", 1);
                 Ok(p.buf)
             }
             "mode_possible" => {
@@ -776,6 +868,10 @@ impl DisplayModel {
             return false;
         };
         let pb = self.pushbuffers.get(&(class, inst)).copied();
+        let life = self
+            .ports
+            .allocate(kind.channel_number(inst), offset)
+            .unwrap_or(0);
         self.channels.insert(
             (kind, inst),
             Channel {
@@ -785,14 +881,17 @@ impl DisplayModel {
                 client,
                 handle,
                 pb,
-                get: offset,
-                put: offset,
+                offset,
+                life,
             },
         );
         self.state(Statement::ChannelAllocated {
             kind,
             instance: inst,
             offset,
+            client,
+            pb,
+            life,
         });
         true
     }
@@ -806,6 +905,7 @@ impl DisplayModel {
             .map(|(k, _)| *k);
         if let Some(k) = key {
             self.channels.remove(&k);
+            self.ports.release(k.0.channel_number(k.1));
             self.state(Statement::ChannelFreed {
                 kind: k.0,
                 instance: k.1,
@@ -825,6 +925,7 @@ impl DisplayModel {
             .collect();
         for k in &keys {
             self.channels.remove(k);
+            self.ports.release(k.0.channel_number(k.1));
             self.state(Statement::ChannelFreed {
                 kind: k.0,
                 instance: k.1,
@@ -941,6 +1042,45 @@ mod tests {
         );
     }
 
+    /// ★ `SYSTEM_GET_ACTIVE` reports what the engine's ARMED state lights (the worker publishes it
+    /// into the shared ports): nothing at boot, the connector on the head's SOR while it runs, and
+    /// nothing again once the head goes idle. A head the engine does not have answers 0.
+    #[test]
+    fn get_active_reports_the_display_the_armed_state_lights() {
+        let mut m = model();
+        let s = "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS";
+        let ask = |m: &mut DisplayModel, head: u64| {
+            let mut q = Params::new(m.layouts(), s, &vec![0; size(m, s)]).unwrap();
+            q.set("head", head);
+            let r = m
+                .control(cmd(m, "NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE"), &q.buf)
+                .unwrap()
+                .unwrap();
+            get(m, s, &r, "displayId")
+        };
+        assert_eq!(ask(&mut m, 3), 0, "nothing is lit at boot");
+        m.ports.set_lit_sor(3, Some(0));
+        assert_eq!(ask(&mut m, 3), 0x100, "head 3 drives SOR 0 -> connector 0");
+        assert_eq!(ask(&mut m, 0), 0, "head 0 lights nothing");
+        assert_eq!(ask(&mut m, 99), 0, "a head we do not have");
+        m.ports.set_lit_sor(3, Some(2));
+        assert_eq!(ask(&mut m, 3), 0, "SOR 2 has no connector");
+        m.ports.set_lit_sor(3, None);
+        assert_eq!(ask(&mut m, 3), 0, "idle again");
+        // the display-SW object's constructor query is refused by name (its software methods would
+        // trap on the host GPU): claimed, so it never reaches the ledger as unserviced
+        let c = cmd(
+            &m,
+            "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
+        );
+        assert!(m.claims(c));
+        let s = "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS";
+        assert_eq!(
+            m.control(c, &vec![0; size(&m, s)]),
+            Some(Err(NV_ERR_NOT_SUPPORTED))
+        );
+    }
+
     /// A custom EDID shadows the monitor's until cleared (NVKMS clears on every read,
     /// `nvkms-dpy.c:2015-2045`); sizes that do not match the derived struct are refused.
     #[test]
@@ -990,6 +1130,7 @@ mod tests {
         assert!(m.alloc(0xc1d0_0001, 0xc67d_0000, 0xC67D, &vec![0; size(&m, s)]));
         let ch = &m.channels[&(ChannelKind::Core, 0)];
         assert_eq!(ch.pb.map(|p| p.phys), Some(0x1234_5000));
+        let life = ch.life;
         let s = "NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS";
         let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
         q.set("channelClass", 0xC67D);
@@ -998,12 +1139,26 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(get(&m, s, &r, "channelState"), 1, "IDLE");
-        m.channels.get_mut(&(ChannelKind::Core, 0)).unwrap().put = 0x40;
+        m.ports.post_put(0, 0x40);
         let r = m
             .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
             .unwrap()
             .unwrap();
-        assert_eq!(get(&m, s, &r, "channelState"), 0x40, "BUSY");
+        assert_eq!(
+            get(&m, s, &r, "channelState"),
+            0x40,
+            "BUSY: the guest posted a PUT the engine has not consumed"
+        );
+        assert!(m.ports.publish_get(0, life, 0x40));
+        let r = m
+            .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            get(&m, s, &r, "channelState"),
+            1,
+            "IDLE once the engine published GET"
+        );
         m.free(0xc1d0_0001, 0xc67d_0000);
         let r = m
             .control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
@@ -1039,7 +1194,7 @@ mod tests {
         let m = model();
         let set = m.claimed();
         assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
-        assert_eq!(set.len(), 36);
+        assert_eq!(set.len(), 39);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));

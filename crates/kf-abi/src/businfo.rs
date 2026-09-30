@@ -138,6 +138,19 @@ pub const BUS_GET_INFO_V2_PARAMS_SIZE: usize = 4 + 8 * BUS_INFO_MAX_LIST_SIZE;
 /// index of the six that is RPC-forwarded on a GSP client.
 pub const BUS_INFO_INDEX_PCIE_GEN_INFO: u32 = 0x2d;
 
+/// `NV2080_CTRL_BUS_INFO_INDEX_PCIE_GEN2_INFO` (`ogkm-580: ctrl2080bus.h:304`) — the DEPRECATED
+/// name of [`BUS_INFO_INDEX_PCIE_GEN_INFO`] (*"PCIE_GEN_INFO // REPLACES "GEN2" variant"*,
+/// `ctrl2080bus.h:153-154`), forwarded on a GSP client by the same `bSendRpc` arm
+/// (`ogkm-580: kern_bus_ctrl.c:299-300`). The stock NVIDIA X driver still asks it — `[measured
+/// 2026-09-30, kf3 display lane m3a]` its refusal is Xorg's fatal *"Failed to query PCI info"*.
+///
+/// ★ It is the SAME word, and that is measured, not read off the name: the real GA106 sweep
+/// answers `0x14` and `0x2d` identically idle (`0x00302000`,
+/// `traces/real_ga106/rmladder_r22_businfo_sweep_real_ga106.txt:38,58`) and identically
+/// under load (`0x00322000`, `…_loaded_real_ga106.txt:37,62`) — the header's older 2-bit
+/// `PCIE_GEN2_INFO_CAP/_CURR_LEVEL` layout (`ctrl2080bus.h:451-457`) is not what RM returns.
+pub const BUS_INFO_INDEX_PCIE_GEN2_INFO: u32 = 0x14;
+
 /// A PCI Express generation as `NV2080_CTRL_BUS_INFO_PCIE_LINK_CAP_GEN_*` encodes it.
 ///
 /// ⚠ **The encoding is off by one from the name and that is the whole hazard**:

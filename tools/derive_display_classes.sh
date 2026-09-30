@@ -9,6 +9,7 @@
 #     F   <name> <hi> <lo>               a bit field `hi:lo`
 #     A   <name> <base> <stride>         a one-parameter macro `X(i)` = base + i*stride
 #     A2  <name> <base> <s1> <s2>        a two-parameter macro `X(a,b)` = base + a*s1 + b*s2
+#     FA  <name> <hi0> <lo0> <stride>    a one-parameter bit field `X(i)` = (hi0+i*s):(lo0+i*s)
 # Classes: every family's core/window/window-immediate/cursor channel and caps class the display plane
 # serves (Turing C57x, Ampere C67x, Ada C77D + C67x, Blackwell GB20x CA7x), plus NV_DISP_NOTIFIER.
 # ⊘ Names are matched on PREFIX, never on bodies; the compiler evaluates every body. A body is taken
@@ -24,7 +25,7 @@ SPEC='UPDATE SET_CONTEXT_DMA_NOTIFIER SET_NOTIFIER_CONTROL SET_INTERLOCK_FLAGS S
 HEAD_SET_PIXEL_CLOCK_FREQUENCY HEAD_SET_RASTER_ HEAD_SET_VIEWPORT_ HEAD_SET_CONTEXT_DMA_CURSOR HEAD_SET_OFFSET_CURSOR
 HEAD_SET_CONTROL_CURSOR HEAD_SET_DISPLAY_ID HEAD_SET_CONTROL_OUTPUT_RESOURCE HEAD_SET_SURFACE_ADDRESS_HI_CURSOR
 HEAD_SET_SURFACE_ADDRESS_LO_CURSOR WINDOW_SET_CONTROL SOR_SET_CONTROL SET_SIZE SET_STORAGE SET_PARAMS
-SET_PLANAR_STORAGE SET_CONTEXT_DMA_ISO SET_OFFSET SET_POINT_IN SET_POINT_OUT SET_PRESENT_CONTROL
+SET_PLANAR_STORAGE SET_CONTEXT_DMA_ISO SET_OFFSET SET_POINT_IN SET_POINT_OUT SET_PRESENT_CONTROL SET_COMPOSITION_
 SET_CONTEXT_DMA_SEMAPHORE SET_SEMAPHORE_CONTROL SET_SEMAPHORE_RELEASE SET_SEMAPHORE_ACQUIRE
 SET_CONTEXT_DMA_ACQ_SEMAPHORE SET_ACQ_SEMAPHORE_CONTROL SET_ACQ_SEMAPHORE_VALUE SET_SCAN_DIRECTION
 SET_SURFACE_ADDRESS_ FREE SET_CURSOR_HOT_SPOT_POINT_OUT GET PUT SYS_CAP HEAD_CAP HEAD_CLK_CAP SOR_CAP
@@ -55,6 +56,9 @@ for line in open(macros):
         print(f'  printf("V\\t{n}\\t%llu\\n", {u}({n}));')
     elif arity == 1 and ':' not in body:
         print(f'  printf("A\\t{n}\\t%llu\\t%llu\\n", {u}({n}(0)), {u}({n}(1))-{u}({n}(0)));')
+    elif arity == 1 and '?' not in body:
+        # an indexed bit field `X(i)` = (hi0+i*s):(lo0+i*s) — e.g. INTERLOCK_WITH_WINDOW(i)
+        print(f'  printf("FA\\t{n}\\t%llu\\t%llu\\t%llu\\n", {u}(1?{n}(0)), {u}(0?{n}(0)), {u}(0?{n}(1))-{u}(0?{n}(0)));')
     elif arity == 2 and ':' not in body:
         print(f'  printf("A2\\t{n}\\t%llu\\t%llu\\t%llu\\n", {u}({n}(0,0)), {u}({n}(1,0))-{u}({n}(0,0)), {u}({n}(0,1))-{u}({n}(0,0)));')
 print('  return 0; }')

@@ -130,7 +130,25 @@ pub struct ObjectLinks {
     /// amputates its display engine (`sweep.rs`). ★ Step (1) (2026-09-27): with a row, the link
     /// delegates to a `kf_disp::model::DisplayModel` built for the guest driver's derived layouts
     /// and observes accepted display-object allocs and frees (`tests/display_seat.rs`).
-    pub display: Option<&'static kf_chip::display::DisplayRow>,
+    pub display: Option<DisplaySeat>,
+}
+
+/// ★ The display seat: the chip's display row, and — when a display PLANE consumes the model (the
+/// kf3 device's display worker) — the shared model that plane holds across `ReselectAtFn1` rebuilds
+/// of the chain (`V3_DISPLAY.md` step (3)). `model: None` builds a private model per chain, whose
+/// statements the link logs (the configuration of the GPU-free tests).
+#[derive(Clone)]
+pub struct DisplaySeat {
+    /// The chip's display row.
+    pub row: &'static kf_chip::display::DisplayRow,
+    /// The plane's model, shared across chain rebuilds.
+    pub model: Option<display::SharedDisplayModel>,
+}
+
+impl From<&'static kf_chip::display::DisplayRow> for DisplaySeat {
+    fn from(row: &'static kf_chip::display::DisplayRow) -> DisplaySeat {
+        DisplaySeat { row, model: None }
+    }
 }
 
 /// ★ P4: the memory plane's seat — where statements go, and the guest OS the page-directory
@@ -149,7 +167,13 @@ impl core::fmt::Debug for ObjectLinks {
             .field("objects", &self.objects.is_some())
             .field("memory", &self.memory.is_some())
             .field("channels", &self.channels.is_some())
-            .field("display", &self.display.map(|r| r.chips))
+            .field(
+                "display",
+                &self
+                    .display
+                    .as_ref()
+                    .map(|d| (d.row.chips, d.model.is_some())),
+            )
             .finish()
     }
 }
@@ -406,8 +430,11 @@ pub fn served_chain(
     // Lifecycle observation belongs to the object seat AFTER acceptance, not to this front link:
     // a rejected allocation must never displace a live display channel, nor a rejected free
     // release one. Reassembly/held-fragment acknowledgements are not object acceptance either.
-    if let Some(row) = display {
-        let policy = display::DisplayPolicy::new(driver, row);
+    if let Some(seat) = display {
+        let policy = match &seat.model {
+            Some(shared) => display::DisplayPolicy::over_shared(driver, seat.row, shared),
+            None => display::DisplayPolicy::new(driver, seat.row),
+        };
         if let Some(mut registry) = policy.registry() {
             objects = objects.map(|p| p.with_accepted_observer(move |cmd| registry.observe(cmd)));
         }

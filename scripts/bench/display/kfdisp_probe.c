@@ -8,7 +8,8 @@
  *   kfdisp_probe show  [card] [hold_s] [flips] set the preferred mode on the first connected
  *                                              connector, scan out PATTERN A from a dumb buffer,
  *                                              then page-flip A<->B `flips` times (events counted
- *                                              and timed), end on A and hold `hold_s` seconds
+ *                                              and timed), end on A and hold `hold_s` seconds, then
+ *                                              RESTORE the CRTC it found (fbcon's framebuffer)
  *   kfdisp_probe ppm   <w> <h> [a|b]           write the pattern as a binary PPM to stdout
  *
  * The pattern is a pure function of (x, y, w, h): the guest's dumb buffer and the host's
@@ -18,6 +19,16 @@
  * Output lines are KEY=VALUE for the harness (grep-able); every failure prints KFDISP_FAIL=<why>
  * and exits non-zero. ⊘ A flip that never completes is a timeout (KFDISP_FAIL=flip-timeout),
  * never a hang: every wait has a deadline.
+ *
+ * ⊘ Why `show` restores the CRTC before it exits (m1c, 2026-09-30): a client that exits with its
+ * framebuffer still on the primary plane makes the kernel remove that framebuffer in a BLOCKING
+ * commit that DISABLES the plane (drm_fb_release -> atomic_remove_fb). nvidia-drm counts one flip
+ * event for it (old CRTC active, old fb non-NULL: nvidia-drm-modeset.c __will_generate_flip_event)
+ * but NVKMS programs the disabled window with NO completion notifier, so no event can come, and
+ * the commit logs "Flip event timeout" after 3 s. That is nvidia-drm's own behaviour on real
+ * hardware (NVIDIA/open-gpu-kernel-modules#1361: "framebuffer removal on DRM file close ... no
+ * flip-complete event arrives"), not a display-engine defect — so the probe does what a
+ * well-behaved client does and puts back what it found; the teardown path is not what it grades.
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -248,6 +259,8 @@ static int cmd_show(const char *card, int hold_s, int flips)
     if (dumb_make(fd, w, h, 0, &a) || dumb_make(fd, w, h, 1, &b)) return 4;
     printf("KFDISP_PATTERN_A_FNV=%016" PRIx64 " pitch=%u\n", fnv_rgb(a.map, a.pitch, w, h), a.pitch);
     printf("KFDISP_PATTERN_B_FNV=%016" PRIx64 "\n", fnv_rgb(b.map, b.pitch, w, h));
+    /* what was there before us (fbcon's framebuffer), put back before we exit */
+    drmModeCrtcPtr saved = drmModeGetCrtc(fd, crtc);
     double t0 = now_s();
     if (drmModeSetCrtc(fd, crtc, a.fb, 0, 0, &conn->connector_id, 1, &mode)) {
         printf("KFDISP_FAIL=setcrtc %s\n", strerror(errno)); return 5;
@@ -274,6 +287,15 @@ static int cmd_show(const char *card, int hold_s, int flips)
     printf("KFDISP_SHOWING=A hold_s=%d\n", hold_s);
     fflush(stdout);
     if (hold_s > 0) sleep((unsigned)hold_s);
+    if (saved && saved->mode_valid && saved->buffer_id) {
+        int rc = drmModeSetCrtc(fd, crtc, saved->buffer_id, saved->x, saved->y,
+                                &conn->connector_id, 1, &saved->mode);
+        printf("KFDISP_RESTORED=%s fb=%u\n", rc ? strerror(errno) : "ok", saved->buffer_id);
+    } else {
+        printf("KFDISP_RESTORED=nothing-to-restore\n");
+    }
+    if (saved) drmModeFreeCrtc(saved);
+    fflush(stdout);
     return done == flips ? 0 : 6;
 }
 

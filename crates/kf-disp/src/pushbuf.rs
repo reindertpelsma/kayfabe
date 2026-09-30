@@ -56,6 +56,25 @@ pub const MAX_PUSHBUFFER: u32 = 4096;
 /// decoded so far are returned with the offset the pass stopped at, so the caller can report the
 /// error at that GET (what the hardware's error notifier does) instead of guessing past it.
 pub fn decode(pb: &[u8], get: u32, put: u32) -> (Vec<MethodWrite>, u32, Option<DecodeError>) {
+    let (groups, end, err) = decode_groups(pb, get, put);
+    (groups.into_iter().map(|g| g.write).collect(), end, err)
+}
+
+/// One decoded write and where its method group lies in the ring.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Located {
+    /// The write.
+    pub write: MethodWrite,
+    /// Byte offset of the group's header (where GET stands while this write is not yet consumed).
+    pub header: u32,
+    /// Byte offset just past the group (where GET goes once every write of it is consumed).
+    pub end: u32,
+}
+
+/// ★ As [`decode`], with each write's group position — what a channel that STOPS at an `UPDATE`
+/// (waiting for its interlocked channels or the next vblank) needs to publish a GET that stands
+/// before the unconsumed method, and to resume from exactly there.
+pub fn decode_groups(pb: &[u8], get: u32, put: u32) -> (Vec<Located>, u32, Option<DecodeError>) {
     let len = u32::try_from(pb.len()).unwrap_or(0);
     let mut out = Vec::new();
     if len == 0
@@ -101,9 +120,13 @@ pub fn decode(pb: &[u8], get: u32, put: u32) -> (Vec<MethodWrite>, u32, Option<D
                 }
                 for i in 0..count {
                     let method = if opcode == 0 { offset + 4 * i } else { offset };
-                    out.push(MethodWrite {
-                        method,
-                        data: word(at + 4 + 4 * i),
+                    out.push(Located {
+                        write: MethodWrite {
+                            method,
+                            data: word(at + 4 + 4 * i),
+                        },
+                        header: at,
+                        end,
                     });
                 }
                 visited += count;
@@ -180,6 +203,21 @@ mod tests {
                     data: 0
                 },
             ]
+        );
+    }
+
+    /// ★ Every write knows its group: GET may stand at a group's header (a write in it unconsumed)
+    /// or just past it; a JUMP-wrapped group reports the post-wrap offsets.
+    #[test]
+    fn writes_know_their_group() {
+        let b = pb(&[0, method(2, 0x204), 7, 8, method(1, 0x200), 1]);
+        let (g, get, err) = decode_groups(&b, 0, 24);
+        assert_eq!((get, err), (24, None));
+        assert_eq!(
+            g.iter()
+                .map(|l| (l.write.method, l.header, l.end))
+                .collect::<Vec<_>>(),
+            vec![(0x204, 4, 16), (0x208, 4, 16), (0x200, 16, 24)]
         );
     }
 

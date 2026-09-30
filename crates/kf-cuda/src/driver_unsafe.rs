@@ -169,6 +169,7 @@ pub struct Cuda {
     pub(crate) cuLaunchHostFunc:
         unsafe extern "C" fn(*mut c_void, extern "C" fn(*mut c_void), *mut c_void) -> CUresult,
     pub(crate) cuMemAllocHost: unsafe extern "C" fn(*mut *mut c_void, usize) -> CUresult,
+    pub(crate) cuMemFreeHost: unsafe extern "C" fn(*mut c_void) -> CUresult,
     pub(crate) cuMemHostGetDevicePointer:
         unsafe extern "C" fn(*mut CUdeviceptr, *mut c_void, c_uint) -> CUresult,
     pub(crate) cuMemcpyHtoDAsync:
@@ -390,6 +391,7 @@ impl Cuda {
             cuEventElapsedTime: sym!("cuEventElapsedTime"),
             cuLaunchHostFunc: sym!("cuLaunchHostFunc"),
             cuMemAllocHost: sym!("cuMemAllocHost_v2"),
+            cuMemFreeHost: sym!("cuMemFreeHost"),
             cuMemHostGetDevicePointer: sym!("cuMemHostGetDevicePointer_v2"),
             cuMemcpyHtoDAsync: sym!("cuMemcpyHtoDAsync_v2"),
             cuMemcpyDtoHAsync: sym!("cuMemcpyDtoHAsync_v2"),
@@ -803,6 +805,22 @@ impl Cuda {
         })
     }
 
+    /// `cuMemsetD8_v2` over `n` bytes (synchronous, the legacy stream).
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn memset_d8(
+        &self,
+        dst: CUdeviceptr,
+        v: u8,
+        n: usize,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        // SAFETY: `dst` is a live device mapping of at least `n` bytes — every caller bounds
+        // `[dst, dst+n)` against the mapping it came from before calling.
+        self.check(what, unsafe { (self.cuMemsetD8)(dst, v, n) })
+    }
+
     /// `cuMemsetD8Async` over `n` bytes, in `stream`.
     ///
     /// # Errors
@@ -953,6 +971,19 @@ impl Cuda {
         Ok(PinnedBuf {
             ptr: p as usize,
             len,
+        })
+    }
+
+    /// `cuMemFreeHost` — give back a [`Self::pinned_alloc`] buffer. ⊘ Only once no queued copy can
+    /// still target it (the caller observed the completion of the last one).
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub(crate) fn pinned_free(&self, buf: PinnedBuf, what: &'static str) -> Result<(), CudaError> {
+        // SAFETY: `buf.ptr` is the base of a live `cuMemAllocHost` allocation, consumed here, so
+        // no safe code can reach it afterwards.
+        self.check(what, unsafe {
+            (self.cuMemFreeHost)(buf.ptr as *mut c_void)
         })
     }
 
@@ -1317,6 +1348,17 @@ pub(crate) struct PinnedBuf {
 }
 
 impl PinnedBuf {
+    /// The allocation's host address, as an integer — handed across an FFI (the display console
+    /// reads a finished frame there); never dereferenced by safe code.
+    pub(crate) fn addr(&self) -> usize {
+        self.ptr
+    }
+
+    /// Its length.
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+
     /// Copy `n` bytes at `off` out. ⊘ Only after the copy that filled them completed.
     ///
     /// # Panics

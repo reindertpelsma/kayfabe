@@ -19,6 +19,8 @@ pub enum Row {
     A(u64, u64),
     /// `X(a,b)` = base + a*s1 + b*s2.
     A2(u64, u64, u64),
+    /// An indexed bit field `X(i)` = (hi0 + i·s):(lo0 + i·s).
+    Fa(u64, u64, u64),
 }
 
 /// The class table of one ogkm version.
@@ -51,6 +53,7 @@ impl ClassTable {
                     .zip(n(3))
                     .zip(n(4))
                     .map(|((b, s1), s2)| Row::A2(b, s1, s2)),
+                Some(&"FA") => n(2).zip(n(3)).zip(n(4)).map(|((h, l), s)| Row::Fa(h, l, s)),
                 _ => None,
             };
             if let (Some(r), Some(name)) = (row, f.get(1)) {
@@ -97,6 +100,18 @@ impl ClassTable {
         match self.rows.get(&Self::key(class, name))? {
             Row::A2(base, s1, s2) => {
                 u32::try_from(base + u64::from(a) * s1 + u64::from(b) * s2).ok()
+            }
+            _ => None,
+        }
+    }
+
+    /// An indexed field `NV<class>_<name>(i)` as `(hi, lo)` of a 32-bit word.
+    #[must_use]
+    pub fn fa(&self, class: u32, name: &str, i: u32) -> Option<(u8, u8)> {
+        match self.rows.get(&Self::key(class, name))? {
+            Row::Fa(h, l, s) => {
+                let (h, l) = (h + u64::from(i) * s, l + u64::from(i) * s);
+                (h < 32 && l <= h).then(|| (h as u8, l as u8))
             }
             _ => None,
         }
@@ -193,6 +208,20 @@ mod tests {
             "GB20x names surfaces by address"
         );
         assert!(t.a(0xCA7E, "SET_SURFACE_ADDRESS_LO_ISO", 0).is_some());
+        assert_eq!(
+            t.fa(
+                0xC67D,
+                "SET_WINDOW_INTERLOCK_FLAGS_INTERLOCK_WITH_WINDOW",
+                5
+            ),
+            Some((5, 5))
+        );
+        assert_eq!(
+            t.fa(0xC67E, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CURSOR", 0),
+            Some((1, 1)),
+            "bit 0 is WITH_CORE"
+        );
+        assert_eq!(t.fa(0xC673, "SYS_CAP_SOR_EXISTS", 2), Some((10, 10)));
         assert_eq!(get(0x0438_0780, (31, 16)), 0x438);
         assert_eq!(put(0, (31, 30), 2), 0x8000_0000);
     }

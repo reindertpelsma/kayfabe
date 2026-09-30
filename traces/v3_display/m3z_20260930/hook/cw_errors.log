@@ -1,0 +1,71 @@
+[   80.943518] cinnamon[2788]: segfault at 0 ip 000076dd46b57f19 sp 00007ffcceccb9b0 error 6 in libnvidia-glcore.so.580.159.04[76dd46400000+c00000] likely on CPU 2 (core 2, socket 0)
+
+** (nm-applet:4709): WARNING **: 13:02:31.829: AT-SPI: Could not obtain desktop path or name
+
+
+** (cinnamon:4295): WARNING **: 13:02:31.829: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-automount:4368): WARNING **: 13:02:31.830: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-housekeeping:4362): WARNING **: 13:02:31.830: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-housekeeping:4362): WARNING **: 13:02:31.847: AT-SPI: Could not obtain desktop path or name
+
+
+** (nm-applet:4709): WARNING **: 13:02:31.847: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-housekeeping:4362): WARNING **: 13:02:31.848: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-automount:4368): WARNING **: 13:02:31.848: AT-SPI: Could not obtain desktop path or name
+
+
+** (polkit-gnome-authentication-agent-1:4711): WARNING **: 13:02:31.848: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-wacom:4386): WARNING **: 13:02:31.848: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-wacom:4386): WARNING **: 13:02:31.848: AT-SPI: Could not obtain desktop path or name
+
+
+** (cinnamon:4295): WARNING **: 13:02:31.864: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-automount:4368): WARNING **: 13:02:31.865: AT-SPI: Could not obtain desktop path or name
+
+
+** (cinnamon:4295): WARNING **: 13:02:31.865: AT-SPI: Could not obtain desktop path or name
+
+
+** (cinnamon:4295): WARNING **: 13:02:31.865: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-housekeeping:4362): WARNING **: 13:02:31.865: AT-SPI: Could not obtain desktop path or name
+
+
+** (polkit-gnome-authentication-agent-1:4711): WARNING **: 13:02:31.865: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-wacom:4386): WARNING **: 13:02:31.865: AT-SPI: Could not obtain desktop path or name
+
+
+** (nm-applet:4709): WARNING **: 13:02:31.865: AT-SPI: Could not obtain desktop path or name
+
+
+** (csd-automount:4368): WARNING **: 13:02:31.865: AT-SPI: Could not obtain desktop path or name
+
+Sep 30 13:00:27 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Sep 30 13:00:27 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Sep 30 13:00:32 ubuntu lightdm[2592]: pam_unix(lightdm-autologin:session): session opened for user ubuntu(uid=1000) by (uid=0)
+Sep 30 13:01:56 ubuntu systemd[1]: Stopping lightdm.service - Light Display Manager...
+Sep 30 13:01:56 ubuntu systemd[1]: lightdm.service: Deactivated successfully.
+Sep 30 13:01:56 ubuntu systemd[1]: Stopped lightdm.service - Light Display Manager.
+Sep 30 13:01:56 ubuntu systemd[1]: lightdm.service: Consumed 4.043s CPU time.
+Sep 30 13:01:58 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Sep 30 13:01:58 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Sep 30 13:01:58 ubuntu lightdm[4225]: pam_unix(lightdm-autologin:session): session opened for user ubuntu(uid=1000) by (uid=0)

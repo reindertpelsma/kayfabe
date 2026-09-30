@@ -136,12 +136,32 @@ fn lock(m: &SharedDisplayModel) -> MutexGuard<'_, DisplayModel> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// ★ Step (1): the model's statements are drained by the link and written to the log, AFTER the
-/// lock is dropped. There is no display worker yet to hand them to (step (3)); the registry itself
-/// (`channels`, `inst_mem`) is what that worker will read.
-fn log_statements(st: &[Statement]) {
-    for s in st {
-        eprintln!("kf-rm: display: {s:?}");
+/// ★ What the link does with the model's statements once it has dropped the lock.
+enum Settle {
+    /// No plane: the link drained them — written to the log (the GPU-free configuration).
+    Log(Vec<Statement>),
+    /// A display plane is attached: they stay queued for it, and it is woken.
+    Wake(kf_disp::model::Waker),
+}
+
+/// ★ Under the lock: leave the statements for an attached plane (step (3): "the statement drain
+/// moves to the display worker"), or drain them for the log when no plane exists.
+fn settle(g: &mut DisplayModel) -> Settle {
+    match g.waker() {
+        Some(w) => Settle::Wake(w),
+        None => Settle::Log(g.take_statements()),
+    }
+}
+
+/// After the lock is dropped: log, or wake the plane (one eventfd write, never a wait).
+fn finish(s: Settle) {
+    match s {
+        Settle::Log(st) => {
+            for s in st {
+                eprintln!("kf-rm: display: {s:?}");
+            }
+        }
+        Settle::Wake(w) => w.wake(),
     }
 }
 
@@ -220,6 +240,38 @@ impl DisplayPolicy {
         model: SharedDisplayModel,
     ) -> DisplayPolicy {
         DisplayPolicy::with(driver, row, Some(model))
+    }
+
+    /// ★ Step (3): the link over the display PLANE's model, shared across `ReselectAtFn1` rebuilds.
+    /// The model is re-targeted to this driver's derived layouts (a rebuild for the guest's own
+    /// version); a driver with no derived layouts gets the M0 link and the plane sees nothing.
+    #[must_use]
+    pub fn over_shared(
+        driver: kf_abi::versions::DriverAbiTable,
+        row: &'static kf_chip::display::DisplayRow,
+        shared: &SharedDisplayModel,
+    ) -> DisplayPolicy {
+        let Some(layouts) = kf_disp::layout::for_version(&driver.driver_version().to_string())
+        else {
+            eprintln!(
+                "kf-rm: display: no derived display layouts for guest driver {} — answering the M0 set only; the display \
+                 plane sees nothing",
+                driver.driver_version()
+            );
+            return DisplayPolicy::without_model(driver, row);
+        };
+        {
+            let mut g = lock(shared);
+            if g.layouts().version != layouts.version {
+                eprintln!(
+                    "kf-rm: display: the plane's model re-targeted {} -> {}",
+                    g.layouts().version,
+                    layouts.version
+                );
+                g.retarget(layouts);
+            }
+        }
+        DisplayPolicy::over(driver, row, shared.clone())
     }
 
     /// The M0 link with no model — what a guest driver without derived display layouts gets.
@@ -323,9 +375,9 @@ impl DisplayPolicy {
         let (r, st) = {
             let mut g = lock(&m);
             let r = g.control(cmd, params);
-            (r, g.take_statements())
+            (r, settle(&mut g))
         };
-        log_statements(&st);
+        finish(st);
         r
     }
 
@@ -475,7 +527,7 @@ impl DisplayRegistry {
             let mut g = lock(&m);
             let channel = g.classes.channel_kind(h.class).is_some();
             let recorded = channel && g.alloc(h.client, h.handle, h.class, params);
-            (channel, recorded, g.take_statements())
+            (channel, recorded, settle(&mut g))
         };
         if channel && !recorded {
             eprintln!(
@@ -487,7 +539,7 @@ impl DisplayRegistry {
                 params.len()
             );
         }
-        log_statements(&st);
+        finish(st);
     }
 
     /// The object `root` of `client` and every remembered display object below it.
@@ -538,9 +590,9 @@ impl DisplayRegistry {
                     g.free(client, *h);
                 }
             }
-            g.take_statements()
+            settle(&mut g)
         };
-        log_statements(&st);
+        finish(st);
     }
 }
 
@@ -798,8 +850,9 @@ mod tests {
             .collect();
         assert_eq!(
             claimed.len(),
-            30 + 6,
-            "the NVKMS bring-up set and the six internal controls"
+            33 + 6,
+            "the NVKMS bring-up set (with the console pair and the display-SW object's query) and \
+             the six internal controls"
         );
         assert_eq!(
             claimed.iter().copied().collect::<BTreeSet<u32>>(),
@@ -883,7 +936,12 @@ mod tests {
             let g = shared.lock().unwrap();
             assert_eq!(g.channels.len(), 1 + 8 + 8 + 4);
             let core = &g.channels[&(ChannelKind::Core, 0)];
-            assert_eq!((core.handle, core.get, core.put), (0xcafe_0d00, 0x40, 0x40));
+            assert_eq!((core.handle, core.offset), (0xcafe_0d00, 0x40));
+            assert_eq!(
+                (g.ports.get(0), g.ports.put(0)),
+                (0x40, 0x40),
+                "the shared ports start at the alloc's offset"
+            );
             assert_eq!(core.pb.map(|b| b.phys), Some(0x1234_5000));
             assert!(
                 g.statements.is_empty(),
@@ -911,6 +969,52 @@ mod tests {
         assert!(
             registry.objects.is_empty(),
             "no parent edge outlives its client"
+        );
+    }
+
+    /// ★ Step (3): with a PLANE attached, the link leaves the statements queued for it and wakes it
+    /// (after dropping the lock) instead of draining them into the log; a rebuild over the SAME
+    /// shared model keeps what the plane will read.
+    #[test]
+    fn an_attached_plane_gets_the_statements_and_a_wake() {
+        let shared: SharedDisplayModel = Arc::new(Mutex::new(
+            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+        ));
+        let woke = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        {
+            let w = woke.clone();
+            shared
+                .lock()
+                .unwrap()
+                .attach_plane(kf_disp::model::Waker(Arc::new(move || {
+                    w.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                })));
+        }
+        let p = DisplayPolicy::over_shared(abi(), &kf_chip::display::AMPERE, &shared);
+        let mut registry = p.registry().unwrap();
+        registry.observe(&alloc(
+            0xc1d0_0001,
+            0xcafe_0070,
+            0xcafe_0d00,
+            0xC67D,
+            &chan_params(false, 0),
+        ));
+        assert_eq!(woke.load(std::sync::atomic::Ordering::Relaxed), 1);
+        // a rebuild (ReselectAtFn1) over the same model: the statement is still there for the plane
+        let p2 = DisplayPolicy::over_shared(abi(), &kf_chip::display::AMPERE, &shared);
+        assert!(Arc::ptr_eq(&p2.model().unwrap(), &shared));
+        let st = shared.lock().unwrap().take_statements();
+        assert!(
+            matches!(
+                st.as_slice(),
+                [Statement::ChannelAllocated {
+                    kind: ChannelKind::Core,
+                    instance: 0,
+                    life: 1,
+                    ..
+                }]
+            ),
+            "{st:?}"
         );
     }
 
