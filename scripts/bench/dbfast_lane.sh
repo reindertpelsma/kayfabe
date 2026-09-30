@@ -11,6 +11,8 @@
 #               boot with the fast path ON (+ the measurement probe), one OFF; both with dummy-bar
 #     ladder    the CUDA ladder guest arm (cup2, cup3, cup8, cup8bench), OFF then ON
 #     gpufree   the real-KVM tests and the GPU-free benchmark (dbfast_kvm, dbfast_exhaust, dbfast_bench)
+#     launch    cup8bench alone, DBL_REPS (3) boots each: OFF, ON, and ON + KF3_DBFAST_SPIN_US=DBL_SPIN_US
+#               (100) — the launch-latency trade (single synchronous vs batched launches) with variance
 # ⚠ Everything on a vast box is NESTED. One DBL_<step>_RC line per step; the log ends with EXIT.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -76,6 +78,23 @@ if has ladder; then
             grep -ao 'DOORBELL-LEDGER tok=[^ ]* route=[a-z]* .*' "$q" | cut -c1-260 | sed "s/^/DBL_LEDGER mode=$mode /"
         done
     done
+fi
+
+if has launch; then
+    for mode in off on spin; do
+        gpu_idle
+        extra=""; [ "$mode" != off ] && extra=$ON
+        if [ "$mode" = spin ]; then export KF3_DBFAST_SPIN_US=${DBL_SPIN_US:-100}; else unset KF3_DBFAST_SPIN_US; fi
+        KF3_DEV_EXTRA=$extra bash "$HERE/cuda_ladder.sh" guest "${T}_l$mode" "${DBL_REPS:-3}" cup8bench \
+            > "$OUT/${T}_launch_$mode.run" 2>&1
+        echo "DBL_LAUNCH_${mode}_RC=$? spin=${KF3_DBFAST_SPIN_US:-0}"
+        grep -a '^CL_ROW\|GUEST_BSUM' "$BENCH/cl_${T}_l${mode}_guest.out" | cut -c1-330 | sed "s/^/DBL_LAUNCH mode=$mode /"
+        for q in "$BENCH"/run_cl_"${T}"_l"${mode}"_*_qemu.log; do
+            [ -e "$q" ] || continue
+            echo "DBL_LAUNCH mode=$mode $(basename "$q") $(grep -ao 'dbfast\[[^]]*\]' "$q" | tail -1 | cut -c1-300)"
+        done
+    done
+    unset KF3_DBFAST_SPIN_US
 fi
 
 if has gpufree; then

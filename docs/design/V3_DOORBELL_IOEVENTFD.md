@@ -186,7 +186,78 @@ timeouts, 0 failed deassigns (three runs).
 
 ## 7. Measurements — ALL NESTED
 
-*(filled in as the runs land; each row carries its revision and box)*
+Box: vast 53510558 — RTX 3060 (GA106), AMD EPYC 7K62 host (machine 30524, the same CPU model as the
+historical `vh` LLM box), 11 vCPUs, **itself a KVM guest**, Linux 6.8.0-59, host driver 580.159.04.
+Evidence: `traces/v3_ioeventfd/`. ⊘ Not one number here is non-nested.
+
+### 7.1 Correctness, ON vs OFF — identical verdicts (2026-09-30)
+
+| check | fast path OFF (the default) | fast path ON |
+|---|---|---|
+| crate tests / v3 gates / kf3 build / bare metal | 1700/0, 9/9, KF3_RC=0, 30/30 (`merge_check` at `43293417`) | — (the gates run no QEMU) |
+| thin guest suite, budget 180 s | **30/30** (merge bar) | **30/30** (`dbfast_lane.sh`, same revision); arm times equal within 1 s |
+| CUDA ladder, fat guest (cup2, cup3, cup8, cup8bench) | **4/4** | **4/4**; per-token `forwarded>0`, `emulated=0` for every guest token |
+| where passthrough doorbells went (thin suite, all 30 arms) | trapped | **823 of 823 by eventfd, 0 trapped** (84 ledger rows) — the datamatch prediction is exact on GA106 / 580 |
+| Translated (CeUtils, UVM kernel channels) | trapped | by eventfd, handed by the drainer (e.g. `--concurrency`: 830 hand-offs). `cup8bench` boot: CeUtils `0x801` 52 doorbells in 45 wakes; UVM-owned (`PRIVILEGE=KERNEL+UVM_OWNED`) `0x803` 201 in 160, `0x804`/`0x1005`/`0x1006` 1 each — every one `fast_forwarded`, `emulated=0` |
+
+### 7.2 The vCPU cost of one doorbell store (guest-timed, `dbfast_exitbench.c`)
+
+200 000 stores × 3 repetitions per row, timed in batches of 100 inside the guest; p50 per store.
+`probe` is the measurement registration (a slot no channel holds, so the device then does nothing
+either way) — the transport alone:
+
+| store | OFF boot | ON boot |
+|---|---|---|
+| `probe` 0x007f07ff to the doorbell | trapped: 20.4 / 20.4 / 17.4 µs | **ioeventfd: 15.7 / 15.7 / 15.8 µs** |
+| `unknown` 0x007f07fe to the doorbell (never registered) | trapped: 20.4 / 21.0 / 20.5 µs | trapped: 17.5 / 17.4 / 20.4 µs |
+| dummy page, lockless no-op MMIO (floor of an exit to QEMU) | 18.9 µs | 18.9 µs |
+| dummy page, BQL no-op MMIO | 19.4 µs | 19.2 µs |
+| dummy page, plain ioeventfd with NO memslot | 11.9 µs | 11.7 µs |
+
+⇒ On this nested box a matched doorbell costs the vCPU **~15.7 µs instead of ~17.4–21 µs: 2–5 µs
+(10–23 %) less**. ★ The exit itself dominates, not QEMU: the in-kernel path still takes the nested VM
+exit and emulates the store instruction (the doorbell page is a read-only memslot, so the store is an
+EPT violation → emulation); the userspace round trip it removes is only the last few µs. The
+no-memslot page shows the floor a read-only memslot cannot reach (11.8 µs) — but the usermode page
+must stay a memslot, because its timer registers are read with no exit.
+GPU-free on the same box (`dbfast_bench` A, a minimal harness exit): trapped 17.8 µs vs ioeventfd
+13.2 µs; each OTHER token registered at the same address adds ~36 ns to every store (511 others:
++18 µs) — the kernel's linear same-address scan, and the reason the budget defaults to 256.
+
+### 7.3 Host notification latency — the drainer's side
+
+| where | p50 | p99 |
+|---|---|---|
+| in-device `wake_to_deliver` (epoll return → delivered), thin suite arms | 8–20 µs | 26–49 µs |
+| in-device, CUDA ladder boots | 5–7 µs | — |
+| in-device, the exit probe (a store every ~16 µs: the drainer never sleeps) | 1.5 µs | 2.8 µs |
+| GPU-free signal → delivery on the box, **idle drainer** (includes its wake-up) | **45.7 µs** | 92.2 µs |
+| … with 2 000 register writes/s at 20 µs each | 40.0 µs | 67.3 µs |
+| … with 10 000/s at 20 µs (the drainer mostly awake) | 12.8 µs | 23.5 µs |
+| … with 10 000/s at 60 µs (a doorbell waits behind an apply) | 18.6 µs | 62.5 µs |
+
+⇒ ★ **The fast path is only as fast as the drainer's wake-up, and on this nested box an idle drainer
+wakes in ~46 µs** (a cross-CPU wake-up in a nested guest). The trapped path rings the twin inside the
+exit, with no wake-up at all. So the vCPU returns sooner, and the GPU hears about the work later.
+Concurrent register traffic *helps* the latency (the drainer is awake) until an apply is long enough
+to make a doorbell wait behind it (p99 62.5 µs at 60 µs applies): the drainer polls doorbells between
+applies, never inside one.
+
+### 7.4 What an application sees
+
+`cup8bench` in the fat guest (the CUDA ladder's per-launch benchmark), same boot shape, one run each:
+
+| N=16 (launch-bound) | OFF | ON |
+|---|---|---|
+| single launch + sync, median | 37 µs (submit 30 + sync 5) | **44 µs** (submit 26 + sync 19) |
+| batched launches, per launch | 30 µs | **23 µs** |
+| N=2048 (compute-bound) | 22.3 ms | 22.3 ms |
+
+⇒ Exactly the trade the owner predicted (2026-09-28): asynchronous dispatch **helps a deep queue**
+(batched −23 %: the vCPU returns sooner and keeps submitting) and **hurts an idle, synchronous launch**
+(+19 %: the sync waits ~14 µs longer for the drainer to wake and ring).
+
+LLM decode (the `llm_parity` lane, ON vs OFF and the spin experiment): §7.5.
 
 ### 7.x The protocol for a NON-nested host (not yet reachable, 2026-09-30)
 
