@@ -1,15 +1,20 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-09-30.** Master = **`b32aa046`**: the code of `3f67ed95`, which passed the full
-merge bar (§0 first entry), plus evidence. The single entry point for resuming work without any chat
-history. Decisions live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per-topic
-detail in the design docs named below. ⊘ When this file and a design doc disagree, the design doc's
-dated STATUS wins — then fix this file. Entries below the first are dated history.
+**STATUS: LIVE, 2026-09-30.** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
+the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
+evidence and documentation. The single entry point for resuming work without any chat history. Decisions
+live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per-topic detail in the design
+docs named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then
+fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-- **2026-09-30 — `v3-cdp` (not merged): CUDA dynamic parallelism works in a kf3 guest.** The child grid never ran because the guest's SKED-reflected page (libcuda's `UVM_MAP_DYNAMIC_PARALLELISM_REGION`, kind `SMSKED_MESSAGE`) was mirrored as a memory row; fix `46509dce` places it as a message-kind host mapping. At kf3 `090b20d9` (RTX 3060) every CDP launch shape runs its child and `cdpSimpleQuicksort` passes (128/1 000/10 000); merge bar passed at `2830988f` (1752/0, gates 9/9, KF3_RC=0, bare 30/30, thin 30/30; later commits evidence/docs only); app matrix there 61/65 + 6/6. `design/V3_CDP.md`, `traces/v3_cdp/`.
-- **2026-09-30 — master and v3 = `b32aa046`.** Landed since `5c639f54`:
+- **2026-09-30 — `v3-cdp` MERGED as `v3-mc23` (`afb552ea`): CUDA dynamic parallelism works in a kf3
+  guest.** Bar at exactly `afb552ea`: tests 1754/0, gates 9/9, bare 30/30, thin 30/30; CDP smoke on the
+  merged binary: all four launch shapes run their child, `cdpSimpleQuicksort` validates (default and 10 000)
+  (`traces/v3_mc23/`). Branch detail follows.
+  ⊘ *Branch-time text:* **`v3-cdp`: CUDA dynamic parallelism works in a kf3 guest.** The child grid never ran because the guest's SKED-reflected page (libcuda's `UVM_MAP_DYNAMIC_PARALLELISM_REGION`, kind `SMSKED_MESSAGE`) was mirrored as a memory row; fix `46509dce` places it as a message-kind host mapping. At kf3 `090b20d9` (RTX 3060) every CDP launch shape runs its child and `cdpSimpleQuicksort` passes (128/1 000/10 000); merge bar passed at `2830988f` (1752/0, gates 9/9, KF3_RC=0, bare 30/30, thin 30/30; later commits evidence/docs only); app matrix there 61/65 + 6/6. `design/V3_CDP.md`, `traces/v3_cdp/`.
+- **2026-09-30 — landed on master earlier the same day** (first `b32aa046`, then the items below), since `5c639f54`:
   - **CI repair** (`v3-ci`, `bf6e7640`): first green GitHub CI; the hardware bar is now fail-closed and
     includes a bare-metal suite (`scripts/bench/box/merge_check.sh`, run from a repo checkout).
   - **Display M1–M3** (`v3-display2`): the emulated display (`display=on`, default **off**) drives a
@@ -194,7 +199,7 @@ master's code passed the same bar on a TU116, plus the CUDA ladder (`traces/v3_t
 |---|---|---|
 | Families | GA10x (GA106/GA104/GA102) 30/30; Ada AD106 30/30, **AD104 (RTX 4000 Ada) at master 2026-09-30: bar + ladder 4/4**; Blackwell GB203 (RTX 5080) 30/30 + CUDA ladder, **GB205 (RTX 5070) at master 2026-09-30: bar + ladder 4/4** (`traces/v3_families_master/`); floor-swept RTX 3060 Ti 30/30. TU116 (GTX 1660 SUPER) at master `1915bd71` (code `3f67ed95`, 2026-09-30): tests 1742/0, gates 9/9, bare 30/30, thin 30/30, CUDA ladder host 4/4 + guest 4/4 (`traces/v3_turing_master/`). GA100, Hopper, GB10x remain source-derived only; GA100/GB10B refused by name | [Turing recovery evidence](https://github.com/reindertpelsma/kayfabe/blob/recovery/resume-2026-09-28/docs/RESUME_2026-09-28.md), `design/V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md` |
 | Multi-GPU | distinct host GPUs in one VM work (8×3060 box); per-card BAR1 budget refused at realize | `design/V3_MULTI_GPU_AUDIT.md` |
-| CUDA apps | 60/65 at `4c48ca0c`, 6/6 stream probes, 100/100 processes; four UVM-demand-paging failures plus CDP child-launch failure. Not rerun at the latest integration revision | `design/V3_APP_MATRIX.md` §R3 |
+| CUDA apps | **61/65 + 6/6 probes at `2830988f`** (`v3-cdp`, host 71/71; CDP fixed, merged as `afb552ea`); the four remaining failures are UVM demand paging (guest fault plane in progress on `v3-uvm-guest`). Earlier: 60/65 at `4c48ca0c`, 100/100 processes | `design/V3_APP_MATRIX.md` §R3 |
 | Graphics / video | nvkvm-pv's headless graphics set + 15 more items: **38/38** on an RTX 3070 (31 byte-identical to bare metal; OFA optical flow advertised); NVENC/NVDEC byte-exact. Per-call GPU waits are slow on nested boxes (`glFinish` 62 vs 9 µs) | `design/V3_GFX_TESTSET.md` (display-phase list §7), `V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
 | Memory plane | pooled walker capacity (no per-space 16k-run wall); batched host maps; big-PTE slot ownership; guest PTE read-only/volatile carried, PRIV leaves withheld from user twins; **every host map snoops the CPU cache** (`NVOS46_FLAGS_CACHE_SNOOP_ENABLE` — without it a CE read stale DRAM on bare-metal hosts; nested VM boxes hid it) | `design/V3_BUILD.md`, `V3_BATCHED_MAP.md`, `traces/v3_adasys/FINDING.txt` |
 | Refusals | audited host-vs-guest: forged completions removed (MC_SERVICE_INTERRUPTS, sysmembar flush); the rest classified | `design/V3_REFUSAL_AUDIT.md` |
@@ -342,6 +347,15 @@ must pass to another session.
    other 29 arms and a full 30-arm rerun passed. Open question: can state left by a killed VMM stall
    the next guest's first CeUtils completion, even though host-side clients work? If so, it is a
    host-side defect in the same class as §4.4. First step: kill a VMM mid-arm, then boot one arm.
+10. **CDP on Hopper/Blackwell hardware** (2026-09-30): the SYSTEM_NON_COHERENT SKED-reflected page
+    (`kf_chip::sked`) is covered by GPU-free tests only; run `scripts/cdp/cdp_guest.sh` on a GB20x box.
+11. **A killed hung guest CUDA process poisons the boot** (`design/V3_CDP.md` §6): after a pre-fix CDP hang
+    was SIGKILLed, every later process in that boot failed `cudaSetDeviceFlags` with 999. Not diagnosed;
+    the bare-metal control (kill a hung process, then start another) has not been run. If bare metal
+    recovers, it is a kayfabe teardown gap (bare-metal pass + guest fail ⇒ kayfabe bug).
+12. **Instrument:** `boot_capture.sh`'s host-dmesg line-count watermark reads 0 once a long-lived box's
+    kernel ring is full, so "host Xid 0" counts from such boxes were never measured. `scripts/cdp/`
+    uses `journalctl -k --since` instead; port that to `boot_capture.sh`.
 
 ## 5. How work was run (so it can be run again)
 
