@@ -858,7 +858,7 @@ pub struct EfsMirror {
     /// Host UVM calls this space has cost.
     pub calls: SpaceCalls,
     /// ★ Rows placed by the fault path's CPU point walk (`efs_point_map`) that no GPU walk has
-    /// confirmed yet, by VA. A GPU walk's MAP over one confirms it; a later split re-validates the
+    /// placed yet, by VA. A GPU walk's MAP over one takes it over; a later split re-validates the
     /// rest against the guest's tables (`efs_revalidate`) and unmaps what the guest no longer maps.
     pub fast: Mutex<std::collections::BTreeMap<u64, u64>>,
     /// The permissions each row was placed with (a permission change is a new placement).

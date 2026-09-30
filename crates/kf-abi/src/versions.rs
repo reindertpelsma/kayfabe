@@ -1325,7 +1325,8 @@ impl DriverAbiTable {
     }
 
     /// ★ The channel's instance block as the guest's CPU-RM described it to the GSP
-    /// (`instanceMem`). `Ok(None)`: no measured layout, or the params stop short — never a zero.
+    /// (`instanceMem`). `Ok(None)`: no layout for this driver in the generated matrix, or the params
+    /// stop short — never a zero.
     ///
     /// # Errors
     /// [`AbiError`] from the primitive readers (unreachable past the length check).

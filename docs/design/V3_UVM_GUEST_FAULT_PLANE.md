@@ -285,7 +285,7 @@ have cancelled it as fatal: never parked for nobody.
   records at the replay piece (one split per root) before resolving — the belt to the braces above,
   off by default, used only if a hardware run shows a replay racing its own mapping.
 
-### 3.8a ★★★ The GR engine is held while a fault is parked — the walker cannot run (MEASURED)
+### 3.8a ★★★ The GR engine is held while a fault is parked — the walker cannot run (`[meas]` 2026-09-30, RTX 3060)
 
 **`[meas]` uvmg4, 2026-09-30, `d178a737`, box `vuvm` (RTX 3060, nested), `KF3_FAULTLOG=1 KF3_MAPLOG=1`,
 `traces/v3_uvm_guest/run_uvmg4_qemu.log.gz`.** `um_probe gpufirst`: 14 faults delivered at
