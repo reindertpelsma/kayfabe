@@ -1,7 +1,8 @@
 //
-// kf_scanout.ptx — the display plane's block-linear scanout copy (docs/design/V3_DISPLAY.md §4.6).
+// kf_scanout.ptx - the display plane's block-linear scanout copy (docs/design/V3_DISPLAY.md sec. 4.6).
 //
-// HAND-WRITTEN PTX (no nvcc in the loop): one CTA per output row, its threads stride the row's
+// HAND-WRITTEN PTX (no nvcc in the loop; ASCII only - the PTX parser refuses other bytes even in
+// comments, measured m3a: CUDA_ERROR_INVALID_PTX): one CTA per output row, its threads stride the row's
 // 4-byte words. Each word is read from its block-linear address in the guest's surface (the store)
 // and written, pitch-linear, into the page-locked frame the QEMU console shows. The address is
 // kf_disp::scanout::bl_offset, which is the reference this file must match:
@@ -9,11 +10,11 @@
 //   y[2:1] -> bits 7:6, x[5] -> bit 8;  gob = ((block_y * gobs_per_row + gob_x) << bh) + gob_in_block
 // The display worker runs a self-test of this kernel against that reference at bring-up.
 //
-// ⊘ Bounds are the HOST's job (kf_disp::scanout::plan + DisplayGpu::scanout_block_linear): every
+// NOTE: Bounds are the HOST's job (kf_disp::scanout::plan + DisplayGpu::scanout_block_linear): every
 // address this kernel forms lies in [src, src + extent) of whole blocks the plan checked against the
 // context DMA and the store, and every write in [dst, dst + rows * dpitch) of the frame.
 //
-// PTX ISA 6.4 / sm_75: JITs forward onto any Turing-or-later GPU (THE_CONSTRAINTS.md §21).
+// PTX ISA 6.4 / sm_75: JITs forward onto any Turing-or-later GPU (THE_CONSTRAINTS.md sec. 21).
 
 .version 6.4
 .target sm_75

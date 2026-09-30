@@ -2689,10 +2689,14 @@ impl CommandPolicy for InitTablePolicy {
             // this control reads as a positive claim of `PCIE_LINK_CAP_GEN_GEN1`.
             WantedTable::BusGetInfoV2 => {
                 let at = req.params_at;
-                let answers = [(
-                    kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN_INFO,
-                    kf_abi::businfo::PcieGenInfo::fully_trained(self.host.pcie_max_gen).encode(),
-                )];
+                let gen_info =
+                    kf_abi::businfo::PcieGenInfo::fully_trained(self.host.pcie_max_gen).encode();
+                // `0x14` is `0x2d`'s deprecated name and RM answers it with the same word
+                // (`[measured]`, `kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO`)
+                let answers = [
+                    (kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN_INFO, gen_info),
+                    (kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO, gen_info),
+                ];
                 match kf_abi::businfo::answer_bus_get_info_v2(
                     &cmd.payload[at..at + kf_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE],
                     &answers,

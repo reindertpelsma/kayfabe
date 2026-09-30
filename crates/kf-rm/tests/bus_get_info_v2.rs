@@ -132,6 +132,30 @@ fn the_forwarded_index_is_answered_in_the_envelope_and_the_tail_is_left_alone() 
     );
 }
 
+/// ★ `0x14` (`PCIE_GEN2_INFO`, deprecated) is answered with `0x2d`'s word — the real GA106 returns
+/// the same word for both, idle and loaded (`kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO`);
+/// the stock NVIDIA X driver asks it and fails X ("Failed to query PCI info") on a refusal.
+#[test]
+fn the_deprecated_gen2_index_is_the_same_word() {
+    for index in [
+        BUS_INFO_INDEX_PCIE_GEN_INFO,
+        businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO,
+    ] {
+        let cmd = bus_command(&[(index, 0)], BUS_GET_INFO_V2_PARAMS_SIZE as u32);
+        let reply = policy().respond(&cmd).expect("served");
+        assert_eq!(reply.rpc_result, 0);
+        let params = &reply.body[PARAMS_AT..PARAMS_AT + BUS_GET_INFO_V2_PARAMS_SIZE];
+        assert_eq!(
+            businfo::decode_bus_info_pairs(params),
+            Ok(vec![(
+                index,
+                PcieGenInfo::fully_trained(chip().pcie_max_gen).encode()
+            )]),
+            "index {index:#x}"
+        );
+    }
+}
+
 #[test]
 fn an_index_with_no_derivation_refuses_the_whole_call_by_name() {
     // ⊘ Quantified over a list, and it includes indices the guest's own kernel normally

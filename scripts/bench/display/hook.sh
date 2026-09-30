@@ -113,13 +113,15 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     say "DESKTOP_CONF busid=$busid session=$session $(tr '\n' ' ' < "$OUT/desk_conf.log")"
     gq 'sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/lightdm_start.log"
     # the session: Xorg up, then a Cinnamon process of the autologin user (≤ 90 s)
+    XENV='sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority'
+    # ⊘ `[measured m3a]` a process check reads a crash-looping X as "up" (lightdm restarts it): the
+    # server must ANSWER a client, as the session user, and the session must be running
     up=no
     for i in $(seq 1 45); do
-        if gq 'pgrep -x Xorg >/dev/null && pgrep -u ubuntu -f "cinnamon" >/dev/null && echo UP' | grep -q UP; then up=yes; break; fi
+        if gq "$XENV xset q >/dev/null 2>&1 && pgrep -u ubuntu -x cinnamon >/dev/null && echo UP" | grep -q UP; then up=yes; break; fi
         sleep 2
     done
-    say "DESKTOP_SESSION=$up ($(tr '\n' ' ' < "$OUT/lightdm_start.log"))"
-    XENV='sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority'
+    say "DESKTOP_SESSION=$up ($(tr '\n' ' ' < "$OUT/lightdm_start.log") xorg_starts=$(gq 'sudo grep -c "X.Org X Server" /var/log/Xorg.0.log.old /var/log/Xorg.0.log 2>/dev/null | tr "\n" " "'))"
     sleep 20   # let the session paint (panel, wallpaper) before the first shot
     shot "$OUT/desk_1.ppm"
     gq "$XENV glxinfo -B 2>&1 | head -40" 60 > "$OUT/glxinfo.log"
