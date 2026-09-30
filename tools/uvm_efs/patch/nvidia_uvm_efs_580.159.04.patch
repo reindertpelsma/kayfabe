@@ -1,0 +1,1518 @@
+diff -ruN a/nvidia-uvm/nvidia-uvm-sources.Kbuild b/nvidia-uvm/nvidia-uvm-sources.Kbuild
+--- a/nvidia-uvm/nvidia-uvm-sources.Kbuild	2026-07-28 03:20:15.354027331 +0200
++++ b/nvidia-uvm/nvidia-uvm-sources.Kbuild	2026-09-30 12:19:23.721503574 +0200
+@@ -32,6 +32,7 @@
+ NVIDIA_UVM_SOURCES += nvidia-uvm/uvm_va_block.c
+ NVIDIA_UVM_SOURCES += nvidia-uvm/uvm_range_group.c
+ NVIDIA_UVM_SOURCES += nvidia-uvm/uvm_gpu_replayable_faults.c
++NVIDIA_UVM_SOURCES += nvidia-uvm/uvm_efs.c
+ NVIDIA_UVM_SOURCES += nvidia-uvm/uvm_gpu_non_replayable_faults.c
+ NVIDIA_UVM_SOURCES += nvidia-uvm/uvm_gpu_access_counters.c
+ NVIDIA_UVM_SOURCES += nvidia-uvm/uvm_perf_events.c
+diff -ruN a/nvidia-uvm/uvm.c b/nvidia-uvm/uvm.c
+--- a/nvidia-uvm/uvm.c	2026-07-28 03:20:15.355027332 +0200
++++ b/nvidia-uvm/uvm.c	2026-09-30 12:18:43.700470799 +0200
+@@ -39,6 +39,7 @@
+ #include "uvm_mem.h"
+ #include "uvm_kvmalloc.h"
+ #include "uvm_test_file.h"
++#include "uvm_efs.h"
+ 
+ #define NVIDIA_UVM_DEVICE_NAME          "nvidia-uvm"
+ 
+@@ -855,7 +856,15 @@
+     // 1) An overlapping range was previously created with an ioctl, for example
+     //    for an external mapping.
+     // 2) This file was passed to another process via a UNIX domain socket
+-    status = uvm_va_range_create_mmap(va_space, current->mm, vma->vm_private_data, NULL);
++    //
++    // kayfabe b3: an EXTERNAL FAULT SERVICE VA space never creates a managed
++    // range, so no GPU access in it is ever backed implicitly by memory of the
++    // process that owns the file. Only an existing range created explicitly by
++    // an ioctl (a semaphore pool, device P2P) may be CPU-mapped below.
++    if (va_space->efs)
++        status = NV_ERR_UVM_ADDRESS_IN_USE;
++    else
++        status = uvm_va_range_create_mmap(va_space, current->mm, vma->vm_private_data, NULL);
+ 
+     if (status == NV_ERR_UVM_ADDRESS_IN_USE) {
+         uvm_va_range_t *existing_range = uvm_va_range_find(va_space, vma->vm_start);
+@@ -893,6 +902,10 @@
+         }
+     }
+ 
++    // kayfabe b3: an EFS VA space asked for a managed range: refused.
++    if (va_space->efs && status == NV_ERR_UVM_ADDRESS_IN_USE)
++        status = NV_ERR_NOT_SUPPORTED;
++
+     if (status != NV_OK) {
+         UVM_DBG_PRINT_RL("Failed to create or map VA range for vma [0x%lx, 0x%lx): %s\n",
+                          vma->vm_start, vma->vm_end, nvstatusToString(status));
+@@ -929,6 +942,23 @@
+     uvm_va_space_t *va_space;
+     NV_STATUS status;
+     uvm_fd_type_t old_fd_type;
++    NvU64 flags = params->flags;
++    const bool efs_requested = (flags & UVM_INIT_FLAGS_EXTERNAL_FAULT_SERVICE) != 0;
++    uvm_efs_va_space_t *efs = NULL;
++
++    // kayfabe b3: EXTERNAL FAULT SERVICE is opt-in twice: the administrator
++    // loads the module with uvm_efs_enable=1, and the file asks for it here,
++    // before anything is registered. It requires pageable (HMM) access off, so
++    // no GPU fault in this VA space is ever serviced from process memory.
++    if (efs_requested) {
++        if (!uvm_efs_enabled())
++            return NV_ERR_NOT_SUPPORTED;
++
++        if (!(flags & (UVM_INIT_FLAGS_DISABLE_HMM | UVM_INIT_FLAGS_MULTI_PROCESS_SHARING_MODE)))
++            return NV_ERR_INVALID_ARGUMENT;
++
++        flags &= ~UVM_INIT_FLAGS_EXTERNAL_FAULT_SERVICE;
++    }
+ 
+     // Normally we expect private_data == UVM_FD_UNINITIALIZED. However multiple
+     // threads may call this ioctl concurrently so we have to be careful to
+@@ -950,18 +980,32 @@
+     old_fd_type = uvm_fd_type_init_cas(filp);
+     switch (old_fd_type) {
+         case UVM_FD_UNINITIALIZED:
+-            status = uvm_va_space_create(filp->f_mapping, &va_space, params->flags);
++            if (efs_requested) {
++                status = uvm_efs_va_space_alloc(&efs);
++                if (status != NV_OK) {
++                    uvm_fd_type_set(filp, UVM_FD_UNINITIALIZED, NULL);
++                    return status;
++                }
++            }
++
++            status = uvm_va_space_create(filp->f_mapping, &va_space, flags);
+             if (status != NV_OK) {
++                uvm_efs_va_space_free_unattached(efs);
+                 uvm_fd_type_set(filp, UVM_FD_UNINITIALIZED, NULL);
+                 return status;
+             }
+ 
++            // Attached before the file is published: nothing can have been
++            // registered, so no fault can have been attributed to it yet.
++            if (efs)
++                uvm_efs_va_space_attach(va_space, efs);
++
+             uvm_fd_type_set(filp, UVM_FD_VA_SPACE, va_space);
+             break;
+ 
+         case UVM_FD_VA_SPACE:
+             va_space = uvm_va_space_get(filp);
+-            if (params->flags != va_space->initialization_flags)
++            if (flags != va_space->initialization_flags || efs_requested != (va_space->efs != NULL))
+                 status = NV_ERR_INVALID_ARGUMENT;
+             else
+                 status = NV_OK;
+@@ -1046,6 +1090,12 @@
+         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_TOOLS_GET_PROCESSOR_UUID_TABLE_V2,uvm_api_tools_get_processor_uuid_table_v2);
+         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_ALLOC_DEVICE_P2P,               uvm_api_alloc_device_p2p);
+         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_CLEAR_ALL_ACCESS_COUNTERS,      uvm_api_clear_all_access_counters);
++
++        // kayfabe b3: EXTERNAL FAULT SERVICE. QUERY works on any file (a caller
++        // learns whether the module has EFS and whether it is enabled).
++        UVM_ROUTE_CMD_STACK_NO_INIT_CHECK(UVM_EFS_QUERY,                   uvm_api_efs_query);
++        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_EFS_WAIT,                       uvm_api_efs_wait);
++        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_EFS_RESOLVE,                    uvm_api_efs_resolve);
+     }
+ 
+     // Try the test ioctls if none of the above matched
+diff -ruN a/nvidia-uvm/uvm_efs.c b/nvidia-uvm/uvm_efs.c
+--- a/nvidia-uvm/uvm_efs.c	1970-01-01 01:00:00.000000000 +0100
++++ b/nvidia-uvm/uvm_efs.c	2026-09-30 12:17:51.482784658 +0200
+@@ -0,0 +1,901 @@
++/*******************************************************************************
++    Copyright (c) 2026 kayfabe contributors. Licensed under the same terms as the
++    surrounding nvidia-uvm sources (MIT, see the header of uvm_ioctl.h).
++
++    EXTERNAL FAULT SERVICE (EFS) — opt-in, default off.
++
++    What it changes. In a VA space whose file opted in at UVM_INITIALIZE, a
++    replayable fault that stock UVM would cancel because no UVM range services it
++    (service_fault_batch_dispatch, status NV_ERR_INVALID_ADDRESS) is parked: its
++    packet is copied into a bounded per-file table, the file's owner is woken, and
++    the access stays pending in hardware. Nothing else changes: managed faults,
++    fatal fault types, prefetch faults, non-replayable faults, every other VA
++    space and every other process keep stock behaviour, through stock code.
++
++    What the owner can do with a record: read it (UVM_EFS_WAIT), then resolve it
++    (UVM_EFS_RESOLVE) with REPLAY (after mapping the page with the stock external
++    mapping ioctls) or CANCEL (the access fails, as stock would have made it
++    fail). Both act only through state this file saved: the saved packet and the
++    VA space's own page directory. The ABI carries no instance pointer, no PDB
++    and no host address.
++
++    Ownership. The VA space belongs to the file (stock UVM). EFS records the
++    thread group that initialized the file and refuses WAIT/RESOLVE from any
++    other thread group: an EFS file passed by SCM_RIGHTS or inherited over fork
++    does not delegate fault service. Registrations into the VA space are stock
++    UVM's, with RM's duplication/verification checks (see the design doc).
++
++    Lifetime (who keeps what alive):
++    - The records live in uvm_efs_va_space_t, which lives exactly as long as the
++      uvm_va_space_t (freed in uvm_va_space_destroy after the bottom halves were
++      flushed), which lives as long as the file. An ioctl holds a file
++      reference, so no WAIT/RESOLVE can run concurrently with the destroy.
++    - A record holds no pointer into UVM or RM objects: it names its GPU by id
++      and remembers the GPU VA space generation. remove_gpu_va_space bumps the
++      generation under the VA space write lock, so a record from a removed GPU
++      VA space can never reach hardware (its PDB is gone): it is dropped.
++    - Every teardown path (mm shutdown at process exit, file release, deferred
++      release) calls uvm_efs_va_space_shutdown first, before stock UVM stops a
++      single channel: accepting stops, the timeout work is cancelled
++      synchronously, and every parked fault is cancelled in hardware, which is
++      what stock UVM would have done with it. Stock teardown then runs unchanged.
++    - Channel unregistration needs no EFS action: a parked fault is hardware
++      state stock UVM also leaves pending while it services a fault; a record
++      whose channel went away is resolved harmlessly (replay: GPU-wide, no-op for
++      a dead context; cancel: VA cancel against this VA space's own PDB) or
++      expires.
++
++    Bounds. uvm_efs_max_records parked records per VA space (the next fault is
++    left to stock: cancelled). uvm_efs_timeout_ms after parking, the kernel
++    cancels the record itself. Dedupe: a re-fault on a parked page merges into
++    its record. A batch whose every fault was parked is not replayed (a replay
++    would only re-raise the same parked accesses), while records are parked a
++    periodic safety replay keeps any overflow-dropped fault of another tenant
++    moving.
++
++    Locking. efs->lock is a leaf spinlock. The bottom half calls
++    uvm_efs_try_divert with the replayable service lock and the VA space lock
++    (read) held. Every hardware action here takes the replayable ISR lock first
++    and the VA space lock (read) second: the bottom half's own order.
++*******************************************************************************/
++
++#include "uvm_common.h"
++#include "uvm_linux.h"
++#include "uvm_api.h"
++#include "uvm_efs.h"
++#include "uvm_global.h"
++#include "uvm_gpu.h"
++#include "uvm_gpu_isr.h"
++#include "uvm_kvmalloc.h"
++#include "uvm_processors.h"
++#include "uvm_va_space.h"
++
++#include <linux/pid.h>
++#include <linux/sched.h>
++#include <linux/sched/signal.h>
++#include <linux/spinlock.h>
++#include <linux/timekeeping.h>
++#include <linux/wait.h>
++#include <linux/workqueue.h>
++
++static int uvm_efs_enable = 0;
++module_param(uvm_efs_enable, int, S_IRUGO);
++MODULE_PARM_DESC(uvm_efs_enable,
++                 "kayfabe b3: allow a UVM file to opt into EXTERNAL FAULT SERVICE at UVM_INITIALIZE (default 0: refused)");
++
++static unsigned uvm_efs_max_records = 1024;
++module_param(uvm_efs_max_records, uint, S_IRUGO);
++MODULE_PARM_DESC(uvm_efs_max_records, "EFS: parked fault records per VA space (1..65535)");
++
++static unsigned uvm_efs_timeout_ms = 10000;
++module_param(uvm_efs_timeout_ms, uint, S_IRUGO);
++MODULE_PARM_DESC(uvm_efs_timeout_ms, "EFS: a record parked this long is cancelled by the kernel (ms, >= 10)");
++
++static int uvm_efs_skip_replays = 1;
++module_param_named(uvm_efs_skip_diverted_replays, uvm_efs_skip_replays, int, S_IRUGO);
++MODULE_PARM_DESC(uvm_efs_skip_diverted_replays, "EFS: do not replay a fault batch whose every fault was parked (default 1)");
++
++static int uvm_efs_teardown_cancel = 1;
++module_param(uvm_efs_teardown_cancel, int, S_IRUGO);
++MODULE_PARM_DESC(uvm_efs_teardown_cancel, "EFS: cancel parked faults in hardware when the VA space shuts down (default 1)");
++
++#define EFS_SLOT_BITS        16
++#define EFS_SLOT_MASK        ((1ULL << EFS_SLOT_BITS) - 1)
++#define EFS_MAX_RECORDS_CAP  ((1U << EFS_SLOT_BITS) - 1)
++#define EFS_MIN_TIMEOUT_MS   10
++
++static atomic64_t g_efs_gctr[UVM_EFS_GCTR_COUNT];
++
++typedef struct
++{
++    bool                        in_use;
++    NvU64                       id;
++    NvU64                       gen;
++    uvm_gpu_id_t                gpu_id;
++    NvProcessorUuid             gpu_uuid;
++    NvU64                       divert_real_ns;
++    NvU64                       park_mono_ns;
++    NvU32                       num_instances;
++
++    // A copy of the packet as stock UVM parsed it. Its va_space/gpu pointers and
++    // list head are cleared: nothing in it is ever dereferenced.
++    uvm_fault_buffer_entry_t    entry;
++
++    // On efs->undelivered until handed to userspace by UVM_EFS_WAIT.
++    struct list_head            undelivered_node;
++    bool                        delivered;
++} uvm_efs_record_t;
++
++// What a hardware action needs, copied out of a record under the lock.
++typedef struct
++{
++    uvm_gpu_id_t                gpu_id;
++    NvU64                       gen;
++    uvm_fault_buffer_entry_t    entry;
++} uvm_efs_saved_t;
++
++struct uvm_efs_va_space_struct
++{
++    spinlock_t                  lock;
++    wait_queue_head_t           wait_queue;
++    struct mutex                shutdown_mutex;
++    struct pid                 *owner;
++    uvm_va_space_t             *va_space;
++
++    bool                        closing;
++    bool                        shut_down;
++    NvU32                       max_records;
++    NvU32                       num_parked;
++    NvU32                       num_undelivered;
++    NvU32                       free_hint;
++    NvU64                       next_seq;
++    NvU64                       gpu_gen[UVM_ID_MAX_GPUS];
++    NvU64                       ctr[UVM_EFS_CTR_COUNT];
++
++    struct list_head            undelivered;
++    struct delayed_work         timeout_work;
++
++    uvm_efs_record_t           *records;
++};
++
++bool uvm_efs_enabled(void)
++{
++    return uvm_efs_enable != 0;
++}
++
++bool uvm_efs_skip_diverted_replays(void)
++{
++    return uvm_efs_skip_replays != 0;
++}
++
++void uvm_efs_count_batch_replay_skipped(void)
++{
++    atomic64_inc(&g_efs_gctr[UVM_EFS_GCTR_BATCH_REPLAYS_SKIPPED]);
++}
++
++static NvU32 efs_timeout_ms(void)
++{
++    return max(uvm_efs_timeout_ms, (unsigned)EFS_MIN_TIMEOUT_MS);
++}
++
++// The timeout work runs at a quarter of the timeout, at most once a second.
++static unsigned long efs_tick_jiffies(void)
++{
++    NvU32 tick_ms = min(efs_timeout_ms() / 4, 1000U);
++
++    return msecs_to_jiffies(max(tick_ms, 1U));
++}
++
++static bool efs_caller_is_owner(uvm_efs_va_space_t *efs)
++{
++    return task_tgid(current) == efs->owner;
++}
++
++// Must be called with efs->lock held.
++static void efs_record_free_locked(uvm_efs_va_space_t *efs, uvm_efs_record_t *rec)
++{
++    UVM_ASSERT(rec->in_use);
++
++    if (!rec->delivered) {
++        list_del_init(&rec->undelivered_node);
++        UVM_ASSERT(efs->num_undelivered > 0);
++        --efs->num_undelivered;
++    }
++
++    rec->in_use = false;
++    UVM_ASSERT(efs->num_parked > 0);
++    --efs->num_parked;
++    efs->free_hint = (NvU32)(rec - efs->records);
++}
++
++static void efs_timeout_work_fn(struct work_struct *work);
++
++NV_STATUS uvm_efs_va_space_alloc(uvm_efs_va_space_t **efs_out)
++{
++    uvm_efs_va_space_t *efs;
++    NvU32 max_records = uvm_efs_max_records;
++
++    *efs_out = NULL;
++
++    if (max_records == 0 || max_records > EFS_MAX_RECORDS_CAP)
++        return NV_ERR_INVALID_ARGUMENT;
++
++    efs = uvm_kvmalloc_zero(sizeof(*efs));
++    if (!efs)
++        return NV_ERR_NO_MEMORY;
++
++    efs->records = uvm_kvmalloc_zero(sizeof(*efs->records) * max_records);
++    if (!efs->records) {
++        uvm_kvfree(efs);
++        return NV_ERR_NO_MEMORY;
++    }
++
++    spin_lock_init(&efs->lock);
++    init_waitqueue_head(&efs->wait_queue);
++    mutex_init(&efs->shutdown_mutex);
++    INIT_LIST_HEAD(&efs->undelivered);
++    INIT_DELAYED_WORK(&efs->timeout_work, efs_timeout_work_fn);
++    efs->max_records = max_records;
++    efs->next_seq = 1;
++    efs->owner = get_pid(task_tgid(current));
++
++    atomic64_inc(&g_efs_gctr[UVM_EFS_GCTR_EFS_VA_SPACES]);
++
++    *efs_out = efs;
++    return NV_OK;
++}
++
++void uvm_efs_va_space_attach(uvm_va_space_t *va_space, uvm_efs_va_space_t *efs)
++{
++    UVM_ASSERT(!va_space->efs);
++
++    efs->va_space = va_space;
++    va_space->efs = efs;
++}
++
++void uvm_efs_va_space_free_unattached(uvm_efs_va_space_t *efs)
++{
++    if (!efs)
++        return;
++
++    put_pid(efs->owner);
++    uvm_kvfree(efs->records);
++    uvm_kvfree(efs);
++}
++
++bool uvm_efs_try_divert(uvm_va_space_t *va_space, uvm_gpu_t *gpu, const uvm_fault_buffer_entry_t *entry)
++{
++    uvm_efs_va_space_t *efs = va_space->efs;
++    uvm_efs_record_t *rec = NULL;
++    NvU32 gpu_index;
++    NvU32 i;
++
++    if (!efs)
++        return false;
++
++    // A prefetch fault needs no service: stock treats it as an invalid prefetch
++    // and it disappears on the next replay.
++    if (entry->fault_access_type == UVM_FAULT_ACCESS_TYPE_PREFETCH)
++        return false;
++
++    // A parked fault must be precisely cancellable later (Volta+).
++    if (!gpu->parent->fault_cancel_va_supported)
++        return false;
++
++    gpu_index = uvm_id_gpu_index(gpu->id);
++
++    spin_lock(&efs->lock);
++
++    if (efs->closing) {
++        ++efs->ctr[UVM_EFS_CTR_REFUSED_CLOSING];
++        spin_unlock(&efs->lock);
++        return false;
++    }
++
++    // A re-fault of a parked page (another warp, or a replay issued by anyone)
++    // merges into its record.
++    for (i = 0; i < efs->max_records; i++) {
++        uvm_efs_record_t *cur = &efs->records[i];
++
++        if (!cur->in_use ||
++            !uvm_id_equal(cur->gpu_id, gpu->id) ||
++            cur->gen != efs->gpu_gen[gpu_index] ||
++            cur->entry.fault_address != entry->fault_address)
++            continue;
++
++        cur->entry.access_type_mask |= entry->access_type_mask;
++        if (entry->fault_access_type > cur->entry.fault_access_type)
++            cur->entry.fault_access_type = entry->fault_access_type;
++        cur->num_instances += entry->num_instances;
++        ++efs->ctr[UVM_EFS_CTR_DEDUPED];
++        spin_unlock(&efs->lock);
++        return true;
++    }
++
++    if (efs->num_parked >= efs->max_records) {
++        ++efs->ctr[UVM_EFS_CTR_REFUSED_FULL];
++        spin_unlock(&efs->lock);
++        return false;
++    }
++
++    for (i = 0; i < efs->max_records; i++) {
++        NvU32 slot = (efs->free_hint + i) % efs->max_records;
++
++        if (!efs->records[slot].in_use) {
++            rec = &efs->records[slot];
++            break;
++        }
++    }
++    UVM_ASSERT(rec);
++
++    memset(rec, 0, sizeof(*rec));
++    rec->in_use = true;
++    rec->id = (efs->next_seq++ << EFS_SLOT_BITS) | (NvU64)(rec - efs->records);
++    rec->gen = efs->gpu_gen[gpu_index];
++    rec->gpu_id = gpu->id;
++    uvm_uuid_copy(&rec->gpu_uuid, &gpu->uuid);
++    rec->divert_real_ns = ktime_get_real_ns();
++    rec->park_mono_ns = ktime_get_ns();
++    rec->num_instances = entry->num_instances;
++    rec->entry = *entry;
++    rec->entry.va_space = NULL;
++    rec->entry.gpu = NULL;
++    INIT_LIST_HEAD(&rec->entry.merged_instances_list);
++    rec->delivered = false;
++    list_add_tail(&rec->undelivered_node, &efs->undelivered);
++
++    ++efs->num_parked;
++    ++efs->num_undelivered;
++    ++efs->ctr[UVM_EFS_CTR_DIVERTED];
++
++    // Queued under the lock: uvm_efs_va_space_shutdown sets closing under the
++    // same lock before cancelling the work synchronously, so no work can be
++    // queued after that cancel.
++    queue_delayed_work(system_wq, &efs->timeout_work, efs_tick_jiffies());
++
++    spin_unlock(&efs->lock);
++
++    wake_up_interruptible(&efs->wait_queue);
++
++    return true;
++}
++
++// Looks up and retains the GPU a record names, if its GPU VA space is still
++// registered in this VA space. Returns NULL otherwise.
++static uvm_gpu_t *efs_retain_gpu(uvm_va_space_t *va_space, uvm_gpu_id_t gpu_id)
++{
++    uvm_gpu_t *gpu = NULL;
++
++    uvm_va_space_down_read(va_space);
++
++    if (uvm_processor_mask_test(&va_space->registered_gpu_va_spaces, gpu_id)) {
++        gpu = uvm_gpu_get(gpu_id);
++        if (gpu)
++            uvm_gpu_retain(gpu);
++    }
++
++    uvm_va_space_up_read(va_space);
++
++    return gpu;
++}
++
++// Cancels saved[0..n) in hardware on one GPU, then flushes the fault buffer and
++// replays, as stock UVM does after its own precise cancels. Records whose GPU VA
++// space was removed or replaced since they were parked are skipped. Returns the
++// number of records that reached hardware.
++static NvU32 efs_hw_cancel(uvm_va_space_t *va_space, uvm_efs_saved_t *saved, NvU32 n)
++{
++    uvm_efs_va_space_t *efs = va_space->efs;
++    uvm_gpu_t *gpu;
++    NvU32 i, cancelled = 0;
++    NV_STATUS status;
++
++    if (n == 0)
++        return 0;
++
++    gpu = efs_retain_gpu(va_space, saved[0].gpu_id);
++    if (!gpu)
++        return 0;
++
++    uvm_parent_gpu_replayable_faults_isr_lock(gpu->parent);
++    uvm_va_space_down_read(va_space);
++
++    if (uvm_gpu_va_space_get(va_space, gpu)) {
++        for (i = 0; i < n; i++) {
++            uvm_fault_buffer_entry_t entry = saved[i].entry;
++
++            UVM_ASSERT(uvm_id_equal(saved[i].gpu_id, gpu->id));
++
++            // gpu_gen only changes under the VA space write lock.
++            if (saved[i].gen != efs->gpu_gen[uvm_id_gpu_index(gpu->id)])
++                continue;
++
++            entry.va_space = va_space;
++            entry.gpu = gpu;
++            entry.is_fatal = true;
++            entry.filtered = false;
++            entry.fatal_reason = UvmEventFatalReasonInvalidAddress;
++            entry.replayable.cancel_va_mode = UVM_FAULT_CANCEL_VA_MODE_ALL;
++            INIT_LIST_HEAD(&entry.merged_instances_list);
++
++            status = uvm_efs_hw_cancel_va_locked(&entry);
++            if (status != NV_OK)
++                UVM_ERR_PRINT("EFS cancel of 0x%llx failed: %s, GPU %s\n",
++                              entry.fault_address, nvstatusToString(status), uvm_gpu_name(gpu));
++            else
++                ++cancelled;
++        }
++    }
++
++    uvm_va_space_up_read(va_space);
++
++    status = uvm_efs_hw_flush_and_replay_locked(gpu);
++    if (status != NV_OK)
++        UVM_ERR_PRINT("EFS flush after cancel failed: %s, GPU %s\n", nvstatusToString(status), uvm_gpu_name(gpu));
++
++    uvm_parent_gpu_replayable_faults_isr_unlock(gpu->parent);
++    uvm_gpu_release(gpu);
++
++    return cancelled;
++}
++
++static bool efs_hw_replay(uvm_va_space_t *va_space, uvm_gpu_id_t gpu_id)
++{
++    uvm_gpu_t *gpu = efs_retain_gpu(va_space, gpu_id);
++    NV_STATUS status;
++
++    if (!gpu)
++        return false;
++
++    uvm_parent_gpu_replayable_faults_isr_lock(gpu->parent);
++    status = uvm_efs_hw_replay_locked(gpu);
++    uvm_parent_gpu_replayable_faults_isr_unlock(gpu->parent);
++
++    if (status != NV_OK)
++        UVM_ERR_PRINT("EFS replay failed: %s, GPU %s\n", nvstatusToString(status), uvm_gpu_name(gpu));
++
++    uvm_gpu_release(gpu);
++
++    return status == NV_OK;
++}
++
++// Cancels the given saved records GPU by GPU (usually one GPU).
++static NvU32 efs_hw_cancel_all(uvm_va_space_t *va_space, uvm_efs_saved_t *saved, NvU32 n)
++{
++    NvU32 done = 0, cancelled = 0;
++
++    // Group by GPU in place: stable enough for the handful of GPUs involved.
++    while (done < n) {
++        NvU32 i, end = done + 1;
++
++        for (i = done + 1; i < n; i++) {
++            if (uvm_id_equal(saved[i].gpu_id, saved[done].gpu_id)) {
++                uvm_efs_saved_t tmp = saved[end];
++                saved[end] = saved[i];
++                saved[i] = tmp;
++                ++end;
++            }
++        }
++
++        cancelled += efs_hw_cancel(va_space, &saved[done], end - done);
++        done = end;
++    }
++
++    return cancelled;
++}
++
++static void efs_timeout_work_fn(struct work_struct *work)
++{
++    uvm_efs_va_space_t *efs = container_of(to_delayed_work(work), uvm_efs_va_space_t, timeout_work);
++    uvm_va_space_t *va_space = efs->va_space;
++    uvm_efs_saved_t *saved;
++    NvU64 now = ktime_get_ns();
++    NvU64 timeout_ns = (NvU64)efs_timeout_ms() * 1000 * 1000;
++    uvm_gpu_id_t replay_gpus[4];
++    NvU32 num_replay_gpus = 0;
++    NvU32 i, n = 0;
++    bool requeue;
++
++    saved = uvm_kvmalloc(sizeof(*saved) * efs->max_records);
++
++    spin_lock(&efs->lock);
++
++    for (i = 0; saved && i < efs->max_records; i++) {
++        uvm_efs_record_t *rec = &efs->records[i];
++
++        if (!rec->in_use)
++            continue;
++
++        if (now - rec->park_mono_ns >= timeout_ns) {
++            saved[n].gpu_id = rec->gpu_id;
++            saved[n].gen = rec->gen;
++            saved[n].entry = rec->entry;
++            ++n;
++            efs_record_free_locked(efs, rec);
++            ++efs->ctr[UVM_EFS_CTR_TIMED_OUT];
++        }
++        else if (num_replay_gpus < ARRAY_SIZE(replay_gpus)) {
++            NvU32 j;
++            bool seen = false;
++
++            for (j = 0; j < num_replay_gpus; j++)
++                seen = seen || uvm_id_equal(replay_gpus[j], rec->gpu_id);
++            if (!seen)
++                replay_gpus[num_replay_gpus++] = rec->gpu_id;
++        }
++    }
++
++    spin_unlock(&efs->lock);
++
++    if (n > 0)
++        efs_hw_cancel_all(va_space, saved, n);
++
++    // Safety replay: parked records suppress batch replays, so make sure a
++    // fault some other tenant lost to a buffer overflow still gets replayed.
++    for (i = 0; i < num_replay_gpus; i++) {
++        if (efs_hw_replay(va_space, replay_gpus[i]))
++            atomic64_inc(&g_efs_gctr[UVM_EFS_GCTR_SAFETY_REPLAYS]);
++    }
++
++    uvm_kvfree(saved);
++
++    spin_lock(&efs->lock);
++    requeue = !efs->closing && efs->num_parked > 0;
++    if (requeue)
++        queue_delayed_work(system_wq, &efs->timeout_work, efs_tick_jiffies());
++    spin_unlock(&efs->lock);
++}
++
++void uvm_efs_va_space_shutdown(uvm_va_space_t *va_space)
++{
++    uvm_efs_va_space_t *efs = va_space->efs;
++    uvm_efs_saved_t *saved;
++    NvU32 i, n = 0, cancelled = 0;
++
++    if (!efs)
++        return;
++
++    mutex_lock(&efs->shutdown_mutex);
++
++    if (efs->shut_down) {
++        mutex_unlock(&efs->shutdown_mutex);
++        return;
++    }
++
++    spin_lock(&efs->lock);
++    efs->closing = true;
++    spin_unlock(&efs->lock);
++
++    // No work can be queued after this: try_divert queues under the lock only
++    // while !closing, and the work requeues itself only while !closing.
++    cancel_delayed_work_sync(&efs->timeout_work);
++
++    saved = uvm_kvmalloc(sizeof(*saved) * efs->max_records);
++
++    spin_lock(&efs->lock);
++    for (i = 0; i < efs->max_records; i++) {
++        uvm_efs_record_t *rec = &efs->records[i];
++
++        if (!rec->in_use)
++            continue;
++
++        if (saved) {
++            saved[n].gpu_id = rec->gpu_id;
++            saved[n].gen = rec->gen;
++            saved[n].entry = rec->entry;
++            ++n;
++        }
++        efs_record_free_locked(efs, rec);
++    }
++    spin_unlock(&efs->lock);
++
++    if (uvm_efs_teardown_cancel && n > 0)
++        cancelled = efs_hw_cancel_all(va_space, saved, n);
++
++    uvm_kvfree(saved);
++
++    spin_lock(&efs->lock);
++    efs->ctr[UVM_EFS_CTR_TEARDOWN_CANCELLED] += cancelled;
++    spin_unlock(&efs->lock);
++
++    wake_up_all(&efs->wait_queue);
++
++    UVM_INFO_PRINT("EFS VA space of tgid %d shut down: parked_at_shutdown=%u hw_cancelled=%u diverted=%llu "
++                   "deduped=%llu delivered=%llu replayed=%llu cancelled=%llu timed_out=%llu refused_full=%llu "
++                   "refused_closing=%llu stale=%llu gpu_gone=%llu hw_replays=%llu\n",
++                   pid_nr(efs->owner), n, cancelled,
++                   efs->ctr[UVM_EFS_CTR_DIVERTED], efs->ctr[UVM_EFS_CTR_DEDUPED],
++                   efs->ctr[UVM_EFS_CTR_DELIVERED], efs->ctr[UVM_EFS_CTR_RESOLVED_REPLAY],
++                   efs->ctr[UVM_EFS_CTR_RESOLVED_CANCEL], efs->ctr[UVM_EFS_CTR_TIMED_OUT],
++                   efs->ctr[UVM_EFS_CTR_REFUSED_FULL], efs->ctr[UVM_EFS_CTR_REFUSED_CLOSING],
++                   efs->ctr[UVM_EFS_CTR_STALE], efs->ctr[UVM_EFS_CTR_DROPPED_GPU_GONE],
++                   efs->ctr[UVM_EFS_CTR_HW_REPLAYS]);
++
++    efs->shut_down = true;
++    mutex_unlock(&efs->shutdown_mutex);
++}
++
++void uvm_efs_va_space_free(uvm_va_space_t *va_space)
++{
++    uvm_efs_va_space_t *efs = va_space->efs;
++
++    if (!efs)
++        return;
++
++    // Every destroy path already shut it down; this is the backstop.
++    uvm_efs_va_space_shutdown(va_space);
++
++    UVM_ASSERT(efs->num_parked == 0);
++    UVM_ASSERT(!delayed_work_pending(&efs->timeout_work));
++
++    va_space->efs = NULL;
++    uvm_efs_va_space_free_unattached(efs);
++}
++
++void uvm_efs_gpu_va_space_removed(uvm_va_space_t *va_space, uvm_gpu_t *gpu)
++{
++    uvm_efs_va_space_t *efs = va_space->efs;
++    NvU32 i, gpu_index;
++
++    if (!efs)
++        return;
++
++    uvm_assert_rwsem_locked_write(&va_space->lock);
++
++    gpu_index = uvm_id_gpu_index(gpu->id);
++
++    spin_lock(&efs->lock);
++
++    ++efs->gpu_gen[gpu_index];
++
++    for (i = 0; i < efs->max_records; i++) {
++        uvm_efs_record_t *rec = &efs->records[i];
++
++        if (rec->in_use && uvm_id_equal(rec->gpu_id, gpu->id)) {
++            efs_record_free_locked(efs, rec);
++            ++efs->ctr[UVM_EFS_CTR_DROPPED_GPU_GONE];
++        }
++    }
++
++    spin_unlock(&efs->lock);
++}
++
++NV_STATUS uvm_api_efs_query(UVM_EFS_QUERY_PARAMS *params, struct file *filp)
++{
++    uvm_va_space_t *va_space = uvm_fd_va_space(filp);
++    uvm_efs_va_space_t *efs = va_space ? va_space->efs : NULL;
++    NvU32 i;
++
++    params->abiVersion = UVM_EFS_ABI_VERSION;
++    params->moduleEnabled = uvm_efs_enabled();
++    params->maxRecords = uvm_efs_max_records;
++    params->timeoutMs = efs_timeout_ms();
++    params->skipDivertedReplays = uvm_efs_skip_diverted_replays();
++    params->active = efs != NULL;
++    params->numParked = 0;
++    params->numUndelivered = 0;
++    memset(params->vaSpaceCounters, 0, sizeof(params->vaSpaceCounters));
++
++    for (i = 0; i < UVM_EFS_GCTR_COUNT; i++)
++        params->globalCounters[i] = atomic64_read(&g_efs_gctr[i]);
++
++    if (efs) {
++        spin_lock(&efs->lock);
++        params->maxRecords = efs->max_records;
++        params->numParked = efs->num_parked;
++        params->numUndelivered = efs->num_undelivered;
++        memcpy(params->vaSpaceCounters, efs->ctr, sizeof(params->vaSpaceCounters));
++        spin_unlock(&efs->lock);
++    }
++
++    return NV_OK;
++}
++
++static void efs_fill_user_record(const uvm_efs_record_t *rec, UvmEfsFaultRecord *out)
++{
++    memset(out, 0, sizeof(*out));
++    out->recordId = rec->id;
++    out->faultAddress = rec->entry.fault_address;
++    out->gpuTimestampNs = rec->entry.timestamp;
++    out->divertTimeNs = rec->divert_real_ns;
++    out->gpuUuid = rec->gpu_uuid;
++    out->accessType = rec->entry.fault_access_type;
++    out->accessTypeMask = rec->entry.access_type_mask;
++    out->faultType = rec->entry.fault_type;
++    out->clientType = rec->entry.fault_source.client_type;
++    out->clientId = rec->entry.fault_source.client_id;
++    out->gpcId = rec->entry.fault_source.gpc_id;
++    out->utlbId = rec->entry.fault_source.utlb_id;
++    out->veId = rec->entry.fault_source.ve_id;
++    out->mmuEngineId = rec->entry.fault_source.mmu_engine_id;
++    out->numInstances = rec->num_instances;
++}
++
++// Moves up to max undelivered records into out[]. Returns how many.
++static NvU32 efs_take_undelivered(uvm_efs_va_space_t *efs, UvmEfsFaultRecord *out, NvU32 max, bool *closing)
++{
++    NvU32 n = 0;
++
++    spin_lock(&efs->lock);
++
++    while (n < max && !list_empty(&efs->undelivered)) {
++        uvm_efs_record_t *rec = list_first_entry(&efs->undelivered, uvm_efs_record_t, undelivered_node);
++
++        list_del_init(&rec->undelivered_node);
++        rec->delivered = true;
++        --efs->num_undelivered;
++        efs_fill_user_record(rec, &out[n++]);
++    }
++
++    efs->ctr[UVM_EFS_CTR_DELIVERED] += n;
++    *closing = efs->closing;
++
++    spin_unlock(&efs->lock);
++
++    return n;
++}
++
++NV_STATUS uvm_api_efs_wait(UVM_EFS_WAIT_PARAMS *params, struct file *filp)
++{
++    uvm_va_space_t *va_space = uvm_va_space_get(filp);
++    uvm_efs_va_space_t *efs = va_space->efs;
++    UvmEfsFaultRecord *out;
++    NvU32 max = params->maxRecords;
++    NvU32 timeout_us = min(params->timeoutUs, (NvU32)UVM_EFS_MAX_WAIT_TIMEOUT_US);
++    NvU32 n;
++    bool closing = false;
++    NV_STATUS status = NV_OK;
++
++    params->numRecords = 0;
++
++    if (!efs)
++        return NV_ERR_NOT_SUPPORTED;
++
++    if (!efs_caller_is_owner(efs))
++        return NV_ERR_INSUFFICIENT_PERMISSIONS;
++
++    if (max == 0 || max > UVM_EFS_MAX_WAIT_RECORDS)
++        return NV_ERR_INVALID_ARGUMENT;
++
++    out = uvm_kvmalloc(sizeof(*out) * max);
++    if (!out)
++        return NV_ERR_NO_MEMORY;
++
++    n = efs_take_undelivered(efs, out, max, &closing);
++    if (n == 0 && timeout_us > 0 && !closing) {
++        long ret = wait_event_interruptible_timeout(efs->wait_queue,
++                                                    READ_ONCE(efs->num_undelivered) > 0 || READ_ONCE(efs->closing),
++                                                    usecs_to_jiffies(timeout_us));
++        // A signal or a timeout both return with whatever is there (maybe nothing).
++        (void)ret;
++        n = efs_take_undelivered(efs, out, max, &closing);
++    }
++
++    // ⚠ Records are marked delivered before the copy: a faulting user buffer
++    // loses them to userspace and they expire through the timeout (cancelled).
++    if (n > 0 && copy_to_user((void __user *)(uintptr_t)params->records, out, sizeof(*out) * n))
++        status = NV_ERR_INVALID_ADDRESS;
++    else
++        params->numRecords = n;
++
++    uvm_kvfree(out);
++
++    return status;
++}
++
++NV_STATUS uvm_api_efs_resolve(UVM_EFS_RESOLVE_PARAMS *params, struct file *filp)
++{
++    uvm_va_space_t *va_space = uvm_va_space_get(filp);
++    uvm_efs_va_space_t *efs = va_space->efs;
++    NvU64 *ids = NULL;
++    uvm_efs_saved_t *saved = NULL;
++    NvU32 count = params->count;
++    NvU32 i, n = 0, stale = 0;
++    NV_STATUS status = NV_OK;
++
++    params->numResolved = 0;
++    params->numStale = 0;
++
++    if (!efs)
++        return NV_ERR_NOT_SUPPORTED;
++
++    if (!efs_caller_is_owner(efs))
++        return NV_ERR_INSUFFICIENT_PERMISSIONS;
++
++    if (count == 0 || count > UVM_EFS_MAX_RESOLVE_RECORDS)
++        return NV_ERR_INVALID_ARGUMENT;
++
++    if (params->action != UVM_EFS_ACTION_REPLAY && params->action != UVM_EFS_ACTION_CANCEL)
++        return NV_ERR_INVALID_ARGUMENT;
++
++    ids = uvm_kvmalloc(sizeof(*ids) * count);
++    saved = uvm_kvmalloc(sizeof(*saved) * count);
++    if (!ids || !saved) {
++        status = NV_ERR_NO_MEMORY;
++        goto out;
++    }
++
++    if (copy_from_user(ids, (const void __user *)(uintptr_t)params->recordIds, sizeof(*ids) * count)) {
++        status = NV_ERR_INVALID_ADDRESS;
++        goto out;
++    }
++
++    spin_lock(&efs->lock);
++
++    for (i = 0; i < count; i++) {
++        NvU64 slot = ids[i] & EFS_SLOT_MASK;
++        uvm_efs_record_t *rec;
++
++        if (slot >= efs->max_records) {
++            ++stale;
++            continue;
++        }
++
++        rec = &efs->records[slot];
++        if (!rec->in_use || rec->id != ids[i]) {
++            ++stale;
++            continue;
++        }
++
++        if (rec->gen != efs->gpu_gen[uvm_id_gpu_index(rec->gpu_id)]) {
++            // Its GPU VA space went away: nothing in hardware to act on.
++            efs_record_free_locked(efs, rec);
++            ++stale;
++            continue;
++        }
++
++        saved[n].gpu_id = rec->gpu_id;
++        saved[n].gen = rec->gen;
++        saved[n].entry = rec->entry;
++        ++n;
++        efs_record_free_locked(efs, rec);
++    }
++
++    efs->ctr[UVM_EFS_CTR_STALE] += stale;
++    if (params->action == UVM_EFS_ACTION_REPLAY)
++        efs->ctr[UVM_EFS_CTR_RESOLVED_REPLAY] += n;
++    else
++        efs->ctr[UVM_EFS_CTR_RESOLVED_CANCEL] += n;
++
++    spin_unlock(&efs->lock);
++
++    params->numResolved = n;
++    params->numStale = stale;
++
++    if (n == 0)
++        goto out;
++
++    if (params->action == UVM_EFS_ACTION_CANCEL) {
++        efs_hw_cancel_all(va_space, saved, n);
++    }
++    else {
++        // One replay per GPU involved. The mapping ioctls the owner issued before
++        // this call have completed their PTE writes and TLB invalidates (they wait
++        // on their trackers), so the replayed accesses see the new mappings.
++        uvm_gpu_id_t done[4];
++        NvU32 num_done = 0, j;
++
++        for (i = 0; i < n; i++) {
++            bool seen = false;
++
++            for (j = 0; j < num_done; j++)
++                seen = seen || uvm_id_equal(done[j], saved[i].gpu_id);
++            if (seen)
++                continue;
++
++            if (efs_hw_replay(va_space, saved[i].gpu_id)) {
++                spin_lock(&efs->lock);
++                ++efs->ctr[UVM_EFS_CTR_HW_REPLAYS];
++                spin_unlock(&efs->lock);
++            }
++
++            if (num_done < ARRAY_SIZE(done))
++                done[num_done++] = saved[i].gpu_id;
++        }
++    }
++
++out:
++    uvm_kvfree(saved);
++    uvm_kvfree(ids);
++    return status;
++}
+diff -ruN a/nvidia-uvm/uvm_efs.h b/nvidia-uvm/uvm_efs.h
+--- a/nvidia-uvm/uvm_efs.h	1970-01-01 01:00:00.000000000 +0100
++++ b/nvidia-uvm/uvm_efs.h	2026-09-30 12:17:51.482496436 +0200
+@@ -0,0 +1,71 @@
++/*******************************************************************************
++    Copyright (c) 2026 kayfabe contributors. Licensed under the same terms as the
++    surrounding nvidia-uvm sources (MIT, see the header of uvm_ioctl.h).
++
++    EXTERNAL FAULT SERVICE (EFS): kernel-internal interface. See uvm_efs_ioctl.h
++    for the user ABI and uvm_efs.c for the design and the lifetime rules.
++*******************************************************************************/
++
++#ifndef __UVM_EFS_H__
++#define __UVM_EFS_H__
++
++#include "uvm_forward_decl.h"
++#include "uvm_linux.h"
++#include "uvm_efs_ioctl.h"
++#include "uvm_hal_types.h"
++
++typedef struct uvm_efs_va_space_struct uvm_efs_va_space_t;
++
++// Module parameter uvm_efs_enable, read at UVM_INITIALIZE time.
++bool uvm_efs_enabled(void);
++
++// Module parameter uvm_efs_skip_diverted_replays.
++bool uvm_efs_skip_diverted_replays(void);
++
++// Global counter bump for the replayable-fault service loop.
++void uvm_efs_count_batch_replay_skipped(void);
++
++// Allocated before the VA space is created and attached before the file is
++// published, so no fault can ever be attributed to an EFS VA space that has no
++// EFS state. Freed by uvm_efs_va_space_free().
++NV_STATUS uvm_efs_va_space_alloc(uvm_efs_va_space_t **efs_out);
++void uvm_efs_va_space_attach(uvm_va_space_t *va_space, uvm_efs_va_space_t *efs);
++void uvm_efs_va_space_free_unattached(uvm_efs_va_space_t *efs);
++
++// First step of every teardown path (mm shutdown and VA space destroy), before
++// stock UVM stops any channel. Idempotent. Stops accepting records, cancels the
++// timeout work and (uvm_efs_teardown_cancel=1, the default) cancels every parked
++// fault in hardware, so the stock teardown finds exactly the hardware state it
++// would have found without EFS: no fault left pending on its behalf.
++//
++// LOCKING: no UVM locks held. Takes the replayable ISR lock, then the VA space
++//          lock in read mode (the bottom half's own order).
++void uvm_efs_va_space_shutdown(uvm_va_space_t *va_space);
++
++// Last step of uvm_va_space_destroy, after the bottom halves were flushed.
++void uvm_efs_va_space_free(uvm_va_space_t *va_space);
++
++// Called from remove_gpu_va_space() with the VA space lock held in write mode.
++// Records against that GPU VA space become stale: they are dropped without any
++// hardware action (its page directory is going away).
++void uvm_efs_gpu_va_space_removed(uvm_va_space_t *va_space, uvm_gpu_t *gpu);
++
++// Called by the replayable fault servicing path, with the replayable service
++// lock held and the VA space lock held in read mode, for a fault stock UVM is
++// about to mark fatal with NV_ERR_INVALID_ADDRESS. Returns true if the fault was
++// parked (or merged into a parked record): the caller must then neither cancel
++// nor count it as fatal. Never sleeps and never allocates.
++bool uvm_efs_try_divert(uvm_va_space_t *va_space, uvm_gpu_t *gpu, const uvm_fault_buffer_entry_t *entry);
++
++// Hardware helpers implemented in uvm_gpu_replayable_faults.c (they wrap static
++// functions there). The caller holds uvm_parent_gpu_replayable_faults_isr_lock.
++NV_STATUS uvm_efs_hw_cancel_va_locked(uvm_fault_buffer_entry_t *entry);
++NV_STATUS uvm_efs_hw_flush_and_replay_locked(uvm_gpu_t *gpu);
++NV_STATUS uvm_efs_hw_replay_locked(uvm_gpu_t *gpu);
++
++// ioctls
++NV_STATUS uvm_api_efs_query(UVM_EFS_QUERY_PARAMS *params, struct file *filp);
++NV_STATUS uvm_api_efs_wait(UVM_EFS_WAIT_PARAMS *params, struct file *filp);
++NV_STATUS uvm_api_efs_resolve(UVM_EFS_RESOLVE_PARAMS *params, struct file *filp);
++
++#endif // __UVM_EFS_H__
+diff -ruN a/nvidia-uvm/uvm_efs_ioctl.h b/nvidia-uvm/uvm_efs_ioctl.h
+--- a/nvidia-uvm/uvm_efs_ioctl.h	1970-01-01 01:00:00.000000000 +0100
++++ b/nvidia-uvm/uvm_efs_ioctl.h	2026-09-30 12:13:27.397890056 +0200
+@@ -0,0 +1,126 @@
++/*******************************************************************************
++    Copyright (c) 2026 kayfabe contributors. Licensed under the same terms as the
++    surrounding nvidia-uvm sources (MIT, see the header of uvm_ioctl.h).
++
++    EXTERNAL FAULT SERVICE (EFS) — the user ABI of the opt-in b3 extension.
++
++    A UVM file opts in at UVM_INITIALIZE with UVM_INIT_FLAGS_EXTERNAL_FAULT_SERVICE,
++    before any registration. The module parameter uvm_efs_enable must be 1
++    (default 0), otherwise that flag is refused with NV_ERR_NOT_SUPPORTED. A stock
++    nvidia-uvm refuses the unknown flag with NV_ERR_INVALID_ARGUMENT, so the two
++    are distinguishable from userspace.
++
++    In an EFS VA space, a replayable GPU fault that stock UVM would cancel because
++    no UVM range can service it (NV_ERR_INVALID_ADDRESS: no range, an external
++    range, HMM off) is parked instead and queued to this file as a record. Only
++    the thread group that initialized the file may read records or resolve them.
++    Records never carry an instance pointer, a PDB or any host address: a record
++    is named by an opaque id the kernel issued, and every hardware action the
++    kernel takes on it uses state the kernel saved itself.
++*******************************************************************************/
++
++#ifndef _UVM_EFS_IOCTL_H
++#define _UVM_EFS_IOCTL_H
++
++#include "uvm_types.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++// Outside UVM_INIT_FLAGS_MASK on purpose (a high bit, far from NVIDIA's own).
++#define UVM_INIT_FLAGS_EXTERNAL_FAULT_SERVICE            ((NvU64)0x4000000000000000ULL)
++
++#define UVM_EFS_ABI_VERSION                              1
++
++// Far from both the stock range (1..80) and the test range (200+).
++#define UVM_EFS_QUERY                                    UVM_IOCTL_BASE(1800)
++#define UVM_EFS_WAIT                                     UVM_IOCTL_BASE(1801)
++#define UVM_EFS_RESOLVE                                  UVM_IOCTL_BASE(1802)
++
++#define UVM_EFS_ACTION_REPLAY                            1
++#define UVM_EFS_ACTION_CANCEL                            2
++
++#define UVM_EFS_MAX_WAIT_RECORDS                         64
++#define UVM_EFS_MAX_RESOLVE_RECORDS                      256
++#define UVM_EFS_MAX_WAIT_TIMEOUT_US                      1000000
++
++// Indices into UVM_EFS_QUERY_PARAMS.vaSpaceCounters.
++#define UVM_EFS_CTR_DIVERTED                             0  // new records
++#define UVM_EFS_CTR_DEDUPED                              1  // re-faults merged into a parked record
++#define UVM_EFS_CTR_REFUSED_FULL                         2  // queue full: left to stock (cancel)
++#define UVM_EFS_CTR_REFUSED_CLOSING                      3  // VA space tearing down: left to stock
++#define UVM_EFS_CTR_DELIVERED                            4  // records handed to userspace
++#define UVM_EFS_CTR_RESOLVED_REPLAY                      5
++#define UVM_EFS_CTR_RESOLVED_CANCEL                      6
++#define UVM_EFS_CTR_TIMED_OUT                            7  // cancelled by the kernel at the deadline
++#define UVM_EFS_CTR_TEARDOWN_CANCELLED                   8  // cancelled by the kernel at shutdown
++#define UVM_EFS_CTR_STALE                                9  // ids that named no live record
++#define UVM_EFS_CTR_DROPPED_GPU_GONE                     10 // records dropped: GPU VA space removed
++#define UVM_EFS_CTR_HW_REPLAYS                           11 // replays this VA space issued
++#define UVM_EFS_CTR_COUNT                                12
++
++// Indices into UVM_EFS_QUERY_PARAMS.globalCounters (module-wide).
++#define UVM_EFS_GCTR_BATCH_REPLAYS_SKIPPED               0  // all-diverted batches not replayed
++#define UVM_EFS_GCTR_SAFETY_REPLAYS                      1  // periodic replays while records parked
++#define UVM_EFS_GCTR_EFS_VA_SPACES                       2  // EFS VA spaces created
++#define UVM_EFS_GCTR_COUNT                               4
++
++typedef struct
++{
++    NvU32           abiVersion;                                 // OUT
++    NvU32           moduleEnabled;                              // OUT uvm_efs_enable
++    NvU32           active;                                     // OUT this file is an EFS VA space
++    NvU32           maxRecords;                                 // OUT
++    NvU32           timeoutMs;                                  // OUT
++    NvU32           skipDivertedReplays;                        // OUT
++    NvU32           numParked;                                  // OUT
++    NvU32           numUndelivered;                             // OUT
++    NvU64           vaSpaceCounters[UVM_EFS_CTR_COUNT]  NV_ALIGN_BYTES(8); // OUT
++    NvU64           globalCounters[UVM_EFS_GCTR_COUNT]  NV_ALIGN_BYTES(8); // OUT
++    NV_STATUS       rmStatus;                                   // OUT
++} UVM_EFS_QUERY_PARAMS;
++
++typedef struct
++{
++    NvU64           recordId          NV_ALIGN_BYTES(8);  // opaque, kernel-issued, never reused
++    NvU64           faultAddress      NV_ALIGN_BYTES(8);  // GPU VA, PAGE_SIZE aligned
++    NvU64           gpuTimestampNs    NV_ALIGN_BYTES(8);  // from the fault packet (GPU timer)
++    NvU64           divertTimeNs      NV_ALIGN_BYTES(8);  // ktime_get_real_ns() when parked
++    NvProcessorUuid gpuUuid;                              // GPU (or GI) the fault came from
++    NvU32           accessType;                           // highest access type seen
++    NvU32           accessTypeMask;                       // all access types seen on this page
++    NvU32           faultType;
++    NvU32           clientType;                           // 0 = GPC, 1 = HUB
++    NvU32           clientId;
++    NvU32           gpcId;
++    NvU32           utlbId;
++    NvU32           veId;
++    NvU32           mmuEngineId;
++    NvU32           numInstances;                         // packets coalesced into this record
++} UvmEfsFaultRecord;
++
++typedef struct
++{
++    NvU64           records           NV_ALIGN_BYTES(8);  // IN  user pointer to UvmEfsFaultRecord[maxRecords]
++    NvU32           maxRecords;                           // IN  1..UVM_EFS_MAX_WAIT_RECORDS
++    NvU32           timeoutUs;                            // IN  0 = poll; capped at UVM_EFS_MAX_WAIT_TIMEOUT_US
++    NvU32           numRecords;                           // OUT
++    NV_STATUS       rmStatus;                             // OUT
++} UVM_EFS_WAIT_PARAMS;
++
++typedef struct
++{
++    NvU64           recordIds         NV_ALIGN_BYTES(8);  // IN  user pointer to NvU64[count]
++    NvU32           count;                                // IN  1..UVM_EFS_MAX_RESOLVE_RECORDS
++    NvU32           action;                               // IN  UVM_EFS_ACTION_*
++    NvU32           numResolved;                          // OUT ids that named a live record
++    NvU32           numStale;                             // OUT ids that did not (no action taken)
++    NV_STATUS       rmStatus;                             // OUT
++} UVM_EFS_RESOLVE_PARAMS;
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif // _UVM_EFS_IOCTL_H
+diff -ruN a/nvidia-uvm/uvm_gpu.h b/nvidia-uvm/uvm_gpu.h
+--- a/nvidia-uvm/uvm_gpu.h	2026-07-28 03:20:15.359027333 +0200
++++ b/nvidia-uvm/uvm_gpu.h	2026-09-30 12:19:23.709992356 +0200
+@@ -325,6 +325,10 @@
+ 
+     NvU32 num_replays;
+ 
++    // kayfabe b3: coalesced faults of this batch parked for an EXTERNAL FAULT
++    // SERVICE owner instead of being serviced or cancelled.
++    NvU32 num_efs_diverted;
++
+     uvm_ats_fault_context_t ats_context;
+ 
+     // Unique id (per-GPU) generated for tools events recording
+diff -ruN a/nvidia-uvm/uvm_gpu_replayable_faults.c b/nvidia-uvm/uvm_gpu_replayable_faults.c
+--- a/nvidia-uvm/uvm_gpu_replayable_faults.c	2026-07-28 03:20:15.360027334 +0200
++++ b/nvidia-uvm/uvm_gpu_replayable_faults.c	2026-09-30 12:19:23.721245859 +0200
+@@ -39,6 +39,7 @@
+ #include "uvm_gpu_non_replayable_faults.h"
+ #include "uvm_ats_faults.h"
+ #include "uvm_test.h"
++#include "uvm_efs.h"
+ 
+ // The documentation at the beginning of uvm_gpu_non_replayable_faults.c
+ // provides some background for understanding replayable faults, non-replayable
+@@ -1692,6 +1693,26 @@
+     update_batch_and_notify_fault(gpu, batch_context, NULL, UVM_ID_INVALID, current_entry, is_duplicate);
+ }
+ 
++// kayfabe b3: accounting for a fault uvm_efs_try_divert() parked. It is neither
++// serviced nor fatal: it consumes its batch entry and stays pending in hardware
++// until its EFS owner resolves it (or the kernel's timeout cancels it).
++static void service_fault_batch_efs_diverted(uvm_fault_service_batch_context_t *batch_context,
++                                             NvU32 first_fault_index,
++                                             NvU32 *block_faults)
++{
++    uvm_fault_buffer_entry_t *current_entry = batch_context->ordered_fault_cache[first_fault_index];
++    const uvm_fault_buffer_entry_t *previous_entry = first_fault_index > 0 ?
++                                                       batch_context->ordered_fault_cache[first_fault_index - 1] : NULL;
++
++    if (check_fault_entry_duplicate(current_entry, previous_entry))
++        batch_context->num_duplicate_faults += current_entry->num_instances;
++    else
++        batch_context->num_duplicate_faults += current_entry->num_instances - 1;
++
++    ++batch_context->num_efs_diverted;
++    (*block_faults)++;
++}
++
+ static NV_STATUS service_fault_batch_ats_sub_vma(uvm_gpu_va_space_t *gpu_va_space,
+                                                  struct vm_area_struct *vma,
+                                                  NvU64 base,
+@@ -2020,12 +2041,19 @@
+         }
+     }
+     else {
+-        service_fault_batch_fatal_notify(gpu,
+-                                         batch_context,
+-                                         fault_index,
+-                                         status,
+-                                         UVM_FAULT_CANCEL_VA_MODE_ALL,
+-                                         block_faults);
++        // kayfabe b3: in an EXTERNAL FAULT SERVICE VA space, a fault no UVM range
++        // can service is parked for the file's owner instead of cancelled.
++        if (status == NV_ERR_INVALID_ADDRESS && uvm_efs_try_divert(va_space, gpu, current_entry)) {
++            service_fault_batch_efs_diverted(batch_context, fault_index, block_faults);
++        }
++        else {
++            service_fault_batch_fatal_notify(gpu,
++                                             batch_context,
++                                             fault_index,
++                                             status,
++                                             UVM_FAULT_CANCEL_VA_MODE_ALL,
++                                             block_faults);
++        }
+ 
+         // Do not fail due to logical errors
+         status = NV_OK;
+@@ -2105,6 +2133,7 @@
+     batch_context->num_invalid_prefetch_faults = 0;
+     batch_context->num_duplicate_faults        = 0;
+     batch_context->num_replays                 = 0;
++    batch_context->num_efs_diverted            = 0;
+     batch_context->fatal_va_space              = NULL;
+     batch_context->fatal_gpu                   = NULL;
+     batch_context->has_throttled_faults        = false;
+@@ -2245,6 +2274,7 @@
+         &parent_gpu->fault_buffer.replayable.block_service_context;
+     uvm_va_block_context_t *va_block_context = service_context->block_context;
+     bool hmm_migratable = true;
++    NvU32 efs_diverted_before;
+ 
+     UVM_ASSERT(parent_gpu->replayable_faults_supported);
+ 
+@@ -2322,6 +2352,7 @@
+             continue;
+         }
+ 
++        efs_diverted_before = batch_context->num_efs_diverted;
+         status = service_fault_batch_dispatch(va_space,
+                                               gpu_va_space,
+                                               batch_context,
+@@ -2348,8 +2379,11 @@
+         hmm_migratable = true;
+         i += block_faults;
+ 
+-        // Don't issue replays in cancel mode
+-        if (replay_per_va_block && !batch_context->fatal_va_space) {
++        // Don't issue replays in cancel mode. kayfabe b3: nor for a dispatch
++        // whose every fault was parked for an EFS owner.
++        if (replay_per_va_block && !batch_context->fatal_va_space &&
++            !(uvm_efs_skip_diverted_replays() &&
++              batch_context->num_efs_diverted - efs_diverted_before == block_faults)) {
+             status = push_replay_on_gpu(gpu_va_space->gpu, UVM_FAULT_REPLAY_TYPE_START, batch_context);
+             if (status != NV_OK)
+                 goto fail;
+@@ -2908,6 +2942,7 @@
+     NvU32 num_replays = 0;
+     NvU32 num_batches = 0;
+     NvU32 num_throttled = 0;
++    NvU32 num_efs_only_batches = 0;
+     NV_STATUS status = NV_OK;
+     uvm_replayable_fault_buffer_t *replayable_faults = &parent_gpu->fault_buffer.replayable;
+     uvm_fault_service_batch_context_t *batch_context = &replayable_faults->batch_service_context;
+@@ -2926,6 +2961,7 @@
+         batch_context->num_invalid_prefetch_faults = 0;
+         batch_context->num_duplicate_faults        = 0;
+         batch_context->num_replays                 = 0;
++        batch_context->num_efs_diverted            = 0;
+         batch_context->fatal_va_space              = NULL;
+         batch_context->fatal_gpu                   = NULL;
+         batch_context->has_throttled_faults        = false;
+@@ -2983,6 +3019,21 @@
+             break;
+         }
+ 
++        // kayfabe b3: every fault in this batch was parked for its EXTERNAL FAULT
++        // SERVICE owner. A replay now would only make the same accesses fault
++        // again, at once and forever (a replay storm); the owner's
++        // UVM_EFS_RESOLVE replays once it has mapped the page. GET was already
++        // advanced past these entries by the fetch.
++        if (uvm_efs_skip_diverted_replays() &&
++            batch_context->num_efs_diverted > 0 &&
++            batch_context->num_efs_diverted == batch_context->num_coalesced_faults &&
++            !batch_context->has_throttled_faults) {
++            uvm_efs_count_batch_replay_skipped();
++            ++num_efs_only_batches;
++            ++num_batches;
++            continue;
++        }
++
+         if (replayable_faults->replay_policy == UVM_PERF_FAULT_REPLAY_POLICY_BATCH) {
+             status = push_replay_on_parent_gpu(parent_gpu, UVM_FAULT_REPLAY_TYPE_START, batch_context);
+             if (status != NV_OK)
+@@ -3016,9 +3067,13 @@
+         status = NV_OK;
+ 
+     // Make sure that we issue at least one replay if no replay has been
+-    // issued yet to avoid dropping faults that do not show up in the buffer
+-    if ((status == NV_OK && replayable_faults->replay_policy == UVM_PERF_FAULT_REPLAY_POLICY_ONCE) ||
+-        num_replays == 0)
++    // issued yet to avoid dropping faults that do not show up in the buffer.
++    // kayfabe b3: except when every batch serviced here was parked for EFS
++    // owners (see above); the EFS timeout work issues a periodic safety replay
++    // while records are parked.
++    if (((status == NV_OK && replayable_faults->replay_policy == UVM_PERF_FAULT_REPLAY_POLICY_ONCE) ||
++         num_replays == 0) &&
++        !(status == NV_OK && num_batches > 0 && num_efs_only_batches == num_batches))
+         status = push_replay_on_parent_gpu(parent_gpu, UVM_FAULT_REPLAY_TYPE_START, batch_context);
+ 
+     uvm_tracker_deinit(&batch_context->tracker);
+@@ -3116,3 +3171,34 @@
+ 
+     return status;
+ }
++
++// kayfabe b3: hardware helpers for uvm_efs.c. They wrap the static cancel and
++// replay primitives above; the caller holds
++// uvm_parent_gpu_replayable_faults_isr_lock (the replay tracker needs it) and,
++// for the cancel, the VA space lock in read mode (it reads the GPU VA space's
++// PDB).
++NV_STATUS uvm_efs_hw_cancel_va_locked(uvm_fault_buffer_entry_t *entry)
++{
++    UVM_ASSERT(uvm_sem_is_locked(&entry->gpu->parent->isr.replayable_faults.service_lock));
++    UVM_ASSERT(entry->gpu->parent->fault_cancel_va_supported);
++
++    return cancel_fault_precise_va(entry, UVM_FAULT_CANCEL_VA_MODE_ALL);
++}
++
++NV_STATUS uvm_efs_hw_flush_and_replay_locked(uvm_gpu_t *gpu)
++{
++    UVM_ASSERT(uvm_sem_is_locked(&gpu->parent->isr.replayable_faults.service_lock));
++
++    return fault_buffer_flush_locked(gpu->parent,
++                                     gpu,
++                                     UVM_GPU_BUFFER_FLUSH_MODE_UPDATE_PUT,
++                                     UVM_FAULT_REPLAY_TYPE_START,
++                                     NULL);
++}
++
++NV_STATUS uvm_efs_hw_replay_locked(uvm_gpu_t *gpu)
++{
++    UVM_ASSERT(uvm_sem_is_locked(&gpu->parent->isr.replayable_faults.service_lock));
++
++    return push_replay_on_gpu(gpu, UVM_FAULT_REPLAY_TYPE_START, NULL);
++}
+diff -ruN a/nvidia-uvm/uvm_va_space.c b/nvidia-uvm/uvm_va_space.c
+--- a/nvidia-uvm/uvm_va_space.c	2026-07-28 03:20:15.376027339 +0200
++++ b/nvidia-uvm/uvm_va_space.c	2026-09-30 12:18:14.099379237 +0200
+@@ -23,6 +23,7 @@
+ 
+ #include "uvm_api.h"
+ #include "uvm_va_space.h"
++#include "uvm_efs.h"
+ #include "uvm_va_range.h"
+ #include "uvm_lock.h"
+ #include "uvm_global.h"
+@@ -474,6 +475,10 @@
+     list_del(&va_space->list_node);
+     uvm_mutex_unlock(&g_uvm_global.va_spaces.lock);
+ 
++    // kayfabe b3: before any channel is stopped, stop parking faults and cancel
++    // the parked ones (what stock would have done with them). No-op without EFS.
++    uvm_efs_va_space_shutdown(va_space);
++
+     uvm_perf_heuristics_stop(va_space);
+ 
+     // Stop all channels before unmapping anything. This kills the channels and
+@@ -625,6 +630,9 @@
+ 
+     uvm_mutex_unlock(&g_uvm_global.global_lock);
+ 
++    // kayfabe b3: the bottom halves were flushed above, nothing can reach it.
++    uvm_efs_va_space_free(va_space);
++
+     uvm_kvfree(va_space->mapping);
+     uvm_kvfree(va_space);
+ }
+@@ -1787,6 +1795,10 @@
+ 
+     uvm_assert_rwsem_locked_write(&va_space->lock);
+ 
++    // kayfabe b3: records against this GPU VA space become stale (its PDB is
++    // going away); dropped without hardware action. No-op without EFS.
++    uvm_efs_gpu_va_space_removed(va_space, gpu_va_space->gpu);
++
+     uvm_gpu_va_space_detach_all_user_channels(gpu_va_space, deferred_free_list);
+ 
+     // Removing all registered channels should've removed all VA ranges used by
+diff -ruN a/nvidia-uvm/uvm_va_space.h b/nvidia-uvm/uvm_va_space.h
+--- a/nvidia-uvm/uvm_va_space.h	2026-07-28 03:20:15.377027340 +0200
++++ b/nvidia-uvm/uvm_va_space.h	2026-09-30 12:18:14.097767792 +0200
+@@ -434,6 +434,11 @@
+ 
+     // Queue item for deferred f_ops->release() handling
+     nv_kthread_q_item_t deferred_release_q_item;
++
++    // kayfabe b3: EXTERNAL FAULT SERVICE state, NULL unless this VA space's file
++    // opted in at UVM_INITIALIZE. Set before the file is published, freed at the
++    // end of uvm_va_space_destroy. See uvm_efs.c.
++    struct uvm_efs_va_space_struct *efs;
+ };
+ 
+ NV_STATUS uvm_va_space_create(struct address_space *mapping, uvm_va_space_t **va_space_ptr, NvU64 flags);
+diff -ruN a/nvidia-uvm/uvm_va_space_mm.c b/nvidia-uvm/uvm_va_space_mm.c
+--- a/nvidia-uvm/uvm_va_space_mm.c	2026-07-28 03:20:15.377027340 +0200
++++ b/nvidia-uvm/uvm_va_space_mm.c	2026-09-30 12:18:14.099834371 +0200
+@@ -25,6 +25,7 @@
+ #include "uvm_kvmalloc.h"
+ #include "uvm_va_space.h"
+ #include "uvm_va_space_mm.h"
++#include "uvm_efs.h"
+ #include "uvm_ats.h"
+ #include "uvm_api.h"
+ #include "uvm_test.h"
+@@ -335,6 +336,10 @@
+     uvm_parent_processor_mask_t flushed_parent_gpus;
+     LIST_HEAD(deferred_free_list);
+ 
++    // kayfabe b3: process exit reaches here first. Stop parking faults and
++    // cancel the parked ones before any channel is stopped. No-op without EFS.
++    uvm_efs_va_space_shutdown(va_space);
++
+     uvm_va_space_down_write(va_space);
+ 
+     // Prevent future registrations of any kind. We'll be iterating over all
