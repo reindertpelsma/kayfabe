@@ -1,5 +1,39 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS: M3 MET FOR THE WAYLAND DESKTOP; X11 DESKTOP PARTIAL — 2026-09-30 (branch `v3-display2`;
+> display stays default-off).** RTX 3060 (GA106), host + guest 580.159.04, vast 53505783.
+> - **Mint's desktop on the virtual monitor** (`traces/v3_display/m3i_20260930/`): lightdm autologin
+>   into Cinnamon's Wayland session — muffin drives the emulated display through nvidia-drm KMS and
+>   renders with the NVIDIA EGL/GBM stack on the RTX 3060; `vkcube-wayland` (Vulkan) runs in a
+>   Cinnamon window; both in the HOST screendump (`console_cinnamon_wayland*.png`); nothing crashed.
+>   weston 13 likewise (`m3h`: `vkcube-wayland` exits 0 on its overlay window, visible in the dump).
+> - **X11** (`m3f`, `m3h`): Xorg + the stock NVIDIA X driver set 1920x1080 on `KFB kayfabe (DFP-0)`;
+>   `glxinfo`: `NVIDIA GeForce RTX 3060/PCIe/SSE2`, direct; glxgears vsync-locked 54-60 FPS; the
+>   console image equals the X server's own root-window screenshot in all 2 073 600 pixels.
+>   ⊘ **Open, one cause:** Cinnamon's X11 session segfaults in `libnvidia-glcore` (fallback dialog)
+>   and X11 Vulkan presentation fails at `vkCreateSwapchainKHR`. Both need a `GF100_DISP_SW` object;
+>   its methods are SOFTWARE methods RM services when the host engine traps them, but the guest's
+>   channels run on the host GPU, whose RM has no such object — `[m3c]` offering it produced 186 host
+>   `Xid 32` and 1.3 FPS GL. So it is refused by name (`kf_disp::model`, `no_display_sw`), and
+>   `kf-rm`'s rule stands: *"NOT twinned: host RM's dispsw acts on HOST display heads"*
+>   (`chanlink.rs:1304-1316`). ⊘ **OWNER DECISION NEEDED:** twinning it on the host with AUTHORED params (head 0,
+>   displayMask 0) would make a headless host run each vblank callback immediately
+>   (`vblank.c:87, 209-243`, *"call it now"* when the head's vblank interrupt is unavailable) — i.e. X11
+>   would work unthrottled by dispsw — but it lets a guest's software methods act on the host's
+>   display object, which the rule forbids.
+> - **The console composes the head** (`m3h`): every enabled window back to front by `DEPTH`, placed
+>   by its window-immediate `POINT_OUT`, blended per `SET_COMPOSITION_FACTOR_SELECT`, pitch or
+>   block-linear, by one hand-written PTX kernel (`cuda/display/kf_scanout.ptx`, bring-up
+>   self-test), into a device staging frame copied to the console — the probe stays pixel-exact.
+>   The block-linear GOB order is MEASURED (`m3b`): `x[3:0] y[1:0] x[4] y[2] x[5]`, not the
+>   often-quoted Tegra order. Not composed yet: the cursor channel (the console shows the pointer
+>   only when the compositor draws it), scaled windows (shown unscaled, clipped), YUV/16-bit layers.
+> - Also measured on the way: `BUS_GET_INFO_V2` index `0x14` (`PCIE_GEN2_INFO`) is served with
+>   `0x2d`'s word (the real GA106 answers both identically; the X driver's fatal "Failed to query PCI
+>   info" was its refusal); `SYSTEM_GET_ACTIVE` reports the lit display (`Display Active: Enabled`).
+> - Next: the §7 display-app list (`V3_GFX_TESTSET.md`), the cursor plane on the console, and the
+>   owner's ruling on `GF100_DISP_SW` for X11 compositors / X11 Vulkan.
+
 > **STATUS: M1 AND M2 MET ON HARDWARE, 2026-09-30 (branch `v3-display2`; display stays
 > default-off).** RTX 3060 (GA106), host + guest 580.159.04, vast 53505783.
 > - **M1** (`traces/v3_display/m1b_20260930/`, `m1c_20260930/`): the emulated NVDisplay engine (worker
