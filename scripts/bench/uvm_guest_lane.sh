@@ -43,7 +43,9 @@ if [ ! -x /workspace/bench/um_probe ]; then
 fi
 echo "um_probe md5=$(md5sum < /workspace/bench/um_probe | cut -d' ' -f1)"
 if [ "$MODE" = off ]; then unset KF3_UVM_EFS; else export KF3_UVM_EFS=1; fi
-export KF_DEVICE=kf3 POST_CAPTURE_HOOK="$HERE/uvm_guest_hook.sh"
+# HOOK selects the workload: uvm_guest_hook.sh (um_probe modes, default) or uvm_apps_hook.sh (the
+# four managed-memory apps; build them first with uvm_apps_build.sh).
+export KF_DEVICE=kf3 POST_CAPTURE_HOOK="$HERE/${HOOK:-uvm_guest_hook.sh}"
 bash "$HERE/boot_capture.sh" "$TAG"
 rc=$?
 echo "BOOT_CAPTURE_RC=$rc"
@@ -53,5 +55,5 @@ grep -E 'UVM EFS|fault plane|EFS mirror|EFS:|EFS space' "$Q" | head -60
 echo "--- the LAST fault-plane heartbeat:"
 grep 'kf3: fault plane: regs=' "$Q" | tail -1
 echo "--- hook verdicts:"
-grep -hE '^CHECK |UM_RC=' /workspace/bench/run_${TAG}_probe.log 2>/dev/null | head -40
+grep -hE '^CHECK |UM_RC=|^UVMAPP ' /workspace/bench/run_${TAG}_probe.log 2>/dev/null | head -40
 exit $rc
