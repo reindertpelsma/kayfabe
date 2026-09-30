@@ -218,6 +218,8 @@ pub fn host_pte_kind(guest: u8, ram: bool, per_map_kind: bool) -> u8 {
         }
         Some(k) if !ram => k,
         Some(k @ (kf_chip::PTE_KIND_PITCH | kf_chip::PTE_KIND_GENERIC)) => k,
+        // EXPERIMENT exp1 (v3-cdp): a vidmem SKED-reflected leaf keeps its message kind.
+        None if guest == kf_chip::usermode::PTE_KIND_SMSKED_MESSAGE && !ram => guest,
         _ => kf_chip::PTE_KIND_PITCH,
     }
 }
@@ -371,6 +373,13 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 &mut out,
             );
             continue;
+        }
+        if r.kind == kf_chip::usermode::PTE_KIND_SMSKED_MESSAGE {
+            eprintln!(
+                "kf-mem: EXP1 SKED-kind leaf {:#x}+{:#x} ap={} at={:#x} kind={:#x} priv={} -> host kind {:#x}",
+                r.va, r.len, r.ap, r.at, r.kind, r.privileged,
+                host_pte_kind(r.kind, r.ap != crate::ledger::AP_VIDMEM, cfg.per_map_kind)
+            );
         }
         // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
         // isolation: an unprivileged guest channel must not reach what the guest kernel marked
