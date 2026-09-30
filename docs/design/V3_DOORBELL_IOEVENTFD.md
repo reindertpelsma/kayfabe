@@ -1,10 +1,14 @@
 # V3 — the doorbell fast path: one KVM ioeventfd per live token, serviced by the register drainer
 
-**STATUS: BUILT + GPU-FREE-TESTED, 2026-09-30; hardware verdicts and nested measurements in §7 as
-they land. Branch `v3-ioeventfd` (off `v3-ci`).** Default **OFF** (`-device kf3-gpu,…,
-doorbell-ioeventfd=on` turns it on) until the measurements in §7 justify a default. Nothing here is
-a non-nested result: every number is from a Vast KVM box (itself a KVM guest) or from the
-development workspace (also virtualized), and is labelled **nested**.
+**STATUS: BUILT, GPU-FREE-TESTED AND HARDWARE-VERIFIED (nested), 2026-09-30. Branch `v3-ioeventfd`
+(off `v3-ci`).** Merge bar at `ca7a5006` (the final code revision): crate tests 1701/0, gates 9/9,
+KF3_RC=0, bare metal 30/30, thin suite 30/30 OFF **and** 30/30 ON (GA106); CUDA ladder 4/4 OFF = 4/4 ON
+(GA106 at `43293417`, which differs only by the default-off spin knob and a never-reached discard path; GB206 at `b351af9d` = the
+final code); the whole bar and the ON lane also on Blackwell GB206 (§7.6). Measured on nested Vast boxes: a doorbell store costs the vCPU ~4–5 µs
+less (§7.2); LLM decode **+7–11 %** (0.29× → 0.32× of host) for ~⅙ of a core in the drainer (§7.5).
+Default **OFF** (`-device kf3-gpu,…,doorbell-ioeventfd=on` turns it on) until a non-nested host is
+measured (§7.x). ⊘ Nothing here is a non-nested result: every number is from a Vast KVM box (itself a
+KVM guest) or from the development workspace (also virtualized), and is labelled **nested**.
 
 ## 0. Owner direction, in order (binding; `docs/OWNER_RULINGS.md` §D)
 
@@ -204,9 +208,10 @@ Evidence: `traces/v3_ioeventfd/`. ⊘ Not one number here is non-nested.
 
 ### 7.2 The vCPU cost of one doorbell store (guest-timed, `dbfast_exitbench.c`)
 
-200 000 stores × 3 repetitions per row, timed in batches of 100 inside the guest; p50 per store.
-`probe` is the measurement registration (a slot no channel holds, so the device then does nothing
-either way) — the transport alone:
+200 000 stores × 3 repetitions per row, timed in batches of 100 inside the guest; p50 per store
+(RTX 3060 box, 2026-09-30, `traces/v3_ioeventfd/dbl1_43293417/`). `probe` is the `KF3_DBFAST_PROBE`
+registration (a slot no channel holds, so the device then does nothing either way) — the transport
+alone:
 
 | store | OFF boot | ON boot |
 |---|---|---|
@@ -306,6 +311,26 @@ spin buys **+16 %** (0.34×) by removing that wake-up, for **a whole core** whil
 vCPU-side saving is the same (§7.2); what the spin adds is the drainer ringing ~40 µs sooner.
 ⊘ The spin stays an experiment knob (default off): a core per busy VM is a policy decision, and on a
 non-nested host the wake-up it hides should be far cheaper (a hypothesis until §7.x is run).
+
+### 7.6 A second family: Blackwell GB206 (RTX 5060 Ti) — the bit-30 token and the BAR1 views
+
+Box: vast 53522821 — RTX 5060 Ti (GB206, `10de:2d04`), AMD EPYC 7K62 host, 23 vCPUs, itself a KVM
+guest (nested); host driver 580.159.04 open. Revision `b351af9d` (code identical to `ca7a5006`).
+Evidence: `traces/v3_ioeventfd/{mgb1,dgb1}_b351af9d_gb206/`. This is the first GB206 run of kayfabe at
+all (GB203 was the earlier Blackwell), and the die group whose doorbell differs most from GA106:
+
+| check | OFF | ON |
+|---|---|---|
+| merge bar: crate tests / gates / kf3 / bare metal / thin | 1701/0, 9/9, KF3_RC=0, 30/30, **30/30** | — |
+| thin suite (ON) | — | **30/30** |
+| CUDA ladder (cup2, cup3, cup8, cup8bench) | **4/4** | **4/4** |
+| the guest's token (§3) | — | `value=0x4000000N`: **bit 30 set**, as `_GB202` writes it; passthrough doorbells `trap=0`, all by eventfd |
+| libcuda's **BAR1 usermode view** (`bBar1Mapping`, `V3_BAR1_DOORBELL.md`) | **967** doorbells trapped through the view's overlay (`bar1db rings=967`) | **0** trapped (`rings=0`); every passthrough token placed at **2 sites** (BAR0 + the view), e.g. token 0x3: 263 by eventfd |
+| guest-timed store (`probe`, p50) | trapped 21.4–22.2 µs | ioeventfd 16.1–18.1 µs |
+
+⇒ The per-die-group datamatch derivation and the listener's alias-section sites both work on real
+Blackwell hardware. ⊘ No LLM row: the lane's pinned PyTorch has no `sm_120` kernels ("no kernel image
+is available") — the host run fails identically, so it is the environment, not kayfabe.
 
 ### 7.x The protocol for a NON-nested host (not yet reachable, 2026-09-30)
 
