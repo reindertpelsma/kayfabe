@@ -561,7 +561,7 @@ impl Engine {
         };
         let space = self.vocab.other_space;
         if let Some(c) = self.chans[chn as usize].as_mut() {
-            if off % 4 != 0 || off >= space {
+            if !off.is_multiple_of(4) || off >= space {
                 self.exceptions += 1;
                 st.effects.push(Effect::Exception {
                     chn,
@@ -1224,11 +1224,15 @@ pub struct ScanVocab {
     viewport_in: (u32, u32, (u8, u8), (u8, u8)),
 }
 
+/// A method's offset and two `(hi, lo)` fields of its data word — e.g. `SET_SIZE`'s `_WIDTH` and
+/// `_HEIGHT`.
+type MethodTwoFields = (u32, (u8, u8), (u8, u8));
+
 impl ScanVocab {
     /// Resolve for window class `win`, window-immediate class `winim` and core class `core`.
     #[must_use]
     pub fn resolve(t: &ClassTable, win: u32, winim: u32, core: u32) -> Option<ScanVocab> {
-        let wh = |n: &str| -> Option<(u32, (u8, u8), (u8, u8))> {
+        let wh = |n: &str| -> Option<MethodTwoFields> {
             Some((
                 t.v(win, n)?,
                 t.f(win, &format!("{n}_WIDTH"))?,

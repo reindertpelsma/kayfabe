@@ -133,7 +133,7 @@ impl ComposeLayer {
         let row = u64::from(l.width) * 4;
         let need = if l.block_linear {
             if l.block_height_log2 > 5
-                || l.x0_bytes % 4 != 0
+                || !l.x0_bytes.is_multiple_of(4)
                 || u64::from(l.x0_bytes) + row > u64::from(l.pitch) * 64
             {
                 return Err(format!("{l:?}: the rows leave the surface's GOB columns"));

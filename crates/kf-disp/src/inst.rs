@@ -220,7 +220,7 @@ impl Layout {
     /// The context DMA object at `instance` (32-byte units, `disp_inst_mem.c:640-650`).
     fn object(&self, image: &[u8], instance: u32) -> Result<CtxDma, Miss> {
         let at = u64::from(instance) << 5;
-        if at <= self.hash_base + self.hash_bytes - 1
+        if at < self.hash_base + self.hash_bytes
             || at < self.obj_base
             || at + 20 > self.obj_limit + 1
         {
@@ -269,18 +269,29 @@ pub(crate) mod tests {
             .expect("derived layout")
     }
 
+    /// One context DMA as the guest's RM binds it: the hash key (`client`, `handle`, `chn`) and the
+    /// object at instance `inst32` (32-byte units) — its target `node`, `base` and `limit`.
+    pub(crate) struct Binding {
+        pub(crate) client: u32,
+        pub(crate) handle: u32,
+        pub(crate) chn: u32,
+        pub(crate) inst32: u32,
+        pub(crate) node: u32,
+        pub(crate) base: u64,
+        pub(crate) limit: u64,
+    }
+
     /// Write what `instmemCommitContextDma_v03_00` + `_instmemAddHashEntry` write, into `img`.
-    pub(crate) fn bind(
-        img: &mut [u8],
-        l: &Layout,
-        client: u32,
-        handle: u32,
-        chn: u32,
-        inst32: u32,
-        node: u32,
-        base: u64,
-        limit: u64,
-    ) {
+    pub(crate) fn bind(img: &mut [u8], l: &Layout, b: Binding) {
+        let Binding {
+            client,
+            handle,
+            chn,
+            inst32,
+            node,
+            base,
+            limit,
+        } = b;
         let mut e = l.hash(client, handle, chn) as usize;
         loop {
             let at = e * 8;
@@ -318,13 +329,15 @@ pub(crate) mod tests {
         bind(
             &mut img,
             &l,
-            c,
-            0xcaf0_0010,
-            0,
-            0x100,
-            2,
-            0x1_2345_6000,
-            0x1_2345_6fff,
+            Binding {
+                client: c,
+                handle: 0xcaf0_0010,
+                chn: 0,
+                inst32: 0x100,
+                node: 2,
+                base: 0x1_2345_6000,
+                limit: 0x1_2345_6fff,
+            },
         );
         // a handle chosen to collide with the first on channel 0
         let other = (0..0xFFFFu32)
@@ -334,13 +347,15 @@ pub(crate) mod tests {
         bind(
             &mut img,
             &l,
-            c,
-            other,
-            0,
-            0x101,
-            1,
-            0x4000_0000,
-            0x4000_ffff,
+            Binding {
+                client: c,
+                handle: other,
+                chn: 0,
+                inst32: 0x101,
+                node: 1,
+                base: 0x4000_0000,
+                limit: 0x4000_ffff,
+            },
         );
         let a = l.resolve(&img, c, 0xcaf0_0010, 0).unwrap();
         assert_eq!(
@@ -373,10 +388,34 @@ pub(crate) mod tests {
         let l = layout();
         let c = 0xc1d0_0001;
         let mut img = vec![0u8; 0x1_0000];
-        bind(&mut img, &l, c, 0x11, 0, 0x10, 2, 0, 0xfff); // instance 0x10 << 5 = 0x200: inside the hash table
+        bind(
+            &mut img,
+            &l,
+            Binding {
+                client: c,
+                handle: 0x11,
+                chn: 0,
+                inst32: 0x10, // instance 0x10 << 5 = 0x200: inside the hash table
+                node: 2,
+                base: 0,
+                limit: 0xfff,
+            },
+        );
         assert_eq!(l.resolve(&img, c, 0x11, 0), Err(Miss::BadInstance(0x10)));
         let mut img = vec![0u8; 0x1_0000];
-        bind(&mut img, &l, c, 0x12, 0, 0x7ff, 0, 0, 0xfff); // node 0
+        bind(
+            &mut img,
+            &l,
+            Binding {
+                client: c,
+                handle: 0x12,
+                chn: 0,
+                inst32: 0x7ff,
+                node: 0, // an invalid target node
+                base: 0,
+                limit: 0xfff,
+            },
+        );
         assert_eq!(l.resolve(&img, c, 0x12, 0), Err(Miss::BadTarget(0)));
         assert_eq!(l.resolve(&img[..0x1000], c, 0x12, 0), Err(Miss::NoTable));
         let mut full = vec![0u8; 0x1_0000];

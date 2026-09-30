@@ -159,7 +159,7 @@ pub fn page(
             set(capa, f(fld)?, 1);
         }
     }
-    for (off, _) in w.iter() {
+    for off in w.keys() {
         if *off as usize + 4 > PAGE || off % 4 != 0 {
             return Err(m(format!("caps word at {off:#x} is outside the page")));
         }

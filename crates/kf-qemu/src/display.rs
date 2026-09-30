@@ -48,6 +48,10 @@ use std::time::{Duration, Instant};
 /// Heads any family's register file indexes.
 const MAX_HEADS: usize = kf_disp::ports::MAX_HEADS;
 
+/// `NV_PDISP_FE_CORE_HEAD_STATE(i)`: base, stride, the `OPERATING_MODE` field `(hi, lo)`, and its
+/// `AWAKE` and `SLEEP` values.
+type CoreHeadState = (u64, u64, (u8, u8), u32, u32);
+
 /// ★ Every BAR0 offset the plane decodes, RESOLVED from the derived register and class tables at
 /// realize — so the vCPU path compares integers and a missing name refuses the device up front.
 #[derive(Debug, Clone)]
@@ -87,7 +91,7 @@ pub struct RegMap {
     chnstatus_state: [(u8, u8); 4],
     chnstatus_idle: [u32; 4],
     chnstatus_busy: [u32; 4],
-    core_head_state: Option<(u64, u64, (u8, u8), u32, u32)>,
+    core_head_state: Option<CoreHeadState>,
     rg_dpca: (u64, u64, (u8, u8)),
     loadv: Option<(u64, u64)>,
 }
@@ -1145,8 +1149,12 @@ impl Device {
             // 4. vblanks whose time has come
             let now = Instant::now();
             let mut raised = false;
-            for h in 0..dp.map.heads as usize {
-                let Some((t, period)) = next_vblank[h] else {
+            for (h, slot) in next_vblank
+                .iter_mut()
+                .enumerate()
+                .take(dp.map.heads as usize)
+            {
+                let Some((t, period)) = *slot else {
                     continue;
                 };
                 if now < t {
@@ -1157,7 +1165,7 @@ impl Device {
                 } else {
                     t + period
                 };
-                next_vblank[h] = Some((next, period));
+                *slot = Some((next, period));
                 dp.counters.vblanks.fetch_add(1, Ordering::Relaxed);
                 let s = engine.vblank(h as u32, &mut |a| io.acquired(a));
                 effects.extend(s.effects);
@@ -1616,7 +1624,7 @@ fn fnv_rgb_xrgb8888(bytes: &[u8], stride: usize, width: usize, height: usize) ->
         let Some(row) = bytes.get(y * stride..y * stride + width * 4) else {
             return 0;
         };
-        for px in row.chunks_exact(4) {
+        for px in row.as_chunks::<4>().0 {
             for b in [px[2], px[1], px[0]] {
                 h ^= u64::from(b);
                 h = h.wrapping_mul(1_099_511_628_211);
@@ -1655,7 +1663,7 @@ impl ScanState {
             .fetch_add(us, Ordering::Relaxed);
         dp.counters.scanout_us_max.fetch_max(us, Ordering::Relaxed);
         if let Some(f) = &self.frames[slot] {
-            if self.trace && (n <= 8 || n % 50 == 0) {
+            if self.trace && (n <= 8 || n.is_multiple_of(50)) {
                 let (wu, hu, st) = (w as usize, h as usize, w as usize * 4);
                 let fnv = fnv_rgb_xrgb8888(&f.read(0, st * hu), st, wu, hu);
                 eprintln!("kf3: display: TRACE scanout copy {n} done: {w}x{h} fnv={fnv:016x}");
@@ -1732,7 +1740,7 @@ impl ScanState {
             });
             match planned {
                 Ok(Some(l)) => {
-                    if self.trace && (n <= 8 || n % 50 == 0) {
+                    if self.trace && (n <= 8 || n.is_multiple_of(50)) {
                         eprintln!(
                             "kf3: display: TRACE scanout copy {n}: window {} depth {} iso {:#x} -> src {:#x} {} pitch {} {}x{} at ({}, {}) flags {:#x} blend ({},{})/({},{})",
                             so.window,
@@ -1923,7 +1931,7 @@ mod tests {
             let t = c.free_slot() as u32;
             assert!(t != front && t != ready);
             c.publish(t as usize, frame(0x4000, 4));
-            if t % 2 == 0 {
+            if t.is_multiple_of(2) {
                 c.take();
             }
         }

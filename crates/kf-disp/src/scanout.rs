@@ -269,7 +269,7 @@ fn plan_block_linear(
     let gobs_per_row = u64::from(s.pitch);
     let x0_bytes = u64::from(s.x) * u64::from(format.bytes());
     // the kernel moves 4-byte words
-    if x0_bytes % 4 != 0 || row_bytes % 4 != 0 {
+    if !x0_bytes.is_multiple_of(4) || !row_bytes.is_multiple_of(4) {
         return Err(format!(
             "a {row_bytes}-byte row from byte {x0_bytes} is not whole 4-byte words"
         ));

@@ -147,7 +147,7 @@ impl Regs {
     #[must_use]
     pub fn f32(&self, name: &str) -> Option<(u8, u8)> {
         let (h, l) = self.f(name)?;
-        (h < 32 && l <= h).then(|| (h as u8, l as u8))
+        (h < 32 && l <= h).then_some((h as u8, l as u8))
     }
 
     /// A linear one-parameter register `X(i)`.
@@ -165,7 +165,7 @@ impl Regs {
         match self.row(name)? {
             Row::Fa(h, l, s) => {
                 let (h, l) = (h + u64::from(i) * s, l + u64::from(i) * s);
-                (h < 32 && l <= h).then(|| (h as u8, l as u8))
+                (h < 32 && l <= h).then_some((h as u8, l as u8))
             }
             _ => None,
         }
