@@ -446,6 +446,15 @@ fi
 #      wedged guest.
 #   3. `kill -9` — the census is already lost by here; it is only reported, never silent.
 MON="${LOG}.mon"
+# ★ 2026-09-30 (v3-display2): an optional guest command run just before the poweroff, with a
+# deadline — a lane whose guest may wedge in its driver teardown (the display plane's) uses it to
+# leave the guest's filesystems clean (sync + emergency remount read-only) BEFORE a poweroff that
+# may not complete, so QEMU's `quit` below never leaves an ext4 journal to replay (the fast guest's
+# `nbd0p1 would not mount`). Unset: unchanged.
+if [ -n "${PRE_POWEROFF_GUEST_CMD:-}" ]; then
+  say "pre-poweroff guest command: $PRE_POWEROFF_GUEST_CMD"
+  timeout 30 "$GSSH" "$PRE_POWEROFF_GUEST_CMD" >/dev/null 2>&1; say "pre-poweroff rc=$?"
+fi
 say "powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)"
 "$GSSH" 'sudo poweroff' >/dev/null 2>&1
 for _ in $(seq 1 15); do kill -0 $QPID 2>/dev/null || break; sleep 2; done

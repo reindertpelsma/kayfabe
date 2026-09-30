@@ -14,6 +14,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
 export NVKVM_RAM_MB=${NVKVM_RAM_MB:-8192} KF_SMP=${KF_SMP:-6}
 export KF3_DEV_EXTRA="display=on${DISPLAY_KF3_EXTRA:+,$DISPLAY_KF3_EXTRA}"
 export POST_CAPTURE_HOOK="$HERE/hook.sh"
+# ★ Leave the guest's filesystems clean before a poweroff the display teardown may wedge
+# (coordinator 2026-09-30: an unclean shutdown leaves the image's journal dirty and the next fast-guest
+# build cannot mount it): sync, then the kernel's emergency sync + remount read-only.
+export PRE_POWEROFF_GUEST_CMD=${PRE_POWEROFF_GUEST_CMD:-"sudo sync; echo s | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1; echo u | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1"}
 exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
 echo "DISPLAY_LANE_START tag=$TAG rev=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)"
 bash "$REPO/scripts/bench/boot_capture.sh" "$TAG" -- -vga none -vnc "${DISPLAY_VNC:-127.0.0.1:0}"

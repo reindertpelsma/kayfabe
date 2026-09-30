@@ -54,7 +54,10 @@ SP=$!
 # wait until the guest says it is showing A (or the show fails), then capture
 for i in $(seq 1 60); do grep -q '^KFDISP_SHOWING=A\|^KFDISP_FAIL' "$OUT/show.log" 2>/dev/null && break; sleep 1; done
 mode=$(sed -n 's/^KFDISP_MODE \([0-9]*\)x\([0-9]*\)@.*/\1 \2/p' "$OUT/show.log")
-if grep -q '^KFDISP_SHOWING=A' "$OUT/show.log" && [ -n "$mode" ] && [ -S "$MON" ]; then
+# ⊘ `screendump … kf0` on a device without a graphic console ABORTS QEMU (`[measured m1b]`
+# `Unexpected error in object_property_find_err()`): only when the device registered its console.
+HAS_CONSOLE=no; grep -q 'kf3: display console registered' "$BENCH/run_${TAG}_qemu.log" 2>/dev/null && HAS_CONSOLE=yes
+if grep -q '^KFDISP_SHOWING=A' "$OUT/show.log" && [ -n "$mode" ] && [ -S "$MON" ] && [ "$HAS_CONSOLE" = yes ]; then
     sleep 1   # one more vblank at least, so the scanout copy of A is the latest frame
     python3 - "$MON" "$OUT/screendump.ppm" <<'PY'
 import socket, sys, time
@@ -72,7 +75,7 @@ PY
         else say "PATTERN_MATCH=no screendump=$(head -c 20 "$OUT/screendump.ppm" | tr '\n' ' ') ref=$(md5sum < "$OUT/reference_a.ppm" | cut -c1-12) got=$(md5sum < "$OUT/screendump.ppm" | cut -c1-12)"; fi
     else say "PATTERN_MATCH=absent (screendump=$(stat -c %s "$OUT/screendump.ppm" 2>/dev/null || echo none))"; fi
 else
-    say "PATTERN_MATCH=not-run (showing=$(grep -c '^KFDISP_SHOWING=A' "$OUT/show.log") mode=[$mode] mon=$([ -S "$MON" ] && echo yes || echo no))"
+    say "PATTERN_MATCH=not-run (showing=$(grep -c '^KFDISP_SHOWING=A' "$OUT/show.log") mode=[$mode] mon=$([ -S "$MON" ] && echo yes || echo no) console=$HAS_CONSOLE)"
 fi
 wait $SP
 grep '^KFDISP_' "$OUT/show.log" | sed 's/^/DISPLAY_/'
