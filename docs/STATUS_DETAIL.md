@@ -198,6 +198,11 @@ LLM decode, `Qwen/Qwen2-0.5B-Instruct`, Hugging Face eager, from `V3_BUILD.md`
   decode is about 1,000 kernel launches), and each one is a trapped MMIO write, which means one
   VM exit. Doorbells are 99.7 % of trapped exits and, by the doorbell-module design's estimate,
   55–80 % of the guest-vs-host gap.
+- ⊘ **Corrected 2026-09-30:** the 51 µs below is the whole per-token excess (55.8 ms) divided by the
+  doorbell count — an upper bound that credits every other cost to doorbells, not a measurement. The
+  guest-timed store costs **~20 µs** on the nested RTX 3060 box (~15.7 µs with the ioeventfd fast path;
+  `design/V3_DOORBELL_IOEVENTFD.md` §7.2), so doorbells explain ~22 of the ~58 ms/token excess and the
+  rest is not yet attributed.
 - On the nested AMD box each doorbell costs about **51 µs** of guest time; on the nested Intel
   box about **106 µs**. Reaching 0.8× would need ≤ ~5–8 µs per doorbell, and no trapped exit
   reaches that on these boxes.
