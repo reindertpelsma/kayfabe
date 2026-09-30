@@ -303,7 +303,21 @@ must pass to another session.
 7. Re-run the full CUDA app matrix at the current master (the 58/65 predates several fixes).
 8. **Display** (started: M0 on `v3-display`, in the v3-mc21 candidate — §0, §2), then a desktop, then
    **Windows** (roadmap).
-9. **CeUtils timeout on the first guest init after a killed VMM** (2026-09-30, `traces/v3_cifix/`, seen once).
+9. ⊘ **ROOT-CAUSED 2026-09-30 — not the killed VMM: a kf3 startup race.** That boot's QEMU log says
+   `no fd-backed guest RAM block` at t=0.057 s, and then refuses a sysmem leaf of the CeUtils VA space
+   by name (`map 0x120070000: guest-RAM row and no RAM object`). Its invalidate stayed unreconciled, so
+   RM's `memmgrTestCeUtils` (vid→sys copy through CeUtils) never ran. It is the only one of the 60 boots
+   of both runs with that refusal; all 59 others built the 2 GiB RAM object. Mechanism:
+   `prewarm` checks for the fd, then `guest_ram_object` looked it up again inside a `OnceLock`.
+   QEMU's memory listener re-renders guest RAM at reset (delete, then add), and the second lookup
+   hit that gap. The `OnceLock` then cached "no RAM" for the VM's life; the two retries took 2 and
+   0 µs, i.e. the cached error, where a real import takes ~1.8 s. Fix on branch **`v3-ramobj`**
+   (`once_after`: the fd is read once, outside the cell; "not yet" is never cached; prewarm retries
+   next tick) — pending the merge bar. Residual: other `RamMap` readers can still observe a
+   mid-transaction topology (a refusal by name, not a cached one); fixing that needs the
+   listener's `begin`/`commit` staging in `kf3.c`. The text below is the original,
+   superseded hypothesis.
+   ⊘ *Superseded:* **CeUtils timeout on the first guest init after a killed VMM** (2026-09-30, `traces/v3_cifix/`, seen once).
    At 16:37:56Z a stray QEMU (a kf3 binary of `bf6e7640` left by an earlier mis-launched chain) was
    killed on the RTX 3060 (`kill`, then `kill -9`). The merge check started at 16:38; its bare-metal
    suite used the host GPU in between and passed 30/30. The thin suite's first arm, `--timer`, was the

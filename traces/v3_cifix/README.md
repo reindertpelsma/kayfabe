@@ -10,5 +10,8 @@
 - Display lane at the same revision (display=on): DVI-D-1 connected, pixel-exact 1920x1080 pattern, 120/120 flips
   at 60.02 Hz, rc=0.
 - Run 2 (`mccifix3`, same revision, after e2fsck of the fat-guest image): thin suite **30/30**.
-- ⚠ Open: whether a first-init CeUtils timeout can follow a SIGKILLed VMM on the same host GPU is NOT
-  established by one occurrence — queued as an investigation in docs/STATUS_AND_HANDOFF.md.
+- ⊘ **Root-caused the same day (`docs/STATUS_AND_HANDOFF.md` §4.9): NOT the killed VMM.** The failed
+  boot's `fast_mccifix2_timer_qemu.log` shows `no fd-backed guest RAM block` at t=0.057 s and a CeUtils
+  sysmem leaf refused by name (`guest-RAM row and no RAM object`). It is a kf3 startup race: the guest-RAM
+  object cache kept a transient "no RAM" for the VM's life. It is the only one of the 60 boots with
+  that refusal. Fix on branch `v3-ramobj`.
