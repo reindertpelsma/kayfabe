@@ -9,6 +9,38 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+- ★ **WRAP-UP 2026-09-30 (evening) — the owner resumes Friday 2026-10-02. Where everything stands:**
+  - **master = v3** = the code of **`afb552ea`** (+ docs/evidence/README only). Bar at that exact revision:
+    tests 1754/0, gates 9/9, bare 30/30, thin 30/30, CDP smoke 4/4 shapes (`traces/v3_mc23/`). GitHub CI
+    green, incl. the slow job. Families at master code: TU116, AD104, GB205 bars + CUDA ladder 4/4.
+  - **Apps:** 61/65 + 6/6 at `2830988f` (CDP fixed). R4 on an RTX 3070 at `738c90e5` (pre-CDP code):
+    guest 60/65 + 6/6 = R3, host 71/71 ⇒ no regression from display/ioeventfd/CI (`design/V3_APP_MATRIX.md`
+    §R4). **Not run:** guest graphics set, the fast-path-ON app lane, PM and 100-process shapes.
+  - **In flight, on a branch (not merged): `v3-uvm-guest` (`bf83d0ca`) — guest managed memory WORKS end to
+    end (M2):** `um_probe` gpufirst/cpuinit/prefetch/advise/malloc all `ok bad=0` (3 499 faults delivered and
+    replayed, 0 cancels, 0 Xid). M3 partial: `attach_verify`, `UnifiedMemoryStreams`, `UnifiedMemoryPerf`
+    (79 713 faults) passed; `UnifiedMemoryPerf` failed ONCE (719 after 197 s: 16 faults timed out after 30 s —
+    a guest-side stall, undiagnosed); `conjugateGradientUM` not run (`libnvJitLink` missing on that box).
+    Stop note + exact next recipe: `design/V3_UVM_GUEST_FAULT_PLANE.md`; runs: `traces/v3_uvm_guest/`.
+  - **Owner questions (open):**
+    1. **UVM (new, 2026-09-30):** a parked replayable fault blocks the host GPU's GR engine for EVERY
+       tenant (host CUDA included) until serviced or ~4.3 s; kf3's GPU page-table walker needs that engine,
+       so the design deadlocks (walk waits 4.3 s, twin killed, Xid 109). The branch's experiment reads the
+       guest's page-table words on the CPU while faults are parked — which the v3 rule "no CPU read of a
+       guest page table" forbids. (a) May the fault path do that? (b) Is a stall of every tenant's GPU work
+       of up to ~4 s per parked fault acceptable? (c) Bug 1624521 ownership check: now or later?
+    2. **Doorbells:** build the guest helper now, or first measure a non-nested host (none reachable)?
+    3. **X11 desktops:** `GF100_DISP_SW` option A or B (recommendation B, §0 below).
+  - **Next, in order (suggested):** (1) UVM after the owner's answers: diagnose the 30 s stall, run
+    `conjugateGradientUM`, the Bug-1624521 negative control, the merge bar EFS off/on, merge. (2) A per-token
+    LLM time breakdown on nested boxes: doorbells explain ~22 of the ~58 ms/token gap; the rest is
+    unattributed (offered to the owner, not started). (3) R4's remainder. (4) §4 items 10–12. (5) Driver
+    matrix continuation. (6) Windows last.
+  - **Durability:** everything is on GitHub. The dev host's local-only branches and two uncommitted Codex
+    worktrees are backed up as `backup/host-2026-09-30/*` (13 branches, secret-scanned, not reviewed). Two
+    unpushable research-repo corrections are `archive/nvkvm-unpushed-2026-09-30/`. **All vast boxes are
+    destroyed** at wrap-up (the recipe re-provisions a box in 7–45 min: `scripts/bench/box/README.md`).
+
 - **2026-09-30 — R4 matrices (partial, `v3-matrix-r4`):** kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix), RTX 3070,
   nested: apps bare metal 71/71; guest OFF **60/65 + 6/6, identical to R3** (UVM four + CDP); gfx bare metal
   38/38. Not run (owner pause): apps PM / 100-process / `doorbell-ioeventfd=on`, the guest gfx set, the §4.9
@@ -384,5 +416,11 @@ must pass to another session.
 - **A test runner without `--no-fail-fast` under-reports** (it stopped at the first red crate).
 - **A watchdog must not read "cannot probe" as "idle".**
 - **Boxes vanish** (vast destroyed several mid-run); evidence must already be in git.
+- **A coexistence test that tolerates a stall reads the stall as a pass** (2026-09-30): the b3 host proof
+  logged host CUDA stalling for a whole 3 s fault park as coexistence PASSED; the guest plane then
+  deadlocked on exactly that (`design/V3_UVM_GUEST_FAULT_PLANE.md`). Bound the latency, not just the outcome.
+- **A cached "not yet" outlives its cause** (2026-09-30, §4.9): a `OnceLock` kept a transient "no guest RAM"
+  for a VM's life. And the first plausible cause (a killed QEMU just before) was wrong: read the failed run's
+  own log against a passing run of the same arm, and grep the signature's base rate across all archived logs.
 - **`git stash` is shared by every worktree of a repo** — another agent's `stash pop` applied someone
   else's stash. Agents working in parallel worktrees save a patch file instead of stashing.

@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-09-30.** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-09-30 (evening).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -142,6 +142,13 @@ citation: ask whether its reason still holds before relying on it.
   audit the shared groups omitted by the header sweep, compare complete resolved existing 550+
   policies (not just counts), and pass the required exact-revision tests before promotion. This
   approval does not claim end-to-end 535/545 application support or relax other policy rules.
+- **Refined 2026-09-30 (owner):** *"a chat is no durable artifact, neither this host — keep GitHub as
+  backup for all valuable work."* The dev host is not durable storage either: push branches (a
+  `backup/<host>-<date>/` namespace for unreviewed local work, after a secret scan) and record the resume
+  point in `docs/STATUS_AND_HANDOFF.md` §0 before any pause.
+- **Pacing (owner, 2026-09-30):** the owner expected check-ins before long unattended stretches ("thought
+  you would stop earlier and ask") while welcoming the results; weekly-usage aim ≈ 14 % per day. Check in
+  before launching a new wave of agents or boxes; wrap up (push, stop notes, destroy boxes) when asked.
 - **Storage and execution reaffirmed 2026-09-28:** Vast is untrusted, replaceable compute, never the
   only copy of unique work. Commit/push source and useful text evidence from trusted local storage;
   do not send account credentials or forward the SSH agent. The owner authorized taking over all
