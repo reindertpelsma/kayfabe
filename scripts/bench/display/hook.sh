@@ -164,6 +164,41 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     gq 'sudo systemctl stop lightdm; echo rc=$?' 60 > "$OUT/lightdm_stop.log"
 fi
 
+# 4b. ★ M3 Cinnamon on Wayland (DISPLAY_CINNAMON_WAYLAND=1): the Mint desktop's own compositor
+#     (muffin) driving KMS directly — no X driver, so no display-SW object — through lightdm's
+#     autologin into the `cinnamon-wayland` session, then a Vulkan client in it; host screendumps
+if [ "${DISPLAY_CINNAMON_WAYLAND:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
+    gq 'ls /usr/share/wayland-sessions/ 2>&1' > "$OUT/wayland_sessions.log"
+    wsession=$(sed -n 's/^\(cinnamon[a-z0-9-]*\)\.desktop$/\1/p' "$OUT/wayland_sessions.log" | head -1)
+    say "CINNAMON_WAYLAND_SESSION=[${wsession:-none}] ($(tr '\n' ' ' < "$OUT/wayland_sessions.log"))"
+    if [ -n "$wsession" ]; then
+        CW=$(mktemp -d)
+        sed "s/@SESSION@/$wsession/g" "$HERE/desktop/50-kf-autologin.conf.in" > "$CW/50-kf-autologin.conf"
+        tar -C "$CW" -cf - 50-kf-autologin.conf | $G 'rm -rf ~/cw && mkdir -p ~/cw && tar -xf - -C ~/cw'
+        rm -rf "$CW"
+        gq 'sudo systemctl stop lightdm 2>/dev/null; sudo rm -f /etc/X11/xorg.conf; sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/cw/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/cw_start.log"
+        up=no
+        for i in $(seq 1 45); do
+            if gq 'pgrep -u ubuntu -x cinnamon >/dev/null && ls /run/user/1000/wayland-* >/dev/null 2>&1 && echo UP' | grep -q UP; then up=yes; break; fi
+            sleep 2
+        done
+        sleep 15
+        wd=$(gq 'ls /run/user/1000/ | grep -m1 "^wayland-[0-9]*$"')
+        say "CINNAMON_WAYLAND up=$up socket=[${wd}] $(tr '\n' ' ' < "$OUT/cw_start.log")"
+        shot "$OUT/cw_1.ppm"
+        CWENV="sudo -u ubuntu env XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=${wd:-wayland-0}"
+        ( gq "$CWENV timeout 12 vkcube-wayland --c 400 2>&1 | tail -6; echo RC=\${PIPESTATUS[0]}" 40 > "$OUT/cw_vkcube.log" ) &
+        VP=$!; sleep 6; shot "$OUT/cw_vkcube.ppm"; wait $VP
+        say "CINNAMON_WAYLAND_VKCUBE $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/cw_vkcube.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/cw_vkcube.log")"
+        gq 'sudo dmesg | grep -i "segfault\|traps:" | tail -10; tail -60 /home/ubuntu/.xsession-errors 2>/dev/null; sudo journalctl -b -u lightdm --no-pager | tail -30' 60 > "$OUT/cw_errors.log"
+        say "CINNAMON_WAYLAND_CRASHES $(grep -c 'segfault\|traps:' "$OUT/cw_errors.log")"
+        for f in cw_1 cw_vkcube; do
+            [ -s "$OUT/$f.ppm" ] && say "SHOT $f md5=$(md5sum < "$OUT/$f.ppm" | cut -c1-12)" || say "SHOT $f absent"
+        done
+        gq 'sudo systemctl stop lightdm; echo rc=$?' 60 > /dev/null
+    fi
+fi
+
 # 5. ★ M3 Wayland (DISPLAY_WESTON=1): with no X server holding the head —
 #    weston on the DRM backend (nvidia-drm KMS -> the virtual engine)
 #    with Vulkan and EGL clients presenting through it; graded by host screendumps
