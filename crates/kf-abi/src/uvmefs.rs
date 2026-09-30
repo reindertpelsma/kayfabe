@@ -41,6 +41,15 @@ pub const UVM_UNREGISTER_GPU: u64 = 38;
 pub const UVM_UNMAP_EXTERNAL: u64 = 66;
 /// `UVM_CREATE_EXTERNAL_RANGE` = `UVM_IOCTL_BASE(73)`.
 pub const UVM_CREATE_EXTERNAL_RANGE: u64 = 73;
+/// `UVM_MM_INITIALIZE` (`uvm_ioctl.h:1087`) — issued on a SECOND file that then holds the
+/// memory map for the va_space named by `uvmFd`. ⊘ Without it a va_space whose `mm` is enabled
+/// has no `mm` and every GPU-VA-space registration answers `NV_ERR_PAGE_TABLE_NOT_AVAIL`
+/// (`uvm_va_space.c` `uvm_va_space_register_gpu_va_space` → `uvm_va_space_mm_or_current_retain`)
+/// — `[measured uvmg2, 2026-09-30]`, and the ladder's W392C learned it first.
+pub const UVM_MM_INITIALIZE: u64 = 75;
+/// `NV_WARN_NOTHING_TO_DO` (`nvstatuscodes.h:176`) — `UVM_MM_INITIALIZE`'s SUCCESS on a platform
+/// that needs no secondary file (`uvm_ioctl.h:1083-1085`).
+pub const NV_WARN_NOTHING_TO_DO: u32 = 0x0001_0006;
 /// `UVM_EFS_QUERY` = `UVM_IOCTL_BASE(1800)` (`uvm_efs_ioctl.h`).
 pub const UVM_EFS_QUERY: u64 = 1800;
 /// `UVM_EFS_WAIT` = `UVM_IOCTL_BASE(1801)`.
@@ -132,6 +141,8 @@ pub enum UvmOp {
     UnregisterChannel,
     /// `UVM_CREATE_EXTERNAL_RANGE`.
     CreateExternalRange,
+    /// `UVM_MM_INITIALIZE` (on the secondary file).
+    MmInitialize,
     /// `UVM_MAP_EXTERNAL_ALLOCATION`.
     MapExternalAllocation,
     /// `UVM_UNMAP_EXTERNAL`.
@@ -148,7 +159,7 @@ pub enum UvmOp {
 
 impl UvmOp {
     /// Every op.
-    pub const ALL: [UvmOp; 14] = [
+    pub const ALL: [UvmOp; 15] = [
         UvmOp::Initialize,
         UvmOp::RegisterGpu,
         UvmOp::UnregisterGpu,
@@ -157,6 +168,7 @@ impl UvmOp {
         UvmOp::RegisterChannel,
         UvmOp::UnregisterChannel,
         UvmOp::CreateExternalRange,
+        UvmOp::MmInitialize,
         UvmOp::MapExternalAllocation,
         UvmOp::UnmapExternal,
         UvmOp::Free,
@@ -177,6 +189,7 @@ impl UvmOp {
             UvmOp::RegisterChannel => UVM_REGISTER_CHANNEL,
             UvmOp::UnregisterChannel => UVM_UNREGISTER_CHANNEL,
             UvmOp::CreateExternalRange => UVM_CREATE_EXTERNAL_RANGE,
+            UvmOp::MmInitialize => UVM_MM_INITIALIZE,
             UvmOp::MapExternalAllocation => UVM_MAP_EXTERNAL_ALLOCATION,
             UvmOp::UnmapExternal => UVM_UNMAP_EXTERNAL,
             UvmOp::Free => UVM_FREE,
@@ -198,6 +211,7 @@ impl UvmOp {
             UvmOp::RegisterChannel => 56,
             UvmOp::UnregisterChannel => 28,
             UvmOp::CreateExternalRange => 24,
+            UvmOp::MmInitialize => 8,
             UvmOp::MapExternalAllocation => 9264,
             UvmOp::UnmapExternal => 40,
             UvmOp::Free => 24,
@@ -214,6 +228,7 @@ impl UvmOp {
             UvmOp::Initialize => 8,
             UvmOp::RegisterGpu => 36,
             UvmOp::UnregisterGpu | UvmOp::UnregisterGpuVaSpace | UvmOp::CreateExternalRange => 16,
+            UvmOp::MmInitialize => 4,
             UvmOp::RegisterGpuVaSpace => 28,
             UvmOp::RegisterChannel => 48,
             UvmOp::UnregisterChannel => 24,
@@ -238,6 +253,7 @@ impl UvmOp {
             UvmOp::RegisterChannel => "UVM_REGISTER_CHANNEL",
             UvmOp::UnregisterChannel => "UVM_UNREGISTER_CHANNEL",
             UvmOp::CreateExternalRange => "UVM_CREATE_EXTERNAL_RANGE",
+            UvmOp::MmInitialize => "UVM_MM_INITIALIZE",
             UvmOp::MapExternalAllocation => "UVM_MAP_EXTERNAL_ALLOCATION",
             UvmOp::UnmapExternal => "UVM_UNMAP_EXTERNAL",
             UvmOp::Free => "UVM_FREE",
@@ -285,6 +301,15 @@ pub type Uuid = [u8; 16];
 pub fn initialize(flags: u64) -> Vec<u8> {
     let mut b = UvmOp::Initialize.buffer();
     put64(&mut b, 0, flags);
+    b
+}
+
+/// `UVM_MM_INITIALIZE_PARAMS` (`uvm_ioctl.h:1088-1092`): `{ NvS32 uvmFd; NV_STATUS rmStatus; }` —
+/// `uvm_fd` is the PRIMARY (va_space) file's descriptor.
+#[must_use]
+pub fn mm_initialize(uvm_fd: i32) -> Vec<u8> {
+    let mut b = UvmOp::MmInitialize.buffer();
+    b[0..4].copy_from_slice(&uvm_fd.to_le_bytes());
     b
 }
 
@@ -708,8 +733,9 @@ mod tests {
     /// `uvm_ioctl.h`, `uvm_linux_ioctl.h` and `uvm_efs_ioctl.h`), not a hand count.
     #[test]
     fn the_kernel_struct_sizes_are_the_compilers() {
-        let want: [(UvmOp, usize, usize); 14] = [
+        let want: [(UvmOp, usize, usize); 15] = [
             (UvmOp::Initialize, 16, 8),
+            (UvmOp::MmInitialize, 8, 4),
             (UvmOp::RegisterGpu, 40, 36),
             (UvmOp::UnregisterGpu, 20, 16),
             (UvmOp::RegisterGpuVaSpace, 32, 28),

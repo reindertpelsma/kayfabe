@@ -63,6 +63,7 @@ pub const KERNEL_SIZES: &[(u64, usize, &str)] = &[
     (38, 20, "UVM_UNREGISTER_GPU"),
     (66, 40, "UVM_UNMAP_EXTERNAL"),
     (73, 24, "UVM_CREATE_EXTERNAL_RANGE"),
+    (75, 8, "UVM_MM_INITIALIZE"),
     (1800, 168, "UVM_EFS_QUERY"),
 ];
 
@@ -196,7 +197,9 @@ mod tests {
         let mut seen = std::collections::BTreeSet::new();
         for &(r, s, n) in KERNEL_SIZES {
             assert!(seen.insert(r), "{n} listed twice");
-            assert!(s >= 16, "{n}");
+            // `UVM_MM_INITIALIZE_PARAMS` (`{ NvS32 uvmFd; NV_STATUS rmStatus; }`) is the one
+            // 8-byte struct; every other is at least 16.
+            assert!(s >= 16 || (r == 75 && s == 8), "{n}");
         }
         assert_eq!(kernel_size(UVM_EFS_WAIT), None);
         assert_eq!(kernel_size(UVM_EFS_RESOLVE), None);

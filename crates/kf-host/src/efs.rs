@@ -98,6 +98,27 @@ fn open_efs_file(dev: &kf_linux_raw::DevDir) -> Result<UvmFile, EfsRefusal> {
     }
 }
 
+/// ★ Bind the memory map to the va_space of `file` through a SECOND file (`UVM_MM_INITIALIZE`).
+/// ⊘ Without it every GPU-VA-space registration answers `NV_ERR_PAGE_TABLE_NOT_AVAIL`
+/// (`[measured uvmg2, 2026-09-30]`: `UVM_REGISTER_GPU_VASPACE … Other(93)`), because the va_space
+/// has no `mm` (`uvm_va_space_mm_or_current_retain`). `NV_WARN_NOTHING_TO_DO` is success on a
+/// platform that needs no secondary file (then it may be closed at once).
+fn mm_initialize(
+    dev: &kf_linux_raw::DevDir,
+    file: &UvmFile,
+) -> Result<Option<UvmFile>, EfsRefusal> {
+    let mm = UvmFile::open(dev).map_err(|e| EfsRefusal::NoDevice(format!("{e:?}")))?;
+    let mut buf = u::mm_initialize(file.fd_number());
+    mm.ioctl(UvmOp::MmInitialize.request(), &mut buf)
+        .map_err(|e| EfsRefusal::Host(format!("UVM_MM_INITIALIZE: {e:?}")))?;
+    match UvmOp::MmInitialize.status(&buf) {
+        Ok(0) => Ok(Some(mm)),
+        Ok(u::NV_WARN_NOTHING_TO_DO) => Ok(None),
+        Ok(s) => Err(EfsRefusal::Host(format!("UVM_MM_INITIALIZE -> {s:#x}"))),
+        Err(e) => Err(EfsRefusal::Host(format!("UVM_MM_INITIALIZE status: {e:?}"))),
+    }
+}
+
 fn query_file(file: &UvmFile) -> Result<EfsQuery, EfsRefusal> {
     let mut buf = UvmOp::EfsQuery.buffer();
     file.ioctl(UvmOp::EfsQuery.request(), &mut buf)
@@ -170,6 +191,7 @@ impl HostRm {
             .map_err(|e| EfsRefusal::Host(format!("GPU_GET_GID_INFO: {e:?}")))?;
         let file = open_efs_file(&self.dev)?;
         accept(&query_file(&file)?)?;
+        let mm = mm_initialize(&self.dev, &file)?;
         issue(&file, UvmOp::RegisterGpu, u::register_gpu(&uuid))
             .map_err(|e| EfsRefusal::Host(format!("UVM_REGISTER_GPU: {e:?}")))?;
         let ctl_fd = self.ctl.fd_number();
@@ -182,6 +204,7 @@ impl HostRm {
         .map_err(|e| EfsRefusal::Host(format!("UVM_REGISTER_GPU_VASPACE {vaspace:#x}: {e:?}")))?;
         Ok(EfsSession {
             file,
+            _mm: mm,
             uuid,
             ctl_fd,
             client,
@@ -233,6 +256,11 @@ impl HostRm {
 #[derive(Debug)]
 pub struct EfsSession {
     file: UvmFile,
+    /// ★ The secondary file holding the va_space's memory map (`UVM_MM_INITIALIZE`) — open for the
+    /// session's whole life: *"once this file-descriptor has been closed the UVM context is
+    /// effectively dead"* (`uvm_ioctl.h:1074-1076`). `None` on a platform that answered
+    /// `NV_WARN_NOTHING_TO_DO`. It holds a reference on `file`, so the va_space outlives it.
+    _mm: Option<UvmFile>,
     uuid: [u8; 16],
     ctl_fd: i32,
     client: u32,
