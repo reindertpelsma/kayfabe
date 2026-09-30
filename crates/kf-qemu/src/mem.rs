@@ -867,6 +867,23 @@ pub struct Spare {
 /// Spares kept; a retirement beyond this frees the host space instead.
 const SPARES_MAX: usize = 32;
 
+/// ★ Build once, behind a precondition that can be TRANSIENTLY absent. `pre` is read outside the
+/// cell and its value is what `build` gets, so the build never re-reads what `pre` saw (no
+/// check-then-use gap), and a `None` from `pre` returns `not_yet` WITHOUT touching the cell — the
+/// next call looks again. Only `build`'s outcome, success or refusal, is remembered.
+fn once_after<P, T: Clone>(
+    cell: &std::sync::OnceLock<Result<T, String>>,
+    pre: impl FnOnce() -> Option<P>,
+    not_yet: &str,
+    build: impl FnOnce(P) -> Result<T, String>,
+) -> Result<T, String> {
+    if let Some(done) = cell.get() {
+        return done.clone();
+    }
+    let p = pre().ok_or_else(|| not_yet.to_owned())?;
+    cell.get_or_init(|| build(p)).clone()
+}
+
 /// ★ w827: spares built by [`prewarm`] before the guest runs. `[measured w827 vh2, 58e03230]` a
 /// raw-client process names THREE VA spaces (the floor arm `--timer`: one took the single prewarmed
 /// spare, two paid `create_mirror` at 67-90 ms each — its RAM window map is 65-86 ms — INSIDE a held
@@ -1527,15 +1544,22 @@ impl MemPlane {
     /// ⚠ It pins all of guest RAM on the host for the VM's life — the same posture as gate 3's
     /// Translated channel, and the reason `memory-backend-memfd,share=on` is required.
     ///
+    /// ⊘ **"No fd-backed block" is never remembered** — only the build's own outcome is. The fd
+    /// is read ONCE, outside the cell, and handed to the build ([`once_after`]): QEMU's listener
+    /// re-renders guest RAM at machine reset (a region deleted, then added again), and a second
+    /// lookup inside the cell caught that gap once in 60 boots (`traces/v3_cifix/`, the first
+    /// `--timer` arm at `3f67ed95`): the cached "no RAM" refused every sysmem leaf of that VM, and
+    /// its CeUtils self-test timed out.
+    ///
     /// # Errors
-    /// No fd-backed guest RAM, the mapping, or the host's refusal — by name, and remembered.
+    /// No fd-backed guest RAM yet (not remembered), the mapping, or the host's refusal (by name,
+    /// and remembered).
     pub fn guest_ram_object(&self, rm: &'static HostRm) -> Result<(u32, u64), String> {
-        self.ram_obj
-            .get_or_init(|| {
-                let fd = self
-                    .ram
-                    .backing_fd()
-                    .ok_or("no fd-backed guest RAM block (memory-backend-memfd,share=on?)")?;
+        once_after(
+            &self.ram_obj,
+            || self.ram.backing_fd(),
+            "no fd-backed guest RAM block (memory-backend-memfd,share=on?)",
+            |fd| {
                 let borrowed = fd.borrow();
                 let len = borrowed
                     .try_clone_to_owned()
@@ -1560,8 +1584,15 @@ impl MemPlane {
                     .map_err(|e| format!("guest-RAM OS descriptor of {len:#x}: {e:?}"))?;
                 eprintln!("kf3: guest-RAM object {obj:#x} over {len:#x} bytes of the guest memfd");
                 Ok((obj, len))
-            })
-            .clone()
+            },
+        )
+    }
+
+    /// Whether [`Self::guest_ram_object`] has an outcome to remember yet (built, or refused by
+    /// the host). `false` after a "no RAM registered yet" answer, which is never cached.
+    #[must_use]
+    pub fn guest_ram_object_settled(&self) -> bool {
+        self.ram_obj.get().is_some()
     }
 
     /// The PRAMIN plan for a window-base word: what each slot must show.
@@ -1764,6 +1795,11 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
     plane.ram.backing_fd()?;
     let t0 = std::time::Instant::now();
     let ram_obj = plane.guest_ram_object(rm);
+    // The block went away between the two lookups (QEMU re-rendering guest RAM): nothing was
+    // cached, so try again next tick instead of spending a spare on a space with no RAM window.
+    if ram_obj.is_err() && !plane.guest_ram_object_settled() {
+        return None;
+    }
     let ram_obj_us = t0.elapsed().as_micros();
     let t1 = std::time::Instant::now();
     let space = match rm.alloc_vaspace() {
@@ -2086,6 +2122,57 @@ pub fn apply_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ `traces/v3_cifix/`: a "not registered yet" answer is returned, never cached; the first
+    /// time the precondition holds, the build runs with exactly the value it saw, and its result
+    /// is what every later call gets — even if the precondition is absent again by then.
+    #[test]
+    fn a_not_yet_precondition_is_never_remembered() {
+        let cell = std::sync::OnceLock::new();
+        let r: Result<u32, String> = once_after(
+            &cell,
+            || None::<u32>,
+            "no RAM yet",
+            |_| panic!("no build without the precondition"),
+        );
+        assert_eq!(r, Err("no RAM yet".to_owned()));
+        assert!(
+            cell.get().is_none(),
+            "the transient refusal must not be cached"
+        );
+        let r = once_after(
+            &cell,
+            || Some(7u32),
+            "no RAM yet",
+            |p| {
+                assert_eq!(p, 7, "the build gets the value the precondition saw");
+                Ok(p * 2)
+            },
+        );
+        assert_eq!(r, Ok(14));
+        let r = once_after(
+            &cell,
+            || None::<u32>,
+            "no RAM yet",
+            |_| panic!("built twice"),
+        );
+        assert_eq!(r, Ok(14), "a settled build outlives a later gap");
+    }
+
+    /// A refusal the BUILD makes (the host said no) is an outcome: remembered, never retried.
+    #[test]
+    fn a_build_refusal_is_remembered() {
+        let cell = std::sync::OnceLock::new();
+        let r: Result<u32, String> = once_after(
+            &cell,
+            || Some(1u32),
+            "no RAM yet",
+            |_| Err("host refused".to_owned()),
+        );
+        assert_eq!(r, Err("host refused".to_owned()));
+        let r = once_after(&cell, || Some(1u32), "no RAM yet", |_| panic!("retried"));
+        assert_eq!(r, Err("host refused".to_owned()));
+    }
 
     /// The measured bases, at 12 GiB, are inside what is armed, and a 1 MiB window from each is
     /// wholly covered.
