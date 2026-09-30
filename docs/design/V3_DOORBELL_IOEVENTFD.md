@@ -194,8 +194,8 @@ Evidence: `traces/v3_ioeventfd/`. ⊘ Not one number here is non-nested.
 
 | check | fast path OFF (the default) | fast path ON |
 |---|---|---|
-| crate tests / v3 gates / kf3 build / bare metal | 1700/0, 9/9, KF3_RC=0, 30/30 (`merge_check` at `43293417`) | — (the gates run no QEMU) |
-| thin guest suite, budget 180 s | **30/30** (merge bar) | **30/30** (`dbfast_lane.sh`, same revision); arm times equal within 1 s |
+| crate tests / v3 gates / kf3 build / bare metal | 1700/0, 9/9, KF3_RC=0, 30/30 (`merge_check` at `43293417`); ★ **1701/0, 9/9, KF3_RC=0, 30/30 at `ca7a5006`, the final code revision** | — (the gates run no QEMU) |
+| thin guest suite, budget 180 s | **30/30** (merge bar, both revisions) | **30/30** at `43293417` and **30/30 at `ca7a5006`** (`dbfast_lane.sh`); arm times equal within 1 s |
 | CUDA ladder, fat guest (cup2, cup3, cup8, cup8bench) | **4/4** | **4/4**; per-token `forwarded>0`, `emulated=0` for every guest token |
 | where passthrough doorbells went (thin suite, all 30 arms) | trapped | **823 of 823 by eventfd, 0 trapped** (84 ledger rows) — the datamatch prediction is exact on GA106 / 580 |
 | Translated (CeUtils, UVM kernel channels) | trapped | by eventfd, handed by the drainer (e.g. `--concurrency`: 830 hand-offs). `cup8bench` boot: CeUtils `0x801` 52 doorbells in 45 wakes; UVM-owned (`PRIVILEGE=KERNEL+UVM_OWNED`) `0x803` 201 in 160, `0x804`/`0x1005`/`0x1006` 1 each — every one `fast_forwarded`, `emulated=0` |
@@ -256,6 +256,20 @@ applies, never inside one.
 ⇒ Exactly the trade the owner predicted (2026-09-28): asynchronous dispatch **helps a deep queue**
 (batched −23 %: the vCPU returns sooner and keeps submitting) and **hurts an idle, synchronous launch**
 (+19 %: the sync waits ~14 µs longer for the drainer to wake and ring).
+
+★ **Repeated at the final revision `ca7a5006`** (`dbfast_lane.sh … launch`: `cup8bench` alone, 3 boots
+per mode × 20 iterations, N=16, µs; `traces/v3_ioeventfd/dbl2_ca7a5006/`):
+
+| mode | batched, per launch | submit (median) | single synchronous launch (median) |
+|---|---|---|---|
+| OFF | 27 / 27 / 32 | 31 / 30 / 32 | 36 / 35 / 50 |
+| ON | 26 / 24 / 37 | **26 / 26 / 26** | 46 / 69 / 37 |
+| ON + `KF3_DBFAST_SPIN_US=100` | **22 / 19 / 22** | **22 / 22 / 21** | 49 / 76 / 26 |
+
+⇒ Reproducible: **submit is faster with the fast path** (the vCPU returns ~5 µs sooner, ~10 µs with
+the spin's awake drainer) and **batched launches are faster with the spin** (19–22 vs 27–32 µs, −25 %).
+⊘ The single synchronous launch is **not** separable from noise at 3 × 20 iterations on this box (each
+mode spans 26–76 µs across boots); the first run's +19 % is one sample of that spread, not a result.
 
 LLM decode (the `llm_parity` lane, ON vs OFF and the spin experiment): §7.5.
 
@@ -332,5 +346,19 @@ fast path does); the fast path and the optional guest helper remain the routes.
   (the vCPU is not excluded from the free). A ring is only a hint to re-read that channel's `GP_PUT`,
   so it is harmless, but it is not generation-safe; the fast path is. The churn test reports it
   (`trap_late_rings`; 0 in every local run).
-- The drainer wakes per doorbell burst; a bounded spin-then-park (§48.2) could cut wake latency when
-  doorbells are dense, at a CPU cost — to be measured before it is proposed, never as a timer.
+- ★ **The drainer's wake-up is the fast path's price** (§7.3, §7.4): the trapped path rings the twin
+  inside the exit; the fast path rings it when the drainer runs — ~46 µs later on this nested box if
+  the drainer was asleep. That is why a single synchronous launch got slower while batched launches got
+  faster. `KF3_DBFAST_SPIN_US` (default off) lets the drainer poll for that long after each delivery
+  before parking (§48.2's bounded spin-then-park: it acts sooner, never later; it never spins while
+  register work is queued, and an idle device never spins); its gain and its CPU cost are in §7.5.
+  It is an experiment knob until measured on a non-nested host.
+- The vCPU saving per matched doorbell is modest on this nested box (§7.2: ~15.7 vs ~20 µs), because
+  the store still exits and is emulated in the kernel; only a guest-side route (the optional helper,
+  `V3_GUEST_DOORBELL_MODULE.md`) removes the exit itself. A non-nested host is expected to show a
+  larger relative saving (its exit to userspace is a larger share of a smaller exit) — a hypothesis
+  until §7.x's protocol is run there.
+- The drainer polls doorbells before every privileged register write it applies, one
+  `epoll_wait(0)` each (e.g. `--concurrency`: 39 295 polls for 834 doorbells). Cheap (sub-µs each),
+  counted (`polls=hits/total`), and it is what keeps a vCPU's doorbell ahead of its later register
+  write; a doorbell that arrives DURING one long apply waits for it (§7.3's p99 62.5 µs row).
