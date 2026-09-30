@@ -8,7 +8,7 @@ page, a replay completes the kernel with correct data; a scoped cancel fails onl
 native host CUDA (matmul + real managed-memory demand paging) is unaffected throughout. This is the
 **privileged half only** — no guest, no kayfabe VMM. Per the owner's standing rule this does **not**
 claim guest managed-memory support; that needs the guest fault plane (`V3_UVM_DEMAND_PAGING.md`
-§13) wired on top. The preflight below (2026-09-28) is preserved; where the experiment settled one
+§5, "What the guest must see") wired on top. The preflight below (2026-09-28) is preserved; where the experiment settled one
 of its open questions the answer is folded in **above** it, in "§0 Result".
 
 Reference: NVIDIA open-gpu-kernel-modules 580.159.04, commit
@@ -138,7 +138,7 @@ objects); and full native host-CUDA coexistence including managed-memory demand 
 establish: anything guest-side (no guest, no VMM ran); multi-VMM VA-space-ownership authentication
 (§0.3); the graphics page-kind and per-call TLB-cost questions of §4.4 (compute pages only here);
 non-replayable/CE-fault handling (the shader path only). Next is the guest fault plane
-(`V3_UVM_DEMAND_PAGING.md` §13) injected into a stock guest, which is where a guest-managed-memory
+(`V3_UVM_DEMAND_PAGING.md` §5) injected into a stock guest, which is where a guest-managed-memory
 claim would first be earned.
 
 ## First boundary to establish: authority, not fault delivery
@@ -256,7 +256,7 @@ row's "foreign same-UID/different-UID object" authentication is the one delibera
 §0.3 explains it is the pre-existing stock Bug-1624521 gap, needed only for multiple mutually-
 untrusting VMMs, and it is an owner/RM-interface question, not host-only-proof work.
 
-Next, in order: (1) the **guest fault plane** (`V3_UVM_DEMAND_PAGING.md` §13) — inject the guest's
+Next, in order: (1) the **guest fault plane** (`V3_UVM_DEMAND_PAGING.md` §5) — inject the guest's
 `clc369` packet + interrupt, let stock guest UVM service and replay, mirror the mapping — wired onto
 this EFS host source; only when a guest `cudaMallocManaged` first touch completes correctly is a
 guest-managed-memory claim earned. (2) The graphics **page-kind** and per-call **TLB-cost** checks

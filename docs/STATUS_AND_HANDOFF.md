@@ -34,7 +34,7 @@ dated STATUS wins — then fix this file. Entries below the first are dated hist
     kf-rm refuses unknown classes; B = keep refusing it, which leaves X11 partial. Recommendation: B
     now; try a kayfabe-serviced vblank next; A only with a headless guard. (3) b3 registration
     ownership (NVIDIA Bug 1624521) for mutually untrusting VMMs on one GPU: now or later.
-  - **Queued:** the UVM guest fault plane (`design/V3_UVM_DEMAND_PAGING.md` §13); CDP child launch;
+  - **Queued:** the UVM guest fault plane (`design/V3_UVM_DEMAND_PAGING.md` §5, "What the guest must see"); CDP child launch;
     display leftovers (cursor, scaled windows, 16-bit/YUV, the §7 display apps); the rest of the driver
     matrix (570 UVM first-channel wall; hosts 535/590/595/610); re-running the app and graphics matrices
     at this master; the `cuda/walk` tidy-up (§4.6); Turing on hardware.

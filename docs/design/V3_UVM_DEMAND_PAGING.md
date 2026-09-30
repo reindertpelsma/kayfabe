@@ -7,10 +7,12 @@ privileged piece is allowed for guest UVM only and must not trust the VMM.
 ⊘ **"no measured coexistence claim yet" is now superseded for the host half:** the b3 patch is
 built and the bounded host-only fault/replay/cancel/timeout/teardown proof passed on a GA106
 (580.159.04 open), with native host CUDA + managed-memory demand paging measured at 96% of idle
-throughput under EFS fault pressure, `managed_bad=0`, delivery p50 131 µs / p99 206 µs. The §10
+throughput under EFS fault pressure, `managed_bad=0`, delivery p50 73.7 µs / p99 98.8 µs (the committed
+`service 256` run, `traces/v3_uvm_b3/run_full.log` §E; ⊘ an earlier 131 / 206 µs is from an uncommitted
+run — `V3_UVM_B3_IMPLEMENTATION.md` §0.4). The §10
 open questions **Q2** (a context with parked faults holds the GPU until answered or the kernel
-timeout cancels it — bounded) is answered there; **Q3** (page-kind) and the guest side (§13) are
-not. This note's *guest*-managed-memory claim remains unearned until §13 is wired on top.
+timeout cancels it — bounded) is answered there; **Q3** (page-kind) and the guest side (§5; ⊘ earlier text cited it as "§13", a heading that never existed) are
+not. This note's *guest*-managed-memory claim remains unearned until §5 is wired on top.
 
 **Supersession of the 09-26 preference below:** N4 replacement-module research is preserved on
 `v3-uvm-e6pp` (`c6765f5c`) but is not the implementation route. In 580.159.04, UVM callback
