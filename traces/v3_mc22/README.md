@@ -101,3 +101,22 @@ Same script, same box, run after the drainer fix: 15:08 → 15:32 UTC, **`EXIT r
 | 30-arm thin-guest suite, budget 180 | **FAST_SUITE_PASS=30 FAIL=0 CRASH=0 NOTRUN=0** | `mc22b_suite.out` |
 
 The lanes below all run from this bar's verify worktree, i.e. on `kf3-bins/b84250b8/`.
+
+### `dbfast_b84250b8/` — the doorbell fast path ON: thin suite and CUDA ladder (`dbfast_lane.sh mc22dbl suite_on,ladder`)
+
+Run from the `mc22b` verify worktree (kf3 `b84250b8`), 15:32 → 16:00 UTC, **`EXIT rc=0`** (`mc22dbl.log`).
+
+- **Thin suite with `doorbell-ioeventfd=on`: `FAST_SUITE_PASS=30 FAIL=0 CRASH=0 NOTRUN=0`**
+  (`DBL_SUITE_ON_RC=0`). Every arm's device reports `kf3: doorbell fast path ON` and ends with
+  `refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0`
+  (`DBL_ARM` lines); doorbells went by eventfd wherever the arm rings (e.g. `concurrency` 847,
+  `concurrent-fuzz` 745 of which 288 host rings, `rpc-mixed-allocs` 50). `sites=1` (BAR0's usermode
+  page; GA106 has no BAR1 view) — read from the new lock-free counter.
+- **CUDA ladder, fat guest, OFF then ON: OFF 4/4 = ON 4/4** — `cup2` `CE rv=0xabcd1234 -> PASS`,
+  `cup3` `CUP3_VAL=43`, `cup8` `CUP8_BAD=0 CUP8_MAXERR=0`, `cup8bench` `GUEST_BENCH_TOTAL_BAD=0`
+  (every timed iteration verified), in both modes. ON: 473 / 479 / 531 / 980 doorbells by eventfd per
+  rung, every registration removed by exit (`regs=0 placed=0`), 0 refusals / failures / timeouts, and
+  **all 96 ON ledger rows `emulated=0`** — the same count the fast path's own evidence recorded
+  (`traces/v3_ioeventfd/dbl3_ca7a5006/`).
+- `mc22dbl_detail.tar.xz`: the lane's suite/ladder outputs and every rung's probe log;
+  `mc22dbl_qemu_sample.tar.xz`: four QEMU logs (two busy suite arms, `cup8bench` OFF and ON).
