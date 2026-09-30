@@ -84,10 +84,13 @@ impl ScanFormats {
 /// tight `width` x `height` frame of `format`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CopyPlan {
-    /// Store offset of the rectangle's first pixel.
+    /// Store offset of the rectangle's first pixel (pitch), or of the surface's first block
+    /// (block-linear: the kernel walks the blocks from there).
     pub src: u64,
-    /// The surface's pitch in bytes.
+    /// The surface's pitch in bytes (pitch layout; the block-linear row of blocks is `layout`'s).
     pub src_pitch: u64,
+    /// How the surface is laid out.
+    pub layout: SurfaceLayout,
     /// Bytes per row (`width * bpp`) — also the frame's pitch.
     pub row_bytes: u64,
     /// Rows (= `height`).
@@ -108,6 +111,49 @@ impl CopyPlan {
     }
 }
 
+/// ★ The surface's memory layout, as the copy walks it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceLayout {
+    /// Rows `src_pitch` bytes apart — one 2D copy.
+    Pitch,
+    /// NVIDIA block-linear: 64-byte x 8-row GOBs, `2^block_height_log2` GOBs per block (one GOB
+    /// wide), blocks row-major `gobs_per_row` to a row — a GPU kernel un-swizzles it
+    /// ([`bl_offset`] is its reference).
+    BlockLinear {
+        /// The surface's width in GOBs (`SET_PLANAR_STORAGE.PITCH` in block units).
+        gobs_per_row: u32,
+        /// `SET_STORAGE.BLOCK_HEIGHT` (0..=5).
+        block_height_log2: u32,
+        /// The rectangle's first byte column (`x * bpp`, a multiple of 4).
+        x0_bytes: u32,
+        /// The rectangle's first row.
+        y0: u32,
+        /// Bytes from `src` the kernel may read: whole blocks down to the rectangle's last row.
+        extent: u64,
+    },
+}
+
+/// Bytes in a GOB (64 x 8).
+pub const GOB_BYTES: u64 = 512;
+
+/// ★ The byte offset of surface byte `(x_bytes, y)` in a block-linear surface `gobs_per_row` GOBs
+/// wide with `2^bh` GOBs per block — the reference the scanout kernel (`cuda/display/kf_scanout.ptx`)
+/// implements. Inside a GOB: `x[3:0]`, `y[0]`, `x[4]`, `y[2:1]`, `x[5]` from bit 0 up (the 16-byte x
+/// 2-row sector swizzle of every NVIDIA GPU since Fermi); GOBs stack `2^bh` high into a block, blocks
+/// run row-major.
+#[must_use]
+pub fn bl_offset(x_bytes: u64, y: u64, gobs_per_row: u64, bh: u32) -> u64 {
+    let (gob_x, gob_y) = (x_bytes >> 6, y >> 3);
+    let (block_y, in_block) = (gob_y >> bh, gob_y & ((1 << bh) - 1));
+    let gob = ((block_y * gobs_per_row + gob_x) << bh) + in_block;
+    let in_gob = ((x_bytes & 32) << 3)
+        | ((y & 6) << 5)
+        | ((x_bytes & 16) << 1)
+        | ((y & 1) << 4)
+        | (x_bytes & 15);
+    gob * GOB_BYTES + in_gob
+}
+
 /// Why a scanout cannot be copied (the bound that failed, by name).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Refused(pub String);
@@ -115,9 +161,9 @@ pub struct Refused(pub String);
 /// ★ Plan the copy of scanout `s` whose ISO context DMA resolved to `dma`.
 ///
 /// # Errors
-/// [`Refused`], naming the bound: a system-memory or block-linear surface (not yet shown: M3), a
-/// format the console has no match for, an empty or oversized rectangle, a rectangle outside the
-/// surface, or any byte outside the context DMA.
+/// [`Refused`], naming the bound: a system-memory surface, a format the console has no match for,
+/// an empty or oversized rectangle, a rectangle outside the surface, a block-linear geometry the
+/// kernel cannot walk, or any byte outside the context DMA.
 pub fn plan(s: &Scanout, dma: &CtxDma, formats: &ScanFormats) -> Result<CopyPlan, Refused> {
     let no = |why: String| {
         Err(Refused(format!(
@@ -127,9 +173,6 @@ pub fn plan(s: &Scanout, dma: &CtxDma, formats: &ScanFormats) -> Result<CopyPlan
     };
     if dma.target != Target::Vidmem {
         return no("a system-memory surface (the console shows video memory only)".into());
-    }
-    if dma.block_linear {
-        return no("a block-linear surface (the console copies pitch surfaces only, M3)".into());
     }
     let Some(format) = formats.of(s.format) else {
         return no(format!(
@@ -161,6 +204,9 @@ pub fn plan(s: &Scanout, dma: &CtxDma, formats: &ScanFormats) -> Result<CopyPlan
     let bpp = u64::from(format.bytes());
     let src_pitch = u64::from(s.pitch) * 64;
     let row_bytes = u64::from(s.width) * bpp;
+    if dma.block_linear {
+        return plan_block_linear(s, dma, format, row_bytes).or_else(no);
+    }
     if row_bytes > src_pitch {
         return no(format!(
             "a {row_bytes}-byte row is wider than the {src_pitch}-byte pitch"
@@ -177,6 +223,59 @@ pub fn plan(s: &Scanout, dma: &CtxDma, formats: &ScanFormats) -> Result<CopyPlan
     Ok(CopyPlan {
         src,
         src_pitch,
+        layout: SurfaceLayout::Pitch,
+        row_bytes,
+        rows: s.height,
+        width: s.width,
+        height: s.height,
+        format,
+    })
+}
+
+/// The block-linear half of [`plan`] (the rectangle is already inside the surface's own size).
+fn plan_block_linear(
+    s: &Scanout,
+    dma: &CtxDma,
+    format: PixelFormat,
+    row_bytes: u64,
+) -> Result<CopyPlan, String> {
+    let bh = s.block_height_log2;
+    if bh > 5 {
+        return Err(format!("SET_STORAGE.BLOCK_HEIGHT {bh} is not 1..32 GOBs"));
+    }
+    let gobs_per_row = u64::from(s.pitch);
+    let x0_bytes = u64::from(s.x) * u64::from(format.bytes());
+    // the kernel moves 4-byte words
+    if x0_bytes % 4 != 0 || row_bytes % 4 != 0 {
+        return Err(format!(
+            "a {row_bytes}-byte row from byte {x0_bytes} is not whole 4-byte words"
+        ));
+    }
+    if x0_bytes + row_bytes > gobs_per_row * 64 {
+        return Err(format!(
+            "bytes {x0_bytes}..{} leave the {gobs_per_row}-GOB-wide surface",
+            x0_bytes + row_bytes
+        ));
+    }
+    let rows_per_block = 8u64 << bh;
+    let block_rows = (u64::from(s.y) + u64::from(s.height)).div_ceil(rows_per_block);
+    let extent = block_rows * gobs_per_row * (GOB_BYTES << bh);
+    let Some(src) = dma.span(s.offset, extent) else {
+        return Err(format!(
+            "[{:#x}, +{extent:#x}) (block-linear) leaves context DMA {:#x}..={:#x}",
+            s.offset, dma.base, dma.limit
+        ));
+    };
+    Ok(CopyPlan {
+        src,
+        src_pitch: 0,
+        layout: SurfaceLayout::BlockLinear {
+            gobs_per_row: s.pitch,
+            block_height_log2: bh,
+            x0_bytes: u32::try_from(x0_bytes).map_err(|_| "x0".to_string())?,
+            y0: s.y,
+            extent,
+        },
         row_bytes,
         rows: s.height,
         width: s.width,
@@ -286,9 +385,6 @@ mod tests {
         s.format = 0x1E;
         assert!(why(s, dma).contains("no console format"));
         let mut d = dma;
-        d.block_linear = true;
-        assert!(why(fb1080(), d).contains("block-linear"));
-        d.block_linear = false;
         d.target = Target::Sysmem;
         assert!(why(fb1080(), d).contains("system-memory"));
     }
@@ -304,5 +400,86 @@ mod tests {
         assert_eq!(f.of(0xE8), Some(PixelFormat::Rgb565), "R5G6B5");
         assert_eq!(f.of(0xDF), Some(PixelFormat::Xrgb2101010));
         assert_eq!(f.of(0x1E), None, "I8");
+    }
+
+    /// ★ The GOB swizzle, bit by bit (`x[3:0] y[0] x[4] y[2:1] x[5]`), and GOBs stacked into blocks.
+    #[test]
+    fn the_block_linear_reference_is_the_nvidia_gob_swizzle() {
+        assert_eq!(bl_offset(0, 0, 1, 0), 0);
+        assert_eq!(bl_offset(15, 0, 1, 0), 15, "x[3:0] -> bits 3:0");
+        assert_eq!(bl_offset(0, 1, 1, 0), 16, "y[0] -> bit 4");
+        assert_eq!(bl_offset(16, 0, 1, 0), 32, "x[4] -> bit 5");
+        assert_eq!(bl_offset(0, 2, 1, 0), 64, "y[1] -> bit 6");
+        assert_eq!(bl_offset(0, 4, 1, 0), 128, "y[2] -> bit 7");
+        assert_eq!(bl_offset(32, 0, 1, 0), 256, "x[5] -> bit 8");
+        assert_eq!(bl_offset(63, 7, 1, 0), 511, "the GOB's last byte");
+        // 16-GOB blocks: the next GOB DOWN is the next GOB in memory, the next one ACROSS is a block away
+        assert_eq!(bl_offset(0, 8, 30, 4), 512);
+        assert_eq!(bl_offset(64, 0, 30, 4), 16 * 512);
+        assert_eq!(
+            bl_offset(0, 128, 30, 4),
+            30 * 16 * 512,
+            "the next row of blocks"
+        );
+    }
+
+    /// Every byte of a whole-block surface has exactly one address, and the addresses are the whole
+    /// surface — for every block height.
+    #[test]
+    fn the_block_linear_reference_is_a_bijection() {
+        for bh in 0..=5u32 {
+            let (gpr, block_rows) = (3u64, 2u64);
+            let rows = block_rows * (8 << bh);
+            let total = gpr * 64 * rows;
+            let mut seen = vec![false; total as usize];
+            for y in 0..rows {
+                for x in 0..gpr * 64 {
+                    let o = bl_offset(x, y, gpr, bh) as usize;
+                    assert!(o < seen.len() && !seen[o], "bh {bh}: ({x},{y}) -> {o}");
+                    seen[o] = true;
+                }
+            }
+            assert!(seen.iter().all(|b| *b), "bh {bh}: a hole");
+        }
+    }
+
+    /// ★ A 1080p block-linear surface (NVKMS's 16-GOB blocks): the kernel reads whole blocks from the
+    /// surface's start, 9 block rows of 120 GOBs; every refusal names its bound.
+    #[test]
+    fn a_block_linear_surface_is_planned_as_whole_blocks() {
+        let f = formats();
+        let mut s = fb1080();
+        s.pitch = 7680 / 64;
+        s.block_height_log2 = 4;
+        let mut dma = vid(0x4000_0000, 16 << 20);
+        dma.block_linear = true;
+        let p = plan(&s, &dma, &f).unwrap();
+        assert_eq!(p.src, 0x4001_0000, "the surface's first block, not a pixel");
+        assert_eq!(
+            p.layout,
+            SurfaceLayout::BlockLinear {
+                gobs_per_row: 120,
+                block_height_log2: 4,
+                x0_bytes: 0,
+                y0: 0,
+                extent: 9 * 120 * 16 * 512,
+            }
+        );
+        assert_eq!((p.row_bytes, p.rows), (7680, 1080));
+        let why = |s: Scanout, d: CtxDma| plan(&s, &d, &f).unwrap_err().0;
+        let mut t = s;
+        t.block_height_log2 = 6;
+        assert!(why(t, dma).contains("BLOCK_HEIGHT"));
+        let mut t = s;
+        t.pitch = 119;
+        assert!(why(t, dma).contains("GOB-wide"), "{}", why(t, dma));
+        let mut d = dma;
+        d.limit = d.base + 0x1_0000 + 9 * 120 * 16 * 512 - 2;
+        assert!(why(s, d).contains("leaves context DMA"));
+        let mut t = s;
+        t.format = 0xE8; // R5G6B5
+        t.x = 1;
+        t.width = 1919;
+        assert!(why(t, dma).contains("4-byte words"));
     }
 }

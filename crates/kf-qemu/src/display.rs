@@ -31,13 +31,13 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
-use kf_cuda::display::{DisplayGpu, Frame, PitchRect};
+use kf_cuda::display::{BlRect, DisplayGpu, Frame, PitchRect};
 use kf_disp::engine::{Acquire, Effect, Engine, PbLoc, ScanVocab, Scanout, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::model::{ChannelKind, Statement, Waker};
 use kf_disp::ports::{EventReg, Ports};
 use kf_disp::regs::Regs;
-use kf_disp::scanout::{CopyPlan, ScanFormats};
+use kf_disp::scanout::{CopyPlan, ScanFormats, SurfaceLayout};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_rm::display::SharedDisplayModel;
 use std::collections::VecDeque;
@@ -952,6 +952,17 @@ impl Device {
             );
             return;
         }
+        // ★ M3: the block-linear scanout kernel proves itself on synthetic data before any guest copy
+        let bl_ok = gpu.as_ref().map(|g| {
+            let r = selftest_block_linear(g);
+            match &r {
+                Ok(()) => eprintln!("kf3: display: block-linear scanout kernel self-test PASSED"),
+                Err(e) => eprintln!(
+                    "kf3: display: block-linear scanout kernel self-test FAILED: {e} — block-linear surfaces will be refused"
+                ),
+            }
+            r
+        });
         let Ok(poller) = Poller::create() else {
             eprintln!("kf3: display: epoll refused — the display plane is DOWN");
             return;
@@ -991,6 +1002,7 @@ impl Device {
         let mut next_vblank: [Option<(Instant, Duration)>; MAX_HEADS] = [None; MAX_HEADS];
         let mut scan = ScanState {
             trace,
+            bl_ok,
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
@@ -1477,6 +1489,53 @@ struct ScanState {
     refusals_logged: u32,
     /// `KF3_DISPLAY_TRACE`: each copy's source, and a digest of what it copied.
     trace: bool,
+    /// The block-linear kernel's bring-up self-test verdict (block-linear scanouts are refused by
+    /// its failure).
+    bl_ok: Option<Result<(), String>>,
+}
+
+/// ★ Run the block-linear scanout kernel on a SYNTHETIC surface and compare every word with the
+/// reference address function (`kf_disp::scanout::bl_offset`) — at bring-up, before any guest copy.
+fn selftest_block_linear(gpu: &DisplayGpu) -> Result<(), String> {
+    // 4 GOBs wide, 2-GOB blocks, 3 block rows; a rectangle offset in both axes
+    let (gpr, bh, block_rows) = (4u32, 1u32, 3u64);
+    let extent = block_rows * u64::from(gpr) * (512 << bh);
+    let surface: Vec<u8> = (0..extent)
+        .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
+        .collect();
+    let (x0_bytes, y0, words, rows) = (4u32, 3u32, 62u32, 37u32);
+    let r = BlRect {
+        src: 0,
+        extent,
+        gobs_per_row: gpr,
+        block_height_log2: bh,
+        x0_bytes,
+        y0,
+        words,
+        rows,
+        dst_pitch: u64::from(words) * 4,
+    };
+    let got = gpu
+        .selftest_block_linear(&surface, r)
+        .map_err(|e| format!("did not run: {e}"))?;
+    for y in 0..rows {
+        for b in 0..words * 4 {
+            let at = kf_disp::scanout::bl_offset(
+                u64::from(x0_bytes + b),
+                u64::from(y0 + y),
+                u64::from(gpr),
+                bh,
+            );
+            let want = surface[at as usize];
+            let have = got[(y * words * 4 + b) as usize];
+            if want != have {
+                return Err(format!(
+                    "row {y} byte {b}: the kernel wrote {have:#04x}, the reference says {want:#04x}"
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// FNV-1a over a frame's visible pixels as R,G,B bytes — the digest `kfdisp_probe` prints for its
@@ -1649,17 +1708,50 @@ impl ScanState {
             self.done = n;
             return;
         };
-        let r = PitchRect {
-            src: plan.src,
-            src_pitch: plan.src_pitch,
-            row_bytes: plan.row_bytes,
-            rows: plan.rows,
-            dst_pitch: plan.row_bytes,
+        let queued = match plan.layout {
+            SurfaceLayout::Pitch => {
+                let r = PitchRect {
+                    src: plan.src,
+                    src_pitch: plan.src_pitch,
+                    row_bytes: plan.row_bytes,
+                    rows: plan.rows,
+                    dst_pitch: plan.row_bytes,
+                };
+                gpu.scanout_pitch(r, frame)
+                    .map_err(|e| format!("the copy of {r:?}: {e}"))
+            }
+            SurfaceLayout::BlockLinear {
+                gobs_per_row,
+                block_height_log2,
+                x0_bytes,
+                y0,
+                extent,
+            } => match &self.bl_ok {
+                Some(Ok(())) => {
+                    let r = BlRect {
+                        src: plan.src,
+                        extent,
+                        gobs_per_row,
+                        block_height_log2,
+                        x0_bytes,
+                        y0,
+                        words: u32::try_from(plan.row_bytes / 4).unwrap_or(0),
+                        rows: plan.rows,
+                        dst_pitch: plan.row_bytes,
+                    };
+                    gpu.scanout_block_linear(r, frame)
+                        .map_err(|e| format!("the block-linear copy of {r:?}: {e}"))
+                }
+                Some(Err(e)) => Err(format!(
+                    "a block-linear surface: the kernel failed its self-test ({e})"
+                )),
+                None => Err("a block-linear surface: the kernel was not self-tested".into()),
+            },
         };
-        match gpu.scanout_pitch(r, frame) {
+        match queued {
             Ok(()) => self.inflight = Some((n, slot, plan, Instant::now())),
             Err(e) => {
-                self.refuse(dp, &format!("the copy of {r:?}: {e}"));
+                self.refuse(dp, &e);
                 self.done = n;
             }
         }

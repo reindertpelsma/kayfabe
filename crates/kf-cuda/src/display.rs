@@ -13,8 +13,15 @@
 //! walk must never wait on a scanout copy.
 
 use crate::driver_unsafe::{
-    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, PinnedBuf, StreamHandle,
+    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, Func, PinnedBuf, StreamHandle,
 };
+
+/// ★ The block-linear scanout kernel, hand-written PTX (`cuda/display/kf_scanout.ptx`), JIT-compiled
+/// at the plane's bring-up; its address function is `kf_disp::scanout::bl_offset`.
+pub static SCANOUT_PTX: &[u8] = include_bytes!("../../../cuda/display/kf_scanout.ptx");
+
+/// The kernel's entry point.
+pub const SCANOUT_ENTRY: &str = "kf_bl_to_pitch";
 
 /// ★ The display worker's GPU context with the store imported.
 pub struct DisplayGpu {
@@ -26,6 +33,8 @@ pub struct DisplayGpu {
     stream: StreamHandle,
     /// Readable once the last queued scanout copy completed (`cuLaunchHostFunc` after it).
     done: CompletionFd,
+    /// The block-linear kernel, or why it did not load (block-linear scanouts are refused by it).
+    bl: Result<Func, String>,
 }
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
@@ -67,6 +76,58 @@ impl Frame {
 impl std::fmt::Debug for Frame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Frame").field("len", &self.len()).finish()
+    }
+}
+
+/// ★ A block-linear surface's rectangle to un-swizzle into a frame (bounds are checked before a
+/// byte moves): the kernel reads `[src, src + extent)` of whole blocks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlRect {
+    /// Store offset of the surface's first block.
+    pub src: u64,
+    /// Bytes of whole blocks the rectangle's rows lie in.
+    pub extent: u64,
+    /// The surface's width in GOBs.
+    pub gobs_per_row: u32,
+    /// log2 GOBs per block (0..=5).
+    pub block_height_log2: u32,
+    /// The rectangle's first byte column (a multiple of 4).
+    pub x0_bytes: u32,
+    /// Its first row.
+    pub y0: u32,
+    /// 4-byte words per row.
+    pub words: u32,
+    /// Rows.
+    pub rows: u32,
+    /// The frame's pitch in bytes.
+    pub dst_pitch: u64,
+}
+
+impl BlRect {
+    /// ⊘ The kernel's reads stay inside `extent` and its writes inside `dst_len` — or the refusal.
+    fn check(&self, dst_len: usize) -> Result<(), String> {
+        let r = *self;
+        if r.rows == 0 || r.words == 0 || r.rows > 16384 || r.block_height_log2 > 5 {
+            return Err(format!("{r:?} is not a copyable rectangle"));
+        }
+        let row = u64::from(r.words) * 4;
+        if r.x0_bytes % 4 != 0 || u64::from(r.x0_bytes) + row > u64::from(r.gobs_per_row) * 64 {
+            return Err(format!("{r:?}: the rows leave the surface's GOB columns"));
+        }
+        let rows_per_block = 8u64 << r.block_height_log2;
+        let need = (u64::from(r.y0) + u64::from(r.rows)).div_ceil(rows_per_block)
+            * u64::from(r.gobs_per_row)
+            * (512u64 << r.block_height_log2);
+        if need > r.extent {
+            return Err(format!("{r:?}: the rows need {need:#x} bytes of blocks"));
+        }
+        let last = u64::from(r.rows - 1)
+            .checked_mul(r.dst_pitch)
+            .and_then(|x| x.checked_add(row));
+        if r.dst_pitch < row || last.is_none_or(|l| l > dst_len as u64) {
+            return Err(format!("{r:?}: the rows leave the {dst_len:#x}-byte frame"));
+        }
+        Ok(())
     }
 }
 
@@ -114,6 +175,12 @@ impl DisplayGpu {
         let ctx = cu.ctx_create(device)?;
         let stream = cu.stream_create()?;
         let done = CompletionFd::new()?;
+        let mut ptx = SCANOUT_PTX.to_vec();
+        ptx.push(0);
+        let bl = cu
+            .module_load(&ptx)
+            .and_then(|m| cu.module_function(m, SCANOUT_ENTRY))
+            .map_err(|e| format!("the block-linear scanout kernel did not load: {e}"));
         Ok(DisplayGpu {
             cu,
             ctx,
@@ -121,6 +188,7 @@ impl DisplayGpu {
             store: None,
             stream,
             done,
+            bl,
         })
     }
 
@@ -201,6 +269,84 @@ impl DisplayGpu {
             "cuMemcpy2DAsync(scanout)",
         )?;
         self.cu.launch_host_signal(self.stream, &self.done)
+    }
+
+    /// ★ Queue the un-swizzle of block-linear rectangle `r` of the store into `dst` (the kernel on the
+    /// display stream, writing the page-locked frame through its device mapping), then the host
+    /// signal on [`Self::completion_fd`]. The CPU reads nothing.
+    ///
+    /// # Errors
+    /// Refused by name when the kernel did not load, or any byte it would read leaves the store or
+    /// the rectangle's blocks, or any byte it would write leaves the frame; the CUDA error otherwise.
+    pub fn scanout_block_linear(&self, r: BlRect, dst: &Frame) -> Result<(), CudaError> {
+        let what = "DisplayGpu::scanout_block_linear";
+        r.check(dst.len()).map_err(|e| refused(what, e))?;
+        let n = usize::try_from(r.extent).map_err(|_| refused(what, format!("{r:?}")))?;
+        let src = self.at(r.src, n, what)?;
+        self.launch_bl(src, r, dst, what)?;
+        self.cu.launch_host_signal(self.stream, &self.done)
+    }
+
+    /// The kernel launch itself (one CTA per row, 256 threads striding the row's words).
+    fn launch_bl(
+        &self,
+        src: CUdeviceptr,
+        r: BlRect,
+        dst: &Frame,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        let f = *self.bl.as_ref().map_err(|e| refused(what, e.clone()))?;
+        let dptr = self.cu.pinned_device_ptr(&dst.buf, 0)?;
+        let dpitch =
+            u32::try_from(r.dst_pitch).map_err(|_| refused(what, format!("{r:?} pitch")))?;
+        let mut params = vec![
+            src.to_le_bytes().to_vec(),
+            dptr.to_le_bytes().to_vec(),
+            r.x0_bytes.to_le_bytes().to_vec(),
+            r.y0.to_le_bytes().to_vec(),
+            r.words.to_le_bytes().to_vec(),
+            r.gobs_per_row.to_le_bytes().to_vec(),
+            r.block_height_log2.to_le_bytes().to_vec(),
+            dpitch.to_le_bytes().to_vec(),
+        ];
+        self.cu
+            .launch_args(self.stream, f, r.rows, 256, 0, &mut params, what)
+    }
+
+    /// ★ Bring-up self-test of the block-linear kernel on SYNTHETIC data (never guest memory): upload
+    /// `surface` to a scratch allocation, run the kernel over rectangle `r` (its `src` is ignored),
+    /// wait, and return the frame's bytes — the caller compares them with the reference.
+    ///
+    /// # Errors
+    /// [`CudaError`]; a rectangle that leaves `surface` is refused.
+    pub fn selftest_block_linear(&self, surface: &[u8], r: BlRect) -> Result<Vec<u8>, CudaError> {
+        let what = "DisplayGpu::selftest_block_linear";
+        let len = usize::try_from(u64::from(r.rows) * r.dst_pitch)
+            .map_err(|_| refused(what, format!("{r:?}")))?;
+        if r.extent > surface.len() as u64 {
+            return Err(refused(what, format!("{r:?} leaves the synthetic surface")));
+        }
+        r.check(len).map_err(|e| refused(what, e))?;
+        self.make_current()?;
+        let scratch = self
+            .cu
+            .mem_alloc_zeroed(surface.len(), "cuMemAlloc(bl selftest)")?;
+        let out = (|| {
+            self.cu
+                .memcpy_h2d(scratch, surface, "cuMemcpyHtoD(bl selftest)")?;
+            let frame = self.frame(len)?;
+            let run = self
+                .launch_bl(scratch, r, &frame, what)
+                .and_then(|()| self.cu.ctx_synchronize());
+            let bytes = run.map(|()| frame.read(0, len));
+            // the kernel is done (or failed): the frame can go
+            let freed = self.release_frame(frame);
+            let bytes = bytes?;
+            freed?;
+            Ok(bytes)
+        })();
+        self.cu.mem_free(scratch);
+        out
     }
 
     /// Make this context current on the calling thread (the worker calls it once, at its top).
@@ -295,5 +441,82 @@ impl Drop for DisplayGpu {
         // the stream drains (every queued host signal with it) before the context goes
         self.cu.stream_destroy(self.stream);
         self.cu.ctx_destroy(self.ctx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ⊘ The launch passes EIGHT by-value parameters (two u64 then six u32) in this order; the PTX
+    /// entry must declare exactly those — a drift is a wild pointer on the GPU, not a type error.
+    #[test]
+    fn the_scanout_kernel_declares_the_parameters_the_launch_passes() {
+        let ptx = std::str::from_utf8(SCANOUT_PTX).unwrap();
+        let head = ptx
+            .split(&format!(".visible .entry {SCANOUT_ENTRY}("))
+            .nth(1)
+            .expect("the entry");
+        let params: Vec<(&str, &str)> = head
+            .split(')')
+            .next()
+            .unwrap()
+            .split(',')
+            .map(|p| {
+                let w: Vec<&str> = p.split_whitespace().collect();
+                (w[1], w[2].rsplit('_').next().unwrap())
+            })
+            .collect();
+        assert_eq!(
+            params,
+            [
+                (".u64", "src"),
+                (".u64", "dst"),
+                (".u32", "x0b"),
+                (".u32", "y0"),
+                (".u32", "words"),
+                (".u32", "gpr"),
+                (".u32", "bh"),
+                (".u32", "dpitch"),
+            ]
+        );
+        assert!(ptx.contains(".target sm_75"), "Turing+ JIT target (§21)");
+    }
+
+    /// The host-side bounds of a block-linear launch: the reads stay in whole blocks, the writes in
+    /// the frame.
+    #[test]
+    fn a_block_linear_launch_is_bounded_before_it_is_queued() {
+        let r = BlRect {
+            src: 0,
+            extent: 9 * 120 * 16 * 512,
+            gobs_per_row: 120,
+            block_height_log2: 4,
+            x0_bytes: 0,
+            y0: 0,
+            words: 1920,
+            rows: 1080,
+            dst_pitch: 7680,
+        };
+        assert_eq!(r.check(7680 * 1080), Ok(()));
+        assert!(
+            r.check(7680 * 1080 - 1).is_err(),
+            "one byte short of the frame"
+        );
+        let mut t = r;
+        t.extent -= 1;
+        assert!(
+            t.check(7680 * 1080).is_err(),
+            "one byte short of the blocks"
+        );
+        let mut t = r;
+        t.gobs_per_row = 119;
+        assert!(t.check(7680 * 1080).is_err(), "rows wider than the surface");
+        let mut t = r;
+        t.x0_bytes = 2;
+        assert!(t.check(7680 * 1080).is_err(), "not word-aligned");
+        let mut t = r;
+        t.block_height_log2 = 6;
+        assert!(t.check(7680 * 1080).is_err());
     }
 }

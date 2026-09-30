@@ -1,0 +1,97 @@
+//
+// kf_scanout.ptx — the display plane's block-linear scanout copy (docs/design/V3_DISPLAY.md §4.6).
+//
+// HAND-WRITTEN PTX (no nvcc in the loop): one CTA per output row, its threads stride the row's
+// 4-byte words. Each word is read from its block-linear address in the guest's surface (the store)
+// and written, pitch-linear, into the page-locked frame the QEMU console shows. The address is
+// kf_disp::scanout::bl_offset, which is the reference this file must match:
+//   in a GOB (64 bytes x 8 rows): x[3:0] -> bits 3:0, y[0] -> bit 4, x[4] -> bit 5,
+//   y[2:1] -> bits 7:6, x[5] -> bit 8;  gob = ((block_y * gobs_per_row + gob_x) << bh) + gob_in_block
+// The display worker runs a self-test of this kernel against that reference at bring-up.
+//
+// ⊘ Bounds are the HOST's job (kf_disp::scanout::plan + DisplayGpu::scanout_block_linear): every
+// address this kernel forms lies in [src, src + extent) of whole blocks the plan checked against the
+// context DMA and the store, and every write in [dst, dst + rows * dpitch) of the frame.
+//
+// PTX ISA 6.4 / sm_75: JITs forward onto any Turing-or-later GPU (THE_CONSTRAINTS.md §21).
+
+.version 6.4
+.target sm_75
+.address_size 64
+
+.visible .entry kf_bl_to_pitch(
+	.param .u64 kf_bl_to_pitch_param_src,
+	.param .u64 kf_bl_to_pitch_param_dst,
+	.param .u32 kf_bl_to_pitch_param_x0b,
+	.param .u32 kf_bl_to_pitch_param_y0,
+	.param .u32 kf_bl_to_pitch_param_words,
+	.param .u32 kf_bl_to_pitch_param_gpr,
+	.param .u32 kf_bl_to_pitch_param_bh,
+	.param .u32 kf_bl_to_pitch_param_dpitch
+)
+{
+	.reg .pred 	%p<2>;
+	.reg .b32 	%r<32>;
+	.reg .b64 	%rd<16>;
+
+	ld.param.u64 	%rd1, [kf_bl_to_pitch_param_src];
+	ld.param.u64 	%rd2, [kf_bl_to_pitch_param_dst];
+	ld.param.u32 	%r1, [kf_bl_to_pitch_param_x0b];
+	ld.param.u32 	%r2, [kf_bl_to_pitch_param_y0];
+	ld.param.u32 	%r3, [kf_bl_to_pitch_param_words];
+	ld.param.u32 	%r4, [kf_bl_to_pitch_param_gpr];
+	ld.param.u32 	%r5, [kf_bl_to_pitch_param_bh];
+	ld.param.u32 	%r6, [kf_bl_to_pitch_param_dpitch];
+
+	// the row: output row = ctaid.x, surface row y = row + y0
+	mov.u32 	%r7, %ctaid.x;
+	add.u32 	%r8, %r7, %r2;
+	shr.u32 	%r9, %r8, 3;		// gob_y
+	shr.u32 	%r10, %r9, %r5;		// block_y
+	mov.u32 	%r11, 1;
+	shl.b32 	%r11, %r11, %r5;
+	sub.u32 	%r11, %r11, 1;		// (1 << bh) - 1
+	and.b32 	%r12, %r9, %r11;	// gob_in_block
+	and.b32 	%r13, %r8, 6;
+	shl.b32 	%r13, %r13, 5;		// y[2:1] -> bits 7:6
+	and.b32 	%r14, %r8, 1;
+	shl.b32 	%r14, %r14, 4;		// y[0] -> bit 4
+	or.b32 	%r15, %r13, %r14;	// the row's part of the in-GOB offset
+	mul.wide.u32 	%rd3, %r10, %r4;	// block_y * gobs_per_row
+	cvt.u64.u32 	%rd4, %r12;		// gob_in_block
+	mul.wide.u32 	%rd5, %r7, %r6;
+	add.u64 	%rd5, %rd2, %rd5;	// the frame row: dst + row * dpitch
+
+	mov.u32 	%r16, %tid.x;		// this thread's first word
+	mov.u32 	%r17, %ntid.x;		// the stride
+$L_word:
+	setp.ge.u32 	%p1, %r16, %r3;
+	@%p1 bra 	$L_done;
+	shl.b32 	%r18, %r16, 2;		// the word's byte offset in the output row
+	add.u32 	%r19, %r18, %r1;	// the surface byte column
+	shr.u32 	%r20, %r19, 6;		// gob_x
+	cvt.u64.u32 	%rd6, %r20;
+	add.u64 	%rd7, %rd3, %rd6;	// block_y * gobs_per_row + gob_x
+	shl.b64 	%rd7, %rd7, %r5;	// << bh
+	add.u64 	%rd7, %rd7, %rd4;	// + gob_in_block
+	shl.b64 	%rd7, %rd7, 9;		// * 512
+	and.b32 	%r21, %r19, 32;
+	shl.b32 	%r21, %r21, 3;		// x[5] -> bit 8
+	and.b32 	%r22, %r19, 16;
+	shl.b32 	%r22, %r22, 1;		// x[4] -> bit 5
+	and.b32 	%r23, %r19, 15;		// x[3:0]
+	or.b32 	%r24, %r21, %r22;
+	or.b32 	%r24, %r24, %r23;
+	or.b32 	%r24, %r24, %r15;
+	cvt.u64.u32 	%rd8, %r24;
+	add.u64 	%rd7, %rd7, %rd8;
+	add.u64 	%rd9, %rd1, %rd7;
+	ld.global.nc.u32 	%r25, [%rd9];
+	cvt.u64.u32 	%rd10, %r18;
+	add.u64 	%rd11, %rd5, %rd10;
+	st.global.u32 	[%rd11], %r25;
+	add.u32 	%r16, %r16, %r17;
+	bra.uni 	$L_word;
+$L_done:
+	ret;
+}

@@ -1,0 +1,6 @@
+# kf3 display lane (M3): log the bench user straight into the desktop session
+[Seat:*]
+autologin-user=ubuntu
+autologin-user-timeout=0
+autologin-session=@SESSION@
+user-session=@SESSION@

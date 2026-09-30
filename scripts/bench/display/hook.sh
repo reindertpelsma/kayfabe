@@ -52,6 +52,18 @@ say "SMI_DISPLAY $(tr '\n' ' ' < "$OUT/smi_display.log" | tr -s ' ' | head -c 30
 say "GPU_PROGRESS_ERRORS=$(gq 'sudo dmesg | grep -c "waiting for GPU progress"')"
 grep -q '^KFDISP_SUMMARY connected=[1-9]' "$OUT/list.log" && say "CONNECTED=yes card=$card" || { say "CONNECTED=no card=$card"; exit 0; }
 
+# a host screendump of the kf3 console to $1 (PPM); prints the monitor's last line
+shot(){
+    python3 - "$MON" "$1" <<'PY'
+import socket, sys, time
+s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.settimeout(10)
+time.sleep(0.2); s.recv(65536)
+s.sendall(("screendump %s kf0\n" % sys.argv[2]).encode()); time.sleep(2)
+try: print(s.recv(65536).decode(errors="replace").strip().splitlines()[-1])
+except Exception as e: print("recv:", e)
+PY
+}
+
 # 3. set a mode from a known pattern, flip, and grade the host's screendump
 HOLD=${DISPLAY_HOLD_S:-20}; FLIPS=${DISPLAY_FLIPS:-120}
 ( gql "sudo ~/display/kfdisp_probe show $card $HOLD $FLIPS" $((HOLD + 60)) > "$OUT/show.log" ) &
@@ -65,14 +77,7 @@ HAS_CONSOLE=no; grep -q 'kf3: display console registered' "$BENCH/run_${TAG}_qem
 if grep -q '^KFDISP_SHOWING=A' "$OUT/show.log" && [ -n "$mode" ] && [ -S "$MON" ] && [ "$HAS_CONSOLE" = yes ]; then
     sleep 1   # one more vblank at least, so the scanout copy of A is the latest frame
     grep -q '^KFDISP_RESTORED' "$OUT/show.log" && say "SCREENDUMP_LATE (the probe already restored its CRTC)"
-    python3 - "$MON" "$OUT/screendump.ppm" <<'PY'
-import socket, sys, time
-s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.settimeout(10)
-time.sleep(0.2); s.recv(65536)
-s.sendall(("screendump %s kf0\n" % sys.argv[2]).encode()); time.sleep(2)
-try: print(s.recv(65536).decode(errors="replace").strip().splitlines()[-1])
-except Exception as e: print("recv:", e)
-PY
+    shot "$OUT/screendump.ppm"
     set -- $mode
     cc -O2 -DKFDISP_NO_DRM -o "$OUT/kfdisp_ppm" "$HERE/kfdisp_probe.c" 2>/dev/null \
       && "$OUT/kfdisp_ppm" ppm "$1" "$2" a > "$OUT/reference_a.ppm"
@@ -88,4 +93,57 @@ grep '^KFDISP_' "$OUT/show.log" | sed 's/^/DISPLAY_/'
 # ★ after the probe exited (its restore + close are inside that exit): nvidia-drm's own complaints.
 # A missing flip event is a timeout here; an event nobody expected is a WARN (`cut here`).
 say "FLIP_EVENT_TIMEOUTS=$(gq 'sudo dmesg | grep -c "Flip event timeout"') DRM_WARNS=$(gq 'sudo dmesg | grep -c "cut here"')"
+
+# 4. ★ M3 (DISPLAY_DESKTOP=1): the desktop on the virtual monitor — Xorg with the stock NVIDIA X
+#    driver, a Cinnamon session through lightdm's autologin, then GL and Vulkan clients in it; graded
+#    by the HOST's screendumps of the kf3 console (what the display engine scanned out), the X
+#    server's own screenshot for comparison, and the clients' own words (renderer, device, fps).
+if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
+    bdf=$(gq "lspci -D -d 10de: | awk 'NR==1{print \$1}'")
+    IFS=':.' read -r _ b d f <<< "$bdf"
+    busid=$(printf 'PCI:%d:%d:%d' "0x${b:-0}" "0x${d:-0}" "0x${f:-0}")
+    gq 'ls /usr/share/xsessions/' > "$OUT/xsessions.log"
+    session=$(sed -n 's/^\(cinnamon[a-z0-9-]*\)\.desktop$/\1/p' "$OUT/xsessions.log" | head -1)
+    session=${session:-cinnamon}
+    DESK=$(mktemp -d); trap 'rm -rf "$DESK"' EXIT
+    sed "s/@BUSID@/$busid/" "$HERE/desktop/xorg.conf.in" > "$DESK/xorg.conf"
+    sed "s/@SESSION@/$session/g" "$HERE/desktop/50-kf-autologin.conf.in" > "$DESK/50-kf-autologin.conf"
+    tar -C "$DESK" -cf - xorg.conf 50-kf-autologin.conf | $G 'rm -rf ~/desk && mkdir -p ~/desk && tar -xf - -C ~/desk'
+    gq 'sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
+    say "DESKTOP_CONF busid=$busid session=$session $(tr '\n' ' ' < "$OUT/desk_conf.log")"
+    gq 'sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/lightdm_start.log"
+    # the session: Xorg up, then a Cinnamon process of the autologin user (≤ 90 s)
+    up=no
+    for i in $(seq 1 45); do
+        if gq 'pgrep -x Xorg >/dev/null && pgrep -u ubuntu -f "cinnamon" >/dev/null && echo UP' | grep -q UP; then up=yes; break; fi
+        sleep 2
+    done
+    say "DESKTOP_SESSION=$up ($(tr '\n' ' ' < "$OUT/lightdm_start.log"))"
+    XENV='sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority'
+    sleep 20   # let the session paint (panel, wallpaper) before the first shot
+    shot "$OUT/desk_1.ppm"
+    gq "$XENV glxinfo -B 2>&1 | head -40" 60 > "$OUT/glxinfo.log"
+    say "GLX_RENDERER $(grep -m1 'OpenGL renderer string' "$OUT/glxinfo.log" | cut -d: -f2- | sed 's/^ *//') DIRECT=$(grep -m1 'direct rendering' "$OUT/glxinfo.log" | cut -d: -f2 | tr -d ' ')"
+    gq "$XENV timeout 15 glxgears -info 2>&1 | tail -8" 30 > "$OUT/glxgears.log"
+    say "GLXGEARS $(grep 'frames in' "$OUT/glxgears.log" | tail -2 | tr '\n' ' ')"
+    ( gq "$XENV timeout 25 vkcube --c 1200 2>&1 | tail -20; echo VKCUBE_RC=\${PIPESTATUS[0]}" 45 > "$OUT/vkcube.log" ) &
+    VP=$!
+    sleep 8
+    shot "$OUT/desk_vkcube.ppm"
+    wait $VP
+    say "VKCUBE $(grep -m1 -i 'selected\|gpu\|device' "$OUT/vkcube.log" | head -c 160) $(grep VKCUBE_RC "$OUT/vkcube.log")"
+    sleep 3
+    shot "$OUT/desk_2.ppm"
+    # the X server's own view of the root window, taken right after the host's second shot
+    gq "$XENV import -window root /tmp/xroot.png && echo IMPORT_OK" 60 > "$OUT/xroot.log"
+    $G 'cat /tmp/xroot.png' > "$OUT/xroot.png" 2>/dev/null
+    gq 'cat /var/log/Xorg.0.log' 60 > "$OUT/Xorg.0.log"
+    gq 'sudo journalctl -b -u lightdm --no-pager | tail -60' 60 > "$OUT/lightdm_journal.log"
+    say "XORG_LOG errors=$(grep -c '(EE)' "$OUT/Xorg.0.log") nvidia=$(grep -c 'NVIDIA(0)' "$OUT/Xorg.0.log") $(grep -m1 'NVIDIA(0): Setting mode' "$OUT/Xorg.0.log" | cut -c1-120)"
+    for f in desk_1 desk_vkcube desk_2; do
+        [ -s "$OUT/$f.ppm" ] && say "SHOT $f md5=$(md5sum < "$OUT/$f.ppm" | cut -c1-12) bytes=$(stat -c %s "$OUT/$f.ppm")" || say "SHOT $f absent"
+    done
+    say "DESKTOP_GPU_PROGRESS_ERRORS=$(gq 'sudo dmesg | grep -c "waiting for GPU progress"') XID=$(gq 'sudo dmesg | grep -c "Xid"')"
+    gq 'sudo systemctl stop lightdm; echo rc=$?' 60 > "$OUT/lightdm_stop.log"
+fi
 say "HOOK_DONE"
