@@ -1,5 +1,26 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
+> **2026-09-30 check — can more driver versions still be added after the display, CDP and UVM work?
+> Yes; everything version-specific is keyed on the exact tag and fails closed.** Adding a tag:
+> `tools/drivermatrix/tags.txt` + `regen.sh` (≈2 min per tag; 29 measured, 535.309.01 … 615.71.09).
+> An unmeasured host is `HostAbiError::Unmeasured`, an unmeasured guest `AbiError::Unmeasured`, a guest
+> below the oldest capability row `NoCapabilityRow` — by name, never guessed. The capability allowlist
+> (policy, nvproxy-derived, "newest row ≤ version") is the one reviewed hand-maintained part: a future
+> driver's NEW controls stay refused until a reviewed row admits them. Three pins added by recent work,
+> all fail-closed:
+> 1. **Display** (`display=on`): wire layouts derived for guest **580.159.04 only**
+>    (`crates/kf-disp/data/*-580.159.04.tsv`, `kf_disp::layout::for_version`); any other guest version
+>    is refused. Adding one = the three `tools/derive_display_*.sh` for that tag + one match arm.
+>    ⚠ Not yet part of `regen.sh` — fold it in so one command covers a new tag.
+> 2. **CDP** (the SKED-reflected page, `design/V3_CDP.md`) needs a host with the per-map PTE kind
+>    (≥ 580.65.06); older hosts refuse that mapping by name.
+> 3. **UVM b3 host patch** (`tools/uvm_efs/`): written against host **580.159.04** (7 nvidia-uvm files,
+>    30 hunks, plus the new `uvm_efs.c`). Every new host version needs a port and a re-run of the host-only
+>    proof — the one piece whose cost grows with each host release. Suggested: a per-tag
+>    `patch --dry-run` check against each supported host tag's nvidia-uvm source, as early warning.
+> `v3-uvm-guest` (unmerged) must take its fault-buffer control layouts from the versioned tables — check
+> at merge review.
+
 > **2026-09-28 correction:** the owner approved `a50265f8`'s 535/545 capability extension,
 > subject to independent audit and the exact-revision merge bar. The review hold in the historical
 > stop note below is lifted. All 16 shared controls in the seven previously unchecked prefix groups
