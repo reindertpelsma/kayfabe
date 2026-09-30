@@ -237,6 +237,9 @@ pub struct PageDirPolicy {
     /// ★ P5c: every VA-space object allocated, `(hClient, hVaSpace)` → `(parent device, a
     /// GPU_DEVICE reference)` — what a later free retires.
     vas: std::collections::BTreeMap<(u32, u32), (u32, bool)>,
+    /// ★ The VA-space objects allocated FAULT-CAPABLE (`ENABLE_PAGE_FAULTING |
+    /// IS_EXTERNALLY_OWNED`), by original `(client, handle)` — `V3_UVM_GUEST_FAULT_PLANE.md` §3.0.
+    fault_capable: std::collections::BTreeSet<(u32, u32)>,
     /// ★ P6b: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
     /// ORIGINAL `(client, handle)`. `DUP_OBJECT` aliases, it does not copy
     /// (`vaspaceapiCopyConstruct` is `vaspaceIncRefCnt` + the same `pVASpace`, `vaspace_api.c:440`;
@@ -271,6 +274,7 @@ impl PageDirPolicy {
             sink,
             held_last: false,
             vas: Default::default(),
+            fault_capable: Default::default(),
             aliases: Default::default(),
             orphans: Default::default(),
             carried: 0,
@@ -290,11 +294,27 @@ impl PageDirPolicy {
         {
             return;
         }
-        let device_ref = crate::rmrpc::alloc_params_window(&self.abi, body)
+        let window = crate::rmrpc::alloc_params_window(&self.abi, body);
+        let device_ref = window
             .and_then(|p| self.abi.decode_vaspace_index(p))
             .is_some_and(|i| i == kf_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE);
         self.vas
             .insert((h.client, h.handle), (h.parent, device_ref));
+        // ★ Fault-capable: BOTH bits, as RM requires them together (`vaspace_api.c:678-690`).
+        // Params too short to say leave it unrecorded — an ordinary (RM-owned) mirror.
+        const IS_EXTERNALLY_OWNED: u32 = 1 << 3;
+        const ENABLE_PAGE_FAULTING: u32 = 1 << 6;
+        let fault_capable = window
+            .and_then(|p| self.abi.decode_vaspace_flags(p))
+            .is_some_and(|f| {
+                f & (IS_EXTERNALLY_OWNED | ENABLE_PAGE_FAULTING)
+                    == (IS_EXTERNALLY_OWNED | ENABLE_PAGE_FAULTING)
+            });
+        if fault_capable {
+            self.fault_capable.insert((h.client, h.handle));
+        } else {
+            self.fault_capable.remove(&(h.client, h.handle));
+        }
     }
 
     /// ★ P6b: the VA-space object `(client, handle)` names — itself, or the original a dup aliases.
@@ -340,6 +360,7 @@ impl PageDirPolicy {
             .collect();
         for (c, v) in dying {
             self.vas.remove(&(c, v));
+            self.fault_capable.remove(&(c, v));
             // ★ v3-gfx: still referenced by a dup ⇒ the object lives on; retire it with its last alias.
             if self.aliases.values().any(|orig| *orig == (c, v)) {
                 self.orphans.insert((c, v));
@@ -494,6 +515,7 @@ impl CommandPolicy for PageDirPolicy {
         }
         st.client = kf_arch::ids::HClient(c);
         st.vaspace = kf_arch::ids::HObject(v);
+        st.fault_capable = self.fault_capable.contains(&(c, v));
         (self.sink)(MemStatement::PageDir(st));
         self.carried += 1;
         self.held_last = true;

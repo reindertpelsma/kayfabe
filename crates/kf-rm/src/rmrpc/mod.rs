@@ -302,6 +302,11 @@ pub struct PageDirStatement {
     /// defaulting an aperture you were told is how a sysmem-rooted VAS was once read out of
     /// the framebuffer and "walked" successfully to nothing.
     pub pdb_aperture: Option<kf_arch::Aperture>,
+    /// ★ The VA-space object was allocated FAULT-CAPABLE — `ENABLE_PAGE_FAULTING |
+    /// IS_EXTERNALLY_OWNED`, what libcuda allocates for a guest-UVM space — which is what selects
+    /// an EFS-mode mirror (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0). `false` from [`translate`] (the
+    /// control carries no flags); `barpde::PageDirPolicy` sets it from the alloc it observed.
+    pub fault_capable: bool,
 }
 
 /// Every way [`translate`] can refuse, by name.
@@ -1692,6 +1697,7 @@ fn page_dir_statement(
         // `None` — "we do not understand this" — never to vidmem, because folding an unknown
         // into a default is how a walk reads the wrong memory and reports success.
         pdb_aperture: p.aperture.to_domain(),
+        fault_capable: false,
     }))
 }
 
@@ -1805,6 +1811,7 @@ fn translate_published_pdes(
         // vidmem-rooted publication was stated as `SysmemCoherent`. Decode it with the
         // encoding it is actually in.
         pdb_aperture: kf_abi::gvaspacepdes::decode_aperture(root.aperture),
+        fault_capable: false,
     }))
 }
 

@@ -389,6 +389,12 @@ pub struct TsgAllocFacts {
 pub struct CtxShareAllocFacts {
     /// `hVASpace` — the VASpace this context share is bound to. 0 = none.
     pub h_vaspace: u32,
+    /// `flags` — `NV_CTXSHARE_ALLOCATION_FLAGS_SUBCONTEXT_*` (sync / async / specified).
+    pub flags: u32,
+    /// ★ `subctxId` — the VEID. On a GSP client the guest's CPU-RM picks it from its own TSG heap
+    /// (`kctxshareInitCommon`, `ogkm-580: kernel_ctxshare.c:440-537`) and the value in flight is
+    /// the one the guest's channels (and its UVM) use — `V3_UVM_GUEST_FAULT_PLANE.md` §3.5.
+    pub subctx_id: u32,
 }
 
 /// `NV_CHANNEL_ALLOC_PARAMS` — the three fields a channel declares that the core

@@ -339,6 +339,9 @@ pub struct DriverAbiTable {
     /// driver source, and for the three documents whose *"the guest's USERD address is
     /// unobtainable"* this field refutes.
     channel_userd_mem: Option<ChannelUserdMemWire>,
+    /// ★ `NV_CHANNEL_ALLOC_PARAMS.instanceMem` — where the guest's CPU-RM put the channel's
+    /// instance block (`V3_UVM_GUEST_FAULT_PLANE.md` §3.5).
+    channel_instance_mem: Option<crate::notifier::ChannelInstanceMemWire>,
     /// ★★★★★ Where this boundary's `NV_CHANNEL_ALLOC_PARAMS` puts **`engineType`** — the
     /// only wire field that separates a GR channel from a CE channel, since both are
     /// `AMPERE_CHANNEL_GPFIFO_A`.
@@ -742,6 +745,11 @@ fn derive_table(v: DriverVersion) -> Result<DriverAbiTable, AbiError> {
     let channel_userd_mem = ch
         .maybe("userdMem")
         .map(|f| ChannelUserdMemWire { userd_mem: f.off() });
+    let channel_instance_mem =
+        ch.maybe("instanceMem")
+            .map(|f| crate::notifier::ChannelInstanceMemWire {
+                instance_mem: f.off(),
+            });
     let channel_engine = ch.maybe("engineType").map(|f| ChannelEngineWire {
         engine_type: f.off(),
     });
@@ -774,6 +782,7 @@ fn derive_table(v: DriverVersion) -> Result<DriverAbiTable, AbiError> {
         channel_notifier,
         channel_userd,
         channel_userd_mem,
+        channel_instance_mem,
         channel_engine,
         rm_control,
         note: caps_row.note,
@@ -1160,6 +1169,8 @@ impl DriverAbiTable {
         let p = classes::NvCtxshareAllocationParameters::decode(bytes)?;
         Ok(CtxShareAllocFacts {
             h_vaspace: p.h_va_space,
+            flags: p.flags,
+            subctx_id: p.subctx_id,
         })
     }
 
@@ -1185,6 +1196,15 @@ impl DriverAbiTable {
     #[must_use]
     pub fn decode_vaspace_index(&self, bytes: &[u8]) -> Option<u32> {
         u32_at(bytes, 0).ok()
+    }
+
+    /// ★ The `flags` of `NV_VASPACE_ALLOCATION_PARAMETERS` (+4 at every measured tag, the
+    /// generated matrix's `NV_VASPACE_ALLOCATION_PARAMETERS` runs) — `None` when the params are
+    /// too short to say, never "no flags" (`V3_UVM_GUEST_FAULT_PLANE.md` §3.0: the selector for an
+    /// EFS-mode mirror is the guest's own `ENABLE_PAGE_FAULTING | IS_EXTERNALLY_OWNED`).
+    #[must_use]
+    pub fn decode_vaspace_flags(&self, bytes: &[u8]) -> Option<u32> {
+        u32_at(bytes, 4).ok()
     }
 
     /// Decode the channel alloc params under the **prefix contract** — see
@@ -1299,6 +1319,21 @@ impl DriverAbiTable {
     /// check makes unreachable.
     pub fn decode_channel_userd_mem(&self, bytes: &[u8]) -> Result<Option<UserdMem>, AbiError> {
         match self.channel_userd_mem {
+            Some(wire) => wire.decode(bytes),
+            None => Ok(None),
+        }
+    }
+
+    /// ★ The channel's instance block as the guest's CPU-RM described it to the GSP
+    /// (`instanceMem`). `Ok(None)`: no measured layout, or the params stop short — never a zero.
+    ///
+    /// # Errors
+    /// [`AbiError`] from the primitive readers (unreachable past the length check).
+    pub fn decode_channel_instance_mem(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Option<crate::notifier::InstanceMem>, AbiError> {
+        match self.channel_instance_mem {
             Some(wire) => wire.decode(bytes),
             None => Ok(None),
         }
@@ -2507,5 +2542,66 @@ mod tests {
         );
         assert_eq!(t.alloc_param_size(ClassId(classes::NV01_ROOT_CLIENT)), None);
         assert_eq!(t.alloc_param_size(ClassId(0xDEAD_BEEF)), None);
+    }
+}
+
+/// ★ `V3_UVM_GUEST_FAULT_PLANE.md` §3.5 — the two facts the fault plane reads off guest allocs.
+#[cfg(test)]
+mod fault_plane_decodes {
+    use super::*;
+
+    /// `instanceMem` sits at the matrix's offset for each guest driver: +144 through 595.84,
+    /// +152 from 610.43.02.
+    #[test]
+    fn instance_mem_is_read_at_each_versions_offset() {
+        for (ver, off) in [
+            (BENCH_DRIVER, 144usize),
+            (
+                DriverVersion {
+                    major: 610,
+                    minor: 43,
+                    patch: 2,
+                },
+                152,
+            ),
+        ] {
+            let t = table_for(ver).expect("measured");
+            let mut b = vec![0u8; off + 24];
+            b[off..off + 8].copy_from_slice(&0x1_2345_6000u64.to_le_bytes());
+            b[off + 8..off + 16].copy_from_slice(&0x1000u64.to_le_bytes());
+            b[off + 16..off + 20].copy_from_slice(&2u32.to_le_bytes());
+            b[off + 20..off + 24].copy_from_slice(&1u32.to_le_bytes());
+            let m = t
+                .decode_channel_instance_mem(&b)
+                .expect("reads")
+                .expect("present");
+            assert_eq!(
+                (m.base, m.size, m.address_space, m.cache_attrib),
+                (0x1_2345_6000, 0x1000, 2, 1),
+                "{ver}"
+            );
+            assert_eq!(
+                t.decode_channel_instance_mem(&b[..off + 23])
+                    .expect("reads"),
+                None,
+                "{ver}: short params say nothing, never zero"
+            );
+        }
+    }
+
+    /// The VA space's flags and the context share's VEID.
+    #[test]
+    fn vaspace_flags_and_subctx_id() {
+        let t = table_for(BENCH_DRIVER).expect("measured");
+        let mut v = vec![0u8; 48];
+        v[4..8].copy_from_slice(&0x48u32.to_le_bytes());
+        assert_eq!(t.decode_vaspace_flags(&v), Some(0x48));
+        assert_eq!(t.decode_vaspace_flags(&v[..7]), None);
+        let mut c = vec![0u8; 12];
+        c[0..4].copy_from_slice(&0xcafeu32.to_le_bytes());
+        c[4..8].copy_from_slice(&1u32.to_le_bytes());
+        c[8..12].copy_from_slice(&3u32.to_le_bytes());
+        let f = t.decode_ctxshare_alloc_facts(&c).expect("decodes");
+        assert_eq!((f.h_vaspace, f.flags, f.subctx_id), (0xcafe, 1, 3));
     }
 }

@@ -177,6 +177,13 @@ pub struct ChannelAlloc {
     /// ★ P5c: the error notifier the guest kernel resolved for it (`errorNotifierMem`) — where a
     /// GSP writes the channel's robust-channel record (`kernel_channel.c:548-590`).
     pub error_notifier: Option<kf_arch::fault::ErrorNotifier>,
+    /// ★ The guest's instance block for this channel (`instanceMem`) — what the guest's UVM keys
+    /// the channel by, and so what a replayable-fault packet must carry
+    /// (`V3_UVM_GUEST_FAULT_PLANE.md` §3.5). `None`: no measured layout / short params.
+    pub instance: Option<kf_abi::notifier::InstanceMem>,
+    /// ★ The VEID of the context share the channel named (`subctxId` of that alloc), when it
+    /// named one this link saw; `None` for a channel in its group's legacy subcontext.
+    pub subctx_id: Option<u32>,
 }
 
 /// A statement for the channel plane.
@@ -435,6 +442,8 @@ pub struct ChannelPolicy {
     tsgs: std::collections::BTreeMap<(u32, u32), (u32, u32, u32)>,
     /// ★ P5b: `(hClient, hCtxShare)` → its `hVASpace`.
     ctxshares: std::collections::BTreeMap<(u32, u32), u32>,
+    /// ★ The VEID each context share was allocated with (`subctxId`), by `(client, handle)`.
+    ctx_veids: std::collections::BTreeMap<(u32, u32), u32>,
     /// ★ v3-gfx: every VA-space object seen (alloc'd, or named by a page-directory statement).
     vas_objects: std::collections::BTreeSet<(u32, u32)>,
     /// ★ v3-gfx: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
@@ -462,6 +471,7 @@ impl ChannelPolicy {
             vas_stated: Default::default(),
             tsgs: Default::default(),
             ctxshares: Default::default(),
+            ctx_veids: Default::default(),
             vas_objects: Default::default(),
             vas_aliases: Default::default(),
             pending: None,
@@ -573,6 +583,7 @@ impl ChannelPolicy {
                 let params = crate::rmrpc::alloc_params_window(&self.abi, body)?;
                 let c = self.abi.decode_ctxshare_alloc_facts(params).ok()?;
                 self.ctxshares.insert((h.client, h.handle), c.h_vaspace);
+                self.ctx_veids.insert((h.client, h.handle), c.subctx_id);
                 return None;
             }
             Some(AllocParams::Channel) => {}
@@ -692,6 +703,10 @@ impl ChannelPolicy {
                 .abi
                 .decode_channel_error_notifier(params)
                 .ok()
+                .flatten(),
+            instance: self.abi.decode_channel_instance_mem(params).ok().flatten(),
+            subctx_id: (f.h_ctx_share != 0)
+                .then(|| self.ctx_veids.get(&(h.client, f.h_ctx_share)).copied())
                 .flatten(),
         };
         self.carried += 1;
@@ -1264,9 +1279,11 @@ impl ChannelPolicy {
             self.vas_stated.remove(&client);
             self.tsgs.retain(|k, _| k.0 != client);
             self.ctxshares.retain(|k, _| k.0 != client);
+            self.ctx_veids.retain(|k, _| k.0 != client);
         } else {
             self.tsgs.remove(&(client, object));
             self.ctxshares.remove(&(client, object));
+            self.ctx_veids.remove(&(client, object));
             // ★ Only the DEVICE's free forgets its default VAS. The VASpace handle itself is a
             // transient NAME (`index = GPU_DEVICE`, "acquire reference to device vaspace",
             // `nvos.h:3187`): RM allocs it, publishes the PDEs, and FREES it — `[measured p5c]`

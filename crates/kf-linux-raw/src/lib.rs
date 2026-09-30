@@ -286,6 +286,7 @@ pub mod memtype;
 pub mod page_size;
 mod signal_unsafe;
 mod sysconf_unsafe;
+pub mod uvm;
 mod vcpu_unsafe;
 pub mod view;
 mod window_unsafe;

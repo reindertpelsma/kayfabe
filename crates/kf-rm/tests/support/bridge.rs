@@ -114,6 +114,7 @@ pub fn expected_set_page_dir(client: u32, vaspace: u32, pdb: u64) -> Translation
         pdb: Pdb(pdb),
         // ⊘ The TEST default. The PRODUCTION path must never assume it.
         pdb_aperture: Some(kf_arch::Aperture::Vidmem),
+        fault_capable: false,
     })
 }
 

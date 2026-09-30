@@ -545,6 +545,57 @@ impl ChannelUserdMemWire {
     }
 }
 
+/// ★ Where the guest's instance block for a channel lives — `NV_CHANNEL_ALLOC_PARAMS.instanceMem`,
+/// the `NV_MEMORY_DESC_PARAMS` a GSP client's CPU-RM fills when it sends the channel alloc
+/// (`V3_UVM_GUEST_FAULT_PLANE.md` §3.5). ★ It is the address the guest's UVM keys its channels by
+/// (`nvGpuOpsRetainChannel` → `channelInfo.base`), so a replayable-fault packet that carries it is
+/// attributed to that channel by the guest itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InstanceMem {
+    /// `base` — a guest FB offset (`ADDR_FBMEM`) or guest-physical address (`ADDR_SYSMEM`).
+    pub base: u64,
+    /// `size`.
+    pub size: u64,
+    /// `addressSpace` (`ADDR_SYSMEM` 1, `ADDR_FBMEM` 2; anything else kept raw).
+    pub address_space: u32,
+    /// `cacheAttrib` (`NV_MEMORY_UNCACHED` 0, `NV_MEMORY_CACHED` 1, …).
+    pub cache_attrib: u32,
+}
+
+/// The offset of `instanceMem` in `NV_CHANNEL_ALLOC_PARAMS` at one guest driver's layout — +144
+/// from 535.309.01 through 595.84, +152 from 610.43.02 (the generated matrix's
+/// `NV_CHANNEL_ALLOC_PARAMS` runs, `instanceMem` field).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelInstanceMemWire {
+    /// Offset of the `NV_MEMORY_DESC_PARAMS instanceMem` sub-struct.
+    pub instance_mem: usize,
+}
+
+impl ChannelInstanceMemWire {
+    /// The bytes a decode needs: through `cacheAttrib`.
+    #[must_use]
+    pub const fn needs(&self) -> usize {
+        self.instance_mem + 24
+    }
+
+    /// Decode it. `Ok(None)` when the params stop before it — additive, like
+    /// [`ChannelUserdMemWire::decode`].
+    ///
+    /// # Errors
+    /// [`AbiError`] only from the primitive readers (unreachable past the length check).
+    pub fn decode(&self, bytes: &[u8]) -> Result<Option<InstanceMem>, AbiError> {
+        if bytes.len() < self.needs() {
+            return Ok(None);
+        }
+        Ok(Some(InstanceMem {
+            base: u64_at(bytes, self.instance_mem)?,
+            size: u64_at(bytes, self.instance_mem + 8)?,
+            address_space: u32_at(bytes, self.instance_mem + 16)?,
+            cache_attrib: u32_at(bytes, self.instance_mem + 20)?,
+        }))
+    }
+}
+
 /// ★★★★★ **WHICH ENGINE THE GUEST SAID THIS CHANNEL IS FOR** —
 /// `NV_CHANNEL_ALLOC_PARAMS.engineType`, the one wire field that separates a GR channel
 /// from a CE channel.

@@ -2208,6 +2208,7 @@ fn set_page_dir() -> PageDirStatement {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kf_arch::Aperture::Vidmem),
+        fault_capable: false,
     }
 }
 

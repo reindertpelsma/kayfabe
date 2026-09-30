@@ -10,8 +10,10 @@
 #![allow(clippy::too_many_arguments)]
 
 pub mod channel;
+pub mod efs;
 pub mod event;
 pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
+pub use efs::{EfsRefusal, EfsSession};
 pub use event::EventFd;
 
 use kf_abi::bringup::{
