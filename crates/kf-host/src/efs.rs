@@ -300,6 +300,13 @@ impl EfsSession {
         self.uuid
     }
 
+    /// OUR RM client handle the space lives in (for the VMM's own log — the E-S1 negative control
+    /// names it; it is a host handle, never guest-visible).
+    #[must_use]
+    pub fn client(&self) -> u32 {
+        self.client
+    }
+
     /// `UVM_EFS_QUERY` on this file.
     ///
     /// # Errors

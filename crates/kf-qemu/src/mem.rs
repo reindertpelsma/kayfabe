@@ -2104,6 +2104,7 @@ fn create_efs_mirror(
             None
         }
     };
+    let rm_client = session.client();
     if let Err(e) = fault.add_space(key, session.clone()) {
         drop(session);
         let _ = rm.free(vas);
@@ -2147,7 +2148,8 @@ fn create_efs_mirror(
     );
     plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
     Ok(format!(
-        "{key:?} EFS mirror space={vas:#x}: host-UVM-owned, external ranges {:#x?}, channel window [{:#x}, {:#x}) ({} us)",
+        "{key:?} EFS mirror space={vas:#x} client={:#x}: host-UVM-owned, external ranges {:#x?}, channel window [{:#x}, {:#x}) ({} us)",
+        rm_client,
         EFS_EXTERNAL_RANGES,
         EFS_CHANNEL_WINDOW.0,
         EFS_CHANNEL_WINDOW.1,
