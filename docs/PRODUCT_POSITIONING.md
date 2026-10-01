@@ -1,5 +1,35 @@
 # Product positioning — what kayfabe sells, and to whom
 
+> ### ★ STATUS UPDATE — 2026-10-01: who it is for, after issue #1 and an owner discussion
+> Issue #1 (native-context advocates) argued kayfabe matters only where NVIDIA's own stack is needed on
+> Windows. Owner and coordinator converged on a wider but sharper answer. Opinion and direction, not
+> measurement:
+> - **Not for:** a single trusted user's Linux CUDA (containers already serve it), generic multi-vendor
+>   Linux-guest graphics (virtio-gpu native context), or enterprise datacenters (NVIDIA vGPU/MIG/SR-IOV).
+> - **For:** NVIDIA's unmodified stack in a VM, on any NVIDIA card, without passthrough or licensing:
+>   1. **Windows guests** that need NVIDIA's stack on a single-GPU Linux machine (r/VFIO, prosumer, small
+>      business; CUDA renderers, Adobe, pro OpenGL CAD, NVENC). The community story; Windows
+>      feasibility is the risk to retire first (a short probe once kf3 is the boot display).
+>   2. **Desktop VMs on Linux** — a whole desktop is where containers fall short: compartmentalized
+>      desktops (Qubes/Spectrum/Ghaf-style, today no NVIDIA option), AI agents that operate a desktop,
+>      disposable VMs for risky software, remote workstations on GeForce servers.
+>   3. **Untrusted code plus a GPU where vGPU does not exist:** GPU marketplaces renting consumer cards,
+>      AI-agent sandboxes in microVMs, CI running strangers' CUDA, cloud gaming hosting strangers (e.g.
+>      Nestri). Containers expose the host's NVIDIA kernel driver; kayfabe's authored-verb boundary is
+>      the value. Likely the longest-lived case.
+> - **Latent demand (owner):** almost nobody runs NVIDIA in Linux VMs because only a hard VFIO setup ever
+>   worked — absence of users is not absence of a gap. NVIDIA's paid vGPU licensing and the spread of
+>   `vgpu_unlock` both show the value; a new capability creates its market (nvidia-docker, WSL2 GPU-PV,
+>   Proton/Steam Deck).
+> - **Conversion needs:** easier than VFIO, not merely possible — one card, host desktop alive, stock
+>   guest driver, an install path (today there is none: packaging, then Proxmox/libvirt integration);
+>   bare-metal performance numbers; a security review before real untrusted use.
+> - **Risks:** NVIDIA's reaction (a competing revenue line; GeForce EULA's datacenter clause for commercial
+>   operators; future GSP interface changes) — the clean-room provenance (§6) is the protection, not a
+>   guarantee.
+> - The display plane (boot display, broker) serves audiences 1 and 2 alike, so that work is not a bet on
+>   Windows alone.
+
 > ### ★ STATUS UPDATE — 2026-09-26
 > The rulings below stand. The evidence around them has moved:
 > - **§1:** multi-process is **no longer open**. 100 sequential CUDA processes ran in one guest
