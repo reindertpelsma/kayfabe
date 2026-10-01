@@ -68,6 +68,10 @@ citation: ask whether its reason still holds before relying on it.
 6. Windows guest last. ★ **Refined 2026-10-01 (owner):** before Windows, the display must work with a
    **stock guest and no guest-side tweaks**, and frames should leave through a **VMM-agnostic broker**
    rather than QEMU's SDL/GTK UI (`design/V3_DISPLAY.md`, the NEXT note at the top).
+   ★ **Demo milestone (owner, 2026-10-01):** a **game running in a Windows guest**, plus **SolidWorks**,
+   shown in a window on the **Linux host desktop** (through the broker) — then a new r/VFIO post. The
+   point to show: one GPU shared with the host (no VFIO passthrough, host desktop stays alive), the stock
+   NVIDIA driver in the guest, hostile-guest isolation. Pick a game whose anti-cheat tolerates VMs.
 - ⊘ *Superseded 2026-09-28 by the refinement of item 5 (Turing is on the arch axis, so it runs on
   hardware before the sweep):* Later, if time: **Turing** on hardware (its GSP model is source-derived only).
 - **All working, verified work lands on master.** Nothing verified may be stranded on a branch.
