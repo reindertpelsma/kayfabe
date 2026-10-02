@@ -38,7 +38,7 @@ place to live. The levers, all from kayfabe's unprivileged host verb set unless 
   `V3_APP_MATRIX`-era note in `kf-qemu/src/chan.rs` `groups`); mirroring subcontexts exactly would
   interact with this policy.
 
-## 4. First measurement
+## 4. The experiment to run first
 
 Two VMs on one GPU: one runs a hostile long-running kernel (no preemption points, many contexts), the
 other an interactive desktop or a latency-sensitive inference loop. Measure the second VM's frame time /
