@@ -9,6 +9,10 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+- **2026-10-02 — LICENCE:** the repository is now `Apache-2.0 OR GPL-2.0-or-later`, by owner ruling (`OWNER_RULINGS.md` §G; `LICENSE` lists the exceptions). Still open:
+  - I7: re-derive the nvproxy-derived `capability.rs`. Until then a QEMU binary built from this tree is not GPL-distributable.
+  - Per-file SPDX headers.
+  - Owner decision: whether the archived C traces, which hold PROM reads served from a real VBIOS dump, stay public.
 - **2026-10-02 — DESIGN, nothing built (branch `v3-sweep`):** the driver × GPU-family sweep and the one-binary install artifact it runs on — `design/V3_SWEEP_AND_INSTALL.md`.
 - ★ **WRAP-UP 2026-09-30 (evening) — the owner resumes Friday 2026-10-02. Where everything stands:**
   - **master = v3** = the code of **`afb552ea`** (+ docs/evidence/README only). Bar at that exact revision:
