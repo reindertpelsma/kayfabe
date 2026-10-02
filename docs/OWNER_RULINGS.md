@@ -224,7 +224,8 @@ citation: ask whether its reason still holds before relying on it.
   - Running NVIDIA's licensed vGPU guest stack on kayfabe needs its license check faked, the way
     vgpu_unlock setups do. That is piracy, however little reverse engineering it takes.
   - A user who holds a vGPU license should run NVIDIA vGPU and does not need kayfabe.
-- **Ideas for later, not rulings:**
+- **Ideas for later, not rulings.** The full plan, with the stock tier and the opt-in stages, is in
+  `design/V3_COOPERATIVE_TIERS.md` (2026-10-03).
   - Host-side vGPU-style sharing, one device per VM, through Linux mediated devices, so Proxmox,
     libvirt and OpenStack attach kayfabe unmodified. Not NVIDIA's vGPU software, and no licensing.
     See `design/V3_VFIO_USER_FRONTEND.md` §2, option 0.

@@ -9,6 +9,12 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+- **2026-10-03 — DESIGN, nothing built:** `design/V3_COOPERATIVE_TIERS.md` is the stock tier plus opt-in stages:
+  - doorbell passthrough by token;
+  - Linux dynamic memory with allocations that can fail;
+  - host-owned UVM;
+  - a host helper module.
+  - The Windows balloon is dropped.
 - **2026-10-02 — RESEARCH, docs only:** `design/V3_UVM_STATE_MACHINE.md` maps the managed-page state machine from the nvidia-uvm 580 source.
   - Owner's hypotheses (§7): H1, H2, H4 and H5 hold on x86 PCIe; H3 only partly; GSP-side placement is refuted.
   - The all-tenant GR hold is NVIDIA's designed "fault and stall" (`uvm_gpu_non_replayable_faults.c:78-81`).

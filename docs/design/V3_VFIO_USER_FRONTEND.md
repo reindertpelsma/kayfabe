@@ -47,6 +47,8 @@ TRAP those BAR accesses as socket messages — functional, far too slow for BAR1
         `KVM_RUN` with `EFAULT`, and the guest dies.
      3. Doorbells: VFIO has a kernel-side ioeventfd hook (`VFIO_DEVICE_IOEVENTFD`). Does an
         unmodified QEMU arm it for an mdev region? If it does not, every doorbell crosses QEMU.
+        The shim cannot add an MMIO handler of its own: `kvm_io_bus_register_dev` is not exported
+        on kernel 7.0 (2026-10-03, `V3_COOPERATIVE_TIERS.md` §3.2).
      4. The shim's map call must accept only memory the daemon already owns. Otherwise it hands an
         unprivileged process a way to map arbitrary physical memory.
    - **Cost:** an out-of-tree (DKMS) module, signed for Secure Boot.
