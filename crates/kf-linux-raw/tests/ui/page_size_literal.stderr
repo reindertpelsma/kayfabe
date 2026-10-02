@@ -4,6 +4,7 @@ error[E0423]: cannot initialize a tuple struct which contains private fields
 8 |     let _literal = HostPageSize(4096);
   |                    ^^^^^^^^^^^^
   |
+  = note: a struct named `HostPageSize` exists in another namespace
 note: constructor is not visible here due to private fields
  --> src/page_size.rs
   |

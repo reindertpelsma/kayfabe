@@ -21,5 +21,5 @@ note: method defined here
    |            ^^^^^^^
 help: provide the argument
    |
-13 |     let _ = w.execute(&plan, /* &kayfabe_util::trapwitness::OffTrap */);
-   |                            +++++++++++++++++++++++++++++++++++++++++++
+13 |     let _ = w.execute(&plan, /* &OffTrap */);
+   |                            ++++++++++++++++
