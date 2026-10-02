@@ -9,6 +9,10 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+- **2026-10-02 — RESEARCH, docs only:** `design/V3_UVM_STATE_MACHINE.md` maps the managed-page state machine from the nvidia-uvm 580 source.
+  - Owner's hypotheses (§7): H1, H2, H4 and H5 hold on x86 PCIe; H3 only partly; GSP-side placement is refuted.
+  - The all-tenant GR hold is NVIDIA's designed "fault and stall" (`uvm_gpu_non_replayable_faults.c:78-81`).
+  - Two kf3 gaps: ATOMIC_DISABLE is carried only under `KF3_CARRY_ATOMIC_DISABLE=1`; Ampere resumes a faulted CE channel through CHRAM plus the runlist doorbell, not the C076 method (§8).
 - **2026-10-02 — LICENCE:** the repository is now `Apache-2.0 OR GPL-2.0-or-later`, by owner ruling (`OWNER_RULINGS.md` §G; `LICENSE` lists the exceptions). Still open:
   - I7: re-derive the nvproxy-derived `capability.rs`. Until then a QEMU binary built from this tree is not GPL-distributable.
   - Per-file SPDX headers.
