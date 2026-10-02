@@ -9,6 +9,7 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+- **2026-10-02 — DESIGN, nothing built (branch `v3-sweep`):** the driver × GPU-family sweep and the one-binary install artifact it runs on — `design/V3_SWEEP_AND_INSTALL.md`.
 - ★ **WRAP-UP 2026-09-30 (evening) — the owner resumes Friday 2026-10-02. Where everything stands:**
   - **master = v3** = the code of **`afb552ea`** (+ docs/evidence/README only). Bar at that exact revision:
     tests 1754/0, gates 9/9, bare 30/30, thin 30/30, CDP smoke 4/4 shapes (`traces/v3_mc23/`). GitHub CI
