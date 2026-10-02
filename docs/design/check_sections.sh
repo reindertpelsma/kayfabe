@@ -15,11 +15,26 @@
 # that cries wolf is a gate people switch off.
 set -uo pipefail
 cd "$(dirname "$0")"
+# ⊘ 2026-10-02: this gate passed vacuously on a known duplicate. Two reasons:
+#   - GNU grep (the CI runner's grep) never matches the old `(?= )` lookahead pattern; it warns
+#     "? at start of expression" and returns 1, so only the fallback grep ever ran.
+#   - That fallback's `§?` binds `?` to the LAST byte of the two-byte `§` in a C locale, so no
+#     heading without a `§` matched.
+# Hence `(§)?`, one GNU-compatible grep, and the self-test below: report one before reporting zero.
+dup_numbers() {
+    grep -oE '^#{2,4} +(§)?[0-9]+(\.[0-9]+)*[a-z]?' "$1" 2>/dev/null \
+        | sed 's/^#* *//' | grep -v '^$' | sort | uniq -d | tr '\n' ' '
+}
+probe=$(mktemp)
+printf '## 7. a\n### 7.x b\n## 7.1 c\n## 7.1a d\n' > "$probe"
+seen=$(dup_numbers "$probe"); rm -f "$probe"
+if [ "$seen" != "7 " ]; then
+    echo "SECTION_GATE self-test FAILED: expected the known duplicate '7' only, got '$seen'"
+    exit 2
+fi
 bad=0
 for f in *.md; do
-    dups=$(grep -oE '^#{2,4} +§?[0-9]+(\.[0-9]+)*[a-z]?(?= )' "$f" 2>/dev/null \
-           || grep -oE '^#{2,4} +§?[0-9]+(\.[0-9]+)*[a-z]?' "$f" 2>/dev/null)
-    dups=$(printf '%s\n' "$dups" | sed 's/^#* *//' | grep -v '^$' | sort | uniq -d | tr '\n' ' ')
+    dups=$(dup_numbers "$f")
     if [ -n "${dups// /}" ]; then
         echo "⊘ $f  duplicate section numbers: $dups"
         bad=$((bad+1))

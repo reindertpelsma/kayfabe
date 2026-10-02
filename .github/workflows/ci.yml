@@ -938,6 +938,10 @@ jobs:
       # (383, a census of pre-existing prose across a tree several agents write at once).
       - name: "Claim-ledger gate (a measurement word names its run, not a source read)"
         run: python3 scripts/ci/debt.py claims
+      # docs/design/check_sections.sh existed but ran nowhere, so a duplicate section number
+      # (V3_DOORBELL_IOEVENTFD.md, `## 7.` and `### 7.x`) reached master on 2026-09-30.
+      - name: "Section-number gate (no two design-doc sections share a number)"
+        run: bash docs/design/check_sections.sh
       # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).
       #
       # Landed WITH `kayfabe-linux-raw`, because that crate is what makes them necessary.

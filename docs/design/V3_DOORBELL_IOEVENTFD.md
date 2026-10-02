@@ -7,7 +7,7 @@ ON (GA106, GB206); the whole bar and the ON lane also on Blackwell GB206 (§7.6)
 Vast boxes: a doorbell store costs the vCPU ~4–5 µs less (§7.2); LLM decode **+9–10 %** (0.29× →
 0.32× of host, two alternated pairs) for ~⅙ of a core in the drainer, **+16–18 %** with the
 bounded-spin experiment for a whole core (§7.5). Default **OFF** (`-device kf3-gpu,…,doorbell-ioeventfd=on` turns it on) until a non-nested host is
-measured (§7.x). ⊘ Nothing here is a non-nested result: every number is from a Vast KVM box (itself a
+measured (§7.7). ⊘ Nothing here is a non-nested result: every number is from a Vast KVM box (itself a
 KVM guest) or from the development workspace (also virtualized), and is labelled **nested**.
 ★ **Merged with the display work as `v3-mc22` (2026-09-30), KF3 ABI 10:** merge bar 30/30 OFF, thin
 suite **30/30 ON**, CUDA ladder **OFF 4/4 = ON 4/4**, and the display lane M1/M2 with the fast path ON
@@ -321,7 +321,7 @@ the ON boot: essentially no coalescing at ~14 000 doorbells/s — CUDA already b
 spin buys **+16 %** (0.34×) by removing that wake-up, for **a whole core** while decoding: the
 vCPU-side saving is the same (§7.2); what the spin adds is the drainer ringing ~40 µs sooner.
 ⊘ The spin stays an experiment knob (default off): a core per busy VM is a policy decision, and on a
-non-nested host the wake-up it hides should be far cheaper (a hypothesis until §7.x is run).
+non-nested host the wake-up it hides should be far cheaper (a hypothesis until §7.7 is run).
 
 ### 7.6 A second family: Blackwell GB206 (RTX 5060 Ti) — the bit-30 token and the BAR1 views
 
@@ -343,7 +343,7 @@ all (GB203 was the earlier Blackwell), and the die group whose doorbell differs 
 Blackwell hardware. ⊘ No LLM row: the lane's pinned PyTorch has no `sm_120` kernels ("no kernel image
 is available") — the host run fails identically, so it is the environment, not kayfabe.
 
-### 7.x The protocol for a NON-nested host (not yet reachable, 2026-09-30)
+### 7.7 The protocol for a NON-nested host (not yet reachable, 2026-09-30)
 
 A physical host was not reachable from this workspace on 2026-09-28/29 (`V3_DOORBELL_BASELINE.md`,
 "Non-nested baseline protocol" — its steps 1–5 still govern: shared-host exclusions, recording the
@@ -475,7 +475,7 @@ where exits are cheap and the gain should be smaller.
   the store still exits and is emulated in the kernel; only a guest-side route (the optional helper,
   `V3_GUEST_DOORBELL_MODULE.md`) removes the exit itself. A non-nested host is expected to show a
   larger relative saving (its exit to userspace is a larger share of a smaller exit) — a hypothesis
-  until §7.x's protocol is run there.
+  until §7.7's protocol is run there.
 - The drainer polls doorbells before every privileged register write it applies, one
   `epoll_wait(0)` each (e.g. `--concurrency`: 39 295 polls for 834 doorbells). Cheap (sub-µs each),
   counted (`polls=hits/total`), and it is what keeps a vCPU's doorbell ahead of its later register
