@@ -142,5 +142,9 @@ frozen `kayfabe-linux-raw`). In each of them, unsafe code lives only in files na
 
 ## Licence
 
-Apache License 2.0. See [`LICENSE`](LICENSE); it applies to the whole repository, including
-`archive/`.
+Dual-licensed under **Apache-2.0 OR GPL-2.0-or-later**, at your option: the full texts are
+[`LICENSE-APACHE`](LICENSE-APACHE) and [`LICENSE-GPL`](LICENSE-GPL), and [`LICENSE`](LICENSE) states
+the grant and its exceptions. The exceptions are the `third_party/` submodules, files that carry their own
+notice, third-party data inside recorded traces, and the files derived from gVisor's nvproxy. The
+nvproxy-derived files stay Apache-2.0 only until they are re-derived. Because the kf3 QEMU device links
+one of them, a QEMU binary built from this tree is not yet distributable under the GPL.

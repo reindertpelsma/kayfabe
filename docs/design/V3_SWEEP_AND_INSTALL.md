@@ -1100,6 +1100,11 @@ value that fits.
 ### 2.9 Gaps to close before any binary is distributed
 
 - **The license (§4 Q1).**
+  - ⊘ **ANSWERED 2026-10-02:** the repository is now `Apache-2.0 OR GPL-2.0-or-later`; see `LICENSE`
+    and `docs/OWNER_RULINGS.md` §G. The next line describes the state before that ruling.
+    ⚠ This section missed one blocker, which the ruling found. `kf-abi`'s `capability.rs` is derived
+    from gVisor's nvproxy and stays Apache-2.0 only. `kf-qemu` links `kf-abi`, so the QEMU binary is
+    not yet GPL-distributable until that file is re-derived (I7).
   - kayfabe is Apache-2.0 (`LICENSE:1-2`; `Cargo.toml:46`).
   - `libkf_qemu.a` is linked statically into QEMU (`qemu/hw/misc/kf3/meson.build:4-8`).
   - QEMU says the emulator as a whole is GPLv2 (`qemu-10.2.4/LICENSE:8-9`).
@@ -1190,6 +1195,9 @@ Around the runner:
 ## 4. Open questions for the owner
 
 - **Q1 — License for distributing binaries.**
+  - ⊘ **ANSWERED 2026-10-02 — option (a), as `Apache-2.0 OR GPL-2.0-or-later`** (`LICENSE`;
+    `docs/OWNER_RULINGS.md` §G). The question text below is kept as it was asked. ⚠ One more
+    blocker remains, the nvproxy-derived `capability.rs` (see §2.9).
   - kf-qemu (Apache-2.0) is linked statically into QEMU (GPLv2). Every crate in the product closure is
     kayfabe's except `libc` 0.2.189, which is `MIT OR Apache-2.0` (its own `Cargo.toml`).
   - Options: (a) dual-license the closure as `Apache-2.0 OR MIT`, or add `GPL-2.0-or-later`, and give the

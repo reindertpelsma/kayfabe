@@ -175,3 +175,29 @@ citation: ask whether its reason still holds before relying on it.
   **Superseded 2026-09-29:** the owner authorized retiring the Paguro Windows box after saving
   any unique work; retention is no longer required. The /dev/sdb SSD is
   spare workspace; regenerate/download caches, builds and VM images rather than lose unique work.
+
+## G. Licence (2026-10-02)
+
+- **Ruling:** dual-license the whole repository as **`Apache-2.0 OR GPL-2.0-or-later`**. The owner's
+  words: *"Same as ogkm. We satisfy both, user may chose either"*. The owner confirmed the exact
+  expression on 2026-10-02.
+- **Done on branch `v3-dual-license`:**
+  - `LICENSE` states the grant and its exceptions. `LICENSE-APACHE` and `LICENSE-GPL` hold the full
+    texts.
+  - The `Cargo.toml` `license` fields are updated: the workspace and both detached `gen` crates.
+- **Exceptions, as `LICENSE` lists them:**
+  - the `third_party/` submodules;
+  - files derived from gVisor's nvproxy, which stay Apache-2.0 only;
+  - files that carry their own notice;
+  - third-party data inside recorded traces.
+- **Still open, under task I7 (`docs/design/V3_SWEEP_AND_INSTALL.md`):**
+  - Re-derive the nvproxy-derived allowlists (`kf-abi`/`kayfabe-abi` `capability.rs`) from ogkm
+    headers. `kf-qemu` links `kf-abi`, so until then a QEMU binary built from this tree is not
+    distributable under the GPL.
+  - Per-file SPDX headers, starting with the three kf3 overlay files.
+  - `LICENSES/` in the release tarball.
+- **For the owner to decide:** whether the archived C reference traces stay in the public tree.
+  - `archive/nvkvm/traces/mode2_c_reference/` records PROM reads as served values.
+  - The C emulator served those reads from a real GA106 VBIOS dump: its `vbios=` property; md5 in
+    that directory's README.
+  - The grant does not cover that data (`LICENSE`, exception 4).
