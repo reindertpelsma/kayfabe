@@ -50,6 +50,14 @@ fix this file. Entries below the first are dated history.
     `the_allowed_acquisitions_are_not_reported` (`in_trap_census() == before`) and `trapwitness.rs`
     `the_enumerated_exception_mints_inside_a_trap_and_counts_itself` (`== before + 1`), plus their
     `kayfabe-util` copies.
+  - **Rust 1.99.0 (2026-10-02):** GitHub's runner moved from rustc 1.98.1 to 1.99.0 and CI went red on
+    every commit: four `trybuild` compile-fail snapshots changed wording (every snippet still fails to
+    compile — the guards hold) and clippy 1.99 reports six new sites (std `Atomic*::fetch_update`
+    deprecated → `try_update`, four in kf-chan/kf-qemu; `clippy::double_must_use`, two in the frozen
+    kayfabe-device). Fixed by `v3-rust199` (snapshots regenerated; the six sites recorded as migration
+    debt in `scripts/ci/clippy-debt.json`), merged; no product code changed. ⚠ Owner decisions: pin the
+    toolchain (`rust-toolchain.toml`, bumped deliberately) so a Rust release cannot break CI unannounced;
+    and rename to `try_update` (needs ≥1.99 on every box) as a reviewed change.
   - **Durability:** everything is on GitHub. The dev host's local-only branches and two uncommitted Codex
     worktrees are backed up as `backup/host-2026-09-30/*` (13 branches, secret-scanned, not reviewed). Two
     unpushable research-repo corrections are `archive/nvkvm-unpushed-2026-09-30/`. **All vast boxes are
