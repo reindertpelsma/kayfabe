@@ -201,3 +201,31 @@ citation: ask whether its reason still holds before relying on it.
   - The C emulator served those reads from a real GA106 VBIOS dump: its `vbios=` property; md5 in
     that directory's README.
   - The grant does not cover that data (`LICENSE`, exception 4).
+
+## H. Feature scope after a working product (2026-10-02)
+
+- **Stub what workloads do not need** (owner). Stub a refusal when it only blocks a feature
+  workloads do not need, especially one an unprivileged host process cannot issue.
+  - Named: debugger, profiler, NVLink, ECC.
+  - Confidential compute is impossible. Its attestation is rooted in the physical GPU's keys and is
+    never faked.
+  - A stub answers the way a GPU without the feature answers: capability absent, or not permitted.
+    It never answers `OK` to an action; that is the forged-completion trap of 2026-09-26.
+  - Read in ogkm-580 the same day:
+    - The **debugger** is open to unprivileged users for their own processes
+      (`ogkm-580: src/nvidia/src/kernel/gpu/gr/kernel_sm_debugger_session.c:270-301`). kayfabe
+      could forward it later.
+    - The **profiler** needs root or `CAP_PERFMON` unless the host admin sets
+      `RestrictProfilingToAdminUsers=0`. The default is 1 (`ogkm-580: kernel-open/nvidia/nv-reg.h:965`;
+      `ogkm-580: src/nvidia/src/kernel/gpu/hwpm/profiler_v2/kern_profiler_v2.c:31-63`), so a stub
+      matches what a non-root user gets on bare metal. If it is ever offered, make it opt-in for
+      single-tenant hosts only: profiler counters are a side channel across tenants.
+- **Guest-side NVIDIA vGPU: crossed off** (owner).
+  - Running NVIDIA's licensed vGPU guest stack on kayfabe needs its license check faked, the way
+    vgpu_unlock setups do. That is piracy, however little reverse engineering it takes.
+  - A user who holds a vGPU license should run NVIDIA vGPU and does not need kayfabe.
+- **Ideas for later, not rulings:**
+  - Host-side vGPU-style sharing, one device per VM, through Linux mediated devices, so Proxmox,
+    libvirt and OpenStack attach kayfabe unmodified. Not NVIDIA's vGPU software, and no licensing.
+    See `design/V3_VFIO_USER_FRONTEND.md` §2, option 0.
+  - MIG: map host MIG instances into guests, on MIG-capable cards.
