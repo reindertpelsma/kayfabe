@@ -1,6 +1,6 @@
 # V3 — the stock tier and the opt-in cooperation stages
 
-**STATUS: DESIGN-ONLY, 2026-10-03.** The owner sketched this plan on 2026-10-02 and 2026-10-03,
+**STATUS: DESIGN-ONLY, 2026-10-03; §5.1 corrected the same day (pool backing, owner).** The owner sketched this plan on 2026-10-02 and 2026-10-03,
 and the review's corrections are folded in. Nothing here is decided or built, apart from what
 `docs/OWNER_RULINGS.md` §H already rules (the stub rule, and the vGPU guest stack crossed off).
 
@@ -134,16 +134,26 @@ Owner idea: move the doorbell helper to the host.
     software restriction, not a hardware one (owner).
 - **Migration destinations come from the VM's own VRAM** (reserved or dynamic). Managed memory
   never takes host VRAM outside the VM's accounting.
-- **The pool cannot be ordinary guest RAM.**
-  - After a page's data moves to VRAM, a guest CPU touch must trap, and a memfd guest-RAM page
-    cannot be made to. Stock KVM on kernel 7.0 has per-page access exits only for guest_memfd
-    memory, and userfaultfd is ruled out (owner, 2026-09-14).
-  - So the pool is memory backed by the patched host driver, mapped into the guest as its own
-    region (for example a BAR of the kf3 device).
-  - Host UVM's normal migration then does the trapping. It removes the CPU-side mapping before
-    copying, and KVM's MMU notifier drops the guest's mapping with it. A guest CPU touch faults in
-    the host, and host UVM migrates the page back.
+- **To the guest, the pool is ordinary RAM. Its host backing must not be memfd.**
+  - ⊘ **Corrected 2026-10-03 (owner).** The first version said the pool "cannot be ordinary guest
+    RAM". That holds only for memfd backing. Stage 3 already needs a host kernel module, and a
+    module can own the backing pages itself.
+  - **Why not memfd.** After a page's data moves to VRAM, a guest CPU touch must trap. shmem's
+    fault path offers no hook short of userfaultfd, which is ruled out (owner, 2026-09-14). Stock
+    KVM on kernel 7.0 has per-page access exits only for guest_memfd memory.
+  - **How.** The host module provides a file whose pages it owns, and stock QEMU maps it as a
+    second guest-RAM block (`memory-backend-file`, attached as its own NUMA node or a DIMM).
+    - The guest sees ordinary RAM and keeps its other allocations off that block.
+    - kayfabe's guest-RAM import leaves the block to host UVM.
+  - **The module's fault handler is the trap.**
+    - Migration to VRAM zaps every mapping of the page, and KVM's MMU notifier drops the guest's
+      mapping with it.
+    - A guest CPU touch then faults into the module, which migrates the page back before mapping it.
+    - The handler must never fail: a fault KVM cannot resolve fails `KVM_RUN` and kills the guest.
   - That means no guest page-table reads or edits, no handover call and no race boundary.
+- **What "we control the host kernel" covers.** A module can load through DKMS and use exported
+  symbols; it cannot change KVM or mm. On kernel 7.0 that rules out a module's own MMIO handlers
+  (§3.2), but not this design.
 - **The walker skips registered managed ranges.** Host UVM owns those page-table entries.
 - **Guest residency queries** read a small host-written table, or are stubbed (owner).
 
@@ -173,16 +183,17 @@ Each is removed by one cooperation piece.
 
 ### 5.4 Open questions, in order
 
-1. **Does KVM fault through a host-UVM-managed mapping?** `V3_UVM_DEMAND_PAGING.md` §3.1(ii) calls
-   it plausible but untested. This is the first experiment.
+1. **Does KVM fault cleanly through the module's file?** That means a get_user_pages call, an MMU
+   notifier zap, and a refault into the module. `V3_UVM_DEMAND_PAGING.md` §3.1(ii) found the
+   closest case plausible but untested. This is the first experiment.
 2. **Many guest processes reuse the same GPU VAs,** while UVM keeps one address layout per VA
    space.
    - That probably means one host UVM VA space per guest GPU VA space; how they share the one
      pool is open.
    - As far as the review can tell, decoupling CPU and GPU addresses is a real UVM change, not
      one removed check.
-3. **How the guest consumes the pool** (hot-added memory, or device memory), so that guest-side
-   managed pages come from it.
+3. **How the guest keeps other allocations off the pool node**, so that only managed pages come
+   from it. One option is onlining it for the driver alone.
 4. **How long GR is held** while the host services a fault. The host bounds it, but the length on
    hardware is not yet known.
 5. **GPU atomics** and the `ATOMIC_DISABLE` bit on pool pages.
