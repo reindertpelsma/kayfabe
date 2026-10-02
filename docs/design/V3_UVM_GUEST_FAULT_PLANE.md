@@ -13,6 +13,24 @@ the first one is milestone M2 (§9).
 
 ## Stop note — where the work stands (update this first, every time)
 
+- **★ 2026-10-02 — OWNER RULINGS on §3.8a (both NO; `docs/OWNER_RULINGS.md` §E on master) and the
+  agreed direction.** No MMIO/BAR CPU reads of guest page tables; the ~4 s all-tenant GR stall is not
+  acceptable; this branch stays unmerged until the per-fault GR hold is measured and bounded.
+  - *Why the walker cannot run while a fault is parked, though it has its own CUDA context/channel/TSG:*
+    consumer GPUs have one GR engine, time-shared by context switches, and a context with a parked
+    replayable fault cannot be switched out (uvmg4: the walk completed 4.3 s after submission, 7 ms after
+    the ctxsw watchdog killed the faulted context). A separate channel helps only on another engine.
+  - *Owner's idea:* the walk kernel keeps a sysmem copy of its last decoded mappings for kf3 (written
+    before it returns the diff — cannot go stale relative to that walk). ⚠ It cannot hold the NEW PTE the
+    guest wrote while servicing the fault (written after the last walk), so on its own it does not
+    unblock the replay.
+  - *Direction:* (1) the owner's sysmem copy for the stable upper levels + a **copy-engine snapshot of
+    only the changed leaf page-table page(s)** on the faulted VAs' paths, decoded on the CPU with the
+    walk kernel's rules — GR-free, no MMIO (verify first that CE runs while GR is held); alternative:
+    capture guest nvidia-uvm's own CE page-table writes from its Translated channels (no reads; depends
+    on UVM always writing PTEs by CE — check). (2) A park limit far below the watchdog (ms) with cancel,
+    and a per-VM fault budget. (3) A two-VM test (one hostile) measuring GR hold time per fault.
+
 - **★ 2026-09-30 20:20 UTC — PAUSED (owner pause until Friday). Resume here.** Branch
   `v3-uvm-guest` (never merged; do not merge without the owner's §3.8a ruling). Box `53564695`
   **destroyed**; nothing lives only on a box — every result is in `traces/v3_uvm_guest/` (README =
