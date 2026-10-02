@@ -10,6 +10,20 @@
 >   the boot display**: a UEFI GOP (and a legacy VGA path) over a kf-disp linear framebuffer, handed over
 >   to the NVIDIA driver when it loads. ★ Windows needs this regardless: its installer, boot and safe mode
 >   run on the GOP framebuffer before `nvlddmkm` starts. The largest item (~1–2 weeks, estimate).
+> - ★ **How kf3 becomes the boot display — the owner's 2026-09-10 design (from the session; first written
+>   down here 2026-10-02).** On real cards the PCI expansion ROM (the VBIOS) carries a UEFI GOP driver
+>   that programs the display; the firmware's linear framebuffer is a BAR1 range (not PRAMIN), and GOP
+>   itself is a firmware software interface in system RAM, not a BAR. Owner: *"why do we need [a vendor]
+>   UEFI image … since the GPU is already initialized in kayfabe, the only thing we have to compile in
+>   there as UEFI image is to put the structure to tell where"* the framebuffer is. ⇒ kf3 ships its OWN
+>   small option ROM (QEMU `romfile=`): an EFI GOP driver (EDK2 or `uefi-rs`) that publishes one or a few
+>   modes with `FrameBufferBase` in kf3's BAR1, software `Blt` over it, and no hardware programming —
+>   kf-disp already owns the display model and scans that BAR1 range out. OVMF binds it to the device;
+>   bootloader, efifb/simpledrm and Windows' boot screen draw into it; the NVIDIA driver takes over when it
+>   loads. Legacy VGA (SeaBIOS) is optional. ⚠ The handover: Windows RM sizes a BAR1 "smooth transition"
+>   from `uefiScanoutSurfaceSizeInMB` (`bSmoothTransitionEnabled = (uefiScanoutSurfaceSizeInMB != 0) &&
+>   RMCFG_FEATURE_PLATFORM_WINDOWS`, `kern_bus_gm107.c:889`, found 2026-09-20) — the fake GSP's answer for it
+>   must agree with what the option ROM set up.
 > - X11 desktops need `GF100_DISP_SW` (owner choice A/B, `STATUS_AND_HANDOFF.md` §0).
 > - The lightdm autologin is a bench convenience, not a display requirement.
 > - Leftovers for daily use: cursor plane, scaled windows, 16-bit/YUV surfaces, mode lists and

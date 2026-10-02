@@ -1,3 +1,10 @@
+# ★ PINNED (owner, 2026-10-02). A floating `stable` let the 2026-10-02 runner bump (1.98.1 -> 1.99.0)
+# break CI on every commit: trybuild snapshots changed wording and clippy grew new lints. Bump this
+# deliberately, in one commit that also regenerates `crates/*/tests/ui/*.stderr` and re-records
+# `scripts/ci/clippy-debt.json` — and update the three `toolchain:` lines in .github/workflows/ci.yml.
 [toolchain]
-channel = "stable"
+channel = "1.99.0"
 components = ["rustfmt", "clippy"]
+# The isolate image is embedded as a static musl binary (crates/kayfabe-isolate-host/build.rs).
+targets = ["x86_64-unknown-linux-musl"]
+profile = "minimal"
