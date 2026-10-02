@@ -23,7 +23,10 @@ fix this file. Entries below the first are dated history.
     a guest-side stall, undiagnosed); `conjugateGradientUM` not run (`libnvJitLink` missing on that box).
     Stop note + exact next recipe: `design/V3_UVM_GUEST_FAULT_PLANE.md`; runs: `traces/v3_uvm_guest/`.
   - **Owner questions (open):**
-    1. **UVM (new, 2026-09-30):** a parked replayable fault blocks the host GPU's GR engine for EVERY
+    1. ⊘ **ANSWERED 2026-10-02 — both NO** (`OWNER_RULINGS.md` §E): no MMIO/BAR CPU page-table reads
+       (a copy-engine snapshot if a CPU decode is unavoidable); the ~4 s all-tenant stall is not
+       acceptable; UVM stays unmerged until the GR hold per fault is measured and bounded. Original text:
+       **UVM (new, 2026-09-30):** a parked replayable fault blocks the host GPU's GR engine for EVERY
        tenant (host CUDA included) until serviced or ~4.3 s; kf3's GPU page-table walker needs that engine,
        so the design deadlocks (walk waits 4.3 s, twin killed, Xid 109). The branch's experiment reads the
        guest's page-table words on the CPU while faults are parked — which the v3 rule "no CPU read of a

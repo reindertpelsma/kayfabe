@@ -130,6 +130,16 @@ citation: ask whether its reason still holds before relying on it.
   **Supersedes the 09-26 preference** for a separate replacement module: N4 takeover prevents
   stock UVM coexistence in the same host kernel (the 580.159.04 callback registration is global,
   not per GPU). N4 remains historical research, not the next implementation experiment.
+- **RULED 2026-10-02 (owner) on the `v3-uvm-guest` questions — both NO:**
+  - *No MMIO/BAR CPU reads of guest page tables* (the branch's §3.8a experiment reads them through
+    CPU views of the store). Prefer the GPU walker; if a CPU decode is unavoidable on the fault path,
+    the words must come from a **copy-engine snapshot** into host memory, not MMIO reads.
+  - *A ~4 s stall of every tenant's GR work per parked fault is not acceptable.* Cause, measured on
+    the RTX 3060: a GR context stalled on a parked replayable fault cannot be context-switched out, so
+    no other GR work runs (other VMs, host CUDA, kf3's own walker) until the fault is replayed; the
+    bound is the host's ~4.3 s ctxsw watchdog (Xid 109), not a kayfabe timeout. ⇒ The fault path must
+    be GR-free end to end and fast, the park time bounded far below the watchdog, and UVM is **not
+    merged** until the per-fault GR hold time is measured and acceptable (two-VM test, one hostile).
 - Stock UVM read-duplication (`cudaMemAdviseSetReadMostly`) is not a kayfabe mode — kayfabe must *handle*
   it correctly (read-only PTEs, collapse on write): permission bits are now carried.
 - **Next: bounded b3 host-only proof before guest integration.** Require real fault delivery,
