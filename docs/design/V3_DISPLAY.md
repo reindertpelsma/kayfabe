@@ -1,5 +1,14 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> ⊘ **CORRECTED 2026-10-03, later the same day (the adversarial review of `v3-broker`; the fixes are
+> on the same branch, nothing run on a box):** the last sentence below no longer holds. The console's
+> `ui_info` hook (3c resize) is now installed **only with `display-broker` set**, so with it unset
+> GTK and VNC never re-mode the guest and the console path is M2's — except the 3d cursor layer,
+> which still composes into the console (a guest pointer now shows on VNC and in a screendump). The
+> broker peer check no longer trusts the owner of the socket's directory, and reads QEMU's
+> effective uid at each connect. All review findings and their fixes: §8, the correction above its
+> STATUS line.
+
 > **STATUS: DISPLAY STEP 3 BUILT IN CODE, GPU-FREE — 2026-10-03 (branch `v3-broker`; nothing run on
 > a box).** All four sub-steps are in code: 3a (frames + input), 3b (reconnect, pacing), 3d (the
 > head's cursor composed as the top layer) and 3c (resize: authored EDID + a hotplug the register
@@ -673,6 +682,30 @@ its dependency chain, in one commit).
 
 ## 8. The display broker — display step 3
 
+> ⊘ **CORRECTED 2026-10-03 — the adversarial review of this branch (the same day) found twelve
+> defects; all are fixed in code here, each with a test that fails without its fix (run against the
+> unfixed code or a bite-mutation, §8.8). Nothing has run on a box.**
+> 1. **A permanent display freeze** (§8.3): an owed COMMIT superseded by a newer frame while the
+>    latest commit and the superseded frame filled the cap of 2 — nothing was ever committed again.
+>    The superseded frame now yields its slot.
+> 2. **Stale pixels after a partial backing refusal** (§8.2): a slot refilled with the console's own
+>    memory went on naming its previous memfd. It is now withdrawn from the broker.
+> 3. **The peer policy admitted the owner of the socket's directory** (§8.5) — anyone, when the
+>    directory is missing under `/tmp`. Now uid 0, QEMU's euid at each connect, and
+>    `display-broker-uid` only.
+> 4. **QEMU's euid was read once, at realize** — root's, before `-run-with user=`/`-runas` dropped
+>    privileges (§8.5). The first attempt now runs from the main loop's timer, and every attempt reads
+>    the euid.
+> 5. **An out-of-range `display-broker-uid` was silently ignored**; it is refused by name at realize.
+> 6. **The `REFUSED frame` line was logged per frame** (30–60 a second); now 1–4 and every 256th.
+> 7. **Frames were refused on 64 KiB-page hosts** (1920×1080×4 is not 64 KiB-aligned); backings are
+>    rounded up to whole host pages.
+> 8. **The `ui_info` hook changed the GTK/VNC path without a broker**; it is installed only with one.
+> 9. **Design §1.3's absent-tablet log was neither built nor listed**; it is built (§8.4).
+> 10. **§8.9 named ABI 11**; the branch is ABI 12.
+> 11. **The slots TOCTOU test asserted nothing for the console**, and had no known-positive (§8.3).
+> 12. **The full-backlog test depended on `ulimit -n` and `somaxconn`** (§8.1).
+
 **STATUS: LIVE — 3a, 3b, 3d and 3c BUILT IN CODE, GPU-FREE, 2026-10-03 (branch `v3-broker`).**
 Local runs are §8.8; nothing has run on a box (renting needs the owner's approval). This section folds in the reviewed design (the adversarial review of 2026-10-03 applied);
 where the code departs from it, §8.7 says so.
@@ -688,7 +721,7 @@ src/common/nvkvm_broker_proto.h` at `368d2db`, vendored verbatim as
 |---|---|
 | wire codec; the connection machine (connect, peer check, HELLO, replay, owed frame, reconnect, verdicts, rung, pacing, RELEASE accounting, reclaim); the frame ring | **`crates/kf-broker`** — new, light, safe code (workspace lints), VMM-agnostic, deterministic under a caller-supplied clock |
 | `AF_UNIX` connect, `SO_PEERCRED`, `sendmsg`+`SCM_RIGHTS`, `recvmsg` without a control buffer, `UDMABUF_CREATE`, `fstatfs`, `fstat` ids | `crates/kf-linux-raw` (`unixsock_unsafe.rs`, `host_fd_unsafe.rs`) |
-| frame backing (memfd + `cuMemHostRegister` + udmabuf), the relay seat, KF3 ABI 11 | `crates/kf-qemu/src/broker.rs`, `display.rs`, `ffi_unsafe.rs`; `crates/kf-cuda` (registration) |
+| frame backing (memfd + `cuMemHostRegister` + udmabuf), the relay seat, KF3 ABI 12 (⊘ corrected 2026-10-03: said 11; 3c added two entries, §8.7 (6)) | `crates/kf-qemu/src/broker.rs`, `display.rs`, `ffi_unsafe.rs`; `crates/kf-cuda` (registration) |
 | fd handlers, the timer, `qemu_input_*`, the relative-pointer switch, the close policy | `qemu/hw/misc/kf3/kf3.c` (about 230 lines; QEMU 10.2 only) |
 
 The relay runs on QEMU's **main loop** (one socket owner, as in nvkvm-pv). The display worker never
@@ -703,6 +736,12 @@ Usage:
 -device virtio-keyboard-pci \
 -device virtio-tablet-pci,display=kf0,head=0
 ```
+
+**Who may be the broker** (§8.5): uid 0, QEMU's effective uid at each connect, and
+`display-broker-uid` when set. A QEMU started as root with the broker in a desktop user's session
+therefore needs `-run-with user=<that user>` (QEMU then runs as the broker's uid) or
+`display-broker-uid=<the broker's uid>`; otherwise the relay refuses the listener, loudly, and keeps
+retrying.
 
 One broker and one socket per kf3 device (a broker serves one VMM and never displaces it). The broker
 is **installed separately**, built from nvkvm-pv at a pinned revision (`368d2db`); it is not part of
@@ -739,7 +778,9 @@ pointers map no `WHEEL_LEFT/RIGHT`); (c) the peer-credential check (§8.5); (d) 
 the credit, `EV_FRAME` **or** the `RELEASE` of the latest commit returns it (the X11 XRender path never
 sends FRAME), a 100 ms backstop is the last resort (`pacing_credit_returns_on_frame_release_or_the_backstop`);
 (e) the replay carries F_SHM; (f) rung 1b. Also: **no CONNECTING state** (an `AF_UNIX` `EAGAIN` is a full
-backlog, a failed attempt — `kf-linux-raw` `a_full_backlog_is_eagain_and_never_in_progress`), and at
+backlog, a failed attempt — `kf-linux-raw` `a_full_backlog_is_eagain_and_never_in_progress`; ⊘ corrected
+2026-10-03: its listener now has a backlog of 1, as it needed more than `somaxconn` descriptors and
+failed under `ulimit -n 1024`), and at
 most 64 packets per call with the tail left in the socket
 (`at_most_64_packets_per_call_and_the_tail_stays_in_the_socket`).
 
@@ -750,7 +791,21 @@ is unchanged. With it **set**, each of **5** slots is a sealed memfd (`kayfabe-d
 `SHRINK|GROW|SEAL`, never `WRITE`), mapped and page-locked with `cuMemHostRegister_v2` so the existing
 asynchronous D2H scanout copy lands in it, plus a udmabuf over the same pages when `/dev/udmabuf` opens
 (`root:kvm 0660`). The frame is registered **before** its descriptors enter the ring, so the ring never
-names a backing the GPU does not write. A refusal (no `cuMemHostRegister`, or a driver that will not
+names a backing the GPU does not write.
+
+⊘ **CORRECTED 2026-10-03 (the review of this branch): the next sentence was false as built, and is
+now true.** After a refusal the worker refilled a slot with the console's own memory while the ring
+still named the slot's previous memfd, which the GPU no longer wrote: once the mode fitted it again
+the broker was sent those stale pixels, and until then the relay logged `REFUSED frame slot` for
+every frame. Now the worker **withdraws** such a slot before refilling it (`FrameRing::withdraw`);
+a withdrawn slot is never broker-ready and the relay checks the bit too
+(`a_withdrawn_slot_is_never_offered_to_the_broker`, `a_withdrawn_slot_is_never_sent_to_the_broker`,
+kf-qemu `a_withdrawn_slot_feeds_the_console_and_never_the_broker`); any `REFUSED frame` line left is
+rate-limited to the first four and every 256th (`a_refused_frame_is_logged_at_a_bounded_rate`). Each
+backing is also rounded up to whole host pages (`kf_broker::frame_bytes`): 1920×1080×4 is not
+64 KiB-aligned, and on a 64 KiB-page host every frame was refused.
+
+A refusal (no `cuMemHostRegister`, or a driver that will not
 pin these pages) is logged once by name; the console keeps its own frames and the broker is shown
 nothing — a CPU copy is never the fallback. The descriptor: `XR24`, `offset 0`, `stride = width × 4`,
 `LINEAR` or `MOD_INVALID`.
@@ -778,11 +833,28 @@ transition is a CAS; the worker's fill target is a slot named nowhere in the wor
 most **2**, so at most four slots are occupied (front, last published, two held) and with five a fill
 target always exists (`with_five_slots_a_fill_target_always_exists_…`; the interleaving test
 `the_worker_never_picks_a_slot_another_thread_holds` races a real worker, relay and console thread).
+⊘ Corrected 2026-10-03: the interleaving test asserted only the relay's marks, and nothing showed it
+could fail. Both readers now mark a slot after the transition that gives it to them and unmark it before
+the one that gives it back, so every mark is asserted, and `the_harness_catches_the_two_word_ring` runs
+the same harness against a two-word model of the ring, which it must catch (locally: thousands of
+violations in 200 000 rounds; the one-word ring: none).
 `free_slot()` returns `Option`; `None` is counted (`scanout_no_slot`), never papered over with slot 0.
 Descriptors are never closed while the device lives (retire-never-free, per slot at most two backing
 generations in `OnceLock`s), so a recycled descriptor number can never be sent. RELEASE is matched only
 against the id of the descriptor actually sent on that frame's rung (memfd and dma-buf inodes come from
 different counters); identities are checked distinct across every slot and generation at install.
+
+⊘ **CORRECTED 2026-10-03 — a fourth way a held frame comes back, and without it the display froze for
+good.** When the broker stalls long enough for the socket to fill, an ATTACH can go while its COMMIT
+meets `EAGAIN` (an owed COMMIT), and the next frame supersedes it. That frame is then never shown —
+no COMMIT follows its ATTACH; the next one follows the newer frame's — and never RELEASEd, it is not
+the latest commit, and the reclaim rule below needs a newer commit than it: with it and the frame on
+screen filling the cap of 2, no frame could ever be committed again (the review's scripted probe:
+`sent=1 blocked=61 reclaims=0`). A **superseded** frame now yields its slot to the live frame the way
+the retained one does (`a_superseded_owed_commit_never_freezes_the_display`). Measured locally against
+the real broker: a 40 s SIGSTOP commits ~2 frames a second (the cap of 2 and the 1 s reclaim), so the
+socket did not fill in 40 s — the trigger needs a longer stall, and the scripted case is the
+regression test.
 
 **Reuse without RELEASE (owner question 6, implemented as the reviewed default).** "Reuse a copy only
 after the broker's RELEASE" cannot be kept literally: RELEASE is advisory and a rejected ATTACH never
@@ -803,6 +875,7 @@ Rust bounds every value (`kf_broker::Input`) and kf3.c dispatches on kf3's own c
 | REL | consecutive packets summed (saturating); `qemu_input_queue_rel` X/Y; sync |
 | WHEEL | vertical only: press and release `WHEEL_UP/DOWN` |
 | GRAB | `qmp_query_mice` + `qemu_mouse_set`, preferring Virtio (`relay_set_relative`, copied; mouse-look is known not to work) |
+| (connect) | ★ added 2026-10-03 (design §1.3, missed by the first build): at the first connection that passes the peer check, `qmp_query_mice`; with no absolute device, one warning naming `-device virtio-tablet-pci,display=<id>,head=0` (ABS events would find no handler). On the main loop, so a tablet listed after kf3 already exists |
 | CLOSE | FORCE → `qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_UI)`; otherwise `qemu_system_powerdown_request()`, with nvkvm-pv's repeat-ask message |
 | SURFACE | 3c: clamped to 64..8192 and deduplicated in Rust, then `dpy_set_ui_info(con, …, true)` with the broker's refresh (mHz) when it has one — the console's `ui_info` hook does the rest (§8.6) |
 | FOCUS / BYE | logged; POINTER, HELLO, CLIPBOARD ignored (no clipboard: CAPS bit 0 is clear) |
@@ -811,7 +884,26 @@ Rust bounds every value (`kf_broker::Input`) and kf3.c dispatches on kf3's own c
 ### 8.5 Security
 
 The broker stays a separate process holding the display-server connection and the grab; QEMU holds one
-socket and imports nothing. The relay never binds, chmods or unlinks. **Peer check right after
+socket and imports nothing. The relay never binds, chmods or unlinks.
+
+⊘ **CORRECTED 2026-10-03 (the review of this branch) — the peer policy below admitted a squatter, and
+the default is now narrower.** The owner of a directory does not decide who can create the path when
+anyone can create the directory: after a reboot `/tmp/kf3` is made by whichever local user runs
+`mkdir` first (sticky `/tmp`), who then binds `display.sock`, is shown the guest's screen, types into
+the guest and can force it off. The directory's owner is **no longer trusted**. Accepted uids are
+**0, QEMU's effective uid read at each connect attempt, and `display-broker-uid` when set** — nothing
+else (`only_root_the_vmms_euid_and_display_broker_uid_are_admitted`; on a real socket, as root,
+`a_squatter_who_owns_the_sockets_directory_is_refused`, which the unfixed relay failed: it connected
+and read the squatter's HELLO). The euid was read once, at realize — root's, before QEMU's
+`-run-with user=`/`-runas` drops privileges in `os_setup_post` (QEMU 10.2.4 `system/vl.c:3850-3856`:
+after `qmp_x_exit_preconfig` realizes the devices, before the main loop) — so a broker running as QEMU's final uid
+was refused. Now `Relay::start` only ARMS the first attempt on the timer, which fires from the main
+loop after the drop, and each attempt reads `geteuid()`
+(`the_euid_is_read_at_each_connect_after_privileges_are_dropped`). A `display-broker-uid` other than
+`-1` or `0..=4294967294` is refused by name at realize (`an_out_of_range_display_broker_uid_is_refused_by_name`).
+A root QEMU with a desktop user's broker needs `-run-with user=` or `display-broker-uid` (§8.0).
+
+The text as first built (superseded): **Peer check right after
 `connect`, before a byte is read** (`SO_PEERCRED` is fixed at connect): accepted uids are 0, QEMU's
 effective uid, `display-broker-uid` when set, and the **owner of the socket's directory** (owner question
 1, implemented as the recommended default: that uid already decides who can create the path, so it
@@ -845,6 +937,13 @@ cursor:
   the three `plan_cursor` cases in `scanout.rs` (CI-compiled: `kf-disp` is not built on the dev host).
 
 **3c — resize, built in code** (owner question 5's narrow seat, as the brief specified):
+
+⊘ Corrected 2026-10-03: the hook is installed **only with `display-broker` set** (`kf3_gfx_ops_broker`
+in kf3.c). Installed always, it changed the console path without a broker: GTK's `gd_configure` →
+`gd_set_ui_size` → `dpy_set_ui_info` re-authored the monitor to the widget's size, startup size
+included, and a VNC `SetDesktopSize` re-moded the guest (QEMU v10.2.4 `ui/gtk.c:1853-1865`,
+`ui/vnc.c:2655-2660`). So "from VNC/GTK" in item 1 now holds only when a broker is configured too.
+
 1. A resize hint reaches the console's `ui_info` hook (`kf3_ui_info`, installed only now, because it
    now does something): from VNC/GTK, or from the broker's `EV_SURFACE` — clamped to 64..8192 and
    handed to `dpy_set_ui_info(con, …, delay=true)` (every hint forwarded, as nvkvm-pv's relay does;
@@ -898,8 +997,10 @@ cursor:
    superseded), as reviewed; the "two newer commits" half is (2).
 4. **`kf3_realize` gains `display_broker`** (the design kept `kf3_realize` unchanged): the worker must
    know at realize whether to back frames with memfds, before `kf3_broker_start` runs.
-5. **The effective uid comes from `/proc/self/status`** (safe code) rather than `geteuid` (one more
-   unsafe relaxation).
+5. ⊘ Superseded 2026-10-03: the euid now comes from `geteuid` (`kf_linux_raw::effective_uid`, one
+   audited block, ratchet 87 → 89 with a test-only `listen`), read at every connect attempt; a
+   `/proc` read fails inside a `-run-with chroot=` without `/proc`. As first built: **The effective uid
+   comes from `/proc/self/status`** (safe code) rather than `geteuid` (one more unsafe relaxation).
 6. **KF3 ABI 12**, not 11: 3c added `kf3_display_ui_info` and the broker's `SURFACE` event kind on
    top of 3a's ABI 11 (the device refuses an archive of either other number).
 7. **The loopback's SIGSTOP case grades "never blocks"** (every relay call returned within 50 ms, frames
@@ -914,8 +1015,33 @@ cursor:
    reviewed design named "every GSP re-init" without a mechanism.
 10. **The hotplug post goes to the newest live registration** (NVKMS makes one per GPU it drives;
     the bound is 4).
+11. **The first connect attempt runs from the timer, not inside `kf3_broker_start`** (2026-10-03, the
+    review): realize precedes QEMU's privilege drop.
+12. **A superseded owed frame yields its slot** (2026-10-03, the review), beside the retained frame of
+    (1); without it the display could freeze for good (§8.3).
+13. **The ring withdraws a slot refilled with console-only memory** (2026-10-03, the review) — the
+    design's "the broker is shown nothing" needed a per-slot bit the design did not have (§8.2).
 
 ### 8.8 Local runs (dev host, 2026-10-03; no GPU)
+
+⊘ **Added 2026-10-03 — the review fixes, re-run locally (same rules):**
+- `cargo test -p kf-linux-raw --lib`: 131 passed. Under `ulimit -n 1024` the unfixed
+  `a_full_backlog_is_eagain_and_never_in_progress` FAILED (`socket(AF_UNIX)` errno 24, `EMFILE`) and
+  the fixed one passes.
+- `cargo test -p kf-broker`: 43 passed (lib 15, `proto_mirror.rs` 3, `relay_machine.rs` 25).
+- Each new test was shown to fail without its fix: a bite-mutation per fix (no superseded mark → the
+  freeze test fails; `start` connecting at once → the euid test fails; the euid ignored → the policy
+  test fails; `publish` ignoring the withdraw bit → the ring test fails; an unconditional `REFUSED`
+  line → the rate test fails; the old `display-broker-uid` parse → the property test fails; the ring
+  forgetting the console's front → the interleaving test fails on the console's marks). The squatter
+  who owns the socket's directory was run against the UNFIXED relay in a throwaway worktree: it
+  connected (`connected: 1, packets: 1`).
+- Against nvkvm-pv's unchanged broker (`368d2db`, `--backend test`), as root: **7 passed** (the six
+  above plus `a_squatter_who_owns_the_sockets_directory_is_refused`).
+- kf3.c compiled `-fsyntax-only -Werror` with QEMU's own warning flags against the configured QEMU
+  10.2.4 bench tree (`/workspace/bench/qemu-build`, pixman on) — a check shown to fail on a misspelled
+  QEMU call. It is not a link or a run.
+- kf-qemu is not built locally (owner rule F); CI compiles it and runs its tests.
 
 Every cargo run under the shared flock, `-j2`, a throwaway target dir (owner rule F):
 
@@ -948,10 +1074,17 @@ Every cargo run under the shared flock, `-j2`, a throwaway target dir (owner rul
 
 Every result cites the kf3 binary's revision (§5.2). On the box, with the branch head checked out:
 
-1. **Build and the unchanged bar.** `scripts/bench/build_kf3.sh` (QEMU 10.2.4, ABI 11 — the device
-   refuses an ABI-10 archive), then the merge bar with `display-broker` unset:
+⊘ Corrected 2026-10-03 (the review): item 1 said ABI 11; the branch is **KF3 ABI 12** and the device
+refuses archives of 10 and 11. Item 1 also gains GTK/VNC cases without a broker, item 10's VNC resize
+without a broker now grades the OPPOSITE way, and items 11–12 are new.
+
+1. **Build and the unchanged bar.** `scripts/bench/build_kf3.sh` (QEMU 10.2.4, ABI 12 — the device
+   refuses archives of 10 and 11), then the merge bar with `display-broker` unset:
    `scripts/bench/v3_gates.sh` and `KF_DEVICE=kf3 scripts/fastguest/fast_suite.sh <tag> 180` (30/30),
-   and the display lane M1/M2 (`scripts/bench/display/`) — pixel-exact as before.
+   and the display lane M1/M2 (`scripts/bench/display/`) — pixel-exact as before. Also with
+   `display-broker` unset: a `-display vnc=…` boot where a VNC client asks `SetDesktopSize`, and (where
+   GTK is built) a `-display gtk` boot — the guest's mode must stay what it was (no `resize … hotplug
+   queued` line: without a broker there is no `ui_info` hook).
 2. **The broker.** `git -C <nvkvm-pv> archive 368d2db src/broker src/common | tar -x -C /opt/nvkvm-broker
    && make -C /opt/nvkvm-broker/src/broker nvkvm-display-broker`; then the relay's own loopback on the
    box: `KF_BROKER_BIN=/opt/nvkvm-broker/src/broker/nvkvm-display-broker cargo test -p kf-broker --test
@@ -978,7 +1111,9 @@ Every result cites the kf3 binary's revision (§5.2). On the box, with the branc
    same on the console alone with `display-broker` unset (the cursor layer applies there too).
 8. **Never holds the guest:** `kill -STOP <broker>` for 10 s while `kfdisp_probe` flips: ~60 Hz, 0 flip
    timeouts; `kill -CONT`; then `kill -9` and a restart: reconnect within the backoff and the last frame
-   replayed (broker log `TEST attach`), VM unaffected.
+   replayed (broker log `TEST attach`), VM unaffected. Added 2026-10-03: repeat with a STOP of 3 minutes
+   (long enough for the socket to fill at ~2 frames/s; grade `broker[dropped=…]` or
+   `broker[uncommitted=…]` > 0, then after `kill -CONT` `sent` keeps rising — the freeze of §8.3).
 9. **Absent at boot:** boot with no broker; the VM boots, the console and VNC work; start the broker
    later: it attaches.
 10. **Resize (3c):** with the broker on `--backend test` and a guest desktop up, resize the broker's
@@ -989,11 +1124,22 @@ Every result cites the kf3 binary's revision (§5.2). On the box, with the branc
     Then `rmmod nvidia_drm nvidia_modeset` and reload: the log shows the registration retired (FREE) and
     re-registered, and no post ever names a dead pair (no `Bad sequence number` in the guest log). Compare
     the compositor's behaviour with bare metal under a forced EDID (`nvidia-settings`
-    `CustomEDID`/`drm.edid_firmware`). Also a VNC client's resize, with `display-broker` unset.
+    `CustomEDID`/`drm.edid_firmware`). ⊘ Corrected 2026-10-03: a VNC client's resize with
+    `display-broker` unset must now NOT re-mode the guest (item 1); with it set, it does, as above.
+11. **Peer policy under `-run-with user=`** (2026-10-03): start QEMU as root with
+    `-run-with user=<u>` and the broker running as `<u>`, no `display-broker-uid`: the broker is
+    admitted at the first attempt (no `REFUSED the listener` line). Then the broker as another uid:
+    refused by name, retried; with `display-broker-uid=<that uid>`: admitted. `display-broker-uid=-2`
+    refuses realize by name.
+12. **No tablet** (2026-10-03): boot with the broker and without `virtio-tablet-pci`: exactly one
+    `NO absolute pointing device exists` warning at the first connect; with the tablet listed after
+    kf3 on the command line, none.
 
 ### 8.10 Owner questions (each implemented with the stated default; the owner confirms later)
 
-1. Peer policy: {0, QEMU euid, the socket directory's owner} + `display-broker-uid` — implemented.
+1. Peer policy: ⊘ corrected 2026-10-03 — {0, QEMU's euid read at each connect} + `display-broker-uid`;
+   the socket directory's owner is no longer trusted (§8.5). As first built: {0, QEMU euid, the socket
+   directory's owner} + `display-broker-uid`.
 2. Broker distribution: installed separately, pinned to nvkvm-pv `368d2db` — as above.
 3. Clipboard: left out of step 3.
 4. Native resizes above ~1920×1200@60 (DVI single-link): not in this step.
