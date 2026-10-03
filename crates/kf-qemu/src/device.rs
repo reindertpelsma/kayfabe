@@ -228,6 +228,15 @@ pub struct Device {
     pub gop: Option<crate::gop::BootPlan>,
     /// The option ROM packed for this device at realize (`kf3_option_rom`); `None` with `gop=off`.
     gop_rom: Option<Vec<u8>>,
+    /// ★ 2026-10-03 (B5): the register the guest's RM writes to give BAR1 back to PHYSICAL mode
+    /// (`kf_chip::bar1mode`) — observed on the drainer, never trapped specially. `None`: the die
+    /// group does not resolve it (named at realize).
+    bar1_mode: Option<kf_chip::bar1mode::Bar1ModeReg>,
+    /// ★ 2026-10-03 (B5): the `UNLOADING_GUEST_DRIVER` (fn 47) body's layout at the declared guest
+    /// version (`kf_abi` generated matrix) — to tell a teardown from a PM transition.
+    unload_layout: Option<&'static kf_abi::matrix::Layout>,
+    /// Lines logged by the B5 observers (bounded).
+    b5_logged: AtomicU64,
 }
 
 impl Device {
@@ -514,6 +523,21 @@ impl Device {
         let token_fmt = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
             .map_err(|e| format!("{e:?}"))
             .and_then(kf_trap::tokenindex::GuestTokenFormat::for_die_group);
+        // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the BAR1-mode register of this die group.
+        let bar1_mode = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
+            .map_err(|e| format!("{e:?}"))
+            .and_then(kf_chip::bar1mode::bar1_mode_reg);
+        let bar1_mode = match bar1_mode {
+            Ok(r) => Some(r),
+            Err(e) => {
+                eprintln!("kf3: the BAR1-mode register does not resolve ({e}) — not observed");
+                None
+            }
+        };
+        let unload_layout = kf_abi::generated::matrix::RPC_UNLOADING_GUEST_DRIVER_V
+            .at(version)
+            .ok()
+            .flatten();
         let token_fmt = match token_fmt {
             Ok(f) => Some(f),
             Err(e) => {
@@ -842,6 +866,9 @@ impl Device {
             display: display_plane,
             gop,
             gop_rom,
+            bar1_mode,
+            unload_layout,
+            b5_logged: AtomicU64::new(0),
         })
     }
 
@@ -1492,6 +1519,7 @@ impl Device {
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
+        let mut bar1_lines = 0u32;
         // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
         // here, before the guest runs, as soon as QEMU has registered guest RAM.
         // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
@@ -1635,6 +1663,34 @@ impl Device {
                     applied.join(" "),
                     r.completed,
                     r.unreconciled
+                );
+            }
+            // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): what BAR1's boot-framebuffer range shows
+            // after every BAR1 change (bounded) — the guest's views, the seed, or scratch.
+            if r.collected
+                && bar1_lines < 64
+                && r.applied
+                    .iter()
+                    .any(|(k, a)| *k == crate::mem::K_BAR1 && a.mapped + a.unmapped > 0)
+                && let Some(w) = m
+                    .table
+                    .target(crate::mem::K_BAR1)
+                    .and_then(crate::mem::Target::cpu_window)
+                && let Some((at, _, len)) = w.boot_range()
+            {
+                bar1_lines += 1;
+                let c = w.coverage(at, len);
+                eprintln!(
+                    "kf3: mem t={:.3}s BAR1 boot framebuffer [{at:#x}, +{len:#x}) after BAR1 change #{}: guest views {:x?}; {:#x} bytes {}",
+                    self.born.elapsed().as_secs_f64(),
+                    w.changes(),
+                    c.inside,
+                    c.uncovered(),
+                    if w.seeded().is_some() {
+                        "show the seed (FB 0)"
+                    } else {
+                        "show SCRATCH"
+                    }
                 );
             }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
@@ -2148,9 +2204,55 @@ impl Device {
     fn log_report(&self, r: &kf_gsp::ServiceReport) {
         for c in &r.commands {
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
+            if c.function == kf_gsp::RpcFunction::UnloadingGuestDriver {
+                self.observe_unloading(c);
+            }
         }
         for u in &r.unserviced {
             eprintln!("kf3: GSP rpc UNSERVICED {u:?}");
+        }
+    }
+
+    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13), on the drainer: the guest's fn 47 — GSP-RM's
+    /// own unload. Decoded with the generated layout; logged.
+    fn observe_unloading(&self, c: &kf_gsp::RpcCommand) {
+        match crate::bar1phys::decode_unloading(self.unload_layout, &c.payload) {
+            Ok(u) => eprintln!(
+                "kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq={}: bInPMTransition={} bGc6Entering={} newLevel={} — {}",
+                c.sequence,
+                u.pm,
+                u.gc6,
+                u.level,
+                if u.gives_bar1_up() {
+                    "the guest's RM gives BAR1 up"
+                } else {
+                    "a PM transition: BAR1 is preserved"
+                }
+            ),
+            Err(e) => eprintln!("kf3: GSP fn 47 seq={}: body not decoded ({e})", c.sequence),
+        }
+    }
+
+    /// ★ 2026-10-03 (B5), on the drainer: a guest write of its BAR1-mode register
+    /// (`kf_chip::bar1mode`). Logged (bounded); the shadow already holds the guest's value.
+    fn observe_bar1_mode(
+        &self,
+        r: kf_chip::bar1mode::Bar1ModeReg,
+        value: u64,
+        phase: kf_arch::BootPhase,
+    ) {
+        let n = self.b5_logged.fetch_add(1, Ordering::Relaxed);
+        if n < 64 {
+            eprintln!(
+                "kf3: mem t={:.3}s the guest wrote {} = {value:#x} (MODE {}) at GSP phase {phase:?}",
+                self.born.elapsed().as_secs_f64(),
+                r.name,
+                if r.is_physical(value) {
+                    "PHYSICAL"
+                } else {
+                    "VIRTUAL"
+                }
+            );
         }
     }
 
@@ -2524,6 +2626,12 @@ impl HostOps for Device {
                 "kf3: w#{n} bar{bar} @{offset:#08x} = {value:#x} phase={:?}",
                 g.fsm.phase()
             );
+        }
+        if bar == 0
+            && let Some(r) = self.bar1_mode
+            && u64::from(offset) == r.offset
+        {
+            self.observe_bar1_mode(r, value, g.fsm.phase());
         }
         // ★ The register just applied is re-published unconditionally: the vCPU already stored
         // the GUEST's value there, and the FSM's answer may equal what was last published

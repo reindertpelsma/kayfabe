@@ -593,6 +593,35 @@ fn choose_shown(
     }
 }
 
+/// ★ One line naming what the console shows (`V3_DISPLAY.md` §4.11.13) — the log compares it.
+fn shown_digest(shown: Option<&Shown>) -> String {
+    match shown {
+        None => "NOTHING (no head is armed; the last frame stays)".to_string(),
+        Some(Shown::Boot(l, (w, h))) => {
+            format!("the BOOT layer (store {:#x}, {w}x{h})", l.src)
+        }
+        Some(Shown::Armed(c)) => {
+            let layers: Vec<String> = c
+                .layers
+                .iter()
+                .map(|l| {
+                    format!(
+                        "window {} iso {:#x}+{:#x} {}x{} pitch {} fmt {:#x}",
+                        l.window, l.handle, l.offset, l.width, l.height, l.pitch, l.format
+                    )
+                })
+                .collect();
+            format!(
+                "head {} {}x{}: [{}]",
+                c.head,
+                c.width,
+                c.height,
+                layers.join("; ")
+            )
+        }
+    }
+}
+
 /// What the worker takes at its start.
 struct WorkerInit {
     engine: Engine,
@@ -1088,6 +1117,8 @@ impl Device {
         let mut logged_updates = 0u32;
         // ★ The boot display: sticky once the guest arms its first head.
         let mut boot_done = false;
+        let mut shown_last = String::new();
+        let mut shown_lines = 0u32;
         let started = Instant::now();
         if let Some(b) = dp.boot.as_ref() {
             eprintln!(
@@ -1294,6 +1325,22 @@ impl Device {
                 dp.boot.as_ref(),
                 boot_done,
             );
+            // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): every change of WHAT the console shows,
+            // timed — the boot layer, a head's windows (context DMA, offset, size), or nothing.
+            let digest = shown_digest(shown.as_ref());
+            if digest != shown_last && shown_lines < 256 {
+                shown_lines += 1;
+                eprintln!(
+                    "kf3: display: +{} ms the console shows {digest} (core channel {})",
+                    started.elapsed().as_millis(),
+                    if engine.generation(0).is_some() {
+                        "allocated"
+                    } else {
+                        "FREE"
+                    }
+                );
+                shown_last = digest;
+            }
             scan.active = shown.is_some();
             for e in effects {
                 if let Effect::Latched { window } = &e
