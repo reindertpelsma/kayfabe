@@ -1570,15 +1570,23 @@ fn the_detector_backs_off_retries_and_clears_on_a_release() {
     assert!(t.ring.want_vram());
 }
 
-/// ★ `EV_DEVICE`: a compositor on another device gets no GPU-copy frame on this connection, even
-/// after a yes; one on this GPU's primary or render node does. A reconnect forgets it.
+/// ★ `EV_DEVICE` (nvkvm-pv's header: `x` = `DEVICE_F_*`, `w0`:`w1` = major:minor): a compositor
+/// on another device's RENDER node gets no GPU-copy frame on this connection, even after a yes;
+/// one on this GPU's primary or render node does; "does not know" (`x` = 0) leaves the yes and
+/// the detector to decide; an unresolved node (KNOWN without RENDER) decides only when it is this
+/// GPU's. A broker advertising `CAP_DEVICE` gets no GPU-copy frame before its `EV_DEVICE`. A
+/// later, different device (sent unsolicited) moves the decision.
 #[test]
 fn a_compositor_on_another_gpu_gets_no_gpu_copy() {
+    use kf_broker::wire::{CAP_DEVICE, DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_DEVICE};
+    let kr = DEVICE_F_KNOWN | DEVICE_F_RENDER;
     let mut t = T::with_vram();
-    t.up(NATIVE_CAPS);
-    let log = kf_broker::capture_log();
-    t.pkt(kf_broker::wire::EV_DEVICE, 226, 130, 0, 0);
+    t.up(NATIVE_CAPS | CAP_DEVICE);
     t.bl_verdict(true);
+    t.read();
+    assert!(!t.ring.want_vram(), "CAP_DEVICE: wait for EV_DEVICE");
+    let log = kf_broker::capture_log();
+    t.pkt(EV_DEVICE, kr, 0, 226, 130);
     t.read();
     assert!(!t.ring.want_vram());
     assert!(
@@ -1591,18 +1599,33 @@ fn a_compositor_on_another_gpu_gets_no_gpu_copy() {
     t.publish_kinds(64, 32, true, true);
     t.frame();
     assert!(t.sent().iter().all(|(c, _)| c.modifier != BL));
-    for (major, minor) in NODES {
+    // the display server moves to this GPU: an unsolicited EV_DEVICE says so
+    t.pkt(EV_DEVICE, kr, 0, 226, 129);
+    t.read();
+    assert!(
+        t.ring.want_vram(),
+        "a later, different device moves the decision"
+    );
+    for (flags, (major, minor)) in [(kr, NODES[1]), (DEVICE_F_KNOWN, NODES[0])] {
         let mut t = T::with_vram();
-        t.up(NATIVE_CAPS);
-        t.pkt(kf_broker::wire::EV_DEVICE, major as i32, minor as i32, 0, 0);
+        t.up(NATIVE_CAPS | CAP_DEVICE);
+        t.pkt(EV_DEVICE, flags, 0, major, minor);
         t.bl_verdict(true);
         t.read();
         assert!(t.ring.want_vram(), "{major}:{minor} is this GPU");
     }
-    // "cannot tell" is unknown: the yes and the detector decide
+    // "does not know", and an unresolved node that is not ours: the yes and the detector decide
+    for (flags, dev) in [(0, (0, 0)), (DEVICE_F_KNOWN, (226, 2))] {
+        let mut t = T::with_vram();
+        t.up(NATIVE_CAPS | CAP_DEVICE);
+        t.pkt(EV_DEVICE, flags, 0, dev.0, dev.1);
+        t.bl_verdict(true);
+        t.read();
+        assert!(t.ring.want_vram(), "flags {flags:#x} {dev:?}");
+    }
+    // an older broker (no CAP_DEVICE) never sends it: the yes decides
     let mut t = T::with_vram();
     t.up(NATIVE_CAPS);
-    t.pkt(kf_broker::wire::EV_DEVICE, -1, -1, 0, 0);
     t.bl_verdict(true);
     t.read();
     assert!(t.ring.want_vram());

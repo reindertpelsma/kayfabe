@@ -2574,6 +2574,53 @@ mod tests {
         assert!(ring.release_held(a));
     }
 
+    /// ★ §8.11: a frame only in VRAM (the pack ran, the D2H did not) is offered to the broker and
+    /// NOT to the console, which keeps its last host frame; and the two demand signals: broker
+    /// activity wants frames (the refresh rate) without being the console's demand.
+    #[test]
+    fn a_vram_only_frame_goes_to_the_broker_and_the_console_keeps_its_host_frame() {
+        let ring = broker_ring();
+        for j in 0..ring.slots() {
+            let fd = kf_linux_raw::SharedRam::create_named(c"kfq-test-vram", 4096)
+                .expect("memfd")
+                .dup_for_export()
+                .expect("dup");
+            ring.install_vram(j, kf_broker::VramFds::new(fd, 10 << 20).expect("id"))
+                .expect("install");
+        }
+        let c = ConsoleShare::over(ring.clone());
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1), true, None);
+        assert_eq!(c.take().unwrap().serial, 1);
+        let b = c.free_slot().unwrap();
+        let vg = kf_broker::VramGeom {
+            stride: 7680,
+            extent: 8_847_360,
+        };
+        c.publish(b, frame(0, 2), false, Some(vg));
+        assert_eq!(ring.broker_ready(), Some(b), "the broker is offered it");
+        assert!(ring.backed(b, kf_broker::Kind::Vram) && !ring.backed(b, kf_broker::Kind::Host));
+        assert_eq!(ring.vram_geometry(b), vg);
+        let shown = c.take().unwrap();
+        assert_eq!(
+            (shown.addr, shown.serial),
+            (0x1000, 1),
+            "the console keeps its host frame"
+        );
+        // the demand split
+        let d = ConsoleShare::default();
+        assert!(!d.wanted_within(2000));
+        d.note_broker_demand();
+        assert!(d.wanted_within(2000), "the broker keeps the refresh rate");
+        assert!(d.broker_wanted_within(2000));
+        assert!(
+            !d.console_wanted_within(2000),
+            "broker activity is not the console's demand"
+        );
+        let _ = d.take();
+        assert!(d.console_wanted_within(2000));
+    }
+
     /// ★ The worker's refusal branch, DRIVEN (the second review of `v3-broker`, 2026-10-03: the
     /// first fix's tests called the ring directly, so deleting the call site passed them all):
     /// the first refused broker backing withdraws EVERY slot from the broker — the frame that

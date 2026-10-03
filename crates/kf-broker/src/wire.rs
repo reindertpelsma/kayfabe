@@ -51,16 +51,45 @@ pub const EV_CLIPBOARD: u16 = 15;
 /// `w0`,`w1` = the modifier.
 pub const EV_FORMAT: u16 = 16;
 
-/// ★ **AHEAD OF THE VENDORED HEADER** (2026-10-03, `docs/design/V3_DISPLAY.md` §8.11) — the
-/// compositor's DRM device: `x` = major, `y` = minor of the node it renders on (primary or render
-/// node), `x < 0` = the broker cannot tell. Append-only in protocol v2, sent once after HELLO by a
-/// broker that knows it; an older broker never sends it (unknown types are skipped exactly, so the
-/// relay then falls back to the acknowledgement detector). The value is THIS relay's proposal to
-/// nvkvm-pv's broker (the coordinator's default for the owner: the change goes into nvkvm-pv's
-/// broker in the same revision as the cursor message); `tests/proto_mirror.rs` asserts the
-/// vendored header does not define it yet, so the day it does, the test forces the value to be
-/// checked against the header's.
+// ── AHEAD OF THE VENDORED HEADER (2026-10-03) ─────────────────────────────────────────────
+// Defined by nvkvm-pv's broker on branch `broker-cursor-gpucopy` (its
+// `src/common/nvkvm_broker_proto.h`, read from that worktree before it was committed); the copy
+// vendored here is still `368d2db`. The broker owns the protocol: these are transcribed from it,
+// not proposed. `tests/proto_mirror.rs` asserts each is ABSENT from the vendored header (so the
+// day it lands, the test forces it into the mirrored map) and, given `KF_BROKER_PROTO_NEXT`, equal
+// to the newer header's value, the cursor record's layout compiled from it.
+
+/// ★ `NVKVM_BROKER_EV_DEVICE`: which DRM device the display renders on. Advertised by
+/// [`CAP_DEVICE`]; sent once at attach as the packet AFTER the priming FRAME, and again,
+/// unsolicited, whenever the display server reports a different device. `x` = `DEVICE_F_*` (0 =
+/// the broker does not know), `y` = 0 (reserved), `w0`:`w1` = major:minor of the DRM character
+/// device. A hint for choosing a rung; the broker still validates every ATTACH.
 pub const EV_DEVICE: u16 = 17;
+/// `NVKVM_BROKER_DEVICE_F_KNOWN`: `w0`:`w1` are meaningful.
+pub const DEVICE_F_KNOWN: i32 = 1 << 0;
+/// `NVKVM_BROKER_DEVICE_F_RENDER`: `w0`:`w1` is a render node (`renderD*`), as reported or as the
+/// broker resolved it through sysfs. KNOWN without RENDER = an unresolved (primary) node: compare
+/// with care.
+pub const DEVICE_F_RENDER: i32 = 1 << 1;
+/// `NVKVM_BROKER_CAP_CURSOR`: [`CMD_CURSOR`] is understood; clear ⇒ sending it is a violation and
+/// the VMM composes the cursor into the frame.
+pub const CAP_CURSOR: u32 = 1 << 10;
+/// `NVKVM_BROKER_CAP_DEVICE`: an [`EV_DEVICE`] follows the handshake's FRAME (even when its answer
+/// is "unknown", so "too old to say" and "could not tell" differ).
+pub const CAP_DEVICE: u32 = 1 << 11;
+/// `NVKVM_BROKER_CMD_CURSOR`: the guest's pointer image as the host pointer while hovering and not
+/// grabbed ([`CursorCmd`]). Only with [`CAP_CURSOR`].
+pub const CMD_CURSOR: u16 = 7;
+/// `NVKVM_BROKER_CURSOR_SET`: define the image AND show it (exactly one memfd rides along).
+pub const CURSOR_SET: u32 = 1;
+/// `NVKVM_BROKER_CURSOR_HIDE`: no visible guest cursor (or the VMM composes it). No fd.
+pub const CURSOR_HIDE: u32 = 2;
+/// `NVKVM_BROKER_CURSOR_SHOW`: show the last SET image again. No fd.
+pub const CURSOR_SHOW: u32 = 3;
+/// `NVKVM_BROKER_CURSOR_MAX_DIM`: the largest cursor edge.
+pub const CURSOR_MAX_DIM: u32 = 256;
+/// `NVKVM_BROKER_CURSOR_MAX_STRIDE`: the widest cursor row in bytes (`4 * CURSOR_MAX_DIM`).
+pub const CURSOR_MAX_STRIDE: u32 = 4 * CURSOR_MAX_DIM;
 
 /// `NVKVM_BROKER_CLOSE_POWERDOWN`.
 pub const CLOSE_POWERDOWN: i32 = 0;
@@ -296,6 +325,102 @@ impl Cmd {
     }
 }
 
+/// ★ `struct nvkvm_broker_cursor_cmd` — the 40-byte command record with ATTACH's buffer
+/// description at the same offsets (`type@0 flags@2 width@4 height@8 stride@12 offset@16
+/// fourcc@20`), the hot spot where ATTACH keeps its modifier (`hot_x@24 hot_y@28`), `op@32` where
+/// ATTACH keeps its seq, `reserved1@36` = 0. `flags` is always 0. Pixels are premultiplied
+/// `DRM_FORMAT_ARGB8888` only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CursorCmd {
+    /// Pixels per row (SET: `1..=CURSOR_MAX_DIM`).
+    pub width: u32,
+    /// Rows (SET: `1..=CURSOR_MAX_DIM`).
+    pub height: u32,
+    /// Bytes per row (SET: `4 * width ..= CURSOR_MAX_STRIDE`).
+    pub stride: u32,
+    /// Byte offset of row 0 in the memfd.
+    pub offset: u32,
+    /// [`FOURCC_AR24`] on SET.
+    pub fourcc: u32,
+    /// Hot spot column (`< width`).
+    pub hot_x: u32,
+    /// Hot spot row (`< height`).
+    pub hot_y: u32,
+    /// [`CURSOR_SET`], [`CURSOR_HIDE`] or [`CURSOR_SHOW`].
+    pub op: u32,
+}
+
+impl CursorCmd {
+    /// ★ A SET of a `width`x`height` image at `stride` bytes a row from `offset` in a memfd of
+    /// `memfd_bytes` bytes — `None` unless every bound the broker checks holds (computed in 64
+    /// bits), so a refused SET is never sent.
+    #[must_use]
+    pub fn set(
+        width: u32,
+        height: u32,
+        stride: u32,
+        offset: u32,
+        hot: (u32, u32),
+        memfd_bytes: u64,
+    ) -> Option<CursorCmd> {
+        let ok = (1..=CURSOR_MAX_DIM).contains(&width)
+            && (1..=CURSOR_MAX_DIM).contains(&height)
+            && (u64::from(width) * 4..=u64::from(CURSOR_MAX_STRIDE)).contains(&u64::from(stride))
+            && hot.0 < width
+            && hot.1 < height
+            && u64::from(offset) + u64::from(stride) * u64::from(height - 1) + u64::from(width) * 4
+                <= memfd_bytes;
+        ok.then_some(CursorCmd {
+            width,
+            height,
+            stride,
+            offset,
+            fourcc: FOURCC_AR24,
+            hot_x: hot.0,
+            hot_y: hot.1,
+            op: CURSOR_SET,
+        })
+    }
+
+    /// HIDE: every field but `op` zero.
+    #[must_use]
+    pub fn hide() -> CursorCmd {
+        CursorCmd {
+            op: CURSOR_HIDE,
+            ..CursorCmd::default()
+        }
+    }
+
+    /// SHOW: every field but `op` zero.
+    #[must_use]
+    pub fn show() -> CursorCmd {
+        CursorCmd {
+            op: CURSOR_SHOW,
+            ..CursorCmd::default()
+        }
+    }
+
+    /// Encode at the header's offsets; `flags` and `reserved1` are zero by construction.
+    #[must_use]
+    pub fn encode(&self) -> [u8; CMD_SIZE] {
+        let mut b = [0u8; CMD_SIZE];
+        b[0..2].copy_from_slice(&CMD_CURSOR.to_le_bytes());
+        for (at, v) in [
+            (4, self.width),
+            (8, self.height),
+            (12, self.stride),
+            (16, self.offset),
+            (20, self.fourcc),
+            (24, self.hot_x),
+            (28, self.hot_y),
+            (32, self.op),
+        ] {
+            b[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        }
+        b
+    }
+}
+
 /// A fourcc as its four characters, for log lines.
 #[must_use]
 pub fn fourcc_name(f: u32) -> String {
@@ -374,6 +499,51 @@ mod tests {
             ..Pkt::default()
         };
         assert_eq!(r.wide(), 0x1_dead_beef);
+    }
+
+    /// ★ The cursor record at the broker's offsets, and SET refused unless every bound the broker
+    /// checks holds (each bound one past its edge).
+    #[test]
+    fn the_cursor_record_and_its_bounds_are_the_brokers() {
+        let c = CursorCmd::set(64, 32, 1024, 16, (3, 31), 16 + 1024 * 31 + 256).unwrap();
+        let b = c.encode();
+        assert_eq!(&b[0..2], &CMD_CURSOR.to_le_bytes());
+        assert_eq!(&b[2..4], &[0, 0], "flags");
+        for (at, v) in [
+            (4, 64u32),
+            (8, 32),
+            (12, 1024),
+            (16, 16),
+            (20, FOURCC_AR24),
+            (24, 3),
+            (28, 31),
+            (32, CURSOR_SET),
+        ] {
+            assert_eq!(&b[at..at + 4], &v.to_le_bytes(), "+{at}");
+        }
+        assert_eq!(&b[36..40], &[0; 4], "reserved1");
+        let fits = 16 + 1024 * 31 + 256;
+        for bad in [
+            CursorCmd::set(0, 32, 1024, 16, (0, 0), fits),
+            CursorCmd::set(257, 1, 1028, 0, (0, 0), 1 << 20),
+            CursorCmd::set(64, 32, 255, 16, (0, 0), fits),
+            CursorCmd::set(64, 32, 1025, 16, (0, 0), 1 << 20),
+            CursorCmd::set(64, 32, 1024, 16, (64, 0), fits),
+            CursorCmd::set(64, 32, 1024, 16, (0, 32), fits),
+            CursorCmd::set(64, 32, 1024, 16, (0, 0), fits - 1),
+            CursorCmd::set(256, 256, 1024, u32::MAX, (0, 0), 1 << 32),
+        ] {
+            assert_eq!(bad, None);
+        }
+        assert!(CursorCmd::set(256, 256, 1024, 0, (255, 255), 256 * 1024).is_some());
+        for (c, op) in [
+            (CursorCmd::hide(), CURSOR_HIDE),
+            (CursorCmd::show(), CURSOR_SHOW),
+        ] {
+            let b = c.encode();
+            assert_eq!(&b[32..36], &op.to_le_bytes());
+            assert!(b[2..32].iter().chain(&b[36..]).all(|x| *x == 0));
+        }
     }
 
     #[test]

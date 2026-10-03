@@ -9,6 +9,11 @@
 > effective uid at each connect. All review findings and their fixes: §8, the correction above its
 > STATUS line.
 
+> **STATUS ADDENDUM, later on 2026-10-03:** the broker's GPU-copy rung (`OWNER_RULINGS.md` §L) is
+> built in code, GPU-free-tested, on the same branch — kayfabe's own VRAM frame slots, a block-linear
+> dma-buf for a compositor on the same GPU, `display-broker-vram=auto|on|off`, KF3 ABI 13 (§8.11).
+> Nothing of it has run on a GPU.
+
 > **STATUS: DISPLAY STEP 3 BUILT IN CODE, GPU-FREE — 2026-10-03 (branch `v3-broker`; nothing run on
 > a box).** All four sub-steps are in code: 3a (frames + input), 3b (reconnect, pacing), 3d (the
 > head's cursor composed as the top layer) and 3c (resize: authored EDID + a hotplug the register
@@ -768,7 +773,7 @@ src/common/nvkvm_broker_proto.h` at `368d2db`, vendored verbatim as
 |---|---|
 | wire codec; the connection machine (connect, peer check, HELLO, replay, owed frame, reconnect, verdicts, rung, pacing, RELEASE accounting, reclaim); the frame ring | **`crates/kf-broker`** — new, light, safe code (workspace lints), VMM-agnostic, deterministic under a caller-supplied clock |
 | `AF_UNIX` connect, `SO_PEERCRED`, `sendmsg`+`SCM_RIGHTS`, `recvmsg` without a control buffer, `UDMABUF_CREATE`, `fstatfs`, `fstat` ids | `crates/kf-linux-raw` (`unixsock_unsafe.rs`, `host_fd_unsafe.rs`) |
-| frame backing (memfd + `cuMemHostRegister` + udmabuf), the relay seat, KF3 ABI 12 (⊘ corrected 2026-10-03: said 11; 3c added two entries, §8.7 (6)) | `crates/kf-qemu/src/broker.rs`, `display.rs`, `ffi_unsafe.rs`; `crates/kf-cuda` (registration) |
+| frame backing (memfd + `cuMemHostRegister` + udmabuf), the relay seat, KF3 ABI 12 (⊘ corrected 2026-10-03: said 11; 3c added two entries, §8.7 (6); ⊘ 13 since the GPU-copy rung, §8.11) | `crates/kf-qemu/src/broker.rs`, `display.rs`, `ffi_unsafe.rs`; `crates/kf-cuda` (registration) |
 | fd handlers, the timer, `qemu_input_*`, the relative-pointer switch, the close policy | `qemu/hw/misc/kf3/kf3.c` (about 230 lines; QEMU 10.2 only) |
 
 The relay runs on QEMU's **main loop** (one socket owner, as in nvkvm-pv). The display worker never
@@ -1112,6 +1117,25 @@ included, and a VNC `SetDesktopSize` re-moded the guest (QEMU v10.2.4 `ui/gtk.c:
 
 ### 8.8 Local runs (dev host, 2026-10-03; no GPU)
 
+★ **Added 2026-10-03 — the GPU-copy rung (§8.11), run locally (same rules; no GPU):**
+- `cargo test -p kf-broker`: lib 22, `proto_mirror.rs` 4, `relay_machine.rs` 35 — all passed. Five
+  bite-mutations of `conn.rs` each fail a rung-0 test: the explicit yes weakened to "not no"; the
+  detector never run; the `EV_DEVICE` check dropped; a stale VRAM backing accepted; the extent check
+  dropped.
+- `cargo test -p kf-abi -- drmnv the_display_slot memory_allocation_params`: 7 passed.
+- `cargo test -p kf-linux-raw --lib -- drm`: 7 passed, the fence check `UDMABUF-GATE: RAN` on a real
+  udmabuf (kernel 7.0: idle, and a memfd refused).
+- `cargo test -p kf-disp -- vramslot` 6 and `--test bl_pack_kernel` 2 passed; three mutations of
+  `kf_bl_pack.cu` (a read past the row, a swapped GOB bit, the GOB column width) each fail the
+  host-run kernel test.
+- `cargo test -p kf-cuda --lib -- display` 5, `cargo test -p kf-host -- display_slot` 1 passed.
+- `tools/drivermatrix/drmnv.py` over the 29 tags (headers fetched from GitHub at each tag): the
+  interval of §8.11.
+- kf3.c `-fsyntax-only -Werror` with QEMU's warning flags against `/workspace/bench/qemu-build`
+  (its `config-host.h` now says `#undef CONFIG_PIXMAN`, so the check ran with a copy defining it —
+  HEAD's kf3.c needs pixman too).
+- kf-qemu is not built locally (owner rule F): CI compiles it.
+
 ⊘⊘⊘ **Added 2026-10-03 — the third review's fixes, re-run locally (same rules):**
 - `cargo test -p kf-broker`: `relay_machine.rs` 27 passed (25 + the two withdrawal tests of §8's
   top correction).
@@ -1325,9 +1349,166 @@ without a broker now grades the OPPOSITE way, and items 11–12 are new.
 5. The 3c hotplug registration beside A.11's `osevent` rule: built as the separate, narrow seat the
    brief specified (§8.6); `osevent` and its pinned refusal of `0x7e` are untouched. Owner to confirm.
 6. Reuse without RELEASE: the narrowed rule of §8.3, with the deviations §8.7 (1)-(2).
+7. **(2026-10-03, §8.11) The GPU-copy rung's host requirements and VRAM.** It needs nvidia-drm
+   `modeset=1` and QEMU access to the GPU's render node (the `render` group or the seat's ACL — a third
+   device class after `/dev/nvidia*` and `/dev/udmabuf`), and holds 50 MiB of host VRAM per head at
+   1080p, up to 230 MiB after a 4K mode, for the VM's life. Implemented default:
+   `display-broker-vram=auto` (allocate at the first explicit yes for the block-linear pair); `on`
+   fails realize on a refusal; `off` never allocates. Owner to confirm.
+8. **(2026-10-03, §8.11) The broker changes in nvkvm-pv**, append-only in protocol v2: (a) the X11
+   backend sends the unsolicited `EV_FORMAT x=0` on a refused DRI3 import, as Wayland does; (b)
+   `EV_DEVICE` (type 17 as kf-broker implements it, `x:y` = the compositor's DRM device); (c)
+   optionally, an idle fence on X11 `PresentPixmap` and the XRender path's RELEASE after its composite,
+   so RELEASE means GPU-idle. The coordinator took (a) and (b) as the owner's default; until the broker
+   sends them, kf3 runs the acknowledgement detector with back-off, the LRU fill and the fence check.
 
 ### 8.11 The GPU-copy rung (`OWNER_RULINGS.md` §L) — rung 0 for a compositor on the same GPU
 
-**STATUS: DESIGN, BEING BUILT on `v3-broker`, 2026-10-03.** The design was read from source and
-revised the same day after an adversarial review; what is built, and how it is tested, is added
-here as it lands. Nothing has run on a box.
+**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-03 (branch `v3-broker`, `bd37049f` + `b3ec2d21`).
+Nothing has run on a GPU or a box.** The design was read from source and revised the same day after
+an adversarial review; the revision is what is built. Every claim below that needs hardware is
+listed in *What has not run* and the box experiments E0-E6.
+
+**The rung in one paragraph.** kf3 allocates its OWN VRAM frame objects ("slots") — never guest
+memory, never a slice of the store — from a separate RM client, wraps each once as a dma-buf through
+the same GPU's DRM render node, and imports the same object into the display CUDA context. Per frame
+the compose kernel writes the staging frame as before (windows, blending, scaling, and the cursor —
+composed in grab mode per `OWNER_RULINGS.md` §O; the hover-mode host cursor is the cursor message's
+work, not this rung's), and a pack kernel writes it into a free slot in NVIDIA block-linear layout.
+The relay ATTACHes that dma-buf with `DRM_FORMAT_MOD_NVIDIA_BLOCK_LINEAR_2D` read from
+`GET_DEV_INFO` (`0x0300000000606014` on Turing … GB20x, 32 bpp, 16-GOB blocks). No byte crosses
+PCIe; the guest's release semaphores still follow kf3's own copy (§4.6), so there is no new barrier.
+
+**Built, by crate** (each GPU-free part tested locally and in CI):
+
+| piece | where | test |
+|---|---|---|
+| the nvidia-drm/NVKMS private ABI as byte encoders; the modifier builder; **the ABI gate** — the rung is offered only at a host driver tag where `tools/drivermatrix/drmnv.py` compiled that tag's own headers and every value equals the transcription | `kf-abi/src/drmnv.rs`, `traces/driver_matrix/drmnv.tsv` | `the_rung_is_offered_only_at_tags_measured_equal_to_the_transcription` (incl. a mutated row refused) |
+| `NV_MEMORY_ALLOCATION_PARAMS` `flags` (+8) and `attr2` (+28); the three candidate slot attribute sets S0/S1/S2 as setup data | `kf-abi/src/submit.rs` | `the_display_slot_attribute_sets_are_nvos32_fields` |
+| render-node discovery by PCI address (sysfs), an open that checks the file IS that char device (`st_rdev`), the two nvidia-drm ioctls through `CharDevice::ioctl`, allowlisted, the import's size field checked against its buffer | `kf-linux-raw/src/drm.rs` | fixture sysfs + a `/dev/null` symlink as the node |
+| `PRIME_HANDLE_TO_FD`, `GEM_CLOSE`, `DMA_BUF_IOCTL_EXPORT_SYNC_FILE` + `poll(0)` (ratchet 89 → 93) | `kf-linux-raw/src/drm_unsafe.rs` | the fence check on a real udmabuf (UDMABUF-gated: RAN locally on kernel 7.0, SKIPPED in CI) |
+| slot geometry; `SLOT_MAX` = 36 MiB derived by exhaustive search; the GOB byte order as setup data; `bl_chunk_origin` = the exact inverse of `bl_offset` (h 0..5, all 32 chunks); `pack_reference` | `kf-disp/src/vramslot.rs` | six tests |
+| the pack kernel: one warp per GOB, one thread per 16 bytes, the GOB bits as parameters; PTX by clang's NVPTX back-end (`make_pack_ptx.sh`, the source's FNV in the PTX header) | `cuda/display/kf_bl_pack.{cu,ptx}` | `kf-disp/tests/bl_pack_kernel.rs` runs the SAME source on the host against `pack_reference` (three bite-mutations each fail it); kf-cuda pins the PTX parameter list and the source FNV |
+| slot import / clear / `compose_to_slot` (bounded by `BlPack::check`) / `compose_to_host` / `compose_signal` / `selftest_bl_pack` | `kf-cuda/src/display.rs` | `a_pack_launch_is_bounded_before_it_is_queued` |
+| `alloc_display_slot` / `export_display_slot`: only a slot this session recorded, at its size, under a 64 MiB cap, is exported | `kf-host/src/lib.rs` | `only_a_recorded_display_slot_of_a_sane_size_is_exported` |
+| two backings per slot, per-frame freshness, **withdrawal per kind**, the LRU fill with a fence exclusion mask, identities across kinds | `kf-broker/src/slots.rs` | five ring tests, incl. the cap argument with mixed backings |
+| `Rung::Native`, the explicit-yes rule, the acknowledgement detector with timed back-off, `EV_DEVICE`, the `want_vram` signal | `kf-broker/src/conn.rs` | eight `relay_machine.rs` tests; five bite-mutations each fail one |
+| `VramMode`, `plan()` (pack and/or D2H), `Provisioning` | `kf-broker/src/gpucopy.rs` | three tests |
+| the realize probe, slot making with collision retry, the provisioning thread; the worker's adoption, fence check, pack, two demand signals | `kf-qemu/src/gpucopy.rs`, `display.rs` | CI-compiled; the decisions are kf-broker's tested functions |
+| `display-broker-vram=auto\|on\|off`, KF3 ABI 13 | `kf3.c`, `kf3.h`, `ffi_unsafe.rs` | `wire_mirror.rs` checks the C encoding against `VramMode` |
+
+**The ABI interval, measured 2026-10-03** (`drmnv.py` over the 29 tags of `tools/drivermatrix/tags.txt`,
+gcc over each tag's own headers fetched from the open-gpu-kernel-modules tag): equal to the
+transcription at **575.51.02 … 615.71.09** (18 tags; the header is `nv_drm_common_ioctl.h` from
+590.48.01, the layout unchanged). Refused at **535.309.01 … 570.148.08**: there
+`drm_nvidia_get_dev_info_params` has no `mig_device`, so every later field sits 4 bytes lower — what
+the DRM core would have zero-filled into a silent misread. The probe also requires nvidia-drm's own
+`/sys/module/nvidia_drm/version` to equal the RM's version.
+
+**How a frame chooses its copies** (`kf_broker::gpucopy::plan`, per frame on the worker):
+- **pack** when an active broker wants VRAM (`FrameRing::want_vram`, set by the relay), the VRAM kind
+  is not withdrawn, and a free VRAM slot can take the frame (provisioned that large, and its dma-buf's
+  fences signalled);
+- **D2H** when the console asked, when an active broker must be fed through host memory, or when
+  nobody asked (the 4 Hz copy that keeps a screendump recent, as before). ★ Never only because the
+  broker is active while it takes the GPU copy: then no byte goes to the CPU.
+- ⊘ **Two demand signals** (the design review's correction): broker activity keeps the 33 ms refresh
+  (a front-buffer-rendering guest stays at 30 Hz on the broker) but asks for a host copy only in the
+  case above.
+- A frame no one can be shown is not made; the flips behind it still complete (`done = n`).
+
+**When rung 0 goes** (`Relay::choose`): an EXPLICIT yes to `QUERY_FORMAT(XR24, the modifier)`, asked
+right after HELLO; `CAP_MODIFIERS` and `CAP_RELEASE`; the compositor not on another GPU (`EV_DEVICE`);
+not backing off; the slot's VRAM backing fresh, the block-linear extent inside the object, the stride
+inside the broker's bounds (`4w ≤ stride ≤ 8w + 4096`, `stride·h ≤ extent`). Otherwise the host rungs
+of §8.2, unchanged, each requiring its own backing fresh and not withdrawn.
+
+**Learning that the import failed.**
+- Wayland reports a failed probe as `EV_FORMAT x=0`: a later "no" wins, rung 0 stops, and the frames
+  attached under it are reclaimed.
+- X11 reports nothing today. The **acknowledgement detector**: 3 native commits and ≥ 1 s with no
+  RELEASE naming a native frame back the rung off for 5 s, doubling to 60 s; a native RELEASE
+  acknowledges it and clears the back-off. It is a timed back-off, never a permanent "no": on X11 with
+  the NVIDIA DDX the host rungs may be a black window. The cap of 2 held frames and the 1 s reclaim
+  pace an unimported stream, so the trip comes after ~1-2 s (`the_detector_backs_off_retries_and_
+  clears_on_a_release`).
+- Once nvkvm-pv's X11 backend sends `EV_FORMAT x=0` on a refused DRI3 import (the coordinator's
+  default for the owner, same protocol revision as the cursor message), the existing "later no" path
+  handles it — no relay change.
+- **`EV_DEVICE`** (type 17, `x:y` = the compositor's DRM device; AHEAD of the vendored header, a
+  proposal to nvkvm-pv's broker): another device ⇒ no rung 0 on that connection; this GPU's primary
+  or render node ⇒ allowed; absent or "cannot tell" ⇒ the yes and the detector decide.
+
+**Slots and reuse.** Five ring slots as before; each may carry a VRAM backing besides its host one.
+`display-broker-vram=auto` (default): realize only probes (render node, `GET_DEV_INFO`, the ABI gate)
+and logs whether the rung is possible; the five 10 MiB class-0 slots are provisioned on a
+provisioning thread at the first explicit yes (a cross-vendor compositor never says yes and costs no
+VRAM). `on`: provisioned and self-tested at realize, a refusal fails realize. `off`: never. A frame
+larger than its slot grows every slot once to `SLOT_MAX` (36 MiB) — meanwhile such frames take the
+host rungs. Worst case 5 × (10 + 36) = 230 MiB per head, never freed while the device lives; RM is
+the only arbiter (`cardbudget` is BAR1-only and slots use no BAR1), the slots come AFTER the store,
+and a refused store names display VRAM. ⊘ **RELEASE is not GPU-idle** (X11 presents with no idle
+fence; the XRender path RELEASEs right after queuing its composite): the pack takes the eligible free
+slot the broker released LONGEST ago, and excludes a slot whose dma-buf still carries an unsignalled
+fence (`EXPORT_SYNC_FILE` — lock-free, unlike `poll()` on the dma-buf, which takes `dma_resv_lock`).
+Whether NVIDIA compositors attach read fences at all is unverified (E1).
+
+**Security** (§8.5 continues to hold; what is new):
+- Only `kf_host::DisplaySlot`s are ever exported: no public constructor, no handle accessor, no API
+  that maps one into a VA space; `export_display_slot` refuses a handle the session did not record.
+  The slots live in a separate RM client from the store, guest RAM and twins (`OWNER_RULINGS.md` §N).
+- The guest cannot write a slot: slots are never mapped into a VA space the guest reaches. ⚠ This
+  rests on the EXISTING store-bounded translation — the invariant every other host VRAM object rests
+  on (a physical-mode CE hole that reached host VRAM was fixed in `00f62991`); slots add no new path.
+- What the compositor gets: one dma-buf per slot, and through `GEM_EXPORT_NVKMS_MEMORY`
+  (`DRM_RENDER_ALLOW`) an RM handle to that slot only. It may write it; kf3 never reads a slot after
+  the self-test, so nothing flows back.
+- The RM export fd is closed after both imports; the dma-buf is `DMA_BUF_MAGIC`-checked; an identity
+  collision is retried with a fresh GEM import (≤ 3), the colliding handle closed unsent.
+- A hostile guest controls content, geometry (within `MAX_PIXELS`, 8192 a side) and the flip rate —
+  never the modifier, stride, kind, slot size or what is exported. Every pack launch re-derives its
+  geometry and bounds (`BlPack::check`): the extent inside the slot, the reads inside the staging
+  frame.
+- New capability: one render-node fd (GEM wrapping only, no KMS). With `auto` on a host where it
+  cannot be opened, the rung is not offered and nothing else changes.
+
+**Version tolerance.** Outside 575.51.02 … 615.71.09 the probe refuses by name (*"GPU-copy rung: the
+nvidia-drm ABI … at host driver X"*); a host driver tag not in `tags.txt` is NOT MEASURED and refused.
+Re-run `tools/drivermatrix/drmnv.py` when a tag is added.
+
+**What has not run** (box only; every item is a prediction until then):
+- CUDA importing any of S0/S1/S2 (only S0, the store's set, has been imported — w755x, RTX 3090,
+  580.159.04); the default is S1 (`KF3_VRAM_ATTRS=s0|s1|s2` selects for E1).
+- a compositor on the same GPU importing and sampling a kayfabe-owned OFFSCREEN object (nvkvm-pv
+  showed only a GBM scanout bo);
+- the pack self-test on a GPU; the in-GOB order beyond GA106; the fence check seeing a real fence;
+- the screendump freshness on rung 0 with the console idle (no D2H then: a screendump sees the last
+  host frame until the next console request; the deferred-update remedy — QEMU 9.2's
+  `gfx_update_async` / 11.1's bool return — is NOT built; the 10.2 API is unverified).
+
+**Box experiments** (exact recipe in §8.9 once a box is approved): **E0** host preflight (driver tag in
+the interval, `modeset=1`, the render node's mode/group/ACL as QEMU's uid, `GET_DEV_INFO`, the broker's
+DRI3 modifier log); **E1** the gate — a slot probe per attribute set S0/S1/S2 against the real broker
+(X11, default present mode) on the same GPU: CUDA import, `GEM_IMPORT`, the DDX import, an FNV-matched
+image at 1920×1080 and 1366×768, 3 laps through all 5 slots, the export fd closed, whether a fence is
+ever unsignalled (a `sw_sync` known-positive); **E1b** the same on Wayland, with the probe pause
+measured; **E2** negative controls — a declared block height that differs from the pack's must change
+the FNV; another GPU (Wayland `x=0`, X11 detector trip); no `CAP_MODIFIERS` never Native; the detector's
+known-positive (a forced bad stride trips, backs off, retries, clears); **E3** guest end to end
+(`scanout_d2h` = 0 while the console is unwatched, 30 Hz on a non-compositing desktop, cursor, resize,
+broker `kill -9` and `SIGSTOP`); **E4** performance (compose+pack vs compose+D2H, CPU vs F_SHM);
+**E5** lifetime and security (5 × class 0 then one growth, the export fd absent from
+`/proc/<qemu>/fd`, `GEM_EXPORT_NVKMS_MEMORY` of the received dma-buf names a slot-sized object, a write
+through it changes no guest byte); **E6** E1 on Turing, Ada and GB20x.
+
+**Deviations from the reviewed design.**
+1. **Fallback B (`GEM_ALLOC_NVKMS_MEMORY`) is not built**: nvidia-drm silently retries a refused
+   NO_SCANOUT allocation in sysmem (`ogkm-580: nvidia-drm-gem-nvkms-memory.c:533-538`), and the task
+   ruled RM-first only. If E1 refuses path A for every set, the rung stays off and B is a new decision.
+2. **The ABI gate is a compile probe of the headers, not DWARF**, because the nvidia-drm/NVKMS private
+   headers are outside `dm.py`'s spec set; the gate reads `traces/driver_matrix/drmnv.tsv`, exact tag.
+3. **The pack PTX is generated by clang** (no CUDA SDK) and the same source is run on the host —
+   the compose kernel stays hand-written.
+4. **`withdraw_all` is kept** as "both kinds" for any caller that means both; the worker withdraws one
+   kind.
+

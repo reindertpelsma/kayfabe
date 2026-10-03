@@ -36,6 +36,9 @@ fn eval(v: &str, known: &BTreeMap<String, u64>) -> Option<u64> {
     if let Some((a, b)) = v.split_once("<<") {
         return Some(eval(a, known)? << eval(b, known)?);
     }
+    if let Some((a, b)) = v.split_once('*') {
+        return eval(a, known)?.checked_mul(eval(b, known)?);
+    }
     let lit = v.trim_end_matches(['u', 'U', 'l', 'L']);
     if let Some(hex) = lit.strip_prefix("0x") {
         return u64::from_str_radix(hex, 16).ok();
@@ -43,9 +46,15 @@ fn eval(v: &str, known: &BTreeMap<String, u64>) -> Option<u64> {
     lit.parse().ok().or_else(|| known.get(v).copied())
 }
 
-/// Every `#define NVKVM_BROKER_* <constant>` and every `NVKVM_BROKER_* = N` enum entry.
+/// Every `#define NVKVM_BROKER_* <constant>` and every `NVKVM_BROKER_* = N` enum entry of the
+/// vendored header.
 fn header_values() -> BTreeMap<String, u64> {
-    let text = strip_comments(&header());
+    values_of(&header())
+}
+
+/// The same census over any header text.
+fn values_of(src: &str) -> BTreeMap<String, u64> {
+    let text = strip_comments(src);
     let mut m = BTreeMap::new();
     for line in text.lines() {
         let l = line.trim();
@@ -152,28 +161,157 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
     }
 }
 
-/// ★ Values `wire.rs` carries AHEAD of the vendored header (proposed to nvkvm-pv's broker, not yet
-/// in its protocol header): each must still be absent from the header, and must not collide with
-/// any value of its family there. The day the header gains one, this fails and the value moves
-/// into the mirrored map above, checked against the header's own.
+/// ★ Values `wire.rs` carries AHEAD of the vendored header: nvkvm-pv's broker defines them on
+/// branch `broker-cursor-gpucopy` (2026-10-03), the vendored copy is still `368d2db`.
+fn ahead() -> Vec<(&'static str, u64)> {
+    use wire::*;
+    vec![
+        ("NVKVM_BROKER_EV_DEVICE", u64::from(EV_DEVICE)),
+        ("NVKVM_BROKER_DEVICE_F_KNOWN", DEVICE_F_KNOWN as u64),
+        ("NVKVM_BROKER_DEVICE_F_RENDER", DEVICE_F_RENDER as u64),
+        ("NVKVM_BROKER_CAP_CURSOR", u64::from(CAP_CURSOR)),
+        ("NVKVM_BROKER_CAP_DEVICE", u64::from(CAP_DEVICE)),
+        ("NVKVM_BROKER_CMD_CURSOR", u64::from(CMD_CURSOR)),
+        ("NVKVM_BROKER_CURSOR_SET", u64::from(CURSOR_SET)),
+        ("NVKVM_BROKER_CURSOR_HIDE", u64::from(CURSOR_HIDE)),
+        ("NVKVM_BROKER_CURSOR_SHOW", u64::from(CURSOR_SHOW)),
+        ("NVKVM_BROKER_CURSOR_MAX_DIM", u64::from(CURSOR_MAX_DIM)),
+        (
+            "NVKVM_BROKER_CURSOR_MAX_STRIDE",
+            u64::from(CURSOR_MAX_STRIDE),
+        ),
+    ]
+}
+
+/// ★ Each value ahead of the header is still ABSENT from the vendored copy and collides with no
+/// value of its family there. The day the vendored header gains one, this fails and the value
+/// moves into the mirrored map above, checked against the header's own.
 #[test]
 fn values_ahead_of_the_header_are_absent_from_it_and_collide_with_nothing() {
     let theirs = header_values();
-    for (name, v, family) in [(
-        "NVKVM_BROKER_EV_DEVICE",
-        u64::from(wire::EV_DEVICE),
-        "NVKVM_BROKER_EV_",
-    )] {
+    for (name, v) in ahead() {
         assert!(
             !theirs.contains_key(name),
-            "{name} is in the header now: mirror it above and drop it from this list"
+            "{name} is in the vendored header now: mirror it above and drop it from ahead()"
         );
+        let family = &name[..name.rfind('_').unwrap() + 1];
         let clash: Vec<_> = theirs
             .iter()
-            .filter(|(n, x)| n.starts_with(family) && **x == v)
+            .filter(|(n, x)| n.starts_with(family) && **x == v && !family.ends_with("CURSOR_"))
             .collect();
         assert!(clash.is_empty(), "{name} = {v} collides with {clash:?}");
     }
+}
+
+/// ★ Against the NEWER header, when one is named (`KF_BROKER_PROTO_NEXT` = a path to nvkvm-pv's
+/// `src/common/nvkvm_broker_proto.h` at the revision that defines them): every value ahead equals
+/// the header's, and the cursor record's layout, compiled from that header, is where
+/// `CursorCmd::encode` writes each field. Without the variable it says so and asserts nothing —
+/// the vendored copy is what CI checks.
+#[test]
+fn values_ahead_of_the_header_match_the_newer_header_when_given() {
+    let Ok(path) = std::env::var("KF_BROKER_PROTO_NEXT") else {
+        eprintln!("PROTO-NEXT: SKIPPED (KF_BROKER_PROTO_NEXT is not set)");
+        return;
+    };
+    let text = std::fs::read_to_string(&path).expect("KF_BROKER_PROTO_NEXT");
+    let theirs = values_of(&text);
+    for (name, v) in ahead() {
+        assert_eq!(theirs.get(name), Some(&v), "{name} in {path}");
+    }
+    // and the other direction: every name the newer header adds is one wire.rs carries
+    let vendored = header_values();
+    let carried: Vec<&str> = ahead().iter().map(|(n, _)| *n).collect();
+    for name in theirs.keys() {
+        assert!(
+            vendored.contains_key(name)
+                || carried.contains(&name.as_str())
+                || name.starts_with("NVKVM_BROKER_CLIP_"),
+            "{name} is new in {path} and wire.rs does not carry it"
+        );
+    }
+    let dir = std::env::temp_dir().join(format!("kfb-proto-next-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(&path, dir.join("nvkvm_broker_proto.h")).unwrap();
+    let fields = [
+        "type",
+        "flags",
+        "width",
+        "height",
+        "stride",
+        "offset",
+        "fourcc",
+        "hot_x",
+        "hot_y",
+        "op",
+        "reserved1",
+    ];
+    let mut prog = String::from(
+        "#include <stdio.h>\n#include <stddef.h>\n#include \"nvkvm_broker_proto.h\"\nint main(void) {\n",
+    );
+    prog.push_str("printf(\"size %zu\\n\", sizeof(struct nvkvm_broker_cursor_cmd));\n");
+    for f in fields {
+        prog.push_str(&format!(
+            "printf(\"{f} %zu\\n\", offsetof(struct nvkvm_broker_cursor_cmd, {f}));\n"
+        ));
+    }
+    prog.push_str("return 0; }\n");
+    std::fs::write(dir.join("c.c"), prog).unwrap();
+    let out = Command::new("cc")
+        .args(["-std=c11", "-Wall", "-Werror", "-o"])
+        .arg(dir.join("c"))
+        .arg(dir.join("c.c"))
+        .arg("-I")
+        .arg(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let run = Command::new(dir.join("c")).output().unwrap();
+    let got: BTreeMap<String, usize> = String::from_utf8(run.stdout)
+        .unwrap()
+        .lines()
+        .map(|l| {
+            let (k, v) = l.split_once(' ').unwrap();
+            (k.to_string(), v.parse().unwrap())
+        })
+        .collect();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(got["size"], wire::CMD_SIZE);
+    // plant a distinct value per field and find it where the compiled header says it lives
+    let c = wire::CursorCmd {
+        width: 0x1111_1111,
+        height: 0x2222_2222,
+        stride: 0x3333_3333,
+        offset: 0x4444_4444,
+        fourcc: 0x5555_5555,
+        hot_x: 0x6666_6666,
+        hot_y: 0x7777_7777,
+        op: 0x0808_0808,
+    };
+    let b = c.encode();
+    for (f, v) in [
+        ("width", 0x11u8),
+        ("height", 0x22),
+        ("stride", 0x33),
+        ("offset", 0x44),
+        ("fourcc", 0x55),
+        ("hot_x", 0x66),
+        ("hot_y", 0x77),
+        ("op", 0x08),
+    ] {
+        let at = got[f];
+        assert_eq!(b[at..at + 4], [v; 4], "{f} at +{at}");
+    }
+    assert_eq!(
+        &b[got["type"]..got["type"] + 2],
+        &wire::CMD_CURSOR.to_le_bytes()
+    );
+    assert_eq!(&b[got["reserved1"]..got["reserved1"] + 4], &[0; 4]);
+    eprintln!("PROTO-NEXT: RAN against {path}");
 }
 
 #[test]

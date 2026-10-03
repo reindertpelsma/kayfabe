@@ -50,10 +50,11 @@
 
 use crate::slots::{FrameRing, Kind, MAX_SLOTS, Take};
 use crate::wire::{
-    CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CLOSE_FORCE, CMD_ATTACH, CMD_F_SHM,
-    CMD_SIZE, Cmd, EV_ABS, EV_BTN, EV_BYE, EV_CLIPBOARD, EV_CLOSE, EV_DEVICE, EV_FOCUS, EV_FORMAT,
-    EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL,
-    FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE, PROTO_VERSION, Pkt, fourcc_name,
+    CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CLOSE_FORCE, CMD_ATTACH,
+    CMD_F_SHM, CMD_SIZE, Cmd, DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_ABS, EV_BTN, EV_BYE,
+    EV_CLIPBOARD, EV_CLOSE, EV_DEVICE, EV_FOCUS, EV_FORMAT, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY,
+    EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, FOURCC_XR24, MOD_INVALID, MOD_LINEAR,
+    PKT_SIZE, PROTO_VERSION, Pkt, fourcc_name,
 };
 use std::os::fd::BorrowedFd;
 use std::path::{Path, PathBuf};
@@ -276,14 +277,19 @@ pub struct Counters {
     pub native_trips: u64,
 }
 
-/// What the broker said about its compositor's device (`EV_DEVICE`).
+/// What the broker said about its compositor's device (`EV_DEVICE`, nvkvm-pv's header on
+/// `broker-cursor-gpucopy`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Device {
-    /// Nothing said (an older broker), or "cannot tell".
+    /// The broker advertised `CAP_DEVICE` and its `EV_DEVICE` has not arrived yet (it follows the
+    /// handshake's FRAME): no GPU-copy frame until it does.
+    Pending,
+    /// An older broker (no `CAP_DEVICE`), "the broker does not know" (`x` = 0), or an unresolved
+    /// primary node that is not this GPU's: the explicit yes and the detector decide.
     Unknown,
     /// One of this GPU's DRM nodes.
     Same,
-    /// Another device: the GPU-copy rung is not offered on this connection.
+    /// Another device's RENDER node: no GPU-copy frame on this connection.
     Other(u32, u32),
 }
 
@@ -767,7 +773,7 @@ impl<L: Link> Relay<L> {
             && c.caps & CAP_MODIFIERS != 0
             && c.caps & CAP_RELEASE != 0
             && verdict(c, FOURCC_XR24, m) == Some(Verdict::Yes)
-            && !matches!(c.device, Device::Other(..))
+            && !matches!(c.device, Device::Other(..) | Device::Pending)
             && c.backoff_until.is_none_or(|t| self.now_ms >= t);
         ok.then_some(m)
     }
@@ -1671,6 +1677,9 @@ impl<L: Link> Relay<L> {
         }
         if let Some(c) = self.conn.as_mut() {
             c.caps = p.w1;
+            if p.w1 & CAP_DEVICE != 0 {
+                c.device = Device::Pending;
+            }
         }
         // ★ ask the block-linear pair at once: with `display-broker-vram=auto` the VRAM slots are
         // provisioned only at the first explicit yes, so it must not wait for a frame
@@ -1773,17 +1782,31 @@ impl<L: Link> Relay<L> {
     /// ★ `EV_DEVICE`: which DRM device the compositor renders on. Another device than this GPU's
     /// nodes ⇒ no GPU-copy frame on this connection (`DupMemory` refuses vidmem from another
     /// device, `ogkm-580: nvkms-kapi.c:1789-1806`; a non-NVIDIA importer gets no `sg_table`).
+    ///
+    /// `x` = `DEVICE_F_*`, `w0`:`w1` = major:minor. A render node of another device is
+    /// [`Device::Other`]; an unresolved node (KNOWN without RENDER — the header says "compare with
+    /// care": it may be a primary node sysfs could not map) counts only when it IS one of this
+    /// GPU's nodes, and is [`Device::Unknown`] otherwise, so a node the broker could not resolve
+    /// never shuts the rung off by itself.
     fn device(&mut self, p: &Pkt) {
         let nodes = self.ring.gpu_nodes();
-        let d = if p.x < 0 || p.y < 0 || nodes.is_empty() {
+        let known = p.x & DEVICE_F_KNOWN != 0;
+        let render = p.x & DEVICE_F_RENDER != 0;
+        let dev = (p.w0, p.w1);
+        let d = if !known || nodes.is_empty() {
             Device::Unknown
+        } else if nodes.contains(&dev) {
+            Device::Same
+        } else if render {
+            Device::Other(dev.0, dev.1)
         } else {
-            let dev = (p.x as u32, p.y as u32);
-            if nodes.contains(&dev) {
-                Device::Same
-            } else {
-                Device::Other(dev.0, dev.1)
-            }
+            say!(
+                "the compositor's DRM device {}:{} is an unresolved node, not one of this GPU's \
+                 ({nodes:?}): it does not decide the GPU-copy rung",
+                dev.0,
+                dev.1
+            );
+            Device::Unknown
         };
         let Some(c) = self.conn.as_mut() else { return };
         if c.device == d {
@@ -1798,7 +1821,7 @@ impl<L: Link> Relay<L> {
                 "the compositor renders on DRM device {a}:{b}, not this GPU's ({nodes:?}): \
                  no GPU-copy frame on this connection; frames go through host memory"
             ),
-            Device::Unknown => {}
+            Device::Unknown | Device::Pending => {}
         }
     }
 
