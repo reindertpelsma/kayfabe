@@ -14,9 +14,9 @@ use crate::{ABI_ENCODE_FAILED, HostRm, RmError};
 use kf_abi::bringup::{
     NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_ACCESS_READ_ONLY, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
     NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN, NVOS46_FLAGS_GPU_CACHEABLE_NO,
-    NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES, NVOS46_FLAGS_TLB_LOCK_ENABLE,
-    NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NvMemoryVirtualAllocationParams,
-    NvVaspaceAllocationParameters,
+    NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
+    NVOS46_FLAGS_TLB_LOCK_ENABLE, NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+    NvMemoryVirtualAllocationParams, NvVaspaceAllocationParameters,
 };
 use kf_abi::generated::classes::NvChannelGroupAllocationParameters;
 use kf_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
@@ -338,11 +338,68 @@ impl HostRm {
         kind: u8,
         perm: MapPerm,
     ) -> Result<u64, RmError> {
-        let extra = if defer {
-            NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE
-        } else {
-            0
-        };
+        self.map_kind_flags(
+            space, memory, backing, offset, len, at, defer, kind, perm, 0,
+        )
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`): [`HostRm::map_kind`] of
+    /// a [`MapBacking::SharedSlice`] at the FIXED address `at`, with
+    /// [`NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`] — host RM also gives the mapping a KERNEL CPU mapping
+    /// (`KernelVAddr`), the only address through which it writes a display-SW semaphore or
+    /// notifier (`method_notification.c:624-627`, `:349-351`). ⊘ Costs host kernel address space
+    /// (system memory: a `vmap` of `len` bytes) or host BAR1 plus an `ioremap` (video memory) for
+    /// the mapping's whole life, and the mapping can only ever be unmapped WHOLE
+    /// (`virtual_mem.c:1685-1689`) — the caller must never batch or split it.
+    ///
+    /// # Errors
+    /// As [`HostRm::map`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn map_kind_kernel_mapped(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        offset: u64,
+        len: u64,
+        at: u64,
+        defer: bool,
+        kind: u8,
+        perm: MapPerm,
+    ) -> Result<u64, RmError> {
+        self.map_kind_flags(
+            space,
+            memory,
+            MapBacking::SharedSlice,
+            offset,
+            len,
+            Some(at),
+            defer,
+            kind,
+            perm,
+            NVOS46_FLAGS_KERNEL_MAPPING_ENABLE,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn map_kind_flags(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        backing: MapBacking,
+        offset: u64,
+        len: u64,
+        at: Option<u64>,
+        defer: bool,
+        kind: u8,
+        perm: MapPerm,
+        authored: u32,
+    ) -> Result<u64, RmError> {
+        let extra = authored
+            | if defer {
+                NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE
+            } else {
+                0
+            };
         let extra = extra
             | if kind != 0 {
                 NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES

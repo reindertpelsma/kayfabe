@@ -90,6 +90,10 @@ struct PtChan {
     /// the twin: guest handle → host handle. Always empty with the switch off. Host RM frees them
     /// with the twin's channel (`HostRm::free` forgets the subtree), so they go with the twin.
     disp_sw: HashMap<u32, u32>,
+    /// ★ EXPERIMENT `x11-dispsw`: its mirror's "a display-SW twin lives here" flag
+    /// (`crate::mem::Mirror::dispsw`) — set when the guest allocates one on this channel, so the
+    /// memory plane places this space's guest-RAM rows with a host kernel mapping from then on.
+    dispsw_space: Arc<AtomicBool>,
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
     /// satisfied by the twin (never forwarded).
     ctx: CtxBind,
@@ -2372,12 +2376,10 @@ impl ChanPlane {
     /// passthrough twin holds the channel, or when the host refuses the alloc (a host GPU with no
     /// display engine, `disp_sw.c:67-71`).
     fn display_sw(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
-        let Some(chan) = self
-            .pt
-            .lock()
-            .ok()
-            .and_then(|m| m.get(&(client, parent)).map(|v| v.chan))
-        else {
+        let Some((chan, space_flag)) = self.pt.lock().ok().and_then(|m| {
+            m.get(&(client, parent))
+                .map(|v| (v.chan, v.dispsw_space.clone()))
+        }) else {
             self.dispsw.no_twin.fetch_add(1, Ordering::Relaxed);
             return ChanAnswer::Refused {
                 status: NV_ERR_NOT_SUPPORTED,
@@ -2401,6 +2403,14 @@ impl ChanPlane {
                     "GF100_DISP_SW {client:#x}:{handle:#x} under {parent:#x}: that handle already names a live twinned object"
                 ),
             };
+        }
+        // ★ The space's guest-RAM rows carry a host kernel mapping from its NEXT placement on —
+        // set NOW, in statement order, before the guest can map the memory it will name. ⊘ Rows
+        // placed before stay as they are: a placement is never re-made under a running channel.
+        if !space_flag.swap(true, Ordering::AcqRel) {
+            eprintln!(
+                "kf3: x11-dispsw: GF100_DISP_SW {client:#x}:{handle:#x} under {parent:#x} — its space's guest-RAM rows are placed with a host kernel mapping from now on"
+            );
         }
         self.defer(
             "display-SW twin",
@@ -3030,6 +3040,7 @@ impl ChanPlane {
             };
             let space = mirror.space;
             let rows = mirror.rows.clone();
+            let dispsw_space = mirror.dispsw.clone();
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
             let live = mirror.live.clone();
@@ -3083,6 +3094,7 @@ impl ChanPlane {
                             engine,
                             objects: HashMap::new(),
                             disp_sw: HashMap::new(),
+                            dispsw_space,
                             ctx: CtxBind::default(),
                             live,
                             notifier,

@@ -800,6 +800,17 @@ pub const NVOS46_FLAGS_GPU_CACHEABLE_NO: u32 = 2 << 17;
 /// forces coherence hides the defect, so a green run elsewhere never proved the bit unneeded.
 pub const NVOS46_FLAGS_CACHE_SNOOP_ENABLE: u32 = 1 << 4;
 
+/// ★ EXPERIMENT `x11-dispsw`: `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` — field `5:5`, value 1
+/// (`ogkm-580: nvos.h:1997-2001`, *"ENABLE: Map CPU address"*), i.e. `0x20`. With it, host RM gives
+/// the DMA mapping a KERNEL CPU mapping (`CLI_DMA_MAPPING_INFO::KernelVAddr`): a `vmap` of the
+/// pages for system memory (`virtual_mem.c:1440-1451`), a BAR1 aperture plus an `ioremap` for video
+/// memory (`_virtmemAllocKernelMapping`, `:1024-1128`). It is the ONLY way host RM itself writes a
+/// display-SW semaphore or notifier: `semaphoreFillGPUVATimestamp` / `notifyFillNotifierGPUVATimestamp`
+/// write through `KernelVAddr` and, when it is NULL, log and write NOTHING while returning `NV_OK`
+/// (`method_notification.c:624-627`, `:349-351`). ⊘ A kernel-mapped mapping can never be unmapped
+/// in part (`virtual_mem.c:1685-1689`, `NV_ASSERT_OR_RETURN(!bPartialUnmap, …)`).
+pub const NVOS46_FLAGS_KERNEL_MAPPING_ENABLE: u32 = 1 << 5;
+
 /// ★★★ **THE BIG-PAGE SIZE THIS ARCHITECTURE FAMILY USES — 64 KiB.**
 ///
 /// ⊘ **Not a per-die constant, and constraint 12 is the reason the distinction is written
