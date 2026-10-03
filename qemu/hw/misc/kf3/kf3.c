@@ -1280,14 +1280,19 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         return;
     }
 
-    kf3_status(s->h, err, sizeof(err));
-    info_report("%s (BAR0 pieces=%u)", err, s->n_pieces);
+    /* ⊘ 2026-10-03 (v3-broker): the status line outgrew 512 bytes — the disp[...] and broker[...]
+     * fragments were cut off at realize and exit, so the relay's counters never reached the log */
+    {
+        char st[4096] = "";
+        kf3_status(s->h, st, sizeof(st));
+        info_report("%s (BAR0 pieces=%u)", st, s->n_pieces);
+    }
 }
 
 static void kf3_dev_exit(PCIDevice *pci)
 {
     Kf3State *s = KF3(pci);
-    char st[512] = "";
+    char st[4096] = "";
     if (s->h) {
         kf3_status(s->h, st, sizeof(st));
         info_report("%s bar12_reads=%" PRIu64 " bar12_writes=%" PRIu64 " irq_routes=%" PRIu64
