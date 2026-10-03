@@ -1,0 +1,13 @@
+/etc/X11/xorg.conf.d/:
+total 8
+drwxr-xr-x  2 root root 4096 Apr  8  2024 .
+drwxr-xr-x 10 root root 4096 Oct  3 16:23 ..
+
+/usr/share/X11/xorg.conf.d/:
+total 20
+drwxr-xr-x 2 root root 4096 Oct  3 16:44 .
+drwxr-xr-x 5 root root 4096 Oct  3 16:23 ..
+-rw-r--r-- 1 root root 1350 Jun 29 17:33 10-quirks.conf
+-rw-r--r-- 1 root root 1429 Mar 24  2025 40-libinput.conf
+-r--r--r-- 1 root root  489 Oct  3 16:44 nvidia-drm-outputclass.conf
+ls: cannot access '/etc/X11/xorg.conf': No such file or directory

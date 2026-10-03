@@ -42,7 +42,12 @@ if [ "$PHASE" = desktop ] || [ "$PHASE" = all ]; then
   $GS "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $DESK_PKGS 2>&1 | tail -2"
   $GS "sudo systemctl disable lightdm 2>/dev/null; sudo systemctl set-default multi-user.target" >/dev/null 2>&1
   # the X driver: the bench's .run was installed with no X server present
-  if ! $GS 'test -e /usr/lib/xorg/modules/drivers/nvidia_drv.so' 2>/dev/null; then
+  # ⊘ [2026-10-03, box 54032077, B0a] the X driver module alone is not enough: the .run installs
+  # /usr/share/X11/xorg.conf.d/nvidia-drm-outputclass.conf (the file that makes Xorg load nvidia_drv.so
+  # with NO xorg.conf, README "installed files") only when an X server exists at install time, and
+  # Ubuntu's xserver-xorg-video-nvidia-580 package ships the same file. Without it a stock Xorg
+  # autoconfigures nouveau → modesetting, which is not what a stock guest runs. Re-run on either gap.
+  if ! $GS 'test -e /usr/lib/xorg/modules/drivers/nvidia_drv.so && test -e /usr/share/X11/xorg.conf.d/nvidia-drm-outputclass.conf' 2>/dev/null; then
     [ -s "$RUN" ] || { say "⊘ missing $RUN (needed to install the NVIDIA X driver)"; }
     scp -i "$BENCH/guest_key" -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -o LogLevel=ERROR "$RUN" ubuntu@127.0.0.1:/var/tmp/nv.run >/dev/null 2>&1
@@ -54,7 +59,7 @@ if [ "$PHASE" = desktop ] || [ "$PHASE" = all ]; then
 fi
 CTRL=$($GS 'command -v modetest kmscube weston Xorg lightdm cinnamon-session xdotool import mpv glxinfo vkcube | tr "\n" " "; \
             test -x ~/display/kfdisp_probe && echo PROBE=yes || echo PROBE=no; \
-            ls /usr/lib/xorg/modules/drivers/nvidia_drv.so /usr/lib/x86_64-linux-gnu/nvidia/xorg/libglxserver_nvidia.so* 2>/dev/null | tr "\n" " "' | tr -d '\r')
+            ls /usr/lib/xorg/modules/drivers/nvidia_drv.so /usr/lib/x86_64-linux-gnu/nvidia/xorg/libglxserver_nvidia.so* /usr/share/X11/xorg.conf.d/nvidia-drm-outputclass.conf 2>/dev/null | tr "\n" " "' | tr -d '\r')
 KA=$($GS 'uname -r' | tr -d '\r')
 cat > "$BENCH/display_lane.receipt" <<RCPT
 DISPLAY_LANE_PROVISIONED=$(echo "$CTRL" | grep -q PROBE=yes && echo yes || echo no)
