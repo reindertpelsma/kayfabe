@@ -942,6 +942,13 @@ jobs:
       # (V3_DOORBELL_IOEVENTFD.md, `## 7.` and `### 7.x`) reached master on 2026-09-30.
       - name: "Section-number gate (no two design-doc sections share a number)"
         run: bash docs/design/check_sections.sh
+      # ★ 2026-10-03 (release §I, docs/design/V3_APP_MATRIX.md §R5.3): the app matrix's
+      # managed-memory classifier, offline — R3's committed per-app slices must score SILENT as
+      # recorded, EXPECTED_LOUD with a guest `kayfabe` Xid and the named host line, KF3_DEFECT with
+      # a C′ line. No GPU: it is a shell script over committed logs, and it gates the verdict that
+      # decides a release blocker.
+      - name: "App-matrix verdict fixtures (loud_verdict.sh on the R3 slices)"
+        run: bash scripts/apps/test_verdicts.sh
       # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).
       #
       # Landed WITH `kayfabe-linux-raw`, because that crate is what makes them necessary.

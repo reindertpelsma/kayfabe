@@ -2,7 +2,13 @@
 # torch_correct.py — NUMERICAL correctness of PyTorch on the GPU, checked against the CPU on the
 # same machine (ai_bench.py's checks are only isfinite()). Seeded, so the GPU digests are also
 # comparable host vs guest. Emits "CHECK <key> ok|FAIL" and "DIGEST <key> <hex>".
-import hashlib, sys, torch, torch.nn as nn
+# ★ 2026-10-03 (release §I, row torch_expseg): with PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# the caching allocator backs its segments with the CUDA virtual-memory API (cuMemCreate/cuMemMap)
+# and grows/shrinks them by mapping and unmapping pages at reserved VAs. After the usual checks the
+# script then GROWS a segment, frees part of it, empty_cache()s (unmap), reallocates (remap), writes
+# by kernel, verifies every element on the CPU, prints a DIGEST, and prints
+# "CHECK expandable_segments ok|FAIL" LAST — the row's regex, so a run that stops early cannot pass.
+import hashlib, os, sys, torch, torch.nn as nn
 
 def chk(k, ok, extra=""):
     print(f"CHECK {k} {'ok' if ok else 'FAIL'} {extra}", flush=True)
@@ -63,3 +69,34 @@ for i, s_ in enumerate(st):
 torch.cuda.synchronize(); vals = [o.item() for o in outs]
 chk("multi_stream", vals == [2.0 * i * (1 << 20) for i in range(4)])
 print("TORCH_CORRECT_DONE", flush=True)
+
+# 8. ★ expandable segments (only when the allocator was configured for them — row torch_expseg)
+if "expandable_segments:True" in os.environ.get("PYTORCH_CUDA_ALLOC_CONF", ""):
+    chunk = 64 << 20  # int32 elements = 256 MiB per tensor; (i + 1) * arange stays below 2**31
+    def write(i, t):
+        torch.arange(chunk, dtype=torch.int32, device="cuda", out=t)  # a kernel writes it
+        t.mul_(i + 1)
+    torch.cuda.synchronize(); torch.cuda.empty_cache()
+    ts = [torch.empty(chunk, dtype=torch.int32, device="cuda") for _ in range(4)]  # the segment grows
+    for i, t in enumerate(ts):
+        write(i, t)
+    torch.cuda.synchronize()
+    before = [t.data_ptr() for t in ts]
+    del ts[1:3]  # free the middle two ...
+    torch.cuda.synchronize(); torch.cuda.empty_cache()  # ... and UNMAP their pages (the VA stays reserved)
+    ts.insert(1, torch.empty(chunk, dtype=torch.int32, device="cuda"))  # remap fresh pages
+    ts.insert(2, torch.empty(chunk, dtype=torch.int32, device="cuda"))
+    for i in (1, 2):
+        write(i, ts[i])
+    torch.cuda.synchronize()
+    after = [t.data_ptr() for t in ts]
+    ref = torch.arange(chunk, dtype=torch.int32)
+    bad = sum(int((t.cpu() != ref * (i + 1)).sum().item()) for i, t in enumerate(ts))  # every element
+    dig("expandable_segments", torch.cat([t[::4096] for t in ts]))
+    segs = torch.cuda.memory._snapshot().get("segments", [])
+    field = bool(segs) and all("is_expandable" in sg for sg in segs)  # FAIL if the field is missing
+    expandable = field and any(sg["is_expandable"] for sg in segs)
+    reused = sum(a == b for a, b in zip(before, after))
+    chk("expandable_segments", field and expandable and bad == 0,
+        f"bad={bad} segments={len(segs)} is_expandable_field={field} expandable={expandable} "
+        f"same_va_after_remap={reused}/4")

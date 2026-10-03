@@ -22,11 +22,19 @@ S=$B/samples
 # name|timeout|pass-regex|command   (pass = rc 0 AND regex matches AND no "CHECK .* FAIL")
 # ⊘ many cuda-samples verify on the CPU and signal only through their EXIT CODE (no PASS line);
 #   their regex is then a completion marker from the last verified step, and rc 0 is the verdict.
+# ★ 2026-10-03 (release §I, docs/design/V3_APP_MATRIX.md §R5):
+#   - vectorAddMMAP / vmm_probe / torch_expseg cover the CUDA virtual-memory API (cuMemCreate/cuMemMap:
+#     PyTorch expandable segments, vLLM). torch_expseg's regex is the CHECK line torch_correct.py
+#     prints LAST, so a run that stops early cannot match it.
+#   - um_* are the deterministic proof that a managed-memory fault reaches the APP as an error:
+#     cpuinit/gpufirst/pageable are EXPECTED to fail in a kf3 guest (719 + a guest Xid 31 naming
+#     kayfabe — loud_verdict.sh scores them); the other five must pass everywhere.
 APPS=$(cat <<'EOF'
 nvidia_smi|60|RTX|nvidia-smi
 deviceQuery|60|Result = PASS|$S/deviceQuery
 vectorAdd|60|Test PASSED|$S/vectorAdd
 vectorAddDrv|60|Result = PASS|cd $S && ./vectorAddDrv
+vectorAddMMAP|60|Result = PASS|cd $S && ./vectorAddMMAP
 matrixMul|90|Result = PASS|$S/matrixMul
 matrixMulDrv|90|Result = PASS|cd $S && ./matrixMulDrv
 bandwidthTest|120|Result = PASS|$S/bandwidthTest
@@ -69,7 +77,16 @@ sgemm_cublas|90|CHECK|$B/bin/sgemm_cublas
 fft_cufft|90|CHECK|$B/bin/fft_cufft
 sha256|90|CHECK|$B/bin/sha256
 memcpy2d|90|CHECK|$B/bin/memcpy2d
+vmm_probe|90|CHECK|$B/bin/vmm_probe
 attach_verify|90|RESULT: CORRECT|$B/bin/attach_verify
+um_cpuinit|60|CHECK cpuinit ok|$B/bin/um_probe cpuinit
+um_gpufirst|60|CHECK gpufirst ok|$B/bin/um_probe gpufirst
+um_pageable|60|CHECK pageable ok|$B/bin/um_probe pageable
+um_prefetch|60|CHECK prefetch ok|$B/bin/um_probe prefetch
+um_advise|60|CHECK advise ok|$B/bin/um_probe advise
+um_malloc|60|CHECK malloc ok|$B/bin/um_probe malloc
+um_hostalloc|60|CHECK hostalloc ok|$B/bin/um_probe hostalloc
+um_d2h|60|CHECK d2h ok|$B/bin/um_probe d2h
 stream_default|60|STREAM_PROBE_DONE default rc=0|$B/bin/stream_probe default
 stream_created|60|STREAM_PROBE_DONE created rc=0|$B/bin/stream_probe created
 stream_nonblocking|60|STREAM_PROBE_DONE nonblocking rc=0|$B/bin/stream_probe nonblocking
@@ -78,6 +95,7 @@ stream_two|60|STREAM_PROBE_DONE two rc=0|$B/bin/stream_probe two
 stream_created2nd|60|STREAM_PROBE_DONE created2nd rc=0|$B/bin/stream_probe created2nd
 gpu_burn|180|GPU 0: OK|cd $B/gpu-burn && ./gpu_burn 60
 torch_correct|300|TORCH_CORRECT_DONE|$PY $B/share/torch_correct.py
+torch_expseg|300|CHECK expandable_segments ok|PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True $PY $B/share/torch_correct.py
 torch_ai_bench|900|CHECK bert_infer_seqs ok|$PY $B/share/ai_bench.py
 hf_generate|600|OUTSHA|HF_MODEL=Qwen/Qwen2-0.5B-Instruct $PY $B/share/hf_generate.py
 cupy|300|CUPY_DONE|CUDA_PATH=$B/cuda $PY $B/share/cupy_check.py

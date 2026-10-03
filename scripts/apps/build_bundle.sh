@@ -30,7 +30,10 @@ apt-get install -y -qq cmake git build-essential libegl-dev libgles-dev pkg-conf
 # ---- nvkvm-pv realapp kernels (static cudart; cuBLAS/cuFFT from the bundled libs) ----------
 for f in "$HERE"/src/*.cu; do
   n=$(basename "$f" .cu); ex=""
-  case $n in sgemm_cublas) ex="-lcublas";; fft_cufft) ex="-lcufft";; esac
+  # ★ 2026-10-03: vmm_probe is a driver-API (cuMem*) program — linked against the toolkit's libcuda
+  # STUB, so the build does not depend on which libcuda.so the box has; the driver's libcuda.so.1
+  # resolves it at run time on both sides.
+  case $n in sgemm_cublas) ex="-lcublas";; fft_cufft) ex="-lcufft";; vmm_probe) ex="-L/usr/local/cuda-12.6/lib64/stubs -lcuda";; esac
   nvcc -O3 -arch=sm_86 -cudart static -o "$B/bin/$n" "$f" $ex 2>"/tmp/build_$n.err"; ok "$n" $?
 done
 gcc -O2 "$HERE/src/egl_offscreen.c" -o "$B/bin/egl_offscreen" -lEGL -lGLESv2 2>/tmp/build_egl.err; ok egl_offscreen $?
@@ -54,7 +57,8 @@ SAMPLES="1_Utilities/deviceQuery 1_Utilities/bandwidthTest 0_Introduction/vector
 3_CUDA_Features/globalToShmemAsyncCopy 3_CUDA_Features/bf16TensorCoreGemm 4_CUDA_Libraries/simpleCUBLAS 4_CUDA_Libraries/simpleCUFFT \
 4_CUDA_Libraries/conjugateGradient 4_CUDA_Libraries/MersenneTwisterGP11213 2_Concepts_and_Techniques/reduction 2_Concepts_and_Techniques/sortingNetworks \
 2_Concepts_and_Techniques/scan 2_Concepts_and_Techniques/histogram 5_Domain_Specific/BlackScholes 5_Domain_Specific/fastWalshTransform \
-6_Performance/transpose 0_Introduction/concurrentKernels 4_CUDA_Libraries/conjugateGradientUM 6_Performance/UnifiedMemoryPerf"
+6_Performance/transpose 0_Introduction/concurrentKernels 4_CUDA_Libraries/conjugateGradientUM 6_Performance/UnifiedMemoryPerf \
+0_Introduction/vectorAddMMAP"
 for d in $SAMPLES; do
   n=$(basename "$d")
   ( cd "$S/cuda-samples/Samples/$d" && make -s SMS=86 CUDA_PATH=/usr/local/cuda-12.6 >/tmp/build_s_$n.log 2>&1 ) \

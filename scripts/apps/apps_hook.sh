@@ -4,7 +4,8 @@
 #   $APPS_OUT/<app>.guest.log         the app's own output (from inside the guest)
 #   $APPS_OUT/<app>.guest_dmesg.log   the guest dmesg lines this app added (NVRM / Xid)
 #   $APPS_OUT/<app>.kf3.log           the kf3 device's stderr lines this app added
-# and append its APPRES line (plus KF3/XID counters) to $APPS_OUT/guest.res.
+# and append its APPRES line (plus KF3/XID counters, the managed-memory verdict `loud=` of
+# loud_verdict.sh and the boot's `rc[unarmed= none=]` gate counters) to $APPS_OUT/guest.res.
 # Stops at the first app after which the guest no longer answers (verdict GUEST_DEAD);
 # apps_matrix.sh reboots and continues with the rest.
 set -uo pipefail
@@ -16,7 +17,10 @@ $G true >/dev/null 2>&1 || { echo "APPS_HOOK guest unreachable at start"; exit 0
 $G 'sudo tee /opt/apps/bundle/run_apps.sh >/dev/null' < "$HERE/run_apps.sh"
 # the tree's python drivers, so a harness fix does not need a re-provisioned image
 # host-built probes added after the image was provisioned (same binaries the host lane ran)
-tar -C /workspace/apps/bundle -cf - bin | $G 'sudo tar -C /opt/apps/bundle -xf -'
+# ★ 2026-10-03: plus the release rows' sample files (the image's samples/ predates them): only the ones
+# the bundle has, so an older bundle still pushes bin/ cleanly.
+extra=$(cd /workspace/apps/bundle 2>/dev/null && ls -d samples/vectorAddMMAP samples/vectorAdd_kernel64.fatbin 2>/dev/null | tr '\n' ' ')
+tar -C /workspace/apps/bundle -cf - bin $extra | $G 'sudo tar -C /opt/apps/bundle -xf -'
 $G 'test -d /opt/apps/bundle/cuda/include' || tar -C /workspace/apps/bundle -czf - cuda | $G 'sudo tar -C /opt/apps/bundle -xzf -'
 for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
 $G 'sudo rm -rf /opt/apps/out/guest'
@@ -45,7 +49,12 @@ for app in $APPS; do
   nx=$(grep -c 'Xid' "$OUT/$app.guest_dmesg.log" 2>/dev/null); nx=${nx:-0}
   nr=$(grep -v 'kf3: family=' "$OUT/$app.kf3.log" 2>/dev/null | grep -ciE 'refus'); nr=${nr:-0}
   nk=$(wc -l < "$OUT/$app.kf3.log")
-  echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr" | tee -a "$OUT/guest.res"
+  # ★ 2026-10-03 (release §I): the managed-memory verdict, and the boot's silent-twin gate — the last
+  # `rc[...]` status line in this app's slice (cumulative for the boot; `-` = no status line yet).
+  loud=$(bash "$HERE/loud_verdict.sh" "$app" "$OUT/$app.guest.log" "$OUT/$app.guest_dmesg.log" "$OUT/$app.kf3.log" "$line")
+  st=$(grep -aoE 'rc\[armed=[0-9]+ unarmed=[0-9]+ none=[0-9]+' "$OUT/$app.kf3.log" 2>/dev/null | tail -1)
+  ru=$(sed -n 's/.*unarmed=\([0-9]*\).*/\1/p' <<<"$st"); rn=$(sed -n 's/.*none=\([0-9]*\).*/\1/p' <<<"$st")
+  echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr rc_unarmed=${ru:--} rc_none=${rn:--} loud=${loud#LOUD=}" | tee -a "$OUT/guest.res"
   grep -a '^APPDIG ' <<<"$res" | tee -a "$OUT/guest.dig"
   [ $alive = 0 ] && { echo "APPS_HOOK guest dead after $app — stopping this boot"; break; }
   # ⊘ measured nb1 (670bd310, vh): after UnifiedMemoryStreams' fault the boot was WEDGED — every

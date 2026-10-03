@@ -2,10 +2,15 @@
 """triage.py <results-dir> [res-file] — one line per guest APPRES row with the evidence that names
 its cause: app | verdict | guest Xid lines | kf3 RC/Xid lines | first non-baseline kf3 refusal | note.
 
+★ 2026-10-03 (release §I): a managed-memory row also carries its `loud_verdict.sh` class
+(EXPECTED_LOUD / KF3_DEFECT / SILENT) after the verdict, and a closing `LOUD …` line counts them;
+SILENT and KF3_DEFECT are release blockers. Rows recorded before the hook wrote `loud=` print as
+before.
+
 Baseline noise (present on every passing app, measured 670bd310 on vh) is dropped from the refusal
 column: `QueueNotBound`, the AllocClassNotPermitted rows for class 50031 (0xc36f... allowlist) and
 NV40_I2C, and the `kf3: family=` census line.  Everything else is shown, first occurrence only."""
-import os, re, sys
+import collections, os, re, sys
 
 R = sys.argv[1]
 RES = sys.argv[2] if len(sys.argv) > 2 else "guest.res"
@@ -21,6 +26,7 @@ def clip(s, n):
     s = re.sub(r"\s+", " ", s).strip().replace("|", "/")
     return s[:n]
 
+loud = collections.Counter()
 for line in read(os.path.join(R, RES)):
     if not line.startswith("APPRES "):
         continue
@@ -34,4 +40,11 @@ for line in read(os.path.join(R, RES)):
     gxs = clip(re.sub(r"^\[[^\]]*\] ", "", gx[0]), 150) if gx else "-"
     rcs = clip(rc[0], 170) if rc else "-"
     refs = f"({len(ref)}) " + clip(ref[0], 200) if ref else "-"
+    lc = kv.get("loud", "-")
+    if lc not in ("-", ""):
+        loud[lc] += 1
+        v = f"{v}/{lc}"
     print(f"{app}|{v}|{kv.get('rc')}|{kv.get('secs')}s|gXid:{gxs}|kf3rc:{rcs}|kf3ref:{refs}|{clip(kv.get('note',''),140)}")
+if loud:
+    blockers = loud["SILENT"] + loud["KF3_DEFECT"]
+    print("LOUD " + " ".join(f"{k}={n}" for k, n in sorted(loud.items())) + f" blockers={blockers}")

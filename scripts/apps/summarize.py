@@ -2,7 +2,12 @@
 """summarize.py <results-dir>... — one markdown row per app from host.res / guest.res /
 guest_isolated.res (+ APPDIG digests compared host vs guest). The LAST row per (side, app) wins.
 The guest verdict is the ISOLATED re-run when there is one (a fresh boot with that app alone), and
-the batched verdict is shown beside it when they differ."""
+the batched verdict is shown beside it when they differ.
+
+★ 2026-10-03 (release §I): a managed-memory row that did not pass is scored by its `loud=` class
+(`loud_verdict.sh`): EXPECTED_LOUD, KF3_DEFECT or SILENT replace FAIL/TIMEOUT in the guest column
+and in the closing counts, so a sanctioned loud failure, a kayfabe defect and a release blocker are
+never one bucket. Rows recorded before the hook wrote `loud=` print as before."""
 import re, sys, os, collections
 
 def rows(path):
@@ -41,6 +46,11 @@ for R in sys.argv[1:]:
         hv = h.get("verdict", "-"); bv = b.get("verdict", "-"); iv = i.get("verdict", "")
         final = iv or bv
         det = i or b
+        lc = det.get("loud", "")
+        if final not in ("PASS", "-") and lc in ("EXPECTED_LOUD", "KF3_DEFECT", "SILENT"):
+            final = lc
+            if iv: iv = f"{iv}/{lc}"
+            else: bv = f"{bv}/{lc}"
         detail = ""
         if final not in ("PASS", "-"):
             detail = f"rc={det.get('rc')} {det.get('secs')}s quiet={det.get('quiet')} xid={det.get('guest_xid')} kf3_refusals={det.get('kf3_refusals')} — {det.get('note','')[:90]}"
