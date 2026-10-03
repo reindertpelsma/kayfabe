@@ -349,3 +349,18 @@ citation: ask whether its reason still holds before relying on it.
     unaligned access faults. The likely fix is the one-flag host patch in nvidia.ko's mmap path,
     since a host patch is already required for UVM (`design/V3_COOPERATIVE_TIERS.md`).
 
+## L. Broker frames: a GPU copy into kayfabe's own frames, never guest memory (2026-10-03)
+
+- **Owner:** *"exact zero copy isn't needed though, what we do need is that we can avoid a GPU-CPU copy.
+  So if you need an object to export to the screen that contains a frame you can also copy directly.
+  Is maybe better for security because a shared RM object lets the guest change the bytes
+  underneath."*
+- No guest surface and no slice of the store is ever exported to the broker or any other process.
+- For a compositor on the same NVIDIA GPU, kf-disp copies each finished frame GPU→GPU into a frame
+  object kayfabe allocated itself in host VRAM. That object is exported as a dma-buf with a format and
+  modifier the compositor imports. The frame never crosses to the CPU, and the guest cannot change it
+  after the copy.
+- The existing rungs stay as fallbacks: a linear dma-buf copy in host RAM for compositors on another GPU
+  or vendor, and F_SHM.
+- Design pass of 2026-10-03; research in `traces/` once the broker branch lands.
+
