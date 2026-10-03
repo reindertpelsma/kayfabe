@@ -540,6 +540,14 @@ citation: ask whether its reason still holds before relying on it.
        performs and the test that shows each check.
     4. Private fields on handle types that carry addresses.
     5. No `Copy` or `Clone` on handles that own memory.
+- **Standing merge approval** (owner, the same day, verbatim): *"you have full approval to merge only
+  it ci passed, code is good and it passed on real hardware with a real boot and apps. you are free to
+  merge in a candidate merge branch and then test that, or check per branch, what you prefer, as long as
+  the end state as a whole in main is tested"* and *"then if thats true, you dont have to ask to merge"*.
+  The bar for master, for code and security-policy changes alike: CI green; the code reviewed; and the
+  exact commit master will point to has passed, on a box with a real NVIDIA GPU, a real guest boot, the
+  merge bar (tests, gates, bare metal, guest suite) and the apps. A candidate branch that merges several
+  lanes is tested as a whole, at its own head.
 - **Testing before master** (owner, the same day): *"before you merge to master, test it works"*, *"on
   real hardware"*. Code reaches master only after CI and a merge bar on a box with a real NVIDIA GPU,
   at the exact commit, plus that change's own hardware tests. Docs-only commits are tested by CI.
