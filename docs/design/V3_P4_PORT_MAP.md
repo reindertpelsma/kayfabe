@@ -363,10 +363,17 @@ The order is forced:
 >   the old view mapped, and nvidia.ko does not zap user mappings when RM unmaps (its only revocation
 >   is `nv_revoke_gpu_mappings_locked`, power-management paths; `ogkm-580:
 >   kernel-open/nvidia/nv-mmap.c:786-816`), so the guest kept a CPU mapping of a released host BAR1
->   aperture. Now an old view is retired only when every window range it was placed over was
->   re-placed by that re-point; otherwise it is kept and counted (`pramin_kept=` in the status
->   line). `CpuWindow::map/unmap` were checked and already safe: unmap releases only after its
->   sink lands, and a refused view placement never leaves the new view mapped (`mm/vma.c:2496-2506`).
+>   aperture. Now an old view is retired only when every slot it was placed over has been
+>   re-placed since it was placed; otherwise it is kept and counted. ⊘ *Corrected the same day
+>   (third review): the first fix required ONE re-point to re-place the whole range, so a view
+>   landed over piecewise (refusals alternating between the two halves of the window) was held
+>   for the VM's life, and `pramin_kept=` counted one event per re-point (399 for 200 re-points,
+>   the review's probe).* Each slot now remembers the last re-point that landed it
+>   (`PraminPool::repoint`, `landed_since`), so a kept view goes with the re-point that lands its
+>   last slot; at most one view per slot is ever kept (16). `pramin_kept=` counts distinct views
+>   ever kept, `pramin_kept_now=` the views held now. `CpuWindow::map/unmap` were checked and
+>   already safe: unmap releases only after its sink lands, and a refused view placement never
+>   leaves the new view mapped (`mm/vma.c:2496-2506`).
 > - **A refused sink piece may be a HOLE**, not the old backing: Linux 7.1 clears the old page
 >   tables before allocating the new mapping (`mm/vma.c:2476`) and then leaves *"a gap where the
 >   MAP_FIXED mapping failed"* (`:2368-2388`). `ScratchTile::cover` now retries a refused piece
@@ -400,6 +407,12 @@ The order is forced:
 >   (the first releases `0x10_0000` while the guest still reaches it). `crates/kf-qemu/src/mem.rs`:
 >   `a_bar_sink_merges_back_after_qemu_has_advised_the_window` runs the production doors (CI only).
 >   ⚠ All of these run on the host CPU; nothing here was run in a VM or on a box.
+> - **Tests, third review (2026-10-03; bites run locally on Linux 7.0).** `crates/kf-mem/src/cpuwin.rs`:
+>   `a_view_landed_over_piecewise_is_retired_and_kept_views_stay_bounded` (200 re-points that
+>   alternately refuse each half; the first view must go by round 1, at most 2 views live, `kept`
+>   = one per view); with retirement bitten back to "this re-point landed every slot" it fails at
+>   round 1 holding 2 views. `a_view_kept_across_many_repoints_is_counted_once`; counting events
+>   again it fails at 5 against 1.
 
 > ⊘⊘ **CORRECTED 2026-10-03 (branch `v3-scratch-bound`) — the recommendation below bounded scratch
 > by the BAR size, and guest root can reach that bound. The scratch is now TILED.**
