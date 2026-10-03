@@ -92,7 +92,10 @@ int ioctl(int fd, unsigned long req, ...) {
             memcpy(&parms, p + 16, 8);
             memcpy(&psize, p + (size == 32 ? 24 : 32), 4);
             if (size == 48) memcpy(&nvos64_flags, p + 36, 4);
-            if (parms && psize >= 24 && !(nvos64_flags & 1)) {
+            // ⊘ paramsSize is NOT a precondition: RM ignores the caller's size and copies the
+            // class's own parameter struct in and out (ogkm-580: rmapi/alloc_free.c:134-143,
+            // rmapiParamsCopyInit -> rmapiGetClassAllocParamSize). libcuda passes 0 here.
+            if (parms && !(nvos64_flags & 1)) {
                 memcpy(&req_flags, (uint8_t *)(uintptr_t)parms + 20, 4);
             }
             watch = 1;
@@ -105,7 +108,7 @@ int ioctl(int fd, unsigned long req, ...) {
         memcpy(&h, p + 8, 4);
         memcpy(&status, p + (size == 32 ? 28 : 40), 4);
         const char *verdict = "?";
-        if (parms && psize >= 24 && !(nvos64_flags & 1)) {
+        if (parms && !(nvos64_flags & 1)) {
             memcpy(&reply_flags, (uint8_t *)(uintptr_t)parms + 20, 4);
             if (rc == 0 && status == 0 && !(req_flags & 0x20))
                 verdict = (reply_flags & 0x20) ? "1" : "0";
