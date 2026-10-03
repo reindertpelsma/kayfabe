@@ -248,6 +248,8 @@ impl HostRm {
         NvMemoryAllocationParams {
             owner: self.client.raw(),
             kind: 0,
+            flags: 0,
+            attr2: 0,
             attr: 0,
             size: len,
             alignment: 0,

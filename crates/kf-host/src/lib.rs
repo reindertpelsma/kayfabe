@@ -83,6 +83,41 @@ pub const IMPOSSIBLE_CONVERSION: u32 = 0x4B66;
 pub const NOT_ON_THIS_RUNG: u32 = 0x4B46;
 /// An offset or length outside the object it names.
 pub const NOT_IN_THIS_OBJECT: u32 = 0x4B47;
+
+/// ★ The largest display slot a session allocates or exports — a hard cap above
+/// `kf_disp::vramslot::SLOT_MAX` (36 MiB, derived there; kf-qemu's tests pin `SLOT_MAX <=` this).
+pub const DISPLAY_SLOT_CAP: u64 = 64 << 20;
+/// Display slots are whole multiples of this (CUDA's import granularity).
+pub const DISPLAY_SLOT_GRANULE: u64 = 2 << 20;
+
+/// ★ A display slot of the GPU-copy broker rung ([`HostRm::alloc_display_slot`]): a VRAM object
+/// kayfabe owns, never guest memory. Not `Clone`, no public constructor, no public handle — the
+/// only way to name one to [`HostRm::export_display_slot`] is to have allocated it.
+#[derive(Debug, PartialEq, Eq)]
+pub struct DisplaySlot {
+    handle: u32,
+    bytes: u64,
+}
+
+/// A display slot's size: whole granules, at most the cap.
+#[must_use]
+pub fn display_slot_size_ok(bytes: u64) -> bool {
+    bytes != 0 && bytes <= DISPLAY_SLOT_CAP && bytes.is_multiple_of(DISPLAY_SLOT_GRANULE)
+}
+
+/// The export guard: the session recorded this slot (`known` = its recorded size) at this size.
+#[must_use]
+pub fn display_slot_exportable(known: Option<u64>, bytes: u64) -> bool {
+    known == Some(bytes) && display_slot_size_ok(bytes)
+}
+
+impl DisplaySlot {
+    /// Its size in bytes.
+    #[must_use]
+    pub fn bytes(&self) -> u64 {
+        self.bytes
+    }
+}
 /// The kernel refused the cache attribute asked for.
 pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
 /// A FIXED map at a VA that is already mapped.
@@ -343,6 +378,9 @@ struct UsermodeWindow {
 struct Objects {
     next: u32,
     parents: BTreeMap<u32, u32>,
+    /// ★ The display slots this session allocated ([`HostRm::alloc_display_slot`]): handle →
+    /// bytes. The ONLY objects [`HostRm::export_display_slot`] will export.
+    display_slots: BTreeMap<u32, u64>,
 }
 
 /// `NV2080_CTRL_CMD_MC_GET_ARCH_INFO` — NON_PRIVILEGED (`ogkm-580: ctrl2080mc.h:61`).
@@ -488,6 +526,7 @@ impl HostRm {
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
+                display_slots: BTreeMap::new(),
             }),
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
             views: Default::default(),
@@ -1707,6 +1746,8 @@ impl HostRm {
         NvMemoryAllocationParams {
             owner: self.client.raw(),
             kind: 0,
+            flags: 0,
+            attr2: 0,
             attr: kf_abi::submit::ATTR_CONTIGUOUS_VIDMEM,
             size: len,
             alignment: ONE_GIB,
@@ -1735,6 +1776,8 @@ impl HostRm {
         NvMemoryAllocationParams {
             owner: self.client.raw(),
             kind: 0,
+            flags: 0,
+            attr2: 0,
             attr: kf_abi::submit::ATTR_NONCONTIGUOUS_VIDMEM,
             size: len,
             alignment: 4096,
@@ -1766,6 +1809,8 @@ impl HostRm {
         NvMemoryAllocationParams {
             owner: self.client.raw(),
             kind: 0,
+            flags: 0,
+            attr2: 0,
             attr: ATTR_CONTIGUOUS_VIDMEM,
             size: len,
             alignment: len,
@@ -1875,6 +1920,87 @@ impl HostRm {
         Ok(out.h_object_new)
     }
 
+    /// ★★ **GPU-copy broker rung: one display slot** (`docs/design/V3_DISPLAY.md` §8.11,
+    /// `OWNER_RULINGS.md` §L) — a video-memory object kayfabe allocates for ITSELF, `bytes` long
+    /// (whole 2 MiB granules, at most [`DISPLAY_SLOT_CAP`]) with the attribute set `attrs` (setup
+    /// data, chosen by the box experiment E1). Its handle is recorded, and only a recorded slot
+    /// can ever be exported ([`HostRm::export_display_slot`]).
+    ///
+    /// ⊘ Call it on a session that holds NO guest object (`OWNER_RULINGS.md` §N, the client
+    /// split): kf3 opens a separate [`HostRm`] for the display, so the store, the guest's RAM and
+    /// its twins are never in the client a slot is exported from. There is no API that maps a
+    /// slot into a GPU VA space — the guest can only reach it through a translation that
+    /// already reaches outside its store, the invariant every other host VRAM object rests on.
+    ///
+    /// # Errors
+    /// A size outside the cap or the granule ([`NOT_IN_THIS_OBJECT`]); the host's refusal.
+    pub fn alloc_display_slot(
+        &self,
+        bytes: u64,
+        attrs: &kf_abi::submit::SlotAttrs,
+    ) -> Result<DisplaySlot, RmError> {
+        if !display_slot_size_ok(bytes) {
+            return Err(RmError::Other(NOT_IN_THIS_OBJECT));
+        }
+        let mut params = [0u8; NvMemoryAllocationParams::SIZE];
+        NvMemoryAllocationParams {
+            owner: self.client.raw(),
+            kind: attrs.kind,
+            flags: attrs.flags,
+            attr: attrs.attr,
+            attr2: attrs.attr2,
+            size: bytes,
+            alignment: attrs.alignment,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let want = self.mint();
+        let h = self.raw_alloc(
+            self.device,
+            want,
+            NV01_MEMORY_LOCAL_USER,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS,
+            )),
+            &mut params,
+        )?;
+        self.remember(h, self.device);
+        {
+            let _leaf = leafwitness::Held::enter();
+            self.objects
+                .lock()
+                .expect("objects")
+                .display_slots
+                .insert(h, bytes);
+        }
+        Ok(DisplaySlot { handle: h, bytes })
+    }
+
+    /// ★ Export display slot `slot` to a FRESH control-node fd, for the two imports (CUDA's and
+    /// NVKMS's); the caller closes it once both hold the object (the imports dup it from RM's
+    /// export client, `ogkm-580: src/nvidia/arch/nvalloc/unix/src/rmobjexportimport.c:575-640`).
+    /// ⊘ The runtime guard beside the type: the handle must be one [`HostRm::alloc_display_slot`]
+    /// recorded in THIS session, with the same size, under [`DISPLAY_SLOT_CAP`] — so no route
+    /// leads from the store's handle (or any other object) to a render node.
+    ///
+    /// # Errors
+    /// [`NOT_IN_THIS_OBJECT`] for a slot this session did not allocate; the export's refusal.
+    pub fn export_display_slot(&self, slot: &DisplaySlot) -> Result<CharDevice, RmError> {
+        let known = {
+            let _leaf = leafwitness::Held::enter();
+            self.objects
+                .lock()
+                .expect("objects")
+                .display_slots
+                .get(&slot.handle)
+                .copied()
+        };
+        if !display_slot_exportable(known, slot.bytes) {
+            return Err(RmError::Other(NOT_IN_THIS_OBJECT));
+        }
+        self.export_to_new_fd(slot.handle)
+    }
+
     /// Export `object` to a FRESH control-node fd (owned by the returned device) — how the store
     /// is handed to the CUDA walk context (`WalkKernel::import_store`).
     ///
@@ -1978,5 +2104,37 @@ impl HostRm {
         status_check(out.status)?;
         self.forget(object);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod display_slot_tests {
+    /// ★ The display-slot guards (GPU-free): only whole 2 MiB granules up to the cap are
+    /// allocated, and only a slot this session recorded, at its recorded size, is exported.
+    #[test]
+    fn only_a_recorded_display_slot_of_a_sane_size_is_exported() {
+        assert!(super::display_slot_size_ok(10 << 20));
+        assert!(super::display_slot_size_ok(super::DISPLAY_SLOT_CAP));
+        for bad in [
+            0,
+            1 << 20,
+            (10 << 20) + 4096,
+            super::DISPLAY_SLOT_CAP + (2 << 20),
+        ] {
+            assert!(!super::display_slot_size_ok(bad), "{bad:#x}");
+        }
+        assert!(super::display_slot_exportable(Some(10 << 20), 10 << 20));
+        assert!(
+            !super::display_slot_exportable(None, 10 << 20),
+            "never allocated here"
+        );
+        assert!(
+            !super::display_slot_exportable(Some(10 << 20), 36 << 20),
+            "another size"
+        );
+        assert!(
+            !super::display_slot_exportable(Some(1 << 30), 1 << 30),
+            "the store's size"
+        );
     }
 }

@@ -273,6 +273,8 @@ pub mod bounds;
 pub mod cache;
 pub mod census;
 mod chardev_unsafe;
+pub mod drm;
+mod drm_unsafe;
 mod epoll_unsafe;
 pub mod error;
 pub mod geometry;
@@ -295,6 +297,10 @@ mod window_unsafe;
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
 pub use chardev_unsafe::{CharDevice, DevAccess, DevDir, Indirect, POINTER_FIELD_WIDTH};
+pub use drm_unsafe::{
+    DMA_BUF_EXPORT_SYNC_FILE, GEM_CLOSE, PRIME_HANDLE_TO_FD, dma_buf_idle, gem_close,
+    prime_handle_to_fd,
+};
 pub use epoll_unsafe::{MAX_READY_BATCH, PollTimeout, Poller, ReadyTokens};
 pub use error::RawError;
 pub use host_fd_unsafe::{

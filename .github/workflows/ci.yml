@@ -1530,7 +1530,19 @@ jobs:
           #     that narrows std's listener to a backlog of 1, so the full-backlog test needs a few
           #     descriptors instead of more than `somaxconn` (it failed under `ulimit -n 1024`).
           #   ⊘ No new power: `geteuid` reads this process's own credential.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:89 kf-cuda:78 kf-qemu:53"
+          #
+          # ★★ `kf-linux-raw` 89 -> 93, 2026-10-03 (`v3-broker`, the GPU-copy broker rung —
+          # docs/design/V3_DISPLAY.md §8.11, OWNER_RULINGS.md §L). `drm_unsafe.rs` (+4), each on a
+          # kernel-uapi `#[repr(C)]` mirror whose size is asserted at compile time and encoded in
+          # the request: `ioctl(DRM_IOCTL_PRIME_HANDLE_TO_FD)` (12-byte `drm_prime_handle`; the
+          # new dma-buf descriptor adopted at once); `ioctl(DRM_IOCTL_GEM_CLOSE)` (8 bytes, `_IOW`);
+          # `ioctl(DMA_BUF_IOCTL_EXPORT_SYNC_FILE)` (8 bytes; the sync_file adopted at once) and a
+          # zero-timeout `poll` on that one live `pollfd`.
+          #   ⊘ No new power: the render node's two nvidia-drm ioctls go through the EXISTING
+          #     `CharDevice::ioctl` (its size check and pointer patch-and-scrub) from SAFE code
+          #     (`drm.rs`), allowlisted to `GET_DEV_INFO` and `GEM_IMPORT_NVKMS_MEMORY`; the GEM
+          #     objects are only ever kayfabe's own VRAM frame slots, never guest memory.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:93 kf-cuda:78 kf-qemu:53"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

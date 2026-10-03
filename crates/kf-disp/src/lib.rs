@@ -33,3 +33,4 @@ pub mod ports;
 pub mod pushbuf;
 pub mod regs;
 pub mod scanout;
+pub mod vramslot;
