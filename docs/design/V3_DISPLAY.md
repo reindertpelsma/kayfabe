@@ -139,7 +139,13 @@
 >   (b) the pacing: a headless host runs each vblank callback at once (`vblank.c:87, 209-243`), so X11
 >   should run UNTHROTTLED (glxgears well above 60 FPS); a host that drives a monitor paces the guest at
 >   that monitor's refresh; (c) whether Cinnamon's X11 crash in `libnvidia-glcore` and X11 vkcube's abort
->   (rc 134, `traces/v3_display/b0a_20261003/`) have no other cause.
+>   (rc 134, `traces/v3_display/b0a_20261003/`) have no other cause; (d) whether any guest client sends
+>   the object's one control, `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK` (`0x90720101`, "an out-of-band version
+>   of the … NOTIFY_ON_VBLANK method", `ctrl9072.h:52-84`). It is `ROUTE_TO_PHYSICAL | NON_PRIVILEGED`
+>   (flags `0x48`, `g_dispsw_nvoc.c:176-190`), so it would reach us, and NOTHING here serves it: it
+>   meets the unserviced ledger and is refused `NOT_SUPPORTED`. If the box shows it, it needs a twin
+>   verb on the host object (unprivileged there too); it is not built because nothing has shown a
+>   client sending it.
 > - Carried with it: the driver matrix gains `NV9072_ALLOCATION_PARAMETERS` (the sweep of 2026-10-03 at
 >   all 29 tags: one 12-byte layout, `traces/driver_matrix/ranges.tsv`), and `kf3_realize` takes
 >   `x11_dispsw` — **KF3 ABI 13** (11 and 12 are taken by `v3-gop` and `v3-broker` for other signatures).
@@ -155,7 +161,8 @@
 >   **Pass (B):** `DISPLAY_DESKTOP_SESSION=yes`; `DISPLAY_DESKTOP_CRASHES 0`; `DISPLAY_VKCUBE … VKCUBE_RC=0`
 >   (and the `DISPLAY_VKCUBE_PM0/1/2` lines' `RC=`); `DISPLAY_HOST_XID=0`; in `run_dsw_on_qemu.log` the
 >   realize line `EXPERIMENT x11-dispsw ON` and a status line with `dispsw[twins=` > 0, `host_refused=0`,
->   `no_twin=0`. **Record, do not grade:** `DISPLAY_GLXGEARS` and `DISPLAY_GLXGEARS_NOVSYNC` (expected
+>   `no_twin=0`; and neither its `unserviced=[…]` nor a `kf3: GSP REFUSED` line names `0x90720101`
+>   (open item (d)). **Record, do not grade:** `DISPLAY_GLXGEARS` and `DISPLAY_GLXGEARS_NOVSYNC` (expected
 >   unthrottled on a headless host), the `desk_1`/`desk_vkcube` screendumps, and the same lines from A for
 >   the comparison. ⊘ A chip with no display engine on bare metal (GA100, GH100, GB10x) cannot take this
 >   test at all — `display=on` refuses to realize there (§2.2). The B-fallback path (`host_refused` > 0,
