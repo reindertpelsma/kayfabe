@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later -->
 <!--
   autounattend.xml.in — the Windows 11 Enterprise LTSC 2024 (evaluation) unattended install for
-  win_vm.sh. win_vm.sh fills the @@...@@ fields and writes the result ONLY into the VM's secrets/
+  win_vm.sh. win_vm.sh fills the placeholder fields and writes the result ONLY into the VM's secrets/
   directory (mode 0600), onto the install-time unattend.iso, which it deletes after the install
   check passes. Nothing secret is in this template.
 

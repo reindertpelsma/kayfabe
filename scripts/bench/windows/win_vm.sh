@@ -72,6 +72,7 @@ OVMF_VARS_TEMPLATE=${WINVM_OVMF_VARS:-/usr/share/OVMF/OVMF_VARS_4M.fd}
 WIN_USER=kf
 MAC=52:54:00:4b:46:57
 QMP="python3 $HERE/qmp.py"
+QBIN=""
 export PATH="$HOME/.cargo/bin:$PATH"
 
 # ★ The media, each pinned by sha256 at its first fetch (2026-10-04, box vwin). Only official
@@ -104,11 +105,21 @@ log() {
   return 0
 }
 die() { log "REFUSED: $*" >&2; exit 2; }
+# ⊘ The body runs in a subshell OUTSIDE any `||`/`if`: bash ignores `set -e` for everything called in
+# such a context, so `"$@" || rc=$?` reported rc=0 for a step whose python had died (measured on vwin,
+# 2026-10-04: the unattend ISO shipped without autounattend.xml and Setup stopped at its first page).
+# A step therefore cannot set variables in the caller; none needs to.
 step() {
-  local n=$1 rc=0
+  local n=$1 rc
   shift
   log "START $n"
-  "$@" || rc=$?
+  set +e
+  (
+    set -e
+    "$@"
+  )
+  rc=$?
+  set -e
   log "EXIT $n rc=$rc"
   return "$rc"
 }
@@ -135,12 +146,11 @@ check_prereqs() {
   need_file /dev/kvm "KVM is required"
   need_file "$OVMF_CODE" "apt install ovmf (the Secure Boot 4M build)"
   need_file "$OVMF_VARS_TEMPLATE" "apt install ovmf"
-  local q
-  q=$(qemu_bin)
-  "$q" -device help 2>/dev/null | grep -q '"tpm-crb"' \
-    || die "$q has no tpm-crb: rebuild with scripts/bench/build_kf3.sh (it configures --enable-tpm since 2026-10-04)"
-  "$q" -netdev help 2>/dev/null | grep -qx 'user' \
-    || die "$q has no user networking: rebuild with scripts/bench/build_kf3.sh (--enable-slirp since 2026-10-04)"
+  [ -n "${QBIN:-}" ] || die "internal: QBIN unset"
+  "$QBIN" -device help 2>/dev/null | grep -q '"tpm-crb"' \
+    || die "$QBIN has no tpm-crb: rebuild with scripts/bench/build_kf3.sh (it configures --enable-tpm since 2026-10-04)"
+  "$QBIN" -netdev help 2>/dev/null | grep -qx 'user' \
+    || die "$QBIN has no user networking: rebuild with scripts/bench/build_kf3.sh (--enable-slirp since 2026-10-04)"
 }
 
 kf3_rev() {
@@ -384,9 +394,8 @@ qemu_running() {
 
 # vm_start TAG BOOT EXTRA-QEMU-ARGS...   (QA must be set; sets QPID, EVPID, SHOTPID, BOOT_EV)
 vm_start() {
-  local tag=$1 n=$2 q
+  local tag=$1 n=$2 q=$QBIN
   shift 2
-  q=$(qemu_bin)
   qemu_running && die "QEMU for $NAME is already running (pid $(cat "$VM/run/qemu.pid"))"
   swtpm_start
   rm -f "$VM/run/qmp.sock" "$VM/run/qmp-ev.sock" "$VM/run/qga.sock" "$VM/run/vnc.sock"
@@ -483,8 +492,8 @@ qga_diag() {
 run_check() {  # TAG [-ExpectKf3]
   local tag=$1 out
   shift
-  gssh 'New-Item -ItemType Directory -Force -Path C:\kf | Out-Null' >/dev/null
-  gscp_to "$HERE/check.ps1" "C:/kf/check.ps1"
+  gssh 'New-Item -ItemType Directory -Force -Path C:\kf | Out-Null' >/dev/null || return 1
+  gscp_to "$HERE/check.ps1" "C:/kf/check.ps1" || return 1
   out=$VM/logs/${tag}_check.txt
   local rc=0
   gssh "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\check.ps1 $*" > "$out" 2>&1 || rc=$?
@@ -580,7 +589,10 @@ cmd_install() {
   LOGFILE=$VM/logs/install.log
   exec 7>"$VM/run/vm.lock"
   flock -n 7 || die "$NAME is in use by another win_vm.sh"
-  log "WINVM_INSTALL_START name=$NAME repo=$(kf3_rev) qemu=$(qemu_bin) host_driver=$(host_driver)"
+  # ★ The binary and the revision are resolved ONCE: a checkout updated under a running install or
+  # run must not change which QEMU the next boot of it starts.
+  QBIN=$(qemu_bin)
+  log "WINVM_INSTALL_START name=$NAME repo=$(kf3_rev) qemu=$QBIN host_driver=$(host_driver)"
   step prereqs check_prereqs
   step fetch cmd_fetch
   step apparmor apparmor_swtpm
@@ -662,6 +674,7 @@ cmd_run() {
   LOGFILE=$VM/logs/${tag}_run.log
   exec 7>"$VM/run/vm.lock"
   flock -n 7 || die "$NAME is in use by another win_vm.sh"
+  QBIN=$(qemu_bin)
   check_prereqs
   local disk=$VM/disk/$overlay.qcow2
   if [ ! -e "$disk" ]; then
@@ -687,7 +700,7 @@ cmd_run() {
   rm -f "$VM/run/stop-requested"
   local stopping=0
   trap 'stopping=1; touch "$VM/run/stop-requested"; log "signal: asking the guest to power down"; $QMP "$VM/run/qmp.sock" cmd system_powerdown >/dev/null 2>&1 || true' TERM INT
-  log "WINVM_RUN_START tag=$tag repo_rev=$(kf3_rev) kf3=$([ "$kf3" = 1 ] && echo on || echo off) qemu=$(qemu_bin) host_driver=$(host_driver) overlay=$overlay arm=$arm guest_driver=${gdrv:-default} gop_efi=${gop:-none} sha256(gop_efi)=$([ -n "$gop" ] && sha256sum "$gop" | cut -c1-16 || echo -)"
+  log "WINVM_RUN_START tag=$tag repo_rev=$(kf3_rev) kf3=$([ "$kf3" = 1 ] && echo on || echo off) qemu=$QBIN host_driver=$(host_driver) overlay=$overlay arm=$arm guest_driver=${gdrv:-default} gop_efi=${gop:-none} sha256(gop_efi)=$([ -n "$gop" ] && sha256sum "$gop" | cut -c1-16 || echo -)"
   [ -z "$dev" ] || log "kf3 device: $dev"
   local n=0 reason="" dm0
   while :; do
