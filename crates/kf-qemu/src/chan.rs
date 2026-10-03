@@ -1007,31 +1007,40 @@ type ObjIndex = HashMap<(u32, u32), (u32, u32)>;
 /// `host_refused_before`: the twin's mark ([`dispsw_mark_host_refused`]). A poisoned map counts as
 /// full (`usize::MAX`), so the caps refuse.
 fn dispsw_live(pt: &Mutex<PtMap>, key: (u32, u32)) -> crate::dispsw::Live {
-    // MUTANT M1 (zero body)
-    let _ = (pt, key);
-    crate::dispsw::Live {
-        chan: 0,
-        vm: 0,
-        host_refused_before: false,
-    }
+    pt.lock().map_or(
+        crate::dispsw::Live {
+            chan: usize::MAX,
+            vm: usize::MAX,
+            host_refused_before: false,
+        },
+        |m| crate::dispsw::Live {
+            chan: m.get(&key).map_or(0, |v| v.disp_sw.len()),
+            vm: m.values().map(|v| v.disp_sw.len()).sum(),
+            host_refused_before: m.get(&key).is_some_and(|v| v.dispsw_host_refused),
+        },
+    )
 }
 
 /// ★ x11-dispsw (review 2026-10-03, LOW): a host display-SW alloc on channel `key`'s twin was
 /// refused ([`crate::dispsw::twin_watched`]) — mark the twin, so every later display-SW alloc on it
 /// is refused by name. Only while the map still holds THAT twin (`chan`); `true` when marked.
 fn dispsw_mark_host_refused(pt: &Mutex<PtMap>, key: (u32, u32), chan: kf_host::Channel) -> bool {
-    // MUTANT M3 (marks nothing)
-    let _ = (pt, key, chan);
-    false
+    pt.lock().is_ok_and(|mut m| match m.get_mut(&key) {
+        Some(v) if v.chan == chan => {
+            v.dispsw_host_refused = true;
+            true
+        }
+        _ => false,
+    })
 }
 
 /// ★ x11-dispsw (review 2026-10-03, MEDIUM; its test, LOW): the guest numbered another `ENG_SW`
 /// object under channel `key` ([`ChanPlane::software_object`]) — that twin's mirror advances, and
 /// no other channel's. `None`: no twin holds the channel; `Some(None)`: the mirror lost the count.
 fn register_other_sw(pt: &Mutex<PtMap>, key: (u32, u32)) -> Option<Option<u16>> {
-    // MUTANT M6 (mirror never advances)
-    let _ = (pt, key);
-    None
+    pt.lock()
+        .ok()
+        .and_then(|mut m| m.get_mut(&key).map(|v| v.sw_ids.register()))
 }
 
 /// The act-queue label of the display-SW undo ([`attach_dispsw_withdraw`]).
@@ -1048,8 +1057,22 @@ fn attach_dispsw_withdraw(
     key: (u32, u32),
     handle: u32,
 ) {
-    // MUTANT M8 (no undo attached)
-    let _ = (d, tx, kept, key, handle);
+    d.on_orphaned(move || {
+        let undo: Act = Box::new(move |me: &ChanPlane| {
+            let h = kept.load(Ordering::Acquire);
+            Ok(withdraw_kept(
+                me.rm,
+                &me.pt,
+                &me.pt_objs,
+                key,
+                handle,
+                h,
+                &me.dispsw,
+            ))
+        });
+        // Nobody waits on this cell: the guest already has the refusal.
+        let _ = tx.send((undo, kf_gsp::Deferred::new(), DISPSW_WITHDRAW));
+    });
 }
 
 /// ★ x11-dispsw: the undo's body ([`attach_dispsw_withdraw`]) — take the display-SW twin the act
@@ -1064,9 +1087,26 @@ fn withdraw_kept<H: crate::dispsw::DispSwHost>(
     h: u32,
     c: &crate::dispsw::DispSwCounters,
 ) -> String {
-    // MUTANT M7 (withdraws nothing)
-    let _ = (host, pt, pt_objs, h, c);
-    format!("{:#x}:{handle:#x}: nothing of this act's left to withdraw", key.0)
+    let client = key.0;
+    let taken = h != 0
+        && match (pt.lock(), pt_objs.lock()) {
+            (Ok(mut pt), Ok(mut objs)) => crate::dispsw::withdraw_disp_sw(
+                pt.get_mut(&key).map(|v| &mut v.disp_sw),
+                &mut objs,
+                key,
+                handle,
+                h,
+            ),
+            _ => false,
+        };
+    if !taken {
+        return format!("{client:#x}:{handle:#x}: nothing of this act's left to withdraw");
+    }
+    c.withdrawn.fetch_add(1, Ordering::Relaxed);
+    let freed = crate::dispsw::release_one(host, h, c);
+    format!(
+        "{client:#x}:{handle:#x} GF100_DISP_SW: another link refused the alloc after the act — its twin, host object {h:#x}, withdrawn and {freed}"
+    )
 }
 
 impl ChanPlane {

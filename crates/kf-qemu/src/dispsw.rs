@@ -327,8 +327,7 @@ pub fn twin_one<H: DispSwHost>(
     live: Live,
     c: &DispSwCounters,
 ) -> Result<(u32, String), Refusal> {
-    // MUTANT M2 (the mark is ignored)
-    if live.host_refused_before && std::hint::black_box(false) {
+    if live.host_refused_before {
         DispSwCounters::add(&c.after_host_refused, 1);
         return Err((
             NV_ERR_NOT_SUPPORTED,
@@ -446,8 +445,9 @@ impl<H: DispSwHost> DispSwHost for Watch<'_, H> {
     type Chan = H::Chan;
     fn alloc(&self, chan: H::Chan) -> Result<u32, String> {
         let r = self.host.alloc(chan);
-        // MUTANT M5 (a refused alloc is not remembered)
-        let _ = &self.alloc_refused;
+        if r.is_err() {
+            self.alloc_refused.set(true);
+        }
         r
     }
     fn class_id(&self, chan: H::Chan, object: u32) -> Result<u16, String> {
