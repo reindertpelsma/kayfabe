@@ -470,8 +470,66 @@ citation: ask whether its reason still holds before relying on it.
     kernels, so the kernels' own bounds (the walker's store bound; the compose layer check) are
     host-memory-safety obligations. They stay in the audited set and need tests that can fail. HMM is
     not refused. (Audit S1-05 is narrowed accordingly.)
+- **The rule is keyed on the channel's privilege, which kayfabe always knows.** Owner, verbatim: *"what
+  you do know is if the channel is privileged or not. channel guest says is unprivileged cannot contain
+  a full vram map ever, forbidden. real hardware must be told, so ogkm indicates it, as on bare metal
+  channel userd and the ring and push buffers are mapped in an unprivileged cpu process, so the gpu is
+  told any data at those addresses must be confined without ogkm checking it as it doesn't inspect in
+  the first place. right? so then we should too. this is a critical flaw worth fixing right?"*
+  - On bare metal, RM never inspects a user pushbuffer. Confinement is the hardware's job: the
+    channel is unprivileged, and its VA space holds only what the kernel mapped for that process.
+    kayfabe gives the same guarantee the same way. The host VA space that runs work from a channel
+    the guest created unprivileged holds only rows derived from the guest's page tables: never a
+    window, never kayfabe memory. The guest's RM sets each channel's privilege, and kayfabe services
+    the channel allocation, so the decision needs no knowledge of what the space will later hold.
+  - Audit S1-21 (the windows mapped in every mirrored space) breaks this rule and is **critical**. The
+    fix is P1 + P2: no window in any space an unprivileged channel uses, and Translated work in its
+    own space as above.
 - **Also the same day:** *"We must check iova addresses are supported in kayfabe for guests requiring
   iommu protection. Not that this becomes a hard retrofit later."* A guest DMA address (an IOVA under a
   guest vIOMMU) is a fourth kind. It must be translated to a GPA at one validated boundary before any of
   the rules above apply. The readiness check is on `v3-viommu` (`design/V3_VIOMMU.md`).
+
+## R. Memory safety: the `_unsafe` file is the audit perimeter (2026-10-03)
+
+- **Owner, verbatim:**
+  - *"safe code cannoy hold a raw pointer, either get rid of it or declare it as unsafe code and
+    ensures it validates if safe code callers use it, do whats best"*;
+  - *"we need to limit the amount of unsafe code, just logic may not need unsafe code"*;
+  - *"the main invariant to hold, to protect against memory bugs, is that the vast majority of safe
+    code that contains a bug and calls into any unsafe code is bound checked into that function. not at
+    every call site. its a protection at us, a few validation sites is easy to audit, at every call its
+    not then its basically unsafe code declared as safe."*;
+  - *"if you would export an abritary read memory at vmm offset + length address as normal rust
+    function, unchecked, and then expect safe code to call it correctly, you basically have a function
+    that can dereference pointers without unsafe { ... }. so it breaks the compile time security rust
+    provides. ideally by only auditing unsafe code we can conclude that with rust + that audit (assume
+    the audit was perfect) that memory bugw cannot occur, without an audit on safe code. the same way a
+    memory bug should not be possible in java/python/js/C# code ... i would say if the file ends with
+    _unsafe, unvalidated length+offset or raw ptr is allowed, incl validation functions, even though you
+    didn't need rust's unsafe block. then if safe code calls it, its validated, and that file gets a lot
+    ot audit attention. so unsafe block is used as I needed this otherwise rust doesn't compile, if its
+    not needed dont use it even in an unsafe file. unsafe file means this file can violate memory
+    safety. so unsafe rust block not allowed in safe files is one gate, but not the whole actual
+    security promise for memory bugs."*
+- **Rules:**
+  - A file named `*_unsafe.rs` is the audit perimeter: "this file can violate memory safety". It may
+    hold raw pointers, unvalidated offsets and lengths, and the validation code itself, including code
+    that needs no `unsafe` block. Code outside the perimeter must be memory-safe for every input by
+    construction, so it needs a logic review only, never a memory-safety audit.
+  - Every function a perimeter file exports to safe code validates all of its own inputs: overflow,
+    range in the real allocation, alignment and lifetime. A buggy safe caller cannot cause a memory
+    error. A precondition left to callers is forbidden; it is unsafe code declared safe.
+  - `unsafe {}` is used only where Rust does not compile without it, inside the perimeter too.
+  - No raw or disguised host or device address outside the perimeter. The console frame's address
+    (S1-03) and kf-cuda's device-memory functions (S1-04) are being converted on `v3-sec-rawaddr`.
+    The owner keeps the console display feature.
+- **Proposed by Claude the same day; the owner has not ruled on these yet:**
+  - (a) Inside the perimeter, mark a function with an unchecked precondition `unsafe fn` even when
+    its body needs no `unsafe` block, so every caller states why its arguments are valid.
+  - (b) Code that produces an address hardware will dereference (GPU page-table entries, RM ioctl
+    structs, kernel launch arguments, `mmap` targets) is perimeter material even though it compiles
+    as safe Rust.
+  - (c) Ratchet the perimeter's size (lines and exported items), not only `unsafe` blocks.
+  - (d) `kf3.c` is entirely inside the perimeter and must compile in CI.
 
