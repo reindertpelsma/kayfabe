@@ -113,7 +113,8 @@
 //!
 //! Every public type is `Send + Sync` (decision #17), asserted at the bottom of each
 //! module. The FSM is a plain value: it holds no lock, spawns nothing, and reads no
-//! clock, so a shell that owns it decides its own serialisation.
+//! clock, so a shell that owns it decides its own serialisation. ★ The one shared cell it may
+//! write — fn 72's body for the boot display ([`sysinfo`]) — takes its lock for one bounded copy.
 
 pub mod boot;
 pub mod element;
@@ -124,6 +125,7 @@ pub mod refusal;
 pub mod ring;
 pub mod rpc;
 pub mod seq;
+pub mod sysinfo;
 
 pub use boot::{
     CommandObserver, CommandPolicy, Deferred, EchoOk, EventDelivery, GspAbi, GspFsm,
@@ -147,3 +149,4 @@ pub use ring::{
 };
 pub use rpc::{Disposition, FunctionCodes, RpcAbi, RpcCommand, RpcFunction};
 pub use seq::FalconSecureBooterBoot;
+pub use sysinfo::{StashedSystemInfo, SystemInfoCell};

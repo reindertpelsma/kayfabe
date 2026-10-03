@@ -466,8 +466,9 @@ pub fn plan_layer(
     }))
 }
 
-/// The [`LayerPlan::window`] a cursor layer carries (logs only: the cursor is no window).
-pub const CURSOR_LAYER: u32 = u32::MAX;
+/// The [`LayerPlan::window`] a cursor layer carries (logs only: the cursor is no window). One below
+/// [`BOOT_WINDOW`] (the merge of 2026-10-03: both had taken `u32::MAX`), so a log tells them apart.
+pub const CURSOR_LAYER: u32 = u32::MAX - 1;
 
 /// ★ Display step 3d: plan head `c.head`'s cursor as the TOP layer of a `fw` x `fh` composition.
 /// The image is pitch `A8R8G8B8` (NVKMS programs nothing else, `ogkm-580:
@@ -567,9 +568,146 @@ pub fn plan_cursor(
     }))
 }
 
+/// ★ The boot framebuffer kf3's option ROM published (`docs/design/V3_DISPLAY.md` §4.11): a pitch
+/// XRGB8888 surface at store offset 0 — what RM will call FB 0 — of `bytes` (G) store bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BootSurface {
+    /// Visible width in pixels.
+    pub width: u32,
+    /// Visible height in lines.
+    pub height: u32,
+    /// Bytes from one line to the next (a multiple of 256: NVKMS's console rule).
+    pub pitch: u32,
+    /// The framebuffer's store bytes, G: nothing past it is ever read.
+    pub bytes: u64,
+}
+
+/// The [`LayerPlan::window`] of the boot layer: no guest window owns it.
+pub const BOOT_WINDOW: u32 = u32::MAX;
+
+/// ★★ **The boot layer**: what the console shows before the guest's driver arms a head — the
+/// firmware's framebuffer, read by the GPU from store `[0, G)` (the CPU never reads it, §38).
+/// One opaque pitch layer at the frame's origin, `width`×`height`, bounded by G.
+///
+/// The surface is VMM-AUTHORED (kf3 chose the mode and G when it packed its ROM), but it is checked
+/// like any guest surface, so a bad geometry is a named refusal rather than a copy past G.
+///
+/// # Errors
+/// [`Refused`], naming the bound: an empty or oversized mode, a pitch that is not a multiple of 256
+/// or is shorter than a line, or lines that do not fit G.
+pub fn boot_layer(s: &BootSurface) -> Result<LayerPlan, Refused> {
+    let no = |why: String| Err(Refused(format!("boot framebuffer: {why}")));
+    if s.width == 0 || s.height == 0 {
+        return no(format!("an empty mode {}x{}", s.width, s.height));
+    }
+    if u64::from(s.width) * u64::from(s.height) > MAX_PIXELS {
+        return no(format!(
+            "{}x{} is larger than the console's {MAX_PIXELS} pixels",
+            s.width, s.height
+        ));
+    }
+    let line = u64::from(s.width) * 4;
+    if !s.pitch.is_multiple_of(256) || u64::from(s.pitch) < line {
+        return no(format!(
+            "pitch {} is not a multiple of 256 at least {line} bytes long",
+            s.pitch
+        ));
+    }
+    let extent = u64::from(s.height - 1) * u64::from(s.pitch) + line;
+    if u64::from(s.pitch) * u64::from(s.height) > s.bytes {
+        return no(format!(
+            "{} lines of {} bytes leave the {:#x}-byte framebuffer",
+            s.height, s.pitch, s.bytes
+        ));
+    }
+    Ok(LayerPlan {
+        window: BOOT_WINDOW,
+        src: 0,
+        extent,
+        block_linear: false,
+        pitch: s.pitch,
+        block_height_log2: 0,
+        x0_bytes: 0,
+        y0: 0,
+        width: s.width,
+        rows: s.height,
+        ox: 0,
+        oy: 0,
+        // opaque XRGB8888 in B, G, R, X byte order: no alpha, no red/blue swap, store the word
+        flags: 4,
+        a_s: 255,
+        b_s: 0,
+        a_d: 0,
+        b_d: 0,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 1920x1080 as kf3 packs it (`kf_oprom::Geometry::for_mode`): pitch 7680, G = 0x7F0000.
+    fn boot1080() -> BootSurface {
+        BootSurface {
+            width: 1920,
+            height: 1080,
+            pitch: 7680,
+            bytes: 0x7F_0000,
+        }
+    }
+
+    #[test]
+    fn the_boot_layer_is_one_opaque_pitch_copy_of_store_zero() {
+        let l = boot_layer(&boot1080()).unwrap();
+        assert_eq!((l.src, l.pitch, l.width, l.rows), (0, 7680, 1920, 1080));
+        assert_eq!(l.extent, 1079 * 7680 + 1920 * 4);
+        assert!(l.extent <= 0x7F_0000);
+        assert!(!l.block_linear);
+        assert_eq!((l.ox, l.oy, l.x0_bytes, l.y0), (0, 0, 0, 0));
+        assert_eq!(l.flags, 4, "opaque, no alpha, no swap");
+        assert_eq!((l.a_s, l.b_s, l.a_d, l.b_d), (255, 0, 0, 0));
+        assert_eq!(l.window, BOOT_WINDOW);
+        // the same shape `plan_layer` gives an opaque X8R8G8B8 pitch window at the origin
+        let odd = BootSurface {
+            width: 1152,
+            height: 648,
+            pitch: 4608,
+            bytes: 0x2E_0000,
+        };
+        assert_eq!(boot_layer(&odd).unwrap().extent, 647 * 4608 + 1152 * 4);
+    }
+
+    #[test]
+    fn a_boot_geometry_past_its_bounds_is_refused_by_name() {
+        let b = boot1080();
+        for (bad, word) in [
+            (BootSurface { width: 0, ..b }, "empty"),
+            (
+                BootSurface {
+                    width: 7680,
+                    height: 4320,
+                    pitch: 30720,
+                    bytes: 1 << 30,
+                },
+                "larger",
+            ),
+            (BootSurface { pitch: 7700, ..b }, "pitch"),
+            (BootSurface { pitch: 7424, ..b }, "pitch"),
+            (
+                BootSurface {
+                    bytes: 0x7E_0000,
+                    ..b
+                },
+                "leave",
+            ),
+        ] {
+            let e = boot_layer(&bad).unwrap_err().0;
+            assert!(
+                e.contains(word) && e.contains("boot framebuffer"),
+                "{bad:?}: {e}"
+            );
+        }
+    }
 
     fn formats() -> ScanFormats {
         ScanFormats::resolve(crate::class::for_version("580.159.04").unwrap(), 0xC67E)

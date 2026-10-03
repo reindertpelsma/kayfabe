@@ -426,6 +426,104 @@ pub fn fb_layout(fb_length: u64) -> Option<FbLayout> {
     })
 }
 
+/// The granule CPU-RM reserves a preserved console in: `ReservedConsoleDispMemSize =
+/// NV_ALIGN_UP(fbConsoleSize, 64 KiB)` (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osinit.c:1092`).
+pub const CONSOLE_ALIGN: u64 = 64 << 10;
+
+/// Why a console region cannot be carved out of the layout (refused by name, never clamped).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsoleRefused {
+    /// The store cannot hold the firmware carve-out at all ([`fb_layout`] is `None`).
+    NoLayout {
+        /// The store's size.
+        fb_length: u64,
+    },
+    /// `C` is not a multiple of [`CONSOLE_ALIGN`] — CPU-RM never sends such a value.
+    Unaligned {
+        /// The console size the guest stated.
+        console: u64,
+    },
+    /// `C` reaches the firmware carve-out: there would be no heap left below it.
+    NotBelowCarveOut {
+        /// The console size the guest stated.
+        console: u64,
+        /// The carve-out's base (the heap's end without a console).
+        carve: u64,
+    },
+}
+
+impl core::fmt::Display for ConsoleRefused {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match *self {
+            ConsoleRefused::NoLayout { fb_length } => write!(
+                f,
+                "a {fb_length:#x}-byte store cannot hold the firmware carve-out"
+            ),
+            ConsoleRefused::Unaligned { console } => write!(
+                f,
+                "consoleMemSize {console:#x} is not a multiple of {CONSOLE_ALIGN:#x} (CPU-RM aligns it, \
+                 osinit.c:1092)"
+            ),
+            ConsoleRefused::NotBelowCarveOut { console, carve } => write!(
+                f,
+                "consoleMemSize {console:#x} reaches the firmware carve-out at {carve:#x}: no heap \
+                 would be left"
+            ),
+        }
+    }
+}
+
+/// ★★ **The layout when the guest preserves a firmware console of `console` bytes** (the boot
+/// display, `docs/design/V3_DISPLAY.md` §4.11.4 row 1).
+///
+/// CPU-RM describes the preserved console as ALL of `fbRegion[0]` (`memmgrAllocateConsoleRegion_GM107`,
+/// `ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_mgr_gm107.c:2068-2110`: `regionSize =
+/// limit - base + 1`) and maps it at BAR1 VA 0 (`kern_bus_gm107.c:1084-1162`). With today's two-region
+/// table that is the whole ≈ 7.7 GiB heap, which a 256 MiB BAR1 cannot map, so `kbusInitBar1` fails —
+/// read from source, not run. ⇒ with `console > 0`:
+/// - region 0 = `[0, console)`, reserved (`reserved = console` makes RM set `bRsvdRegion`,
+///   `mem_mgr_gsp_client.c:91-101`), ISO yes (it is scanned out), compressed no, performance 0 like
+///   the other reserved region;
+/// - region 1 = `[console, carve)`, the heap, as today's region 0;
+/// - region 2 = the firmware carve-out, unchanged — as are both PDE bases.
+///
+/// `memmgrCalculateHeapOffsetWithGSP_TU102` then takes its region-0 branch and the heap starts at
+/// `console` (`arch/turing/mem_mgr_tu102.c:672-680`). ⚠ GSP-RM's own attributes for a console
+/// region are not knowable (closed firmware); these are ours.
+///
+/// ★ With `console == 0` the result is [`fb_layout`]'s, byte for byte (`tests/console_region.rs`).
+///
+/// # Errors
+/// [`ConsoleRefused`], by name.
+pub fn fb_layout_with_console(fb_length: u64, console: u64) -> Result<FbLayout, ConsoleRefused> {
+    let mut layout = fb_layout(fb_length).ok_or(ConsoleRefused::NoLayout { fb_length })?;
+    if console == 0 {
+        return Ok(layout);
+    }
+    if !console.is_multiple_of(CONSOLE_ALIGN) {
+        return Err(ConsoleRefused::Unaligned { console });
+    }
+    let carve = fb_length - FW_CARVE_OUT_BYTES;
+    if console >= carve {
+        return Err(ConsoleRefused::NotBelowCarveOut { console, carve });
+    }
+    let heap = &mut layout.regions[0];
+    heap.base = console;
+    layout.regions.insert(
+        0,
+        kf_abi::gspstaticinfo::FbRegion {
+            base: 0,
+            limit: console - 1,
+            reserved: console,
+            performance: 0,
+            support_compressed: false,
+            support_iso: true,
+            protected: false,
+        },
+    );
+    Ok(layout)
+}
+
 /// ★ Every BAR0 boot register and config word above, at the offset the ogkm-580 header of each
 /// die group gives it (`kf_chip::hwref`, `docs/design/V3_HW_BOUNDARY_INVENTORY.md`).
 #[cfg(test)]

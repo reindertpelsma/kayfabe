@@ -13,17 +13,17 @@ use std::os::unix::ffi::OsStrExt as _;
 /// ([`kf3_doorbell_page_offset`], [`kf3_set_ioeventfd`], [`kf3_doorbell_site`]). The two 9s name
 /// different surfaces, so an archive from either branch must fail the device's check: one new
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
-/// ★ 11 (2026-10-03, `v3-broker`, display step 3): `kf3_realize` gains `display_broker`, and the
-/// broker relay's surface ([`Kf3BrokerEvent`], [`kf3_broker_start`], [`kf3_broker_frame_fd`],
-/// [`kf3_broker_ready`], [`kf3_broker_stop`]).
-/// ★ 12 (2026-10-03, `v3-broker`, display step 3c): [`kf3_display_ui_info`] (the console's
-/// `ui_info` hook) and the broker's `SURFACE` event (kind 8).
-/// ★ 13 (2026-10-03, `v3-broker`, the GPU-copy rung, `V3_DISPLAY.md` §8.11): `kf3_realize`'s
-/// `display_broker` word carries `display-broker-vram` in bits 1-2 (0 auto, 1 on, 2 off;
-/// [`kf_broker::gpucopy::VramMode::from_abi`]) beside the broker in bit 0. The signature is
-/// unchanged, so the number is what keeps an ABI-12 archive (which reads any nonzero word as
-/// "broker on") from meeting a device that sends the mode.
-pub const KF3_ABI: u32 = 13;
+/// ★ 11 (2026-10-03, `v3-gop-kf3`, `docs/design/V3_DISPLAY.md` §4.11): the boot display —
+/// [`kf3_realize`] takes `gop`, and [`kf3_option_rom`] hands the C device the ROM to register.
+/// ★ 12 (2026-10-03, `v3-broker`, display step 3 — `docs/design/V3_DISPLAY.md` §8): ONE number above
+/// master's 11 for the whole broker surface. ⊘ The branch had numbered its own steps 11, 12 and 13
+/// before master's boot display took 11; the merge folds them into this one bump:
+/// `kf3_realize` gains `display_broker` (after `gop`), whose word carries the broker in bit 0 and
+/// `display-broker-vram` in bits 1-2 (0 auto, 1 on, 2 off; [`kf_broker::gpucopy::VramMode::from_abi`]);
+/// the broker relay's surface ([`Kf3BrokerEvent`], [`kf3_broker_start`], [`kf3_broker_frame_fd`],
+/// [`kf3_broker_ready`], [`kf3_broker_stop`]); [`kf3_display_ui_info`] (the console's `ui_info`
+/// hook) and the broker's `SURFACE` event (kind 8). (`v3-dispsw-exp` takes 13 when it merges.)
+pub const KF3_ABI: u32 = 12;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -100,6 +100,7 @@ pub unsafe extern "C" fn kf3_realize(
     bar2_bytes: u64,
     guest_driver: *const c_char,
     display: u32,
+    gop: u32,
     display_broker: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
@@ -130,6 +131,7 @@ pub unsafe extern "C" fn kf3_realize(
         bar2_bytes,
         guest_driver: guest,
         display: display != 0,
+        gop: gop != 0,
         display_broker: vram.is_some(),
         display_broker_vram: vram.unwrap_or_default(),
     };
@@ -515,8 +517,8 @@ pub struct Kf3Frame {
     pub serial: u64,
 }
 
-/// ★ ABI 11 (display step 3): one input event from the display broker for the C device to inject
-/// (`kind`: 1 key, 2 button, 3 absolute, 4 relative, 5 wheel, 6 grab, 7 close; ABI 12: 8 surface —
+/// ★ ABI 12 (display step 3): one input event from the display broker for the C device to inject
+/// (`kind`: 1 key, 2 button, 3 absolute, 4 relative, 5 wheel, 6 grab, 7 close; 8 surface —
 /// `x`, `y` = the broker window's size, `w0` = its refresh in mHz). Every value is
 /// already bounded by the relay (`kf_broker::Input`); the C device still checks a key code
 /// against QEMU's own map.
@@ -637,7 +639,7 @@ pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
     }
 }
 
-/// ★ ABI 11 (display step 3, `docs/design/V3_DISPLAY.md` §8): start the display-broker relay —
+/// ★ ABI 12 (display step 3, `docs/design/V3_DISPLAY.md` §8): start the display-broker relay —
 /// QEMU's main loop, BQL held, after `kf3_realize` with `display_broker` = 1. `path` is the
 /// broker's socket (absolute, shorter than `sun_path`); `extra_uid` is the `display-broker-uid`
 /// property — `-1` none, or one more uid accepted as the broker (any other value is refused by
@@ -688,7 +690,7 @@ pub unsafe extern "C" fn kf3_broker_start(
     }
 }
 
-/// ★ ABI 11: the display worker's frame eventfd, for the C device to watch for readability
+/// ★ ABI 12: the display worker's frame eventfd, for the C device to watch for readability
 /// (main loop); -1 without a broker.
 #[unsafe(no_mangle)]
 pub extern "C" fn kf3_broker_frame_fd(h: *mut c_void) -> i32 {
@@ -698,7 +700,7 @@ pub extern "C" fn kf3_broker_frame_fd(h: *mut c_void) -> i32 {
         .map_or(-1, crate::broker::BrokerSeat::frame_fd)
 }
 
-/// ★ ABI 11 (main loop, BQL held): something the relay waits on is ready — `fd` is the socket
+/// ★ ABI 12 (main loop, BQL held): something the relay waits on is ready — `fd` is the socket
 /// (`rd`/`wr` say which), the frame eventfd, or -1 for the relay's timer. Writes at most `cap`
 /// input events to `out` and returns how many (never negative; 0 on a bad handle). Reads at most
 /// `cap` packets from the socket; level-triggered readiness delivers the rest.
@@ -737,7 +739,7 @@ pub unsafe extern "C" fn kf3_broker_ready(
     i32::try_from(n).unwrap_or(0)
 }
 
-/// ★ ABI 11 (main loop, device exit, BEFORE the console closes): stop the relay — unwatch, close,
+/// ★ ABI 12 (main loop, device exit, BEFORE the console closes): stop the relay — unwatch, close,
 /// no timer.
 #[unsafe(no_mangle)]
 pub extern "C" fn kf3_broker_stop(h: *mut c_void) {
@@ -765,6 +767,33 @@ pub extern "C" fn kf3_display_ui_info(
         Some(dp) if dp.request_ui(head, width, height, refresh_mhz) => 0,
         _ => -1,
     }
+}
+
+/// ★ ABI 11 (`docs/design/V3_DISPLAY.md` §4.11.6): the boot display's option ROM — the embedded GOP
+/// driver wrapped with this device's ids and its `KFGP` descriptor, packed at realize (`gop=on`).
+/// `0` with `*rom`/`*rom_len` filled: the bytes live for the process (the device is never freed), and
+/// the C device copies them into its ROM BAR. `-1` with `gop=off`, or on a bad handle.
+///
+/// # Safety
+/// `rom` and `rom_len` are writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_option_rom(
+    h: *mut c_void,
+    rom: *mut *const u8,
+    rom_len: *mut u64,
+) -> i32 {
+    let (Some(d), false, false) = (dev(h), rom.is_null(), rom_len.is_null()) else {
+        return -1;
+    };
+    let Some(bytes) = d.option_rom() else {
+        return -1;
+    };
+    // SAFETY: both writable (caller contract); the bytes are the leaked device's for the process.
+    unsafe {
+        *rom = bytes.as_ptr();
+        *rom_len = bytes.len() as u64;
+    }
+    0
 }
 
 /// Stop the device's threads (the device itself lives for the process).

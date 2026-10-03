@@ -81,12 +81,12 @@ that you can do it without asking the guest to load your module at all.
 | host driver | NVIDIA **open** kernel module **580.159.04** |
 | hypervisor | QEMU **10.2.4** with the `kf3` overlay (`qemu/hw/misc/kf3`) compiled in, built by `scripts/bench/build_kf3.sh` |
 | guest | Linux with the stock NVIDIA driver from the same `.run`. Guest RAM must be a shared memfd (`memory-backend-memfd,share=on`) |
-| toolchain | Rust **1.99.0**, pinned in `rust-toolchain.toml` (rustup picks it up), with the `x86_64-unknown-linux-musl` target listed there too. `kayfabe-isolate-host` links a static helper, and without the target the whole workspace fails to build |
+| toolchain | Rust **1.99.0**, pinned in `rust-toolchain.toml` (rustup picks it up), with the `x86_64-unknown-linux-musl` and `x86_64-unknown-uefi` targets listed there too. `kayfabe-isolate-host` links a static helper, and `kf-gop-image` builds kf3's boot-display UEFI driver from `firmware/kf-gop` (nothing compiled is committed); without either target the workspace fails to build, with an error naming it |
 
 ## Build and test
 
 ```sh
-rustup target add x86_64-unknown-linux-musl
+rustup target add x86_64-unknown-linux-musl x86_64-unknown-uefi
 cargo build --workspace
 cargo test -p kf-abi -p kf-chip -p kf-rm -p kf-mem ...   # the kf-* crates; GPU-free
 ```

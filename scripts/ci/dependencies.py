@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # These are algorithms and vocabulary, not host adapters. Include test/build edges:
 # an OS-backed test can live in the harness instead of changing the core's contract.
 PURE = frozenset(("kf-util", "kf-arch", "kf-abi", "kf-chip", "kf-gsp", "kf-trap",
-                  "kf-core", "kf-rm", "kf-trace", "kf-crec", "kf-disp"))
+                  "kf-core", "kf-rm", "kf-trace", "kf-crec", "kf-disp", "kf-oprom"))
 
 
 def dependencies(manifest, workspace):

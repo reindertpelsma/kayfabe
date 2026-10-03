@@ -47,7 +47,8 @@ impl VramMode {
         }
     }
 
-    /// ★ KF3 ABI 13: `kf3_realize`'s `display_broker` word carries the broker in bit 0 and this
+    /// ★ KF3 ABI 12 (the broker's one bump above master's 11; the branch called it 13 before the
+    /// merge): `kf3_realize`'s `display_broker` word carries the broker in bit 0 and this
     /// mode in bits 1-2 (0 auto, 1 on, 2 off). `None` for the broker off; an error for a mode
     /// value 3 or any bit above 2.
     ///
@@ -244,12 +245,12 @@ mod tests {
         assert_eq!(
             VramMode::from_abi(0),
             Ok(None),
-            "ABI 12's `0`: the broker off"
+            "`0`: the broker off (as before the vram bits)"
         );
         assert_eq!(
             VramMode::from_abi(1),
             Ok(Some(VramMode::Auto)),
-            "ABI 12's `1`: auto"
+            "`1`: auto (as before the vram bits)"
         );
         for bad in [0b111, 0b1000, 0b100, 0b10, u32::MAX] {
             assert!(VramMode::from_abi(bad).is_err(), "{bad:#b}");

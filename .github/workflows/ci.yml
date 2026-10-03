@@ -58,7 +58,10 @@ jobs:
           # in this job fails in the build script. It is a build input, not an optimisation:
           # the isolate is `exec`'d from a memfd inside a mount namespace that has no path to
           # a dynamic loader.
-          targets: x86_64-unknown-linux-musl
+          # ★ x86_64-unknown-uefi (2026-10-03, OWNER_RULINGS §K): `crates/kf-gop-image/build.rs`
+          # builds kf3's boot-display GOP driver from firmware/kf-gop the same way, and a missing
+          # target is a named build error there. Both are listed in rust-toolchain.toml.
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --workspace
@@ -651,11 +654,26 @@ jobs:
                      -not -path './crates/kayfabe-linux-raw/*' \
                      -not -path './crates/kf-abi/*' \
                      -not -path './crates/kf-linux-raw/*' \
+                     -not -path './firmware/*' \
                      -not -path './archive/*' -not -path './third_party/*' \
                      -not -path './target/*' -not -path './*/target/*' \
                      -not -path './mutants.out/*' \
                      -exec grep -Hn '^[[:space:]]*#\[repr(C' {} + 2>/dev/null \
                    | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|/\*|\*)' || true)
+
+          # ★ firmware/ (2026-10-03, docs/design/V3_DISPLAY.md §4.11) is GUEST code: the boot-display
+          # GOP runs inside OVMF and is never linked into the VMM. Its C layouts are the UEFI
+          # specification's tables and protocols, which is the whole program's ABI, not a layout
+          # leaking into a logic crate. They are quarantined the way a kernel uapi struct is: in a
+          # *_unsafe.rs file only, where the unsafe audit (gates B and the ratchet below) already
+          # reads them. A repr(C) anywhere else under firmware/ fails here.
+          fw=$(find ./firmware -name '*.rs' -not -name '*_unsafe.rs' -not -path '*/target*' \
+                 -exec grep -Hn '^[[:space:]]*#\[repr(C' {} + 2>/dev/null || true)
+          if [ -n "$fw" ]; then
+            echo "$fw"
+            echo "  ↑ a C layout under firmware/ outside a *_unsafe.rs file (UEFI layouts live in efi_unsafe.rs)"
+            fail=1
+          fi
 
           if [ "$fail" -ne 0 ]; then
             echo ""
@@ -1542,7 +1560,56 @@ jobs:
           #     `CharDevice::ioctl` (its size check and pointer patch-and-scrub) from SAFE code
           #     (`drm.rs`), allowlisted to `GET_DEV_INFO` and `GEM_IMPORT_NVKMS_MEMORY`; the GEM
           #     objects are only ever kayfabe's own VRAM frame slots, never guest memory.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:93 kf-cuda:78 kf-qemu:53"
+          #
+          # ★★★ `firmware/kf-gop:77`, 2026-10-03 — the FIRST entry that is not a crate under crates/,
+          # and an owner default rather than a manifest edit (the release brief: "the firmware crate
+          # is a named unsafe exception living under firmware/ only, outside the cargo workspace").
+          # An entry containing `/` is a path from the repository root; every other entry is
+          # `crates/<name>`. What it is: kf3's boot-display UEFI GOP (docs/design/V3_DISPLAY.md
+          # §4.11) — GUEST code that runs inside OVMF, built for x86_64-unknown-uefi by the
+          # `firmware` job, never linked into the VMM. Raw UEFI tables are its whole interface, so
+          # it cannot be safe; what it can be is CONTAINED: every decision (which controller is
+          # ours, Blt's bounds, placement inside the BAR) is in its safe library (`src/lib.rs`,
+          # `forbid(unsafe_code)`, host-tested), and the 77 sit in four files:
+          #   efi_unsafe.rs (23)   the UEFI ABI: 6 `unsafe fn` (system-table entry, FreePool,
+          #                        FreePages, InstallProtocolInterface, LocateDevicePath, the
+          #                        SecureBoot read) and one block per boot-service wrapper — each
+          #                        a call through the firmware's own table with locals as
+          #                        out-pointers and static GUIDs.
+          #   driver_unsafe.rs (32) the entry points: recovering `Driver`/`Ctx` from `This` (the
+          #                        protocol struct is the first field of a #[repr(C)] owner,
+          #                        checked by signature), config/attribute/BAR calls through PCI
+          #                        I/O, the ROM image slice (the bus driver's copy, read inside
+          #                        the call), the RAM shadow's slice, the framebuffer's one
+          #                        aligned volatile word store (`Mmio::store`, bounds-checked; the
+          #                        BAR range is first checked to fit the BAR the bus driver assigned
+          #                        and to be word-aligned — it is never a slice), the caller's Blt
+          #                        buffer (exactly the bytes the validated plan spans).
+          #   port_unsafe.rs (1)   one `out dx, al` to the debug port. Compiled into the driver
+          #                        only with `--features debugcon` (test builds), and only for
+          #                        x86_64 (`cfg(target_arch)`, §K; elsewhere a named build error).
+          #   bin/kf-gop-test/check_unsafe.rs (22) the stand-in's test application, never shipped.
+          #
+          # ★★ `kf-qemu` 44 -> 46, 2026-10-03 (`v3-gop-kf3`, KF3 ABI 11, the boot display's option ROM,
+          # docs/design/V3_DISPLAY.md §4.11.6). `ffi_unsafe.rs` (+2): `kf3_option_rom` (`unsafe extern
+          # "C" fn`: `rom` and `rom_len` must be writable) and its one `unsafe { }` storing the ROM's
+          # address and length through them. The bytes are the leaked device's (`Device::option_rom`,
+          # packed at realize, never freed), so the pointer the C device copies from is valid for the
+          # process. ⊘ No new power: the C device copies VMM-authored bytes into a read-only ROM region.
+          # ★★ `firmware/kf-gop` 77 -> 78, 2026-10-03 (`v3-gop`, OWNER_RULINGS §K: framebuffer writes are
+          # aligned volatile 32-bit stores — a BAR mapped as Device memory on arm64 faults on an
+          # unaligned access and forbids `DC ZVA`). `driver_unsafe.rs` (31 -> 32): `Mmio::store`'s one
+          # `unsafe { base.add(i).write_volatile(..) }`, bounds-checked against `words` on the line above;
+          # `Ctx::planes` keeps its one block, which now forms only the RAM shadow's slice — the BAR is
+          # never a slice again, so `blt` cannot reach it with `copy_from_slice`/`fill`. ⊘ No new power:
+          # the same bytes of the same BAR the old slice covered, now one aligned word at a time.
+          #
+          # ★★ MERGE 2026-10-03 (`v3-broker` takes master's boot display): the two branches each moved
+          # `kf-qemu` from 44 — the broker by +9 (53), the GOP option ROM by +2 (46) — so the bar is their
+          # sum, 55; `kf-linux-raw` 93 and `kf-cuda` 78 are the broker's alone; `firmware/kf-gop` 78 is
+          # master's alone.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:93 kf-cuda:78 kf-qemu:55 firmware/kf-gop:78"
+          audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
@@ -1579,7 +1646,7 @@ jobs:
           # about, inside the gate that enforces it.
           prune=()
           for entry in $AUDITED; do
-            prune+=( -not -path "./crates/${entry%%:*}/src/*" )
+            prune+=( -not -path "./$(audited_dir "$entry")/src/*" )
           done
           outside=$(find . -name '*_unsafe.rs' "${prune[@]}" \
                       -not -path './archive/*' -not -path './third_party/*' \
@@ -1590,7 +1657,7 @@ jobs:
             echo ""
             echo "★ UNSAFE-CONTAINMENT BREACH — l1_os_shell.md §4.1 gate B."
             echo "The unsound surface lives in the audited crates' src/ ONLY:"
-            for entry in $AUDITED; do echo "  crates/${entry%%:*}/src/"; done
+            for entry in $AUDITED; do echo "  $(audited_dir "$entry")/src/"; done
             echo "The files above are elsewhere. Move the code, or the audit stops being"
             echo "'read the audited crates in one sitting', which is its acceptance"
             echo "criterion."
@@ -1874,7 +1941,7 @@ jobs:
           # this comment that itemisation in the same commit that moves this 0.
           fail=0
           for entry in $AUDITED; do
-            c="${entry%%:*}"; want="${entry##*:}"
+            c="$(audited_dir "$entry")"; want="${entry##*:}"
             # `find ... -exec ... +` rather than a glob: a crate with NO *_unsafe.rs files
             # must count 0, and an unmatched glob would make grep fail the step instead.
             #
@@ -1891,11 +1958,11 @@ jobs:
             # could be moved by any amount without a single gate firing, by putting the
             # file in a subdirectory. There is no `-maxdepth` here now, deliberately:
             # the audit surface is "every `*_unsafe.rs` under the crate", at any depth.
-            actual=$(find "crates/$c/src" -name '*_unsafe.rs' \
+            actual=$(find "$c/src" -name '*_unsafe.rs' \
                        -exec grep -hoE 'unsafe (\{|fn |impl |trait )|unsafe extern "C" fn [A-Za-z_]' {} + 2>/dev/null \
                      | wc -l | tr -d ' ')
             echo "$c: $actual relaxation(s) (bar: $want)"
-            find "crates/$c/src" -name '*_unsafe.rs' \
+            find "$c/src" -name '*_unsafe.rs' \
               -exec grep -coE 'unsafe (\{|fn |impl |trait )|unsafe extern "C" fn [A-Za-z_]' {} + 2>/dev/null || true
             [ "$actual" -ne "$want" ] && fail=1
           done
@@ -1918,7 +1985,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
-          targets: aarch64-unknown-linux-gnu
+          # ★ aarch64-unknown-uefi (2026-10-03, OWNER_RULINGS §K: the ROM stays arch-neutral and
+          # "CI's aarch64 job also builds the driver for aarch64-unknown-uefi"). The cross-check
+          # below runs `crates/kf-gop-image/build.rs`, which builds firmware/kf-gop for the arch the
+          # workspace is checked for — so this job embeds a real AArch64 driver. UEFI targets link
+          # with rust-lld, which ships with the toolchain: no linker to install, no stub needed.
+          targets: aarch64-unknown-linux-gnu, aarch64-unknown-uefi
       - uses: Swatinem/rust-cache@v2
       # ★★ KAYFABE_ISOLATE_IMAGE_STUB=1 — the ONE reviewed opt-out from embedding a real
       # isolate image, and this job is the only place it may be used. This job type-CHECKS
@@ -1930,6 +2002,172 @@ jobs:
         env:
           KAYFABE_ISOLATE_IMAGE_STUB: "1"
         run: cargo check --workspace --target aarch64-unknown-linux-gnu
+      # ★ The boot-display GOP driver for aarch64-unknown-uefi, on its own (OWNER_RULINGS §K), so
+      # x86-isms cannot creep in: the release driver builds, Clippy denies warnings, kf3's PE check
+      # accepts it as AArch64 (machine 0xaa64 — the ROM's EfiMachineType is copied from it), and the
+      # two x86-only pieces (the `debugcon` port output and the stand-in's test app) refuse to build
+      # BY NAME rather than compiling into something that silently reports nothing.
+      - name: kf-gop for aarch64-unknown-uefi (driver builds; x86-only parts refuse by name)
+        run: |
+          set -euo pipefail
+          m=firmware/kf-gop/Cargo.toml
+          cargo build --locked --release --target aarch64-unknown-uefi --bin kf-gop --manifest-path "$m"
+          cargo clippy --locked --release --target aarch64-unknown-uefi --bin kf-gop --manifest-path "$m" -- -D warnings
+          efi=firmware/kf-gop/target/aarch64-unknown-uefi/release/kf-gop.efi
+          cargo run -q --locked -p kf-oprom --bin kf-oprom -- pe "$efi" | tee pe.txt
+          grep -q 'machine=0xaa64 subsystem=11' pe.txt || { echo "★ the aarch64 driver is not an AArch64 boot-service driver"; exit 1; }
+          for bin in "--bin kf-gop --features debugcon" "--bin kf-gop-test"; do
+            # shellcheck disable=SC2086
+            if cargo build --locked --release --target aarch64-unknown-uefi $bin --manifest-path "$m" \
+                 --target-dir firmware/kf-gop/target/refuse > refuse.log 2>&1; then
+              echo "★ '$bin' built for aarch64-unknown-uefi: it must refuse by name (x86 port I/O)"; exit 1
+            fi
+            grep -q 'x86 I/O port 0x402' refuse.log || { cat refuse.log; echo "★ '$bin' failed, but not with its named refusal"; exit 1; }
+            echo "refused by name for aarch64: $bin"
+          done
+
+
+  # ★ The boot-display GOP (docs/design/V3_DISPLAY.md §4.11), added 2026-10-03. firmware/kf-gop is
+  # GUEST code — a UEFI boot-service driver that runs inside OVMF — so it is outside the cargo
+  # workspace. The driver kf3 serves is built from it by `crates/kf-gop-image/build.rs` during every
+  # workspace build (OWNER_RULINGS §K: no compiled binary in the repo; rust-toolchain.toml lists
+  # x86_64-unknown-uefi). This job works on the firmware itself: both build flavours, its host tests
+  # and lints, kf3's PE check, and the local stand-in. The containment rules for its unsafe code run
+  # in the `stable` job (gate B, the ratchet's `firmware/kf-gop` entry, the ABI-quarantine firmware
+  # arm); its aarch64 build runs in the `aarch64` job.
+  # ⊘ CORRECTED 2026-10-03 (v3-gop): until §K landed this job also compared a committed
+  # firmware/kf-gop/kf-gop.efi with the build, and rust-toolchain.toml did not list the UEFI target.
+  firmware:
+    name: firmware — kf-gop (x86_64-unknown-uefi), kf3's PE check, size, local stand-in
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
+          components: rustfmt, clippy
+          targets: x86_64-unknown-uefi
+      # ★ OWNER_RULINGS §K: nothing compiled is committed. A tracked PE (`MZ` header) or `.efi` under
+      # the source tree fails here — the committed kf-gop.efi this repository carried until 2026-10-03
+      # is the instance this guards against.
+      - name: No compiled binary is committed (OWNER_RULINGS §K)
+        # ⊘ WIDENED 2026-10-03 (the review of v3-gop): this flagged only a `.efi` suffix or an `MZ`
+        # header, so an ELF, a packed option ROM (55 AA — exactly what `kf-oprom pack` emits), an
+        # object or an archive passed. §K says no compiled binary at all: every header below, and the
+        # suffixes of build output, outside archive/.
+        run: |
+          python3 - <<'EOF'
+          import subprocess, sys
+          files = subprocess.run(["git", "ls-files", "-z"], capture_output=True, check=True).stdout.split(b"\0")
+          SUFFIXES = (".efi", ".rom", ".o", ".a", ".so", ".rlib", ".rmeta", ".dll", ".exe", ".dylib",
+                      ".obj", ".lib", ".pdb", ".wasm", ".fd", ".ko", ".elf")
+          MAGIC = {
+              b"MZ": "PE/COFF (MZ)",
+              b"\x7fELF": "ELF",
+              b"\x55\xaa": "PCI option ROM (55 AA)",
+              b"!<arch>\n": "ar archive (.a / .rlib)",
+              b"\xcf\xfa\xed\xfe": "Mach-O",
+              b"\xce\xfa\xed\xfe": "Mach-O",
+              b"\xfe\xed\xfa\xcf": "Mach-O",
+              b"\xca\xfe\xba\xbe": "Mach-O fat / Java class",
+              b"\x00asm": "WebAssembly",
+          }
+          bad = []
+          for f in filter(None, files):
+              name = f.decode()
+              if name.startswith("archive/"):
+                  continue
+              try:
+                  with open(f, "rb") as h:
+                      head = h.read(8)
+              except (IsADirectoryError, FileNotFoundError):
+                  continue
+              why = [w for m, w in MAGIC.items() if head.startswith(m)]
+              if name.lower().endswith(SUFFIXES):
+                  why.append("suffix ." + name.rsplit(".", 1)[-1])
+              if why:
+                  bad.append(f"{name} ({', '.join(why)})")
+          for b in bad:
+              print(f"★ tracked compiled binary: {b}")
+          print(f"tracked files checked: {sum(1 for f in files if f)}; compiled binaries: {len(bad)}")
+          sys.exit(1 if bad else 0)
+          EOF
+      - name: Build the driver and the test app (release, and the debugcon test build)
+        run: |
+          cargo build --locked --release --target x86_64-unknown-uefi --manifest-path firmware/kf-gop/Cargo.toml
+          cargo build --locked --release --target x86_64-unknown-uefi --features debugcon \
+            --manifest-path firmware/kf-gop/Cargo.toml --target-dir firmware/kf-gop/target/debugcon
+      # ★ The driver kf3 embeds is THIS source's build, and the same bytes wherever it is built:
+      # `crates/kf-gop-image/build.rs` builds it in a nested cargo under OUT_DIR with a scrubbed
+      # environment, this job builds it standalone in another target directory, and the two must be
+      # identical. That is the property one future Secure Boot signature rests on (§K: "the driver is
+      # byte-identical on every host"): firmware/kf-gop/build.rs links with /Brepro and /DEBUG:NONE.
+      # (Until 2026-10-03 this step compared a committed kf-gop.efi instead; §K withdrew it.)
+      - name: The embedded driver is the standalone build, byte for byte
+        run: |
+          set -euo pipefail
+          cargo build --locked -p kf-gop-image --target-dir target/gop-image
+          embedded=$(find target/gop-image/debug/build -path '*kf-gop-image-*/out/kf-gop.efi')
+          [ "$(echo "$embedded" | wc -l)" -eq 1 ] || { echo "★ expected one embedded driver, found: $embedded"; exit 1; }
+          built=firmware/kf-gop/target/x86_64-unknown-uefi/release/kf-gop.efi
+          if ! cmp "$embedded" "$built"; then
+            echo "★ the driver kf-gop-image embeds differs from a standalone build of the same source"
+            echo "  embedded sha256 $(sha256sum < "$embedded" | cut -c1-64)"
+            echo "  built    sha256 $(sha256sum < "$built" | cut -c1-64)"
+            exit 1
+          fi
+          echo "kf-gop.efi reproduced across target directories: $(sha256sum < "$built" | cut -c1-64)"
+      - name: Host tests of the firmware's safe library
+        run: cargo test --locked --lib --target x86_64-unknown-linux-gnu --manifest-path firmware/kf-gop/Cargo.toml
+      - name: Clippy (warnings are errors) and rustfmt, both build flavours
+        run: |
+          m=firmware/kf-gop/Cargo.toml
+          cargo clippy --locked --release --target x86_64-unknown-uefi --bins --manifest-path "$m" -- -D warnings
+          cargo clippy --locked --release --target x86_64-unknown-uefi --bins --features debugcon \
+            --manifest-path "$m" --target-dir firmware/kf-gop/target/debugcon -- -D warnings
+          cargo clippy --locked --lib --tests --target x86_64-unknown-linux-gnu --manifest-path "$m" -- -D warnings
+          rustfmt --edition 2024 --check $(find firmware -name '*.rs' -not -path '*/target/*')
+      # kf3 serves only a PE that `kf_oprom::pe::check` accepts: x86-64 or AArch64 (the ROM's
+      # EfiMachineType is the PE's own), subsystem 11 (an EFI boot-service driver — EDK2 skips an
+      # application inside a ROM), and the ABI marker for the descriptor version kf-oprom encodes.
+      # The release build must also contain no port I/O.
+      - name: kf3 accepts the release driver; record its size
+        run: |
+          set -euo pipefail
+          efi=firmware/kf-gop/target/x86_64-unknown-uefi/release/kf-gop.efi   # == the embedded driver (step above)
+          cargo run -q --locked -p kf-oprom --bin kf-oprom -- pe "$efi" | tee pe.txt
+          cargo run -q --locked -p kf-oprom --bin kf-oprom -- pe firmware/kf-gop/target/debugcon/x86_64-unknown-uefi/release/kf-gop.efi
+          io=$(objdump -d "$efi" | grep -cE '\s(in|out)\s' || true)
+          if [ "$io" -ne 0 ]; then echo "★ the release driver contains $io port I/O instruction(s)"; exit 1; fi
+          {
+            echo "### kf-gop.efi (release, x86_64-unknown-uefi; what kf-gop-image embeds)"
+            echo "- bytes: $(stat -c %s "$efi")"
+            echo "- sha256: \`$(sha256sum "$efi" | cut -c1-64)\`"
+            echo "- \`$(head -1 pe.txt)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "KF_GOP_EFI_BYTES=$(stat -c %s "$efi")"
+      # ★ The local stand-in (scripts/display/gop_standin.sh): the same driver, packed by kf-oprom
+      # for QEMU's ati-vga, booted under OVMF — every GOP check, the framebuffer read back
+      # byte-exact, the refusals by name, Linux's simpledrm/BOOTFB/boot_vga, and the Secure Boot
+      # observations. GATING: an arm that fails fails the job. KVM when the runner exposes it,
+      # TCG otherwise (slower, same assertions). A Linux arm skips, saying why, when the runner's
+      # kernel has no built-in simpledrm.
+      - name: Install QEMU, OVMF and the stand-in's tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q qemu-system-x86 ovmf busybox-static sbsigntool cpio
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          fi
+          ls -l /dev/kvm || echo "no /dev/kvm: the stand-in runs under TCG"
+          sudo cp "/boot/vmlinuz-$(uname -r)" "$RUNNER_TEMP/vmlinuz" && sudo chmod 0644 "$RUNNER_TEMP/vmlinuz"
+          sudo cp "/boot/config-$(uname -r)" "$RUNNER_TEMP/kconfig" && sudo chmod 0644 "$RUNNER_TEMP/kconfig" || true
+      - name: Stand-in (scripts/display/gop_standin.sh)
+        env:
+          KERNEL: ${{ runner.temp }}/vmlinuz
+          KERNEL_CONFIG: ${{ runner.temp }}/kconfig
+        run: bash scripts/display/gop_standin.sh
 
   slow:
     name: slow — full suite with the soaks (KAYFABE_SLOW=1)
@@ -1943,7 +2181,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml; bump both together
-          targets: x86_64-unknown-linux-musl   # the embedded isolate image; see the stable job
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi   # the embedded isolate image and GOP driver; see the stable job
       - uses: Swatinem/rust-cache@v2
       - name: Test with the slow gate open (pushbuffer proptest fuzz + 16-thread stress soak)
         run: |

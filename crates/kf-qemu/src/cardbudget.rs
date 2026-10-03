@@ -47,6 +47,19 @@ impl Demand {
             store,
         }
     }
+
+    /// ★ The boot display (`gop=on`, `docs/design/V3_DISPLAY.md` §4.11.5): + `g` bytes of host BAR1.
+    /// The seed — one view of store `[0, G)` at guest BAR1 offset 0 — lies inside the guest BAR1
+    /// term already; while it retires, the guest's own console view of the same pages is placed
+    /// BEFORE the seed is released (scratch-first), so for that moment both hold host BAR1 aperture.
+    /// `with_boot_fb(0)` is the demand unchanged (`gop=off`).
+    #[must_use]
+    pub fn with_boot_fb(self, g: u64) -> Demand {
+        Demand {
+            bar1: self.bar1.saturating_add(g),
+            ..self
+        }
+    }
 }
 
 /// The pure rule: may `want` join `held` (the sum of this card's devices so far) on a card whose
@@ -65,7 +78,8 @@ pub fn check(
     if total > host_bar1 {
         return Err(format!(
             "host card {bdf}: BAR1 budget exceeded — this device needs {} MiB (guest BAR1 + BAR2 + \
-             {} MiB PRAMIN + {} MiB headroom) and the {n_held} kf3 device(s) already on this card \
+             {} MiB PRAMIN + {} MiB headroom, + the boot framebuffer with gop=on) and the {n_held} \
+             kf3 device(s) already on this card \
              hold {} MiB; {} MiB > the host's {} MiB BAR1. Refused at realize, by name: shrink the \
              guest BAR1 (bar1-size) or put this device on another host GPU",
             want.bar1 >> 20,
@@ -146,6 +160,27 @@ mod tests {
             check("0000:01:00.0", 256 * MIB, d, 1, d).is_ok(),
             "2 × 113 MiB ≤ 256 MiB"
         );
+    }
+
+    /// ⊘ `gop=off` adds nothing; `gop=on` adds G — and can tip a full card over, by name.
+    #[test]
+    fn the_boot_framebuffer_is_one_more_g_of_host_bar1() {
+        let d = Demand::of(128 * MIB, 32 * MIB, 8192 * MIB);
+        assert_eq!(d.with_boot_fb(0), d);
+        let g = 0x7F_0000;
+        assert_eq!(d.with_boot_fb(g).bar1, d.bar1 + g);
+        assert_eq!(d.with_boot_fb(g).store, d.store);
+        let host = d.bar1 + g - 1;
+        assert!(check("0000:01:00.0", host, Demand::default(), 0, d).is_ok());
+        let e = check(
+            "0000:01:00.0",
+            host,
+            Demand::default(),
+            0,
+            d.with_boot_fb(g),
+        )
+        .expect_err("one byte short");
+        assert!(e.contains("boot framebuffer"), "{e}");
     }
 
     #[test]

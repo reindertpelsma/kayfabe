@@ -21,7 +21,7 @@
 use crate::edid::Monitor;
 use crate::layout::{Layouts, Params};
 use crate::ports::Ports;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 /// `NV_OK`.
@@ -120,6 +120,11 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
     ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
     ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
+    // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): ROUTE_TO_PHYSICAL (`g_disp_objs_nvoc.c`, flags
+    // 0x40), so it reaches us. NVKMS sends PRESERVE_HW before freeing each channel after it restored
+    // the console (`nvkms-rm.c:2990-3017`): the display keeps scanning the console through the free.
+    // The mark is the DISPLAY OBJECT's the control names ([`DisplayModel::control_on`]).
+    ("NV5070_CTRL_CMD_SET_RMFREE_FLAGS", "rmfree_flags"),
     // ★ M1 (`[measured m1a, 2026-09-30, GA106 / 580.159.04]` the ledger held 0x20800a76 after
     // nvidia-drm's fbdev took the console): the VGA console save/restore around a console switch
     // (`unix_console.c:74-140`). Our virtual engine has no VGA console and no VBIOS mode to save:
@@ -292,6 +297,9 @@ pub struct Channel {
     pub instance: u32,
     /// The owning client and handle (a free names them).
     pub client: u32,
+    /// ★ Its parent object — the display object (`DispObject`) it was allocated under (NVKMS:
+    /// `pDevEvo->displayHandle`, `nvkms-rm.c:2815-2819`), whose `SET_RMFREE_FLAGS` its free reads.
+    pub parent: u32,
     /// The channel object's handle.
     pub handle: u32,
     /// Its pushbuffer (`None` for the cursor PIO channel).
@@ -354,6 +362,10 @@ pub enum Statement {
         kind: ChannelKind,
         /// Instance.
         instance: u32,
+        /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the free carried
+        /// `NV5070_CTRL_SET_RMFREE_FLAGS_PRESERVE_HW` — the display hardware keeps scanning what
+        /// it scans (NVKMS sets it after a console restore, `nvkms-rm.c:2990-3017`).
+        preserve: bool,
     },
 }
 
@@ -392,7 +404,27 @@ pub struct DisplayModel {
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
     pub hotplug: Vec<HotplugRegistration>,
+    /// ★ `NV5070_CTRL_CMD_SET_RMFREE_FLAGS` PRESERVE_HW marks, by the display object the control
+    /// named — `(client, DispObject handle)`, at most [`MAX_RMFREE_MARKS`].
+    /// ⊘ CORRECTED 2026-10-03 (the review of `v3-gop-unload`): this was ONE flag for the whole model,
+    /// cleared after every `GSP_RM_FREE`. RM keeps it on the `DispObject` (`rmFreeFlags`,
+    /// `ogkm-580: src/nvidia/src/kernel/gpu/disp/disp_objs.c:563-578`) "for the next RmFree() only"
+    /// (`ctrl5070chnc.h:901-913`), so another client's flag marked this client's free, and a free of a
+    /// channel's child (the guest's RM sends one `GSP_RM_FREE` per object, children first) spent it
+    /// before the channel's own free. Now: a channel free reads its PARENT's mark, and the free that
+    /// read it (or freed the display object or its client) spends it ([`Self::end_free`]).
+    rmfree_marks: BTreeSet<(u32, u32)>,
+    /// Marks the free in progress read or freed — spent by [`Self::end_free`].
+    rmfree_spent: BTreeSet<(u32, u32)>,
 }
+
+/// ★ How many display objects may carry a `SET_RMFREE_FLAGS` mark at once. A guest has one display
+/// object per client per device; past this the control is refused, so a hostile guest that sets
+/// marks it never spends grows nothing.
+pub const MAX_RMFREE_MARKS: usize = 64;
+
+/// `NV_ERR_INSUFFICIENT_RESOURCES` — [`MAX_RMFREE_MARKS`] reached.
+pub const NV_ERR_INSUFFICIENT_RESOURCES: u32 = 0x1a;
 
 /// The display plane's wake (an eventfd write, in the plane) — callable from any thread.
 #[derive(Clone)]
@@ -448,6 +480,8 @@ impl DisplayModel {
             waker: None,
             pending_plug: 0,
             hotplug: Vec::new(),
+            rmfree_marks: BTreeSet::new(),
+            rmfree_spent: BTreeSet::new(),
         }
     }
 
@@ -593,18 +627,45 @@ impl DisplayModel {
     /// ★ Answer one display control: `Some(Ok(reply params))`, `Some(Err(status))`, or `None` when
     /// the control is not the display plane's.
     pub fn control(&mut self, cmd: u32, params: &[u8]) -> Option<Result<Vec<u8>, u32>> {
+        self.control_at(None, cmd, params)
+    }
+
+    /// ★ [`Self::control`] with the object the control names, `(hClient, hObject)` of the
+    /// `GSP_RM_CONTROL` — the one a per-object control (`SET_RMFREE_FLAGS`, the `DispObject`'s) acts
+    /// on. Without it ([`Self::control`]) such a control is refused `NV_ERR_INVALID_OBJECT`.
+    pub fn control_on(
+        &mut self,
+        client: u32,
+        object: u32,
+        cmd: u32,
+        params: &[u8],
+    ) -> Option<Result<Vec<u8>, u32>> {
+        self.control_at(Some((client, object)), cmd, params)
+    }
+
+    fn control_at(
+        &mut self,
+        target: Option<(u32, u32)>,
+        cmd: u32,
+        params: &[u8],
+    ) -> Option<Result<Vec<u8>, u32>> {
         let kind = self.kind_of(cmd)?;
         if self.seen.len() < 512 {
             self.seen.push(cmd);
         }
-        Some(self.answer(kind, params))
+        Some(self.answer(kind, params, target))
     }
 
     fn view<'a>(&self, s: &'a str, params: &[u8]) -> Result<Params<'a>, u32> {
         Params::new(self.l, s, params).ok_or(NV_ERR_INVALID_ARGUMENT)
     }
 
-    fn answer(&mut self, kind: &str, params: &[u8]) -> Result<Vec<u8>, u32> {
+    fn answer(
+        &mut self,
+        kind: &str,
+        params: &[u8],
+        target: Option<(u32, u32)>,
+    ) -> Result<Vec<u8>, u32> {
         let l = self.l;
         let k = |n: &str| l.konst(n).ok_or(NV_ERR_NOT_SUPPORTED);
         match kind {
@@ -930,6 +991,22 @@ impl DisplayModel {
                 p.set("bReturnEarly", 1);
                 Ok(p.buf)
             }
+            "rmfree_flags" => {
+                let p = self.view("NV5070_CTRL_SET_RMFREE_FLAGS_PARAMS", params)?;
+                let preserve = k("NV5070_CTRL_SET_RMFREE_FLAGS_PRESERVE_HW")?;
+                let at = target.ok_or(NV_ERR_INVALID_OBJECT)?;
+                if p.get("flags").unwrap_or(0) & preserve == 0 {
+                    // NONE: "explicitly clears the flags" (`ctrl5070chnc.h:910-911`)
+                    self.rmfree_marks.remove(&at);
+                } else if self.rmfree_marks.len() >= MAX_RMFREE_MARKS
+                    && !self.rmfree_marks.contains(&at)
+                {
+                    return Err(NV_ERR_INSUFFICIENT_RESOURCES);
+                } else {
+                    self.rmfree_marks.insert(at);
+                }
+                Ok(p.buf)
+            }
             "mode_possible" => {
                 // A virtual head has no isochronous memory pool to exhaust: every mode NVKMS validated
                 // against the EDID and the pixel-clock limit is possible. The bandwidth numbers are
@@ -958,7 +1035,14 @@ impl DisplayModel {
     /// display has, whatever the guest sends. (The guest's CPU-RM does not check a CORE instance,
     /// `kern_disp_0300.c:96-99`: there is one core channel, number 0, and NVKMS allocates it as
     /// instance 0.)
-    pub fn alloc(&mut self, client: u32, handle: u32, class: u32, params: &[u8]) -> bool {
+    pub fn alloc(
+        &mut self,
+        client: u32,
+        parent: u32,
+        handle: u32,
+        class: u32,
+        params: &[u8],
+    ) -> bool {
         let Some(kind) = self.classes.channel_kind(class) else {
             return false;
         };
@@ -984,6 +1068,7 @@ impl DisplayModel {
                 kind,
                 instance: inst,
                 client,
+                parent,
                 handle,
                 pb,
                 offset,
@@ -1002,21 +1087,44 @@ impl DisplayModel {
     }
 
     /// A free of `(client, handle)`: drops the channel if it was one. Returns `true` when it was.
+    ///
+    /// ★ A channel's free carries its display object's `SET_RMFREE_FLAGS` mark (`preserve`), and
+    /// spends it at [`Self::end_free`]; a free OF a marked display object spends its mark too.
     pub fn free(&mut self, client: u32, handle: u32) -> bool {
+        if self.rmfree_marks.contains(&(client, handle)) {
+            self.rmfree_spent.insert((client, handle));
+        }
         let key = self
             .channels
             .iter()
             .find(|(_, c)| c.client == client && c.handle == handle)
-            .map(|(k, _)| *k);
-        if let Some(k) = key {
+            .map(|(k, c)| (*k, c.parent));
+        if let Some((k, parent)) = key {
             self.channels.remove(&k);
             self.ports.release(k.0.channel_number(k.1));
+            let preserve = self.rmfree_marks.contains(&(client, parent));
+            if preserve {
+                self.rmfree_spent.insert((client, parent));
+            }
             self.state(Statement::ChannelFreed {
                 kind: k.0,
                 instance: k.1,
+                preserve,
             });
         }
         key.is_some()
+    }
+
+    /// ★ One guest `GSP_RM_FREE` is done (every object it freed was passed to [`Self::free`] or
+    /// [`Self::free_client`]): the `SET_RMFREE_FLAGS` marks it read — or whose display object (or
+    /// client) it freed — are spent. A free that touched no marked display object leaves every mark
+    /// as it was (RM keeps the flag on the `DispObject`, which an unrelated free never reaches).
+    /// ⊘ Where GSP-RM clears the flag is closed firmware: `ogkm-580` has the accessors and no caller
+    /// (`disp_objs.c:563-578`). This is "the free it was set for" — `ctrl5070chnc.h:901-913`.
+    pub fn end_free(&mut self) {
+        for at in std::mem::take(&mut self.rmfree_spent) {
+            self.rmfree_marks.remove(&at);
+        }
     }
 
     /// A free of the CLIENT `client` (the guest's RM frees each object first, but a client free is
@@ -1026,16 +1134,25 @@ impl DisplayModel {
             .channels
             .iter()
             .filter(|(_, c)| c.client == client)
-            .map(|(k, _)| *k)
+            .map(|(k, c)| (*k, c.parent))
             .collect();
-        for k in &keys {
-            self.channels.remove(k);
+        for &(k, parent) in &keys {
+            self.channels.remove(&k);
             self.ports.release(k.0.channel_number(k.1));
             self.state(Statement::ChannelFreed {
                 kind: k.0,
                 instance: k.1,
+                preserve: self.rmfree_marks.contains(&(client, parent)),
             });
         }
+        // the client's every display object goes with it, and with them their marks
+        let gone: Vec<_> = self
+            .rmfree_marks
+            .iter()
+            .filter(|(c, _)| *c == client)
+            .copied()
+            .collect();
+        self.rmfree_spent.extend(gone);
         keys.len()
     }
 
@@ -1232,7 +1349,13 @@ mod tests {
         q.set("valid", 1);
         assert!(matches!(m.control(CHANNEL_PUSHBUFFER, &q.buf), Some(Ok(_))));
         let s = "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS";
-        assert!(m.alloc(0xc1d0_0001, 0xc67d_0000, 0xC67D, &vec![0; size(&m, s)]));
+        assert!(m.alloc(
+            0xc1d0_0001,
+            0xc670_0000,
+            0xc67d_0000,
+            0xC67D,
+            &vec![0; size(&m, s)]
+        ));
         let ch = &m.channels[&(ChannelKind::Core, 0)];
         assert_eq!(ch.pb.map(|p| p.phys), Some(0x1234_5000));
         let life = ch.life;
@@ -1291,16 +1414,136 @@ mod tests {
         ));
     }
 
+    /// ★ 2026-10-03 (B5): `SET_RMFREE_FLAGS` PRESERVE_HW is the DISPLAY OBJECT's
+    /// (`disp_objs.c:563-578`) and lasts for the free it was set for (`ctrl5070chnc.h:901-913`).
+    /// ⊘ CORRECTED the same day (the review of `v3-gop-unload`): it was one model-wide flag, cleared
+    /// after every `GSP_RM_FREE` — another client's flag marked this client's free, and a child's
+    /// free spent it before the channel's own.
+    #[test]
+    fn preserve_hw_is_the_display_objects_and_lasts_for_the_free_it_was_set_for() {
+        let mut m = model();
+        let (c, disp, other) = (0xc1d0_0001, 0xc670_0000, 0xc1d0_0002);
+        let s = "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS";
+        let core = |m: &mut DisplayModel| {
+            assert!(m.alloc(c, disp, 0xc67d_0000, 0xC67D, &vec![0; size(m, s)]));
+        };
+        let flags = |m: &mut DisplayModel, at: (u32, u32), v: u64| {
+            let f = "NV5070_CTRL_SET_RMFREE_FLAGS_PARAMS";
+            let mut q = Params::new(m.layouts(), f, &vec![0; size(m, f)]).unwrap();
+            q.set("flags", v);
+            let k = cmd(m, "NV5070_CTRL_CMD_SET_RMFREE_FLAGS");
+            m.control_on(at.0, at.1, k, &q.buf)
+        };
+        let freed = |m: &mut DisplayModel| {
+            m.take_statements()
+                .into_iter()
+                .filter_map(|st| match st {
+                    Statement::ChannelFreed { preserve, .. } => Some(preserve),
+                    _ => None,
+                })
+                .collect::<Vec<bool>>()
+        };
+        // marked, then the channel's own free: preserving; the free spent it
+        core(&mut m);
+        assert!(matches!(flags(&mut m, (c, disp), 1), Some(Ok(_))));
+        assert!(m.free(c, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![true]);
+        core(&mut m);
+        assert!(m.free(c, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![false], "the mark was for one free");
+        // a child's free first (one GSP_RM_FREE per object, children first): not the channel's,
+        // so the mark survives it; an unrelated free neither
+        core(&mut m);
+        assert!(matches!(flags(&mut m, (c, disp), 1), Some(Ok(_))));
+        assert!(
+            !m.free(c, 0xc0de_0001),
+            "a child of the channel, not a channel"
+        );
+        m.end_free();
+        assert!(!m.free(c, 0x1234), "an unrelated object");
+        m.end_free();
+        assert!(m.free(c, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![true]);
+        // another client's mark (or another display object's) marks nothing of this one
+        core(&mut m);
+        assert!(matches!(flags(&mut m, (other, disp), 1), Some(Ok(_))));
+        assert!(matches!(flags(&mut m, (c, 0xc670_0001), 1), Some(Ok(_))));
+        assert!(m.free(c, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![false]);
+        // flags 0 (NONE) clears it
+        core(&mut m);
+        assert!(matches!(flags(&mut m, (c, disp), 1), Some(Ok(_))));
+        assert!(matches!(flags(&mut m, (c, disp), 0), Some(Ok(_))));
+        assert!(m.free(c, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![false], "flags 0 (NONE) clears it");
+        // the display object's own free spends its mark, and so does the client's
+        assert!(matches!(flags(&mut m, (c, disp), 1), Some(Ok(_))));
+        assert!(!m.free(c, disp));
+        m.end_free();
+        core(&mut m);
+        assert!(m.free(c, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(
+            freed(&mut m),
+            vec![false],
+            "spent by its display object's free"
+        );
+        core(&mut m);
+        assert!(matches!(flags(&mut m, (c, disp), 1), Some(Ok(_))));
+        assert_eq!(m.free_client(c), 1);
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![true], "the client's free reads it");
+        core(&mut m);
+        assert!(m.free(c, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![false], "and spends it");
+        // ⊘ a control that names no object cannot mark one
+        let f = "NV5070_CTRL_SET_RMFREE_FLAGS_PARAMS";
+        let k = cmd(&m, "NV5070_CTRL_CMD_SET_RMFREE_FLAGS");
+        assert_eq!(
+            m.control(k, &vec![1; size(&m, f)]),
+            Some(Err(NV_ERR_INVALID_OBJECT))
+        );
+    }
+
+    /// ⊘ Hostile guest: marks it never spends are bounded; past the bound the control is refused
+    /// and nothing grows, while a display object already marked can still be re-marked or cleared.
+    #[test]
+    fn rmfree_marks_are_bounded() {
+        let mut m = model();
+        let f = "NV5070_CTRL_SET_RMFREE_FLAGS_PARAMS";
+        let mut q = Params::new(m.layouts(), f, &vec![0; size(&m, f)]).unwrap();
+        q.set("flags", 1);
+        let k = cmd(&m, "NV5070_CTRL_CMD_SET_RMFREE_FLAGS");
+        for i in 0..MAX_RMFREE_MARKS as u32 {
+            assert!(matches!(m.control_on(i, 0xd15, k, &q.buf), Some(Ok(_))));
+        }
+        assert_eq!(
+            m.control_on(0xffff, 0xd15, k, &q.buf),
+            Some(Err(NV_ERR_INSUFFICIENT_RESOURCES))
+        );
+        assert!(matches!(m.control_on(3, 0xd15, k, &q.buf), Some(Ok(_))));
+        assert_eq!(m.rmfree_marks.len(), MAX_RMFREE_MARKS);
+        q.set("flags", 0);
+        assert!(matches!(m.control_on(3, 0xd15, k, &q.buf), Some(Ok(_))));
+        assert_eq!(m.rmfree_marks.len(), MAX_RMFREE_MARKS - 1);
+    }
+
     /// ★ The claim set is enumerable and exact: six subdevice-internal controls plus the named
-    /// ones (34 since display step 3c added the internal hotplug state), every name resolved through
-    /// the derived layouts, no id twice, and nothing in the display interfaces' command pages
-    /// claimed that the set does not list.
+    /// ones (35 since the merge of 2026-10-03: display step 3c added the internal hotplug state and
+    /// B5 `SET_RMFREE_FLAGS`), every name resolved through the derived layouts, no id twice, and
+    /// nothing in the display interfaces' command pages claimed that the set does not list.
     #[test]
     fn the_claim_set_is_enumerable_and_exact() {
         let m = model();
         let set = m.claimed();
         assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
-        assert_eq!(set.len(), 40);
+        assert_eq!(set.len(), 41);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
@@ -1370,30 +1613,30 @@ mod tests {
         };
         let c = 0xc1d0_0001;
         assert!(
-            !m.alloc(c, 0x10, 0xC67E, &with_inst(dma - 4, 0)),
+            !m.alloc(c, 0xd15, 0x10, 0xC67E, &with_inst(dma - 4, 0)),
             "short params are not a window at instance 0"
         );
         assert!(
-            !m.alloc(c, 0x11, 0xC67E, &with_inst(dma, 0xffff_ffff)),
+            !m.alloc(c, 0xd15, 0x11, 0xC67E, &with_inst(dma, 0xffff_ffff)),
             "an instance the display does not have"
         );
         assert!(
-            !m.alloc(c, 0x12, 0xC67A, &with_inst(pio, 4)),
+            !m.alloc(c, 0xd15, 0x12, 0xC67A, &with_inst(pio, 4)),
             "cursor 4 on a four-head display"
         );
         assert!(
-            !m.alloc(c, 0x13, 0xC670, &with_inst(dma, 0)),
+            !m.alloc(c, 0xd15, 0x13, 0xC670, &with_inst(dma, 0)),
             "the display object is not a channel"
         );
         assert!(m.channels.is_empty());
-        assert!(m.alloc(c, 0x20, 0xC67E, &with_inst(dma, 7)));
+        assert!(m.alloc(c, 0xd15, 0x20, 0xC67E, &with_inst(dma, 7)));
         assert_eq!(
             m.channels[&(ChannelKind::Window, 7)].pb.map(|p| p.phys),
             Some(0),
             "its pushbuffer was stated first"
         );
-        assert!(m.alloc(c, 0x21, 0xC67A, &with_inst(pio, 3)));
-        assert!(m.alloc(0xc1d0_0002, 0x22, 0xC67D, &with_inst(dma, 0)));
+        assert!(m.alloc(c, 0xd15, 0x21, 0xC67A, &with_inst(pio, 3)));
+        assert!(m.alloc(0xc1d0_0002, 0xd15, 0x22, 0xC67D, &with_inst(dma, 0)));
         assert_eq!(m.free_client(c), 2);
         assert_eq!(
             m.channels.keys().copied().collect::<Vec<_>>(),
@@ -1402,7 +1645,13 @@ mod tests {
         assert!(!m.free(c, 0x20), "already gone");
         m.take_statements();
         for i in 0..MAX_STATEMENTS + 5 {
-            m.alloc(c, 0x100 + i as u32, 0xC67B, &with_inst(dma, (i % 8) as u32));
+            m.alloc(
+                c,
+                0xd15,
+                0x100 + i as u32,
+                0xC67B,
+                &with_inst(dma, (i % 8) as u32),
+            );
         }
         assert_eq!(m.statements.len(), MAX_STATEMENTS);
         assert_eq!(m.statements_dropped, 5);

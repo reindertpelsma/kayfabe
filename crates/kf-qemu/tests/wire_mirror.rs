@@ -114,7 +114,7 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
         format => "format", serial => "serial"]);
     layout!(Kf3BrokerEvent, [kind => "kind", x => "x", y => "y", w0 => "w0", w1 => "w1"]);
     value!("abi", "KF3_ABI", KF3_ABI);
-    // ★ ABI 13 (V3_DISPLAY.md §8.11): the C device's display_broker word for each
+    // ★ ABI 12 (V3_DISPLAY.md §8.11): the C device's display_broker word for each
     // display-broker-vram value is the one kf_broker::gpucopy::VramMode decodes
     {
         use kf_broker::gpucopy::VramMode;
@@ -442,7 +442,7 @@ fn a_signature_that_drifted_from_kf3_h_is_refused() {
             "int32_t kf3_display_frame(void *, Kf3Frame *);",
             "int32_t kf3_display_frame(void *, Kf3Frame *, uint32_t);",
         ),
-        // ★ ABI 11: the broker's verbs — a callback's parameter narrowed, an entry's swapped
+        // ★ ABI 12: the broker's verbs — a callback's parameter narrowed, an entry's swapped
         (
             "typedef void (*Kf3BrokerTimerFn)(void *, int64_t);",
             "typedef void (*Kf3BrokerTimerFn)(void *, int32_t);",

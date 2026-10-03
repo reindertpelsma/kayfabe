@@ -1,0 +1,15 @@
+START 2026-10-03T19:59:02+00:00
+Preparing worktree (detached HEAD d4c3767b)
+Updating files:  51% (5478/10556)Updating files:  52% (5490/10556)Updating files:  53% (5595/10556)Updating files:  54% (5701/10556)Updating files:  55% (5806/10556)Updating files:  56% (5912/10556)Updating files:  57% (6017/10556)Updating files:  58% (6123/10556)Updating files:  59% (6229/10556)Updating files:  60% (6334/10556)Updating files:  61% (6440/10556)Updating files:  62% (6545/10556)Updating files:  63% (6651/10556)Updating files:  64% (6756/10556)Updating files:  65% (6862/10556)Updating files:  66% (6967/10556)Updating files:  67% (7073/10556)Updating files:  68% (7179/10556)Updating files:  69% (7284/10556)Updating files:  70% (7390/10556)Updating files:  71% (7495/10556)Updating files:  72% (7601/10556)Updating files:  73% (7706/10556)Updating files:  74% (7812/10556)Updating files:  75% (7917/10556)Updating files:  76% (8023/10556)Updating files:  77% (8129/10556)Updating files:  78% (8234/10556)Updating files:  79% (8340/10556)Updating files:  80% (8445/10556)Updating files:  81% (8551/10556)Updating files:  82% (8656/10556)Updating files:  83% (8762/10556)Updating files:  84% (8868/10556)Updating files:  85% (8973/10556)Updating files:  86% (9079/10556)Updating files:  87% (9184/10556)Updating files:  88% (9290/10556)Updating files:  89% (9395/10556)Updating files:  90% (9501/10556)Updating files:  91% (9606/10556)Updating files:  92% (9712/10556)Updating files:  93% (9818/10556)Updating files:  94% (9923/10556)Updating files:  95% (10029/10556)Updating files:  96% (10134/10556)Updating files:  97% (10240/10556)Updating files:  98% (10345/10556)Updating files:  99% (10451/10556)Updating files:  99% (10477/10556)Updating files: 100% (10556/10556)Updating files: 100% (10556/10556), done.
+HEAD is now at d4c3767b GOP + unload, final box runs at 06b307c4: B0, B1, B5 pass; evidence and V3_DISPLAY §4.11
+HEAD=d4c3767ba373717eddf8da160d692df408225517 CHECKOUT=/workspace/bench/verify-worktrees/mb_gop.zQjUXY
+TESTS passed 1844 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/d4c3767b/qemu-system-x86_64 rev=d4c3767b mtime=2026-10-03 20:01:41.568805185 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-10-03T20:20:44+00:00

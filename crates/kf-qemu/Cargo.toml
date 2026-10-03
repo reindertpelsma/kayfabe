@@ -20,6 +20,10 @@ kf-mem.workspace = true
 kf-cuda.workspace = true
 kf-disp.workspace = true
 kf-broker.workspace = true
+# ★ The boot display (`gop=on`): the ROM container (kf-oprom) and the GOP driver, built from source
+# and embedded by kf-gop-image's build script (OWNER_RULINGS §K: no compiled binary in the repo).
+kf-oprom.workspace = true
+kf-gop-image.workspace = true
 kf-chan.workspace = true
 kf-rm.workspace = true
 kf-trap.workspace = true

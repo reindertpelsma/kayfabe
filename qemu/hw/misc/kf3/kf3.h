@@ -10,15 +10,17 @@
 /* ★ 10 (2026-09-30, v3-mc22): the union of two INDEPENDENT 9s — v3-display2's frame hand-off
  * (Kf3Frame, kf3_display_frame) and v3-ioeventfd's doorbell fast path (Kf3IoeventfdFn,
  * kf3_doorbell_page_offset, kf3_set_ioeventfd, kf3_doorbell_site). The two 9s name DIFFERENT
- * surfaces, so an archive from either branch must be refused here: one new number above both. */
-/* ★ 11 (2026-10-03, v3-broker, display step 3 — docs/design/V3_DISPLAY.md §8): kf3_realize gains
- * display_broker, and the broker relay's surface (Kf3BrokerEvent, the two verbs, kf3_broker_*). */
-/* ★ 12 (2026-10-03, display step 3c): kf3_display_ui_info (the console's ui_info hook) and the
- * broker's SURFACE event (KF3_BROKER_SURFACE). */
-/* ★ 13 (2026-10-03, the GPU-copy rung — docs/design/V3_DISPLAY.md sec. 8.11): kf3_realize's
- * display_broker word carries display-broker-vram in bits 1-2 (KF3_BROKER_VRAM_*) beside the
- * broker in bit 0; the signature is unchanged. */
-#define KF3_ABI 13
+ * surfaces, so an archive from either branch must be refused here: one new number above both.
+ * ★ 11 (2026-10-03, v3-gop-kf3, docs/design/V3_DISPLAY.md §4.11): the boot display — kf3_realize
+ * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device. */
+/* ★ 12 (2026-10-03, v3-broker, display step 3 — docs/design/V3_DISPLAY.md §8): ONE number above
+ * master's 11 for the whole broker surface. ⊘ The branch had numbered its steps 11, 12 and 13 before
+ * master's boot display took 11; the merge folds them into this one bump. kf3_realize gains
+ * display_broker (after gop), whose word carries the broker in bit 0 and display-broker-vram in bits
+ * 1-2 (KF3_BROKER_VRAM_*, the GPU-copy rung, sec. 8.11); the broker relay's surface (Kf3BrokerEvent,
+ * the two verbs, kf3_broker_*); kf3_display_ui_info (3c, the console's ui_info hook) and the
+ * broker's SURFACE event (KF3_BROKER_SURFACE). v3-dispsw-exp takes 13 when it merges. */
+#define KF3_ABI 12
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -45,7 +47,7 @@ typedef struct Kf3Frame {
     uint64_t serial;
 } Kf3Frame;
 
-/* ★ ABI 11: one input event from the display broker, already bounded by Rust (kf_broker::Input).
+/* ★ ABI 12: one input event from the display broker, already bounded by Rust (kf_broker::Input).
  * kind: KF3_BROKER_* below. */
 typedef struct Kf3BrokerEvent {
     uint32_t kind;
@@ -62,10 +64,13 @@ typedef struct Kf3BrokerEvent {
 #define KF3_BROKER_SURFACE 8   /* x, y = the broker window's size; w0 = its refresh in mHz (0: unknown) */
 
 uint32_t kf3_abi_version(void);
-/* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md). */
-/* ★ ABI 11: `display_broker` (0/1) — back the display's frames with memfds the broker can receive. */
+/* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
+ * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1.
+ * ★ ABI 12: `display_broker` — bit 0 backs the display's frames for the broker, bits 1-2 are
+ * display-broker-vram (§8.11). */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
-                    const char *guest_driver, uint32_t display, uint32_t display_broker, void **out,
+                    const char *guest_driver, uint32_t display, uint32_t gop, uint32_t display_broker,
+                    void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
@@ -101,7 +106,7 @@ typedef int32_t (*Kf3IoeventfdFn)(void *opaque, uint64_t gpa, uint32_t len, uint
 int64_t kf3_doorbell_page_offset(void *h);
 int32_t kf3_set_ioeventfd(void *h, Kf3IoeventfdFn f, void *opaque, uint32_t budget);
 void kf3_doorbell_site(void *h, uint64_t gpa, uint32_t add);
-/* ★ ABI 11 (display step 3): the display-broker relay. Main loop only, BQL held. Rust owns the
+/* ★ ABI 12 (display step 3): the display-broker relay. Main loop only, BQL held. Rust owns the
  * socket; it calls `watch` (fd handlers; (0, 0) BEFORE it closes the fd) and `timer`
  * (QEMU_CLOCK_REALTIME ms, -1 = none) back only from inside these entries. kf3_broker_ready: `fd`
  * is the socket, the frame eventfd, or -1 for the timer; returns the events written to `out`. */
@@ -116,5 +121,9 @@ int32_t kf3_broker_ready(void *h, int32_t fd, uint32_t rd, uint32_t wr, uint64_t
 void kf3_broker_stop(void *h);
 /* ★ ABI 12 (display step 3c): the console's ui_info — a resize hint for `head` (main loop). */
 int32_t kf3_display_ui_info(void *h, uint32_t head, uint32_t width, uint32_t height, uint32_t refresh_mhz);
+/* ★ ABI 11 (docs/design/V3_DISPLAY.md §4.11.6): the boot display's option ROM (gop=1) — the
+ * embedded GOP driver wrapped with this device's ids and its KFGP descriptor. 0 and *rom, *rom_len
+ * (valid for the process; the device copies them into its ROM BAR), or -1 (gop=0). */
+int32_t kf3_option_rom(void *h, const uint8_t **rom, uint64_t *rom_len);
 void kf3_unrealize(void *h);
 #endif
