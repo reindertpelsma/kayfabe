@@ -14,5 +14,5 @@ fn main() {
     )
     .unwrap();
     let span = region.host_span();
-    let _p: *mut u8 = span.as_ptr();
+    let _p = span.as_ptr();
 }
