@@ -361,12 +361,24 @@ citation: ask whether its reason still holds before relying on it.
     ROM changes, because the measurement of the option ROM changes.
 - **The vTPM (swtpm), from the owner's question the same day** (*"For swtpm a secure seed must be
   provided probably?"*):
-  - No seed is supplied. `swtpm_setup --tpm2` manufactures the TPM once per VM, and its primary
-    seeds come from the TPM's own random generator, seeded from host entropy.
-  - The rules are about the state file: one state per VM, created fresh at install and never copied
-    into an image or template, since a copy duplicates the seeds and the endorsement key. Owner-only
-    permissions. Optional state encryption (`--key`/`--pwdfile`) with a host-held key when the host
-    disk is not trusted. A self-signed EK certificate is enough for Windows 11 and BitLocker.
+  - ⊘ *Corrected the same day; the first wording ("no seed is supplied") was too loose.* Owner,
+    verbatim: *"Yes but tpm should persist reboot though. And a hash of non secret values isn't
+    secure. So some secure seed must be stored right."* Right.
+  - **A secret seed is stored: the state file is the secret.** `swtpm_setup --tpm2` manufactures the
+    TPM once per VM. The primary seeds (endorsement, storage, platform) are random secrets from the
+    host's CSPRNG, never derived from non-secret values such as the VM's name or UUID. swtpm keeps
+    them in its state file. Everything the guest seals to the TPM, BitLocker and Windows Hello
+    included, depends on them.
+  - **It persists.** The same state is reused on every guest boot, every QEMU restart (kayfabe
+    restarts QEMU on each guest reboot) and every kayfabe update. Manufacture happens once, and the
+    tooling refuses to re-run it on an existing state. Losing or regenerating the state is like
+    replacing the TPM: BitLocker asks for its recovery key. The VM's OVMF variables file is per-VM
+    persistent state too.
+  - **It is protected like a key:** one state per VM; owner-only permissions; kept with the VM and
+    backed up with its disk, as a secret; never copied into an image, a template or another VM
+    (a copy duplicates the seeds and the endorsement key); never committed. If it is encrypted at
+    rest (`--key`/`--pwdfile`), that key is a random host-held secret.
+  - A self-signed EK certificate is enough for Windows 11 and BitLocker.
 
 ## L. Broker frames: a GPU copy into kayfabe's own frames, never guest memory (2026-10-03)
 
