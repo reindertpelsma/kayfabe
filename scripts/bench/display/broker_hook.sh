@@ -47,6 +47,20 @@ d = ImageChops.difference(a.crop(box), b.crop(box))
 print(sum(1 for p in d.getdata() if max(p) > 24))
 PY
 }
+# the fraction of pixels (in 1/10000) that differ between two same-size PNGs — the broker's picture
+# (the host's root window with the window fullscreen) against the guest's own frame
+fulldiff(){
+    python3 - "$OUT/$1.png" "$OUT/$2.png" <<'PY'
+import sys
+from PIL import Image, ImageChops
+a, b = Image.open(sys.argv[1]).convert("RGB"), Image.open(sys.argv[2]).convert("RGB")
+if a.size != b.size:
+    print("size_mismatch %dx%d vs %dx%d" % (a.size + b.size)); sys.exit(0)
+d = ImageChops.difference(a, b)
+n = sum(1 for p in d.getdata() if max(p) > 24)
+print("differing_per_10000=%d of %dx%d" % (n * 10000 // (a.width * a.height), a.width, a.height))
+PY
+}
 qline(){ wc -l < "$Q"; }
 since(){ tail -n +"$(( $1 + 1 ))" "$Q"; }
 
@@ -58,6 +72,7 @@ gq 'sudo modprobe nvidia-drm modeset=1 fbdev=1; echo rc=$?' 90 > "$OUT/modprobe.
 sleep 6
 say "GUEST_KMS $(tr '\n' ' ' < "$OUT/modprobe.log") nodes=[$(gq 'ls /dev/dri | tr "\n" " "')]"
 say "RELAY_CONNECTED $(grep -ac 'kf3: broker: connected to' "$Q") GPU_COPY_PROBE=[$(grep -a 'GPU-copy rung' "$Q" | head -1 | cut -c1-200)]"
+say "EV_DEVICE broker=[$(grep -a 'renders on DRM device\|EV_DEVICE will' "${BRK_BROKER_LOG:-/dev/null}" | head -1 | cut -c1-160)] relay=[$(grep -a 'the compositor' "$Q" | head -1 | cut -c1-160)] host_nodes=[$(stat -c '%n=%t:%T' /dev/dri/card* /dev/dri/renderD* 2>/dev/null | tr '\n' ' ')]"
 
 # 2. the guest's desktop (Cinnamon on Xorg, as hook.sh's M3)
 bdf=$(gq "lspci -D -d 10de: | awk 'NR==1{print \$1}'")
@@ -106,6 +121,7 @@ gq "$GX python3 ~/display/xcursor.py image /tmp/guest_hover.pam" | sed 's/^/BRK_
 python3 "$XC" compare "$OUT/guest_hover.pam" "$OUT/host_hover.pam" | sed 's/^/BRK_HOVER_/'
 shot hover
 hshot host_hover
+say "HOST_VS_GUEST hover $(fulldiff hover host_hover) (the broker fullscreen against the guest frame; the host shot has no pointer, the frame no cursor in hover)"
 set -- $gpos; gx=${1:-0}; gy=${2:-0}
 
 # 5. HIDE — the guest hides its cursor for 10 s
