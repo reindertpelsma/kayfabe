@@ -130,6 +130,19 @@ fw=${fr%x*}; fh=${fr#*x}
 hx=$(( ${X:-0} + gx * ${WIDTH:-1} / ${fw:-1} )); hy=$(( ${Y:-0} + gy * ${HEIGHT:-1} / ${fh:-1} ))
 say "MAP frame=${fr:-?} window=${WIDTH:-?}x${HEIGHT:-?}+${X:-?}+${Y:-?} guest_pointer=$gx,$gy -> host $hx,$hy"
 
+# 4b. HOVER with a large hot spot — the guest's root-window cursor as a crosshair (its hot spot
+#     near the centre, where an underived hot spot 0,0 would be off by half the image); the host
+#     pointer over the root window near the top-left corner
+gq "$GX xsetroot -cursor_name crosshair; echo rc=\$?" > "$OUT/xsetroot.log"
+HX xdotool mousemove --window "$W" 30 30 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 40 36 >/dev/null 2>&1; sleep 3
+HX python3 "$XC" image "$OUT/cur_host_cross.pam" | sed 's/^/BRK_HOST_CROSS /'
+gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_cross.pam" | sed 's/^/BRK_GUEST_CROSS /'
+"$G" 'cat /tmp/cur_guest_cross.pam' > "$OUT/cur_guest_cross.pam" 2>/dev/null
+python3 "$XC" compare "$OUT/cur_guest_cross.pam" "$OUT/cur_host_cross.pam" | sed 's/^/BRK_CROSS_/'
+say "CROSS_SETS $(grep -a 'guest cursor image' "$Q" | tail -3 | cut -d: -f4- | tr '\n' '|' | cut -c1-240) xsetroot=[$(tr '\n' ' ' < "$OUT/xsetroot.log")]"
+HX xdotool mousemove --window "$W" 720 410 >/dev/null 2>&1; sleep 2
+
 # 5. HIDE — the guest hides its cursor for 10 s
 m=$(qline)
 ( gq "$GX python3 ~/display/xcursor.py hide 10" 30 > "$OUT/guest_hide.log" ) &
