@@ -58,6 +58,9 @@ const NV_ERR_INVALID_ARGUMENT: u32 = 0x1F;
 const NV_ERR_INSUFFICIENT_RESOURCES: u32 = 0x1A;
 /// `NV_ERR_NOT_SUPPORTED`.
 const NV_ERR_NOT_SUPPORTED: u32 = 0x56;
+/// `NV_ERR_INSERT_DUPLICATE_NAME` — what RM answers an alloc whose handle is taken
+/// (`ogkm-580: nvstatuscodes.h:54`).
+const NV_ERR_INSERT_DUPLICATE_NAME: u32 = 0x19;
 /// `NV_ERR_INVALID_CLASS` (`ogkm-580: nvstatuscodes.h:63`).
 const NV_ERR_INVALID_CLASS: u32 = 0x22;
 /// `NV2080_NOTIFIERS_GR0` = `NV2080_NOTIFIERS_GRAPHICS` (`ogkm-580: cl2080_notification.h:48,185`).
@@ -981,6 +984,62 @@ pub struct DispSwCounters {
     /// Allocs under a channel no passthrough twin holds — refused to the guest, never left
     /// twinless.
     pub no_twin: AtomicU64,
+}
+
+/// ★ EXPERIMENT `x11-dispsw`: what the act does with a display-SW host object it has just
+/// allocated ([`keep_disp_sw`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DispSwKeep {
+    /// Recorded on its twin and in the object index: the guest's free (or its channel's) frees it.
+    Kept,
+    /// The twin is gone (a free statement queued behind the alloc took it): the act frees the
+    /// host object itself.
+    ChannelGone,
+    /// The handle names a live object of ours already: nothing is overwritten; the act frees the
+    /// new host object and refuses the alloc.
+    Duplicate,
+}
+
+/// ★ EXPERIMENT `x11-dispsw` — **the act's keep-or-drop decision, pure** (review 2026-10-03,
+/// MEDIUM: the channel-plane behaviour needed tests that fail without it). `disp_sw` is the twin's
+/// display-SW map (`None` once the twin is gone), `objs` the plane's object index
+/// `(client, handle) → (client, channel)`. Records `handle → host` in both only when neither
+/// already names `handle`; never overwrites a live entry (the overwrite re-pointed a live engine
+/// object's free at this channel).
+///
+/// Lock order where it is called: `pt` then `pt_objs` — no other site holds `pt_objs` while it
+/// takes `pt`.
+fn keep_disp_sw(
+    disp_sw: Option<&mut HashMap<u32, u32>>,
+    objs: &mut HashMap<(u32, u32), (u32, u32)>,
+    chan_key: (u32, u32),
+    handle: u32,
+    host: u32,
+) -> DispSwKeep {
+    let Some(disp_sw) = disp_sw else {
+        return DispSwKeep::ChannelGone;
+    };
+    let obj_key = (chan_key.0, handle);
+    if disp_sw.contains_key(&handle) || objs.contains_key(&obj_key) {
+        return DispSwKeep::Duplicate;
+    }
+    disp_sw.insert(handle, host);
+    objs.insert(obj_key, chan_key);
+    DispSwKeep::Kept
+}
+
+/// ★ **What a guest free of `object` takes from a twin that still lives — pure** (review
+/// 2026-10-03, MEDIUM): its engine object (`false`) or, x11-dispsw only, its display-SW twin
+/// (`true`), with the host handle to free; `None` if the twin holds neither.
+fn take_twin_object(
+    objects: &mut HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    disp_sw: &mut HashMap<u32, u32>,
+    object: u32,
+) -> Option<(u32, bool)> {
+    objects
+        .remove(&object)
+        .map(|o| (o.0, false))
+        .or_else(|| disp_sw.remove(&object).map(|h| (h, true)))
 }
 
 impl DispSwCounters {
@@ -2327,6 +2386,22 @@ impl ChanPlane {
                 ),
             };
         };
+        // ⊘ Review 2026-10-03 (LOW): this act is queued BEFORE the object seat validates the alloc
+        // (the seat answers after the act). A handle that already names a live object of ours is
+        // refused here, before any host call, so a refused duplicate can neither allocate a host
+        // object nor re-point the live object's free at this channel.
+        if self
+            .pt_objs
+            .lock()
+            .is_ok_and(|m| m.contains_key(&(client, handle)))
+        {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INSERT_DUPLICATE_NAME,
+                why: format!(
+                    "GF100_DISP_SW {client:#x}:{handle:#x} under {parent:#x}: that handle already names a live twinned object"
+                ),
+            };
+        }
         self.defer(
             "display-SW twin",
             Box::new(move |me: &ChanPlane| {
@@ -2341,26 +2416,44 @@ impl ChanPlane {
                     )
                 })?;
                 me.dispsw.twins.fetch_add(1, Ordering::Relaxed);
-                // ⊘ The twin may have been taken by a free statement queued behind this act: host RM
-                // then frees this object with its channel, and nothing here may name it again.
-                let kept = me
-                    .pt
-                    .lock()
-                    .ok()
-                    .and_then(|mut m| m.get_mut(&(client, parent)).map(|v| v.disp_sw.insert(handle, h)))
-                    .is_some();
-                if kept {
-                    if let Ok(mut m) = me.pt_objs.lock() {
-                        m.insert((client, handle), (client, parent));
+                let keep = match (me.pt.lock(), me.pt_objs.lock()) {
+                    (Ok(mut pt), Ok(mut objs)) => keep_disp_sw(
+                        pt.get_mut(&(client, parent)).map(|v| &mut v.disp_sw),
+                        &mut objs,
+                        (client, parent),
+                        handle,
+                        h,
+                    ),
+                    _ => DispSwKeep::ChannelGone,
+                };
+                match keep {
+                    DispSwKeep::Kept => Ok(format!(
+                        "{client:#x}:{handle:#x} GF100_DISP_SW on twin host {:#x} -> host object {h:#x} (authored: head 0, displayMask 0, caps 0)",
+                        chan.token
+                    )),
+                    // ⊘ The twin was taken by a free statement queued behind this act, or the
+                    // handle was taken meanwhile: the object is freed NOW, by us, and counted
+                    // only once the host free returned.
+                    DispSwKeep::ChannelGone | DispSwKeep::Duplicate => {
+                        let r = me.rm.free(h);
+                        if r.is_ok() {
+                            me.dispsw.freed.fetch_add(1, Ordering::Relaxed);
+                        }
+                        let freed = if r.is_ok() { "freed" } else { "FREE REFUSED" };
+                        if keep == DispSwKeep::Duplicate {
+                            return Err((
+                                NV_ERR_INSERT_DUPLICATE_NAME,
+                                format!(
+                                    "GF100_DISP_SW {client:#x}:{handle:#x}: the handle was taken before the twin landed; host object {h:#x} {freed}"
+                                ),
+                            ));
+                        }
+                        Ok(format!(
+                            "{client:#x}:{handle:#x} GF100_DISP_SW on twin host {:#x} -> host object {h:#x} [its channel is already going: {freed}]",
+                            chan.token
+                        ))
                     }
-                } else {
-                    me.dispsw.freed.fetch_add(1, Ordering::Relaxed);
                 }
-                Ok(format!(
-                    "{client:#x}:{handle:#x} GF100_DISP_SW on twin host {:#x} -> host object {h:#x} (authored: head 0, displayMask 0, caps 0){}",
-                    chan.token,
-                    if kept { "" } else { " [its channel is already going: freed with it]" }
-                ))
             }),
         )
     }
@@ -2554,24 +2647,16 @@ impl ChanPlane {
                 .and_then(|mut m| m.remove(&(client, object)))
                 .and_then(|key| {
                     self.pt.lock().ok().and_then(|mut m| {
-                        m.get_mut(&key).and_then(|v| {
-                            v.objects
-                                .remove(&object)
-                                .map(|o| (o.0, false))
-                                .or_else(|| v.disp_sw.remove(&object).map(|h| (h, true)))
-                        })
+                        m.get_mut(&key)
+                            .and_then(|v| take_twin_object(&mut v.objects, &mut v.disp_sw, object))
                     })
                 })
         } else {
             None
         };
-        // ★ x11-dispsw: display-SW twins that go WITH their channel's twin (host RM frees them).
-        let disp_sw_with_twins: u64 = twins.iter().map(|(_, t)| t.disp_sw.len() as u64).sum();
-        if disp_sw_with_twins > 0 {
-            self.dispsw
-                .freed
-                .fetch_add(disp_sw_with_twins, Ordering::Relaxed);
-        }
+        // ★ x11-dispsw: display-SW twins that go WITH their channel's twin (host RM frees them with
+        // it) are counted as freed in the act, once that channel's host free has returned — a
+        // refused twin free leaves them live, and `live=` says so.
         let sessions = client == object
             && self
                 .enc_sessions
@@ -2653,12 +2738,15 @@ impl ChanPlane {
                         t.chan.token,
                         Self::fast_fields(fast)
                     );
+                    if r.is_ok() {
+                        me.dispsw.freed.fetch_add(t.disp_sw.len() as u64, Ordering::Relaxed);
+                    }
                     let disp_sw = if t.disp_sw.is_empty() { String::new() } else { format!(" disp_sw={}", t.disp_sw.len()) };
                     line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={}{disp_sw} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
                 }
                 if let Some((h, disp_sw)) = obj {
                     let r = me.rm.free(h);
-                    if disp_sw {
+                    if disp_sw && r.is_ok() {
                         me.dispsw.freed.fetch_add(1, Ordering::Relaxed);
                     }
                     let what = if disp_sw { "display-SW object" } else { "engine object" };
@@ -3808,8 +3896,74 @@ impl ChanPlane {
 
 #[cfg(test)]
 mod dispsw_tests {
-    use super::DispSwCounters;
+    use super::{DispSwCounters, DispSwKeep, keep_disp_sw, take_twin_object};
+    use kf_chip::classes::Kind;
+    use std::collections::HashMap;
     use std::sync::atomic::Ordering;
+
+    const CLIENT: u32 = 0xc1d0_0001;
+    const CHAN: u32 = 0x5c00_0010;
+
+    /// ★ The act records a display-SW twin in BOTH maps, so the guest's own free finds it
+    /// ([`take_twin_object`]) — and a twin already gone, or a handle already live, records
+    /// nothing. Delete the insert, the gone check or the duplicate check and this fails.
+    #[test]
+    fn the_act_keeps_a_fresh_display_sw_and_drops_a_gone_or_duplicate_one() {
+        let mut objs: HashMap<(u32, u32), (u32, u32)> = HashMap::new();
+        let mut ds: HashMap<u32, u32> = HashMap::new();
+        assert_eq!(
+            keep_disp_sw(Some(&mut ds), &mut objs, (CLIENT, CHAN), 0x77, 0xbeef),
+            DispSwKeep::Kept
+        );
+        assert_eq!(ds.get(&0x77), Some(&0xbeef));
+        assert_eq!(objs.get(&(CLIENT, 0x77)), Some(&(CLIENT, CHAN)));
+        // The twin went first: nothing recorded anywhere.
+        let mut objs2 = HashMap::new();
+        assert_eq!(
+            keep_disp_sw(None, &mut objs2, (CLIENT, CHAN), 0x78, 0xcafe),
+            DispSwKeep::ChannelGone
+        );
+        assert!(objs2.is_empty());
+        // The same handle again: the live entry is NOT overwritten (the old overwrite dropped the
+        // first host object on the floor).
+        assert_eq!(
+            keep_disp_sw(Some(&mut ds), &mut objs, (CLIENT, CHAN), 0x77, 0xf00d),
+            DispSwKeep::Duplicate
+        );
+        assert_eq!(ds.get(&0x77), Some(&0xbeef));
+        // A handle a live ENGINE object of another channel holds: refused, and that object's
+        // index entry still points at ITS channel (the old overwrite re-pointed its free here).
+        objs.insert((CLIENT, 0x99), (CLIENT, 0x5c00_0020));
+        assert_eq!(
+            keep_disp_sw(Some(&mut ds), &mut objs, (CLIENT, CHAN), 0x99, 0xd00d),
+            DispSwKeep::Duplicate
+        );
+        assert_eq!(objs.get(&(CLIENT, 0x99)), Some(&(CLIENT, 0x5c00_0020)));
+        assert!(!ds.contains_key(&0x99));
+    }
+
+    /// ★ A guest free of a display-SW object on a LIVE twin is ours (`Some(_, true)`), so the plane
+    /// frees its host object — without the `disp_sw` lookup the free answered NotOurs and the
+    /// host object lived until its channel went. An engine object is found first and stays
+    /// `false`; a handle the twin does not hold is `None`.
+    #[test]
+    fn a_guest_free_takes_the_display_sw_twin_from_a_live_channel() {
+        let mut objects: HashMap<u32, (u32, Kind)> = HashMap::new();
+        let mut ds: HashMap<u32, u32> = HashMap::new();
+        objects.insert(0x10, (0xa1, Kind::ThreeD));
+        ds.insert(0x20, 0xb2);
+        assert_eq!(
+            take_twin_object(&mut objects, &mut ds, 0x20),
+            Some((0xb2, true))
+        );
+        assert!(ds.is_empty(), "taken, so a second free finds nothing");
+        assert_eq!(take_twin_object(&mut objects, &mut ds, 0x20), None);
+        assert_eq!(
+            take_twin_object(&mut objects, &mut ds, 0x10),
+            Some((0xa1, false))
+        );
+        assert_eq!(take_twin_object(&mut objects, &mut ds, 0x30), None);
+    }
 
     /// ★ EXPERIMENT `x11-dispsw`: with the switch off the status line gains NOTHING (byte for byte
     /// the line it was, whatever the counters say); on, it states twins, the live ones (twins less
