@@ -14,7 +14,10 @@ use std::ffi::CStr;
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
 /// ★ 11 (2026-10-03, `v3-gop-kf3`, `docs/design/V3_DISPLAY.md` §4.11): the boot display —
 /// [`kf3_realize`] takes `gop`, and [`kf3_option_rom`] hands the C device the ROM to register.
-pub const KF3_ABI: u32 = 11;
+/// ★ 14 (2026-10-04, `v3-viommu`, `docs/design/V3_VIOMMU.md` §4.2): [`kf3_dma_regime`] — the C
+/// device publishes its DMA regime (a guest vIOMMU in front of it or not). 12 is `v3-broker`'s and
+/// 13 `v3-dispsw-exp`'s; this surface differs from both, so one number above both.
+pub const KF3_ABI: u32 = 14;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -376,6 +379,17 @@ pub unsafe extern "C" fn kf3_bar_ram(
 pub extern "C" fn kf3_ram_del(h: *mut c_void, gpa: u64) {
     if let Some(d) = dev(h) {
         d.ram_del(gpa);
+    }
+}
+
+/// ★ ABI 14 (`docs/design/V3_VIOMMU.md` §4.2): the device's DMA regime is now `regime` (a
+/// `KF3_DMA_*` value; an unknown one refuses). The C device calls it at machine-done and from its
+/// DMA address space's memory-listener commit — under the BQL, on whichever thread committed, a
+/// vCPU included — so this is one atomic store and nothing else (`OWNER_RULINGS.md` §A.4).
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_dma_regime(h: *mut c_void, regime: u32) {
+    if let Some(d) = dev(h) {
+        d.dma_regime(regime);
     }
 }
 

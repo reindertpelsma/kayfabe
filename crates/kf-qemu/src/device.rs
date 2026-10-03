@@ -1422,6 +1422,13 @@ impl Device {
         self.ram.del(gpa);
     }
 
+    /// ★ ABI 14 (`docs/design/V3_VIOMMU.md` §4.2): the C device's classification of this device's
+    /// DMA address space changed (`KF3_DMA_*`). Called under the BQL on whichever thread committed
+    /// a memory change, a vCPU included: ONE atomic store, nothing else (`OWNER_RULINGS.md` §A.4).
+    pub fn dma_regime(&self, wire: u32) {
+        self.ram.dma.set(kf_arch::dma::DmaRegime::from_wire(wire));
+    }
+
     /// ★ P4: re-publish the invalidate trigger's word into the BAR0 read shadow — after the VA
     /// thread cleared it. ⊘ Loops until the shadow and the port agree: a vCPU re-arming between
     /// our read and our store has already stored "busy", and our stale "idle" must not stay.
@@ -2229,13 +2236,15 @@ impl Device {
         });
         let db = format!(" {}", self.dbfast.status());
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} dma={:?} dma_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
             c.refused.load(o),
             c.serviced.load(o),
             c.ram_refused.load(o),
+            self.ram.dma.get(),
+            self.ram.dma.refused(),
             c.unshadowed_writes.load(o),
             c.read_exits.load(o),
             c.last_off.load(o),
@@ -2611,7 +2620,11 @@ impl GuestRam for Ram<'_> {
         Err(RamRefused {
             gpa,
             len: buf.len(),
-            why: "no guest-RAM block QEMU registered covers this range",
+            why: self
+                .0
+                .ram
+                .dma_refusal()
+                .unwrap_or("no guest-RAM block QEMU registered covers this range"),
         })
     }
     fn write(&mut self, gpa: u64, bytes: &[u8]) -> Result<(), RamRefused> {
@@ -2624,7 +2637,11 @@ impl GuestRam for Ram<'_> {
         Err(RamRefused {
             gpa,
             len: bytes.len(),
-            why: "no guest-RAM block QEMU registered covers this range",
+            why: self
+                .0
+                .ram
+                .dma_refusal()
+                .unwrap_or("no guest-RAM block QEMU registered covers this range"),
         })
     }
 }

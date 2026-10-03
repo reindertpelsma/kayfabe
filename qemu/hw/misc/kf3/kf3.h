@@ -12,8 +12,10 @@
  * kf3_doorbell_page_offset, kf3_set_ioeventfd, kf3_doorbell_site). The two 9s name DIFFERENT
  * surfaces, so an archive from either branch must be refused here: one new number above both.
  * ★ 11 (2026-10-03, v3-gop-kf3, docs/design/V3_DISPLAY.md §4.11): the boot display — kf3_realize
- * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device. */
-#define KF3_ABI 11
+ * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device.
+ * ★ 14 (2026-10-04, v3-viommu, docs/design/V3_VIOMMU.md §4.2): kf3_dma_regime. 12 is v3-broker's
+ * and 13 v3-dispsw-exp's; this surface differs from both, so one number above both. */
+#define KF3_ABI 14
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -54,6 +56,16 @@ uint64_t kf3_bar0_read(void *h, uint64_t off, uint32_t width);
 int32_t kf3_ram_add(void *h, uint64_t gpa, uint8_t *hva, uint64_t len, int32_t fd, uint64_t fd_off);
 int32_t kf3_bar_ram(void *h, uint32_t bar, uint64_t base, uint64_t len, void **ptr);
 void kf3_ram_del(void *h, uint64_t gpa);
+/* ★ ABI 14 (v3-viommu, docs/design/V3_VIOMMU.md §4.2): the device's DMA regime — whether a device
+ * address the guest programs is a GPA. Published at machine-done and on every change, under the BQL
+ * on whichever thread commits (a vCPU included); Rust stores it and refuses guest-RAM lookups of
+ * device addresses unless DIRECT or IDENTITY. Any other value refuses. */
+#define KF3_DMA_DIRECT 0u      /* no vIOMMU in front: device addresses are GPAs */
+#define KF3_DMA_IDENTITY 1u    /* behind a vIOMMU that does not translate this device */
+#define KF3_DMA_TRANSLATING 2u /* the guest translates this device's DMA: IOVAs, refused until built */
+#define KF3_DMA_UNTRACKED 3u   /* behind a vIOMMU whose translation QEMU does not model (amd-iommu dma-remap=off) */
+#define KF3_DMA_BLOCKED 4u     /* neither RAM nor IOMMU in the device's address space (a transition, or unknown) */
+void kf3_dma_regime(void *h, uint32_t regime);
 void kf3_status(void *h, char *buf, size_t len);
 int32_t kf3_irq_fd(void *h, uint32_t vector);
 /* Hopper+ BAR1 usermode views (docs/design/V3_BAR1_DOORBELL.md). */

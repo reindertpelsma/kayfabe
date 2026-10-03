@@ -45,6 +45,7 @@
 #include "qom/object.h"
 #include "system/memory.h"
 #include "system/address-spaces.h"
+#include "system/system.h"
 #include "system/kvm.h"
 #include "qemu/event_notifier.h"
 #include "qemu/main-loop.h"
@@ -52,6 +53,7 @@
 #include "ui/console.h"
 #include <linux/kvm.h>
 #include "kf3.h"
+#include "kf3_dma.h"
 #include "kf3_gop.h"
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
@@ -118,6 +120,12 @@ struct Kf3State {
     QEMUBH *bar1_bh;
     uint64_t bar1_ov_applied, bar1_ov_failed;
     MemoryListener listener;
+    /* ★ ABI 14 (docs/design/V3_VIOMMU.md §4.2): the device's DMA regime. A listener on the device's
+     * DMA address space (only when a vIOMMU is in front of it), armed at machine-done. BQL only. */
+    MemoryListener dma_listener;
+    Notifier dma_done;
+    bool dma_listening, dma_done_armed, dma_untracked;
+    uint32_t dma_iommu_sections, dma_ram_sections, dma_regime;
     Kf3Vec vec[KF3_MAX_VECTORS];
     uint64_t irq_routes, irq_route_fail;
     /* w827 trap bench (property dummy-bar, default off): two do-nothing MMIO pages in the MSI-X
@@ -617,6 +625,146 @@ static void kf3_region_del(MemoryListener *l, MemoryRegionSection *sec)
     }
 }
 
+/* ── the device's DMA regime (docs/design/V3_VIOMMU.md §4.2) ──────────────────────────────────
+ * Whether a device address the guest programs (a sysmem PTE leaf, USERD, an error notifier, a GSP
+ * boot argument, a CE physical operand, display memory) is a GPA. Rust refuses every guest-RAM
+ * lookup of one unless the regime is DIRECT or IDENTITY (crates/kf-qemu mem.rs RamMap::block_for):
+ * IOVA translation is not built, and a guest that translates this device is refused by name rather
+ * than having its IOVAs read as GPAs (§1.1).
+ *  - Classified at machine-done, per device, whatever the -device order: each vIOMMU installs its
+ *    PCI hooks in its own realize, so a kf3 listed before it would still see system memory at its
+ *    own realize (§4.1). On hot-plug the notifier fires at once, inside realize.
+ *  - pci_device_iommu_address_space() is &address_space_memory: DIRECT, for the device's life.
+ *  - an amd-iommu with dma-remap=off and DMA translation on (or more than one, or one whose
+ *    properties cannot be read): UNTRACKED, for the device's life (kf3_dma_amd_untracked). QEMU
+ *    never enables that model's IOMMU region, yet nothing tells the guest, which may translate this
+ *    device anyway; its address kind cannot be read from here.
+ *  - otherwise a listener on that address space, classified at each commit (kf3_dma_classify): any
+ *    IOMMU section -> TRANSLATING; RAM and no IOMMU -> IDENTITY; neither -> BLOCKED. Every vIOMMU
+ *    switches a device by disabling one region, then enabling the other, in two commits
+ *    (memory_region_set_enabled commits each change), so a real switch passes through BLOCKED, which
+ *    refuses, and never through a false IDENTITY.
+ *  - the rules are pure C in kf3_dma.h, so CI compiles and runs them (kf3.c it does not compile).
+ *  - commit is a GLOBAL listener callback: it runs on every memory transaction in the VM, under the
+ *    BQL, on whichever thread commits (the main loop, a vCPU, an IOThread). O(1): compare the counts
+ *    and call Rust only on a change, where it is one atomic store (OWNER_RULINGS.md §A.4). */
+
+static void kf3_dma_add(MemoryListener *l, MemoryRegionSection *sec)
+{
+    Kf3State *s = container_of(l, Kf3State, dma_listener);
+
+    if (memory_region_is_iommu(sec->mr)) {
+        s->dma_iommu_sections++;
+    } else if (memory_region_is_ram(sec->mr)) {
+        s->dma_ram_sections++;
+    }
+}
+
+static void kf3_dma_del(MemoryListener *l, MemoryRegionSection *sec)
+{
+    Kf3State *s = container_of(l, Kf3State, dma_listener);
+
+    /* QEMU deletes only sections it added; the guards keep a count from wrapping regardless. */
+    if (memory_region_is_iommu(sec->mr)) {
+        if (s->dma_iommu_sections > 0) {
+            s->dma_iommu_sections--;
+        }
+    } else if (memory_region_is_ram(sec->mr)) {
+        if (s->dma_ram_sections > 0) {
+            s->dma_ram_sections--;
+        }
+    }
+}
+
+static void kf3_dma_commit(MemoryListener *l)
+{
+    Kf3State *s = container_of(l, Kf3State, dma_listener);
+    uint32_t r = kf3_dma_classify(s->dma_untracked, s->dma_iommu_sections, s->dma_ram_sections);
+
+    if (r != s->dma_regime) {
+        s->dma_regime = r;
+        kf3_dma_regime(s->h, r);
+    }
+}
+
+/* What kf3_dma_amd_untracked (kf3_dma.h) needs, read from the QOM tree: the machine's amd-iommu, if
+ * any (by type name: hw/i386/amd_iommu.h is a target header), and its two properties. */
+static bool kf3_dma_amd_lookup(void)
+{
+    bool ambiguous = false, remap = false, translation = false;
+    Object *o = object_resolve_path_type("", "amd-iommu", &ambiguous);
+    Error *err = NULL;
+
+    if (o) {
+        remap = object_property_get_bool(o, "dma-remap", &err);
+        if (!err) {
+            translation = object_property_get_bool(o, "dma-translation", &err);
+        }
+    }
+    if (err) {
+        error_free(err);
+        return kf3_dma_amd_untracked(true, ambiguous, false, remap, translation);
+    }
+    return kf3_dma_amd_untracked(o != NULL, ambiguous, true, remap, translation);
+}
+
+/* Main loop at machine-done, BQL held (or at once, inside realize, on hot-plug). */
+static void kf3_dma_machine_done(Notifier *n, void *data)
+{
+    Kf3State *s = container_of(n, Kf3State, dma_done);
+    AddressSpace *as;
+
+    (void)data;
+    if (!s->h || s->dma_listening) {
+        return;
+    }
+    as = pci_device_iommu_address_space(&s->parent_obj);
+    if (as == &address_space_memory) {
+        s->dma_regime = KF3_DMA_DIRECT;
+        kf3_dma_regime(s->h, KF3_DMA_DIRECT);
+        info_report("kf3: device DMA regime %s (%s)", kf3_dma_name(s->dma_regime),
+                    as->name ? as->name : "?");
+        return;
+    }
+    s->dma_untracked = kf3_dma_amd_lookup();
+    s->dma_listener = (MemoryListener){
+        .name = "kf3-dma",
+        .region_add = kf3_dma_add,
+        .region_del = kf3_dma_del,
+        .commit = kf3_dma_commit,
+        .priority = MEMORY_LISTENER_PRIORITY_MIN,
+    };
+    /* The registration replays every current section and then commits: the first publish. */
+    memory_listener_register(&s->dma_listener, as);
+    s->dma_listening = true;
+    info_report("kf3: device DMA regime %s (%s)%s", kf3_dma_name(s->dma_regime),
+                as->name ? as->name : "?",
+                s->dma_untracked ? "; amd-iommu with dma-remap=off (or unreadable, or two): QEMU does not "
+                                   "apply the guest's DMA translation; set dma-remap=on or "
+                                   "dma-translation=off" : "");
+}
+
+/* Main loop, BQL held: unregister what kf3_dma_machine_done set up. Idempotent. */
+static void kf3_dma_disarm(Kf3State *s)
+{
+    if (s->dma_done_armed) {
+        qemu_remove_machine_init_done_notifier(&s->dma_done);
+        s->dma_done_armed = false;
+    }
+    if (s->dma_listening) {
+        memory_listener_unregister(&s->dma_listener);
+        s->dma_listening = false;
+    }
+}
+
+/* A realize that fails AFTER the DMA notifier was armed gets no exit from QEMU, but the object is
+ * still finalized: the notifier (and, on hot-plug, the listener it already registered) must not stay
+ * in QEMU's global lists. A no-op after kf3_dev_exit and for an object never realized. */
+static void kf3_instance_finalize(Object *obj)
+{
+    kf3_dma_disarm(KF3(obj));
+}
+
 /* ── MSI-X → KVM irqfd ───────────────────────────────────────────────────────────────────── */
 
 static int kf3_vector_use(PCIDevice *pci, unsigned v, MSIMessage msg)
@@ -914,6 +1062,14 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         .priority = MEMORY_LISTENER_PRIORITY_MIN,
     };
     memory_listener_register(&s->listener, &address_space_memory);
+    /* ★ ABI 14 (docs/design/V3_VIOMMU.md §4.2): classify the device's DMA address space once the
+     * machine is assembled (at once on hot-plug), whatever the -device order. Until then Rust's
+     * regime is Unset and every device-address lookup refuses. kf3_instance_finalize disarms it if a
+     * later step of realize fails. */
+    s->dma_regime = UINT32_MAX;
+    s->dma_done.notify = kf3_dma_machine_done;
+    s->dma_done_armed = true;
+    qemu_add_machine_init_done_notifier(&s->dma_done);
 
     if (s->display) {
         s->con = graphic_console_init(DEVICE(pci), 0, &kf3_gfx_ops, s);
@@ -943,6 +1099,8 @@ static void kf3_dev_exit(PCIDevice *pci)
             graphic_console_close(s->con);
             s->con = NULL;
         }
+        /* ★ ABI 14: the DMA regime's notifier and listener go before the Rust device does. */
+        kf3_dma_disarm(s);
         kf3_unrealize(s->h);
     }
     if (s->msix_vectors > 0) {
@@ -987,6 +1145,7 @@ static const TypeInfo kf3_type_info = {
     .name = TYPE_KF3,
     .parent = TYPE_PCI_DEVICE,
     .instance_size = sizeof(Kf3State),
+    .instance_finalize = kf3_instance_finalize,
     .class_init = kf3_class_init,
     .interfaces = (const InterfaceInfo[]){ { INTERFACE_CONVENTIONAL_PCI_DEVICE }, { } },
 };

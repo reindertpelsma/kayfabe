@@ -72,9 +72,20 @@ pub struct RamBlock {
 
 /// ★ Guest RAM, as QEMU registered it — the VMM's own guest-physical layout, which is NOT the
 /// identity once there is a PCI hole.
+///
+/// ★ 2026-10-04 (`v3-viommu`, `docs/design/V3_VIOMMU.md` §4.3): every caller of
+/// [`Self::block_for`] and [`Self::file_range`] hands in a **guest device (DMA) address** the guest
+/// driver programmed — a sysmem PTE leaf, USERD, an error notifier, a GSP boot argument or queue
+/// page, a copy-engine physical operand, display memory (13 sites, `V3_VIOMMU.md` §2). Such an
+/// address is a GPA only while [`Self::dma`] admits. This is the **interim** gate: it moves into a
+/// single device-address boundary when the vIOMMU translator is built (§3). [`Self::at_file_offset`]
+/// is not gated — its input is a file offset already resolved through this gate.
 #[derive(Debug, Default)]
 pub struct RamMap {
     blocks: RwLock<Vec<RamBlock>>,
+    /// The device's DMA regime as the C device last published it (`kf3_dma_regime`), and the
+    /// device-address lookups it refused. `Unset` — refusing — until the machine is assembled.
+    pub dma: kf_arch::dma::DmaRegimeCell,
 }
 
 impl RamMap {
@@ -100,18 +111,21 @@ impl RamMap {
         self.blocks.read().ok()?.iter().find_map(|b| b.fd)
     }
 
-    /// The block wholly covering `[gpa, gpa+len)`.
+    /// The block wholly covering `[gpa, gpa+len)`. ⊘ `None` without looking, and counted, while
+    /// the device's DMA regime does not admit `gpa` as a guest-physical address ([`Self::dma`]).
     #[must_use]
     pub fn block_for(&self, gpa: u64, len: u64) -> Option<RamBlock> {
-        let v = self.blocks.read().ok()?;
-        v.iter()
-            .find(|b| {
-                gpa >= b.gpa
-                    && gpa
-                        .checked_add(len)
-                        .is_some_and(|e| e - b.gpa <= b.mem.len() as u64)
-            })
-            .copied()
+        self.dma.admitted(|| {
+            let v = self.blocks.read().ok()?;
+            v.iter()
+                .find(|b| {
+                    gpa >= b.gpa
+                        && gpa
+                            .checked_add(len)
+                            .is_some_and(|e| e - b.gpa <= b.mem.len() as u64)
+                })
+                .copied()
+        })
     }
 
     /// ★ P5: the host mapping of guest-RAM memfd bytes `[off, off+len)` — the inverse of
@@ -135,11 +149,47 @@ impl RamMap {
     /// ★ The guest-RAM object's fd and the file offset of `[gpa, gpa+len)`. `None` when no single
     /// fd-backed block covers it. ⊘ Every block must share ONE fd (q35's `memory-backend=ram0`
     /// aliases one memfd above and below the hole); a second fd is refused, never guessed at.
+    /// Gated on the DMA regime through [`Self::block_for`].
     #[must_use]
     pub fn file_range(&self, gpa: u64, len: u64) -> Option<(BackendFd, u64)> {
         let b = self.block_for(gpa, len)?;
         let first = self.blocks.read().ok()?.iter().find_map(|x| x.fd)?;
         (b.fd == Some(first)).then(|| (first, b.fd_off + (gpa - b.gpa)))
+    }
+
+    /// Why a device-address lookup is refused right now when the reason is the DMA regime, for a
+    /// refusal's text (`docs/design/V3_VIOMMU.md` §4.3); `None` while the regime admits, when a
+    /// refusal is the address's own. Read by a person, never branched on.
+    #[must_use]
+    pub fn dma_refusal(&self) -> Option<&'static str> {
+        dma_regime_why(self.dma.get())
+    }
+}
+
+/// The refusal sentence for a DMA regime that does not admit a device address as a GPA; `None`
+/// for one that does (`docs/design/V3_VIOMMU.md` §4.3).
+#[must_use]
+pub fn dma_regime_why(regime: kf_arch::dma::DmaRegime) -> Option<&'static str> {
+    use kf_arch::dma::DmaRegime as R;
+    match regime {
+        R::Direct | R::Identity => None,
+        R::Unset => Some(
+            "device DMA regime not published yet (the machine is not assembled): device addresses \
+             are refused until it is",
+        ),
+        R::Translating => Some(
+            "device DMA is translated by the guest's vIOMMU: these are IOVAs, not supported yet \
+             (docs/design/V3_VIOMMU.md)",
+        ),
+        R::Untracked => Some(
+            "amd-iommu with dma-remap=off (or unreadable, or two): QEMU does not apply the guest's \
+             DMA translation, so whether these are IOVAs is unknowable; set dma-remap=on or \
+             dma-translation=off",
+        ),
+        R::Blocked => Some(
+            "the device's DMA address space shows neither guest RAM nor a vIOMMU (a mode switch in \
+             flight, or unclassifiable): device addresses are refused",
+        ),
     }
 }
 
@@ -2222,6 +2272,37 @@ pub fn apply_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ `docs/design/V3_VIOMMU.md` §4.3 — the interim gate's known-positive. Both device-address
+    /// entry points ask the DMA regime first and count a refusal, but only in a regime that does not
+    /// admit — the default `Unset` included. An empty map answers `None` either way, so the COUNT is
+    /// what can fail here: a lookup that skips the gate leaves it at 0 in a refusing regime, and one
+    /// that refuses an admitting regime moves it. (That the gate never runs a refused lookup is
+    /// `kf_arch::dma`'s test.)
+    #[test]
+    fn every_device_address_lookup_asks_the_dma_regime_first() {
+        use kf_arch::dma::DmaRegime;
+        for r in DmaRegime::ALL {
+            let ram = RamMap::default();
+            if r != DmaRegime::Unset {
+                ram.dma.set(r);
+            }
+            assert_eq!(ram.dma.get(), r, "a fresh map starts Unset");
+            assert!(ram.block_for(0x10_0000, 0x1000).is_none());
+            assert_eq!(
+                ram.dma.refused(),
+                u64::from(!r.admits()),
+                "block_for, {r:?}"
+            );
+            assert!(ram.file_range(0x10_0000, 0x1000).is_none());
+            assert_eq!(
+                ram.dma.refused(),
+                2 * u64::from(!r.admits()),
+                "file_range, {r:?}"
+            );
+            assert_eq!(ram.dma_refusal().is_none(), r.admits(), "{r:?}");
+        }
+    }
 
     /// ★ `traces/v3_cifix/`: a "not registered yet" answer is returned, never cached; the first
     /// time the precondition holds, the build runs with exactly the value it saw, and its result
