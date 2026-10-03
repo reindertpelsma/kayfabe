@@ -31,7 +31,15 @@
 //!
 //! Slot descriptors ([`SlotFds`], the geometry) are written only while a slot is free — named
 //! nowhere in the word, so only the worker can reach it — and read only by a thread that holds
-//! the slot through the word. ⊘ **Descriptors are never closed while the ring lives**: each slot
+//! the slot through the word.
+//!
+//! ★ **A slot is offered to the broker only while its newest backing is the frame the GPU
+//! writes** (corrected 2026-10-03, the review of `v3-broker`). [`FrameRing::install`] makes a
+//! slot broker-backed; [`FrameRing::withdraw`] — the worker, when it refills a free slot with a
+//! frame the broker cannot receive (a refused memfd registration falls back to the console's
+//! own memory) — makes it not. [`FrameRing::publish`] of a withdrawn slot makes NO frame
+//! broker-ready. Before this, the ring went on naming the slot's previous, smaller memfd: the
+//! GPU no longer wrote it, and once the mode shrank back the broker was sent its stale pixels. ⊘ **Descriptors are never closed while the ring lives**: each slot
 //! keeps every generation of its backing in a `OnceLock` (at most [`GENERATIONS`]), so a stale
 //! read can never name a recycled descriptor number (a host-RM fd, the guest-RAM memfd) that
 //! would then be sent to a process in the user's session.
@@ -39,7 +47,7 @@
 use kf_linux_raw::{RawError, SharedRam, fd_inode};
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// The most slots a ring has (the held mask is 5 bits).
 pub const MAX_SLOTS: usize = 5;
@@ -51,6 +59,18 @@ pub const CONSOLE_SLOTS: usize = 3;
 pub const HELD_CAP: u32 = 2;
 /// Backing generations per slot: the 1080p size, then the largest — a slot grows at most once.
 pub const GENERATIONS: usize = 2;
+
+/// ★ A frame backing's length for `cap` bytes of pixels: whole host pages of `page_bytes`
+/// (a udmabuf spans whole pages, and `cuMemHostRegister` registers them). 1920x1080x4 is
+/// 4 KiB-aligned but not 64 KiB-aligned, so an arm64 host with 64 KiB pages needs the rounding.
+/// `None` for a zero page size or an overflow.
+#[must_use]
+pub fn frame_bytes(cap: u64, page_bytes: u64) -> Option<u64> {
+    if page_bytes == 0 {
+        return None;
+    }
+    cap.checked_next_multiple_of(page_bytes)
+}
 /// "No slot" in a 4-bit field.
 pub const NO_SLOT: u32 = 0xF;
 
@@ -195,6 +215,10 @@ struct SlotMeta {
     gens: [OnceLock<SlotFds>; GENERATIONS],
     /// How many generations are installed; the newest is the current one.
     installed: AtomicU32,
+    /// ★ The newest generation is the memory the GPU writes for this slot — set by
+    /// [`FrameRing::install`], cleared by [`FrameRing::withdraw`]. Written only while the slot
+    /// is free (by the worker); read by the worker's publish and by the slot's holder.
+    broker_backed: AtomicBool,
 }
 
 /// ★ The ring. See the module docs.
@@ -293,7 +317,26 @@ impl FrameRing {
             return Err((InstallRefusal::NoGeneration, fds));
         }
         m.installed.store(n as u32 + 1, Ordering::Release);
+        m.broker_backed.store(true, Ordering::Release);
         Ok(())
+    }
+
+    /// ★ **Worker**: the FREE `slot` is being refilled with memory the broker cannot receive
+    /// (the console's own frame), so its newest backing is no longer what the GPU writes: until
+    /// a new generation is installed the slot is never offered to the broker, and the relay
+    /// never sends its descriptors. Call it BEFORE the slot's new memory is filled.
+    pub fn withdraw(&self, slot: usize) {
+        if let Some(m) = self.meta.get(slot) {
+            m.broker_backed.store(false, Ordering::Release);
+        }
+    }
+
+    /// Whether `slot`'s newest backing is the memory the GPU writes (see [`FrameRing::withdraw`]).
+    #[must_use]
+    pub fn broker_backed(&self, slot: usize) -> bool {
+        self.meta
+            .get(slot)
+            .is_some_and(|m| m.broker_backed.load(Ordering::Acquire))
     }
 
     /// The current backing of `slot` — read only by the slot's holder (the worker for a free
@@ -336,15 +379,21 @@ impl FrameRing {
     }
 
     /// ★ **Worker**: make `slot` the newest frame for the console (and the broker). An older
-    /// ready frame nobody took is dropped — latest wins.
+    /// ready frame nobody took is dropped — latest wins. A slot that is not broker-backed
+    /// ([`FrameRing::withdraw`]) is not offered to the broker, and drops the older broker-ready
+    /// frame too: the broker never shows a frame older than one it could not be sent.
     pub fn publish(&self, slot: usize) {
         let j = slot as u32;
-        let broker = self.broker;
+        let broker = if self.broker {
+            Some(if self.broker_backed(slot) { j } else { NO_SLOT })
+        } else {
+            None
+        };
         let _ = self.update(|s| {
             Some(pack(
                 front(s),
                 j,
-                if broker { j } else { broker_ready(s) },
+                broker.unwrap_or(broker_ready(s)),
                 held(s),
             ))
         });
@@ -445,6 +494,16 @@ mod tests {
         SlotFds::new(SharedRam::create_named(tag, 4096).expect("memfd"), None).expect("ids")
     }
 
+    /// A broker ring whose every slot carries a (one-page) backing, as the display worker's
+    /// does before it publishes anything.
+    fn backed(count: usize) -> FrameRing {
+        let r = FrameRing::new(count, true);
+        for j in 0..r.slots() {
+            r.install(j, fds(c"kfb-backed")).expect("install");
+        }
+        r
+    }
+
     #[test]
     fn the_word_packs_four_fields_and_starts_empty() {
         let r = FrameRing::new(BROKER_SLOTS, true);
@@ -461,7 +520,7 @@ mod tests {
     /// ★ Never fills a slot that is held, ready (either kind) or the console's front.
     #[test]
     fn the_fill_target_is_never_held_ready_or_shown() {
-        let r = FrameRing::new(BROKER_SLOTS, true);
+        let r = backed(BROKER_SLOTS);
         let a = r.fill_target(None).unwrap();
         r.publish(a);
         assert_eq!(r.take_console(), Some(a));
@@ -488,7 +547,7 @@ mod tests {
     /// console and the broker do (one copy in flight at a time: the target IS the in-flight one).
     #[test]
     fn with_five_slots_a_fill_target_always_exists_and_the_broker_holds_at_most_two() {
-        let r = FrameRing::new(BROKER_SLOTS, true);
+        let r = backed(BROKER_SLOTS);
         for step in 0..500u32 {
             let t = r.fill_target(None).expect("a fill target must exist");
             r.publish(t);
@@ -534,7 +593,7 @@ mod tests {
 
     #[test]
     fn requeue_and_clear_on_disconnect() {
-        let r = FrameRing::new(BROKER_SLOTS, true);
+        let r = backed(BROKER_SLOTS);
         let a = r.fill_target(None).unwrap();
         r.publish(a);
         assert_eq!(r.take_broker(), Take::Taken(a));
@@ -586,19 +645,172 @@ mod tests {
         );
     }
 
-    /// ★ The TOCTOU case, interleaved for real: a worker picking targets and publishing races a
-    /// relay taking and releasing and a console taking. Each reader marks what it holds BEFORE
-    /// the worker could see it free again; the worker must never pick a marked slot. With two
-    /// separately-read words this fails within a few thousand rounds.
+    /// ★ The review's stale-pixels case (2026-10-03): a slot refilled with memory the broker
+    /// cannot receive is WITHDRAWN, and from then on its publishes are never broker-ready — the
+    /// ring went on naming the slot's previous memfd, which the GPU no longer wrote. A slot that
+    /// never had a backing is never offered either; a new generation offers it again.
     #[test]
-    fn the_worker_never_picks_a_slot_another_thread_holds() {
-        let r = Arc::new(FrameRing::new(BROKER_SLOTS, true));
-        let owned = Arc::new(AtomicU32::new(0)); // slots the relay or the console holds
+    fn a_withdrawn_slot_is_never_offered_to_the_broker() {
+        let r = backed(BROKER_SLOTS);
+        let a = r.fill_target(None).unwrap();
+        assert!(r.broker_backed(a));
+        r.publish(a);
+        assert_eq!(r.broker_ready(), Some(a), "a backed slot is offered");
+        let b = r.fill_target(None).unwrap();
+        r.withdraw(b); // the worker refilled it with the console's own frame
+        assert!(!r.broker_backed(b));
+        r.publish(b);
+        assert_eq!(
+            r.broker_ready(),
+            None,
+            "not offered, and the older frame is dropped too (latest wins)"
+        );
+        assert_eq!(r.take_broker(), Take::Empty);
+        assert_eq!(r.take_console(), Some(b), "the console still gets it");
+        // a new generation for the slot offers it again
+        let c = r.fill_target(None).unwrap();
+        r.publish(c);
+        assert_eq!(r.take_broker(), Take::Taken(c));
+        let free_b = r.fill_target(Some(c)).unwrap();
+        assert_ne!(free_b, b, "b is the console's front");
+        assert!(r.release_held(c));
+        let _ = r.take_console(); // b stays front (nothing new)
+        // an unbacked ring never offers anything
+        let bare = FrameRing::new(BROKER_SLOTS, true);
+        let t = bare.fill_target(None).unwrap();
+        bare.publish(t);
+        assert_eq!(bare.take_broker(), Take::Empty);
+        bare.install(t + 1, fds(c"kfb-late")).unwrap();
+        bare.publish(t + 1);
+        assert_eq!(bare.take_broker(), Take::Taken(t + 1));
+    }
+
+    #[test]
+    fn a_frame_backing_is_whole_host_pages() {
+        let small = 1920 * 1080 * 4;
+        assert_eq!(
+            frame_bytes(small, 4096),
+            Some(small),
+            "4 KiB-aligned already"
+        );
+        assert_eq!(small % 65536, 36_864, "but not 64 KiB-aligned");
+        assert_eq!(frame_bytes(small, 65536), Some(127 * 65536));
+        let max = 3840 * 2160 * 4;
+        assert_eq!(frame_bytes(max, 65536), Some(507 * 65536));
+        assert_eq!(frame_bytes(1, 4096), Some(4096));
+        assert_eq!(frame_bytes(5, 0), None);
+        assert_eq!(frame_bytes(u64::MAX, 4096), None);
+    }
+
+    // ── the interleaving case ──────────────────────────────────────────────────────────────
+
+    /// What the interleaving harness drives: the ring, or the two-word model it must catch.
+    trait Occupancy: Send + Sync + 'static {
+        /// The slots ONE worker snapshot sees as free (the fill target is the lowest).
+        fn free_mask(&self) -> u32;
+        fn publish(&self, slot: usize);
+        fn take_console(&self) -> Option<usize>;
+        fn take_broker(&self) -> Take;
+        fn release_held(&self, slot: usize) -> bool;
+    }
+
+    impl Occupancy for FrameRing {
+        fn free_mask(&self) -> u32 {
+            !FrameRing::occupied(self.state.load(Ordering::Acquire)) & ((1 << self.count) - 1)
+        }
+        fn publish(&self, slot: usize) {
+            FrameRing::publish(self, slot);
+        }
+        fn take_console(&self) -> Option<usize> {
+            FrameRing::take_console(self)
+        }
+        fn take_broker(&self) -> Take {
+            FrameRing::take_broker(self)
+        }
+        fn release_held(&self, slot: usize) -> bool {
+            FrameRing::release_held(self, slot)
+        }
+    }
+
+    /// ⊘ The KNOWN-POSITIVE: the same transitions over TWO words — front, console ready and
+    /// broker ready in `a`, the held mask in `h` — which the worker reads separately. A taken
+    /// frame leaves `a` before it joins `h`, so a worker snapshot between the two sees it free
+    /// while the broker holds it: the race the one-word ring exists to close (module docs). The
+    /// yields only widen the windows the defect already has.
+    struct TwoWords {
+        a: AtomicU32,
+        h: AtomicU32,
+    }
+
+    /// One CAS loop (the model's own; `FrameRing::update` is the ring's).
+    fn cas(w: &AtomicU32, f: impl Fn(u32) -> Option<u32>) -> Result<u32, u32> {
+        let mut s = w.load(Ordering::SeqCst);
+        loop {
+            let Some(n) = f(s) else { return Err(s) };
+            match w.compare_exchange(s, n, Ordering::SeqCst, Ordering::SeqCst) {
+                Ok(_) => return Ok(s),
+                Err(now) => s = now,
+            }
+        }
+    }
+
+    impl Occupancy for TwoWords {
+        fn free_mask(&self) -> u32 {
+            let held = self.h.load(Ordering::SeqCst);
+            std::thread::yield_now();
+            let a = self.a.load(Ordering::SeqCst);
+            !(FrameRing::occupied(a) | held) & ((1 << BROKER_SLOTS) - 1)
+        }
+        fn publish(&self, slot: usize) {
+            let j = slot as u32;
+            let _ = cas(&self.a, |s| Some(pack(front(s), j, j, 0)));
+        }
+        fn take_console(&self) -> Option<usize> {
+            let n = cas(&self.a, |s| {
+                (console_ready(s) != NO_SLOT)
+                    .then(|| pack(console_ready(s), NO_SLOT, broker_ready(s), 0))
+            })
+            .map_or_else(front, console_ready);
+            (n != NO_SLOT).then_some(n as usize)
+        }
+        fn take_broker(&self) -> Take {
+            if self.h.load(Ordering::SeqCst).count_ones() >= HELD_CAP {
+                return Take::Full;
+            }
+            match cas(&self.a, |s| {
+                (broker_ready(s) != NO_SLOT).then(|| pack(front(s), console_ready(s), NO_SLOT, 0))
+            }) {
+                Ok(was) => {
+                    let r = broker_ready(was);
+                    std::thread::yield_now();
+                    self.h.fetch_or(1 << r, Ordering::SeqCst);
+                    Take::Taken(r as usize)
+                }
+                Err(_) => Take::Empty,
+            }
+        }
+        fn release_held(&self, slot: usize) -> bool {
+            self.h.fetch_and(!(1 << slot), Ordering::SeqCst) & (1 << slot) != 0
+        }
+    }
+
+    /// Race a worker against a relay thread and a console thread for `rounds` publishes; return
+    /// how many worker snapshots saw a slot FREE that a reader held.
+    ///
+    /// Each reader marks a slot only AFTER the transition that gives it the slot, and unmarks it
+    /// BEFORE the transition that gives it back, so a mark always names a slot that reader holds
+    /// at that instant. The console takes its new front and gives back the old one in ONE
+    /// transition, so it unmarks the old front before every take and re-marks what it got. Then
+    /// a marked slot in a worker snapshot's free set is a real violation: a reader can only
+    /// acquire a ready (occupied) slot, and only the worker makes one ready.
+    fn race<R: Occupancy>(r: Arc<R>, rounds: usize) -> u64 {
+        let owned = Arc::new(AtomicU32::new(0)); // bits 0-4 the console's, 8-12 the relay's
         let stop = Arc::new(AtomicBool::new(false));
         let relay = {
             let (r, owned, stop) = (r.clone(), owned.clone(), stop.clone());
             std::thread::spawn(move || {
                 let mut mine: Vec<usize> = Vec::new();
+                let mut bad_releases = 0u64;
                 while !stop.load(Ordering::Relaxed) {
                     if let Take::Taken(j) = r.take_broker() {
                         owned.fetch_or(1 << (8 + j), Ordering::SeqCst);
@@ -607,9 +819,14 @@ mod tests {
                     if mine.len() == 2 {
                         let j = mine.remove(0);
                         owned.fetch_and(!(1 << (8 + j)), Ordering::SeqCst);
-                        assert!(r.release_held(j));
+                        // a slot taken twice (the worker republished it while held) gives
+                        // back nothing the second time: that is a violation too
+                        if !r.release_held(j) {
+                            bad_releases += 1;
+                        }
                     }
                 }
+                bad_releases
             })
         };
         let console = {
@@ -617,35 +834,53 @@ mod tests {
             std::thread::spawn(move || {
                 let mut shown: Option<usize> = None;
                 while !stop.load(Ordering::Relaxed) {
-                    // the console marks its next front before taking it: clear the old mark only
-                    // after the take moved the front away from it
-                    let next = r.take_console();
-                    if next != shown {
-                        if let Some(n) = next {
-                            owned.fetch_or(1 << n, Ordering::SeqCst);
-                        }
-                        if let Some(o) = shown {
-                            owned.fetch_and(!(1 << o), Ordering::SeqCst);
-                        }
-                        shown = next;
+                    if let Some(o) = shown {
+                        owned.fetch_and(!(1 << o), Ordering::SeqCst);
+                    }
+                    shown = r.take_console();
+                    if let Some(n) = shown {
+                        owned.fetch_or(1 << n, Ordering::SeqCst);
                     }
                 }
             })
         };
-        for _ in 0..200_000 {
-            let t = r.fill_target(None).expect("a target");
-            // the relay's mark is set after its CAS, so a slot it took before our load is
-            // either still marked or already released — never free-and-marked
+        let mut violations = 0u64;
+        for _ in 0..rounds {
+            let free = r.free_mask();
             let o = owned.load(Ordering::SeqCst);
-            assert_eq!(
-                o & (1 << (8 + t)),
-                0,
-                "the worker picked slot {t} while the broker held it"
-            );
+            if free & ((o | (o >> 8)) & 0x1F) != 0 {
+                violations += 1;
+            }
+            let t = free.trailing_zeros() as usize;
+            assert!(t < BROKER_SLOTS, "a fill target must exist");
             r.publish(t);
         }
         stop.store(true, Ordering::Relaxed);
-        relay.join().unwrap();
+        let bad_releases = relay.join().unwrap();
         console.join().unwrap();
+        violations + bad_releases
+    }
+
+    /// ★ The TOCTOU case, interleaved for real: a worker taking snapshots and publishing races a
+    /// relay taking and releasing and a console taking. No snapshot may show FREE a slot the
+    /// relay OR the console holds (both readers' marks are asserted; see [`race`]).
+    #[test]
+    fn the_worker_never_picks_a_slot_another_thread_holds() {
+        let r = Arc::new(backed(BROKER_SLOTS));
+        assert_eq!(race(r, 200_000), 0);
+    }
+
+    /// ⊘ ...and the harness CAN fail: the two-word model of the same transitions is caught
+    /// (the known-positive the review asked for, 2026-10-03). Without it, a zero above would
+    /// say nothing about whether the harness ever sees an interleaving.
+    #[test]
+    fn the_harness_catches_the_two_word_ring() {
+        let r = Arc::new(TwoWords {
+            a: AtomicU32::new(pack(NO_SLOT, NO_SLOT, NO_SLOT, 0)),
+            h: AtomicU32::new(0),
+        });
+        let v = race(r, 200_000);
+        eprintln!("the two-word ring: {v} violations in 200000 rounds");
+        assert!(v > 0, "the two-word ring must be caught at least once");
     }
 }

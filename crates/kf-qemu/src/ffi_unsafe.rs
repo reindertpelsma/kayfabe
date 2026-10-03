@@ -626,10 +626,12 @@ pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
 
 /// ★ ABI 11 (display step 3, `docs/design/V3_DISPLAY.md` §8): start the display-broker relay —
 /// QEMU's main loop, BQL held, after `kf3_realize` with `display_broker` = 1. `path` is the
-/// broker's socket (absolute, shorter than `sun_path`); `extra_uid` (`>= 0`) is one more uid
-/// accepted as the broker; `watch`/`timer` are the C device's fd-handler and timer verbs, called
-/// back only from inside the `kf3_broker_*` entries. Returns 0, or -1 with a message (a broker
-/// that is not running yet is NOT an error: it is retried in the background).
+/// broker's socket (absolute, shorter than `sun_path`); `extra_uid` is the `display-broker-uid`
+/// property — `-1` none, or one more uid accepted as the broker (any other value is refused by
+/// name); `watch`/`timer` are the C device's fd-handler and timer verbs, called back only from
+/// inside the `kf3_broker_*` entries. Returns 0, or -1 with a message (a broker that is not
+/// running yet is NOT an error: the first attempt runs from the main loop's timer, and a failed
+/// one is retried in the background).
 ///
 /// # Safety
 /// `path` is a NUL-terminated string; `err` is null or writable for `err_len` bytes; `watch` and
@@ -662,10 +664,9 @@ pub unsafe extern "C" fn kf3_broker_start(
     // SAFETY: the caller promises a NUL-terminated string.
     let p = unsafe { CStr::from_ptr(path) };
     let path = std::path::PathBuf::from(std::ffi::OsStr::from_bytes(p.to_bytes()));
-    let extra = u32::try_from(extra_uid).ok();
     // SAFETY: forwarded from this function's contract.
     let hooks = unsafe { crate::raw_unsafe::BrokerHooks::adopt(watch, timer, opaque) };
-    match seat.start(&path, extra, hooks, now_ms) {
+    match seat.start(&path, extra_uid, hooks, now_ms) {
         Ok(()) => 0,
         Err(e) => {
             write_err(err, err_len, &e);

@@ -77,21 +77,24 @@ impl BrokerSeat {
         })
     }
 
-    /// ★ **Worker**: a broker frame of `cap` bytes for the FREE slot `slot`. The memfd is
-    /// registered for the copy BEFORE its descriptors are installed, so the ring never names a
-    /// backing the GPU does not write.
+    /// ★ **Worker**: a broker frame of at least `cap` bytes — whole host pages
+    /// ([`kf_broker::frame_bytes`]) — for the FREE slot `slot`. The memfd is registered for the
+    /// copy BEFORE its descriptors are installed, so the ring never names a backing the GPU does
+    /// not write. ⊘ On an error the caller must [`FrameRing::withdraw`] the slot before it
+    /// refills it with other memory (`display.rs`): the ring would otherwise go on offering the
+    /// slot's previous backing, which the GPU no longer writes.
+    ///
+    /// ⊘ CORRECTED 2026-10-03 (the review of `v3-broker`): a size that was not a multiple of the
+    /// host page was REFUSED, and 1920x1080x4 is not a multiple of 64 KiB — so on a host with
+    /// 64 KiB pages (arm64) every broker frame was refused. It is now rounded up.
     ///
     /// # Errors
     /// By name: the memfd, the mapping, the registration (`cuMemHostRegister` on a memfd mapping
     /// is the one step not yet run on hardware), or the ring's refusal.
     pub fn frame(&self, gpu: &DisplayGpu, slot: usize, cap: usize) -> Result<Frame, String> {
         let page = HostPageSize::query();
-        let bytes = cap as u64;
-        if !bytes.is_multiple_of(page.bytes()) {
-            return Err(format!(
-                "a {cap}-byte frame is not page-aligned (udmabuf needs whole pages)"
-            ));
-        }
+        let bytes = kf_broker::frame_bytes(cap as u64, page.bytes())
+            .ok_or_else(|| format!("a {cap}-byte frame does not round to whole host pages"))?;
         for _ in 0..3 {
             let ram = SharedRam::create_named(c"kayfabe-display-frame", bytes)
                 .map_err(|e| format!("memfd: {e}"))?;
@@ -150,20 +153,22 @@ impl BrokerSeat {
         self.wake.as_source_fd().as_raw_fd()
     }
 
-    /// ★ **Main loop**: start the relay — the path is checked, the first attempt made; a broker
-    /// that is not up yet is retried in the background (never a startup dependency).
+    /// ★ **Main loop** (realize): start the relay — the path and `display-broker-uid` are
+    /// checked, and the first attempt is ARMED on the relay's timer, so it runs from QEMU's main
+    /// loop, after `-run-with user=`/`-runas` dropped privileges; a broker that is not up yet is
+    /// retried in the background (never a startup dependency).
     ///
     /// # Errors
-    /// A refused path, an unreadable euid, or a second start.
+    /// A refused path, a `display-broker-uid` that is not -1 or a uid, or a second start.
     pub fn start(
         &self,
         path: &std::path::Path,
-        extra_uid: Option<u32>,
+        extra_uid: i64,
         mut hooks: BrokerHooks,
         now_ms: u64,
     ) -> Result<(), String> {
         kf_linux_raw::check_socket_path(path).map_err(|e| format!("display-broker: {e}"))?;
-        let allowed = kf_broker::allowed_uids(extra_uid)?;
+        let extra_uid = kf_broker::broker_uid_property(extra_uid)?;
         let mut g = self
             .relay
             .lock()
@@ -172,14 +177,15 @@ impl BrokerSeat {
             return Err("display-broker: the relay is already started".into());
         }
         eprintln!(
-            "kf3: broker: relay to {} (brokers accepted: uids {allowed:?} and the owner of the \
-             socket's directory); no clipboard",
-            path.display()
+            "kf3: broker: relay to {} (brokers accepted: uid 0, QEMU's effective uid at each \
+             connect{}); no clipboard",
+            path.display(),
+            extra_uid.map_or_else(String::new, |x| format!(", display-broker-uid {x}"))
         );
         let mut relay = Relay::new(
             RelayConfig {
                 path: path.to_path_buf(),
-                allowed_uids: allowed,
+                extra_uid,
             },
             self.ring.clone(),
             UnixLink,

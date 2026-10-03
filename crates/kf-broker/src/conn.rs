@@ -10,9 +10,14 @@
 //!   is a full backlog, i.e. a failed attempt that goes to the backoff (nvkvm-pv treated it as
 //!   "in progress", `relay.c:1573-1576`).
 //! - **The peer is checked right after `connect`, before a byte is read** (`SO_PEERCRED`
-//!   against [`RelayConfig::allowed_uids`] plus the owner of the socket's directory). Whoever
-//!   listens on the path gets the guest's screen and types into the guest; nvkvm-pv never
-//!   checked (`relay.c:1553-1600`).
+//!   against uid 0, this process's effective uid READ AT THAT ATTEMPT, and
+//!   [`RelayConfig::extra_uid`]). Whoever listens on the path gets the guest's screen and types
+//!   into the guest; nvkvm-pv never checked (`relay.c:1553-1600`). ⊘ The owner of the socket's
+//!   directory is not trusted (corrected 2026-10-03): anyone can create a missing directory
+//!   under `/tmp`.
+//! - **The first attempt is made on the timer, never inside [`Relay::start`]**: QEMU drops
+//!   privileges (`-run-with user=`, `-runas`) after realize and before its main loop runs, so
+//!   the euid the peer check reads is the one QEMU runs as.
 //! - **A later "no" wins**: a broker that probes an import after advertising it sends an
 //!   unsolicited `EV_FORMAT x=0` (`nb_session_wl.c:610-626`); nvkvm-pv kept the first answer
 //!   (`relay.c:1371-1373`). Here a 0 downgrades the rung and reclaims every held frame attached
@@ -105,8 +110,9 @@ pub trait Link {
     /// # Errors
     /// Why it could not be read.
     fn peer_uid(&mut self, sock: &Self::Sock) -> Result<u32, String>;
-    /// The owner uid of `dir`, if it can be read.
-    fn dir_owner(&mut self, dir: &Path) -> Option<u32>;
+    /// ★ This process's effective uid NOW — asked at every attempt, never cached (a VMM that
+    /// dropped privileges after realize is judged as what it runs as).
+    fn effective_uid(&mut self) -> u32;
     /// Send one command record with at most one descriptor.
     fn send(&mut self, sock: &Self::Sock, rec: &[u8; CMD_SIZE], fd: Option<BorrowedFd<'_>>)
     -> Sent;
@@ -191,9 +197,9 @@ pub enum Input {
 pub struct RelayConfig {
     /// The broker's socket (absolute; checked at realize).
     pub path: PathBuf,
-    /// uids accepted as the broker besides the owner of the socket's directory: 0, the VMM's
-    /// euid, and the `display-broker-uid` property when set.
-    pub allowed_uids: Vec<u32>,
+    /// The `display-broker-uid` property: one more uid accepted as the broker, besides root and
+    /// the VMM's effective uid at each attempt ([`crate::broker_uids`]).
+    pub extra_uid: Option<u32>,
 }
 
 /// A presentation rung (`V3_DISPLAY.md` §8.2).
@@ -296,6 +302,12 @@ struct Held {
     /// The broker released it while it was the latest commit: it is kept only as the frame a
     /// reconnect replays, and goes back when a newer frame is committed.
     released: bool,
+    /// ★ Its ATTACH went but its owed COMMIT was SUPERSEDED by a newer frame: no COMMIT will
+    /// ever follow that ATTACH (the next one follows the newer frame's ATTACH), so the broker
+    /// never shows it and sends no RELEASE for it. It yields its slot to a live frame, like a
+    /// retained one — without this, it and the latest commit filled the cap of 2 and nothing
+    /// could ever be committed again (the review's freeze, 2026-10-03).
+    superseded: bool,
 }
 
 /// ★ Everything known about ONE broker connection — dropped whole on disconnect.
@@ -346,7 +358,57 @@ pub struct Relay<L: Link> {
 }
 
 macro_rules! say {
-    ($($t:tt)*) => { eprintln!("kf3: broker: {}", format!($($t)*)) };
+    ($($t:tt)*) => { $crate::conn::log_line(format!($($t)*)) };
+}
+
+thread_local! {
+    static CAPTURE: core::cell::RefCell<Option<Vec<String>>> =
+        const { core::cell::RefCell::new(None) };
+}
+
+/// Every relay log line goes through here: to stderr, prefixed `kf3: broker:` — and, while a
+/// [`capture_log`] guard lives on this thread, into its capture too.
+pub fn log_line(line: String) {
+    eprintln!("kf3: broker: {line}");
+    CAPTURE.with(|c| {
+        if let Some(v) = c.borrow_mut().as_mut() {
+            v.push(line);
+        }
+    });
+}
+
+/// Test support: what the relay logged on this thread while the guard lived.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct LogCapture(());
+
+impl LogCapture {
+    /// The lines logged so far.
+    #[must_use]
+    pub fn lines(&self) -> Vec<String> {
+        CAPTURE.with(|c| c.borrow().clone().unwrap_or_default())
+    }
+}
+
+impl Drop for LogCapture {
+    fn drop(&mut self) {
+        CAPTURE.with(|c| *c.borrow_mut() = None);
+    }
+}
+
+/// Test support: start capturing this thread's relay log lines (a relay is driven from one
+/// thread — QEMU's main loop — so a test's capture sees exactly its own relay's lines).
+#[doc(hidden)]
+#[must_use]
+pub fn capture_log() -> LogCapture {
+    CAPTURE.with(|c| *c.borrow_mut() = Some(Vec::new()));
+    LogCapture(())
+}
+
+/// A repeating line is said for the first four and then every 256th time — never a line per
+/// frame (30-60 a second) for as long as the condition lasts.
+fn loud(n: u64) -> bool {
+    n <= 4 || n.is_multiple_of(256)
 }
 
 impl<L: Link> Relay<L> {
@@ -423,16 +485,19 @@ impl<L: Link> Relay<L> {
         )
     }
 
-    /// ★ The first attempt. ⊘ Not a startup dependency: a failure is logged once and retried
-    /// in the background; the VM boots regardless.
+    /// ★ Arm the first attempt for `now` on the machine's timer — it is made from the VMM's
+    /// loop, never inside this call. ⊘ QEMU realizes devices BEFORE it drops privileges
+    /// (`os_setup_post`: `-run-with user=`, `-runas`), and only then runs its main loop; an
+    /// attempt made here would judge the peer against root's euid and refuse a broker running
+    /// as the uid QEMU is about to become. ⊘ Not a startup dependency: a failure is logged once
+    /// and retried in the background; the VM boots regardless.
     pub fn start(&mut self, now: u64, host: &mut dyn Host) {
-        self.attempt(now, host);
-        if self.conn.is_none() {
-            say!(
-                "starting without a display; retrying in the background — the VM boots regardless"
-            );
+        if self.stopped || self.conn.is_some() || self.retry_at.is_some() {
+            return;
         }
-        self.finish(now, host);
+        self.retry_at = Some(now);
+        self.timer = Some(now);
+        host.timer(Some(now));
     }
 
     /// ★ The socket is readable and/or writable. Reads at most [`READ_BATCH`] packets (`cap`
@@ -492,19 +557,23 @@ impl<L: Link> Relay<L> {
                 return;
             }
         };
-        // ★ the peer check, before a single byte is read
-        let owner = self.cfg.path.parent().and_then(|d| self.link.dir_owner(d));
+        // ★ the peer check, before a single byte is read — against the euid of THIS moment
+        let euid = self.link.effective_uid();
+        let allowed = crate::link::broker_uids(euid, self.cfg.extra_uid);
         match self.link.peer_uid(&sock) {
-            Ok(uid) if self.cfg.allowed_uids.contains(&uid) || owner == Some(uid) => {}
+            Ok(uid) if allowed.contains(&uid) => {}
             Ok(uid) => {
                 drop(sock); // never watched, never read
                 self.counters.peer_refused += 1;
                 let why = format!(
                     "REFUSED the listener on {}: it runs as uid {uid}, which is not an allowed \
-                     broker (allowed: {:?}, plus the directory's owner {owner:?}; set the \
-                     display-broker-uid property to admit another uid)",
+                     broker (allowed: uid 0, QEMU's effective uid {euid}{}). If uid {uid} is \
+                     your broker, set display-broker-uid={uid} on the device or run QEMU as that \
+                     user (-run-with user=)",
                     self.cfg.path.display(),
-                    self.cfg.allowed_uids
+                    self.cfg
+                        .extra_uid
+                        .map_or_else(String::new, |x| format!(", display-broker-uid {x}"))
                 );
                 self.failed(now, host, &why);
                 return;
@@ -683,13 +752,18 @@ impl<L: Link> Relay<L> {
             at_ms: now,
             commit_no: self.commits,
             released: false,
+            superseded: false,
         }
     }
 
-    /// Whether `slot` has a backing that holds its published geometry, inside the broker's
-    /// bounds (the broker re-checks all of it; a frame it would reject is not sent).
+    /// Whether `slot` has a CURRENT backing (the one the GPU writes) that holds its published
+    /// geometry, inside the broker's bounds (the broker re-checks all of it; a frame it would
+    /// reject is not sent).
     fn fits(&self, slot: usize) -> bool {
         let g = self.ring.geometry(slot);
+        if !self.ring.broker_backed(slot) {
+            return false;
+        }
         let Some(fds) = self.ring.fds(slot) else {
             return false;
         };
@@ -787,6 +861,7 @@ impl<L: Link> Relay<L> {
                 at_ms: now,
                 commit_no: self.commits,
                 released: false,
+                superseded: false,
             });
         }
         r
@@ -866,8 +941,15 @@ impl<L: Link> Relay<L> {
             if self.ring.broker_ready().is_none() {
                 return;
             }
-            if let Owed::Attach(j) = owed {
-                self.unhold(j); // never reached the broker
+            match owed {
+                Owed::Attach(j) => self.unhold(j), // never reached the broker
+                // its ATTACH is on the stream with no COMMIT to follow: never shown, never
+                // released — it must yield its slot (see `Held::superseded`)
+                Owed::Commit(j) => {
+                    if let Some(h) = self.held[j].as_mut() {
+                        h.superseded = true;
+                    }
+                }
             }
             if let Some(c) = self.conn.as_mut() {
                 c.owed = None;
@@ -882,10 +964,13 @@ impl<L: Link> Relay<L> {
             Take::Empty => return,
             Take::Taken(j) => j,
             Take::Full => {
-                // the retained (already released) latest frame yields first: retention is
-                // only for a replay, and must never hold back a live frame
-                let retained = (0..MAX_SLOTS).find(|&j| self.held[j].is_some_and(|h| h.released));
-                if let Some(j) = retained {
+                // a superseded frame (never shown) yields first, then the retained (already
+                // released) latest one: neither is on screen, and retention is only for a
+                // replay — neither may hold back a live frame
+                let yields = (0..MAX_SLOTS)
+                    .find(|&j| self.held[j].is_some_and(|h| h.superseded))
+                    .or_else(|| (0..MAX_SLOTS).find(|&j| self.held[j].is_some_and(|h| h.released)));
+                if let Some(j) = yields {
                     self.unhold(j);
                 } else if !self.reclaim_overdue(now) {
                     self.counters.blocked += 1;
@@ -900,7 +985,15 @@ impl<L: Link> Relay<L> {
         self.held[j] = Some(self.claimed(j, now));
         if !self.fits(j) {
             self.counters.refused += 1;
-            say!("REFUSED frame slot {j}: no backing fits its geometry");
+            let n = self.counters.refused;
+            if loud(n) {
+                let g = self.ring.geometry(j);
+                say!(
+                    "REFUSED frame slot {j}: no current backing fits its {}x{} geometry ({n} so far)",
+                    g.width,
+                    g.height
+                );
+            }
             self.unhold(j);
             return;
         }
@@ -930,7 +1023,7 @@ impl<L: Link> Relay<L> {
             Sent::Full => {
                 self.counters.uncommitted += 1;
                 let n = self.counters.uncommitted;
-                if n <= 4 || n.is_multiple_of(256) {
+                if loud(n) {
                     say!(
                         "the broker did not drain: a frame was attached but not committed, so the \
                          display holds the previous one ({n} so far)"

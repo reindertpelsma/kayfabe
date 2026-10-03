@@ -1915,7 +1915,16 @@ impl ScanState {
             };
             let made = match broker_frame {
                 Some(f) => Ok(f),
-                None => gpu.frame(cap).map_err(|e| e.to_string()),
+                None => {
+                    // ★ the slot is about to hold memory the broker cannot receive: the ring
+                    // must stop offering it, or it would go on naming the slot's previous broker
+                    // memfd — which the GPU no longer writes — and, once the mode fits it again,
+                    // send the broker those stale pixels (the review of `v3-broker`, 2026-10-03)
+                    if dp.broker.is_some() {
+                        dp.console.ring().withdraw(slot);
+                    }
+                    gpu.frame(cap).map_err(|e| e.to_string())
+                }
             };
             match made {
                 Ok(f) => {
@@ -2079,14 +2088,27 @@ mod tests {
         }
     }
 
-    /// ★ With the broker on, the console and the relay read ONE ring: a frame the relay holds is
-    /// never a fill target, and the console still gets every newest frame.
-    #[test]
-    fn the_console_and_the_broker_share_one_ring() {
+    /// A five-slot broker ring whose slots carry a (one-page) memfd backing, as
+    /// `BrokerSeat::frame` installs before the worker publishes into a slot.
+    fn broker_ring() -> Arc<kf_broker::FrameRing> {
         let ring = Arc::new(kf_broker::FrameRing::new(
             kf_broker::slots::BROKER_SLOTS,
             true,
         ));
+        for j in 0..ring.slots() {
+            let mem =
+                kf_linux_raw::SharedRam::create_named(c"kfq-test-frame", 4096).expect("memfd");
+            ring.install(j, kf_broker::SlotFds::new(mem, None).expect("ids"))
+                .expect("install");
+        }
+        ring
+    }
+
+    /// ★ With the broker on, the console and the relay read ONE ring: a frame the relay holds is
+    /// never a fill target, and the console still gets every newest frame.
+    #[test]
+    fn the_console_and_the_broker_share_one_ring() {
+        let ring = broker_ring();
         let c = ConsoleShare::over(ring.clone());
         let a = c.free_slot().unwrap();
         c.publish(a, frame(0x1000, 1));
@@ -2111,5 +2133,18 @@ mod tests {
             c.publish(t, frame(0x2000, 2 + i));
         }
         assert!(ring.release_held(a));
+    }
+
+    /// ★ A slot the worker refills with console-only memory (the broker's backing was refused)
+    /// is withdrawn: the console still gets its frames, the broker is offered none of them.
+    #[test]
+    fn a_withdrawn_slot_feeds_the_console_and_never_the_broker() {
+        let ring = broker_ring();
+        let c = ConsoleShare::over(ring.clone());
+        let t = c.free_slot().unwrap();
+        ring.withdraw(t);
+        c.publish(t, frame(0x1000, 1));
+        assert_eq!(ring.take_broker(), kf_broker::Take::Empty);
+        assert_eq!(c.take().unwrap().serial, 1, "the console shows it");
     }
 }

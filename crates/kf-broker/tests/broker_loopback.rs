@@ -13,7 +13,7 @@
 //!
 //! Run with `--ignored` but without `KF_BROKER_BIN`, every test FAILS (it does not pass
 //! vacuously). The dma-buf cases need `/dev/udmabuf` and print `UDMABUF-GATE: SKIPPED` without
-//! it; the squatter case needs root and says so when it is not.
+//! it; the two squatter cases need root and say so when it is not (they need no broker binary).
 
 use kf_broker::wire::{Cmd, EV_FORMAT, FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE, Pkt};
 use kf_broker::{FrameGeom, FrameRing, Host, Input, Relay, RelayConfig, SlotFds, UnixLink};
@@ -159,7 +159,7 @@ struct Rig {
 }
 
 impl Rig {
-    fn new(sock: &Path, dmabuf: bool, allowed: Vec<u32>) -> Rig {
+    fn new(sock: &Path, dmabuf: bool) -> Rig {
         let page = HostPageSize::query();
         let dev = dmabuf.then(|| kf_linux_raw::udmabuf_gate::open_device().expect("udmabuf"));
         let ring = Arc::new(FrameRing::new(kf_broker::slots::BROKER_SLOTS, true));
@@ -174,7 +174,7 @@ impl Rig {
         let relay = Relay::new(
             RelayConfig {
                 path: sock.to_path_buf(),
-                allowed_uids: allowed,
+                extra_uid: None,
             },
             ring.clone(),
             UnixLink,
@@ -270,10 +270,6 @@ fn wait_log(b: &Broker, needle: &str, ms: u64) -> bool {
     false
 }
 
-fn me() -> Vec<u32> {
-    kf_broker::allowed_uids(None).unwrap()
-}
-
 /// ★ Rung 1: a real 640x480 udmabuf, LINEAR — the broker logs OUR dma-buf's id, answers with
 /// SURFACE, RELEASE carrying that id, and FRAME; scripted input arrives decoded.
 #[test]
@@ -284,7 +280,7 @@ fn linear_udmabuf_frames_release_and_scripted_input() {
     let dir = scratch("linear");
     let sock = dir.join("display.sock");
     let mut b = Broker::spawn(&sock);
-    let mut r = Rig::new(&sock, true, me());
+    let mut r = Rig::new(&sock, true);
     let j = r.publish(FOURCC_XR24);
     let id = r.ring.fds(j).unwrap().dmabuf_id().unwrap();
     r.start();
@@ -423,7 +419,7 @@ fn shm_frames_and_an_shm_replay_after_kill_9() {
     let dir = scratch("shm");
     let sock = dir.join("display.sock");
     let b = Broker::spawn(&sock);
-    let mut r = Rig::new(&sock, false, me());
+    let mut r = Rig::new(&sock, false);
     r.start();
     assert!(r.pump_until(3000, |r| r.relay.active()));
     let j = r.publish(FOURCC_XR24);
@@ -463,7 +459,7 @@ fn a_rejected_attach_is_reclaimed_by_rule() {
     let dir = scratch("reject");
     let sock = dir.join("display.sock");
     let b = Broker::spawn(&sock);
-    let mut r = Rig::new(&sock, false, me());
+    let mut r = Rig::new(&sock, false);
     r.start();
     assert!(r.pump_until(3000, |r| r.relay.active()));
     let bad = r.publish(u32::from_le_bytes(*b"AB24"));
@@ -503,7 +499,7 @@ fn a_stopped_broker_never_blocks_the_relay() {
     let dir = scratch("stop");
     let sock = dir.join("display.sock");
     let b = Broker::spawn(&sock);
-    let mut r = Rig::new(&sock, false, me());
+    let mut r = Rig::new(&sock, false);
     r.start();
     assert!(r.pump_until(3000, |r| r.relay.active()));
     b.signal("-STOP");
@@ -533,20 +529,44 @@ fn a_stopped_broker_never_blocks_the_relay() {
 }
 
 /// ★ A squatter listening on the path as another uid (65534) is refused BEFORE its HELLO is
-/// read; the directory is root's, so the directory-owner rule does not admit it. Needs root.
+/// read, in a world-writable directory root owns. Needs root (no broker binary).
 #[test]
-#[ignore = "needs KF_BROKER_BIN and root"]
+#[ignore = "needs root"]
 fn a_squatter_under_another_uid_is_refused_before_hello() {
-    let _ = broker_bin();
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = scratch("squat");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+    squatter_is_refused(&dir);
+}
+
+/// ★ The review's case (2026-10-03): the squatter OWNS the socket's directory — as anyone does
+/// who runs `mkdir /tmp/kf3` first after a reboot. The old rule admitted the directory's owner;
+/// it must be refused like any other uid. Needs root (no broker binary).
+#[test]
+#[ignore = "needs root"]
+fn a_squatter_who_owns_the_sockets_directory_is_refused() {
+    let dir = scratch("squatdir");
+    let ok = Command::new("chown")
+        .args(["65534:65534"])
+        .arg(&dir)
+        .status()
+        .expect("chown")
+        .success();
+    assert!(ok, "chown the directory to the squatter");
+    use std::os::unix::fs::MetadataExt as _;
+    assert_eq!(std::fs::metadata(&dir).unwrap().uid(), 65534);
+    squatter_is_refused(&dir);
+}
+
+/// A python3 listener running as uid 65534 binds `dir/display.sock` and would answer HELLO; the
+/// relay must refuse it on `SO_PEERCRED` before reading a byte.
+fn squatter_is_refused(dir: &Path) {
     assert_eq!(
-        kf_broker::effective_uid().unwrap(),
+        kf_broker::effective_uid(),
         0,
         "this case needs root (to run the squatter as uid 65534)"
     );
-    use std::os::unix::fs::PermissionsExt as _;
     use std::os::unix::process::CommandExt as _;
-    let dir = scratch("squat");
-    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
     let sock = dir.join("display.sock");
     let script = format!(
         "import socket,struct,time\ns=socket.socket(socket.AF_UNIX)\ns.bind({:?})\ns.listen(8)\n\
@@ -568,7 +588,7 @@ fn a_squatter_under_another_uid_is_refused_before_hello() {
         );
         std::thread::sleep(Duration::from_millis(10));
     }
-    let mut r = Rig::new(&sock, false, me());
+    let mut r = Rig::new(&sock, false);
     r.start();
     r.pump(500);
     let _ = squat.kill();
@@ -576,4 +596,5 @@ fn a_squatter_under_another_uid_is_refused_before_hello() {
     let c = r.relay.counters();
     assert!(!r.relay.active(), "never connected to a squatter");
     assert!(c.peer_refused >= 1 && c.packets == 0, "{c:?}");
+    let _ = std::fs::remove_dir_all(dir);
 }

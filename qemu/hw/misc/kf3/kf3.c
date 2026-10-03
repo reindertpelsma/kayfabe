@@ -151,6 +151,7 @@ struct Kf3State {
     QEMUTimer *broker_timer;
     int broker_sock;                 /* the socket Rust asked us to watch, or -1 */
     int broker_frame_fd;             /* the display worker's frame eventfd, or -1 */
+    bool broker_pointer_checked;     /* the absolute-pointer check ran (once, at the first connect) */
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -725,9 +726,10 @@ static void kf3_gfx_update(void *opaque)
     dpy_gfx_update_full(s->con);
 }
 
-/* ★ ABI 12 (display step 3c, docs/design/V3_DISPLAY.md §8.6): a resize hint from the UI (VNC/GTK, or
- * the broker's SURFACE through dpy_set_ui_info) after QEMU's 1 s coalescing. Rust authors the new
- * monitor's EDID on its worker and the register drainer posts the hotplug; nothing here waits. */
+/* ★ ABI 12 (display step 3c, docs/design/V3_DISPLAY.md §8.6): a resize hint from the UI (the
+ * broker's SURFACE through dpy_set_ui_info, or a GTK/VNC frontend on the same console) after QEMU's
+ * 1 s coalescing. Rust authors the new monitor's EDID on its worker and the register drainer posts
+ * the hotplug; nothing here waits. */
 static void kf3_ui_info(void *opaque, uint32_t head, QemuUIInfo *info)
 {
     Kf3State *s = opaque;
@@ -737,7 +739,16 @@ static void kf3_ui_info(void *opaque, uint32_t head, QemuUIInfo *info)
     }
 }
 
+/* ⊘ 2026-10-03 (the review of v3-broker): the ui_info hook is installed ONLY with display-broker
+ * set. Installed unconditionally, it changed the console path without a broker: GTK's
+ * gd_configure -> gd_set_ui_size -> dpy_set_ui_info re-authored the guest's monitor to the widget's
+ * size (its startup size included), and a VNC SetDesktopSize re-moded the guest. Without a broker
+ * the console is exactly the M2 one (no ui_info: dpy_ui_info_supported() is false). */
 static const GraphicHwOps kf3_gfx_ops = {
+    .gfx_update = kf3_gfx_update,
+};
+
+static const GraphicHwOps kf3_gfx_ops_broker = {
     .gfx_update = kf3_gfx_update,
     .ui_info = kf3_ui_info,
 };
@@ -773,6 +784,35 @@ static void kf3_broker_timer_cb(void *opaque)
     kf3_broker_pump(opaque, -1, false, false);
 }
 
+/* Design §1.3 (the review of v3-broker, 2026-10-03): the broker's pointer position arrives as
+ * absolute events, and without an absolute pointing device (-device virtio-tablet-pci) they find no
+ * handler and are dropped without a word. Checked once, at the first connection that passed the
+ * peer check — on the main loop, so every -device on the command line exists by then (the tablet
+ * may be listed after kf3). Keys and buttons do not depend on it. */
+static void kf3_broker_check_pointer(Kf3State *s)
+{
+    MouseInfoList *mice, *e;
+    bool absolute = false;
+
+    if (s->broker_pointer_checked) {
+        return;
+    }
+    s->broker_pointer_checked = true;
+    mice = qmp_query_mice(NULL);
+    for (e = mice; e; e = e->next) {
+        if (e->value->absolute) {
+            absolute = true;
+        }
+    }
+    qapi_free_MouseInfoList(mice);
+    if (!absolute) {
+        warn_report("kf3: broker: NO absolute pointing device exists, so the broker's pointer "
+                    "position goes nowhere (keys and buttons still work). Add -device "
+                    "virtio-tablet-pci,display=%s,head=0.",
+                    DEVICE(s)->id ? DEVICE(s)->id : "<this kf3-gpu's id>");
+    }
+}
+
 /* Rust's watch verb (Kf3BrokerWatchFn). (0, 0) arrives BEFORE Rust closes the fd, so no stale
  * descriptor number stays registered (nvkvm-pv relay.c:724-743's order). */
 static void kf3_broker_watch(void *opaque, int32_t fd, uint32_t rd, uint32_t wr)
@@ -785,6 +825,10 @@ static void kf3_broker_watch(void *opaque, int32_t fd, uint32_t rd, uint32_t wr)
             s->broker_sock = -1;
         }
         return;
+    }
+    if (s->broker_sock < 0) {
+        /* a new connection: Rust watches a socket only after its peer check passed */
+        kf3_broker_check_pointer(s);
     }
     s->broker_sock = fd;
     qemu_set_fd_handler(fd, rd ? kf3_broker_sock_rd : NULL, wr ? kf3_broker_sock_wr : NULL, s);
@@ -944,8 +988,10 @@ static void kf3_broker_pump(Kf3State *s, int fd, bool rd, bool wr)
 }
 
 /* Realize, after the console exists. The path rules (absolute, < sun_path, no abstract namespace)
- * are Rust's and refuse here by name; an ABSENT broker is not an error (retried, never a startup
- * dependency). */
+ * and display-broker-uid's range (-1, or a uid) are Rust's and refuse here by name; an ABSENT
+ * broker is not an error (retried, never a startup dependency). Rust only ARMS the first attempt
+ * on the timer: it runs from the main loop, after os_setup_post's -run-with user= / -runas
+ * dropped privileges, so the peer check judges against the uid QEMU runs as. */
 static bool kf3_broker_realize(Kf3State *s, Error **errp)
 {
     char err[512] = "";
@@ -1131,7 +1177,9 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     memory_listener_register(&s->listener, &address_space_memory);
 
     if (s->display) {
-        s->con = graphic_console_init(DEVICE(pci), 0, &kf3_gfx_ops, s);
+        /* the ui_info hook (3c resize) only with a broker: without one, GTK/VNC stay as in M2 */
+        s->con = graphic_console_init(DEVICE(pci), 0,
+                                      s->display_broker ? &kf3_gfx_ops_broker : &kf3_gfx_ops, s);
         info_report("kf3: display console registered (head 0 of %s)",
                     DEVICE(pci)->id ? DEVICE(pci)->id : "kf3-gpu");
     }
@@ -1187,7 +1235,9 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),
     /* ★ 2026-10-03, display step 3 (docs/design/V3_DISPLAY.md §8): the display broker's socket
      * (absolute path; unset = off, the console alone) and one more uid accepted as the broker
-     * (-1 = none; 0, QEMU's euid and the socket directory's owner are always accepted). */
+     * (-1 = none; any other value outside 0..4294967294 is refused at realize). Uid 0 and QEMU's
+     * effective uid AT EACH CONNECT (after -run-with user= / -runas) are always accepted; the
+     * owner of the socket's directory is not (anyone can create a missing /tmp directory). */
     DEFINE_PROP_STRING("display-broker", Kf3State, display_broker),
     DEFINE_PROP_INT64("display-broker-uid", Kf3State, display_broker_uid, -1),
 };

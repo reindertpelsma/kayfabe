@@ -20,7 +20,9 @@ use std::sync::Arc;
 #[derive(Default)]
 struct Wire {
     peer_uid: u32,
-    dir_owner: Option<u32>,
+    /// What `effective_uid` answers NOW (a VMM that dropped privileges changes it).
+    euid: u32,
+    euid_reads: u32,
     connect_err: Option<String>,
     connects: u32,
     inbox: VecDeque<u8>,
@@ -60,8 +62,10 @@ impl Link for Fake {
     fn peer_uid(&mut self, _s: &Sock) -> Result<u32, String> {
         Ok(self.0.borrow().peer_uid)
     }
-    fn dir_owner(&mut self, _d: &Path) -> Option<u32> {
-        self.0.borrow().dir_owner
+    fn effective_uid(&mut self) -> u32 {
+        let mut w = self.0.borrow_mut();
+        w.euid_reads += 1;
+        w.euid
     }
     fn send(&mut self, _s: &Sock, rec: &[u8; CMD_SIZE], fd: Option<BorrowedFd<'_>>) -> Sent {
         let mut w = self.0.borrow_mut();
@@ -132,12 +136,13 @@ impl T {
         }
         let wire = Rc::new(RefCell::new(Wire {
             peer_uid: ME,
+            euid: ME,
             ..Wire::default()
         }));
         let relay = Relay::new(
             RelayConfig {
                 path: PathBuf::from("/run/test/display.sock"),
-                allowed_uids: vec![0, ME],
+                extra_uid: None,
             },
             ring.clone(),
             Fake(wire.clone()),
@@ -211,9 +216,16 @@ impl T {
         self.relay.on_timer(now, &mut self.host);
     }
 
+    /// `start` arms the first attempt for now; the VMM's loop then fires the timer.
     fn start(&mut self) {
         let now = self.now;
         self.relay.start(now, &mut self.host);
+        assert_eq!(
+            self.host.timer,
+            Some(now),
+            "the first attempt is armed for now"
+        );
+        self.relay.on_timer(now, &mut self.host);
     }
 
     /// Connect and complete the HELLO with `caps` (always including `CAP_DMABUF`), keeping what
@@ -293,8 +305,7 @@ fn hello_must_come_first_with_version_2_and_dmabuf() {
     assert_eq!(t.sent()[0].0.width, 0, "CAPS without the clipboard bit");
 }
 
-/// ★ Fix (c): the peer check runs right after connect, BEFORE a byte is read; the directory's
-/// owner is admitted.
+/// ★ Fix (c): the peer check runs right after connect, BEFORE a byte is read.
 #[test]
 fn the_peer_check_runs_before_any_read() {
     let mut t = T::new(false);
@@ -310,11 +321,100 @@ fn the_peer_check_runs_before_any_read() {
     );
     let c = t.relay.counters();
     assert_eq!((c.peer_refused, c.attempts_failed), (1, 1));
-    // the same uid owning the socket's directory is admitted
+}
+
+/// A relay whose broker runs as `peer`, in a VMM whose euid is `euid`, with
+/// `display-broker-uid` = `extra`: started and given a HELLO. Returns whether it went ACTIVE.
+fn admitted(peer: u32, euid: u32, extra: Option<u32>) -> bool {
+    let ring = Arc::new(FrameRing::new(kf_broker::slots::BROKER_SLOTS, true));
+    let wire = Rc::new(RefCell::new(Wire {
+        peer_uid: peer,
+        euid,
+        ..Wire::default()
+    }));
+    let mut relay = Relay::new(
+        RelayConfig {
+            path: PathBuf::from("/tmp/kf3/display.sock"),
+            extra_uid: extra,
+        },
+        ring,
+        Fake(wire.clone()),
+    );
+    let mut host = H::default();
+    relay.start(0, &mut host);
+    relay.on_timer(0, &mut host);
+    let hello = Pkt {
+        ty: EV_HELLO,
+        w0: 2,
+        w1: CAP_DMABUF,
+        ..Pkt::default()
+    };
+    wire.borrow_mut().inbox.extend(hello.encode());
+    relay.on_socket(0, true, false, &mut host, &mut Vec::new(), 64);
+    relay.active()
+}
+
+/// ★ The peer policy (corrected 2026-10-03, the review of `v3-broker`): exactly uid 0, the
+/// VMM's effective uid and `display-broker-uid`. ⊘ Nothing else — in particular not the owner of
+/// the socket's directory, which anyone can be when the directory is missing (`mkdir /tmp/kf3`
+/// after a reboot); the loopback's `a_squatter_who_owns_the_sockets_directory_is_refused` runs
+/// that case on a real socket.
+#[test]
+fn only_root_the_vmms_euid_and_display_broker_uid_are_admitted() {
+    assert!(admitted(0, ME, None), "root");
+    assert!(admitted(ME, ME, None), "the VMM's own uid");
+    assert!(admitted(4242, ME, Some(4242)), "display-broker-uid");
+    assert!(!admitted(4242, ME, None), "any other uid");
+    assert!(
+        !admitted(4242, ME, Some(4243)),
+        "a different display-broker-uid"
+    );
+    assert!(
+        !admitted(ME, 0, None),
+        "a root VMM does not admit a user's broker by itself"
+    );
+    assert!(
+        admitted(ME, 0, Some(ME)),
+        "...unless display-broker-uid names it"
+    );
+}
+
+/// ★ The euid is read at EACH attempt — QEMU realizes devices as root, then `-run-with user=`
+/// (or `-runas`) drops to the user before its main loop runs. `start` makes no attempt of its
+/// own: the first one runs from the timer, after the drop, and a broker running as that user is
+/// admitted. (Read once at realize — the review's finding — it named root and refused it.)
+#[test]
+fn the_euid_is_read_at_each_connect_after_privileges_are_dropped() {
     let mut t = T::new(false);
-    t.wire.borrow_mut().peer_uid = 4242;
-    t.wire.borrow_mut().dir_owner = Some(4242);
-    t.up(0);
+    t.wire.borrow_mut().euid = 0; // realize: QEMU still runs as root
+    let now = t.now;
+    t.relay.start(now, &mut t.host);
+    assert_eq!(t.wire.borrow().connects, 0, "start never connects");
+    assert_eq!(t.wire.borrow().euid_reads, 0, "nor reads the euid");
+    assert_eq!(
+        t.host.timer,
+        Some(now),
+        "the first attempt is the timer's, at once"
+    );
+    t.wire.borrow_mut().euid = ME; // os_setup_post: setuid(ME), then the main loop
+    t.relay.on_timer(now, &mut t.host);
+    t.pkt(EV_HELLO, 0, 0, 2, CAP_DMABUF);
+    t.read();
+    assert!(t.relay.active(), "the broker running as ME is admitted");
+    assert_eq!(t.relay.counters().peer_refused, 0);
+    // and again at a reconnect: the euid of THAT attempt
+    t.wire.borrow_mut().eof = true;
+    t.read();
+    assert!(!t.relay.connected());
+    t.wire.borrow_mut().eof = false;
+    t.wire.borrow_mut().euid = 4242;
+    t.tick(200);
+    assert_eq!(
+        t.relay.counters().peer_refused,
+        1,
+        "judged against the euid of now"
+    );
+    assert_eq!(t.wire.borrow().euid_reads, 2);
 }
 
 /// ★ No CONNECTING state: a connect that fails (EAGAIN included) is a failed attempt at once.
@@ -889,6 +989,100 @@ fn a_frame_larger_than_its_backing_is_refused_before_the_wire() {
     assert!(t.sent().is_empty());
     assert_eq!(t.relay.counters().refused, 1);
     assert_eq!(t.ring.held_mask(), 0);
+}
+
+/// ★ The review's freeze (2026-10-03): the broker stalls, the COMMIT after an ATTACH gets
+/// EAGAIN (owed), and the next frame supersedes it while the latest commit and the superseded
+/// frame fill the cap of 2. The superseded frame is never shown (no COMMIT follows its ATTACH)
+/// and never released, and it was neither the latest commit nor reclaimable — so nothing was
+/// ever committed again (`sent=1 blocked=61 reclaims=0 held=0b00011 timer=None`). It now yields
+/// its slot to the live frame.
+#[test]
+fn a_superseded_owed_commit_never_freezes_the_display() {
+    let mut t = T::new(false);
+    t.up(0);
+    let a = t.publish(64, 32);
+    t.frame(); // a: WINDOW ATTACH COMMIT — the latest commit, never released (on screen)
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read(); // credit back
+    let b = t.publish(64, 32);
+    t.clear();
+    t.wire.borrow_mut().budget = Some(1); // b's ATTACH goes, its COMMIT is Full: owed
+    t.frame();
+    assert_eq!(t.types(), vec![CMD_ATTACH]);
+    assert_eq!(t.relay.counters().uncommitted, 1);
+    assert_eq!(
+        t.ring.held_mask(),
+        (1 << a) | (1 << b),
+        "the cap of 2 is full"
+    );
+    t.wire.borrow_mut().budget = None;
+    let c = t.publish(64, 32); // supersedes b's owed COMMIT
+    t.frame();
+    assert_eq!(
+        t.types(),
+        vec![CMD_ATTACH, CMD_ATTACH, CMD_COMMIT],
+        "c's ATTACH comes before the next COMMIT: b is never shown"
+    );
+    assert_eq!(t.relay.counters().sent, 2, "c went");
+    assert_eq!(
+        t.ring.held_mask() & (1 << b),
+        0,
+        "the superseded frame gave its slot back"
+    );
+    assert_ne!(t.ring.held_mask() & (1 << c), 0);
+    // and frames keep flowing
+    for _ in 0..30 {
+        t.pkt(EV_FRAME, 0, 0, 0, 0);
+        t.read();
+        t.publish(64, 32);
+        t.frame();
+        t.tick(1000);
+    }
+    let k = t.relay.counters();
+    assert_eq!(k.sent, 32, "{k:?}");
+    assert!(t.ring.held_mask().count_ones() <= 2);
+}
+
+/// ★ A slot the worker refilled with memory the broker cannot receive (a refused backing,
+/// `FrameRing::withdraw`) is never sent — its previous memfd is stale — and makes no log line.
+#[test]
+fn a_withdrawn_slot_is_never_sent_to_the_broker() {
+    let mut t = T::new(false);
+    t.up(0);
+    let log = kf_broker::capture_log();
+    let j = t.ring.fill_target(None).unwrap();
+    t.ring.withdraw(j);
+    let k = t.publish(64, 32);
+    assert_eq!(k, j);
+    t.frame();
+    assert!(t.sent().is_empty(), "the stale backing was not sent");
+    assert_eq!(t.relay.counters().refused, 0, "never even broker-ready");
+    assert!(log.lines().is_empty(), "{:?}", log.lines());
+    // the next frame, in a backed slot, goes
+    t.publish(64, 32);
+    t.frame();
+    assert_eq!(t.types(), vec![CMD_WINDOW, CMD_ATTACH, CMD_COMMIT]);
+}
+
+/// ★ A refused frame is logged for the first four and then every 256th — not once per frame for
+/// as long as it lasts (the review's log flood, 2026-10-03).
+#[test]
+fn a_refused_frame_is_logged_at_a_bounded_rate() {
+    let mut t = T::new(false);
+    t.up(0);
+    let log = kf_broker::capture_log();
+    for _ in 0..300 {
+        t.publish(4096, 4096); // 64 MiB of pixels in a 64 KiB backing
+        t.frame();
+    }
+    assert_eq!(t.relay.counters().refused, 300);
+    let said = log
+        .lines()
+        .iter()
+        .filter(|l| l.contains("REFUSED frame slot"))
+        .count();
+    assert_eq!(said, 5, "frames 1-4 and 256: {:?}", log.lines());
 }
 
 /// Stop unwatches before it closes, and leaves no timer.

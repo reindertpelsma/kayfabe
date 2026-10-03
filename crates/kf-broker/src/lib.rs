@@ -14,7 +14,8 @@
 //! - [`conn`] — the [`Relay`]: connect, peer check, HELLO, replay, the owed frame, pacing,
 //!   RELEASE accounting, reclaim, reconnect with backoff — everything decided here, nothing
 //!   blocking, deterministic under a caller-supplied clock;
-//! - [`link`] — the real socket ([`UnixLink`]) and the peer policy's inputs.
+//! - [`link`] — the real socket ([`UnixLink`]) and the peer policy's inputs (root, the VMM's
+//!   effective uid at each connect, `display-broker-uid`).
 //!
 //! The VMM's part is small and is the only VMM-specific code: register the socket and a timer
 //! ([`Host`]), wake the relay when the worker publishes a frame, and inject [`Input`] through
@@ -30,5 +31,7 @@ pub mod slots;
 pub mod wire;
 
 pub use conn::{Counters, Host, Input, Link, Recv, Relay, RelayConfig, Rung, Sent};
-pub use link::{UnixLink, allowed_uids, effective_uid};
-pub use slots::{FrameGeom, FrameRing, InstallRefusal, SlotFds, Take};
+#[doc(hidden)]
+pub use conn::{LogCapture, capture_log};
+pub use link::{MAX_BROKER_UID, UnixLink, broker_uid_property, broker_uids, effective_uid};
+pub use slots::{FrameGeom, FrameRing, InstallRefusal, SlotFds, Take, frame_bytes};
