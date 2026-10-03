@@ -3,7 +3,8 @@
 //! each is a function a test drives with a fake host ([`DispSwHost`]): the guest's software-classID
 //! numbering mirrored ([`SwClassIds`]), the statement-time admission ([`admit`]), the caps
 //! ([`PER_CHANNEL_CAP`], [`PER_VM_CAP`]), the twin's numbering made equal to the guest's or refused
-//! ([`plan_ids`], [`twin_one`]), what the act does once the maps answer ([`settle_keep`]), the
+//! ([`plan_ids`], [`twin_one`]), a twin whose host numbering can no longer be trusted after a
+//! host refusal ([`twin_watched`]), what the act does once the maps answer ([`settle_keep`]), the
 //! undo when another link refused the alloc ([`withdraw_disp_sw`]), and the counters.
 //!
 //! The plane (`crate::chan`) keeps the maps and calls these; it decides nothing about display-SW
@@ -187,6 +188,10 @@ pub struct DispSwCounters {
     pub other_sw: AtomicU64,
     /// Host frees of display-SW objects host RM refused — host objects left behind.
     pub free_refused: AtomicU64,
+    /// ★ Refused, with no host call, because a host display-SW alloc on the same twin was refused
+    /// before ([`Live::host_refused_before`]): from then on the readback cannot vouch for host
+    /// GSP's numbering on that twin.
+    pub after_host_refused: AtomicU64,
 }
 
 impl DispSwCounters {
@@ -200,7 +205,7 @@ impl DispSwCounters {
         }
         let l = |a: &AtomicU64| a.load(Ordering::Relaxed);
         format!(
-            " dispsw[twins={} live={live} host_refused={} no_twin={} capped={} id_refused={} repaid={} withdrawn={} other_sw={} free_refused={}]",
+            " dispsw[twins={} live={live} host_refused={} no_twin={} capped={} id_refused={} repaid={} withdrawn={} other_sw={} free_refused={} after_host_refused={}]",
             l(&self.twins),
             l(&self.host_refused),
             l(&self.no_twin),
@@ -210,6 +215,7 @@ impl DispSwCounters {
             l(&self.withdrawn),
             l(&self.other_sw),
             l(&self.free_refused),
+            l(&self.after_host_refused),
         )
     }
 
@@ -260,14 +266,18 @@ pub fn admit(
     })
 }
 
-/// The live counts [`twin_one`] checks the caps against, read on the act thread (where every
-/// display-SW alloc and free runs, in order).
+/// What [`twin_one`] checks before any host call, read from the plane's channel map on the act
+/// thread (where every display-SW alloc and free runs, in order): the live counts the caps compare,
+/// and the twin's host-numbering flag (`crate::chan`'s `dispsw_live`, which reads all three).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Live {
     /// Display-SW twins on this channel's twin.
     pub chan: usize,
     /// Display-SW twins in the VM.
     pub vm: usize,
+    /// ★ A host display-SW alloc on this channel's twin was refused before ([`twin_watched`]'s
+    /// second value, kept on the twin by the plane for the twin's life).
+    pub host_refused_before: bool,
 }
 
 /// Free `h`; a refusal is counted (`free_refused`). The word for the log line.
@@ -299,7 +309,9 @@ fn take_numbers<H: DispSwHost>(
 }
 
 /// ★★ **The act: one host `GF100_DISP_SW` for one guest object, numbered as the guest numbered it —
-/// or refused by name.** In order: the caps ([`PER_CHANNEL_CAP`], [`PER_VM_CAP`];
+/// or refused by name.** In order: a twin with an earlier host refusal
+/// ([`Live::host_refused_before`]: `NV_ERR_NOT_SUPPORTED`, `after_host_refused`; see
+/// [`twin_watched`]), the caps ([`PER_CHANNEL_CAP`], [`PER_VM_CAP`];
 /// `NV_ERR_INSUFFICIENT_RESOURCES`, `capped`), the authored host alloc (`host_refused`), the host's
 /// number read back (`HostRm::disp_sw_class_id`), then [`plan_ids`]: keep it, repay the gap and
 /// allocate again (`repaid` throwaways, the new number read back and checked), or free it and
@@ -315,6 +327,16 @@ pub fn twin_one<H: DispSwHost>(
     live: Live,
     c: &DispSwCounters,
 ) -> Result<(u32, String), Refusal> {
+    if live.host_refused_before {
+        DispSwCounters::add(&c.after_host_refused, 1);
+        return Err((
+            NV_ERR_NOT_SUPPORTED,
+            "an earlier host display-SW alloc on this twin was refused, so the host's numbering here is \
+             no longer known: the readback asks host CPU-RM, which may have numbered that object while \
+             host GSP (which services SET_OBJECT) did not; refused for the twin's life"
+                .into(),
+        ));
+    }
     if live.chan >= PER_CHANNEL_CAP || live.vm >= PER_VM_CAP {
         DispSwCounters::add(&c.capped, 1);
         return Err((
@@ -411,6 +433,60 @@ pub fn twin_one<H: DispSwHost>(
             ))
         }
     }
+}
+
+/// A [`DispSwHost`] that remembers whether any alloc through it was refused ([`twin_watched`]).
+struct Watch<'a, H> {
+    host: &'a H,
+    alloc_refused: std::cell::Cell<bool>,
+}
+
+impl<H: DispSwHost> DispSwHost for Watch<'_, H> {
+    type Chan = H::Chan;
+    fn alloc(&self, chan: H::Chan) -> Result<u32, String> {
+        let r = self.host.alloc(chan);
+        if r.is_err() {
+            self.alloc_refused.set(true);
+        }
+        r
+    }
+    fn class_id(&self, chan: H::Chan, object: u32) -> Result<u16, String> {
+        self.host.class_id(chan, object)
+    }
+    fn free(&self, object: u32) -> Result<(), String> {
+        self.host.free(object)
+    }
+}
+
+/// ★★ **[`twin_one`], and whether any host alloc in it was refused** (review 2026-10-03, LOW — the
+/// host CPU-RM vs host GSP numbering). The second value is `true` when the twin is now unsafe to
+/// number: the plane keeps it on the twin and passes it back as [`Live::host_refused_before`], so
+/// every later display-SW alloc on that twin is refused by name with no host call.
+///
+/// Why: the readback (`HostRm::disp_sw_class_id`, `NV906F_CTRL_GET_CLASS_ENGINEID`, flags
+/// `0x10008` — no `ROUTE_TO_PHYSICAL`, `ogkm-580: g_kernel_channel_nvoc.c:251-258`) is answered
+/// by host **CPU-RM** from its own `pObject->classID` (`kernel_channel.c:2966`,
+/// `kernel_channel_gm107.c:72-82`), while the guest's `SET_OBJECT` on the twin is serviced by host
+/// **GSP**, which numbers the twin's `ENG_SW` children from its own counter (the alloc RPC carries
+/// no number). They agree while every host alloc succeeds. A host alloc that fails AFTER CPU-RM
+/// registered the object — `dispswConstruct`'s query RPC (`disp_sw.c:73-80`) or the alloc RPC to
+/// GSP (`alloc_free.c:916-927`) — moves CPU-RM's counter and not GSP's, and nothing CPU-RM answers
+/// afterwards can tell that from a refusal before registering. So after ANY refused host alloc
+/// on a twin (the first one, a repayment's throwaway, or the realloc after repaying), a readback
+/// equal to the guest's number no longer proves GSP's is: the twin is not trusted again.
+pub fn twin_watched<H: DispSwHost>(
+    host: &H,
+    chan: H::Chan,
+    expect: u16,
+    live: Live,
+    c: &DispSwCounters,
+) -> (Result<(u32, String), Refusal>, bool) {
+    let w = Watch {
+        host,
+        alloc_refused: std::cell::Cell::new(false),
+    };
+    let r = twin_one(&w, chan, expect, live, c);
+    (r, live.host_refused_before || w.alloc_refused.get())
 }
 
 /// What the act does with a display-SW host object it has just made ([`keep_disp_sw`]).
@@ -589,7 +665,11 @@ mod tests {
         }
     }
 
-    const ROOM: Live = Live { chan: 0, vm: 0 };
+    const ROOM: Live = Live {
+        chan: 0,
+        vm: 0,
+        host_refused_before: false,
+    };
 
     /// ★ The mirror numbers 1, 2, 3, … — exactly `kchannelRegisterChild` from a fresh channel while
     /// no wrap occurs — and says it no longer knows once the guest's counter would wrap.
@@ -719,10 +799,12 @@ mod tests {
             Live {
                 chan: PER_CHANNEL_CAP,
                 vm: PER_CHANNEL_CAP,
+                ..ROOM
             },
             Live {
                 chan: 0,
                 vm: PER_VM_CAP,
+                ..ROOM
             },
         ] {
             let e = twin_one(&host, (), 1, live, &c).expect_err("capped");
@@ -734,6 +816,7 @@ mod tests {
         let under = Live {
             chan: PER_CHANNEL_CAP - 1,
             vm: PER_VM_CAP - 1,
+            ..ROOM
         };
         assert!(twin_one(&host, (), 1, under, &c).is_ok());
         // A cap refusal took the guest's number and not the host's: the next alloc repays it.
@@ -761,6 +844,146 @@ mod tests {
         released_with_channel(false, 3, &c);
         released_with_channel(true, 5, &c);
         assert_eq!(c.free_refused.load(Ordering::Relaxed), 4);
+    }
+
+    /// A host whose CPU-RM and GSP number a twin's `ENG_SW` children SEPARATELY (review 2026-10-03,
+    /// LOW): every alloc registers on CPU-RM first; `fail_after_register` makes the n-th alloc
+    /// (1-based) fail AFTER that — the query RPC or the alloc RPC to GSP refused — so GSP never
+    /// numbers it. The readback answers CPU-RM's number (`cpu`); `gsp` is the number the guest's
+    /// `SET_OBJECT` meets on the twin.
+    #[derive(Default)]
+    struct SplitHost {
+        cpu_next: RefCell<u16>,
+        gsp_next: RefCell<u16>,
+        allocs: RefCell<u32>,
+        cpu: RefCell<HashMap<u32, u16>>,
+        gsp: RefCell<HashMap<u32, u16>>,
+        fail_after_register: Option<u32>,
+        refuse_read: bool,
+    }
+
+    impl DispSwHost for SplitHost {
+        type Chan = ();
+        fn alloc(&self, _: ()) -> Result<u32, String> {
+            *self.allocs.borrow_mut() += 1;
+            let n = *self.allocs.borrow();
+            *self.cpu_next.borrow_mut() += 1;
+            if self.fail_after_register == Some(n) {
+                return Err("Other(0x40): the alloc RPC to GSP".into());
+            }
+            *self.gsp_next.borrow_mut() += 1;
+            let h = 0xd500_0000 + n;
+            self.cpu.borrow_mut().insert(h, *self.cpu_next.borrow());
+            self.gsp.borrow_mut().insert(h, *self.gsp_next.borrow());
+            Ok(h)
+        }
+        fn class_id(&self, _: (), object: u32) -> Result<u16, String> {
+            if self.refuse_read {
+                return Err("Other(0x4b72)".into());
+            }
+            self.cpu
+                .borrow()
+                .get(&object)
+                .copied()
+                .ok_or_else(|| "no such".into())
+        }
+        fn free(&self, _: u32) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    /// ★ KNOWN-POSITIVE for the fix below: the hazard is real in the model. A host alloc that fails
+    /// after CPU-RM registered it leaves GSP one behind; the next twin's readback (CPU-RM's) then
+    /// equals the guest's number while GSP holds the one before — and [`twin_one`] alone, with no
+    /// flag, KEEPS it (the Xid 32 the review describes, with a log line saying "equal").
+    #[test]
+    fn the_readback_alone_keeps_a_twin_whose_gsp_number_is_one_behind() {
+        let host = SplitHost {
+            fail_after_register: Some(1),
+            ..SplitHost::default()
+        };
+        let c = DispSwCounters::default();
+        let mut ids = SwClassIds::default();
+        let first = ids.register().expect("1");
+        let e = twin_one(&host, (), first, ROOM, &c).expect_err("the host refused it");
+        assert_eq!(e.0, NV_ERR_NOT_SUPPORTED);
+        assert_eq!(c.host_refused.load(Ordering::Relaxed), 1);
+        let second = ids.register().expect("2");
+        let (h, why) = twin_one(&host, (), second, ROOM, &c).expect("kept: CPU-RM says equal");
+        assert!(why.contains("= the guest's"), "{why}");
+        assert_eq!(host.cpu.borrow()[&h], 2, "the readback: CPU-RM's number");
+        assert_eq!(
+            host.gsp.borrow()[&h],
+            1,
+            "what SET_OBJECT 2 meets: GSP's number, one behind"
+        );
+    }
+
+    /// ★★ The fix, first half (review 2026-10-03, LOW): [`twin_watched`] says a twin is no longer
+    /// to be trusted once ANY host display-SW alloc on it is refused — the first alloc, a
+    /// repayment's throwaway, or the realloc after repaying — and only then: a twin whose host
+    /// allocs all succeeded, or whose only failure was the readback (no alloc refused, so no number
+    /// can split), stays trusted.
+    #[test]
+    fn a_refused_host_alloc_marks_the_twin() {
+        let c = DispSwCounters::default();
+        // The known-positive's first act: CPU-RM registered it, GSP never saw it.
+        let first = SplitHost {
+            fail_after_register: Some(1),
+            ..SplitHost::default()
+        };
+        let (r, flag) = twin_watched(&first, (), 1, ROOM, &c);
+        assert!(r.is_err() && flag, "a refused first alloc marks the twin");
+        // The guest is at 3, the twin at 0: the first alloc gets 1 and is freed, and the throwaway
+        // (the host's 2nd alloc) is refused.
+        let repay = SplitHost {
+            fail_after_register: Some(2),
+            ..SplitHost::default()
+        };
+        let (r, flag) = twin_watched(&repay, (), 3, ROOM, &c);
+        assert!(r.is_err() && flag, "a refused repayment marks the twin");
+        // The guest is at 2, the twin at 0: the first alloc gets 1 and is freed; the realloc (the
+        // host's 2nd alloc) is refused.
+        let realloc = SplitHost {
+            fail_after_register: Some(2),
+            ..SplitHost::default()
+        };
+        let (r, flag) = twin_watched(&realloc, (), 2, ROOM, &c);
+        assert!(r.is_err() && flag, "a refused realloc marks the twin");
+        let fine = SplitHost::default();
+        let (r, flag) = twin_watched(&fine, (), 1, ROOM, &c);
+        assert!(r.is_ok() && !flag, "every alloc succeeded");
+        let unreadable = SplitHost {
+            refuse_read: true,
+            ..SplitHost::default()
+        };
+        let (r, flag) = twin_watched(&unreadable, (), 1, ROOM, &c);
+        assert!(r.is_err() && !flag, "a readback failure splits no number");
+    }
+
+    /// ★★ The fix, second half: a marked twin ([`Live::host_refused_before`]) is refused by name with
+    /// NO host call and counted (`after_host_refused`), and stays marked — on the known-positive's
+    /// own host, where the unmarked path keeps a twin GSP numbers one behind.
+    #[test]
+    fn a_marked_twin_is_refused_with_no_host_call() {
+        let host = SplitHost {
+            fail_after_register: Some(1),
+            ..SplitHost::default()
+        };
+        let c = DispSwCounters::default();
+        assert!(twin_one(&host, (), 1, ROOM, &c).is_err());
+        let marked = Live {
+            host_refused_before: true,
+            ..ROOM
+        };
+        let (r, still) = twin_watched(&host, (), 2, marked, &c);
+        let e = r.expect_err("refused by name");
+        assert_eq!(e.0, NV_ERR_NOT_SUPPORTED);
+        assert!(e.1.contains("host CPU-RM"), "{}", e.1);
+        assert!(still, "and stays marked");
+        assert_eq!(*host.allocs.borrow(), 1, "no host call on a marked twin");
+        assert_eq!(c.after_host_refused.load(Ordering::Relaxed), 1);
+        assert_eq!(c.twins.load(Ordering::Relaxed), 0);
     }
 
     /// ★ The statement-time half (review 2026-10-03, LOW — "the duplicate pre-check before any host
@@ -902,11 +1125,12 @@ mod tests {
         assert_eq!(c.status(false, 3), "");
         assert_eq!(
             c.status(true, 0),
-            " dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]"
+            " dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0 after_host_refused=0]"
         );
         DispSwCounters::add(&c.twins, 5);
         DispSwCounters::add(&c.capped, 2);
         DispSwCounters::add(&c.other_sw, 1);
+        DispSwCounters::add(&c.after_host_refused, 4);
         assert_eq!(
             c.status(false, 3),
             "",
@@ -914,7 +1138,7 @@ mod tests {
         );
         assert_eq!(
             c.status(true, 3),
-            " dispsw[twins=5 live=3 host_refused=0 no_twin=0 capped=2 id_refused=0 repaid=0 withdrawn=0 other_sw=1 free_refused=0]"
+            " dispsw[twins=5 live=3 host_refused=0 no_twin=0 capped=2 id_refused=0 repaid=0 withdrawn=0 other_sw=1 free_refused=0 after_host_refused=4]"
         );
     }
 }

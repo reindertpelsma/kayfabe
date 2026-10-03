@@ -180,16 +180,45 @@
 >   `SET_OBJECT`s name a number its own twin lacks (host Xid 32 on its own twin, the m3c signature;
 >   run 13 below forces it: 26 Xid 32 on the forcing client's channels, `unpaired=112` counted). A
 >   real GSP-RM is sent the same RPC with no number, so it is inferred — not shown — to share the limit.
+> - ⊘ **2026-10-03 (later, third review LOW) — the readback is HOST CPU-RM's number, and the host-side
+>   twin of the slip above.** Every "= the guest's" in this block and in runs 9-13 is the number host
+>   **CPU-RM** gave: `NV906F_CTRL_GET_CLASS_ENGINEID` has flags `0x10008` (no `ROUTE_TO_PHYSICAL`,
+>   `ogkm-580: g_kernel_channel_nvoc.c:251-258`) and CPU-RM answers it from its own `pObject->classID`
+>   (`kernel_channel.c:2966`, `kernel_channel_gm107.c:72-82`). The guest's `SET_OBJECT` on the twin is
+>   serviced by host **GSP**, which numbers the twin's `ENG_SW` children from its own counter (the alloc
+>   RPC carries no number). The two agree while every host display-SW alloc succeeds — `host_refused=0`
+>   in every run, so GSP's number is inferred equal, not read. A host alloc that fails AFTER CPU-RM
+>   registered the object (`dispswConstruct`'s query RPC, `disp_sw.c:73-80`, or the alloc RPC to GSP,
+>   `alloc_free.c:916-927`) moves CPU-RM's counter and not GSP's, and the next twin's readback would then
+>   say "equal" while GSP holds the number before. ⇒ Now (`crates/kf-qemu/src/dispsw.rs`,
+>   `twin_watched`): after ANY refused host display-SW alloc on a twin — the first try, a repayment's
+>   throwaway, or the realloc after repaying — the plane marks that twin, and every later display-SW
+>   alloc on it is refused `NOT_SUPPORTED` by name with no host call (`after_host_refused=`), for the
+>   twin's life. Tests: `kf-qemu` `dispsw::tests::the_readback_alone_keeps_a_twin_whose_gsp_number_is_one_behind`
+>   (the known-positive: a model host whose CPU-RM and GSP number separately; without the mark the
+>   twin is kept with GSP one behind), `a_refused_host_alloc_marks_the_twin`,
+>   `a_marked_twin_is_refused_with_no_host_call`, and
+>   `chan::dispsw_tests::the_host_refusal_mark_lands_on_its_own_twin_only`. Not run on hardware: it
+>   needs a transient host GSP failure.
 > - **Caps** (review MEDIUM): at most **16 live display-SW twins per channel and 1024 per VM**; past
 >   either the alloc is refused `NV_ERR_INSUFFICIENT_RESOURCES` by name with no host call (`capped=`).
 >   Chosen from runs 2-8: at most 4 live per channel (one per head of the 4-head virtual display) and 20
 >   per VM (60-84 created per boot) — 4× and ~50×, while bounding one guest's host RM objects and host
 >   RM's per-alloc child scan (`kernel_channel.c:3435-3446`). A cap refusal takes a guest number and no
->   host one; the next twin on that channel repays it.
+>   host one; the next twin on that channel repays it. ⊘ *2026-10-03 (later, third review LOW): the
+>   counts the caps compare had no test (a body of zeros kept CI green); they are now one function
+>   over the plane's channel map (`chan.rs` `dispsw_live`), tested with two clients, three channels and
+>   one channel freed, and fed into the cap
+>   (`chan::dispsw_tests::the_live_count_sums_every_client_and_drops_a_freed_channel`).*
 > - **The undo** (review LOW, the duplicate pre-check saw only twinned handles): `kf_gsp::Deferred` takes
 >   an undo (`on_orphaned`), run once by `release_held` when an act succeeded and another link refused
 >   the reply. A display-SW alloc whose handle names a NON-twinned guest object is refused by the object
->   seat after the act; the undo withdraws exactly the twin that act kept (`withdrawn=`).
+>   seat after the act; the undo withdraws exactly the twin that act kept (`withdrawn=`). ⊘ *2026-10-03
+>   (later): its body and its wiring are now functions with tests
+>   (`chan::dispsw_tests::the_undo_withdraws_the_kept_twin_and_frees_it_once`,
+>   `an_orphaned_display_sw_act_queues_exactly_one_withdraw`), as is the other-`ENG_SW` mirror step
+>   (`another_eng_sw_object_advances_only_its_own_channels_mirror`). Still not covered by a test: the
+>   one-line call sites inside `ChanPlane` (building a plane needs a host RM session).*
 > - **The no-kernel-mapping bound, pinned where it is enforced** (review LOW): `kf-host`'s one NVOS46
 >   flags builder, `nvos46_map_flags`, CLEARS `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` whatever its callers
 >   pass (`the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets` feeds every bit), and a source
@@ -198,6 +227,7 @@
 >   bits; it is gone.
 > - **Status line:** `dispsw[twins= live= host_refused= no_twin= capped= id_refused= repaid= withdrawn=
 >   other_sw= free_refused=]`. `live=` is now the plane's maps' own count, so it cannot drift from them.
+>   ⊘ *2026-10-03 (later): `after_host_refused=` is appended at the end (the readback bullet above).*
 > - **Wording corrected in the block below** (review LOW): (a) the probe counts entries into HOST
 >   CPU-RM only. CPU-RM has no software methods for this class (`dispswGetSwMethods` is the
 >   `NOT_SUPPORTED` stub, `g_dispsw_nvoc.h:450-452`), so the guest's display-SW methods are serviced by
