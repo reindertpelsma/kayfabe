@@ -14,9 +14,9 @@ use crate::{ABI_ENCODE_FAILED, HostRm, RmError};
 use kf_abi::bringup::{
     NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_ACCESS_READ_ONLY, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
     NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN, NVOS46_FLAGS_GPU_CACHEABLE_NO,
-    NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
-    NVOS46_FLAGS_TLB_LOCK_ENABLE, NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
-    NvMemoryVirtualAllocationParams, NvVaspaceAllocationParameters,
+    NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES, NVOS46_FLAGS_TLB_LOCK_ENABLE,
+    NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NvMemoryVirtualAllocationParams,
+    NvVaspaceAllocationParameters,
 };
 use kf_abi::generated::classes::NvChannelGroupAllocationParameters;
 use kf_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
@@ -338,68 +338,11 @@ impl HostRm {
         kind: u8,
         perm: MapPerm,
     ) -> Result<u64, RmError> {
-        self.map_kind_flags(
-            space, memory, backing, offset, len, at, defer, kind, perm, 0,
-        )
-    }
-
-    /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`): [`HostRm::map_kind`] of
-    /// a [`MapBacking::SharedSlice`] at the FIXED address `at`, with
-    /// [`NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`] — host RM also gives the mapping a KERNEL CPU mapping
-    /// (`KernelVAddr`), the only address through which it writes a display-SW semaphore or
-    /// notifier (`method_notification.c:624-627`, `:349-351`). ⊘ Costs host kernel address space
-    /// (system memory: a `vmap` of `len` bytes) or host BAR1 plus an `ioremap` (video memory) for
-    /// the mapping's whole life, and the mapping can only ever be unmapped WHOLE
-    /// (`virtual_mem.c:1685-1689`) — the caller must never batch or split it.
-    ///
-    /// # Errors
-    /// As [`HostRm::map`].
-    #[allow(clippy::too_many_arguments)]
-    pub fn map_kind_kernel_mapped(
-        &self,
-        space: VaSpace,
-        memory: u32,
-        offset: u64,
-        len: u64,
-        at: u64,
-        defer: bool,
-        kind: u8,
-        perm: MapPerm,
-    ) -> Result<u64, RmError> {
-        self.map_kind_flags(
-            space,
-            memory,
-            MapBacking::SharedSlice,
-            offset,
-            len,
-            Some(at),
-            defer,
-            kind,
-            perm,
-            NVOS46_FLAGS_KERNEL_MAPPING_ENABLE,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn map_kind_flags(
-        &self,
-        space: VaSpace,
-        memory: u32,
-        backing: MapBacking,
-        offset: u64,
-        len: u64,
-        at: Option<u64>,
-        defer: bool,
-        kind: u8,
-        perm: MapPerm,
-        authored: u32,
-    ) -> Result<u64, RmError> {
-        let extra = authored
-            | if defer {
-                NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE
-            } else {
-                0
-            };
+        let extra = if defer {
+            NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE
+        } else {
+            0
+        };
         let extra = extra
             | if kind != 0 {
                 NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES
@@ -1357,6 +1300,57 @@ mod perm_tests {
             all & ((1 << 15) | (0xF << 8) | (1 << 19) | (1 << 31) | (1 << 4)),
             0
         );
+    }
+
+    /// ★ x11-dispsw (2026-10-03): NO map the crate makes asks host RM for a kernel CPU mapping
+    /// (`NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`, field `5:5`), whatever the caller's permissions, kind,
+    /// defer, grows-down, page-size pin or `FIXED` — so host RM has no address through which to
+    /// write a display-SW semaphore or notifier into anything we map (`method_notification.c:624-627`,
+    /// `:349-351`). That is the bound `docs/design/V3_DISPLAY.md` states for a twinned
+    /// `GF100_DISP_SW`; adding the bit anywhere in the map path fails here.
+    #[test]
+    fn no_map_asks_host_rm_for_a_kernel_cpu_mapping() {
+        use kf_abi::bringup::{
+            NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
+            NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
+            NVOS46_FLAGS_PAGE_SIZE_4KB,
+        };
+        assert_eq!(
+            NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, 0x20,
+            "nvos.h: KERNEL_MAPPING is 5:5, _ENABLE is 1"
+        );
+        for ro in [false, true] {
+            for atomic_disable in [false, true] {
+                for volatile in [false, true] {
+                    let perm = MapPerm {
+                        read_only: ro,
+                        atomic_disable,
+                        volatile,
+                    };
+                    for other in [
+                        0,
+                        NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+                        NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
+                        NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
+                    ] {
+                        for page_size in [0, NVOS46_FLAGS_PAGE_SIZE_4KB] {
+                            for fixed in [false, true] {
+                                let f = crate::nvos46_map_flags(
+                                    perm.nvos46_flags() | other,
+                                    page_size,
+                                    fixed,
+                                );
+                                assert_eq!(
+                                    f & NVOS46_FLAGS_KERNEL_MAPPING_ENABLE,
+                                    0,
+                                    "kernel mapping asked: {f:#x}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// ★★★★★ v3-adasys: EVERY map the crate makes asks RM to snoop the CPU cache

@@ -566,74 +566,6 @@ pub struct GpuMirror {
     /// `V3_CDP.md`). ⊘ Kept OUT of [`GpuMirror::rows`]: a SKED page is not memory, so no reader may
     /// resolve a guest VA through it; it is here so an unmap and the retire take it down.
     pub sked: Mutex<std::collections::BTreeMap<u64, u64>>,
-    /// ★ EXPERIMENT `x11-dispsw`: a display-SW twin lives in this space (set by the channel plane,
-    /// shared with [`Mirror::dispsw`]; never set with the switch off). From then on its rows that
-    /// [`kmap_wanted`] names are placed ALONE with a host kernel CPU mapping — what host RM needs
-    /// to write the display-SW semaphores and notifiers into them.
-    pub dispsw: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    /// ★ EXPERIMENT `x11-dispsw`: the plane-wide count of kernel-mapped rows (status line).
-    pub kmap: std::sync::Arc<KmapCounters>,
-    /// ★ EXPERIMENT `x11-dispsw`: OUR kernel-mapped placements in this space, `va → len` — what
-    /// [`KmapCounters::live_bytes`] gives back when they go.
-    pub kmapped: Mutex<std::collections::BTreeMap<u64, u64>>,
-}
-
-/// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`): the host kernel CPU
-/// mappings this device asked host RM for (`NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`), plane-wide — the
-/// status line's `kmap[...]`. All zero with the switch off.
-#[derive(Debug, Default)]
-pub struct KmapCounters {
-    /// Rows placed with a host kernel mapping.
-    pub maps: AtomicU64,
-    /// Bytes of those rows still mapped — host kernel address space held (a `vmap` of guest RAM).
-    pub live_bytes: AtomicU64,
-    /// The most `live_bytes` ever held.
-    pub peak_bytes: AtomicU64,
-    /// Kernel-mapped placements host RM refused: the row was then placed WITHOUT one (the GPU
-    /// path stands; a release into it does not land) — named per row.
-    pub refused: AtomicU64,
-}
-
-impl KmapCounters {
-    fn placed(&self, len: u64) {
-        self.maps.fetch_add(1, Ordering::Relaxed);
-        let now = self.live_bytes.fetch_add(len, Ordering::Relaxed) + len;
-        self.peak_bytes.fetch_max(now, Ordering::Relaxed);
-    }
-
-    /// `len` bytes this plane added in [`KmapCounters::placed`] are unmapped.
-    fn gone(&self, len: u64) {
-        self.live_bytes.fetch_sub(len, Ordering::Relaxed);
-    }
-
-    /// The status line's segment (printed only with the switch on).
-    #[must_use]
-    pub fn status(&self) -> String {
-        let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
-        format!(
-            " kmap[rows={} live={}KiB peak={}KiB refused={}]",
-            g(&self.maps),
-            g(&self.live_bytes) / 1024,
-            g(&self.peak_bytes) / 1024,
-            g(&self.refused)
-        )
-    }
-}
-
-/// ★ EXPERIMENT `x11-dispsw`: `KF3_DISPSW_NO_KMAP=1` turns the display-SW spaces' kernel mappings
-/// (and their no-batching rule) off — an A/B comparison on one binary. Read once.
-pub(crate) fn kmap_enabled() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_DISPSW_NO_KMAP").is_none())
-}
-
-/// ★ EXPERIMENT `x11-dispsw`: which rows of a display-SW space get a host kernel CPU mapping.
-/// Guest RAM only: a `vmap` of host kernel address space, no host BAR1 (`virtual_mem.c:1440-1451`).
-/// ⊘ A store row would take host BAR1 (`_virtmemAllocKernelMapping`) — 256 MiB on the RTX 3060
-/// bench, shared with the host — so it is never asked for here.
-#[must_use]
-pub fn kmap_wanted(d: &Desired) -> bool {
-    d.ram
 }
 
 /// ★ `V3_BATCHED_MAP.md`: what one mirrored space cost in host RM calls over its life — the
@@ -697,8 +629,6 @@ impl GpuMirror {
         reserved: Vec<(u64, u64)>,
         ram: Option<&'static RamMap>,
         kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
-        dispsw: std::sync::Arc<std::sync::atomic::AtomicBool>,
-        kmap: std::sync::Arc<KmapCounters>,
     ) -> Self {
         GpuMirror {
             vas,
@@ -709,24 +639,6 @@ impl GpuMirror {
             calls: SpaceCalls::default(),
             kernel_vas,
             sked: Mutex::new(std::collections::BTreeMap::new()),
-            dispsw,
-            kmap,
-            kmapped: Mutex::new(std::collections::BTreeMap::new()),
-        }
-    }
-
-    /// ★ EXPERIMENT `x11-dispsw`: the kernel-mapped placements in `[va, end)` are gone.
-    fn kmap_gone(&self, va: u64, end: u64) {
-        let gone: Vec<u64> = self
-            .kmapped
-            .lock()
-            .map(|mut k| {
-                let keys: Vec<u64> = k.range(va..end).map(|(&v, _)| v).collect();
-                keys.into_iter().filter_map(|v| k.remove(&v)).collect()
-            })
-            .unwrap_or_default();
-        for len in gone {
-            self.kmap.gone(len);
         }
     }
 
@@ -803,34 +715,7 @@ impl MapTarget for GpuMirror {
     }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let t = std::time::Instant::now();
-        // ★ EXPERIMENT `x11-dispsw`: a display-SW space's guest-RAM row carries a host kernel
-        // mapping. ⊘ A refused one falls back to the plain placement, named and counted: the GPU
-        // path must not lose the row because host RM could not map it for itself.
-        let kmapped = self.dispsw.load(Ordering::Acquire) && kmap_enabled() && kmap_wanted(d);
-        let m = if kmapped {
-            match self.vas.map_kernel_mapped(d, defer) {
-                Ok(m) => {
-                    if m == Mapped::Placed {
-                        self.kmap.placed(d.len);
-                        if let Ok(mut k) = self.kmapped.lock() {
-                            k.insert(d.va, d.len);
-                        }
-                    }
-                    Ok(m)
-                }
-                Err(e) => {
-                    let n = self.kmap.refused.fetch_add(1, Ordering::Relaxed);
-                    if n < 32 {
-                        eprintln!(
-                            "kf3: x11-dispsw KMAP REFUSED {e} — placed without a host kernel mapping (a display-SW release into it will not land)"
-                        );
-                    }
-                    self.vas.map(d, defer)
-                }
-            }
-        } else {
-            self.vas.map(d, defer)
-        };
+        let m = self.vas.map(d, defer);
         self.calls.maps.fetch_add(1, Ordering::Relaxed);
         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
         let m = m?;
@@ -843,12 +728,6 @@ impl MapTarget for GpuMirror {
         Ok(m)
     }
     fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
-        // ★ EXPERIMENT `x11-dispsw`: a kernel-mapped placement can only be unmapped WHOLE
-        // (`virtual_mem.c:1685-1689`), and a batch is unmapped piece by piece — so a display-SW
-        // space places its rows one by one.
-        if self.dispsw.load(Ordering::Acquire) && kmap_enabled() {
-            return Err(kf_mem::ledger::NOT_BATCHED.into());
-        }
         let (Some(ram), true) = (self.ram, batching_enabled()) else {
             return Err(kf_mem::ledger::NOT_BATCHED.into());
         };
@@ -930,9 +809,6 @@ impl MapTarget for GpuMirror {
         self.calls
             .unmap_ns
             .fetch_add(ns_since(t), Ordering::Relaxed);
-        if r.is_ok() {
-            self.kmap_gone(va, va.saturating_add(1));
-        }
         r
     }
     fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
@@ -981,8 +857,6 @@ impl MapTarget for GpuMirror {
             if let Ok(mut k) = self.sked.lock() {
                 k.extend(sked_removed);
             }
-        } else {
-            self.kmap_gone(va, end);
         }
         self.calls
             .unmap_ns
@@ -1024,10 +898,6 @@ pub struct Mirror {
     /// Translated channel here; the memory plane's [`GpuMirror`] reads it to decide whether a
     /// privileged guest leaf may be mirrored.
     pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    /// ★ EXPERIMENT `x11-dispsw`: a display-SW twin lives here — set by the channel plane when it
-    /// takes the guest's `GF100_DISP_SW` statement; the memory plane's [`GpuMirror`] reads it.
-    /// Fresh (false) for every guest VA space, a recycled host space included.
-    pub dispsw: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// ★★★ v3-roperm: a mirror's starting classification — KERNEL for one of the guest RM's own
@@ -1652,8 +1522,6 @@ pub struct MemPlane {
     pub fb_len: u64,
     /// ★ P5c: retired host spaces ready for reuse (VA thread only).
     spares: Mutex<Vec<Spare>>,
-    /// ★ EXPERIMENT `x11-dispsw`: the host kernel CPU mappings asked for (all zero when off).
-    pub kmap: std::sync::Arc<KmapCounters>,
 }
 
 impl MemPlane {
@@ -1732,7 +1600,6 @@ impl MemPlane {
                 mirrors,
                 fb_len: layout.fb_length,
                 spares: Mutex::new(Vec::new()),
-                kmap: std::sync::Arc::default(),
             },
             ops("BAR1", bar1_win, bar1_scratch, None),
             ops("BAR2", bar2_win, bar2_scratch, None),
@@ -1897,7 +1764,6 @@ fn create_mirror(
     let rows = PlacedRows::default();
     let rings = RingSlots::default();
     let kernel_vas = kernel_vas_for(key);
-    let dispsw = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let line = match (&fb_base, &ram_base) {
         (Ok(fb), Some(Ok((rb, rl)))) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
@@ -1913,7 +1779,6 @@ fn create_mirror(
                         live: Default::default(),
                         rings: rings.clone(),
                         kernel_vas: kernel_vas.clone(),
-                        dispsw: dispsw.clone(),
                     },
                 );
             }
@@ -1936,7 +1801,6 @@ fn create_mirror(
                         live: Default::default(),
                         rings: rings.clone(),
                         kernel_vas: kernel_vas.clone(),
-                        dispsw: dispsw.clone(),
                     },
                 );
             }
@@ -1975,8 +1839,6 @@ fn create_mirror(
             reserved,
             Some(plane.ram),
             kernel_vas,
-            dispsw,
-            plane.kmap.clone(),
         )),
     );
     Ok(())
@@ -2261,7 +2123,6 @@ pub fn apply_statement(
                     let reserved = vmm_ranges(Some((sp.fb_base, plane.fb_len)), sp.ram);
                     // ★ v3-roperm: a recycled host space is classified afresh for its new object.
                     let kernel_vas = kernel_vas_for(key);
-                    let dispsw = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
                     if let Ok(mut mm) = plane.mirrors.lock() {
                         mm.insert(
                             key,
@@ -2275,7 +2136,6 @@ pub fn apply_statement(
                                 live: Default::default(),
                                 rings: sp.rings.clone(),
                                 kernel_vas: kernel_vas.clone(),
-                                dispsw: dispsw.clone(),
                             },
                         );
                     }
@@ -2296,8 +2156,6 @@ pub fn apply_statement(
                             reserved,
                             Some(plane.ram),
                             kernel_vas,
-                            dispsw,
-                            plane.kmap.clone(),
                         )),
                     );
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {

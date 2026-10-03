@@ -800,15 +800,16 @@ pub const NVOS46_FLAGS_GPU_CACHEABLE_NO: u32 = 2 << 17;
 /// forces coherence hides the defect, so a green run elsewhere never proved the bit unneeded.
 pub const NVOS46_FLAGS_CACHE_SNOOP_ENABLE: u32 = 1 << 4;
 
-/// ★ EXPERIMENT `x11-dispsw`: `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` — field `5:5`, value 1
-/// (`ogkm-580: nvos.h:1997-2001`, *"ENABLE: Map CPU address"*), i.e. `0x20`. With it, host RM gives
-/// the DMA mapping a KERNEL CPU mapping (`CLI_DMA_MAPPING_INFO::KernelVAddr`): a `vmap` of the
-/// pages for system memory (`virtual_mem.c:1440-1451`), a BAR1 aperture plus an `ioremap` for video
-/// memory (`_virtmemAllocKernelMapping`, `:1024-1128`). It is the ONLY way host RM itself writes a
-/// display-SW semaphore or notifier: `semaphoreFillGPUVATimestamp` / `notifyFillNotifierGPUVATimestamp`
-/// write through `KernelVAddr` and, when it is NULL, log and write NOTHING while returning `NV_OK`
-/// (`method_notification.c:624-627`, `:349-351`). ⊘ A kernel-mapped mapping can never be unmapped
-/// in part (`virtual_mem.c:1685-1689`, `NV_ASSERT_OR_RETURN(!bPartialUnmap, …)`).
+/// ★ x11-dispsw (2026-10-03): `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` — field `5:5`, value 1
+/// (`ogkm-580: nvos.h:1997-2001`, *"ENABLE: Map CPU address"*), i.e. `0x20`. **kayfabe never sets
+/// it** (`kf-host`'s `no_map_asks_host_rm_for_a_kernel_cpu_mapping` pins that). It is what gives a
+/// DMA mapping a host KERNEL CPU mapping (`CLI_DMA_MAPPING_INFO::KernelVAddr`: a `vmap` for system
+/// memory, `virtual_mem.c:1440-1451`; host BAR1 plus an `ioremap` for video memory, `:1024-1128`),
+/// and that is the ONLY address through which host RM writes a display-SW semaphore or notifier:
+/// with it NULL the writers log and write nothing (`method_notification.c:624-627`, `:349-351`).
+/// So no display-SW object kayfabe twins can make host RM write any memory. `[box vast 54044296,
+/// 2026-10-03, traces/v3_display/dispsw_20261003/]` no client asked for such a write anyway
+/// (`dispswReleaseSemaphoreAndNotifierFill` called 0 times in every run).
 pub const NVOS46_FLAGS_KERNEL_MAPPING_ENABLE: u32 = 1 << 5;
 
 /// ★★★ **THE BIG-PAGE SIZE THIS ARCHITECTURE FAMILY USES — 64 KiB.**

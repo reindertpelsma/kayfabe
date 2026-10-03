@@ -352,34 +352,6 @@ pub struct HostVas<'rm> {
 }
 
 impl HostVas<'_> {
-    /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`): [`MapTarget::map`] of
-    /// ONE row with a host KERNEL CPU mapping (`kf_host::HostRm::map_kind_kernel_mapped`) — what
-    /// host RM needs to write a display-SW semaphore or notifier into it. ⊘ The caller must place
-    /// it alone (never in a batch) and unmap it whole: RM refuses a partial unmap of a kernel-mapped
-    /// mapping.
-    ///
-    /// # Errors
-    /// The host's refusal, by name.
-    pub fn map_kernel_mapped(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let obj = if d.ram {
-            self.ram_obj
-                .ok_or_else(|| format!("map {:#x}: guest-RAM row and no RAM object", d.va))?
-        } else {
-            self.store
-        };
-        match self
-            .rm
-            .map_kind_kernel_mapped(self.space, obj, d.off, d.len, d.va, defer, d.kind, d.perm)
-        {
-            Ok(_) => Ok(Mapped::Placed),
-            Err(kf_host::RmError::Other(kf_host::VA_ALREADY_MAPPED)) => Ok(Mapped::HeldByHost),
-            Err(e) => Err(format!(
-                "map (kernel-mapped) {:#x}+{:#x}: {e:?}",
-                d.va, d.len
-            )),
-        }
-    }
-
     /// ★★★ Place VA-contiguous guest-RAM `rows` through ONE host object stitched from `ram_fd`
     /// (the guest memfd; `Desired::off` is a memfd offset) — [`kf_host::HostRm::map_scattered`].
     /// Returns the object's handle, which the caller must track and free (`crate::batch`).

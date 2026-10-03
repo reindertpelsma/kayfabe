@@ -558,13 +558,7 @@ impl Device {
             if cfg.x11_dispsw {
                 eprintln!(
                     "kf3: ⚠ EXPERIMENT x11-dispsw ON (pending the owner's ruling): every guest GF100_DISP_SW is twinned \
-                     under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name; \
-                     display-SW spaces' guest-RAM rows host-kernel-mapped: {}",
-                    if crate::mem::kmap_enabled() {
-                        "yes"
-                    } else {
-                        "NO (KF3_DISPSW_NO_KMAP)"
-                    }
+                     under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name"
                 );
             }
             Some(row)
@@ -2069,11 +2063,6 @@ impl Device {
         });
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw.status(self.x11_dispsw);
-        let irq = if self.x11_dispsw {
-            irq + &self.mem.kmap.status()
-        } else {
-            irq
-        };
         let db = format!(" {}", self.dbfast.status());
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
