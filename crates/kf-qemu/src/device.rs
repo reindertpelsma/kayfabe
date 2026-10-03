@@ -1520,6 +1520,11 @@ impl Device {
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
         let mut bar1_lines = 0u32;
+        // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): BAR1 back to its physical view — requests
+        // seen, and the one waiting for the VA manager to go idle, with the BAR1 window's change
+        // count when it was noticed (a change since means an RM took BAR1 again first).
+        let mut bar1_phys_seen = 0u64;
+        let mut bar1_phys_due: Option<u64> = None;
         // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
         // here, before the guest runs, as soon as QEMU has registered guest RAM.
         // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
@@ -1692,6 +1697,34 @@ impl Device {
                         "show SCRATCH"
                     }
                 );
+            }
+            let asked = self.mem.inbox.bar1_physical_requests();
+            if asked != bar1_phys_seen {
+                bar1_phys_seen = asked;
+                if bar1_phys_due.is_none() {
+                    bar1_phys_due = m
+                        .table
+                        .target(crate::mem::K_BAR1)
+                        .and_then(crate::mem::Target::cpu_window)
+                        .map(kf_mem::cpuwin::CpuWindow::changes);
+                }
+            }
+            if let Some(at_change) = bar1_phys_due
+                && !m.in_flight()
+                && m.pending() == 0
+            {
+                bar1_phys_due = None;
+                if let Some(line) = m
+                    .table
+                    .target(crate::mem::K_BAR1)
+                    .and_then(crate::mem::Target::cpu_window)
+                    .and_then(|w| crate::bar1phys::restore_physical_view(w, at_change))
+                {
+                    eprintln!(
+                        "kf3: mem t={:.3}s {line}",
+                        self.born.elapsed().as_secs_f64()
+                    );
+                }
             }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
                 eprintln!(
@@ -2217,18 +2250,25 @@ impl Device {
     /// own unload. Decoded with the generated layout; logged.
     fn observe_unloading(&self, c: &kf_gsp::RpcCommand) {
         match crate::bar1phys::decode_unloading(self.unload_layout, &c.payload) {
-            Ok(u) => eprintln!(
-                "kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq={}: bInPMTransition={} bGc6Entering={} newLevel={} — {}",
-                c.sequence,
-                u.pm,
-                u.gc6,
-                u.level,
-                if u.gives_bar1_up() {
-                    "the guest's RM gives BAR1 up"
-                } else {
-                    "a PM transition: BAR1 is preserved"
+            Ok(u) => {
+                eprintln!(
+                    "kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq={}: bInPMTransition={} bGc6Entering={} newLevel={} — {}",
+                    c.sequence,
+                    u.pm,
+                    u.gc6,
+                    u.level,
+                    if u.gives_bar1_up() {
+                        "the guest's RM gives BAR1 up"
+                    } else {
+                        "a PM transition: BAR1 is preserved"
+                    }
+                );
+                // ★ GSP-RM's own unload returns BAR1 to physical mode on a real card (the same
+                // `kbusStatePreUnload`): the second of the two triggers (`crate::bar1phys`).
+                if u.gives_bar1_up() && self.gop.is_some() {
+                    self.mem.inbox.request_bar1_physical();
                 }
-            ),
+            }
             Err(e) => eprintln!("kf3: GSP fn 47 seq={}: body not decoded ({e})", c.sequence),
         }
     }
@@ -2253,6 +2293,11 @@ impl Device {
                     "VIRTUAL"
                 }
             );
+        }
+        // ★ The first of the two triggers (`crate::bar1phys`): CPU-RM's `kbusTeardownMailbox` —
+        // on a real card this write IS BAR1 going physical, before the console is unlocked.
+        if r.is_physical(value) && self.gop.is_some() {
+            self.mem.inbox.request_bar1_physical();
         }
     }
 

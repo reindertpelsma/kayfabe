@@ -574,29 +574,66 @@ enum Shown {
     Armed(Composition),
     /// The boot layer, until the guest arms its first head (`gop=on`).
     Boot(LayerPlan, (u32, u32)),
+    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the scanout the guest freed its channels from
+    /// with `PRESERVE_HW` (NVKMS, after restoring the console, `nvkms-rm.c:2990-3017`) — planned
+    /// layers of the last armed composition, kept: the hardware keeps scanning them.
+    Preserved(Vec<LayerPlan>, (u32, u32)),
+    /// ★ 2026-10-03 (B5): nothing is scanned (no head lit, or a lit head with no window): the
+    /// monitor shows black, never the last frame.
+    Blank((u32, u32)),
+}
+
+/// ★ What the display shows when no armed head scans a window (`V3_DISPLAY.md` §4.11.13).
+#[derive(Debug, Default)]
+struct Held {
+    /// The scanout the guest freed with `PRESERVE_HW`, until a head is armed again.
+    preserved: Option<(Vec<LayerPlan>, (u32, u32))>,
+    /// The size of the last frame shown — `None` until the first one (QEMU's own placeholder).
+    last_size: Option<(u32, u32)>,
 }
 
 /// ★★ Choose what the console shows. The boot layer is chosen BEFORE the window vocabulary's gate
 /// (`console_composition` is `None` without a `ScanVocab`, as on GB20x), so every family shows the
 /// boot picture; it is shown only while no head has ever been armed (`boot_done` is sticky), and
-/// never again after — an unload that leaves no head armed shows nothing, as on bare metal.
-/// ⊘ With no boot layer (`gop=off`) this is `console.map(Shown::Armed)`: today's choice.
+/// never again after.
+/// ⊘ CORRECTED 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): *"an unload that leaves no head armed
+/// shows nothing, as on bare metal"* was built as "no new frame", so QEMU kept showing the LAST
+/// frame (box run b5: the fbcon text stayed after `rmmod nvidia_drm`). With nothing scanned a real
+/// monitor is black: once a frame was shown, nothing becomes [`Shown::Blank`]. And a scanout freed
+/// with `PRESERVE_HW` stays shown ([`Shown::Preserved`]) until a head is armed again.
+/// With no boot layer (`gop=off`) and before the first frame this is `console.map(Shown::Armed)`.
 fn choose_shown(
     console: Option<Composition>,
     boot: Option<&BootScan>,
     boot_done: bool,
+    held: &Held,
 ) -> Option<Shown> {
     match (console, boot) {
         (Some(c), _) => Some(Shown::Armed(c)),
         (None, Some(b)) if !boot_done => Some(Shown::Boot(b.layer, b.size)),
-        (None, _) => None,
+        (None, _) => match (&held.preserved, held.last_size) {
+            (Some((l, size)), _) => Some(Shown::Preserved(l.clone(), *size)),
+            (None, Some(size)) => Some(Shown::Blank(size)),
+            (None, None) => None,
+        },
     }
 }
 
 /// ★ One line naming what the console shows (`V3_DISPLAY.md` §4.11.13) — the log compares it.
 fn shown_digest(shown: Option<&Shown>) -> String {
     match shown {
-        None => "NOTHING (no head is armed; the last frame stays)".to_string(),
+        None => "NOTHING yet (no frame was ever shown)".to_string(),
+        Some(Shown::Blank((w, h))) => format!("BLACK {w}x{h} (no head scans a window)"),
+        Some(Shown::Preserved(l, (w, h))) => {
+            let srcs: Vec<String> = l
+                .iter()
+                .map(|p| format!("window {} store {:#x}", p.window, p.src))
+                .collect();
+            format!(
+                "the PRESERVED scanout {w}x{h} [{}] (freed with PRESERVE_HW)",
+                srcs.join("; ")
+            )
+        }
         Some(Shown::Boot(l, (w, h))) => {
             format!("the BOOT layer (store {:#x}, {w}x{h})", l.src)
         }
@@ -1119,6 +1156,7 @@ impl Device {
         let mut boot_done = false;
         let mut shown_last = String::new();
         let mut shown_lines = 0u32;
+        let mut held = Held::default();
         let started = Instant::now();
         if let Some(b) = dp.boot.as_ref() {
             eprintln!(
@@ -1204,7 +1242,18 @@ impl Device {
                             self.display_chan_status(kind, instance, Some(true));
                         }
                     }
-                    Statement::ChannelFreed { kind, instance } => {
+                    Statement::ChannelFreed {
+                        kind,
+                        instance,
+                        preserve,
+                    } => {
+                        // ★ B5: a preserving free keeps the last armed scanout on the monitor.
+                        if preserve
+                            && held.preserved.is_none()
+                            && let Some(plan) = scan.last_plan.clone()
+                        {
+                            held.preserved = Some(plan);
+                        }
                         engine.free(kind, instance);
                         self.display_chan_status(kind, instance, None);
                     }
@@ -1320,11 +1369,16 @@ impl Device {
                     dp.counters.boot_frames.load(Ordering::Relaxed)
                 );
             }
-            let shown = choose_shown(
-                console_composition(&engine, dp),
-                dp.boot.as_ref(),
-                boot_done,
-            );
+            let console = console_composition(&engine, dp);
+            if console.is_some() {
+                held.preserved = None;
+            }
+            held.last_size = scan.last_size;
+            let shown = choose_shown(console, dp.boot.as_ref(), boot_done, &held);
+            if !matches!(shown, Some(Shown::Armed(_))) {
+                // only the composition shown right before a preserving free is kept
+                scan.last_plan = None;
+            }
             // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): every change of WHAT the console shows,
             // timed — the boot layer, a head's windows (context DMA, offset, size), or nothing.
             let digest = shown_digest(shown.as_ref());
@@ -1340,8 +1394,12 @@ impl Device {
                     }
                 );
                 shown_last = digest;
+                scan.want = true;
             }
-            scan.active = shown.is_some();
+            scan.active = matches!(
+                shown,
+                Some(Shown::Armed(_) | Shown::Boot(..) | Shown::Preserved(..))
+            );
             for e in effects {
                 if let Effect::Latched { window } = &e
                     && let Some(Shown::Armed(c)) = &shown
@@ -1369,7 +1427,7 @@ impl Device {
                 scan.completed(dp);
             }
             scan.give_up_if_stuck(dp);
-            if shown.is_some() && scan.refresh_due(dp).is_some_and(|t| t <= Instant::now()) {
+            if scan.active && scan.refresh_due(dp).is_some_and(|t| t <= Instant::now()) {
                 scan.want = true;
             }
             if scan.want && scan.inflight.is_none() {
@@ -1670,6 +1728,11 @@ struct ScanState {
     trace: bool,
     /// The compose kernel's bring-up self-test verdict (the console shows nothing on its failure).
     bl_ok: Option<Result<(), String>>,
+    /// ★ B5: the planned layers of the last ARMED composition copied whole (no window refused) —
+    /// what a `PRESERVE_HW` free keeps on the monitor ([`Shown::Preserved`]).
+    last_plan: Option<(Vec<LayerPlan>, (u32, u32))>,
+    /// ★ B5: the size of the last frame queued — what [`Shown::Blank`] is drawn at.
+    last_size: Option<(u32, u32)>,
 }
 
 /// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, then a
@@ -1874,7 +1937,7 @@ impl ScanState {
         }
         let (w, h) = match shown {
             Shown::Armed(comp) => (comp.width, comp.height),
-            Shown::Boot(_, size) => *size,
+            Shown::Boot(_, size) | Shown::Preserved(_, size) | Shown::Blank(size) => *size,
         };
         if w == 0 || h == 0 || u64::from(w) * u64::from(h) > kf_disp::scanout::MAX_PIXELS {
             self.refuse(dp, &format!("a {w}x{h} composition"));
@@ -1889,7 +1952,16 @@ impl ScanState {
                 layers.push(*layer);
                 &[]
             }
+            // ⊘ planned (and bounded) when they were armed; the compose kernel bounds each read
+            // again against the store (`DisplayGpu::compose_layer`)
+            Shown::Preserved(kept, _) => {
+                layers.extend_from_slice(kept);
+                &[]
+            }
+            // no layer: `compose_begin` clears the frame to black
+            Shown::Blank(_) => &[],
         };
+        let mut whole = true;
         for so in windows {
             let planned = io.resolve(so.client, so.handle, so.chn).and_then(|dma| {
                 kf_disp::scanout::plan_layer(so, &dma, &dp.formats, w, h).map_err(|r| r.0)
@@ -1919,7 +1991,10 @@ impl ScanState {
                     layers.push(l);
                 }
                 Ok(None) => {}
-                Err(e) => self.refuse(dp, &e),
+                Err(e) => {
+                    whole = false;
+                    self.refuse(dp, &e);
+                }
             }
         }
         let slot = dp.console.free_slot();
@@ -1969,6 +2044,10 @@ impl ScanState {
                 if matches!(shown, Shown::Boot(..)) {
                     dp.counters.boot_frames.fetch_add(1, Ordering::Relaxed);
                 }
+                if matches!(shown, Shown::Armed(_)) {
+                    self.last_plan = whole.then(|| (layers.clone(), (w, h)));
+                }
+                self.last_size = Some((w, h));
                 self.inflight = Some((n, slot, (w, h), Instant::now()));
             }
             Err(e) => {
@@ -2078,19 +2157,77 @@ mod tests {
             size: (1920, 1080),
         };
         let armed = Some(Shown::Armed(comp.clone()));
-        // ⊘ gop=off: exactly today's choice
-        assert_eq!(choose_shown(None, None, false), None);
-        assert_eq!(choose_shown(None, None, true), None);
-        assert_eq!(choose_shown(Some(comp.clone()), None, false), armed);
+        let fresh = Held::default();
+        // ⊘ gop=off, before any frame: exactly today's choice
+        assert_eq!(choose_shown(None, None, false, &fresh), None);
+        assert_eq!(choose_shown(None, None, true, &fresh), None);
+        assert_eq!(choose_shown(Some(comp.clone()), None, false, &fresh), armed);
         // gop=on, before any head: the boot layer (with or without a window vocabulary)
         assert_eq!(
-            choose_shown(None, Some(&boot), false),
+            choose_shown(None, Some(&boot), false, &fresh),
             Some(Shown::Boot(boot.layer, (1920, 1080)))
         );
         // an armed composition always wins, and once a head was armed the boot layer never returns
-        assert_eq!(choose_shown(Some(comp.clone()), Some(&boot), false), armed);
-        assert_eq!(choose_shown(Some(comp), Some(&boot), true), armed);
-        assert_eq!(choose_shown(None, Some(&boot), true), None);
+        assert_eq!(
+            choose_shown(Some(comp.clone()), Some(&boot), false, &fresh),
+            armed
+        );
+        assert_eq!(choose_shown(Some(comp), Some(&boot), true, &fresh), armed);
+        assert_eq!(choose_shown(None, Some(&boot), true, &fresh), None);
+    }
+
+    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): once a frame was shown, NOTHING to scan is a
+    /// black frame (box run b5 kept the last fbcon frame after `rmmod nvidia_drm`), and a scanout
+    /// freed with `PRESERVE_HW` stays until a head is armed again.
+    #[test]
+    fn nothing_scanned_is_black_and_a_preserved_scanout_stays() {
+        let comp = Composition {
+            head: 3,
+            width: 1920,
+            height: 1080,
+            layers: Vec::new(),
+        };
+        let boot = BootScan {
+            layer: kf_disp::scanout::boot_layer(&kf_disp::scanout::BootSurface {
+                width: 1920,
+                height: 1080,
+                pitch: 7680,
+                bytes: 0x7F_0000,
+            })
+            .unwrap(),
+            size: (1920, 1080),
+        };
+        let shown_once = Held {
+            preserved: None,
+            last_size: Some((1920, 1080)),
+        };
+        assert_eq!(
+            choose_shown(None, Some(&boot), true, &shown_once),
+            Some(Shown::Blank((1920, 1080)))
+        );
+        assert_eq!(
+            choose_shown(None, None, true, &shown_once),
+            Some(Shown::Blank((1920, 1080))),
+            "gop=off too: a head that went dark is black"
+        );
+        let kept = Held {
+            preserved: Some((vec![boot.layer], (1920, 1080))),
+            last_size: Some((1920, 1080)),
+        };
+        assert_eq!(
+            choose_shown(None, None, true, &kept),
+            Some(Shown::Preserved(vec![boot.layer], (1920, 1080)))
+        );
+        assert_eq!(
+            choose_shown(Some(comp.clone()), None, true, &kept),
+            Some(Shown::Armed(comp)),
+            "an armed head wins over the preserved scanout"
+        );
+        // the boot layer still comes first while no head was ever armed
+        assert_eq!(
+            choose_shown(None, Some(&boot), false, &kept),
+            Some(Shown::Boot(boot.layer, (1920, 1080)))
+        );
     }
 
     /// ★ M2 triple buffering: the console only ever takes the newest READY frame; the worker's next

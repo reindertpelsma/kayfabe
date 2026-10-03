@@ -5,15 +5,20 @@
 # lane.sh, selected with DISPLAY_HOOK=unload_hook. It runs on the HOST with the guest up and nvidia.ko
 # loaded (no nvidia-drm yet; boot_capture's nvidia-smi has come and gone, so the guest's RM has
 # already initialised and torn the adapter down once). One DISPLAY_B5* line per arm; shots in $OUT.
-#   (c)  nvidia.ko, no RM client: the firmware console (simpledrm on BAR1 [0, G)) must show new text.
+#   (c)  nvidia.ko, no RM client: the firmware console (simpledrm on BAR1 [0, G)) must show new text
+#        — the guest's RM gave BAR1 back to physical mode when its last client closed.
 #   (c2) the same with an RM client holding /dev/nvidia0 (RM up, its console mapping at BAR1 VA 0),
-#        then (c3) once more after that client closed (RM torn down a second time).
-#   (a)  lightdm with no xorg.conf and no nvidia-drm: Xorg runs on simpledrm (modesetting) and the
-#        NVIDIA GL/EGL libraries open /dev/nvidia0 — RM up for X's life. After X exits the text
-#        console must be back. ⊘ No NVKMS here (no display channel is ever allocated).
-#   (a2) the NVIDIA X driver (an xorg.conf naming it), modeset=0: NVKMS imports the console and
-#        restores it when X — its last client — closes; the text console must be back.
-#   (b)  nvidia-drm modeset=1 fbdev=1, fbcon unbound, nvidia-drm removed (nvidia-modeset stays).
+#        then (c3) once more after that client closed (RM torn down a second time). (c2) is the
+#        positive control: it passed with the defect too (box run d1, 2026-10-03).
+#   (a)  a KMS compositor on the firmware framebuffer — Cinnamon on Wayland (muffin) on simpledrm,
+#        nvidia-drm not loaded, NVIDIA's EGL holding RM up. ⊘ No Xorg and no NVKMS (no display
+#        channel is ever allocated). After the session the text console must be back.
+#   (a2) the NVIDIA X driver (an xorg.conf.d snippet naming it), modeset=0: X11 Cinnamon on Xorg on
+#        NVKMS, which imports the firmware console and restores it when X — its last client —
+#        closes; the text console must be back and keep updating (PRESERVE_HW).
+#   (b)  nvidia-drm modeset=1 fbdev=1, fbcon unbound, nvidia-drm removed (nvidia-modeset stays):
+#        black, as on bare metal — fbdev=1 made NVKMS drop the console surface
+#        (`nvRmUnmapFbConsoleMemory`), so its restore has nothing to show and shuts the heads down.
 # Every step logs the guest's uptime so it lines up with the guest dmesg and the QEMU log.
 # ⊘ No step may hang: every guest command has a deadline. A missing line is reported as missing.
 set -uo pipefail
@@ -72,40 +77,67 @@ BUSID=$(printf 'PCI:%d:%d:%d' "0x${_b:-0}" "0x${_d:-0}" "0x${_f:-0}")
 #     40 new lines. On a real card RM returned BAR1 to physical mode when its last client closed.
 say "B5C_MODULES $(gq 'lsmod | awk "/^nvidia/{print \$1}" | tr "\n" " "') fb=[$(gq 'cat /proc/fb | tr "\n" " "')]"
 gq 'sudo chvt 1; echo ok' 20 >/dev/null
-say "B5C_CUDA_ONLY_CONSOLE up=$(upt) $(lines_and_shot B5C 40 b5c)"
+say "B5C_CUDA_ONLY_CONSOLE up=$(upt) $(lines_and_shot B5C 40 b5c) (expected: changed=yes)"
 # (c2) RM held up by a client: its console mapping at BAR1 VA 0 is live.
 gq 'sudo rm -f /tmp/kf3hold.pid; sudo setsid sh -c "sleep 60 </dev/nvidia0 >/dev/null 2>&1 & echo \$! >/tmp/kf3hold.pid" </dev/null >/dev/null 2>&1; sleep 8; echo ok' 30 >/dev/null
-say "B5C2_RM_HELD up=$(upt) holder=$(gq 'cat /tmp/kf3hold.pid 2>/dev/null || echo none') $(lines_and_shot B5C2 20 b5c2)"
+say "B5C2_RM_HELD up=$(upt) holder=$(gq 'cat /tmp/kf3hold.pid 2>/dev/null || echo none') $(lines_and_shot B5C2 20 b5c2) (expected: changed=yes)"
 # (c3) the holder closes: RM tears the adapter down a second time.
 gq 'sudo kill "$(cat /tmp/kf3hold.pid)" 2>/dev/null; sleep 6; echo ok' 30 >/dev/null
-say "B5C3_AFTER_SECOND_TEARDOWN up=$(upt) $(lines_and_shot B5C3 20 b5c3)"
+say "B5C3_AFTER_SECOND_TEARDOWN up=$(upt) $(lines_and_shot B5C3 20 b5c3) (expected: changed=yes)"
 
-# (a) lightdm, no xorg.conf, no nvidia-drm: which X driver runs is RECORDED, not assumed.
-say "B5A_DRM_MODESET_PARAM $(gq 'cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo not-loaded') xorg_conf=$(gq 'ls /etc/X11/xorg.conf /etc/X11/xorg.conf.d/ 2>&1 | tr "\n" " "')"
+# (a)/(a2) need a known session: the image's lightdm autologin conf is whatever the last lane left
+#     (`[measured d1, 2026-10-03]` B3's Cinnamon-Wayland arm had left `cinnamon-wayland`, so the first
+#     B5 run's "X" was muffin on simpledrm: no Xorg, no NVKMS). Saved here, restored at the end.
+AUTOLOGIN=/etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+gq "sudo rm -f /tmp/kf3-b5-autologin.bak; [ -e $AUTOLOGIN ] && sudo cp -a $AUTOLOGIN /tmp/kf3-b5-autologin.bak; echo ok" 20 >/dev/null
+set_session(){
+    sed "s/@SESSION@/$1/g" "$HERE/desktop/50-kf-autologin.conf.in" \
+        | $G "sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo tee $AUTOLOGIN >/dev/null; echo ok" >/dev/null
+}
+WSESS=$(gq 'ls /usr/share/wayland-sessions/ 2>/dev/null' | sed -n 's/^\(cinnamon[a-z0-9-]*\)\.desktop$/\1/p' | head -1)
+XSESS=$(gq 'ls /usr/share/xsessions/ 2>/dev/null' | sed -n 's/^\(cinnamon[a-z0-9-]*\)\.desktop$/\1/p' | head -1)
+say "B5A_SESSIONS wayland=[${WSESS:-none}] x11=[${XSESS:-none}] drm_modeset=$(gq 'cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo not-loaded') xorg_conf=[$(gq 'ls /etc/X11/xorg.conf /etc/X11/xorg.conf.d/ 2>&1 | tr "\n" " "')]"
 XENV='sudo env DISPLAY=:0 XAUTHORITY=/var/run/lightdm/root/:0'
-x_up(){ for i in $(seq 1 45); do
-    if gq "$XENV xset q >/dev/null 2>&1 && echo UP" 15 | grep -q UP; then echo yes; return; fi
+up_x11(){ for i in $(seq 1 45); do
+    if gq "pgrep -x Xorg >/dev/null && $XENV xset q >/dev/null 2>&1 && echo UP" 15 | grep -q UP; then echo yes; return; fi
     sleep 2; done; echo no; }
-x_gone(){ for i in $(seq 1 20); do gq 'pgrep -x Xorg >/dev/null && echo RUNNING' 10 | grep -q RUNNING || break; sleep 1; done; }
-x_driver(){ gq 'sudo grep -E "LoadModule: \"(nvidia|modesetting|fbdev|vesa)\"|\(II\) (NVIDIA|modeset|FBDEV)\([0-9]\): |\(EE\)|NVIDIA\(0\): Failed" /var/log/Xorg.0.log | head -12 | tr "\n" "|"' 30; }
-a_arm(){  # a_arm <label> <shot prefix>
-    local label=$1 p=$2 t0 up
+up_wayland(){ for i in $(seq 1 45); do
+    if gq 'pgrep -u ubuntu -x cinnamon >/dev/null && ls /run/user/1000/wayland-* >/dev/null 2>&1 && echo UP' 15 | grep -q UP; then echo yes; return; fi
+    sleep 2; done; echo no; }
+gone(){ for i in $(seq 1 20); do gq 'pgrep -x Xorg >/dev/null || pgrep -u ubuntu -x cinnamon >/dev/null && echo RUNNING' 10 | grep -q RUNNING || break; sleep 1; done; }
+a_arm(){  # a_arm <label> <shot prefix> <up check>
+    local label=$1 p=$2 upcheck=$3 t0 up
     t0=$(upt); gq 'sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/${p}_start.log"
-    up=$(x_up); sleep 10; shot "$OUT/${p}_x.ppm" >/dev/null
-    gq 'sudo cat /var/log/Xorg.0.log' 30 > "$OUT/${p}_Xorg.0.log"
-    say "${label}_X up=$up start_up=$t0 $(tr '\n' ' ' < "$OUT/${p}_start.log") shot=[$(stats "$OUT/${p}_x.ppm")] driver=[$(x_driver)] modules=[$(gq 'lsmod | awk "/^nvidia/{print \$1}" | tr "\n" " "')]"
-    t0=$(upt); gq 'sudo systemctl stop lightdm; echo rc=$?' 60 > "$OUT/${p}_stop.log"; x_gone
+    up=$($upcheck); sleep 10; shot "$OUT/${p}_x.ppm" >/dev/null
+    gq 'sudo cat /var/log/Xorg.0.log 2>/dev/null' 30 > "$OUT/${p}_Xorg.0.log"
+    say "${label}_SESSION up=$up start_up=$t0 $(tr '\n' ' ' < "$OUT/${p}_start.log") shot=[$(stats "$OUT/${p}_x.ppm")] xorg=[$(gq 'pgrep -a -x Xorg | head -1')] x_driver=[$(gq 'sudo grep -o -m3 -E "\((II|EE)\) (NVIDIA|modeset)\(0\): [^,]{0,60}" /var/log/Xorg.0.log 2>/dev/null | tr "\n" "|"')] modules=[$(gq 'lsmod | awk "/^nvidia/{print \$1}" | tr "\n" " "')]"
+    t0=$(upt); gq 'sudo systemctl stop lightdm; echo rc=$?' 60 > "$OUT/${p}_stop.log"; gone
     gq 'sudo chvt 1; echo ok' 20 >/dev/null
     sleep 3; shot "$OUT/${p}_after.ppm" >/dev/null
-    say "${label}_AFTER_X stop_up=$t0 $(tr '\n' ' ' < "$OUT/${p}_stop.log") shot=[$(stats "$OUT/${p}_after.ppm")] changed_from_x=$(changed "$(stats "$OUT/${p}_x.ppm")" "$(stats "$OUT/${p}_after.ppm")") (expected: the text console)"
-    say "${label}_CONSOLE_AFTER_X up=$(upt) $(lines_and_shot "${label}" 10 "${p}_tty")"
+    say "${label}_AFTER_SESSION stop_up=$t0 $(tr '\n' ' ' < "$OUT/${p}_stop.log") shot=[$(stats "$OUT/${p}_after.ppm")] changed_from_session=$(changed "$(stats "$OUT/${p}_x.ppm")" "$(stats "$OUT/${p}_after.ppm")") (expected: yes — the text console)"
+    say "${label}_CONSOLE_AFTER_SESSION up=$(upt) $(lines_and_shot "${label}" 10 "${p}_tty") (expected: changed=yes)"
 }
-a_arm B5A b5a
-# (a2) the NVIDIA X driver, modeset=0 (nvidia-drm not loaded): NVKMS is X's display path.
-printf 'Section "Device"\n    Identifier "kf3-b5"\n    Driver "nvidia"\n    BusID "%s"\nEndSection\n' "$BUSID" \
-    | $G 'sudo mkdir -p /etc/X11/xorg.conf.d && sudo tee /etc/X11/xorg.conf.d/90-kf3-b5-nvidia.conf >/dev/null; echo ok' >/dev/null
-a_arm B5A2 b5a2
-gq 'sudo rm -f /etc/X11/xorg.conf.d/90-kf3-b5-nvidia.conf; echo ok' 20 >/dev/null
+# (a) a KMS compositor on the firmware framebuffer: Cinnamon on Wayland (muffin) drives simpledrm —
+#     nvidia-drm is not loaded — and NVIDIA's EGL opens /dev/nvidia0 (RM up for the session's life).
+if [ -n "$WSESS" ]; then
+    gq 'sudo rm -f /etc/X11/xorg.conf; echo ok' 20 >/dev/null
+    set_session "$WSESS"
+    a_arm B5A b5a up_wayland
+else
+    say "B5A_SKIPPED no cinnamon Wayland session on this image"
+fi
+# (a2) the NVIDIA X driver, modeset=0 (nvidia-drm not loaded): X11 Cinnamon on Xorg on NVKMS. NVKMS
+#      imports the firmware console and restores it when X — its last client — closes.
+if [ -n "$XSESS" ]; then
+    printf 'Section "Device"\n    Identifier "kf3-b5"\n    Driver "nvidia"\n    BusID "%s"\nEndSection\n' "$BUSID" \
+        | $G 'sudo mkdir -p /etc/X11/xorg.conf.d && sudo tee /etc/X11/xorg.conf.d/90-kf3-b5-nvidia.conf >/dev/null; echo ok' >/dev/null
+    set_session "$XSESS"
+    a_arm B5A2 b5a2 up_x11
+    gq 'sudo rm -f /etc/X11/xorg.conf.d/90-kf3-b5-nvidia.conf; echo ok' 20 >/dev/null
+else
+    say "B5A2_SKIPPED no cinnamon X11 session on this image"
+fi
+gq "if [ -e /tmp/kf3-b5-autologin.bak ]; then sudo cp -a /tmp/kf3-b5-autologin.bak $AUTOLOGIN; else sudo rm -f $AUTOLOGIN; fi; echo ok" 20 >/dev/null
 gq 'sudo dmesg | grep -i -E "nvidia-modeset|nvkms|console|fbcon" | tail -30' 30 > "$OUT/b5a_dmesg.log"
 
 # (b) modeset=1 fbdev=1, then fbcon unbound and nvidia-drm removed (nvidia-modeset stays loaded).
@@ -116,7 +148,7 @@ say "B5B_FBCON up=$(upt) $(tr '\n' ' ' < "$OUT/b5b_load.log") fb=[$(gq 'cat /pro
 t0=$(upt)
 gq 'for v in /sys/class/vtconsole/vtcon*/bind; do echo 0 | sudo tee "$v" >/dev/null; done; echo unbound; cat /proc/uptime; sudo rmmod nvidia_drm; echo rc=$?; lsmod | grep -c "^nvidia_drm"' 90 > "$OUT/b5b_unload.log"
 sleep 4; shot "$OUT/b5b_after.ppm" >/dev/null
-say "B5B_AFTER_RMMOD up=$t0 $(tr '\n' ' ' < "$OUT/b5b_unload.log") shot=[$(stats "$OUT/b5b_after.ppm")] modules=[$(gq 'lsmod | awk "/^nvidia/{print \$1}" | tr "\n" " "')]"
+say "B5B_AFTER_RMMOD up=$t0 $(tr '\n' ' ' < "$OUT/b5b_unload.log") shot=[$(stats "$OUT/b5b_after.ppm")] modules=[$(gq 'lsmod | awk "/^nvidia/{print \$1}" | tr "\n" " "')] (expected: nonblack=0 — black, as bare metal)"
 gq 'sudo dmesg | tail -60' 30 > "$OUT/b5_dmesg_tail.log"
 # the device's own account of each arm: what the console showed, BAR1's boot range, the teardowns
 grep -a -E 'the console shows|BAR1 boot framebuffer|wrote NV_|BAR1_BLOCK|fn 47|boot display seed|physical view|armed its first head|ChannelFreed \{ kind: Core|ChannelAllocated \{ kind: Core' \

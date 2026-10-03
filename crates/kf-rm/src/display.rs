@@ -595,6 +595,7 @@ impl DisplayRegistry {
                     g.free(client, *h);
                 }
             }
+            g.end_free();
             settle(&mut g)
         };
         finish(st);

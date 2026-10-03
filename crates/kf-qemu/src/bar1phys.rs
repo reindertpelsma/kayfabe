@@ -67,6 +67,36 @@ pub fn decode_unloading(
     })
 }
 
+/// ★ The VA thread, idle (no walk in flight or pending): show the boot framebuffer's physical view
+/// again (`kf_mem::cpuwin::CpuWindow::reseed`) — unless the window changed since the request was
+/// noticed (`at_change`, its change count then): an RM took BAR1 back first, and its placements
+/// win. The log line, or `None` for a window that never had a boot framebuffer (`gop=off`).
+pub fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
+    w: &kf_mem::cpuwin::CpuWindow<V>,
+    at_change: u64,
+) -> Option<String> {
+    let (at, store_off, len) = w.boot_range()?;
+    let now = w.changes();
+    if now != at_change {
+        return Some(format!(
+            "BAR1's physical view NOT restored: BAR1 changed {} time(s) after the guest's RM gave it \
+             up — an RM holds BAR1 again, its placements win",
+            now.wrapping_sub(at_change)
+        ));
+    }
+    Some(match w.reseed() {
+        Ok(kf_mem::cpuwin::Reseed::Placed { life }) => format!(
+            "BAR1 back to its physical view: [{at:#x}, +{len:#x}) shows store [{store_off:#x}, +{len:#x}) \
+             again (seed life {life}) — the guest's RM gave BAR1 up"
+        ),
+        Ok(kf_mem::cpuwin::Reseed::AlreadyShown) => format!(
+            "BAR1 [{at:#x}, +{len:#x}) already shows its physical view (the seed never retired)"
+        ),
+        Ok(kf_mem::cpuwin::Reseed::NoBootFramebuffer) => return None,
+        Err(e) => format!("BAR1's physical view REFUSED: {e}"),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,6 +126,78 @@ mod tests {
         let s = decode_unloading(Some(layout()), &[1, 0, 0, 0, 3, 0, 0, 0]).unwrap();
         assert_eq!((s.pm, s.level), (true, 3));
         assert!(!s.gives_bar1_up());
+    }
+
+    /// A host that does whatever it is asked (a view is its store offset).
+    struct Host;
+    impl kf_mem::cpuwin::ViewOps for Host {
+        type View = u64;
+        fn arm_store(&self, off: u64, _len: u64) -> Result<u64, String> {
+            Ok(off)
+        }
+        fn place_view(&self, _at: u64, _len: u64, _v: &u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn place_ram(&self, _at: u64, _len: u64, _off: u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn sink(&self, _at: u64, _len: u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn release(&self, _v: u64) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    const G: u64 = 0x7F_0000;
+
+    /// One RM life on a seeded BAR1: the console mapped at VA 0, then unmapped at teardown.
+    fn one_life() -> kf_mem::cpuwin::CpuWindow<Host> {
+        use kf_mem::ledger::{Desired, MapTarget};
+        let w = kf_mem::cpuwin::CpuWindow::new(Host, 128 << 20);
+        w.seed(0, 0, G).unwrap();
+        let console = Desired {
+            va: 0,
+            len: G,
+            off: 0,
+            ram: false,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+        };
+        w.map(&console, false).unwrap();
+        w.invalidate().unwrap();
+        w.unmap(0, false).unwrap();
+        w.invalidate().unwrap();
+        w
+    }
+
+    #[test]
+    fn the_physical_view_comes_back_when_the_rm_gave_bar1_up() {
+        let w = one_life();
+        let line = restore_physical_view(&w, w.changes()).expect("a line");
+        assert!(
+            line.contains("back to its physical view") && line.contains("seed life 2"),
+            "{line}"
+        );
+        assert_eq!(w.seeded(), Some((0, 0, G)));
+        let again = restore_physical_view(&w, w.changes()).expect("a line");
+        assert!(again.contains("already shows"), "{again}");
+    }
+
+    /// ⊘ An RM that took BAR1 again before the VA thread got to the request wins.
+    #[test]
+    fn a_bar1_change_after_the_request_keeps_the_rms_placements() {
+        let w = one_life();
+        let line = restore_physical_view(&w, w.changes() - 1).expect("a line");
+        assert!(line.contains("NOT restored"), "{line}");
+        assert_eq!(w.seeded(), None);
+    }
+
+    /// `gop=off`: a window that never had a seed says nothing and does nothing.
+    #[test]
+    fn without_a_boot_framebuffer_nothing_happens() {
+        let w = kf_mem::cpuwin::CpuWindow::new(Host, 128 << 20);
+        assert_eq!(restore_physical_view(&w, 0), None);
     }
 
     #[test]

@@ -120,6 +120,10 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     ("NVC370_CTRL_CMD_GET_LOCKPINS_CAPS", "lockpins"),
     ("NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR", "echo"),
     ("NVC372_CTRL_CMD_IS_MODE_POSSIBLE", "mode_possible"),
+    // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): ROUTE_TO_PHYSICAL (`g_disp_objs_nvoc.c`, flags
+    // 0x40), so it reaches us. NVKMS sends PRESERVE_HW before freeing each channel after it restored
+    // the console (`nvkms-rm.c:2990-3017`): the display keeps scanning the console through the free.
+    ("NV5070_CTRL_CMD_SET_RMFREE_FLAGS", "rmfree_flags"),
     // ★ M1 (`[measured m1a, 2026-09-30, GA106 / 580.159.04]` the ledger held 0x20800a76 after
     // nvidia-drm's fbdev took the console): the VGA console save/restore around a console switch
     // (`unix_console.c:74-140`). Our virtual engine has no VGA console and no VBIOS mode to save:
@@ -323,6 +327,10 @@ pub enum Statement {
         kind: ChannelKind,
         /// Instance.
         instance: u32,
+        /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the free carried
+        /// `NV5070_CTRL_SET_RMFREE_FLAGS_PRESERVE_HW` — the display hardware keeps scanning what
+        /// it scans (NVKMS sets it after a console restore, `nvkms-rm.c:2990-3017`).
+        preserve: bool,
     },
 }
 
@@ -357,6 +365,9 @@ pub struct DisplayModel {
     /// ★ The display plane's wake: set when a plane consumes [`Self::statements`]; the control link
     /// then leaves them queued and calls it (after dropping the lock) instead of logging them.
     waker: Option<Waker>,
+    /// ★ `NV5070_CTRL_CMD_SET_RMFREE_FLAGS` PRESERVE_HW, for the NEXT `RmFree` only
+    /// (`ctrl5070chnc.h:899-918`); cleared by [`Self::end_free`].
+    rmfree_preserve: bool,
 }
 
 /// The display plane's wake (an eventfd write, in the plane) — callable from any thread.
@@ -411,6 +422,7 @@ impl DisplayModel {
             seen: Vec::new(),
             ports: Arc::new(Ports::default()),
             waker: None,
+            rmfree_preserve: false,
         }
     }
 
@@ -828,6 +840,12 @@ impl DisplayModel {
                 p.set("bReturnEarly", 1);
                 Ok(p.buf)
             }
+            "rmfree_flags" => {
+                let p = self.view("NV5070_CTRL_SET_RMFREE_FLAGS_PARAMS", params)?;
+                let preserve = k("NV5070_CTRL_SET_RMFREE_FLAGS_PRESERVE_HW")?;
+                self.rmfree_preserve = p.get("flags").unwrap_or(0) & preserve != 0;
+                Ok(p.buf)
+            }
             "mode_possible" => {
                 // A virtual head has no isochronous memory pool to exhaust: every mode NVKMS validated
                 // against the EDID and the pixel-clock limit is possible. The bandwidth numbers are
@@ -912,9 +930,16 @@ impl DisplayModel {
             self.state(Statement::ChannelFreed {
                 kind: k.0,
                 instance: k.1,
+                preserve: self.rmfree_preserve,
             });
         }
         key.is_some()
+    }
+
+    /// ★ One guest `RmFree` is done (every object it freed was passed to [`Self::free`] or
+    /// [`Self::free_client`]): `SET_RMFREE_FLAGS` applied to it and to nothing after it.
+    pub fn end_free(&mut self) {
+        self.rmfree_preserve = false;
     }
 
     /// A free of the CLIENT `client` (the guest's RM frees each object first, but a client free is
@@ -932,6 +957,7 @@ impl DisplayModel {
             self.state(Statement::ChannelFreed {
                 kind: k.0,
                 instance: k.1,
+                preserve: self.rmfree_preserve,
             });
         }
         keys.len()
@@ -1189,6 +1215,51 @@ mod tests {
         ));
     }
 
+    /// ★ 2026-10-03 (B5): `SET_RMFREE_FLAGS` PRESERVE_HW marks the channels of the NEXT free — and
+    /// only those (`ctrl5070chnc.h:899-918`); a free without it is not preserving.
+    #[test]
+    fn preserve_hw_marks_the_next_free_only() {
+        let mut m = model();
+        let s = "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS";
+        let core = |m: &mut DisplayModel| {
+            assert!(m.alloc(0xc1d0_0001, 0xc67d_0000, 0xC67D, &vec![0; size(m, s)]));
+        };
+        let flags = |m: &mut DisplayModel, v: u64| {
+            let f = "NV5070_CTRL_SET_RMFREE_FLAGS_PARAMS";
+            let mut q = Params::new(m.layouts(), f, &vec![0; size(m, f)]).unwrap();
+            q.set("flags", v);
+            let c = cmd(m, "NV5070_CTRL_CMD_SET_RMFREE_FLAGS");
+            assert!(matches!(m.control(c, &q.buf), Some(Ok(_))));
+        };
+        let freed = |m: &mut DisplayModel| {
+            m.take_statements()
+                .into_iter()
+                .filter_map(|st| match st {
+                    Statement::ChannelFreed { preserve, .. } => Some(preserve),
+                    _ => None,
+                })
+                .collect::<Vec<bool>>()
+        };
+        core(&mut m);
+        flags(&mut m, 1);
+        assert!(m.free(0xc1d0_0001, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![true]);
+        core(&mut m);
+        assert!(m.free(0xc1d0_0001, 0xc67d_0000));
+        m.end_free();
+        assert_eq!(freed(&mut m), vec![false], "the flag was for one free");
+        core(&mut m);
+        flags(&mut m, 1);
+        m.end_free(); // an unrelated free in between
+        assert!(m.free(0xc1d0_0001, 0xc67d_0000));
+        assert_eq!(freed(&mut m), vec![false]);
+        core(&mut m);
+        flags(&mut m, 0);
+        assert!(m.free(0xc1d0_0001, 0xc67d_0000));
+        assert_eq!(freed(&mut m), vec![false], "flags 0 (NONE) clears it");
+    }
+
     /// ★ The claim set is enumerable and exact: six subdevice-internal controls plus the thirty
     /// named ones, every name resolved through the derived layouts, no id twice, and nothing in the
     /// display interfaces' command pages claimed that the set does not list.
@@ -1197,7 +1268,7 @@ mod tests {
         let m = model();
         let set = m.claimed();
         assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
-        assert_eq!(set.len(), 39);
+        assert_eq!(set.len(), 40);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
