@@ -438,7 +438,15 @@ The order is forced:
 >   does not compile it): the requirement precedes `kf3_realize`, and no path after it leaves
 >   without the `fail:` label that releases it. Against the previous kf3.c it fails with
 >   *"comes after kf3_realize"* and *"no `fail:` label"*; with one `goto fail` turned back into
->   `return`, with *"2 `return;` after the requirement is held"*.
+>   `return`, with *"2 `return;` after the requirement is held"*. `crates/kf-qemu/src/mem.rs`:
+>   `a_bar_sink_merges_back_after_qemu_has_advised_the_window` now runs both `dump-guest-core`
+>   settings and checks every mapping's `dd`/`dc`; with `=off` alone (as before) QEMU's own
+>   `DONTDUMP` hid a plain initial cover in `window_with_scratch`. Its logic mirrored locally
+>   through `kf_linux_raw` (kf-qemu builds only in CI): a plain initial cover reads **543 mappings
+>   against 32** under `=on` and 32 under `=off`. `the_pramin_window_is_its_own_tile_and_a_run_is_one_mmap`
+>   asserts `window_advises(true) == false` (the PRAMIN `WindowOps` decision, now a named
+>   function) and that the trap's sink leaves exactly its 192 KiB run without `dc`; an advised
+>   sink leaves none (mirrored locally the same way).
 
 > ⊘⊘ **CORRECTED 2026-10-03 (branch `v3-scratch-bound`) — the recommendation below bounded scratch
 > by the BAR size, and guest root can reach that bound. The scratch is now TILED.**
