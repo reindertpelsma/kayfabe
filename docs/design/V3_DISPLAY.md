@@ -20,8 +20,11 @@
 > **STATUS ADDENDUM 2, 2026-10-03 (night):** the hover-mode host cursor (`OWNER_RULINGS.md` §O) is
 > built in code on `v3-broker`, GPU-free-tested locally and in CI: with a `CAP_CURSOR` broker that
 > is not grabbed, kf3 sends the guest's cursor image as `CMD_CURSOR` and stops composing it; under
-> grab, and for an XOR cursor, it composes as before (§8.12). Box results, when they exist, are in
-> §8.12 and `traces/v3_display/`.
+> grab, and for an XOR cursor, it composes as before (§8.12). ⊘ Since run on box 54032077
+> (2026-10-03, kf3 at `c38032f3`, broker `9cb736f`): hover, hide and grab graded against the guest's
+> own cursor, the GPU-copy rung (rung 0) carrying a KDE/X11 desktop on the NVIDIA DDX, the fallbacks,
+> E1 for all three slot attribute sets, E2's explicit-yes control, E3 — §8.12, evidence in
+> `traces/v3_display/broker_20261003/`.
 
 > **STATUS ADDENDUM, later on 2026-10-03:** the broker's GPU-copy rung (`OWNER_RULINGS.md` §L) is
 > built in code, GPU-free-tested, on the same branch — kayfabe's own VRAM frame slots, a block-linear
@@ -2455,6 +2458,11 @@ nvidia-drm ABI … at host driver X"*); a host driver tag not in `tags.txt` is N
 Re-run `tools/drivermatrix/drmnv.py` when a tag is added.
 
 **What has not run** (box only; every item is a prediction until then):
+⊘ **Partly superseded 2026-10-03 (night) — run on box 54032077 at kf3 `18562ba4`/`c38032f3`, results
+in §8.12:** CUDA importing S0, S1 and S2 (all three provisioned, self-tested and imported by the X
+server, every GPU-copy frame RELEASEd); a compositor on the same GPU importing a kayfabe-owned
+OFFSCREEN object (the NVIDIA X server, S1 and S2 included); the pack self-test on a GPU (GA106:
+passed). The fence check seeing a real fence and the screendump freshness item below have NOT run.
 - CUDA importing any of S0/S1/S2 (only S0, the store's set, has been imported — w755x, RTX 3090,
   580.159.04); the default is S1 (`KF3_VRAM_ATTRS=s0|s1|s2` selects for E1).
 - a compositor on the same GPU importing and sampling a kayfabe-owned OFFSCREEN object (nvkvm-pv
@@ -2520,9 +2528,12 @@ through it changes no guest byte); **E6** E1 on Turing, Ada and GB20x.
 > scaled, the relay not recording the position) each fail one of them. ⚠ The derivation has not
 > run on a box yet: the next run grades it against the guest X server's own cursor (XFixes).
 
-**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-03 (branch `v3-broker`, after the merge with
-master's boot display). Box results: see the end of this section; until a line there says
-otherwise, nothing of it has run on a GPU.**
+**STATUS: BUILT AND RUN ON A BOX — 2026-10-03 (branch `v3-broker`; box 54032077, RTX 3060,
+580.159.04, KDE on Xorg). The final run, `brkA5` at kf3 `c38032f3` with nvkvm-pv's broker at
+`9cb736f`, graded hover, hide, grab and the hot spot against the guest X server's own cursor; the
+runs before it found and fixed two hot-spot defects (the corrections above). What has not run is
+listed at the end of this section.** (As first written, 2026-10-03: "BUILT IN CODE, GPU-FREE-TESTED
+… nothing of it has run on a GPU.")
 
 **What it does.** The owner's rule (§O): in hover the broker shows the guest's cursor IMAGE as the host
 pointer, the guest's position is ignored (the absolute device already makes the host pointer the
@@ -2562,6 +2573,12 @@ are posted between two entries the broker gets ONE SET, of the newest
    3d (the compose kernel's XOR blend of §O is not built), and the host's cursor is hidden.
 5. **The worker → relay wake is the frame publish** that follows every post; a post whose frame copy
    failed is taken at the relay's next entry.
+
+**What has not run (2026-10-03):** `display-max-fps` (`OWNER_RULINGS.md` §M) is not built on any
+branch, so it could not be graded; a Wayland broker (E1b); the console's screendump on rung 0 with
+the console idle (stale by design, §8.11); the X11 DDX's handling of an XOR cursor (no guest here
+programs one); E5's write-through test and a slot's RM export fd identified among QEMU's
+descriptors; a second GPU (E2's other-GPU control, E6).
 
 **Local runs (dev host, 2026-10-03; no GPU), each with `cargo test` under the shared flock:**
 - `cargo test -p kf-broker`: lib 27 (four new in `cursor.rs`), `tests/host_cursor.rs` 8,
@@ -2625,6 +2642,47 @@ Evidence: `traces/v3_display/broker_20261003/<run>/`; harness `scripts/bench/dis
     closed after the imports" is NOT graded by it.
   - **display-max-fps:** NOT built anywhere (`OWNER_RULINGS.md` §M is a ruling, no branch carries the
     property), so it could not be graded.
+- **Runs `brkA4` … `brkE1s2` — kf3 `18562ba4`, harness `18562ba4`, broker `9cb736f`, 2026-10-03, one
+  chain (`chain_A4_B_C_D_E1.log`: every run rc 0), and `brkA5` — kf3 `c38032f3` (the hot-spot
+  fixes), 2026-10-03.** Evidence per run under `traces/v3_display/broker_20261003/<run>/`.
+  - **The hover cursor, graded against the guest's own (`brkA5`).** With the guest's root-window
+    cursor set to `left_ptr`, the host's cursor over the picture had hot spot `3,1` — the guest X
+    server's own is `3,1` — the same visible pixels relative to the hot spot (`bbox_rel_hot
+    -1,-1,14,22` on both sides, 254 pixels); with a `crosshair`, `11,11` against the guest's
+    `11,11`, 281 pixels on both sides. The relay sent one SET per shape (`hot 0,0` before the
+    pointer ever entered the window, then `3,1`, then `11,11`). Colours: identical on every opaque
+    pixel; on partially transparent ones the host's is the guest's times alpha (62 of the arrow's
+    254, 13 of the crosshair's 281; e.g. 137 at alpha 166 became 89). ⚠ Inferred, not read from a
+    register (the composition word is not logged): the cursor surface holds the X server's
+    premultiplied pixels and the head is programmed with the non-premultiplied blend, so the
+    head itself scans out the darker edge, and the host shows what the head would.
+  - **Hidden when the guest hides it** (`brkA4`, `brkA5`): blank (`visible_px=0`) while the guest
+    holds `XFixesHideCursor` for 10 s, the same image (same digest) after.
+  - **CTRL+ALT+G** (`brkA4`, `brkA5`, `brkC`): `grab ON` → `composed into the frame`, the host's
+    cursor blank; the broker's picture then carries the guest's crosshair at the guest pointer
+    (76 changed pixels in a 96-pixel box, `crop_hover_grab_moved_x3.png` in `brkA4`), a relative
+    move under grab moves it (76 again at the new position: 79,29 → 119,56), and after `grab off`
+    the frame is cursor-free again (0 changed pixels against hover). On `brkB`/`brkC`/`brkD`, where
+    the console's frames are fresh (host-memory rungs), the console shows the same.
+  - **Rung 0 vs the fallbacks:**
+    | run | configuration | what carried the frames | broker counters |
+    |---|---|---|---|
+    | `brkA4`, `brkA5` | `display-broker-vram=auto`, X11 default | block-linear GPU copy after the X server refused LINEAR | `sent=3912 gpucopy=3910 releases=3899` (`brkA5`) |
+    | `brkB` | `vram=off`, X11 default | LINEAR refused, then F_SHM which an X11 broker in its default mode does not present: a blank picture | `sent=205 releases=0 reclaims=204` |
+    | `brkC` | `vram=off`, broker `--present-mode=shm` | F_SHM, presented | `sent=3005 releases=3005` |
+    | `brkD` | `vram=auto`, broker `--present-mode=linear` (E2) | the broker said NO to block-linear: no GPU-copy frame and NO display VRAM (`display_vram_mib=0`), LINEAR refused: blank | `sent=205 gpucopy=0 releases=0` |
+    So on X11 with the NVIDIA DDX, rung 0 is the only rung that shows a picture without changing
+    the broker's present mode — §8.11's prediction, now run.
+  - **E1, the three slot attribute sets** (`brkE1s0/s1/s2`, `display-broker-vram=on`): for S0
+    (store-like), S1 (NVKMS offscreen) and S2 (NVKMS scanout) alike, realize provisioned 50 MiB in 5
+    slots and the pack self-test passed on the GPU (`pack kernel self-test PASSED (into display VRAM
+    slot 0)`), the X server imported them and every GPU-copy frame came back released (S0
+    `gpucopy=2285 releases=2284`, S1 1474/1474, S2 1458/1458). Not run from E1: the FNV-matched
+    image at two sizes, the export fd's closure, and a fence that is ever unsignalled.
+  - **E3** (`brkA5`): the broker SIGSTOPped for ~7 s did not hold the guest (it answered, `glxgears`
+    ran at 84.8 FPS); after `kill -9` and a restart the relay reconnected and replayed
+    (`re-sent geometry 1024x695 and the last frame to the new broker`, `reconnected … #1`).
+  - **EV_DEVICE** named `226:128` (renderD128) in every run with a broker on this X server.
 - **Runs `brkA2` (kf3 `1ddccbdf`) and `brkA3` (kf3 `7753459b`) graded NOTHING about the cursor, and
   the cause is the bench, not kayfabe.** Both connected, took rung 0 and imported every frame
   (`brkA3`: `sent=4088 gpucopy=4086 releases=4073`), but CTRL+ALT+F/G never reached the broker and
