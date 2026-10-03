@@ -1,5 +1,12 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
+★ *2026-10-03 (§R5, BUILT on branch `v3-loud-uvm`, NOT yet run on a box): release item §I
+(`OWNER_RULINGS.md` §I). Managed memory is unsupported and now fails loudly: kf3 posts a guest
+`Xid 31 … kayfabe:` and a named host line, and `loud_verdict.sh` scores the managed-memory rows
+EXPECTED_LOUD / KF3_DEFECT / SILENT. The CUDA virtual-memory API gets three rows (`vectorAddMMAP`,
+`vmm_probe`, `torch_expseg`) and `um_probe` gets eight. The matrix grows from 71 to 82 rows.
+⊘ CORRECTED by the same section: the four managed-memory failures were never silent at the CUDA
+level. `conjugateGradientUM` prints SUCCESS only because it discards its cuBLAS statuses.*
 ★ *2026-09-30 (§R4, partial): the same matrix at kf3 `738c90e5` (= `3f67ed95`, pre-CDP-fix) on an RTX 3070 —
 guest OFF 60/65 + 6/6, identical to R3; PM, 100-process and fast-path-ON runs not run.*
 **STATUS: LIVE, 2026-09-28 — current result is §R3 (kf3 `4c48ca0c` = master `8ab92bf4`'s code,
@@ -10,6 +17,205 @@ on master): **61/65 apps + 6/6 probes** in one boot, host 71/71; the four failur
 ⊘ *Superseded by §R3 (the headline below is R2's):* **LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
 58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
 as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
+
+## R5 — release item §I: managed memory fails loudly; the CUDA VMM API joins the sweep (2026-10-03)
+
+**STATUS: BUILT 2026-10-03 on branch `v3-loud-uvm` (cut from master `5d70e9c2`). GitHub CI builds and
+tests it. NOT run on a box: every guest/host expectation below is a prediction until §R5.7 runs.** The
+item is `OWNER_RULINGS.md` §I: *"unsupported must fail loudly … every such fault must reach the app as an
+error"*, plus *"add a sample such as `vectorAddMMAP` to the sweep"*.
+
+### R5.1 ⊘ CORRECTED — what the four managed-memory rows already showed at R3
+
+Evidence: R3 at kf3 `4c48ca0c` (2026-09-28), each row run alone in a fresh boot
+(`traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/all_logs.tgz`, `m20/iso/`):
+
+| row | what the app saw | host | kf3 | guest dmesg |
+|---|---|---|---|---|
+| `UnifiedMemoryPerf` | `code=719(cudaErrorLaunchFailure)` at `cudaStreamSynchronize`, rc 1 | Xid 31 | 8 × `RC_TRIGGERED posted` | no Xid |
+| `UnifiedMemoryStreams` | `code=13(CUBLAS_STATUS_EXECUTION_FAILED)`, then SIGSEGV (rc 139) | Xid 31 `FAULT_PTE` | 8 posted | no Xid |
+| `attach_verify` | `cudaDeviceSynchronize() -> 719`, rc 1 | Xid 31 | 8 posted | no Xid |
+| `conjugateGradientUM` | rc 0, `result = SUCCESS`, `Error amount = 1.000000` | Xid 31 `FAULT_PDE` | 8 posted | no Xid |
+
+- **The fault already reached every app.** The path is as follows:
+  - guest UVM gets no fault;
+  - the host twin faults, and the host RCs its group (one host Xid 31; eight twin notifier records);
+  - kf3 posts `RC_TRIGGERED`;
+  - libcuda reads the host-written record and returns 719.
+- **`conjugateGradientUM` is silent by its own code.** Read upstream at cuda-samples `v12.5`,
+  `Samples/4_CUDA_Libraries/conjugateGradientUM/main.cpp`:
+  - `r1` is uninitialised (`:90`);
+  - the first SpMV launch is asynchronous, so its `checkCudaErrors` (`:190`) sees success;
+  - `cublasSaxpy` (`:192`) and `cublasSdot(…, &r1)` (`:195`) are unchecked;
+  - stack garbage below `tol²` skips the loop (`:199`), so its checked SpMV (`:208`) never runs;
+  - `result = SUCCESS` and the exit code come from the iteration count (`:270-272`).
+  
+  On bare metal it does the same after any fatal fault. No VMM can make an app that discards its
+  statuses fail. The `um_*` rows (§R5.5) are the deterministic proof that the status reaches the app.
+- **⊘ `UnifiedMemoryStreams` is not C′ at R3.** C′ is a refused host map before a `FAULT_PTE`
+  (§R2.3). Its R3 slice has no `not applied` and no `Other(31)` line. So at R3 it is the same class as
+  the other three: demand paging.
+- **What was missing:** everything bare metal shows besides the status. The guest dmesg had no Xid,
+  because a GSP-client guest prints an RC Xid only on the GSP `OS_ERROR_LOG` event, and kf3 never sent it.
+  The kf3 log had no line saying *why*. The boot-report sentence (`kf_abi::faultbuffer::DELIVERY_UNBUILT`)
+  still predicted a hang.
+
+### R5.2 What kf3 adds (`kf-qemu` `deliver_rc` / `rc_scan`, `kf-abi` `oserrorlog`)
+
+- **A guest Xid.** kf3 posts one `OS_ERROR_LOG` (`0x1006`) per (guest client, exception) group of an
+  RC batch, before the group's `RC_TRIGGERED`s.
+  - The guest prints `NVRM: Xid (PCI:…): 31, pid=<pid>, name=<comm, 15 chars>, kayfabe: GPU MMU fault;
+    N channel(s) of this process stopped. kayfabe services no GPU page faults: CUDA managed memory or
+    pageable (HMM) access to a non-resident page is unsupported. Otherwise this is a kayfabe bug - please
+    report.` The source is `ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:769-806` →
+    `kernel_rc.c:297-412`. The print needs `RmLogonRC=1`, the default.
+  - The wire layout is versioned. Three layouts exist across 535–615, and the encoder takes offsets by
+    field name for the guest driver version the served chain answers as. It refuses an unmeasured
+    version and text over 255 bytes.
+  - **Attribution never names another process.** The chid is that of a member twin still live
+    (checked on the drainer, under the GSP lock, the same thread and lock that apply the guest's FREE)
+    with a runlist the served FIFO table names. Otherwise kf3 posts `INVALID_CHID`, and the Xid prints
+    without `pid=`/`name=`.
+  - `xid_done` makes a requeued group (GSP queue full) never post a second Xid.
+  - An event from an earlier GSP life (the phase left `Running`: unload, teardown) is dropped whole and
+    counted `rc[stale=]`. A guest reboot needs a QEMU restart: kf3 has no reset path.
+- **⊘ Deviation from the design, named:** a group member whose twin the guest freed before delivery
+  gets no `RC_TRIGGERED` either (`rc[freed=]`). Its chid may already name a new channel of another
+  process, and `_kgspRpcRCTriggered` would notify that channel. The design kept the post unchanged.
+- **A named host line**, once per guest client per RC scan, rate-limited per client (10 s; at most 64
+  clients tracked, the held count carried into the next line). Example:
+  `kf3: UNSERVICED-GPU-FAULT guest client 0x… chids [0x7 0x8 …] host Xid 31 — kayfabe services no GPU page
+  faults; guest gets RC_TRIGGERED + Xid 31`.
+- **The silent holes counted.** Two kinds of twin turn a fault into a silent hang:
+  - a twin whose notifier could not be armed (`RC-UNARMED`, counted before);
+  - a twin whose guest declared **no** error notifier. It was counted nowhere; it is now named at birth
+    (`RC-NONE`) and counted in `rc[none=]`.
+  
+  The status reads `rc[armed= unarmed= none= wakes= seen= posted= xid= unserviced= stale= freed=]`.
+- **The boot-report sentence**, `DELIVERY_UNBUILT`, now names the error path. kf3 prints it once, the
+  first time a guest registers a replayable fault buffer.
+- **Error code.** The app gets **719**, where bare metal's unserviced fault (HMM off) gives **700**
+  (`V3_UVM_DEMAND_PAGING.md` §1.2). Both are sticky. The cause is UNVERIFIED. The candidates are a host RC
+  of a fatal fault versus a UVM cancel, and kf3 refusing `0x83de030c` (`READ_ALL_SM_ERROR_STATES`, the
+  query libcuda sends after the fault; `fn76/0x83de030c=0x56x1` in the R3 slices). Documented, not chased.
+
+### R5.3 Verdict classes for the managed-memory rows (`scripts/apps/loud_verdict.sh`)
+
+The list is `UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM attach_verify um_cpuinit
+um_gpufirst um_pageable`. It is the one exception to *"bare metal passes + guest fails ⇒ kayfabe bug"*
+(`OWNER_RULINGS.md` §A.10), sanctioned by §I. `apps_hook.sh` appends `loud=<class>` and the boot's
+`rc_unarmed=`/`rc_none=` (from the last status line in the slice) to every `guest.res` row.
+`triage.py` and `summarize.py` count the classes separately.
+
+| class | when | release |
+|---|---|---|
+| PASS | the row passed | — |
+| EXPECTED_LOUD | all hold: (1) the guest dmesg has `NVRM: Xid (…): 31, … kayfabe:`; (2) the kf3 slice has `UNSERVICED-GPU-FAULT` and an `RC_TRIGGERED posted`; (3) no `not applied`, `REFUSED VasKey`, `RC-UNARMED` or `RC-NONE` line; (4) the app saw an error (`code=7(00\|19)`, `-> 7(00\|19)`, `CUBLAS_STATUS_EXECUTION_FAILED`, or a non-timeout nonzero rc). (4) is waived only for `conjugateGradientUM` (§R5.1) | sanctioned |
+| KF3_DEFECT | the slice has a `not applied`, `REFUSED VasKey` or `RC-UNARMED` line (the C′ signature) | **blocker** |
+| SILENT | anything else, including a hang (TIMEOUT, HANG, GUEST_DEAD) and an `RC-NONE` birth | **blocker** |
+| UNTESTED | NOTRUN or BOOT_FAIL | — |
+
+⚠ A kf3 publication defect that leaves none of the condition-(3) lines still scores EXPECTED_LOUD.
+The Xid text says *"otherwise this is a kayfabe bug"* for that reason. The design's optional step 2
+would tell the two apart: read the fault's VA from the host twin with `0x906f0106`, which is
+unprivileged. It is gated on a box probe and not built. The classifier is tested offline by
+`scripts/apps/test_verdicts.sh`, on the R3 slices plus synthetic lines (42 cases, CI step
+"App-matrix verdict fixtures").
+
+### R5.4 The CUDA virtual-memory API rows
+
+The ioctls these calls issue on bare metal come from the census at
+`/workspace/nvidia-gpu-passthrough/traces/w388_cuda_api_census/` (RTX 3060, open 560.35.03, CUDA 12.6;
+stage `vmm`):
+
+| call | ioctls (bare metal) |
+|---|---|
+| `cuMemAddressReserve` | none |
+| `cuMemCreate` (PINNED, DEVICE) | `NV_ESC_RM_ALLOC` class `0x40` under the device |
+| `cuMemMap` + `cuMemSetAccess` | `UVM_CREATE_EXTERNAL_RANGE` + `UVM_MAP_EXTERNAL_ALLOCATION` |
+| alias at a second VA, then unmap | the same pair again + `UVM_FREE` |
+| export to a POSIX fd / import | RM ALLOC `0x40`; NV0000 `0x202`/`0x201`; `ATTACH_GPUS_TO_FD`; `0x3d05`/`0x3d08`/`0x3d06`; NV0041 `0x410110`; then the UVM pair |
+| teardown | `UVM_FREE` + RM `FREE` |
+
+**Prediction (read, not run).** A GSP-client guest sends no RPC for the memory object: vidmem allocation
+is not RPC'd (`ogkm-580: src/nvidia/src/kernel/mem_mgr/video_mem.c:963,994`), so its dups send none
+either. kf3 sees only guest UVM's page-table writes and invalidates, which is the `cuMemAlloc` path.
+The exception is the **first FD export**: `RmExportObject` allocates an RM-internal client, device and
+subdevice (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/rmobjexportimport.c:257-261,423-427,441-445`).
+The device alloc is RPC'd, so kf3 sees new `GSP_RM_ALLOC`s under a kernel client. Whether kf3 accepts
+them is UNVERIFIED; `vmm_probe`'s `fd_import` check is the test.
+
+| row | regex | what it covers |
+|---|---|---|
+| `vectorAddMMAP` | `Result = PASS` | cuda-samples `v12.5` `0_Introduction/vectorAddMMAP`: three reserve/create/map/release/set-access rounds (d_A, d_B, d_C), then a checked sum. `EXIT_WAIVED` (VMM unsupported) scores FAIL |
+| `vmm_probe` | `CHECK` | `scripts/apps/src/vmm_probe.cu`, ported from nvkvm's `nvd_apis.c` stage `vmm`. Checks: `vmm_supported`, `map`, `alias` (write VA1 / read VA2 through the copy engine and a kernel, and back), `remap_same_va` (VA1 unmapped and its handle released while VA2 keeps the backing; a fresh handle at VA1 must read new data, VA2 old data — a stale leaf would cross them), `ro_map` (PROT_READ reads correctly), `fd_import`, `teardown`, `ro_write` (a kernel write through a PROT_READ mapping, in a child process, must fail) |
+| `torch_expseg` | `CHECK expandable_segments ok` | `torch_correct.py` under `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, then a segment grown by four 256 MiB tensors, two freed + `empty_cache()` (unmap), reallocated (remap), kernel-written, every element verified, a `DIGEST`. The CHECK is printed last and fails if the allocator snapshot has no `is_expandable` field (field name UNVERIFIED on the bundle's torch 2.6.0) |
+
+⚠ `vmm_probe`'s `ro_write` faults on purpose. One Xid 31 per run is expected on both lanes; in a kf3
+guest that includes a guest `Xid 31 … kayfabe:` for the child process. That row is the one exception to
+"`guest_xid=0` on every passing row". The bundle builds `vmm_probe` against the toolkit's libcuda stub
+(`build_bundle.sh`), and `apps_hook.sh` pushes `samples/vectorAddMMAP` and
+`samples/vectorAdd_kernel64.fatbin` beside `bin/`, so neither needs a re-provisioned guest image. The
+fatbin's name collides with `vectorAddDrv`'s, which defines the identical `VecAdd_kernel`.
+
+### R5.5 The `um_*` rows — the status reaches the app
+
+`scripts/apps/src/um_probe.cu` is `traces/v3_appfix/um_probe.cu` (the shapes of
+`V3_UVM_DEMAND_PAGING.md` §1), unchanged. It checks every CUDA status and every value.
+
+| row | bare metal | kf3 guest (predicted from `V3_UVM_DEMAND_PAGING.md` §1) |
+|---|---|---|
+| `um_cpuinit`, `um_gpufirst`, `um_pageable` | `CHECK <mode> ok` | `CHECK <mode> FAIL … -> 719` + a guest Xid 31 naming kayfabe ⇒ EXPECTED_LOUD |
+| `um_prefetch`, `um_advise`, `um_malloc`, `um_hostalloc`, `um_d2h` | ok | ok — must PASS |
+
+### R5.6 What a user is told (README "Not yet", release notes)
+
+- CUDA **managed memory** (`cudaMallocManaged`) and **HMM pageable access** to a page that is not
+  resident and mapped on the GPU are **unsupported**. Such an access fails with CUDA error 719 at the
+  next sync, plus a guest kernel line `NVRM: Xid (…): 31, …, kayfabe: …`.
+- Two managed-memory patterns work, from the 2026-09 `v3-appfix` runs on an RTX 3060
+  (`V3_UVM_DEMAND_PAGING.md` §1):
+  - CPU-initialised, then `cudaMemPrefetchAsync` to the GPU;
+  - CPU-initialised, then `cudaMemAdviseSetAccessedBy`.
+  
+  Any other access to a non-resident page fails as above, including a page the GPU touches first or one
+  migrated back to the CPU.
+- Known opt-ins: llama.cpp's `GGML_CUDA_ENABLE_UNIFIED_MEMORY`, and RAPIDS cudf.pandas (which, as far
+  as the review knows, defaults to managed memory when the GPU reports concurrent managed access).
+- Pinned and zero-copy host memory work (`bandwidthTest`, `simpleZeroCopy`).
+
+### R5.7 Pending box tests (owner approval; one GA10x; record the kf3 revision on every claim)
+
+```sh
+# on a box provisioned as in §5, the tree at this branch's head, kf3 built by scripts/bench/build_kf3.sh
+bash scripts/apps/build_bundle.sh 2>&1 | grep -E '^BUILD_(sample_vectorAddMMAP|vmm_probe|um_probe)='   # all =ok
+R5="vectorAddMMAP vmm_probe torch_expseg um_cpuinit um_gpufirst um_pageable um_prefetch um_advise um_malloc um_hostalloc um_d2h"
+UM="UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM attach_verify um_cpuinit um_gpufirst um_pageable"
+bash scripts/apps/apps_matrix.sh host r5host $R5 $UM          # every new row PASS on bare metal first
+KF3_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 APPS_PER_BOOT=1 \
+  bash scripts/apps/apps_matrix.sh guest r5iso $UM            # each managed row alone, fresh boot
+grep -E 'loud=|APPS_WEDGE' /workspace/apps/results/r5iso/guest.res   # want loud=EXPECTED_LOUD, rc_unarmed=0 rc_none=0, no WEDGE
+for a in $UM; do grep -h 'NVRM: Xid' /workspace/apps/results/r5iso/$a.guest_dmesg.log; grep -hc UNSERVICED-GPU-FAULT /workspace/apps/results/r5iso/$a.kf3.log; done
+KF3_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 APPS_PER_BOOT=8 \
+  bash scripts/apps/apps_matrix.sh guest r5full all          # the full 82-row matrix
+python3 scripts/apps/summarize.py /workspace/apps/results/r5full; python3 scripts/apps/triage.py /workspace/apps/results/r5full
+```
+
+Expected:
+- `build_bundle.sh` prints `BUILD_sample_vectorAddMMAP=ok`, `BUILD_vmm_probe=ok` and `BUILD_um_probe=ok`.
+- Host lane: every new row PASS, including `CHECK expandable_segments ok` and every `vmm_probe` CHECK.
+  This validates the regexes and the snapshot field before any guest verdict counts.
+- Guest, each managed row alone:
+  - `loud=EXPECTED_LOUD`;
+  - at least one guest `NVRM: Xid (…): 31, pid=<pid>, name=<15-char comm>, kayfabe:` per faulting
+    process (`conjugateGradie`, `UnifiedMemorySt`, `UnifiedMemoryPe`, `attach_verify`, `um_probe`);
+  - `UNSERVICED-GPU-FAULT` in the kf3 slice and `rc[… none=0 … xid=≥1 …]`;
+  - the post-row `vectorAdd` passes.
+- Full matrix: no regression from master's 61/65 apps + 6/6 probes (kf3 `2830988f`, §R3). `guest_xid=0`
+  on every passing row except `vmm_probe` (§R5.4). The `torch_expseg` digest equals the host's.
+- Still open (design §6): the optional `0x906f0106` fault-identity probe after an RC; one non-Ampere die
+  (`um_probe cpuinit` attribution, `vmm_probe remap_same_va` against the Hopper/Blackwell walker gaps
+  L4/L5 of `V3_HW_BOUNDARY_INVENTORY.md`), whose bundle must be built for that die.
 
 ## R4 — re-run at kf3 `738c90e5` (code of `3f67ed95`, before the CDP fix), RTX 3070, 2026-09-30 — PARTIAL
 
@@ -51,6 +257,10 @@ mode, one boot; `m20seq` = 100 `vectorAdd` processes in one boot; `all_logs.tgz`
 - **Fixed since R2 (now PASS):** `gpu_burn` (G), `torch_ai_bench` (C/J), `clpeak` (C) — the mapfix /
   BAR1-view leak work. Output digests equal the host's for `torch_correct`, `hf_generate`, `llama_cpp_gen`
   (`m20/guest.dig` vs `m20/host.res`).
+- ⊘ **CORRECTED 2026-10-03 (§R5.1): the next bullet's "silent wrong answer" is wrong.** The CUDA error
+  reached all four apps. `conjugateGradientUM` lost it at an unchecked `cublasSdot` and computed
+  `result = SUCCESS` from its iteration count. Also, `UnifiedMemoryStreams` shows no C′ signature at R3:
+  its slice has no `not applied` or `Other(31)` line, and the host fault is `FAULT_PTE`.
 - **Still failing, the UVM demand-paging four** (host twin RC `except_type=0x1f` = Xid 31 in `m20/triage.txt`):
   `UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM` (silent wrong answer, `Error amount =
   1.000000`), `attach_verify` — the owner-decision route (`STATUS_AND_HANDOFF.md` §3.2).

@@ -260,6 +260,17 @@ citation: ask whether its reason still holds before relying on it.
     - opt-in switches such as llama.cpp's `GGML_CUDA_ENABLE_UNIFIED_MEMORY`;
     - RAPIDS cudf.pandas, which, as far as the review knows, defaults to managed memory when the
       GPU reports concurrent managed access.
+  - ⊘ **CORRECTED 2026-10-03 (the next bullet), from R3's per-app logs (kf3 `4c48ca0c`, 2026-09-28,
+    `design/V3_APP_MATRIX.md` §R5.1).** The fault already reaches every one of the four apps as an
+    error: 719 (`UnifiedMemoryPerf`, `attach_verify`) or CUBLAS 13 and a SIGSEGV
+    (`UnifiedMemoryStreams`). `conjugateGradientUM` prints `result = SUCCESS` because it discards every
+    cuBLAS status: `cublasSaxpy`/`cublasSdot` are unchecked and its verdict comes from the iteration
+    count. It does the same on bare metal after any fatal fault. What was missing is what bare metal
+    shows besides the status. kayfabe now adds the guest `Xid 31 … kayfabe:` line (a GSP
+    `OS_ERROR_LOG` event) and a named host line (`UNSERVICED-GPU-FAULT`). The sweep scores the rows
+    EXPECTED_LOUD / KF3_DEFECT / SILENT, and SILENT is a release blocker. Built on branch
+    `v3-loud-uvm`; not yet run on a box. The VMM-API rows (`vectorAddMMAP`, `vmm_probe`,
+    `torch_expseg`) are in the same section.
   - **Release item: unsupported must fail loudly.** The four managed-memory apps fail on master,
     and `conjugateGradientUM` prints a wrong answer with `result = SUCCESS`
     (`design/V3_APP_MATRIX.md`). Every such fault must reach the app as an error.
@@ -270,6 +281,9 @@ citation: ask whether its reason still holds before relying on it.
   (`design/V3_APP_MATRIX.md`).
   - Coverage gap: no row uses the CUDA virtual memory API (`cuMemCreate`/`cuMemMap`), which PyTorch's
     expandable segments and vLLM rely on. Add a sample such as `vectorAddMMAP` to the sweep.
+  - ★ 2026-10-03: added on branch `v3-loud-uvm` and not yet run on a box: `vectorAddMMAP`,
+    `vmm_probe` (alias, remap at the same VA, FD import, a read-only write check) and `torch_expseg`
+    (`design/V3_APP_MATRIX.md` §R5.4).
 
 ## J. Kernel-module flavours (2026-10-03)
 

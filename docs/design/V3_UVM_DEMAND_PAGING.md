@@ -14,6 +14,13 @@ open questions **Q2** (a context with parked faults holds the GPU until answered
 timeout cancels it — bounded) is answered there; **Q3** (page-kind) and the guest side (§5; ⊘ earlier text cited it as "§13", a heading that never existed) are
 not. This note's *guest*-managed-memory claim remains unearned until §5 is wired on top.
 
+★ **Release stance, 2026-10-03 (owner, `OWNER_RULINGS.md` §I):** guest managed memory is **not a
+release target**. Release item: an unsupported access **fails loudly**. On master the app already gets
+719 (R3 at kf3 `4c48ca0c`, 2026-09-28, `V3_APP_MATRIX.md` §R5.1). Branch `v3-loud-uvm` adds a guest
+`Xid 31 … kayfabe:` line, a named host line and a sweep verdict (§R5.2–§R5.3). The non-demand-paging
+mode a Windows guest gets cannot be reached in a stock Linux guest (§7.3). This note's research and the
+b3 work stay as they are, for after the release.
+
 **Supersession of the 09-26 preference below:** N4 replacement-module research is preserved on
 `v3-uvm-e6pp` (`c6765f5c`) but is not the implementation route. In 580.159.04, UVM callback
 registration is **global to nvidia.ko**, not per GPU: N4 excludes stock UVM throughout the same
@@ -125,6 +132,16 @@ From `origin/v3-appfix` (`docs/design/V3_BUILD.md` "App-matrix fixes" C; `traces
 ⇒ Everything the guest UVM **maps** is published correctly. What fails is **demand paging**: the
 guest UVM expects a replayable fault to populate the page. kf3 delivers none, and the host twin's
 fault is non-replayable, so the host RCs the TSG.
+
+⊘ **CORRECTED 2026-10-03 (the paragraph below), from R3's per-app slices (kf3 `4c48ca0c`,
+2026-09-28, `traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/all_logs.tgz` `m20/iso/`).**
+- At R3, `UnifiedMemoryStreams` shows **no** C′ signature: no `not applied` and no `Other(31)` in its
+  kf3 slice, and its host fault is `FAULT_PTE`. So it is a demand-paging row like the other three.
+  The C′ text is R2's (`670bd310`).
+- All four apps receive the error: 719, or CUBLAS 13 then a SIGSEGV. `conjugateGradientUM`'s
+  "silence" is the sample discarding its cuBLAS statuses (`V3_APP_MATRIX.md` §R5.1).
+- The clpeak reading below files clpeak "with C′ (UnifiedMemoryStreams)". It stays a kf3 defect class
+  of its own, and the R3 `UnifiedMemoryStreams` row no longer belongs in it.
 
 The app-level family (`V3_APP_MATRIX.md` §R2 row 1): conjugateGradientUM (**silent wrong answer**:
 it checks no status), attach_verify, UnifiedMemoryPerf, torch_ai_bench, clpeak. All show host
@@ -552,6 +569,12 @@ drops that restriction, which weakens a guest-internal boundary. I did not find 
 
 ### 7.2 Guest (not stock-guest, but no host privilege), stopgaps only
 
+- ⊘ **CORRECTED 2026-10-03 (the next bullet overstates it).** `uvm_disable_hmm=1` only makes the
+  attribute read 0, so it helps only an app that queries it. A kernel that touches `malloc` memory
+  still faults: on bare metal with HMM off, `um_probe pageable` returned **700** plus a host
+  `Xid 31 … FAULT_PDE` (§1.2, 2026-09-26). In a kf3 guest the same access returns 719. It is a guest
+  configuration item, neither a correctness lever nor a loudness lever, and **not** part of the release
+  guidance (owner question open, `V3_APP_MATRIX.md` §R5).
 - **Guest `uvm_disable_hmm=1`** makes `pageableMemoryAccess` report 0 (`uvm_gpu.c:3861`, via
   `uvm_va_space_pageable_mem_access_enabled`). Well-behaved runtimes then take their non-HMM
   paths, and an app that dereferences malloc memory on the GPU fails as it would on a non-HMM
@@ -563,6 +586,34 @@ drops that restriction, which weakens a guest-internal boundary. I did not find 
   that also covers `cuGetProcAddress`, or a guest kernel hook. `cudaMemPrefetchAsync` and
   `cudaMemAdvise` on the result must be made no-ops. It is Tier 1 of nvkvm-pv, with its
   limitation (no VRAM residency). `[inf]`
+
+### 7.3 The non-demand-paging ("Windows") mode is unreachable in a stock Linux guest (2026-10-03)
+
+Asked for the release (`OWNER_RULINGS.md` §I): can kayfabe make a stock Linux guest's UVM run without
+faults, mapping everything at launch as on a non-faultable GPU? **No.** Read in ogkm-580, not run:
+
+1. **Guest UVM picks the mode per GPU, by architecture.** A GPU is faultable when
+   `isr.replayable_faults.handling` is set (`ogkm-580: kernel-open/nvidia-uvm/uvm_va_space.c:856-867`).
+   That flag follows a successful fault-buffer setup, which UVM attempts whenever the HAL says
+   `replayable_faults_supported`. That is hard-coded true on Turing through Blackwell
+   (`ogkm-580: kernel-open/nvidia-uvm/uvm_ampere.c:81`, `uvm_turing.c:76`, `uvm_ada.c:77`,
+   `uvm_hopper.c:94`, `uvm_blackwell.c:80`). UVM-Lite behaviour applies only to non-faultable GPUs
+   (`uvm_va_range.c:1620-1643`), and no module parameter overrides the choice.
+2. **Every RM-side lever kf3 owns leaves the GPU faultable or kills registration.**
+   - Failing `0x20800a9b`, or omitting class `0xc369`, fails `nvUvmInterfaceInitFaultInfo` and `cuInit`
+     dies (boot `pu1448` at `ef20ccc`, 2026-08-09).
+   - A pre-Pascal identity is impossible: the open RM is GSP-only, and the HAL must drive the real chip.
+   - Legacy-vGPU mode refuses UVM outright (`uvm_gpu.c:1452-1456`).
+   - `accessCntrBufferCount` gates access counters, not faults.
+3. **libcuda cannot be told either.** UVM exposes no faultability bit; its only capability output is
+   `pageableMemAccess` (`uvm_ioctl.h:556-563`). The kf3 guest reports `managed=1
+   concurrentManagedAccess=1 pageableMemoryAccess=1` (`traces/v3_appfix/c_um_shapes_guest.out:3`).
+   Bare metal with `uvm_disable_hmm=1` reports concurrent 1, pageable 0
+   (`traces/v3_uvm_research/bm_rtx3060ti_580.159.04_hmm0.out:8`).
+4. **The only working mechanism is prefetch** (`cudaMemPrefetchAsync` → `UVM_MIGRATE`, §1).
+   "Migrate everything at each launch" would need a guest userspace shim. That is a cooperation stage,
+   post-release per §I.
+5. **Windows guests** are non-faulting by platform. UNVERIFIED until a Windows guest runs CUDA.
 
 ---
 

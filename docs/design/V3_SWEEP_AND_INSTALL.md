@@ -515,6 +515,19 @@ them is under **Attempts** below, and every attempt stays in the ledger.
   and kf3's log names the refusal (`RefusedSurface`, `crates/kf-rm/src/lib.rs:299-301`). A guest that fails
   with no named refusal, for example before fn 1 at the 610 element break (`V3_DRIVER_MATRIX.md:344-346`),
   is FAIL: refusing by name is the requirement under test.
+- ★ **2026-10-03 — the managed-memory rows of the apps lane (14)** carry a second class beside their
+  verdict, from `scripts/apps/loud_verdict.sh` (`V3_APP_MATRIX.md` §R5.3). The sibling of EXPECTED-REFUSAL
+  is **EXPECTED_LOUD**: managed memory is unsupported (`OWNER_RULINGS.md` §I), and such a row passes only
+  if all of these hold:
+  - the guest printed an `Xid 31` naming kayfabe;
+  - kf3 named the fault (`UNSERVICED-GPU-FAULT`) and posted `RC_TRIGGERED`;
+  - the app saw an error.
+  
+  **KF3_DEFECT** (a C′ / `RC-UNARMED` signature) and **SILENT** (anything else, a hang included) are
+  FAIL, and both block the release. A twin whose notifier is unarmed or undeclared turns a fault into a
+  silent hang, so a managed-memory row whose kf3 slice names an `RC-UNARMED` birth is KF3_DEFECT, and
+  one naming an `RC-NONE` birth is SILENT. Every lane-14 row also records the boot's `rc_unarmed` and
+  `rc_none` counts from kf3's status line, and the lane asserts both are 0.
 
 **Verdict rules.** The per-box runner applies these to parsed counts, never to a step's exit code
 (task S7):

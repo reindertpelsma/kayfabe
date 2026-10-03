@@ -45,7 +45,16 @@ Works, measured:
 
 Not yet:
 
-- **Four apps need UVM demand paging.** The host side is proven; the guest side is in progress.
+- **CUDA managed memory is not supported** (not a release target). A GPU access to managed memory
+  (`cudaMallocManaged`), or HMM pageable memory, whose page is not resident and mapped fails with
+  CUDA error 719 at the next sync. In the guest's kernel log it appears as
+  `NVRM: Xid (…): 31, pid=…, name=…, kayfabe: …`. These are the four failing apps.
+  - Two patterns work: CPU-initialised + `cudaMemPrefetchAsync`, and CPU-initialised +
+    `cudaMemAdviseSetAccessedBy`. Any other access to a non-resident page fails as above.
+  - Opt-ins to avoid: llama.cpp's `GGML_CUDA_ENABLE_UNIFIED_MEMORY`, and RAPIDS cudf.pandas, which
+    as far as we know defaults to managed memory on GPUs that report concurrent managed access.
+  - Pinned and zero-copy host memory work.
+  - Details: [`docs/design/V3_APP_MATRIX.md`](docs/design/V3_APP_MATRIX.md) §R5.
 - **Apps that launch every kernel separately are slow on nested hosts** (PyTorch eager on a small
   model: 0.29× host), because each launch traps into the VMM. Bare metal is not measured yet.
 - X11 desktops are partial; Windows guests are the last roadmap step; two VMs sharing one GPU is not
