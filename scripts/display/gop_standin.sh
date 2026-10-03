@@ -23,7 +23,7 @@
 #   linux                 Ubuntu OVMF + the host kernel + a busybox initramfs: the EFI stub's
 #                         framebuffer is the stand-in's BAR0 (BOOTFB nested in it, at +0, pitch·H
 #                         long), simpledrm binds it, sysfb's parent is the device, boot_vga = 1, and
-#                         the console drew into the BAR.
+#                         a pattern Linux writes through /dev/fb0 lands in the BAR byte-exact.
 #   linux_two_vga         a second VGA-class device without a GOP in a lower slot: boot_vga must
 #                         follow the firmware framebuffer; the arm records both devices' decode bits.
 #   sb_ms_unsigned        Secure Boot with Microsoft's keys, unsigned ROM: does OVMF run it?
@@ -226,6 +226,8 @@ stop() {
 esp_drive() { ESP=(-drive "if=virtio,format=raw,readonly=on,file=fat:$1"); } # sets ESP
 verdict() { # verdict <arm> PASS|FAIL|SKIP <facts...>
     local arm=$1 v=$2; shift 2
+    # A checker that crashed leaves no verdict word: that is a failure, never a silent pass.
+    case "$v" in PASS | FAIL | SKIP) ;; *) set -- "no verdict from the arm's checker ($v)" "$@"; v=FAIL ;; esac
     echo "GOP_STANDIN arm=$arm verdict=$v $*"
     RESULTS+=("$arm=$v")
 }
@@ -351,6 +353,16 @@ build_initramfs() {
     local r="$WORK/initramfs"
     mkdir -p "$r/bin" "$r/proc" "$r/sys" "$r/dev"
     cp "$BUSYBOX" "$r/bin/busybox"
+    # The pattern Linux writes through /dev/fb0: the test app's pattern, at the descriptor's pitch.
+    python3 - "$r/pattern.bin" "$SI_W" "$SI_H" 4608 <<'EOF'
+import sys
+w, h, pitch = int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+def px(x, y):  # kf_gop::test_pattern
+    return bytes([(x * 3 + y * 5) & 0xFF, (x ^ y) & 0xFF, (x + y * 7) & 0xFF, 0])
+with open(sys.argv[1], "wb") as f:
+    for y in range(h):
+        f.write(b"".join(px(x, y) for x in range(w)).ljust(pitch, b"\0"))
+EOF
     cat > "$r/init" <<'EOF'
 #!/bin/busybox sh
 B=/bin/busybox
@@ -372,6 +384,21 @@ for p in /sys/bus/platform/devices/simple-framebuffer.*; do
     [ -e "$p" ] && echo "KFLINUX sysfb $($B readlink -f "$p") driver=$($B basename "$($B readlink -f "$p/driver" 2>/dev/null)")"
 done
 for f in name virtual_size stride bits_per_pixel; do echo "KFLINUX fb0 $f=$($B cat /sys/class/graphics/fb0/$f 2>/dev/null)"; done
+# Draw through Linux's own framebuffer device; the host then compares the BAR with the pattern,
+# byte for byte, at the pitch. fbcon is unbound first so nothing draws over it. `[2026-10-03, local
+# 7.0.0-34-generic]` a write() to simpledrm's fbdev lands in its shadow and reached the BAR only at
+# the next full commit; blank/unblank is that commit (fbcon's own text, drawn through the same
+# device, landed at once).
+for v in /sys/class/vtconsole/vtcon*; do
+    $B grep -q 'frame buffer' "$v/name" 2>/dev/null && echo 0 > "$v/bind"
+done
+if [ -c /dev/fb0 ] && $B dd if=/pattern.bin of=/dev/fb0 bs=4608 2>/dev/null; then
+    echo 1 > /sys/class/graphics/fb0/blank
+    $B sleep 1
+    echo 0 > /sys/class/graphics/fb0/blank
+    echo "KFLINUX fb0 drawn"
+fi
+$B sleep 2
 echo "KFLINUX end"
 while true; do $B sleep 60; done
 EOF
@@ -396,7 +423,7 @@ linux_boot() {
     local arm=$1 d="$WORK/$1"; shift
     build_initramfs
     boot "$d" "$OVMF_DIR/OVMF_CODE_4M.fd" "$OVMF_DIR/OVMF_VARS_4M.fd" 'KFLINUX end' serial.log \
-        "$@" -kernel "$KERNEL" -initrd "$WORK/initramfs.cpio.gz" -append "console=ttyS0 loglevel=7 panic=-1"
+        "$@" -kernel "$KERNEL" -initrd "$WORK/initramfs.cpio.gz" -append "console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer"
 }
 
 arm_linux() {
@@ -434,15 +461,19 @@ else:
 sysfb = [l for l in log if l.startswith("KFLINUX sysfb")]
 need(sysfb and "/0000:00:" in sysfb[0] and "driver=simple-framebuffer" in sysfb[0],
      "sysfb=" + (sysfb[0].split()[2].split("/")[-2] + " " + sysfb[0].split()[3] if sysfb else "absent"))
-fb = {l.split()[2].split("=")[0]: l.split("=", 1)[1] for l in log if l.startswith("KFLINUX fb0")}
+fb = {l.split()[2].split("=")[0]: l.split("=", 1)[1] for l in log if l.startswith("KFLINUX fb0") and "=" in l}
 need(fb.get("virtual_size") == "1152,648" and fb.get("stride") == "4608",
      f"fb0={fb.get('name', '?').replace(' ', '_')}:{fb.get('virtual_size')}:stride={fb.get('stride')}")
 drm = [l for l in log if "simpledrm" in l and "Initialized" in l]
 need(drm, "simpledrm=" + ("initialized" if drm else "absent"))
-nz = 0
+need(any(l.startswith("KFLINUX fb0 drawn") for l in log), "fb0_write=" + ("ok" if any(l.startswith("KFLINUX fb0 drawn") for l in log) else "failed"))
+bad = h = 648
 if os.path.exists(sys.argv[2]):
-    nz = sum(1 for x in open(sys.argv[2], "rb").read() if x)
-need(nz > 0, f"bar_nonzero_bytes={nz}")
+    fbb = open(sys.argv[2], "rb").read()
+    def px(x, y):  # kf_gop::test_pattern
+        return bytes([(x * 3 + y * 5) & 0xFF, (x ^ y) & 0xFF, (x + y * 7) & 0xFF, 0])
+    bad = sum(1 for y in range(h) if fbb[y * 4608 : y * 4608 + 1152 * 4] != b"".join(px(x, y) for x in range(1152)))
+need(bad == 0, f"bar_pattern_rows_bad={bad}/{h}")
 print(("PASS " if ok else "FAIL ") + " ".join(facts))
 EOF
     local res; res=$(cat "$d/facts")
