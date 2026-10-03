@@ -653,7 +653,20 @@ CUDA ladder, headless set 38/38) must stay green with display on.
 
 ### 4.11 Boot display: kf3's UEFI GOP option ROM (display step 1)
 
-**STATUS: B5 (unload) MEASURED AND FIXED, 2026-10-03, branch `v3-gop-unload`** (box 54032077, kf3
+**STATUS: REVIEWED, FIXED AND RE-RUN, 2026-10-03 (late), branch `v3-gop-unload`, kf3 `06b307c4`** (box
+54032077; `traces/v3_display/gop_final_20261003/`). The adversarial review of the B5 work (one MEDIUM, eight
+lower) and the five minor findings of the `v3-gop` re-review are fixed; each correction is folded above
+what it corrects (§4.11.3, §4.11.6, §4.11.12, §4.11.13). Measured at `06b307c4`: **B1** — no black frame
+between the boot layer and the first armed head, from kf3's own lines (`DISPLAY_BOOT_HANDOFF
+black_frames=0`; the boot layer's last frame stays 1 ms until head 3's window), probe pixel-exact, 120/120
+flips, B2's checks as before; **B0** (`gop=off`) — pixel-exact, 120/120 flips, no seed; **B5** —
+`DISPLAY_B5_VERDICT PASS arms=14 failed=0`, the lane's rc graded (it was always 0). The first try at
+`445367a8` failed ONE arm, and the fault was the hook's (`qsince | grep -q` under `pipefail`), not kf3's —
+the new verdict is what showed it. Locally: the Secure Boot deny arms with their positive control (4
+PASS, 1 OBSERVED; the bite FAILs). Not run: GB20x or any non-GA10x box; B5 (d). The STATUS just below is
+superseded where §4.11.13 says so (the handoff black, *"the log lines are bounded"*, the (a2) cause).
+
+(superseded the same day where §4.11.13 corrects it) **STATUS: B5 (unload) MEASURED AND FIXED, 2026-10-03, branch `v3-gop-unload`** (box 54032077, kf3
 `4a4b95f7`; `traces/v3_display/gop_unload_20261003/`): the guest's RM gives BAR1 up at every teardown and
 kf3 now returns BAR1 `[0, G)` to its physical view then; nothing scanned is a black frame; a scanout
 freed with `PRESERVE_HW` stays. B1 and B0 re-run at the same binary pass. The causes, the trigger and
@@ -1171,6 +1184,11 @@ Every result cites the kf3 binary's revision (`build_kf3.sh`'s `kf3-bins/<rev>/`
   B3's `cinnamon-wayland`): it is now that arm, by name, and the X arm is (a2) — the NVIDIA X driver,
   `modeset=0`, X11 Cinnamon; both bring the text console back and keep it updating; (b) is black. The hook
   (`scripts/bench/display/unload_hook.sh`) prints each arm's expectation. (d) was not run.
+- ⊘ **2026-10-03 (late) — B5 RE-RUN with a verdict** (`traces/v3_display/gop_final_20261003/`, kf3
+  `06b307c4`; §4.11.13): every arm is judged against its expectation (`DISPLAY_B5_JUDGE`), and
+  `DISPLAY_B5_VERDICT PASS|FAIL` decides the lane's exit (3 on a failing or missing verdict); the
+  bullet above *"prints each arm's expectation"* graded nothing. Result: 14/14 PASS. `lane.sh` also grades
+  every `gop=on` boot's handoff (`DISPLAY_BOOT_HANDOFF black_frames=0`, from kf3's *"console shows"* lines).
 - **B5** (unload): (a) `modeset=0` + X restore, on the 6.8 guest; (b) `fbdev=1` rmmod gives black; (c) a
   CUDA-only guest keeps its console for the VM's life; (d) a 7.x guest arm records which
   `nv_get_screen_info` path ran.
@@ -1360,7 +1378,19 @@ and the Windows arm in the bench scripts (B10); SPDX headers on the existing kf3
 
 #### 4.11.13 B5 — when RM, NVKMS or nvidia-drm lets go (measured 2026-10-03, branch `v3-gop-unload`)
 
-**STATUS: BUILT and MEASURED, 2026-10-03.** Box 54032077 (RTX 3060, host 580.159.04, guest noble 6.8 with
+**STATUS: REVIEWED AND RE-RUN, 2026-10-03 (late) — kf3 `06b307c4`, `traces/v3_display/gop_final_20261003/`.**
+The review's findings are folded below as ⊘ notes above what they correct. At `06b307c4` (box 54032077):
+B5 `DISPLAY_B5_VERDICT PASS arms=14 failed=0` — (c), (c2), (c3) new text shown; (a) Cinnamon Wayland with no
+Xorg and no fresh Xorg log, text console back and updating; (a2) X11 on the NVIDIA X driver with a fresh
+log, NVKMS's restored console kept (*"+149612 ms the console shows the PRESERVED scanout … [window 6 store
+0x0]"*) and updating; (b) fbcon shown, then black after `rmmod` (nonblack 0/1000; kf3: *"BLACK"* 250 ms after
+the window left); five teardowns, five re-seeds, none refused. X's modeset left head 3 windowless for
+20 ms: *"no new frame … held"*, no black (before: a BLACK frame). The handoff (X's first modeset in (a2)):
+no black. B1 and B0 as in §4.11's STATUS. CI green at `06b307c4` (run 37148069930).
+⚠ What none of these runs can show: GB20x keeping its boot layer (no window vocabulary) is argued from
+`choose_shown` and unit-tested, not run.
+
+(superseded the same day, kept as written) **STATUS: BUILT and MEASURED, 2026-10-03.** Box 54032077 (RTX 3060, host 580.159.04, guest noble 6.8 with
 580.159.04, OVMF), evidence `traces/v3_display/gop_unload_20261003/`: the first run at `f20ab853`, the
 diagnosis at `e2c6e1d5` (instruments only), B5, B1 and B0 at `4a4b95f7`. CI green at `4a4b95f7` (run
 37142859887).
@@ -1422,6 +1452,13 @@ diagnosis at `e2c6e1d5` (instruments only), B5, B1 and B0 at `4a4b95f7`. CI gree
    `x_driver=` from it. Each X arm now moves the old `/var/log/Xorg.0.log` aside and reads the file only if
    it is newer than the arm's start; device checks read only QEMU log lines written after the arm began.
 
+⊘ *2026-10-03 (late), at `06b307c4` (`gop_final_20261003/run_h/b5h/hook/b5_device.log`, every teardown logged):*
+for the four teardowns whose RM still held the console at BAR1 VA 0 the unmap and the register write
+land in the same ms and the re-seed ≤ 1 ms after (t = 48.551/48.552, 76.086/76.087, 115.915/115.915,
+149.751/149.752 s). The fifth, in (b), is different: `fbdev=1` had already replaced the console at VA 0 with
+nvidia-drm's surface (store `0xa00000`, t = 196.517 s); `rmmod` unmapped it at t = 210.110 s, 406 ms before
+RM's teardown wrote the register — with fbcon unbound, nothing drew into BAR1 then.
+
 **The trigger, decided from source and measurement.** Two guest acts give BAR1 up, in this order
 (`gpuStateUnload` then `gpuStateDestroy` → `kgspUnloadRm`, `ogkm-580: src/nvidia/arch/nvalloc/unix/src/osinit.c:2352-2375`,
 `src/nvidia/src/kernel/gpu/gpu.c:3970-3975`): CPU-RM's `NV_PBUS_BAR1_BLOCK` write, then fn 47, after which
@@ -1470,7 +1507,10 @@ only when it changes). And the coalescing of the two triggers: ⊘ the change ba
 FIRST request's notice and a later request merged in without refreshing it, so a register-write
 trigger skipped for a BAR1 change swallowed fn 47's too; every newly noticed request now re-baselines
 (`kf_qemu::bar1phys::PhysicalViewDue`, unit-tested).
-`gop=off`: no boot range, so no re-seed and no line (`[measured b0f at 4a4b95f7]` none).
+`gop=off`: no boot range, so no re-seed and no boot-range or re-seed line (`[measured b0f at 4a4b95f7]` none).
+⊘ *Scoped 2026-10-03 (late, the review of `v3-gop-unload`):* "no line" is those two families only — the
+BAR1-mode write and fn-47 lines print with `gop=off` too, and request nothing (`[measured b0h at
+06b307c4]`: two teardowns logged, t = 47.889 s and 97.157 s, `B0_SEED_LINES=0`).
 
 **Not modelled / open:**
 - Physical mode for BAR1 `[G, bar1-size)` (above). A guest that keeps a mapping inside `[0, G)` through
