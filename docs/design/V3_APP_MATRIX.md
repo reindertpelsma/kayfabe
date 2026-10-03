@@ -265,9 +265,10 @@ KF3_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 APPS_PER_BOOT=8 \
   bash scripts/apps/apps_matrix.sh guest r5full all          # the full 82-row matrix
 python3 scripts/apps/summarize.py /workspace/apps/results/r5full; python3 scripts/apps/triage.py /workspace/apps/results/r5full
 # the guest with HMM off (design §6; owner question: may release guidance mention uvm_disable_hmm=1?)
-KF_DEVICE=kf3 QEMU_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 \
-  POST_CAPTURE_HOOK="$PWD/scripts/apps/hmm0_hook.sh" bash scripts/bench/boot_capture.sh r5hmm0
-cat /workspace/apps/results/r5hmm0.txt
+flock /tmp/kayfabe-fastguest.lock env KF_DEVICE=kf3 QEMU_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 \
+  NVKVM_RAM_MB=16384 KF_SMP=6 GQ_TIMEOUT=300 POST_CAPTURE_HOOK="$PWD/scripts/apps/hmm0_hook.sh" \
+  bash scripts/bench/boot_capture.sh r5hmm0
+cat /workspace/apps/results/r5hmm0.txt                     # HMM0_START … HMM0_END rc=0
 ```
 
 Expected:
