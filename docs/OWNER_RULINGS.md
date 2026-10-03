@@ -379,6 +379,12 @@ citation: ask whether its reason still holds before relying on it.
     (a copy duplicates the seeds and the endorsement key); never committed. If it is encrypted at
     rest (`--key`/`--pwdfile`), that key is a random host-held secret.
   - A self-signed EK certificate is enough for Windows 11 and BitLocker.
+- **Bench Windows guests run without BitLocker** (owner, 2026-10-04, verbatim: *"Also disable bitlocker
+  in the windows guest, its useless for our vm."*). The unattended install prevents BitLocker and
+  Windows' automatic device encryption from the first boot, and the lane checks the volume is fully
+  decrypted with protection off, after install and again after the NVIDIA driver install. This is a
+  bench setting: a user's own Windows guest may still use BitLocker, so the TPM-persistence rules
+  above still apply to it.
 
 ## L. Broker frames: a GPU copy into kayfabe's own frames, never guest memory (2026-10-03)
 
