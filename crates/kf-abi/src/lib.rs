@@ -151,6 +151,7 @@ pub mod transcribed;
 pub mod vbios;
 pub mod versions;
 pub mod view;
+pub mod windows_twin;
 pub mod wire;
 pub mod zbc;
 

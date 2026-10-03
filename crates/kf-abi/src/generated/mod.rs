@@ -17,6 +17,8 @@ pub mod nvos;
 pub mod rpc;
 /// The VBIOS ROM / BIT-table / FWSEC-descriptor vocabulary — the synthetic-ROM seam.
 pub mod vbios;
+/// Each driver-matrix tag's Windows build, from its own `nvBldVer.h` (`tools/drivermatrix/windows_twins.py`).
+pub mod windows_twins;
 
 /// The ogkm checkout these modules were generated from.
 pub const OGKM_VERSION: &str = "580.159.04";
