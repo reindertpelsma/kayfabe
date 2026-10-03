@@ -386,7 +386,8 @@ The order is forced:
 >   through a `RAMBlockNotifier` (`util/vfio-helpers.c:464-478`) and disables no discard. Do not
 >   combine it with kf3. On QEMU 11.1 the skip flag is the precise fix. Checked by compiling kf3.c
 >   against the 10.2.4 headers (`-Werror -fsyntax-only`); not run in a VM.
-> - **Tests (2026-10-03).** `crates/kf-linux-raw/src/scratch.rs`:
+> - **Tests (2026-10-03; all ran and passed in GitHub CI run 37134501679 at `b90c9307`, the
+>   kf-qemu one only there; the bites below were run locally on Linux 7.0).** `crates/kf-linux-raw/src/scratch.rs`:
 >   `a_sink_restores_the_canonical_tiling_after_qemu_has_advised_the_window` (cover with the advice,
 >   QEMU's advice after it, 600 place-then-sink cycles at distinct offsets, both `dump-guest-core`
 >   settings, every mapping's `VmFlags` checked); with the advice bitten out it fails at
