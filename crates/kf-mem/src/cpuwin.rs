@@ -1126,7 +1126,7 @@ mod tests {
             &crate::apply::ApplyCfg {
                 store_bytes: 8 << 30,
                 grain: 0x1000,
-                ram_offset: &|gpa, _| Some(gpa),
+                dma: &crate::dma::IdentityFn(|gpa, _| Some(gpa)),
                 usermode: None,
                 per_map_kind: true,
             },

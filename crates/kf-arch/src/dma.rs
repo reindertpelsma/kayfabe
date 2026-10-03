@@ -26,9 +26,65 @@
 //! Fail-closed throughout: a cell starts [`DmaRegime::Unset`] (refuses until the first publish), a
 //! device address space that shows neither guest RAM nor a translator is [`DmaRegime::Blocked`]
 //! (refuses), and an unknown wire value reads as [`DmaRegime::Translating`] (refuses).
+//!
+//! [`DevAddr`] names the address kind itself where the guest's statement is decoded (§3.1).
 
 use core::fmt;
 use core::sync::atomic::{AtomicU8, AtomicU64, Ordering};
+
+/// ★ **A guest device (DMA) address**: what the guest driver programmed into the device for system
+/// memory (its `dma_addr_t`), the fourth address kind of `docs/OWNER_RULINGS.md` §Q. It is a
+/// guest-physical address only while the device's [`DmaRegime`] admits, and an IOVA under a
+/// translating guest IOMMU.
+///
+/// Constructed at the **decode sites** ([`DevAddr::from_guest`]: the ABI decode of a USERD or
+/// error-notifier descriptor, a walked sysmem leaf, a copy-engine physical operand) and read as an
+/// integer only by the translator ([`DevAddr::translator_raw`]). No `From`/`Into` to or from any
+/// GPA type exists, on purpose.
+///
+/// ⊘ A **labelling aid, not the boundary** (`docs/design/V3_VIOMMU.md` §3.1): Rust cannot scope a
+/// getter to one crate, so until guest RAM is reachable only through the translator (Tier 3, §6)
+/// the guarantee is the regime gate ([`DmaRegimeCell::admitted`]) plus review.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DevAddr(u64);
+
+impl DevAddr {
+    /// The value the guest programmed, read as a device address. Called where the guest's
+    /// statement is decoded, and nowhere else.
+    #[must_use]
+    pub const fn from_guest(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    /// `self + n`, or `None` past the end of the 64-bit space.
+    #[must_use]
+    pub const fn checked_add(self, n: u64) -> Option<Self> {
+        match self.0.checked_add(n) {
+            Some(v) => Some(Self(v)),
+            None => None,
+        }
+    }
+
+    /// ⊘ **Translator only**: the integer the guest programmed, for the one boundary that turns a
+    /// device address into a guest-physical one (`docs/design/V3_VIOMMU.md` §3.2) and for test
+    /// fixtures. Any other caller is reading an IOVA as a GPA.
+    #[must_use]
+    pub const fn translator_raw(self) -> u64 {
+        self.0
+    }
+}
+
+impl fmt::Debug for DevAddr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "DevAddr({:#x})", self.0)
+    }
+}
+
+impl fmt::LowerHex for DevAddr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::LowerHex::fmt(&self.0, f)
+    }
+}
 
 /// What a device address the guest programs means right now (`docs/design/V3_VIOMMU.md` §4.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -181,6 +237,18 @@ impl DmaRegimeCell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A device address prints as the guest wrote it, orders by value, and overflows to `None`.
+    #[test]
+    fn a_device_address_carries_the_guest_value_unchanged() {
+        let a = DevAddr::from_guest(0x7fee_0000);
+        assert_eq!(format!("{a:#x}"), "0x7fee0000");
+        assert_eq!(format!("{a:?}"), "DevAddr(0x7fee0000)");
+        assert_eq!(a.checked_add(0x200), Some(DevAddr::from_guest(0x7fee_0200)));
+        assert_eq!(DevAddr::from_guest(u64::MAX).checked_add(1), None);
+        assert!(a < DevAddr::from_guest(0x7fee_0001));
+        assert_eq!(a.translator_raw(), 0x7fee_0000);
+    }
 
     /// The adapter's five wire values, and the fail-closed reading of every other one.
     #[test]

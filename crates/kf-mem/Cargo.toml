@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# ★ kf_arch::dma (DevAddr, DmaRegime): the device-address seam (src/dma.rs, docs/design/V3_VIOMMU.md §3).
+kf-arch.workspace = true
 kf-host.workspace = true
 kf-trap.workspace = true
 kf-cuda.workspace = true

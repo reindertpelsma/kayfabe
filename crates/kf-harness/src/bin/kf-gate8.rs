@@ -397,7 +397,11 @@ fn phase(
         gpu_us: vec![],
         in_flight_at_return: vec![],
     };
-    let mut m: Mgr<'_> = VaManager::new(walker, STORE_BYTES, Box::new(|_, _| None));
+    let mut m: Mgr<'_> = VaManager::new(
+        walker,
+        STORE_BYTES,
+        Box::new(kf_mem::dma::IdentityFn(|_, _| None)),
+    );
     let obs = |sp| Observed {
         host: Recorded::new(HostVas {
             rm,

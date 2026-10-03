@@ -578,9 +578,9 @@ impl DeclaredUserd {
     /// for every other reading.**
     ///
     /// ⊘ The narrowing is the point, and it is why this is a method rather than callers
-    /// matching: a `Sysmem` USERD's `base` is a **guest-physical** address, and a consumer
-    /// that read it out of the framebuffer would get a confident wrong number rather than an
-    /// error. `kf_arch::Aperture`'s own docs name the class — *"vidmem offset X and
+    /// matching: a `Sysmem` USERD's `base` is a **device (DMA) address** — guest-physical only
+    /// while the device's DMA regime admits (`kf_arch::dma::DevAddr`) — and a consumer that
+    /// read it out of the framebuffer would get a confident wrong number rather than an error. `kf_arch::Aperture`'s own docs name the class — *"vidmem offset X and
     /// sysmem offset X are different bytes on different devices"*.
     #[must_use]
     pub fn framebuffer_base(&self) -> Option<u64> {

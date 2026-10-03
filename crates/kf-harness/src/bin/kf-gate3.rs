@@ -112,7 +112,7 @@ impl Guest<'_> {
             self.root,
             &self.target,
             STORE_BYTES,
-            &ram_offset,
+            &kf_mem::dma::IdentityFn(ram_offset),
         )
         .map_err(|e| format!("{tag}: {e}"))?;
         let a = &p.applied;

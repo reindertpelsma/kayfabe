@@ -505,18 +505,28 @@ impl Window for Windows<'_> {
     }
 }
 
-/// The window with guest RAM resolved through the VMM's own layout.
+/// The window with guest RAM resolved through the device-address boundary.
 struct SlotWindow<'a> {
     mirror: &'a Mirror,
-    ram: &'a RamMap,
+    dma: crate::mem::DmaSpace<'a>,
 }
 impl Window for SlotWindow<'_> {
     fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
         match t {
             Target::CoherentSysmem | Target::NonCoherentSysmem => {
                 let (base, rlen) = self.mirror.ram?;
-                let (_, off) = self.ram.file_range(phys, len)?;
-                (off.checked_add(len)? <= rlen).then(|| base + off)
+                // ★ `V3_VIOMMU.md` §2 row 8: a physical-mode sysmem operand is a DEVICE address,
+                // resolved as exactly one piece, then base + offset. `None` loses the reason; a
+                // regime refusal is counted by the device's DMA regime cell.
+                let p = self
+                    .dma
+                    .piece(
+                        kf_arch::dma::DevAddr::from_guest(phys),
+                        len,
+                        kf_host::MapPerm::READ_WRITE,
+                    )
+                    .ok()?;
+                (p.off.checked_add(len)? <= rlen).then(|| base + p.off)
             }
             other => Windows(self.mirror).translate(other, phys, len),
         }
@@ -797,9 +807,14 @@ fn probe_operand(
             )
         }
         Target::CoherentSysmem | Target::NonCoherentSysmem => {
-            let host = ram
-                .file_range(phys, n as u64)
-                .and_then(|(_, off)| ram.at_file_offset(off, n as u64))
+            let host = crate::mem::DmaSpace::new(ram)
+                .piece(
+                    kf_arch::dma::DevAddr::from_guest(phys),
+                    n as u64,
+                    kf_host::MapPerm::READ_WRITE,
+                )
+                .ok()
+                .and_then(|p| ram.at_file_offset(p.off, n as u64))
                 .and_then(|(m, at)| {
                     let mut b = vec![0u8; n];
                     m.read_into(at, &mut b).then_some(b)
@@ -2747,17 +2762,22 @@ impl ChanPlane {
                     }
                 }
                 Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
-                    let (Some(ram), Some((_, off))) =
-                        (mirror.ram_obj, self.ram.file_range(base, 0x200))
-                    else {
+                    // ★ `V3_VIOMMU.md` §2 row 5: a device address, one piece for the host binding.
+                    let piece = crate::mem::DmaSpace::new(self.ram).piece(
+                        base,
+                        0x200,
+                        kf_host::MapPerm::READ_WRITE,
+                    );
+                    let (Some(ram), Ok(p)) = (mirror.ram_obj, &piece) else {
                         return refuse(
                             NV_ERR_NOT_SUPPORTED,
-                            format!(
-                                "sysmem USERD at {base:#x}: no guest-RAM object or memfd offset"
-                            ),
+                            match &piece {
+                                Err(e) => format!("sysmem USERD: {e}"),
+                                Ok(_) => format!("sysmem USERD at {base:#x}: no guest-RAM object"),
+                            },
                         );
                     };
-                    kf_chan::passthrough::UserdAt::Ram { ram, off }
+                    kf_chan::passthrough::UserdAt::Ram { ram, off: p.off }
                 }
                 other => {
                     return refuse(
@@ -2769,21 +2789,24 @@ impl ChanPlane {
             // ★ P5c: where the guest's error notifier record is, as an object + offset the host
             // can name — so the twin's RC record is written there by the HOST (its GSP), natively.
             let err_at: Option<(u32, u64, kf_arch::UserdMem)> = match a.error_notifier {
-                Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => {
-                    match (mirror.ram_obj, self.ram.file_range(gpa, 16)) {
-                        (Some(ram), Some((_, off))) => Some((
-                            ram,
-                            off,
-                            kf_arch::UserdMem::Sysmem {
-                                base: gpa,
-                                size: 16,
-                            },
-                        )),
-                        _ => {
+                Some(kf_arch::fault::ErrorNotifier::Sysmem { at }) => {
+                    // ★ `V3_VIOMMU.md` §2 row 6: a device address, one piece for the host binding.
+                    let piece = crate::mem::DmaSpace::new(self.ram).piece(
+                        at,
+                        16,
+                        kf_host::MapPerm::READ_WRITE,
+                    );
+                    match (mirror.ram_obj, piece) {
+                        (Some(ram), Ok(p)) => {
+                            Some((ram, p.off, kf_arch::UserdMem::Sysmem { base: at, size: 16 }))
+                        }
+                        (_, why) => {
                             self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
                             eprintln!(
-                                "kf3: chan {:#x}:{:#x} RC-UNARMED: sysmem notifier @{gpa:#x} has no guest-RAM object/offset",
-                                a.client, a.handle
+                                "kf3: chan {:#x}:{:#x} RC-UNARMED: sysmem notifier @{at:#x} has no guest-RAM object/offset{}",
+                                a.client,
+                                a.handle,
+                                why.err().map(|e| format!(" ({e})")).unwrap_or_default()
                             );
                             None
                         }
@@ -3182,14 +3205,11 @@ impl ChanPlane {
                 })
             }
             Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
-                let b = self
-                    .ram
-                    .block_for(base, 0x200)
-                    .ok_or_else(|| format!("USERD at guest-physical {base:#x}: no RAM block"))?;
-                Ok(UserdView::Ram {
-                    mem: b.mem,
-                    at: (base - b.gpa) as usize,
-                })
+                // ★ `V3_VIOMMU.md` §2 row 7: a device address, one block for a persistent view.
+                let (mem, at) = crate::mem::DmaSpace::new(self.ram)
+                    .view(base, 0x200)
+                    .map_err(|e| format!("USERD: {e}"))?;
+                Ok(UserdView::Ram { mem, at })
             }
             other => Err(format!(
                 "USERD not declared as a physical descriptor ({other:?})"
@@ -3379,7 +3399,7 @@ impl ChanPlane {
         };
         let win = SlotWindow {
             mirror: &mirror,
-            ram: self.ram,
+            dma: crate::mem::DmaSpace::new(self.ram),
         };
         let mut split = VaSplit {
             inbox: &self.inbox,

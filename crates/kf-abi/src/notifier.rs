@@ -267,7 +267,11 @@ impl ChannelNotifierWire {
             return Ok(Some(ErrorNotifier::Unreachable));
         }
         match aperture {
-            ADDR_SYSMEM => Ok(Some(ErrorNotifier::Sysmem { gpa: base })),
+            // ★ A decode site of the fourth address kind (`docs/design/V3_VIOMMU.md` §3.1): the
+            // guest driver's DMA address, a GPA only while the device's DMA regime admits.
+            ADDR_SYSMEM => Ok(Some(ErrorNotifier::Sysmem {
+                at: kf_arch::dma::DevAddr::from_guest(base),
+            })),
             ADDR_FBMEM => Ok(Some(ErrorNotifier::Framebuffer { off: base })),
             _ => Ok(Some(ErrorNotifier::Unreachable)),
         }
@@ -539,7 +543,11 @@ impl ChannelUserdMemWire {
         let address_space = u32_at(bytes, self.userd_mem + 16)?;
         Ok(Some(match address_space {
             crate::fmbpromote::ADDR_FBMEM => UserdMem::Framebuffer { base, size },
-            crate::fmbpromote::ADDR_SYSMEM => UserdMem::Sysmem { base, size },
+            // ★ A decode site of the fourth address kind (`docs/design/V3_VIOMMU.md` §3.1).
+            crate::fmbpromote::ADDR_SYSMEM => UserdMem::Sysmem {
+                base: kf_arch::dma::DevAddr::from_guest(base),
+                size,
+            },
             _ => UserdMem::Undeclared { address_space },
         }))
     }
@@ -728,7 +736,9 @@ mod tests {
             let p = params(wire, NOTIFIER_TYPE_CTXDMA, 0xdead_0000, 64, ADDR_SYSMEM);
             assert_eq!(
                 wire.decode(&p),
-                Ok(Some(ErrorNotifier::Sysmem { gpa: 0xdead_0000 }))
+                Ok(Some(ErrorNotifier::Sysmem {
+                    at: kf_arch::dma::DevAddr::from_guest(0xdead_0000)
+                }))
             );
         }
         assert_eq!(
@@ -750,7 +760,9 @@ mod tests {
             let p = params(w, kind, 0x4000, 64, ADDR_SYSMEM);
             assert_eq!(
                 w.decode(&p),
-                Ok(Some(ErrorNotifier::Sysmem { gpa: 0x4000 })),
+                Ok(Some(ErrorNotifier::Sysmem {
+                    at: kf_arch::dma::DevAddr::from_guest(0x4000)
+                })),
                 "both notifier kinds share one record layout"
             );
         }
@@ -797,7 +809,9 @@ mod tests {
         assert_eq!(p.len(), w.needs());
         assert_eq!(
             w.decode(&p),
-            Ok(Some(ErrorNotifier::Sysmem { gpa: 0x9000 }))
+            Ok(Some(ErrorNotifier::Sysmem {
+                at: kf_arch::dma::DevAddr::from_guest(0x9000)
+            }))
         );
     }
 }
@@ -900,7 +914,7 @@ mod engine_wire_tests {
         assert_eq!(
             ChannelUserdMemWire::V580.decode(&p),
             Ok(Some(UserdMem::Sysmem {
-                base: 0x0102_3000,
+                base: kf_arch::dma::DevAddr::from_guest(0x0102_3000),
                 size: 512
             })),
             "guest RAM is a legal USERD location and must be refusable BY NAME"

@@ -48,8 +48,15 @@ use crate::fault::{GspFault, RamRefused, RegionError};
 ///
 /// `Send` (not `Sync`): an implementation is reached through `&mut`, exactly like
 /// `kayfabe_vmm::Vmm`, and its synchronisation is the adapter's.
+///
+/// ★ 2026-10-04 (`docs/design/V3_VIOMMU.md` §2 row 4, §3.3): every address handed to this port —
+/// the LibOS arguments, RMARGS, the message-queue region and its own page table — is one the guest
+/// driver programmed for the device, i.e. a **device (DMA) address** (`kf_arch::dma::DevAddr`): a
+/// guest-physical address only while no guest IOMMU translates the device. The parameter is still
+/// named `gpa` and typed `u64`; the implementation decodes it as a device address and resolves it
+/// at the VMM's device-address boundary (`kf-qemu`'s `DmaSpace`), refusing by name otherwise.
 pub trait GuestRam: Send {
-    /// Read `buf.len()` bytes of guest RAM at `gpa`.
+    /// Read `buf.len()` bytes of guest RAM at device address `gpa`.
     ///
     /// # Errors
     ///
@@ -57,7 +64,7 @@ pub trait GuestRam: Send {
     /// implementation that cannot fill `buf` entirely must refuse.
     fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), RamRefused>;
 
-    /// Write `bytes` to guest RAM at `gpa`.
+    /// Write `bytes` to guest RAM at device address `gpa`.
     ///
     /// # Errors
     ///

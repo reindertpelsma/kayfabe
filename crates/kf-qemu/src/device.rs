@@ -744,7 +744,9 @@ impl Device {
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
             fb_length,
-            Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
+            // ★ `V3_VIOMMU.md` §3.3: walked sysmem leaves resolve through the device-address
+            // boundary (the identity while the DMA regime admits; refused by name otherwise).
+            Box::new(crate::mem::DmaSpace::new(ram)),
         )
         .with_page_grain(family.mmu_format().small_page_bytes())
         // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM
@@ -2606,43 +2608,41 @@ impl Device {
 /// ★ P5c: the RC fd's poller tag, past every engine's (`OTHER_TAG_BASE + engine index`).
 const RC_TAG_OFFSET: u64 = 1 << 16;
 
-/// Guest RAM as the GSP FSM reads it — through the blocks QEMU registered.
+/// Guest RAM as the GSP FSM reads it — through the device-address boundary.
+///
+/// ★ `V3_VIOMMU.md` §2 row 4: every address this port is handed (the LibOS arguments, RMARGS, the
+/// message-queue region and its page table, FWSEC DMEM, FSP COT) is one the guest driver programmed
+/// for the device, so this is where those values are decoded as [`kf_arch::dma::DevAddr`]. The
+/// `GuestRam` trait keeps `u64` (its `kf-gsp` file is edited by in-flight branches); its docs say
+/// "device address".
 struct Ram<'a>(&'a Device);
 
 impl GuestRam for Ram<'_> {
     fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), RamRefused> {
-        if let Some(b) = self.0.ram.block_for(gpa, buf.len() as u64)
-            && b.mem.read_into((gpa - b.gpa) as usize, buf)
-        {
-            return Ok(());
-        }
-        self.0.counters.ram_refused.fetch_add(1, Ordering::Relaxed);
-        Err(RamRefused {
-            gpa,
-            len: buf.len(),
-            why: self
-                .0
-                .ram
-                .dma_refusal()
-                .unwrap_or("no guest-RAM block QEMU registered covers this range"),
-        })
+        let (at, len) = (kf_arch::dma::DevAddr::from_guest(gpa), buf.len());
+        crate::mem::DmaSpace::new(self.0.ram)
+            .read(at, buf)
+            .map_err(|e| {
+                self.0.counters.ram_refused.fetch_add(1, Ordering::Relaxed);
+                RamRefused {
+                    gpa,
+                    len,
+                    why: crate::mem::dma_refusal_why(&e),
+                }
+            })
     }
     fn write(&mut self, gpa: u64, bytes: &[u8]) -> Result<(), RamRefused> {
-        if let Some(b) = self.0.ram.block_for(gpa, bytes.len() as u64)
-            && b.mem.write_from((gpa - b.gpa) as usize, bytes)
-        {
-            return Ok(());
-        }
-        self.0.counters.ram_refused.fetch_add(1, Ordering::Relaxed);
-        Err(RamRefused {
-            gpa,
-            len: bytes.len(),
-            why: self
-                .0
-                .ram
-                .dma_refusal()
-                .unwrap_or("no guest-RAM block QEMU registered covers this range"),
-        })
+        let (at, len) = (kf_arch::dma::DevAddr::from_guest(gpa), bytes.len());
+        crate::mem::DmaSpace::new(self.0.ram)
+            .write(at, bytes)
+            .map_err(|e| {
+                self.0.counters.ram_refused.fetch_add(1, Ordering::Relaxed);
+                RamRefused {
+                    gpa,
+                    len,
+                    why: crate::mem::dma_refusal_why(&e),
+                }
+            })
     }
 }
 

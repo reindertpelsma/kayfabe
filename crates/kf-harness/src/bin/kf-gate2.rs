@@ -97,8 +97,15 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let publish = |walk: &mut WalkKernel, tag: &str| -> Result<(usize, usize, usize), String> {
         let t0 = std::time::Instant::now();
         // Gate 2 has no guest RAM: a sysmem leaf is refused by name, never mapped as a store slice.
-        let p = publish(walk, 0, root, &target, STORE_BYTES, &|_, _| None)
-            .map_err(|e| format!("{tag}: {e}"))?;
+        let p = publish(
+            walk,
+            0,
+            root,
+            &target,
+            STORE_BYTES,
+            &kf_mem::dma::IdentityFn(|_, _| None),
+        )
+        .map_err(|e| format!("{tag}: {e}"))?;
         let a = &p.applied;
         println!(
             "MEASURE publish_{tag} diff_runs={} mapped={} unmapped={} refused={} invalidated={} gpu_us={} us={}{}",

@@ -90,16 +90,18 @@ pub enum MmuFaultAccess {
 /// not emitted at all; see `kayfabe_core::fault::NotifierGap`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ErrorNotifier {
-    /// The notifier lives in **guest RAM** at this guest-physical address, and this port
-    /// has a write port for it.
+    /// The notifier lives in **guest RAM** at this device address, and this port has a write
+    /// port for it.
     ///
     /// The address is `errorNotifierMem.base`, which CPU-RM already added the notifier's
     /// own offset into (`kernel_channel.c:557-560`), so index 0 of the
     /// `NV_CHANNELGPFIFO_NOTIFICATION_TYPE_ERROR` array is exactly here — no further
     /// arithmetic, and none invented.
     Sysmem {
-        /// Guest-physical address of the 16-byte notification record.
-        gpa: u64,
+        /// ★ 2026-10-04 (`docs/design/V3_VIOMMU.md` §3.1): the **device (DMA) address** of the
+        /// 16-byte notification record — a guest-physical address only while the device's DMA
+        /// regime admits (`crate::dma::DevAddr`). Was `gpa: u64`.
+        at: crate::dma::DevAddr,
     },
     /// ★ P5c: the notifier lives in the guest's **framebuffer** (`ADDR_FBMEM`) at this offset —
     /// in v3 an offset into the single store, which the host twin's error context can name

@@ -13,6 +13,7 @@ pub use store::{Store, StoreRefusal};
 pub mod apply;
 pub mod batch;
 pub mod cpuwin;
+pub mod dma;
 pub mod ledger;
 pub mod maplog;
 pub mod vasmgr;

@@ -130,8 +130,15 @@ impl Shared<'_> {
                 .map(|_| gpa)
         };
         let Mm { walk, target, .. } = &mut *g;
-        let p = publish(walk, 0, self.root, target, STORE_BYTES, &layout)
-            .map_err(|e| format!("{tag}: {e}"))?;
+        let p = publish(
+            walk,
+            0,
+            self.root,
+            target,
+            STORE_BYTES,
+            &kf_mem::dma::IdentityFn(layout),
+        )
+        .map_err(|e| format!("{tag}: {e}"))?;
         let a = p.applied;
         if a.refused > 0 {
             return Err(format!(

@@ -49,14 +49,19 @@ pub enum LeafRefusal {
         /// Bytes.
         len: u64,
     },
-    /// A sysmem leaf naming guest-physical memory the VMM's layout does not back contiguously.
-    NotGuestRam {
+    /// ★ 2026-10-04 (`docs/design/V3_VIOMMU.md` §3.3): a sysmem leaf whose **device address** did
+    /// not resolve to guest RAM — not backed in one block, refused by the device's DMA regime, or
+    /// fragmented. Replaces `NotGuestRam { gpa }`, which named the address a GPA it is only while
+    /// no guest IOMMU translates it.
+    DeviceAddress {
         /// Guest VA.
         va: u64,
-        /// Guest-physical address.
-        gpa: u64,
+        /// The leaf's device address.
+        at: kf_arch::dma::DevAddr,
         /// Bytes.
         len: u64,
+        /// Why, by name.
+        why: crate::dma::DmaRefusal,
     },
     /// Peer or an unknown aperture.
     Aperture {
@@ -69,45 +74,61 @@ pub enum LeafRefusal {
 
 /// ★ **Classify walked leaves by APERTURE** into rows of the two ground truths. A vidmem leaf is a
 /// slice of the store (`off` = GPGA); a sysmem leaf is a slice of the guest-RAM object, at the
-/// memfd offset `ram_offset(gpa, len)` gives — the VMM's own guest-physical layout, which is NOT
-/// the identity once there is a PCI hole. ⊘ The walker deliberately leaves sysmem leaves unbounded
-/// (w825: it cannot know the layout); THIS is the bound.
+/// offsets `dma` resolves its **device address** to — the VMM's own guest-physical layout, which is
+/// NOT the identity once there is a PCI hole, behind the guest's IOMMU when one translates. ⊘ The
+/// walker deliberately leaves sysmem leaves unbounded (w825: it cannot know the layout); THIS is
+/// the bound.
+///
+/// ★ 2026-10-04 (`docs/design/V3_VIOMMU.md` §3.3): the walker's report is the decode site of a
+/// leaf's device address, and a sysmem leaf yields one row per resolved piece (in device order,
+/// consecutive VAs). Under the identity a leaf is always one piece, so the rows are the ones the
+/// raw `ram_offset` closure this replaces produced.
 ///
 /// # Errors
 /// The first leaf refused, by name.
 pub fn desired_from_leaves(
     leaves: impl IntoIterator<Item = (u64, u64, u64, u8)>,
     store_bytes: u64,
-    ram_offset: &dyn Fn(u64, u64) -> Option<u64>,
+    dma: &dyn crate::dma::DmaResolve,
 ) -> Result<Vec<Desired>, LeafRefusal> {
-    leaves
-        .into_iter()
-        .map(|(va, at, len, ap)| match ap {
-            AP_VIDMEM => at
-                .checked_add(len)
-                .filter(|&e| e <= store_bytes)
-                .map(|_| Desired {
-                    va,
-                    len,
-                    off: at,
-                    ram: false,
-                    kind: 0,
-                    perm: kf_host::MapPerm::READ_WRITE,
-                })
-                .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len }),
-            AP_SYS_COHERENT | AP_SYS_NONCOHERENT => ram_offset(at, len)
-                .map(|off| Desired {
-                    va,
-                    len,
-                    off,
-                    ram: true,
-                    kind: 0,
-                    perm: kf_host::MapPerm::READ_WRITE,
-                })
-                .ok_or(LeafRefusal::NotGuestRam { va, gpa: at, len }),
-            _ => Err(LeafRefusal::Aperture { va, ap }),
-        })
-        .collect()
+    let mut rows = Vec::new();
+    for (va, at, len, ap) in leaves {
+        match ap {
+            AP_VIDMEM => rows.push(
+                at.checked_add(len)
+                    .filter(|&e| e <= store_bytes)
+                    .map(|_| Desired {
+                        va,
+                        len,
+                        off: at,
+                        ram: false,
+                        kind: 0,
+                        perm: kf_host::MapPerm::READ_WRITE,
+                    })
+                    .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len })?,
+            ),
+            AP_SYS_COHERENT | AP_SYS_NONCOHERENT => {
+                let at = kf_arch::dma::DevAddr::from_guest(at);
+                let pieces = dma
+                    .resolve(at, len, kf_host::MapPerm::READ_WRITE)
+                    .map_err(|why| LeafRefusal::DeviceAddress { va, at, len, why })?;
+                let mut piece_va = va;
+                for p in pieces {
+                    rows.push(Desired {
+                        va: piece_va,
+                        len: p.len,
+                        off: p.off,
+                        ram: true,
+                        kind: 0,
+                        perm: p.perm,
+                    });
+                    piece_va = piece_va.saturating_add(p.len);
+                }
+            }
+            _ => return Err(LeafRefusal::Aperture { va, ap }),
+        }
+    }
+    Ok(rows)
 }
 
 /// ★★★ **What one [`MapTarget::map`] did** — P6b ruling (a): *only mappings we made are ours.*
@@ -469,5 +490,140 @@ impl MapTarget for HostVas<'_> {
         self.rm
             .unmap_range(self.space, va, len, defer)
             .map_err(|e| format!("unmap range {va:#x}+{len:#x}: {e:?}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dma::{DmaRefusal, DmaResolve, IdentityFn, RamPiece};
+    use kf_arch::dma::{DevAddr, DmaRegime};
+    use kf_host::MapPerm;
+
+    /// A resolver that answers the same thing for every device range.
+    struct Answer(Result<Vec<RamPiece>, DmaRefusal>);
+    impl DmaResolve for Answer {
+        fn resolve(&self, _: DevAddr, _: u64, _: MapPerm) -> Result<Vec<RamPiece>, DmaRefusal> {
+            self.0.clone()
+        }
+    }
+
+    const STORE: u64 = 1 << 30;
+
+    fn row(va: u64, len: u64, off: u64, ram: bool) -> Desired {
+        Desired {
+            va,
+            len,
+            off,
+            ram,
+            kind: 0,
+            perm: MapPerm::READ_WRITE,
+        }
+    }
+
+    /// ★ `docs/design/V3_VIOMMU.md` §3.3, golden: under the identity the seam yields exactly the
+    /// rows the raw `ram_offset(gpa, len)` closure it replaced did — a vidmem leaf at its GPGA, each
+    /// sysmem leaf (either coherence) at the layout's memfd offset, one row per leaf.
+    #[test]
+    fn the_identity_yields_the_rows_the_raw_closure_did() {
+        // A layout with a hole: guest RAM below 2 GiB at memfd offset = GPA, above 4 GiB at
+        // GPA - 2 GiB (q35's split around the PCI hole); nothing between.
+        let layout = IdentityFn(|gpa: u64, len: u64| match gpa {
+            g if g.checked_add(len)? <= 0x8000_0000 => Some(g),
+            g if g >= 0x1_0000_0000 => Some(g - 0x8000_0000),
+            _ => None,
+        });
+        let leaves = [
+            (0x10_0000, 0x4000, 0x2000, AP_VIDMEM),
+            (0x20_0000, 0x7000_0000, 0x1000, AP_SYS_COHERENT),
+            (0x30_0000, 0x1_0000_2000, 0x3000, AP_SYS_NONCOHERENT),
+        ];
+        assert_eq!(
+            desired_from_leaves(leaves, STORE, &layout),
+            Ok(vec![
+                row(0x10_0000, 0x2000, 0x4000, false),
+                row(0x20_0000, 0x1000, 0x7000_0000, true),
+                row(0x30_0000, 0x3000, 0x8000_2000, true),
+            ])
+        );
+        // The hole is refused by name, with the leaf's device address and the reason.
+        let hole = (0x40_0000, 0x9000_0000, 0x1000, AP_SYS_COHERENT);
+        let at = DevAddr::from_guest(0x9000_0000);
+        assert_eq!(
+            desired_from_leaves([hole], STORE, &layout),
+            Err(LeafRefusal::DeviceAddress {
+                va: 0x40_0000,
+                at,
+                len: 0x1000,
+                why: DmaRefusal::NotGuestRam { at, len: 0x1000 },
+            })
+        );
+    }
+
+    /// A refusing resolver (the device's DMA regime) refuses the sysmem leaf by name and never
+    /// touches a vidmem one: the store is not behind the guest's IOMMU.
+    #[test]
+    fn a_refused_device_address_names_the_leaf_and_the_regime() {
+        let at = DevAddr::from_guest(0x7000);
+        let why = DmaRefusal::Regime {
+            at,
+            len: 0x1000,
+            regime: DmaRegime::Translating,
+        };
+        let refusing = Answer(Err(why));
+        assert_eq!(
+            desired_from_leaves(
+                [(0x5000, 0x7000, 0x1000, AP_SYS_COHERENT)],
+                STORE,
+                &refusing
+            ),
+            Err(LeafRefusal::DeviceAddress {
+                va: 0x5000,
+                at,
+                len: 0x1000,
+                why
+            })
+        );
+        assert_eq!(
+            desired_from_leaves([(0x5000, 0x7000, 0x1000, AP_VIDMEM)], STORE, &refusing),
+            Ok(vec![row(0x5000, 0x1000, 0x7000, false)])
+        );
+    }
+
+    /// One device run that resolves to two pieces becomes two rows at consecutive VAs, each with
+    /// its own offset and permission (the shape a translating IOMMU produces; the caller decides
+    /// whether it can place it).
+    #[test]
+    fn two_pieces_are_two_rows_at_consecutive_vas() {
+        let ro = MapPerm {
+            read_only: true,
+            ..MapPerm::READ_WRITE
+        };
+        let pieces = Answer(Ok(vec![
+            RamPiece {
+                off: 0x9000,
+                len: 0x1000,
+                perm: MapPerm::READ_WRITE,
+            },
+            RamPiece {
+                off: 0x3000,
+                len: 0x2000,
+                perm: ro,
+            },
+        ]));
+        assert_eq!(
+            desired_from_leaves(
+                [(0x8000, 0x1_0000, 0x3000, AP_SYS_COHERENT)],
+                STORE,
+                &pieces
+            ),
+            Ok(vec![
+                row(0x8000, 0x1000, 0x9000, true),
+                Desired {
+                    perm: ro,
+                    ..row(0x9000, 0x2000, 0x3000, true)
+                },
+            ])
+        );
     }
 }

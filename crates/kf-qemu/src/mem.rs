@@ -193,6 +193,162 @@ pub fn dma_regime_why(regime: kf_arch::dma::DmaRegime) -> Option<&'static str> {
     }
 }
 
+/// The refusal sentence for a device-address refusal, for a port whose reason is a `&'static str`
+/// (the GSP's guest-RAM port).
+#[must_use]
+pub fn dma_refusal_why(e: &kf_mem::dma::DmaRefusal) -> &'static str {
+    use kf_mem::dma::DmaRefusal as E;
+    match e {
+        E::Regime { regime, .. } => dma_regime_why(*regime)
+            .unwrap_or("the device's DMA regime changed under the access: refused"),
+        E::NotGuestRam { .. } => "no guest-RAM block QEMU registered covers this range",
+        E::Fragmented { .. } => {
+            "fragmented device range: an access split across guest-RAM pieces is not built"
+        }
+    }
+}
+
+/// ★★ **The device-address boundary** (`docs/design/V3_VIOMMU.md` §3.2; Tier 2 of the seam,
+/// 2026-10-04). A guest device (DMA) address ([`DevAddr`](kf_arch::dma::DevAddr)) becomes guest
+/// memory here and nowhere else in this crate, with two named exceptions that still reach
+/// [`RamMap`] directly, behind the same regime gate:
+/// - display memory (`display.rs`): it moves here after `v3-broker`, which rewrites that file,
+///   merges (Tier 3, §6);
+/// - the PRAMIN window's sysmem target ([`MemPlane`]'s `PraminPool` closure): `v3-cand-1` reworks
+///   those lines, so it moves here after that merges.
+///
+/// Hop 1, `translate`: a device address to a guest-physical one. In the Direct and Identity
+/// regimes it is the raw value; every other regime refuses (the interim, §4.3). The IOVA
+/// translation of §5 (a notifier-fed shadow) lands in that one function. Hop 2: [`RamMap`]'s
+/// guest-RAM-only lookup (`docs/OWNER_RULINGS.md` §Q: a device address may reach *"only guest ram
+/// or its bar or an error"*; the device's own BAR is refused).
+///
+/// ⊘ Not yet the compile-time boundary: [`RamMap`]'s lookups are still public (Tier 3).
+#[derive(Debug, Clone, Copy)]
+pub struct DmaSpace<'a> {
+    ram: &'a RamMap,
+}
+
+impl<'a> DmaSpace<'a> {
+    /// The boundary over the device's guest-RAM map.
+    #[must_use]
+    pub fn new(ram: &'a RamMap) -> Self {
+        Self { ram }
+    }
+
+    /// Hop 1: the guest-physical address `[at, at+len)` names, while the regime admits.
+    fn translate(
+        &self,
+        at: kf_arch::dma::DevAddr,
+        len: u64,
+    ) -> Result<u64, kf_mem::dma::DmaRefusal> {
+        if self.ram.dma.admit() {
+            Ok(at.translator_raw())
+        } else {
+            Err(kf_mem::dma::DmaRefusal::Regime {
+                at,
+                len,
+                regime: self.ram.dma.get(),
+            })
+        }
+    }
+
+    /// Exactly one piece of the guest-RAM object for `[at, at+len)` (its memfd offset), with
+    /// `want` — for one placement, a copy-engine physical operand, a USERD slot or an error
+    /// notifier. No allocation.
+    ///
+    /// # Errors
+    /// [`kf_mem::dma::DmaRefusal`], by name.
+    pub fn piece(
+        &self,
+        at: kf_arch::dma::DevAddr,
+        len: u64,
+        want: kf_host::MapPerm,
+    ) -> Result<kf_mem::dma::RamPiece, kf_mem::dma::DmaRefusal> {
+        let gpa = self.translate(at, len)?;
+        let (_, off) = self
+            .ram
+            .file_range(gpa, len)
+            .ok_or(kf_mem::dma::DmaRefusal::NotGuestRam { at, len })?;
+        Ok(kf_mem::dma::RamPiece {
+            off,
+            len,
+            perm: want,
+        })
+    }
+
+    /// The guest-RAM block holding `[at, at+len)` and the range's offset inside it — for a CPU
+    /// access, or a persistent view (a Translated channel's USERD). Exactly one block.
+    ///
+    /// # Errors
+    /// [`kf_mem::dma::DmaRefusal`], by name.
+    pub fn view(
+        &self,
+        at: kf_arch::dma::DevAddr,
+        len: u64,
+    ) -> Result<(RawRegion, usize), kf_mem::dma::DmaRefusal> {
+        let gpa = self.translate(at, len)?;
+        let b = self
+            .ram
+            .block_for(gpa, len)
+            .ok_or(kf_mem::dma::DmaRefusal::NotGuestRam { at, len })?;
+        Ok((b.mem, (gpa - b.gpa) as usize))
+    }
+
+    /// Read `buf.len()` bytes at `at` — all of them or none.
+    ///
+    /// # Errors
+    /// [`kf_mem::dma::DmaRefusal`], by name.
+    pub fn read(
+        &self,
+        at: kf_arch::dma::DevAddr,
+        buf: &mut [u8],
+    ) -> Result<(), kf_mem::dma::DmaRefusal> {
+        let len = buf.len() as u64;
+        let (mem, off) = self.view(at, len)?;
+        mem.read_into(off, buf)
+            .then_some(())
+            .ok_or(kf_mem::dma::DmaRefusal::NotGuestRam { at, len })
+    }
+
+    /// Write `bytes` at `at` — all of them or none.
+    ///
+    /// # Errors
+    /// [`kf_mem::dma::DmaRefusal`], by name.
+    pub fn write(
+        &self,
+        at: kf_arch::dma::DevAddr,
+        bytes: &[u8],
+    ) -> Result<(), kf_mem::dma::DmaRefusal> {
+        let len = bytes.len() as u64;
+        let (mem, off) = self.view(at, len)?;
+        mem.write_from(off, bytes)
+            .then_some(())
+            .ok_or(kf_mem::dma::DmaRefusal::NotGuestRam { at, len })
+    }
+}
+
+/// The VA manager's resolver for walked sysmem leaves (`kf_mem::ledger::desired_from_leaves`).
+impl kf_mem::dma::DmaResolve for DmaSpace<'_> {
+    fn resolve(
+        &self,
+        at: kf_arch::dma::DevAddr,
+        len: u64,
+        want: kf_host::MapPerm,
+    ) -> Result<Vec<kf_mem::dma::RamPiece>, kf_mem::dma::DmaRefusal> {
+        self.piece(at, len, want).map(|p| vec![p])
+    }
+
+    fn resolve_one(
+        &self,
+        at: kf_arch::dma::DevAddr,
+        len: u64,
+        want: kf_host::MapPerm,
+    ) -> Result<kf_mem::dma::RamPiece, kf_mem::dma::DmaRefusal> {
+        self.piece(at, len, want)
+    }
+}
+
 /// ★ An armed CPU view of a store slice: the node whose `mmap` context RM registered, and the
 /// `pLinearAddress` cookie its release is keyed by.
 #[derive(Debug)]
@@ -2301,6 +2457,43 @@ mod tests {
                 "file_range, {r:?}"
             );
             assert_eq!(ram.dma_refusal().is_none(), r.admits(), "{r:?}");
+        }
+    }
+
+    /// ★ `docs/design/V3_VIOMMU.md` §3.2 — the device-address boundary refuses BY NAME: in a regime
+    /// that does not admit, every verb (one piece, a view, a read, a write, the leaf resolver)
+    /// answers `Regime` with that regime and counts it; in one that admits, the same empty map
+    /// answers `NotGuestRam` (hop 2's guest-RAM-only lookup), uncounted.
+    #[test]
+    fn the_device_address_boundary_names_the_regime_or_the_hole() {
+        use kf_arch::dma::{DevAddr, DmaRegime};
+        use kf_mem::dma::{DmaRefusal, DmaResolve};
+        let rw = kf_host::MapPerm::READ_WRITE;
+        let at = DevAddr::from_guest(0x7fee_0000);
+        for r in DmaRegime::ALL {
+            let ram = RamMap::default();
+            ram.dma.set(r);
+            let dma = DmaSpace::new(&ram);
+            let want = |len: u64| {
+                if r.admits() {
+                    DmaRefusal::NotGuestRam { at, len }
+                } else {
+                    DmaRefusal::Regime { at, len, regime: r }
+                }
+            };
+            assert_eq!(dma.piece(at, 0x200, rw), Err(want(0x200)), "{r:?}");
+            assert_eq!(dma.resolve_one(at, 16, rw), Err(want(16)), "{r:?}");
+            assert_eq!(dma.resolve(at, 0x1000, rw), Err(want(0x1000)), "{r:?}");
+            assert_eq!(dma.view(at, 0x200).err(), Some(want(0x200)), "{r:?}");
+            assert_eq!(dma.read(at, &mut [0u8; 8]), Err(want(8)), "{r:?}");
+            assert_eq!(dma.write(at, &[0u8; 4]), Err(want(4)), "{r:?}");
+            assert_eq!(ram.dma.refused(), if r.admits() { 0 } else { 6 }, "{r:?}");
+            let why = dma_refusal_why(&want(8));
+            if r.admits() {
+                assert!(why.contains("no guest-RAM block"), "{r:?}: {why}");
+            } else {
+                assert_eq!(Some(why), dma_regime_why(r), "{r:?}");
+            }
         }
     }
 

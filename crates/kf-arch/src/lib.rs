@@ -302,8 +302,11 @@ pub enum UserdMem {
     /// pin and by no framebuffer join. Carried so it can be **refused by name** rather than
     /// by absence.
     Sysmem {
-        /// Guest-physical address of the 512-byte slot.
-        base: u64,
+        /// ★ 2026-10-04 (`docs/design/V3_VIOMMU.md` §3.1): the **device (DMA) address** of the
+        /// 512-byte slot — the guest driver's `dma_addr_t`. ⊘ Not a guest-physical address: it
+        /// is one only while the device's DMA regime admits ([`dma::DevAddr`]), and an IOVA under
+        /// a translating guest IOMMU. (Before this it was typed, and documented, as a GPA.)
+        base: dma::DevAddr,
         /// The sub-memdesc's size.
         size: u64,
     },

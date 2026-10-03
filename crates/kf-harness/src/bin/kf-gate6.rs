@@ -140,7 +140,14 @@ fn run(l: &mut Checks) -> Result<(), String> {
         store,
         ram_obj: None,
     };
-    let pubd = publish(&mut walk, 0, tree.root, &target, STORE_BYTES, &|_, _| None)?;
+    let pubd = publish(
+        &mut walk,
+        0,
+        tree.root,
+        &target,
+        STORE_BYTES,
+        &kf_mem::dma::IdentityFn(|_, _| None),
+    )?;
     let ap = &pubd.applied;
     l.check(
         "process_vas_mirrored",

@@ -2749,7 +2749,9 @@ fn the_notifier_is_the_only_field_past_the_prefix_and_only_where_a_tree_was_read
     let bench = table_for(BENCH_DRIVER).expect("bench");
     assert_eq!(
         bench.decode_channel_error_notifier(&params),
-        Ok(Some(ErrorNotifier::Sysmem { gpa: 0x7fee_0000 })),
+        Ok(Some(ErrorNotifier::Sysmem {
+            at: kf_arch::dma::DevAddr::from_guest(0x7fee_0000)
+        })),
         "580.159.04's tree was read, so the field is readable"
     );
 
@@ -2765,7 +2767,9 @@ fn the_notifier_is_the_only_field_past_the_prefix_and_only_where_a_tree_was_read
     .expect("550.54.14 is measured");
     assert_eq!(
         old.decode_channel_error_notifier(&params),
-        Ok(Some(ErrorNotifier::Sysmem { gpa: 0x7fee_0000 })),
+        Ok(Some(ErrorNotifier::Sysmem {
+            at: kf_arch::dma::DevAddr::from_guest(0x7fee_0000)
+        })),
         "550.54.14's measured NV_CHANNEL_ALLOC_PARAMS puts errorNotifierMem at +248 too"
     );
 
@@ -2789,7 +2793,9 @@ fn the_notifier_is_the_only_field_past_the_prefix_and_only_where_a_tree_was_read
     };
     assert_eq!(
         facts.error_notifier,
-        Some(ErrorNotifier::Sysmem { gpa: 0x7fee_0000 }),
+        Some(ErrorNotifier::Sysmem {
+            at: kf_arch::dma::DevAddr::from_guest(0x7fee_0000)
+        }),
         "★ the declared notifier reaches AllocFacts — the seam is wired, not merely correct"
     );
 }

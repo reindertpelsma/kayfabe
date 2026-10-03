@@ -804,7 +804,7 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     pub table: VasTable<T>,
     walker: W,
     store_bytes: u64,
-    ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>,
+    dma: Box<dyn crate::dma::DmaResolve + Send>,
     pending: Vec<Want>,
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
@@ -824,19 +824,16 @@ pub struct VaManager<W: Walker, T: MapTarget> {
 }
 
 impl<W: Walker, T: MapTarget> VaManager<W, T> {
-    /// A manager over a store of `store_bytes`. `ram_offset(gpa, len)` is the VMM's guest-RAM
-    /// layout (the memfd offset of a sysmem leaf), `None` where it backs nothing contiguously.
-    pub fn new(
-        walker: W,
-        store_bytes: u64,
-        ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>,
-    ) -> Self {
+    /// A manager over a store of `store_bytes`. `dma` resolves a sysmem leaf's device address to
+    /// the guest-RAM object (`docs/design/V3_VIOMMU.md` §3.3: the VMM's guest-RAM layout, behind
+    /// the device's DMA regime), refusing by name where it backs nothing.
+    pub fn new(walker: W, store_bytes: u64, dma: Box<dyn crate::dma::DmaResolve + Send>) -> Self {
         let slots = walker.slots();
         VaManager {
             table: VasTable::new(store_bytes, slots),
             walker,
             store_bytes,
-            ram_offset,
+            dma,
             pending: Vec::new(),
             inflight: None,
             splits_done: Vec::new(),
@@ -1279,7 +1276,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let cfg = ApplyCfg {
             store_bytes: self.store_bytes,
             grain: self.page_grain,
-            ram_offset: &*self.ram_offset,
+            dma: &*self.dma,
             usermode: self.usermode,
             per_map_kind: self.per_map_kind,
         };
@@ -1837,7 +1834,7 @@ mod tests {
         let m = VaManager::new(
             ModelWalker::new(tables.clone()),
             STORE,
-            Box::new(|gpa, _| Some(gpa)),
+            Box::new(crate::dma::IdentityFn(|gpa, _| Some(gpa))),
         );
         let mut r = Rig {
             m,

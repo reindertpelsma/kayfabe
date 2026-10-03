@@ -188,7 +188,7 @@ pub fn publish(
     root: u64,
     target: &dyn MapTarget,
     store_bytes: u64,
-    ram_offset: &dyn Fn(u64, u64) -> Option<u64>,
+    dma: &dyn kf_mem::dma::DmaResolve,
 ) -> Result<Published, String> {
     walk.submit(&[WalkEntry { pdb: root, slot }])
         .map_err(|e| e.to_string())?;
@@ -214,7 +214,7 @@ pub fn publish(
         &ApplyCfg {
             store_bytes,
             grain: 0x1000,
-            ram_offset,
+            dma,
             usermode: None,
             per_map_kind: true,
         },

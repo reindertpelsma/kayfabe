@@ -50,8 +50,12 @@ pub struct ApplyCfg<'a> {
     pub store_bytes: u64,
     /// The family's smallest GMMU page: every row is whole pages of it.
     pub grain: u64,
-    /// The VMM's guest-RAM layout: the memfd offset of guest-physical `[gpa, gpa+len)`.
-    pub ram_offset: &'a dyn Fn(u64, u64) -> Option<u64>,
+    /// ★ 2026-10-04 (`docs/design/V3_VIOMMU.md` §3.3): the device-address resolver — a sysmem
+    /// leaf's device address to its piece(s) of the guest-RAM object. Replaces the raw
+    /// `ram_offset(gpa, len)` closure. One run is placed as ONE row, so a run that resolves to more
+    /// than one piece is refused by name (multi-piece placement is not built; under the identity a
+    /// run is always one piece).
+    pub dma: &'a dyn crate::dma::DmaResolve,
     /// ★ The family's internal-MMIO usermode page (`kf_chip::Family::usermode_mmio`): `None` on
     /// Turing … Ada, where no such leaf exists and nothing below changes.
     pub usermode: Option<UsermodeMmio>,
@@ -402,25 +406,36 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             }
             out.priv_mirrored += 1;
         }
-        let mut d =
-            match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset)
-            {
-                // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
-                // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
-                Ok(v) if v.len() == 1 => Desired {
-                    kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
-                    perm: r.perm,
-                    ..v[0]
-                },
-                Ok(_) => {
-                    out.refuse(i, format!("map {:#x}: no row", r.va));
-                    continue;
-                }
-                Err(e) => {
-                    out.refuse(i, format!("leaf refused: {e:?}"));
-                    continue;
-                }
-            };
+        let mut d = match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.dma)
+        {
+            // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
+            // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
+            Ok(v) if v.len() == 1 => Desired {
+                kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
+                perm: r.perm,
+                ..v[0]
+            },
+            // ★ `V3_VIOMMU.md` §3.3: one IOVA-contiguous run, several guest-physical pieces.
+            Ok(v) if v.len() > 1 => {
+                out.refuse(
+                    i,
+                    format!(
+                        "map {:#x}: fragmented device range ({} pieces): multi-piece placement not built",
+                        r.va,
+                        v.len()
+                    ),
+                );
+                continue;
+            }
+            Ok(_) => {
+                out.refuse(i, format!("map {:#x}: no row", r.va));
+                continue;
+            }
+            Err(e) => {
+                out.refuse(i, format!("leaf refused: {e:?}"));
+                continue;
+            }
+        };
         if !whole_pages(&d, cfg.grain) {
             out.refuse(
                 i,
@@ -900,7 +915,7 @@ mod tests {
         ApplyCfg {
             store_bytes: 1 << 30,
             grain: 0x1000,
-            ram_offset: &|gpa, _| Some(gpa),
+            dma: &crate::dma::IdentityFn(|gpa, _| Some(gpa)),
             usermode: None,
             per_map_kind: true,
         }
@@ -1895,5 +1910,63 @@ mod tests {
             ]
         );
         assert_eq!((a.usermode_trapped, a.sked_placed), (1, 1));
+    }
+
+    /// ★ `docs/design/V3_VIOMMU.md` §3.3: a run whose device address resolves to TWO pieces of guest
+    /// RAM (what a translating guest IOMMU produces) is refused by name, never placed as one run at
+    /// the first piece's offset; a refusing resolver acks the run FAILED with the device address.
+    /// The vidmem run beside them is unaffected (the store is not behind the guest's IOMMU).
+    #[test]
+    fn a_fragmented_or_refused_device_range_is_acked_failed_by_name() {
+        use crate::dma::{DmaRefusal, DmaResolve, RamPiece};
+        use kf_arch::dma::{DevAddr, DmaRegime};
+        struct Answer(Result<Vec<RamPiece>, DmaRefusal>);
+        impl DmaResolve for Answer {
+            fn resolve(
+                &self,
+                _: DevAddr,
+                _: u64,
+                _: kf_host::MapPerm,
+            ) -> Result<Vec<RamPiece>, DmaRefusal> {
+                self.0.clone()
+            }
+        }
+        let piece = |off, len| RamPiece {
+            off,
+            len,
+            perm: kf_host::MapPerm::READ_WRITE,
+        };
+        let runs = [
+            ram(0x2_0000_0000, 0x7000, 0x2000),
+            m(0x2_0000_2000, 0x10_0000, 0x1000),
+        ];
+        let two = Answer(Ok(vec![piece(0x9000, 0x1000), piece(0x3000, 0x1000)]));
+        let t = Rec::default();
+        let a = apply_entry(&t, &runs, &ApplyCfg { dma: &two, ..cfg() });
+        assert_eq!(a.codes, vec![KFWR_ACK_FAILED, KFWR_ACK_APPLIED]);
+        assert_eq!(*t.ops.borrow(), vec!["map 0x200002000+0x1000", "inval"]);
+        let why = a.first_refusal.unwrap_or_default();
+        assert!(why.contains("fragmented device range (2 pieces)"), "{why}");
+        let at = DevAddr::from_guest(0x7000);
+        let refusing = Answer(Err(DmaRefusal::Regime {
+            at,
+            len: 0x2000,
+            regime: DmaRegime::Translating,
+        }));
+        let t = Rec::default();
+        let a = apply_entry(
+            &t,
+            &runs,
+            &ApplyCfg {
+                dma: &refusing,
+                ..cfg()
+            },
+        );
+        assert_eq!(a.codes, vec![KFWR_ACK_FAILED, KFWR_ACK_APPLIED]);
+        let why = a.first_refusal.unwrap_or_default();
+        assert!(
+            why.contains("DeviceAddress") && why.contains("Translating") && why.contains("0x7000"),
+            "{why}"
+        );
     }
 }
