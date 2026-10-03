@@ -62,10 +62,12 @@ safety net, not a guarantee. `DRY_RUN=1 ONCE=1` tests it.
 From a cloud session (no SSH): the same scripts, through `vx` — see the last section.
 
 ```bash
-scp scripts/bench/provision_box.sh scripts/bench/box/provision_full.sh scripts/bench/box/merge_check.sh <alias>:/root/
+scp scripts/bench/provision_box.sh scripts/bench/box/provision_full.sh <alias>:/root/
 ssh <alias> 'KAYFABE_BRANCH=<branch> nohup bash /root/provision_full.sh >/dev/null 2>&1 &'   # ~15–45 min
 ssh <alias> 'cat /root/prov/prov.log'            # BOX_RC/DRIVER_RC/TREE_RC/FG_RC/KF3_RC, READY line, EXIT line
-ssh <alias> 'nohup bash /root/merge_check.sh <branch> <tag> >/dev/null 2>&1 &'
+ssh <alias> 'CARGO_BUILD_JOBS=$(nproc) nohup bash /root/kayfabe/scripts/bench/box/merge_check.sh <branch> <tag> >/dev/null 2>&1 &'
+# ⊘ [2026-10-03, box 54049598] run it from the CHECKOUT: it finds the repo as $(dirname $0)/../../..,
+# so a copy in /root exits at once with "fatal: not a git repository" (EXIT rc=128).
 ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF3_RC / FG_RC / FAST_SUITE_PASS / EXIT
 ```
 
@@ -144,7 +146,7 @@ for f in scripts/bench/provision_box.sh scripts/bench/box/provision_full.sh scri
   vput "$f" "/root/$(basename "$f")"; done
 vx -b prov 'KAYFABE_BRANCH=<branch> bash /root/provision_full.sh'   # [measured mc20] 11.5 min to READY, no reboot
 vx 'grep -aE "_RC=|READY|REBOOT_NEEDED|^EXIT" /root/prov/prov.log'    # poll; done at the EXIT line
-vx -b mc 'bash /root/merge_check.sh <branch> <tag>'                   # [measured mc20] 19 min
+vx -b mc 'bash /root/kayfabe/scripts/bench/box/merge_check.sh <branch> <tag>'                   # [measured mc20] 19 min
 vx 'grep -aE "^TESTS|RC=|SUMMARY|FAST_SUITE_PASS|^EXIT" /root/prov/<tag>.log'
 ```
 
