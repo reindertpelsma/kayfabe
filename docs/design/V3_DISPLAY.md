@@ -955,7 +955,9 @@ byte-exact on `6.17.0-1022-azure`.
 **The committed blob is reproducible** (2026-10-03, `3dd574e5`): `firmware/kf-gop/kf-gop.efi`, 9 216
 bytes, sha256 `f11ab0b9f61745a224388fdeda21d19c2c2d802d681a4f9d1c48ddcdd919ed9b`, rebuilt with the pinned
 toolchain from a fresh target directory and from a second checkout at another path: identical both
-times (`cmp`); the stand-in run above packed that same build.
+times (`cmp`); the stand-in run above packed that same build. CI run 37128563465 (`65a22819`,
+GitHub `ubuntu-latest`) rebuilt it from source on another machine to the same sha256, and its stand-in
+ran 10 PASS and 1 SKIP (QEMU's edk2 not installed there).
 
 **Not established locally** (box tests, §4.11.9): kf3's realize and ROM BAR; the seed through host BAR1
 and the GPU zeroing; kf-disp's CUDA boot scanout; RM's console preservation with the new region table and
