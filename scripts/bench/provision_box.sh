@@ -5,7 +5,7 @@
 # another; provisioning a broken box wastes the time the preflight exists to save.
 #
 # ⚠ THE ONE STEP THAT IS NOT OBVIOUS AND FAILS LOUDLY-BUT-MISLEADINGLY:
-#   `rustup target add x86_64-unknown-linux-musl`
+#   `rustup target add x86_64-unknown-linux-musl`   (and, since 2026-10-03, x86_64-unknown-uefi)
 # `kayfabe-isolate-host/build.rs` builds the embedded isolate as a **static musl binary**
 # (`:164`), so without the musl std the WHOLE WORKSPACE fails with a bare
 #   error[E0463]: can't find crate for `std`
@@ -206,6 +206,15 @@ if rustup target list --installed | grep -qx x86_64-unknown-linux-musl; then
   echo "musl target already installed"
 else
   rustup target add x86_64-unknown-linux-musl && echo "musl target ADDED"
+fi
+# ★ 2026-10-03 (OWNER_RULINGS §K): kf3's boot-display GOP driver is built from firmware/kf-gop by
+# crates/kf-gop-image/build.rs during every kf3 build (`build_kf3.sh`), for x86_64-unknown-uefi. Without
+# it that build stops with a named error that prints this same command. rust-toolchain.toml lists it,
+# so rustup also adds it when it installs the pinned toolchain; this covers a toolchain installed first.
+if rustup target list --installed | grep -qx x86_64-unknown-uefi; then
+  echo "uefi target already installed"
+else
+  rustup target add x86_64-unknown-uefi && echo "uefi target ADDED"
 fi
 
 # ⊘⊘⊘ **THE BRANCH, EXPLICITLY, AND THE REVISION, PRINTED — w825.**

@@ -24,7 +24,9 @@ echo "== toolchain"
 # (`build.rs:303`). `[measured w814d]` a fresh CUDA container has the host triple only, so the
 # first provision failed here — and the error told us exactly what to add, which is the only
 # reason this cost minutes instead of an hour.
-$S 'command -v cargo >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq curl build-essential pkg-config git >/dev/null 2>&1; curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal >/dev/null 2>&1; }; export PATH=$HOME/.cargo/bin:$PATH; rustup target add x86_64-unknown-linux-musl >/dev/null 2>&1; cargo --version; rustup target list --installed | tr "\n" " "; echo' || exit 2
+# ★ x86_64-unknown-uefi (2026-10-03, OWNER_RULINGS §K): crates/kf-gop-image/build.rs builds kf3's
+# boot-display GOP driver from source in every build of kf-qemu, and names the target when it is missing.
+$S 'command -v cargo >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq curl build-essential pkg-config git >/dev/null 2>&1; curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal >/dev/null 2>&1; }; export PATH=$HOME/.cargo/bin:$PATH; rustup target add x86_64-unknown-linux-musl x86_64-unknown-uefi >/dev/null 2>&1; cargo --version; rustup target list --installed | tr "\n" " "; echo' || exit 2
 
 echo "== pull the tree (public repo; nothing is pushed to the box)"
 $S 'export PATH=$HOME/.cargo/bin:$PATH
