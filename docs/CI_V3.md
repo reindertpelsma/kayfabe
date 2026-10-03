@@ -60,6 +60,19 @@ proof. Archived QEMU headers are not live ABI declarations.
   removed or changed files fail that guard. Its tests still execute. This
   exception does not authorize new unsafe surfaces in the prototype.
 
+## Firmware (2026-10-03)
+
+`firmware/kf-gop` is guest-side UEFI code (kf3's boot-display GOP, `docs/design/V3_DISPLAY.md` §4.11),
+outside the cargo workspace and built by its own job, `firmware`: `rustup target add
+x86_64-unknown-uefi --toolchain 1.99.0` (`rust-toolchain.toml` unchanged), both build flavours, the
+safe library's host tests, Clippy with `-D warnings`, rustfmt, kf3's PE acceptance check, a check that
+the release driver has no port I/O, the `.efi` size in the job summary, and the local stand-in
+(`scripts/display/gop_standin.sh`, gating). Its unsafe code is a named exception under the same rules,
+checked in the `stable` job: `*_unsafe.rs` naming and the host-pointer gate apply unchanged; gate B and
+the ratchet take path entries, and `firmware/kf-gop` is the one such entry; the ABI-quarantine gate's
+firmware arm keeps every `#[repr(C)]` there inside a `*_unsafe.rs` file. `crates/kf-oprom` (the ROM
+container) is an ordinary pure workspace crate.
+
 ## Visible migration debt, not warning-free code
 
 The previously red workflow had hundreds of existing lint diagnostics and stale

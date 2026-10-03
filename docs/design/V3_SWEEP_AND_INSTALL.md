@@ -800,7 +800,8 @@ kayfabe-<version>-x86_64-linux-gnu.tar.xz
         ├── qemu/                  QEMU's relocatable data: BIOS, keymaps, edk2-x86_64-code.fd and
         │                          edk2-x86_64-secure-code.fd (installed by default)
         ├── kayfabe/MANIFEST.json  build identity and pinned inputs (§2.4), per-file sha256
-        ├── kayfabe/rom/           (later) kf3-gop.rom, the boot-display option ROM, own version + sha256
+        ├── kayfabe/rom/           ⊘ 2026-10-03: not a .rom — kf3-gop.efi (the PE) ships beside QEMU's
+        │                          firmware in share/qemu/ and kf3 wraps it per host (V3_DISPLAY.md §4.11.6)
         └── doc/kayfabe/           README.install.md, LICENSES/ (QEMU's COPYING and LICENSE, edk2's
                                    and the other installed firmware's licenses, each bundled
                                    library's license, kayfabe's LICENSE, the libc crate's)
@@ -1041,6 +1042,14 @@ value that fits.
     host version needs a port (`V3_DRIVER_MATRIX.md:17-20`).
   - Ship it as one DKMS source package per host tag, plus a CI check that runs `patch --dry-run` against
     every accepted host tag's nvidia-uvm source.
+- ⊘ **CORRECTED 2026-10-03 (`V3_DISPLAY.md` §4.11) — the next bullet, three ways.** The firmware is built
+  (branch `v3-gop-rom`): a zero-dependency Rust EFI driver, `firmware/kf-gop`, not EDK2 or `uefi-rs`.
+  It is **not** loaded through `romfile=`: PCIR must carry the host die's ids and class and the
+  descriptor is per VM, so the tarball ships the constant PE, `kf3-gop.efi`, with its sha256, and kf3
+  wraps it into a ROM per host at realize (`crates/kf-oprom`; found with `qemu_find_file`, so
+  `share/qemu/` is where it belongs). And there is **no** fake-GSP answer for
+  `uefiScanoutSurfaceSizeInMB` to agree with: it is a CPU-RM field for Windows; what must agree is the
+  FB layout and the fn 65 region table (`V3_DISPLAY.md` §4.11.4). Its own CI job exists (`firmware`).
 - **The boot-display GOP option ROM.** It is a design (`docs/design/V3_DISPLAY.md:12-26`): an EFI GOP driver
   built with EDK2 or `uefi-rs`, loaded through `romfile=`.
   - It needs its own UEFI toolchain, so it is built in its own CI job.
