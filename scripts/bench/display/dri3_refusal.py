@@ -79,12 +79,14 @@ def make_udmabuf(size):
     dev = os.open("/dev/udmabuf", os.O_RDWR)
     try:
         # _IOW('u', 0x42, struct udmabuf_create {u32 memfd, flags; u64 offset, size})
-        fd = fcntl.ioctl(dev, 0x40187542, struct.pack("<IIQQ", mfd, 1, 0, size))
+        # ⊘ [box 54032077, run brkF1, 2026-10-04] an immutable bytes argument makes fcntl.ioctl
+        # return the buffer, not the call's result (the new fd): a mutable one returns the int
+        fd = fcntl.ioctl(dev, 0x40187542, bytearray(struct.pack("<IIQQ", mfd, 1, 0, size)), True)
     finally:
         os.close(dev)
         os.close(mfd)
-    if isinstance(fd, bytes):
-        raise RuntimeError("UDMABUF_CREATE returned a buffer")
+    if not isinstance(fd, int) or fd < 0:
+        raise RuntimeError("UDMABUF_CREATE returned %r" % (fd,))
     return fd
 
 
@@ -226,7 +228,7 @@ def main(argv):
     if a.udmabuf:
         try:
             ufd = make_udmabuf(src["size"])
-        except OSError as e:
+        except (OSError, RuntimeError) as e:
             print("DRI3_UDMABUF unavailable: %s" % e, flush=True)
     want = set(x for x in a.variants.split(",") if x)
     for name, d, which in variants(src, want, ufd):
