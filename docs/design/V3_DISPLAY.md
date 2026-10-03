@@ -288,7 +288,9 @@
 >   display-SW semaphore/notifier only through the DMA mapping's kernel CPU mapping
 >   (`method_notification.c:624-627`, `:349-351`), which exists only for a map made with
 >   `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`; kayfabe never sets it (`kf-host`
->   `no_map_asks_host_rm_for_a_kernel_cpu_mapping` pins that). No client measured asked for a release,
+>   `no_map_asks_host_rm_for_a_kernel_cpu_mapping` pins that ⊘ *— SUPERSEDED 2026-10-03 by `d84086df`:
+>   that test is removed; the pins are `the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets` and
+>   `only_the_one_builder_can_name_the_kernel_mapping_bit`*). No client measured asked for a release,
 >   so nothing was dropped. ⊘ *Corrected 2026-10-03 (review fixes block above): the pin is now the
 >   builder itself (`nvos46_map_flags` clears the bit) plus a source gate — the old test tried only
 >   today's callers' bits; and the runs show host CPU-RM's release path entered 0 times, not that no

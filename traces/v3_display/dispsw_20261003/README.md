@@ -34,6 +34,10 @@ Probe versions: runs 1-5 counted the release path only (4 kretprobes); run 6 add
 drain and the client/device lookups made inside it (7); runs 7-8 added `CliGetEventInfo` (8) — the
 `kfdsw_probe.c` committed at `c1cc4482`.
 
+⊘ *SUPERSEDED 2026-10-03 (later), by `d84086df` and `16b73475`: `c1cc4482` was the branch's final
+state only until the review fixes. The code the fixes run at is `d84086df` (runs 9-13, the dated
+section below; `16b73475` adds their evidence), and run 12 uses `c1cc4482` as the pre-fix negative
+control. Read the next sentence as "the code of runs 7-8". As written:*
 `c1cc4482` is the code of the branch's final state (`6082f264` plus lane/probe scripts only; the two
 binaries are byte-for-byte the same size, 88 683 160). Runs 7-8 are the A/B pair at it. MAILBOX
 (present mode 1) is "not supported" by the NVIDIA X11 WSI in every run, on and off — it is not a
@@ -83,7 +87,10 @@ in a decorated Cinnamon window, and glxgears / vkcube on bare X.
   display-SW spaces singly with `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`: 5 986 rows, a peak of
   33 868 KiB of host kernel `vmap`, 0 refused, all unmapped by the end — and nothing observable
   changed (run 3 = run 4). It is not on the branch (`6082f264`); kayfabe never sets that bit, and
-  `kf-host`'s `no_map_asks_host_rm_for_a_kernel_cpu_mapping` pins it.
+  `kf-host`'s `no_map_asks_host_rm_for_a_kernel_cpu_mapping` pins it ⊘ *(SUPERSEDED 2026-10-03 by
+  `d84086df`: that test is removed; the pins are `kf-host`'s
+  `the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets` and
+  `only_the_one_builder_can_name_the_kernel_mapping_bit`, as the note below says)*.
   ⊘ *2026-10-03 (second review): it was never "the fix". It was never shown to fix anything (no run
   had a release); it had no budget (33 868 KiB is one workload's peak — its bound was whatever guest
   RAM a guest maps into a display-SW space); and it was incomplete by design (rows placed before the
