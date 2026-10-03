@@ -11,7 +11,7 @@ security decisions) was added.*
 | 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | ⊘ ANSWERED: option A (§N) |
 | 3 | the archived traces that contain a full VBIOS | nothing technical; a legal liability | scrub the PROM values forward in both public repos |
 | 4 | renting a GPU box for display work | every display test, every merge bar | ⊘ ANSWERED: rent as needed |
-| 6 | three security decisions (§6 below) | merging `v3-scratch-bound`, `v3-sec-nonpriv`, and building P2 | approve each as recommended |
+| 6 | three security decisions (§6 below) | merging `v3-scratch-bound`, `v3-sec-nonpriv`, and building P2 | 6c ⊘ ANSWERED (§Q); 6a, 6b open |
 
 ## 1. The sweep and install plan (`design/V3_SWEEP_AND_INSTALL.md`)
 
@@ -281,7 +281,7 @@ when the wiring is removed, a gate on the merge bar's channel census, and the sa
 the CUDA contexts kf3 runs itself; that work is in progress. **Recommendation: approve once that
 lands.**
 
-**6c. P2: guest RAM in the Translated address space.** The owner's ruling: Translated work gets its
+**6c. P2: guest RAM in the Translated address space.** ⊘ **ANSWERED 2026-10-03 by the owner** (`OWNER_RULINGS.md` §Q): *"Translated uses a channel only gpga and/or gpa is mapped"* — the guest-RAM window is allowed. The owner's ruling: Translated work gets its
 own host VA space, *"with for kernel/phys channels atmost the single store guest vram mapped"*. The
 design (`P1+P2`, 2026-10-03) agrees, with one exception it cannot avoid. The guest kernel's
 Translated producers, the driver's CeUtils and UVM, address system memory by guest-physical address

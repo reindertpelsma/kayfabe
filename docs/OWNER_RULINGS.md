@@ -448,3 +448,30 @@ citation: ask whether its reason still holds before relying on it.
 - **Out of scope:** sandboxing the VMM process. The owner, the same day: *"Sandboxing vmm is not our
   job."*
 
+## Q. The address model: what each kind of address may reach (2026-10-03)
+
+- **Owner, verbatim:** *"Gpga offsets can't, outside guest vram is invalid. Gpa offset can't either,
+  only reference guest ram or its bar or an error. Same for bar offsets. Passthrough uses a sandboxed
+  channel, that strictly only maps based on pte/pdb and nothing else. Translated uses a channel only
+  gpga and/or gpa is mapped."* And, on host-process addresses as GPU addresses (HMM): *"only for the
+  cuda channel (vmm ptx refresher), and this offset is never supplied or given by guest."*
+- **Rules that follow:**
+  - A guest-VRAM offset (GPGA) outside guest VRAM is invalid. A guest-physical address (GPA) resolves
+    only to guest RAM or the device's own BAR, or it is an error. BAR offsets are validated the same way.
+  - A passthrough twin's host VA space maps only rows derived from the guest's own page tables. It maps
+    nothing else: no windows, no kayfabe memory. (Audit S1-21 records where the code departs from this today.)
+  - A Translated channel's host VA space maps guest VRAM and/or guest RAM, and nothing else the guest's
+    work can address. **This answers `OWNER_QUESTIONS_2026-10-03.md` 6c: a guest-RAM window in the
+    Translated space is allowed.** The one mapping the engine needs beyond that, the Translated
+    channel's own command ring, is kayfabe-authored, mapped read-only except its fence, and outside
+    every address the rewriter will emit.
+  - Host-process addresses reach a GPU only in kayfabe's own CUDA contexts (the walker and the display
+    compose), and no guest value is ever used as one. Guest data only steers offsets inside those
+    kernels, so the kernels' own bounds (the walker's store bound; the compose layer check) are
+    host-memory-safety obligations. They stay in the audited set and need tests that can fail. HMM is
+    not refused. (Audit S1-05 is narrowed accordingly.)
+- **Also the same day:** *"We must check iova addresses are supported in kayfabe for guests requiring
+  iommu protection. Not that this becomes a hard retrofit later."* A guest DMA address (an IOVA under a
+  guest vIOMMU) is a fourth kind. It must be translated to a GPA at one validated boundary before any of
+  the rules above apply. The readiness check is on `v3-viommu` (`design/V3_VIOMMU.md`).
+
