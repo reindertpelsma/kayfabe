@@ -349,3 +349,88 @@ citation: ask whether its reason still holds before relying on it.
     unaligned access faults. The likely fix is the one-flag host patch in nvidia.ko's mmap path,
     since a host patch is already required for UVM (`design/V3_COOPERATIVE_TIERS.md`).
 
+## L. Broker frames: a GPU copy into kayfabe's own frames, never guest memory (2026-10-03)
+
+- **Owner:** *"exact zero copy isn't needed though, what we do need is that we can avoid a GPU-CPU copy.
+  So if you need an object to export to the screen that contains a frame you can also copy directly.
+  Is maybe better for security because a shared RM object lets the guest change the bytes
+  underneath."*
+- No guest surface and no slice of the store is ever exported to the broker or any other process.
+- For a compositor on the same NVIDIA GPU, kf-disp copies each finished frame GPU→GPU into a frame
+  object kayfabe allocated itself in host VRAM. That object is exported as a dma-buf with a format and
+  modifier the compositor imports. The frame never crosses to the CPU, and the guest cannot change it
+  after the copy.
+- The existing rungs stay as fallbacks: a linear dma-buf copy in host RAM for compositors on another GPU
+  or vendor, and F_SHM.
+- Design pass of 2026-10-03; research in `traces/` once the broker branch lands.
+
+## M. The display frame-rate bound is configurable (2026-10-03)
+
+- **Owner:** *"I think the fps bound must be configurable."* Context: with `GF100_DISP_SW` twinned on
+  the host (`x11-dispsw`, still an experiment), host RM fires vblank releases at the host head's vblank,
+  and immediately on a headless host. Vsync'd X11 clients would then run uncapped.
+- One device property (working name `display-max-fps`), defaulting to the virtual monitor's refresh.
+  - **KMS flips** (Wayland, fullscreen X, nvidia-drm) are paced by kf-disp's own vblank timer, so the
+    bound is exact there. The EDID's preferred mode follows the same rate.
+  - **X11 display-SW paths** (windowed GLX, X11 Vulkan FIFO): host RM owns the release timing, so the
+    bound needs a kayfabe lever. If clients use `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK` (`0x90720101`), it
+    reaches kayfabe and kf-disp services it at the configured rate. If they use software methods,
+    kayfabe paces only the channels that own a display-SW object, through the trapped-doorbell path.
+    That bound is per submission, not per frame, and is not promised until a box run shows it holds.
+  - The status line reports the achieved rate per path, so a bound that does not hold is visible.
+
+## N. X11 desktops: GF100_DISP_SW option A is the design (2026-10-03)
+
+- **Owner, after the design was laid out:** *"I think this is the best design i intended."* This answers
+  `OWNER_QUESTIONS_2026-10-03.md` item 2.
+- **The design:**
+  - A guest `GF100_DISP_SW` (`0x9072`) allocation gets a real host twin under its channel's host
+    twin. Its parameters are authored by kayfabe (head 0, displayMask 0, caps 0); the guest's
+    parameters are never forwarded.
+  - The guest's display-SW software methods trap on the host GPU to host RM. Host RM writes the
+    vblank release directly into the guest's semaphore memory. That memory is a guest-RAM page or a
+    store slice, mapped with a host kernel mapping (`NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`) for exactly
+    that memory. kayfabe acts only at allocation, mapping and teardown, not per vblank.
+  - Pacing follows §M.
+- **It stays inside the single store (owner, the same day: "the guest cannot get an object outside
+  its allocated vram").** The object is not memory the guest can address, and releases land only
+  in the guest's own mappings. The host client that the address check uses must hold only the
+  guest's store, guest RAM and twins; kayfabe's own allocations, such as the broker frame slots,
+  live in separate clients. This is pending the client audit of 2026-10-03.
+- **Default-on once all of these hold, on hosts whose GPU has a display engine** (refusal by name
+  stays the fallback elsewhere):
+  - a box run shows releases landing: Cinnamon X11 up, X11 vkcube presenting, vsync clients
+    advancing;
+  - per-VM caps on display-SW objects and kernel-mapped bytes exist, and refuse by name;
+  - the client split is built;
+  - a release aimed outside the guest's own memory lands nowhere outside the store and guest RAM.
+
+## O. The guest cursor (2026-10-03)
+
+- **Owner:** *"For hover broker receives the cursor image of the guest, and sets using wl/x api that as
+  cursor … if the guest doesn't draw a cursor then it remains hidden in hover/absolute. For grab mode …
+  we follow the cursor as is."* And: *"frame copy in gpu is cheap. Best is copy to a nvidia buf on the
+  gpu … draw cursor there, then copy to linear over dma as dmabuf (in case of host ram)."*
+- The host's hardware cursor plane is never used. The guest programs kf-disp's emulated cursor channel,
+  and kf-disp knows the cursor's image (from the store), hot spot, position and visibility per head.
+- **Hover / absolute pointer:**
+  - The broker receives the guest's cursor image and hot spot, and sets it as the host cursor
+    (Wayland `wl_pointer.set_cursor`; X11 an ARGB cursor on the window).
+  - The guest's cursor position is ignored, because the absolute device already makes the host
+    pointer the guest pointer. A cursor move produces no frame.
+  - If the guest hides its cursor, the host cursor is hidden.
+  - The image is sent only when it changes, detected by a hash.
+  - kf-disp does not compose the cursor into frames in this mode, so there is never a second,
+    lagging cursor.
+  - If the broker scales the guest frame, it scales the cursor image and hot spot by the same factor.
+- **Grab / relative pointer:** the guest owns the position. kf-disp composes the cursor as the top layer
+  of the frame (display step 3d), and frames are coalesced to the display rate (§M).
+- **XOR / monochrome cursors** cannot be expressed as a host ARGB cursor, so they are composed into the
+  frame in either mode. The compose kernel gains an XOR blend.
+- **Where composition happens:** always on the GPU, into kayfabe's VRAM staging frame. The GPU-copy rung
+  packs that frame into the exported VRAM slot (§L). The host-RAM rungs (linear dma-buf, F_SHM) take
+  one copy-engine DMA from staging into the CUDA-registered host frame; the CPU never copies a frame.
+- **Protocol:** the broker protocol gains a cursor message (image fd, size, hot spot, hide) behind a
+  capability bit. A broker without the bit gets composed cursors. The change goes into nvkvm-pv's
+  broker too, so both projects get it.
+
