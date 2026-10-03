@@ -311,8 +311,8 @@ pub use signal_unsafe::{
     BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
 };
 pub use unixsock_unsafe::{
-    PeerCredentials, Received, SUN_PATH_BYTES, check_socket_path, peer_credentials, recv_bounded,
-    send_record, unix_connect,
+    PeerCredentials, Received, SUN_PATH_BYTES, check_socket_path, effective_uid, peer_credentials,
+    recv_bounded, send_record, unix_connect,
 };
 pub use vcpu_unsafe::{KvmVcpu, VcpuExit};
 pub use view::RegionView;

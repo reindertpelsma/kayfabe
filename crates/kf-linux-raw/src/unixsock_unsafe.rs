@@ -183,6 +183,19 @@ pub fn peer_credentials(sock: BorrowedFd<'_>) -> Result<PeerCredentials, RawErro
     })
 }
 
+/// ★ This process's effective uid, NOW — the other half of a [`peer_credentials`] check.
+///
+/// Read at each check, never cached: QEMU drops privileges (`-run-with user=`, `-runas`) in
+/// `os_setup_post`, after every device is realized, so a value read at realize names root
+/// while QEMU then runs as the dropped uid. `geteuid` cannot fail and, unlike
+/// `/proc/self/status`, works inside a `-run-with chroot=` that has no `/proc`.
+#[must_use]
+pub fn effective_uid() -> u32 {
+    // SAFETY: no arguments, no memory touched; `geteuid` always succeeds (POSIX). glibc applies
+    // a `setuid` to every thread of the process, so the calling thread's answer is the process's.
+    unsafe { libc::geteuid() }
+}
+
 /// A zeroed `msghdr`: on some libc targets it carries private padding fields, so it cannot be
 /// written as a struct literal portably.
 fn zeroed_msghdr() -> libc::msghdr {
@@ -364,13 +377,24 @@ mod tests {
 
     /// ★ No "in progress" for AF_UNIX: once the listener's backlog is full a non-blocking
     /// connect returns EAGAIN, and that is a failed attempt (`is_would_block`).
+    ///
+    /// ⊘ CORRECTED 2026-10-03 (review of `v3-broker`): this used std's listener as bound, whose
+    /// backlog is `somaxconn` (4096 here), so reaching EAGAIN took more than 4096 open client
+    /// descriptors — under `ulimit -n 1024` the loop hit `EMFILE` first and failed on "the only
+    /// refusal is EAGAIN" (measured). The listener is now re-armed with a backlog of 1, so the
+    /// test needs a handful of descriptors whatever the host's limits are.
     #[test]
     fn a_full_backlog_is_eagain_and_never_in_progress() {
         let p = scratch("backlog");
         let l = UnixListener::bind(&p).expect("bind");
+        // Linux re-applies `listen` on a listening AF_UNIX socket (`unix_listen` stores the new
+        // `sk_max_ack_backlog`), so this narrows std's backlog of somaxconn to 1.
+        // SAFETY: two integers by value; `l` is a live listening socket this test owns.
+        let rc = unsafe { libc::listen(l.as_raw_fd(), 1) };
+        assert_eq!(rc, 0, "re-listen with a backlog of 1");
         let mut held = Vec::new();
         let mut saw_eagain = false;
-        for _ in 0..8192 {
+        for _ in 0..16 {
             match unix_connect(&p) {
                 Ok(s) => held.push(s),
                 Err(e) => {
@@ -387,6 +411,35 @@ mod tests {
             saw_eagain,
             "a listener that never accepts must fill its backlog ({} connects)",
             held.len()
+        );
+        assert!(
+            (1..=2).contains(&held.len()),
+            "a backlog of 1 holds one or two pending connects (af_unix's `>` test), not {}",
+            held.len()
+        );
+        drop(l);
+        let _ = std::fs::remove_file(&p);
+    }
+
+    /// `effective_uid` is the effective uid the kernel reports for this process (the second
+    /// field of `/proc/self/status`'s `Uid:` line), and the uid `SO_PEERCRED` names for a socket
+    /// this process listens on.
+    #[test]
+    fn the_effective_uid_is_what_proc_and_so_peercred_say() {
+        let status = std::fs::read_to_string("/proc/self/status").expect("/proc/self/status");
+        let euid: u32 = status
+            .lines()
+            .find_map(|l| l.strip_prefix("Uid:"))
+            .and_then(|r| r.split_whitespace().nth(1))
+            .and_then(|v| v.parse().ok())
+            .expect("an effective uid in /proc/self/status");
+        assert_eq!(effective_uid(), euid);
+        let p = scratch("euid");
+        let l = UnixListener::bind(&p).expect("bind");
+        let s = unix_connect(&p).expect("connect");
+        assert_eq!(
+            peer_credentials(s.as_fd()).expect("SO_PEERCRED").uid,
+            effective_uid()
         );
         drop(l);
         let _ = std::fs::remove_file(&p);

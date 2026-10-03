@@ -1521,7 +1521,16 @@ jobs:
           #     adopt`, and the two `unsafe { }` calls of the watch and timer verbs.
           #   ⊘ No new power: the verbs only register fd handlers and a timer on QEMU's main loop,
           #     for descriptors Rust owns; the registration pins memory this process mapped.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:87 kf-cuda:78 kf-qemu:53"
+          #
+          # ★★ `kf-linux-raw` 87 -> 89, 2026-10-03 (`v3-broker`, the review fixes of display step 3).
+          #   `unixsock_unsafe.rs` (+2): `effective_uid` — one `unsafe { }` call of `geteuid` (no
+          #     arguments, no memory, cannot fail). The broker peer check now reads QEMU's euid at
+          #     EVERY connect, after `-run-with user=`/`-runas` dropped privileges (a `/proc` read
+          #     fails inside a `-run-with chroot=` without `/proc`); and a test-only `listen(fd, 1)`
+          #     that narrows std's listener to a backlog of 1, so the full-backlog test needs a few
+          #     descriptors instead of more than `somaxconn` (it failed under `ulimit -n 1024`).
+          #   ⊘ No new power: `geteuid` reads this process's own credential.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:89 kf-cuda:78 kf-qemu:53"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
