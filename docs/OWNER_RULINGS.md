@@ -524,7 +524,8 @@ citation: ask whether its reason still holds before relying on it.
   - No raw or disguised host or device address outside the perimeter. The console frame's address
     (S1-03) and kf-cuda's device-memory functions (S1-04) are being converted on `v3-sec-rawaddr`.
     The owner keeps the console display feature.
-- **Proposed by Claude the same day; the owner has not ruled on these yet:**
+- **Proposed by Claude the same day, and ADOPTED by the owner the same day** (*"Do your
+  suggestions/you think is best as well"*):
   - (a) Inside the perimeter, mark a function with an unchecked precondition `unsafe fn` even when
     its body needs no `unsafe` block, so every caller states why its arguments are valid.
   - (b) Code that produces an address hardware will dereference (GPU page-table entries, RM ioctl
@@ -532,4 +533,14 @@ citation: ask whether its reason still holds before relying on it.
     as safe Rust.
   - (c) Ratchet the perimeter's size (lines and exported items), not only `unsafe` blocks.
   - (d) `kf3.c` is entirely inside the perimeter and must compile in CI.
+  - Also adopted, from the same proposal: the CI gates that enforce this model.
+    1. No `unsafe` outside the perimeter, in a form that cannot be bypassed (audit S1-01).
+    2. No raw or disguised address outside the perimeter (S1-02; built on `v3-sec-rawaddr`).
+    3. A reviewed table of every function the perimeter exports to safe code, each with the checks it
+       performs and the test that shows each check.
+    4. Private fields on handle types that carry addresses.
+    5. No `Copy` or `Clone` on handles that own memory.
+- **Testing before master** (owner, the same day): *"before you merge to master, test it works"*, *"on
+  real hardware"*. Code reaches master only after CI and a merge bar on a box with a real NVIDIA GPU,
+  at the exact commit, plus that change's own hardware tests. Docs-only commits are tested by CI.
 
