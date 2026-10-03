@@ -950,6 +950,9 @@ jobs:
       # rendered from the Rust source (scripts/apps/kf3_lines.py — kf3's own boot sentence names
       # RC-UNARMED and once made every managed row KF3_DEFECT), plus the per-boot silent-twin gate
       # (boot_gate.sh, summarize.py lane=) and apps_hook.sh driven offline (test_hook.sh).
+      # ⊘ 2026-10-03 (review of 9390f51c): rendered BY EACH PLACEHOLDER'S SPEC (the first renderer
+      # ignored `{:#x}` and stayed green under a `{:x}` mutation); test_hook.sh also drives
+      # hmm0_hook.sh and apps_matrix.sh's guest path (boot_gates.py: one gate rule for all readers).
       - name: "App-matrix verdict fixtures (loud_verdict.sh, boot gate, hook — on the R3 slices)"
         run: bash scripts/apps/test_verdicts.sh
       # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).

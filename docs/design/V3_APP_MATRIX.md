@@ -24,6 +24,14 @@ as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3
 `37131299412` at `539a04cb` was green: it ran the new unit tests (`kf-abi` `oserrorlog`, `kf-qemu`
 `chan::rc_delivery_tests`, `kf-rm` `rpc`) and the 42 verdict fixtures. NOT run on a box: every
 guest/host expectation below is a prediction until §R5.7 runs.**
+★ *2026-10-03, second review round (review of `9390f51c`, four minor findings, all fixed on this
+branch; still NOT run on a box): the fixtures now follow each format SPEC, not only the format text
+(§R5.3 ⊘ — a `{:x}` mutation used to stay green); the wedge probe also follows a PASS row whose kf3
+slice holds an RC / UNSERVICED line, not only one with a guest Xid (§R5.4); `apps_matrix.sh`,
+`summarize.py` and `triage.py` read the appended `guest.res` gate lines by ONE rule,
+`scripts/apps/boot_gates.py`, and a boot never reads an earlier boot's log (§R5.3); `hmm0_hook.sh`'s
+exit line names the steps that matter (§R5.7). ⊘ The fixture count below ("84 + 12") is now
+102 + 29.*
 ★ *2026-10-03, review round (adversarial review of `5af7e644`, every finding fixed on this branch):
 the classifier keyed on bare words and scored every isolated managed row KF3_DEFECT on kf3's own boot
 sentence (§R5.3 ⊘); the boot gate the design required is now BUILT (§R5.3, `boot_gate.sh`); twin
@@ -128,6 +136,19 @@ Evidence: R3 at kf3 `4c48ca0c` (2026-09-28), each row run alone in a fresh boot
 
 ### R5.3 Verdict classes for the managed-memory rows (`scripts/apps/loud_verdict.sh`)
 
+⊘ **CORRECTED 2026-10-03 (review of `9390f51c`) — "rendered from the Rust format strings" (next
+paragraph) did not yet mean FOLLOWING them.** `kf3_lines.py` filled each placeholder with a value that
+was already formatted (`"0xc1d0001e"`) and never read its spec, while the classifiers key on exactly
+those specs (the `0x` of `{:#x}` in `kf3: chan 0x…:0x… RC-UNARMED:`, `VasKey`'s derived `Debug`, the
+`{:.3}` of `t=`). Measured: with chan.rs's RC-UNARMED formats changed to `{:x}`, the fixtures stayed
+84/0 while kf3 would print `chan c1d0001e:caf00099`, which neither `loud_verdict.sh` nor
+`boot_gate.sh`'s birth regex matches. Now every fill value is a typed Rust value formatted by its
+spec (`{}`, `{:?}`, `{:x}`/`{:#x}`, `{:.N}`; `VasKey`'s `Debug` only after checking it is derived),
+and anything it does not model exits 2. The same mutation now fails 6 cases (`unarmed_is_defect_*`,
+`gate_unarmed_birth_alone_fails_*`), and the `drift_*` cases run four such mutations on a copy of
+the tree. The status line's `rc[…]` counters and the guest Xid-31 text are rendered too
+(`rc_status`, `xid_text`). ⚠ It still cannot see which VALUE the code passes into a placeholder.
+
 ⊘ **CORRECTED 2026-10-03 (review of `5af7e644`) — the classifier as first built scored EVERY isolated
 managed row KF3_DEFECT.** Its kf3 conditions were bare-word greps (`RC-UNARMED`, `RC-NONE`, `not
 applied`, …), and this branch's own boot sentence (`DELIVERY_UNBUILT`, printed once per QEMU at the
@@ -158,7 +179,17 @@ gate=PASS|FAIL|UNMEASURED unarmed= none= births= why=` to that boot's `guest.res
 - FAIL: either count nonzero, or a birth line.
 - UNMEASURED (never a pass): no readable log, or no status line with `none=` (a kf3 older than this
   branch).
-- Any boot not `gate=PASS` FAILS THE LANE: `apps_matrix.sh guest` exits 3, and `summarize.py` closes
+- ⊘ CORRECTED 2026-10-03 (review of `9390f51c`): `guest.res` is appended to and boot tags repeat
+  when a run name is reused, and `apps_matrix.sh` counted EVERY gate line while `summarize.py` kept
+  the last per boot — so one directory could exit 3 and print `lane=PASS`, or the reverse. All three
+  readers (`apps_matrix.sh guest`/`lane`, `summarize.py`, `triage.py`) now call
+  `scripts/apps/boot_gates.py`: the LAST gate line per boot wins. And `apps_matrix.sh` removes the
+  tag's old `run_<tag>_*.log` and result copies before each boot, so a `boot_capture.sh` that dies
+  early is gated UNMEASURED on its own missing log, never PASS on an earlier boot's. Which apps a
+  boot completed (and which failed, for the isolated re-runs) is read from the lines THIS invocation
+  appended, so an earlier attempt's row at the same tag no longer marks an app done.
+- Any boot not `gate=PASS` FAILS THE LANE: `apps_matrix.sh guest` exits 3 (`apps_matrix.sh lane <run>`
+  recomputes it from the recorded results), and `summarize.py` closes
   with `BOOT_GATE boots= pass= fail= unmeasured= lane=FAIL`. A boot that ran apps but has no gate line
   is UNMEASURED; results that predate the gate print `lane=UNMEASURED`. A row whose slice holds a
   birth line shows `/RC_SILENT` after its guest verdict.
@@ -178,9 +209,11 @@ gate=PASS|FAIL|UNMEASURED unarmed= none= births= why=` to that boot's `guest.res
 The Xid text says *"otherwise this is a kayfabe bug"* for that reason. The design's optional step 2
 would tell the two apart: read the fault's VA from the host twin with `0x906f0106`, which is
 unprivileged. It is gated on a box probe and not built. The classifier is tested offline by
-`scripts/apps/test_verdicts.sh`, on the R3 slices plus lines rendered from the source (84 cases, CI
-step "App-matrix verdict fixtures"; ⊘ 42 before the review round), which also runs
-`scripts/apps/test_hook.sh` — `apps_hook.sh` driven offline through a fake guest ssh (12 cases).
+`scripts/apps/test_verdicts.sh`, on the R3 slices plus lines rendered from the source (102 cases, CI
+step "App-matrix verdict fixtures"; ⊘ 84 before the second review round, 42 before the first), which
+also runs `scripts/apps/test_hook.sh` — `apps_hook.sh` and `hmm0_hook.sh` driven offline through a
+fake guest ssh, and `apps_matrix.sh`'s guest path through a fake `boot_capture.sh` (29 cases; ⊘ 12
+before the second round; the stubs are `scripts/apps/fixtures/`).
 
 ### R5.4 The CUDA virtual-memory API rows
 
@@ -217,7 +250,12 @@ guest that includes a guest `Xid 31 … kayfabe:` for the child process. That ro
 used to run only after a non-PASS row, so a boot wedged by this deliberate fault would have burned the
 rows after it (`attach_verify`, the `um_*` rows) and scored them SILENT — a blocker blamed on the wrong
 row. `apps_hook.sh` now also probes after any row whose guest dmesg gained an Xid
-(`test_hook.sh` pins both the probe and the stop). The bundle builds `vmm_probe` against the toolkit's libcuda stub
+(`test_hook.sh` pins both the probe and the stop). ⊘ CORRECTED 2026-10-03 (review of `9390f51c`): the
+guest Xid alone was the PASS-row trigger, and that line exists only if the OS_ERROR_LOG path works,
+which no box has run (at R3, host RCs reached the guest with no Xid line at all). The probe now also
+follows a PASS row whose own kf3 slice holds `kf3: RC host twin 0x…`, `kf3: RC_TRIGGERED posted:`,
+`kf3: OS_ERROR_LOG posted:` or `kf3: UNSERVICED-GPU-FAULT guest client 0x…` (the shapes `triage.py`
+reads; kf3's boot sentence triggers nothing), and its line reads `(guest_xid=<n> kf3_rc=<n>)`. The bundle builds `vmm_probe` against the toolkit's libcuda stub
 (`build_bundle.sh`), and `apps_hook.sh` pushes `samples/vectorAddMMAP` and
 `samples/vectorAdd_kernel64.fatbin` beside `bin/`, so neither needs a re-provisioned guest image. The
 fatbin's name collides with `vectorAddDrv`'s, which defines the identical `VecAdd_kernel`.
@@ -268,7 +306,7 @@ python3 scripts/apps/summarize.py /workspace/apps/results/r5full; python3 script
 flock /tmp/kayfabe-fastguest.lock env KF_DEVICE=kf3 QEMU_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 \
   NVKVM_RAM_MB=16384 KF_SMP=6 GQ_TIMEOUT=300 POST_CAPTURE_HOOK="$PWD/scripts/apps/hmm0_hook.sh" \
   bash scripts/bench/boot_capture.sh r5hmm0
-cat /workspace/apps/results/r5hmm0.txt                     # HMM0_START … HMM0_END rc=0
+cat /workspace/apps/results/r5hmm0.txt                     # HMM0_START … HMM0_END status=MEASURED …
 ```
 
 Expected:
@@ -286,10 +324,14 @@ Expected:
   line with `sanity_vectorAdd=1`. The `torch_expseg` digest equals the host's.
 - The boot gate: every `APPS_BOOT_GATE` line `gate=PASS`, `summarize.py` closing with
   `BOOT_GATE … lane=PASS`, and `apps_matrix.sh guest` exiting 0 (it exits 3 on any boot not PASS).
-- HMM off (`r5hmm0.txt`, written by `scripts/apps/hmm0_hook.sh`): `hmm_disabled=Y`, `ATTR managed=1
+- HMM off (`r5hmm0.txt`, written by `scripts/apps/hmm0_hook.sh`). ⊘ CORRECTED 2026-10-03 (review of
+  `9390f51c`): the expected `HMM0_END rc=0` was the status of `… | tail -3`, 0 whatever happened. The
+  exit line is now `HMM0_END status=MEASURED|UNMEASURED ssh_rc= reload_rc= hmm_disabled= attrs_rc=
+  attr_lines= pageable_rc= new_xid= why=`; MEASURED needs the reload, the option and an ATTR line.
+  Expected: `status=MEASURED`, `hmm_disabled=Y`, `ATTR managed=1
   concurrentManagedAccess=1 pageableMemoryAccess=0` (bare metal with HMM off reads the same:
   `traces/v3_uvm_research/bm_rtx3060ti_580.159.04_hmm0.out:8`), and `um_probe pageable` still fails
-  (`-> 719`, a guest `Xid 31 … kayfabe:`) — so `uvm_disable_hmm=1` changes the attribute only. This
+  (`-> 719`, `pageable_rc` nonzero and not 124, `new_xid` ≥ 1 with a guest `Xid 31 … kayfabe:`) — so `uvm_disable_hmm=1` changes the attribute only. This
   answers the owner question on mentioning it (`V3_UVM_DEMAND_PAGING.md` §1.2's ⊘ note).
 - Still open (design §6): the optional `0x906f0106` fault-identity probe after an RC; one non-Ampere die
   (`um_probe cpuinit` attribution, `vmm_probe remap_same_va` against the Hopper/Blackwell walker gaps

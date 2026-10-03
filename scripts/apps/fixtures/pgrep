@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# test_hook.sh fixture: pgrep on an idle bench — nothing is running (apps_matrix.sh's serial-bench wait
+# must not block an offline test on a QEMU or cargo the developer's machine happens to be running)
+exit 1

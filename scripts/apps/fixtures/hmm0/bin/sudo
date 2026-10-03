@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# test_hook.sh fixture: the guest's sudo — run the command as is
+exec "$@"

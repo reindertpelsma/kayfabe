@@ -13,11 +13,16 @@
 # fault is what wedged nb1; (2) every row also carries `rc_silent_births=` (RC-UNARMED/RC-NONE birth
 # lines in its own slice) — the per-row attribution of the boot gate apps_matrix.sh enforces
 # (boot_gate.sh). `APPS_GSSH` replaces the guest ssh (test_hook.sh drives this hook offline with it).
+# ⊘ CORRECTED 2026-10-03 (review of 9390f51c): the PASS-row probe was keyed on the GUEST Xid alone —
+# a line that exists only if kf3's OS_ERROR_LOG path works, which no box has run yet (R3's host RCs
+# reached the guest with NO Xid line at all). The probe now also follows a PASS row whose own kf3
+# slice holds an RC or UNSERVICED-GPU-FAULT line (the host's direct fact that the row faulted).
 set -uo pipefail
 TAG=${1:?tag}
 HERE="$(cd "$(dirname "$0")" && pwd)"; G=${APPS_GSSH:-$HERE/../bench/gssh_nv}
 OUT=${APPS_OUT:?APPS_OUT}; mkdir -p "$OUT"
 QLOG=${BENCH_DIR:-/workspace/bench}/run_${TAG}_qemu.log
+RE_KF3_RC='kf3: (RC host twin 0x[0-9a-f]+ |RC_TRIGGERED posted: guest chid 0x|OS_ERROR_LOG posted: guest client 0x|UNSERVICED-GPU-FAULT guest client 0x)'
 $G true >/dev/null 2>&1 || { echo "APPS_HOOK guest unreachable at start"; exit 0; }
 $G 'sudo tee /opt/apps/bundle/run_apps.sh >/dev/null' < "$HERE/run_apps.sh"
 # the tree's python drivers, so a harness fix does not need a re-provisioned image
@@ -52,6 +57,9 @@ for app in $APPS; do
   fi
   tail -n +"$((q0+1))" "$QLOG" 2>/dev/null | tail -3000 > "$OUT/$app.kf3.log"
   nx=$(grep -c 'Xid' "$OUT/$app.guest_dmesg.log" 2>/dev/null); nx=${nx:-0}
+  # the host side's own record that this row faulted: kf3's RC / UNSERVICED line SHAPES (triage.py
+  # RC_LINE) — never the bare words, which kf3's boot sentence also prints
+  nrc=$(grep -acE "$RE_KF3_RC" "$OUT/$app.kf3.log" 2>/dev/null); nrc=${nrc:-0}
   nr=$(grep -v 'kf3: family=' "$OUT/$app.kf3.log" 2>/dev/null | grep -ciE 'refus'); nr=${nr:-0}
   nk=$(wc -l < "$OUT/$app.kf3.log")
   # ★ 2026-10-03 (release §I): the managed-memory verdict, and the boot's silent-twin gate — the last
@@ -68,15 +76,17 @@ for app in $APPS; do
   # later app burned its whole timeout silently. After any non-PASS row, prove the boot still runs
   # CUDA (vectorAdd, 60 s); if not, record WEDGED and end the boot — apps_matrix.sh reboots and
   # continues with the remaining apps, so one wedge costs one app, not the rest of the list.
-  # ★ 2026-10-03: and after ANY row whose guest dmesg gained an Xid, PASS or not — a GPU fault is
-  # what wedged nb1, and vmm_probe faults on purpose yet PASSes (its rows after it would otherwise
-  # burn their timeouts and score SILENT, blamed on the wrong row).
+  # ★ 2026-10-03: and after ANY row that faulted, PASS or not — a GPU fault is what wedged nb1, and
+  # vmm_probe faults on purpose yet PASSes (its rows after it would otherwise burn their timeouts and
+  # score SILENT, blamed on the wrong row). "Faulted" = the guest dmesg gained an Xid OR (⊘ review of
+  # 9390f51c) the row's kf3 slice holds an RC / UNSERVICED line: either fact alone triggers it.
   probe=0
   case "$line" in *verdict=PASS*) ;; *) probe=1 ;; esac
   [ "$nx" -gt 0 ] 2>/dev/null && probe=1
+  [ "$nrc" -gt 0 ] 2>/dev/null && probe=1
   if [ $probe = 1 ] && [ "${APPS_WEDGE_PROBE:-1}" = 1 ]; then
     sane=$(timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/vectorAdd 2>&1 | grep -c "Test PASSED"' 2>/dev/null | tr -d '\r')
-    echo "APPS_HOOK wedge probe after $app (guest_xid=$nx): sanity_vectorAdd=${sane:-none}"
+    echo "APPS_HOOK wedge probe after $app (guest_xid=$nx kf3_rc=$nrc): sanity_vectorAdd=${sane:-none}"
     if [ "${sane:-0}" != 1 ]; then
       echo "APPS_WEDGE boot=$TAG after=$app sanity_vectorAdd=${sane:-none}" | tee -a "$OUT/guest.res"
       echo "APPS_HOOK boot wedged after $app — stopping this boot"; break

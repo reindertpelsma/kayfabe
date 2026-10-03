@@ -31,7 +31,13 @@
 # `RC-UNARMED`, `RC_TRIGGERED` and `Xid 31`. In every isolated boot it lands in the managed app's own
 # slice, so the bare grep scored EVERY such row KF3_DEFECT: a false release blocker. Each condition
 # now matches the SHAPE of the line kf3 prints for it (the format strings in crates/kf-qemu and
-# crates/kf-mem; `test_verdicts.sh` renders them from the source, so the two cannot drift):
+# crates/kf-mem; `test_verdicts.sh` renders them from the source with `kf3_lines.py`).
+# ⊘ CORRECTED 2026-10-03 (review of 9390f51c): this said "so the two cannot drift", which the first
+# renderer did not deliver — it filled pre-formatted values and ignored each placeholder's SPEC, so
+# `{:#x}` → `{:x}` in chan.rs kept every fixture green while kf3 would print `chan c1d0001e:…`, which
+# the shapes below never match. It now formats typed values by the spec (`{:#x}`, `{:?}`, `{:.3}`, …)
+# or exits 2 on a spec it does not model, and `test_verdicts.sh`'s `drift_*` cases mutate a copy of the
+# tree to prove the fixture moves. What still CAN drift: the value the code passes into a placeholder.
 #   RC-UNARMED birth   `kf3: chan 0x<client>:0x<handle> RC-UNARMED: …`   (chan.rs, three producers)
 #   RC-NONE birth      `kf3: chan 0x<client>:0x<handle> RC-NONE: …`
 #   C′ refused map     `kf3: mem t=<s>s REFUSED VasKey(<n>) root 0x…: <n> run(s) not applied: …`

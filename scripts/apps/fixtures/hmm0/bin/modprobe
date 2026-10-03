@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# test_hook.sh fixture: the guest's modprobe for nvidia_uvm, as the kernel behaves.
+#   modprobe -r   exits $FAKE_G/rmmod_rc (nonzero = the module is busy); on success the module's
+#                 parameter file ($FAKE_G/param) goes away with it
+#   modprobe …    loads with uvm_disable_hmm=1 (param = Y) — but over a module that is STILL loaded it
+#                 is a no-op that exits 0 and keeps the old value
+F=${FAKE_G:?}
+if [ "$1" = -r ]; then
+  r=$(cat "$F/rmmod_rc")
+  [ "$r" = 0 ] && rm -f "$F/param"
+  exit "$r"
+fi
+[ -e "$F/param" ] || echo Y > "$F/param"
+exit 0

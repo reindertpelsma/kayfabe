@@ -11,13 +11,15 @@ never one bucket. Rows recorded before the hook wrote `loud=` print as before.
 
 ★ 2026-10-03 (review of 5af7e644): the BOOT GATE. Every guest boot's silent-twin gate
 (`APPS_BOOT_GATE boot=… gate=PASS|FAIL|UNMEASURED …`, appended by apps_matrix.sh from boot_gate.sh)
-is read from guest.res and iso/guest.res, and a closing line scores the lane:
+is read from guest.res and iso/guest.res BY boot_gates.py (the last gate line per boot wins — the
+rule apps_matrix.sh's exit status uses too), and a closing line scores the lane:
     BOOT_GATE boots=<n> pass=<p> fail=<f> unmeasured=<u> lane=PASS|FAIL|UNMEASURED
 lane=FAIL when any boot is FAIL or UNMEASURED — including a boot that produced app rows but no gate
 line at all (its gate never ran: not a pass). lane=UNMEASURED only for results that predate the gate
 entirely (no gate line and no row carrying `rc_none=`). A row whose own kf3 slice holds a silent-twin
 birth line (`rc_silent_births=` > 0) also shows `/RC_SILENT` after its guest verdict."""
 import re, sys, os, collections
+import boot_gates  # the ONE rule for APPS_BOOT_GATE lines (beside this script; sys.path[0])
 
 def rows(path):
     out = collections.OrderedDict()
@@ -28,53 +30,10 @@ def rows(path):
         out[kv.get("app")] = kv
     return out
 
-def gate_lines(*paths):
-    """{boot: {gate, unarmed, none, births, why}} — the LAST gate line per boot wins."""
-    out = collections.OrderedDict()
-    for path in paths:
-        if not os.path.exists(path): continue
-        for line in open(path, errors="replace"):
-            if not line.startswith("APPS_BOOT_GATE "): continue
-            kv = dict(re.findall(r"(\w+)=(\S*)", line[15:]))
-            if kv.get("boot"): out[kv["boot"]] = kv
-    return out
-
-def boots_of(path):
-    """{boot: [app, …]} for every guest row that RAN in a boot (BOOT_FAIL rows never reached the hook)."""
-    out = collections.OrderedDict()
-    if not os.path.exists(path): return out
-    for line in open(path, errors="replace"):
-        if not line.startswith("APPRES "): continue
-        kv = dict(re.findall(r"(\w+)=((?:(?! \w+=).)*)", line[7:].strip()))
-        if kv.get("verdict") == "BOOT_FAIL" or not kv.get("boot"): continue
-        out.setdefault(kv["boot"], []).append(kv.get("app"))
-    return out
-
 def gate_verdict(R):
-    """The lane's BOOT_GATE line (and the non-PASS boots, one line each)."""
-    gates = gate_lines(f"{R}/guest.res", f"{R}/iso/guest.res")
-    ran = boots_of(f"{R}/guest.res"); ran.update(boots_of(f"{R}/iso/guest.res"))
-    new_format = bool(gates) or any("rc_none=" in l for p in (f"{R}/guest.res", f"{R}/iso/guest.res")
-                                    if os.path.exists(p) for l in open(p, errors="replace"))
-    cnt = collections.Counter(); bad = []
-    for boot in list(gates) + [b for b in ran if b not in gates]:
-        g = gates.get(boot)
-        v = g.get("gate", "UNMEASURED") if g else "UNMEASURED"
-        cnt[v] += 1
-        if v != "PASS":
-            why = g.get("why", "") if g else "no APPS_BOOT_GATE line for a boot that ran apps (its gate never ran)"
-            apps = ran.get(boot, [])
-            shown = " ".join(apps[:6]) + (f" …+{len(apps) - 6}" if len(apps) > 6 else "")
-            bad.append(f"  ⊘ {boot} gate={v} unarmed={(g or {}).get('unarmed', '-')} none={(g or {}).get('none', '-')} "
-                       f"births={(g or {}).get('births', '-')} apps=[{shown}] {why}")
-    n = sum(cnt.values())
-    if not new_format: lane = "UNMEASURED"
-    elif cnt["FAIL"] or cnt["UNMEASURED"] or n == 0: lane = "FAIL"
-    else: lane = "PASS"
-    head = (f"BOOT_GATE boots={n} pass={cnt['PASS']} fail={cnt['FAIL']} unmeasured={cnt['UNMEASURED']} lane={lane}")
-    if not new_format:
-        head += " (these results predate the gate, 2026-10-03: not a pass)"
-        bad = []
+    """The lane's BOOT_GATE line (and the non-PASS boots, one line each) — boot_gates.py's rule, the
+    same code apps_matrix.sh exits on (⊘ review of 9390f51c: the two used to read guest.res apart)."""
+    head, bad, _lane = boot_gates.verdict(boot_gates.dir_paths(R))
     return head, bad
 
 def digs(path):

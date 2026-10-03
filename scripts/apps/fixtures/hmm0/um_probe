@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# test_hook.sh fixture: the guest's um_probe.
+#   attrs     prints $FAKE_G/attr (if not empty) and exits $FAKE_G/attrs_rc
+#   pageable  fails as kf3 is expected to make it fail: `-> 719`, plus one guest Xid 31 naming kayfabe
+#             (the text in $FAKE_G/xidtext, rendered by kf3_lines.py) appended to the guest dmesg
+F=${FAKE_G:?}
+case "$1" in
+  attrs)
+    [ -s "$F/attr" ] && echo "$(cat "$F/attr")"
+    exit "$(cat "$F/attrs_rc")" ;;
+  pageable)
+    echo "CHECK pageable FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)"
+    echo "[   70.000000] NVRM: Xid (PCI:0000:00:02): 31, pid=88, name=um_probe, $(cat "$F/xidtext")" >> "$F/dmesg"
+    exit 2 ;;
+esac
+exit 64

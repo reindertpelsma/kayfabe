@@ -15,10 +15,16 @@ the shapes of the RC lines kf3 prints (`kf3: RC host twin 0x…`, `kf3: RC_TRIGG
 `kf3: OS_ERROR_LOG posted:`, `kf3: UNSERVICED-GPU-FAULT guest client`). The closing lines also name
 every boot whose silent-twin gate (`APPS_BOOT_GATE`, boot_gate.sh) is not PASS.
 
+⊘ CORRECTED 2026-10-03 (review of 9390f51c): those closing lines counted EVERY gate line, while
+summarize.py kept the last per boot — and guest.res is appended to, so a reused run name made the two
+disagree. They now come from boot_gates.py, the one rule apps_matrix.sh and summarize.py also use
+(`BOOT_GATE boots= pass= fail= unmeasured= lane=`, over this res file).
+
 Baseline noise (present on every passing app, measured 670bd310 on vh) is dropped from the refusal
 column: `QueueNotBound`, the AllocClassNotPermitted rows for class 50031 (0xc36f... allowlist) and
 NV40_I2C, and the `kf3: family=` census line.  Everything else is shown, first occurrence only."""
 import collections, os, re, sys
+import boot_gates  # the ONE rule for APPS_BOOT_GATE lines (beside this script; sys.path[0])
 
 R = sys.argv[1]
 RES = sys.argv[2] if len(sys.argv) > 2 else "guest.res"
@@ -37,13 +43,11 @@ def clip(s, n):
     return s[:n]
 
 loud = collections.Counter()
-gates = []
+rows = 0
 for line in read(os.path.join(R, RES)):
-    if line.startswith("APPS_BOOT_GATE "):
-        gates.append(line)
-        continue
     if not line.startswith("APPRES "):
         continue
+    rows += 1
     kv = dict(re.findall(r"(\w+)=((?:(?! \w+=).)*)", line[7:].strip()))
     app, v = kv.get("app"), kv.get("verdict")
     base = os.path.join(R, app)
@@ -62,8 +66,8 @@ for line in read(os.path.join(R, RES)):
 if loud:
     blockers = loud["SILENT"] + loud["KF3_DEFECT"]
     print("LOUD " + " ".join(f"{k}={n}" for k, n in sorted(loud.items())) + f" blockers={blockers}")
-if gates:
-    bad = [g for g in gates if " gate=PASS " not in g]
-    print(f"BOOT_GATE boots={len(gates)} not_pass={len(bad)}")
-    for g in bad:
-        print("  " + clip(g, 300))
+if rows:
+    head, bad, _lane = boot_gates.verdict([os.path.join(R, RES)])
+    print(head)
+    for b in bad:
+        print(clip(b, 300))
