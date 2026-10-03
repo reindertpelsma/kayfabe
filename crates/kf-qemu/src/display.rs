@@ -31,7 +31,7 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
-use kf_broker::{CursorImage, CursorMode, CursorWant};
+use kf_broker::{CursorImage, CursorMode, CursorWant, HotTracker};
 use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
@@ -2286,8 +2286,12 @@ struct ScanState {
     cursor_in_frame: bool,
     /// … the key of the cursor last posted to the relay (posted again only when it changes) …
     cursor_posted: Option<(u8, u64)>,
-    /// … and host-cursor refusals logged so far (bounded).
+    /// … host-cursor refusals logged so far (bounded) …
     cursor_refusals: u64,
+    /// … and the hot spot NVKMS does not program, derived from the injected pointer.
+    hot: HotTracker,
+    /// The worker's clock for [`HotTracker`] (its first use).
+    hot_epoch: Option<Instant>,
 }
 
 /// ★ The copy in flight: its number, slot, frame size and start — and which copies it made: the
@@ -2579,10 +2583,21 @@ impl ScanState {
         shown: &Shown,
         cursor: Option<&kf_disp::engine::CursorScan>,
     ) -> CursorWant {
-        let (Shown::Armed(_), Some(cs)) = (shown, cursor) else {
+        let (Shown::Armed(comp), Some(cs)) = (shown, cursor) else {
             return CursorWant::Hidden;
         };
         let dp = io.dp;
+        let frame = (comp.width, comp.height);
+        let hover = self.cursor_mode == CursorMode::Hover;
+        let (seq, abs) = dp.broker.as_ref().map_or((0, None), |b| b.cursor().abs());
+        let now_ms = u64::try_from(
+            self.hot_epoch
+                .get_or_insert_with(Instant::now)
+                .elapsed()
+                .as_millis(),
+        )
+        .unwrap_or(u64::MAX);
+        let hot = &mut self.hot;
         let got = io
             .resolve(cs.client, cs.handle, 0)
             .and_then(|dma| kf_disp::scanout::plan_host_cursor(cs, &dma).map_err(|r| r.0))
@@ -2597,8 +2612,16 @@ impl ScanState {
                     .fetch_add(1, Ordering::Relaxed);
                 match h.image(&raw).map_err(|r| r.0)? {
                     None => Ok(CursorWant::Hidden),
-                    Some(px) => CursorImage::new(h.size, h.size, h.hot, px)
-                        .map(|i| CursorWant::Image(Arc::new(i))),
+                    Some(px) => {
+                        // ★ NVKMS programs hot spot 0 (`nvkms-evo3.c:6565-6569`): in hover the hot
+                        // spot is derived from the pointer the relay injected
+                        let derived = abs.filter(|_| hover).and_then(|a| {
+                            kf_disp::scanout::hot_from_pointer(cs, (a.x, a.y), (a.w, a.h), frame)
+                        });
+                        let at = hot.hot(&px, seq, now_ms, derived, h.hot);
+                        CursorImage::new(h.size, h.size, at, px)
+                            .map(|i| CursorWant::Image(Arc::new(i)))
+                    }
                 }
             });
         match got {

@@ -97,7 +97,8 @@ say "RUNGS $(grep -ao 'frames go as [^(;—]*' "$Q" | sort | uniq -c | tr '\n' '
 grep -aE 'kf3: broker: (the compositor|the display (CAN|CANNOT|imported)|GPU-copy frames are not)' "$Q" | cut -c1-200 | head -6 | sed 's/^/BRK_RUNG_LINE /'
 
 # 3. the broker window, fullscreen (1:1 with the guest)
-W=$(HX xdotool search --name '^nvkvm' 2>/dev/null | head -1)
+# ⊘ [run brkA] `search --name` found an unmapped 1024x768 window first: only a VISIBLE one is ours
+W=$(HX xdotool search --onlyvisible --name '^nvkvm' 2>/dev/null | head -1)
 say "WINDOW id=[${W:-none}]"
 if [ -z "$W" ]; then say "HOOK_DONE (no broker window)"; exit 0; fi
 HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
@@ -113,27 +114,32 @@ HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
 HX xdotool mousemove --window "$W" 700 400 >/dev/null 2>&1; sleep 1
 HX xdotool mousemove --window "$W" 720 410 >/dev/null 2>&1; sleep 3
 say "MODE_LINES $(grep -a 'kf3: broker: guest cursor:' "$Q" | cut -d: -f4- | tr '\n' '|' | cut -c1-300)"
-HX python3 "$XC" image "$OUT/host_hover.pam" | sed 's/^/BRK_HOST_HOVER /'
+HX python3 "$XC" image "$OUT/cur_host_hover.pam" | sed 's/^/BRK_HOST_HOVER /'
 gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
 say "GUEST_POINTER $gpos"
-gq "$GX python3 ~/display/xcursor.py image /tmp/guest_hover.pam" | sed 's/^/BRK_GUEST_CURSOR /'
-"$G" 'cat /tmp/guest_hover.pam' > "$OUT/guest_hover.pam" 2>/dev/null
-python3 "$XC" compare "$OUT/guest_hover.pam" "$OUT/host_hover.pam" | sed 's/^/BRK_HOVER_/'
+gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_hover.pam" | sed 's/^/BRK_GUEST_CURSOR /'
+"$G" 'cat /tmp/cur_guest_hover.pam' > "$OUT/cur_guest_hover.pam" 2>/dev/null
+python3 "$XC" compare "$OUT/cur_guest_hover.pam" "$OUT/cur_host_hover.pam" | sed 's/^/BRK_HOVER_/'
 shot hover
 hshot host_hover
 say "HOST_VS_GUEST hover $(fulldiff hover host_hover) (the broker fullscreen against the guest frame; the host shot has no pointer, the frame no cursor in hover)"
 set -- $gpos; gx=${1:-0}; gy=${2:-0}
+# the guest frame's size (the relay's last WINDOW) and where the guest pointer is in host pixels
+fr=$(grep -ao 'guest resolution is now [0-9]*x[0-9]*' "$Q" | tail -1 | grep -o '[0-9]*x[0-9]*')
+fw=${fr%x*}; fh=${fr#*x}
+hx=$(( ${X:-0} + gx * ${WIDTH:-1} / ${fw:-1} )); hy=$(( ${Y:-0} + gy * ${HEIGHT:-1} / ${fh:-1} ))
+say "MAP frame=${fr:-?} window=${WIDTH:-?}x${HEIGHT:-?}+${X:-?}+${Y:-?} guest_pointer=$gx,$gy -> host $hx,$hy"
 
 # 5. HIDE — the guest hides its cursor for 10 s
 m=$(qline)
 ( gq "$GX python3 ~/display/xcursor.py hide 10" 30 > "$OUT/guest_hide.log" ) &
 HP=$!
 sleep 4
-HX python3 "$XC" image "$OUT/host_hidden.pam" | sed 's/^/BRK_HOST_HIDDEN /'
+HX python3 "$XC" image "$OUT/cur_host_hidden.pam" | sed 's/^/BRK_HOST_HIDDEN /'
 shot hidden
 wait $HP
 sleep 3
-HX python3 "$XC" image "$OUT/host_after_hide.pam" | sed 's/^/BRK_HOST_AFTER_HIDE /'
+HX python3 "$XC" image "$OUT/cur_host_after_hide.pam" | sed 's/^/BRK_HOST_AFTER_HIDE /'
 say "HIDE_GUEST $(tr '\n' ' ' < "$OUT/guest_hide.log")"
 say "HIDE_RELAY $(since "$m" | grep -ac 'kf3: broker:') relay lines, host_cursor_refusals=$(since "$m" | grep -ac 'host cursor REFUSED')"
 
@@ -143,21 +149,26 @@ HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
 HX xdotool key --clearmodifiers ctrl+alt+g >/dev/null 2>&1
 sleep 3
 say "GRAB_ON $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | cut -d: -f4- | tr '\n' '|' | cut -c1-240)"
-HX python3 "$XC" image "$OUT/host_grab.pam" | sed 's/^/BRK_HOST_GRAB /'
+HX python3 "$XC" image "$OUT/cur_host_grab.pam" | sed 's/^/BRK_HOST_GRAB /'
 shot grab
-say "GRAB_FRAME_DIFF hover_vs_grab_px=$(boxdiff hover grab "$gx" "$gy") (the composed cursor near the guest pointer $gx,$gy)"
+hshot host_grab
+say "GRAB_FRAME_DIFF host_hover_vs_host_grab_px=$(boxdiff host_hover host_grab "$hx" "$hy") console_hover_vs_grab_px=$(boxdiff hover grab "$gx" "$gy") (the composed cursor near the guest pointer; the host shot is what the broker shows — the console's frames are fresh only on the host-memory rungs)"
 HX xdotool mousemove_relative -- 60 40 >/dev/null 2>&1; sleep 2
 gpos2=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
 shot grab_moved
+hshot host_grab_moved
 set -- $gpos2
-say "GRAB_MOVE guest_pointer=$gpos -> $gpos2 moved_cursor_px=$(boxdiff grab grab_moved "${1:-0}" "${2:-0}")"
+hx2=$(( ${X:-0} + ${1:-0} * ${WIDTH:-1} / ${fw:-1} )); hy2=$(( ${Y:-0} + ${2:-0} * ${HEIGHT:-1} / ${fh:-1} ))
+say "GRAB_MOVE guest_pointer=$gpos -> $gpos2 host_moved_cursor_px=$(boxdiff host_grab host_grab_moved "$hx2" "$hy2") console_moved_cursor_px=$(boxdiff grab grab_moved "${1:-0}" "${2:-0}")"
 m=$(qline)
 HX xdotool key --clearmodifiers ctrl+alt+g >/dev/null 2>&1
 sleep 3
 say "GRAB_OFF $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | cut -d: -f4- | tr '\n' '|' | cut -c1-240)"
 HX xdotool mousemove --window "$W" 720 410 >/dev/null 2>&1; sleep 2
-HX python3 "$XC" image "$OUT/host_after_grab.pam" | sed 's/^/BRK_HOST_AFTER_GRAB /'
+HX python3 "$XC" image "$OUT/cur_host_after_grab.pam" | sed 's/^/BRK_HOST_AFTER_GRAB /'
 shot after_grab
+hshot host_after_grab
+say "AFTER_GRAB host_hover_vs_host_after_grab_px=$(boxdiff host_hover host_after_grab "$hx" "$hy") (hover again: no cursor in the frame)"
 
 # E5 (part): what QEMU holds — descriptors by kind, its VRAM
 pid=${KF_QEMU_PID:-}

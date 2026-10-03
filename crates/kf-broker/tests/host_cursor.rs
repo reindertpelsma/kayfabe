@@ -5,12 +5,12 @@
 //! decides it changed), so a detector that never fires cannot pass.
 
 use kf_broker::wire::{
-    CAP_CURSOR, CAP_DMABUF, CMD_CURSOR, CMD_SIZE, CURSOR_HIDE, CURSOR_SET, CURSOR_SHOW, EV_FOCUS,
-    EV_GRAB, EV_HELLO, EV_KEY, F_GRABBED, FOURCC_AR24, Pkt,
+    CAP_CURSOR, CAP_DMABUF, CMD_CURSOR, CMD_SIZE, CURSOR_HIDE, CURSOR_SET, CURSOR_SHOW, EV_ABS,
+    EV_FOCUS, EV_GRAB, EV_HELLO, EV_KEY, F_GRABBED, FOURCC_AR24, Pkt,
 };
 use kf_broker::{
-    CursorImage, CursorMode, CursorShare, CursorWant, FrameRing, Host, Link, Recv, Relay,
-    RelayConfig, Sent, SlotFds,
+    CursorImage, CursorMode, CursorShare, CursorWant, FrameRing, Host, Link, PointerAbs, Recv,
+    Relay, RelayConfig, Sent, SlotFds,
 };
 use kf_linux_raw::{SharedRam, fd_inode};
 use std::cell::RefCell;
@@ -513,4 +513,36 @@ fn a_reconnect_is_sent_the_cursor_again_and_no_broker_composes() {
         "the new broker holds no cursor: sent again"
     );
     assert_eq!(t.cursors()[0].fd.as_ref().unwrap().2, pixels(&a));
+}
+
+/// ★ The relay hands the worker the absolute position it injected — clamped exactly like the input
+/// it describes — from which the hot spot NVKMS does not program is derived (`HotTracker`).
+#[test]
+fn an_injected_absolute_position_reaches_the_cursor_share() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR, 0);
+    assert_eq!(t.share.abs(), (0, None));
+    for (x, y, want) in [(703, 405, (703, 405)), (5000, -7, (1023, 0))] {
+        let p = Pkt {
+            ty: EV_ABS,
+            x,
+            y,
+            w0: 1024,
+            w1: 768,
+            ..Pkt::default()
+        };
+        t.wire.borrow_mut().inbox.extend(p.encode());
+        t.read();
+        let (_, a) = t.share.abs();
+        assert_eq!(
+            a,
+            Some(PointerAbs {
+                x: want.0,
+                y: want.1,
+                w: 1024,
+                h: 768
+            })
+        );
+    }
+    assert_eq!(t.share.abs().0, 2, "one per injected position");
 }

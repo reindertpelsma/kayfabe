@@ -224,6 +224,20 @@ impl CursorWant {
     }
 }
 
+/// ★ The absolute pointer position the relay last injected: `x`, `y` in a `w` x `h` range (the
+/// broker's), which QEMU scales onto the tablet's axis and the guest onto its head.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PointerAbs {
+    /// Column, `0..w`.
+    pub x: i32,
+    /// Row, `0..h`.
+    pub y: i32,
+    /// Range width.
+    pub w: u32,
+    /// Range height.
+    pub h: u32,
+}
+
 /// ★ The worker ↔ relay share for the guest's cursor. VM-lifetime; see the module docs.
 #[derive(Debug)]
 pub struct CursorShare {
@@ -232,6 +246,10 @@ pub struct CursorShare {
     slot: Mutex<Option<(u64, CursorWant)>>,
     /// Posts that found the mailbox busy (retried on the next frame).
     busy_posts: AtomicU64,
+    /// ★ The last injected absolute position, packed `x | y << 16 | w << 32 | h << 48` …
+    abs: AtomicU64,
+    /// … and how many have been injected (0: none yet).
+    abs_seq: AtomicU64,
 }
 
 impl Default for CursorShare {
@@ -249,7 +267,37 @@ impl CursorShare {
             posted: AtomicU64::new(0),
             slot: Mutex::new(None),
             busy_posts: AtomicU64::new(0),
+            abs: AtomicU64::new(0),
+            abs_seq: AtomicU64::new(0),
         }
+    }
+
+    /// ★ **Relay**: an absolute position was injected (hover). Each field is clamped to 16 bits
+    /// (the broker's range is at most 8192 a side).
+    pub fn note_abs(&self, a: PointerAbs) {
+        let c = |v: i64| u64::try_from(v.clamp(0, 0xffff)).unwrap_or(0);
+        let packed = c(i64::from(a.x))
+            | c(i64::from(a.y)) << 16
+            | c(i64::from(a.w)) << 32
+            | c(i64::from(a.h)) << 48;
+        self.abs.store(packed, Ordering::Release);
+        self.abs_seq.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// ★ **Worker**: the injected-position count and the last position (`None` before the first).
+    /// A torn pair costs one estimate, which [`HotTracker`] does not act on until it settles.
+    #[must_use]
+    pub fn abs(&self) -> (u64, Option<PointerAbs>) {
+        let seq = self.abs_seq.load(Ordering::Acquire);
+        let v = self.abs.load(Ordering::Acquire);
+        let f = |shift: u32| (v >> shift) & 0xffff;
+        let a = PointerAbs {
+            x: i32::try_from(f(0)).unwrap_or(0),
+            y: i32::try_from(f(16)).unwrap_or(0),
+            w: u32::try_from(f(32)).unwrap_or(0),
+            h: u32::try_from(f(48)).unwrap_or(0),
+        };
+        (seq, (seq != 0).then_some(a))
     }
 
     /// ★ **Worker**, once per frame: the relay's current decision. A stale read costs one frame.
@@ -307,6 +355,58 @@ impl CursorShare {
     #[must_use]
     pub fn busy_posts(&self) -> u64 {
         self.busy_posts.load(Ordering::Relaxed)
+    }
+}
+
+/// ★ How long the injected pointer must stay put before the hot spot is derived from it again: the
+/// guest has had that long to move its cursor there, so the cursor point and the pointer belong
+/// to the same moment.
+pub const HOT_SETTLE_MS: u64 = 40;
+
+/// ★ The guest's hot spot for the image it shows (`kf_disp::scanout::hot_from_pointer`: NVKMS
+/// programs 0, so it is derived from the pointer the VMM injected). A NEW image takes the hot spot
+/// derived at once (or the programmed one when there is none) — the host should change shape with
+/// the guest — and is then corrected only from a SETTLED pointer ([`HOT_SETTLE_MS`] without a new
+/// injection) and only by more than a pixel of rounding, so a moving pointer, or one pixel of
+/// scaling, never re-sends the image.
+#[derive(Debug, Default)]
+pub struct HotTracker {
+    seq: u64,
+    seq_at_ms: u64,
+    image: Option<u64>,
+    hot: (u32, u32),
+}
+
+impl HotTracker {
+    /// The hot spot to show `pixels` with. `seq` is the share's injected-position count, `now_ms`
+    /// the worker's clock, `derived` the hot spot the latest position gives (or `None`),
+    /// `programmed` the one in the cursor's registers.
+    pub fn hot(
+        &mut self,
+        pixels: &[u8],
+        seq: u64,
+        now_ms: u64,
+        derived: Option<(u32, u32)>,
+        programmed: (u32, u32),
+    ) -> (u32, u32) {
+        if seq != self.seq {
+            self.seq = seq;
+            self.seq_at_ms = now_ms;
+        }
+        let settled = seq != 0 && now_ms.saturating_sub(self.seq_at_ms) >= HOT_SETTLE_MS;
+        let mut id = 0xcbf2_9ce4_8422_2325u64;
+        for b in (pixels.len() as u64).to_le_bytes().iter().chain(pixels) {
+            id = (id ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3);
+        }
+        if self.image != Some(id) {
+            self.image = Some(id);
+            self.hot = derived.unwrap_or(programmed);
+        } else if let Some(d) = derived.filter(|_| settled)
+            && (d.0.abs_diff(self.hot.0) > 1 || d.1.abs_diff(self.hot.1) > 1)
+        {
+            self.hot = d;
+        }
+        self.hot
     }
 }
 
@@ -446,6 +546,67 @@ mod tests {
         );
         assert!(!CursorMode::Off.reads());
         assert!(CursorMode::Grabbed.reads() && CursorMode::Hover.reads());
+    }
+
+    /// ★ The hot spot NVKMS does not program: a new image takes the derived one at once (else the
+    /// programmed one); a moving pointer never re-sends; a settled pointer corrects by more than a
+    /// pixel, never by one.
+    #[test]
+    fn the_hot_spot_follows_a_settled_pointer_and_ignores_a_moving_one() {
+        let (a, b) = (vec![1u8; 64], vec![2u8; 64]);
+        let mut t = HotTracker::default();
+        assert_eq!(t.hot(&a, 0, 0, None, (0, 0)), (0, 0), "no pointer yet");
+        assert_eq!(
+            t.hot(&b, 1, 5, Some((3, 5)), (0, 0)),
+            (3, 5),
+            "a new image: at once"
+        );
+        // the pointer moves (a new injection each pass): the estimate is not acted on
+        assert_eq!(t.hot(&b, 2, 10, Some((9, 9)), (0, 0)), (3, 5));
+        assert_eq!(t.hot(&b, 3, 15, Some((12, 1)), (0, 0)), (3, 5));
+        // it stops at injection 4: not yet settled at +39 ms, settled at +40
+        assert_eq!(t.hot(&b, 4, 20, Some((6, 6)), (0, 0)), (3, 5));
+        assert_eq!(t.hot(&b, 4, 59, Some((6, 6)), (0, 0)), (3, 5));
+        assert_eq!(t.hot(&b, 4, 60, Some((6, 6)), (0, 0)), (6, 6), "settled");
+        // one pixel of rounding is not a change
+        assert_eq!(t.hot(&b, 4, 200, Some((7, 5)), (0, 0)), (6, 6));
+        // a settled pointer off the image says nothing
+        assert_eq!(t.hot(&b, 4, 300, None, (0, 0)), (6, 6));
+        // back to the first image: a new image again, derived at once
+        assert_eq!(t.hot(&a, 4, 310, Some((1, 2)), (0, 0)), (1, 2));
+    }
+
+    /// The relay's injected position round-trips through the share, clamped to 16 bits.
+    #[test]
+    fn the_injected_position_round_trips_through_the_share() {
+        let s = CursorShare::new();
+        assert_eq!(s.abs(), (0, None));
+        let a = PointerAbs {
+            x: 703,
+            y: 405,
+            w: 1024,
+            h: 768,
+        };
+        s.note_abs(a);
+        assert_eq!(s.abs(), (1, Some(a)));
+        s.note_abs(PointerAbs {
+            x: -3,
+            y: 70_000,
+            w: 8192,
+            h: 8192,
+        });
+        assert_eq!(
+            s.abs(),
+            (
+                2,
+                Some(PointerAbs {
+                    x: 0,
+                    y: 0xffff,
+                    w: 8192,
+                    h: 8192
+                })
+            )
+        );
     }
 
     /// ★ The mailbox: latest wins, a generation per post, and a busy mailbox is never waited on.

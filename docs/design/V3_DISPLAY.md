@@ -2492,6 +2492,25 @@ through it changes no guest byte); **E6** E1 on Turing, Ada and GB20x.
 
 ### 8.12 The guest cursor as the host pointer — hover mode (`OWNER_RULINGS.md` §O)
 
+> ⊘ **CORRECTED 2026-10-03 (box 54032077, run `brkA`, kf3 `6da16d2f` + broker `9cb736f`) — the hot
+> spot was wrong as built.** The first SET on hardware said `256x256 hot 0,0`: **NVKMS hard-codes the
+> hardware hot spot to 0** (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6565-6569`, "Hard code the
+> cursor hotspot") and moves the image's top-left instead; nvidia-drm has no hot-spot handling at all.
+> So the hot spot the guest meant is in no register, and a host cursor at hot 0,0 sits offset from
+> where the guest's clicks land by the X cursor's own hot spot (a few pixels for an arrow, about half
+> the image for a crosshair or an I-beam). **Now** it is derived: in hover the VMM injected the
+> guest's pointer itself, so hot spot = pointer (the injected position, scaled from the broker's
+> range onto the head) − the image's top-left (`kf_disp::scanout::hot_from_pointer`). A new image
+> takes the derived hot spot at once; it is corrected only from a pointer that stayed put for
+> `HOT_SETTLE_MS` = 40 ms (the cursor point and the pointer then belong to the same moment), and
+> only by more than one pixel of rounding (`kf_broker::cursor::HotTracker`), so a moving pointer
+> never re-sends the image. Tests: `scanout.rs` `the_hot_spot_is_the_pointer_minus_the_images_top_left`,
+> `cursor.rs` `the_hot_spot_follows_a_settled_pointer_and_ignores_a_moving_one`, `host_cursor.rs`
+> `an_injected_absolute_position_reaches_the_cursor_share`; five bite-mutations (an unsettled
+> pointer acted on, no hysteresis, a new image waiting for the settle, the broker's range not
+> scaled, the relay not recording the position) each fail one of them. ⚠ The derivation has not
+> run on a box yet: the next run grades it against the guest X server's own cursor (XFixes).
+
 **STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-03 (branch `v3-broker`, after the merge with
 master's boot display). Box results: see the end of this section; until a line there says
 otherwise, nothing of it has run on a GPU.**
@@ -2551,4 +2570,49 @@ are posted between two entries the broker gets ONE SET, of the newest
   the source pitch ignored.
 - kf3.c is unchanged by this step (the cursor is Rust's end to end); KF3 ABI stays 12.
 
-**Box (vdisp, RTX 3060, 580.159.04) — results land here with both revisions; see `traces/v3_display/`.**
+**Box (vdisp = vast 54032077, RTX 3060, host driver 580.159.04, KDE on Xorg with the NVIDIA DDX).**
+Evidence: `traces/v3_display/broker_20261003/<run>/`; harness `scripts/bench/display/broker_lane.sh`
+(`prep`, `run`) and `broker_hook.sh`.
+
+- **Run `brkA` — kf3 `6da16d2f` (the binary's path stamp, `run_brkA_rev.txt`), harness `aa141a99`,
+  broker `9cb736f` (nvkvm-pv `broker-cursor-gpucopy`), 2026-10-03.** `display-broker-vram=auto`,
+  the broker on X11 with its default present mode. The broker was started by hand ~20 s into the
+  boot (the lane's own start failed — the session user cannot traverse `/root`; fixed in
+  `d2864f2d`), hence `failed_attempts=6` before it connected.
+  - **E0.** Driver 580.159.04 (inside 575.51.02 … 615.71.09); nvidia-drm loaded `modeset=N` — the
+    rung's precondition was NOT met as the box came; `prep` reloaded it `modeset=1` with no X server
+    up. Render node `renderD128` (226:128), `root:render 0660` plus an ACL for the desktop's user.
+    `GET_DEV_INFO` gave the modifier `0x0300000000606014` and gpu_id 0x7 (`GPU-copy rung possible`).
+  - **EV_DEVICE names the real render node:** the broker logged `the X server renders on DRM device
+    226:128 (render node)`, and the relay `the compositor renders on this GPU`.
+  - **Rung 0 on the same GPU, and the fallback before it:** the first frames went LINEAR (the VRAM
+    slots are provisioned only at the first explicit yes); the NVIDIA X server then refused LINEAR
+    (`the display CANNOT show XR24 modifier 0x0`, its frame reclaimed by name) and answered YES for
+    block-linear; from then on every frame was a GPU copy — the device's exit status:
+    `broker[sent=3446 gpucopy=3445 releases=3445 …]`, `scanout_pack=3464 scanout_d2h=360
+    display_vram_mib=50`: every GPU-copy frame came back RELEASEd, i.e. the X server imported each.
+  - **The guest desktop end to end through the broker:** `host_desktop.png` is the HOST's root window
+    with the broker window fullscreen, showing the guest's Cinnamon session (its own
+    "fallback mode" dialog — a guest-side Cinnamon fallback this bench's M3 lanes have seen before,
+    not a display fault) drawn correctly from the block-linear copy. The window resize also re-moded
+    the guest through the 3c hotplug (`resize 1024x768 -> monitor 1024x768 … hotplug posted`).
+  - **The hover cursor replaces the host pointer:** mode `hover` from the connection on; one SET
+    (`guest cursor image 256x256 hot 0,0` — the hot spot defect above); the host's cursor over the
+    window was the guest's arrow (`cur_host_hover.png`, 254 visible pixels).
+  - **Hidden when the guest hides it:** the guest called `XFixesHideCursor` for 10 s: the host's
+    cursor over the window was blank (`visible_px=0`), then the same image again (same digest)
+    after; counters `cursor_hides=2 cursor_shows=1`, `host_cursor_reads=1672 host_cursor_refused=0`.
+  - **CTRL+ALT+G:** `grab ON` → `guest cursor: composed into the frame (grabbed; …)`, the relative
+    device selected, the host's cursor blank (`cur_host_grab.png`); a second CTRL+ALT+G → `grab off`,
+    hover again, the guest's image back over the window. ⚠ Whether the frame carried the composed
+    cursor under grab was NOT graded in this run: the hook compared the console's screendumps, which
+    on rung 0 stay at a stale 640x480 frame (§8.11's "screendump freshness" limit — no host copy is
+    made for an idle console while the broker takes the GPU copy), and it overwrote the root-window
+    shots with the cursor images (both fixed in the hook for the next run).
+  - **E5 (part), raw:** QEMU held 10 dma-buf descriptors (five VRAM slots and five udmabufs would be
+    ten; not attributed one by one), 5 `/dev/nvidiactl` and 311 `/dev/nvidia<N>` descriptors, and
+    8728 MiB of VRAM (the 8192 MiB store and 50 MiB of display slots are inside it). ⚠ This listing
+    cannot tell a slot's RM export fd from QEMU's other `nvidiactl` descriptors, so "the export fd is
+    closed after the imports" is NOT graded by it.
+  - **display-max-fps:** NOT built anywhere (`OWNER_RULINGS.md` §M is a ruling, no branch carries the
+    property), so it could not be graded.

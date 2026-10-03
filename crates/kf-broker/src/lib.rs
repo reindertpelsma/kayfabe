@@ -37,7 +37,7 @@ pub mod wire;
 pub use conn::{Counters, Host, Input, Link, Recv, Relay, RelayConfig, Rung, Sent};
 #[doc(hidden)]
 pub use conn::{LogCapture, capture_log};
-pub use cursor::{CursorImage, CursorMode, CursorShare, CursorWant};
+pub use cursor::{CursorImage, CursorMode, CursorShare, CursorWant, HotTracker, PointerAbs};
 pub use link::{MAX_BROKER_UID, UnixLink, broker_uid_property, broker_uids, effective_uid};
 pub use slots::{
     FrameGeom, FrameRing, InstallRefusal, Kind, SlotFds, Take, VramFds, VramGeom, frame_bytes,

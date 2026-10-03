@@ -658,6 +658,36 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
     })
 }
 
+/// ★★ §O, found on hardware (box 54032077, run `brkA`, 2026-10-03): **NVKMS hard-codes the
+/// hardware hot spot to 0** (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6565-6569`, "Hard code
+/// the cursor hotspot") and moves the image's top-left instead, so the hot spot the guest MEANT is
+/// in no register: the first SET of that run said `hot 0,0` for an arrow whose X hot spot is not
+/// there. It is where the guest's POINTER is, minus where the image's top-left is (`point -
+/// programmed hot`). In hover the VMM knows that pointer — it injected it: `abs` in the broker's
+/// `range`, which QEMU scales to the tablet's axis and the guest maps onto the head's `frame` — so
+/// the hot spot is derived from it. `None` when the result lies outside the image (the pointer and
+/// the cursor point belong to different moments, or the pointer is not over this head). Within a
+/// pixel of rounding (QEMU's and the guest's scaling).
+#[must_use]
+pub fn hot_from_pointer(
+    c: &CursorScan,
+    abs: (i32, i32),
+    range: (u32, u32),
+    frame: (u32, u32),
+) -> Option<(u32, u32)> {
+    if range.0 == 0 || range.1 == 0 {
+        return None;
+    }
+    let gx = i64::from(abs.0) * i64::from(frame.0) / i64::from(range.0);
+    let gy = i64::from(abs.1) * i64::from(frame.1) / i64::from(range.1);
+    let hx = gx - (i64::from(c.x) - i64::from(c.hot_x));
+    let hy = gy - (i64::from(c.y) - i64::from(c.hot_y));
+    let s = i64::from(c.size);
+    ((0..s).contains(&hx) && (0..s).contains(&hy))
+        .then(|| (u32::try_from(hx).ok(), u32::try_from(hy).ok()))
+        .and_then(|(x, y)| Some((x?, y?)))
+}
+
 impl HostCursorSrc {
     /// ★ The image as the host takes it: `size` x `size` premultiplied `ARGB8888` (B, G, R, A
     /// bytes), rows tight — what the head's blend `out = src * fs(a) + dst * fd(a)` means as an
@@ -1310,6 +1340,45 @@ mod tests {
         let (h, raw) = host32(2, 0, 255, [0; 4]);
         let out = h.image(&raw).unwrap().expect("an opaque square is visible");
         assert!(out.chunks(4).all(|p| p == [0, 0, 0, 255]));
+    }
+
+    /// ★ NVKMS programs hot spot 0 and places the image's top-left at the point, so the hot spot
+    /// is the pointer minus the point — in the head's pixels, from the broker's range; outside the
+    /// image is no answer.
+    #[test]
+    fn the_hot_spot_is_the_pointer_minus_the_images_top_left() {
+        // NVKMS: hot 0, the image's top-left at (700, 400); the guest pointer at (703, 405)
+        let mut c = cursor(700, 400);
+        (c.hot_x, c.hot_y) = (0, 0);
+        assert_eq!(
+            hot_from_pointer(&c, (703, 405), (1024, 768), (1024, 768)),
+            Some((3, 5))
+        );
+        // the broker's range is not the head's size: scaled into the head's pixels
+        assert_eq!(
+            hot_from_pointer(&c, (1406, 810), (2048, 1536), (1024, 768)),
+            Some((3, 5))
+        );
+        // a driver that programs its hot spot: the point IS the pointer, the result the same
+        let mut p = cursor(703, 405);
+        (p.hot_x, p.hot_y) = (3, 5);
+        assert_eq!(
+            hot_from_pointer(&p, (703, 405), (1024, 768), (1024, 768)),
+            Some((3, 5))
+        );
+        // the pointer left of / below the image, a range of 0: no answer
+        assert_eq!(
+            hot_from_pointer(&c, (699, 405), (1024, 768), (1024, 768)),
+            None
+        );
+        assert_eq!(
+            hot_from_pointer(&c, (703, 464), (1024, 768), (1024, 768)),
+            None
+        );
+        assert_eq!(
+            hot_from_pointer(&c, (703, 405), (0, 768), (1024, 768)),
+            None
+        );
     }
 
     /// ⊘ What the host cannot show is refused by name — the caller composes it in every mode:

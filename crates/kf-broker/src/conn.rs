@@ -53,7 +53,7 @@
 //! the time (`now_ms`), so the machine is deterministic under test. Every syscall is
 //! non-blocking; nothing here waits.
 
-use crate::cursor::{BrokerCursor, CursorMode, CursorOp, CursorShare, CursorWant};
+use crate::cursor::{BrokerCursor, CursorMode, CursorOp, CursorShare, CursorWant, PointerAbs};
 use crate::slots::{FrameRing, Kind, MAX_SLOTS, Take};
 use crate::wire::{
     CAP_CURSOR, CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CLOSE_FORCE,
@@ -1646,15 +1646,18 @@ impl<L: Link> Relay<L> {
             EV_ABS if p.w0 > 0 && p.w1 > 0 => {
                 let w = i32::try_from(p.w0.min(1 << 20)).unwrap_or(1);
                 let h = i32::try_from(p.w1.min(1 << 20)).unwrap_or(1);
-                emit(
-                    out,
-                    Input::Abs {
-                        x: p.x.clamp(0, w - 1),
-                        y: p.y.clamp(0, h - 1),
-                        w,
-                        h,
-                    },
-                );
+                let (x, y) = (p.x.clamp(0, w - 1), p.y.clamp(0, h - 1));
+                // ★ §O: the pointer the guest will move its cursor to — the worker derives the
+                // hot spot NVKMS does not program from it (`crate::cursor::HotTracker`)
+                if let Some(s) = &self.cursor {
+                    s.note_abs(PointerAbs {
+                        x,
+                        y,
+                        w: w.unsigned_abs(),
+                        h: h.unsigned_abs(),
+                    });
+                }
+                emit(out, Input::Abs { x, y, w, h });
             }
             EV_REL => {
                 if let Some(Input::Rel { dx, dy }) = out.last_mut() {

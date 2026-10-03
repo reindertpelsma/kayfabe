@@ -52,10 +52,15 @@ def libs():
     f.XFixesHideCursor.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
     f.XFixesShowCursor.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
     x.XQueryPointer.argtypes = [ctypes.c_void_p, ctypes.c_ulong] + [ctypes.c_void_p] * 7
+    f.XFixesQueryVersion.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
     d = x.XOpenDisplay(None)
     if not d:
         print("CURSOR_ERROR cannot open the display (DISPLAY/XAUTHORITY?)")
         sys.exit(2)
+    # ⊘ [box 54032077, run brkA, 2026-10-03] without the version handshake the guest's X server
+    # answered XFixesGetCursorImage with nothing (Xvfb did not mind): XFixes requires it first
+    maj, mnr = ctypes.c_int(6), ctypes.c_int(0)
+    f.XFixesQueryVersion(d, ctypes.byref(maj), ctypes.byref(mnr))
     return x, f, d
 
 
