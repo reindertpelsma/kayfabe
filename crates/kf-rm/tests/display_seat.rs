@@ -359,8 +359,9 @@ fn default_off_every_claimed_control_still_reaches_the_ledger() {
     let set = claimed();
     assert_eq!(
         set.len(),
-        33 + 6,
-        "the NVKMS bring-up set (with the console pair and the display-SW object's query) and the six internal controls"
+        34 + 6,
+        "the NVKMS bring-up set (with the console pair, the display-SW object's query and the \
+         internal hotplug state) and the six internal controls"
     );
     let log = kf_rm::unserviced::UnservicedLog::new();
     let mut c = chain(false, &log);

@@ -168,6 +168,44 @@ impl Monitor {
         }
     }
 
+    /// ★ Display step 3c: the monitor for a host window of `w` x `h` at `mhz` millihertz (0: 60 Hz)
+    /// behind a connector whose pixel clock is limited to `max_pixel_khz` (`PCLK_LIMIT`; DVI
+    /// single-link is 165 000). The size is clamped to 640..=3840 x 480..=2160 and the refresh to the
+    /// EDID's 24..=75 Hz range; 1920x1080@60 is the CEA mode, anything else CVT reduced blanking; a
+    /// size whose clock exceeds the limit is scaled down at the SAME aspect ratio until it fits (the
+    /// broker scales the rest). The EDID then carries 1920x1080@60 as its second mode.
+    #[must_use]
+    pub fn for_window(w: u32, h: u32, mhz: u32, max_pixel_khz: u32) -> Monitor {
+        let hz = if mhz == 0 {
+            60
+        } else {
+            (mhz.saturating_add(500) / 1000).clamp(24, 75)
+        };
+        let (mut w, mut h) = (w.clamp(640, 3840), h.clamp(480, 2160));
+        let timing = loop {
+            let t = if (w & !7, h, hz) == (1920, 1080, 60) {
+                Some(Timing::cea_1080p60())
+            } else {
+                Timing::cvt_rb(w, h, hz)
+            };
+            match t {
+                Some(t) if t.pixel_khz <= max_pixel_khz || w <= 640 || h <= 480 => break t,
+                _ => {
+                    // 15/16 per step keeps the aspect ratio within a pixel
+                    w = (w * 15 / 16).max(640);
+                    h = (h * 15 / 16).max(480);
+                }
+            }
+        };
+        Monitor {
+            preferred: timing,
+            interface: Interface::Dvi,
+            name: "kayfabe".to_string(),
+            serial: 1,
+            max_pixel_khz,
+        }
+    }
+
     /// ★ The EDID base block (128 bytes, checksummed).
     ///
     /// # Errors
@@ -231,8 +269,14 @@ impl Monitor {
         name[used] = 0x0a;
         e[90..95].copy_from_slice(&[0, 0, 0, 0xfc, 0]);
         e[95..108].copy_from_slice(&name);
-        // dummy descriptor
-        e[108..126].copy_from_slice(&[0, 0, 0, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        // ★ 3c: a preferred mode other than 1080p60 keeps 1080p60 as the second detailed timing (a
+        // compositor can always fall back to it); otherwise the dummy descriptor
+        let cea = Timing::cea_1080p60();
+        if self.preferred != cea && cea.pixel_khz <= self.max_pixel_khz {
+            e[108..126].copy_from_slice(&dtd(&cea)?);
+        } else {
+            e[108..126].copy_from_slice(&[0, 0, 0, 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        }
         e[126] = 0; // no extension blocks
         let sum = e[..127].iter().fold(0u8, |a, b| a.wrapping_add(*b));
         e[127] = 0u8.wrapping_sub(sum);
@@ -329,5 +373,42 @@ mod tests {
         }
         assert!(Timing::cvt_rb(8192, 8192, 60).is_none());
         assert!(Timing::cvt_rb(1920, 1080, 500).is_none());
+    }
+
+    /// ★ 3c: a window becomes a monitor — clamped, CVT-RB (or CEA at 1080p60), fitted under the
+    /// connector's 165 MHz at the same aspect ratio, with 1080p60 as the second mode and a valid
+    /// checksum.
+    #[test]
+    fn a_window_becomes_a_monitor_fitted_under_the_connector() {
+        let m = Monitor::for_window(1600, 900, 0, 165_000);
+        assert_eq!((m.preferred.h_active, m.preferred.v_active), (1600, 900));
+        assert!((59_000..=61_000).contains(&m.preferred.refresh_mhz()));
+        let e = m.edid().unwrap();
+        assert_eq!(e.iter().fold(0u8, |a, b| a.wrapping_add(*b)), 0, "checksum");
+        assert_eq!(
+            u16::from_le_bytes([e[108], e[109]]),
+            14850,
+            "the second DTD is CEA 1080p60"
+        );
+        assert_eq!(
+            Monitor::for_window(1920, 1080, 60_000, 165_000).preferred,
+            Timing::cea_1080p60()
+        );
+        let d = Monitor::for_window(1920, 1080, 60_000, 165_000)
+            .edid()
+            .unwrap();
+        assert_eq!(d[111], 0x10, "1080p60 preferred: no duplicate second DTD");
+        // too small and too large are clamped; the refresh is clamped to the EDID's range
+        let s = Monitor::for_window(100, 100, 240_000, 165_000);
+        assert_eq!((s.preferred.h_active, s.preferred.v_active), (640, 480));
+        assert!(s.preferred.refresh_mhz() <= 76_000);
+        // 2560x1440 does not fit 165 MHz: scaled down at 16:9 until it does
+        let b = Monitor::for_window(2560, 1440, 60_000, 165_000);
+        assert!(b.preferred.pixel_khz <= 165_000, "{:?}", b.preferred);
+        let (w, h) = (b.preferred.h_active, b.preferred.v_active);
+        assert!(w < 2560 && h < 1440);
+        let aspect = f64::from(w) / f64::from(h);
+        assert!((aspect - 16.0 / 9.0).abs() < 0.02, "{w}x{h}");
+        assert!(b.edid().is_ok());
     }
 }

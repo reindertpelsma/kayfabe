@@ -142,7 +142,38 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
         "no_display_sw",
     ),
+    // ★ Display step 3c (resize, `V3_DISPLAY.md` §8.6): after a hotplug event NVKMS asks the PUBLIC
+    // `SYSTEM_GET_HOTPLUG_UNPLUG_STATE` (0x73012d), which kernel RM serves itself by asking physical
+    // RM this INTERNAL control and fanning the masks out
+    // (`ogkm-580: src/nvidia/src/kernel/gpu/disp/disp_common_kern_ctrl_minimal.c:49-100`). So this
+    // is the id the model claims: the pending masks, cleared on read.
+    (
+        "NV0073_CTRL_CMD_INTERNAL_GET_HOTPLUG_UNPLUG_STATE",
+        "hotplug_state",
+    ),
 ];
+
+/// `NV2080_NOTIFIERS_HOTPLUG` (`cl2080_notification.h:37`).
+pub const NOTIFIERS_HOTPLUG: u32 = 1;
+/// `NV01_EVENT_CLIENT_RM` (`nvos.h:436`): what a `GSP_RM_ALLOC` of an event carries on top of its
+/// notify index (`event.c:148-170`).
+pub const EVENT_CLIENT_RM: u32 = 0x0400_0000;
+/// The most hotplug registrations remembered (NVKMS makes one per GPU it drives).
+pub const MAX_HOTPLUG_REGISTRATIONS: usize = 4;
+
+/// ★ 3c: a live `NV01_EVENT_KERNEL_CALLBACK_EX` registration for `NV2080_NOTIFIERS_HOTPLUG` — the
+/// `(hClient, hEvent)` a hotplug `POST_EVENT` is addressed to. Retired on the FREE of the event, its
+/// parent or its client, and on every GSP re-init (a pair kept across a driver reload is dead, and
+/// a post to a dead pair wedges the RPC path, `kf_rm::osevent`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HotplugRegistration {
+    /// `hClient`.
+    pub client: u32,
+    /// `hEvent`.
+    pub event: u32,
+    /// The event's parent (the subdevice).
+    pub parent: u32,
+}
 
 /// The display classes a chip lists (a copy of the chip row's, so this crate owns its inputs).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -357,6 +388,10 @@ pub struct DisplayModel {
     /// ★ The display plane's wake: set when a plane consumes [`Self::statements`]; the control link
     /// then leaves them queued and calls it (after dropping the lock) instead of logging them.
     waker: Option<Waker>,
+    /// ★ 3c: display ids whose monitor changed since the last `INTERNAL_GET_HOTPLUG_UNPLUG_STATE`.
+    pub pending_plug: u32,
+    /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
+    pub hotplug: Vec<HotplugRegistration>,
 }
 
 /// The display plane's wake (an eventfd write, in the plane) — callable from any thread.
@@ -411,7 +446,65 @@ impl DisplayModel {
             seen: Vec::new(),
             ports: Arc::new(Ports::default()),
             waker: None,
+            pending_plug: 0,
+            hotplug: Vec::new(),
         }
+    }
+
+    /// ★ 3c: put `monitor` behind connector `index` (a resize asked for by the VMM's UI). Returns
+    /// the connector's display id when the monitor CHANGED — the plug mask
+    /// `INTERNAL_GET_HOTPLUG_UNPLUG_STATE` then reports — or `None` (no such connector, or the same
+    /// monitor: a request equal to the current one is deduplicated). A custom EDID the guest set
+    /// still shadows the monitor, as on bare metal.
+    pub fn set_monitor(&mut self, index: usize, monitor: Monitor) -> Option<u32> {
+        let c = self.connectors.get_mut(index)?;
+        if c.monitor == monitor {
+            return None;
+        }
+        c.monitor = monitor;
+        self.pending_plug |= c.display_id;
+        Some(c.display_id)
+    }
+
+    /// ★ 3c: record a hotplug registration (an ACCEPTED `GSP_RM_ALLOC` of
+    /// `NV01_EVENT_KERNEL_CALLBACK_EX` whose notify index is `HOTPLUG | CLIENT_RM`). Returns whether
+    /// it is now remembered (bounded; a duplicate pair is not added twice).
+    pub fn register_hotplug(&mut self, r: HotplugRegistration) -> bool {
+        if self
+            .hotplug
+            .iter()
+            .any(|h| (h.client, h.event) == (r.client, r.event))
+        {
+            return true;
+        }
+        if self.hotplug.len() >= MAX_HOTPLUG_REGISTRATIONS {
+            return false;
+        }
+        self.hotplug.push(r);
+        true
+    }
+
+    /// ★ 3c: an accepted FREE of `handle` under `client` (the client itself when equal): every
+    /// registration naming it as its event, its parent or its client is retired. Returns how many.
+    pub fn retire_hotplug(&mut self, client: u32, handle: u32) -> usize {
+        let before = self.hotplug.len();
+        self.hotplug.retain(|h| {
+            h.client != client || (handle != client && h.event != handle && h.parent != handle)
+        });
+        before - self.hotplug.len()
+    }
+
+    /// ★ 3c: a GSP re-init (the guest driver reloaded): every registration is dead.
+    pub fn retire_all_hotplug(&mut self) -> usize {
+        let n = self.hotplug.len();
+        self.hotplug.clear();
+        n
+    }
+
+    /// ★ 3c: where a hotplug `POST_EVENT` goes now (the newest live registration), if anywhere.
+    #[must_use]
+    pub fn hotplug_target(&self) -> Option<HotplugRegistration> {
+        self.hotplug.last().copied()
     }
 
     /// ★ Attach the display plane: it drains [`Self::statements`] itself and is woken through `wake`.
@@ -687,6 +780,15 @@ impl DisplayModel {
                     "platform",
                     k("NV0073_CTRL_SPECIFIC_CONNECTOR_PLATFORM_DEFAULT_ADD_IN_CARD")?,
                 );
+                Ok(p.buf)
+            }
+            "hotplug_state" => {
+                let mut p =
+                    self.view("NV0073_CTRL_SYSTEM_GET_HOTPLUG_UNPLUG_STATE_PARAMS", params)?;
+                p.set("flags", 0); // LID open (a desktop monitor)
+                p.set("hotPlugMask", u64::from(self.pending_plug));
+                p.set("hotUnplugMask", 0);
+                self.pending_plug = 0;
                 Ok(p.buf)
             }
             "get_type" => {
@@ -1308,5 +1410,76 @@ mod tests {
             1 + 8,
             "the registry holds one entry per channel the display has"
         );
+    }
+
+    /// ★ 3c: a resize is a new monitor behind the connector; the INTERNAL hotplug state (0x730401 —
+    /// not the public 0x73012d, which kernel RM serves itself) reports its display id once, then
+    /// nothing; the same monitor again is deduplicated; GET_EDID serves the new preferred mode.
+    #[test]
+    fn a_new_monitor_is_reported_once_by_the_internal_hotplug_state() {
+        let mut m = model();
+        let id = cmd(&m, "NV0073_CTRL_CMD_INTERNAL_GET_HOTPLUG_UNPLUG_STATE");
+        assert_eq!(id, 0x0073_0401);
+        assert!(m.claims(id));
+        let s = "NV0073_CTRL_SYSTEM_GET_HOTPLUG_UNPLUG_STATE_PARAMS";
+        let ask = |m: &mut DisplayModel| m.control(id, &vec![0; size(m, s)]).unwrap().unwrap();
+        let r = ask(&mut m);
+        assert_eq!(get(&m, s, &r, "hotPlugMask"), 0, "nothing pending at boot");
+        let mon = Monitor::for_window(1600, 900, 60_000, 165_000);
+        assert_eq!(m.set_monitor(0, mon.clone()), Some(0x100));
+        assert_eq!(m.set_monitor(0, mon), None, "the same monitor is no change");
+        assert_eq!(
+            m.set_monitor(5, Monitor::default_1080p()),
+            None,
+            "no such connector"
+        );
+        let r = ask(&mut m);
+        assert_eq!(get(&m, s, &r, "hotPlugMask"), 0x100);
+        assert_eq!(get(&m, s, &r, "hotUnplugMask"), 0);
+        let r = ask(&mut m);
+        assert_eq!(get(&m, s, &r, "hotPlugMask"), 0, "cleared on read");
+        let e = "NV0073_CTRL_SPECIFIC_GET_EDID_V2_PARAMS";
+        let mut q = vec![0u8; size(&m, e)];
+        q[..4].copy_from_slice(&0x100u32.to_le_bytes());
+        let r = m
+            .control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q)
+            .unwrap()
+            .unwrap();
+        let edid = Params::new(m.layouts(), e, &r)
+            .unwrap()
+            .bytes("edidBuffer")
+            .unwrap()
+            .to_vec();
+        let w = u32::from(edid[56]) | (u32::from(edid[58] >> 4) << 8);
+        assert_eq!(w, 1600, "the preferred mode is the window's");
+    }
+
+    /// ★ 3c: the hotplug registrations — bounded, deduplicated, retired by the FREE of the event,
+    /// its parent or its client, and all at once by a GSP re-init.
+    #[test]
+    fn hotplug_registrations_retire_with_their_objects() {
+        let mut m = model();
+        let r = |client, event, parent| HotplugRegistration {
+            client,
+            event,
+            parent,
+        };
+        assert_eq!(m.hotplug_target(), None);
+        assert!(m.register_hotplug(r(1, 10, 5)));
+        assert!(m.register_hotplug(r(1, 10, 5)), "the same pair again");
+        assert_eq!(m.hotplug.len(), 1);
+        assert!(m.register_hotplug(r(2, 20, 6)));
+        assert_eq!(m.hotplug_target(), Some(r(2, 20, 6)), "the newest");
+        assert_eq!(m.retire_hotplug(2, 99), 0, "an unrelated object");
+        assert_eq!(m.retire_hotplug(1, 20), 0, "another client's handle");
+        assert_eq!(m.retire_hotplug(2, 6), 1, "the parent's FREE");
+        assert_eq!(m.retire_hotplug(1, 1), 1, "the client's FREE");
+        for i in 0..10 {
+            m.register_hotplug(r(3, 30 + i, 7));
+        }
+        assert_eq!(m.hotplug.len(), MAX_HOTPLUG_REGISTRATIONS, "bounded");
+        assert_eq!(m.retire_hotplug(3, 31), 1, "the event's own FREE");
+        assert_eq!(m.retire_all_hotplug(), MAX_HOTPLUG_REGISTRATIONS - 1);
+        assert_eq!(m.hotplug_target(), None);
     }
 }
