@@ -342,10 +342,12 @@ dependencies = [
  "kf-core",
  "kf-cuda",
  "kf-disp",
+ "kf-gop-image",
  "kf-gsp",
  "kf-host",
  "kf-linux-raw",
  "kf-mem",
+ "kf-oprom",
  "kf-rm",
  "kf-trap",
 ]

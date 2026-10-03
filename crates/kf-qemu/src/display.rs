@@ -392,6 +392,11 @@ pub struct DispCounters {
     pub scanout_us_total: AtomicU64,
     /// The longest one.
     pub scanout_us_max: AtomicU64,
+    /// ★ The boot display: copies started from the boot layer (`gop=on`).
+    pub boot_frames: AtomicU64,
+    /// ★ Milliseconds from the worker's start to the first armed head, when the boot layer retired
+    /// (at least 1; 0 while it is still shown, or without one).
+    pub boot_done_ms: AtomicU64,
 }
 
 /// Console frame slots: one the console shows, one ready, one the GPU fills.
@@ -537,6 +542,57 @@ impl ConsoleShare {
     }
 }
 
+/// ★ The boot display's picture (`gop=on`, `docs/design/V3_DISPLAY.md` §4.11.2): the boot layer
+/// (`kf_disp::scanout::boot_layer`, store `[0, G)`) and the frame size it fills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BootScan {
+    /// The one layer: an opaque pitch copy of store `[0, G)`.
+    pub layer: LayerPlan,
+    /// The frame's width and height (the mode's).
+    pub size: (u32, u32),
+}
+
+impl BootScan {
+    /// The boot layer for a `gop=on` plan.
+    ///
+    /// # Errors
+    /// `kf_disp::scanout::boot_layer`'s refusal, by name.
+    pub fn of(plan: &crate::gop::BootPlan) -> Result<BootScan, String> {
+        let s = plan.surface();
+        let layer = kf_disp::scanout::boot_layer(&s).map_err(|r| format!("gop=on: {}", r.0))?;
+        Ok(BootScan {
+            layer,
+            size: (s.width, s.height),
+        })
+    }
+}
+
+/// ★ What the console shows on one scanout copy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Shown {
+    /// The lowest running head's composition (every enabled window it owns) — the guest's own.
+    Armed(Composition),
+    /// The boot layer, until the guest arms its first head (`gop=on`).
+    Boot(LayerPlan, (u32, u32)),
+}
+
+/// ★★ Choose what the console shows. The boot layer is chosen BEFORE the window vocabulary's gate
+/// (`console_composition` is `None` without a `ScanVocab`, as on GB20x), so every family shows the
+/// boot picture; it is shown only while no head has ever been armed (`boot_done` is sticky), and
+/// never again after — an unload that leaves no head armed shows nothing, as on bare metal.
+/// ⊘ With no boot layer (`gop=off`) this is `console.map(Shown::Armed)`: today's choice.
+fn choose_shown(
+    console: Option<Composition>,
+    boot: Option<&BootScan>,
+    boot_done: bool,
+) -> Option<Shown> {
+    match (console, boot) {
+        (Some(c), _) => Some(Shown::Armed(c)),
+        (None, Some(b)) if !boot_done => Some(Shown::Boot(b.layer, b.size)),
+        (None, _) => None,
+    }
+}
+
 /// What the worker takes at its start.
 struct WorkerInit {
     engine: Engine,
@@ -568,6 +624,8 @@ pub struct DisplayPlane {
     scan: Option<ScanVocab>,
     /// The window formats the console can show.
     formats: ScanFormats,
+    /// ★ The boot display's picture (`gop=on`); `None` keeps today's console.
+    boot: Option<BootScan>,
 }
 
 impl std::fmt::Debug for DisplayPlane {
@@ -654,7 +712,21 @@ impl DisplayPlane {
             console: ConsoleShare::default(),
             scan,
             formats,
+            boot: None,
         })
+    }
+
+    /// ★ Show `boot` (the boot display's layer, `gop=on`) until the guest arms a head.
+    #[must_use]
+    pub fn with_boot(mut self, boot: Option<BootScan>) -> DisplayPlane {
+        self.boot = boot;
+        self
+    }
+
+    /// The boot display's picture, if any.
+    #[must_use]
+    pub fn boot(&self) -> Option<&BootScan> {
+        self.boot.as_ref()
     }
 
     /// The caps page's `(BAR0 offset, value)` words, and each cursor's `Free` (what the shadow holds
@@ -1014,6 +1086,15 @@ impl Device {
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
+        // ★ The boot display: sticky once the guest arms its first head.
+        let mut boot_done = false;
+        let started = Instant::now();
+        if let Some(b) = dp.boot.as_ref() {
+            eprintln!(
+                "kf3: display: boot layer — store [0, {:#x}) as {}x{} pitch {}, shown until the guest arms a head",
+                b.layer.extent, b.size.0, b.size.1, b.layer.pitch
+            );
+        }
         while !self.stop.load(Ordering::Acquire) {
             // the deadline: the earliest vblank, a 2 ms acquire poll, or 50 ms
             let now = Instant::now();
@@ -1194,13 +1275,30 @@ impl Device {
             // surface, and every completion from that flip on waits for that copy to COMPLETE (the
             // flip-complete notifier and the release that frees the old surface, then GET): the
             // queue below keeps effect order and holds each item until its copy is done.
-            let console = console_composition(&engine, dp);
-            scan.active = console.is_some();
+            if !boot_done
+                && dp.boot.is_some()
+                && engine.heads_armed().iter().any(|m| m.period_ns > 0)
+            {
+                boot_done = true;
+                let ms = u64::try_from(started.elapsed().as_millis())
+                    .unwrap_or(u64::MAX)
+                    .max(1);
+                dp.counters.boot_done_ms.store(ms, Ordering::Relaxed);
+                eprintln!(
+                    "kf3: display: the guest armed its first head at +{ms} ms — the boot layer is retired after {} boot frame(s)",
+                    dp.counters.boot_frames.load(Ordering::Relaxed)
+                );
+            }
+            let shown = choose_shown(
+                console_composition(&engine, dp),
+                dp.boot.as_ref(),
+                boot_done,
+            );
+            scan.active = shown.is_some();
             for e in effects {
                 if let Effect::Latched { window } = &e
-                    && console
-                        .as_ref()
-                        .is_some_and(|c| c.layers.iter().any(|l| l.window == *window))
+                    && let Some(Shown::Armed(c)) = &shown
+                    && c.layers.iter().any(|l| l.window == *window)
                 {
                     scan.barrier = scan.started + 1;
                     scan.want = true;
@@ -1224,11 +1322,11 @@ impl Device {
                 scan.completed(dp);
             }
             scan.give_up_if_stuck(dp);
-            if console.is_some() && scan.refresh_due(dp).is_some_and(|t| t <= Instant::now()) {
+            if shown.is_some() && scan.refresh_due(dp).is_some_and(|t| t <= Instant::now()) {
                 scan.want = true;
             }
             if scan.want && scan.inflight.is_none() {
-                scan.start(&mut io, console.as_ref());
+                scan.start(&mut io, shown.as_ref());
             }
             // 7. completions, IN ORDER — each after the state it reports and the copy it follows
             while queue.front().is_some_and(|q| q.need <= scan.done) {
@@ -1709,14 +1807,15 @@ impl ScanState {
     /// back to front, into the device staging frame, then copied into a free console frame. A copy
     /// that cannot be made (nothing shown, no kernel) completes at once — the flip it follows still
     /// completes (the engine latched it); only the console keeps its previous frame. A window that
-    /// cannot be composed is refused by name and left out.
-    fn start(&mut self, io: &mut Io<'_>, console: Option<&Composition>) {
+    /// cannot be composed is refused by name and left out. ★ The boot layer (`gop=on`) is one
+    /// VMM-authored layer: no context DMA to resolve and nothing to plan.
+    fn start(&mut self, io: &mut Io<'_>, shown: Option<&Shown>) {
         self.want = false;
         self.last = Some(Instant::now());
         self.started += 1;
         let n = self.started;
         let dp = io.dp;
-        let Some(comp) = console else {
+        let Some(shown) = shown else {
             self.done = n;
             return;
         };
@@ -1726,7 +1825,10 @@ impl ScanState {
             self.done = n;
             return;
         }
-        let (w, h) = (comp.width, comp.height);
+        let (w, h) = match shown {
+            Shown::Armed(comp) => (comp.width, comp.height),
+            Shown::Boot(_, size) => *size,
+        };
         if w == 0 || h == 0 || u64::from(w) * u64::from(h) > kf_disp::scanout::MAX_PIXELS {
             self.refuse(dp, &format!("a {w}x{h} composition"));
             self.done = n;
@@ -1734,7 +1836,14 @@ impl ScanState {
         }
         // plan every window (each bounded by its own context DMA) before the GPU sees one
         let mut layers = Vec::new();
-        for so in &comp.layers {
+        let windows: &[kf_disp::engine::Scanout] = match shown {
+            Shown::Armed(comp) => &comp.layers,
+            Shown::Boot(layer, _) => {
+                layers.push(*layer);
+                &[]
+            }
+        };
+        for so in windows {
             let planned = io.resolve(so.client, so.handle, so.chn).and_then(|dma| {
                 kf_disp::scanout::plan_layer(so, &dma, &dp.formats, w, h).map_err(|r| r.0)
             });
@@ -1809,7 +1918,12 @@ impl ScanState {
                     .map_err(|e| format!("the frame copy: {e}"))
             });
         match queued {
-            Ok(()) => self.inflight = Some((n, slot, (w, h), Instant::now())),
+            Ok(()) => {
+                if matches!(shown, Shown::Boot(..)) {
+                    dp.counters.boot_frames.fetch_add(1, Ordering::Relaxed);
+                }
+                self.inflight = Some((n, slot, (w, h), Instant::now()));
+            }
             Err(e) => {
                 self.refuse(dp, &e);
                 self.done = n;
@@ -1894,6 +2008,42 @@ mod tests {
             format: 1,
             serial,
         }
+    }
+
+    /// ★ The boot display: the boot layer until the first armed head — also on a family with no
+    /// window vocabulary (no composition at all) — and never again; without it, today's choice.
+    #[test]
+    fn the_boot_layer_shows_until_the_first_armed_head_and_never_again() {
+        let comp = Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: Vec::new(),
+        };
+        let boot = BootScan {
+            layer: kf_disp::scanout::boot_layer(&kf_disp::scanout::BootSurface {
+                width: 1920,
+                height: 1080,
+                pitch: 7680,
+                bytes: 0x7F_0000,
+            })
+            .unwrap(),
+            size: (1920, 1080),
+        };
+        let armed = Some(Shown::Armed(comp.clone()));
+        // ⊘ gop=off: exactly today's choice
+        assert_eq!(choose_shown(None, None, false), None);
+        assert_eq!(choose_shown(None, None, true), None);
+        assert_eq!(choose_shown(Some(comp.clone()), None, false), armed);
+        // gop=on, before any head: the boot layer (with or without a window vocabulary)
+        assert_eq!(
+            choose_shown(None, Some(&boot), false),
+            Some(Shown::Boot(boot.layer, (1920, 1080)))
+        );
+        // an armed composition always wins, and once a head was armed the boot layer never returns
+        assert_eq!(choose_shown(Some(comp.clone()), Some(&boot), false), armed);
+        assert_eq!(choose_shown(Some(comp), Some(&boot), true), armed);
+        assert_eq!(choose_shown(None, Some(&boot), true), None);
     }
 
     /// ★ M2 triple buffering: the console only ever takes the newest READY frame; the worker's next

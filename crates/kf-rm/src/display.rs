@@ -117,7 +117,12 @@ pub type SharedDisplayModel = Arc<Mutex<DisplayModel>>;
 
 /// The monitors behind the virtual connectors: one DVI-D monitor with a 1920×1080@60 EDID we author
 /// (`V3_DISPLAY.md` §4.7; a configurable size is later work).
-fn monitors() -> Vec<kf_disp::edid::Monitor> {
+///
+/// ★ Public because the boot display reads the SAME first monitor (`V3_DISPLAY.md` §4.11): kf3's
+/// option ROM carries its preferred mode and EDID, so the firmware's mode is the native one and the
+/// two statements of "what the monitor is" cannot disagree.
+#[must_use]
+pub fn monitors() -> Vec<kf_disp::edid::Monitor> {
     vec![kf_disp::edid::Monitor::default_1080p()]
 }
 
