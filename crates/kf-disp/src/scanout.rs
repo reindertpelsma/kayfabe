@@ -14,8 +14,11 @@ use crate::class::ClassTable;
 use crate::engine::Scanout;
 use crate::inst::{CtxDma, Target};
 
-/// The largest frame the console takes (3840x2160): three page-locked frames of this size are the
-/// plane's worst-case host memory (≈ 100 MB), and a guest cannot make it more.
+/// The largest frame the console takes (3840x2160). Three page-locked frames of this size are the
+/// plane's worst-case host memory with the display broker off (≈ 100 MB). ⊘ With `display-broker`
+/// on there are five slots and a slot that grew keeps its 1080p backing retired (descriptors are never
+/// closed): 5 × (7.9 + 31.6) MiB ≈ 198 MiB (`docs/design/V3_DISPLAY.md` §8.3). A guest cannot make it
+/// more.
 pub const MAX_PIXELS: u64 = 3840 * 2160;
 
 /// ★ A console pixel format — the FFI code the QEMU console maps to its own (`kf3.c`).
