@@ -10,8 +10,10 @@
  *    write reaches Rust without the BQL.
  *  - PRAMIN, BAR1 and BAR3 (RM's BAR2) are disposition-A RAM (P4): each is ONE host range Rust
  *    created and never unmaps (kf3_bar_ram), registered as a ram_device region — one memslot, no
- *    exit either way. What each page shows (a store view, guest RAM, or per-BAR scratch — never a
- *    hole) is re-pointed inside it by Rust with mmap(MAP_FIXED); QEMU never learns of a re-point.
+ *    exit either way. What each page shows (a store view, guest RAM, or the window's scratch — never
+ *    a hole) is re-pointed inside it by Rust with mmap(MAP_FIXED); QEMU never learns of a re-point.
+ *    Scratch is one small memfd tile per window, repeated (2026-10-03, V3_P4_PORT_MAP.md Q3), so a
+ *    guest touching every unmapped page costs the host at most one tile per window.
  *    ⊘ No BAR1 page traps at setup. Hopper+ BAR1 usermode (doorbell) views are placed where the
  *    guest's own BAR1 PTEs put them: Rust's VA thread asks for a write-trapped overlay at that
  *    offset (kf3_bar1_overlay, a main-loop bottom half) before the guest's invalidate clears

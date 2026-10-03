@@ -22,8 +22,13 @@
 //!
 //! No CPU read of a guest page table, no mirror of one: every walk is the GPU walker's, the only
 //! previous state is OUR ledger. No byte of guest memory is copied: every window page is a
-//! placement of the store, of guest RAM, or of per-BAR scratch (never a hole — a memslot over an
-//! unmapped range kills the guest). No host flag is forwarded: every verb is authored here.
+//! placement of the store, of guest RAM, or of the window's scratch (never a hole — a memslot over
+//! an unmapped range kills the guest). No host flag is forwarded: every verb is authored here.
+//!
+//! ⊘ **Scratch is TILED (2026-10-03)**: one small memfd per window ([`ScratchTile`]), mapped again
+//! and again, so a guest touching every unmapped page costs the host at most one tile per window
+//! (2 MiB for BAR1 and BAR2 at their default sizes, 1 MiB for PRAMIN) instead of the whole window.
+//! See [`window_with_scratch`] and `V3_P4_PORT_MAP.md` Q3.
 //!
 //! ## BAR1
 //!
@@ -36,7 +41,7 @@
 use crate::raw_unsafe::{BackendFd, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{
-    Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, SharedRam,
+    Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, ScratchTile,
 };
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
 use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, Settle, UsermodeRow};
@@ -267,7 +272,8 @@ pub struct WindowOps {
     rm: &'static HostRm,
     store: u32,
     win: &'static GuestWindow,
-    scratch: &'static SharedRam,
+    /// ★ The window's scratch tile (2026-10-03): every hole shows it, at `offset % tile`.
+    scratch: &'static ScratchTile,
     ram: &'static RamMap,
     /// PRAMIN only: nodes opened ahead of time and the reaper that releases retired views.
     trap: Option<&'static TrapNodes>,
@@ -383,16 +389,12 @@ impl ViewOps for WindowOps {
         Ok(())
     }
 
+    /// ★ One `mmap` per scratch tile the run touches ([`ScratchTile::cover`]): exactly ONE for
+    /// any PRAMIN run (the window is its own tile), `ceil(len / tile)` at most elsewhere — and
+    /// those are VA-thread sinks, never a vCPU's.
     fn sink(&self, at: u64, len: u64) -> Result<(), String> {
-        self.win
-            .place(
-                HostOffset::new(at),
-                len,
-                Backing::SharedFile {
-                    fd: self.scratch.as_backing_fd(),
-                    offset: at,
-                },
-            )
+        self.scratch
+            .cover(self.win, HostOffset::new(at), len)
             .map_err(|e| format!("mmap scratch @{at:#x}+{len:#x}: {e:?}"))?;
         if let Some(ix) = view_index() {
             ix.sunk(self.name, at, len);
@@ -1486,6 +1488,50 @@ pub struct MemCounters {
     pub prewarmed: AtomicU64,
 }
 
+// ★ Owner ruling 2026-09-25: a PRAMIN re-point is ONE `mmap` on the vCPU. With a tiled scratch
+// that holds only while PRAMIN is its own tile, since every run inside one tile is one piece.
+const _: () = assert!(
+    kf_linux_raw::scratch_tile_len(kf_trap::trappolicy::PRAMIN_LEN)
+        == kf_trap::trappolicy::PRAMIN_LEN,
+    "PRAMIN must be its own scratch tile, or its trap's sink becomes more than one mmap"
+);
+
+/// ★★★ **One guest window and its scratch, exactly as realize builds them** (2026-10-03).
+///
+/// The window is `len` bytes of host range under one memslot; before anyone can see it, every page
+/// of it shows the window's [`ScratchTile`], so it is never a hole. The tile is
+/// [`kf_linux_raw::scratch_tile_len`]`(len)` bytes, mapped again and again (offset `o` shows tile
+/// byte `o % tile`), so a guest that touches every unmapped page makes the host allocate at most one
+/// tile, not the window. Until 2026-10-03 the scratch was one memfd of the whole window and a guest
+/// READ of every page allocated all of it (`V3_P4_PORT_MAP.md` Q3).
+///
+/// `name` is the memfd's creation name: an operator finds it as `memfd:<name>` in
+/// `/proc/<pid>/fd` and reads its allocation with `stat -L -c %b`.
+///
+/// # Errors
+/// The window's `mmap`, the tile's memfd, or a cover placement, by name.
+pub fn window_with_scratch(
+    len: u64,
+    page: HostPageSize,
+    what: &str,
+    name: &std::ffi::CStr,
+) -> Result<(GuestWindow, ScratchTile), String> {
+    let w =
+        GuestWindow::create(len, page).map_err(|e| format!("{what} window of {len:#x}: {e:?}"))?;
+    let s = ScratchTile::for_window(name, &w)
+        .map_err(|e| format!("{what} scratch tile for {len:#x}: {e:?}"))?;
+    // ⊘ Scratch over the WHOLE window before anyone can see it: never a hole.
+    let mmaps = s
+        .cover(&w, HostOffset::ZERO, len)
+        .map_err(|e| format!("{what} scratch placement: {e:?}"))?;
+    eprintln!(
+        "kf3: {what} scratch: tile {:#x} x {mmaps} over {len:#x} (host RAM bound {:#x})",
+        s.tile_len(),
+        s.tile_len()
+    );
+    Ok((w, s))
+}
+
 /// ★★★ **The memory plane's shared half** — what the vCPU and the VA thread both reach.
 pub struct MemPlane {
     /// The three `MMU_INVALIDATE` registers.
@@ -1542,28 +1588,27 @@ impl MemPlane {
         mirrors: Mirrors,
     ) -> Result<(MemPlane, WindowOps, WindowOps), String> {
         let page = HostPageSize::query();
-        let window =
-            |len: u64, what: &str| -> Result<(&'static GuestWindow, &'static SharedRam), String> {
-                let w = GuestWindow::create(len, page)
-                    .map_err(|e| format!("{what} window of {len:#x}: {e:?}"))?;
-                let s = SharedRam::create(len)
-                    .map_err(|e| format!("{what} scratch memfd of {len:#x}: {e:?}"))?;
-                // ⊘ Scratch over the WHOLE window before anyone can see it: never a hole.
-                w.place(
-                    HostOffset::new(0),
-                    len,
-                    Backing::SharedFile {
-                        fd: s.as_backing_fd(),
-                        offset: 0,
-                    },
-                )
-                .map_err(|e| format!("{what} scratch placement: {e:?}"))?;
-                Ok((Box::leak(Box::new(w)), Box::leak(Box::new(s))))
-            };
+        // The windows live for the VM: leaked, like every other piece the vCPU paths borrow.
+        let window = |len: u64,
+                      what: &str,
+                      name: &std::ffi::CStr|
+         -> Result<(&'static GuestWindow, &'static ScratchTile), String> {
+            let (w, s) = window_with_scratch(len, page, what, name)?;
+            Ok((Box::leak(Box::new(w)), Box::leak(Box::new(s))))
+        };
         let pramin_len = kf_trap::trappolicy::PRAMIN_LEN;
-        let (pramin_win, pramin_scratch) = window(pramin_len, "PRAMIN")?;
-        let (bar1_win, bar1_scratch) = window(bar1_bytes, "BAR1")?;
-        let (bar2_win, bar2_scratch) = window(bar2_bytes, "BAR2")?;
+        let (pramin_win, pramin_scratch) = window(pramin_len, "PRAMIN", c"kf3-scratch-pramin")?;
+        let (bar1_win, bar1_scratch) = window(bar1_bytes, "BAR1", c"kf3-scratch-bar1")?;
+        let (bar2_win, bar2_scratch) = window(bar2_bytes, "BAR2", c"kf3-scratch-bar2")?;
+        eprintln!(
+            "kf3: scratch host-RAM bound {:#x} for this device (PRAMIN {:#x} + BAR1 {:#x} + BAR2 \
+             {:#x}); whole-window scratch would have allowed {:#x}",
+            pramin_scratch.tile_len() + bar1_scratch.tile_len() + bar2_scratch.tile_len(),
+            pramin_scratch.tile_len(),
+            bar1_scratch.tile_len(),
+            bar2_scratch.tile_len(),
+            pramin_len + bar1_bytes + bar2_bytes,
+        );
         let ops = |name, win, scratch, trap| WindowOps {
             name,
             rm,
@@ -2272,5 +2317,59 @@ mod tests {
     #[test]
     fn the_bar2_key_is_no_guest_key() {
         assert_eq!(K_BAR2.0 >> 32, 0xFFFF_FFFF);
+    }
+
+    /// ★★★ The owner's question of 2026-10-03 (*"the memfd is only scratch — isn't that a DoS
+    /// target?"*), as a test of the PRODUCTION constructor: a guest that reads and then writes every
+    /// page of a fully unmapped BAR-sized window makes the host allocate at most one tile. Before
+    /// 2026-10-03 the same reads allocated the whole window
+    /// (`scratch.rs::the_old_whole_window_scratch_allocates_the_whole_window_on_reads_alone`).
+    #[test]
+    fn a_window_built_for_the_vm_bounds_its_scratch_to_one_tile() {
+        let page = HostPageSize::query();
+        let len = 64 << 20;
+        let bound = kf_linux_raw::scratch_tile_len(len);
+        assert_eq!(bound, 2 << 20);
+        let (w, s) =
+            window_with_scratch(len, page, "BAR1", c"kf3-scratch-test-bar1").expect("window");
+        let step = page.bytes();
+        let mut b = [0u8; 1];
+        let mut sum = 0u64;
+        let mut at = 0;
+        while at < len {
+            w.read_into(HostOffset::new(at), &mut b).expect("read");
+            sum += u64::from(b[0]);
+            at += step;
+        }
+        std::hint::black_box(sum);
+        let after_reads = s.allocated_bytes().expect("fstat");
+        assert!(after_reads > 0, "the reads reached the scratch");
+        assert!(
+            after_reads <= bound,
+            "reads allocated {after_reads} > {bound}"
+        );
+        let mut at = 0;
+        while at < len {
+            w.write_from(HostOffset::new(at), &[0x5A]).expect("write");
+            at += step;
+        }
+        let after_writes = s.allocated_bytes().expect("fstat");
+        assert!(
+            after_writes <= bound,
+            "writes allocated {after_writes} > {bound}"
+        );
+    }
+
+    /// ★ PRAMIN keeps its one-`mmap` sink (owner ruling 2026-09-25): the production PRAMIN window is
+    /// its own tile, so every slot run of the trap's re-point is one placement.
+    #[test]
+    fn the_pramin_window_is_its_own_tile_and_a_run_is_one_mmap() {
+        let page = HostPageSize::query();
+        let len = kf_trap::trappolicy::PRAMIN_LEN;
+        let (w, s) =
+            window_with_scratch(len, page, "PRAMIN", c"kf3-scratch-test-pramin").expect("window");
+        assert_eq!(s.tile_len(), len);
+        assert_eq!(s.cover(&w, HostOffset::new(GRANULE), 3 * GRANULE), Ok(1));
+        assert_eq!(s.cover(&w, HostOffset::ZERO, len), Ok(1));
     }
 }

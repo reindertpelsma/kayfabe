@@ -64,7 +64,12 @@
 >   - A framebuffer in plain RAM is rejected. It breaks the ownership above, and the handover expects
 >     VRAM (BAR1 = real VRAM views, owner 2026-09-14).
 >   - Optional, only if boot is found to be slow: back the GOP region with host RAM during boot, and
->     move it into VRAM before the NVIDIA driver touches it through the GPU.
+>     move it into VRAM before the NVIDIA driver touches it through the GPU. ⚠ That RAM must be its
+>     own memfd, never the window's scratch: since 2026-10-03 scratch is one small tile repeated
+>     across the window (2 MiB for a BAR1 up to 2 GiB), so a framebuffer left on it would alias
+>     itself every tile (`V3_P4_PORT_MAP.md` Q3). Retiring the boot framebuffer's store view
+>     (`traces/v3_design_review_20261003/`) may return the part no guest placement covers to scratch
+>     only because nothing reads that part afterwards.
 > - **Driver unload.**
 >   - NVIDIA's modeset driver restores the boot console (`nvEvoRestoreConsole`,
 >     `ogkm-580: src/nvidia-modeset/src/nvkms-console-restore.c:756`). It finds the console through

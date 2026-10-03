@@ -5,10 +5,17 @@
 //! unmapped. What each page of it shows is decided by `mmap(MAP_FIXED)` placements inside it:
 //! - a **view of the store** (an armed `NV_ESC_RM_MAP_MEMORY` node of the one reserved object), or
 //! - the **guest-RAM memfd** at a file offset (a sysmem leaf), or
-//! - the window's **scratch** — one sparse memfd per BAR. ⊘ Never a hole: a memslot over an
-//!   unmapped range, or a `PROT_NONE` one, is `KVM_RUN → EFAULT` and kills the guest
+//! - the window's **scratch** — one small memfd TILE per window, mapped again and again (window
+//!   offset `o` shows tile byte `o % T`; `kf_linux_raw::scratch`). ⊘ Never a hole: a memslot over
+//!   an unmapped range, or a `PROT_NONE` one, is `KVM_RUN → EFAULT` and kills the guest
 //!   (`userfaultfd_is_ruled_out`). The scratch is not a shadow (§18.2): nothing is ever copied or
-//!   synced between it and the store; the worst a guest can do with it is corrupt itself.
+//!   synced between it and the store, and its contents are undefined (they repeat every `T` bytes).
+//!   ⊘ **Corrected 2026-10-03:** *"the worst a guest can do with it is corrupt itself"* was false
+//!   while the scratch was one memfd of the whole window. A guest READ of every unmapped page then
+//!   allocated the whole window in host RAM, charged to the VMM, because shmem has no zero page.
+//!   Tiled, the worst is self-corruption plus at most `T` of host RAM per window: 2 MiB for BAR1 and
+//!   BAR2 at their default sizes, 1 MiB for PRAMIN (`V3_P4_PORT_MAP.md` Q3). A sink is one `mmap`
+//!   per tile it touches, so a PRAMIN sink (the window is its own tile) stays ONE.
 //!
 //! ## BAR2 / BAR1: [`CpuWindow`], a [`MapTarget`]
 //!

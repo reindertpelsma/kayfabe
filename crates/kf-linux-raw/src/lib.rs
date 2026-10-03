@@ -284,6 +284,7 @@ mod kvm_unsafe;
 mod mapping_unsafe;
 pub mod memtype;
 pub mod page_size;
+pub mod scratch;
 mod signal_unsafe;
 mod sysconf_unsafe;
 mod vcpu_unsafe;
@@ -302,6 +303,9 @@ pub use mapping_unsafe::{
     VolatileRegion, release_fence,
 };
 pub use page_size::HostPageSize;
+pub use scratch::{
+    SCRATCH_TILE_MIN, SCRATCH_TILES_MAX, ScratchTile, TilePiece, scratch_tile_len, tile_pieces,
+};
 pub use signal_unsafe::{
     BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
 };

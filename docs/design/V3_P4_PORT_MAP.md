@@ -33,6 +33,10 @@ schedule channel, status: 56` — `0xa06f0103` GPFIFO_SCHEDULE unserviced), as �
 has 6 sysmem leaves and the host VA space has no guest-RAM object yet — so the guest spins ~22 s
 to its own timeout. The guest-RAM object (`alloc_os_descriptor` over the memfd) is the fix.
 
+**STATUS UPDATE, 2026-10-03 (branch `v3-scratch-bound`): Q3 is CORRECTED.** Its bound ("bounded
+by the BAR size") was reachable by guest root and was host RAM outside the VM's memory. The scratch
+is now one small tile per window, repeated; see the correction at the top of Q3.
+
 **Summary.** P4 is **~2.2k lines of product code plus ~0.9k of harness**. Only **~0.4k** of it is
 copied old-tree code; the rest is new, because the old tree walked and mirrored guest tables on
 the CPU and v3 forbids both. The main parts already exist in v3:
@@ -307,6 +311,61 @@ The order is forced:
 - Reject arming in the trap. It is 22 times per boot, but it establishes an RM ioctl on the vCPU path.
 
 **Q3. What backs the unmapped parts of the BAR1, BAR2 and PRAMIN HVAs?**
+
+> ⊘⊘ **CORRECTED 2026-10-03 (branch `v3-scratch-bound`) — the recommendation below bounded scratch
+> by the BAR size, and guest root can reach that bound. The scratch is now TILED.**
+> Owner, 2026-10-03: *"The memfd is only scratch — isn't that a DoS target?"* It was.
+>
+> - **Threat.** Each window's scratch was one memfd of the WHOLE window, placed 1:1. A shmem page
+>   has no zero page: a guest READ of a never-touched page reaches `shmem_fault`, which asks with
+>   `SGP_CACHE` and allocates (Linux 7.1 `mm/shmem.c:2765`, `:2527-2564`; KVM gets there through
+>   `hva_to_pfn_slow` → `get_user_pages_unlocked`, `virt/kvm/kvm_main.c:2883-2903`). The page is
+>   charged to QEMU's memory cgroup (`mm/shmem.c:1985`) and kept until QEMU exits. Guest root that
+>   reads every page of BAR1 and BAR2 (no driver needed: `mmap` of `/sys/bus/pci/devices/*/resource1`
+>   after unbinding nvidia.ko) and points PRAMIN at an unbacked target therefore makes the host
+>   allocate `bar1 + bar2 + 1 MiB` beyond the VM's `-m`, in milliseconds (one load per page).
+>   Unprivileged guest users cannot: they reach BAR1 only through views kf3 places before the
+>   invalidate clears.
+> - **Before (per device).** 289 MiB at the device defaults (256 + 32 + 1, `kf3.c:887`, `:890`),
+>   161 MiB under the bench launchers (BAR1 128 MiB). The only ceiling was `cardbudget.rs`: Σ per
+>   host card ≤ host BAR1 − 16 MiB per device, which on a resizable-BAR host is about the whole
+>   VRAM per card, summed over every card the VM uses.
+> - **After.** One tile of `T = min(window, max(2 MiB, next_pow2(ceil(window / 1024))))` per
+>   window, mapped again and again (window offset `o` shows tile byte `o % T`;
+>   `crates/kf-linux-raw/src/scratch.rs`, used by every sink and by the initial cover through
+>   `kf_qemu::mem::window_with_scratch`). Host RAM ≤ `T` per window: **5 MiB per device** at the
+>   defaults and under the bench launchers (PRAMIN 1 + BAR1 2 + BAR2 2), 19 MiB with a 16 GiB BAR1,
+>   131 MiB with a 128 GiB BAR1. Scratch mappings ≤ 1024 per window (128 for a 256 MiB BAR1).
+>   PRAMIN is its own tile, so its trap's sink stays ONE `mmap` (owner ruling 2026-09-25; a
+>   compile-time assertion in `kf-qemu/src/mem.rs`).
+> - **Why aliasing is legal.** Nothing reads scratch expecting what was written there (nothing
+>   copies or syncs it; §18.2), and an unmapped BAR page on real hardware has no defined contents.
+>   A guest write into one unmapped page now shows `T` bytes away in the same window of the same
+>   VM: self-corruption only.
+> - **Residual.** `T` per window, plus host page tables and KVM SPTEs for a fully touched window
+>   (about `window / 256` at 4 KiB pages, charged to the same cgroup; a placed store view costs the
+>   same, so that term belongs to the BAR's size, not to scratch). Guest RAM is pinned whole and is
+>   the large term. A deployment without a memory limit on QEMU's cgroup still lets these terms
+>   press on the host: the launcher must size one (`V3_SWEEP_AND_INSTALL.md` §2.6).
+> - **Tests, 2026-10-03.** `crates/kf-linux-raw/src/scratch.rs` (run locally on Linux 7.0 and in
+>   CI): `the_old_whole_window_scratch_allocates_the_whole_window_on_reads_alone` is the
+>   known-positive (reads alone: `st_blocks` = 64 MiB of a 64 MiB window);
+>   `a_tiled_scratch_holds_a_guest_that_touches_every_page_to_one_tile` is the bound (64 and 256 MiB
+>   windows, every page read then written: ≤ 2 MiB), and it fails against the whole-window shape
+>   (bite-checked that day: 67108864 > 2097152). `kf-qemu/src/mem.rs`'s
+>   `a_window_built_for_the_vm_bounds_its_scratch_to_one_tile` runs the same bound through the
+>   production constructor (CI only). ⚠ These fault from the host CPU, which enters
+>   `handle_mm_fault` where KVM's GUP does; the KVM path itself is not yet measured on a live boot.
+>   Bench check: guest root reads every page of `resource1` and `resource3`; on the host,
+>   `stat -L -c %b` of QEMU's `/proc/<pid>/fd` entries named `memfd:kf3-scratch-*` (was
+>   `memfd:kayfabe-guest-ram`) must stay ≤ 5 MiB in total.
+> - **Open, adjacent.** QEMU's VFIO listener DMA-maps `ram_device` regions unless
+>   `memory_region_set_skip_iommu_map` was called, and kf3 never calls it: a VM that also has a
+>   VFIO device would pin every window page at start and keep stale IOMMU mappings after each
+>   re-point. Read in QEMU 11.1.1 (`hw/vfio/listener.c:599-631`); not checked on 10.2.4.
+>
+> The recommendation below is kept as written; its *"one sparse RW memfd sink per BAR"* and
+> *"bounded by the BAR size"* are what this corrects.
 - The options are holes (a memslot per mapped run, which §16 forbids, or `PROT_NONE`, which gives `EFAULT` and kills the guest) or a sink.
 - **Recommend: one sparse RW memfd sink per BAR,** with usage counted.
 - It is not a shadow under §18.2 (nothing ever copies or syncs it with the store), and the worst a guest can do with it is corrupt itself.
