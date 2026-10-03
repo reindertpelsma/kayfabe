@@ -58,8 +58,10 @@
 //! (`vm_area_struct` + a maple-tree node, about 212 B) charged to QEMU's cgroup, outside `-m`.
 //!
 //! The fix: every off-vCPU sink, and the initial cover, carries [`WINDOW_ADVICE`]
-//! ([`ScratchTile::cover_advised`]), a superset of QEMU's flags set BEFORE QEMU registers the
-//! window, so QEMU's advice changes nothing and a sink merges back. The count is then:
+//! ([`ScratchTile::cover_advised`] for the cover; a sink is [`ScratchTile::cover`] then
+//! [`advise_window`], `kf_qemu::mem::window_sink`), a superset of QEMU's flags set BEFORE QEMU
+//! registers the window, so QEMU's advice changes nothing and a sink merges back. The count is
+//! then:
 //! - `ceil(window / T)` (≤ 1024) once nothing is placed;
 //! - plus at most two per LIVE placement (the placement itself, and the tile it splits). Live
 //!   placements never overlap, so they are at most `window / page`; no cap below that is built
@@ -271,8 +273,8 @@ impl ScratchTile {
 
     /// ★ Show scratch over window `[at, at + len)`: one `MAP_FIXED` placement per tile piece
     /// ([`tile_pieces`]), so `ceil((at % T + len) / T)` of them, at most `ceil(len / T) + 1`.
-    /// Returns the number of `mmap` calls made. It sets no VMA flag: off the vCPU, use
-    /// [`ScratchTile::cover_advised`].
+    /// Returns the number of `mmap` calls made. It sets no VMA flag: off the vCPU, follow it with
+    /// [`advise_window`] ([`ScratchTile::cover_advised`] does both).
     ///
     /// Every argument is checked BEFORE the first `mmap` (zero length, overflow, the window's
     /// bound, page alignment), so a refusal by argument places nothing. Only an `mmap` the kernel
@@ -327,13 +329,17 @@ impl ScratchTile {
     }
 
     /// ★★ [`ScratchTile::cover`], then [`WINDOW_ADVICE`] over the same range ([`advise_window`]):
-    /// the initial cover of every window (`kf_qemu::mem::window_with_scratch`) and every sink made
-    /// OFF the vCPU. Returns the `mmap` calls made; the advice adds one `madvise` per flag.
+    /// the initial cover of every window (`kf_qemu::mem::window_with_scratch`). Every sink made
+    /// OFF the vCPU applies the same two steps (`kf_qemu::mem::window_sink`). Returns the `mmap`
+    /// calls made; the advice adds one `madvise` per flag.
     ///
     /// ⊘ Not optional there: without the advice a sink never merges back into the tiling QEMU
     /// advised, and every place-then-sink cycle leaves its split boundaries for the VM's life
-    /// (module docs). An advice refusal is returned, so a caller does not count the sink as done:
-    /// the range already shows scratch, and a later sink re-covers and re-advises it.
+    /// (module docs). An advice refusal is returned here, and the initial cover fails realize on
+    /// it. ⊘ *Corrected 2026-10-03 (third review):* a SINK does not refuse on it any more —
+    /// `window_sink` covers, then advises, and only counts a refused advice: the cover alone
+    /// already made the old view unreachable, and refusing the sink kept the view and held the
+    /// guest's invalidate. That range then stays its own mapping until a later advised sink.
     ///
     /// PRAMIN's trap calls [`ScratchTile::cover`] instead: no `madvise` on a vCPU (owner ruling
     /// 2026-09-25, ONE `mmap` per window move), and it needs none, because every move re-places

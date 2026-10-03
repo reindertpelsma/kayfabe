@@ -337,8 +337,12 @@ The order is forced:
 >   applied by the initial cover BEFORE QEMU registers the window (`window_with_scratch` runs inside
 >   `kf3_realize`, which precedes `kf3_bar_build`). QEMU's advice then finds the flags set and changes
 >   nothing, whatever `dump-guest-core` says, so no re-cover after registration is needed. Every BAR1
->   and BAR2 sink (`kf_qemu::mem::window_sink` → `ScratchTile::cover_advised`) carries the same set
->   and merges back. Guest-RAM placements on BAR1/BAR2 carry it too. Device views do not need it:
+>   and BAR2 sink (`kf_qemu::mem::window_sink`: the cover, then `advise_window`) carries the same
+>   set and merges back. Guest-RAM placements on BAR1/BAR2 carry it too. ⊘ *Corrected the same day
+>   (third review): a sink whose cover landed but whose `madvise` was refused was returned as a
+>   refused sink, so `CpuWindow::unmap` kept an unreachable view and the guest's invalidate stayed
+>   armed. It is now counted (`window_advice_refused=`) and the sink is done; only that range's
+>   merge waits for a later advised sink.* Device views do not need it:
 >   they are `VM_IO | VM_PFNMAP`, never merge (`VM_SPECIAL`), and the driver marks them `VM_DONTDUMP`.
 >   PRAMIN gets no `madvise`: its verbs run on the vCPU (owner ruling 2026-09-25, ONE `mmap` per
 >   move), and every move re-places all 16 slots, so it holds at most 16 mappings regardless.
@@ -447,6 +451,9 @@ The order is forced:
 >   asserts `window_advises(true) == false` (the PRAMIN `WindowOps` decision, now a named
 >   function) and that the trap's sink leaves exactly its 192 KiB run without `dc`; an advised
 >   sink leaves none (mirrored locally the same way).
+>   `a_sink_whose_advice_is_refused_still_unmaps_and_is_counted` drives a `CpuWindow` over a real
+>   window whose sinks go through the production sink with the advice refused: the unmap must land,
+>   the view be released and the refusal counted (kf-qemu, CI only).
 
 > ⊘⊘ **CORRECTED 2026-10-03 (branch `v3-scratch-bound`) — the recommendation below bounded scratch
 > by the BAR size, and guest root can reach that bound. The scratch is now TILED.**

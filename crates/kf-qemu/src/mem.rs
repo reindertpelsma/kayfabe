@@ -293,23 +293,41 @@ pub const fn window_advises(has_trap: bool) -> bool {
 }
 
 /// ★ Window sinks and guest-RAM placements whose `madvise` the kernel refused (2026-10-03), all
-/// windows of the process. A refused sink is also returned as a refusal (the caller retries it);
-/// a refused advice on a guest-RAM placement only costs that placement its flags while it lives.
+/// windows of the process. Either way the mapping itself landed, so the operation is reported as
+/// done: a refused advice costs only the merge (that range stays its own mapping until a later
+/// advised sink covers it) or, on a guest-RAM placement, its flags while it lives.
 pub static WINDOW_ADVICE_REFUSED: AtomicU64 = AtomicU64::new(0);
+
+/// Count one refused window advice, and log the first of the process.
+fn advice_refused(what: &str, at: u64, len: u64, e: &RawError) {
+    if WINDOW_ADVICE_REFUSED.fetch_add(1, Ordering::Relaxed) == 0 {
+        eprintln!("kf3: {what} @{at:#x}+{len:#x}: advice refused ({e:?}), counted");
+    }
+}
+
+/// The advice an advised sink applies after its cover; production's is
+/// [`kf_linux_raw::advise_window`].
+type Advice = fn(&GuestWindow, HostOffset, u64) -> Result<(), RawError>;
 
 /// ★★ Re-point window `[at, at + len)` to scratch: the one sink door of every window (2026-10-03).
 ///
-/// `advise` (BAR1, BAR2, on the VA thread): [`ScratchTile::cover_advised`], so the sunk range
-/// carries the same flags as the tiling around it and merges back into it; without that, every
-/// guest-driven place-then-sink cycle left two more mappings for the VM's life
-/// (`kf_linux_raw::scratch`, module docs). Not `advise` (PRAMIN, on the vCPU): a plain
-/// [`ScratchTile::cover`], ONE `mmap` (the window is its own tile).
+/// `advise` (BAR1, BAR2, on the VA thread): [`ScratchTile::cover`], then
+/// [`kf_linux_raw::advise_window`] over the same range, so the sunk range carries the same flags as
+/// the tiling around it and merges back into it; without that, every guest-driven place-then-sink
+/// cycle left two more mappings for the VM's life (`kf_linux_raw::scratch`, module docs). Not
+/// `advise` (PRAMIN, on the vCPU): the cover alone, ONE `mmap` (the window is its own tile).
+///
+/// ⊘ **Corrected 2026-10-03 (third review): once the cover landed, a refused advice is counted
+/// ([`WINDOW_ADVICE_REFUSED`]) and the sink is `Ok`.** It was returned as a refused sink, so
+/// `CpuWindow::unmap` kept a view the guest could no longer reach and the VA manager held the
+/// guest's invalidate armed until a re-walk: a guest-visible stall for a flag. The cover alone
+/// makes the view unreachable; only the merge waits for a later advised sink over that range.
 ///
 /// `mmap`s: `ceil((at % T + len) / T)`, at most `ceil(len / T) + 1`, plus one retry only after a
 /// refusal. Returns that count.
 ///
 /// # Errors
-/// The cover's or the advice's refusal, by name.
+/// The cover's refusal, by name. Never the advice's.
 pub fn window_sink(
     win: &GuestWindow,
     scratch: &ScratchTile,
@@ -317,17 +335,27 @@ pub fn window_sink(
     at: u64,
     len: u64,
 ) -> Result<usize, String> {
-    let r = if advise {
-        scratch.cover_advised(win, HostOffset::new(at), len)
-    } else {
-        scratch.cover(win, HostOffset::new(at), len)
-    };
-    r.map_err(|e| {
-        if matches!(e, RawError::Syscall { call, .. } if call.starts_with("madvise")) {
-            WINDOW_ADVICE_REFUSED.fetch_add(1, Ordering::Relaxed);
-        }
-        format!("mmap scratch @{at:#x}+{len:#x}: {e:?}")
-    })
+    let advice: Advice = kf_linux_raw::advise_window;
+    sink_with(win, scratch, advise.then_some(advice), at, len)
+}
+
+/// [`window_sink`] with the advice as an argument (`None`: no advice).
+fn sink_with(
+    win: &GuestWindow,
+    scratch: &ScratchTile,
+    advice: Option<Advice>,
+    at: u64,
+    len: u64,
+) -> Result<usize, String> {
+    let mmaps = scratch
+        .cover(win, HostOffset::new(at), len)
+        .map_err(|e| format!("mmap scratch @{at:#x}+{len:#x}: {e:?}"))?;
+    if let Some(advise) = advice
+        && let Err(e) = advise(win, HostOffset::new(at), len)
+    {
+        advice_refused("window sink", at, len, &e);
+    }
+    Ok(mmaps)
 }
 
 /// ★ The PRAMIN trap's helpers: device nodes opened AHEAD of time (so the trap's map is exactly one
@@ -440,12 +468,8 @@ impl ViewOps for WindowOps {
         // (another file), so a missing flag costs no mapping once it is sunk.
         if self.advise
             && let Err(e) = kf_linux_raw::advise_window(self.win, HostOffset::new(at), len)
-            && WINDOW_ADVICE_REFUSED.fetch_add(1, Ordering::Relaxed) == 0
         {
-            eprintln!(
-                "kf3: {} guest RAM @{at:#x}+{len:#x}: advice refused ({e:?}), counted",
-                self.name
-            );
+            advice_refused(&format!("{} guest RAM", self.name), at, len, &e);
         }
         if let Some(ix) = view_index() {
             ix.sunk(self.name, at, len);
@@ -455,7 +479,8 @@ impl ViewOps for WindowOps {
 
     /// ★ [`window_sink`]: exactly ONE `mmap` for any PRAMIN run (the window is its own tile, and
     /// no advice on the vCPU); on BAR1 and BAR2 (VA thread) `ceil((at % T + len) / T)` `mmap`s,
-    /// at most `ceil(len / T) + 1`, then the window's advice.
+    /// at most `ceil(len / T) + 1`, then the window's advice (a refused advice is counted, and the
+    /// sink still landed).
     fn sink(&self, at: u64, len: u64) -> Result<(), String> {
         window_sink(self.win, self.scratch, self.advise, at, len)?;
         if let Some(ix) = view_index() {
@@ -2539,6 +2564,105 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A refusing stand-in for [`kf_linux_raw::advise_window`] (`ENOMEM`, what a merge's
+    /// allocation under memory-cgroup pressure returns).
+    fn refused_advice(_: &GuestWindow, _: HostOffset, _: u64) -> Result<(), RawError> {
+        Err(RawError::Syscall {
+            call: "madvise",
+            errno: Some(12),
+        })
+    }
+
+    /// A BAR window's verbs over a real [`GuestWindow`] and its scratch, with no host RM: a "view"
+    /// is a stand-in memfd placed at the view's offset, and every sink goes through the production
+    /// sink with its advice refused.
+    struct RefusedAdviceOps {
+        w: GuestWindow,
+        s: ScratchTile,
+        view: kf_linux_raw::SharedRam,
+        released: std::cell::RefCell<Vec<u64>>,
+    }
+
+    impl ViewOps for &RefusedAdviceOps {
+        type View = u64;
+        fn arm_store(&self, off: u64, _len: u64) -> Result<u64, String> {
+            Ok(off)
+        }
+        fn place_view(&self, at: u64, len: u64, _v: &u64) -> Result<(), String> {
+            self.w
+                .place(
+                    HostOffset::new(at),
+                    len,
+                    Backing::SharedFile {
+                        fd: self.view.as_backing_fd(),
+                        offset: 0,
+                    },
+                )
+                .map_err(|e| format!("{e:?}"))
+        }
+        fn place_ram(&self, _: u64, _: u64, _: u64) -> Result<(), String> {
+            Err("no guest RAM in this test".into())
+        }
+        fn sink(&self, at: u64, len: u64) -> Result<(), String> {
+            sink_with(&self.w, &self.s, Some(refused_advice), at, len).map(|_| ())
+        }
+        fn release(&self, v: u64) -> Result<(), String> {
+            self.released.borrow_mut().push(v);
+            Ok(())
+        }
+    }
+
+    /// ★★ 2026-10-03 (third review, finding 6): once a sink's cover landed, the guest can no longer
+    /// reach the view behind it, and a refused advice costs only the merge. Returned as a refused
+    /// sink, it made `CpuWindow::unmap` keep the view (and its host aperture) and left the guest's
+    /// invalidate armed until a re-walk. Now the unmap lands, the view is released, and the
+    /// refusal is counted.
+    #[test]
+    fn a_sink_whose_advice_is_refused_still_unmaps_and_is_counted() {
+        let page = HostPageSize::query();
+        let pg = page.bytes();
+        let len = 64 << 20;
+        let (w, s) = window_with_scratch(len, page, "BAR1", c"kf3-scratch-test-advice-refused")
+            .expect("window");
+        let view_name = c"kf3-test-advice-refused-view";
+        let ops = RefusedAdviceOps {
+            w,
+            s,
+            view: kf_linux_raw::SharedRam::create_named(view_name, 4 * pg).expect("a stand-in"),
+            released: std::cell::RefCell::default(),
+        };
+        let win = CpuWindow::new(&ops, len);
+        let d = Desired {
+            va: 8 * pg,
+            len: 4 * pg,
+            off: 0x2_0000,
+            ram: false,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+        };
+        win.map(&d, false).expect("map");
+        assert_eq!(mappings_of(view_name), 1, "the view is placed");
+        let before = WINDOW_ADVICE_REFUSED.load(Ordering::Relaxed);
+        win.unmap(8 * pg, false)
+            .expect("the unmap lands: the cover already made the view unreachable");
+        assert_eq!(
+            mappings_of(view_name),
+            0,
+            "the window no longer shows the view"
+        );
+        assert_eq!(
+            *ops.released.borrow(),
+            vec![0x2_0000],
+            "its aperture was released"
+        );
+        assert!(
+            WINDOW_ADVICE_REFUSED.load(Ordering::Relaxed) > before,
+            "the refused advice is counted"
+        );
+        let st = win.stats();
+        assert_eq!((st.sunk, st.released, st.refused), (1, 1, 0));
     }
 
     /// ★ PRAMIN keeps its one-`mmap` sink (owner ruling 2026-09-25): the production PRAMIN window is
