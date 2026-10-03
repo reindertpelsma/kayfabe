@@ -228,6 +228,54 @@ impl Device {
     /// # Errors
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
+        // ★★★ V3_SEC_P0 — kf3 MUST NOT realize while this process can act as CAP_SYS_ADMIN.
+        //
+        // RM stamps a host channel's privilege from the creating ioctl's capability, per ioctl,
+        // in the calling thread (`ogkm-580: kernel_channel.c:277-291`; `escape.c:304`). If this
+        // process holds CAP_SYS_ADMIN, every passthrough twin becomes an ADMIN host channel that
+        // runs guest-authored pushbuffers — the escalation the single store forbids
+        // (OWNER_RULINGS §N; THE_CONSTRAINTS §30). Capabilities are per thread and births run on
+        // worker threads, but a child thread can only hold in its permitted set what its creator
+        // held, and every worker descends from this realize thread — so a process-wide scan here
+        // is sufficient to guarantee no later birth ioctl runs as admin. The per-birth bit-5
+        // readback in `kf_host::birth_member` is the exact, independent second half.
+        //
+        // ⊘ The override exists only for diagnostics and is loud by construction: a run that sets
+        // it is not a run that upholds the rule, and the log says so on every boot.
+        match kf_linux_raw::scan_cap_sys_admin() {
+            Ok(scan) if scan.holds_sys_admin() => {
+                if std::env::var("KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN").is_ok_and(|v| v == "1") {
+                    eprintln!(
+                        "kf3: ⊘⊘⊘ UNSAFE OVERRIDE — KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 is set and \
+                         this process HOLDS CAP_SYS_ADMIN ({scan}). Every host channel kf3 births \
+                         may be PRIVILEGED; guest-authored work would run at admin level. This \
+                         violates the single-store rule (OWNER_RULINGS §N) and is for diagnostics \
+                         ONLY. The per-birth privilege assert still refuses any channel RM stamps \
+                         privileged."
+                    );
+                } else {
+                    return Err(format!(
+                        "kf3: refused to realize — {scan}. A host channel this process births \
+                         would be stamped PRIVILEGED (ogkm-580 kernel_channel.c:277-291), so \
+                         guest-authored pushbuffers would run on an admin host channel, which the \
+                         single store forbids (OWNER_RULINGS §N). Run kf3 as an unprivileged user \
+                         (the launcher drops CAP_SYS_ADMIN; scripts/bench/boot_nvkvm.sh). To \
+                         bypass for diagnostics only, set KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1."
+                    ));
+                }
+            }
+            Ok(scan) => {
+                eprintln!("kf3: privilege check passed — {scan}");
+            }
+            Err(e) => {
+                // An un-scannable process must be treated as un-cleared, never as clean.
+                return Err(format!(
+                    "kf3: refused to realize — could not scan this process's capabilities \
+                     (/proc/self/task: {e}); cannot prove CAP_SYS_ADMIN is absent, so the \
+                     single-store privilege rule cannot be upheld (OWNER_RULINGS §N)."
+                ));
+            }
+        }
         let dev = kf_linux_raw::DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
         let rm: &'static kf_host::HostRm = Box::leak(Box::new(
             kf_host::HostRm::open(

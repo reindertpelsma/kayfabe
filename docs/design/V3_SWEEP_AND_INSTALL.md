@@ -1003,6 +1003,19 @@ undeclared mode stays for users who run QEMU directly, and the undeclared lane g
 Guest images are the user's. The guest needs the stock NVIDIA driver of an accepted guest tag. The optional
 guest helper module is separate (§2.7).
 
+**★ `kayfabe-run` never runs kf3 as root `[V3_SEC_P0, 2026-10-03]`.** The security model is an
+*unprivileged* host process driving a real GPU, and a host RM channel's privilege is stamped from
+the creating ioctl's capability (`ogkm-580: kernel_channel.c:277-291`). So the launcher refuses to
+start QEMU with `CAP_SYS_ADMIN` in the effective/permitted/ambient set of the process it is about to
+become, and drops `CAP_SYS_ADMIN` from the bounding set before exec. When invoked as root it drops to
+an unprivileged service user (the device nodes it needs are opened with group access, not root — see
+§2.6). The device enforces the same rule at realize independently (`crates/kf-qemu/src/device.rs`
+scans `/proc/self/task` and refuses; override `KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1` is diagnostics-only
+and logged loudly), and every channel birth asserts `NVOS04_FLAGS_PRIVILEGED_CHANNEL` came back clear
+(`crates/kf-host/src/channel.rs`), so a user who starts QEMU by hand still cannot get a privileged
+host channel. ⚠ Making root refusal the default is a policy change pending the owner's review (A.11);
+the branch builds and measures it.
+
 ### 2.6 Host requirements checked at start
 
 `kayfabe-preflight` runs before QEMU. The device repeats the hard checks at realize, so a user who skips the
@@ -1010,6 +1023,7 @@ launcher still gets a named refusal.
 
 | check | preflight | realize, today |
 |---|---|---|
+| the process holds **no** `CAP_SYS_ADMIN` (effective/permitted/ambient) `[V3_SEC_P0]` | yes; refuses to launch, and drops it from the bounding set before exec | R0 gate: realize scans `/proc/self/task` and refuses by name (`crates/kf-qemu/src/device.rs`; diagnostics override `KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1`, logged loudly); every birth asserts bit-5 clear (`crates/kf-host/src/channel.rs`) |
 | x86_64 Linux and a writable `/dev/kvm` | yes | `-accel kvm` required (`qemu/hw/misc/kf3/kf3.c:720-723`) |
 | KVM MSI-via-irqfd (in-kernel irqchip) | yes, by kernel config | refused without it (`kf3.c:789-793`) |
 | host driver loaded, with a version among the accepted host tags | yes; reads `/proc/driver/nvidia/version` and warns when the tag is accepted but untested in `SUPPORT.md` | R2 gate: unreadable, unparsable and unmeasured versions are refused by name (`crates/kf-host/src/lib.rs:159-191`; `crates/kf-abi/src/hostabi.rs:184-197`) |

@@ -30,6 +30,18 @@ use kf_abi::submit::{
 /// `NV01_CONTEXT_DMA` (`ogkm-580: class/cl0002.h:40`).
 /// `NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE` at `7:7` (`ogkm-580 alloc_channel.h:168-170`).
 pub const NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE: u32 = 1 << 7;
+/// ★ `NVOS04_FLAGS_CHANNEL_DENY_AUTH_LEVEL_PRIV_TRUE` at `22:22` (`ogkm-580 alloc_channel.h:208-214`):
+/// the channel's methods may not run at privileged auth level. Requested on every kf3 birth as
+/// defence in depth beside `DENY_PHYSICAL_MODE_CE` — enforcement is closed GSP, so the load-bearing
+/// guarantee is still the bit-5 readback below, not this request.
+pub const NVOS04_FLAGS_CHANNEL_DENY_AUTH_LEVEL_PRIV_TRUE: u32 = 1 << 22;
+/// `NVOS04_FLAGS_PRIVILEGED_CHANNEL` at `5:5` (`ogkm-580 alloc_channel.h:141-143`) — the bit RM
+/// SETS in the reply when it stamps the channel admin or kernel. kf3 requests it CLEAR and asserts
+/// it comes back clear after every birth.
+pub const NVOS04_FLAGS_PRIVILEGED_CHANNEL_BIT: u32 = 1 << 5;
+/// Byte offset of the `NvU32 flags` field inside `NV_CHANNEL_ALLOC_PARAMS` (`+20`,
+/// `kf_abi::submit::ChannelAllocParams`).
+const CHANNEL_FLAGS_OFFSET: usize = 20;
 
 const NV01_CONTEXT_DMA: u32 = 0x0000_0002;
 /// `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` (`ogkm-580: ctrl2080dma.h`).
@@ -607,7 +619,8 @@ impl HostRm {
             // them into window VAs), so this only ever stops one that ESCAPED the rewriter from
             // reaching host physical memory: `[measured p6b8]` UVM's CE launches on subchannel 4
             // escaped a subchannel-keyed rewriter, verbatim and physical, with no Xid.
-            flags: NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE,
+            flags: NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE
+                | NVOS04_FLAGS_CHANNEL_DENY_AUTH_LEVEL_PRIV_TRUE, // ★ V3_SEC_P0 (see consts above)
             h_context_share: 0,
             h_va_space: 0,
             h_userd_memory_0: ring.userd_memory,
@@ -632,6 +645,53 @@ impl HostRm {
         let unwind = |me: &Self| {
             let _ = me.free(chan);
         };
+        // ★★★ V3_SEC_P0 — ASSERT THE CHANNEL IS NOT PRIVILEGED, on the reply RM just wrote.
+        //
+        // `raw_alloc` copies the host's reply back into `chan_params` (the `carried_alloc` round
+        // trip), so `flags` now holds what RM stamped. We requested bit 5 CLEAR and RM never
+        // clears a requested bit on a USER channel (`kf_abi::notifier`), so a set bit 5 means RM
+        // decided this channel is ADMIN or KERNEL — which, for a userspace ioctl, happens only
+        // when the calling thread held CAP_SYS_ADMIN (`ogkm-580: kernel_channel.c:277-291`).
+        // A privileged twin would run guest-authored pushbuffers at admin level, defeating the
+        // single store. Refuse by name and free the channel; this is exact, not inferred — it
+        // reads RM's own verdict rather than reasoning about our capabilities. `[measured w750,
+        // 2026-09-16, GA106, traces/w750_route_k/route_k_run3.log]`: `K_BIT5=0` on a USER channel,
+        // with the known-positive `K_BIT5_KP=0x20` proving the readback would see a set bit.
+        let reply_flags = u32::from_le_bytes(
+            chan_params[CHANNEL_FLAGS_OFFSET..CHANNEL_FLAGS_OFFSET + 4]
+                .try_into()
+                .expect("ChannelAllocParams is 368 bytes; flags at +20 is always present"),
+        );
+        let privileged = reply_flags & NVOS04_FLAGS_PRIVILEGED_CHANNEL_BIT != 0;
+        // One concise, always-on line per birth: the privilege RM actually stamped, which reads
+        // `PRIVILEGED_CHANNEL=0` on every twin and ring when kf3 is unprivileged and `=1` when it
+        // is not. The single-store audit asks for exactly this line.
+        eprintln!(
+            "kf-host: SEC_P0 channel birth engine={engine_type:#x} flags={reply_flags:#010x} \
+             PRIVILEGED_CHANNEL={}",
+            u32::from(privileged)
+        );
+        if privileged {
+            // The diagnostic override (also checked at realize): when set, the operator has
+            // explicitly asked to run privileged, so log loudly and continue rather than refuse —
+            // otherwise the override could never boot. Default (unset) refuses by name.
+            if std::env::var("KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN").is_ok_and(|v| v == "1") {
+                eprintln!(
+                    "kf-host: ⊘⊘⊘ UNSAFE — this channel is PRIVILEGED (flags {reply_flags:#010x}, \
+                     engine {engine_type:#x}) and KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 permits it. \
+                     Guest-authored work would run at admin level; single store NOT upheld."
+                );
+            } else {
+                eprintln!(
+                    "kf-host: ⊘ PRIVILEGED CHANNEL REFUSED — host RM stamped this channel \
+                     NVOS04_FLAGS_PRIVILEGED_CHANNEL (reply flags {reply_flags:#010x}, engine \
+                     {engine_type:#x}). kf3 must hold no admin host channel (single store, \
+                     OWNER_RULINGS §N). The kf3 process is holding CAP_SYS_ADMIN; run it unprivileged."
+                );
+                unwind(self);
+                return Err(RmError::Other(crate::PRIVILEGED_CHANNEL_REFUSED));
+            }
+        }
         let mut bind = [0u8; BIND_PARAMS_SIZE];
         bind.copy_from_slice(&engine_type.to_le_bytes());
         let (on, cmd) = if first {

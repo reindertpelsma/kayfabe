@@ -91,6 +91,14 @@ pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
 /// host's version does not have, a control with no row, a struct absent at that version. The
 /// reason is printed once per refusal (`kf-host: HOST-ABI REFUSED …`) — the status is only the class.
 pub const HOST_ABI_REFUSED: u32 = 0x4B72;
+/// ★★★ **A channel RM stamped PRIVILEGED (`NVOS04_FLAGS_PRIVILEGED_CHANNEL`, bit 5, set) — the
+/// birth is refused BY NAME and the channel freed.** Single-store rule (OWNER_RULINGS §N;
+/// THE_CONSTRAINTS §30, "the only form of constraint 30 that cannot be argued with"): every kf3
+/// host channel must be a USER channel. A privileged channel means the kf3 process held
+/// `CAP_SYS_ADMIN` when it created the channel, so guest-authored pushbuffers would run on an admin
+/// host channel. Read, never reasoned about: RM writes its verdict into the reply's `flags` word
+/// (`ogkm-580: kernel_channel.c:281-287`, copied out on success `alloc_free.c:195-218`).
+pub const PRIVILEGED_CHANNEL_REFUSED: u32 = 0x4B73;
 /// The store reservation and which form RM granted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reservation {

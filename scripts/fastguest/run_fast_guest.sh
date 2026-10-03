@@ -285,8 +285,17 @@ case "${KF_CONSOLE:-hvc}" in
 esac
 echo "== console: ${KF_CONSOLE:-hvc} ($CONSOLE)"
 
+# ★★★ V3_SEC_P0 — drop QEMU to an unprivileged user (the kf3 process must hold no CAP_SYS_ADMIN;
+# kf3 refuses to realize otherwise). No-op when already unprivileged or when KF_QEMU_DROP=0.
+# shellcheck source=../bench/qemu_unpriv.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")/../bench" && pwd)/qemu_unpriv.sh"
+kf_unpriv_setup
+# The two files QEMU opens itself (the console/serial logs); the `>` redirect below is opened by
+# this (root) shell and its fd crosses the drop unaided.
+kf_unpriv_file "$SER" "${SER%_serial.log}_ttyS0.log"
+
 start=$(date +%s)
-timeout --kill-after=3 "$BUDGET" "$Q" -name kf-fastguest \
+timeout --kill-after=3 "$BUDGET" "${KF_QEMU_PREFIX[@]}" "$Q" -name kf-fastguest \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
     -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}${MGPU_TOK}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_BUDGET_S=$BUDGET" \

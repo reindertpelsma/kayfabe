@@ -120,6 +120,29 @@ and the per-client host MMU fault above.
     (to GPA where that is not skippable) into a **VMM VA**, and use that VA in `mmap` or in
     ioctls. ⊘ Never one memslot per published page. Same model as `nvkvm-pv` and the Mode-2 C.
 17. **Host userspace stays UNPRIVILEGED.** Standing, absolute, and it constrains every item above.
+    ★★★ **MADE STRUCTURAL `[V3_SEC_P0, 2026-10-03]`.** "Unprivileged" is not a posture to remember;
+    it is now two fail-closed asserts, because a host RM channel's privilege is stamped at CREATION
+    from the creating ioctl's capability, per ioctl, in the calling thread (`ogkm-580:
+    kernel_channel.c:277-291`; `escape.c:304`; `nv-linux.h:537` `NV_IS_SUSER() = capable(CAP_SYS_ADMIN)`).
+    If kf3 held `CAP_SYS_ADMIN`, every passthrough twin would be `_PRIVILEGE_ADMIN` and would run
+    guest-authored pushbuffers at admin level — the single store defeated.
+    - **(a) Realize refuses while the process can act as admin.** `Device::realize`
+      (`crates/kf-qemu/src/device.rs`) scans every `/proc/self/task/<tid>/status`
+      (`kf_linux_raw::scan_cap_sys_admin`) and refuses by name if `CAP_SYS_ADMIN` is in any thread's
+      permitted/effective/ambient set. Capabilities are per thread and births run on workers, but a
+      child can hold in *permitted* only what its creator held, and every worker descends from the
+      realize thread — so a process-wide scan here is sufficient. Override for diagnostics only:
+      `KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1`, logged loudly on every boot.
+    - **(b) Every birth asserts the channel came back NOT privileged.** `birth_member`
+      (`crates/kf-host/src/channel.rs`) reads `NVOS04_FLAGS_PRIVILEGED_CHANNEL` (bit 5) out of the
+      alloc reply and frees the channel + refuses by name if set. This is the exact form of §30 that
+      cannot be argued with: it reads RM's own verdict (`[measured w750, 2026-09-16, GA106]`
+      `K_BIT5=0`), not our capabilities. Every kf3 birth also requests `DENY_PHYSICAL_MODE_CE` and
+      `DENY_AUTH_LEVEL_PRIV`, but those are closed-GSP-enforced, so (b) is the load-bearing one.
+    - **(c) The bench runs QEMU unprivileged.** `scripts/bench/boot_nvkvm.sh` and the fast lane drop
+      to an unprivileged user with access to `/dev/kvm`, `/dev/nvidia*` and a raised memlock, so (a)
+      does not trip the bench. ⚠ Refusing root outright is a bench-policy change and goes to the
+      owner before any merge (A.11); on-branch it is built and measured.
 18. **Guest vidmem is vidmem** — no silent sysmem substitution. ✔ **Satisfied by construction**
     under the single store: there is no other memory to substitute (§18).
 19. ⊘ ~~Classify per address, lease the classification.~~ **SUPERSEDED** — nothing is classified,

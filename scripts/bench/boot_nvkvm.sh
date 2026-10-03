@@ -80,10 +80,27 @@ esac
 # ★ `KF_GUEST_IMG` also carries the driver matrix's per-version fat guests (V3_DRIVER_MATRIX.md
 # §5): a qcow2 overlay on guest.qcow2 with that version installed (`scripts/drivermatrix/
 # stage_fat_guest.sh`). Unset = the bench image, i.e. the host's version.
-[ -f "${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}" ] || { echo "★ no guest image at ${KF_GUEST_IMG}" >&2; exit 2; }
-exec "$Q" \
+GUEST_IMG=${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}
+[ -f "$GUEST_IMG" ] || { echo "★ no guest image at $GUEST_IMG" >&2; exit 2; }
+
+# ★★★ V3_SEC_P0 — drop QEMU to an unprivileged user (kf3 refuses to realize as root). A monitor
+# UNIX socket and a read-write qcow2 need the dropped user to be able to create/write them: the
+# socket moves to a world-writable dir and the image is made group/world writable (throwaway box).
+# shellcheck source=qemu_unpriv.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/qemu_unpriv.sh"
+kf_unpriv_setup
+MON="unix:${LOG}.mon,server,nowait"
+if [ "${#KF_QEMU_PREFIX[@]}" -gt 0 ]; then
+    kf_unpriv_file "${LOG}_serial.log" "${LOG}_qemu.log"
+    MON="unix:/tmp/kf3_${TAG}.mon,server,nowait"
+    rm -f "/tmp/kf3_${TAG}.mon"
+    chmod 0666 "$GUEST_IMG" 2>/dev/null || true   # the dropped user opens it read-write
+    echo "== monitor socket at /tmp/kf3_${TAG}.mon (QEMU dropped to ${KF_QEMU_USER:-kfqemu})" >&2
+fi
+
+exec "${KF_QEMU_PREFIX[@]}" "$Q" \
   "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
-  -drive if=virtio,file="${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}",format=qcow2 \
+  -drive if=virtio,file="$GUEST_IMG",format=qcow2 \
   -netdev tap,id=n0,ifname=nvktap0,script=no,downscript=no \
   -device virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56 \
   `# NVKVM_DEV_EXTRA appends properties to the device line (e.g.
@@ -114,6 +131,6 @@ exec "$Q" \
    # ordered and undated, and ordering alone cannot exclude "it happened during boot".` \
   -msg timestamp=on \
   -serial "file:${LOG}_serial.log" \
-  -monitor "unix:${LOG}.mon,server,nowait" \
+  -monitor "$MON" \
   "$@" \
   > "${LOG}_qemu.log" 2>&1

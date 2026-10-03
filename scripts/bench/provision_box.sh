@@ -219,6 +219,32 @@ fi
 # ★ Same class as `REPO=${KAYFABE_REPO:-/root/kayfabe}` (w824) and as CLAUDE.md's oldest trap
 # ("the bench silently served a binary built from `862c7c2` for weeks"): **an invisible default
 # deciding which code a measurement is about.** ⇒ Name the branch, and PRINT what you got.
+# ★★★ V3_SEC_P0 — the unprivileged QEMU user. The security model is an UNPRIVILEGED host process
+# driving the GPU; kf3 refuses to realize while the process holds CAP_SYS_ADMIN
+# (crates/kf-qemu/src/device.rs), so the bench must launch QEMU as a non-root user. The NVIDIA
+# device nodes default to 0666 (NVreg_DeviceFileMode), so this user needs only the `kvm` group for
+# /dev/kvm and a raised memlock (the launcher raises it as root before the setpriv drop). A system
+# user with no login and no home.
+KF_QEMU_USER=${KF_QEMU_USER:-kfqemu}
+if ! id "$KF_QEMU_USER" >/dev/null 2>&1; then
+    useradd --system --no-create-home --shell /usr/sbin/nologin "$KF_QEMU_USER" \
+        || die "could not create the unprivileged QEMU user $KF_QEMU_USER"
+fi
+getent group kvm >/dev/null 2>&1 || groupadd --system kvm
+usermod -aG kvm "$KF_QEMU_USER" || die "could not add $KF_QEMU_USER to the kvm group"
+# Belt-and-suspenders for any PAM-login path (the setpriv drop already carries root's raised
+# rlimit across the uid change, which is the load-bearing one).
+cat > /etc/security/limits.d/99-kfqemu.conf <<LIM
+$KF_QEMU_USER - memlock unlimited
+LIM
+# The NVIDIA nodes are 0666 by default; assert it, and fix it if a box ever ships them tighter,
+# so the dropped user can open /dev/nvidia*.
+for n in /dev/nvidiactl /dev/nvidia0 /dev/nvidia-uvm; do
+    [ -e "$n" ] && chmod o+rw "$n" 2>/dev/null || true
+done
+command -v setpriv >/dev/null 2>&1 || die "setpriv(1) missing (util-linux) — the QEMU privilege drop needs it"
+echo "SEC_P0_QEMU_USER=$KF_QEMU_USER groups=$(id -nG "$KF_QEMU_USER" 2>/dev/null)"
+
 KF_BRANCH=${KAYFABE_BRANCH:-w749-fable-legb}
 if [ ! -d ~/kayfabe/.git ]; then
     git clone -q --branch "$KF_BRANCH" https://github.com/reindertpelsma/kayfabe.git ~/kayfabe \
