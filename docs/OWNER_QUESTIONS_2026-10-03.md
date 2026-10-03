@@ -57,7 +57,10 @@ tag, at most 8 boxes at once.
 - *`--guest-driver` stays required in `kayfabe-run`.* Plain QEMU still runs undeclared pairs, but
   `SUPPORT.md` promises only declared ones.
 
-**Q5 — closed kernel modules.** vast's template ships the closed 575.51.03 module; only
+**Q5 — closed kernel modules.** ⊘ **ANSWERED 2026-10-03 by the owner** (`OWNER_RULINGS.md` §J): closed
+hosts are supported and never refused; closed guests are a sweep axis, and Windows makes them a must.
+The recommendation below, to refuse closed hosts, is superseded. It was also inconsistent with the Q8
+recommendation in this same document, which advises against refusing untested in-range tags. vast's template ships the closed 575.51.03 module; only
 provisioning insists on the open one, and no kayfabe code checks it. NVIDIA has installed the open
 module by default on Turing and later since the R560 driver.
 

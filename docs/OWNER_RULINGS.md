@@ -270,3 +270,27 @@ citation: ask whether its reason still holds before relying on it.
   (`design/V3_APP_MATRIX.md`).
   - Coverage gap: no row uses the CUDA virtual memory API (`cuMemCreate`/`cuMemMap`), which PyTorch's
     expandable segments and vLLM rely on. Add a sample such as `vectorAddMMAP` to the sweep.
+
+## J. Kernel-module flavours (2026-10-03)
+
+- **Closed (proprietary) host modules are supported, never refused (owner).** nvkvm-pv forwards the
+  same RM ioctls on both flavours and met few compatibility differences between them. kayfabe's host
+  side uses only that unprivileged ioctl API and nvidia-uvm, whose source ships in both packages.
+  - Preflight reports the flavour and does not refuse it. Until a sweep covers a closed-host cell,
+    `SUPPORT.md` shows it as "accepted, untested".
+  - NVIDIA's own limit: the closed module cannot drive Blackwell (`nvkvm-pv:docs/howto/sweep.md:303`),
+    so closed-host cells exist for Turing, Ampere and Ada.
+  - This supersedes the review's recommendation of 2026-10-03 to refuse closed hosts
+    (`OWNER_QUESTIONS_2026-10-03.md`, Q5).
+- **Closed guest modules are a sweep axis, and Windows makes them a must (owner).** Windows has only
+  NVIDIA's proprietary driver.
+  - At 580 both flavours use the GSP firmware by default on every Turing-and-later GPU (`README.txt`
+    of `NVIDIA-Linux-x86_64-580.159.04.run`, chapter 44C, read 2026-10-03). A closed Linux guest
+    therefore reaches kayfabe's fake GSP with no module option. Older branches are to be checked per
+    tag.
+  - The open question is whether the closed guest's kernel RM issues RPCs or controls the open one
+    does not. One closed-guest cell per family in the band tier answers it.
+  - As far as the review knows, the closed Linux RM and the Windows RM come from the same NVIDIA
+    sources, so the closed-guest cells are also the earliest Linux-side signal for Windows
+    (unverified).
+- Answers `design/V3_SWEEP_AND_INSTALL.md` §4 Q5.
