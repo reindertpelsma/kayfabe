@@ -323,7 +323,21 @@ citation: ask whether its reason still holds before relying on it.
   - build.rs builds the driver for the arch kayfabe itself is built for;
   - CI's aarch64 job also builds the driver for `aarch64-unknown-uefi`, so x86-isms cannot creep in.
   - Unchecked: whether AAVMF (OVMF's Arm build) runs PCI option ROMs.
-  - ⚠ **Found 2026-10-03, and it concerns all of kf3 on arm64, not only the ROM.** arm64 KVM maps a
+  - ⊘ **CORRECTED the same day — the note below overstated it; there is no regression against bare
+    metal.** nvidia.ko itself maps the framebuffer BAR as **Device-nGnRE** on arm64 when write
+    combining is asked for (`ogkm-580: kernel-open/common/inc/nv-pgprot.h:76-80`, used for
+    `NV_MEMORY_TYPE_FRAMEBUFFER` by `kernel-open/nvidia/nv-mmap.c:355-363`, `:587-597`; WC is allowed
+    on aarch64, `nv-linux.h:307-308`). So the host's own CUDA gets Device memory for BAR1 too. KVM's
+    Device stage-2 for these views equals what bare metal uses, and the guest's own nvidia.ko asks for
+    the same type. What remains:
+    - code that maps the boot framebuffer expecting Normal-NC must use aligned accesses (the GOP
+      driver's `Blt`: aligned volatile stores, no `DC ZVA`-style memset; the guest kernel's I/O
+      accessors already align);
+    - the `VM_ALLOW_ANY_UNCACHED` patch below would give *more* than bare metal (Normal-NC), which
+      NVIDIA chose not to use on arm64, and ARM does not guarantee Normal-NC is safe on every MMIO
+      region (`drivers/vfio/pci/vfio_pci_core.c:1815-1830`). Not planned.
+    - kf3's BAR2 is memfd RAM, ordinary cacheable memory, so none of this applies to it.
+  - (superseded, kept as written) ⚠ **Found 2026-10-03, and it concerns all of kf3 on arm64, not only the ROM.** arm64 KVM maps a
     non-cacheable PFNMAP memslot as Normal-NC only when the host VMA carries `VM_ALLOW_ANY_UNCACHED`,
     and as Device memory otherwise (Linux 7.1 `arch/arm64/kvm/mmu.c:1966-1968`). vfio-pci sets that
     flag (`drivers/vfio/pci/vfio_pci_core.c:1831`); nvidia.ko never does (no occurrence in
