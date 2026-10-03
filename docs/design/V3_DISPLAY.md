@@ -114,7 +114,12 @@
 >     breaks the FB-0 identity RM relies on (§4.11.2). It is not a fallback the design may take; it would
 >     need an explicit owner ruling (`OWNER_RULINGS.md` A.11).
 >   - Optional, only if boot is found to be slow: back the GOP region with host RAM during boot, and
->     move it into VRAM before the NVIDIA driver touches it through the GPU.
+>     move it into VRAM before the NVIDIA driver touches it through the GPU. ⚠ That RAM must be its
+>     own memfd, never the window's scratch: since 2026-10-03 scratch is one small tile repeated
+>     across the window (2 MiB for a BAR1 up to 2 GiB), so a framebuffer left on it would alias
+>     itself every tile (`V3_P4_PORT_MAP.md` Q3). Retiring the boot framebuffer's store view
+>     (`traces/v3_design_review_20261003/`) may return the part no guest placement covers to scratch
+>     only because nothing reads that part afterwards.
 > - **Driver unload.**
 >   - ⊘ *SCOPED 2026-10-03:* the next sub-bullet holds only on guest kernels that export `screen_info`
 >     (the bench's noble 6.8 does). On Linux 7.x nvidia.ko's console detection takes the BAR1-child

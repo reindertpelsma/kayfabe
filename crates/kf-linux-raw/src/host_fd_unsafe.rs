@@ -163,6 +163,32 @@ impl SharedRam {
         self.fd.as_fd()
     }
 
+    /// ★ Bytes of host memory this backing has ACTUALLY allocated: `st_blocks × 512` of the
+    /// memfd, which shmem raises as it allocates a page and lowers as it frees one. The sealed
+    /// length ([`SharedRam::len_bytes`]) is only the most it can ever hold.
+    ///
+    /// This is the instrument the scratch bound is tested with ([`crate::scratch`]). Safe code
+    /// only (a descriptor duplicate and `fstat` through `std`), so it adds no relaxation here.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] (`fcntl(F_DUPFD_CLOEXEC)` or `fstat`).
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn allocated_bytes(&self) -> Result<u64, RawError> {
+        use std::os::unix::fs::MetadataExt;
+        lockwitness::assert_lock_free("fstat (a shared backing's allocated bytes)");
+        let file = std::fs::File::from(self.fd.try_clone().map_err(|e| RawError::Syscall {
+            call: "fcntl(F_DUPFD_CLOEXEC)",
+            errno: e.raw_os_error(),
+        })?);
+        let meta = file.metadata().map_err(|e| RawError::Syscall {
+            call: "fstat",
+            errno: e.raw_os_error(),
+        })?;
+        Ok(meta.blocks().saturating_mul(512))
+    }
+
     /// Duplicate the descriptor, for handing to another process.
     ///
     /// The duplicate is close-on-exec: a descriptor that leaks across an unrelated `exec`

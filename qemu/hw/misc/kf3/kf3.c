@@ -10,8 +10,10 @@
  *    write reaches Rust without the BQL.
  *  - PRAMIN, BAR1 and BAR3 (RM's BAR2) are disposition-A RAM (P4): each is ONE host range Rust
  *    created and never unmaps (kf3_bar_ram), registered as a ram_device region — one memslot, no
- *    exit either way. What each page shows (a store view, guest RAM, or per-BAR scratch — never a
- *    hole) is re-pointed inside it by Rust with mmap(MAP_FIXED); QEMU never learns of a re-point.
+ *    exit either way. What each page shows (a store view, guest RAM, or the window's scratch — never
+ *    a hole) is re-pointed inside it by Rust with mmap(MAP_FIXED); QEMU never learns of a re-point.
+ *    Scratch is one small memfd tile per window, repeated (2026-10-03, V3_P4_PORT_MAP.md Q3), so a
+ *    guest touching every unmapped page costs the host at most one tile per window.
  *    ⊘ No BAR1 page traps at setup. Hopper+ BAR1 usermode (doorbell) views are placed where the
  *    guest's own BAR1 PTEs put them: Rust's VA thread asks for a write-trapped overlay at that
  *    offset (kf3_bar1_overlay, a main-loop bottom half) before the guest's invalidate clears
@@ -142,6 +144,10 @@ struct Kf3State {
     uint64_t db_sites_added, db_sites_removed;
     MemoryRegion dummy_pages[3];
     EventNotifier dummy_efd;   /* page 2's KVM ioeventfd — nobody reads it */
+    /* ★ 2026-10-03: this device holds ram_block_discard_require(true) (see realize), so no device
+     * that pins guest RAM for DMA can join the VM while it lives. Released at exit, or by
+     * realize's `fail` path. */
+    bool discard_required;
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -790,14 +796,44 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
             return;
         }
     }
+    /* ★ 2026-10-03 (V3_P4_PORT_MAP.md Q3): never share a VM with a device that pins guest RAM for
+     * DMA. VFIO's listener DMA-maps every ram_device region (QEMU 10.2.4 hw/vfio/listener.c:
+     * 598-631): it would pin every page of PRAMIN/BAR1/BAR2 and keep IOMMU mappings of whatever
+     * they showed at that moment, stale after every re-point Rust makes behind QEMU's back -- a
+     * released host BAR1 aperture among them, reachable by the guest-programmed device. 10.2 has
+     * no per-region opt-out (memory_region_set_skip_iommu_map arrives in QEMU 11.1). Every 10.2
+     * technology that pins guest RAM first disables RAM discard, and ram_block_discard_require()
+     * inhibits exactly that, in both realize orders and for hotplug: vfio legacy and iommufd,
+     * vfio-user, and the nvme:// userspace block driver, which DMA-maps every RAM block through a
+     * RAMBlockNotifier (util/vfio-helpers.c: qemu_vfio_open_pci disables discard before it
+     * registers the notifier), so a later one fails with "Cannot set discarding of RAM broken";
+     * also refused, as collateral: libblkio drivers that may pin memory (block/blkio.c), vhost-vdpa
+     * (it skips ram_device sections, so it was never the hazard), SEV/SEV-ES and incoming COLO.
+     * ⊘ Corrected 2026-10-03 (third review): this said nvme:// was "not caught" and "disables
+     * nothing"; it disables discard first, so it is refused like VFIO.
+     * ★ Taken FIRST, before kf3_realize builds anything (the host store, the RM client, the
+     * threads, the windows), so a refused realize builds and holds nothing (only checks that build
+     * nothing come before it: KVM, the archive ABI, and gop's ROM properties); every later failure
+     * goes to `fail`, which gives it back (QEMU calls no exit for a failed realize: 10.2.4
+     * hw/pci/pci.c pci_qdev_realize only unregisters the device). */
+    if (ram_block_discard_require(true) != 0) {
+        error_setg(errp, "kf3: RAM discard is already disabled by something that pins guest RAM "
+                   "(a VFIO, iommufd or vfio-user device, an nvme:// drive, a libblkio drive that may "
+                   "pin memory, vhost-vdpa, SEV or COLO); kf3 refuses to share a VM with one, since "
+                   "a DMA-mapping one would map kf3's BAR windows and keep stale mappings after "
+                   "every re-point");
+        return;
+    }
+    s->discard_required = true;
+
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
                     s->gop ? 1 : 0, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
-        return;
+        goto fail;
     }
     if (kf3_identity(s->h, &id) != 0) {
         error_setg(errp, "kf3: no identity");
-        return;
+        goto fail;
     }
     /* The host's own identity, so the guest's stock driver binds. */
     pci_config_set_vendor_id(c, id.vendor);
@@ -810,16 +846,16 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     c[PCI_INTERRUPT_PIN] = 1;
 
     if (!kf3_bar0_build(s, id.bar0_bytes, errp)) {
-        return;
+        goto fail;
     }
     pci_register_bar(pci, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->bar0);
 
     if (!kf3_bar_build(s, 1, &s->bar1, s->bar1_size, errp) ||
         !kf3_bar_build(s, 2, &s->bar2, s->bar2_size, errp)) {
-        return;
+        goto fail;
     }
     if (!kf3_bar1_views_build(s, errp)) {
-        return;
+        goto fail;
     }
     pci_register_bar(pci, 1, PCI_BASE_ADDRESS_SPACE_MEMORY | PCI_BASE_ADDRESS_MEM_TYPE_64 |
                      PCI_BASE_ADDRESS_MEM_PREFETCH, &s->bar1);
@@ -845,7 +881,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         }
         if (msix_init(pci, s->msix_vectors, &s->msix_bar, KF3_MSIX_BAR, 0x0, &s->msix_bar,
                       KF3_MSIX_BAR, 0x2000, 0, errp) < 0) {
-            return;
+            goto fail;
         }
         pci_register_bar(pci, KF3_MSIX_BAR, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->msix_bar);
         for (unsigned i = 0; i < s->msix_vectors; i++) {
@@ -854,7 +890,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         /* ⊘ No irqfd, no interrupts: refuse rather than fall back to a BQL-taking notify. */
         if (!kvm_msi_via_irqfd_enabled()) {
             error_setg(errp, "kf3: KVM MSI-via-irqfd is not available (kernel irqchip required)");
-            return;
+            goto fail;
         }
         for (unsigned i = 0; i < s->msix_vectors && i < KF3_MAX_VECTORS; i++) {
             int fd = kf3_irq_fd(s->h, i);
@@ -866,7 +902,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         }
         if (msix_set_vector_notifiers(pci, kf3_vector_use, kf3_vector_release, NULL) < 0) {
             error_setg(errp, "kf3: MSI-X vector notifiers refused");
-            return;
+            goto fail;
         }
     }
 
@@ -882,7 +918,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         if (off < PCI_CONFIG_HEADER_SIZE || off + 4 > PCI_CONFIG_SPACE_SIZE || (off & 3) != 0 ||
             pci->used[off] || pci->used[off + 1] || pci->used[off + 2] || pci->used[off + 3]) {
             error_setg(errp, "kf3: config word %u at 0x%x collides with the header or a capability", i, off);
-            return;
+            goto fail;
         }
         pci_set_long(c + off, val);
     }
@@ -894,19 +930,20 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     if (s->db_ioeventfd) {
         if (!s->um_mr) {
             error_setg(errp, "kf3: doorbell-ioeventfd=on, but BAR0 has no usermode passthrough piece");
-            return;
+            goto fail;
         }
         s->db_page_off = kf3_doorbell_page_offset(s->h);
         if (s->db_page_off < 0 || kf3_set_ioeventfd(s->h, kf3_ioeventfd, s, s->db_ioeventfd_max) != 0) {
             error_setg(errp, "kf3: Rust refused the doorbell fast path");
-            return;
+            goto fail;
         }
     }
     /* ★ ABI 11: the boot display's option ROM (gop=on only) — after the last step of realize that can
      * fail; nothing below this line can (kf3_option_rom_build's comment says why it matters). */
     if (!kf3_option_rom_build(s, pci, errp)) {
-        return;
+        goto fail;
     }
+
     s->listener = (MemoryListener){
         .name = "kf3-guest-ram",
         .region_add = kf3_region_add,
@@ -923,6 +960,14 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
 
     kf3_status(s->h, err, sizeof(err));
     info_report("%s (BAR0 pieces=%u)", err, s->n_pieces);
+    return;
+
+fail:
+    /* Every failure after the discard requirement was taken. QEMU calls no exit for a failed
+     * realize, so it is given back here. ⊘ Pre-existing and unchanged: a failure after kf3_realize
+     * still leaves what kf3_realize built (s->h) in place. */
+    ram_block_discard_require(false);
+    s->discard_required = false;
 }
 
 static void kf3_dev_exit(PCIDevice *pci)
@@ -948,6 +993,10 @@ static void kf3_dev_exit(PCIDevice *pci)
     if (s->msix_vectors > 0) {
         msix_unset_vector_notifiers(pci);
         msix_uninit(pci, &s->msix_bar, &s->msix_bar);
+    }
+    if (s->discard_required) {
+        ram_block_discard_require(false);
+        s->discard_required = false;
     }
 }
 

@@ -338,8 +338,10 @@ citation: ask whether its reason still holds before relying on it.
       region (`drivers/vfio/pci/vfio_pci_core.c:1815-1830`). Not planned.
     - The same holds for BAR2 (PCI BAR3) and the PRAMIN window. Under the single store
       (`design/THE_CONSTRAINTS.md:1011-1020`) every mapped page of all three windows is a view of
-      the one reserved host-VRAM object (`crates/kf-qemu/src/mem.rs:1-30`). Only unmapped pages show
-      the per-window scratch memfd, which exists because a memslot hole kills the guest.
+      the one reserved host-VRAM object (`crates/kf-qemu/src/mem.rs:1-35`). Only unmapped pages show
+      the per-window scratch memfd, which exists because a memslot hole kills the guest. Since
+      2026-10-03 that scratch is one small tile per window, repeated, so a guest touching every
+      unmapped page costs the host at most one tile per window (`design/V3_P4_PORT_MAP.md` Q3).
   - (superseded, kept as written) ⚠ **Found 2026-10-03, and it concerns all of kf3 on arm64, not only the ROM.** arm64 KVM maps a
     non-cacheable PFNMAP memslot as Normal-NC only when the host VMA carries `VM_ALLOW_ANY_UNCACHED`,
     and as Device memory otherwise (Linux 7.1 `arch/arm64/kvm/mmu.c:1966-1968`). vfio-pci sets that

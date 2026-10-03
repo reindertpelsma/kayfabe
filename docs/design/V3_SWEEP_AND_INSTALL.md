@@ -9,7 +9,8 @@ and a first-verdict rule for retries (§1.8); exclusions decided from source per
 (§1.11); a Kconfig fix that survives `--without-default-devices` and bundled host libraries (§2.3); the
 running binary's sha256 measured on every boot (§2.8); a launcher lane and an undeclared-guest lane
 (§1.6). This document answers the owner's plan of 2026-10-02, which is not yet recorded in
-`docs/OWNER_RULINGS.md`. The plan has three parts:
+`docs/OWNER_RULINGS.md`. **2026-10-03:** §2.5 and §2.6 gained the launcher's memory-cgroup sizing (design only), after
+the guest-reachable scratch allocation was bounded (`V3_P4_PORT_MAP.md` Q3). The plan has three parts:
 
 1. Adopt nvkvm-pv's unattended coverage sweep so that it tests kayfabe.
 2. Support every GSP driver we want on both driver axes, and test host/guest driver mismatch "vGPU style".
@@ -935,8 +936,9 @@ the same commit must produce the same sha256, or the differences are listed in t
 - A per-commit CI build is versioned `0.0.0+g<sha>` and is never published as a release. It is attested
   like a release (task I3), so the sweep can check every artifact it runs the same way (§2.8).
 - The C and Rust halves are locked by `KF3_ABI`. Realize refuses an archive whose
-  `kf3_abi_version()` differs (`qemu/hw/misc/kf3/kf3.h:16`; `qemu/hw/misc/kf3/kf3.c:782-785`, at `v3-gop-kf3`), so a
-  release always ships both halves from one commit.
+  `kf3_abi_version()` differs (`KF3_ABI` in `qemu/hw/misc/kf3/kf3.h`; the `kf3_abi_version()` check
+  in `kf3_dev_realize`, `qemu/hw/misc/kf3/kf3.c`), so a release always ships both halves from one
+  commit.
 
 **Fields of `MANIFEST.json`:**
 
@@ -995,6 +997,35 @@ the same script CI runs.
   harnesses use in artifact mode (§1.6);
 - `guest-driver=<v>`, always. `kayfabe-run` refuses to start without `--guest-driver`, and names the flag
   and where to read the version (the guest's `/proc/driver/nvidia/version`, or its `.run` file name).
+- ★ **a memory limit on QEMU's cgroup** (design only, 2026-10-03; nothing is built). `kayfabe-run` starts
+  QEMU in its own cgroup with `memory.max` (systemd: `systemd-run --user --scope -p MemoryMax=… -p
+  MemorySwapMax=…`, which needs the user manager to have the memory controller delegated; as root, a
+  system scope) sized as **guest RAM + the scratch bound + overhead**.
+  ⊘ **Corrected 2026-10-03 (review of `v3-scratch-bound`):** the list below omitted the window
+  MAPPINGS' own kernel slab, which a guest drives and which `T` does not bound; it is the fifth term,
+  added at the end (`V3_P4_PORT_MAP.md` Q3, the block at its top):
+  - guest RAM: all of it, since RM pins it whole for the VM's life (§2.6);
+  - the scratch bound: one tile per window per device, from `kf_linux_raw::scratch_tile_len` —
+    PRAMIN 1 MiB + BAR1 tile + BAR2 tile (2 MiB for `bar2-size=32M`): 5 MiB per device for a BAR1 up
+    to 2 GiB, 19 MiB for the 16 GiB BAR1 a resizable-BAR card can give (`V3_P4_PORT_MAP.md` Q3);
+  - host page tables and KVM SPTEs for fully touched windows and RAM: about (Σ windows + guest RAM) / 256;
+  - QEMU's own overhead: a fixed allowance, to be taken from the `memory.peak` of a bench boot (not yet
+    measured);
+  - the window mappings' slab (`vm_area_struct` + maple-tree nodes, ≈ 212 B each): per window
+    `ceil(W / T)` + 2 × live placements, live placements ≤ `W / page`; at most `vm.max_map_count`
+    × 212 B per QEMU (≈ 13 MiB at the kernel default 65 530, ≈ 212 MiB at the 1 048 576 Ubuntu sets).
+    `vm.max_map_count` is one system-wide sysctl, so the launcher cannot lower it for one QEMU; it
+    budgets the term. Before the 2026-10-03 fix this term grew with every guest place-then-sink
+    cycle, not only with live placements.
+
+  `MemorySwapMax` is set explicitly (0, or a small value), so a guest that fills its limit is reclaimed
+  or OOM-killed inside its own cgroup and never pushes the host into swap. ⊘ Why the limit and not only
+  the tiling: until 2026-10-03 a guest could make QEMU allocate up to its whole BAR1 + BAR2 outside `-m`;
+  tiling bounds that term to a few MiB, but the cgroup is what turns any remaining excess (a QEMU leak,
+  the page-table term on a huge BAR) into self-harm instead of host-wide memory pressure on other
+  tenants. When the launcher cannot create a limited cgroup (no delegation, no systemd), it says so in
+  one line naming the missing delegation and starts QEMU anyway; `--require-memcg` turns that into a
+  refusal.
 
 Why the launcher requires it. Left unset, the device answers as the host's version and re-selects at fn 1
 only when the pair's pre-fn-1 surface is identical; otherwise it refuses
@@ -1015,21 +1046,22 @@ launcher still gets a named refusal.
 
 | check | preflight | realize, today |
 |---|---|---|
-| x86_64 Linux and a writable `/dev/kvm` | yes | `-accel kvm` required (`qemu/hw/misc/kf3/kf3.c:720-723`) |
-| KVM MSI-via-irqfd (in-kernel irqchip) | yes, by kernel config | refused without it (`kf3.c:789-793`) |
+| x86_64 Linux and a writable `/dev/kvm` | yes | `-accel kvm` required (the `kvm_enabled()` check in `kf3_dev_realize`, `qemu/hw/misc/kf3/kf3.c`) |
+| KVM MSI-via-irqfd (in-kernel irqchip) | yes, by kernel config | refused without it (the `kvm_msi_via_irqfd_enabled()` check in `kf3_dev_realize`) |
 | host driver loaded, with a version among the accepted host tags | yes; reads `/proc/driver/nvidia/version` and warns when the tag is accepted but untested in `SUPPORT.md` | R2 gate: unreadable, unparsable and unmeasured versions are refused by name (`crates/kf-host/src/lib.rs:159-191`; `crates/kf-abi/src/hostabi.rs:184-197`) |
 | open or closed kernel module | reported, never refused (§4 Q5, answered 2026-10-03); a closed host shows as "accepted, untested" until a sweep covers it | no check (none in `crates/`; only provisioning checks, `scripts/bench/provision_host_driver.sh:152-158`) |
 | `libcuda.so.1` and `libnvidia-ptxjitcompiler` loadable | yes | no walker means no device (`crates/kf-qemu/src/device.rs:281-283`) |
 | `/dev/nvidiactl`, `/dev/nvidia<minor>` and `/dev/nvidia-uvm` openable by the invoking user | yes | the host RM open fails, by name |
 | host BAR1 ≥ guest BAR1 + BAR2 + 1 MiB + 16 MiB | yes; computes the largest guest BAR1 that fits | summed per card, refused by name (`crates/kf-qemu/src/cardbudget.rs:5-14`, `:24-27`; `device.rs:268-273`) |
 | card memory for `fb-mb` | yes, from `nvidia-smi` | `store of N MiB refused: NoMemory` |
-| guest RAM is a shared memfd | the launcher always passes one | **not checked at realize.** It fails at the first sysmem placement (`crates/kf-qemu/src/mem.rs:362-369`); task I5 moves it to realize |
-| host RAM ≥ guest RAM | yes | all guest RAM is pinned for the VM's life (`crates/kf-qemu/src/mem.rs:1609-1614`) |
+| guest RAM is a shared memfd | the launcher always passes one | **not checked at realize.** It fails at the first sysmem placement (`WindowOps::place_ram` and `MemPlane::guest_ram_object` in `crates/kf-qemu/src/mem.rs`); task I5 moves it to realize |
+| host RAM ≥ guest RAM | yes | all guest RAM is pinned for the VM's life (`MemPlane::guest_ram_object` in `crates/kf-qemu/src/mem.rs`) |
+| QEMU's cgroup has a memory limit (design only, 2026-10-03) | yes: computes guest RAM + scratch bound + overhead (§2.5) and reports whether the memory controller is delegated to the user | none. The design: kf3 logs one warning at realize when its own cgroup's `memory.max` is `max`. The scratch bound itself is logged per window (`kf3: <window> scratch: tile …`) |
 | glibc ≥ the manifest's floor | yes | the loader refuses |
 | every NEEDED library resolves (bundled in `lib/`, or host-provided per `build.needed`) | yes: runs `bin/qemu-system-x86_64 --version`, and on failure names the missing library and the package that provides it | the loader refuses |
 
 **The device's own defaults fail on common cards.** Those defaults are `bar1-size` 256 MiB, `bar2-size`
-32 MiB and `fb-mb` 8192 (`qemu/hw/misc/kf3/kf3.c:884-890`). They need 305 MiB of host BAR1 under the
+32 MiB and `fb-mb` 8192 (`kf3_properties` in `qemu/hw/misc/kf3/kf3.c`). They need 305 MiB of host BAR1 under the
 budget above. Both harnesses therefore override them: a 128 MiB guest BAR1, and `fb-mb` sized from the card
 (`scripts/fastguest/run_fast_guest.sh:205-237`). Task I5 makes the device derive them, or refuse with the
 value that fits.

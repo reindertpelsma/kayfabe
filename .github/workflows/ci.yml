@@ -1580,7 +1580,21 @@ jobs:
           #     across the call; the kernel keeps no pointer and reports failure by return value.
           #   ⊘ No new power: `capset` can only lower a thread's own effective set or raise it back
           #     within its permitted set; the kernel refuses anything else.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:77 kf-cuda:75 kf-qemu:46 firmware/kf-gop:78"
+          # ★★ `kf-linux-raw` 75 -> 76, 2026-10-03 (`v3-scratch-bound`, review finding 1,
+          # `docs/design/V3_P4_PORT_MAP.md` Q3) — `GuestWindow::advise`, ONE `unsafe { }` block in
+          # `window_unsafe.rs`: `madvise` over `[offset, offset + len)` of the window, after
+          # `checked_span` bounds it inside the object's own live mapping and the page alignment
+          # is checked. The advice comes from a closed three-variant enum (`MADV_DONTDUMP`,
+          # `MADV_DONTFORK`, `MADV_HUGEPAGE`), each of which only sets a VMA flag: nothing is
+          # unmapped, discarded, re-protected or written, so no concurrent copy through the window
+          # can observe it. Why it exists: QEMU advises a window when it registers it, a later
+          # `MAP_FIXED` comes back without those flags, and mappings with different flags never
+          # merge, so every guest-driven place-then-sink cycle left two mappings for the VM's life.
+          # ⊘ No new power: flags on our own window only.
+          # ★ `kf-linux-raw` 77 + 1 = 78 at the merge of the two lines above (`v3-cand-1`, 2026-10-04):
+          #   capability_unsafe.rs (2, `v3-sec-nonpriv`) and window_unsafe.rs's `advise` (1,
+          #   `v3-scratch-bound`) are disjoint files and disjoint blocks; each branch counted from 75.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:78 kf-cuda:75 kf-qemu:46 firmware/kf-gop:78"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
