@@ -462,8 +462,9 @@ The order is forced:
 >   allocate `bar1 + bar2 + 1 MiB` beyond the VM's `-m`, in milliseconds (one load per page).
 >   Unprivileged guest users cannot: they reach BAR1 only through views kf3 places before the
 >   invalidate clears.
-> - **Before (per device).** 289 MiB at the device defaults (256 + 32 + 1, `kf3.c:887`, `:890`),
->   161 MiB under the bench launchers (BAR1 128 MiB). The only ceiling was `cardbudget.rs`: Σ per
+> - **Before (per device).** 289 MiB at the device defaults (256 + 32 + 1; the `bar1-size` and
+>   `bar2-size` defaults in `kf3_properties`, `qemu/hw/misc/kf3/kf3.c`), 161 MiB under the bench
+>   launchers (BAR1 128 MiB). The only ceiling was `cardbudget.rs`: Σ per
 >   host card ≤ host BAR1 − 16 MiB per device, which on a resizable-BAR host is about the whole
 >   VRAM per card, summed over every card the VM uses.
 > - **After.** One tile of `T = min(window, max(2 MiB, next_pow2(ceil(window / 1024))))` per

@@ -931,8 +931,9 @@ the same commit must produce the same sha256, or the differences are listed in t
 - A per-commit CI build is versioned `0.0.0+g<sha>` and is never published as a release. It is attested
   like a release (task I3), so the sweep can check every artifact it runs the same way (§2.8).
 - The C and Rust halves are locked by `KF3_ABI`. Realize refuses an archive whose
-  `kf3_abi_version()` differs (`qemu/hw/misc/kf3/kf3.h:14`; `qemu/hw/misc/kf3/kf3.c:724-727`), so a
-  release always ships both halves from one commit.
+  `kf3_abi_version()` differs (`qemu/hw/misc/kf3/kf3.h:14`; the `kf3_abi_version()` check in
+  `kf3_dev_realize`, `qemu/hw/misc/kf3/kf3.c`), so a release always ships both halves from one
+  commit.
 
 **Fields of `MANIFEST.json`:**
 
@@ -1040,22 +1041,22 @@ launcher still gets a named refusal.
 
 | check | preflight | realize, today |
 |---|---|---|
-| x86_64 Linux and a writable `/dev/kvm` | yes | `-accel kvm` required (`qemu/hw/misc/kf3/kf3.c:720-723`) |
-| KVM MSI-via-irqfd (in-kernel irqchip) | yes, by kernel config | refused without it (`kf3.c:789-793`) |
+| x86_64 Linux and a writable `/dev/kvm` | yes | `-accel kvm` required (the `kvm_enabled()` check in `kf3_dev_realize`, `qemu/hw/misc/kf3/kf3.c`) |
+| KVM MSI-via-irqfd (in-kernel irqchip) | yes, by kernel config | refused without it (the `kvm_msi_via_irqfd_enabled()` check in `kf3_dev_realize`) |
 | host driver loaded, with a version among the accepted host tags | yes; reads `/proc/driver/nvidia/version` and warns when the tag is accepted but untested in `SUPPORT.md` | R2 gate: unreadable, unparsable and unmeasured versions are refused by name (`crates/kf-host/src/lib.rs:159-191`; `crates/kf-abi/src/hostabi.rs:184-197`) |
 | open or closed kernel module | reported, never refused (§4 Q5, answered 2026-10-03); a closed host shows as "accepted, untested" until a sweep covers it | no check (none in `crates/`; only provisioning checks, `scripts/bench/provision_host_driver.sh:152-158`) |
 | `libcuda.so.1` and `libnvidia-ptxjitcompiler` loadable | yes | no walker means no device (`crates/kf-qemu/src/device.rs:281-283`) |
 | `/dev/nvidiactl`, `/dev/nvidia<minor>` and `/dev/nvidia-uvm` openable by the invoking user | yes | the host RM open fails, by name |
 | host BAR1 ≥ guest BAR1 + BAR2 + 1 MiB + 16 MiB | yes; computes the largest guest BAR1 that fits | summed per card, refused by name (`crates/kf-qemu/src/cardbudget.rs:5-14`, `:24-27`; `device.rs:268-273`) |
 | card memory for `fb-mb` | yes, from `nvidia-smi` | `store of N MiB refused: NoMemory` |
-| guest RAM is a shared memfd | the launcher always passes one | **not checked at realize.** It fails at the first sysmem placement (`crates/kf-qemu/src/mem.rs:368-375`); task I5 moves it to realize |
-| host RAM ≥ guest RAM | yes | all guest RAM is pinned for the VM's life (`crates/kf-qemu/src/mem.rs:1654-1659`) |
+| guest RAM is a shared memfd | the launcher always passes one | **not checked at realize.** It fails at the first sysmem placement (`WindowOps::place_ram` and `MemPlane::guest_ram_object` in `crates/kf-qemu/src/mem.rs`); task I5 moves it to realize |
+| host RAM ≥ guest RAM | yes | all guest RAM is pinned for the VM's life (`MemPlane::guest_ram_object` in `crates/kf-qemu/src/mem.rs`) |
 | QEMU's cgroup has a memory limit (design only, 2026-10-03) | yes: computes guest RAM + scratch bound + overhead (§2.5) and reports whether the memory controller is delegated to the user | none. The design: kf3 logs one warning at realize when its own cgroup's `memory.max` is `max`. The scratch bound itself is logged per window (`kf3: <window> scratch: tile …`) |
 | glibc ≥ the manifest's floor | yes | the loader refuses |
 | every NEEDED library resolves (bundled in `lib/`, or host-provided per `build.needed`) | yes: runs `bin/qemu-system-x86_64 --version`, and on failure names the missing library and the package that provides it | the loader refuses |
 
 **The device's own defaults fail on common cards.** Those defaults are `bar1-size` 256 MiB, `bar2-size`
-32 MiB and `fb-mb` 8192 (`qemu/hw/misc/kf3/kf3.c:884-890`). They need 305 MiB of host BAR1 under the
+32 MiB and `fb-mb` 8192 (`kf3_properties` in `qemu/hw/misc/kf3/kf3.c`). They need 305 MiB of host BAR1 under the
 budget above. Both harnesses therefore override them: a 128 MiB guest BAR1, and `fb-mb` sized from the card
 (`scripts/fastguest/run_fast_guest.sh:205-237`). Task I5 makes the device derive them, or refuse with the
 value that fits.
