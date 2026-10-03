@@ -7,7 +7,7 @@ ANSWERED with a pointer. Nothing below is decided yet.
 | # | decision | blocks | recommendation |
 |---|---|---|---|
 | 1 | the sweep and install plan: go-ahead, and Q2–Q8 | the installable binary and every support claim | approve; answers below |
-| 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | option A, guarded, with B as the fallback |
+| 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | option A, guarded, with B as the fallback — ★ box data 2026-10-03: A works (below) |
 | 3 | the archived traces that contain a full VBIOS | nothing technical; a legal liability | scrub the PROM values forward in both public repos |
 | 4 | renting a GPU box for display work | every display test, every merge bar | a standing weekly budget, one box at a time |
 
@@ -97,6 +97,35 @@ it dies with it.
 
 ## 2. `GF100_DISP_SW` (X11 desktops)
 
+★ **Box result, 2026-10-03 — option A works on hardware; still the owner's call.** vast 54044296,
+RTX 3060 (GA106), host + guest 580.159.04, the default-off experiment `x11-dispsw` on branch
+`v3-dispsw-exp`, A/B pair at its final code `c1cc4482` (`traces/v3_display/dispsw_20261003/`, eight
+runs in all; `design/V3_DISPLAY.md`, the x11-dispsw note's box block):
+
+- **Off:** `(EE) NVIDIA(0): Failed to allocate display software resources.`, Cinnamon X11 segfaults
+  into the fallback dialog, X11 vkcube aborts (`RC=134`); on a bare Xorg with no compositor,
+  fullscreen GL runs at 1.7 FPS. **On:** Cinnamon X11 is up with 0 crashes, X11 vkcube exits 0
+  (IMMEDIATE and FIFO, in a Cinnamon window and on bare X), vsync glxgears 59.8 FPS (60.0 fullscreen
+  on bare X), no-vsync ~2 500 FPS. Host Xid 0, an empty host-dmesg delta, every display-SW twin freed
+  (`dispsw[twins=80 live=0 host_refused=0 no_twin=0]`). The object's one control,
+  `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK`, was never sent.
+- **No release ever reached host RM** (a host-side kretprobe module, `scripts/bench/display/kfdsw_probe/`:
+  0 calls of the release functions in every run). So the 2026-10-03 review's worry — host RM writes
+  these releases only through a host kernel mapping kayfabe never creates, so they would be dropped
+  silently — did not bite: nothing asked. Kernel-mapping the display-SW spaces' guest RAM was tried
+  (5 986 rows, 33 868 KiB of host kernel address space at peak) and changed nothing; it is not shipped.
+- **The true security bound,** replacing the third bullet of the "new facts" below: kayfabe has ONE
+  host client per VM, so host RM's address check is client-wide (per guest VA space only if GSP
+  firmware names the channel's VA space, which is closed); and since kayfabe never asks host RM for a
+  kernel mapping (a unit test pins it), host RM has no address to write a display-SW release through
+  at all — the object makes host RM write no memory for the guest. What remains: the host object's
+  existence, host vblank timing as a side channel when the host drives a monitor (this box is
+  headless), and whatever GSP firmware does with the class's methods (ogkm-580 defines none, so
+  "cannot flip or set a mode" is a hypothesis). If a future client does ask for a release, it is
+  dropped and that client waits on its own semaphore; the probe shows it.
+- **What the owner is asked:** turn `x11-dispsw` on by default for display-capable hosts (it refuses
+  by name where the host cannot), or keep it opt-in.
+
 **The problem.** X11 compositors and X11 Vulkan presentation allocate a display-software object
 (class `0x9072`) on their 3D channel. Its methods ask for a semaphore release at the next vblank.
 Software methods are serviced by the RM of the GPU that runs the channel, which here is the host GPU.
@@ -122,7 +151,9 @@ without one logged 186 host Xid 32 and 1.3 FPS GL. So kayfabe refuses it today (
 - The host object is only a vblank timer. Its methods release a semaphore or notifier at an address
   that RM checks against the calling client's own mappings (`CliGetDmaMappingInfo`, `:146`). The
   twin's client is the guest's own, so a guest can write only into its own memory, at host vblank
-  times. It cannot flip, set a mode or change host display state.
+  times. It cannot flip, set a mode or change host display state. ⊘ *Corrected 2026-10-03 (box
+  result above): the client is kayfabe's one host client, so the check is client-wide; host RM writes
+  nothing (no kernel mapping); "cannot flip" is a hypothesis.*
 - The host allocation needs a display engine (`:69`) and a valid head (`:83`). On GPUs without one,
   such as data-centre parts, it fails, so B stays the fallback there.
 - On a host GPU with no monitor, RM runs each vblank callback immediately (`V3_DISPLAY.md` cites
@@ -146,7 +177,8 @@ host Xid 32, and frame rates are recorded.
 ★ *2026-10-03 (later): option A is built as a default-off experiment so this can be decided on box
 data — branch `v3-dispsw-exp`, device property `x11-dispsw` (default off; with it off nothing changes).
 What it does, the rule change it embodies, and the exact A/B box test are in `design/V3_DISPLAY.md`, the
-`x11-dispsw` note. No box has run it yet; this item stays open.*
+`x11-dispsw` note. No box has run it yet; this item stays open.* ⊘ *Superseded the same day: the box
+result at the top of this item. The item stays open for the owner's ruling.*
 
 ## 3. The archived traces that contain a full VBIOS
 
