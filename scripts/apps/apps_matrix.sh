@@ -9,6 +9,12 @@
 # env: KF3_BIN (kf3 qemu binary; default: the newest in /workspace/bench/kf3-bins),
 #      NVKVM_RAM_MB (16384), KF_SMP (6), KF3_FB_MB, APPS_GUEST_PM (0/1)
 # results: /workspace/apps/results/<run>/{host.res,guest.res,guest_isolated.res,<app>.*.log}
+# ★ 2026-10-03 (release §I, V3_APP_MATRIX.md §R5.3): every guest boot is GATED — after QEMU exits,
+#   boot_gate.sh reads the boot's whole kf3 log and appends
+#     APPS_BOOT_GATE boot=<tag> gate=PASS|FAIL|UNMEASURED unarmed= none= births= why=
+#   to the boot's guest.res. A silent twin (RC-UNARMED / RC-NONE) under ANY row fails the gate, and
+#   any boot that is not gate=PASS FAILS THE LANE: `guest` exits 3 after GUEST_DONE. summarize.py
+#   prints the same verdict (BOOT_GATE … lane=).
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"
 SIDE=${1:?host|guest}; RUN=${2:?run}; shift 2
@@ -45,6 +51,8 @@ boot(){  # $1 tag, $2 apps, $3 outdir
   flock -u 9; exec 9>&-
   for x in dmesg dmesg_after probe hostdmesg serial; do cp -f "/workspace/bench/run_$1_$x.log" "$3/boot_$1.$x.log" 2>/dev/null; done
   zstd -q -f "/workspace/bench/run_$1_qemu.log" -o "$3/boot_$1.qemu.log.zst" 2>/dev/null
+  # ★ the boot's silent-twin gate, over the COMPLETE kf3 log (QEMU has exited)
+  echo "APPS_BOOT_GATE boot=$1 $(bash "$HERE/boot_gate.sh" "/workspace/bench/run_$1_qemu.log" | sed 's/^GATE=/gate=/')" | tee -a "$3/guest.res"
   say "boot $1 rc=$rc apps=[$2] :: $(grep -a 'APPS_HOOK\|FAILED' "$3/boot_$1.driver.log" "/workspace/bench/run_$1_probe.log" 2>/dev/null | tail -2 | tr '\n' ' ' | cut -c1-200)"
   while busy; do sleep 3; done
 }
@@ -76,4 +84,13 @@ if [ "$PER" -gt 1 ] && [ "${APPS_NO_ISOLATE:-0}" != 1 ]; then
   done
   [ -f "$R/iso/guest.res" ] && cp "$R/iso/guest.res" "$R/guest_isolated.res"
 fi
-say "GUEST_DONE batched: $(grep -c 'verdict=PASS' "$R/guest.res") pass / $(wc -l < "$R/guest.res");  isolated re-runs: $(grep -c 'verdict=PASS' "$R/guest_isolated.res" 2>/dev/null || echo 0) pass / $(wc -l < "$R/guest_isolated.res" 2>/dev/null || echo 0)"
+say "GUEST_DONE batched: $(grep -c '^APPRES .*verdict=PASS' "$R/guest.res") pass / $(grep -c '^APPRES ' "$R/guest.res");  isolated re-runs: $(grep -c '^APPRES .*verdict=PASS' "$R/guest_isolated.res" 2>/dev/null || echo 0) pass / $(grep -c '^APPRES ' "$R/guest_isolated.res" 2>/dev/null || echo 0)"
+# ★ 2026-10-03: the lane fails on any boot whose silent-twin gate is not PASS (FAIL or UNMEASURED).
+gates=$(cat "$R/guest.res" "$R/iso/guest.res" 2>/dev/null | grep -a '^APPS_BOOT_GATE ')
+bad=$(grep -av ' gate=PASS ' <<<"$gates" | grep -c .)
+say "BOOT_GATE boots=$(grep -c . <<<"$gates") not_pass=$bad"
+if [ "$bad" -gt 0 ]; then
+  grep -av ' gate=PASS ' <<<"$gates" | sed 's/^/  ⊘ /'
+  say "⊘ LANE FAIL: $bad boot(s) not gate=PASS — a silent twin (RC-UNARMED/RC-NONE) or an unmeasured gate"
+  exit 3
+fi

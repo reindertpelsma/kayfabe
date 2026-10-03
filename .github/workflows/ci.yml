@@ -946,8 +946,11 @@ jobs:
       # managed-memory classifier, offline — R3's committed per-app slices must score SILENT as
       # recorded, EXPECTED_LOUD with a guest `kayfabe` Xid and the named host line, KF3_DEFECT with
       # a C′ line. No GPU: it is a shell script over committed logs, and it gates the verdict that
-      # decides a release blocker.
-      - name: "App-matrix verdict fixtures (loud_verdict.sh on the R3 slices)"
+      # decides a release blocker. ★ 2026-10-03 (review of 5af7e644): every injected kf3 line is
+      # rendered from the Rust source (scripts/apps/kf3_lines.py — kf3's own boot sentence names
+      # RC-UNARMED and once made every managed row KF3_DEFECT), plus the per-boot silent-twin gate
+      # (boot_gate.sh, summarize.py lane=) and apps_hook.sh driven offline (test_hook.sh).
+      - name: "App-matrix verdict fixtures (loud_verdict.sh, boot gate, hook — on the R3 slices)"
         run: bash scripts/apps/test_verdicts.sh
       # ★ The UNSAFE-CONTAINMENT gates — A, B and the ratchet (l1_os_shell.md §4.1).
       #

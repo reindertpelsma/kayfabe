@@ -23,7 +23,26 @@
 #      cuBLAS status and prints SUCCESS on bare metal after any fatal fault too (main.cpp:192-199,
 #      :270-272 at cuda-samples v12.5).
 # Prints exactly one line: `LOUD=<class> why=<reason-without-spaces>`. Never exits nonzero on a verdict.
+#
+# ⊘ CORRECTED 2026-10-03 (review of 5af7e644): every kf3 condition used to be a BARE WORD grep
+# (`RC-UNARMED`, `RC-NONE`, `not applied`, `UNSERVICED-GPU-FAULT`, `RC_TRIGGERED posted`). kf3 now
+# prints its boot-report sentence `kf_abi::faultbuffer::DELIVERY_UNBUILT` once per QEMU process, at
+# the first fault-buffer registration — the first CUDA process's `cuInit` — and that sentence names
+# `RC-UNARMED`, `RC_TRIGGERED` and `Xid 31`. In every isolated boot it lands in the managed app's own
+# slice, so the bare grep scored EVERY such row KF3_DEFECT: a false release blocker. Each condition
+# now matches the SHAPE of the line kf3 prints for it (the format strings in crates/kf-qemu and
+# crates/kf-mem; `test_verdicts.sh` renders them from the source, so the two cannot drift):
+#   RC-UNARMED birth   `kf3: chan 0x<client>:0x<handle> RC-UNARMED: …`   (chan.rs, three producers)
+#   RC-NONE birth      `kf3: chan 0x<client>:0x<handle> RC-NONE: …`
+#   C′ refused map     `kf3: mem t=<s>s REFUSED VasKey(<n>) root 0x…: <n> run(s) not applied: …`
+#                      (device.rs `REFUSED {why}` over vasmgr.rs; any `REFUSED VasKey(` line counts)
+#   named host line    `kf3: UNSERVICED-GPU-FAULT guest client 0x…`
+#   RC posted          `kf3: RC_TRIGGERED posted: guest chid 0x…`
 set -uo pipefail
+RE_DEFECT='kf3: mem t=[0-9.]+s REFUSED (VasKey\(|.* run\(s\) not applied: )|kf3: chan 0x[0-9a-f]+:0x[0-9a-f]+ RC-UNARMED: '
+RE_NONE='kf3: chan 0x[0-9a-f]+:0x[0-9a-f]+ RC-NONE: '
+RE_UNSERVICED='kf3: UNSERVICED-GPU-FAULT guest client 0x[0-9a-f]+ '
+RE_POSTED='kf3: RC_TRIGGERED posted: guest chid 0x[0-9a-f]+ '
 # ★ The list, and the ONE sanctioned exception to "bare metal passes + guest fails ⇒ kayfabe bug"
 # (OWNER_RULINGS §A.10): managed memory is not a release target (§I). Every other failing row stays
 # a kayfabe bug.
@@ -43,14 +62,14 @@ case "$v" in
   PASS) say PASS "the row passed" ;;
   NOTRUN|BOOT_FAIL) say UNTESTED "verdict=$v" ;;
 esac
-defect=$( [ -r "$klog" ] && grep -aE -m1 'not applied|REFUSED VasKey|RC-UNARMED' "$klog" | cut -c1-120 | tr ' |' '_/' )
+defect=$( [ -r "$klog" ] && grep -aE -m1 "$RE_DEFECT" "$klog" | cut -c1-120 | tr ' |' '_/' )
 [ -n "$defect" ] && say KF3_DEFECT "kf3:$defect"
 case "$v" in TIMEOUT|HANG|GUEST_DEAD) say SILENT "verdict=$v — a hang is never loud" ;; esac
 miss=""
 has 'NVRM: Xid \([^)]*\): 31, .*kayfabe:' "$gdm" || miss="$miss,no-guest-kayfabe-xid31"
-has 'UNSERVICED-GPU-FAULT' "$klog" || miss="$miss,no-UNSERVICED-GPU-FAULT"
-has 'RC_TRIGGERED posted' "$klog" || miss="$miss,no-RC_TRIGGERED-posted"
-has 'RC-NONE' "$klog" && miss="$miss,a-twin-with-no-notifier(RC-NONE)"
+has "$RE_UNSERVICED" "$klog" || miss="$miss,no-UNSERVICED-GPU-FAULT"
+has "$RE_POSTED" "$klog" || miss="$miss,no-RC_TRIGGERED-posted"
+has "$RE_NONE" "$klog" && miss="$miss,a-twin-with-no-notifier(RC-NONE)"
 apperr=0
 has 'code=7(00|19)|-> 7(00|19)|CUBLAS_STATUS_EXECUTION_FAILED' "$glog" && apperr=1
 case "$rc" in ''|0|124|137|-|ssh*) ;; *[!0-9]*) ;; *) apperr=1 ;; esac

@@ -8,9 +8,14 @@
 # loud_verdict.sh and the boot's `rc[unarmed= none=]` gate counters) to $APPS_OUT/guest.res.
 # Stops at the first app after which the guest no longer answers (verdict GUEST_DEAD);
 # apps_matrix.sh reboots and continues with the rest.
+# ★ 2026-10-03 (review of 5af7e644): (1) the wedge probe also runs after a PASS row whose guest dmesg
+# gained an Xid — `vmm_probe`'s `ro_write` child faults ON PURPOSE and the row still PASSes, and a
+# fault is what wedged nb1; (2) every row also carries `rc_silent_births=` (RC-UNARMED/RC-NONE birth
+# lines in its own slice) — the per-row attribution of the boot gate apps_matrix.sh enforces
+# (boot_gate.sh). `APPS_GSSH` replaces the guest ssh (test_hook.sh drives this hook offline with it).
 set -uo pipefail
 TAG=${1:?tag}
-HERE="$(cd "$(dirname "$0")" && pwd)"; G="$HERE/../bench/gssh_nv"
+HERE="$(cd "$(dirname "$0")" && pwd)"; G=${APPS_GSSH:-$HERE/../bench/gssh_nv}
 OUT=${APPS_OUT:?APPS_OUT}; mkdir -p "$OUT"
 QLOG=${BENCH_DIR:-/workspace/bench}/run_${TAG}_qemu.log
 $G true >/dev/null 2>&1 || { echo "APPS_HOOK guest unreachable at start"; exit 0; }
@@ -54,21 +59,28 @@ for app in $APPS; do
   loud=$(bash "$HERE/loud_verdict.sh" "$app" "$OUT/$app.guest.log" "$OUT/$app.guest_dmesg.log" "$OUT/$app.kf3.log" "$line")
   st=$(grep -aoE 'rc\[armed=[0-9]+ unarmed=[0-9]+ none=[0-9]+' "$OUT/$app.kf3.log" 2>/dev/null | tail -1)
   ru=$(sed -n 's/.*unarmed=\([0-9]*\).*/\1/p' <<<"$st"); rn=$(sed -n 's/.*none=\([0-9]*\).*/\1/p' <<<"$st")
-  echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr rc_unarmed=${ru:--} rc_none=${rn:--} loud=${loud#LOUD=}" | tee -a "$OUT/guest.res"
+  # the birth LINE's shape, never the bare word (kf3's boot-report sentence names RC-UNARMED too)
+  rb=$(grep -acE 'kf3: chan 0x[0-9a-f]+:0x[0-9a-f]+ RC-(UNARMED|NONE): ' "$OUT/$app.kf3.log" 2>/dev/null); rb=${rb:-0}
+  echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr rc_unarmed=${ru:--} rc_none=${rn:--} rc_silent_births=$rb loud=${loud#LOUD=}" | tee -a "$OUT/guest.res"
   grep -a '^APPDIG ' <<<"$res" | tee -a "$OUT/guest.dig"
   [ $alive = 0 ] && { echo "APPS_HOOK guest dead after $app — stopping this boot"; break; }
   # ⊘ measured nb1 (670bd310, vh): after UnifiedMemoryStreams' fault the boot was WEDGED — every
   # later app burned its whole timeout silently. After any non-PASS row, prove the boot still runs
   # CUDA (vectorAdd, 60 s); if not, record WEDGED and end the boot — apps_matrix.sh reboots and
   # continues with the remaining apps, so one wedge costs one app, not the rest of the list.
-  case "$line" in *verdict=PASS*) ;; *)
-    if [ "${APPS_WEDGE_PROBE:-1}" = 1 ]; then
-      sane=$(timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/vectorAdd 2>&1 | grep -c "Test PASSED"' 2>/dev/null | tr -d '\r')
-      if [ "${sane:-0}" != 1 ]; then
-        echo "APPS_WEDGE boot=$TAG after=$app sanity_vectorAdd=${sane:-none}" | tee -a "$OUT/guest.res"
-        echo "APPS_HOOK boot wedged after $app — stopping this boot"; break
-      fi
-    fi ;;
-  esac
+  # ★ 2026-10-03: and after ANY row whose guest dmesg gained an Xid, PASS or not — a GPU fault is
+  # what wedged nb1, and vmm_probe faults on purpose yet PASSes (its rows after it would otherwise
+  # burn their timeouts and score SILENT, blamed on the wrong row).
+  probe=0
+  case "$line" in *verdict=PASS*) ;; *) probe=1 ;; esac
+  [ "$nx" -gt 0 ] 2>/dev/null && probe=1
+  if [ $probe = 1 ] && [ "${APPS_WEDGE_PROBE:-1}" = 1 ]; then
+    sane=$(timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/vectorAdd 2>&1 | grep -c "Test PASSED"' 2>/dev/null | tr -d '\r')
+    echo "APPS_HOOK wedge probe after $app (guest_xid=$nx): sanity_vectorAdd=${sane:-none}"
+    if [ "${sane:-0}" != 1 ]; then
+      echo "APPS_WEDGE boot=$TAG after=$app sanity_vectorAdd=${sane:-none}" | tee -a "$OUT/guest.res"
+      echo "APPS_HOOK boot wedged after $app — stopping this boot"; break
+    fi
+  fi
 done
 echo "APPS_HOOK_DONE"
