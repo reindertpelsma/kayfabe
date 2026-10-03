@@ -2,10 +2,12 @@
 //! ★★ The relay against nvkvm-pv's REAL, UNCHANGED broker (`--backend test`, which drives no
 //! display and takes its input from stdin, `nb_session_test.c`).
 //!
-//! Ignored by default — it needs the broker binary, built from nvkvm-pv `368d2db`:
+//! Ignored by default — it needs the broker binary, built from nvkvm-pv `368d2db` or later
+//! (2026-10-04: all of them pass against `badf2d7`, the `/dev/udmabuf` case included, and the
+//! fdinfo case needs `badf2d7` or later):
 //!
 //! ```text
-//! git -C <nvkvm-pv> archive 368d2db src/broker src/common | tar -x -C <scratch>
+//! git -C <nvkvm-pv> archive badf2d7 src/broker src/common | tar -x -C <scratch>
 //! make -C <scratch>/src/broker nvkvm-display-broker
 //! KF_BROKER_BIN=<scratch>/src/broker/nvkvm-display-broker \
 //!     cargo test -p kf-broker --test broker_loopback -- --ignored --test-threads=1
@@ -61,8 +63,29 @@ struct Broker {
 
 impl Broker {
     fn spawn(sock: &Path) -> Broker {
+        Broker::spawn_in(sock, false)
+    }
+
+    /// `no_proc`: in its own mount namespace with a tmpfs over `/proc` — a broker that cannot read
+    /// `/proc/self/fdinfo` (needs root: `unshare --mount`).
+    fn spawn_in(sock: &Path, no_proc: bool) -> Broker {
         let _ = std::fs::remove_file(sock);
-        let mut child = Command::new(broker_bin())
+        let mut cmd = if no_proc {
+            let mut c = Command::new("unshare");
+            c.args([
+                "--mount",
+                "--propagation",
+                "private",
+                "sh",
+                "-c",
+                "mount -t tmpfs kfb-noproc /proc && exec \"$0\" \"$@\"",
+            ])
+            .arg(broker_bin());
+            c
+        } else {
+            Command::new(broker_bin())
+        };
+        let mut child = cmd
             .args([
                 "--backend",
                 "test",
@@ -308,6 +331,11 @@ fn linear_udmabuf_frames_release_and_scripted_input() {
     assert!(
         r.ring.held_mask().count_ones() <= 1,
         "every frame came back but the retained latest one"
+    );
+    assert_eq!(
+        r.relay.counters().dmabuf_trips,
+        0,
+        "a broker that can prove the dma-buf releases it: no back-off"
     );
     // input, scripted through the broker's stdin (focus first: unfocused, it sends none)
     for l in [
@@ -597,4 +625,54 @@ fn squatter_is_refused(dir: &Path) {
     assert!(!r.relay.active(), "never connected to a squatter");
     assert!(c.peer_refused >= 1 && c.packets == 0, "{c:?}");
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// ★ nvkvm-pv `badf2d7`, behaviour (4), against the REAL broker: one that cannot read
+/// `/proc/self/fdinfo` (its own mount namespace, a tmpfs over `/proc`) cannot prove a dma-buf, so
+/// it drops every LINEAR frame with no word on the wire (it logs why); the relay's dma-buf
+/// detector trips and the frames go as shared memory, which the broker presents and RELEASEs.
+/// Known-positive: the same relay against the same broker WITH `/proc` keeps LINEAR and never
+/// trips (`linear_udmabuf_frames_release_and_scripted_input`, which asserts `dmabuf_trips == 0`).
+/// Needs root, `/dev/udmabuf` and the broker at `badf2d7` or later.
+#[test]
+#[ignore = "needs KF_BROKER_BIN (nvkvm-pv's broker at badf2d7+), root and /dev/udmabuf"]
+fn a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory() {
+    assert_eq!(
+        kf_broker::effective_uid(),
+        0,
+        "this case needs root (unshare --mount, to hide /proc from the broker)"
+    );
+    kf_linux_raw::require_udmabuf!("a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory");
+    let dir = scratch("noproc");
+    let sock = dir.join("display.sock");
+    let b = Broker::spawn_in(&sock, true);
+    let mut r = Rig::new(&sock, true);
+    r.start();
+    assert!(r.pump_until(3000, |r| r.relay.active()), "{}", b.log());
+    for _ in 0..40 {
+        r.publish(FOURCC_XR24);
+        r.pump(100);
+        if r.relay.counters().dmabuf_trips > 0 {
+            break;
+        }
+    }
+    assert_eq!(
+        r.relay.counters().dmabuf_trips,
+        1,
+        "{:?}",
+        r.relay.counters()
+    );
+    assert!(
+        wait_log(&b, "cannot read /proc/self/fdinfo", 2000),
+        "the broker refused for that reason:\n{}",
+        b.log()
+    );
+    let before = r.relay.counters().releases;
+    for _ in 0..10 {
+        r.publish(FOURCC_XR24);
+        r.pump(100);
+    }
+    let c = r.relay.counters();
+    assert!(c.releases >= before + 5, "shared-memory frames flow: {c:?}");
+    assert!(r.relay.active(), "one connection throughout");
 }

@@ -44,6 +44,15 @@
 //!   relay tracks the grab (`EV_GRAB`, and `F_GRABBED` on EVERY packet), publishes the mode the
 //!   worker composes by, and in hover brings the broker to the guest's newest cursor with at most
 //!   one `CMD_CURSOR` per entry ([`crate::cursor`]). Never under grab, never without the bit.
+//! - ★ **nvkvm-pv `badf2d7`** (the broker's review fixes, wire unchanged; 2026-10-04): every "no"
+//!   the broker volunteers is RECORDED, asked or not — it now sends `EV_FORMAT x=0` whenever an
+//!   ATTACH is dropped at its format gate, and on X11 for both alpha twins of one refusal — in a
+//!   table where a "no" for a pair the relay sends is never evicted by volunteered ones; the host
+//!   dma-buf rungs get their own acknowledgement detector, because a dma-buf the broker cannot
+//!   prove (without a readable `/proc/self/fdinfo`, every one) is dropped without a word on the
+//!   wire; and every descriptor the relay sends is checked first, by the broker's own two tests in
+//!   its order ([`kf_linux_raw::fd_carrier`]), so the broker never has to close one of ours on its
+//!   helper thread. Its refusals are connection state, like the relay's.
 //! - All per-connection knowledge lives in one [`Conn`] that is dropped on disconnect, so the
 //!   "reconnect inherits partial state" class (nvkvm-pv audits B-2, S-11, RR-07) cannot be
 //!   written.
@@ -62,6 +71,7 @@ use crate::wire::{
     EV_HELLO, EV_KEY, EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, F_GRABBED, FOURCC_XR24,
     MOD_INVALID, MOD_LINEAR, PKT_SIZE, PROTO_VERSION, Pkt, fourcc_name,
 };
+use kf_linux_raw::Carrier;
 use std::os::fd::BorrowedFd;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
@@ -82,8 +92,13 @@ pub const CREDIT_BACKSTOP_MS: u64 = 100;
 pub const RECLAIM_AFTER_MS: u64 = 1000;
 /// The most packets one read takes (`kf3_broker_ready`'s batch).
 pub const READ_BATCH: usize = 64;
-/// Distinct (fourcc, modifier) verdicts remembered per connection (`relay.c:92`).
-const VERDICTS: usize = 4;
+/// Distinct (fourcc, modifier) verdicts remembered per connection. ⊘ 4 (`relay.c:92`) until
+/// 2026-10-04: since nvkvm-pv `badf2d7` the broker VOLUNTEERS `x` = 0 for pairs the relay never
+/// asked about — an ATTACH dropped at its format gate, and on X11 both alpha twins of one refusal
+/// (`nvkvm_broker.c:768-821`, `:1735-1749`) — and it tells each pair ONCE per connection, so a
+/// forgotten "no" is a pair the next frame goes into with nothing on the wire to say why. A "no"
+/// is evicted only when every row is one ([`remember`]).
+const VERDICTS: usize = 16;
 /// ★ The GPU-copy acknowledgement detector: this many native commits with no RELEASE naming a
 /// native frame …
 pub const DETECT_COMMITS: u32 = 3;
@@ -282,6 +297,16 @@ pub struct Counters {
     pub native: u64,
     /// GPU-copy back-offs the acknowledgement detector tripped.
     pub native_trips: u64,
+    /// ★ Host dma-buf (LINEAR, implicit) back-offs the same detector tripped: frames the broker
+    /// dropped without a word (since nvkvm-pv `badf2d7`, any dma-buf it cannot prove, e.g.
+    /// without a readable `/proc/self/fdinfo`).
+    pub dmabuf_trips: u64,
+    /// ★ Frames (and cursor images) NOT sent because their descriptor is not provably a memfd
+    /// or a dma-buf ([`kf_linux_raw::fd_carrier`]) — the broker would refuse it and close it on
+    /// a helper thread (`badf2d7`). A kayfabe defect whenever it is not zero.
+    pub carrier_refused: u64,
+    /// `EV_FORMAT` "no"s for a pair this connection never asked about, recorded (`badf2d7`).
+    pub formats_unasked: u64,
     /// ★ §O: `CMD_CURSOR` SETs sent (an image or hot spot the broker did not hold) …
     pub cursor_sets: u64,
     /// … HIDEs …
@@ -320,6 +345,9 @@ struct VerdictRow {
     fourcc: u32,
     modifier: u64,
     v: Verdict,
+    /// This connection asked about the pair — one the relay itself sends (every rung asks before
+    /// its first ATTACH), unlike a pair the broker merely volunteered a "no" for (an alpha twin).
+    asked: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -396,18 +424,91 @@ struct Conn<S> {
     seq: u32,
     /// ★ The compositor's device (`EV_DEVICE`).
     device: Device,
-    /// ★ The acknowledgement detector: a RELEASE named a native frame on this connection.
-    native_confirmed: bool,
-    /// Native commits since the last confirmation, and when the first of them went.
-    native_unacked: u32,
-    native_unacked_since: Option<u64>,
-    /// No native frame before this; the next back-off's length.
-    backoff_until: Option<u64>,
-    backoff_ms: u64,
+    /// ★ The acknowledgement detector for the GPU-copy rung …
+    native: Ack,
+    /// … and for the host dma-buf rungs (LINEAR, implicit; nvkvm-pv `badf2d7`).
+    dmabuf: Ack,
     /// ★ §O: the broker's grab, from `EV_GRAB` and from `F_GRABBED` on every packet.
     grabbed: bool,
     /// ★ §O: the cursor as this connection knows it.
     cursor: CursorConn,
+}
+
+/// ★ An acknowledgement detector for one class of dma-buf rungs. A broker that drops a dma-buf
+/// ATTACH says so NOWHERE on the wire — X11 for a refused DRI3 import, and since nvkvm-pv
+/// `badf2d7` both backends for any dma-buf whose identity the broker cannot prove (without a
+/// readable `/proc/self/fdinfo` every one, `nvkvm_broker.c:1675-1689`; the frame is dropped and
+/// the connection lives, `:2219-2231`) — so commits of the class that no RELEASE acknowledged,
+/// [`DETECT_COMMITS`] of them over at least [`DETECT_MS`], back the class off for
+/// [`BACKOFF_MIN_MS`] (doubling to [`BACKOFF_MAX_MS`]); a RELEASE naming a frame of the class
+/// confirms it for the connection. Never permanent, and connection state: it dies with [`Conn`].
+#[derive(Debug, Clone, Copy)]
+struct Ack {
+    /// A RELEASE named a frame of this class on this connection.
+    acked: bool,
+    /// Commits since the last confirmation, and when the first of them went.
+    unacked: u32,
+    unacked_since: Option<u64>,
+    /// No frame of the class before this; the next back-off's length.
+    backoff_until: Option<u64>,
+    backoff_ms: u64,
+}
+
+impl Ack {
+    const fn new() -> Ack {
+        Ack {
+            acked: false,
+            unacked: 0,
+            unacked_since: None,
+            backoff_until: None,
+            backoff_ms: BACKOFF_MIN_MS,
+        }
+    }
+
+    /// A frame of the class was committed.
+    fn committed(&mut self, now: u64) {
+        if !self.acked {
+            self.unacked += 1;
+            self.unacked_since.get_or_insert(now);
+        }
+    }
+
+    /// A RELEASE named a frame of the class: acknowledged, any back-off cleared. Whether that is
+    /// news.
+    fn released(&mut self) -> bool {
+        let news = !self.acked;
+        *self = Ack {
+            acked: true,
+            ..Ack::new()
+        };
+        news
+    }
+
+    /// Whether the class may be used at `now`.
+    fn allows(&self, now: u64) -> bool {
+        self.backoff_until.is_none_or(|t| now >= t)
+    }
+
+    /// When the detector decides next (a trip), if it has anything to decide.
+    fn trip_at(&self) -> Option<u64> {
+        self.unacked_since
+            .filter(|_| !self.acked && self.unacked >= DETECT_COMMITS)
+            .map(|t| t + DETECT_MS)
+    }
+
+    /// Trip, when due at `now`: the commits it counted and the back-off's length.
+    fn trip(&mut self, now: u64) -> Option<(u32, u64)> {
+        if !self.trip_at().is_some_and(|t| now >= t) {
+            return None;
+        }
+        let ms = self.backoff_ms;
+        self.backoff_until = Some(now + ms);
+        self.backoff_ms = (ms * 2).min(BACKOFF_MAX_MS);
+        let n = self.unacked;
+        self.unacked = 0;
+        self.unacked_since = None;
+        Some((n, ms))
+    }
 }
 
 /// ★ §O: the guest's cursor on one connection — what the broker holds, the newest want taken
@@ -443,6 +544,8 @@ pub struct Relay<L: Link> {
     now_ms: u64,
     /// ★ §O: the worker ↔ relay share for the guest's cursor; `None` = cursors stay composed.
     cursor: Option<Arc<CursorShare>>,
+    /// Why [`Relay::attach`] last refused a descriptor ([`carried`]), for the refusal's log line.
+    carrier_refusal: Option<String>,
 }
 
 macro_rules! say {
@@ -520,6 +623,7 @@ impl<L: Link> Relay<L> {
             counters: Counters::default(),
             now_ms: 0,
             cursor: None,
+            carrier_refusal: None,
         }
     }
 
@@ -722,11 +826,8 @@ impl<L: Link> Relay<L> {
             surface: None,
             seq: 0,
             device: Device::Unknown,
-            native_confirmed: false,
-            native_unacked: 0,
-            native_unacked_since: None,
-            backoff_until: None,
-            backoff_ms: BACKOFF_MIN_MS,
+            native: Ack::new(),
+            dmabuf: Ack::new(),
             grabbed: false,
             cursor: CursorConn::default(),
         });
@@ -812,11 +913,7 @@ impl<L: Link> Relay<L> {
             return Sent::Failed("no connection".into());
         };
         let rec = cmd.encode();
-        let fd = slot_fd.and_then(|j| match rung {
-            Rung::Native => self.ring.vram(j).map(crate::slots::VramFds::fd),
-            Rung::Shm => self.ring.fds(j).map(crate::SlotFds::memfd),
-            Rung::Linear | Rung::Implicit => self.ring.fds(j).and_then(crate::SlotFds::dmabuf),
-        });
+        let fd = slot_fd.and_then(|j| ring_fd(&self.ring, j, rung));
         if slot_fd.is_some() && fd.is_none() {
             return Sent::Failed("an ATTACH without its descriptor".into());
         }
@@ -835,7 +932,7 @@ impl<L: Link> Relay<L> {
             && c.caps & CAP_RELEASE != 0
             && verdict(c, FOURCC_XR24, m) == Some(Verdict::Yes)
             && !matches!(c.device, Device::Other(..) | Device::Pending)
-            && c.backoff_until.is_none_or(|t| self.now_ms >= t);
+            && c.native.allows(self.now_ms);
         ok.then_some(m)
     }
 
@@ -879,7 +976,9 @@ impl<L: Link> Relay<L> {
         let Some(c) = self.conn.as_ref() else {
             return Some((Rung::Shm, MOD_LINEAR));
         };
-        if fds.dmabuf().is_some() {
+        // ★ the host dma-buf rungs, unless their detector backs off (`badf2d7`: a dma-buf the
+        // broker cannot prove is dropped without a word)
+        if fds.dmabuf().is_some() && c.dmabuf.allows(self.now_ms) {
             if c.caps & CAP_MODIFIERS != 0 {
                 // an unknown verdict counts as yes (`relay.c:753-793`)
                 if verdict(c, g.fourcc, MOD_LINEAR) != Some(Verdict::No) {
@@ -935,14 +1034,7 @@ impl<L: Link> Relay<L> {
         if self.send(&Cmd::query(fourcc, modifier), None, Rung::Shm) == Sent::Done
             && let Some(c) = self.conn.as_mut()
         {
-            if c.verdicts.len() == VERDICTS {
-                c.verdicts.remove(0); // full: recycle the oldest
-            }
-            c.verdicts.push(VerdictRow {
-                fourcc,
-                modifier,
-                v: Verdict::Asked,
-            });
+            remember(c, fourcc, modifier, Verdict::Asked, true);
         }
         // a refused query is not fatal and not retried here: the next frame asks again
     }
@@ -976,8 +1068,14 @@ impl<L: Link> Relay<L> {
     fn refuse_unfit(&mut self, j: usize) {
         self.counters.refused += 1;
         let n = self.counters.refused;
+        let carrier = self.carrier_refusal.take();
         if loud(n) {
-            if self.ring.broker_backed(j) {
+            if let Some(why) = carrier {
+                say!(
+                    "REFUSED frame slot {j}: {why} — the broker accepts only a memfd or a dma-buf \
+                     it can prove, and closes any other on a helper thread ({n} so far)"
+                );
+            } else if self.ring.broker_backed(j) {
                 let g = self.ring.geometry(j);
                 say!(
                     "REFUSED frame slot {j}: no current backing fits its {}x{} geometry ({n} so far)",
@@ -1084,6 +1182,16 @@ impl<L: Link> Relay<L> {
     /// blamed the socket, and lost input until the reconnect.
     fn attach(&mut self, now: u64, slot: usize) -> Option<Sent> {
         let (cmd, rung) = self.attach_cmd(slot)?;
+        // ★ `badf2d7`: only a descriptor the broker can prove — never one it must close off its
+        // main thread; the frame is refused here, by name, and the connection stays up
+        if let Err(why) = ring_fd(&self.ring, slot, rung).map_or_else(
+            || Err("has no descriptor".to_string()),
+            |fd| carried(fd, rung == Rung::Shm),
+        ) {
+            self.counters.carrier_refused += 1;
+            self.carrier_refusal = Some(format!("its {rung:?} descriptor {why}"));
+            return None;
+        }
         let r = self.send(&cmd, Some(slot), rung);
         if r == Sent::Done {
             self.held[slot] = Some(Held {
@@ -1112,13 +1220,18 @@ impl<L: Link> Relay<L> {
         if r == Sent::Done {
             self.commits += 1;
             self.counters.sent += 1;
-            if self.held[slot].is_some_and(|h| h.rung == Rung::Native) {
+            let rung = self.held[slot].map(|h| h.rung);
+            if rung == Some(Rung::Native) {
                 self.counters.native += 1;
-                if let Some(c) = self.conn.as_mut()
-                    && !c.native_confirmed
-                {
-                    c.native_unacked += 1;
-                    c.native_unacked_since.get_or_insert(now);
+            }
+            // ★ the acknowledgement detectors count commits only where a RELEASE is promised
+            if let Some(c) = self.conn.as_mut()
+                && c.caps & CAP_RELEASE != 0
+            {
+                match rung {
+                    Some(Rung::Native) => c.native.committed(now),
+                    Some(Rung::Linear | Rung::Implicit) => c.dmabuf.committed(now),
+                    Some(Rung::Shm) | None => {}
                 }
             }
             if let Some(h) = self.held[slot].as_mut() {
@@ -1768,18 +1881,20 @@ impl<L: Link> Relay<L> {
             return;
         };
         self.counters.releases += 1;
-        // ★ a RELEASE names only a buffer the compositor imported: the GPU copy is acknowledged
-        if self.held[j].is_some_and(|h| h.rung == Rung::Native)
-            && let Some(c) = self.conn.as_mut()
-        {
-            if !c.native_confirmed {
-                say!("the display imported a GPU-copy frame (its RELEASE came back)");
+        // ★ a RELEASE names only a buffer the compositor imported: its class is acknowledged
+        let rung = self.held[j].map(|h| h.rung);
+        if let Some(c) = self.conn.as_mut() {
+            match rung {
+                Some(Rung::Native) => {
+                    if c.native.released() {
+                        say!("the display imported a GPU-copy frame (its RELEASE came back)");
+                    }
+                }
+                Some(Rung::Linear | Rung::Implicit) => {
+                    c.dmabuf.released();
+                }
+                Some(Rung::Shm) | None => {}
             }
-            c.native_confirmed = true;
-            c.native_unacked = 0;
-            c.native_unacked_since = None;
-            c.backoff_until = None;
-            c.backoff_ms = BACKOFF_MIN_MS;
         }
         if let Some(c) = self.conn.as_mut()
             && c.last_commit == Some(j)
@@ -1798,37 +1913,55 @@ impl<L: Link> Relay<L> {
         self.progress(now, host);
     }
 
+    /// ★ `EV_FORMAT`: the answer to a `QUERY_FORMAT` — or, since nvkvm-pv `badf2d7`, a "no" the
+    /// broker VOLUNTEERS: when the display refuses an import it had advertised, and whenever an
+    /// ATTACH is dropped at its format gate, for the pair that ATTACH named (once per pair per
+    /// connection, possibly a pair this connection never asked about), on X11 for BOTH alpha
+    /// twins of one refusal (`nvkvm_broker.c:768-821`, `:1735-1749`). Every "no" is recorded — a
+    /// later one always wins, asked or not — and reclaims the frames attached under its pair; a
+    /// "yes" counts only as the answer to a question this connection asked (never an upgrade).
+    /// The record is connection state ([`Conn`]): the broker forgets its refusals at detach
+    /// (`badf2d7`), and so does the relay.
     fn format(&mut self, now: u64, host: &mut dyn Host, p: &Pkt) {
         let fourcc = u32::from_le_bytes(p.y.to_le_bytes());
         let modifier = p.wide();
         let Some(c) = self.conn.as_mut() else { return };
         let last = c.last_commit;
-        let Some(row) = c
-            .verdicts
-            .iter_mut()
-            .find(|r| r.fourcc == fourcc && r.modifier == modifier)
-        else {
-            say!(
-                "stale EV_FORMAT for {} modifier {modifier:#x}, ignored",
-                fourcc_name(fourcc)
-            );
-            return;
+        let was = verdict(c, fourcc, modifier);
+        let v = match (was, p.x != 0) {
+            (_, false) => Verdict::No, // ★ a later "no" always wins
+            (Some(Verdict::Asked), true) => Verdict::Yes,
+            (Some(w), true) => w,
+            (None, true) => {
+                say!(
+                    "unasked EV_FORMAT yes for {} modifier {modifier:#x}, ignored (a yes is \
+                     never an upgrade)",
+                    fourcc_name(fourcc)
+                );
+                return;
+            }
         };
-        let was = row.v;
-        if p.x == 0 {
-            row.v = Verdict::No; // ★ a later "no" always wins
-        } else if row.v == Verdict::Asked {
-            row.v = Verdict::Yes;
+        if was != Some(v) {
+            remember(c, fourcc, modifier, v, false);
+            if was.is_none() {
+                self.counters.formats_unasked += 1;
+            }
+            let n = self.counters.formats_unasked;
+            if was.is_some() || loud(n) {
+                say!(
+                    "the display {} show {} modifier {modifier:#018x}{}",
+                    if v == Verdict::Yes { "CAN" } else { "CANNOT" },
+                    fourcc_name(fourcc),
+                    if was.is_none() {
+                        " (unasked: the broker dropped an ATTACH in this pair, or refused its \
+                         alpha twin)"
+                    } else {
+                        ""
+                    }
+                );
+            }
         }
-        let v = row.v;
-        if v != was {
-            say!(
-                "the display {} show {} modifier {modifier:#018x}",
-                if v == Verdict::Yes { "CAN" } else { "CANNOT" },
-                fourcc_name(fourcc)
-            );
-        }
-        if v != Verdict::No {
+        if p.x != 0 {
             return;
         }
         // ★ fix (a): free what that pair orphaned — the broker failed to import them
@@ -1904,26 +2037,29 @@ impl<L: Link> Relay<L> {
     /// rung off — loud once per trip, never permanent.
     fn detect(&mut self, now: u64) {
         let Some(c) = self.conn.as_mut() else { return };
-        let due = !c.native_confirmed
-            && c.native_unacked >= DETECT_COMMITS
-            && c.native_unacked_since.is_some_and(|t| now >= t + DETECT_MS);
-        if !due {
-            return;
+        let native = c.native.trip(now);
+        let dmabuf = c.dmabuf.trip(now);
+        if let Some((n, ms)) = native {
+            self.counters.native_trips += 1;
+            say!(
+                "GPU-copy frames are not acknowledged ({n} committed, no RELEASE for {DETECT_MS} ms — \
+                 the compositor may not import them): backing off to the host rungs for {} s, then \
+                 trying again (trip {})",
+                ms / 1000,
+                self.counters.native_trips
+            );
         }
-        let ms = c.backoff_ms;
-        c.backoff_until = Some(now + ms);
-        c.backoff_ms = (ms * 2).min(BACKOFF_MAX_MS);
-        let n = c.native_unacked;
-        c.native_unacked = 0;
-        c.native_unacked_since = None;
-        self.counters.native_trips += 1;
-        say!(
-            "GPU-copy frames are not acknowledged ({n} committed, no RELEASE for {DETECT_MS} ms — \
-             the compositor may not import them): backing off to the host rungs for {} s, then \
-             trying again (trip {})",
-            ms / 1000,
-            self.counters.native_trips
-        );
+        if let Some((n, ms)) = dmabuf {
+            self.counters.dmabuf_trips += 1;
+            say!(
+                "dma-buf frames are not acknowledged ({n} committed, no RELEASE for {DETECT_MS} ms): \
+                 the broker drops a dma-buf it cannot prove without a word on the wire — it needs a \
+                 readable /proc/self/fdinfo (its own log says why) — so frames go as shared memory \
+                 for {} s, then the dma-buf rung is tried again (trip {})",
+                ms / 1000,
+                self.counters.dmabuf_trips
+            );
+        }
     }
 
     /// The close policy is the VMM's (`proto.h:73-91`); this keeps nvkvm-pv's repeat-ask message
@@ -2170,6 +2306,11 @@ impl<L: Link> Relay<L> {
                 f.write_all_at(i.pixels(), 0)
                     .map_err(|e| format!("writing the cursor memfd: {e}"))?;
                 drop(f);
+                carried(ram.as_backing_fd(), true).map_err(|why| {
+                    self.counters.carrier_refused += 1;
+                    format!("the cursor memfd {why}")
+                })?;
+                let c = self.conn.as_ref().ok_or("no connection")?;
                 Ok(self
                     .link
                     .send(&c.sock, &cmd.encode(), Some(ram.as_backing_fd())))
@@ -2187,15 +2328,78 @@ impl<L: Link> Relay<L> {
             c.owed.and(c.owed_at),
             (!c.credit).then_some(c.credit_at).flatten(),
             self.reclaim_deadline(),
-            c.native_unacked_since
-                .filter(|_| !c.native_confirmed && c.native_unacked >= DETECT_COMMITS)
-                .map(|t| t + DETECT_MS),
-            c.backoff_until.filter(|t| *t > self.now_ms),
+            c.native.trip_at(),
+            c.dmabuf.trip_at(),
+            c.native.backoff_until.filter(|t| *t > self.now_ms),
+            c.dmabuf.backoff_until.filter(|t| *t > self.now_ms),
         ]
         .into_iter()
         .flatten()
         .min()
     }
+}
+
+/// The descriptor `rung` sends for slot `j` of `ring`.
+fn ring_fd(ring: &FrameRing, j: usize, rung: Rung) -> Option<BorrowedFd<'_>> {
+    match rung {
+        Rung::Native => ring.vram(j).map(crate::slots::VramFds::fd),
+        Rung::Shm => ring.fds(j).map(crate::SlotFds::memfd),
+        Rung::Linear | Rung::Implicit => ring.fds(j).and_then(crate::SlotFds::dmabuf),
+    }
+}
+
+/// ★ nvkvm-pv `badf2d7`: the broker accepts only a descriptor it can PROVE to be shmem or a
+/// dma-buf, and closes any other on a helper thread (`nb_fd_drop`, `nvkvm_broker.c:1487-1520`).
+/// So every descriptor this relay sends is checked first, by the broker's own two tests in its
+/// order ([`kf_linux_raw::fd_carrier`]: `F_GET_SEALS`, then `/proc/self/fdinfo`'s `exp_name:`;
+/// never an `fstatfs` on an unproven descriptor) — a memfd or a dma-buf, and an `F_SHM` frame's
+/// (or a cursor's) memfd sealed `F_SEAL_SHRINK`, which the broker requires of it
+/// (`:1640-1668`). The ring's descriptors are memfds and dma-bufs by construction; this is the
+/// one place that says so on the wire's side.
+fn carried(fd: BorrowedFd<'_>, shm: bool) -> Result<(), String> {
+    match kf_linux_raw::fd_carrier(fd) {
+        Ok(c @ Carrier::Shmem { .. }) if shm && !c.sealed_against_shrinking() => {
+            Err("is a memfd not sealed F_SEAL_SHRINK".into())
+        }
+        Ok(Carrier::DmaBuf) if shm => Err("is a dma-buf, not a memfd".into()),
+        Ok(Carrier::Shmem { .. } | Carrier::DmaBuf) => Ok(()),
+        Ok(Carrier::Neither) => Err("is neither a memfd nor a dma-buf".into()),
+        Err(e) => Err(format!("cannot be classified ({e})")),
+    }
+}
+
+/// ★ Record `v` for `(fourcc, modifier)` on connection `c` (`asked`: this connection asked about
+/// it): update its row, or add one. A full table ([`VERDICTS`]) gives up, in this order, its
+/// oldest row that is not a "no" (an evicted question is simply asked again), its oldest "no" for
+/// a pair the relay never asked about (one the broker volunteered — say an alpha twin the relay
+/// does not send), and only then its oldest "no": an evicted "no" for a pair the relay SENDS is a
+/// pair the broker will not mention again on this connection, so volunteered rows can never push
+/// one out.
+fn remember<S>(c: &mut Conn<S>, fourcc: u32, modifier: u64, v: Verdict, asked: bool) {
+    if let Some(r) = c
+        .verdicts
+        .iter_mut()
+        .find(|r| r.fourcc == fourcc && r.modifier == modifier)
+    {
+        r.v = v;
+        r.asked |= asked;
+        return;
+    }
+    if c.verdicts.len() >= VERDICTS {
+        let rows = &c.verdicts;
+        let k = rows
+            .iter()
+            .position(|r| r.v != Verdict::No)
+            .or_else(|| rows.iter().position(|r| !r.asked))
+            .unwrap_or(0);
+        c.verdicts.remove(k);
+    }
+    c.verdicts.push(VerdictRow {
+        fourcc,
+        modifier,
+        v,
+        asked,
+    });
 }
 
 fn verdict<S>(c: &Conn<S>, fourcc: u32, modifier: u64) -> Option<Verdict> {

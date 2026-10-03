@@ -546,3 +546,42 @@ fn an_injected_absolute_position_reaches_the_cursor_share() {
     }
     assert_eq!(t.share.abs().0, 2, "one per injected position");
 }
+
+/// ★ nvkvm-pv `badf2d7` (6): the broker paces cursor uploads ITSELF — at most one per 8 ms, latest
+/// wins and the latest is always applied, and its backends see only the snapshot it publishes —
+/// and scales the hot spot (`ceil(hot * out / in)`). So the relay adds no pacing of its own: each
+/// entry that finds a newer cursor sends it, 1 ms after the last or not (a relay-side throttle
+/// would only delay the hot-spot correction `HotTracker` makes), and the hot spot goes in GUEST
+/// pixels. Known-positive: the same five posts made between two entries are ONE SET.
+#[test]
+fn the_relay_leaves_the_cursor_pacing_to_the_broker() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR, 0);
+    let mut want = Vec::new();
+    for seed in 0..5u8 {
+        let w = image(32, 32, (u32::from(seed), 1), seed);
+        assert!(t.share.post(w.clone()));
+        t.now += 1;
+        let now = t.now;
+        t.relay.on_frame(now, &mut t.host);
+        want.push(w);
+    }
+    assert_eq!(
+        t.ops(),
+        vec![CURSOR_SET; 5],
+        "one SET per entry, 1 ms apart"
+    );
+    for (r, w) in t.cursors().iter().zip(&want) {
+        assert_eq!(r.fd.as_ref().unwrap().2, pixels(w));
+        let CursorWant::Image(i) = w else {
+            unreachable!()
+        };
+        assert_eq!((r.cursor()[5], r.cursor()[6]), i.hot(), "guest pixels");
+    }
+    t.clear();
+    for seed in 10..15u8 {
+        assert!(t.share.post(image(32, 32, (0, 0), seed)));
+    }
+    t.tick();
+    assert_eq!(t.ops(), vec![CURSOR_SET], "between two entries: one");
+}

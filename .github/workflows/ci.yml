@@ -1608,7 +1608,15 @@ jobs:
           # `kf-qemu` from 44 — the broker by +9 (53), the GOP option ROM by +2 (46) — so the bar is their
           # sum, 55; `kf-linux-raw` 93 and `kf-cuda` 78 are the broker's alone; `firmware/kf-gop` 78 is
           # master's alone.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:93 kf-cuda:78 kf-qemu:55 firmware/kf-gop:78"
+          # ★★ `kf-linux-raw` 93 -> 94, 2026-10-04 (`v3-broker`, nvkvm-pv broker `badf2d7`: the broker
+          # accepts only a descriptor it can PROVE to be shmem or a dma-buf, and closes any other on a
+          # helper thread). `host_fd_unsafe.rs` (+1): `fd_carrier`'s one `unsafe { }` call of
+          # `fcntl(fd, F_GET_SEALS)` — no third argument, no memory, a negative return is "not
+          # shmem". The rest of the proof (`fstatfs` only after it succeeded, through the existing
+          # `fs_magic`; `/proc/self/fdinfo` read with std, bounded at 4 KiB) adds no relaxation.
+          #   ⊘ No new power: it classifies a descriptor this process already holds, and asks an
+          #     unproven descriptor's filesystem nothing (no `fstatfs` on FUSE).
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:94 kf-cuda:78 kf-qemu:55 firmware/kf-gop:78"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

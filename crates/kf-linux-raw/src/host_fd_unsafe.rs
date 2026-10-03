@@ -294,6 +294,80 @@ pub fn fs_magic(fd: BorrowedFd<'_>) -> Result<i64, RawError> {
     Ok(st.f_type as i64)
 }
 
+/// ★ What a descriptor PROVES to be, by the display broker's own two proofs in the broker's order
+/// (nvkvm-pv `badf2d7`, `src/broker/nvkvm_broker.c:1228-1360`) — [`fd_carrier`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Carrier {
+    /// `fcntl(F_GET_SEALS)` answered and the file lives on tmpfs: shmem (a memfd, or a tmpfs
+    /// file), carrying these `F_SEAL_*` bits.
+    Shmem {
+        /// The seals.
+        seals: u32,
+    },
+    /// Not shmem, and its `/proc/self/fdinfo` carries `exp_name:` — a line only the dma-buf core
+    /// prints (`dma_buf_show_fdinfo`).
+    DmaBuf,
+    /// Neither: the broker refuses such a descriptor and closes it on a helper thread.
+    Neither,
+}
+
+impl Carrier {
+    /// Shmem sealed `F_SEAL_SHRINK` — what the broker requires of an `F_SHM` frame
+    /// (`nvkvm_broker.c:1640-1668`: without it the size it read can be taken away under the
+    /// reader, a `SIGBUS`), and what `/dev/udmabuf` requires of its memfd.
+    #[must_use]
+    pub fn sealed_against_shrinking(self) -> bool {
+        matches!(self, Carrier::Shmem { seals } if seals & libc::F_SEAL_SHRINK.unsigned_abs() != 0)
+    }
+}
+
+/// The most of `/proc/self/fdinfo/<fd>` [`fd_carrier`] reads — the broker's own bound
+/// (`nvkvm_broker.c:1323-1327`: "4 KiB is far past a dma-buf's six lines").
+const FDINFO_MAX: u64 = 4096;
+
+/// ★ Prove `fd` to be shmem or a dma-buf the way the display broker does since nvkvm-pv `badf2d7`
+/// (`nb_fd_shmem_seals`, `nb_fd_fdinfo_is_dmabuf`, `nvkvm_broker.c:1308-1355`): `F_GET_SEALS`
+/// first — answered from the file's mapping, never by its filesystem — and `fstatfs` only after
+/// it succeeded (by then the `->statfs` is the kernel's own: shmem or hugetlbfs); otherwise the
+/// `exp_name:` line of `/proc/self/fdinfo/<fd>`, which `show_fdinfo` prints for a dma-buf alone.
+/// Nothing asks an unproven descriptor's filesystem anything (on FUSE an `fstatfs` is a request to
+/// a daemon that may never answer), so a descriptor of any kind is classified without blocking.
+///
+/// # Errors
+/// [`RawError::Syscall`] when `/proc/self/fdinfo` cannot be read — the broker then refuses every
+/// dma-buf, and the caller should treat the descriptor as unproven too.
+pub fn fd_carrier(fd: BorrowedFd<'_>) -> Result<Carrier, RawError> {
+    use std::io::Read as _;
+    // SAFETY: `F_GET_SEALS` takes no third argument and dereferences no memory; `fd` is live for
+    // the borrow. A negative return means "not shmem" (`EINVAL`) and is handled, never a fault.
+    let seals = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_GET_SEALS) };
+    if let Ok(seals) = u32::try_from(seals) {
+        return Ok(if fs_magic(fd)? == TMPFS_MAGIC {
+            Carrier::Shmem { seals }
+        } else {
+            Carrier::Neither // hugetlbfs: sealable, but not what either rung carries
+        });
+    }
+    let unreadable = |e: std::io::Error| RawError::Syscall {
+        call: "read /proc/self/fdinfo (fd_carrier)",
+        errno: e.raw_os_error(),
+    };
+    let mut text = Vec::new();
+    std::fs::File::open(format!("/proc/self/fdinfo/{}", fd.as_raw_fd()))
+        .map_err(unreadable)?
+        .take(FDINFO_MAX)
+        .read_to_end(&mut text)
+        .map_err(unreadable)?;
+    // `dma_buf_show_fdinfo` (`drivers/dma-buf/dma-buf.c`) prints `exp_name:\t<name>` after the
+    // generic `pos:`/`flags:` lines, so it is never the first line: the broker's exact match
+    let needle = b"\nexp_name:\t";
+    Ok(if text.windows(needle.len()).any(|w| w == needle) {
+        Carrier::DmaBuf
+    } else {
+        Carrier::Neither
+    })
+}
+
 /// ★ The identity a peer names a descriptor by: its inode number (`fstat`'s `st_ino`). Stable
 /// across `dup` and `SCM_RIGHTS`, because both share the open file.
 ///
@@ -686,6 +760,58 @@ mod tests {
              copy-on-write, an isolate's completions would be invisible to the guest, \
              which is the exact failure §4.4.1 exists to prevent"
         );
+    }
+
+    /// ★ The broker's proof (nvkvm-pv `badf2d7`): a sealed memfd is shmem with its seals, an
+    /// unsealed one too (seals `F_SEAL_SEAL` only, which the broker's `F_SHM` rule then refuses);
+    /// a regular file, a pipe and `/dev/null` are NEITHER — each classified without an `fstatfs`
+    /// on it — and a dma-buf (gated on `/dev/udmabuf`) is a dma-buf.
+    #[test]
+    fn the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither() {
+        let ram = SharedRam::create_named(c"kfu-carrier", 4096).expect("memfd");
+        let Ok(Carrier::Shmem { seals }) = fd_carrier(ram.as_backing_fd()) else {
+            panic!("a sealed memfd is shmem");
+        };
+        let want = libc::F_SEAL_SHRINK | libc::F_SEAL_GROW | libc::F_SEAL_SEAL;
+        assert_eq!(seals, u32::try_from(want).unwrap(), "the seals it carries");
+        assert!(Carrier::Shmem { seals }.sealed_against_shrinking());
+        let raw = SharedRam::unsealed_for_test(4096);
+        assert_eq!(
+            fd_carrier(raw.as_backing_fd()),
+            Ok(Carrier::Shmem {
+                seals: u32::try_from(libc::F_SEAL_SEAL).unwrap()
+            }),
+            "MFD_ALLOW_SEALING not given: F_SEAL_SEAL only"
+        );
+        assert!(
+            !fd_carrier(raw.as_backing_fd())
+                .unwrap()
+                .sealed_against_shrinking()
+        );
+        assert!(!Carrier::DmaBuf.sealed_against_shrinking());
+        let dir = std::env::temp_dir().join(format!("kfu-carrier-{}", std::process::id()));
+        std::fs::write(&dir, b"not a frame").expect("a regular file");
+        let file = std::fs::File::open(&dir).expect("open");
+        assert_eq!(
+            fd_carrier(file.as_fd()),
+            Ok(Carrier::Neither),
+            "a regular file"
+        );
+        std::fs::remove_file(&dir).ok();
+        let null = std::fs::File::open("/dev/null").expect("/dev/null");
+        assert_eq!(
+            fd_carrier(null.as_fd()),
+            Ok(Carrier::Neither),
+            "a device node"
+        );
+        let (r, _w) = std::io::pipe().expect("pipe");
+        assert_eq!(fd_carrier(r.as_fd()), Ok(Carrier::Neither), "a pipe");
+        crate::require_udmabuf!("the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither");
+        let dev = crate::udmabuf_gate::open_device().expect("the gate opened it");
+        let page = HostPageSize::query();
+        let ram = SharedRam::create_named(c"kfu-carrier-dma", page.bytes()).expect("memfd");
+        let buf = udmabuf_create(dev.as_fd(), &ram, page).expect("UDMABUF_CREATE");
+        assert_eq!(fd_carrier(buf.as_fd()), Ok(Carrier::DmaBuf));
     }
 
     /// ★ `/dev/udmabuf` gated (CI has none): a dma-buf over a sealed memfd, whose filesystem is

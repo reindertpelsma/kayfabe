@@ -5,8 +5,8 @@
 use kf_broker::wire::{
     CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CMD_ATTACH, CMD_CAPS, CMD_COMMIT,
     CMD_F_SHM, CMD_QUERY_FORMAT, CMD_SIZE, CMD_WINDOW, Cmd, EV_ABS, EV_BTN, EV_CLOSE, EV_FORMAT,
-    EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, FOURCC_XR24,
-    MOD_INVALID, MOD_LINEAR, PKT_SIZE, Pkt,
+    EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, FOURCC_AR24,
+    FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE, Pkt,
 };
 use kf_broker::{
     FrameGeom, FrameRing, Host, Input, Kind, Link, Recv, Relay, RelayConfig, Sent, SlotFds,
@@ -15,7 +15,7 @@ use kf_broker::{
 use kf_linux_raw::{SharedRam, fd_inode};
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::os::fd::BorrowedFd;
+use std::os::fd::{BorrowedFd, OwnedFd};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -141,16 +141,22 @@ impl T {
     /// A relay over a five-slot ring whose slots carry a memfd and (`dmabuf`) a second
     /// descriptor standing in for the udmabuf (a distinct inode, as the real one has).
     fn new(dmabuf: bool) -> T {
-        let ring = Arc::new(FrameRing::new(kf_broker::slots::BROKER_SLOTS, true));
-        for j in 0..ring.slots() {
-            let mem = SharedRam::create_named(c"kfb-test-frame", 64 * 1024).unwrap();
-            let dma = dmabuf.then(|| {
+        T::with_dmabuf(|| {
+            dmabuf.then(|| {
                 SharedRam::create_named(c"kfb-test-dmabuf", 64 * 1024)
                     .unwrap()
                     .dup_for_export()
                     .unwrap()
-            });
-            ring.install(j, SlotFds::new(mem, dma).unwrap()).unwrap();
+            })
+        })
+    }
+
+    /// As [`T::new`], with each slot's dma-buf descriptor made by `dma`.
+    fn with_dmabuf(dma: impl Fn() -> Option<OwnedFd>) -> T {
+        let ring = Arc::new(FrameRing::new(kf_broker::slots::BROKER_SLOTS, true));
+        for j in 0..ring.slots() {
+            let mem = SharedRam::create_named(c"kfb-test-frame", 64 * 1024).unwrap();
+            ring.install(j, SlotFds::new(mem, dma()).unwrap()).unwrap();
         }
         let wire = Rc::new(RefCell::new(Wire {
             peer_uid: ME,
@@ -1318,7 +1324,11 @@ impl T {
     /// As [`T::new`], plus a VRAM backing per slot (a memfd standing in for the dma-buf: the ring
     /// takes any descriptor), the device's GPU-copy modifier and its DRM nodes.
     fn with_vram() -> T {
-        let t = T::new(false);
+        T::vram_over(T::new(false))
+    }
+
+    /// `t` plus [`T::with_vram`]'s VRAM backings, modifier and nodes.
+    fn vram_over(t: T) -> T {
         for j in 0..t.ring.slots() {
             let fd = SharedRam::create_named(c"kfb-test-vram", 64 * 1024)
                 .unwrap()
@@ -1732,4 +1742,372 @@ fn a_vram_frame_outside_its_object_or_the_brokers_bounds_is_not_sent() {
     t.frame();
     assert!(t.sent().iter().all(|(c, _)| c.ty != CMD_ATTACH));
     assert_eq!(t.relay.counters().refused, 2);
+}
+
+// ── nvkvm-pv `badf2d7`: what the broker now does that the relay must handle ──────────────────
+
+impl T {
+    /// The first ATTACH sent since the last [`T::clear`].
+    fn attach_sent(&self) -> (Cmd, Option<u64>) {
+        self.sent()
+            .into_iter()
+            .find(|(c, _)| c.ty == CMD_ATTACH)
+            .expect("an ATTACH")
+    }
+
+    /// The broker is done with the dma-buf frame in `slot`.
+    fn release_dmabuf(&self, slot: usize) {
+        let id = self.dmabuf_id(slot);
+        self.pkt(EV_RELEASE, 0, 0, id as u32, (id >> 32) as u32);
+    }
+
+    /// Publish a frame and run the clock (100 ms steps, at most 2 s) until its ATTACH went — two
+    /// unreleased frames hold the cap until the reclaim gives one back. Its ATTACH, after a
+    /// [`T::clear`].
+    fn next_attach(&mut self) -> (usize, Cmd, Option<u64>) {
+        self.clear();
+        let j = self.publish(64, 32);
+        self.frame();
+        for _ in 0..20 {
+            if self.types().contains(&CMD_ATTACH) {
+                break;
+            }
+            self.tick(100);
+        }
+        let (c, id) = self.attach_sent();
+        self.pkt(EV_FRAME, 0, 0, 0, 0);
+        self.read();
+        (j, c, id)
+    }
+
+    /// One dma-buf frame, committed and paced, never released (the broker dropped it).
+    fn unreleased_frame(&mut self) -> usize {
+        let j = self.publish(64, 32);
+        self.frame();
+        self.pkt(EV_FRAME, 0, 0, 0, 0);
+        self.read();
+        j
+    }
+
+    /// Lose the connection and come back with `caps`; the replay is kept.
+    fn reconnect(&mut self, caps: u32) {
+        self.wire.borrow_mut().eof = true;
+        self.read();
+        assert!(!self.relay.connected());
+        self.wire.borrow_mut().eof = false;
+        self.clear();
+        self.now = self.host.timer.expect("a retry");
+        self.pkt(EV_HELLO, 0, 0, 2, caps | CAP_DMABUF);
+        let now = self.now;
+        self.relay.on_timer(now, &mut self.host);
+        self.read();
+        assert!(self.relay.active());
+    }
+}
+
+/// ★ `badf2d7` (1): the broker volunteers `EV_FORMAT x=0` whenever an ATTACH is dropped at its
+/// format gate — possibly for a pair this connection never asked about. The relay RECORDS it: no
+/// question about the pair, and the frame takes another rung. Known-positive: the same script with
+/// the "no" withheld asks and goes LINEAR. And an unasked YES is never an upgrade.
+#[test]
+fn an_unasked_no_is_recorded_and_its_pair_is_not_sent() {
+    for told in [false, true] {
+        let mut t = T::new(true);
+        t.up(CAP_MODIFIERS | CAP_RELEASE);
+        if told {
+            t.pkt(EV_FORMAT, 0, FOURCC_XR24 as i32, 0, 0); // (XR24, LINEAR), never asked
+            t.read();
+        }
+        let j = t.publish(64, 32);
+        t.frame();
+        let att = t.attach_sent();
+        if told {
+            assert!(
+                !t.types().contains(&CMD_QUERY_FORMAT),
+                "told: no question about a recorded no"
+            );
+            assert_eq!((att.0.flags, att.1), (CMD_F_SHM, Some(t.memfd_id(j))));
+            assert_eq!(t.relay.counters().formats_unasked, 1);
+        } else {
+            assert_eq!(t.types()[0], CMD_QUERY_FORMAT, "untold: asked");
+            assert_eq!(
+                (att.0.flags, att.0.modifier, att.1),
+                (0, MOD_LINEAR, Some(t.dmabuf_id(j)))
+            );
+        }
+    }
+    // a volunteered YES for the implicit modifier: still asked, shared memory meanwhile
+    let mut t = T::new(true);
+    t.up(CAP_RELEASE);
+    t.pkt(
+        EV_FORMAT,
+        1,
+        FOURCC_XR24 as i32,
+        MOD_INVALID as u32,
+        (MOD_INVALID >> 32) as u32,
+    );
+    t.read();
+    t.publish(64, 32);
+    t.frame();
+    assert_eq!(
+        t.types(),
+        vec![CMD_QUERY_FORMAT, CMD_WINDOW, CMD_ATTACH, CMD_COMMIT]
+    );
+    assert_eq!(
+        t.sent()[2].0.flags,
+        CMD_F_SHM,
+        "an unasked yes is no answer"
+    );
+}
+
+/// ★ `badf2d7` (1), the bound: the table holds 16 verdicts, and however many "no"s the broker
+/// volunteers for pairs the relay does not send, the "no" for a pair it DOES send stays — the
+/// broker tells each pair once per connection, so a lost one is a black window. Known-positive:
+/// the 4-row recycle-the-oldest table this replaced (`relay.c:92`) lost it after four.
+#[test]
+fn volunteered_noes_never_push_out_a_no_for_a_pair_the_relay_sends() {
+    let mut t = T::new(true);
+    t.up(CAP_MODIFIERS | CAP_RELEASE);
+    t.publish(64, 32);
+    t.frame(); // asks (XR24, LINEAR)
+    t.pkt(EV_FORMAT, 0, FOURCC_XR24 as i32, 0, 0);
+    for m in 0..40u32 {
+        t.pkt(EV_FORMAT, 0, FOURCC_AR24 as i32, 0x100 + m, 0x0300_0000);
+    }
+    t.read();
+    assert_eq!(t.relay.counters().formats_unasked, 40);
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read();
+    t.clear();
+    let k = t.publish(64, 32);
+    t.frame();
+    assert!(
+        !t.types().contains(&CMD_QUERY_FORMAT),
+        "the relay's own no is still known"
+    );
+    assert_eq!(t.attach_sent(), (t.attach_sent().0, Some(t.memfd_id(k))));
+    assert_eq!(t.attach_sent().0.flags, CMD_F_SHM);
+}
+
+/// ★ `badf2d7` (2): on X11 one refused import arrives as TWO `x=0` — XR24 and AR24, the same
+/// modifier (DRI3 imports the two identically). Both are kept, and the frames held under the
+/// refused pair come back ONCE; an AR24 frame then asks nothing and goes as shared memory.
+/// Known-positive: with the twin's "no" withheld the AR24 frame asks and goes LINEAR.
+#[test]
+fn an_x11_refusal_names_both_alpha_twins_and_both_are_kept() {
+    for twin in [false, true] {
+        let mut t = T::new(true);
+        t.up(CAP_MODIFIERS | CAP_RELEASE);
+        let j = t.publish(64, 32);
+        t.frame();
+        assert_eq!(t.ring.held_mask(), 1 << j);
+        t.pkt(EV_FORMAT, 0, FOURCC_XR24 as i32, 0, 0);
+        if twin {
+            t.pkt(EV_FORMAT, 0, FOURCC_AR24 as i32, 0, 0);
+        }
+        t.read();
+        assert_eq!(t.ring.held_mask(), 0, "the refused frame came back");
+        assert_eq!(t.relay.counters().reclaims, 1, "once, twin or not");
+        t.clear();
+        let k = t.publish_fourcc(64, 32, FOURCC_AR24);
+        t.frame();
+        let att = t.attach_sent();
+        if twin {
+            assert!(!t.types().contains(&CMD_QUERY_FORMAT));
+            assert_eq!((att.0.flags, att.1), (CMD_F_SHM, Some(t.memfd_id(k))));
+        } else {
+            assert_eq!(t.types()[0], CMD_QUERY_FORMAT);
+            assert_eq!((att.0.flags, att.0.modifier), (0, MOD_LINEAR));
+        }
+    }
+}
+
+/// ★ `badf2d7` (3): refusals are CONNECTION state on both backends — a refusal is caused by a
+/// buffer the guest chose, and on a `--persist` broker it must not decide the next VM's present
+/// path — so the relay carries none across a reconnect either: not an unasked "no", not the
+/// block-linear pair's, and not the dma-buf detector's back-off. Known-positive: on the SAME
+/// connection each of them holds (asserted before the reconnect).
+#[test]
+fn no_refusal_or_back_off_outlives_its_connection() {
+    let mut t = T::vram_over(T::new(true));
+    t.up(NATIVE_CAPS);
+    t.bl_verdict(true);
+    t.read();
+    assert!(t.ring.want_vram());
+    // the display takes the block-linear yes back, and volunteers a no for (XR24, LINEAR)
+    t.bl_verdict(false);
+    t.pkt(EV_FORMAT, 0, FOURCC_XR24 as i32, 0, 0);
+    t.read();
+    assert!(!t.ring.want_vram(), "this connection: no GPU copy");
+    t.clear();
+    let k = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    assert_eq!(
+        t.attach_sent().1,
+        Some(t.memfd_id(k)),
+        "this connection: F_SHM"
+    );
+    t.reconnect(NATIVE_CAPS);
+    let q: Vec<_> = t
+        .sent()
+        .iter()
+        .filter(|(c, _)| c.ty == CMD_QUERY_FORMAT)
+        .map(|(c, _)| (c.fourcc, c.modifier))
+        .collect();
+    assert!(q.contains(&(FOURCC_XR24, BL)), "asked again: {q:?}");
+    t.bl_verdict(true);
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read();
+    assert!(t.ring.want_vram(), "the new connection's yes counts");
+    t.clear();
+    let n = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    assert_eq!(t.attach_sent().1, Some(t.vram_id(n)), "the GPU copy again");
+    t.release_vram(n);
+    t.read();
+    t.clear();
+    let h = t.publish_kinds(64, 32, true, false);
+    t.frame();
+    assert_eq!(
+        t.attach_sent().1,
+        Some(t.dmabuf_id(h)),
+        "the old unasked no was forgotten: LINEAR"
+    );
+    // the detector's back-off: tripped on one connection, gone on the next
+    let mut t = T::new(true);
+    t.up(CAP_MODIFIERS | CAP_RELEASE);
+    let t0 = t.now;
+    while t.relay.counters().dmabuf_trips == 0 {
+        assert!(t.now - t0 <= 3000, "no trip within 3 s");
+        t.unreleased_frame();
+        t.tick(100);
+    }
+    let (k, _, id) = t.next_attach();
+    assert_eq!(id, Some(t.memfd_id(k)), "backing off: F_SHM");
+    t.reconnect(CAP_MODIFIERS | CAP_RELEASE);
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read();
+    t.clear();
+    let j = t.publish(64, 32);
+    t.frame();
+    assert_eq!(
+        t.attach_sent().1,
+        Some(t.dmabuf_id(j)),
+        "a new connection: LINEAR"
+    );
+}
+
+/// ★ `badf2d7` (4): the broker needs a readable `/proc/self/fdinfo` to accept a dma-buf frame, and
+/// without one drops every dma-buf ATTACH with NO word on the wire (it is not the format gate, so
+/// no `EV_FORMAT`; the connection lives) — LINEAR frames commit and never come back. The host
+/// dma-buf detector backs them off to shared memory (5 s, then 10 s), tries LINEAR again, and a
+/// LINEAR RELEASE confirms the rung for the connection. Known-negatives: with RELEASEs coming back
+/// nothing trips; without `CAP_RELEASE` nothing is counted.
+#[test]
+fn unacknowledged_dma_buf_frames_back_off_to_shared_memory_and_retry() {
+    let mut t = T::new(true);
+    t.up(CAP_MODIFIERS | CAP_RELEASE);
+    let log = kf_broker::capture_log();
+    let t0 = t.now;
+    while t.relay.counters().dmabuf_trips == 0 {
+        assert!(t.now - t0 <= 3000, "no trip within 3 s");
+        t.unreleased_frame();
+        t.tick(100);
+    }
+    assert!(
+        log.lines()
+            .iter()
+            .any(|l| l.contains("/proc/self/fdinfo") && l.contains("5 s")),
+        "{:?}",
+        log.lines()
+    );
+    let (k, c, id) = t.next_attach();
+    assert_eq!(
+        (c.flags, id),
+        (CMD_F_SHM, Some(t.memfd_id(k))),
+        "backing off: shared memory"
+    );
+    t.tick(5000);
+    let (j, c, id) = t.next_attach();
+    assert_eq!(
+        (c.modifier, id),
+        (MOD_LINEAR, Some(t.dmabuf_id(j))),
+        "LINEAR again after 5 s"
+    );
+    t.release_dmabuf(j);
+    t.read();
+    for _ in 0..30 {
+        t.unreleased_frame();
+        t.tick(100);
+    }
+    assert_eq!(
+        t.relay.counters().dmabuf_trips,
+        1,
+        "acknowledged: never again"
+    );
+    // known-negative: released frames never trip
+    let mut t = T::new(true);
+    t.up(CAP_MODIFIERS | CAP_RELEASE);
+    for _ in 0..30 {
+        let j = t.unreleased_frame();
+        t.release_dmabuf(j);
+        t.read();
+        t.tick(100);
+    }
+    assert_eq!(t.relay.counters().dmabuf_trips, 0);
+    // no CAP_RELEASE: no RELEASE is promised, so nothing is counted
+    let mut t = T::new(true);
+    t.up(CAP_MODIFIERS);
+    for _ in 0..30 {
+        t.unreleased_frame();
+        t.tick(100);
+    }
+    assert_eq!(t.relay.counters().dmabuf_trips, 0);
+}
+
+/// ★ `badf2d7` (5): the broker accepts only a descriptor it can PROVE to be shmem or a dma-buf and
+/// closes any other on a helper thread (a FUSE file's `close` can hang) — so the relay sends
+/// nothing else: a slot whose "dma-buf" is a pipe is REFUSED by name before the wire,
+/// counted, and the connection stays up. Known-positive: the same slot with a memfd stand-in sends.
+#[test]
+fn a_descriptor_that_is_neither_memfd_nor_dma_buf_never_reaches_the_broker() {
+    for bad in [false, true] {
+        // a pipe per slot: a distinct inode each (the ring refuses a shared one), and neither
+        // shmem nor a dma-buf on any filesystem /tmp may be
+        let mut t = T::with_dmabuf(|| {
+            Some(if bad {
+                OwnedFd::from(std::io::pipe().expect("pipe").0)
+            } else {
+                SharedRam::create_named(c"kfb-test-dmabuf", 64 * 1024)
+                    .unwrap()
+                    .dup_for_export()
+                    .unwrap()
+            })
+        });
+        t.up(CAP_MODIFIERS | CAP_RELEASE);
+        let log = kf_broker::capture_log();
+        let j = t.publish(64, 32);
+        t.frame();
+        let c = t.relay.counters();
+        if bad {
+            assert!(
+                !t.types().contains(&CMD_ATTACH),
+                "nothing went: {:?}",
+                t.types()
+            );
+            assert_eq!((c.carrier_refused, c.refused), (1, 1));
+            assert!(
+                log.lines()
+                    .iter()
+                    .any(|l| l.contains("neither a memfd nor a dma-buf")),
+                "{:?}",
+                log.lines()
+            );
+            assert!(t.relay.active(), "the connection stays up");
+            assert_eq!(t.ring.held_mask() & (1 << j), 0, "its slot came back");
+        } else {
+            assert_eq!(t.attach_sent().1, Some(t.dmabuf_id(j)));
+            assert_eq!(c.carrier_refused, 0);
+        }
+    }
 }
