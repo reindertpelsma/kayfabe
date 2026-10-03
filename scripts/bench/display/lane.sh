@@ -13,7 +13,8 @@ TAG=${1:?usage: lane.sh <tag>}
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
 export NVKVM_RAM_MB=${NVKVM_RAM_MB:-8192} KF_SMP=${KF_SMP:-6}
 export KF3_DEV_EXTRA="display=on${DISPLAY_KF3_EXTRA:+,$DISPLAY_KF3_EXTRA}"
-export POST_CAPTURE_HOOK="$HERE/hook.sh"
+# DISPLAY_HOOK selects the hook (default hook.sh; unload_hook = box test B5)
+export POST_CAPTURE_HOOK="$HERE/${DISPLAY_HOOK:-hook}.sh"
 # ★ Leave the guest's filesystems clean before a poweroff the display teardown may wedge
 # (coordinator 2026-09-30: an unclean shutdown leaves the image's journal dirty and the next fast-guest
 # build cannot mount it): sync, then the kernel's emergency sync + remount read-only.
