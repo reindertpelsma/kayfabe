@@ -34,6 +34,12 @@ gq 'sudo modprobe nvidia-drm modeset=1 fbdev=1; echo rc=$?' 90 > "$OUT/modprobe.
 sleep 3
 gq "sudo dmesg | tail -n +$((d0 + 1))" > "$OUT/drm_dmesg.log"
 say "DRM_MODPROBE $(tr '\n' ' ' < "$OUT/modprobe.log")"
+# ★ B0a (V3_DISPLAY.md §4.11.9, 2026-10-03): which device the guest kernel calls the boot VGA device,
+# and what the VGA arbiter and the firmware-framebuffer drivers said. Xorg picks its primary device
+# from boot_vga, so this decides whether the lane needs the xorg.conf BusID pin at all.
+gq 'd=$(lspci -D -d 10de: | awk "NR==1{print \$1}"); echo dev=$d boot_vga=$(cat /sys/bus/pci/devices/$d/boot_vga 2>/dev/null)' > "$OUT/boot_vga.log"
+gq 'sudo dmesg | grep -i -E "vgaarb|bootfb|efifb|simpledrm"' > "$OUT/vgaarb.log"
+say "BOOT_VGA $(tr '\n' ' ' < "$OUT/boot_vga.log")vgaarb_lines=$(grep -c . "$OUT/vgaarb.log") $(grep -m1 -i 'boot VGA device' "$OUT/vgaarb.log" | cut -c1-160)"
 say "DRM_NODES $(gq 'ls /dev/dri 2>&1 | tr "\n" " "')"
 say "DRM_DMESG_LINES=$(wc -l < "$OUT/drm_dmesg.log") displayless=$(grep -c -i 'displayless\|No display hardware\|Cannot find any crtc' "$OUT/drm_dmesg.log")"
 
@@ -111,7 +117,10 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     sed "s/@BUSID@/$busid/" "$HERE/desktop/xorg.conf.in" > "$DESK/xorg.conf"
     sed "s/@SESSION@/$session/g" "$HERE/desktop/50-kf-autologin.conf.in" > "$DESK/50-kf-autologin.conf"
     tar -C "$DESK" -cf - xorg.conf 50-kf-autologin.conf xsessionrc | $G 'rm -rf ~/desk && mkdir -p ~/desk && tar -xf - -C ~/desk'
-    gq 'sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && cp ~/desk/xsessionrc ~/.xsessionrc && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
+    # ★ B0a: DISPLAY_XORG_PIN=0 installs NO xorg.conf, so Xorg autoconfigures and picks its primary device
+    # from boot_vga, the way a stock guest does. The default (1) keeps the M3 BusID pin.
+    if [ "${DISPLAY_XORG_PIN:-1}" = 0 ]; then XCONF='sudo rm -f /etc/X11/xorg.conf'; else XCONF='sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf'; fi
+    gq "$XCONF"' && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && cp ~/desk/xsessionrc ~/.xsessionrc && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
     say "DESKTOP_CONF busid=$busid session=$session env=[${DISPLAY_SESSION_ENV:-}] $(tr '\n' ' ' < "$OUT/desk_conf.log")"
     gq 'sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/lightdm_start.log"
     # the session: Xorg up, then a Cinnamon process of the autologin user (≤ 90 s)
@@ -124,6 +133,10 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
         sleep 2
     done
     say "DESKTOP_SESSION=$up ($(tr '\n' ' ' < "$OUT/lightdm_start.log") xorg_starts=$(gq 'sudo grep -c "X.Org X Server" /var/log/Xorg.0.log.old /var/log/Xorg.0.log 2>/dev/null | tr "\n" " "'))"
+    # ★ B0a: what Xorg chose, in its own words — the primary-device marker `PCI:*`, any (EE), and the
+    # whole log kept beside the shots
+    gq 'sudo cat /var/log/Xorg.0.log' 60 > "$OUT/Xorg.0.log"
+    say "XORG_PRIMARY pin=${DISPLAY_XORG_PIN:-1} $(grep -m2 -E 'PCI:\*|Primary Device is' "$OUT/Xorg.0.log" | tr '\n' ' ' | cut -c1-240) EE=$(grep -c '(EE)' "$OUT/Xorg.0.log") no_screens=$(grep -c 'no screens found' "$OUT/Xorg.0.log")"
     sleep 20   # let the session paint (panel, wallpaper) before the first shot
     shot "$OUT/desk_1.ppm"
     gq "$XENV glxinfo -B 2>&1 | head -40" 60 > "$OUT/glxinfo.log"
