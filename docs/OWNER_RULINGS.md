@@ -294,3 +294,19 @@ citation: ask whether its reason still holds before relying on it.
     sources, so the closed-guest cells are also the earliest Linux-side signal for Windows
     (unverified).
 - Answers `design/V3_SWEEP_AND_INSTALL.md` §4 Q5.
+
+## K. The boot display's option ROM is one embedded blob plus generated config (2026-10-03)
+
+- **Owner:** *"generate the uefi data in kayfabe and give it as blob in the rom. So there is no rom
+  per gpu or similar, all is given as config data, just like cuda."*
+- The GOP driver is one constant `.efi`, built from `firmware/kf-gop` and embedded in kayfabe with
+  `include_bytes!`, the way the PTX kernels are (`crates/kf-cuda/src/display.rs:21`). It is not a
+  separate firmware file, there is no `romfile=`, and users install nothing per GPU.
+- kf3 generates everything per device when it starts: the PCI ROM header and PCIR (the identity kf3
+  already presents) and the `KFGP` config blob (BAR, offset, size, mode, pitch, format, EDID). It
+  wraps the constant `.efi` with them in memory and serves the result as its ROM BAR.
+- CI rebuilds the `.efi` from source and fails if it differs from the committed blob. The driver is
+  byte-identical on every host, so one future Secure Boot signature covers all of them.
+- Design: `traces/v3_design_review_20261003/` (gop), and `design/V3_DISPLAY.md` once `v3-gop-rom` and
+  `v3-gop-kf3` land.
+
