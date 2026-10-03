@@ -200,6 +200,34 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This runner permits namespaces: $ran gated tests actually executed."
           fi
+      # ★★ UDMABUF-gate non-vacuity (docs/design/V3_DISPLAY.md §8), the KVM gate's twin. The
+      # display broker's dma-buf rung needs /dev/udmabuf, which GitHub runners lack: those tests
+      # print `UDMABUF-GATE: SKIPPED` (kf_linux_raw::udmabuf_gate) and assert nothing. Counting
+      # both arms keeps a skip from reading as a pass, and keeps the gated tests from silently
+      # vanishing. Floor = the gated tests in the default suite (the loopback ones are ignored).
+      - name: UDMABUF-gate reached-count (floor, not an exact match)
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
+                 "empty, or carries no completion sentinel. This step reports NOTHING about" \
+                 "the tree."
+            exit 2
+          fi
+          ran=$(grep -c 'UDMABUF-GATE: RAN' "$log" || true)
+          skipped=$(grep -c 'UDMABUF-GATE: SKIPPED' "$log" || true)
+          total=$(( ran + skipped ))
+          echo "UDMABUF-gate: ran=$ran skipped=$skipped total=$total (floor 2)"
+          if [ "$total" -lt 2 ]; then
+            echo "::error::udmabuf-gated tests were not reached: $total < 2." \
+                 "Either they were deleted, or the gate stopped announcing itself."
+            exit 1
+          fi
+          if [ "$skipped" -gt 0 ]; then
+            echo "::warning::$skipped udmabuf-gated test(s) SKIPPED here (no /dev/udmabuf):" \
+                 "they asserted nothing; the dma-buf rung is graded on a box or a dev host."
+          fi
       - name: Clippy (errors and new warning sites fail)
         run: bash scripts/ci/clippy.sh
       - name: Format check
@@ -1458,7 +1486,25 @@ jobs:
           #     10: `out` must be writable) and its one `unsafe { *out = fr }`.
           #   ⊘ No new power: page-locked host memory the display worker already owns, handed to
           #     QEMU's console by address; both CUDA calls act on memory this library allocated.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:44"
+          #
+          # ★★ `kf-linux-raw` 75 -> 87, 2026-10-03 (`v3-broker`, display step 3a — the broker
+          # relay, docs/design/V3_DISPLAY.md §8). Twelve, itemised:
+          #   `unixsock_unsafe.rs` (+8): `socket(AF_UNIX, NONBLOCK|CLOEXEC)` (integers only,
+          #     adopted on the same line); `connect` (a live, fully initialised `sockaddr_un`, its
+          #     own size; the path is bounded below `sun_path` first); `getsockopt(SO_PEERCRED)`
+          #     (a live `ucred` and its own size); `zeroed_msghdr` (an all-zero plain C struct);
+          #     the one-descriptor `SCM_RIGHTS` header build (a stack `[u64; 3]`, `CMSG_SPACE`
+          #     asserted to fit it); `sendmsg(MSG_NOSIGNAL|MSG_DONTWAIT)` (reads only); `recvmsg`
+          #     with NO control buffer (writes at most the caller's slice; a peer's descriptor is
+          #     dropped by the kernel and reported); and a test-only `recvmsg` with a control
+          #     buffer that adopts the one received descriptor at once.
+          #   `host_fd_unsafe.rs` (+4): `ioctl(UDMABUF_CREATE)` (a 24-byte `#[repr(C)]` mirror,
+          #     size asserted at compile time; the new descriptor adopted on the same line);
+          #     `fstatfs` and its zeroed `statfs` (a live local of the written type); a test-only
+          #     unsealed `memfd_create` (the case `/dev/udmabuf` must refuse).
+          #   ⊘ No new power over guest memory: the socket carries only dedicated, sealed frame
+          #     copies the display worker owns, and reads no descriptor from the peer.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:87 kf-cuda:75 kf-qemu:44"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

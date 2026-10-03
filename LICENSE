@@ -43,6 +43,9 @@ Exceptions:
        - the Wayland protocol files in archive/nvkvm/tests/perf/protocols/
        - archived C sources with their own SPDX tag, such as the GPL-2.0
          guest kernel module in archive/nvkvm/src/guest/
+       - the display-broker protocol header vendored verbatim from nvkvm-pv
+         (368d2db) as crates/kf-broker/proto/nvkvm_broker_proto.h, which
+         carries GPL-2.0 OR Apache-2.0
 
   4. Traces, logs and captures, under traces/, docs/ and archive/, contain
      data produced by third-party software and hardware. Examples are kernel

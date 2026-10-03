@@ -630,6 +630,17 @@ impl MappedRegion {
         self.map.len_bytes()
     }
 
+    /// ★ The whole mapping as an opaque [`HostSpan`] — for handing the SAME pages to a GPU
+    /// driver as a host registration (the display broker's frames, `cuMemHostRegister`). Safe
+    /// code can carry it; only `unsafe` can open it, and only while this region lives.
+    #[must_use]
+    pub fn host_span(&self) -> HostSpan {
+        HostSpan {
+            base: self.map.base_ptr(),
+            len: usize::try_from(self.map.len_bytes()).unwrap_or(0),
+        }
+    }
+
     /// ★★★★★ **Ask the kernel for 2 MiB backing, fault the range in, then REPORT HOW MANY
     /// BYTES IT ACTUALLY GAVE.** Returns bytes covered by PMD-mapped huge pages.
     ///
