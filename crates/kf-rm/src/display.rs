@@ -372,14 +372,38 @@ impl DisplayPolicy {
     }
 
     /// ★ The answer to one display control's params: `Ok(reply params)` or `Err(NV status)`;
-    /// `None` when the control is not this link's.
+    /// `None` when the control is not this link's. A per-object control (`SET_RMFREE_FLAGS`) needs
+    /// the object it names: [`Self::answer_on`].
     pub fn answer(&mut self, cmd: u32, params: &[u8]) -> Option<Result<Vec<u8>, u32>> {
+        self.answer_at(None, cmd, params)
+    }
+
+    /// ★ [`Self::answer`] for the control `GSP_RM_CONTROL` addressed to `(client, object)`.
+    pub fn answer_on(
+        &mut self,
+        client: u32,
+        object: u32,
+        cmd: u32,
+        params: &[u8],
+    ) -> Option<Result<Vec<u8>, u32>> {
+        self.answer_at(Some((client, object)), cmd, params)
+    }
+
+    fn answer_at(
+        &mut self,
+        target: Option<(u32, u32)>,
+        cmd: u32,
+        params: &[u8],
+    ) -> Option<Result<Vec<u8>, u32>> {
         let Some(m) = self.model.clone() else {
             return self.answer_m0(cmd, params);
         };
         let (r, st) = {
             let mut g = lock(&m);
-            let r = g.control(cmd, params);
+            let r = match target {
+                Some((c, o)) => g.control_on(c, o, cmd, params),
+                None => g.control(cmd, params),
+            };
             (r, settle(&mut g))
         };
         finish(st);
@@ -456,7 +480,7 @@ impl DisplayPolicy {
         else {
             return refuse(NV_ERR_INVALID_ARGUMENT);
         };
-        match self.answer(req.cmd, params)? {
+        match self.answer_on(req.client, req.object, req.cmd, params)? {
             Ok(p) if p.len() == params.len() => {
                 let mut body = cmd.payload.clone();
                 body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
@@ -531,7 +555,7 @@ impl DisplayRegistry {
         let (channel, recorded, st) = {
             let mut g = lock(&m);
             let channel = g.classes.channel_kind(h.class).is_some();
-            let recorded = channel && g.alloc(h.client, h.handle, h.class, params);
+            let recorded = channel && g.alloc(h.client, h.parent, h.handle, h.class, params);
             (channel, recorded, settle(&mut g))
         };
         if channel && !recorded {
@@ -1022,6 +1046,57 @@ mod tests {
             ),
             "{st:?}"
         );
+    }
+
+    /// ★ 2026-10-03 (B5, the review of `v3-gop-unload`): `SET_RMFREE_FLAGS` reaches the model with
+    /// the object its `GSP_RM_CONTROL` names, and only a channel allocated under THAT display object
+    /// frees preserving (`disp_objs.c:563-578`; NVKMS sends it to `displayHandle`, the channels'
+    /// parent, `nvkms-rm.c:2815-2819`, `:3010-3013`).
+    #[test]
+    fn rmfree_flags_mark_the_display_object_the_control_names() {
+        let shared: SharedDisplayModel = Arc::new(Mutex::new(
+            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+        ));
+        shared
+            .lock()
+            .unwrap()
+            .attach_plane(kf_disp::model::Waker(Arc::new(|| {})));
+        let mut p = DisplayPolicy::over_shared(abi(), &kf_chip::display::AMPERE, &shared);
+        let mut registry = p.registry().unwrap();
+        let (c, dev, disp, core) = (0xc1d0_0001, 0xcafe_0001, 0xcafe_0070, 0xcafe_0d00);
+        let f = "NV5070_CTRL_SET_RMFREE_FLAGS_PARAMS";
+        let mut q = kf_disp::layout::Params::new(layouts(), f, &zeroed(f)).unwrap();
+        q.set("flags", 1);
+        let mark = |p: &mut DisplayPolicy, object: u32| {
+            let mut cmd = control(k("NV5070_CTRL_CMD_SET_RMFREE_FLAGS"), 0, &q.buf);
+            cmd.payload[4..8].copy_from_slice(&object.to_le_bytes());
+            p.respond(&cmd).map(|r| r.rpc_result)
+        };
+        let preserved = || -> Vec<bool> {
+            shared
+                .lock()
+                .unwrap()
+                .take_statements()
+                .into_iter()
+                .filter_map(|st| match st {
+                    Statement::ChannelFreed { preserve, .. } => Some(preserve),
+                    _ => None,
+                })
+                .collect()
+        };
+        registry.observe(&alloc(c, dev, disp, 0xC670, &[]));
+        registry.observe(&alloc(c, disp, core, 0xC67D, &chan_params(false, 0)));
+        assert_eq!(
+            mark(&mut p, 0xcafe_0071),
+            Some(NV_OK),
+            "another display object"
+        );
+        registry.observe(&free(c, disp, core));
+        assert_eq!(preserved(), vec![false]);
+        registry.observe(&alloc(c, disp, core, 0xC67D, &chan_params(false, 0)));
+        assert_eq!(mark(&mut p, disp), Some(NV_OK));
+        registry.observe(&free(c, disp, core));
+        assert_eq!(preserved(), vec![true]);
     }
 
     /// ★ Hostile guest: an alloc that is not a display class, a channel instance the display does

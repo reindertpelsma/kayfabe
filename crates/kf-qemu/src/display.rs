@@ -588,9 +588,36 @@ enum Shown {
 struct Held {
     /// The scanout the guest freed with `PRESERVE_HW`, until a head is armed again.
     preserved: Option<(Vec<LayerPlan>, (u32, u32))>,
-    /// The size of the last frame shown — `None` until the first one (QEMU's own placeholder).
-    last_size: Option<(u32, u32)>,
+    /// ★ The size of the last ARMED composition chosen — `None` until a guest head's scanout was
+    /// shown at all. Only a scanout that was shown can be lost: the boot layer → first armed head
+    /// handoff never sets it, and neither does a family without a window vocabulary (GB20x, until
+    /// M5), so neither ever goes black.
+    scanned: Option<(u32, u32)>,
+    /// What the guest's heads say now.
+    dark: Dark,
 }
+
+/// ★ Whether a lit head scans a window — and, when none does, whether the monitor is black yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Dark {
+    /// An armed head scans a window.
+    #[default]
+    No,
+    /// No head is lit (every head disarmed, or the core channel freed): no signal — black.
+    Unlit,
+    /// A head is lit with no window, for less than [`WINDOWLESS_HOLD`]: a modeset in flight — the
+    /// last frame stays.
+    WindowlessBrief,
+    /// A head has been lit with no window for [`WINDOWLESS_HOLD`] or longer — black.
+    Windowless,
+}
+
+/// ★ How long a lit head may scan no window before the console shows black. `[measured 2026-10-03,
+/// b5f at 4a4b95f7]`: X's modeset on NVKMS left head 3 lit with no window for 22 ms (+147905 → +147927 ms)
+/// before its first flip, and the first head's arming took 2–4 ms to latch its window (b1f, b5f) — a
+/// black frame there is a flash no real monitor shows. A head left windowless for longer is a black
+/// screen on bare metal; ten times the longest measured transient is the margin.
+const WINDOWLESS_HOLD: Duration = Duration::from_millis(250);
 
 /// ★★ Choose what the console shows. The boot layer is chosen BEFORE the window vocabulary's gate
 /// (`console_composition` is `None` without a `ScanVocab`, as on GB20x), so every family shows the
@@ -599,9 +626,17 @@ struct Held {
 /// ⊘ CORRECTED 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): *"an unload that leaves no head armed
 /// shows nothing, as on bare metal"* was built as "no new frame", so QEMU kept showing the LAST
 /// frame (box run b5: the fbcon text stayed after `rmmod nvidia_drm`). With nothing scanned a real
-/// monitor is black: once a frame was shown, nothing becomes [`Shown::Blank`]. And a scanout freed
-/// with `PRESERVE_HW` stays shown ([`Shown::Preserved`]) until a head is armed again.
-/// With no boot layer (`gop=off`) and before the first frame this is `console.map(Shown::Armed)`.
+/// monitor is black, and a scanout freed with `PRESERVE_HW` stays shown ([`Shown::Preserved`]) until
+/// a head is armed again.
+/// ⊘ CORRECTED again the same day (the review of `v3-gop-unload`): that black was chosen whenever a
+/// frame had been shown and nothing was scanned — so the boot layer → first-head handoff showed one
+/// black frame (`[measured b1f]` *"+52936 ms the console shows BLACK"*, 4 ms before head 3's window),
+/// GB20x's boot layer was followed by black, and `gop=off` went black between any two windows.
+/// [`Shown::Blank`] is now chosen only when a head's scanout that WAS shown ([`Held::scanned`]) is
+/// lost — its head unlit, or lit with no window past [`WINDOWLESS_HOLD`]. Anything else that has
+/// nothing to show is `None`: no new frame, the last one stays.
+/// `gop=off`: before a head first scans a window this is `None` (QEMU's placeholder), as always;
+/// after, a lost scanout is black where it used to freeze the last frame.
 fn choose_shown(
     console: Option<Composition>,
     boot: Option<&BootScan>,
@@ -611,19 +646,83 @@ fn choose_shown(
     match (console, boot) {
         (Some(c), _) => Some(Shown::Armed(c)),
         (None, Some(b)) if !boot_done => Some(Shown::Boot(b.layer, b.size)),
-        (None, _) => match (&held.preserved, held.last_size) {
-            (Some((l, size)), _) => Some(Shown::Preserved(l.clone(), *size)),
-            (None, Some(size)) => Some(Shown::Blank(size)),
-            (None, None) => None,
+        (None, _) => match (&held.preserved, held.scanned, held.dark) {
+            (Some((l, size)), _, _) => Some(Shown::Preserved(l.clone(), *size)),
+            (None, Some(size), Dark::Unlit | Dark::Windowless) => Some(Shown::Blank(size)),
+            (None, _, _) => None,
         },
     }
 }
 
-/// ★ One line naming what the console shows (`V3_DISPLAY.md` §4.11.13) — the log compares it.
-fn shown_digest(shown: Option<&Shown>) -> String {
+/// FNV-1a over `words` — [`shown_key`]'s hash.
+fn fnv(words: impl IntoIterator<Item = u64>) -> u64 {
+    words.into_iter().fold(0xcbf2_9ce4_8422_2325, |h, w| {
+        w.to_le_bytes()
+            .iter()
+            .fold(h, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3))
+    })
+}
+
+/// ★ What a *"console shows"* line is about, as a number compared every loop without formatting
+/// anything. ⊘ CORRECTED 2026-10-03 (the review of `v3-gop-unload`): the line's text was the key,
+/// formatted every loop, and it named each window's context DMA and offset — which a page flip
+/// changes — so `[measured b1f]` 256 lines were spent in ~4 s of flips and later transitions went
+/// unlogged. The key leaves out what a flip changes; the line still prints it.
+fn shown_key(shown: Option<&Shown>, held: &Held, boot_done: bool) -> u64 {
     match shown {
-        None => "NOTHING yet (no frame was ever shown)".to_string(),
-        Some(Shown::Blank((w, h))) => format!("BLACK {w}x{h} (no head scans a window)"),
+        None => fnv([
+            0,
+            u64::from(held.scanned.is_some()),
+            u64::from(boot_done),
+            held.dark as u64,
+        ]),
+        Some(Shown::Blank((w, h))) => fnv([1, u64::from(*w), u64::from(*h)]),
+        Some(Shown::Preserved(l, (w, h))) => fnv([2, u64::from(*w), u64::from(*h)]
+            .into_iter()
+            .chain(l.iter().flat_map(|p| [u64::from(p.window), p.src]))),
+        Some(Shown::Boot(l, (w, h))) => fnv([3, l.src, u64::from(*w), u64::from(*h)]),
+        Some(Shown::Armed(c)) => fnv([
+            4,
+            u64::from(c.head),
+            u64::from(c.width),
+            u64::from(c.height),
+        ]
+        .into_iter()
+        .chain(c.layers.iter().flat_map(|l| {
+            [
+                u64::from(l.window),
+                u64::from(l.width),
+                u64::from(l.height),
+                u64::from(l.pitch),
+                u64::from(l.format),
+            ]
+        }))),
+    }
+}
+
+/// ★ One line naming what the console shows (`V3_DISPLAY.md` §4.11.13) — printed when
+/// [`shown_key`] changes.
+fn shown_digest(shown: Option<&Shown>, held: &Held, boot_done: bool) -> String {
+    match shown {
+        None => match (held.scanned, held.dark) {
+            (Some(_), Dark::WindowlessBrief) => format!(
+                "no new frame: a lit head has no window (held up to {} ms) — the last frame stays",
+                WINDOWLESS_HOLD.as_millis()
+            ),
+            (Some(_), _) => "no new frame — the last frame stays".to_string(),
+            (None, _) if boot_done => "no new frame: no armed head has scanned a window yet \
+                                       — the boot layer's last frame stays (no black at the handoff)"
+                .to_string(),
+            (None, _) => "NOTHING yet (no head has scanned a window)".to_string(),
+        },
+        Some(Shown::Blank((w, h))) => format!(
+            "BLACK {w}x{h} ({})",
+            if held.dark == Dark::Unlit {
+                "the scanout shown is lost: no head is lit"
+            } else {
+                "the scanout shown is lost: a lit head has had no window past the hold"
+            }
+        ),
         Some(Shown::Preserved(l, (w, h))) => {
             let srcs: Vec<String> = l
                 .iter()
@@ -658,6 +757,9 @@ fn shown_digest(shown: Option<&Shown>) -> String {
         }
     }
 }
+
+/// ★ The bound on *"console shows"* lines (one more says the rest are not logged).
+const SHOWN_LINES: u32 = 256;
 
 /// What the worker takes at its start.
 struct WorkerInit {
@@ -1154,9 +1256,11 @@ impl Device {
         let mut logged_updates = 0u32;
         // ★ The boot display: sticky once the guest arms its first head.
         let mut boot_done = false;
-        let mut shown_last = String::new();
+        // ★ B5 (`V3_DISPLAY.md` §4.11.13): what the console shows when nothing is scanned
+        let mut shown_last: Option<u64> = None;
         let mut shown_lines = 0u32;
         let mut held = Held::default();
+        let mut windowless_since: Option<Instant> = None;
         let started = Instant::now();
         if let Some(b) = dp.boot.as_ref() {
             eprintln!(
@@ -1175,6 +1279,12 @@ impl Device {
                 deadline = deadline.min(now + Duration::from_millis(2));
             }
             if let Some(t) = scan.refresh_due(dp) {
+                deadline = deadline.min(t);
+            }
+            // a lit head without a window: wake when its hold ends (then the console may go black)
+            if let Some(t) = windowless_since.map(|t| t + WINDOWLESS_HOLD)
+                && t > now
+            {
                 deadline = deadline.min(t);
             }
             let ms = u32::try_from(deadline.saturating_duration_since(now).as_millis())
@@ -1370,30 +1480,55 @@ impl Device {
                 );
             }
             let console = console_composition(&engine, dp);
+            let lit = engine.heads_armed().iter().any(|m| m.period_ns > 0);
+            held.dark = match (&console, lit) {
+                (Some(_), _) => Dark::No,
+                (None, false) => Dark::Unlit,
+                (None, true) => {
+                    let now = Instant::now();
+                    let since = *windowless_since.get_or_insert(now);
+                    if now.duration_since(since) >= WINDOWLESS_HOLD {
+                        Dark::Windowless
+                    } else {
+                        Dark::WindowlessBrief
+                    }
+                }
+            };
+            if !matches!(held.dark, Dark::WindowlessBrief | Dark::Windowless) {
+                windowless_since = None;
+            }
             if console.is_some() {
                 held.preserved = None;
             }
-            held.last_size = scan.last_size;
             let shown = choose_shown(console, dp.boot.as_ref(), boot_done, &held);
-            if !matches!(shown, Some(Shown::Armed(_))) {
+            match &shown {
+                Some(Shown::Armed(c)) => held.scanned = Some((c.width, c.height)),
                 // only the composition shown right before a preserving free is kept
-                scan.last_plan = None;
+                _ => scan.last_plan = None,
             }
             // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): every change of WHAT the console shows,
-            // timed — the boot layer, a head's windows (context DMA, offset, size), or nothing.
-            let digest = shown_digest(shown.as_ref());
-            if digest != shown_last && shown_lines < 256 {
-                shown_lines += 1;
-                eprintln!(
-                    "kf3: display: +{} ms the console shows {digest} (core channel {})",
-                    started.elapsed().as_millis(),
-                    if engine.generation(0).is_some() {
-                        "allocated"
-                    } else {
-                        "FREE"
-                    }
-                );
-                shown_last = digest;
+            // timed — the boot layer, a head's windows, black, the preserved scanout, or no new frame
+            // and why. Keyed without what a flip changes; bounded.
+            let key = shown_key(shown.as_ref(), &held, boot_done);
+            if shown_last != Some(key) {
+                if shown_lines < SHOWN_LINES {
+                    eprintln!(
+                        "kf3: display: +{} ms the console shows {} (core channel {})",
+                        started.elapsed().as_millis(),
+                        shown_digest(shown.as_ref(), &held, boot_done),
+                        if engine.generation(0).is_some() {
+                            "allocated"
+                        } else {
+                            "FREE"
+                        }
+                    );
+                } else if shown_lines == SHOWN_LINES {
+                    eprintln!(
+                        "kf3: display: {SHOWN_LINES} 'console shows' lines logged — later changes are not"
+                    );
+                }
+                shown_lines = shown_lines.saturating_add(1);
+                shown_last = Some(key);
                 scan.want = true;
             }
             scan.active = matches!(
@@ -1731,8 +1866,6 @@ struct ScanState {
     /// ★ B5: the planned layers of the last ARMED composition copied whole (no window refused) —
     /// what a `PRESERVE_HW` free keeps on the monitor ([`Shown::Preserved`]).
     last_plan: Option<(Vec<LayerPlan>, (u32, u32))>,
-    /// ★ B5: the size of the last frame queued — what [`Shown::Blank`] is drawn at.
-    last_size: Option<(u32, u32)>,
 }
 
 /// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, then a
@@ -2047,7 +2180,6 @@ impl ScanState {
                 if matches!(shown, Shown::Armed(_)) {
                     self.last_plan = whole.then(|| (layers.clone(), (w, h)));
                 }
-                self.last_size = Some((w, h));
                 self.inflight = Some((n, slot, (w, h), Instant::now()));
             }
             Err(e) => {
@@ -2136,6 +2268,49 @@ mod tests {
         }
     }
 
+    fn boot_scan() -> BootScan {
+        BootScan {
+            layer: kf_disp::scanout::boot_layer(&kf_disp::scanout::BootSurface {
+                width: 1920,
+                height: 1080,
+                pitch: 7680,
+                bytes: 0x7F_0000,
+            })
+            .unwrap(),
+            size: (1920, 1080),
+        }
+    }
+
+    /// Window 6 of head 3 scanning a 1080p pitch surface (b1f's console window).
+    fn scanout_6() -> kf_disp::engine::Scanout {
+        kf_disp::engine::Scanout {
+            window: 6,
+            head: 3,
+            chn: 7,
+            client: 0xc1d0_0001,
+            handle: 0x1_0088,
+            offset: 0,
+            width: 1920,
+            height: 1080,
+            x: 0,
+            y: 0,
+            surface_width: 1920,
+            surface_height: 1080,
+            pitch: 120,
+            block_height_log2: 0,
+            format: 0xe6,
+            out_x: 0,
+            out_y: 0,
+            out_width: 1920,
+            out_height: 1080,
+            depth: 0,
+            k1: 255,
+            k2: 0,
+            src_factor: 0,
+            dst_factor: 0,
+        }
+    }
+
     /// ★ The boot display: the boot layer until the first armed head — also on a family with no
     /// window vocabulary (no composition at all) — and never again; without it, today's choice.
     #[test]
@@ -2176,43 +2351,46 @@ mod tests {
         assert_eq!(choose_shown(None, Some(&boot), true, &fresh), None);
     }
 
-    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): once a frame was shown, NOTHING to scan is a
-    /// black frame (box run b5 kept the last fbcon frame after `rmmod nvidia_drm`), and a scanout
-    /// freed with `PRESERVE_HW` stays until a head is armed again.
+    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): a head's scanout that WAS shown and is lost is
+    /// black (box run b5 kept the last fbcon frame after `rmmod nvidia_drm`) — at once when no head
+    /// is lit, after [`WINDOWLESS_HOLD`] when a lit head has no window — and a scanout freed with
+    /// `PRESERVE_HW` stays until a head is armed again.
     #[test]
-    fn nothing_scanned_is_black_and_a_preserved_scanout_stays() {
+    fn a_lost_scanout_is_black_and_a_preserved_scanout_stays() {
         let comp = Composition {
             head: 3,
             width: 1920,
             height: 1080,
             layers: Vec::new(),
         };
-        let boot = BootScan {
-            layer: kf_disp::scanout::boot_layer(&kf_disp::scanout::BootSurface {
-                width: 1920,
-                height: 1080,
-                pitch: 7680,
-                bytes: 0x7F_0000,
-            })
-            .unwrap(),
-            size: (1920, 1080),
-        };
-        let shown_once = Held {
+        let boot = boot_scan();
+        let lost = |dark| Held {
             preserved: None,
-            last_size: Some((1920, 1080)),
+            scanned: Some((1280, 720)),
+            dark,
         };
-        assert_eq!(
-            choose_shown(None, Some(&boot), true, &shown_once),
-            Some(Shown::Blank((1920, 1080)))
-        );
-        assert_eq!(
-            choose_shown(None, None, true, &shown_once),
-            Some(Shown::Blank((1920, 1080))),
-            "gop=off too: a head that went dark is black"
-        );
+        for g in [Some(&boot), None] {
+            assert_eq!(
+                choose_shown(None, g, true, &lost(Dark::Unlit)),
+                Some(Shown::Blank((1280, 720))),
+                "no head lit: black at once, at the size last shown (gop={})",
+                g.is_some()
+            );
+            assert_eq!(
+                choose_shown(None, g, true, &lost(Dark::Windowless)),
+                Some(Shown::Blank((1280, 720))),
+                "a lit head with no window past the hold: black"
+            );
+            assert_eq!(
+                choose_shown(None, g, true, &lost(Dark::WindowlessBrief)),
+                None,
+                "a lit head with no window inside the hold (a modeset): the last frame stays"
+            );
+        }
         let kept = Held {
             preserved: Some((vec![boot.layer], (1920, 1080))),
-            last_size: Some((1920, 1080)),
+            scanned: Some((1920, 1080)),
+            dark: Dark::Unlit,
         };
         assert_eq!(
             choose_shown(None, None, true, &kept),
@@ -2227,6 +2405,81 @@ mod tests {
         assert_eq!(
             choose_shown(None, Some(&boot), false, &kept),
             Some(Shown::Boot(boot.layer, (1920, 1080)))
+        );
+    }
+
+    /// ⊘ The review of `v3-gop-unload` (2026-10-03): `[measured b1f]` *"+52936 ms the console shows
+    /// BLACK"* 4 ms before head 3's first window — the old rule blanked whenever a frame had been
+    /// shown and nothing was scanned. No scanout that was never shown is ever lost: the boot layer
+    /// → first-head handoff, GB20x (no window vocabulary: never an armed composition) and `gop=off`
+    /// before its first window all show no new frame, whatever the heads say.
+    #[test]
+    fn the_handoff_and_a_family_without_windows_never_go_black() {
+        let boot = boot_scan();
+        for dark in [
+            Dark::No,
+            Dark::Unlit,
+            Dark::WindowlessBrief,
+            Dark::Windowless,
+        ] {
+            let never = Held {
+                preserved: None,
+                scanned: None,
+                dark,
+            };
+            assert_eq!(
+                choose_shown(None, Some(&boot), true, &never),
+                None,
+                "the boot layer's last frame stays ({dark:?})"
+            );
+            assert_eq!(
+                choose_shown(None, None, true, &never),
+                None,
+                "gop=off before any window ({dark:?})"
+            );
+        }
+    }
+
+    /// ⊘ The review of `v3-gop-unload` (2026-10-03): a page flip (a new context DMA or offset in
+    /// the same window) changes no *"console shows"* key — `[measured b1f]` the old text key spent
+    /// its 256 lines in ~4 s of flips — while a change of what is shown does.
+    #[test]
+    fn a_flip_is_not_a_console_change() {
+        let layer = |handle: u32, offset: u64| kf_disp::engine::Scanout {
+            handle,
+            offset,
+            ..scanout_6()
+        };
+        let comp = |l| {
+            Shown::Armed(Composition {
+                head: 3,
+                width: 1920,
+                height: 1080,
+                layers: vec![l],
+            })
+        };
+        let held = Held::default();
+        let a = shown_key(Some(&comp(layer(0x1_0093, 0))), &held, true);
+        let b = shown_key(Some(&comp(layer(0x1_0095, 0x80_0000))), &held, true);
+        assert_eq!(a, b, "a flip");
+        let wider = kf_disp::engine::Scanout {
+            width: 1280,
+            ..layer(0x1_0093, 0)
+        };
+        assert_ne!(a, shown_key(Some(&comp(wider)), &held, true));
+        let lost = Held {
+            preserved: None,
+            scanned: Some((1920, 1080)),
+            dark: Dark::WindowlessBrief,
+        };
+        assert_ne!(
+            shown_key(None, &lost, true),
+            shown_key(None, &Held::default(), true),
+            "why nothing new is shown is part of the key"
+        );
+        assert_ne!(
+            shown_key(Some(&Shown::Blank((1920, 1080))), &held, true),
+            shown_key(None, &held, true)
         );
     }
 

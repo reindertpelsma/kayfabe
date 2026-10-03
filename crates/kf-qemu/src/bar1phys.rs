@@ -2,8 +2,12 @@
 //! ★ **When the guest's RM gives BAR1 up** (`docs/design/V3_DISPLAY.md` §4.11.13, box test B5).
 //!
 //! The two guest-visible acts of a non-preserving RM teardown that concern BAR1, in the order the
-//! guest performs them (`gpuEnterShutdown_IMPL`: `gpuStateUnload` then `kgspUnloadRm`,
-//! `ogkm-580: src/nvidia/src/kernel/gpu/gpu.c:3637-3655`):
+//! guest performs them — RM's last close (`newLevel = 0`): `RmShutdownAdapter` → `gpuStateUnload`
+//! (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osinit.c:2356`) → `gpuStateDestroy` → `kgspUnloadRm`
+//! (`src/nvidia/src/kernel/gpu/gpu.c:3970-3975`).
+//! ⊘ CORRECTED 2026-10-03 (the review of `v3-gop-unload`): this cited `gpuEnterShutdown_IMPL`
+//! (`gpu.c:3637-3655`), which has no caller in `ogkm-580` — the order is the same, the path was not
+//! the one that runs.
 //! 1. CPU-RM's `kbusStatePreUnload_GM107` destroys its BAR1 VA space (the preserved console mapping
 //!    at VA 0 goes first, `kbusUnmapPreservedConsole_GM107`, `kern_bus_gm107.c:1278-1310`) and writes
 //!    the BAR1-mode register back to PHYSICAL, target VID_MEM (`kbusTeardownMailbox_GM107`,
@@ -65,6 +69,71 @@ pub fn decode_unloading(
         gc6: get("bGc6Entering")? != 0,
         level: u32::try_from(get("newLevel")?).unwrap_or(u32::MAX),
     })
+}
+
+/// ★ The VA thread's pending "BAR1 back to its physical view": the request counter it last saw, and
+/// the BAR1 window's change count to compare against when it goes idle ([`restore_physical_view`]).
+///
+/// ⊘ CORRECTED 2026-10-03 (the review of `v3-gop-unload`): the baseline was taken when the FIRST
+/// request was noticed, and a request noticed while one was due merged into it without refreshing
+/// it — so a register-write trigger skipped for a BAR1 change also swallowed the fn-47 trigger behind
+/// it, leaving BAR1 `[0, G)` on scratch for the whole no-RM period (the original defect (c)). Every
+/// newly noticed request now re-baselines: a change is measured from the NEWEST request's notice.
+/// ⚠ The baseline is still taken at the VA thread's notice, not at the guest's act (the drainer
+/// cannot read the window's count): a BAR1 batch applied between the newest request and its notice
+/// that belongs to the teardown itself skips the re-seed, named in the log (*"NOT restored"*).
+#[derive(Debug, Default)]
+pub struct PhysicalViewDue {
+    seen: u64,
+    due: Option<u64>,
+}
+
+impl PhysicalViewDue {
+    /// The VA thread read the request counter `asked`; `changes` reads the BAR1 window's change
+    /// count (`None`: no BAR1 window), asked only for a new request, which (re-)baselines. Returns
+    /// whether one was new.
+    pub fn notice(&mut self, asked: u64, changes: impl FnOnce() -> Option<u64>) -> bool {
+        if asked == self.seen {
+            return false;
+        }
+        self.seen = asked;
+        if let Some(c) = changes() {
+            self.due = Some(c);
+        }
+        true
+    }
+
+    /// The VA thread is idle: the baseline of the request to serve now, if one is due.
+    pub fn take(&mut self) -> Option<u64> {
+        self.due.take()
+    }
+}
+
+/// ★ What BAR1's boot range shows, as a number — the change instrument logs a line only when it
+/// differs from the last one logged (`V3_DISPLAY.md` §4.11.13). ⊘ CORRECTED 2026-10-03 (the review
+/// of `v3-gop-unload`): the instrument logged EVERY BAR1 change and shared its bound with the
+/// re-seed lines, so `[measured b5f]` it stopped at change #88 and the fifth teardown was not logged.
+#[must_use]
+pub fn view_key(c: &kf_mem::cpuwin::Coverage, seeded: bool) -> u64 {
+    let words = c
+        .inside
+        .iter()
+        .flat_map(|&(va, n, off)| [va, n, off.unwrap_or(u64::MAX)])
+        .chain([c.uncovered(), u64::from(seeded)]);
+    words.fold(0xcbf2_9ce4_8422_2325, |h, w| {
+        w.to_le_bytes()
+            .iter()
+            .fold(h, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3))
+    })
+}
+
+/// ★ A bounded log family: line number `n` (0-based) is printed while `n < max`; at `n == max` one
+/// line says the rest are not; after that, nothing. Returns whether `n` is to be printed.
+pub fn bounded(n: u64, max: u64, family: &str) -> bool {
+    if n == max {
+        eprintln!("kf3: {max} {family} lines logged — later ones are not");
+    }
+    n < max
 }
 
 /// ★ The VA thread, idle (no walk in flight or pending): show the boot framebuffer's physical view
@@ -191,6 +260,51 @@ mod tests {
         let line = restore_physical_view(&w, w.changes() - 1).expect("a line");
         assert!(line.contains("NOT restored"), "{line}");
         assert_eq!(w.seeded(), None);
+    }
+
+    /// ⊘ The review of `v3-gop-unload`: the register-write trigger noticed while the teardown's
+    /// last BAR1 batch was still to land (its baseline then goes stale), and fn 47's trigger noticed
+    /// before the VA thread went idle — the second re-baselines, and the physical view comes back.
+    /// (With the first baseline kept, as before, it is *"NOT restored"*: the next test's case.)
+    #[test]
+    fn a_later_trigger_re_baselines_one_already_due() {
+        let w = one_life();
+        let mut due = PhysicalViewDue::default();
+        assert!(due.notice(1, Some(w.changes() - 1)), "the register write");
+        assert!(
+            !due.notice(1, Some(w.changes())),
+            "the same request, seen again"
+        );
+        assert!(due.notice(2, Some(w.changes())), "fn 47");
+        let at = due.take().expect("due");
+        assert_eq!(at, w.changes());
+        let line = restore_physical_view(&w, at).expect("a line");
+        assert!(line.contains("back to its physical view"), "{line}");
+        assert_eq!(due.take(), None, "served once");
+        assert!(!due.notice(2, || Some(w.changes())), "nothing new");
+        assert_eq!(due.take(), None);
+    }
+
+    #[test]
+    fn the_view_key_changes_with_what_the_range_shows_only() {
+        let w = one_life();
+        let empty = w.coverage(0, G);
+        let k = view_key(&empty, false);
+        assert_eq!(k, view_key(&w.coverage(0, G), false), "the same view");
+        assert_ne!(k, view_key(&empty, true), "seeded or scratch");
+        let mapped = kf_mem::cpuwin::Coverage {
+            inside: vec![(0, G, Some(0))],
+            gaps: Vec::new(),
+        };
+        assert_ne!(k, view_key(&mapped, false), "a guest view");
+    }
+
+    #[test]
+    fn a_bounded_family_says_once_that_it_stopped() {
+        assert!(bounded(0, 2, "test"));
+        assert!(bounded(1, 2, "test"));
+        assert!(!bounded(2, 2, "test"));
+        assert!(!bounded(3, 2, "test"));
     }
 
     /// `gop=off`: a window that never had a seed says nothing and does nothing.

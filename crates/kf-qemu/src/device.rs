@@ -235,8 +235,10 @@ pub struct Device {
     /// ★ 2026-10-03 (B5): the `UNLOADING_GUEST_DRIVER` (fn 47) body's layout at the declared guest
     /// version (`kf_abi` generated matrix) — to tell a teardown from a PM transition.
     unload_layout: Option<&'static kf_abi::matrix::Layout>,
-    /// Lines logged by the B5 observers (bounded).
+    /// Lines logged by the B5 observers of the BAR1-mode register (bounded).
     b5_logged: AtomicU64,
+    /// Decoded fn-47 lines logged (bounded).
+    fn47_logged: AtomicU64,
 }
 
 impl Device {
@@ -869,6 +871,7 @@ impl Device {
             bar1_mode,
             unload_layout,
             b5_logged: AtomicU64::new(0),
+            fn47_logged: AtomicU64::new(0),
         })
     }
 
@@ -1519,12 +1522,15 @@ impl Device {
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
-        let mut bar1_lines = 0u32;
-        // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): BAR1 back to its physical view — requests
-        // seen, and the one waiting for the VA manager to go idle, with the BAR1 window's change
-        // count when it was noticed (a change since means an RM took BAR1 again first).
-        let mut bar1_phys_seen = 0u64;
-        let mut bar1_phys_due: Option<u64> = None;
+        // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): BAR1 back to its physical view — the request
+        // waiting for the VA manager to go idle, with the BAR1 window's change count at the newest
+        // request's notice (a change since means an RM took BAR1 again first). Two log families,
+        // each with its own bound: what the boot range shows (a line only when it changes), and the
+        // re-seeds.
+        let mut bar1_phys = crate::bar1phys::PhysicalViewDue::default();
+        let mut bar1_view_last: Option<u64> = None;
+        let mut bar1_view_lines = 0u64;
+        let mut bar1_phys_lines = 0u64;
         // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
         // here, before the guest runs, as soon as QEMU has registered guest RAM.
         // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
@@ -1671,9 +1677,9 @@ impl Device {
                 );
             }
             // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): what BAR1's boot-framebuffer range shows
-            // after every BAR1 change (bounded) — the guest's views, the seed, or scratch.
+            // after a BAR1 change — the guest's views, the seed, or scratch — logged when it differs
+            // from the last line (about two per RM life), with its own bound.
             if r.collected
-                && bar1_lines < 96
                 && r.applied
                     .iter()
                     .any(|(k, a)| *k == crate::mem::K_BAR1 && a.mapped + a.unmapped > 0)
@@ -1683,51 +1689,51 @@ impl Device {
                     .and_then(crate::mem::Target::cpu_window)
                 && let Some((at, _, len)) = w.boot_range()
             {
-                bar1_lines += 1;
                 let c = w.coverage(at, len);
-                eprintln!(
-                    "kf3: mem t={:.3}s BAR1 boot framebuffer [{at:#x}, +{len:#x}) after BAR1 change #{}: guest views {:x?}; {:#x} bytes {}",
-                    self.born.elapsed().as_secs_f64(),
-                    w.changes(),
-                    c.inside,
-                    c.uncovered(),
-                    if w.seeded().is_some() {
-                        "show the seed (FB 0)"
-                    } else {
-                        "show SCRATCH"
+                let key = crate::bar1phys::view_key(&c, w.seeded().is_some());
+                if bar1_view_last != Some(key) {
+                    bar1_view_last = Some(key);
+                    if crate::bar1phys::bounded(bar1_view_lines, 256, "BAR1 boot-framebuffer view")
+                    {
+                        eprintln!(
+                            "kf3: mem t={:.3}s BAR1 boot framebuffer [{at:#x}, +{len:#x}) after BAR1 change #{}: guest views {:x?}; {:#x} bytes {}",
+                            self.born.elapsed().as_secs_f64(),
+                            w.changes(),
+                            c.inside,
+                            c.uncovered(),
+                            if w.seeded().is_some() {
+                                "show the seed (FB 0)"
+                            } else {
+                                "show SCRATCH"
+                            }
+                        );
                     }
-                );
-            }
-            let asked = self.mem.inbox.bar1_physical_requests();
-            if asked != bar1_phys_seen {
-                bar1_phys_seen = asked;
-                if bar1_phys_due.is_none() {
-                    bar1_phys_due = m
-                        .table
-                        .target(crate::mem::K_BAR1)
-                        .and_then(crate::mem::Target::cpu_window)
-                        .map(kf_mem::cpuwin::CpuWindow::changes);
+                    bar1_view_lines = bar1_view_lines.saturating_add(1);
                 }
             }
-            if let Some(at_change) = bar1_phys_due
-                && !m.in_flight()
+            bar1_phys.notice(self.mem.inbox.bar1_physical_requests(), || {
+                m.table
+                    .target(crate::mem::K_BAR1)
+                    .and_then(crate::mem::Target::cpu_window)
+                    .map(kf_mem::cpuwin::CpuWindow::changes)
+            });
+            if !m.in_flight()
                 && m.pending() == 0
-            {
-                bar1_phys_due = None;
-                if let Some(line) = m
+                && let Some(at_change) = bar1_phys.take()
+                && let Some(line) = m
                     .table
                     .target(crate::mem::K_BAR1)
                     .and_then(crate::mem::Target::cpu_window)
                     .and_then(|w| crate::bar1phys::restore_physical_view(w, at_change))
-                    && bar1_lines < 128
-                {
-                    // ⊘ bounded: a guest can ask as often as it writes the register
-                    bar1_lines += 1;
+            {
+                // ⊘ bounded: a guest can ask as often as it writes the register
+                if crate::bar1phys::bounded(bar1_phys_lines, 128, "BAR1 physical-view") {
                     eprintln!(
                         "kf3: mem t={:.3}s {line}",
                         self.born.elapsed().as_secs_f64()
                     );
                 }
+                bar1_phys_lines = bar1_phys_lines.saturating_add(1);
             }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
                 eprintln!(
@@ -2252,27 +2258,39 @@ impl Device {
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13), on the drainer: the guest's fn 47 — GSP-RM's
     /// own unload. Decoded with the generated layout; logged.
     fn observe_unloading(&self, c: &kf_gsp::RpcCommand) {
+        // ⊘ bounded (the review of `v3-gop-unload`): one line per fn 47 is one per RM life, which
+        // a guest controls
+        let log = crate::bar1phys::bounded(
+            self.fn47_logged.fetch_add(1, Ordering::Relaxed),
+            64,
+            "fn-47 decode",
+        );
         match crate::bar1phys::decode_unloading(self.unload_layout, &c.payload) {
             Ok(u) => {
-                eprintln!(
-                    "kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq={}: bInPMTransition={} bGc6Entering={} newLevel={} — {}",
-                    c.sequence,
-                    u.pm,
-                    u.gc6,
-                    u.level,
-                    if u.gives_bar1_up() {
-                        "the guest's RM gives BAR1 up"
-                    } else {
-                        "a PM transition: BAR1 is preserved"
-                    }
-                );
+                if log {
+                    eprintln!(
+                        "kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq={}: bInPMTransition={} bGc6Entering={} newLevel={} — {}",
+                        c.sequence,
+                        u.pm,
+                        u.gc6,
+                        u.level,
+                        if u.gives_bar1_up() {
+                            "the guest's RM gives BAR1 up"
+                        } else {
+                            "a PM transition: BAR1 is preserved"
+                        }
+                    );
+                }
                 // ★ GSP-RM's own unload returns BAR1 to physical mode on a real card (the same
                 // `kbusStatePreUnload`): the second of the two triggers (`crate::bar1phys`).
                 if u.gives_bar1_up() && self.gop.is_some() {
                     self.mem.inbox.request_bar1_physical();
                 }
             }
-            Err(e) => eprintln!("kf3: GSP fn 47 seq={}: body not decoded ({e})", c.sequence),
+            Err(e) if log => {
+                eprintln!("kf3: GSP fn 47 seq={}: body not decoded ({e})", c.sequence);
+            }
+            Err(_) => {}
         }
     }
 
@@ -2285,7 +2303,7 @@ impl Device {
         phase: kf_arch::BootPhase,
     ) {
         let n = self.b5_logged.fetch_add(1, Ordering::Relaxed);
-        if n < 64 {
+        if crate::bar1phys::bounded(n, 64, "BAR1-mode write") {
             eprintln!(
                 "kf3: mem t={:.3}s the guest wrote {} = {value:#x} (MODE {}) at GSP phase {phase:?}",
                 self.born.elapsed().as_secs_f64(),
