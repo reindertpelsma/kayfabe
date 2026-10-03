@@ -39,8 +39,10 @@
 //! per-device semaphore). The 16 slots coalesce into runs (normally ONE: 1 MiB of store, or of
 //! guest RAM); a store run costs one `NV_ESC_RM_MAP_MEMORY` on a node opened AHEAD of time plus one
 //! `mmap(MAP_FIXED)`; a RAM or scratch run costs one `mmap`. The replaced views are handed to
-//! [`ViewOps::retire`], which releases them OFF the vCPU. A slot with no addressable source shows
-//! scratch and is **counted and named**.
+//! [`ViewOps::retire`], which releases them OFF the vCPU — ⊘ (2026-10-03) only once every range a
+//! view was placed over has been re-placed; a view a refused run may have left reachable is kept and
+//! counted ([`Repointed::kept`]). A slot with no addressable source shows scratch and is **counted
+//! and named**.
 //!
 //! ⊘ Nothing here reads or writes a byte of guest memory.
 
@@ -271,6 +273,31 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
     }
 }
 
+/// One store view the PRAMIN window shows, or may still show: the window range it was placed over
+/// and the armed view that holds its host aperture.
+#[derive(Debug)]
+struct LiveView<V> {
+    at: u64,
+    len: u64,
+    view: V,
+}
+
+/// Whether the ranges `landed` (each `(at, len)`, ascending and disjoint, as [`runs`] yields
+/// them) cover all of `[at, at + len)`.
+fn covered_by(landed: &[(u64, u64)], at: u64, len: u64) -> bool {
+    let end = at.saturating_add(len);
+    let mut cur = at;
+    for &(a, l) in landed {
+        if a <= cur && a.saturating_add(l) > cur {
+            cur = a.saturating_add(l);
+        }
+        if cur >= end {
+            return true;
+        }
+    }
+    cur >= end
+}
+
 /// What one PRAMIN re-point did.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Repointed {
@@ -286,6 +313,10 @@ pub struct Repointed {
     pub maps: u32,
     /// `mmap` placements made on the vCPU — 1 for a window that is one run.
     pub mmaps: u32,
+    /// ★ Previously placed views NOT retired, because a placement over part of their range was
+    /// refused, so the guest may still reach them there. Kept, and retired by a later re-point
+    /// that covers them (2026-10-03).
+    pub kept: u32,
 }
 
 /// Where a PRAMIN slot must point.
@@ -359,9 +390,12 @@ pub struct PraminPool<V: ViewOps> {
     ops: V,
     granule: u64,
     ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send + Sync>,
-    placed: std::sync::Mutex<Vec<V::View>>,
+    placed: std::sync::Mutex<Vec<LiveView<V::View>>>,
     /// Re-points done.
     pub repoints: AtomicU64,
+    /// Old views kept past a re-point because their range was not re-covered (see
+    /// [`Repointed::kept`]).
+    pub kept: AtomicU64,
     /// Slots that showed scratch because nothing addressable backed them.
     pub missed: AtomicU64,
     /// Placements the kernel refused.
@@ -396,6 +430,7 @@ impl<V: ViewOps> PraminPool<V> {
             ram_offset,
             placed: std::sync::Mutex::new(Vec::new()),
             repoints: AtomicU64::new(0),
+            kept: AtomicU64::new(0),
             missed: AtomicU64::new(0),
             refused: AtomicU64::new(0),
             maps: AtomicU64::new(0),
@@ -408,6 +443,22 @@ impl<V: ViewOps> PraminPool<V> {
 
     /// ★ The vCPU path: point the window at `slots` (slot `i` = window offset `i * granule`).
     /// One map + one `mmap` per run; the replaced views are retired off the vCPU.
+    ///
+    /// ⊘ **Corrected 2026-10-03: a replaced view is retired ONLY when every window range it was
+    /// placed over was re-placed successfully by this re-point.** Until then this retired every
+    /// old view unconditionally, on the comment *"every old view was covered by a MAP_FIXED
+    /// placement above"*, which is false when a run's placement or sink is refused. A refused
+    /// `MAP_FIXED` either leaves the old mapping in place (a refusal before the old page tables are
+    /// cleared, e.g. `ENOMEM` once `vm.max_map_count` is reached: Linux 7.1 `mm/vma.c:2439-2444`,
+    /// `:1416-1418`) or leaves a hole; in the first case the guest still reaches the old view. Retiring it then hands its
+    /// host BAR1 aperture back to RM while the guest can still map it, and nvidia.ko does not zap
+    /// user mappings when RM unmaps (its only revocation is `nv_revoke_gpu_mappings_locked`, on
+    /// power-management paths: `ogkm-580: kernel-open/nvidia/nv-mmap.c:786-816`). So such a view
+    /// is kept (counted in [`Repointed::kept`]) and retired by a later re-point that covers it.
+    /// [`CpuWindow::unmap`] already had this rule (scratch FIRST, release only after it lands).
+    ///
+    /// A NEW view whose own placement was refused is retired at once: a refused `MAP_FIXED` never
+    /// leaves the new mapping behind (a driver's partial mapping is undone, `mm/vma.c:2496-2506`).
     pub fn repoint(&self, slots: &[SlotSource]) -> Repointed {
         let mut out = Repointed::default();
         let g = self.granule;
@@ -415,7 +466,10 @@ impl<V: ViewOps> PraminPool<V> {
             out.refused += 1;
             return out;
         };
-        let mut fresh = Vec::new();
+        let mut fresh: Vec<LiveView<V::View>> = Vec::new();
+        let mut doomed: Vec<V::View> = Vec::new();
+        // Window ranges this re-point placed something over successfully, in ascending order.
+        let mut landed: Vec<(u64, u64)> = Vec::new();
         for run in runs(slots, g) {
             let (first, n) = match run {
                 Run::Store { first, n, .. }
@@ -424,7 +478,8 @@ impl<V: ViewOps> PraminPool<V> {
             };
             let (at, len) = (first as u64 * g, n as u64 * g);
             let n32 = u32::try_from(n).unwrap_or(u32::MAX);
-            let r = match run {
+            // `placed_ok`: whether the window range now shows what this run put there.
+            let (placed_ok, r) = match run {
                 Run::Store { off, .. } => {
                     out.maps += 1;
                     let t = std::time::Instant::now();
@@ -435,43 +490,62 @@ impl<V: ViewOps> PraminPool<V> {
                         Ok(v) => {
                             out.mmaps += 1;
                             let t = std::time::Instant::now();
-                            let r = self.ops.place_view(at, len, &v).map(|()| out.views += n32);
+                            let r = self.ops.place_view(at, len, &v);
                             self.worst_mmap_ns
                                 .fetch_max(elapsed_ns(t), Ordering::Relaxed);
-                            fresh.push(v);
-                            r
+                            if r.is_ok() {
+                                out.views += n32;
+                                fresh.push(LiveView { at, len, view: v });
+                            } else {
+                                doomed.push(v);
+                            }
+                            (r.is_ok(), r)
                         }
                         Err(e) => {
                             out.missed += n32;
                             out.mmaps += 1;
-                            self.ops.sink(at, len).and(Err(e))
+                            let sunk = self.ops.sink(at, len);
+                            (sunk.is_ok(), sunk.and(Err(e)))
                         }
                     }
                 }
                 Run::Ram { gpa, .. } => {
                     out.mmaps += 1;
-                    match (self.ram_offset)(gpa, len) {
+                    let r = match (self.ram_offset)(gpa, len) {
                         Some(foff) => self.ops.place_ram(at, len, foff).map(|()| out.ram += n32),
                         None => {
                             out.missed += n32;
                             self.ops.sink(at, len)
                         }
-                    }
+                    };
+                    (r.is_ok(), r)
                 }
                 Run::Nothing { .. } => {
                     out.missed += n32;
                     out.mmaps += 1;
-                    self.ops.sink(at, len)
+                    let r = self.ops.sink(at, len);
+                    (r.is_ok(), r)
                 }
             };
+            if placed_ok {
+                landed.push((at, len));
+            }
             if r.is_err() {
                 out.refused += 1;
             }
         }
-        let old = std::mem::replace(&mut *placed, fresh);
+        for old in std::mem::take(&mut *placed) {
+            if covered_by(&landed, old.at, old.len) {
+                // Every page it was placed over now shows something else: unreachable.
+                doomed.push(old.view);
+            } else {
+                out.kept += 1;
+                fresh.push(old);
+            }
+        }
+        *placed = fresh;
         drop(placed);
-        // Every old view was covered by a MAP_FIXED placement above: none is reachable now.
-        for v in old {
+        for v in doomed {
             self.ops.retire(v);
         }
         self.repoints.fetch_add(1, Ordering::Relaxed);
@@ -479,6 +553,7 @@ impl<V: ViewOps> PraminPool<V> {
             .fetch_add(u64::from(out.missed), Ordering::Relaxed);
         self.refused
             .fetch_add(u64::from(out.refused), Ordering::Relaxed);
+        self.kept.fetch_add(u64::from(out.kept), Ordering::Relaxed);
         self.maps.fetch_add(u64::from(out.maps), Ordering::Relaxed);
         self.mmaps
             .fetch_add(u64::from(out.mmaps), Ordering::Relaxed);
@@ -490,6 +565,7 @@ impl<V: ViewOps> PraminPool<V> {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     enum Op {
@@ -505,7 +581,28 @@ mod tests {
     struct Rec {
         ops: Mutex<Vec<Op>>,
         refuse_arm_at: Option<u64>,
-        refuse_place: bool,
+        refuse_place: AtomicBool,
+        refuse_sink: AtomicBool,
+    }
+
+    impl Rec {
+        fn refusing_place() -> Rec {
+            Rec {
+                refuse_place: AtomicBool::new(true),
+                ..Rec::default()
+            }
+        }
+        fn releases(&self) -> Vec<u64> {
+            self.ops
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|o| match o {
+                    Op::Release(v) => Some(*v),
+                    _ => None,
+                })
+                .collect()
+        }
     }
 
     impl ViewOps for &Rec {
@@ -518,8 +615,8 @@ mod tests {
             Ok(off)
         }
         fn place_view(&self, at: u64, len: u64, v: &u64) -> Result<(), String> {
-            if self.refuse_place {
-                return Err("EINVAL (fake)".into());
+            if self.refuse_place.load(Ordering::Relaxed) {
+                return Err("ENOMEM (fake)".into());
             }
             self.ops.lock().unwrap().push(Op::View(at, len, *v));
             Ok(())
@@ -529,6 +626,9 @@ mod tests {
             Ok(())
         }
         fn sink(&self, at: u64, len: u64) -> Result<(), String> {
+            if self.refuse_sink.load(Ordering::Relaxed) {
+                return Err("ENOMEM (fake sink)".into());
+            }
             self.ops.lock().unwrap().push(Op::Sink(at, len));
             Ok(())
         }
@@ -614,10 +714,7 @@ mod tests {
         );
         assert!(w.unmap(0, true).unwrap_err().contains("no placement"));
         assert_eq!(w.stats().refused, 3);
-        let r2 = Rec {
-            refuse_place: true,
-            ..Rec::default()
-        };
+        let r2 = Rec::refusing_place();
         let w2 = CpuWindow::new(&r2, 0x10_0000);
         assert!(w2.map(&d(0, 0x7000, 0x1000, false), true).is_err());
         assert_eq!(
@@ -671,7 +768,8 @@ mod tests {
                 missed: 0,
                 refused: 0,
                 maps: 1,
-                mmaps: 1
+                mmaps: 1,
+                kept: 0
             }
         );
         assert_eq!(
@@ -741,7 +839,8 @@ mod tests {
                 missed: 1,
                 refused: 0,
                 maps: 1,
-                mmaps: 3
+                mmaps: 3,
+                kept: 0
             }
         );
         assert_eq!(
@@ -766,5 +865,111 @@ mod tests {
         let out = pool.repoint(&[SlotSource::Store(0x2_0000), SlotSource::Store(0x3_0000)]);
         assert_eq!((out.missed, out.refused, out.maps), (2, 1, 1));
         assert_eq!(*r.ops.lock().unwrap(), vec![Op::Sink(0, 2 * g)]);
+    }
+
+    /// The 16 slots of a store window at `base`.
+    fn store_at(base: u64, g: u64) -> Vec<SlotSource> {
+        (0..16).map(|i| SlotSource::Store(base + i * g)).collect()
+    }
+
+    /// ★★★ 2026-10-03 (review finding 2): a refused PLACEMENT must not retire the view it was
+    /// meant to replace. The refused `MAP_FIXED` can leave the old view mapped, and retiring it
+    /// hands its host BAR1 aperture back while the guest can still reach it. Before the fix the
+    /// second re-point released `0x10_0000` at once.
+    #[test]
+    fn a_refused_placement_keeps_the_view_it_did_not_cover() {
+        let r = Rec::default();
+        let g = 0x1_0000;
+        let pool = PraminPool::new(&r, g, Box::new(|_, _| None));
+        pool.repoint(&store_at(0x10_0000, g));
+        r.refuse_place.store(true, Ordering::Relaxed);
+        let out = pool.repoint(&store_at(0x40_0000, g));
+        assert_eq!(
+            r.releases(),
+            vec![0x40_0000],
+            "only the NEW view, whose own placement was refused, may go: it was never mapped"
+        );
+        assert_eq!((out.refused, out.kept, out.views), (1, 1, 0));
+        r.refuse_place.store(false, Ordering::Relaxed);
+        let out = pool.repoint(&store_at(0x70_0000, g));
+        assert_eq!((out.refused, out.kept, out.views), (0, 0, 16));
+        assert_eq!(
+            r.releases(),
+            vec![0x40_0000, 0x10_0000],
+            "the kept view goes once a placement covers its whole range"
+        );
+        assert_eq!(pool.kept.load(Ordering::Relaxed), 1);
+    }
+
+    /// ★★ The same rule for a refused SINK (a target with nothing addressable behind it).
+    #[test]
+    fn a_refused_sink_keeps_the_view_it_did_not_cover() {
+        let r = Rec::default();
+        let g = 0x1_0000;
+        let pool = PraminPool::new(&r, g, Box::new(|_, _| None));
+        pool.repoint(&store_at(0x10_0000, g));
+        r.refuse_sink.store(true, Ordering::Relaxed);
+        let out = pool.repoint(&[SlotSource::Nothing; 16]);
+        assert!(r.releases().is_empty(), "the old view is still reachable");
+        assert_eq!((out.refused, out.kept, out.missed), (1, 1, 16));
+        r.refuse_sink.store(false, Ordering::Relaxed);
+        let out = pool.repoint(&[SlotSource::Nothing; 16]);
+        assert_eq!((out.refused, out.kept), (0, 0));
+        assert_eq!(r.releases(), vec![0x10_0000]);
+    }
+
+    /// ★★ Partly covered is not covered: a move whose first half lands and whose second half is
+    /// refused keeps the old view (the guest still reaches its second half), and retires it with
+    /// the half-placed view's successor once a later move covers both.
+    #[test]
+    fn a_view_covered_only_in_part_is_kept() {
+        let r = Rec::default();
+        let g = 0x1_0000;
+        let pool = PraminPool::new(&r, g, Box::new(|_, _| None));
+        pool.repoint(&store_at(0x10_0000, g));
+        r.refuse_sink.store(true, Ordering::Relaxed);
+        let mut half: Vec<SlotSource> = (0..8)
+            .map(|i| SlotSource::Store(0x40_0000 + i * g))
+            .collect();
+        half.extend([SlotSource::Nothing; 8]);
+        let out = pool.repoint(&half);
+        assert!(r.releases().is_empty(), "neither view may go yet");
+        assert_eq!((out.views, out.refused, out.kept), (8, 1, 1));
+        r.refuse_sink.store(false, Ordering::Relaxed);
+        let out = pool.repoint(&store_at(0x70_0000, g));
+        assert_eq!((out.refused, out.kept), (0, 0));
+        let mut gone = r.releases();
+        gone.sort_unstable();
+        assert_eq!(gone, vec![0x10_0000, 0x40_0000]);
+    }
+
+    #[test]
+    fn coverage_is_the_union_of_the_landed_runs() {
+        let g = 0x1_0000;
+        assert!(covered_by(&[(0, 16 * g)], 0, 16 * g));
+        assert!(covered_by(&[(0, 8 * g), (8 * g, 8 * g)], 0, 16 * g));
+        assert!(covered_by(&[(0, 2 * g), (2 * g, g)], g, 2 * g));
+        assert!(
+            !covered_by(&[(0, 8 * g), (9 * g, 7 * g)], 0, 16 * g),
+            "a gap"
+        );
+        assert!(!covered_by(&[(0, 8 * g)], 0, 16 * g), "a short tail");
+        assert!(!covered_by(&[], 0, g));
+        assert!(covered_by(&[(0, 16 * g)], 3 * g, g));
+    }
+
+    /// ★ `CpuWindow` already had the rule the PRAMIN pool lacked: an unmap whose sink is refused
+    /// keeps the placement and its view (the guest may still reach it) and retries later.
+    #[test]
+    fn a_window_unmap_whose_sink_is_refused_keeps_the_view() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 32 << 20);
+        w.map(&d(0x4000, 0x2_0000, 0x1000, false), true).unwrap();
+        r.refuse_sink.store(true, Ordering::Relaxed);
+        assert!(w.unmap(0x4000, true).is_err());
+        assert!(r.releases().is_empty(), "released while still placed");
+        r.refuse_sink.store(false, Ordering::Relaxed);
+        w.unmap(0x4000, true).expect("the retry lands");
+        assert_eq!(r.releases(), vec![0x2_0000]);
     }
 }
