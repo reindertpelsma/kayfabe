@@ -266,6 +266,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-gop-image"
+version = "0.1.0"
+dependencies = [
+ "kf-oprom",
+]
+
+[[package]]
 name = "kf-gsp"
 version = "0.1.0"
 dependencies = [
@@ -319,6 +326,10 @@ dependencies = [
  "kf-host",
  "kf-trap",
 ]
+
+[[package]]
+name = "kf-oprom"
+version = "0.1.0"
 
 [[package]]
 name = "kf-qemu"

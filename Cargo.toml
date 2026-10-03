@@ -1,7 +1,9 @@
 [workspace]
 resolver = "2"
 # The pre-v3 tree lives under archive/ and is deliberately not built (archive/README.md).
-exclude = ["archive"]
+# firmware/ holds guest-side UEFI code: its own workspaces, its own target (x86_64-unknown-uefi),
+# never linked into the VMM (firmware/README.md).
+exclude = ["archive", "firmware"]
 members = [
     "crates/kf-mem",
     "crates/kf-trap",
@@ -21,6 +23,8 @@ members = [
     "crates/kf-chan",
     "crates/kf-cuda",
     "crates/kf-disp",
+    "crates/kf-oprom",
+    "crates/kf-gop-image",
     "crates/kayfabe-doorbell",
     "crates/kayfabe-rm-ladder",
     "crates/kayfabe-util",
@@ -58,6 +62,8 @@ kf-chip = { path = "crates/kf-chip" }
 kf-chan = { path = "crates/kf-chan" }
 kf-cuda = { path = "crates/kf-cuda" }
 kf-disp = { path = "crates/kf-disp" }
+kf-oprom = { path = "crates/kf-oprom" }
+kf-gop-image = { path = "crates/kf-gop-image" }
 kf-mem = { path = "crates/kf-mem" }
 kf-trap = { path = "crates/kf-trap" }
 kf-rm = { path = "crates/kf-rm" }
