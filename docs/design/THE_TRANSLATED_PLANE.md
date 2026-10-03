@@ -199,6 +199,15 @@ The same trick, one level out. UVM's sysmem-side operands are **guest DMA addres
 offsets. ⇒ Map the whole guest memfd as **one `OS_DESCRIPTOR`** at `RAM_VA_BASE`, so a guest
 physical address `g` is `RAM_VA_BASE + g`.
 
+⊘ **Corrected 2026-10-04 (`V3_VIOMMU.md` §2 #8, §3.3):** the window arithmetic above
+(`RAM_VA_BASE + g`) happens only after ONE single-piece resolve of the operand's **device address**
+(`DmaSpace::piece` on `v3-viommu`): the window address is `RAM_VA_BASE` plus that piece's offset in
+the guest-RAM object, never plus the raw operand; an operand that resolves to more than one piece is
+refused by name. Under a translating
+vIOMMU the resolve itself is refused today (the regime gate, §4.3 there), and a translator would
+make it an IOVA-to-GPA lookup — so the sentence below is right that it is "not arithmetic" on the
+raw value, and the design no longer needs it to be.
+
 ⊘ Unmeasured at whole-RAM size, and it pins all guest RAM. ⚠ Under a **vIOMMU** guest the operand
 is an IOVA, not a GPA — **not arithmetic**, and it is a compatibility axis, not a bug.
 

@@ -1157,6 +1157,15 @@ The guest's peer-id space is **ours to define**, because we serve the object tha
 
 ### 9.4 Platform decisions
 
+> ⊘⊘ **SUPERSEDED 2026-10-04 — the first bullet below** (`V3_VIOMMU.md`: STATUS, §1, §3.4, §4). The refusal
+> at realize it describes was **never built**: before `v3-viommu` a guest IOMMU was not refused but
+> **silently misread** (guest IOVAs taken as GPAs). Its reasoning is wrong in a second place too: the
+> walker needs no GPU-side translation, because it never dereferences a sysmem address — the host
+> bounds each one, once (`V3_VIOMMU.md` §3.4). A refusal at realize is also rejected on its merits (it
+> depends on the `-device` order and refuses by presence, not by translation; §4.1 there). Replaced by
+> **refusal at use**, from a DMA regime classified at machine-done (`V3_VIOMMU.md` §4, built on
+> `v3-viommu`), plus a design for support (§3 and §5 there) and owner decisions OD-1 … OD-6.
+
 - ⊘ **A guest IOMMU is detected and refused at device realize.** Every guest-supplied system-memory
   address we consume — message rings, page-table entries, cursors, semaphores, and the walker's own
   reads — resolves through a guest-physical-keyed layout, i.e. **bypasses a guest IOMMU by
