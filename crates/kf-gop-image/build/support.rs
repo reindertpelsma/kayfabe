@@ -83,3 +83,56 @@ pub fn missing_target_message(triple: &str, sysroot: &Path, toolchain: Option<&s
         sysroot.display()
     )
 }
+
+/// ★ The version `lock` (a `Cargo.lock`'s text) records for `package`, if it records it once.
+/// ⊘ Added 2026-10-03 (the review of `v3-gop`): the nested build runs `--locked` against
+/// `firmware/kf-gop/Cargo.lock`, which pins the path dependency `kf-oprom` at the version it had
+/// when the lock was written; `kf-oprom` takes its version from the root `[workspace.package]`, so
+/// a version bump (a release stamp) made the lock stale and the nested build failed, with only the
+/// missing-target hint to go on. [`stale_lock_message`] names it instead.
+#[must_use]
+pub fn locked_version<'a>(lock: &'a str, package: &str) -> Option<&'a str> {
+    let mut found = None;
+    let mut lines = lock.lines();
+    while let Some(l) = lines.next() {
+        if l.trim() != "[[package]]" {
+            continue;
+        }
+        let mut name = None;
+        let mut version = None;
+        for f in lines.by_ref() {
+            let f = f.trim();
+            if f.is_empty() {
+                break;
+            }
+            if let Some(v) = f.strip_prefix("name = ") {
+                name = Some(v.trim_matches('"'));
+            } else if let Some(v) = f.strip_prefix("version = ") {
+                version = Some(v.trim_matches('"'));
+            }
+        }
+        if name == Some(package) {
+            if found.is_some() {
+                return None;
+            }
+            found = version;
+        }
+    }
+    found
+}
+
+/// ★ The named build error for a `firmware/kf-gop/Cargo.lock` that records `kf-oprom` at another
+/// version than the workspace's — said before the `--locked` nested build fails on it.
+#[must_use]
+pub fn stale_lock_message(locked: Option<&str>, workspace: &str) -> String {
+    format!(
+        "kf-gop-image: firmware/kf-gop/Cargo.lock records kf-oprom at {} but the workspace version \
+         (kf-oprom's, from the root Cargo.toml's [workspace.package]) is {workspace}; the nested \
+         firmware build runs --locked and never rewrites the lock. Update it and commit it:\n    \
+         cargo update --manifest-path firmware/kf-gop/Cargo.toml -p kf-oprom",
+        locked.map_or_else(
+            || "no single version".to_string(),
+            |v| format!("version {v}")
+        )
+    )
+}

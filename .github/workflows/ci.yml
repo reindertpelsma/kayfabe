@@ -1962,10 +1962,27 @@ jobs:
       # the source tree fails here — the committed kf-gop.efi this repository carried until 2026-10-03
       # is the instance this guards against.
       - name: No compiled binary is committed (OWNER_RULINGS §K)
+        # ⊘ WIDENED 2026-10-03 (the review of v3-gop): this flagged only a `.efi` suffix or an `MZ`
+        # header, so an ELF, a packed option ROM (55 AA — exactly what `kf-oprom pack` emits), an
+        # object or an archive passed. §K says no compiled binary at all: every header below, and the
+        # suffixes of build output, outside archive/.
         run: |
           python3 - <<'EOF'
           import subprocess, sys
           files = subprocess.run(["git", "ls-files", "-z"], capture_output=True, check=True).stdout.split(b"\0")
+          SUFFIXES = (".efi", ".rom", ".o", ".a", ".so", ".rlib", ".rmeta", ".dll", ".exe", ".dylib",
+                      ".obj", ".lib", ".pdb", ".wasm", ".fd", ".ko", ".elf")
+          MAGIC = {
+              b"MZ": "PE/COFF (MZ)",
+              b"\x7fELF": "ELF",
+              b"\x55\xaa": "PCI option ROM (55 AA)",
+              b"!<arch>\n": "ar archive (.a / .rlib)",
+              b"\xcf\xfa\xed\xfe": "Mach-O",
+              b"\xce\xfa\xed\xfe": "Mach-O",
+              b"\xfe\xed\xfa\xcf": "Mach-O",
+              b"\xca\xfe\xba\xbe": "Mach-O fat / Java class",
+              b"\x00asm": "WebAssembly",
+          }
           bad = []
           for f in filter(None, files):
               name = f.decode()
@@ -1973,11 +1990,14 @@ jobs:
                   continue
               try:
                   with open(f, "rb") as h:
-                      head = h.read(2)
+                      head = h.read(8)
               except (IsADirectoryError, FileNotFoundError):
                   continue
-              if name.lower().endswith(".efi") or head == b"MZ":
-                  bad.append(name)
+              why = [w for m, w in MAGIC.items() if head.startswith(m)]
+              if name.lower().endswith(SUFFIXES):
+                  why.append("suffix ." + name.rsplit(".", 1)[-1])
+              if why:
+                  bad.append(f"{name} ({', '.join(why)})")
           for b in bad:
               print(f"★ tracked compiled binary: {b}")
           print(f"tracked files checked: {sum(1 for f in files if f)}; compiled binaries: {len(bad)}")

@@ -44,7 +44,10 @@ mod support;
 
 #[cfg(test)]
 mod tests {
-    use super::support::{NESTED, has_target, inherited, missing_target_message, uefi_target};
+    use super::support::{
+        NESTED, has_target, inherited, locked_version, missing_target_message, stale_lock_message,
+        uefi_target,
+    };
 
     /// §K: the driver is built for the arch kayfabe is built for, and only an arch a ROM can name.
     #[test]
@@ -127,5 +130,53 @@ mod tests {
             "{msg}"
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// ★ 2026-10-03 (the review of `v3-gop`): the nested build is `--locked` against the
+    /// firmware's own lock, which pins kf-oprom — a path dependency whose version is the
+    /// workspace's (`crates/kf-oprom/Cargo.toml`: `version.workspace = true`, as this crate's). A
+    /// version bump without `cargo update --manifest-path firmware/kf-gop/Cargo.toml -p kf-oprom`
+    /// fails HERE, by name, instead of as an opaque nested `--locked` error.
+    #[test]
+    fn the_firmware_lock_pins_kf_oprom_at_the_workspace_version() {
+        let lock = include_str!("../../../firmware/kf-gop/Cargo.lock");
+        let oprom = include_str!("../../kf-oprom/Cargo.toml");
+        assert!(
+            oprom
+                .lines()
+                .any(|l| l.trim() == "version.workspace = true"),
+            "kf-oprom's version is the workspace's, so this crate's version is the one to compare"
+        );
+        let locked = locked_version(lock, "kf-oprom");
+        assert_eq!(
+            locked,
+            Some(env!("CARGO_PKG_VERSION")),
+            "{}",
+            stale_lock_message(locked, env!("CARGO_PKG_VERSION"))
+        );
+    }
+
+    #[test]
+    fn a_lock_is_read_per_package_and_a_stale_one_is_named_with_its_fix() {
+        let lock = "version = 4\n\n[[package]]\nname = \"kf-gop\"\nversion = \"0.1.0\"\n\n\
+                    [[package]]\nname = \"kf-oprom\"\nversion = \"0.1.0\"\n";
+        assert_eq!(locked_version(lock, "kf-oprom"), Some("0.1.0"));
+        assert_eq!(locked_version(lock, "kf-gop"), Some("0.1.0"));
+        assert_eq!(locked_version(lock, "absent"), None);
+        let twice = format!("{lock}\n[[package]]\nname = \"kf-oprom\"\nversion = \"0.2.0\"\n");
+        assert_eq!(
+            locked_version(&twice, "kf-oprom"),
+            None,
+            "two versions: no single one"
+        );
+        let msg = stale_lock_message(Some("0.1.0"), "0.2.0");
+        assert!(
+            msg.contains("version 0.1.0")
+                && msg.contains("is 0.2.0")
+                && msg.ends_with(
+                    "cargo update --manifest-path firmware/kf-gop/Cargo.toml -p kf-oprom"
+                ),
+            "{msg}"
+        );
     }
 }

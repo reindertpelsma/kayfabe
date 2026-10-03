@@ -270,12 +270,15 @@ mod tests {
     fn a_later_trigger_re_baselines_one_already_due() {
         let w = one_life();
         let mut due = PhysicalViewDue::default();
-        assert!(due.notice(1, Some(w.changes() - 1)), "the register write");
         assert!(
-            !due.notice(1, Some(w.changes())),
+            due.notice(1, || Some(w.changes() - 1)),
+            "the register write"
+        );
+        assert!(
+            !due.notice(1, || Some(w.changes())),
             "the same request, seen again"
         );
-        assert!(due.notice(2, Some(w.changes())), "fn 47");
+        assert!(due.notice(2, || Some(w.changes())), "fn 47");
         let at = due.take().expect("due");
         assert_eq!(at, w.changes());
         let line = restore_physical_view(&w, at).expect("a line");

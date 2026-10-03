@@ -98,6 +98,20 @@ fn main() {
         );
     }
 
+    // ★ A stale firmware lock is a named error too (`support::stale_lock_message`): kf-oprom — a path
+    // dependency of the firmware — takes the workspace version, which is this crate's.
+    let lock_path = root.join("firmware").join("kf-gop").join("Cargo.lock");
+    let workspace_version = std::env::var("CARGO_PKG_VERSION").expect("cargo sets the version");
+    if let Ok(lock) = std::fs::read_to_string(&lock_path) {
+        let locked = support::locked_version(&lock, "kf-oprom");
+        if locked != Some(workspace_version.as_str()) {
+            panic!(
+                "{}",
+                support::stale_lock_message(locked, &workspace_version)
+            );
+        }
+    }
+
     let cargo = std::env::var_os("CARGO").expect("cargo sets CARGO");
     let stage = out_dir.join("kf-gop-stage");
     let mut cmd = Command::new(cargo);
@@ -119,7 +133,10 @@ fn main() {
     assert!(
         status.success(),
         "kf-gop-image: the nested build of firmware/kf-gop for {triple} failed (its output is above).\n\
-         If the standard library for {triple} is missing:\n    rustup target add {triple}"
+         If the standard library for {triple} is missing:\n    rustup target add {triple}\n\
+         If it says the lock file needs to be updated but --locked was passed, firmware/kf-gop/Cargo.lock \
+         is stale against the workspace (a version bump, or a new dependency of kf-oprom):\n    \
+         cargo update --manifest-path firmware/kf-gop/Cargo.toml -p kf-oprom"
     );
     let built = stage.join(triple).join("release").join(IMAGE_FILE);
     let bytes = std::fs::read(&built).unwrap_or_else(|e| {
