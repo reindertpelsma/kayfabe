@@ -1,17 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 [package]
 name = "kf-oprom"
-description = "kf3's boot-display option ROM container: the KFGP descriptor, PCI expansion ROM pack (PCIR rev 3, uncompressed EFI image) and parse. Pure, no_std, no unsafe; shared by the VMM (which packs per host) and the guest-side GOP firmware (which reads the descriptor). docs/design/V3_DISPLAY.md §4.11."
+description = "kf3's boot-display option ROM: the embedded GOP driver blob, the KFGP descriptor, PCI expansion ROM pack (PCIR rev 3, uncompressed EFI image) and parse. Pure, no_std, no unsafe; shared by the VMM (which packs per device at realize) and the guest-side GOP firmware (which reads the descriptor). docs/design/V3_DISPLAY.md §4.11."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["alloc"]
+default = ["alloc", "embedded-gop"]
 # `pack` and `parse` return owned buffers. The GOP firmware (firmware/kf-gop) depends on this crate
 # with `default-features = false`: it only decodes a descriptor out of a ROM it was handed, and it
 # has no allocator.
 alloc = []
+# `KF_GOP_EFI`: the committed release build of firmware/kf-gop, embedded (owner, 2026-10-03: the GOP
+# is one constant blob inside kayfabe, like the PTX kernels). Off for the firmware itself.
+embedded-gop = []
 
 [[bin]]
 name = "kf-oprom"

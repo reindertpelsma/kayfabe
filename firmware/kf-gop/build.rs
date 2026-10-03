@@ -10,5 +10,11 @@ fn main() {
     println!("cargo::rerun-if-changed=build.rs");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("uefi") {
         println!("cargo::rustc-link-arg-bin=kf-gop=/subsystem:efi_boot_service_driver");
+        // Reproducible output: the PE timestamp becomes a hash of the image instead of the build
+        // time, so the committed `kf-gop.efi` can be checked byte for byte against a rebuild.
+        println!("cargo::rustc-link-arg-bins=/Brepro");
+        // No debug directory either: it would name a `.pdb` whose file name carries cargo's per-path
+        // metadata hash, so the bytes would depend on where the tree was checked out.
+        println!("cargo::rustc-link-arg-bins=/DEBUG:NONE");
     }
 }

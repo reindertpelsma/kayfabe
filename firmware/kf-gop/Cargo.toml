@@ -58,6 +58,9 @@ lto = true
 codegen-units = 1
 panic = "abort"
 debug = false
+# No debug directory: it names a `.pdb` whose file name carries cargo's per-path metadata hash, which
+# would make the committed blob depend on where it was built.
+strip = true
 
 [profile.dev]
 panic = "abort"

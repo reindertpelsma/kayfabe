@@ -1912,6 +1912,25 @@ jobs:
           cargo build --locked --release --target x86_64-unknown-uefi --manifest-path firmware/kf-gop/Cargo.toml
           cargo build --locked --release --target x86_64-unknown-uefi --features debugcon \
             --manifest-path firmware/kf-gop/Cargo.toml --target-dir firmware/kf-gop/target/debugcon
+      # ★ Owner, 2026-10-03: the GOP is one constant blob inside kayfabe, like the PTX kernels — the
+      # release build is committed as firmware/kf-gop/kf-gop.efi and `kf-oprom` embeds it with
+      # include_bytes!. This step is what keeps the blob honest: it must be THIS source's build, byte
+      # for byte. Nothing is normalised, because nothing needs to be: build.rs links with /Brepro (the
+      # PE timestamp is a hash of the image) and /DEBUG:NONE (no debug directory, whose .pdb name would
+      # carry cargo's per-path metadata hash).
+      - name: The committed kf-gop.efi is this source's build, byte for byte
+        run: |
+          built=firmware/kf-gop/target/x86_64-unknown-uefi/release/kf-gop.efi
+          if ! cmp firmware/kf-gop/kf-gop.efi "$built"; then
+            echo "★ firmware/kf-gop/kf-gop.efi (the blob kf-oprom embeds) is not the build of this tree."
+            echo "  committed sha256 $(sha256sum < firmware/kf-gop/kf-gop.efi | cut -c1-64)"
+            echo "  built     sha256 $(sha256sum < "$built" | cut -c1-64)"
+            echo "Rebuild it with the pinned toolchain and commit the result:"
+            echo "  cargo build --release --target x86_64-unknown-uefi --manifest-path firmware/kf-gop/Cargo.toml"
+            echo "  cp $built firmware/kf-gop/kf-gop.efi"
+            exit 1
+          fi
+          echo "kf-gop.efi reproduced: $(sha256sum < "$built" | cut -c1-64)"
       - name: Host tests of the firmware's safe library
         run: cargo test --locked --lib --target x86_64-unknown-linux-gnu --manifest-path firmware/kf-gop/Cargo.toml
       - name: Clippy (warnings are errors) and rustfmt, both build flavours
@@ -1928,13 +1947,13 @@ jobs:
       - name: kf3 accepts the release driver; record its size
         run: |
           set -euo pipefail
-          efi=firmware/kf-gop/target/x86_64-unknown-uefi/release/kf-gop.efi
+          efi=firmware/kf-gop/kf-gop.efi   # the committed blob (== the build, step above)
           cargo run -q --locked -p kf-oprom --bin kf-oprom -- pe "$efi" | tee pe.txt
           cargo run -q --locked -p kf-oprom --bin kf-oprom -- pe firmware/kf-gop/target/debugcon/x86_64-unknown-uefi/release/kf-gop.efi
           io=$(objdump -d "$efi" | grep -cE '\s(in|out)\s' || true)
           if [ "$io" -ne 0 ]; then echo "★ the release driver contains $io port I/O instruction(s)"; exit 1; fi
           {
-            echo "### kf-gop.efi (release)"
+            echo "### kf-gop.efi (release; the blob kf-oprom embeds)"
             echo "- bytes: $(stat -c %s "$efi")"
             echo "- sha256: \`$(sha256sum "$efi" | cut -c1-64)\`"
             echo "- \`$(head -1 pe.txt)\`"
