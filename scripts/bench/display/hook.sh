@@ -227,6 +227,49 @@ if [ "${DISPLAY_X11_BARE:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]
     gq 'sudo pkill -x Xorg; echo ok' 30 > /dev/null
 fi
 
+# 4c. ★ x11-dispsw classID probe (DISPLAY_X11_ENGSW=1; docs/design/V3_DISPLAY.md, the x11-dispsw
+#     "review fixes" block): the same bare Xorg + vsync glxgears + X11 vkcube FIFO as 4a, every
+#     process under `engsw_shim` (a bench-only LD_PRELOAD built HERE, in the guest, from
+#     engsw_shim/engsw_shim.c; the .so never leaves the guest). Before each GF100_DISP_SW alloc the
+#     shim allocates a GF100_TIMED_SEMAPHORE_SW under the same channel: the guest's RM numbers it,
+#     kayfabe refuses it, so every display-SW object's guest number is one past a naive twin's. With
+#     the fix the twin is repaid to the guest's number (kf3 log: `took the guest's software classID`,
+#     `= the guest's (the twin was at`); without it the twin carries the naive number.
+if [ "${DISPLAY_X11_ENGSW:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
+    gq 'sudo systemctl stop lightdm 2>/dev/null; sleep 2; sudo pkill -x Xorg 2>/dev/null; sleep 2; echo ok' 60 > /dev/null
+    e0=$(gq 'sudo dmesg | wc -l'); e0=${e0:-0}
+    timeout 30 "$G" 'cat > /tmp/engsw_shim.c' < "$HERE/engsw_shim/engsw_shim.c"
+    gq 'gcc -shared -fPIC -O2 -o /tmp/engsw_shim.so /tmp/engsw_shim.c -ldl && echo BUILT' 90 > "$OUT/engsw_build.log"
+    say "X11_ENGSW_BUILD $(tr '\n' ' ' < "$OUT/engsw_build.log" | head -c 200)"
+    # ENGSW_MODE: `9074` (default — a refused ENG_SW class first, case (b)) or `badhead` (a
+    # display-SW constructor that fails after numbering, case (a)); see engsw_shim.c.
+    SH="LD_PRELOAD=/tmp/engsw_shim.so ENGSW_MODE=${DISPLAY_X11_ENGSW_MODE:-9074}"
+    say "X11_ENGSW_MODE ${DISPLAY_X11_ENGSW_MODE:-9074}"
+    gq "sudo sh -c '$SH nohup Xorg :0 -nolisten tcp -noreset -ac -logfile /var/log/Xorg.8.log > /tmp/xengsw.log 2>&1 &' && echo started" 30 > "$OUT/engsw_start.log"
+    BX='sudo -u ubuntu env DISPLAY=:0'
+    up=no
+    for i in $(seq 1 30); do
+        if gq "$BX xset q >/dev/null 2>&1 && echo UP" | grep -q UP; then up=yes; break; fi
+        sleep 2
+    done
+    say "X11_ENGSW up=$up $(tr '\n' ' ' < "$OUT/engsw_start.log")"
+    gq "$BX $SH timeout 12 glxgears 2>&1 | grep -E 'ENGSW_SHIM|frames in'" 30 > "$OUT/engsw_glxgears.log"
+    say "X11_ENGSW_GLXGEARS $(grep 'frames in' "$OUT/engsw_glxgears.log" | tail -2 | tr '\n' ' ')"
+    ( gq "$BX $SH timeout 12 vkcube --c 480 --present_mode 2 2>&1 | grep -E 'ENGSW_SHIM|Selected|Assertion'; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/engsw_vkcube.log" ) &
+    VP=$!; sleep 6; shot "$OUT/engsw_vkcube.ppm"; wait $VP
+    say "X11_ENGSW_VKCUBE_FIFO $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/engsw_vkcube.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/engsw_vkcube.log")"
+    gq 'cat /tmp/xengsw.log' 30 > "$OUT/engsw_xorg_stderr.log"
+    gq 'sudo cat /var/log/Xorg.8.log' 30 > "$OUT/engsw_Xorg.log"
+    for f in engsw_xorg_stderr engsw_glxgears engsw_vkcube; do
+        say "X11_ENGSW_SHIM $f pre=$(grep -c 'ENGSW_SHIM pre ' "$OUT/$f.log") pre_ok=$(grep 'ENGSW_SHIM pre ' "$OUT/$f.log" | grep -c 'status=0$') disp_sw=$(grep -c 'ENGSW_SHIM 0x9072' "$OUT/$f.log") disp_sw_ok=$(grep 'ENGSW_SHIM 0x9072' "$OUT/$f.log" | grep -c 'status=0$')"
+    done
+    say "X11_ENGSW_XORG EE=$(grep '(EE)' "$OUT/engsw_Xorg.log" | grep -vc 'warning, (EE)') $(grep -m1 'display software' "$OUT/engsw_Xorg.log" | cut -c1-120)"
+    gq "sudo dmesg | tail -n +$((e0 + 1)) | grep -i 'xid\|segfault\|traps:\|waiting for GPU' | tail -10" 60 > "$OUT/engsw_dmesg.log"
+    say "X11_ENGSW_GUEST_FAULTS $(grep -c . "$OUT/engsw_dmesg.log")"
+    [ -s "$OUT/engsw_vkcube.ppm" ] && say "SHOT engsw_vkcube md5=$(md5sum < "$OUT/engsw_vkcube.ppm" | cut -c1-12)" || say "SHOT engsw_vkcube absent"
+    gq 'sudo pkill -x Xorg; echo ok' 30 > /dev/null
+fi
+
 # 4b. ★ M3 Cinnamon on Wayland (DISPLAY_CINNAMON_WAYLAND=1): the Mint desktop's own compositor
 #     (muffin) driving KMS directly — no X driver, so no display-SW object — through lightdm's
 #     autologin into the `cinnamon-wayland` session, then a Vulkan client in it; host screendumps
