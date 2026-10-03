@@ -99,28 +99,18 @@ pub unsafe extern "C" fn kf3_realize(
     err: *mut c_char,
     err_len: usize,
 ) -> i32 {
-    let guest = if guest_driver.is_null() {
-        None
-    } else {
-        // SAFETY: the caller promises a NUL-terminated string.
-        Some(
-            unsafe { CStr::from_ptr(guest_driver) }
-                .to_string_lossy()
-                .into_owned(),
-        )
-        .filter(|s| !s.is_empty())
+    // ★ ABI 12: both string arguments through ONE conversion (and one audited block): null or empty
+    // is unset.
+    let text = |p: *const c_char| -> Option<String> {
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: `p` is `guest_driver` or `gop_efi`, each of which the caller promises is null
+        // (returned above) or a NUL-terminated string.
+        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()).filter(|s| !s.is_empty())
     };
-    let gop_efi = if gop_efi.is_null() {
-        None
-    } else {
-        // SAFETY: the caller promises a NUL-terminated string.
-        Some(
-            unsafe { CStr::from_ptr(gop_efi) }
-                .to_string_lossy()
-                .into_owned(),
-        )
-        .filter(|s| !s.is_empty())
-    };
+    let guest = text(guest_driver);
+    let gop_efi = text(gop_efi);
     let cfg = Config {
         gpu_minor,
         fb_mb,
