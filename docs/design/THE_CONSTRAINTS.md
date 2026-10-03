@@ -566,11 +566,19 @@ and the per-client host MMU fault above.
 >
 > - **The mechanism is the effective `CAP_SYS_ADMIN` bit of the thread making the channel-alloc
 >   call.** RM fixes the level from that thread's `capable(CAP_SYS_ADMIN)` at that one ioctl
->   (`ogkm-580: kernel_channel.c:277-291`, `escape.c:304`). `kf_host::HostRm::birth_member`
->   makes the call inside `kf_linux_raw::capability::with_effective_cap_cleared`. That clears the
->   bit from the calling thread's effective set and restores it right after; the permitted set
->   is untouched. If the bit cannot be cleared, the birth is refused before any host call
+>   (`ogkm-580: kernel_channel.c:277-291`, `escape.c:304`). `kf_host::birth::born_user` (called
+>   by `HostRm::birth_member`) makes the call inside
+>   `kf_linux_raw::capability::with_effective_cap_cleared_on`. That clears the bit from the
+>   calling thread's effective set and restores it right after; the permitted set is untouched.
+>   If the bit cannot be cleared, the birth is refused before any host call
 >   (`CAP_BRACKET_REFUSED`).
+> - **The bound.** Every function in kf-host that builds an `NV_ESC_RM_ALLOC` request first calls
+>   `kf_host::birth::admit_alloc_class`, which refuses every GPFIFO channel class (derived from
+>   kf-abi's class table) unless the request carries the token only `born_user` can make
+>   (`CHANNEL_CLASS_OUTSIDE_BIRTH`, `0x4B75`). So the public `raw_alloc` entries cannot create a
+>   channel around the bracket and the reply check. `crates/kf-host/tests/channel_birth_bound.rs`
+>   pins the shape in the source; `src/birth.rs` tests the behaviour against a simulated root
+>   thread on any runner.
 > - **The tripwire is the reply check.** `kf_host::channel::birth_privilege` reads RM's reply
 >   and refuses the birth by name, freeing the channel (`PRIVILEGED_CHANNEL_REFUSED`), when
 >   `NVOS04_FLAGS_PRIVILEGED_CHANNEL` (5:5) is set or the reply's privilege level is not
@@ -593,9 +601,24 @@ and the per-client host MMU fault above.
 > With the bracket skipped (`KF3_NEGCTL_SKIP_CAP_BRACKET=1`), the tripwire refused the first
 > birth on a live `0x000000a0` reply.
 >
-> ⚠ **Scope.** This covers channels kf-host creates, which are the only ones guest work runs
-> on. libcuda's own channels (the walker and display contexts) are created under the VMM's
-> capabilities and are not covered. They run only kayfabe's kernels.
+> ⊘ **CORRECTED later on 2026-10-03 (`v3-sec-nonpriv`, after the branch's adversarial review):
+> libcuda's channels are covered too.** kf-cuda clears `CAP_SYS_ADMIN` from a thread's effective
+> set for the rest of that thread's life before the thread's first CUDA call: at the library
+> load, `cuInit`, `cuCtxCreate` and `cuCtxSetCurrent` (`kf_cuda::posture`). Threads started
+> afterwards, libcuda's own included, inherit the cleared set. kf3 makes realize's CUDA calls on
+> threads of their own (`kf_qemu::device::on_cuda_thread`), so QEMU's own thread keeps its
+> capabilities; the VA-manager and display threads clear the bit for themselves at their first
+> call. The paragraph this replaces read: *"Scope. This covers channels kf-host creates, which
+> are the only ones guest work runs on. libcuda's own channels (the walker and display contexts)
+> are created under the VMM's capabilities and are not covered. They run only kayfabe's
+> kernels."*
+>
+> **The merge bar gates on it.** `scripts/bench/box/birth_census.sh` (run by `merge_check.sh`
+> after a self-test on planted logs) fails unless every suite arm and the gates log at least one
+> `kf-host: channel birth` line, every such line reads `PRIVILEGED_CHANNEL=0 privilege=USER`, no
+> refusal appears, and every arm logs a CUDA thread posture line. `v3_gates.sh` applies the same
+> birth rule to the gates. libcuda's replies are not visible in-process; the box observer
+> `scripts/bench/sec/chan_alloc_observer.c` reads them (`scripts/bench/sec/libcuda_channel_census.sh`).
 
 > ### ⊘⊘⊘ CORRECTED w748 — **30's PREMISE NAMES THE WRONG QUANTITY, AND ITS DEMANDED ASSERT
 > ### ALREADY EXISTS IN DATA WE RECEIVE.** Read this before the text below.

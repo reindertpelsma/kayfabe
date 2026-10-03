@@ -26,7 +26,8 @@ The bench runs QEMU as root, so before this change every channel kf3 created was
 ## The mechanism and the tripwire
 
 - **The mechanism: clear one bit for one call.** kf-host's `birth_member` makes the
-  channel-alloc ioctl inside `kf_linux_raw::capability::with_effective_cap_cleared`. That clears
+  channel-alloc ioctl inside `kf_linux_raw::capability::with_effective_cap_cleared` (since the
+  review: through `kf_host::birth::born_user`, the only path a channel class may take). That clears
   `CAP_SYS_ADMIN` from the calling thread's *effective* set, makes the call, and restores the
   set. The bit stays in the permitted set. The VMM's privileges, user and threads are otherwise
   unchanged; sandboxing the VMM is not kayfabe's job (owner, 2026-10-03). If the bit cannot be
@@ -59,8 +60,8 @@ The bench runs QEMU as root, so before this change every channel kf3 created was
 | `privprobe.py`, `privprobe_root.log` | (no kf3) | As root, root clients of class `NV01_ROOT`, `NV01_ROOT_NON_PRIV` and `NV01_ROOT_CLIENT` all come back as class `0x41`. All three report `GET_PRIVILEGED_STATUS` (`0x135`) = `0x5`: admin under `rmclientIsAdmin`. With `CAP_SYS_ADMIN` cleared from the calling thread's effective set, every client, including ones created as admin, reports `0x0`. Restoring the bit brings back `0x5`. The decision is per call and per thread. |
 | `before_measure_root_run.log`, `before_measure_root_qemu_sec_p0.log` | `3e0f6dee` (branch `v3-sec-p0`) | **BEFORE.** Copied from `traces/v3_security/p0_20261003/` in that branch's worktree (`measure_root_*`). `--probe-launch-dma` with QEMU as root: 6 channel births, all with reply flags `0x004000a0` and `PRIVILEGED_CHANNEL=1`. That branch also asked for bit 22 and ran with its own diagnostic override; only its readback is reused here. |
 | `after_run.sh` | — | Wrapper for the two runs below. It records the QEMU process's uid and capabilities, then runs `run_fast_guest.sh` with `KF_ARMS=--probe-launch-dma`, budget 180 s. |
-| `after_root_run.log`, `after_root_qemu.log` | `dc64b22b` | **AFTER.** Same arm, QEMU as root: the same 6 births (engines `0xb, 0xb, 0x9, 0x1, 0x9, 0x9`). Every reply reads `0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call`. `FAST_VERDICT=PASS`. |
-| `negctl_root_run.log`, `negctl_root_qemu.log` | `dc64b22b` | **Negative control.** `KF3_NEGCTL_SKIP_CAP_BRACKET=1` skips the bracket. RM's reply to the first birth is `0x000000a0` (bit 5 set). The tripwire refuses it by name and frees the channel, and the guest's client then fails (`FAST_VERDICT=FAIL`). This is the expected result: it shows the check reports a set bit from a live reply. The knob can only make births fail. |
+| `after_root_run.log`, `after_root_qemu.log` | `dc64b22b` | **AFTER.** The same arm, QEMU as root. ⊘ CORRECTED 2026-10-03 (adversarial review): "same arm" hid a difference. `after_run.sh` sets `KF_ARMS=--probe-launch-dma`, and `run_fast_guest.sh` appends the probe token again, so this run's arm list is `--probe-launch-dma,--probe-launch-dma` (the log's `== arms:` line), where BEFORE ran it once. The births match: the same 6 (engines `0xb, 0xb, 0x9, 0x1, 0x9, 0x9`). Every reply reads `0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call`. `FAST_VERDICT=PASS`. |
+| `negctl_root_run.log`, `negctl_root_qemu.log` | `dc64b22b` | **Negative control** (arm list `--probe-launch-dma,--probe-launch-dma`, as AFTER). `KF3_NEGCTL_SKIP_CAP_BRACKET=1` skips the bracket. RM's reply to the first birth is `0x000000a0` (bit 5 set). The tripwire refuses it by name and frees the channel, and the guest's client then fails (`FAST_VERDICT=FAIL`). This is the expected result: it shows the check reports a set bit from a live reply. The knob can only make births fail. |
 
 **Merge bar** at `55743ecd` (`merge_bar/README.md`), run as root with QEMU started the bench's
 usual way:
@@ -75,10 +76,12 @@ was refused.
 
 ## What this does not cover
 
-- **libcuda-owned channels.** The walker (C2) and display (C3) libcuda contexts create their own
-  channels on threads that hold the VMM's capabilities. This bracket and tripwire do not cover
-  them. They run only kayfabe-authored kernels on store offsets that are bounded in code. No
-  guest pushbuffer reaches them.
+- ⊘ **CORRECTED later on 2026-10-03: libcuda-owned channels are now covered** (see
+  `../libcuda_20261003/`). This entry read: *"The walker (C2) and display (C3) libcuda contexts
+  create their own channels on threads that hold the VMM's capabilities. This bracket and
+  tripwire do not cover them."* kf-cuda now clears `CAP_SYS_ADMIN` from each thread's effective
+  set for its life before the thread's first CUDA call (`kf_cuda::posture`), and kf3 runs
+  realize's CUDA calls on threads of their own.
 - **Other open findings from the same 2026-10-03 audit.** These are separate tasks and are not
   addressed here:
   - the identity windows mapped into user twin address spaces;

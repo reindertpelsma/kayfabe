@@ -78,7 +78,12 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF
   read-write with `qemu-nbd` and run `e2fsck -p` on the root AND /boot partitions, then rebuild. Never
   promote on a suite that ran a stale initrd when the raw-client crates changed.
 - A merge to master needs `TESTS … failed 0`, `V3_GATES_SUMMARY pass=9`, `KF3_RC=0`,
-  `FAST_SUITE_PASS=30` on the **exact revision** promoted (docs-only commits on top are fine; say so).
+  `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
+  top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,
+  `<tag>_births.log`) means every channel the suite and the gates birthed read
+  `PRIVILEGED_CHANNEL=0 privilege=USER` and every arm logged at least one birth and one CUDA thread
+  posture line (`docs/design/THE_CONSTRAINTS.md` §30); `v3_gates.sh` now fails a gate run with no
+  birth line or a non-USER one (`V3_GATES_BIRTHS … ok=0`).
 - *[2026-09-27]* A `REBOOT_NEEDED` line in `prov.log` means an unattended upgrade installed a kernel
   newer than the running one: the host driver this run built will not survive a reboot. Either do not
   reboot that box, or reboot it and provision again.

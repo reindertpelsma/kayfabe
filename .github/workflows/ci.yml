@@ -203,6 +203,56 @@ jobs:
           if [ "$ran" -gt 0 ]; then
             echo "This runner permits namespaces: $ran gated tests actually executed."
           fi
+      # ★★★ CAP-gate — the LIVE capability tests (`live_cap_*`: kf-linux-raw's bracket and
+      # thread-life clear, kf-host's channel birth, kf-cuda's CUDA-thread posture;
+      # docs/design/THE_CONSTRAINTS.md §30). The runner user holds no capability (`CapEff=0`), so in
+      # the test step above they take the not-held path and assert almost nothing: each one says so
+      # with `CAP-GATE: VACUOUS`. ⊘ That green is not coverage. The logic itself is covered on any
+      # runner by the simulated-thread tests beside them; what only root can show is the real
+      # capget/capset. So this step (1) checks the unprivileged run REACHED all of them, then (2)
+      # builds the three crates' lib test binaries as the runner user and runs only `live_cap_` as
+      # ROOT (the runner has passwordless sudo), where every one must print `CAP-GATE: RAN` and none
+      # `VACUOUS`. Floors, not exact counts: the set may grow.
+      - name: CAP-gate — the live capability tests, reached unprivileged and run as root
+        run: |
+          set -euo pipefail
+          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
+          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
+            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing, empty or" \
+                 "unterminated, so this step reports nothing about the tree."
+            exit 2
+          fi
+          ran_u=$(grep -o 'CAP-GATE: RAN' "$log" | wc -l)
+          vac_u=$(grep -o 'CAP-GATE: VACUOUS' "$log" | wc -l)
+          echo "CAP-gate, runner user: ran=$ran_u vacuous=$vac_u (reached floor 6)"
+          if [ $((ran_u + vac_u)) -lt 6 ]; then
+            echo "::error::the live capability tests were not reached: $((ran_u + vac_u)) < 6"
+            exit 1
+          fi
+          mapfile -t exes < <(cargo test -q -p kf-linux-raw -p kf-host -p kf-cuda --lib --no-run \
+              --message-format=json | python3 -c 'import json,sys
+          for l in sys.stdin:
+              j = json.loads(l)
+              if j.get("reason") == "compiler-artifact" and j.get("profile", {}).get("test") and j.get("executable"):
+                  print(j["executable"])')
+          if [ "${#exes[@]}" -ne 3 ]; then
+            echo "::error::expected 3 lib test binaries (kf-linux-raw, kf-host, kf-cuda), got ${#exes[@]}"
+            exit 1
+          fi
+          rootlog="$RUNNER_TEMP/cap-gate-root.log"
+          : > "$rootlog"
+          sudo grep -E '^(Uid|CapEff)' /proc/self/status
+          for e in "${exes[@]}"; do
+            sudo "$e" live_cap_ --test-threads=1 2>&1 | tee -a "$rootlog"
+          done
+          ran=$(grep -o 'CAP-GATE: RAN' "$rootlog" | wc -l)
+          vac=$(grep -o 'CAP-GATE: VACUOUS' "$rootlog" | wc -l)
+          echo "CAP-gate, root: ran=$ran vacuous=$vac (floor 6; vacuous must be 0)"
+          if [ "$vac" -ne 0 ] || [ "$ran" -lt 6 ]; then
+            echo "::error::as root every live capability test must exercise the real capset:" \
+                 "ran=$ran vacuous=$vac"
+            exit 1
+          fi
       - name: Clippy (errors and new warning sites fail)
         run: bash scripts/ci/clippy.sh
       - name: Format check
@@ -213,6 +263,7 @@ jobs:
           python3 scripts/ci/debt.py frozen
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
+          bash scripts/bench/box/birth_census.sh --selftest
       # ★ The hexagonal boundary gate (l1_concurrency.md §6.2, decision #37). The
       # completion-source reactor's MODEL is core-owned and PURE: the core says
       # "notifiable source" and "completion source", full stop. The OS half — the

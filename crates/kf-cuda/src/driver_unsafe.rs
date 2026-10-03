@@ -292,6 +292,10 @@ impl Cuda {
     /// # Errors
     /// As [`Cuda::open`].
     pub fn open_soname(soname: &str) -> Result<Cuda, CudaError> {
+        // ★★★ Before `dlopen`: this thread, and every thread libcuda starts from it, makes its
+        // CUDA calls without CAP_SYS_ADMIN in effect, so libcuda's channels are born USER
+        // (`crate::posture`).
+        crate::posture::cuda_thread()?;
         let c = CString::new(soname).map_err(|_| CudaError::NoLibrary {
             soname: soname.to_string(),
             dlerror: "the soname contains a NUL".to_string(),
@@ -472,6 +476,7 @@ impl Cuda {
     /// # Errors
     /// [`CudaError::Refused`].
     pub fn init(&self) -> Result<(), CudaError> {
+        crate::posture::cuda_thread()?;
         // SAFETY: `cuInit` takes an integer and returns a status; it has no pointer
         // arguments and no aliasing obligations at all.
         self.check("cuInit", unsafe { (self.cuInit)(0) })
@@ -554,6 +559,7 @@ impl Cuda {
     /// # Errors
     /// [`CudaError::Refused`].
     pub fn ctx_create(&self, dev: i32) -> Result<CtxHandle, CudaError> {
+        crate::posture::cuda_thread()?;
         let mut ctx: *mut c_void = core::ptr::null_mut();
         // SAFETY: one live out-pointer; the driver writes an opaque handle we never
         // dereference.
@@ -588,6 +594,7 @@ impl Cuda {
     /// # Errors
     /// [`CudaError`].
     pub fn ctx_set_current(&self, ctx: CtxHandle) -> Result<(), CudaError> {
+        crate::posture::cuda_thread()?;
         // SAFETY: `ctx` came from this library's own `cuCtxCreate_v2` and is only ever handed
         // back to it. `cuCtxSetCurrent` takes the handle and affects the calling thread only.
         self.check("cuCtxSetCurrent", unsafe {

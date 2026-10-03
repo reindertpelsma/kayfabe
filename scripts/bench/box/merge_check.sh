@@ -3,7 +3,9 @@
 #   bash merge_check.sh <branch> <tag>        (log: /root/prov/<tag>.log, ends with an EXIT line)
 # Bar: every kf-* crate test (--no-fail-fast: a red crate must not hide later crates — it once
 # reported "483 tests" instead of ~1500), v3 gates 9/9, a kf3 build of THIS revision, the raw client
-# + fast guest rebuilt, and the 30-arm thin-guest suite at budget 180 → 30/30.
+# + fast guest rebuilt, the 30-arm thin-guest suite at budget 180 → 30/30, and the channel-birth
+# census (birth_census.sh, THE_CONSTRAINTS §30): every channel the suite and the gates birth reads
+# PRIVILEGED_CHANNEL=0, every arm births at least one, every CUDA thread cleared CAP_SYS_ADMIN.
 # ⊘ Never hold /tmp/kayfabe-fastguest.lock across fast_suite: run_fast_guest takes it per arm.
 # Never reuse a previous initrd after a build failure, delete a shared checkout, or hide a
 # failed cargo behind a successful log filter. Every stage fails closed and keeps its log.
@@ -53,3 +55,11 @@ echo "FG_RC=0"
 bash scripts/fastguest/fast_suite.sh "$T" 180 >"$PROV/${T}_suite.run" 2>&1
 echo "SUITE_RC=0"
 grep '^FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30$' "$BENCH_DIR/${T}_suite.out"
+# ★ The census must first show it can fail (planted logs), then read this run's logs.
+bash scripts/bench/box/birth_census.sh --selftest >"$PROV/${T}_census_selftest.log" 2>&1 \
+    || { tail -3 "$PROV/${T}_census_selftest.log"; exit 1; }
+tail -1 "$PROV/${T}_census_selftest.log"
+bash scripts/bench/box/birth_census.sh "$BENCH_DIR" "$T" "$PROV/${T}_gates.log" >"$PROV/${T}_births.log" 2>&1 \
+    || { grep -a '^BIRTH_CENSUS_FAIL' "$PROV/${T}_births.log"; exit 1; }
+grep -a '^BIRTH_CENSUS_SUITE\|^BIRTH_CENSUS_GATES' "$PROV/${T}_births.log"
+grep -a '^BIRTH_CENSUS_OK' "$PROV/${T}_births.log"

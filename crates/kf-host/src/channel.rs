@@ -169,24 +169,6 @@ pub struct RingSpec {
     pub err_notifier: u32,
 }
 
-/// What the channel-alloc call did about `CAP_SYS_ADMIN`, for the per-birth log line.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CapNote {
-    /// The bracket ran (`kf_linux_raw::capability::with_effective_cap_cleared`).
-    Bracket(kf_linux_raw::capability::EffectiveBracket),
-    /// `KF3_NEGCTL_SKIP_CAP_BRACKET=1`: the call was issued with the thread's sets untouched.
-    KeptByNegativeControl,
-}
-
-impl core::fmt::Display for CapNote {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            CapNote::Bracket(b) => write!(f, "{b}"),
-            CapNote::KeptByNegativeControl => write!(f, "kept(negative-control)"),
-        }
-    }
-}
-
 /// ★ NEGATIVE CONTROL — `KF3_NEGCTL_SKIP_CAP_BRACKET=1` issues the channel-alloc call WITHOUT
 /// clearing `CAP_SYS_ADMIN`. In a VMM that holds the capability, RM then stamps the channel
 /// `ADMIN` and the reply check must refuse **every** birth: the knob can only make births fail,
@@ -756,73 +738,47 @@ impl HostRm {
             return Err(RmError::Other(ABI_ENCODE_FAILED));
         }
         let want = self.mint();
-        // ★★★ THE MECHANISM: the channel-alloc ioctl runs with `CAP_SYS_ADMIN` cleared from this
-        // thread's EFFECTIVE set. RM stamps the channel's privilege from the calling thread's
+        let class = self.classes.gpfifo_channel().channel_id().0;
+        // ★★★ THE ONLY WAY A CHANNEL CLASS REACHES HOST RM (`crate::birth`): the alloc runs with
+        // `CAP_SYS_ADMIN` cleared from this thread's EFFECTIVE set, and RM's reply is checked
+        // before the channel is used. RM stamps the channel's privilege from the calling thread's
         // `capable(CAP_SYS_ADMIN)` at this one ioctl (`ogkm-580: kernel_channel.c:277-291`,
         // `escape.c:304`), so the channel is `PRIVILEGE_USER` whatever the VMM runs as. The bit
-        // stays permitted and is put back right after, so nothing else about the VMM changes
-        // (`kf_linux_raw::capability`). ⊘ Not the RM client class: `NV01_ROOT_NON_PRIV` is
-        // rewritten to `NV01_ROOT_CLIENT` before RM sees it (`escape.c:394-403`).
-        let mut issue = || {
-            self.raw_alloc(
-                tsg,
-                want,
-                self.classes.gpfifo_channel().channel_id().0,
-                Some(kf_abi::hostabi::HostParams::Measured(
-                    &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
-                )),
-                &mut chan_params,
-            )
-        };
-        let (alloc, cap) = if negctl_skip_cap_bracket() {
-            (issue(), CapNote::KeptByNegativeControl)
-        } else {
-            let (alloc, done) = kf_linux_raw::capability::with_effective_cap_cleared(
-                kf_linux_raw::capability::CAP_SYS_ADMIN,
-                issue,
-            )
-            .map_err(|refused| {
-                eprintln!(
-                    "kf-host: ⊘ CHANNEL BIRTH REFUSED engine={engine_type:#x}: CAP_SYS_ADMIN could \
-                     not be cleared for the channel-alloc call ({refused}); no channel was created"
-                );
-                RmError::Other(crate::CAP_BRACKET_REFUSED)
-            })?;
-            (alloc, CapNote::Bracket(done))
-        };
-        let chan = alloc?;
-        self.remember(chan, tsg);
+        // stays permitted and is put back right after (`kf_linux_raw::capability`). Every other
+        // alloc entry in this crate refuses the class (`birth::admit_alloc_class`). ⊘ Not the RM
+        // client class: `NV01_ROOT_NON_PRIV` is rewritten to `NV01_ROOT_CLIENT` before RM sees it
+        // (`escape.c:394-403`).
+        let born = crate::birth::born_user(
+            &kf_linux_raw::capability::ThisThread,
+            negctl_skip_cap_bracket(),
+            engine_type,
+            request.flags,
+            &mut chan_params,
+            |inside, params| {
+                let h = self.carried_alloc(
+                    class,
+                    Some(kf_abi::hostabi::HostParams::Measured(
+                        &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+                    )),
+                    params,
+                    |p| self.raw_alloc_exact(tsg, want, class, p, Some(inside)),
+                )?;
+                self.remember(h, tsg);
+                Ok(h)
+            },
+            |h| {
+                let _ = self.free(h);
+            },
+        )?;
+        let chan = born.handle;
+        eprintln!(
+            "kf-host: channel birth h={chan:#x} engine={engine_type:#x} reply_flags={:#010x} \
+             PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin={}",
+            born.privilege.reply_flags, born.cap
+        );
         let unwind = |me: &Self| {
             let _ = me.free(chan);
         };
-        if let CapNote::Bracket(kf_linux_raw::capability::EffectiveBracket::ClearedNotRestored {
-            errno,
-        }) = cap
-        {
-            eprintln!(
-                "kf-host: CAP_SYS_ADMIN was cleared for a channel birth and could not be restored \
-                 on this thread (errno {errno}); the thread continues without it in effect"
-            );
-        }
-        // ★★★ THE TRIPWIRE: read RM's verdict out of the reply and refuse by name if the channel
-        // is not a USER channel. Exact, not inferred — it reads what RM stamped, whatever the
-        // bracket above did or did not manage.
-        match birth_privilege(request.flags, &chan_params) {
-            Ok(p) => eprintln!(
-                "kf-host: channel birth h={chan:#x} engine={engine_type:#x} reply_flags={:#010x} \
-                 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin={cap}",
-                p.reply_flags
-            ),
-            Err(why) => {
-                eprintln!(
-                    "kf-host: ⊘ PRIVILEGED CHANNEL REFUSED h={chan:#x} engine={engine_type:#x}: \
-                     {why} (cap_sys_admin={cap}); the channel is freed. Guest-authored work must \
-                     never run on an ADMIN or KERNEL host channel."
-                );
-                unwind(self);
-                return Err(RmError::Other(crate::PRIVILEGED_CHANNEL_REFUSED));
-            }
-        }
         let mut bind = [0u8; BIND_PARAMS_SIZE];
         bind.copy_from_slice(&engine_type.to_le_bytes());
         let (on, cmd) = if first {
