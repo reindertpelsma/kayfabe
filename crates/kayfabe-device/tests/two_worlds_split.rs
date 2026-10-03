@@ -106,8 +106,12 @@ use tiny::{E_VALID, TinyFmt};
 // "expected RED until BAR1 is served from the reserved object" ran and failed, and read as a
 // regression this commit had caused. ⚠ An insertion before an ITEM can separate that item
 // from its attributes; an insertion after the imports cannot.
-/// ⊘ The `twoworlds` census is a PROCESS GLOBAL and four tests in this binary move it. Held
-/// across each one's whole before/act/after window, so no two can interleave. See the note on
+/// ⊘ The `twoworlds` census is a PROCESS GLOBAL. ⊘ CORRECTED 2026-10-03: it is not only
+/// `window_page_backing` that moves it — the plain BAR reads record into it too
+/// (`crates/kayfabe-device/src/plane.rs:5955`), so the tests that held this lock still
+/// interleaved with ones that did not, and the census test failed `left: 2` on GitHub CI (run of
+/// `1e515f87`, a docs-only commit). ⇒ EVERY test in this binary takes it, across its whole
+/// body; the file runs serially. See the note on
 /// `the_plane_attributes_each_window_to_the_world_constraint_15_assigns_it`.
 static CENSUS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -323,6 +327,9 @@ fn fb_read(p: &RegPlane, bar: u8, off: u64) -> (u64, u32) {
             attribute the moment it passes."]
 #[test]
 fn a_framebuffer_page_written_through_bar1_is_not_the_page_bar2_reads() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     build_bar1_tree(&p, BAR1_VA, leaf(SHARED_PHYS));
     build_and_publish_bar2_tree(&p, BAR2_VA, leaf(SHARED_PHYS));
@@ -403,6 +410,9 @@ fn a_framebuffer_page_written_through_bar1_is_not_the_page_bar2_reads() {
 /// agreeing with itself.
 #[test]
 fn the_bar1_walk_reads_the_page_tables_the_control_window_wrote() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     build_bar1_tree(&p, BAR1_VA, leaf(SHARED_PHYS));
 
@@ -445,6 +455,9 @@ fn the_bar1_walk_reads_the_page_tables_the_control_window_wrote() {
 /// write-through in one direction and stale in the other, which is a real shape for a mirror.
 #[test]
 fn pramin_and_bar2_resolve_one_framebuffer_address_to_one_memory() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     build_and_publish_bar2_tree(&p, BAR2_VA, leaf(SHARED_PHYS));
 
@@ -598,6 +611,9 @@ fn the_plane_attributes_each_window_to_the_world_constraint_15_assigns_it() {
 /// already say so. This pins **identity** — one address, one memory — not residence.
 #[test]
 fn a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     build_bar1_tree(&p, BAR1_VA, leaf(SHARED_PHYS));
     build_and_publish_bar2_tree(&p, BAR2_VA, leaf(SHARED_PHYS));
@@ -667,6 +683,9 @@ fn a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads() {
 /// than merely "something was refused".
 #[test]
 fn the_armed_trap_path_refuses_by_name_and_counts_it() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     use kayfabe_device::plane::{FB_TRAP_REFUSED, FbTrapPolicy};
 
     let p = plane();
@@ -826,6 +845,9 @@ fn a_bar1_translate_through_the_single_store_is_refused_and_the_store_is_what_re
 /// refusal so nobody reads cut A as *"the device store does nothing"*.
 #[test]
 fn the_single_store_still_names_every_page_for_the_memslot_path() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     use kayfabe_device::{DeviceFb, FbPageBacking, FbStore};
     let mut fb = DeviceFb::new(GA106.fb_length);
     assert_eq!(
@@ -876,6 +898,9 @@ fn device_plane_with_port(port: &std::sync::Arc<fakeport::FakePort>) -> RegPlane
 /// first attempt would also return `true`, and this must fail if the retry stops running.
 #[test]
 fn a_page_table_read_arms_its_own_page_and_retries_without_deferring_anything() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     use kayfabe_mmu::walker::FbRead;
     let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
     port.poke(SHARED_PHYS, &[0xAB; 8]);
@@ -909,6 +934,9 @@ fn a_page_table_read_arms_its_own_page_and_retries_without_deferring_anything() 
 /// *"declined"* from *"armed nothing this time"* — on a vCPU, inside an MMIO exit.
 #[test]
 fn a_declined_drain_ends_the_retry_rather_than_spinning_it() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     use kayfabe_mmu::walker::FbRead;
     let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
     port.poke(ALT_PHYS, &[0xCD; 8]);
@@ -1001,6 +1029,9 @@ fn a_bar1_translate_resolves_after_a_lock_free_caller_arms_the_pages_it_missed()
 /// That is why it survived: the one arm that can produce it is the one that did not exist.
 #[test]
 fn an_unarmed_enumeration_comes_back_short_and_says_so_instead_of_reading_as_empty() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
     let p = device_plane_with_port(&port);
     build_bar1_tree_in_the_object(&port, BAR1_VA, leaf(SHARED_PHYS));
@@ -1050,6 +1081,9 @@ fn an_unarmed_enumeration_comes_back_short_and_says_so_instead_of_reading_as_emp
 /// field on a struct the default arm also returns.
 #[test]
 fn the_arena_arm_enumerates_with_no_faults_and_has_no_byte_port_at_all() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     build_bar1_tree(&p, BAR1_VA, leaf(SHARED_PHYS));
     let e = p
@@ -1142,6 +1176,9 @@ fn with_arming<T>(p: &RegPlane, mut f: impl FnMut() -> (T, bool)) -> T {
 /// which is the whole point of the field.
 #[test]
 fn an_unreadable_bar2_directory_page_reports_a_fault_rather_than_an_empty_tree() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
     let p = device_plane_with_port(&port);
     build_bar2_tree_in_the_object(&p, &port, BAR2_VA, leaf(SHARED_PHYS));
@@ -1198,6 +1235,9 @@ fn an_unreadable_bar2_directory_page_reports_a_fault_rather_than_an_empty_tree()
 /// SHORT` on a boot where nothing is short.
 #[test]
 fn the_arena_arm_enumerates_bar2_with_no_faults_at_all() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     build_and_publish_bar2_tree(&p, BAR2_VA, leaf(SHARED_PHYS));
     let e = p
@@ -1228,6 +1268,9 @@ fn the_arena_arm_enumerates_bar2_with_no_faults_at_all() {
 /// than by inspection — and `true` the moment a byte port is installed.
 #[test]
 fn the_refused_access_repair_gate_is_false_on_the_arena_arm_and_true_on_the_device_arm() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let arena = plane();
     assert!(
         !arena.fb_has_demand_port(),
@@ -1275,6 +1318,9 @@ fn the_refused_access_repair_gate_is_false_on_the_arena_arm_and_true_on_the_devi
 /// reproduced offline.
 #[test]
 fn a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads_on_the_device_arm() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
     let p = device_plane_with_port(&port);
     build_bar1_tree_in_the_object(&port, BAR1_VA, leaf(SHARED_PHYS));
@@ -1378,6 +1424,9 @@ fn a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads_on_the_device_
 /// caller and not about this.
 #[test]
 fn an_unarmed_write_lands_nowhere_and_leaves_a_want_behind() {
+    let _census = CENSUS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     use core::sync::atomic::Ordering::Relaxed;
     use kayfabe_device::DeviceFbPort;
     use kayfabe_device::fbwin::DEVICE_FB_WANTED_BY_WRITE;

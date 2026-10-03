@@ -270,3 +270,82 @@ citation: ask whether its reason still holds before relying on it.
   (`design/V3_APP_MATRIX.md`).
   - Coverage gap: no row uses the CUDA virtual memory API (`cuMemCreate`/`cuMemMap`), which PyTorch's
     expandable segments and vLLM rely on. Add a sample such as `vectorAddMMAP` to the sweep.
+
+## J. Kernel-module flavours (2026-10-03)
+
+- **Closed (proprietary) host modules are supported, never refused (owner).** nvkvm-pv forwards the
+  same RM ioctls on both flavours and met few compatibility differences between them. kayfabe's host
+  side uses only that unprivileged ioctl API and nvidia-uvm, whose source ships in both packages.
+  - Preflight reports the flavour and does not refuse it. Until a sweep covers a closed-host cell,
+    `SUPPORT.md` shows it as "accepted, untested".
+  - NVIDIA's own limit: the closed module cannot drive Blackwell (`nvkvm-pv:docs/howto/sweep.md:303`),
+    so closed-host cells exist for Turing, Ampere and Ada.
+  - This supersedes the review's recommendation of 2026-10-03 to refuse closed hosts
+    (`OWNER_QUESTIONS_2026-10-03.md`, Q5).
+- **Closed guest modules are a sweep axis, and Windows makes them a must (owner).** Windows has only
+  NVIDIA's proprietary driver.
+  - At 580 both flavours use the GSP firmware by default on every Turing-and-later GPU (`README.txt`
+    of `NVIDIA-Linux-x86_64-580.159.04.run`, chapter 44C, read 2026-10-03). A closed Linux guest
+    therefore reaches kayfabe's fake GSP with no module option. Older branches are to be checked per
+    tag.
+  - The open question is whether the closed guest's kernel RM issues RPCs or controls the open one
+    does not. One closed-guest cell per family in the band tier answers it.
+  - As far as the review knows, the closed Linux RM and the Windows RM come from the same NVIDIA
+    sources, so the closed-guest cells are also the earliest Linux-side signal for Windows
+    (unverified).
+- Answers `design/V3_SWEEP_AND_INSTALL.md` §4 Q5.
+
+## K. The boot display's option ROM is one embedded blob plus generated config (2026-10-03)
+
+- **Owner:** *"generate the uefi data in kayfabe and give it as blob in the rom. So there is no rom
+  per gpu or similar, all is given as config data, just like cuda."*
+- The GOP driver is one constant `.efi`, embedded in kayfabe with `include_bytes!`. It is not a
+  separate firmware file, there is no `romfile=`, and users install nothing per GPU.
+- **No compiled binary is committed** (owner, the same day: *"We aren't going to put compiled stuff
+  in the repo right? … the efi driver is compiled when building the repo."*). build.rs compiles
+  `firmware/kf-gop` during the normal cargo build, with the nested-cargo pattern that already embeds
+  the musl isolate (`crates/kayfabe-isolate-host/build.rs`). `rust-toolchain.toml` lists
+  `x86_64-unknown-uefi` beside the musl target, so rustup installs it wherever the repo builds. The
+  PTX kernels the owner compared it to are hand-written source, not build output
+  (`crates/kf-cuda/src/display.rs:21`).
+- kf3 generates everything per device when it starts: the PCI ROM header and PCIR (the identity kf3
+  already presents) and the `KFGP` config blob (BAR, offset, size, mode, pitch, format, EDID). It
+  wraps the constant `.efi` with them in memory and serves the result as its ROM BAR.
+- The driver is byte-identical on every host, so one future Secure Boot signature covers all of
+  them.
+- Design: `traces/v3_design_review_20261003/` (gop), and `design/V3_DISPLAY.md` once `v3-gop-rom` and
+  `v3-gop-kf3` land.
+- **aarch64 later (owner, the same day: *"Also later needs aarch64 as well."*).** x86_64 ships first,
+  but the ROM stays arch-neutral:
+  - the ROM header's EFI machine type comes from the built driver (0x8664 or 0xAA64), never a
+    constant;
+  - x86 port I/O, used for test-build debug output only, is behind `cfg(target_arch = "x86_64")`;
+  - build.rs builds the driver for the arch kayfabe itself is built for;
+  - CI's aarch64 job also builds the driver for `aarch64-unknown-uefi`, so x86-isms cannot creep in.
+  - Unchecked: whether AAVMF (OVMF's Arm build) runs PCI option ROMs.
+  - ⊘ **CORRECTED the same day — the note below overstated it; there is no regression against bare
+    metal.** nvidia.ko itself maps the framebuffer BAR as **Device-nGnRE** on arm64 when write
+    combining is asked for (`ogkm-580: kernel-open/common/inc/nv-pgprot.h:76-80`, used for
+    `NV_MEMORY_TYPE_FRAMEBUFFER` by `kernel-open/nvidia/nv-mmap.c:355-363`, `:587-597`; WC is allowed
+    on aarch64, `nv-linux.h:307-308`). So the host's own CUDA gets Device memory for BAR1 too. KVM's
+    Device stage-2 for these views equals what bare metal uses, and the guest's own nvidia.ko asks for
+    the same type. What remains:
+    - code that maps the boot framebuffer expecting Normal-NC must use aligned accesses (the GOP
+      driver's `Blt`: aligned volatile stores, no `DC ZVA`-style memset; the guest kernel's I/O
+      accessors already align);
+    - the `VM_ALLOW_ANY_UNCACHED` patch below would give *more* than bare metal (Normal-NC), which
+      NVIDIA chose not to use on arm64, and ARM does not guarantee Normal-NC is safe on every MMIO
+      region (`drivers/vfio/pci/vfio_pci_core.c:1815-1830`). Not planned.
+    - The same holds for BAR2 (PCI BAR3) and the PRAMIN window. Under the single store
+      (`design/THE_CONSTRAINTS.md:1011-1020`) every mapped page of all three windows is a view of
+      the one reserved host-VRAM object (`crates/kf-qemu/src/mem.rs:1-30`). Only unmapped pages show
+      the per-window scratch memfd, which exists because a memslot hole kills the guest.
+  - (superseded, kept as written) ⚠ **Found 2026-10-03, and it concerns all of kf3 on arm64, not only the ROM.** arm64 KVM maps a
+    non-cacheable PFNMAP memslot as Normal-NC only when the host VMA carries `VM_ALLOW_ANY_UNCACHED`,
+    and as Device memory otherwise (Linux 7.1 `arch/arm64/kvm/mmu.c:1966-1968`). vfio-pci sets that
+    flag (`drivers/vfio/pci/vfio_pci_core.c:1831`); nvidia.ko never does (no occurrence in
+    `ogkm-580: kernel-open`). kf3's BAR1 views are nvidia.ko mmaps, so on an arm64 host the guest
+    would see the framebuffer and every BAR1 view as Device memory: no write combining, and an
+    unaligned access faults. The likely fix is the one-flag host patch in nvidia.ko's mmap path,
+    since a host patch is already required for UVM (`design/V3_COOPERATIVE_TIERS.md`).
+
