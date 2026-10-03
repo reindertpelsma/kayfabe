@@ -27,8 +27,8 @@ fix this file. Entries below the first are dated history.
        4. the unload tests.
     2. The install path and the sweep.
     3. Windows.
-  - **Waiting on the owner:**
-    - the go-ahead and the eight open questions in `design/V3_SWEEP_AND_INSTALL.md` §4;
+  - **Waiting on the owner** (facts and recommendations for all four: `OWNER_QUESTIONS_2026-10-03.md`):
+    - the go-ahead and the seven open questions (Q2–Q8) in `design/V3_SWEEP_AND_INSTALL.md` §4;
     - the `GF100_DISP_SW` choice (A or B);
     - whether the archived C traces holding VBIOS-served PROM reads stay public (§G);
     - renting a GPU box before display testing.

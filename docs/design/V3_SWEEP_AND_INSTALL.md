@@ -1013,7 +1013,7 @@ launcher still gets a named refusal.
 | x86_64 Linux and a writable `/dev/kvm` | yes | `-accel kvm` required (`qemu/hw/misc/kf3/kf3.c:720-723`) |
 | KVM MSI-via-irqfd (in-kernel irqchip) | yes, by kernel config | refused without it (`kf3.c:789-793`) |
 | host driver loaded, with a version among the accepted host tags | yes; reads `/proc/driver/nvidia/version` and warns when the tag is accepted but untested in `SUPPORT.md` | R2 gate: unreadable, unparsable and unmeasured versions are refused by name (`crates/kf-host/src/lib.rs:159-191`; `crates/kf-abi/src/hostabi.rs:184-197`) |
-| open or closed kernel module | reported; closed is a warning (unmeasured, §4 Q5) | no check (none in `crates/`; only provisioning checks, `scripts/bench/provision_host_driver.sh:152-158`) |
+| open or closed kernel module | reported, never refused (§4 Q5, answered 2026-10-03); a closed host shows as "accepted, untested" until a sweep covers it | no check (none in `crates/`; only provisioning checks, `scripts/bench/provision_host_driver.sh:152-158`) |
 | `libcuda.so.1` and `libnvidia-ptxjitcompiler` loadable | yes | no walker means no device (`crates/kf-qemu/src/device.rs:281-283`) |
 | `/dev/nvidiactl`, `/dev/nvidia<minor>` and `/dev/nvidia-uvm` openable by the invoking user | yes | the host RM open fails, by name |
 | host BAR1 ≥ guest BAR1 + BAR2 + 1 MiB + 16 MiB | yes; computes the largest guest BAR1 that fits | summed per card, refused by name (`crates/kf-qemu/src/cardbudget.rs:5-14`, `:24-27`; `device.rs:268-273`) |
@@ -1229,6 +1229,12 @@ Around the runner:
   - `kayfabe-run` requires `--guest-driver` (§2.5), so users run the declared configuration the sweep
     measures. Agree, or keep it optional and limit `SUPPORT.md` to same-surface pairs for undeclared use?
 - **Q5 — Closed kernel modules.**
+  - ⊘ **ANSWERED 2026-10-03 — both flavours are in scope** (`docs/OWNER_RULINGS.md` §J). Closed hosts
+    are accepted, never refused, and become a sweep axis on Turing, Ampere and Ada (the closed module
+    cannot drive Blackwell). Closed guests in GSP mode get one cell per family in the band tier. For
+    the plan: the flavour joins the unit identity (task S4), `plan.py` lists the flavour cells (S6),
+    and the host swap installs the requested flavour and checks it on content (S7). The question
+    text below is kept as it was asked.
   - vast's template ships the closed 575.51.03 module (`V3_DRIVER_MATRIX.md:857`). Only provisioning
     insists on the open module; no kayfabe code checks it.
   - Should closed-module hosts, and closed-module guests in GSP mode, be a sweep axis, or stay out of
