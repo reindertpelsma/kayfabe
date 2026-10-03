@@ -12,7 +12,9 @@ use std::ffi::CStr;
 /// ([`kf3_doorbell_page_offset`], [`kf3_set_ioeventfd`], [`kf3_doorbell_site`]). The two 9s name
 /// different surfaces, so an archive from either branch must fail the device's check: one new
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
-pub const KF3_ABI: u32 = 10;
+/// ★ 11 (2026-10-03, `v3-gop-kf3`, `docs/design/V3_DISPLAY.md` §4.11): the boot display —
+/// [`kf3_realize`] takes `gop`, and [`kf3_option_rom`] hands the C device the ROM to register.
+pub const KF3_ABI: u32 = 11;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -89,6 +91,7 @@ pub unsafe extern "C" fn kf3_realize(
     bar2_bytes: u64,
     guest_driver: *const c_char,
     display: u32,
+    gop: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -111,6 +114,7 @@ pub unsafe extern "C" fn kf3_realize(
         bar2_bytes,
         guest_driver: guest,
         display: display != 0,
+        gop: gop != 0,
     };
     match Device::realize(&cfg) {
         Ok(d) => {
@@ -571,6 +575,33 @@ pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
             d.dbfast.site_del(gpa);
         }
     }
+}
+
+/// ★ ABI 11 (`docs/design/V3_DISPLAY.md` §4.11.6): the boot display's option ROM — the embedded GOP
+/// driver wrapped with this device's ids and its `KFGP` descriptor, packed at realize (`gop=on`).
+/// `0` with `*rom`/`*rom_len` filled: the bytes live for the process (the device is never freed), and
+/// the C device copies them into its ROM BAR. `-1` with `gop=off`, or on a bad handle.
+///
+/// # Safety
+/// `rom` and `rom_len` are writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_option_rom(
+    h: *mut c_void,
+    rom: *mut *const u8,
+    rom_len: *mut u64,
+) -> i32 {
+    let (Some(d), false, false) = (dev(h), rom.is_null(), rom_len.is_null()) else {
+        return -1;
+    };
+    let Some(bytes) = d.option_rom() else {
+        return -1;
+    };
+    // SAFETY: both writable (caller contract); the bytes are the leaked device's for the process.
+    unsafe {
+        *rom = bytes.as_ptr();
+        *rom_len = bytes.len() as u64;
+    }
+    0
 }
 
 /// Stop the device's threads (the device itself lives for the process).

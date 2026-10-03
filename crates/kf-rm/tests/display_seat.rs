@@ -69,6 +69,7 @@ fn chain_with_objects(
         memory: None,
         channels: None,
         display: display.then(|| (&kf_chip::display::AMPERE).into()),
+        console: None,
     };
     kf_rm::served_policy(
         ga106::board(),
@@ -359,8 +360,8 @@ fn default_off_every_claimed_control_still_reaches_the_ledger() {
     let set = claimed();
     assert_eq!(
         set.len(),
-        33 + 6,
-        "the NVKMS bring-up set (with the console pair and the display-SW object's query) and the six internal controls"
+        34 + 6,
+        "the NVKMS bring-up set (with the console pair, the display-SW object's query and SET_RMFREE_FLAGS) and the six internal controls"
     );
     let log = kf_rm::unserviced::UnservicedLog::new();
     let mut c = chain(false, &log);

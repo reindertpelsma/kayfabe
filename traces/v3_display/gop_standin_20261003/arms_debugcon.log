@@ -1,0 +1,228 @@
+== gop_ubuntu: kf-gop's debug lines (debugcon builds only) and the test app's report
+KFGOP-TEST start
+KFGOP-TEST secure_boot=absent
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1152 height=648 ppsl=1152 format=1 fb_base=0x80000000 fb_size=0x2e0000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode ok max=1 cur=0
+KFGOP-TEST check mode_is_the_descriptors ok pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar ok base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered ok 128 bytes
+KFGOP-TEST check edid_active ok 128 bytes
+KFGOP-TEST check query_mode_0 ok status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid ok status=0x8000000000000002
+KFGOP-TEST check set_mode_1_unsupported ok status=0x8000000000000003
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer ok fb(8,8)=0x123456
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer ok 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap ok move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel ok status=0x8000000000000002
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern ok status=0x0
+KFGOP-TEST RESULT PASS checks=21 failed=0
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+   (= kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== gop_qemu_edk2: kf-gop's debug lines (debugcon builds only) and the test app's report
+KFGOP-TEST start
+KFGOP-TEST secure_boot=absent
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1152 height=648 ppsl=1152 format=1 fb_base=0x80000000 fb_size=0x2e0000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode ok max=1 cur=0
+KFGOP-TEST check mode_is_the_descriptors ok pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar ok base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered ok 128 bytes
+KFGOP-TEST check edid_active ok 128 bytes
+KFGOP-TEST check query_mode_0 ok status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid ok status=0x8000000000000002
+KFGOP-TEST check set_mode_1_unsupported ok status=0x8000000000000003
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer ok fb(8,8)=0x123456
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer ok 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap ok move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel ok status=0x8000000000000002
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern ok status=0x0
+KFGOP-TEST RESULT PASS checks=21 failed=0
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+   (= kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== stdvga_builtin_wins: kf-gop's debug lines (debugcon builds only) and the test app's report
+kf-gop: loaded
+KFGOP-TEST start
+KFGOP-TEST secure_boot=absent
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1280 height=800 ppsl=1280 format=1 fb_base=0x80000000 fb_size=0x3e8000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode FAIL max=30 cur=0
+KFGOP-TEST check mode_is_the_descriptors FAIL pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar FAIL base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered FAIL 128 bytes
+KFGOP-TEST check edid_active FAIL 128 bytes
+KFGOP-TEST check query_mode_0 FAIL status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid FAIL status=0x0
+KFGOP-TEST check set_mode_1_unsupported FAIL status=0x0
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer FAIL fb(8,8)=0x0
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer FAIL 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap FAIL move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel FAIL status=0x0
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern FAIL status=0x0
+KFGOP-TEST RESULT FAIL checks=21 failed=13
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+   ( 25 0x800000000000000f = kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== neg_wrong_id: kf-gop's debug lines (debugcon builds only) and the test app's report
+kf-gop: loaded
+kf-gop: Supported refuses: ids 1002:5046 but the descriptor names 1002:5047
+kf-gop: Supported refuses: ids 1002:5046 but the descriptor names 1002:5047
+kf-gop: Supported refuses: ids 1002:5046 but the descriptor names 1002:5047
+kf-gop: Supported refuses: ids 1002:5046 but the descriptor names 1002:5047
+kf-gop: Supported refuses: ids 1002:5046 but the descriptor names 1002:5047
+kf-gop: Supported refuses: ids 1002:5046 but the descriptor names 1002:5047
+KFGOP-TEST start
+KFGOP-TEST secure_boot=absent
+KFGOP-TEST gop_handles total=0 ours=0
+KFGOP-TEST check one_kf_gop FAIL ours=0
+KFGOP-TEST RESULT FAIL checks=1 failed=2 reason=no-kf-gop
+   ( 16 0x800000000000000f = kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== neg_no_descriptor: kf-gop's debug lines (debugcon builds only) and the test app's report
+kf-gop: loaded
+kf-gop: Supported refuses: KFGP: no KFGP magic
+kf-gop: Supported refuses: KFGP: no KFGP magic
+kf-gop: Supported refuses: KFGP: no KFGP magic
+kf-gop: Supported refuses: KFGP: no KFGP magic
+kf-gop: Supported refuses: KFGP: no KFGP magic
+kf-gop: Supported refuses: KFGP: no KFGP magic
+KFGOP-TEST start
+KFGOP-TEST secure_boot=absent
+KFGOP-TEST gop_handles total=0 ours=0
+KFGOP-TEST check one_kf_gop FAIL ours=0
+KFGOP-TEST RESULT FAIL checks=1 failed=2 reason=no-kf-gop
+   ( 16 0x800000000000000f = kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== sb_ms_unsigned: kf-gop's debug lines (debugcon builds only) and the test app's report
+kf-gop: loaded
+kf-gop: Supported accepts
+kf-gop: started 1152x648 pitch 4608 fb 0x80000000 size 0x2e0000 bar 0
+   ( 36 0x800000000000000f 20 0x8000000000000014 = kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== sb_snakeoil_signed: kf-gop's debug lines (debugcon builds only) and the test app's report
+kf-gop: loaded
+kf-gop: Supported accepts
+kf-gop: started 1152x648 pitch 4608 fb 0x80000000 size 0x2e0000 bar 0
+KFGOP-TEST start
+KFGOP-TEST secure_boot=1
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1152 height=648 ppsl=1152 format=1 fb_base=0x80000000 fb_size=0x2e0000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode ok max=1 cur=0
+KFGOP-TEST check mode_is_the_descriptors ok pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar ok base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered ok 128 bytes
+KFGOP-TEST check edid_active ok 128 bytes
+KFGOP-TEST check query_mode_0 ok status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid ok status=0x8000000000000002
+KFGOP-TEST check set_mode_1_unsupported ok status=0x8000000000000003
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer ok fb(8,8)=0x123456
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer ok 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap ok move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel ok status=0x8000000000000002
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern ok status=0x0
+KFGOP-TEST RESULT PASS checks=21 failed=0
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+   ( 16 0x800000000000000f 8 0x8000000000000014 = kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== sb_snakeoil_unsigned: kf-gop's debug lines (debugcon builds only) and the test app's report
+kf-gop: loaded
+kf-gop: Supported accepts
+kf-gop: started 1152x648 pitch 4608 fb 0x80000000 size 0x2e0000 bar 0
+KFGOP-TEST start
+KFGOP-TEST secure_boot=1
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1152 height=648 ppsl=1152 format=1 fb_base=0x80000000 fb_size=0x2e0000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode ok max=1 cur=0
+KFGOP-TEST check mode_is_the_descriptors ok pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar ok base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered ok 128 bytes
+KFGOP-TEST check edid_active ok 128 bytes
+KFGOP-TEST check query_mode_0 ok status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid ok status=0x8000000000000002
+KFGOP-TEST check set_mode_1_unsupported ok status=0x8000000000000003
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer ok fb(8,8)=0x123456
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer ok 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap ok move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel ok status=0x8000000000000002
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern ok status=0x0
+KFGOP-TEST RESULT PASS checks=21 failed=0
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+   ( 16 0x800000000000000f 8 0x8000000000000014 = kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== sb_snakeoil_tailpad: kf-gop's debug lines (debugcon builds only) and the test app's report
+kf-gop: loaded
+kf-gop: Supported accepts
+kf-gop: started 1152x648 pitch 4608 fb 0x80000000 size 0x2e0000 bar 0
+KFGOP-TEST start
+KFGOP-TEST secure_boot=1
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1152 height=648 ppsl=1152 format=1 fb_base=0x80000000 fb_size=0x2e0000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode ok max=1 cur=0
+KFGOP-TEST check mode_is_the_descriptors ok pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar ok base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered ok 128 bytes
+KFGOP-TEST check edid_active ok 128 bytes
+KFGOP-TEST check query_mode_0 ok status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid ok status=0x8000000000000002
+KFGOP-TEST check set_mode_1_unsupported ok status=0x8000000000000003
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer ok fb(8,8)=0x123456
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer ok 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap ok move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel ok status=0x8000000000000002
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern ok status=0x0
+KFGOP-TEST RESULT PASS checks=21 failed=0
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+   ( 16 0x800000000000000f 8 0x8000000000000014 = kf-gop 'Supported cannot open PCI I/O' lines by status: 0x..0f ACCESS_DENIED is another driver's device, 0x..14 ALREADY_STARTED is ours after Start)
+== sb_ms_unsigned: the boot manager on the serial console
+BdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+BdsDxe: failed to load Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0): Access Denied -- rejected probably by Secure Boot
+BdsDxe: No bootable option or device was found.
+BdsDxe: Press any key to enter the Boot Manager Menu.

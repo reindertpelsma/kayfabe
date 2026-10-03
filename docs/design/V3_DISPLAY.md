@@ -1,15 +1,57 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS 2026-10-03 (late) — display step 1 (the boot display): BUILT on branch `v3-gop` (both halves
+> plus the owner's §K ruling), nothing run on a GPU box.** `v3-gop` carries `v3-gop-rom` and `v3-gop-kf3`
+> squashed onto `master` with every finding of their review fixed (§4.11.12's ⊘ block): **no compiled
+> binary is committed** — `crates/kf-gop-image/build.rs` builds `firmware/kf-gop` during the ordinary
+> cargo build for `<arch>-unknown-uefi` and embeds it; the ROM is arch-neutral (`EfiMachineType` from the
+> PE; x86 port I/O behind `cfg(target_arch)`; framebuffer writes are aligned volatile 32-bit stores; CI's
+> `aarch64` job builds the driver for `aarch64-unknown-uefi`). First box step: still **B0a** (§4.11.9).
+>
+> (superseded the same day, kept as written) **STATUS 2026-10-03 (evening) — display step 1 (the boot display): BOTH HALVES BUILT, nothing run on a
+> GPU box.** The firmware, the ROM container and the local stand-in on `v3-gop-rom` (§4.11.6–§4.11.8); the
+> kf3 integration on `v3-gop-kf3` (§4.11.12): the ROM BAR (KF3 ABI 11), the BAR1 seed, the boot layer and
+> fn 65's console region, all behind the device property `gop` (default off; with it off every path is
+> today's, unit-tested). CI green at `37740a4b` (run 37132057723). First box step: **B0a** (§4.11.9).
+> ⊘ Open from the owner's ruling of the same day (`OWNER_RULINGS.md` §K): the GOP blob is still a
+> committed binary — build.rs is to compile it instead (§4.11.6).
+>
+> (superseded the same day, kept as written) **STATUS 2026-10-03 — display step 1 (the boot display's GOP
+> option ROM): first half BUILT on branch `v3-gop-rom` — the firmware, the ROM container and a local
+> stand-in test (§4.11, its own STATUS line). The kf3 integration is the second half. The ⊘ notes below
+> dated 2026-10-03 fold that design's corrections into the older text.**
+
 > **NEXT — owner direction 2026-10-01 (design only, nothing built): (1) a STOCK guest display with no
 > guest-side tweaks, then (2) a VMM-agnostic display BROKER instead of QEMU's UI — both before Windows.**
 > What the M1–M3 lanes still change inside the guest (`scripts/bench/display/`), and what each needs:
 > - `modprobe nvidia-drm modeset=1 fbdev=1` by hand after boot → test a packaged driver loading at boot
 >   (Ubuntu's `modprobe.d` already sets `modeset=1`); the bench loads the driver over ssh.
+> - ⊘ **CORRECTED 2026-10-03 (the GOP design's review) — the next bullet's premise is wrong on today's
+>   bench.** With SeaBIOS and `-vga none` the guest kernel already makes kf3 the boot VGA device
+>   (`traces/v3_display/m2c_20260930/run_m2c_serial.log.gz:289`, *"vgaarb: setting as boot VGA device"*;
+>   `run_m2c_dmesg_after.log:56`, *"vgaarb: deactivate vga console"*, printed only for `vga_default`,
+>   `drivers/pci/vgaarb.c:171-173`), and Xorg already marks it primary
+>   (`traces/v3_display/m3b_20260930/hook/Xorg.0.log:57`: `PCI:*(0@0:2:0) … BIOS @ …/131072`, the 0xC0000
+>   shadow of `arch/x86/pci/fixup.c:381-397`). The BusID pin most likely came over from nvkvm-pv, where
+>   QEMU's stdvga was primary (`nvkvm-pv docs/internal/mint-guest-desktop.md:671-676`). ⇒ Test Xorg
+>   without the pin first (box test **B0a**, §4.11.9, no build). The ROM is still needed — Windows, any
+>   picture before nvidia-drm, OVMF guests, guests with a second VGA device (§4.11.1). No legacy VGA path
+>   for the release (§4.11.11).
 > - X11's `xorg.conf` pins the BusID: the VM runs `-vga none` and kf3 shows no firmware framebuffer, so no
 >   device is `boot_vga` and Xorg cannot choose (Wayland enumerates DRM and needs no pin) → **kf3 must be
 >   the boot display**: a UEFI GOP (and a legacy VGA path) over a kf-disp linear framebuffer, handed over
 >   to the NVIDIA driver when it loads. ★ Windows needs this regardless: its installer, boot and safe mode
 >   run on the GOP framebuffer before `nvlddmkm` starts. The largest item (~1–2 weeks, estimate).
+> - ⊘ **CORRECTED 2026-10-03 — two details of the next bullet** (the design and its review: §4.11):
+>   - **Not `romfile=`, and not EDK2/uefi-rs.** PCIR must carry the host die's ids and class and the
+>     descriptor is per VM, so kf3 ships one constant PE (`firmware/kf-gop`, Rust, zero dependencies) and
+>     wraps it into a ROM per host at realize (`crates/kf-oprom`, §4.11.6). QEMU's `pci_patch_ids` would
+>     also corrupt an EFI-only ROM wired as a class default (it rewrites byte 6, inside `EfiSignature`).
+>   - **There is no fake-GSP answer for `uefiScanoutSurfaceSizeInMB`.** It is a CPU-RM `pGpu` field the
+>     open code only zeroes (`ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:1019`,
+>     `:1271`), CPU-RM reports it itself (`kern_mem_sys_ctrl.c:728-732`), and its consumer is compiled
+>     for Windows only (`kern_bus_gm107.c:895-896`). What must agree with the ROM is the FB layout and the
+>     region table fn 65 serves (§4.11.4).
 > - ★ **How kf3 becomes the boot display — the owner's 2026-09-10 design (from the session; first written
 >   down here 2026-10-02).** On real cards the PCI expansion ROM (the VBIOS) carries a UEFI GOP driver
 >   that programs the display; the firmware's linear framebuffer is a BAR1 range (not PRAMIN), and GOP
@@ -52,6 +94,10 @@
 > - **The GOP framebuffer must lie inside a kf3 BAR.**
 >   - Linux ties the firmware framebuffer to the PCI device whose BAR contains it. That device's
 >     driver evicts it (`aperture_remove_conflicting_pci_devices`, `drivers/video/aperture.c`).
+>   - ⊘ *CORRECTED 2026-10-03:* the next sub-bullet's last sentence. Xorg is not missing a boot VGA
+>     device on today's SeaBIOS bench (the correction at the top). The firmware-default rule matters
+>     under OVMF and with a second VGA device; the local stand-in shows it overriding a legacy device
+>     (2026-10-03, `3dd574e5`, arm `linux_two_vga`, §4.11.8).
 >   - The VGA arbiter picks the boot device by the same test (`vga_is_firmware_default`,
 >     `drivers/pci/vgaarb.c:566-569`, Linux 7.1). That is what fixes Xorg's missing boot VGA device.
 >   - kf-disp keeps scanning out the GOP region until the guest's first modeset, so the handover shows
@@ -63,9 +109,17 @@
 >     scanout never uses them.
 >   - A framebuffer in plain RAM is rejected. It breaks the ownership above, and the handover expects
 >     VRAM (BAR1 = real VRAM views, owner 2026-09-14).
+>   - ⊘ *CORRECTED 2026-10-03:* the next sub-bullet is withdrawn. Host RAM behind the guest's BAR1
+>     framebuffer is sysmem standing in for vidmem (`THE_CONSTRAINTS.md:120-125`, items 18 and 22) and
+>     breaks the FB-0 identity RM relies on (§4.11.2). It is not a fallback the design may take; it would
+>     need an explicit owner ruling (`OWNER_RULINGS.md` A.11).
 >   - Optional, only if boot is found to be slow: back the GOP region with host RAM during boot, and
 >     move it into VRAM before the NVIDIA driver touches it through the GPU.
 > - **Driver unload.**
+>   - ⊘ *SCOPED 2026-10-03:* the next sub-bullet holds only on guest kernels that export `screen_info`
+>     (the bench's noble 6.8 does). On Linux 7.x nvidia.ko's console detection takes the BAR1-child
+>     path, which gives width 0: NVKMS imports no console, sends no `NOTIFY_CONSOLE_DISABLED`, and has
+>     nothing to restore (§4.11.3). Bare metal behaves the same.
 >   - NVIDIA's modeset driver restores the boot console (`nvEvoRestoreConsole`,
 >     `ogkm-580: src/nvidia-modeset/src/nvkms-console-restore.c:756`). It finds the console through
 >     `NV0080_CTRL_CMD_OS_UNIX_VT_GET_FB_INFO`. kf-disp must follow that restore.
@@ -80,7 +134,8 @@
 >   (built, §4.4–§4.6). Write the flip-completion notifier only after the frame was taken, and with
 >   the broker never overwrite a copy before `RELEASE`.
 > - **Order:**
->   1. the GOP option ROM;
+>   1. the GOP option ROM; ★ *first half built 2026-10-03 (branch `v3-gop-rom`): the firmware, the
+>      container and the local stand-in (§4.11); the kf3 integration is the second half;*
 >   2. a stock guest display with no tweaks;
 >   3. the broker;
 >   4. the unload tests.
@@ -595,6 +650,882 @@ CUDA ladder, headless set 38/38) must stay green with display on.
   C6 NVKMS HAL and the C67E window class), GB20x (CA HAL), TU10x (C5 HAL).
 - **GA100, GH100, GB100/GB102/GB110/GB112:** displayless by the guest driver's own HAL — no emulation can
   give them a head without lying about the chip. (b) is their display, exactly as on bare metal.
+
+### 4.11 Boot display: kf3's UEFI GOP option ROM (display step 1)
+
+**STATUS: REVIEWED, FIXED AND RE-RUN, 2026-10-03 (late), branch `v3-gop-unload`, kf3 `06b307c4`** (box
+54032077; `traces/v3_display/gop_final_20261003/`). The adversarial review of the B5 work (one MEDIUM, eight
+lower) and the five minor findings of the `v3-gop` re-review are fixed; each correction is folded above
+what it corrects (§4.11.3, §4.11.6, §4.11.12, §4.11.13). Measured at `06b307c4`: **B1** — no black frame
+between the boot layer and the first armed head, from kf3's own lines (`DISPLAY_BOOT_HANDOFF
+black_frames=0`; the boot layer's last frame stays 1 ms until head 3's window), probe pixel-exact, 120/120
+flips, B2's checks as before; **B0** (`gop=off`) — pixel-exact, 120/120 flips, no seed; **B5** —
+`DISPLAY_B5_VERDICT PASS arms=14 failed=0`, the lane's rc graded (it was always 0). The first try at
+`445367a8` failed ONE arm, and the fault was the hook's (`qsince | grep -q` under `pipefail`), not kf3's —
+the new verdict is what showed it. Locally: the Secure Boot deny arms with their positive control (4
+PASS, 1 OBSERVED; the bite FAILs). Not run: GB20x or any non-GA10x box; B5 (d). The STATUS just below is
+superseded where §4.11.13 says so (the handoff black, *"the log lines are bounded"*, the (a2) cause).
+
+(superseded the same day where §4.11.13 corrects it) **STATUS: B5 (unload) MEASURED AND FIXED, 2026-10-03, branch `v3-gop-unload`** (box 54032077, kf3
+`4a4b95f7`; `traces/v3_display/gop_unload_20261003/`): the guest's RM gives BAR1 up at every teardown and
+kf3 now returns BAR1 `[0, G)` to its physical view then; nothing scanned is a black frame; a scanout
+freed with `PRESERVE_HW` stays. B1 and B0 re-run at the same binary pass. The causes, the trigger and
+what is not modelled: §4.11.13. ⊘ The STATUS below says *"nothing has run on a GPU box"*: B0–B3 ran the
+same day (`traces/v3_display/gop_box_20261003/`).
+
+**STATUS: BUILT, 2026-10-03 (late), branch `v3-gop`; nothing has run on a GPU box.** The two halves below
+plus `OWNER_RULINGS.md` §K (no committed binary; arch-neutral ROM) and the review's fixes — what changed
+against the text below is §4.11.12's ⊘ block, and each changed statement carries its own ⊘ note.
+
+(superseded the same day, kept as written) **STATUS: BOTH HALVES BUILT, 2026-10-03 (branches `v3-gop-rom` and `v3-gop-kf3`); nothing has run on a
+GPU box.** The kf3 integration — ROM BAR, BAR1 seed, boot layer, fn 72 → fn 65 console region, property
+`gop` — is §4.11.12, which also lists what it changed against the design below. Box tests in order:
+§4.11.9.
+
+(superseded the same day, kept as written) **STATUS: FIRST HALF BUILT, 2026-10-03 (branch `v3-gop-rom`).** Built and tested without a GPU: the
+GOP firmware (`firmware/kf-gop`, its release build committed and embedded in `crates/kf-oprom` per
+the owner's decision of 2026-10-03, §4.11.6), the ROM container and packer (`crates/kf-oprom`), and the local
+stand-in (`scripts/display/gop_standin.sh`, 11/11 arms at `3dd574e5`, §4.11.8). **Not built:**
+everything inside kf3 — the ROM BAR, the BAR1 seed, the boot layer, the fn 72 → fn 65 region table.
+§4.11.2–§4.11.6 are the design that integration follows; it lands on top of this branch. Nothing here
+has run on a GPU box. The design was revised after an adversarial review on 2026-10-03; its
+corrections to this document are folded into the NEXT block above, and into §4.11 below.
+
+Sources: `ogkm-580` = `research_clones/ogkm-580.159.04`; Linux 7.1-rc6 (`research_clones/linux`);
+QEMU 10.2.4 and 11.1.1 sources; EDK2 **edk2-stable202408**, which *is* local, under QEMU 10.2.4's
+`roms/edk2` (⊘ the design said EDK2's source was not local; §4.11.7 reads it).
+
+#### 4.11.1 Why the ROM, after the boot_vga correction
+
+- The premise that no device is `boot_vga` is wrong on today's SeaBIOS bench (the ⊘ note at the top
+  of this document): kf3 already is the boot VGA device and Xorg already marks it primary.
+- The ROM is still needed for four things:
+  1. Windows: setup, boot and safe mode run on the GOP before `nvlddmkm` starts;
+  2. any picture on kf3 before nvidia-drm loads (OVMF, the boot loader, early kernel output, and a
+     CUDA-only guest's console);
+  3. OVMF guests, where without a GOP nothing promises kf3 gets the firmware framebuffer;
+  4. guests with a second VGA device, where the firmware framebuffer decides (`vga_is_firmware_default`,
+     `drivers/pci/vgaarb.c:566-572`).
+- Item 4, locally: with a driverless VGA device that decodes I/O and memory in a lower slot, Linux 7.0's
+  vgaarb first chose that device, then moved boot VGA to the device holding the EFI framebuffer
+  (*"setting as boot VGA device (overriding previous)"*; 2026-10-03, `3dd574e5`, arm `linux_two_vga`).
+- First box step: **B0a**, which needs no build (§4.11.9).
+
+#### 4.11.2 Where the framebuffer lives
+
+**kf3 BAR1, offset 0, size G**, with `pitch = align_up(4·W, 256)` and `G = align_up(pitch·H, 64 KiB)`
+(0x7F0000 at 1920x1080; `kf_oprom::Geometry::for_mode`, unit-tested). Why each:
+
+- **Offset 0.** `bPreserveBar1ConsoleEnabled = (fbBaseAddress == nv->fb->cpu_address)`
+  (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osinit.c:1073-1079`); `NV_IS_CONSOLE_MAPPED` accepts only
+  the BAR1 base or BAR2 base + 16 MiB (`ogkm-580: kernel-open/common/inc/nv.h:748-750`); kbus maps the
+  console at BAR1 VA 0 with `MAP_OFFSET_FIXED` and 4 KiB pages before anything else
+  (`ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:1084-1162`, flags `:1098`).
+- **FB physical 0.** The console memdesc is all of `fbRegion[0]` (`mem_mgr_gm107.c:2068-2110`; the HAL
+  serves TU102 … GB207), and a present console is region 0 (`arch/turing/mem_mgr_tu102.c:648-653`). Since
+  store offset = guest FB address (`THE_CONSTRAINTS.md:1009-1026`): BAR1 offset 0 ↔ FB 0 ↔ store 0.
+- **Size.** `ReservedConsoleDispMemSize = NV_ALIGN_UP(fbConsoleSize, 64 KiB)` (`osinit.c:1092`); the
+  pitch rounding is NVKMS's (`ogkm-580: src/nvidia-modeset/src/nvkms-rm.c:4880-4884`). `nv_get_screen_info`
+  (`ogkm-580: kernel-open/nvidia/nv.c:6172-6309`) has three paths: a registered fbdev on the BAR1 base;
+  `screen_info` (compiled only if exported, `nv.c:6234`); the BAR1 resource's first `…fb`/`…FB` child
+  (`nv.c:6271-6305`) — the only one on Linux 7.1, which exports `sysfb_primary_display` instead
+  (`arch/x86/kernel/setup.c:216-217`). Every path yields at most G. The EFI stub sets
+  `lfb_size = linelength × height` (`drivers/firmware/efi/libstub/gop.c:412`); locally the BOOTFB
+  resource was exactly 4608 × 648 = 2 985 984 bytes at BAR + 0 (2026-10-03, `3dd574e5`, arm `linux`).
+- **Order and passthrough.** `RmSetConsolePreservationParams` runs before `kgspInitRm` (`osinit.c:1993-1995`
+  vs `:2024`); `GspSystemInfo.consoleMemSize` (`src/nvidia/src/kernel/vgpu/rpc.c:10585`) reaches us in
+  fn 72, which arrives **before** fn 1 and fn 65 (`kernel_gsp.c:4141` vs `:4225`, `:4232`). Under KVM the
+  guest is "passthrough" (`gpu.c:4711-4774`), so `RmDeterminePrimaryDevice` returns early
+  (`osinit.c:983-991`): console preservation still runs (`:1031-1052`), and console access is **not**
+  disabled during GSP/BAR1 setup (`:2003-2007`) — firmware-console writes keep arriving through BAR1.
+  The display fuse already reads ENABLE wherever `display=on` works (`kern_disp.c:333`).
+
+| item | value | why |
+|---|---|---|
+| BAR | PCI BAR1 (`kf3.c:817-818` at `v3-gop-kf3`) | the equality test above; Linux ties the firmware framebuffer to the BAR that contains it (§4.11.8) |
+| offset | 0 | `osinit.c:1079`; `kern_bus_gm107.c:1131-1153` |
+| size G | `align_up(align_up(4W,256)·H, 64 KiB)` | `osinit.c:1092`; `nvkms-rm.c:4880-4884` |
+| backing at boot | store `[0,G)` **zeroed by a GPU write** (the verb that zeroes the roots, `crates/kf-qemu/src/device.rs:337-345`), then one host CPU view of store `[0,G)` placed at BAR1 offset 0 at realize, before any vCPU runs (`WindowOps::arm_store` + `place_view`, `crates/kf-qemu/src/mem.rs:344-357`) | real VRAM, the pages RM will call FB 0; no copy at handover; no exits; nothing from before the VM visible (kayfabe never scrubs the store otherwise, `crates/kf-host/src/lib.rs:1672-1730`) |
+| refused | host-RAM backing | sysmem standing in for vidmem (`THE_CONSTRAINTS.md:120-125`, items 18, 22); breaks FB-0 identity; needs an owner ruling (`OWNER_RULINGS.md` A.11), never a fallback |
+
+★ Built as designed on `v3-gop-kf3` (§4.11.12): `CpuWindow::seed`/`retire_seed`
+(`crates/kf-mem/src/cpuwin.rs`) and the boot layer (`kf_disp::scanout::boot_layer`, `Shown` in
+`crates/kf-qemu/src/display.rs`); the release at stop is the VA thread's (§4.11.12, deviation 2).
+
+⊘ **CORRECTED 2026-10-03 (B5, §4.11.13) — the lifecycle below has one life; the guest's RM has many.**
+The guest RM initialises the adapter at the first open and tears it down at the last close (five RM lives
+in one B5 boot), and every teardown unmaps the console at BAR1 VA 0 and writes the BAR1-mode register back
+to PHYSICAL. The seed is now placed AGAIN then (`CpuWindow::reseed`, on the VA thread) and retires again
+exactly as below when an RM takes BAR1 back (`[measured b5f]` *"… ONE run, VA 0 -> store 0 … (seed life
+N …)"*).
+
+**The seed's lifecycle.** Today every BAR1 page shows the per-BAR scratch until the walker reports the
+guest's BAR1 page tables (`MemPlane::build`, `mem.rs:1544-1566`; `CpuWindow::map`/`unmap`,
+`crates/kf-mem/src/cpuwin.rs:163-240`; `Bar1Target`, `mem.rs:1126-1208`).
+- The seed is `CpuWindow::seed(at=0, len=G, view)`, kept outside `placed`, so the walk/diff ledger is
+  untouched.
+- It retires in the existing batch-end hook `MapTarget::invalidate` (called once per batch after the
+  maps whenever anything changed: `ledger.rs:202-206`, `apply.rs:528-538`), on the **first BAR1 batch
+  that changes anything, at any VA** — the closest observable equivalent of BAR1 going virtual. (⊘ The
+  first design retired it on a batch overlapping `[0,G)`; with C = 0 or a first mapping elsewhere that
+  kept FB `[0,G)` visible while RM treats it as free heap.)
+- In that batch: the guest's views are placed; every part of `[0,G)` no placement covers sinks to
+  scratch; only then is the seed released (the scratch-first rule, `cpuwin.rs:224-230`).
+- If RM preserved the console, its first BAR1 map is FB 0 → VA 0 (`kern_bus_gm107.c:1084-1092`): the
+  new view shows the same store pages, so the handover is invisible. The walker must coalesce the
+  4 KiB-PTE console map into one run, or host BAR1 fills with G/4 KiB views (box test B2 checks it).
+- A seed never retired (the guest never loads nvidia.ko) is released in `kf3_unrealize`, after QEMU
+  has unmapped the BAR.
+
+**How kf-disp shows it before the first modeset.** New `Shown::{Armed(Composition), Boot(LayerPlan,
+(W,H))}`; the loop chooses `Boot` **before** its `dp.scan` gate (`display.rs:1450-1452`) while no head has
+ever been armed — otherwise GB20x, whose `ScanVocab` is `None` (`engine.rs:1208-1209`), would never show
+it. `ScanState::start` takes `Shown`; the `Boot` arm skips `io.resolve`/`plan_layer`. The plan comes from
+a new pure `kf_disp::scanout::boot_layer(geom)` (src 0, pitch P, W×H, opaque XRGB8888, extent ≤ G,
+`W·H ≤ MAX_PIXELS`, refused by name otherwise). A sticky `boot_done` is set at the first armed head.
+
+#### 4.11.3 What the guest RM does with it
+
+⊘ **CORRECTED 2026-10-03 (B5, measured on box 54032077; §4.11.13) — three statements below.**
+- *"efifb or simpledrm keeps drawing through BAR1 VA 0 for the VM's life"* holds only while some RM
+  client keeps the adapter up. With no client (a CUDA-only guest between jobs) RM is torn down, its console
+  mapping is gone and BAR1 is in physical mode, which kf3 now models for `[0, G)`; the console keeps
+  drawing either way.
+- *"which kf-disp follows as a window at FB 0"* (`modeset=0`): measured true (`window 6 store 0x0`), and
+  NVKMS then frees its channels with `PRESERVE_HW` (`NV5070_CTRL_CMD_SET_RMFREE_FLAGS`), which kf-disp
+  now honours. ⊘ *CORRECTED 2026-10-03 (late, the review of `v3-gop-unload`):* *"before, the scanout
+  ended at the free"* was never measured — no kept run had X on NVKMS without the fix (§4.11.13) — and
+  by the code before the fix an unclaimed free left the last frame frozen, not dropped.
+- `modeset=1 fbdev=1`: the eviction also makes NVKMS drop its console surface
+  (`nvRmUnmapFbConsoleMemory`, `ogkm-580: src/nvidia-modeset/src/nvkms-rm.c:4967-4998`), so removing
+  nvidia-drm restores nothing: NVKMS shuts the heads down and the screen is black, as on bare metal.
+
+- **Linux, nvidia.ko only** (a CUDA guest with a firmware console): the guest sends C in fn 72; region 0
+  is the console (§4.11.4); `memmgrAllocateConsoleRegion` describes it (`mem_mgr.c:672-678`); `kbusInitBar1`
+  maps it at VA 0 with 4 KiB PTEs (`kern_bus_gm107.c:1098`, `:1131-1155`); the seed retires; efifb or
+  simpledrm keeps drawing through BAR1 VA 0 for the VM's life.
+- **Linux + nvidia-drm `modeset=1 fbdev=1`** (`fbdev` defaults on, `nvidia-drm-os-interface.c:41-42`):
+  NVKMS reads `VT_GET_FB_INFO` and imports the console (`nvkms-evo.c:5383`, `:9261`), then
+  `drm_dev_register`, aperture eviction and `framebufferConsoleDisabled` (`nvidia-drm-drv.c:2026-2049`)
+  lead to `NV0076_CTRL_CMD_NOTIFY_CONSOLE_DISABLED` → `kbusUnmapPreservedConsole` (`nvkms.c:4988-5009`;
+  `nvkms-rm.c:4967-4995`; `kern_bus_gm107.c:1283-1310`): BAR1 `[0,C)` sinks to scratch, the memdesc stays
+  reserved. Until `drm_client_setup`'s first modeset (`:2073`) kf-disp shows the last boot frame.
+- **`modeset=0` + the NVIDIA X driver**: NVKMS imports the console only if `width != 0`
+  (`nvkms-rm.c:4892-4902`) and restores it on last close with a core-channel modeset
+  (`nvkms.c:1107-1118` → `nvkms-console-restore.c:756`), which kf-disp follows as a window at FB 0.
+- **Guest-kernel scope.** Without an exported `screen_info` (Linux 7.1 here) path 3 gives width 0: no
+  NVKMS import, no `NOTIFY_CONSOLE_DISABLED`, the BAR1 console mapping lives for the driver's life, and
+  there is no NVKMS console restore. Bare metal behaves the same. The bench's noble 6.8 guest still
+  exports `screen_info`. Which kernel first dropped it is not established.
+- **Windows** (closed; not established): if the KMD sets `uefiScanoutSurfaceSizeInMB`, RM describes FB
+  `[0,size)`, maps it at BAR1 VA 0 and allocates the rest from the top of BAR1 (needs BAR1 < 4 GiB,
+  `kern_bus_gm107.c:983-1020`, `:1100-1110`). The layout is what it expects.
+
+#### 4.11.4 Every kayfabe answer that must agree with the ROM
+
+⊘ **CORRECTED AGAIN 2026-10-03 (late, `v3-gop`) — the next note's *"`consoleMemSize` is still kept and
+decoded, and a non-zero value is LOGGED"* no longer holds.** With `gop=off` kf3 now attaches **no**
+`SystemInfoCell` and **no** `ConsoleSeat` (`crates/kf-qemu/src/gop.rs`, `ConsoleWiring`): fn 72 is dropped
+unread, exactly as before the boot display, and fn 65 is today's table with nothing decoded or logged
+(test `gop::tests::gop_off_wires_no_cell_and_no_seat`). So B0 can no longer read C from the QEMU log
+(§4.11.9's B0 note); rows 1–2 still apply with `gop=on` only.
+
+⊘ **CORRECTED 2026-10-03 (as built, `v3-gop-kf3`; deviation 1 of §4.11.12) — rows 1–2 below apply with
+`gop=on` only.** The reviewed design applied the region-0 rule whether or not the ROM is in use. As built,
+with `gop=off` fn 65 serves today's table whatever fn 72 says: `consoleMemSize` is still kept and decoded,
+and a non-zero value is LOGGED (*"GET_GSP_STATIC_INFO (gop=off): the guest preserves a firmware console
+of … bytes"*), never acted on — so `gop=off` is byte-identical to today
+(`crates/kf-rm/tests/console_region.rs::without_a_console_or_with_gop_off_the_reply_is_byte_identical`).
+Without kf3's ROM nothing places a framebuffer at kf3's BAR1 base, and `primary_vga` is never set under
+passthrough (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osinit.c:983-991`, consumed at `:1087-1090`), so C = 0 is
+expected there; B0 reads the log line to check it. Rows 3–5 (NICE) are not built.
+
+| # | answer | where | value |
+|---|---|---|---|
+| 1 | `GspStaticConfigInfo.fbRegionInfoParams` — **MUST** | today `fb_layout` (`crates/kf-chip/src/bar0.rs:403-434`) → the immutable `Arc<BoardFacts>` (`crates/kf-rm/src/lib.rs:47`, `crates/kf-qemu/src/device.rs:411-412`) → `StaticInfoPolicy::body`/`body_measured` (`crates/kf-rm/src/staticinfo.rs:173-197`, `:213-231`) | computed **per fn 65** as `fb_layout_with_console(fb_length, C)`: with C > 0, region 0 = `[0,C)` reserved (`bRsvdRegion`, `mem_mgr_gsp_client.c:91-101`), ISO yes, compressed no; region 1 = `[C, carve)`; carve-out and the BAR1/BAR2 PDE bases unchanged (`memmgrCalculateHeapOffsetWithGSP_TU102` takes its region-0 branch, `mem_mgr_tu102.c:672-680`). With C = 0: byte-identical to today. ⊘ Without it, region 0 (≈7.7 GiB) becomes the console memdesc and `kbusInitBar1` fails (`mem_mgr_gm107.c:2079-2101`; `kern_bus_gm107.c:1131-1140`) — read from source, not run |
+| 2 | fn 72 `GspSystemInfo.consoleMemSize` — **MUST**, read lazily | fn 72 is NoReply and `boot.rs` returns before any policy sees it (`crates/kf-gsp/src/boot.rs:2080-2096`) | copy fn 72's body (bounded by the largest GspSystemInfo in the matrix) into a shared cell that survives `ReselectAtFn1`, like census and inbox (`device.rs:557-568`); decode at fn 65 with **the table that serves fn 65** — fn 72 precedes the fn-1 re-select, which does not compare GspSystemInfo (`crates/kf-abi/src/versions.rs:511-550`), and the offset differs by version (`generated/matrix.rs:2125`, `:2411`, `:2899` → 48/56/64). Refuse fn 65 by name unless C is a 64 KiB multiple, `C < carve`, `C ≤ bar1-size`; log C against G. A later fn 72 replaces the cell |
+| 3 | `bIsGpuUefi`, `bIsEfiInit` — nice | `gsp_static_config.h:161-162`; read only by `unix_console.c:52`, `:95`, `:179` | TRUE with `gop=on`; kf-disp already answers `PRE_UNIX_CONSOLE` with `bReturnEarly` (`crates/kf-disp/src/model.rs:123-131`, `:820-827`) |
+| 4 | `NV2080_CTRL_CMD_BIOS_GET_UEFI_SUPPORT` (0x2080080b) — nice | GSP-routed (`generated/g_subdevice_nvoc.c:1916-1928`) | `PRESENCE_YES \| IS_EFI_INIT_TRUE` with `gop=on` (`ctrl2080bios.h:417-480`) |
+| 5 | `NV0073_CTRL_CMD_SYSTEM_GET_BOOT_DISPLAYS` — nice | `bootDisplayMask = 0` today (`model.rs:642-643`) | the connector's display id with `gop=on` (console-restore pass 2, `nvkms-console-restore.c:824-857`) |
+| 6 | display fuse | already ENABLE wherever `display=on` works (`kern_disp.c:333`) | nothing new |
+| 7 | NV_PROM VBIOS | `crates/kf-abi/src/vbios.rs:880-893` | unchanged (§4.11.6) |
+| — | `uefiScanoutSurfaceSizeInMB` | CPU-RM | nothing to answer (the ⊘ note at the top) |
+| — | `VT_GET_FB_INFO` | CPU-RM (`unix_console.c:332-381`) | agrees automatically |
+
+⚠ **HIGH risk, from source:** shipping the ROM without row 1 breaks guest driver load. Rows 1–2 land
+with the kf3 integration, together with the ROM BAR, never after it.
+
+#### 4.11.5 Constraints, and how the design meets them
+
+- **No traps in BAR1/BAR2/PRAMIN** (`THE_CONSTRAINTS.md:72-73`, §23): the seed is a placement in the
+  existing BAR1 memslot; the ROM touches no BAR0. The ROM BAR is read-only RAM: reads never exit; a write
+  exits to QEMU core and is discarded there (not a kf3 path). It becomes a memslot whenever the guest
+  enables ROM decode (OVMF does, briefly; Linux's x86 fixup then replaces the resource,
+  `arch/x86/pci/fixup.c:381-397`) — setup-time only; churn a guest causes by toggling is self-harm.
+- ⊘ *2026-10-03 (B5, §4.11.13): plus one view (RM map + `mmap`) at each RM teardown and its retirement at
+  the next RM init, on the VA thread; the budget term below already covers the overlap.*
+- **Memslots are setup-only** (§16): no new BAR1 memslot; one `mmap(MAP_FIXED)` at realize and one at
+  retirement, on the VA thread.
+- **No blocking on a vCPU or under a lock** (A.4, §25): no new trap; fn 72 stash = a bounded copy on the
+  GSP queue thread; seed and zeroing on the realize thread; retirement inside the existing `invalidate`;
+  the boot layer on the display worker.
+- **VMM addresses never guest-visible** (A.5): the descriptor carries a BAR index and an offset;
+  `FrameBufferBase` is the guest-physical address OVMF assigned.
+- **One store; vidmem is vidmem** (`THE_CONSTRAINTS.md:1009-1026`, items 18, 22): the seed is a store
+  view; host RAM refused (§4.11.2). **The CPU never reads guest vidmem** (§38): GPU zeroing and GPU copy;
+  the firmware's own reads are the guest's CPU, kept rare by the RAM shadow.
+- **No hard-coded chip** (§12, A.7): the PCIR ids and class come from the host identity (`kf3.c:796-802` at `v3-gop-kf3`);
+  the firmware names no vendor (it matches the descriptor's ids against config space). Displayless dies
+  refuse `display=on` (`device.rs:518-525`); `gop=on` requires `display=on`.
+- **§13 unsafe**: the packer is safe and pure; the firmware is the named exception under `firmware/`
+  (owner default 2026-10-03; `firmware/README.md`), contained by CI (§4.11.6).
+- **Host BAR1 budget** (`crates/kf-qemu/src/cardbudget.rs:1-50`): add G, briefly 2G during retirement,
+  when `gop=on`; refuse by name.
+- **Hostile guest** (A.9): the ROM is VMM-authored and read-only; the scanout extent is the authored G;
+  C shapes only the guest's own region table. **No forged completions** (A.3): none involved.
+- **Licence** (§G): every new file carries `SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later`.
+
+#### 4.11.6 The ROM, its container, and how kf3 serves it
+
+⊘ **CORRECTED 2026-10-03 (late, `v3-gop`; `OWNER_RULINGS.md` §K) — four statements in this section no
+longer hold, each marked where it stands:**
+- **Nothing compiled is committed.** `firmware/kf-gop/kf-gop.efi` is deleted, and no commit of `v3-gop`
+  contains it. `crates/kf-gop-image/build.rs` builds `firmware/kf-gop` (`--bin kf-gop`, release, `--locked`)
+  in a nested cargo under `OUT_DIR` for `<CARGO_CFG_TARGET_ARCH>-unknown-uefi`, with the environment
+  scrub, recursion guard and kept `RUSTUP_TOOLCHAIN` of `crates/kayfabe-isolate-host/build.rs`, refuses the
+  result unless `kf_oprom::pe::check` accepts it with the arch's machine, and embeds it as
+  `kf_gop_image::KF_GOP_EFI`. A toolchain without the UEFI target is a named build error that prints
+  `rustup target add <triple> --toolchain <t>`; `rust-toolchain.toml` lists `x86_64-unknown-uefi`. Why a new
+  crate and not `kf-oprom`: `kf-oprom` is in the PURE set (whose rule counts build edges) and the firmware
+  depends on it, so a build script there would run inside every build of the driver it builds.
+- **The ROM is arch-neutral.** `EfiMachineType` is the PE's own COFF `Machine`; `pe::check` accepts
+  0x8664 and 0xAA64 and refuses every other machine by name (`PeError::UnsupportedMachine`).
+- **x86 port I/O is behind `cfg(target_arch = "x86_64")`**: the `debugcon` feature and the stand-in's
+  test app are named build errors elsewhere; the release driver builds for `aarch64-unknown-uefi` (9 216
+  bytes, machine 0xaa64, built locally 2026-10-03; CI's `aarch64` job builds it on every push).
+- **The framebuffer is written by aligned volatile 32-bit stores only**: `blt` sees it as a
+  `Framebuffer` whose one operation is a word store (never a slice, so never `memcpy`/`memset`), and
+  `probe::place` refuses a framebuffer base that is not word-aligned.
+
+**The firmware, as built** (`firmware/kf-gop`, zero external crates, `no_std`, `x86_64-unknown-uefi`;
+release `kf-gop.efi` 9 216 bytes, ⊘ *(no longer committed or embedded by `kf-oprom` — the note above)*
+committed as `firmware/kf-gop/kf-gop.efi` and embedded by
+`kf-oprom`, see *How kf3 serves it*):
+- `efi_main` installs the driver binding and ComponentName2 on its image handle and returns.
+- `Supported` opens PCI I/O `BY_DRIVER`, reads config dwords 0x00 and 0x08, and accepts only a
+  display-class controller whose `RomImage` holds a valid `KFGP` descriptor naming **that controller's
+  own vendor and device** (`kf_gop::probe::decide`); everything else is refused by name (debug builds
+  print the name).
+- `Start` enables `EFI_PCI_IO_ATTRIBUTE_MEMORY` **only** (no I/O decode, no bus mastering; the previous
+  attributes are saved), reads the BAR's base and length from `GetBarAttributes`, refuses a framebuffer
+  that does not fit it, allocates a context and a RAM shadow (`EfiBootServicesData`), creates one child
+  (the parent's device path + ACPI `_ADR` 0x80010100, the value QemuVideoDxe uses, `OvmfPkg/QemuVideoDxe/Driver.c:389`), installs device path,
+  GOP, `EDID_DISCOVERED` and `EDID_ACTIVE` on it, opens PCI I/O `BY_CHILD_CONTROLLER`, and clears to black.
+  `Stop` reverses it and restores the attributes.
+- GOP: `MaxMode = 1`, `PixelBlueGreenRedReserved8BitPerColor`, `PixelsPerScanLine = pitch/4`,
+  `FrameBufferBase` = BAR + offset, `FrameBufferSize` = G. `QueryMode` returns a pool copy. `Blt` does all
+  four operations with the spec's parameter rules; writes go to the shadow and the framebuffer, reads come
+  from the shadow; every GOP call runs at `TPL_NOTIFY`. ⚠ A loader that writes `FrameBufferBase` directly
+  and later reads through `Blt` sees stale shadow pixels (cosmetic).
+- Debug output on port 0x402 exists only in `--features debugcon` builds; the release build contains no
+  port I/O (checked in CI with `objdump`).
+- Every decision is in the safe library (`src/lib.rs`, `forbid(unsafe_code)`, 14 host tests; ⊘ 17 since
+  `v3-gop`); the 77 (⊘ 78 since `v3-gop`: the framebuffer's volatile word store)
+  relaxations sit in four `*_unsafe.rs` files, counted by the CI ratchet (`firmware/kf-gop:77`); a
+  `#[repr(C)]` under `firmware/` outside `*_unsafe.rs` fails the ABI-quarantine gate.
+
+**The container, as built** (`crates/kf-oprom`: pure, `no_std` + `alloc`, `forbid(unsafe_code)`):
+
+| offset | content |
+|---|---|
+| 0x00 | `55 AA`, `InitializationSize`, `EfiSignature 0x0EF1`, `EfiSubsystem 0x0B`, `EfiMachineType` = the PE's `Machine` (⊘ was the constant 0x8664 until `v3-gop`), `CompressionType 0`, reserved, `EfiImageHeaderOffset` (0x16), `PcirOffset 0x1C` (0x18) |
+| 0x1C | PCIR rev 3, length 0x1C: host vendor, device and class, `ImageLength`, code type 3, indicator 0x80 (last image) |
+| 0x40 | `KFGP` v1 at `(PcirOffset + len + 0xF) & !0xF` (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/kernel_gsp_vbios_tu102.c:331`): magic, version, length, vendor/device echo, BAR, format (1 = XRGB8888), flags (0), offset, G, W, H, pitch, EDID length and EDID (≤ 256 bytes), checksum byte — layout in `crates/kf-oprom/src/desc.rs` |
+| `EfiImageHeaderOffset` | the PE, byte-identical to the shipped `.efi`, **ending exactly on the last 512-byte block** |
+
+- ⊘ *Deviation from the reviewed design, 2026-10-03:* the design put the PE at 0x200 with padding after
+  it. EDK2 hands `LoadImage` `[EfiImageHeaderOffset, InitializationSize·512)`
+  (`MdeModulePkg/Bus/Pci/PciBusDxe/PciOptionRomSupport.c:85-90`) and its Authenticode check hashes every
+  byte past the sections that is not the certificate table
+  (`SecurityPkg/Library/DxeImageVerificationLib/DxeImageVerificationLib.c:556-588`), so padding after a
+  signed PE would break its signature on firmware that verifies option ROMs. kf-oprom pads **before**
+  the PE. An unsigned linker output is already a multiple of 512 bytes, so for it the layout is the
+  design's (PE at 0x200). OVMF does not verify option ROMs at all (§4.11.7), so the stand-in cannot
+  tell the two layouts apart; the arm records that. ★ *Tested 2026-10-03 (late), F1 at `adbe6fcd`
+  (§4.11.9): on a ROM-verifying OVMF the signed end-aligned ROM runs and the same PE with padding after
+  it does not — the layout's premise holds (`traces/v3_display/gop_standin_20261003_v3gop/`). This
+  closes the ⊘ "untested" sentence right after it* (folded 2026-10-03, the review of `v3-gop`: the two
+  read as a contradiction). ⊘ *2026-10-03 (late, `v3-gop`; SUPERSEDED the same day by F1, the ★ note
+  just before):* so the layout is **untested against a firmware that denies unsigned ROMs** — it rests
+  on reading `DxeImageVerificationLib.c` alone. The stand-in's `sb_deny_*` arms test it on an OVMF built with
+  `PcdOptionRomImageVerificationPolicy=0x04` when one is supplied (`OVMF_DENY_CODE`; test F1, §4.11.9).
+- `parse` accepts PCIR revision 0 and 3 and reports compression: QEMU's own `efi-virtio.rom` (read
+  2026-10-03) has two images, the EFI one with PCIR rev 0, length 0x18, compression 1, header offset
+  0x38 — a golden test (`crates/kf-oprom/tests/efi_virtio_golden.rs`).
+- `pack` refuses by name: a PE that is not PE32+/x86-64 (⊘ *`v3-gop`:* or AArch64)/subsystem 11 or lacks the ABI marker
+  `KFGOP-ABI=1` (so a VMM never packs a descriptor version its firmware would refuse); a non-display
+  class; a bad geometry (`pitch % 256`, `G ≥ pitch·H`, dimensions ≤ 16384); an EDID over 256 bytes; a ROM
+  over 0xFFFF blocks.
+
+⊘ *2026-10-03 (late, `v3-gop`):* `pack_kf_gop` and `KF_GOP_EFI` moved to `crates/kf-gop-image` (same
+signatures; `kf_gop_image::TARGET` names the triple); `kf-oprom` keeps `pack(pe, …)` and the rest.
+
+**The API the kf3 integration uses** (`crates/kf-oprom`, re-exported at the crate root):
+`Geometry::for_mode(W, H)` → `BootFramebuffer { bar: 1, offset: 0, geometry }`;
+`pack_kf_gop(&Identity { vendor, device, class: ClassCode::from_u24(class) }, &fb, edid) ->
+Result<Vec<u8>, PackError>` packs the embedded driver `KF_GOP_EFI` (`pack(pe, …)` takes any PE, for
+tests); `BootFramebuffer::fits(bar_len)`; `Descriptor::find(rom)` and `rom::parse` for tests. The
+geometry and EDID come from kf-disp's `Monitor` (`crates/kf-disp/src/edid.rs:145-175`, 128-byte EDID).
+
+**How kf3 serves it** (design, for the integration — ★ built on `v3-gop-kf3`, §4.11.12):
+- ★ **DONE 2026-10-03 (late) on `v3-gop`** — the next bullet's *"⚠ Not done on either branch yet"* is
+  closed: see the ⊘ block at the top of this section. kf3 needed no change for it, as predicted: Rust
+  reads the embedded driver and hands C the finished ROM.
+- ⊘ **CORRECTED by the owner the same day (`OWNER_RULINGS.md` §K, 2026-10-03) — the next bullet's
+  "committed beside its source" is withdrawn.** *"We aren't going to put compiled stuff in the repo
+  right? … the efi driver is compiled when building the repo."* build.rs compiles `firmware/kf-gop`
+  during the normal cargo build (the nested-cargo pattern of `crates/kayfabe-isolate-host/build.rs`),
+  `rust-toolchain.toml` lists `x86_64-unknown-uefi`, and no reproducibility compare is needed. The ROM
+  stays arch-neutral for a later aarch64 (EFI machine type from the PE, x86 port I/O behind
+  `cfg(target_arch)`, CI's aarch64 job builds `aarch64-unknown-uefi`). ⚠ **Not done on either branch
+  yet**: `firmware/kf-gop/kf-gop.efi` is still committed and `kf_oprom::KF_GOP_EFI` still
+  `include_bytes!` it. kf3 reads only `KF_GOP_EFI`, so the switch changes no kf3 code.
+- ★★★ **OWNER DECISION, 2026-10-03 — it overrides steps 1 and 2 below and the *Install* bullet.**
+  *"generate the uefi data in kayfabe and give it as blob in the rom. So there is no rom per gpu or
+  similar, all is given as config data, just like cuda."*
+  - The driver is **one constant `.efi` embedded in kayfabe**, the way the PTX kernels are
+    (`crates/kf-cuda/src/display.rs:21`): the release build is committed beside its source as
+    `firmware/kf-gop/kf-gop.efi` and `crates/kf-oprom` embeds it as `KF_GOP_EFI` (`include_bytes!`,
+    feature `embedded-gop`, on by default and off for the firmware itself). No QEMU firmware file, no
+    `romfile=`, no `qemu_find_file`, no `gop-image=` property, nothing per GPU to install.
+  - CI's `firmware` job rebuilds it from source and fails if one byte differs. Nothing is normalised:
+    `firmware/kf-gop/build.rs` links with `/Brepro` (the PE timestamp is a content hash) and
+    `/DEBUG:NONE` (no debug directory, whose `.pdb` name carries cargo's per-path metadata hash). A
+    fresh target directory and a second checkout path both reproduced it locally on 2026-10-03 at
+    `3dd574e5` (sha256 `f11ab0b9…`, §4.11.8).
+  - Everything per device is config data kf3 generates at realize: the ROM header and PCIR (the ids
+    and class kf3 already presents) and the `KFGP` descriptor (BAR, offset, G, W/H/pitch, format, EDID
+    from kf-disp). Rust calls `pack_kf_gop` and hands C the finished ROM — the new FFI becomes
+    `kf3_option_rom(h, &rom, &rom_len)` (still **KF3_ABI 10 → 11**); C copies it in step 3's shape.
+  - The PE is byte-identical on every host, so one future Secure Boot signature covers all of them.
+1. ⊘ *superseded by the owner decision above:* C finds the PE with `qemu_find_file(QEMU_FILE_TYPE_BIOS, "kf3-gop.efi")`; `-L` or a `gop-image=`
+   property overrides it.
+2. ⊘ *superseded (C no longer handles the PE):* C passes the bytes to a new `kf3_option_rom()` (**KF3_ABI 10 → 11**, `qemu/hw/misc/kf3/kf3.h:9-14`,
+   plus `crates/kf-qemu/tests/wire_mirror.rs`); Rust packs with the host identity, kf-disp's geometry and
+   EDID; C copies the result.
+3. C registers it in the shape of `pci_add_option_rom` (`hw/pci/pci.c:2626-2644`): `has_rom = true`,
+   `memory_region_init_rom(pow2ceil(len))`, memcpy, `pci_register_bar(PCI_ROM_SLOT)`;
+   `pci_del_option_rom` cleans up. vfio is **not** the model (`memory_region_init_io` with trapping reads,
+   `hw/vfio/pci.c:1270-1274`).
+4. Gates: `gop` defaults off; `gop=on` without `display=on` is refused by name; `rombar=0` means no ROM;
+   a user `romfile=` wins (QEMU loads it after `pc->realize`). **Never** set a class-level `pc->romfile`
+   for kf3: `pci_patch_ids` rewrites byte 6, which is inside `EfiSignature` (`pci.c:2484-2537`).
+- **NV_PROM is unchanged**: kayfabe's VBIOS is one base image with `expansionRomOffset = 0`
+  (`crates/kf-abi/src/vbios.rs:880-893`), a parse that is green today; nothing reads an EFI image out of
+  PROM, and Hopper/Blackwell read no VBIOS image (`kf-chip/src/bar0.rs:332-338`).
+- **Nothing in the guest reads the PCI ROM**: nvidia.ko only tests `IORESOURCE_ROM_SHADOW`
+  (`nv.c:5105-5121`); RM disables the ROM through the BAR0 config mirror (`osinit.c:1271-1272`); the x86
+  kernel replaces the ROM resource with the 0xC0000 shadow (`fixup.c:381-397`).
+- **Install** (`V3_SWEEP_AND_INSTALL.md`): ⊘ *superseded by the owner decision above* — nothing is
+  installed; the driver is inside the kf3 binary (`libkf_qemu.a` → QEMU).
+
+#### 4.11.7 EDK2 behaviour: what the source says, and what the stand-in showed
+
+Read in edk2-stable202408 (QEMU 10.2.4's `roms/edk2`); shown by the stand-in on 2026-10-03 at
+`3dd574e5` on Ubuntu `ovmf 2025.11-3ubuntu7` and QEMU's `edk2-x86_64-code.fd`, and in CI runs
+37127211692 (`2c6178fe`) and 37127710871 (`da5cc07f`) on Ubuntu `ovmf 2024.02-2ubuntu0.9`.
+
+| behaviour | read in the source | stand-in, 2026-10-03 (`3dd574e5`; CI runs 37127211692, 37127710871) |
+|---|---|---|
+| The bus driver copies the ROM into `RomImage` before running its driver | `PciDeviceSupport.c:239-333` (`ProcessOpRomImage` inside `RegisterPciDevice`) | kf-gop decodes the descriptor from `RomImage` in `Supported`, all three builds |
+| Only an EFI boot-service or runtime driver is loaded from a ROM | `PciOptionRomSupport.c:76-80`, `:701` | `build.rs`'s `/subsystem:efi_boot_service_driver` is honoured by lld-link: subsystem 11 (`kf-oprom pe`) |
+| `LoadImage` gets `[EfiImageHeaderOffset, InitializationSize·512)` | `PciOptionRomSupport.c:85-90` | the payload is the PE byte for byte (unit test), and it loads |
+| **ROM drivers are deferred until after End-of-DXE, and OVMF connects consoles twice** — before dispatching them and again after (*"GPU passthrough only allows Console enablement after ROM image load"*) | `OvmfPkg/Library/PlatformBootManagerLib/BdsPlatform.c:470-503` | QEMU's DEBUG edk2: *"3rd party image[0] is deferred to load before EndOfDxe"*. ⇒ A device OVMF has a built-in driver for is taken by it first: stdvga + a kf-gop ROM gets QemuVideoDxe (30 modes), kf-gop loads and finds the device owned (arm `stdvga_builtin_wins`). NVIDIA has no built-in OVMF driver, so kf3 is in `ati-vga`'s position, where kf-gop binds |
+| A single-mode GOP drives the text console | — | *"GraphicsConsole video resolution 1152 x 648"*, *"Graphics Console Started"* (QEMU edk2 log) |
+| **Option ROMs are not signature-checked, Secure Boot or not** | `PcdOptionRomImageVerificationPolicy\|0x00` (always trust) in `[PcdsDynamicDefault]`, `OvmfPkg/OvmfPkgX64.dsc:689`; set to 0x04 (deny) only under AMD SEV (`OvmfPkg/PlatformPei/AmdSev.c:468`) | with Secure Boot enforcing — the unsigned boot app is *"Access Denied -- rejected probably by Secure Boot"* in the same boot — the unsigned ROM runs (Microsoft-keyed and snakeoil VARS); the snakeoil-signed ROM and the tail-padded signed ROM run too (arms `sb_*`) |
+
+#### 4.11.8 The local stand-in
+
+★ **Run 2026-10-03 (late) at `adbe6fcd`, clean tree, with a ROM-verifying OVMF: 14 arms — 11 PASS,
+3 OBSERVED, 0 SKIP, 0 FAIL** (`traces/v3_display/gop_standin_20261003_v3gop/`; F1 below). Same host as
+the table below. CI run 37136448638 (`ac10c23f`, the same code before the history was squashed): 7 PASS,
+3 OBSERVED, 4 SKIP (QEMU's edk2 and the deny-policy firmware are not on the runner), 0 FAIL.
+
+⊘ **CORRECTED 2026-10-03 (late, `v3-gop`, the review of `v3-gop-kf3`) — the three Secure Boot arms
+below that only observe are renamed, and none of them is a PASS any more.** `sb_ms_unsigned`,
+`sb_snakeoil_unsigned` and `sb_snakeoil_tailpad` printed `verdict=PASS` whatever the ROM did, so no arm
+could fail on the ROM outcome it was named for. They are now `sb_ms_unsigned_observe`,
+`sb_snakeoil_unsigned_observe` and `sb_snakeoil_tailpad_observe`, with `verdict=OBSERVED` (counted
+separately in `GOP_STANDIN_SUMMARY … passed= observed= skipped= failed=`); each still FAILs when it
+cannot confirm Secure Boot is enforcing. Three new arms can fail on the ROM outcome — `sb_deny_signed`
+(must start), `sb_deny_unsigned` and `sb_deny_tailpad` (must not) — on an OVMF built with
+`PcdOptionRomImageVerificationPolicy=0x04`, named by `OVMF_DENY_CODE`/`OVMF_DENY_VARS`; without one they
+SKIP and say why (test F1, §4.11.9). And the driver the stand-in packs is no longer "the committed blob":
+it builds `firmware/kf-gop` itself, from the same source `kf-gop-image` embeds (CI's `firmware` job
+checks the two builds are byte-identical). The UEFI target is listed in `rust-toolchain.toml`, so the
+`rustup target add` line below is only needed for a toolchain installed before it.
+
+```sh
+rustup target add x86_64-unknown-uefi --toolchain 1.99.0
+bash scripts/display/gop_standin.sh            # every arm; or name arms; --keep keeps the scratch dir
+```
+
+Host: QEMU 10.2.1, KVM, q35, 512 MiB, 1 vCPU; Ubuntu `ovmf 2025.11-3ubuntu7`; QEMU's
+`edk2-x86_64-code.fd` from QEMU 10.2.4 (the same `.bz2` as QEMU 11.1.1's); the host kernel
+`7.0.0-34-generic` with a busybox initramfs. The stand-in device is QEMU's `ati-vga` (1002:5046, class
+0x0300, BAR0 = RAM the host reads back with QMP `pmemsave`). The ROM is the release driver packed by
+`kf-oprom` for 1002:5046, BAR 0, an odd mode 1152x648 (pitch 4608, G 0x2E0000).
+⊘ *Deviation from the reviewed design:* the design named QEMU's stdvga. On OVMF stdvga belongs to
+QemuVideoDxe before any ROM driver runs (§4.11.7), so the stand-in uses a VGA-class device OVMF has no
+driver for — which is also the position kf3 is in.
+
+**Result, 2026-10-03, `3dd574e5`, clean tree: 11/11 PASS** (`traces/v3_display/gop_standin_20261003/`;
+the release build it packed is the committed blob, sha256 `f11ab0b9…`):
+
+| arm | what | result |
+|---|---|---|
+| `gop_ubuntu` | the test app's 21 checks (one GOP of ours, `MaxMode` 1, the descriptor's mode, `FrameBufferBase` = the BAR the bus driver assigned, both EDID protocols, `QueryMode`, `SetMode` 0 clears / 1 unsupported, `Blt` fill / buffer↔video with `Delta` and offsets / overlapping video→video, four refusals), then the framebuffer read back | 21/21; **648/648 lines byte-exact** at pitch 4608 |
+| `gop_qemu_edk2` | the same on QEMU's edk2 | 21/21; 648/648 |
+| `stdvga_builtin_wins` | stdvga + a kf-gop ROM | QemuVideoDxe binds (30 modes); kf-gop loaded, not started — recorded |
+| `neg_wrong_id` | descriptor names device 0x5047 | refused: *"ids 1002:5046 but the descriptor names 1002:5047"*; no kf-gop GOP |
+| `neg_no_descriptor` | descriptor magic broken | refused: *"KFGP: no KFGP magic"*; no kf-gop GOP |
+| `linux` | OVMF → EFI stub → Linux 7.0 | `boot_vga` 1; BOOTFB `0x80000000-0x802d8fff` (BAR0 + 0, 2 985 984 bytes); simpledrm on it; sysfb's parent `0000:00:01.0`; fb0 1152x648 stride 4608; a pattern written through `/dev/fb0` is in the BAR **648/648 lines byte-exact** |
+| `linux_two_vga` | a driverless VGA device (I/O+memory decode) at 02.0, kf-gop's at 03.0 | `boot_vga` moves to 03.0, the BOOTFB owner (*"overriding previous"*) |
+| `sb_ms_unsigned` | Secure Boot, Microsoft keys, unsigned ROM | the ROM **loads and starts**; the unsigned app is *Access Denied* |
+| `sb_snakeoil_signed` | Secure Boot, snakeoil keys, `sbsign`ed ROM and app | `secure_boot=1`; loads; 21/21 |
+| `sb_snakeoil_unsigned` | the same keys, unsigned ROM | loads; 21/21 |
+| `sb_snakeoil_tailpad` | the signed PE at 0x200, padding after | loads; 21/21 (no verification happens, §4.11.7) |
+
+The same script is the CI job `firmware`'s last step. Run 37127211692 at `2c6178fe` (2026-10-03, GitHub
+`ubuntu-latest`, KVM, QEMU 8.2.2, `ovmf 2024.02-2ubuntu0.9`, kernel `6.17.0-1022-azure`): 10 PASS,
+`gop_qemu_edk2` SKIP (not installed there); that revision's Linux arm still had a weaker last check
+(non-zero BAR bytes — which locally turned out to be OVMF's text, because fbcon had deferred its
+takeover; replaced by the `/dev/fb0` pattern at `da5cc07f`). Run 37127710871 at `da5cc07f`, same
+runner image: the same 10 PASS and 1 SKIP, the Linux arm's `/dev/fb0` pattern 648/648 lines
+byte-exact on `6.17.0-1022-azure`.
+
+⊘ *2026-10-03 (late, `v3-gop`): the next paragraph is history — there is no committed blob. Its
+reproducibility result is what CI's `firmware` job now checks on every push in a new form: the driver
+`kf-gop-image` embeds (nested build, scrubbed environment) equals a standalone build, byte for byte.*
+**The committed blob is reproducible** (2026-10-03, `3dd574e5`): `firmware/kf-gop/kf-gop.efi`, 9 216
+bytes, sha256 `f11ab0b9f61745a224388fdeda21d19c2c2d802d681a4f9d1c48ddcdd919ed9b`, rebuilt with the pinned
+toolchain from a fresh target directory and from a second checkout at another path: identical both
+times (`cmp`); the stand-in run above packed that same build. CI run 37128563465 (`65a22819`,
+GitHub `ubuntu-latest`) rebuilt it from source on another machine to the same sha256, and its stand-in
+ran 10 PASS and 1 SKIP (QEMU's edk2 not installed there).
+
+**Not established locally** (box tests, §4.11.9): kf3's realize and ROM BAR; the seed through host BAR1
+and the GPU zeroing; kf-disp's CUDA boot scanout; RM's console preservation with the new region table and
+the walker's single run for it; seamless retirement; nvidia-drm eviction, NVKMS restore, Xorg and Windows;
+memory types and bandwidth through host BAR1 (the design expects OVMF to map the GOP framebuffer UC); other families; a
+firmware that does verify option ROMs (the padding layout, §4.11.6).
+
+#### 4.11.9 Box tests, in order
+
+Every result cites the kf3 binary's revision (`build_kf3.sh`'s `kf3-bins/<rev>/`). B0a needs no build.
+
+- **B0a** (today's SeaBIOS bench, `display=on`, no ROM): while the lane holds the guest up, ask the kernel
+  and Xorg without the pin.
+  ```sh
+  DISPLAY_HOLD_S=900 KF_DEVICE=kf3 bash scripts/bench/display/lane.sh b0a &
+  scripts/bench/gssh_nv 'd=$(lspci -D -d 10de: | awk "NR==1{print \$1}"); cat /sys/bus/pci/devices/$d/boot_vga; sudo dmesg | grep vgaarb'
+  scripts/bench/gssh_nv 'sudo systemctl stop lightdm; sudo rm -f /etc/X11/xorg.conf; sudo systemctl start lightdm; sleep 30; grep -E "PCI:\*|\(EE\)|NVIDIA\(0\)" /var/log/Xorg.0.log' > b0a_xorg.txt
+  ```
+  If Xorg starts on kf3, drop the BusID pin (`scripts/bench/display/desktop/xorg.conf.in`) independently
+  of the ROM.
+- ★ **2026-10-03 (`v3-gop-kf3`) — B0–B2 now have exact commands**, using what the integration built:
+  `KF_FIRMWARE=ovmf` (`scripts/bench/boot_nvkvm.sh`: OVMF code read-only plus a per-run VARS copy beside
+  the run's logs; unset = SeaBIOS, as before), `DISPLAY_KF3_EXTRA=gop=on` (appended to kf3's device
+  line by `lane.sh`), and the device's own log lines in `/workspace/bench/run_<tag>_qemu.log`. The box
+  needs Ubuntu's `ovmf` package (`sudo apt-get install -y ovmf`) and a kf3 binary of the revision under
+  test (`bash scripts/bench/build_kf3.sh`). One boot serves B1–B3: the lane's hook loads nvidia.ko and
+  then `nvidia-drm modeset=1 fbdev=1`.
+- ⊘ *CORRECTED 2026-10-03 (late, `v3-gop`):* B0's last check below cannot fire any more — with
+  `gop=off` kf3 keeps no fn 72 body and logs no C (§4.11.4's first ⊘ note), so the grep prints nothing
+  whatever the guest sends. Drop it; C is read at B2 (`gop=on`). The rest of B0 stands.
+- **B0** (OVMF, `gop=off`): boot, nvidia.ko, the M1/M2 probe pixel-exact; where OVMF places kf3's
+  64-bit BARs; `boot_vga` without a GOP; whether the noble image has an ESP; and that the guest sends
+  C = 0 without a ROM (§4.11.4's ⊘ note: no *"GET_GSP_STATIC_INFO (gop=off)"* line). In the local
+  `linux_two_vga` arm Linux read `command=0x0007` (I/O + memory + bus master) on a driverless VGA device
+  at init; whether OVMF or Linux set it is not established, so B0 checks kf3's decode without a GOP.
+  ```sh
+  KF_FIRMWARE=ovmf DISPLAY_HOLD_S=600 bash scripts/bench/display/lane.sh b0 &
+  scripts/bench/gssh_nv 'ls /sys/firmware/efi >/dev/null && echo UEFI; lsblk -f | grep -i vfat; d=$(lspci -D -d 10de: | awk "NR==1{print \$1}"); cat /sys/bus/pci/devices/$d/boot_vga; sudo setpci -s $d COMMAND; sudo lspci -vv -s $d | grep -E "Region|Expansion ROM"'
+  grep -a 'GET_GSP_STATIC_INFO (gop=off)' /workspace/bench/run_b0_qemu.log   # expected: nothing
+  ```
+- **B1** (`gop=on`): the console shows OVMF, GRUB and kernel text from the first seconds; simpledrm or
+  efifb on BAR1 with BOOTFB at BAR1 + 0; the boot counters.
+  ```sh
+  KF_FIRMWARE=ovmf DISPLAY_KF3_EXTRA=gop=on DISPLAY_HOLD_S=900 bash scripts/bench/display/lane.sh b1 &
+  for t in 3 8 15 30; do sleep 5; echo "screendump /workspace/bench/display/b1_shot$t.ppm" | socat - UNIX-CONNECT:/workspace/bench/run_b1.mon; done
+  grep -a 'boot display ON\|option ROM registered\|display: boot layer\|boot\[frames' /workspace/bench/run_b1_qemu.log
+  scripts/bench/gssh_nv 'grep -i -B1 bootfb /proc/iomem; sudo dmesg | grep -iE "efifb|simpledrm|vgaarb|BOOTFB"; d=$(lspci -D -d 10de: | awk "NR==1{print \$1}"); cat /sys/bus/pci/devices/$d/boot_vga'
+  ```
+  Pass: the shots show firmware and kernel text (not black); *"option ROM registered"* and *"boot display
+  ON … G = 0x7f0000"* in the QEMU log; BOOTFB at the BAR1 base; `boot_vga` = 1; `boot[frames=N …]`
+  growing in the status line.
+- **B2** (RM adoption, the same boot after the hook loads nvidia.ko): fn 72 C == `align64K(H·pitch)` ≤ G;
+  fn 65 has three regions; the first K_BAR1 change is **one run** VA 0 → store 0, length C; the seed
+  retired in that batch; no LEVEL_ERROR *"cannot preserve console mapping"*; nvidia-smi works; no black
+  frames across the module load.
+  ```sh
+  grep -a 'GET_GSP_STATIC_INFO\|boot display seed\|armed its first head' /workspace/bench/run_b1_qemu.log
+  grep -ac 'cannot preserve console' /workspace/bench/run_b1_dmesg.log        # expected: 0
+  ```
+  Pass: *"the guest preserves a firmware console of 0x7f0000 bytes … 3 regions"*; *"boot display seed
+  [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000
+  bytes"*. ⚠ *"⚠ N placements inside it — the console is NOT one view"* means the walker split the
+  console's 4 KiB PTEs: N host BAR1 views (§4.11.10).
+- **B3** (`modeset=1 fbdev=1`): eviction, `NOTIFY_CONSOLE_DISABLED`, `boot_done`, no black gap.
+- **B4**: Xorg with no `xorg.conf`, plus Wayland; the M3 probes pass.
+- ⊘ **CORRECTED 2026-10-03 — B5 RAN** (`traces/v3_display/gop_unload_20261003/`, §4.11.13; kf3
+  `4a4b95f7`): (c) the console shows new text with no RM client, with one, and after a second teardown;
+  (a) as first run was a Wayland compositor on simpledrm, not X (the image's lightdm autologin still named
+  B3's `cinnamon-wayland`): it is now that arm, by name, and the X arm is (a2) — the NVIDIA X driver,
+  `modeset=0`, X11 Cinnamon; both bring the text console back and keep it updating; (b) is black. The hook
+  (`scripts/bench/display/unload_hook.sh`) prints each arm's expectation. (d) was not run.
+- ⊘ **2026-10-03 (late) — B5 RE-RUN with a verdict** (`traces/v3_display/gop_final_20261003/`, kf3
+  `06b307c4`; §4.11.13): every arm is judged against its expectation (`DISPLAY_B5_JUDGE`), and
+  `DISPLAY_B5_VERDICT PASS|FAIL` decides the lane's exit (3 on a failing or missing verdict); the
+  bullet above *"prints each arm's expectation"* graded nothing. Result: 14/14 PASS. `lane.sh` also grades
+  every `gop=on` boot's handoff (`DISPLAY_BOOT_HANDOFF black_frames=0`, from kf3's *"console shows"* lines).
+- **B5** (unload): (a) `modeset=0` + X restore, on the 6.8 guest; (b) `fbdev=1` rmmod gives black; (c) a
+  CUDA-only guest keeps its console for the VM's life; (d) a 7.x guest arm records which
+  `nv_get_screen_info` path ran.
+- **B6** (performance): boot time; WC/UC bandwidth through host BAR1; scroll timings; the boot-copy cost.
+- **B7** (budget): seed + transient in cardbudget; two kf3 devices; G > bar1-size refused.
+- **B8** (families): TU116, AD104: B1–B3. GB205: B1, B2 and the boot layer; B3 only after M5. GA100 and
+  GH100 refuse `display=on` and `gop`. A large-bar1 arm for static-BAR1 with a console
+  (`kern_bus_tu102.c:444-500`).
+- **B9** (hostile): ROM writes; remapping BAR1 VA 0; a forged fn 72 C.
+- **B10** (Windows): install under OVMF with **`-no-reboot` and a QEMU restart per phase**; setup, boot,
+  safe mode visible; nvlddmkm install and the Basic Display handover; a GOP framebuffer above 4 GiB;
+  whether Windows sends `consoleMemSize`.
+- ★ **Added 2026-10-03 (late, `v3-gop`) — no GPU needed:**
+  - ★ *F1 RAN locally 2026-10-03 (late) at `adbe6fcd` (clean tree; `traces/v3_display/gop_standin_20261003_v3gop/`):
+    `sb_deny_signed` PASS (verified, started, 21/21), `sb_deny_unsigned` PASS (did not run),
+    `sb_deny_tailpad` PASS (did not run). Snakeoil keys; CI SKIPs these arms (no such firmware there).*
+  - **F1** (a firmware that verifies option ROMs — the only test of kf-oprom's end-aligned layout):
+    build OVMF from QEMU 10.2.4's `roms/edk2` with Secure Boot, SMM and
+    `PcdOptionRomImageVerificationPolicy` 0x04 (`scripts/display/build_ovmf_deny.sh <edk2> <out>`, ~3 min;
+    it names its two toolchain workarounds), then
+    `OVMF_DENY_CODE=<out>/OVMF_CODE_4M.deny.fd OVMF_DENY_VARS=/usr/share/OVMF/OVMF_VARS_4M.snakeoil.fd bash scripts/display/gop_standin.sh sb_deny_signed sb_deny_unsigned sb_deny_tailpad`.
+    Pass: the signed end-aligned ROM starts and passes every check; the unsigned and the tail-padded
+    ROM do not start. Owner question 1 (Secure Boot) and the layout deviation of §4.11.6 rest on it.
+  - **A1** (arm64 guest firmware): whether AAVMF runs PCI option ROMs at all (`OWNER_RULINGS.md` §K,
+    "Unchecked") — with the `aarch64-unknown-uefi` driver CI already builds, on an AArch64 QEMU.
+
+#### 4.11.10 Risks
+
+- **HIGH, from source:** the ROM without the region-0 change breaks the guest driver's load (§4.11.4).
+- Parsing fn 72 with the wrong table if decoded before fn 1 — closed by the lazy decode.
+- Real GSP-RM's region-0 attributes are not knowable (closed firmware); verify the heap offset on the box.
+- The walker must coalesce the console's 4 KiB PTEs into one view (B2).
+- Stale shadow pixels for loaders that write the framebuffer directly (cosmetic).
+- The seed costs G of host BAR1, briefly 2G. A host class of 0x0302 gets no `boot_vga` (`pci-sysfs.c:1720`).
+- Linux 7.x guests: no NVKMS console import (bare-metal parity).
+- A device OVMF has a built-in driver for would lose to it (§4.11.7) — none exists for NVIDIA ids.
+- If RM does not adopt the console (C = 0), kf-disp scans store `[0,G)` until the first modeset, which can
+  show the guest's own heap — as on hardware; the realize-time zeroing removes any pre-boot exposure.
+- Windows behaviour is not established.
+
+#### 4.11.11 Owner questions, and the defaults in force (2026-10-03)
+
+The owner will confirm; until then the build follows these defaults.
+1. ★ *2026-10-03 (late): F1 (§4.11.9) shows the ROM layout signs correctly — on a ROM-verifying OVMF a
+   snakeoil-signed kf-gop ROM runs and an unsigned one does not — so option (b) below needs only the key
+   and the signing step, not a layout change.*
+   **Secure Boot:** documented **off** for the boot display; no signing infrastructure yet. ⊘ The
+   question's premise ("an unsigned ROM will not run under Secure Boot-enforcing OVMF") does not hold
+   for OVMF: it trusts option ROMs unconditionally except under AMD SEV (§4.11.7). Physical-machine-style
+   firmware with a deny policy would need option (b) (a kayfabe key in a VARS template; the PE is
+   constant per release, so one signature) or (c) (Microsoft third-party CA).
+2. **§13:** `firmware/` is a named unsafe exception, outside the cargo workspace, never linked into the
+   VMM (`firmware/README.md`; CI gate B, the ratchet and the ABI-quarantine firmware arm).
+3. **Firmware for bench lanes:** OVMF only for the display lane; SeaBIOS lanes stay the measured
+   baseline. No legacy VGA BIOS for the release (a code-type-0 VBE image is 1–2+ weeks).
+4. **Warm reboot:** kf3 has no reset path (`kf3.c:965-977` at `v3-gop-kf3`): a guest reboot needs a QEMU restart
+   (`-no-reboot`). Windows Setup's reboots go through restarts (B10).
+5. **No host-RAM backing** for the boot framebuffer (§4.11.2).
+6. ⊘ *2026-10-03 (late, `v3-gop`): with `gop=off` C is no longer even read (§4.11.4's first ⊘ note);
+   the question below stands as asked — whether to apply the region-0 rule without kf3's ROM.*
+   **`gop=off` and the console region** (added 2026-10-03, `v3-gop-kf3`): the default in force serves
+   today's fn 65 table with `gop=off` whatever the guest's `consoleMemSize` (§4.11.4's ⊘ note) — the
+   coordinator's "byte-identical with the property off" — where the reviewed design applied the rule
+   regardless of the ROM. Apply it with `gop=off` too? Only a guest whose console sits at kf3's BAR1
+   base sends C > 0, and without kf3's ROM none is expected to (B0 checks).
+
+#### 4.11.12 The kf3 integration, as built (`v3-gop-kf3`)
+
+⊘ **CORRECTED 2026-10-03 (late) — branch `v3-gop`: the review of `v3-gop-kf3` (one blocker, five minors)
+is fixed, and this section's text is superseded where it says otherwise.** Each fix has a test that fails
+without it (named in brackets; `kf3.c` has none of its own because CI does not compile it — its rule moved
+into a header CI does compile).
+1. **Blocker, `OWNER_RULINGS.md` §K** — no compiled binary; built from source by
+   `crates/kf-gop-image/build.rs`; arch-neutral ROM; aligned volatile framebuffer stores; CI's `aarch64`
+   job builds the driver (§4.11.6's ⊘ block). [`kf-oprom` `pe::tests::an_aarch64_driver_passes_with_its_own_machine`,
+   `pack::tests::the_machine_type_is_the_pes_own`; `kf-gop` `blt::tests::the_framebuffer_sees_one_word_store_per_pixel_and_no_more`,
+   `probe::tests::an_unaligned_framebuffer_is_refused`; `kf-gop-image` `tests/embedded.rs` and its three
+   build-script tests; CI's "No compiled binary is committed" and "The embedded driver is the standalone
+   build" steps.]
+2. **The ROM BAR is registered after every fallible step** — `kf3_option_rom_build` moved from before
+   the doorbell-ioeventfd block to just before `memory_listener_register`; nothing after it can fail.
+   Deviation 3 below was false before the move and holds now.
+3. **`gop=on` with `romfile=` (including `romfile=""`) or `rombar=0` is refused by name, before Rust
+   realizes** (`qemu/hw/misc/kf3/kf3_gop.h`, `kf3_dev_realize`). It used to warn and register no ROM
+   while the Rust half kept the whole boot-display posture and logged *"boot display ON — option ROM N
+   bytes"* for a ROM nobody served. Step 8's *"a user `romfile=` or `rombar=0` wins, with a warning"* is
+   withdrawn. [`crates/kf-qemu/tests/gop_rom_knobs.rs` compiles and runs the header's rule.]
+4. **`gop=off` attaches no `SystemInfoCell` and no `ConsoleSeat`** (`crate::gop::ConsoleWiring`, one
+   decision for the GSP state machine and fn 65). Step 5's *"one cell … given to the GSP state
+   machine"* and *"What `gop=off` does add"* below are withdrawn for `gop=off`: it adds nothing.
+   [`gop::tests::gop_off_wires_no_cell_and_no_seat`, built through the wiring `Device::realize` uses.]
+5. **Supersession notes** for the committed-blob text: `V3_SWEEP_AND_INSTALL.md`, `kf-oprom`'s crate
+   docs, `CI_V3.md`, `firmware/README.md`, and this document (§4.11.6, §4.11.8).
+6. **The stand-in's observe arms** are named and judged as observations (`verdict=OBSERVED`), and the
+   arms that can fail on the ROM outcome exist (`sb_deny_*`, test F1) — §4.11.8's ⊘ note. F1 ran locally
+   at `adbe6fcd` and passes (§4.11.9).
+
+**STATUS: BUILT 2026-10-03, CI green at `37740a4b` (run 37132057723: stable, aarch64 and firmware
+jobs); not run on a GPU box.** Everything is behind the kf3 property `gop` (default off). kf3.c is not
+compiled by CI; it was syntax-checked with `-Werror` against QEMU 10.2.4's configured headers (the
+flags of `hw/display/ati.c`, pixman on), and the C seam by `tests/wire_mirror.rs` in CI.
+
+**At realize, in order** (`crates/kf-qemu/src/device.rs`, `Device::realize`):
+
+| step | what | where |
+|---|---|---|
+| 1 | the plan: the virtual monitor's preferred mode (`kf_rm::display::monitors()[0]`, 1920x1080) → `Geometry::for_mode` → BAR1 + 0, G = 0x7F0000, and its EDID. Refused by name: `gop=on` without `display=on`; G > `bar1-size` | `crates/kf-qemu/src/gop.rs` (`BootPlan::for_config`) |
+| 2 | the host BAR1 budget + G | `crates/kf-qemu/src/cardbudget.rs` (`Demand::with_boot_fb`) |
+| 3 | the option ROM: `kf_oprom::pack_kf_gop` (⊘ `v3-gop`: `kf_gop_image::pack_kf_gop`, the driver built from source) with the vendor, device and class kf3 presents | `BootPlan::rom` |
+| 4 | store `[0, G)` zeroed by the walker's GPU write, 1 MiB per call, before any reader exists | `WalkKernel::write_store` |
+| 5 | (⊘ `v3-gop`: with `gop=on` only — `ConsoleWiring`, item 4 of the ⊘ block) one `kf_gsp::SystemInfoCell`, given to the GSP state machine (`GspFsm::with_system_info_cell`) and, through the chain recipe, to every rebuilt `StaticInfoPolicy` (`ConsoleSeat`) — so it survives `ReselectAtFn1` | `crates/kf-gsp/src/sysinfo.rs`; `crates/kf-rm/src/staticinfo.rs` |
+| 6 | the display plane's boot layer (`DisplayPlane::with_boot`, `kf_disp::scanout::boot_layer`) | `crates/kf-qemu/src/display.rs`; `crates/kf-disp/src/scanout.rs` |
+| 7 | the BAR1 seed: one view of store `[0, G)` at BAR1 offset 0, on the realize thread | `crates/kf-mem/src/cpuwin.rs` (`CpuWindow::seed`) |
+| 8 | the C device registers the ROM BAR in `pci_add_option_rom`'s shape: `has_rom`, `memory_region_init_rom(pow2ceil(len))` (or the user's `romsize`), the bytes copied, `pci_register_bar(PCI_ROM_SLOT)`; a user `romfile=` or `rombar=0` wins, with a warning naming it (⊘ `v3-gop`: refused by name before step 1 instead, item 3 of the ⊘ block) | `qemu/hw/misc/kf3/kf3.c` (`kf3_option_rom_build`), `kf3_option_rom` |
+
+**While the guest runs:**
+- **fn 72** is still never answered; its body is kept (bounded by the largest `GspSystemInfo` in the
+  driver matrix, 952 bytes; a later fn 72 replaces it; `GspFsm::device_reset` keeps the cell).
+- **fn 65** decodes `consoleMemSize` with the table that serves fn 65, after any fn-1 re-select, and with
+  `gop=on` and C > 0 serves `kf_chip::bar0::fb_layout_with_console(fb_length, C)`: region 0 = `[0, C)`
+  reserved, ISO, uncompressed, performance 0; region 1 the heap from C; region 2 the carve-out; both
+  roots unchanged. Refused by name in the envelope (`NV_ERR_NOT_SUPPORTED`, the reason in the QEMU log):
+  a fn 72 struct whose size is not the serving version's, a version or field not in the driver matrix, C
+  not a multiple of 64 KiB, C at or past the carve-out, C larger than BAR1, a board table that is not
+  kf-chip's layout. Logged on every fn 65 with a console: C against G and the region count.
+- ⊘ *2026-10-03 (late, the review of `v3-gop-unload`; §4.11.13): the note below this one is CORRECTED —
+  its black was chosen whenever a frame had been shown and nothing was scanned, so the boot layer →
+  first-head handoff showed one black frame. `Shown::Blank` is now chosen only when a head's scanout
+  that WAS shown is lost (no head lit; or a lit head with no window for 250 ms); until a head first
+  scans a window — the handoff, GB20x, `gop=off` before its first window — there is no new frame and the
+  last one stays.*
+- ⊘ *2026-10-03 (B5, §4.11.13): "then never again" stands, but what follows is no longer "nothing": once a
+  frame was shown, nothing to scan is `Shown::Blank` (black), and a scanout freed with `PRESERVE_HW` is
+  `Shown::Preserved` until a head is armed again.*
+- **The display worker** shows `Shown::Boot` — chosen before the window-vocabulary gate, so GB20x shows
+  it too — until the first armed head, then never again (`choose_shown`); the Boot arm composes one
+  authored layer with no context DMA. Counters in the status line: `boot[frames=N retired=+Tms]`.
+- **The first BAR1 batch that changes anything** retires the seed inside `MapTarget::invalidate`: the
+  batch's views are already placed, the uncovered rest of `[0, G)` sinks to scratch, then the seed's
+  view is released. The log line says whether the console arrived as ONE run VA 0 → store 0 (box test
+  B2) or as several views.
+- **At stop**, a seed the guest never retired is released by the VA thread as it exits (scratch first).
+
+**FFI:** `KF3_ABI` 10 → 11 — `kf3_realize` takes `gop`, and `kf3_option_rom(h, &rom, &rom_len)` returns
+the ROM (`crates/kf-qemu/src/ffi_unsafe.rs`, `qemu/hw/misc/kf3/kf3.h`); the unsafe ratchet moved 44 → 46
+for it, itemised in CI.
+
+**Unit tests (CI runs 37131490782 and 37132057723):** `crates/kf-chip/tests/console_region.rs` (C = 0 is
+`fb_layout` byte for byte; three regions; refusals); `kf-gsp` `boot::fn72_is_kept_for_fn65` and
+`sysinfo::tests`; `crates/kf-rm/tests/console_region.rs` (byte-identical replies with no seat, no fn 72,
+C = 0 or `gop=off`; three regions with `gop=on`; each refusal; the field's offset per version; ★ fn 72
+before a fn-1 re-select decoded with the re-selected table — the provisional one refuses the guest's
+struct); `kf-mem` `cpuwin::tests` (place → sink → release; a first change outside `[0, G)` retires it
+too; a two-run console leaves no gap and is named; no change, no retirement; a refused sink keeps the
+seed; no seed, no host verb); `kf-disp` `scanout::tests::*boot*`; `kf-qemu` `gop::tests`,
+`cardbudget::tests::the_boot_framebuffer_is_one_more_g_of_host_bar1`,
+`display::tests::the_boot_layer_shows_until_the_first_armed_head_and_never_again`, `tests/wire_mirror.rs`.
+
+**`gop=off` is today's device:** no plan, so no ROM (`kf3_option_rom` answers −1 and kf3.c registers
+nothing), no zeroing, no seed, no boot layer, no budget term (`gop::tests::gop_off_plans_nothing`,
+`with_boot_fb(0)`); fn 65's reply is byte-identical whatever fn 72 says (kf-rm test above); the state
+machine without a cell, and a window without a seed, behave as before (kf-gsp and kf-mem tests above).
+What `gop=off` does add: the cell keeps fn 72's bytes, and fn 65 logs a non-zero C. ⊘ *`v3-gop`: no
+longer — `gop=off` attaches no cell and no seat, so it adds nothing (item 4 of the ⊘ block).*
+
+**Changed against the design above:**
+1. `gop=off` reads C and does not act on it (§4.11.4's ⊘ note; owner question 6, §4.11.11). ⊘ *`v3-gop`:
+   `gop=off` no longer reads C at all.*
+2. The never-retired seed is released by the VA thread when the device stops (`kf3_unrealize` → stop),
+   not inside `kf3_unrealize` itself: the window belongs to that thread. Scratch first, so the order
+   against QEMU's BAR unmapping does not matter.
+3. The ROM BAR is registered last in `kf3_dev_realize`, after every fallible kf3 step, because QEMU's
+   realize-failure path does not unregister a ROM. ⊘ *Untrue at `v3-gop-kf3` (the doorbell-ioeventfd
+   block could still fail after it); true since `v3-gop` (item 2 of the ⊘ block).*
+4. The host BAR1 budget charges G for as long as `gop=on`, not only for the retirement moment.
+5. `kf_disp::scanout::boot_layer` takes a `BootSurface` (kf-disp does not depend on kf-oprom); kf-qemu
+   converts.
+6. Region 0's attributes are ours: performance 0 like the other reserved region (GSP-RM's are closed).
+
+**Not built:** §4.11.4 rows 3–5 (`bIsGpuUefi`/`bIsEfiInit`, `BIOS_GET_UEFI_SUPPORT`,
+`SYSTEM_GET_BOOT_DISPLAYS`) — nice-to-haves; ⊘ *(built on `v3-gop`, item 1 of the ⊘ block)* the owner's §K follow-ups (build.rs instead of the
+committed `.efi`; the arch-neutral ROM: EFI machine type from the PE, x86 port I/O behind
+`cfg(target_arch)`, an `aarch64-unknown-uefi` CI build); a reset path (owner question 4); `-no-reboot`
+and the Windows arm in the bench scripts (B10); SPDX headers on the existing kf3 overlay files
+(`OWNER_RULINGS.md` §G, task I7).
+
+
+#### 4.11.13 B5 — when RM, NVKMS or nvidia-drm lets go (measured 2026-10-03, branch `v3-gop-unload`)
+
+**STATUS: REVIEWED AND RE-RUN, 2026-10-03 (late) — kf3 `06b307c4`, `traces/v3_display/gop_final_20261003/`.**
+The review's findings are folded below as ⊘ notes above what they correct. At `06b307c4` (box 54032077):
+B5 `DISPLAY_B5_VERDICT PASS arms=14 failed=0` — (c), (c2), (c3) new text shown; (a) Cinnamon Wayland with no
+Xorg and no fresh Xorg log, text console back and updating; (a2) X11 on the NVIDIA X driver with a fresh
+log, NVKMS's restored console kept (*"+149612 ms the console shows the PRESERVED scanout … [window 6 store
+0x0]"*) and updating; (b) fbcon shown, then black after `rmmod` (nonblack 0/1000; kf3: *"BLACK"* 250 ms after
+the window left); five teardowns, five re-seeds, none refused. X's modeset left head 3 windowless for
+20 ms: *"no new frame … held"*, no black (before: a BLACK frame). The handoff (X's first modeset in (a2)):
+no black. B1 and B0 as in §4.11's STATUS. CI green at `06b307c4` (run 37148069930).
+⚠ What none of these runs can show: GB20x keeping its boot layer (no window vocabulary) is argued from
+`choose_shown` and unit-tested, not run.
+
+(superseded the same day, kept as written) **STATUS: BUILT and MEASURED, 2026-10-03.** Box 54032077 (RTX 3060, host 580.159.04, guest noble 6.8 with
+580.159.04, OVMF), evidence `traces/v3_display/gop_unload_20261003/`: the first run at `f20ab853`, the
+diagnosis at `e2c6e1d5` (instruments only), B5, B1 and B0 at `4a4b95f7`. CI green at `4a4b95f7` (run
+37142859887).
+
+**The first run, and each arm's cause** (diagnosis run d1):
+
+| arm | first run | cause, measured at `e2c6e1d5` (run d1, 2026-10-03) | bare metal |
+|---|---|---|---|
+| (c) nvidia.ko, no RM client | 40 lines on tty1 never shown | The guest RM has no persistence: it initialises the adapter at the first open and tears it down at the last close (five RM lives in d1's one boot). At each teardown it unmaps the console at BAR1 VA 0 (kf3: BAR1 `[0, G)` holds no guest view → SCRATCH), ≤ 1 ms later writes `NV_PBUS_BAR1_BLOCK = 0` (MODE PHYSICAL, target VID_MEM: `kbusStatePreUnload_GM107` → `kbusTeardownMailbox_GM107`, `ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:746-787`), then sends fn 47 (`bInPMTransition = 0`). simpledrm's writes landed in kf3's scratch. Positive control: with a `/dev/nvidia0` holder keeping RM up, the same writes showed. | BAR1 physical: `[0, G)` is FB `[0, G)`, the console keeps drawing |
+| (a) as first run | the session's last frame stays | Not X, not NVKMS: the image's lightdm autologin still named B3's `cinnamon-wayland` (muffin on simpledrm; `Xorg.0.log` was B3's; nvidia-modeset first loaded at (b); no display channel during the session). NVIDIA's EGL held RM up; at the session's end RM was torn down and the console's redraw went to scratch — (c)'s cause. | the text console comes back |
+| (a2) (new) the NVIDIA X driver, `modeset=0` | — | ⊘ *NOT measured at `e2c6e1d5` — inferred* (corrected 2026-10-03, late, the review of `v3-gop-unload`: run d1's two a-arms ran neither X nor NVKMS — `modules=[nvidia_uvm nvidia]`, nvidia-modeset first loaded at 355.4 s in (b) — and d2, the only other run before b5f, already carried the fix and is not kept; by the code before the fix an unclaimed free left the last frame frozen, not dropped, so *"dropped the scanout"* below is also wrong). The mechanism, from source and from b5f (which ran it with the fix): NVKMS restores the console when X closes (`ReleaseModesetOwnership` → `RestoreConsole`, `ogkm-580: src/nvidia-modeset/src/nvkms.c:1107-1161`) and frees each channel after `NV5070_CTRL_CMD_SET_RMFREE_FLAGS(PRESERVE_HW)` (`nvkms-rm.c:2990-3017`; ROUTE_TO_PHYSICAL, so GSP-bound — it reaches kf3). kf-disp did not claim it, and dropped the scanout at the free. | the restored console stays |
+| (b) `fbdev=1`, fbcon unbound, `rmmod nvidia_drm` | the last fbcon frame stays | `fbdev=1` makes nvidia-drm evict the firmware framebuffer and call `framebufferConsoleDisabled` (`kernel-open/nvidia-drm/nvidia-drm-drv.c:2031-2049`), and NVKMS drops its console surface (`nvRmUnmapFbConsoleMemory`, `nvkms-rm.c:4967-4998`). At `rmmod`, `nvEvoRestoreConsole` has no surface (`nvkms-console-restore.c:796-799`), fails, and NVKMS shuts the heads down (`:971-977`); it never sends `PRESERVE_HW` (`0x50700117` appears nowhere in d1's log). kf-disp measured the head left with no window — and then produced no further frame, so QEMU kept the last one. | black (no signal) |
+
+**The fixes** (kf3 `4a4b95f7`):
+1. **BAR1 back to physical at teardown.** The register drainer — never a vCPU — recognises the guest's
+   write of its BAR1-mode register with MODE PHYSICAL (per die group from hwref: `NV_PBUS_BAR1_BLOCK`
+   31:31 through Ada, `NV_VIRTUAL_FUNCTION_PRIV_FUNC_BAR1_BLOCK_LOW_ADDR` 9:9 behind the VF window from
+   Hopper, the `kbusTeardownMailbox` HAL split of `g_kern_bus_nvoc.c:1825-1834`; `kf_chip::bar1mode`) and
+   a fn 47 without `bInPMTransition` (decoded with the generated layout; `kf_qemu::bar1phys`), and only
+   bumps a counter and wakes the VA thread (`Inbox::request_bar1_physical`). The VA thread, once no walk
+   is in flight or pending, places the seed again (`CpuWindow::reseed`: one RM map + one `mmap` over
+   scratch, no view released) — unless BAR1 changed since it noticed the request (an RM took BAR1 back
+   first: its placements win, logged). The re-seed retires exactly as the first seed did at the next
+   RM's first BAR1 change (place, sink the rest, release). A guest placement still inside `[0, G)` refuses
+   the re-seed by name.
+2. **A lost scanout is black** (`Shown::Blank`). ⊘ *CORRECTED 2026-10-03 (late, the review of
+   `v3-gop-unload`, MEDIUM):* as first built — *"once a frame was shown, a moment with no armed head
+   scanning a window presents one black frame of the last size"* — it flashed black at the boot layer →
+   first-head handoff (`[measured b1f, b5f at 4a4b95f7]` *"+52936 ms the console shows BLACK"* 4 ms before
+   head 3's window), followed GB20x's boot layer (no window vocabulary until M5) with black, and changed
+   `gop=off`. Now (`crates/kf-qemu/src/display.rs`, `choose_shown`): black only when a head's scanout
+   that WAS shown (an armed composition was chosen) is lost — at once when no head is lit (every head
+   disarmed, or the core channel freed), after a 250 ms hold when a lit head scans no window (b5f's X
+   modeset left one for 22 ms). Anything else with nothing to show is no new frame: the boot layer's
+   last frame stays through the handoff, and on GB20x for good. **`gop=off` now:** QEMU's placeholder
+   until a head first scans a window, as before; after that a lost scanout is black where it used to
+   freeze the last frame (the bare-metal answer: a monitor with no scanout shows black).
+3. **`PRESERVE_HW`** (`Shown::Preserved`): kf-disp claims `NV5070_CTRL_CMD_SET_RMFREE_FLAGS` (its layout
+   derived by `tools/derive_display_layouts.sh`) and on a preserving free keeps the last armed
+   composition's planned layers on the monitor until a head is armed again. ⊘ *CORRECTED 2026-10-03
+   (late, the review of `v3-gop-unload`):* it *"marks the channels of the next free"* with ONE model-wide
+   flag cleared after every `GSP_RM_FREE` — so another client's flag marked this client's free, and a
+   child's free (the guest's RM sends one RPC per object, children first) spent it before the channel's.
+   RM keeps the flag on the `DispObject` (`rmFreeFlags`, `ogkm-580: src/nvidia/src/kernel/gpu/disp/disp_objs.c:563-578`)
+   for "the next RmFree() only" (`ctrl5070chnc.h:901-913`). Now the mark is the display object's the
+   control names (`(hClient, hObject)` of the `GSP_RM_CONTROL`; NVKMS sends it to `displayHandle`, the
+   channels' parent, `nvkms-rm.c:2815-2819`, `:3010-3013`); a channel's free reads its parent's mark; the
+   free that read it — or freed the display object or its client — spends it; an unrelated free neither
+   reads nor spends it; at most 64 marks. Where GSP-RM clears it is closed firmware (`ogkm-580` has the
+   accessors and no caller).
+4. **`unload_hook.sh`**: per-step guest uptime; (c2)/(c3) as the positive control; (a) and (a2) set their
+   lightdm session explicitly and restore the image's after; each arm prints its expectation.
+   ⊘ *CORRECTED 2026-10-03 (late, the review of `v3-gop-unload`):* *"prints its expectation"* graded
+   nothing — the hook always exited 0 and so did the lane (`lane.sh` ended with an echo). Now each arm is
+   judged (`DISPLAY_B5_JUDGE`), `DISPLAY_B5_VERDICT PASS|FAIL` lists every arm, the hook exits 1 on any
+   mismatch or skipped arm, and `lane.sh` exits 3 on a failing or missing verdict. And the stale-evidence
+   trap that misread the first (a) run was still open: `b5f/b5a_Xorg.0.log` reads *"Time: Sat Oct 3
+   18:00:45"*, before b5f started (18:05:24) — it is d2's (a2) log, and b5f's (a) line printed its
+   `x_driver=` from it. Each X arm now moves the old `/var/log/Xorg.0.log` aside and reads the file only if
+   it is newer than the arm's start; device checks read only QEMU log lines written after the arm began.
+
+⊘ *2026-10-03 (late), at `06b307c4` (`gop_final_20261003/run_h/b5h/hook/b5_device.log`, every teardown logged):*
+for the four teardowns whose RM still held the console at BAR1 VA 0 the unmap and the register write
+land in the same ms and the re-seed ≤ 1 ms after (t = 48.551/48.552, 76.086/76.087, 115.915/115.915,
+149.751/149.752 s). The fifth, in (b), is different: `fbdev=1` had already replaced the console at VA 0 with
+nvidia-drm's surface (store `0xa00000`, t = 196.517 s); `rmmod` unmapped it at t = 210.110 s, 406 ms before
+RM's teardown wrote the register — with fbcon unbound, nothing drew into BAR1 then.
+
+**The trigger, decided from source and measurement.** Two guest acts give BAR1 up, in this order
+(`gpuStateUnload` then `gpuStateDestroy` → `kgspUnloadRm`, `ogkm-580: src/nvidia/arch/nvalloc/unix/src/osinit.c:2352-2375`,
+`src/nvidia/src/kernel/gpu/gpu.c:3970-3975`): CPU-RM's `NV_PBUS_BAR1_BLOCK` write, then fn 47, after which
+GSP-RM runs its own unload. Both are honoured and the second is a no-op (`[measured b5f]` *"already shows
+its physical view"*). ⊘ *CORRECTED 2026-10-03 (late, the review of `v3-gop-unload`) — the reasoning
+that stood here:* *"the register write is the primary one because the guest holds the console lock across
+the whole teardown … fbcon's first write after it comes after fn 47's reply"*. The lock is real
+(`os_disable_console_access` … `os_enable_console_access`, `osinit.c:2352`, `:2375`, = `console_lock()`,
+`kernel-open/nvidia/os-interface.c:75-78`), but it orders only fbcon's drawing into simpledrm's SHADOW
+buffer. The write that reaches BAR1 is the fbdev helper's damage worker — `drm_fb_helper_damage`
+schedules `damage_work` and `drm_fb_helper_damage_work` blits the damaged rectangle later, on a
+workqueue, outside `console_lock` (Linux 7.1-rc6 `drivers/gpu/drm/drm_fb_helper.c:268-276`, `:446-463`;
+simpledrm's fbdev is `drm_fbdev_shmem`, `drivers/gpu/drm/sysfb/simpledrm.c:21`; the 6.8 guest's
+generic shadowed fbdev takes the same path — the review's reading, not re-read here) — and a KMS
+client's commit (muffin in arm (a)) is not under the lock either. **The real ordering:** a blit queued
+before the teardown (or a client's commit during it) can land in BAR1 `[0, G)` between the console's
+unmap and the re-seed, and lands in scratch: that rectangle stays stale until it is drawn again. The
+margin is that window's length — `[measured b5f at 4a4b95f7]` the unmap and the register write in the
+same ms, the re-seed ≤ 1 ms after it (for the 4 teardowns the instrument logged; the 5th's unmap was past
+its bound, below) — not a lock. A real card has the same kind of window: `kbusStatePreUnload_GM107`
+unmaps the preserved console before `kbusTeardownMailbox_GM107` writes the physical mode
+(`kern_bus_gm107.c:746-787`, `:1278-1310`), and a CPU write to BAR1 VA 0 in between reaches no console.
+⚠ The re-seed is asynchronous (the VA thread): the window is measured, not bounded.
+
+**Why `[0, G)` and not all of BAR1.** On a real card physical mode is BAR1 `[0, bar1-size)` → FB. kf3
+restores only the boot framebuffer: the firmware console is the only user of BAR1 in physical mode (a
+Linux guest's efifb/simpledrm, Windows' Basic Display on the GOP), and a whole-BAR1 view would need
+`bar1-size` more host BAR1 for the moment an RM takes BAR1 back (its new views are placed before the
+physical view is released, scratch-first) — 128 MiB on the default device, against `G` (8 MiB at 1080p)
+already in `Demand::with_boot_fb`. `[G, bar1-size)` stays scratch while no RM holds BAR1.
+
+**Constraints.** No trap is added (the register write is an ordinary privileged-ring item); the drainer
+only bumps an atomic; host verbs run on the VA thread; the re-seed replaces scratch and releases nothing,
+and retirement keeps place → sink → release; no VMM address reaches the guest. Hostile guest: a write
+storm costs one atomic per write and at most one re-seed per BAR1 change; the log lines are bounded.
+⊘ *CORRECTED 2026-10-03 (late, the review of `v3-gop-unload`):* they were not all bounded, and the
+bounded ones ran out too early. The fn-47 decode line printed once per fn 47; the *"console shows"*
+digest named each window's context DMA and offset, so a page flip changed it and `[measured b1f at
+4a4b95f7]` its 256 lines were spent in ~4 s of flips; and the BAR1 boot-range line shared one counter
+with the re-seed lines, so `[measured b5f at 4a4b95f7]` it stopped at change #88 and the fifth teardown's
+unmap was never logged (*"every teardown: SCRATCH → write"* held for 4 of 5). Now each family has its own
+bound and one closing *"N … lines logged — later ones are not"* line: BAR1 boot-range view 256, printed
+only when what `[0, G)` shows CHANGES (about two per RM life); re-seeds 128; BAR1-mode writes 64; fn-47
+decodes 64; *"console shows"* 256, keyed without what a flip changes and compared as a hash (formatted
+only when it changes). And the coalescing of the two triggers: ⊘ the change baseline was taken at the
+FIRST request's notice and a later request merged in without refreshing it, so a register-write
+trigger skipped for a BAR1 change swallowed fn 47's too; every newly noticed request now re-baselines
+(`kf_qemu::bar1phys::PhysicalViewDue`, unit-tested).
+`gop=off`: no boot range, so no re-seed and no boot-range or re-seed line (`[measured b0f at 4a4b95f7]` none).
+⊘ *Scoped 2026-10-03 (late, the review of `v3-gop-unload`):* "no line" is those two families only — the
+BAR1-mode write and fn-47 lines print with `gop=off` too, and request nothing (`[measured b0h at
+06b307c4]`: two teardowns logged, t = 47.889 s and 97.157 s, `B0_SEED_LINES=0`).
+
+**Not modelled / open:**
+- Physical mode for BAR1 `[G, bar1-size)` (above). A guest that keeps a mapping inside `[0, G)` through
+  its teardown keeps it (re-seed refused by name, its own console).
+- ⊘ *CORRECTED 2026-10-03 (late):* ~~`Shown::Blank` also applies with `gop=off` once a frame was shown, and
+  on GB20x (no window vocabulary until M5) the boot layer is now followed by black instead of its last
+  frame.~~ GB20x keeps the boot layer's last frame (no head ever scans a window it can name), as before
+  this branch. `gop=off` (with `display=on`) does change, and so do its logs: a lost scanout after a
+  head first scanned a window is black (it froze the last frame), a `PRESERVE_HW` free keeps the
+  preserved scanout, and the BAR1-mode write and fn-47 lines print (bounded); the BAR1 re-seed does
+  nothing without a boot range. None of this was run on GB20x or any non-GA10x box.
+- GSP-RM's behaviour on a channel free WITHOUT `PRESERVE_HW` is closed firmware; kf-disp shows black then.
+- One *"Flip event timeout on head 0"* at `rmmod nvidia_drm` (in the first run and in b5f): nvidia-drm's
+  last commit waits 3 s for a flip event kf-disp does not deliver. Not investigated here.
+- (d) — a 7.x guest's `nv_get_screen_info` path — was not run.
 
 ---
 

@@ -60,6 +60,7 @@ fn chain(memory: bool, log: &kf_rm::unserviced::UnservicedLog) -> (Box<dyn Comma
         }),
         channels: None,
         display: None,
+        console: None,
     };
     let c = kf_rm::served_policy(
         ga106::board(),

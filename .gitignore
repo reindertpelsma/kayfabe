@@ -10,6 +10,12 @@
 # above. Left untracked it made two CI gates fail on `grep: … binary file matches`
 # the first time anyone regenerated the ABI (task #111).
 /crates/kayfabe-abi/gen/target
+# firmware/ crates are their own cargo workspaces (firmware/README.md), so their build output is
+# beside them, not under the root /target.
+/firmware/*/target
+# OWNER_RULINGS §K: no compiled binary is committed — the GOP driver is built by
+# crates/kf-gop-image/build.rs. CI's `firmware` job also fails on any tracked .efi or MZ file.
+/firmware/**/*.efi
 Cargo.lock.orig
 # cargo-mutants run artifacts (the mutation-testing gate, decision #28)
 /mutants.out

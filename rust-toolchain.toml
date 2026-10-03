@@ -6,5 +6,8 @@
 channel = "1.99.0"
 components = ["rustfmt", "clippy"]
 # The isolate image is embedded as a static musl binary (crates/kayfabe-isolate-host/build.rs).
-targets = ["x86_64-unknown-linux-musl"]
+# kf3's boot-display GOP driver is built from firmware/kf-gop and embedded (crates/kf-gop-image/build.rs,
+# OWNER_RULINGS §K, 2026-10-03: no compiled binary in the repo). An aarch64 build of kayfabe needs
+# aarch64-unknown-uefi instead; the build script names the missing target and the command.
+targets = ["x86_64-unknown-linux-musl", "x86_64-unknown-uefi"]
 profile = "minimal"

@@ -434,3 +434,17 @@ citation: ask whether its reason still holds before relying on it.
   capability bit. A broker without the bit gets composed cursors. The change goes into nvkvm-pv's
   broker too, so both projects get it.
 
+## P. A security audit before the first public binary (2026-10-03)
+
+- **Owner:** *"Maybe worth doing a security audit. Meanwhile continue on display."* The owner named ten
+  areas: no host pointers in safe code; unsafe code bounds-checks every input; races and
+  interleavings, with formal checkers where useful; guest DoS points; the security model by role;
+  every RM call and ioctl we make; the PTX page-table walker against hostile tables; integer, cast
+  and compiled-out checks; prove what can be proved and record what is uncertain; and bug classes
+  from history.
+- **Plan and timing:** `design/V3_SECURITY_AUDIT_PLAN.md`. Stage 1 (read-only inventory areas) runs
+  now, alongside the display work. Stage 2 runs after the display and security branches merge.
+- **Gate:** no public binary ships before every stage-2 blocker is closed or accepted by the owner.
+- **Out of scope:** sandboxing the VMM process. The owner, the same day: *"Sandboxing vmm is not our
+  job."*
+

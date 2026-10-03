@@ -24,6 +24,11 @@
  *    per vector (kf3_irq_fd); this device registers each as a KVM irqfd on the vector's MSI route
  *    when the guest unmasks it (msix vector notifiers, virtio-pci's pattern). A raise is then one
  *    write(2) from any Rust thread — never a BQL-taking msix_notify.
+ *  - ★ 2026-10-03, the boot display (property gop, default off; docs/design/V3_DISPLAY.md §4.11):
+ *    the PCI expansion ROM — the constant kf-gop UEFI driver embedded in Rust, wrapped at realize
+ *    with this device's ids and its framebuffer descriptor (kf3_option_rom) — registered as the ROM
+ *    BAR in the shape of pci_add_option_rom (hw/pci/pci.c). Read-only RAM: reads never exit, a write
+ *    exits to QEMU core and is dropped there. Everything else gop=on changes is Rust's.
  */
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
@@ -35,6 +40,7 @@
 #include "qemu/error-report.h"
 #include "qemu/module.h"
 #include "qemu/units.h"
+#include "qemu/host-utils.h"
 #include "system/ram_addr.h"
 #include "qom/object.h"
 #include "system/memory.h"
@@ -46,6 +52,7 @@
 #include "ui/console.h"
 #include <linux/kvm.h>
 #include "kf3.h"
+#include "kf3_gop.h"
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
 #error "kf3-gpu requires QEMU 10.2+ (memory_region_enable_lockless_io keeps the vCPU path BQL-free)"
@@ -118,6 +125,9 @@ struct Kf3State {
     bool dummy_bar;
     /* v3-display (docs/design/V3_DISPLAY.md): the virtual NVDisplay; off = the displayless posture */
     bool display;
+    /* ★ ABI 11 (docs/design/V3_DISPLAY.md §4.11): the boot display — the option ROM here, the BAR1
+     * seed, the boot layer and fn 65's console region in Rust. Needs display=on. Off = today. */
+    bool gop;
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -710,6 +720,49 @@ static const GraphicHwOps kf3_gfx_ops = {
     .gfx_update = kf3_gfx_update,
 };
 
+/* ★ ABI 11 — the boot display's option ROM (docs/design/V3_DISPLAY.md §4.11.6), registered the way
+ * pci_add_option_rom (hw/pci/pci.c) registers a romfile: has_rom, a ROM region of pow2ceil(len)
+ * (or the user's romsize), the bytes copied in, pci_register_bar(PCI_ROM_SLOT); pci_del_option_rom
+ * cleans it up at unrealize. ⊘ Not vfio's trapping ROM, and NEVER a class-level pc->romfile:
+ * pci_patch_ids would rewrite byte 6, which is inside this ROM's EfiSignature.
+ * ⊘ CORRECTED 2026-10-03 (v3-gop): a user romfile= (even "") or rombar=0 no longer "wins with a
+ * warning" here — kf3_dev_realize refuses either with gop=on before Rust realizes (kf3_gop.h), so by
+ * this point gop=on means this ROM is the ROM BAR. Called last, after every step of realize that can
+ * fail: QEMU's realize-failure path (pci_qdev_realize → do_pci_unregister_device) never runs
+ * pci_del_option_rom, so a ROM registered before a later refusal would stay registered. */
+static bool kf3_option_rom_build(Kf3State *s, PCIDevice *pci, Error **errp)
+{
+    const uint8_t *rom = NULL;
+    uint64_t len = 0, size;
+
+    if (!s->gop) {
+        return true;
+    }
+    if (kf3_option_rom(s->h, &rom, &len) != 0 || !rom || len == 0) {
+        error_setg(errp, "kf3: gop=on, but Rust packed no option ROM");
+        return false;
+    }
+    if (pci->romsize != UINT32_MAX) {
+        if (len > pci->romsize) {
+            error_setg(errp, "kf3: the boot display's option ROM (%" PRIu64 " bytes) is too large for "
+                       "romsize %u", len, pci->romsize);
+            return false;
+        }
+        size = pci->romsize;
+    } else {
+        size = pow2ceil(len);
+    }
+    if (!memory_region_init_rom(&pci->rom, OBJECT(pci), "kf3-gpu.rom", size, errp)) {
+        return false;
+    }
+    pci->has_rom = true;
+    memcpy(memory_region_get_ram_ptr(&pci->rom), rom, len);
+    pci_register_bar(pci, PCI_ROM_SLOT, 0, &pci->rom);
+    info_report("kf3: boot display option ROM registered: %" PRIu64 " bytes in a %" PRIu64 "-byte ROM BAR",
+                len, size);
+    return true;
+}
+
 static void kf3_dev_realize(PCIDevice *pci, Error **errp)
 {
     Kf3State *s = KF3(pci);
@@ -725,8 +778,20 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         error_setg(errp, "kf3: archive ABI %u, device ABI %u", kf3_abi_version(), KF3_ABI);
         return;
     }
+    /* ★ gop=on needs THIS device's ROM BAR. QEMU's own ROM properties asking otherwise are refused by
+     * name here, before Rust realizes, so the Rust side never enters the boot-display posture (store
+     * zeroed, BAR1 seeded, budget charged, boot layer armed, fn 65's region 0) for a ROM that would not
+     * be served (kf3_gop.h). */
+    {
+        const char *why = kf3_gop_rom_conflict(s->gop, pci->romfile, pci->rom_bar);
+        if (why) {
+            error_setg(errp, "kf3: gop=on refused: %s (drop the property, or set gop=off; "
+                       "docs/design/V3_DISPLAY.md §4.11.12)", why);
+            return;
+        }
+    }
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    &s->h, err, sizeof(err)) != 0) {
+                    s->gop ? 1 : 0, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }
@@ -837,6 +902,11 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
             return;
         }
     }
+    /* ★ ABI 11: the boot display's option ROM (gop=on only) — after the last step of realize that can
+     * fail; nothing below this line can (kf3_option_rom_build's comment says why it matters). */
+    if (!kf3_option_rom_build(s, pci, errp)) {
+        return;
+    }
     s->listener = (MemoryListener){
         .name = "kf3-guest-ram",
         .region_add = kf3_region_add,
@@ -892,6 +962,8 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_STRING("guest-driver", Kf3State, guest_driver),
     DEFINE_PROP_BOOL("dummy-bar", Kf3State, dummy_bar, false),
     DEFINE_PROP_BOOL("display", Kf3State, display, false),
+    /* ★ 2026-10-03: the boot display (docs/design/V3_DISPLAY.md §4.11). OFF = today's device. */
+    DEFINE_PROP_BOOL("gop", Kf3State, gop, false),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),

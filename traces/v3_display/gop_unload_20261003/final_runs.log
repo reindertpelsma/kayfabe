@@ -1,0 +1,53 @@
+FINAL_START rev=4a4b95f7 2026-10-03T18:05:03+00:00
+HEAD 4a4b95f7 dirty=[0]
+BUILD_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/4a4b95f7/qemu-system-x86_64 rev=4a4b95f7 mtime=2026-10-03 18:05:24.222747174 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+B5_LANE_RC=0
+DISPLAY_LANE_START tag=b5f rev=4a4b95f7 2026-10-03T18:05:24+00:00
+DISPLAY_GPU_PROGRESS_ERRORS_AFTER=0
+DISPLAY_FLIP_EVENT_TIMEOUTS_AFTER=1
+DISPLAY_DRM_WARNS_AFTER=0
+DISPLAY_HOST_XID=0 
+DISPLAY_B5_CONSOLE=yes
+DISPLAY_B5C_MODULES nvidia_uvm nvidia  fb=[0 simpledrmdrmfb ]
+DISPLAY_B5C_CUDA_ONLY_CONSOLE up=32.59 before=[1920x1080 nonblack=0/1000 md5=1b47adcd5357] after=[1920x1080 nonblack=4/1000 md5=0ab35ac8903c] changed=yes (expected: changed=yes)
+DISPLAY_B5C2_RM_HELD up=48.57 holder=1784 before=[1920x1080 nonblack=4/1000 md5=0ab35ac8903c] after=[1920x1080 nonblack=7/1000 md5=f46182a99e64] changed=yes (expected: changed=yes)
+DISPLAY_B5C3_AFTER_SECOND_TEARDOWN up=62.75 before=[1920x1080 nonblack=7/1000 md5=f46182a99e64] after=[1920x1080 nonblack=7/1000 md5=f6991ddd8037] changed=yes (expected: changed=yes)
+DISPLAY_B5A_SESSIONS wayland=[cinnamon-wayland] x11=[cinnamon] drm_modeset=not-loaded xorg_conf=[ls: cannot access '/etc/X11/xorg.conf': No such file or directory /etc/X11/xorg.conf.d/: ]
+DISPLAY_B5A_SESSION up=yes start_up=73.18 rc=0  shot=[1920x1080 nonblack=37/1000 md5=70d5f0e0cef7] xorg=[] x_driver=[(II) NVIDIA(0): Creating default Display subsection in Screen section|(II) NVIDIA(0
+DISPLAY_B5A_AFTER_SESSION stop_up=94.68 rc=0  shot=[1920x1080 nonblack=7/1000 md5=f6991ddd8037] changed_from_session=yes (expected: yes — the text console)
+DISPLAY_B5A_CONSOLE_AFTER_SESSION up=102.05 before=[1920x1080 nonblack=7/1000 md5=f6991ddd8037] after=[1920x1080 nonblack=7/1000 md5=0ebecee9d1d6] changed=yes (expected: changed=yes)
+DISPLAY_B5A2_SESSION up=yes start_up=110.48 rc=0  shot=[1920x1080 nonblack=86/1000 md5=689cf0f998cd] xorg=[3737 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7
+DISPLAY_B5A2_AFTER_SESSION stop_up=127.82 rc=0  shot=[1920x1080 nonblack=7/1000 md5=1c28da9edaa7] changed_from_session=yes (expected: yes — the text console)
+DISPLAY_B5A2_CONSOLE_AFTER_SESSION up=135.64 before=[1920x1080 nonblack=7/1000 md5=1c28da9edaa7] after=[1920x1080 nonblack=8/1000 md5=b0513af6270d] changed=yes (expected: changed=yes)
+DISPLAY_B5B_FBCON up=154.83 rc=0  fb=[0 nvidia-drmdrmfb ] shot=[1920x1080 nonblack=3/1000 md5=176c8a943c0f]
+DISPLAY_B5B_AFTER_RMMOD up=155.78 unbound 156.24 792.35 rc=0 0  shot=[1920x1080 nonblack=0/1000 md5=311265f5f5d9] modules=[nvidia_modeset nvidia_uvm nvidia ] (expected: nonblack=0 — black, as bare m
+DISPLAY_B5_DEVICE_LINES 128
+DISPLAY_B5_HOOK_DONE
+DISPLAY_LANE_EXIT rc=0 2026-10-03T18:08:47+00:00
+B1_LANE_RC=0
+DISPLAY_HOST_XID=0 
+DISPLAY_CONNECTED=yes card=/dev/dri/card1
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=60.01
+DISPLAY_LANE_EXIT rc=0 2026-10-03T18:10:32+00:00
+kf3: boot display ON — option ROM 9728 bytes (10de:2504, KFGP BAR1 +0x0, 1920x1080 pitch 7680, G = 0x7f0000); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU
+2026-10-03T18:08:51.994341Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on: info: kf3: boot display option ROM registered: 9728 bytes in a 16384-byte ROM BAR
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+kf-rm: GET_GSP_STATIC_INFO: the guest preserves a firmware console of 0x7f0000 bytes (fn 72 seq 0; boot framebuffer G = 0x7f0000): region 0 = [0, 0x7f0000) reserved, the heap starts at 0x7f0000, 3 regions
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch
+kf3: mem t=48.284s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up
+kf3: mem t=48.317s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf-rm: GET_GSP_STATIC_INFO: the guest preserves a firmware console of 0x7f0000 bytes (fn 72 seq 0; boot framebuffer G = 0x7f0000): region 0 = [0, 0x7f0000) reserved, the heap starts at 0x7f0000, 3 regions
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 2: the guest's RM took BAR1 back after giving it up)
+kf3: display: the guest armed its first head at +52936 ms — the boot layer is retired after 594 boot frame(s)
+kf3: mem t=96.568s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 3) — the guest's RM gave BAR1 up
+kf3: mem t=96.594s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+B0_LANE_RC=0
+DISPLAY_HOST_XID=0 
+DISPLAY_CONNECTED=yes card=/dev/dri/card0
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=59.99
+DISPLAY_LANE_EXIT rc=0 2026-10-03T18:12:18+00:00
+B0_SEED_LINES=0
+FINAL_EXIT rc=0 2026-10-03T18:12:18+00:00
