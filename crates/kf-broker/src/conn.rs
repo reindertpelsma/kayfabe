@@ -307,6 +307,8 @@ pub struct Counters {
     pub carrier_refused: u64,
     /// `EV_FORMAT` "no"s for a pair this connection never asked about, recorded (`badf2d7`).
     pub formats_unasked: u64,
+    /// Descriptors sent although the check could not classify them (no `/proc` for the VMM).
+    pub carrier_unchecked: u64,
     /// ★ §O: `CMD_CURSOR` SETs sent (an image or hot spot the broker did not hold) …
     pub cursor_sets: u64,
     /// … HIDEs …
@@ -1184,13 +1186,18 @@ impl<L: Link> Relay<L> {
         let (cmd, rung) = self.attach_cmd(slot)?;
         // ★ `badf2d7`: only a descriptor the broker can prove — never one it must close off its
         // main thread; the frame is refused here, by name, and the connection stays up
-        if let Err(why) = ring_fd(&self.ring, slot, rung).map_or_else(
+        let checked = ring_fd(&self.ring, slot, rung).map_or_else(
             || Err("has no descriptor".to_string()),
-            |fd| carried(fd, rung == Rung::Shm),
-        ) {
-            self.counters.carrier_refused += 1;
-            self.carrier_refusal = Some(format!("its {rung:?} descriptor {why}"));
-            return None;
+            |fd| carried(kf_linux_raw::fd_carrier(fd), rung == Rung::Shm),
+        );
+        match checked {
+            Ok(None) => {}
+            Ok(Some(e)) => self.unclassified(&e),
+            Err(why) => {
+                self.counters.carrier_refused += 1;
+                self.carrier_refusal = Some(format!("its {rung:?} descriptor {why}"));
+                return None;
+            }
         }
         let r = self.send(&cmd, Some(slot), rung);
         if r == Sent::Done {
@@ -2274,6 +2281,20 @@ impl<L: Link> Relay<L> {
         }
     }
 
+    /// A descriptor the check could not classify went anyway (see [`carried`]): counted, logged
+    /// at a bounded rate.
+    fn unclassified(&mut self, e: &str) {
+        self.counters.carrier_unchecked += 1;
+        let n = self.counters.carrier_unchecked;
+        if loud(n) {
+            say!(
+                "a frame or cursor descriptor could not be classified ({e}) and was sent unchecked — \
+                 it is a memfd or a dma-buf by construction; is /proc unreadable to the VMM \
+                 (a chroot without /proc)? ({n} so far)"
+            );
+        }
+    }
+
     /// One `CMD_CURSOR`. A SET's image goes in a sealed memfd made here, filled, sent with the
     /// record and CLOSED when this returns: the broker `pread`s its own copy, and nothing of the
     /// guest's is ever handed over (the pixels are kayfabe's copy, `crate::cursor`).
@@ -2306,10 +2327,14 @@ impl<L: Link> Relay<L> {
                 f.write_all_at(i.pixels(), 0)
                     .map_err(|e| format!("writing the cursor memfd: {e}"))?;
                 drop(f);
-                carried(ram.as_backing_fd(), true).map_err(|why| {
-                    self.counters.carrier_refused += 1;
-                    format!("the cursor memfd {why}")
-                })?;
+                match carried(kf_linux_raw::fd_carrier(ram.as_backing_fd()), true) {
+                    Ok(None) => {}
+                    Ok(Some(e)) => self.unclassified(&e),
+                    Err(why) => {
+                        self.counters.carrier_refused += 1;
+                        return Err(format!("the cursor memfd {why}"));
+                    }
+                }
                 let c = self.conn.as_ref().ok_or("no connection")?;
                 Ok(self
                     .link
@@ -2355,16 +2380,25 @@ fn ring_fd(ring: &FrameRing, j: usize, rung: Rung) -> Option<BorrowedFd<'_>> {
 /// never an `fstatfs` on an unproven descriptor) — a memfd or a dma-buf, and an `F_SHM` frame's
 /// (or a cursor's) memfd sealed `F_SEAL_SHRINK`, which the broker requires of it
 /// (`:1640-1668`). The ring's descriptors are memfds and dma-bufs by construction; this is the
-/// one place that says so on the wire's side.
-fn carried(fd: BorrowedFd<'_>, shm: bool) -> Result<(), String> {
-    match kf_linux_raw::fd_carrier(fd) {
+/// one place that says so on the wire's side. `Ok(None)`: send it; `Err`: refuse it, naming why.
+///
+/// ⊘ `Ok(Some(why))` — a descriptor the check could not CLASSIFY (`/proc/self/fdinfo` unreadable
+/// to the VMM, as in a `-run-with chroot=` without `/proc`; a memfd needs no `/proc`, a dma-buf
+/// does) is sent anyway, and the caller logs it: the check is a run-time statement of what the
+/// descriptors are by construction, and refusing every dma-buf for the VMM's own missing `/proc`
+/// would black out a display the broker (with its own `/proc`) can show.
+fn carried(
+    c: Result<Carrier, kf_linux_raw::RawError>,
+    shm: bool,
+) -> Result<Option<String>, String> {
+    match c {
         Ok(c @ Carrier::Shmem { .. }) if shm && !c.sealed_against_shrinking() => {
             Err("is a memfd not sealed F_SEAL_SHRINK".into())
         }
         Ok(Carrier::DmaBuf) if shm => Err("is a dma-buf, not a memfd".into()),
-        Ok(Carrier::Shmem { .. } | Carrier::DmaBuf) => Ok(()),
+        Ok(Carrier::Shmem { .. } | Carrier::DmaBuf) => Ok(None),
         Ok(Carrier::Neither) => Err("is neither a memfd nor a dma-buf".into()),
-        Err(e) => Err(format!("cannot be classified ({e})")),
+        Err(e) => Ok(Some(e.to_string())),
     }
 }
 
@@ -2407,4 +2441,47 @@ fn verdict<S>(c: &Conn<S>, fourcc: u32, modifier: u64) -> Option<Verdict> {
         .iter()
         .find(|r| r.fourcc == fourcc && r.modifier == modifier)
         .map(|r| r.v)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ★ The descriptor rule as a table: what is refused, what goes, and that a descriptor the VMM
+    /// cannot classify (no `/proc` for it) still goes — the broker, with its own `/proc`, decides.
+    #[test]
+    fn the_descriptor_rule_refuses_only_what_it_can_name() {
+        let sealed = Carrier::Shmem {
+            seals: libc_seal_shrink(),
+        };
+        let unsealed = Carrier::Shmem { seals: 1 };
+        let no_proc = || {
+            Err(kf_linux_raw::RawError::Syscall {
+                call: "read /proc/self/fdinfo (fd_carrier)",
+                errno: Some(2),
+            })
+        };
+        assert_eq!(carried(Ok(sealed), true), Ok(None), "an F_SHM memfd");
+        assert!(
+            carried(Ok(unsealed), true).is_err(),
+            "F_SHM without F_SEAL_SHRINK"
+        );
+        assert!(
+            carried(Ok(Carrier::DmaBuf), true).is_err(),
+            "a dma-buf as F_SHM"
+        );
+        assert_eq!(carried(Ok(Carrier::DmaBuf), false), Ok(None), "a dma-buf");
+        assert_eq!(carried(Ok(unsealed), false), Ok(None), "a memfd stand-in");
+        assert!(carried(Ok(Carrier::Neither), false).is_err(), "neither");
+        assert!(carried(Ok(Carrier::Neither), true).is_err(), "neither");
+        assert!(
+            matches!(carried(no_proc(), false), Ok(Some(_))),
+            "unclassified: sent"
+        );
+    }
+
+    /// `F_SEAL_SHRINK` (`include/uapi/linux/fcntl.h`).
+    fn libc_seal_shrink() -> u32 {
+        0x0002
+    }
 }
