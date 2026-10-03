@@ -213,3 +213,37 @@ estimates (`design/V3_SWEEP_AND_INSTALL.md` §1.12).
 a day, and $25 a week, reported in each handoff. Until the owner answers, work stays local: the GOP
 ROM can be written and tested against OVMF with a stand-in PCI device, and the broker relay's
 protocol and pacing logic can be unit-tested without a GPU.
+
+## 5. Defaults taken while building, to confirm or change (added 2026-10-03)
+
+The design review of 2026-10-03 (`traces/v3_design_review_20261003/`) raised these questions. The
+build branches (`v3-gop-rom`, `v3-gop-kf3`, `v3-broker`, `v3-loud-uvm`) use the default shown, so
+nothing waits on them; each one is cheap to change later.
+
+| question | default used | why |
+|---|---|---|
+| Secure Boot with the GOP ROM | documented as off for the boot display; no signing yet | An unsigned option ROM does not run under Secure Boot. The alternatives are a kayfabe key enrolled through an OVMF vars template, or Microsoft third-party CA signing. Windows 11 makes this a release question. |
+| The firmware crate is unsafe by nature (raw UEFI tables) | a named exception under `firmware/` only, outside the cargo workspace | It never links into the VMM. |
+| OVMF for every bench lane, or only the display lane | display lane only; no legacy VGA BIOS | SeaBIOS lanes stay as the baseline. A legacy VGA BIOS is an estimated 1–2 weeks more. |
+| kf3 has no reset path | a guest reboot needs a QEMU restart; documented | Windows Setup reboots several times, so the Windows lane needs either this or a reset path. |
+| Broker peer check | accept uid 0, QEMU's uid and the owner of the socket's directory, plus an optional `display-broker-uid` | Whoever listens on the socket sees the guest's screen and can type into it, and nvkvm-pv never checked. |
+| Broker distribution | installed separately, pinned to an nvkvm-pv revision | Settled with the install path (item 1). |
+| Clipboard | later | It is not in the 2026-10-03 list. |
+| Window sizes above the virtual DVI connector's modes | the largest mode that fits, scaled by the broker | Larger modes need a different virtual connector (`V3_DISPLAY.md` §6.2). |
+| "Reuse a frame only after the broker's RELEASE" | kept, with a narrow reclaim when no RELEASE can come (a rejected ATTACH, a format later refused, a disconnect) | RELEASE is advisory in the protocol, so a literal rule could stall the display. |
+
+**Two findings from the review that change earlier statements:**
+
+- **Managed memory already fails with an error.** A guest touch of a non-resident managed page makes
+  the host RC the twin channel, and the app gets error 719 at its next sync (`UnifiedMemoryPerf`,
+  `attach_verify`, `UnifiedMemoryStreams`). `conjugateGradientUM` prints `SUCCESS` because the sample
+  never checks a cuBLAS status; its loop runs zero times on garbage. kayfabe cannot make an app that
+  ignores its errors fail. What is missing compared with bare metal is the guest's Xid line, and
+  `v3-loud-uvm` adds it, plus a host log line and a sweep verdict (loud versus silent). Making
+  managed memory work without the guest's fault support is not possible without changing the guest:
+  the mode is fixed per GPU architecture.
+- **On today's SeaBIOS bench kf3 is already the boot VGA device, and Xorg already picks it as
+  primary** (the reviewer read the bench's serial and Xorg logs). The Xorg BusID pin may simply be
+  unnecessary. The first box test of the display work checks that with no build at all. The GOP ROM
+  is still needed for Windows and for any picture before nvidia-drm loads.
+
