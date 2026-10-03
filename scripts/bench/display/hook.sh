@@ -136,6 +136,11 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     # ★ B0a: what Xorg chose, in its own words — the primary-device marker `PCI:*`, any (EE), and the
     # whole log kept beside the shots
     gq 'sudo cat /var/log/Xorg.0.log' 60 > "$OUT/Xorg.0.log"
+    # a crash-looping X leaves the last COMPLETE attempt in .old; lightdm's own logs say why it exits
+    gq 'sudo cat /var/log/Xorg.0.log.old' 60 > "$OUT/Xorg.0.log.old"
+    gq 'sudo tail -80 /var/log/lightdm/lightdm.log; echo ===X0; sudo tail -60 /var/log/lightdm/x-0.log' 60 > "$OUT/lightdm_logs.log"
+    gq 'ls -la /usr/share/X11/xorg.conf.d/ /etc/X11/xorg.conf.d/ 2>&1; ls -la /etc/X11/xorg.conf 2>&1' 60 > "$OUT/xorg_confd.log"
+    say "XORG_CONFD $(grep -c . "$OUT/xorg_confd.log") lines, nvidia_outputclass=$(grep -c -i 'nvidia' "$OUT/xorg_confd.log") last_EE=$(grep '(EE)' "$OUT/Xorg.0.log.old" | grep -v 'warning, (EE)' | tail -1 | cut -c1-200)"
     say "XORG_PRIMARY pin=${DISPLAY_XORG_PIN:-1} $(grep -m2 -E 'PCI:\*|Primary Device is' "$OUT/Xorg.0.log" | tr '\n' ' ' | cut -c1-240) EE=$(grep -c '(EE)' "$OUT/Xorg.0.log") no_screens=$(grep -c 'no screens found' "$OUT/Xorg.0.log")"
     sleep 20   # let the session paint (panel, wallpaper) before the first shot
     shot "$OUT/desk_1.ppm"
