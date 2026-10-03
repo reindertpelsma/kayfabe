@@ -293,6 +293,8 @@ kf_unpriv_setup
 # The two files QEMU opens itself (the console/serial logs); the `>` redirect below is opened by
 # this (root) shell and its fd crosses the drop unaided.
 kf_unpriv_file "$SER" "${SER%_serial.log}_ttyS0.log"
+# Inputs QEMU opens read-only as the dropped user: the kernel (copied 0600 from /boot) and initrd.
+kf_unpriv_readable "$FG/vmlinuz" "$FG/initrd.cpio.gz" "$Q"
 
 start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "${KF_QEMU_PREFIX[@]}" "$Q" -name kf-fastguest \

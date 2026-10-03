@@ -242,6 +242,10 @@ LIM
 for n in /dev/nvidiactl /dev/nvidia0 /dev/nvidia-uvm; do
     [ -e "$n" ] && chmod o+rw "$n" 2>/dev/null || true
 done
+# The fast-guest kernel is copied 0600 from /boot; the dropped QEMU opens it read-only, so make it
+# (and the bench dirs it traverses) readable. The launcher re-grants at run time too.
+chmod o+rx /workspace /workspace/bench 2>/dev/null || true
+[ -e /workspace/bench/fastguest/vmlinuz ] && chmod o+r /workspace/bench/fastguest/vmlinuz 2>/dev/null || true
 command -v setpriv >/dev/null 2>&1 || die "setpriv(1) missing (util-linux) — the QEMU privilege drop needs it"
 echo "SEC_P0_QEMU_USER=$KF_QEMU_USER groups=$(id -nG "$KF_QEMU_USER" 2>/dev/null)"
 

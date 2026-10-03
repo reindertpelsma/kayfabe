@@ -64,3 +64,13 @@ kf_unpriv_file() {
         chmod 0666 "$f" 2>/dev/null || true
     done
 }
+
+kf_unpriv_readable() {
+    # Grant the dropped user READ on inputs QEMU opens read-only (the fast-guest kernel is copied
+    # from /boot as 0600). The box is throwaway and these are not secrets. No-op when not dropping.
+    [ "${#KF_QEMU_PREFIX[@]}" -gt 0 ] || return 0
+    local f
+    for f in "$@"; do
+        [ -e "$f" ] && chmod o+r "$f" 2>/dev/null || true
+    done
+}
