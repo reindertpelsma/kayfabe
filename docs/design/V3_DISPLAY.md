@@ -1357,7 +1357,7 @@ diagnosis at `e2c6e1d5` (instruments only), B5, B1 and B0 at `4a4b95f7`. CI gree
 
 **The first run, and each arm's cause** (diagnosis run d1):
 
-| arm | first run | cause, measured | bare metal |
+| arm | first run | cause, measured at `e2c6e1d5` (run d1, 2026-10-03) | bare metal |
 |---|---|---|---|
 | (c) nvidia.ko, no RM client | 40 lines on tty1 never shown | The guest RM has no persistence: it initialises the adapter at the first open and tears it down at the last close (five RM lives in d1's one boot). At each teardown it unmaps the console at BAR1 VA 0 (kf3: BAR1 `[0, G)` holds no guest view → SCRATCH), ≤ 1 ms later writes `NV_PBUS_BAR1_BLOCK = 0` (MODE PHYSICAL, target VID_MEM: `kbusStatePreUnload_GM107` → `kbusTeardownMailbox_GM107`, `ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:746-787`), then sends fn 47 (`bInPMTransition = 0`). simpledrm's writes landed in kf3's scratch. Positive control: with a `/dev/nvidia0` holder keeping RM up, the same writes showed. | BAR1 physical: `[0, G)` is FB `[0, G)`, the console keeps drawing |
 | (a) as first run | the session's last frame stays | Not X, not NVKMS: the image's lightdm autologin still named B3's `cinnamon-wayland` (muffin on simpledrm; `Xorg.0.log` was B3's; nvidia-modeset first loaded at (b); no display channel during the session). NVIDIA's EGL held RM up; at the session's end RM was torn down and the console's redraw went to scratch — (c)'s cause. | the text console comes back |
@@ -1391,7 +1391,7 @@ GSP-RM runs its own unload. Both are honoured and the second is a no-op (`[measu
 its physical view"*). The register write is the primary one because the guest holds the console lock
 across the whole teardown (`os_disable_console_access` … `os_enable_console_access`, `osinit.c:2352`, `:2375`, = `console_lock()`,
 `kernel-open/nvidia/os-interface.c:75-78`): fbcon's first write after it comes after fn 47's reply, and
-the register write precedes that by the rest of the teardown. `[measured b5f, 5 teardowns]` unmap →
+the register write precedes that by the rest of the teardown. `[measured b5f at 4a4b95f7, 5 teardowns]` unmap →
 write in the same ms, re-seed ≤ 1 ms later, fn 47's request served 24–36 ms later. ⚠ The re-seed is
 asynchronous (the VA thread): this ordering is a measured margin, not a guarantee.
 
@@ -1406,7 +1406,7 @@ already in `Demand::with_boot_fb`. `[G, bar1-size)` stays scratch while no RM ho
 only bumps an atomic; host verbs run on the VA thread; the re-seed replaces scratch and releases nothing,
 and retirement keeps place → sink → release; no VMM address reaches the guest. Hostile guest: a write
 storm costs one atomic per write and at most one re-seed per BAR1 change; the log lines are bounded.
-`gop=off`: no boot range, so no re-seed and no line (`[measured b0f]` none).
+`gop=off`: no boot range, so no re-seed and no line (`[measured b0f at 4a4b95f7]` none).
 
 **Not modelled / open:**
 - Physical mode for BAR1 `[G, bar1-size)` (above). A guest that keeps a mapping inside `[0, G)` through

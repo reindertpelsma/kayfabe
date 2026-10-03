@@ -21,7 +21,7 @@ driver script output for b5f, b1f, b0f.
 
 ## d1 — the causes (binary `e2c6e1d5`)
 
-- **(c) confirmed.** `d1/b5_device.log`: after every RM teardown (five RM lives in one boot: nvidia-smi,
+- **(c) confirmed** at `e2c6e1d5` (2026-10-03). `d1/b5_device.log`: after every RM teardown (five RM lives in one boot: nvidia-smi,
   the (c2) holder, the session in (a), X in (a2), nvidia-drm in (b)) BAR1 `[0, G)` holds no guest view
   and shows **SCRATCH**; ≤ 1 ms later the guest writes `NV_PBUS_BAR1_BLOCK = 0x0` (MODE PHYSICAL,
   `kbusTeardownMailbox_GM107`), then fn 47 (`bInPMTransition=false`). Positive control in the probe
