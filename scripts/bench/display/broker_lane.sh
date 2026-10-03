@@ -106,6 +106,8 @@ for _ in $(seq 50); do [ -S "$SOCK" ] && break; sleep 0.2; done
 echo "BRK_BROKER pid=$BPID socket=$([ -S "$SOCK" ] && echo up || echo MISSING) args=[${BROKER_ARGS:-}] bin=$B sha256=$(sha256sum "$B" | cut -c1-16)"
 [ -S "$SOCK" ] || { echo "BRK_BROKER_LOG $(tail -3 "$OUT/broker.log" | tr '\n' ' ')"; echo "BRK_LANE_EXIT rc=22 no broker socket"; exit 22; }
 export BRK_XD="$XD" BRK_XA="$XA" BRK_OUT="$OUT" BRK_BROKER_LOG="$OUT/broker.log"
+# for the hook's E3 resilience step (BRK_RESILIENCE=1): who runs the broker, and how to start it again
+export BRK_SU="$SU" BRK_SOCK="$SOCK" BRK_BIN="$B" BRK_BROKER_ARGS="${BROKER_ARGS:-}"
 export NVKVM_RAM_MB=${NVKVM_RAM_MB:-8192} KF_SMP=${KF_SMP:-6}
 export KF3_DEV_EXTRA="display=on,display-broker=$SOCK,display-broker-uid=$SUID${BRK_KF3_EXTRA:+,$BRK_KF3_EXTRA}"
 export POST_CAPTURE_HOOK="$HERE/broker_hook.sh"

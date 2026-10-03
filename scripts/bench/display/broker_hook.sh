@@ -183,6 +183,32 @@ shot after_grab
 hshot host_after_grab
 say "AFTER_GRAB host_hover_vs_host_after_grab_px=$(boxdiff host_hover host_after_grab "$hx" "$hy") (hover again: no cursor in the frame)"
 
+# E3 (BRK_RESILIENCE=1): the broker stopped for 10 s, then killed and started again — the guest
+# must not be held (it answers, its display keeps flipping), and the relay must reconnect and
+# replay its last frame
+if [ "${BRK_RESILIENCE:-0}" = 1 ] && [ -n "${BRK_SU:-}" ]; then
+    # -n: the broker itself (runuser, its parent, matches the same words and is older)
+    bp=$(pgrep -n -f "[n]vkvm-display-broker --socket $BRK_SOCK")
+    m=$(qline)
+    kill -STOP "$bp" 2>/dev/null
+    t0=$(date +%s%N)
+    alive=$(gq 'echo ALIVE' 20)
+    f0=$(gq "$GX timeout 6 glxgears 2>&1 | grep -m1 'frames in' " 30)
+    t1=$(date +%s%N)
+    kill -CONT "$bp" 2>/dev/null
+    say "E3_STOP broker=$bp guest=[${alive}] glxgears_while_stopped=[$f0] took_ms=$(( (t1 - t0) / 1000000 ))"
+    sleep 2
+    kill -9 "$bp" 2>/dev/null; sleep 1
+    # shellcheck disable=SC2086  # BRK_BROKER_ARGS is a flag list
+    runuser -u "$BRK_SU" -- env DISPLAY="$BRK_XD" XAUTHORITY="$BRK_XA" "$BRK_BIN" --socket "$BRK_SOCK" \
+        --backend x11 --persist --verbose ${BRK_BROKER_ARGS:-} >> "${BRK_BROKER_LOG:-/dev/null}" 2>&1 &
+    for _ in $(seq 1 40); do since "$m" | grep -aq 're-sent geometry\|reconnected to the display broker' && break; sleep 0.5; done
+    sleep 3
+    say "E3_KILL9 $(since "$m" | grep -aE 'kf3: broker: (the display broker closed|reconnected|re-sent geometry|connected to)' | cut -d: -f4- | tr '\n' '|' | cut -c1-300)"
+    hshot host_after_restart
+    say "E3_AFTER_RESTART guest=[$(gq 'echo ALIVE' 20)] window=[$(HX xdotool search --onlyvisible --name '^nvkvm' 2>/dev/null | head -1)]"
+fi
+
 # E5 (part): what QEMU holds — descriptors by kind, its VRAM
 pid=${KF_QEMU_PID:-}
 if [ -n "$pid" ] && [ -d "/proc/$pid/fd" ]; then
