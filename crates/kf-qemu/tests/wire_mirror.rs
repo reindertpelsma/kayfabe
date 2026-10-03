@@ -1,7 +1,7 @@
 //! Compile the repository-owned C seam and compare every carried Rust field's layout.
 //! This uses the actual QEMU header, needs no QEMU build, and never opens a GPU.
 
-use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3Frame, Kf3Identity, Kf3Region};
+use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3BrokerEvent, Kf3Frame, Kf3Identity, Kf3Region};
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::{align_of, offset_of, size_of};
 use std::process::Command;
@@ -54,7 +54,7 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let header = std::fs::read_to_string(root.join("qemu/hw/misc/kf3/kf3.h")).unwrap();
     let rust = include_str!("../src/ffi_unsafe.rs");
-    let names = ["Kf3Identity", "Kf3Region", "Kf3Frame"];
+    let names = ["Kf3Identity", "Kf3Region", "Kf3Frame", "Kf3BrokerEvent"];
     let declared: Vec<_> = rust
         .split("#[repr(C)]")
         .skip(1)
@@ -112,6 +112,7 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
     layout!(Kf3Region, [bar => "bar", how => "how", pad => "pad", base => "base", len => "len"]);
     layout!(Kf3Frame, [data => "data", width => "width", height => "height", stride => "stride",
         format => "format", serial => "serial"]);
+    layout!(Kf3BrokerEvent, [kind => "kind", x => "x", y => "y", w0 => "w0", w1 => "w1"]);
     value!("abi", "KF3_ABI", KF3_ABI);
     program.push_str("return 0; }\n");
     let nonce = std::time::SystemTime::now()
@@ -241,7 +242,7 @@ fn c_type(rust: &str) -> String {
         "usize" => "size_t",
         "c_void" | "()" => "void",
         "c_char" => "char",
-        "Kf3Identity" | "Kf3Region" | "Kf3Frame" => t,
+        "Kf3Identity" | "Kf3Region" | "Kf3Frame" | "Kf3BrokerEvent" => t,
         other => panic!("the mirror cannot spell the Rust FFI type `{other}` in C — add it"),
     }
     .to_string()
@@ -420,6 +421,15 @@ fn a_signature_that_drifted_from_kf3_h_is_refused() {
         (
             "int32_t kf3_display_frame(void *, Kf3Frame *);",
             "int32_t kf3_display_frame(void *, Kf3Frame *, uint32_t);",
+        ),
+        // ★ ABI 11: the broker's verbs — a callback's parameter narrowed, an entry's swapped
+        (
+            "typedef void (*Kf3BrokerTimerFn)(void *, int64_t);",
+            "typedef void (*Kf3BrokerTimerFn)(void *, int32_t);",
+        ),
+        (
+            "int32_t kf3_broker_ready(void *, int32_t, uint32_t, uint32_t, uint64_t, Kf3BrokerEvent *, uint32_t);",
+            "int32_t kf3_broker_ready(void *, int32_t, uint32_t, uint32_t, uint32_t, Kf3BrokerEvent *, uint64_t);",
         ),
     ];
     for (was, now) in drift {

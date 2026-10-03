@@ -392,31 +392,15 @@ pub struct DispCounters {
     pub scanout_us_total: AtomicU64,
     /// The longest one.
     pub scanout_us_max: AtomicU64,
+    /// ★ Copies with no free slot — an invariant violation of the frame ring's cap argument
+    /// (`kf_broker::slots`), counted rather than papered over with a slot someone reads.
+    pub scanout_no_slot: AtomicU64,
 }
 
-/// Console frame slots: one the console shows, one ready, one the GPU fills.
-const SLOTS: usize = 3;
-/// "No slot" in [`ConsoleShare`]'s state word.
-const NO_SLOT: u32 = 0xF;
-
-fn pack(front: u32, ready: u32) -> u32 {
-    (front & 0xF) | ((ready & 0xF) << 4)
-}
-
-fn unpack(s: u32) -> (u32, u32) {
-    (s & 0xF, (s >> 4) & 0xF)
-}
-
-/// One published frame's description (the slot's frame memory is the worker's).
-#[derive(Debug, Default)]
-struct FrameSlot {
-    addr: AtomicUsize,
-    width: AtomicU32,
-    height: AtomicU32,
-    stride: AtomicU32,
-    format: AtomicU32,
-    serial: AtomicU64,
-}
+/// The most console frame slots ([`kf_broker::slots::MAX_SLOTS`]): three with the broker off
+/// (one shown, one ready, one the GPU fills — today's triple buffer), five with it on (two more
+/// the broker may hold, `docs/design/V3_DISPLAY.md` §8.3).
+const SLOTS: usize = kf_broker::slots::MAX_SLOTS;
 
 /// ★ What the console reads: a frame's host address, geometry, format and serial.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -435,18 +419,23 @@ pub struct FrameView {
     pub serial: u64,
 }
 
-/// ★★ M2 — the frames the display worker hands QEMU's console, lock-free (`V3_DISPLAY.md` §4.6).
+/// ★★ M2 — the frames the display worker hands QEMU's console (and, with `display-broker`, the
+/// broker relay), lock-free (`V3_DISPLAY.md` §4.6, §8.3).
 ///
-/// Triple buffering in one atomic word `(front, ready)`: the console takes `ready` as its new
-/// `front` ([`ConsoleShare::take`]); the worker fills a slot that is NEITHER (there is always one,
-/// three slots minus two), then publishes it as `ready`, dropping an untaken older one. The console
-/// can only move `ready` to `front`, so the slot the GPU is writing is never the one on screen.
+/// The occupancy is ONE atomic word, [`kf_broker::FrameRing`]: the console takes the ready frame
+/// as its new front ([`ConsoleShare::take`]); the worker fills a slot named nowhere in the word
+/// ([`ConsoleShare::free_slot`]), then publishes it as ready — for the console and, when the
+/// broker is on, for the relay too — dropping an untaken older one. Nobody can name the slot
+/// the GPU is writing, so it is never the one on screen nor one the broker reads.
 /// ⊘ Frame memory is never freed while the device lives (a screendump may still hold a pixman image
 /// of an old front after the console moved on — a stale read is harmless, a freed page is not).
 #[derive(Debug)]
 pub struct ConsoleShare {
-    state: AtomicU32,
-    slots: [FrameSlot; SLOTS],
+    ring: Arc<kf_broker::FrameRing>,
+    /// Per slot: the host address of its current frame (the console's view of the pixels).
+    addrs: [AtomicUsize; SLOTS],
+    /// Per slot: the [`kf_disp::scanout::PixelFormat`] code of its frame.
+    formats: [AtomicU32; SLOTS],
     /// Milliseconds (since the plane's start) of the console's last request — the refresh rate
     /// follows demand.
     demand_ms: AtomicU64,
@@ -455,81 +444,82 @@ pub struct ConsoleShare {
 
 impl Default for ConsoleShare {
     fn default() -> ConsoleShare {
-        ConsoleShare {
-            state: AtomicU32::new(pack(NO_SLOT, NO_SLOT)),
-            slots: core::array::from_fn(|_| FrameSlot::default()),
-            demand_ms: AtomicU64::new(0),
-            epoch: Instant::now(),
-        }
+        ConsoleShare::over(Arc::new(kf_broker::FrameRing::new(
+            kf_broker::slots::CONSOLE_SLOTS,
+            false,
+        )))
     }
 }
 
 impl ConsoleShare {
-    /// ★ **Console (QEMU's main thread)**: the newest frame — the ready one becomes the front — or
-    /// `None` before the first. The returned memory stays valid and unwritten until the next call.
-    pub fn take(&self) -> Option<FrameView> {
-        let now = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
-        self.demand_ms.store(now.max(1), Ordering::Relaxed);
-        loop {
-            let s = self.state.load(Ordering::Acquire);
-            let (front, ready) = unpack(s);
-            let show = if ready == NO_SLOT { front } else { ready };
-            if show == NO_SLOT {
-                return None;
-            }
-            if ready != NO_SLOT
-                && self
-                    .state
-                    .compare_exchange(s, pack(ready, NO_SLOT), Ordering::AcqRel, Ordering::Acquire)
-                    .is_err()
-            {
-                continue;
-            }
-            let sl = &self.slots[show as usize];
-            return Some(FrameView {
-                addr: sl.addr.load(Ordering::Acquire),
-                width: sl.width.load(Ordering::Acquire),
-                height: sl.height.load(Ordering::Acquire),
-                stride: sl.stride.load(Ordering::Acquire),
-                format: sl.format.load(Ordering::Acquire),
-                serial: sl.serial.load(Ordering::Acquire),
-            });
+    /// The console over `ring` (5 slots that feed the broker, or 3 that do not).
+    #[must_use]
+    pub fn over(ring: Arc<kf_broker::FrameRing>) -> ConsoleShare {
+        ConsoleShare {
+            ring,
+            addrs: core::array::from_fn(|_| AtomicUsize::new(0)),
+            formats: core::array::from_fn(|_| AtomicU32::new(0)),
+            demand_ms: AtomicU64::new(0),
+            epoch: Instant::now(),
         }
     }
 
-    /// **Worker**: a slot neither shown nor ready — the next copy's target.
-    fn free_slot(&self) -> usize {
-        let (front, ready) = unpack(self.state.load(Ordering::Acquire));
-        (0..SLOTS as u32)
-            .find(|i| *i != front && *i != ready)
-            .unwrap_or(0) as usize
+    /// The occupancy ring (the broker relay shares it).
+    #[must_use]
+    pub fn ring(&self) -> &Arc<kf_broker::FrameRing> {
+        &self.ring
+    }
+
+    /// Record a request for frames now (the console's, or an active broker's).
+    pub fn note_demand(&self) {
+        let now = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
+        self.demand_ms.store(now.max(1), Ordering::Relaxed);
+    }
+
+    /// ★ **Console (QEMU's main thread)**: the newest frame — the ready one becomes the front — or
+    /// `None` before the first. The returned memory stays valid and unwritten until the next call.
+    pub fn take(&self) -> Option<FrameView> {
+        self.note_demand();
+        let slot = self.ring.take_console()?;
+        let g = self.ring.geometry(slot);
+        Some(FrameView {
+            addr: self.addrs[slot].load(Ordering::Acquire),
+            width: g.width,
+            height: g.height,
+            stride: g.stride,
+            format: self.formats[slot].load(Ordering::Acquire),
+            serial: g.serial,
+        })
+    }
+
+    /// **Worker**: a slot named nowhere in the occupancy word — the next copy's target. `None`
+    /// breaks the ring's cap argument and is the caller's counted fault, never a fallback.
+    fn free_slot(&self) -> Option<usize> {
+        self.ring.fill_target(None)
     }
 
     /// **Worker**: describe slot `i`'s finished frame, then make it the ready one.
     fn publish(&self, i: usize, f: FrameView) {
-        let sl = &self.slots[i];
-        sl.addr.store(f.addr, Ordering::Release);
-        sl.width.store(f.width, Ordering::Release);
-        sl.height.store(f.height, Ordering::Release);
-        sl.stride.store(f.stride, Ordering::Release);
-        sl.format.store(f.format, Ordering::Release);
-        sl.serial.store(f.serial, Ordering::Release);
-        let mut s = self.state.load(Ordering::Acquire);
-        loop {
-            let (front, _) = unpack(s);
-            match self.state.compare_exchange(
-                s,
-                pack(front, i as u32),
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => return,
-                Err(now) => s = now,
-            }
+        if i >= SLOTS {
+            return;
         }
+        self.addrs[i].store(f.addr, Ordering::Release);
+        self.formats[i].store(f.format, Ordering::Release);
+        self.ring.describe(
+            i,
+            kf_broker::FrameGeom {
+                width: f.width,
+                height: f.height,
+                stride: f.stride,
+                // the console's x8r8g8b8 byte order is DRM's XRGB8888 (`kf3.c`'s pixman map)
+                fourcc: kf_broker::wire::FOURCC_XR24,
+                serial: f.serial,
+            },
+        );
+        self.ring.publish(i);
     }
 
-    /// Did the console ask for a frame within the last `ms` milliseconds?
+    /// Did the console (or the broker) ask for a frame within the last `ms` milliseconds?
     fn wanted_within(&self, ms: u64) -> bool {
         let last = self.demand_ms.load(Ordering::Relaxed);
         let now = u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -563,6 +553,10 @@ pub struct DisplayPlane {
     pub counters: DispCounters,
     /// ★ M2: the frames QEMU's console shows.
     pub console: ConsoleShare,
+    /// ★ Display step 3 (`display-broker`): the broker relay's seat — the frame backing and the
+    /// relay the C device's main loop drives (`crate::broker`). `None`: the console alone,
+    /// exactly as before (`cuMemAllocHost`, three slots).
+    pub broker: Option<crate::broker::BrokerSeat>,
     /// The window-class methods a scanout reads (`None`: the family's windows name surfaces by
     /// address — no console yet, M5).
     scan: Option<ScanVocab>,
@@ -591,6 +585,7 @@ impl DisplayPlane {
         bdf: &str,
         store_fd: i32,
         store_bytes: u64,
+        broker: bool,
     ) -> Result<DisplayPlane, String> {
         let version = table.driver_version().to_string();
         let regs = Regs::for_ip(&version, row.ip_version).ok_or_else(|| {
@@ -637,6 +632,16 @@ impl DisplayPlane {
         let engine = Engine::new(vocab, row.heads, row.windows);
         let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);
         let formats = ScanFormats::resolve(t, classes.window);
+        let (console, broker) = if broker {
+            let ring = Arc::new(kf_broker::FrameRing::new(
+                kf_broker::slots::BROKER_SLOTS,
+                true,
+            ));
+            let seat = crate::broker::BrokerSeat::new(ring.clone())?;
+            (ConsoleShare::over(ring), Some(seat))
+        } else {
+            (ConsoleShare::default(), None)
+        };
         Ok(DisplayPlane {
             model,
             ports,
@@ -651,7 +656,8 @@ impl DisplayPlane {
             })),
             cursor: core::array::from_fn(|_| CursorPorts::default()),
             counters: DispCounters::default(),
-            console: ConsoleShare::default(),
+            console,
+            broker,
             scan,
             formats,
         })
@@ -1517,6 +1523,9 @@ struct ScanState {
     /// Page-locked frames per slot — grown, never freed while the device lives ([`ConsoleShare`]).
     frames: [Option<Frame>; SLOTS],
     retired: Vec<Frame>,
+    /// ★ Display step 3: why the broker's frame backing was refused (logged once); the console
+    /// then keeps `cuMemAllocHost` frames and the broker is shown nothing — never a CPU copy.
+    broker_refused: Option<String>,
     /// When the last copy started.
     last: Option<Instant>,
     serial: u64,
@@ -1681,6 +1690,10 @@ impl ScanState {
                 },
             );
             dp.counters.scanouts.fetch_add(1, Ordering::Relaxed);
+            // ★ the relay (main loop) learns of it through one non-blocking eventfd write
+            if let Some(b) = &dp.broker {
+                b.frame_published();
+            }
         }
     }
 
@@ -1766,7 +1779,15 @@ impl ScanState {
                 Err(e) => self.refuse(dp, &e),
             }
         }
-        let slot = dp.console.free_slot();
+        let Some(slot) = dp.console.free_slot() else {
+            dp.counters.scanout_no_slot.fetch_add(1, Ordering::Relaxed);
+            self.refuse(
+                dp,
+                "no free frame slot (the frame ring's cap argument broke)",
+            );
+            self.done = n;
+            return;
+        };
         let need = w as usize * h as usize * 4;
         let Some(gpu) = io.gpu.as_mut() else {
             self.done = n;
@@ -1778,7 +1799,27 @@ impl ScanState {
             } else {
                 FRAME_MAX
             };
-            match gpu.frame(cap) {
+            // ★ with the broker on: a sealed memfd the broker also receives (registered for the
+            // copy, a udmabuf over it when /dev/udmabuf opened); refused once, by name, the
+            // console falls back to its own frames and the broker is shown nothing
+            let seat = dp.broker.as_ref().filter(|_| self.broker_refused.is_none());
+            let broker_frame = match seat.map(|b| b.frame(gpu, slot, cap)) {
+                Some(Ok(f)) => Some(f),
+                Some(Err(e)) => {
+                    eprintln!(
+                        "kf3: display: the BROKER frame backing is REFUSED ({e}) — the console \
+                         keeps working; the broker will be shown nothing"
+                    );
+                    self.broker_refused = Some(e);
+                    None
+                }
+                None => None,
+            };
+            let made = match broker_frame {
+                Some(f) => Ok(f),
+                None => gpu.frame(cap).map_err(|e| e.to_string()),
+            };
+            match made {
                 Ok(f) => {
                     if let Some(old) = self.frames[slot].replace(f) {
                         self.retired.push(old);
@@ -1901,8 +1942,13 @@ mod tests {
     #[test]
     fn the_console_takes_the_newest_frame_and_the_gpu_never_writes_the_shown_one() {
         let c = ConsoleShare::default();
+        assert_eq!(
+            c.ring().slots(),
+            3,
+            "the broker off: three slots, as before"
+        );
         assert_eq!(c.take(), None, "no frame before the first copy");
-        let a = c.free_slot();
+        let a = c.free_slot().unwrap();
         c.publish(a, frame(0x1000, 1));
         let shown = c.take().unwrap();
         assert_eq!((shown.addr, shown.serial), (0x1000, 1));
@@ -1912,13 +1958,13 @@ mod tests {
             "nothing new: the same front again"
         );
         // two copies complete before the console asks: the second replaces the first
-        let b = c.free_slot();
+        let b = c.free_slot().unwrap();
         assert_ne!(b, a, "never the shown slot");
         c.publish(b, frame(0x2000, 2));
-        let d = c.free_slot();
+        let d = c.free_slot().unwrap();
         assert!(d != a && d != b, "neither shown nor ready");
         c.publish(d, frame(0x3000, 3));
-        let e = c.free_slot();
+        let e = c.free_slot().unwrap();
         assert_ne!(e, a, "the shown slot is still the console's");
         assert_ne!(e, d, "the ready slot is not a target");
         assert_eq!(
@@ -1926,14 +1972,46 @@ mod tests {
             3,
             "the newest, never the stale one"
         );
-        for _ in 0..100 {
-            let (front, ready) = unpack(c.state.load(Ordering::Acquire));
-            let t = c.free_slot() as u32;
-            assert!(t != front && t != ready);
-            c.publish(t as usize, frame(0x4000, 4));
+        for i in 0..100u64 {
+            let t = c.free_slot().expect("three slots always leave a target");
+            c.publish(t, frame(0x4000, 4 + i));
             if t.is_multiple_of(2) {
                 c.take();
             }
         }
+    }
+
+    /// ★ With the broker on, the console and the relay read ONE ring: a frame the relay holds is
+    /// never a fill target, and the console still gets every newest frame.
+    #[test]
+    fn the_console_and_the_broker_share_one_ring() {
+        let ring = Arc::new(kf_broker::FrameRing::new(
+            kf_broker::slots::BROKER_SLOTS,
+            true,
+        ));
+        let c = ConsoleShare::over(ring.clone());
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1));
+        assert_eq!(ring.take_broker(), kf_broker::Take::Taken(a));
+        assert_eq!(
+            c.take().unwrap().serial,
+            1,
+            "the console sees the same frame"
+        );
+        let g = ring.geometry(a);
+        assert_eq!(
+            (g.width, g.stride, g.fourcc),
+            (1920, 7680, kf_broker::wire::FOURCC_XR24)
+        );
+        for i in 0..50u64 {
+            let t = c.free_slot().expect("five slots always leave a target");
+            assert_eq!(
+                ring.held_mask() & (1 << t),
+                0,
+                "never a frame the broker holds"
+            );
+            c.publish(t, frame(0x2000, 2 + i));
+        }
+        assert!(ring.release_held(a));
     }
 }

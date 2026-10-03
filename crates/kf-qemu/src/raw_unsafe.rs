@@ -239,3 +239,61 @@ impl kf_chan::dbfast::Ioeventfd for IoeventfdHook {
         }
     }
 }
+
+/// ★ 2026-10-03 (display step 3, `docs/design/V3_DISPLAY.md` §8) — the C device's fd-handler
+/// verb for the broker relay: watch `fd` for readability (`read` = 1) and/or writability, or
+/// (`read` = `write` = 0) remove the handler. Called only from inside a `kf3_broker_*` entry, so
+/// on QEMU's main loop with the BQL held; always called with `(0, 0)` BEFORE Rust closes `fd`.
+pub type BrokerWatchFn =
+    unsafe extern "C" fn(opaque: *mut core::ffi::c_void, fd: i32, read: u32, write: u32);
+
+/// ★ The C device's timer verb for the broker relay: fire at `deadline_ms`
+/// (`QEMU_CLOCK_REALTIME`, the clock `kf3_broker_ready`'s `now_ms` reads), or never (`-1`).
+/// Same thread and calling rules as [`BrokerWatchFn`].
+pub type BrokerTimerFn = unsafe extern "C" fn(opaque: *mut core::ffi::c_void, deadline_ms: i64);
+
+/// The C device's two broker verbs and its opaque state pointer.
+#[derive(Debug, Clone, Copy)]
+pub struct BrokerHooks {
+    watch: BrokerWatchFn,
+    timer: BrokerTimerFn,
+    opaque: *mut core::ffi::c_void,
+}
+
+// SAFETY: `opaque` is the C device's state, which lives for the process; the hooks are only ever
+// CALLED from inside a `kf3_broker_*` entry (the main loop) — the seat keeps them behind its
+// mutex, and moving the pair between threads does nothing to the state it names.
+unsafe impl Send for BrokerHooks {}
+
+impl BrokerHooks {
+    /// Adopt the C device's verbs.
+    ///
+    /// # Safety
+    /// `watch` and `timer` must be callable with `opaque` on QEMU's main loop for the device's
+    /// lifetime, must not re-enter any `kf3_broker_*` entry, and must not block.
+    #[must_use]
+    pub unsafe fn adopt(
+        watch: BrokerWatchFn,
+        timer: BrokerTimerFn,
+        opaque: *mut core::ffi::c_void,
+    ) -> BrokerHooks {
+        BrokerHooks {
+            watch,
+            timer,
+            opaque,
+        }
+    }
+}
+
+impl kf_broker::Host for BrokerHooks {
+    fn watch(&mut self, fd: i32, read: bool, write: bool) {
+        // SAFETY: the contract `adopt` was given; called from inside a `kf3_broker_*` entry.
+        unsafe { (self.watch)(self.opaque, fd, u32::from(read), u32::from(write)) }
+    }
+
+    fn timer(&mut self, deadline_ms: Option<u64>) {
+        let d = deadline_ms.map_or(-1, |t| i64::try_from(t).unwrap_or(i64::MAX));
+        // SAFETY: as above.
+        unsafe { (self.timer)(self.opaque, d) }
+    }
+}

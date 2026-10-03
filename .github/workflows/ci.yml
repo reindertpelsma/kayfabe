@@ -1504,7 +1504,24 @@ jobs:
           #     unsealed `memfd_create` (the case `/dev/udmabuf` must refuse).
           #   ⊘ No new power over guest memory: the socket carries only dedicated, sealed frame
           #     copies the display worker owns, and reads no descriptor from the peer.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:87 kf-cuda:75 kf-qemu:44"
+          #
+          # ★★ `kf-cuda` 75 -> 78 and `kf-qemu` 44 -> 53, 2026-10-03 (`v3-broker`, display step 3a —
+          # the broker relay's kf3 glue, KF3 ABI 11). Itemised:
+          #   kf-cuda `driver_unsafe.rs` (+3): `Cuda::host_register` — `HostSpan::as_ptr` (the span
+          #     of a mapping `display::Frame` OWNS and unregisters before it unmaps) and one call of
+          #     `cuMemHostRegister_v2` (flags 0) on it; `Cuda::host_unregister` — one call of
+          #     `cuMemHostUnregister` on a `PinnedBuf` it consumes.
+          #   kf-qemu `ffi_unsafe.rs` (+5): `kf3_broker_start` (`unsafe extern "C" fn`; `path` a
+          #     NUL-terminated string, `err` writable) with its `CStr::from_ptr` and its
+          #     `BrokerHooks::adopt` (the C verbs' contract forwarded); `kf3_broker_ready`
+          #     (`unsafe extern "C" fn`; `out` writable for `cap`) with its one bounded write per
+          #     event (`i < n <= cap`).
+          #   kf-qemu `raw_unsafe.rs` (+4): `unsafe impl Send for BrokerHooks` (the C state lives for
+          #     the process; the hooks are called only inside a `kf3_broker_*` entry), `unsafe fn
+          #     adopt`, and the two `unsafe { }` calls of the watch and timer verbs.
+          #   ⊘ No new power: the verbs only register fd handlers and a timer on QEMU's main loop,
+          #     for descriptors Rust owns; the registration pins memory this process mapped.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:87 kf-cuda:78 kf-qemu:53"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

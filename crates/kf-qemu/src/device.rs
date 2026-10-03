@@ -48,6 +48,10 @@ pub struct Config {
     /// Off is today's displayless posture. On a chip whose bare metal has no display engine the
     /// device REFUSES to realize rather than invent one.
     pub display: bool,
+    /// ★ Display step 3 (`display-broker` set, `docs/design/V3_DISPLAY.md` §8): back the display's
+    /// frames with sealed memfds the broker can receive (five slots). Unset: `cuMemAllocHost` and
+    /// three slots, exactly as before. Refused without `display`.
+    pub display_broker: bool,
 }
 
 /// What the C device needs to present the PCI function.
@@ -516,6 +520,11 @@ impl Device {
         // ⊘ A chip whose bare metal has no display engine (GA100, GH100, GB10x datacenter) is
         // REFUSED by name: the guest driver hard-wires those as displayless, so a display here
         // would be a lie about the chip — their VM display is a separate adapter (§2.2).
+        if cfg.display_broker && !cfg.display {
+            return Err(
+                "display-broker needs display=on (the broker shows the virtual display)".into(),
+            );
+        }
         let display_row = if cfg.display {
             let row = kf_chip::display::display_for(architecture, implementation).ok_or(format!(
                 "display=on: chip arch {architecture:#x} impl {implementation:#x} has no display engine on \
@@ -544,6 +553,7 @@ impl Device {
                     &bdf,
                     export.fd_number(),
                     fb_length,
+                    cfg.display_broker,
                 )?;
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
@@ -2021,7 +2031,11 @@ impl Device {
                 d.scanout_refused.load(o),
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
-            )
+            ) + &format!(" scanout_no_slot={}", d.scanout_no_slot.load(o))
+                + &dp
+                    .broker
+                    .as_ref()
+                    .map_or_else(String::new, |b| format!(" {}", b.status()))
         });
         let db = format!(" {}", self.dbfast.status());
         format!(

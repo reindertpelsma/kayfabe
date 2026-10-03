@@ -41,8 +41,14 @@ pub struct DisplayGpu {
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
 /// QEMU console as an integer; this crate writes it only through the GPU copy engine.
+///
+/// Two backings: `cuMemAllocHost` ([`DisplayGpu::frame`], the console alone), or — with the
+/// display broker on — a mapping of a sealed memfd the broker also receives, page-locked with
+/// `cuMemHostRegister` ([`DisplayGpu::frame_over`]). The frame then OWNS that mapping, so the
+/// registration can never outlive the pages it pins.
 pub struct Frame {
     buf: PinnedBuf,
+    map: Option<kf_linux_raw::MappedRegion>,
 }
 
 impl Frame {
@@ -72,6 +78,16 @@ impl Frame {
     #[must_use]
     pub fn read(&self, off: usize, n: usize) -> Vec<u8> {
         self.buf.read(off, n)
+    }
+}
+
+impl Drop for Frame {
+    fn drop(&mut self) {
+        // ⊘ A registered frame dropped WITHOUT `DisplayGpu::release_frame` keeps its pages
+        // mapped: the registration must never outlive the mapping it pins.
+        if let Some(m) = self.map.take() {
+            std::mem::forget(m);
+        }
     }
 }
 
@@ -212,7 +228,33 @@ impl DisplayGpu {
         self.make_current()?;
         Ok(Frame {
             buf: self.cu.pinned_alloc(len, "cuMemAllocHost(display frame)")?,
+            map: None,
         })
+    }
+
+    /// ★ A frame over `map` (the display broker's sealed memfd, mapped by the caller), page-locked
+    /// with `cuMemHostRegister` so the scanout copy lands in the pages the broker reads.
+    ///
+    /// # Errors
+    /// The CUDA refusal — a driver without the entry, or one that will not pin these pages — with
+    /// the mapping handed back.
+    pub fn frame_over(
+        &self,
+        map: kf_linux_raw::MappedRegion,
+    ) -> Result<Frame, (CudaError, kf_linux_raw::MappedRegion)> {
+        if let Err(e) = self.make_current() {
+            return Err((e, map));
+        }
+        match self
+            .cu
+            .host_register(&map.host_span(), "cuMemHostRegister(display broker frame)")
+        {
+            Ok(buf) => Ok(Frame {
+                buf,
+                map: Some(map),
+            }),
+            Err(e) => Err((e, map)),
+        }
     }
 
     /// The fd that becomes readable when a queued scanout copy completed (the worker polls it).
@@ -226,9 +268,24 @@ impl DisplayGpu {
     ///
     /// # Errors
     /// [`CudaError`].
-    pub fn release_frame(&self, f: Frame) -> Result<(), CudaError> {
+    pub fn release_frame(&self, mut f: Frame) -> Result<(), CudaError> {
         self.make_current()?;
-        self.cu.pinned_free(f.buf, "cuMemFreeHost(display frame)")
+        let buf = std::mem::replace(&mut f.buf, PinnedBuf::empty());
+        match f.map.take() {
+            // unregister first, and the mapping goes only once that succeeded
+            Some(map) => {
+                let r = self
+                    .cu
+                    .host_unregister(buf, "cuMemHostUnregister(display broker frame)");
+                if r.is_ok() {
+                    drop(map);
+                } else {
+                    std::mem::forget(map);
+                }
+                r
+            }
+            None => self.cu.pinned_free(buf, "cuMemFreeHost(display frame)"),
+        }
     }
 
     /// ★ Start a `w` x `h` composition: the device staging frame (grown when too small) cleared to

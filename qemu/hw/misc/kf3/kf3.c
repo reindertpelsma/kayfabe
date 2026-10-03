@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later */
 /*
  * kf3-gpu — the v3 kayfabe device (THE_ARCHITECTURE_v3.md §1-§2, docs/design/V3_BUILD.md).
  *
@@ -24,6 +25,13 @@
  *    per vector (kf3_irq_fd); this device registers each as a KVM irqfd on the vector's MSI route
  *    when the guest unmasks it (msix vector notifiers, virtio-pci's pattern). A raise is then one
  *    write(2) from any Rust thread — never a BQL-taking msix_notify.
+ *  - ★ 2026-10-03, the display broker (property display-broker, unset = off;
+ *    docs/design/V3_DISPLAY.md §8): Rust (crates/kf-broker, crates/kf-qemu/src/broker.rs) owns the
+ *    socket and decides everything; this file registers the fd handlers and the timer Rust asks
+ *    for, and injects the broker's input through QEMU's input layer on kf3's own console. The input
+ *    mapping and the close policy are ported from nvkvm-pv src/qemu/nvkvm_display_relay.c at
+ *    368d2db (Apache-2.0, same author; relay_btn, relay_set_relative, relay_handle), for the
+ *    QEMU 10.2 API (qemu_input_event_send_key_qcode). Main loop only, BQL held; no vCPU path.
  */
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
@@ -44,7 +52,12 @@
 #include "qemu/main-loop.h"
 #include "qemu/thread.h"
 #include "ui/console.h"
+#include "ui/input.h"
+#include "qapi/qapi-commands-ui.h"
+#include "qemu/timer.h"
+#include "system/runstate.h"
 #include <linux/kvm.h>
+#include <linux/input-event-codes.h>
 #include "kf3.h"
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
@@ -132,6 +145,12 @@ struct Kf3State {
     uint64_t db_sites_added, db_sites_removed;
     MemoryRegion dummy_pages[3];
     EventNotifier dummy_efd;   /* page 2's KVM ioeventfd — nobody reads it */
+    /* ★ ABI 11 (display step 3): the display-broker relay. Main loop only, BQL held. */
+    char *display_broker;            /* property: the broker's socket path; NULL = off */
+    int64_t display_broker_uid;      /* property: one more uid accepted as the broker; -1 = none */
+    QEMUTimer *broker_timer;
+    int broker_sock;                 /* the socket Rust asked us to watch, or -1 */
+    int broker_frame_fd;             /* the display worker's frame eventfd, or -1 */
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -710,6 +729,241 @@ static const GraphicHwOps kf3_gfx_ops = {
     .gfx_update = kf3_gfx_update,
 };
 
+/* ── the display-broker relay (display step 3, docs/design/V3_DISPLAY.md §8) ─────────────────
+ * Rust decides; this file registers what Rust asks for and injects input. Every function here
+ * runs on the main loop with the BQL held. ⊘ No .ui_info hook yet (3c): a hook that did nothing
+ * would tell VNC/GTK the guest can resize; SURFACE is logged by Rust and the broker scales. */
+
+#define KF3_BROKER_BATCH 64
+
+static void kf3_broker_pump(Kf3State *s, int fd, bool rd, bool wr);
+
+static void kf3_broker_sock_rd(void *opaque)
+{
+    Kf3State *s = opaque;
+    kf3_broker_pump(s, s->broker_sock, true, false);
+}
+
+static void kf3_broker_sock_wr(void *opaque)
+{
+    Kf3State *s = opaque;
+    kf3_broker_pump(s, s->broker_sock, false, true);
+}
+
+static void kf3_broker_frame_rd(void *opaque)
+{
+    Kf3State *s = opaque;
+    kf3_broker_pump(s, s->broker_frame_fd, true, false);
+}
+
+static void kf3_broker_timer_cb(void *opaque)
+{
+    kf3_broker_pump(opaque, -1, false, false);
+}
+
+/* Rust's watch verb (Kf3BrokerWatchFn). (0, 0) arrives BEFORE Rust closes the fd, so no stale
+ * descriptor number stays registered (nvkvm-pv relay.c:724-743's order). */
+static void kf3_broker_watch(void *opaque, int32_t fd, uint32_t rd, uint32_t wr)
+{
+    Kf3State *s = opaque;
+
+    if (!rd && !wr) {
+        qemu_set_fd_handler(fd, NULL, NULL, NULL);
+        if (s->broker_sock == fd) {
+            s->broker_sock = -1;
+        }
+        return;
+    }
+    s->broker_sock = fd;
+    qemu_set_fd_handler(fd, rd ? kf3_broker_sock_rd : NULL, wr ? kf3_broker_sock_wr : NULL, s);
+}
+
+/* Rust's timer verb (Kf3BrokerTimerFn): QEMU_CLOCK_REALTIME milliseconds, -1 = none. */
+static void kf3_broker_timer(void *opaque, int64_t deadline_ms)
+{
+    Kf3State *s = opaque;
+
+    if (!s->broker_timer) {
+        return;
+    }
+    if (deadline_ms < 0) {
+        timer_del(s->broker_timer);
+    } else {
+        timer_mod(s->broker_timer, deadline_ms);
+    }
+}
+
+/* nvkvm-pv relay.c:1101-1111. */
+static InputButton kf3_broker_btn(int code)
+{
+    switch (code) {
+    case BTN_LEFT:   return INPUT_BUTTON_LEFT;
+    case BTN_RIGHT:  return INPUT_BUTTON_RIGHT;
+    case BTN_MIDDLE: return INPUT_BUTTON_MIDDLE;
+    case BTN_SIDE:   return INPUT_BUTTON_SIDE;
+    case BTN_EXTRA:  return INPUT_BUTTON_EXTRA;
+    default:         return INPUT_BUTTON__MAX;
+    }
+}
+
+/* On grab a RELATIVE pointing device goes in front, on ungrab the absolute one — picked
+ * deterministically, preferring Virtio (nvkvm-pv relay.c:1125-1191, copied; ⚠ it is known not to
+ * give mouse-look, broker-design.md). */
+static void kf3_broker_set_relative(bool relative)
+{
+    MouseInfoList *mice = qmp_query_mice(NULL), *e;
+    MouseInfo *pick = NULL;
+
+    for (e = mice; e; e = e->next) {
+        if (e->value->absolute == relative) {
+            continue;
+        }
+        if (!pick) {
+            pick = e->value;
+        }
+        if (e->value->name && strstr(e->value->name, "Virtio")) {
+            pick = e->value;
+            break;
+        }
+    }
+    if (pick) {
+        qemu_mouse_set((int)pick->index, NULL);
+        info_report("kf3: broker: pointing device -> #%d %s (%s)", (int)pick->index, pick->name,
+                    relative ? "relative" : "absolute");
+    } else {
+        warn_report("kf3: broker: NO %s pointing device exists, so %s. Add -device %s.",
+                    relative ? "relative" : "absolute",
+                    relative ? "pointer motion goes nowhere while grabbed"
+                             : "the pointer cannot be put back on ungrab",
+                    relative ? "virtio-mouse-pci" : "virtio-tablet-pci");
+    }
+    qapi_free_MouseInfoList(mice);
+}
+
+/* One event, already bounded by Rust (nvkvm-pv relay.c:1193-1462, the QEMU 10.2 spelling). Input is
+ * aimed at kf3's own console: qemu_input_find_handler takes a handler bound to it first
+ * (-device virtio-tablet-pci,display=<kf3 id>), then any unbound one. */
+static void kf3_broker_input(Kf3State *s, const Kf3BrokerEvent *e)
+{
+    QemuConsole *con = s->con;
+    InputButton b;
+
+    switch (e->kind) {
+    case KF3_BROKER_KEY:
+        /* the map lookup is the validity filter: a key QEMU cannot map is dropped */
+        if (e->x >= 0 && (guint)e->x < qemu_input_map_linux_to_qcode_len &&
+            qemu_input_map_linux_to_qcode[e->x] != Q_KEY_CODE_UNMAPPED) {
+            qemu_input_event_send_key_qcode(con, qemu_input_linux_to_qcode((unsigned)e->x),
+                                            e->y != 0);
+        }
+        break;
+    case KF3_BROKER_BTN:
+        b = kf3_broker_btn(e->x);
+        if (b != INPUT_BUTTON__MAX) {
+            qemu_input_queue_btn(con, b, e->y != 0);
+            qemu_input_event_sync();
+        }
+        break;
+    case KF3_BROKER_ABS:
+        if (e->w0 && e->w1) {
+            qemu_input_queue_abs(con, INPUT_AXIS_X, e->x, 0, (int)e->w0);
+            qemu_input_queue_abs(con, INPUT_AXIS_Y, e->y, 0, (int)e->w1);
+            qemu_input_event_sync();
+        }
+        break;
+    case KF3_BROKER_REL:
+        qemu_input_queue_rel(con, INPUT_AXIS_X, e->x);
+        qemu_input_queue_rel(con, INPUT_AXIS_Y, e->y);
+        qemu_input_event_sync();
+        break;
+    case KF3_BROKER_WHEEL:
+        /* vertical only: QEMU 10.2's virtio and USB pointers map no WHEEL_LEFT/RIGHT */
+        b = e->x > 0 ? INPUT_BUTTON_WHEEL_UP : INPUT_BUTTON_WHEEL_DOWN;
+        qemu_input_queue_btn(con, b, true);
+        qemu_input_event_sync();
+        qemu_input_queue_btn(con, b, false);
+        qemu_input_event_sync();
+        break;
+    case KF3_BROKER_GRAB:
+        kf3_broker_set_relative(e->x != 0);
+        break;
+    case KF3_BROKER_CLOSE:
+        /* the policy is the VMM's (proto.h): force = stop now; otherwise an ACPI powerdown the
+         * guest decides on (Rust logs the repeat-ask message) */
+        if (e->x) {
+            qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_UI);
+        } else {
+            qemu_system_powerdown_request();
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+static void kf3_broker_pump(Kf3State *s, int fd, bool rd, bool wr)
+{
+    Kf3BrokerEvent ev[KF3_BROKER_BATCH];
+    int32_t n, i;
+
+    if (!s->h) {
+        return;
+    }
+    n = kf3_broker_ready(s->h, fd, rd ? 1 : 0, wr ? 1 : 0,
+                         (uint64_t)qemu_clock_get_ms(QEMU_CLOCK_REALTIME), ev, KF3_BROKER_BATCH);
+    for (i = 0; i < n && i < KF3_BROKER_BATCH; i++) {
+        kf3_broker_input(s, &ev[i]);
+    }
+}
+
+/* Realize, after the console exists. The path rules (absolute, < sun_path, no abstract namespace)
+ * are Rust's and refuse here by name; an ABSENT broker is not an error (retried, never a startup
+ * dependency). */
+static bool kf3_broker_realize(Kf3State *s, Error **errp)
+{
+    char err[512] = "";
+
+    s->broker_sock = -1;
+    s->broker_frame_fd = -1;
+    if (!s->display_broker) {
+        return true;
+    }
+    s->broker_frame_fd = kf3_broker_frame_fd(s->h);
+    if (s->broker_frame_fd < 0) {
+        error_setg(errp, "kf3: display-broker: the display has no broker frames");
+        return false;
+    }
+    s->broker_timer = timer_new_ms(QEMU_CLOCK_REALTIME, kf3_broker_timer_cb, s);
+    qemu_set_fd_handler(s->broker_frame_fd, kf3_broker_frame_rd, NULL, s);
+    if (kf3_broker_start(s->h, s->display_broker, s->display_broker_uid, kf3_broker_watch,
+                         kf3_broker_timer, s, (uint64_t)qemu_clock_get_ms(QEMU_CLOCK_REALTIME),
+                         err, sizeof(err)) != 0) {
+        error_setg(errp, "kf3: %s", err);
+        return false;
+    }
+    info_report("kf3: display broker relay on %s (input goes to this device's console)",
+                s->display_broker);
+    return true;
+}
+
+/* Exit, BEFORE the console closes: Rust unwatches and closes the socket, then the timer and the
+ * frame handler go. */
+static void kf3_broker_exit(Kf3State *s)
+{
+    if (!s->display_broker || !s->h) {
+        return;
+    }
+    kf3_broker_stop(s->h);
+    if (s->broker_frame_fd >= 0) {
+        qemu_set_fd_handler(s->broker_frame_fd, NULL, NULL, NULL);
+        s->broker_frame_fd = -1;
+    }
+    if (s->broker_timer) {
+        timer_free(s->broker_timer);
+        s->broker_timer = NULL;
+    }
+}
+
 static void kf3_dev_realize(PCIDevice *pci, Error **errp)
 {
     Kf3State *s = KF3(pci);
@@ -725,8 +979,12 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         error_setg(errp, "kf3: archive ABI %u, device ABI %u", kf3_abi_version(), KF3_ABI);
         return;
     }
+    if (s->display_broker && !s->display) {
+        error_setg(errp, "kf3: display-broker needs display=on (the broker shows the virtual display)");
+        return;
+    }
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    &s->h, err, sizeof(err)) != 0) {
+                    s->display_broker ? 1 : 0, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }
@@ -850,6 +1108,9 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         info_report("kf3: display console registered (head 0 of %s)",
                     DEVICE(pci)->id ? DEVICE(pci)->id : "kf3-gpu");
     }
+    if (!kf3_broker_realize(s, errp)) {
+        return;
+    }
 
     kf3_status(s->h, err, sizeof(err));
     info_report("%s (BAR0 pieces=%u)", err, s->n_pieces);
@@ -868,6 +1129,8 @@ static void kf3_dev_exit(PCIDevice *pci)
                     s->irq_routes, s->irq_route_fail, s->bar1_ov_applied, s->bar1_ov_failed,
                     s->db_sites_added, s->db_sites_removed);
         memory_listener_unregister(&s->listener);
+        /* ★ ABI 11: the broker relay stops BEFORE the console closes (its input targets it) */
+        kf3_broker_exit(s);
         if (s->con) {
             /* the console stops reading the display's frames before the device goes */
             graphic_console_close(s->con);
@@ -895,6 +1158,11 @@ static const Property kf3_properties[] = {
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),
+    /* ★ 2026-10-03, display step 3 (docs/design/V3_DISPLAY.md §8): the display broker's socket
+     * (absolute path; unset = off, the console alone) and one more uid accepted as the broker
+     * (-1 = none; 0, QEMU's euid and the socket directory's owner are always accepted). */
+    DEFINE_PROP_STRING("display-broker", Kf3State, display_broker),
+    DEFINE_PROP_INT64("display-broker-uid", Kf3State, display_broker_uid, -1),
 };
 
 static void kf3_class_init(ObjectClass *klass, const void *data)

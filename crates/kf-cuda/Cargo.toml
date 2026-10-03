@@ -6,6 +6,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# ★ 2026-10-03 (display step 3): a broker frame OWNS its `MappedRegion` (a sealed memfd mapping)
+# so its `cuMemHostRegister` can never outlive the pages it pins. Light: libc + kf-util.
+kf-linux-raw.workspace = true
 
 [dev-dependencies]
 

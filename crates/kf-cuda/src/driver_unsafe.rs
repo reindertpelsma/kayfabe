@@ -252,6 +252,13 @@ pub struct Cuda {
         Option<unsafe extern "C" fn(u64, usize, *const c_void, usize) -> CUresult>,
     pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
     pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    // ★ 2026-10-03 (display step 3, the broker relay): page-lock memory WE mapped (a sealed
+    // memfd the broker also receives) so the display's async D2H copy can land in it.
+    // ⊘ `Option`, like the VMM set: a driver without them loses the broker path BY NAME at its
+    // first frame, never the walker at load.
+    pub(crate) cuMemHostRegister:
+        Option<unsafe extern "C" fn(*mut c_void, usize, c_uint) -> CUresult>,
+    pub(crate) cuMemHostUnregister: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
 }
 
 // SAFETY: every field is a code pointer into a library loaded `RTLD_GLOBAL` for the life of
@@ -427,6 +434,9 @@ impl Cuda {
             cuMemSetAccess: opt!("cuMemSetAccess"),
             cuMemUnmap: opt!("cuMemUnmap"),
             cuMemAddressFree: opt!("cuMemAddressFree"),
+            // ⚠ `_v2`, as everywhere a size is carried (the unsuffixed entry is the 32-bit ABI)
+            cuMemHostRegister: opt!("cuMemHostRegister_v2"),
+            cuMemHostUnregister: opt!("cuMemHostUnregister"),
             cuGetErrorName: if err_name.is_null() {
                 None
             } else {
@@ -987,6 +997,52 @@ impl Cuda {
         })
     }
 
+    /// ★ `cuMemHostRegister_v2` (flags 0: portable to no other context, not device-mapped) —
+    /// page-lock `span`, a mapping this process owns, so an async copy can target it. The
+    /// returned [`PinnedBuf`] names the same pages; [`Self::host_unregister`] gives it back.
+    ///
+    /// # Errors
+    /// [`CudaError::MissingSymbol`] on a driver without the entry; [`CudaError::Refused`].
+    pub(crate) fn host_register(
+        &self,
+        span: &kf_linux_raw::HostSpan,
+        what: &'static str,
+    ) -> Result<PinnedBuf, CudaError> {
+        let f = self
+            .cuMemHostRegister
+            .ok_or(CudaError::MissingSymbol("cuMemHostRegister_v2"))?;
+        // SAFETY: the span is minted by a live mapping the caller keeps alive for as long as the
+        // registration exists (`display::Frame` owns both, and unregisters before it unmaps);
+        // handing it to the driver as a page-lock target is the use `HostSpan::as_ptr`
+        // permits, and no Rust reference into it is formed.
+        let p = unsafe { span.as_ptr() };
+        // SAFETY: `[p, p + len)` is the live mapping above; the driver pins those pages and
+        // dereferences nothing on our behalf. Flags 0 request nothing beyond the pin.
+        self.check(what, unsafe { f(p.cast::<c_void>(), span.len(), 0) })?;
+        Ok(PinnedBuf {
+            ptr: p as usize,
+            len: span.len(),
+        })
+    }
+
+    /// ★ `cuMemHostUnregister` — undo [`Self::host_register`]. ⊘ Only once no queued copy can
+    /// still target the pages.
+    ///
+    /// # Errors
+    /// [`CudaError::MissingSymbol`]; [`CudaError::Refused`].
+    pub(crate) fn host_unregister(
+        &self,
+        buf: PinnedBuf,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        let f = self
+            .cuMemHostUnregister
+            .ok_or(CudaError::MissingSymbol("cuMemHostUnregister"))?;
+        // SAFETY: `buf.ptr` is the base of a live registration made by `host_register`, consumed
+        // here; the driver unpins and dereferences nothing.
+        self.check(what, unsafe { f(buf.ptr as *mut c_void) })
+    }
+
     /// `cuMemHostGetDevicePointer_v2` — the DEVICE address of `buf[off]`, so a kernel can read
     /// the pinned bytes directly (zero-copy) instead of through a copy node.
     ///
@@ -1348,6 +1404,12 @@ pub(crate) struct PinnedBuf {
 }
 
 impl PinnedBuf {
+    /// A placeholder naming nothing (`len` 0), left behind when a frame's real buffer is moved
+    /// out to be released. Never handed to a CUDA call.
+    pub(crate) fn empty() -> PinnedBuf {
+        PinnedBuf { ptr: 0, len: 0 }
+    }
+
     /// The allocation's host address, as an integer — handed across an FFI (the display console
     /// reads a finished frame there); never dereferenced by safe code.
     pub(crate) fn addr(&self) -> usize {

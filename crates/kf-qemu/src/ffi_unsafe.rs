@@ -5,6 +5,7 @@ use crate::device::{Config, Device};
 use crate::raw_unsafe::RawRegion;
 use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
+use std::os::unix::ffi::OsStrExt as _;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
 /// ★ 10 (2026-09-30, `v3-mc22`): the union of two INDEPENDENT 9s — `v3-display2`'s frame hand-off
@@ -12,7 +13,10 @@ use std::ffi::CStr;
 /// ([`kf3_doorbell_page_offset`], [`kf3_set_ioeventfd`], [`kf3_doorbell_site`]). The two 9s name
 /// different surfaces, so an archive from either branch must fail the device's check: one new
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
-pub const KF3_ABI: u32 = 10;
+/// ★ 11 (2026-10-03, `v3-broker`, display step 3): `kf3_realize` gains `display_broker`, and the
+/// broker relay's surface ([`Kf3BrokerEvent`], [`kf3_broker_start`], [`kf3_broker_frame_fd`],
+/// [`kf3_broker_ready`], [`kf3_broker_stop`]).
+pub const KF3_ABI: u32 = 11;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -89,6 +93,7 @@ pub unsafe extern "C" fn kf3_realize(
     bar2_bytes: u64,
     guest_driver: *const c_char,
     display: u32,
+    display_broker: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -111,6 +116,7 @@ pub unsafe extern "C" fn kf3_realize(
         bar2_bytes,
         guest_driver: guest,
         display: display != 0,
+        display_broker: display_broker != 0,
     };
     match Device::realize(&cfg) {
         Ok(d) => {
@@ -494,6 +500,47 @@ pub struct Kf3Frame {
     pub serial: u64,
 }
 
+/// ★ ABI 11 (display step 3): one input event from the display broker for the C device to inject
+/// (`kind`: 1 key, 2 button, 3 absolute, 4 relative, 5 wheel, 6 grab, 7 close). Every value is
+/// already bounded by the relay (`kf_broker::Input`); the C device still checks a key code
+/// against QEMU's own map.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Kf3BrokerEvent {
+    /// `KF3_BROKER_*` (kf3.h).
+    pub kind: u32,
+    /// Key/button code, x, dx, wheel direction (+1 up, -1 down), grab on, close forced.
+    pub x: i32,
+    /// Pressed, y, dy.
+    pub y: i32,
+    /// The absolute range's width.
+    pub w0: u32,
+    /// The absolute range's height.
+    pub w1: u32,
+}
+
+impl Kf3BrokerEvent {
+    fn of(i: kf_broker::Input) -> Kf3BrokerEvent {
+        use kf_broker::Input as I;
+        let (kind, x, y, w0, w1) = match i {
+            I::Key { code, down } => (1, i32::from(code), i32::from(down), 0, 0),
+            I::Btn { code, down } => (2, i32::from(code), i32::from(down), 0, 0),
+            I::Abs { x, y, w, h } => (
+                3,
+                x,
+                y,
+                u32::try_from(w).unwrap_or(1),
+                u32::try_from(h).unwrap_or(1),
+            ),
+            I::Rel { dx, dy } => (4, dx, dy, 0, 0),
+            I::Wheel { up } => (5, if up { 1 } else { -1 }, 0, 0, 0),
+            I::Grab(on) => (6, i32::from(on), 0, 0, 0),
+            I::Close { force } => (7, i32::from(force), 0, 0, 0),
+        };
+        Kf3BrokerEvent { kind, x, y, w0, w1 }
+    }
+}
+
 /// ★ ABI 10 (`v3-display2`'s 9; QEMU's main thread, the console's `gfx_update`): the newest frame
 /// of the virtual display. `0` and `*out` filled — the memory stays valid, and is not written, until
 /// the next call (the worker never fills the frame the console shows); `-1` before the first frame,
@@ -570,6 +617,116 @@ pub extern "C" fn kf3_doorbell_site(h: *mut c_void, gpa: u64, add: u32) {
         } else {
             d.dbfast.site_del(gpa);
         }
+    }
+}
+
+/// ★ ABI 11 (display step 3, `docs/design/V3_DISPLAY.md` §8): start the display-broker relay —
+/// QEMU's main loop, BQL held, after `kf3_realize` with `display_broker` = 1. `path` is the
+/// broker's socket (absolute, shorter than `sun_path`); `extra_uid` (`>= 0`) is one more uid
+/// accepted as the broker; `watch`/`timer` are the C device's fd-handler and timer verbs, called
+/// back only from inside the `kf3_broker_*` entries. Returns 0, or -1 with a message (a broker
+/// that is not running yet is NOT an error: it is retried in the background).
+///
+/// # Safety
+/// `path` is a NUL-terminated string; `err` is null or writable for `err_len` bytes; `watch` and
+/// `timer` must be callable with `opaque` on the main loop for the device's lifetime, must not
+/// re-enter a `kf3_broker_*` entry, and must not block.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_broker_start(
+    h: *mut c_void,
+    path: *const c_char,
+    extra_uid: i64,
+    watch: Option<crate::raw_unsafe::BrokerWatchFn>,
+    timer: Option<crate::raw_unsafe::BrokerTimerFn>,
+    opaque: *mut c_void,
+    now_ms: u64,
+    err: *mut c_char,
+    err_len: usize,
+) -> i32 {
+    let (Some(d), false, Some(watch), Some(timer)) = (dev(h), path.is_null(), watch, timer) else {
+        write_err(err, err_len, "kf3_broker_start: a null argument");
+        return -1;
+    };
+    let Some(seat) = d.display.and_then(|dp| dp.broker.as_ref()) else {
+        write_err(
+            err,
+            err_len,
+            "display-broker needs display=on and a device realized with the broker's frames",
+        );
+        return -1;
+    };
+    // SAFETY: the caller promises a NUL-terminated string.
+    let p = unsafe { CStr::from_ptr(path) };
+    let path = std::path::PathBuf::from(std::ffi::OsStr::from_bytes(p.to_bytes()));
+    let extra = u32::try_from(extra_uid).ok();
+    // SAFETY: forwarded from this function's contract.
+    let hooks = unsafe { crate::raw_unsafe::BrokerHooks::adopt(watch, timer, opaque) };
+    match seat.start(&path, extra, hooks, now_ms) {
+        Ok(()) => 0,
+        Err(e) => {
+            write_err(err, err_len, &e);
+            -1
+        }
+    }
+}
+
+/// ★ ABI 11: the display worker's frame eventfd, for the C device to watch for readability
+/// (main loop); -1 without a broker.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_broker_frame_fd(h: *mut c_void) -> i32 {
+    dev(h)
+        .and_then(|d| d.display)
+        .and_then(|dp| dp.broker.as_ref())
+        .map_or(-1, crate::broker::BrokerSeat::frame_fd)
+}
+
+/// ★ ABI 11 (main loop, BQL held): something the relay waits on is ready — `fd` is the socket
+/// (`rd`/`wr` say which), the frame eventfd, or -1 for the relay's timer. Writes at most `cap`
+/// input events to `out` and returns how many (never negative; 0 on a bad handle). Reads at most
+/// `cap` packets from the socket; level-triggered readiness delivers the rest.
+///
+/// # Safety
+/// `out` is null or writable for `cap` events.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_broker_ready(
+    h: *mut c_void,
+    fd: i32,
+    rd: u32,
+    wr: u32,
+    now_ms: u64,
+    out: *mut Kf3BrokerEvent,
+    cap: u32,
+) -> i32 {
+    let Some(dp) = dev(h).and_then(|d| d.display) else {
+        return 0;
+    };
+    let Some(seat) = dp.broker.as_ref() else {
+        return 0;
+    };
+    let cap = if out.is_null() { 0 } else { cap as usize };
+    let mut evs = Vec::with_capacity(cap.min(kf_broker::conn::READ_BATCH));
+    let active = seat.ready(fd, rd != 0, wr != 0, now_ms, &mut evs, cap.max(1));
+    if active {
+        // broker activity is demand: the refresh clock runs at the watched rate
+        dp.console.note_demand();
+    }
+    let n = evs.len().min(cap);
+    for (i, e) in evs.iter().take(n).enumerate() {
+        // SAFETY: `i < n <= cap`, and `out` is writable for `cap` events (caller contract).
+        unsafe { *out.add(i) = Kf3BrokerEvent::of(*e) };
+    }
+    i32::try_from(n).unwrap_or(0)
+}
+
+/// ★ ABI 11 (main loop, device exit, BEFORE the console closes): stop the relay — unwatch, close,
+/// no timer.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_broker_stop(h: *mut c_void) {
+    if let Some(seat) = dev(h)
+        .and_then(|d| d.display)
+        .and_then(|dp| dp.broker.as_ref())
+    {
+        seat.stop();
     }
 }
 
