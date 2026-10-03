@@ -69,6 +69,7 @@ fn chain_with_objects(
         memory: None,
         channels: None,
         display: display.then(|| (&kf_chip::display::AMPERE).into()),
+        console: None,
     };
     kf_rm::served_policy(
         ga106::board(),

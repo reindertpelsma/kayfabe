@@ -101,6 +101,8 @@ struct Held<V> {
     len: u64,
     /// `None` for a guest-RAM placement (nothing to release).
     view: Option<V>,
+    /// The store offset a view shows (`None` for guest RAM) — for the seed's retirement report.
+    store_off: Option<u64>,
 }
 
 /// Counters for one window — never a decision input.
@@ -120,6 +122,75 @@ pub struct WindowStats {
     pub refused: u64,
 }
 
+/// ★★ **The boot display's seed** (`docs/design/V3_DISPLAY.md` §4.11.2): one view of store
+/// `[store_off, store_off + len)` placed at window offset `at` BEFORE the guest's RM has mapped
+/// anything — what a real card's BAR1 shows before RM switches it to virtual mode: a physical window
+/// onto FB 0, where the firmware's framebuffer is.
+///
+/// ⊘ Kept OUTSIDE `placed`: it is not a mapping the guest's tables state, so the walk/diff ledger
+/// never sees it. It retires at the end of the FIRST batch that changes anything in this window, at
+/// any VA ([`CpuWindow::retire_seed`]) — the closest observable equivalent of BAR1 going virtual.
+#[derive(Debug)]
+struct Seed<V> {
+    at: u64,
+    store_off: u64,
+    len: u64,
+    view: V,
+}
+
+/// What retiring the seed found inside its range — the guest's first placements there.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SeedRetired {
+    /// The seed's window range, `(at, len)`.
+    pub range: (u64, u64),
+    /// Every placement WE made that overlaps the range when it retired: `(va, len, store offset)`
+    /// (`None` = guest RAM). Ascending by VA.
+    pub inside: Vec<(u64, u64, Option<u64>)>,
+    /// Bytes of the range no placement covered — re-pointed to scratch before the seed went.
+    pub sunk: u64,
+    /// The seed's release was refused by the host (the aperture leaked; counted).
+    pub release_refused: bool,
+}
+
+impl SeedRetired {
+    /// ★ The boot display's check (`V3_DISPLAY.md` §4.11.9, box test B2): CPU-RM maps a preserved
+    /// console at VA 0 as ONE fixed range of 4 KiB PTEs (`kern_bus_gm107.c:1098`, `:1131-1155`), and
+    /// the walker must coalesce it — one run, VA 0 → store 0, so ONE host view. `Some(len)` when
+    /// exactly that is what the range holds; `None` otherwise (no console, or several runs: each run
+    /// is a host BAR1 view of its own).
+    #[must_use]
+    pub fn console_is_one_run(&self) -> Option<u64> {
+        match self.inside.as_slice() {
+            [(0, len, Some(0))] => Some(*len),
+            _ => None,
+        }
+    }
+
+    /// The boot log's line for it.
+    #[must_use]
+    pub fn line(&self) -> String {
+        let (at, len) = self.range;
+        let verdict = match (self.console_is_one_run(), self.inside.len()) {
+            (Some(n), _) => format!("the console is ONE run, VA 0 -> store 0, {n:#x} bytes"),
+            (None, 0) => "no placement inside it (no console adopted)".to_string(),
+            (None, k) => format!(
+                "⚠ {k} placements inside it, first {:?} — the console is NOT one view",
+                self.inside[0]
+            ),
+        };
+        format!(
+            "boot display seed [{at:#x}, +{len:#x}) retired at the first change: {verdict}; \
+             {:#x} bytes re-pointed to scratch{}",
+            self.sunk,
+            if self.release_refused {
+                ", the seed's release REFUSED (aperture leaked, counted)"
+            } else {
+                ""
+            }
+        )
+    }
+}
+
 /// ★★★ **A guest BAR aperture as a [`MapTarget`]**: guest BAR VA `v` IS window offset `v`
 /// (`[measured cap3 #159733/#159779]`: the BAR2 PTE at `0xfef000` maps VA 0 and the guest's
 /// `kbusVerifyBar2` writes land at BAR3 offset 0; `kern_bus_gm107.c:431` asserts
@@ -129,6 +200,10 @@ pub struct CpuWindow<V: ViewOps> {
     bytes: u64,
     placed: RefCell<BTreeMap<u64, Held<V::View>>>,
     stats: RefCell<WindowStats>,
+    /// ★ The boot display's seed ([`Seed`]); `None` on every window but a `gop=on` BAR1.
+    seed: RefCell<Option<Seed<V::View>>>,
+    /// What the seed's retirement found (`None` until it retired).
+    retired: RefCell<Option<SeedRetired>>,
 }
 
 impl<V: ViewOps> CpuWindow<V> {
@@ -140,7 +215,119 @@ impl<V: ViewOps> CpuWindow<V> {
             bytes,
             placed: RefCell::new(BTreeMap::new()),
             stats: RefCell::default(),
+            seed: RefCell::new(None),
+            retired: RefCell::new(None),
         }
+    }
+
+    /// ★★ Place the boot display's seed ([`Seed`]): a view of store `[store_off, store_off + len)`
+    /// at window offset `at`. Before the guest runs, on a window nothing has been placed in.
+    ///
+    /// # Errors
+    /// By name: a second seed, a window that already holds placements, a range outside the
+    /// aperture, or the host's refusal (nothing is left placed then).
+    pub fn seed(&self, at: u64, store_off: u64, len: u64) -> Result<(), String> {
+        if self.seed.borrow().is_some() || self.retired.borrow().is_some() {
+            return Err("the window already had its seed".into());
+        }
+        if !self.placed.borrow().is_empty() {
+            return Err("the window already holds placements; a seed is placed first".into());
+        }
+        if len == 0 || at.checked_add(len).is_none_or(|e| e > self.bytes) {
+            return Err(format!(
+                "seed {at:#x}+{len:#x}: outside the {:#x}-byte aperture",
+                self.bytes
+            ));
+        }
+        let view = self
+            .ops
+            .arm_store(store_off, len)
+            .map_err(|e| format!("seed {at:#x}+{len:#x} (store @{store_off:#x}): arm: {e}"))?;
+        if let Err(e) = self.ops.place_view(at, len, &view) {
+            let _ = self.ops.sink(at, len);
+            let _ = self.ops.release(view);
+            return Err(format!(
+                "seed {at:#x}+{len:#x} (store @{store_off:#x}): place: {e}"
+            ));
+        }
+        *self.seed.borrow_mut() = Some(Seed {
+            at,
+            store_off,
+            len,
+            view,
+        });
+        Ok(())
+    }
+
+    /// The seed's `(at, store_off, len)` while it is placed.
+    #[must_use]
+    pub fn seeded(&self) -> Option<(u64, u64, u64)> {
+        self.seed
+            .borrow()
+            .as_ref()
+            .map(|s| (s.at, s.store_off, s.len))
+    }
+
+    /// What the seed's retirement found, once it retired.
+    #[must_use]
+    pub fn seed_retired(&self) -> Option<SeedRetired> {
+        self.retired.borrow().clone()
+    }
+
+    /// ★★ **Retire the seed**: the guest's views are already placed (the batch's maps ran first);
+    /// every part of the seed's range that no placement covers is re-pointed to scratch; only THEN
+    /// is the seed's view released — the scratch-first rule of [`MapTarget::unmap`]. Called by
+    /// [`MapTarget::invalidate`] at the end of the first batch that changed anything, and by the
+    /// device when it stops (a guest that never loaded its driver). `Ok(None)` with no seed.
+    ///
+    /// # Errors
+    /// A re-point to scratch the host refused: the seed STAYS (it still backs the gap), by name.
+    pub fn retire_seed(&self) -> Result<Option<SeedRetired>, String> {
+        let Some((at, len)) = self.seed.borrow().as_ref().map(|s| (s.at, s.len)) else {
+            return Ok(None);
+        };
+        let end = at + len;
+        let mut inside = Vec::new();
+        let mut gaps = Vec::new();
+        let mut cursor = at;
+        for (&va, h) in self.placed.borrow().iter() {
+            let h_end = va.saturating_add(h.len);
+            if h_end <= at || va >= end {
+                continue;
+            }
+            inside.push((va, h.len, h.store_off));
+            if va > cursor {
+                gaps.push((cursor, va - cursor));
+            }
+            cursor = cursor.max(h_end);
+        }
+        if cursor < end {
+            gaps.push((cursor, end - cursor));
+        }
+        for &(g, n) in &gaps {
+            if let Err(e) = self.ops.sink(g, n) {
+                self.stats.borrow_mut().refused += 1;
+                return Err(format!(
+                    "seed {at:#x}+{len:#x}: re-pointing the uncovered {g:#x}+{n:#x} to scratch: {e} — \
+                     the seed stays"
+                ));
+            }
+        }
+        let Some(seed) = self.seed.borrow_mut().take() else {
+            return Ok(None);
+        };
+        let release_refused = self.ops.release(seed.view).is_err();
+        if release_refused {
+            self.stats.borrow_mut().refused += 1;
+        }
+        let report = SeedRetired {
+            range: (at, len),
+            inside,
+            sunk: gaps.iter().map(|&(_, n)| n).sum(),
+            release_refused,
+        };
+        *self.retired.borrow_mut() = Some(report.clone());
+        Ok(Some(report))
     }
 
     /// The counters.
@@ -187,6 +374,7 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
             Held {
                 len: d.len,
                 view: None,
+                store_off: None,
             }
         } else {
             let view = match self.ops.arm_store(d.off, d.len) {
@@ -214,6 +402,7 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
             Held {
                 len: d.len,
                 view: Some(view),
+                store_off: Some(d.off),
             }
         };
         self.placed.borrow_mut().insert(d.va, held);
@@ -234,7 +423,10 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
         let held = self.placed.borrow_mut().remove(&va);
         let mut s = self.stats.borrow_mut();
         s.sunk += 1;
-        if let Some(Held { view: Some(v), len }) = held {
+        if let Some(Held {
+            view: Some(v), len, ..
+        }) = held
+        {
             s.view_bytes = s.view_bytes.saturating_sub(len);
             drop(s);
             match self.ops.release(v) {
@@ -255,7 +447,15 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
     }
 
     /// A CPU view is coherent the moment it is placed: nothing to invalidate.
+    ///
+    /// ★ The boot display's seed retires HERE ([`CpuWindow::retire_seed`]): the apply calls this
+    /// once per batch, after the batch's maps, and only when something changed
+    /// (`crate::apply`) — so the first change at any VA retires it, with the guest's new views
+    /// already in place. Without a seed this is what it always was.
     fn invalidate(&self) -> Result<(), String> {
+        if let Some(r) = self.retire_seed()? {
+            eprintln!("kf3: {}", r.line());
+        }
         Ok(())
     }
 
@@ -499,6 +699,7 @@ mod tests {
         ops: Mutex<Vec<Op>>,
         refuse_arm_at: Option<u64>,
         refuse_place: bool,
+        refuse_sink: bool,
     }
 
     impl ViewOps for &Rec {
@@ -522,6 +723,9 @@ mod tests {
             Ok(())
         }
         fn sink(&self, at: u64, len: u64) -> Result<(), String> {
+            if self.refuse_sink {
+                return Err("ENOMEM (fake)".into());
+            }
             self.ops.lock().unwrap().push(Op::Sink(at, len));
             Ok(())
         }
@@ -759,5 +963,188 @@ mod tests {
         let out = pool.repoint(&[SlotSource::Store(0x2_0000), SlotSource::Store(0x3_0000)]);
         assert_eq!((out.missed, out.refused, out.maps), (2, 1, 1));
         assert_eq!(*r.ops.lock().unwrap(), vec![Op::Sink(0, 2 * g)]);
+    }
+
+    // ── ★★ the boot display's seed (`docs/design/V3_DISPLAY.md` §4.11.2) ─────────────────────
+
+    /// The 1080p boot framebuffer G, and a BAR1 aperture.
+    const G: u64 = 0x7F_0000;
+    const BAR1: u64 = 256 << 20;
+
+    fn vid(va: u64, at: u64, len: u64) -> crate::apply::DiffRun {
+        crate::apply::DiffRun {
+            unmap: false,
+            va,
+            len,
+            at,
+            ap: crate::ledger::AP_VIDMEM,
+            held: false,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+            privileged: false,
+        }
+    }
+
+    fn apply(w: &CpuWindow<&Rec>, runs: &[crate::apply::DiffRun]) -> crate::apply::Applied {
+        crate::apply::apply_entry(
+            w,
+            runs,
+            &crate::apply::ApplyCfg {
+                store_bytes: 8 << 30,
+                grain: 0x1000,
+                ram_offset: &|gpa, _| Some(gpa),
+                usermode: None,
+                per_map_kind: true,
+            },
+        )
+    }
+
+    fn seeded(r: &Rec) -> CpuWindow<&Rec> {
+        let w = CpuWindow::new(r, BAR1);
+        w.seed(0, 0, G).expect("seeded");
+        assert_eq!(
+            std::mem::take(&mut *r.ops.lock().unwrap()),
+            vec![Op::Arm(0, G), Op::View(0, G, 0)],
+            "one view of store [0, G) at BAR1 offset 0"
+        );
+        w
+    }
+
+    /// ★ RM preserved the console: its first BAR1 map is FB 0 → VA 0. The guest's view is placed
+    /// first, the uncovered rest of [0, G) sinks, and only then does the seed go.
+    #[test]
+    fn the_console_map_retires_the_seed_place_then_sink_then_release() {
+        let r = Rec::default();
+        let w = seeded(&r);
+        let c = 0x7E_0000;
+        let a = apply(&w, &[vid(0, 0, c)]);
+        assert!(a.invalidated);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![
+                Op::Arm(0, c),
+                Op::View(0, c, 0),
+                Op::Sink(c, G - c),
+                Op::Release(0)
+            ]
+        );
+        assert_eq!(w.seeded(), None);
+        let s = w.seed_retired().expect("retired");
+        assert_eq!(s.console_is_one_run(), Some(c));
+        assert_eq!(s.sunk, G - c);
+        assert!(s.line().contains("ONE run"), "{}", s.line());
+        // a later batch is an ordinary one
+        r.ops.lock().unwrap().clear();
+        apply(&w, &[vid(0x100_0000, 0x200_0000, 0x1000)]);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![
+                Op::Arm(0x200_0000, 0x1000),
+                Op::View(0x100_0000, 0x1000, 0x200_0000)
+            ]
+        );
+    }
+
+    /// ★ The first BAR1 change lands ELSEWHERE (no console adopted, a REVERSE VAS): the seed still
+    /// retires — FB [0, G) must not stay visible where RM thinks its heap is free.
+    #[test]
+    fn a_first_change_outside_the_seed_retires_it_too() {
+        let r = Rec::default();
+        let w = seeded(&r);
+        apply(&w, &[vid(BAR1 - 0x1000, 0x300_0000, 0x1000)]);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![
+                Op::Arm(0x300_0000, 0x1000),
+                Op::View(BAR1 - 0x1000, 0x1000, 0x300_0000),
+                Op::Sink(0, G),
+                Op::Release(0)
+            ]
+        );
+        let s = w.seed_retired().unwrap();
+        assert_eq!(
+            (s.inside.len(), s.sunk, s.console_is_one_run()),
+            (0, G, None)
+        );
+    }
+
+    /// A console the walker hands over in several runs leaves no scratch gap between them, and the
+    /// report says it is not one view.
+    #[test]
+    fn a_multi_run_console_shows_no_gap_and_is_named() {
+        let r = Rec::default();
+        let w = seeded(&r);
+        apply(&w, &[vid(0, 0, 0x1000), vid(0x1000, 0x1000, G - 0x1000)]);
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![
+                Op::Arm(0, 0x1000),
+                Op::View(0, 0x1000, 0),
+                Op::Arm(0x1000, G - 0x1000),
+                Op::View(0x1000, G - 0x1000, 0x1000),
+                Op::Release(0)
+            ],
+            "no sink: the two runs cover [0, G) together"
+        );
+        let s = w.seed_retired().unwrap();
+        assert_eq!(s.inside.len(), 2);
+        assert_eq!(s.console_is_one_run(), None);
+        assert!(s.line().contains("NOT one view"), "{}", s.line());
+    }
+
+    /// No change, no retirement: an empty batch and a batch whose every map was refused leave the
+    /// seed showing FB [0, G).
+    #[test]
+    fn a_batch_that_changes_nothing_keeps_the_seed() {
+        let r = Rec {
+            refuse_arm_at: Some(0x10_0000),
+            ..Rec::default()
+        };
+        let w = seeded(&r);
+        let a = apply(&w, &[]);
+        assert!(!a.invalidated);
+        let a = apply(&w, &[vid(0x2000, 0x10_0000, 0x1000)]);
+        assert_eq!((a.mapped, a.invalidated), (0, false));
+        assert_eq!(w.seeded(), Some((0, 0, G)));
+        assert!(r.ops.lock().unwrap().is_empty());
+    }
+
+    /// A refused re-point to scratch keeps the seed (it still backs the gap), by name.
+    #[test]
+    fn a_refused_sink_keeps_the_seed() {
+        let r = Rec {
+            refuse_sink: true,
+            ..Rec::default()
+        };
+        let w = seeded(&r);
+        let e = w.retire_seed().expect_err("refused");
+        assert!(e.contains("the seed stays"), "{e}");
+        assert_eq!(w.seeded(), Some((0, 0, G)));
+        assert!(!r.ops.lock().unwrap().contains(&Op::Release(0)));
+    }
+
+    /// ⊘ The default: a window without a seed invalidates exactly as before (no host verb at all).
+    #[test]
+    fn without_a_seed_invalidate_is_a_no_op() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, BAR1);
+        w.invalidate().unwrap();
+        assert_eq!(w.retire_seed(), Ok(None));
+        assert!(r.ops.lock().unwrap().is_empty());
+        assert_eq!(w.seed_retired(), None);
+    }
+
+    #[test]
+    fn a_seed_is_refused_by_name_where_it_cannot_be_placed() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, BAR1);
+        assert!(w.seed(BAR1 - 0x1000, 0, G).unwrap_err().contains("outside"));
+        assert!(w.seed(0, 0, 0).unwrap_err().contains("outside"));
+        w.map(&d(0x10_0000, 0x10_0000, 0x1000, false), true)
+            .unwrap();
+        assert!(w.seed(0, 0, G).unwrap_err().contains("placements"));
+        let r2 = Rec::default();
+        let w2 = seeded(&r2);
+        assert!(w2.seed(0, 0, G).unwrap_err().contains("already"));
     }
 }

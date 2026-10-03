@@ -598,6 +598,7 @@ impl Device {
                             row,
                             model: display_plane.map(|p| p.model.clone()),
                         }),
+                        console: None,
                     },
                 )
             })

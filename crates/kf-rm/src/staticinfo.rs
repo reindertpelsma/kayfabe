@@ -40,16 +40,139 @@
 
 use kf_abi::NV_ERR_NOT_SUPPORTED;
 use kf_abi::gspstaticinfo::{
-    GSP_STATIC_CONFIG_INFO_SIZE, GpuGid, GpuName, GspStaticInfo, encode_gsp_static_info,
+    FbRegion, GSP_STATIC_CONFIG_INFO_SIZE, GpuGid, GpuName, GspStaticInfo, encode_gsp_static_info,
 };
 use kf_abi::versions::DriverAbiTable;
-use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
+use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction, StashedSystemInfo, SystemInfoCell};
 
 use crate::BoardFacts;
 use std::sync::Arc;
 
 /// `NV_OK`.
 const NV_OK: u32 = 0;
+
+/// ★★ **The boot display's seat in fn 65** (`docs/design/V3_DISPLAY.md` §4.11.4 rows 1–2).
+///
+/// When the guest's CPU-RM preserves a firmware console of `C` bytes — the GOP framebuffer kf3's
+/// option ROM put at BAR1 offset 0 — it describes ALL of `fbRegion[0]` as that console and maps it
+/// at BAR1 VA 0 (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/arch/maxwell/mem_mgr_gm107.c:2068-2110`,
+/// `src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:1084-1162`). Region 0 must then BE
+/// `[0, C)` (`kf_chip::bar0::fb_layout_with_console`). `C` reaches us only in fn 72's
+/// `GspSystemInfo.consoleMemSize` (`src/nvidia/src/kernel/vgpu/rpc.c:10585`), which the GSP state
+/// machine keeps unanswered in [`SystemInfoCell`] (`kf_gsp::sysinfo`); it is decoded HERE, at fn 65,
+/// with the table that serves fn 65 — fn 72 precedes the fn-1 re-select ([`crate::ReselectAtFn1`]).
+#[derive(Debug, Clone)]
+pub struct ConsoleSeat {
+    /// Fn 72's body, kept by the state machine — ONE cell across every chain rebuild.
+    pub system_info: SystemInfoCell,
+    /// The guest's BAR1 aperture (`bar1-size`): the console is mapped at VA 0 there, so `C` must fit.
+    pub bar1_bytes: u64,
+    /// The boot framebuffer's size `G` when kf3 serves its option ROM (`gop=on`). `None` is
+    /// `gop=off`: `C` is read and logged, and today's table is served whatever it says — byte for
+    /// byte the posture before the boot display existed.
+    pub boot_fb: Option<u64>,
+}
+
+/// Why fn 65 cannot serve the guest's preserved console (refused by name in the envelope).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConsoleRefusal {
+    /// The serving version's `GspSystemInfo` is not in the driver matrix, or has no `consoleMemSize`.
+    Unmeasured {
+        /// The serving version.
+        version: kf_abi::DriverVersion,
+        /// What the matrix said.
+        why: String,
+    },
+    /// The guest's fn 72 body is not the serving version's `GspSystemInfo` — its fields would be
+    /// read at another version's offsets.
+    WrongSize {
+        /// The serving version.
+        version: kf_abi::DriverVersion,
+        /// The length the guest's envelope declared.
+        declared: usize,
+        /// `sizeof(GspSystemInfo)` in the driver matrix at the serving version.
+        matrix: usize,
+    },
+    /// `C` does not fit the guest's BAR1, where CPU-RM maps it at VA 0.
+    LargerThanBar1 {
+        /// The guest's `consoleMemSize`.
+        console: u64,
+        /// The BAR1 aperture.
+        bar1_bytes: u64,
+    },
+    /// kf-chip refused the region table ([`kf_chip::bar0::ConsoleRefused`]).
+    Layout(kf_chip::bar0::ConsoleRefused),
+    /// The board's own table is not kf-chip's layout (a captured or hand-written row), so no
+    /// console can be carved out of it.
+    NotOurLayout,
+}
+
+impl core::fmt::Display for ConsoleRefusal {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ConsoleRefusal::Unmeasured { version, why } => write!(
+                f,
+                "GspSystemInfo.consoleMemSize is not in the driver matrix at driver {version}: {why}"
+            ),
+            ConsoleRefusal::WrongSize {
+                version,
+                declared,
+                matrix,
+            } => write!(
+                f,
+                "fn 72's GspSystemInfo is {declared} bytes, the driver matrix's layout for driver {version} \
+                 is {matrix} (the guest is not the version this chain serves)"
+            ),
+            ConsoleRefusal::LargerThanBar1 {
+                console,
+                bar1_bytes,
+            } => write!(
+                f,
+                "consoleMemSize {console:#x} does not fit the {bar1_bytes:#x}-byte BAR1 it is mapped \
+                 into at VA 0"
+            ),
+            ConsoleRefusal::Layout(e) => write!(f, "{e}"),
+            ConsoleRefusal::NotOurLayout => write!(
+                f,
+                "the board's region table is not kf-chip's layout; no console region can be carved"
+            ),
+        }
+    }
+}
+
+/// ★ `GspSystemInfo.consoleMemSize` out of a kept fn 72, at `version`'s own layout in the driver matrix
+/// (`kf_abi::generated::matrix::GSPSYSTEMINFO`: offset 48, 56 or 64 by version).
+///
+/// # Errors
+/// [`ConsoleRefusal::Unmeasured`] or [`ConsoleRefusal::WrongSize`], by name — never a value read at
+/// a borrowed offset.
+pub fn console_mem_size(
+    version: kf_abi::DriverVersion,
+    fn72: &StashedSystemInfo,
+) -> Result<u64, ConsoleRefusal> {
+    let unmeasured = |why: String| ConsoleRefusal::Unmeasured { version, why };
+    let layout = kf_abi::matrix::Resolved::of(&kf_abi::generated::matrix::GSPSYSTEMINFO, version)
+        .map_err(|e| unmeasured(e.to_string()))?;
+    if fn72.declared_len != layout.size() {
+        return Err(ConsoleRefusal::WrongSize {
+            version,
+            declared: fn72.declared_len,
+            matrix: layout.size(),
+        });
+    }
+    let field = layout
+        .need("consoleMemSize")
+        .map_err(|e| unmeasured(e.to_string()))?
+        .range()
+        .filter(|r| r.len() == 8)
+        .ok_or_else(|| unmeasured("consoleMemSize is not 8 bytes in the matrix's layout".into()))?;
+    let bytes: [u8; 8] = fn72
+        .bytes
+        .get(field)
+        .and_then(|b| b.try_into().ok())
+        .ok_or_else(|| unmeasured("the kept body is shorter than the field".into()))?;
+    Ok(u64::from_le_bytes(bytes))
+}
 
 /// Answers `GET_GSP_STATIC_INFO` with the static facts a chip row states.
 ///
@@ -63,6 +186,8 @@ pub struct StaticInfoPolicy {
     name: Option<GpuName>,
     short_name: Option<GpuName>,
     engine_caps: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
+    /// ★ The boot display's console ([`ConsoleSeat`]); `None` serves the board's table, as before.
+    console: Option<ConsoleSeat>,
 }
 
 impl StaticInfoPolicy {
@@ -96,7 +221,87 @@ impl StaticInfoPolicy {
             name: None,
             short_name: None,
             engine_caps: [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
+            console: None,
         }
+    }
+
+    /// ★ Seat the boot display's console ([`ConsoleSeat`]): fn 65's region table then follows the
+    /// guest's `consoleMemSize` (`gop=on`), or only logs it (`gop=off`).
+    #[must_use]
+    pub fn with_console(mut self, seat: ConsoleSeat) -> StaticInfoPolicy {
+        self.console = Some(seat);
+        self
+    }
+
+    /// ★★ The region table fn 65 serves NOW: the board's, unless kf3 serves the boot display
+    /// (`gop=on`) and the guest's kept fn 72 preserves a console of `C > 0` bytes — then kf-chip's
+    /// table with `[0, C)` as region 0 ([`kf_chip::bar0::fb_layout_with_console`]).
+    ///
+    /// ⊘ With no seat, no fn 72 kept, `C = 0`, or `gop=off`, the board's table — byte for byte what
+    /// this policy served before the boot display existed.
+    ///
+    /// # Errors
+    /// [`ConsoleRefusal`], by name (`gop=on` only: with `gop=off` nothing here can refuse).
+    pub fn fb_regions_now(&self) -> Result<Vec<FbRegion>, ConsoleRefusal> {
+        let today = || self.board.fb_regions.clone();
+        let Some(seat) = &self.console else {
+            return Ok(today());
+        };
+        let Some(fn72) = seat.system_info.latest() else {
+            return Ok(today());
+        };
+        let version = self.driver.driver_version();
+        let console = match console_mem_size(version, &fn72) {
+            Ok(c) => c,
+            Err(e) if seat.boot_fb.is_none() => {
+                eprintln!(
+                    "kf-rm: GET_GSP_STATIC_INFO (gop=off): consoleMemSize not read ({e}); the board's \
+                     region table is served"
+                );
+                return Ok(today());
+            }
+            Err(e) => return Err(e),
+        };
+        if console == 0 {
+            return Ok(today());
+        }
+        let Some(g) = seat.boot_fb else {
+            eprintln!(
+                "kf-rm: GET_GSP_STATIC_INFO (gop=off): the guest preserves a firmware console of \
+                 {console:#x} bytes (fn 72 seq {}), but kf3 serves no boot display; the board's region \
+                 table is served, as before",
+                fn72.sequence
+            );
+            return Ok(today());
+        };
+        if console > seat.bar1_bytes {
+            return Err(ConsoleRefusal::LargerThanBar1 {
+                console,
+                bar1_bytes: seat.bar1_bytes,
+            });
+        }
+        let fb_length = self.board.fb_length;
+        let carved = kf_chip::bar0::fb_layout_with_console(fb_length, console)
+            .map_err(ConsoleRefusal::Layout)?;
+        // ⊘ Only a board whose table IS kf-chip's layout can be carved: kf3 builds it from
+        // `fb_layout`, a captured row was never ours to reshape.
+        let ours = kf_chip::bar0::fb_layout(fb_length).is_some_and(|l| {
+            l.regions == self.board.fb_regions
+                && l.bar1_pde_base == self.board.bar1_pde_base
+                && l.bar2_pde_base == self.board.bar2_pde_base
+        });
+        if !ours {
+            return Err(ConsoleRefusal::NotOurLayout);
+        }
+        eprintln!(
+            "kf-rm: GET_GSP_STATIC_INFO: the guest preserves a firmware console of {console:#x} bytes \
+             (fn 72 seq {}; boot framebuffer G = {g:#x}{}): region 0 = [0, {console:#x}) reserved, \
+             the heap starts at {console:#x}, {} regions",
+            fn72.sequence,
+            if console == g { "" } else { ", C != G" },
+            carved.regions.len()
+        );
+        Ok(carved.regions)
     }
 
     /// ★ `engineCaps[]` — the NV2080-indexed engine bitmask, from the SAME engine table the FIFO
@@ -208,6 +413,18 @@ impl StaticInfoPolicy {
     /// The encoder's refusals; an unmeasured version or a version without the struct refuses
     /// as `UnsupportedWire` of the table's wire.
     pub fn body_measured(&self) -> Result<Vec<u8>, kf_abi::gspstaticinfo::GspStaticInfoError> {
+        self.body_measured_with(&self.board.fb_regions)
+    }
+
+    /// [`Self::body_measured`] with `fb_regions` in place of the board's own table — the table
+    /// [`Self::fb_regions_now`] chose.
+    ///
+    /// # Errors
+    /// As [`Self::body_measured`].
+    pub fn body_measured_with(
+        &self,
+        fb_regions: &[FbRegion],
+    ) -> Result<Vec<u8>, kf_abi::gspstaticinfo::GspStaticInfoError> {
         let lay = kf_abi::matrix::Resolved::of(
             &kf_abi::generated::matrix::GSPSTATICCONFIGINFO,
             self.driver.driver_version(),
@@ -219,7 +436,7 @@ impl StaticInfoPolicy {
         )?;
         kf_abi::gspstaticinfo::encode_gsp_static_info_at(
             &GspStaticInfo {
-                fb_regions: &self.board.fb_regions,
+                fb_regions,
                 fb_length: self.board.fb_length,
                 gid: self.gid,
                 name: self.name,
@@ -288,7 +505,22 @@ impl CommandPolicy for StaticInfoPolicy {
                 body: Vec::new(),
             });
         }
-        match self.body_measured() {
+        // ★ The boot display: the table follows the guest's preserved console (`gop=on`).
+        let regions = match self.fb_regions_now() {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!(
+                    "kf-rm: GET_GSP_STATIC_INFO refused: the guest's firmware console cannot be \
+                     served: {e} (guest driver {})",
+                    self.driver.driver_version()
+                );
+                return Some(Reply {
+                    rpc_result: NV_ERR_NOT_SUPPORTED,
+                    body: Vec::new(),
+                });
+            }
+        };
+        match self.body_measured_with(&regions) {
             Ok(body) => Some(Reply {
                 rpc_result: NV_OK,
                 body,
