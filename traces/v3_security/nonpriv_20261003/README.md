@@ -62,7 +62,16 @@ The bench runs QEMU as root, so before this change every channel kf3 created was
 | `after_root_run.log`, `after_root_qemu.log` | `dc64b22b` | **AFTER.** Same arm, QEMU as root: the same 6 births (engines `0xb, 0xb, 0x9, 0x1, 0x9, 0x9`). Every reply reads `0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call`. `FAST_VERDICT=PASS`. |
 | `negctl_root_run.log`, `negctl_root_qemu.log` | `dc64b22b` | **Negative control.** `KF3_NEGCTL_SKIP_CAP_BRACKET=1` skips the bracket. RM's reply to the first birth is `0x000000a0` (bit 5 set). The tripwire refuses it by name and frees the channel, and the guest's client then fails (`FAST_VERDICT=FAIL`). This is the expected result: it shows the check reports a set bit from a live reply. The knob can only make births fail. |
 
-The merge-bar evidence for this branch is added in a later commit, with the revision it ran at.
+**Merge bar** at `55743ecd` (`merge_bar/README.md`), run as root with QEMU started the bench's
+usual way:
+
+- every kf-* crate test: 1764 passed, 0 failed;
+- v3 gates: 9/9;
+- bare-metal suite: 30/30;
+- 30-arm thin-guest suite: 30/30.
+
+All 161 channel births in the suite and all 11 in the gates read `PRIVILEGED_CHANNEL=0`; none
+was refused.
 
 ## What this does not cover
 

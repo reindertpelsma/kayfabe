@@ -588,6 +588,7 @@ and the per-client host MMU fault above.
 > |---|---|---|---|
 > | before | `3e0f6dee` | 6 | all `PRIVILEGED_CHANNEL=1` |
 > | after | `dc64b22b` | the same 6 | all `0x00000080`, `PRIVILEGED_CHANNEL=0` |
+> | merge bar, 30-arm suite and gates | `55743ecd` | 161 + 11 | all `PRIVILEGED_CHANNEL=0` (suite 30/30, gates 9/9) |
 >
 > With the bracket skipped (`KF3_NEGCTL_SKIP_CAP_BRACKET=1`), the tripwire refused the first
 > birth on a live `0x000000a0` reply.
