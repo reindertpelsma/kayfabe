@@ -21,10 +21,22 @@ else, and publishes one GOP mode whose framebuffer is the descriptor's range of 
 | `src/driver_unsafe.rs` | the entry point, driver binding, component name, GOP |
 | `src/port_unsafe.rs` | debug output on I/O port 0x402 — compiled into the driver only with `--features debugcon` |
 | `src/bin/kf-gop-test/` | a UEFI application that checks the GOP; used by the local stand-in, never shipped |
-| `build.rs` | links the driver as PE subsystem 11 (`/subsystem:efi_boot_service_driver`) |
+| `build.rs` | links the driver as PE subsystem 11 (`/subsystem:efi_boot_service_driver`), reproducibly (`/Brepro`, `/DEBUG:NONE`) |
+| `kf-gop.efi` | the committed release build: the blob `crates/kf-oprom` embeds and kf3 serves |
 
 The descriptor has one definition, `crates/kf-oprom` (pure, `no_std`), which this crate depends on
 by path with default features off; kf3 packs the ROM with the same crate.
+
+**`kf-gop.efi` beside the source is the shipped driver.** Owner, 2026-10-03: the GOP is one constant
+blob inside kayfabe, like the PTX kernels. `crates/kf-oprom` embeds this file (`KF_GOP_EFI`,
+`include_bytes!`) and kf3 wraps it at realize with per-device data; nothing is installed. CI rebuilds it
+and requires the same bytes — the link is reproducible (`build.rs`: `/Brepro`, `/DEBUG:NONE`), so
+nothing is normalised. After any change to this crate or to `crates/kf-oprom`'s descriptor code:
+
+```sh
+cargo build --release --target x86_64-unknown-uefi --manifest-path firmware/kf-gop/Cargo.toml
+cp firmware/kf-gop/target/x86_64-unknown-uefi/release/kf-gop.efi firmware/kf-gop/kf-gop.efi
+```
 
 ### Build
 
@@ -38,9 +50,10 @@ cargo run -p kf-oprom -- pe firmware/kf-gop/target/x86_64-unknown-uefi/release/k
 ```
 
 Add `--features debugcon` (and another `--target-dir`) for a test build that reports on port 0x402.
-The CI job `firmware` builds both flavours, runs the host tests, Clippy with warnings as errors,
-rustfmt, the PE check (and that the release driver contains no port I/O), records the `.efi` size,
-and runs the local stand-in.
+The CI job `firmware` builds both flavours, compares the release build with the committed
+`kf-gop.efi` byte for byte, runs the host tests, Clippy with warnings as errors, rustfmt, the PE check
+(and that the release driver contains no port I/O), records the `.efi` size, and runs the local
+stand-in.
 
 ### Test without a GPU
 

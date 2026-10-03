@@ -81,7 +81,7 @@
 >   - ⊘ *CORRECTED 2026-10-03:* the next sub-bullet's last sentence. Xorg is not missing a boot VGA
 >     device on today's SeaBIOS bench (the correction at the top). The firmware-default rule matters
 >     under OVMF and with a second VGA device; the local stand-in shows it overriding a legacy device
->     (2026-10-03, `da5cc07f`, arm `linux_two_vga`, §4.11.8).
+>     (2026-10-03, `3dd574e5`, arm `linux_two_vga`, §4.11.8).
 >   - The VGA arbiter picks the boot device by the same test (`vga_is_firmware_default`,
 >     `drivers/pci/vgaarb.c:566-569`, Linux 7.1). That is what fixes Xorg's missing boot VGA device.
 >   - kf-disp keeps scanning out the GOP region until the guest's first modeset, so the handover shows
@@ -638,8 +638,9 @@ CUDA ladder, headless set 38/38) must stay green with display on.
 ### 4.11 Boot display: kf3's UEFI GOP option ROM (display step 1)
 
 **STATUS: FIRST HALF BUILT, 2026-10-03 (branch `v3-gop-rom`).** Built and tested without a GPU: the
-GOP firmware (`firmware/kf-gop`), the ROM container and packer (`crates/kf-oprom`), and the local
-stand-in (`scripts/display/gop_standin.sh`, 11/11 arms at `da5cc07f`, §4.11.8). **Not built:**
+GOP firmware (`firmware/kf-gop`, its release build committed and embedded in `crates/kf-oprom` per
+the owner's decision of 2026-10-03, §4.11.6), the ROM container and packer (`crates/kf-oprom`), and the local
+stand-in (`scripts/display/gop_standin.sh`, 11/11 arms at `3dd574e5`, §4.11.8). **Not built:**
 everything inside kf3 — the ROM BAR, the BAR1 seed, the boot layer, the fn 72 → fn 65 region table.
 §4.11.2–§4.11.6 are the design that integration follows; it lands on top of this branch. Nothing here
 has run on a GPU box. The design was revised after an adversarial review on 2026-10-03; its
@@ -662,7 +663,7 @@ QEMU 10.2.4 and 11.1.1 sources; EDK2 **edk2-stable202408**, which *is* local, un
      `drivers/pci/vgaarb.c:566-572`).
 - Item 4, locally: with a driverless VGA device that decodes I/O and memory in a lower slot, Linux 7.0's
   vgaarb first chose that device, then moved boot VGA to the device holding the EFI framebuffer
-  (*"setting as boot VGA device (overriding previous)"*; 2026-10-03, `da5cc07f`, arm `linux_two_vga`).
+  (*"setting as boot VGA device (overriding previous)"*; 2026-10-03, `3dd574e5`, arm `linux_two_vga`).
 - First box step: **B0a**, which needs no build (§4.11.9).
 
 #### 4.11.2 Where the framebuffer lives
@@ -685,7 +686,7 @@ QEMU 10.2.4 and 11.1.1 sources; EDK2 **edk2-stable202408**, which *is* local, un
   (`nv.c:6271-6305`) — the only one on Linux 7.1, which exports `sysfb_primary_display` instead
   (`arch/x86/kernel/setup.c:216-217`). Every path yields at most G. The EFI stub sets
   `lfb_size = linelength × height` (`drivers/firmware/efi/libstub/gop.c:412`); locally the BOOTFB
-  resource was exactly 4608 × 648 = 2 985 984 bytes at BAR + 0 (2026-10-03, `da5cc07f`, arm `linux`).
+  resource was exactly 4608 × 648 = 2 985 984 bytes at BAR + 0 (2026-10-03, `3dd574e5`, arm `linux`).
 - **Order and passthrough.** `RmSetConsolePreservationParams` runs before `kgspInitRm` (`osinit.c:1993-1995`
   vs `:2024`); `GspSystemInfo.consoleMemSize` (`src/nvidia/src/kernel/vgpu/rpc.c:10585`) reaches us in
   fn 72, which arrives **before** fn 1 and fn 65 (`kernel_gsp.c:4141` vs `:4225`, `:4232`). Under KVM the
@@ -798,7 +799,8 @@ with the kf3 integration, together with the ROM BAR, never after it.
 #### 4.11.6 The ROM, its container, and how kf3 serves it
 
 **The firmware, as built** (`firmware/kf-gop`, zero external crates, `no_std`, `x86_64-unknown-uefi`;
-release `kf-gop.efi` 9 216 bytes at `da5cc07f`):
+release `kf-gop.efi` 9 216 bytes, committed as `firmware/kf-gop/kf-gop.efi` and embedded by
+`kf-oprom`, see *How kf3 serves it*):
 - `efi_main` installs the driver binding and ComponentName2 on its image handle and returns.
 - `Supported` opens PCI I/O `BY_DRIVER`, reads config dwords 0x00 and 0x08, and accepts only a
   display-class controller whose `RomImage` holds a valid `KFGP` descriptor naming **that controller's
@@ -849,15 +851,33 @@ release `kf-gop.efi` 9 216 bytes at `da5cc07f`):
 
 **The API the kf3 integration uses** (`crates/kf-oprom`, re-exported at the crate root):
 `Geometry::for_mode(W, H)` → `BootFramebuffer { bar: 1, offset: 0, geometry }`;
-`pack(pe, &Identity { vendor, device, class: ClassCode::from_u24(class) }, &fb, edid) -> Result<Vec<u8>,
-PackError>`; `BootFramebuffer::fits(bar_len)`; `pe::check(pe)` for a realize-time refusal by name;
-`Descriptor::find(rom)` and `rom::parse` for tests. The geometry and EDID come from kf-disp's `Monitor`
-(`crates/kf-disp/src/edid.rs:145-175`, 128-byte EDID).
+`pack_kf_gop(&Identity { vendor, device, class: ClassCode::from_u24(class) }, &fb, edid) ->
+Result<Vec<u8>, PackError>` packs the embedded driver `KF_GOP_EFI` (`pack(pe, …)` takes any PE, for
+tests); `BootFramebuffer::fits(bar_len)`; `Descriptor::find(rom)` and `rom::parse` for tests. The
+geometry and EDID come from kf-disp's `Monitor` (`crates/kf-disp/src/edid.rs:145-175`, 128-byte EDID).
 
 **How kf3 serves it** (design, for the integration):
-1. C finds the PE with `qemu_find_file(QEMU_FILE_TYPE_BIOS, "kf3-gop.efi")`; `-L` or a `gop-image=`
+- ★★★ **OWNER DECISION, 2026-10-03 — it overrides steps 1 and 2 below and the *Install* bullet.**
+  *"generate the uefi data in kayfabe and give it as blob in the rom. So there is no rom per gpu or
+  similar, all is given as config data, just like cuda."*
+  - The driver is **one constant `.efi` embedded in kayfabe**, the way the PTX kernels are
+    (`crates/kf-cuda/src/display.rs:21`): the release build is committed beside its source as
+    `firmware/kf-gop/kf-gop.efi` and `crates/kf-oprom` embeds it as `KF_GOP_EFI` (`include_bytes!`,
+    feature `embedded-gop`, on by default and off for the firmware itself). No QEMU firmware file, no
+    `romfile=`, no `qemu_find_file`, no `gop-image=` property, nothing per GPU to install.
+  - CI's `firmware` job rebuilds it from source and fails if one byte differs. Nothing is normalised:
+    `firmware/kf-gop/build.rs` links with `/Brepro` (the PE timestamp is a content hash) and
+    `/DEBUG:NONE` (no debug directory, whose `.pdb` name carries cargo's per-path metadata hash). A
+    fresh target directory and a second checkout path both reproduced it locally on 2026-10-03 at
+    `3dd574e5` (sha256 `f11ab0b9…`, §4.11.8).
+  - Everything per device is config data kf3 generates at realize: the ROM header and PCIR (the ids
+    and class kf3 already presents) and the `KFGP` descriptor (BAR, offset, G, W/H/pitch, format, EDID
+    from kf-disp). Rust calls `pack_kf_gop` and hands C the finished ROM — the new FFI becomes
+    `kf3_option_rom(h, &rom, &rom_len)` (still **KF3_ABI 10 → 11**); C copies it in step 3's shape.
+  - The PE is byte-identical on every host, so one future Secure Boot signature covers all of them.
+1. ⊘ *superseded by the owner decision above:* C finds the PE with `qemu_find_file(QEMU_FILE_TYPE_BIOS, "kf3-gop.efi")`; `-L` or a `gop-image=`
    property overrides it.
-2. C passes the bytes to a new `kf3_option_rom()` (**KF3_ABI 10 → 11**, `qemu/hw/misc/kf3/kf3.h:9-14`,
+2. ⊘ *superseded (C no longer handles the PE):* C passes the bytes to a new `kf3_option_rom()` (**KF3_ABI 10 → 11**, `qemu/hw/misc/kf3/kf3.h:9-14`,
    plus `crates/kf-qemu/tests/wire_mirror.rs`); Rust packs with the host identity, kf-disp's geometry and
    EDID; C copies the result.
 3. C registers it in the shape of `pci_add_option_rom` (`hw/pci/pci.c:2626-2644`): `has_rom = true`,
@@ -873,16 +893,16 @@ PackError>`; `BootFramebuffer::fits(bar_len)`; `pe::check(pe)` for a realize-tim
 - **Nothing in the guest reads the PCI ROM**: nvidia.ko only tests `IORESOURCE_ROM_SHADOW`
   (`nv.c:5105-5121`); RM disables the ROM through the BAR0 config mirror (`osinit.c:1271-1272`); the x86
   kernel replaces the ROM resource with the 0xC0000 shadow (`fixup.c:381-397`).
-- **Install** (`V3_SWEEP_AND_INSTALL.md`): the tarball ships the PE, `kf3-gop.efi`, with its sha256;
-  kf3 wraps it per host.
+- **Install** (`V3_SWEEP_AND_INSTALL.md`): ⊘ *superseded by the owner decision above* — nothing is
+  installed; the driver is inside the kf3 binary (`libkf_qemu.a` → QEMU).
 
 #### 4.11.7 EDK2 behaviour: what the source says, and what the stand-in showed
 
 Read in edk2-stable202408 (QEMU 10.2.4's `roms/edk2`); shown by the stand-in on 2026-10-03 at
-`da5cc07f` on Ubuntu `ovmf 2025.11-3ubuntu7` and QEMU's `edk2-x86_64-code.fd`, and at `2c6178fe` in CI
-run 37127211692 on Ubuntu `ovmf 2024.02-2ubuntu0.9`.
+`3dd574e5` on Ubuntu `ovmf 2025.11-3ubuntu7` and QEMU's `edk2-x86_64-code.fd`, and in CI runs
+37127211692 (`2c6178fe`) and 37127710871 (`da5cc07f`) on Ubuntu `ovmf 2024.02-2ubuntu0.9`.
 
-| behaviour | read in the source | stand-in, 2026-10-03 (`da5cc07f`; CI run 37127211692) |
+| behaviour | read in the source | stand-in, 2026-10-03 (`3dd574e5`; CI runs 37127211692, 37127710871) |
 |---|---|---|
 | The bus driver copies the ROM into `RomImage` before running its driver | `PciDeviceSupport.c:239-333` (`ProcessOpRomImage` inside `RegisterPciDevice`) | kf-gop decodes the descriptor from `RomImage` in `Supported`, all three builds |
 | Only an EFI boot-service or runtime driver is loaded from a ROM | `PciOptionRomSupport.c:76-80`, `:701` | `build.rs`'s `/subsystem:efi_boot_service_driver` is honoured by lld-link: subsystem 11 (`kf-oprom pe`) |
@@ -907,7 +927,8 @@ Host: QEMU 10.2.1, KVM, q35, 512 MiB, 1 vCPU; Ubuntu `ovmf 2025.11-3ubuntu7`; QE
 QemuVideoDxe before any ROM driver runs (§4.11.7), so the stand-in uses a VGA-class device OVMF has no
 driver for — which is also the position kf3 is in.
 
-**Result, 2026-10-03, `da5cc07f`, clean tree: 11/11 PASS** (`traces/v3_display/gop_standin_20261003/`):
+**Result, 2026-10-03, `3dd574e5`, clean tree: 11/11 PASS** (`traces/v3_display/gop_standin_20261003/`;
+the release build it packed is the committed blob, sha256 `f11ab0b9…`):
 
 | arm | what | result |
 |---|---|---|
@@ -927,7 +948,14 @@ The same script is the CI job `firmware`'s last step. Run 37127211692 at `2c6178
 `ubuntu-latest`, KVM, QEMU 8.2.2, `ovmf 2024.02-2ubuntu0.9`, kernel `6.17.0-1022-azure`): 10 PASS,
 `gop_qemu_edk2` SKIP (not installed there); that revision's Linux arm still had a weaker last check
 (non-zero BAR bytes — which locally turned out to be OVMF's text, because fbcon had deferred its
-takeover; replaced by the `/dev/fb0` pattern at `da5cc07f`).
+takeover; replaced by the `/dev/fb0` pattern at `da5cc07f`). Run 37127710871 at `da5cc07f`, same
+runner image: the same 10 PASS and 1 SKIP, the Linux arm's `/dev/fb0` pattern 648/648 lines
+byte-exact on `6.17.0-1022-azure`.
+
+**The committed blob is reproducible** (2026-10-03, `3dd574e5`): `firmware/kf-gop/kf-gop.efi`, 9 216
+bytes, sha256 `f11ab0b9f61745a224388fdeda21d19c2c2d802d681a4f9d1c48ddcdd919ed9b`, rebuilt with the pinned
+toolchain from a fresh target directory and from a second checkout at another path: identical both
+times (`cmp`); the stand-in run above packed that same build.
 
 **Not established locally** (box tests, §4.11.9): kf3's realize and ROM BAR; the seed through host BAR1
 and the GPU zeroing; kf-disp's CUDA boot scanout; RM's console preservation with the new region table and

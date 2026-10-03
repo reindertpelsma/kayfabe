@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later -->
 # gop_standin_20261003 — kf3's GOP option ROM on a stand-in device, no GPU
 
-**STATUS: MEASURED, 2026-10-03 — 11/11 arms PASS at `da5cc07f` (branch `v3-gop-rom`, clean tree).**
+**STATUS: MEASURED, 2026-10-03 — 11/11 arms PASS at `3dd574e5` (branch `v3-gop-rom`, clean worktree).**
 Local dev host, no GPU and no kf3: QEMU 10.2.1 (Ubuntu `1:10.2.1+ds-1ubuntu3.2`), KVM, 512 MiB, 1 vCPU,
 q35. Firmware: Ubuntu `ovmf 2025.11-3ubuntu7` (`OVMF_CODE_4M.fd`, `.secboot.fd`, VARS plain / `ms` /
 `snakeoil`) and QEMU's own `edk2-x86_64-code.fd` from QEMU 10.2.4's `pc-bios` (the same `.bz2` as QEMU
@@ -17,7 +17,7 @@ bash scripts/display/gop_standin.sh          # all arms; --keep keeps the scratc
 
 The stand-in device is QEMU's `ati-vga` (1002:5046, class 0x0300), which OVMF has no built-in driver
 for — the position a real NVIDIA GPU is in. The ROM is the release `kf-gop.efi` (9 216 bytes,
-sha256 `703c8bfa…`) packed by `kf-oprom` for 1002:5046, BAR 0, 1152x648, pitch 4608, G = 0x2E0000.
+sha256 `f11ab0b9…` — the committed blob `firmware/kf-gop/kf-gop.efi`) packed by `kf-oprom` for 1002:5046, BAR 0, 1152x648, pitch 4608, G = 0x2E0000.
 
 | file | what |
 |---|---|
@@ -40,6 +40,8 @@ Headlines (the per-arm table and what follows from it are in `V3_DISPLAY.md` §4
 The same script runs in CI (job `firmware`). Run 37127211692 at `2c6178fe` (2026-10-03, GitHub
 `ubuntu-latest`, KVM, QEMU 8.2.2, Ubuntu `ovmf 2024.02-2ubuntu0.9`, kernel `6.17.0-1022-azure`):
 10 arms PASS, `gop_qemu_edk2` SKIP (no QEMU edk2 build installed there) — a third OVMF build. That
-revision's Linux arm still had the weaker last check (non-zero BAR bytes), replaced at `da5cc07f`.
+revision's Linux arm still had the weaker last check (non-zero BAR bytes), replaced at `da5cc07f`;
+run 37127710871 at `da5cc07f`: the same 10 PASS and 1 SKIP, the `/dev/fb0` pattern 648/648 lines
+byte-exact on `6.17.0-1022-azure`.
 
 Local paths in `standin.log` are replaced by `<scratch>` and `<target>`. No VM image is kept.

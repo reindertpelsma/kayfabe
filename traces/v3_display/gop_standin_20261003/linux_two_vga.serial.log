@@ -1,16 +1,16 @@
 KFLINUX begin 7.0.0-34-generic
 KFLINUX dmesg [    0.000000] Command line: initrd=initrd console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer
-KFLINUX dmesg [    0.014143] Kernel command line: initrd=initrd console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer
-KFLINUX dmesg [    1.631383] pci 0000:00:02.0: vgaarb: setting as boot VGA device
-KFLINUX dmesg [    1.631397] pci 0000:00:02.0: vgaarb: bridge control possible
-KFLINUX dmesg [    1.631399] pci 0000:00:02.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
-KFLINUX dmesg [    1.631445] pci 0000:00:03.0: vgaarb: setting as boot VGA device (overriding previous)
-KFLINUX dmesg [    1.631456] pci 0000:00:03.0: vgaarb: bridge control possible
-KFLINUX dmesg [    1.631458] pci 0000:00:03.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
-KFLINUX dmesg [    1.631470] vgaarb: loaded
-KFLINUX dmesg [    1.915382] simple-framebuffer simple-framebuffer.0: [drm] Registered 1 planes with drm panic
-KFLINUX dmesg [    1.919046] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
-KFLINUX dmesg [    1.952452] simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
+KFLINUX dmesg [    0.012429] Kernel command line: initrd=initrd console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer
+KFLINUX dmesg [    1.659375] pci 0000:00:02.0: vgaarb: setting as boot VGA device
+KFLINUX dmesg [    1.659389] pci 0000:00:02.0: vgaarb: bridge control possible
+KFLINUX dmesg [    1.659391] pci 0000:00:02.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+KFLINUX dmesg [    1.659440] pci 0000:00:03.0: vgaarb: setting as boot VGA device (overriding previous)
+KFLINUX dmesg [    1.659452] pci 0000:00:03.0: vgaarb: bridge control possible
+KFLINUX dmesg [    1.659453] pci 0000:00:03.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+KFLINUX dmesg [    1.659466] vgaarb: loaded
+KFLINUX dmesg [    1.953101] simple-framebuffer simple-framebuffer.0: [drm] Registered 1 planes with drm panic
+KFLINUX dmesg [    1.956994] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+KFLINUX dmesg [    1.992142] simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
 KFLINUX iomem 00000000-00000fff : Reserved
 KFLINUX iomem 00001000-0009ffff : System RAM
 KFLINUX iomem 000a0000-000bffff : PCI Bus 0000:00
@@ -22,10 +22,10 @@ KFLINUX iomem 0080b000-0080bfff : ACPI Non-volatile Storage
 KFLINUX iomem 0080c000-00813fff : System RAM
 KFLINUX iomem 00814000-008fffff : ACPI Non-volatile Storage
 KFLINUX iomem 00900000-1d85efff : System RAM
-KFLINUX iomem   0c600000-0dd3ff6f : Kernel code
-KFLINUX iomem   0de00000-0ee5efff : Kernel rodata
-KFLINUX iomem   0f000000-0f4d637f : Kernel data
-KFLINUX iomem   0fa48000-0fffffff : Kernel bss
+KFLINUX iomem   15a00000-1713ff6f : Kernel code
+KFLINUX iomem   17200000-1825efff : Kernel rodata
+KFLINUX iomem   18400000-188d637f : Kernel data
+KFLINUX iomem   18e48000-193fffff : Kernel bss
 KFLINUX iomem 1d85f000-1d867fff : Reserved
 KFLINUX iomem 1d868000-1ed3efff : System RAM
 KFLINUX iomem 1ed3f000-1edfffff : Reserved

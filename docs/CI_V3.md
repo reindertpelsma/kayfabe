@@ -65,8 +65,10 @@ proof. Archived QEMU headers are not live ABI declarations.
 `firmware/kf-gop` is guest-side UEFI code (kf3's boot-display GOP, `docs/design/V3_DISPLAY.md` §4.11),
 outside the cargo workspace and built by its own job, `firmware`: `rustup target add
 x86_64-unknown-uefi --toolchain 1.99.0` (`rust-toolchain.toml` unchanged), both build flavours, the
-safe library's host tests, Clippy with `-D warnings`, rustfmt, kf3's PE acceptance check, a check that
-the release driver has no port I/O, the `.efi` size in the job summary, and the local stand-in
+safe library's host tests, Clippy with `-D warnings`, rustfmt, **a byte-for-byte comparison of the
+committed `firmware/kf-gop/kf-gop.efi` (the blob `kf-oprom` embeds) with this source's build**, kf3's
+PE acceptance check, a check that the release driver has no port I/O, the `.efi` size in the job
+summary, and the local stand-in
 (`scripts/display/gop_standin.sh`, gating). Its unsafe code is a named exception under the same rules,
 checked in the `stable` job: `*_unsafe.rs` naming and the host-pointer gate apply unchanged; gate B and
 the ratchet take path entries, and `firmware/kf-gop` is the one such entry; the ABI-quarantine gate's

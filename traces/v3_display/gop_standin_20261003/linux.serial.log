@@ -1,13 +1,13 @@
 KFLINUX begin 7.0.0-34-generic
 KFLINUX dmesg [    0.000000] Command line: initrd=initrd console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer
-KFLINUX dmesg [    0.012340] Kernel command line: initrd=initrd console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer
-KFLINUX dmesg [    1.637533] pci 0000:00:01.0: vgaarb: setting as boot VGA device
-KFLINUX dmesg [    1.637548] pci 0000:00:01.0: vgaarb: bridge control possible
-KFLINUX dmesg [    1.637550] pci 0000:00:01.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
-KFLINUX dmesg [    1.637566] vgaarb: loaded
-KFLINUX dmesg [    1.930012] simple-framebuffer simple-framebuffer.0: [drm] Registered 1 planes with drm panic
-KFLINUX dmesg [    1.933702] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
-KFLINUX dmesg [    1.970397] simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
+KFLINUX dmesg [    0.012224] Kernel command line: initrd=initrd console=ttyS0 loglevel=7 panic=-1 fbcon=nodefer
+KFLINUX dmesg [    1.638697] pci 0000:00:01.0: vgaarb: setting as boot VGA device
+KFLINUX dmesg [    1.638711] pci 0000:00:01.0: vgaarb: bridge control possible
+KFLINUX dmesg [    1.638713] pci 0000:00:01.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+KFLINUX dmesg [    1.638729] vgaarb: loaded
+KFLINUX dmesg [    1.924093] simple-framebuffer simple-framebuffer.0: [drm] Registered 1 planes with drm panic
+KFLINUX dmesg [    1.927825] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+KFLINUX dmesg [    1.963448] simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
 KFLINUX iomem 00000000-00000fff : Reserved
 KFLINUX iomem 00001000-0009ffff : System RAM
 KFLINUX iomem 000a0000-000bffff : PCI Bus 0000:00
@@ -19,10 +19,10 @@ KFLINUX iomem 0080b000-0080bfff : ACPI Non-volatile Storage
 KFLINUX iomem 0080c000-00813fff : System RAM
 KFLINUX iomem 00814000-008fffff : ACPI Non-volatile Storage
 KFLINUX iomem 00900000-1d85efff : System RAM
-KFLINUX iomem   08a00000-0a13ff6f : Kernel code
-KFLINUX iomem   0a200000-0b25efff : Kernel rodata
-KFLINUX iomem   0b400000-0b8d637f : Kernel data
-KFLINUX iomem   0be48000-0c3fffff : Kernel bss
+KFLINUX iomem   14000000-1573ff6f : Kernel code
+KFLINUX iomem   15800000-1685efff : Kernel rodata
+KFLINUX iomem   16a00000-16ed637f : Kernel data
+KFLINUX iomem   17448000-179fffff : Kernel bss
 KFLINUX iomem 1d85f000-1d867fff : Reserved
 KFLINUX iomem 1d868000-1ed3efff : System RAM
 KFLINUX iomem 1ed3f000-1edfffff : Reserved

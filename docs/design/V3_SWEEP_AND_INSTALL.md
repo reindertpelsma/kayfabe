@@ -800,8 +800,8 @@ kayfabe-<version>-x86_64-linux-gnu.tar.xz
         ├── qemu/                  QEMU's relocatable data: BIOS, keymaps, edk2-x86_64-code.fd and
         │                          edk2-x86_64-secure-code.fd (installed by default)
         ├── kayfabe/MANIFEST.json  build identity and pinned inputs (§2.4), per-file sha256
-        ├── kayfabe/rom/           ⊘ 2026-10-03: not a .rom — kf3-gop.efi (the PE) ships beside QEMU's
-        │                          firmware in share/qemu/ and kf3 wraps it per host (V3_DISPLAY.md §4.11.6)
+        ├── kayfabe/rom/           ⊘ 2026-10-03: no entry — the GOP driver is embedded in the kf3 binary
+        │                          and wrapped per device at realize (V3_DISPLAY.md §4.11.6)
         └── doc/kayfabe/           README.install.md, LICENSES/ (QEMU's COPYING and LICENSE, edk2's
                                    and the other installed firmware's licenses, each bundled
                                    library's license, kayfabe's LICENSE, the libc crate's)
@@ -1044,10 +1044,11 @@ value that fits.
     every accepted host tag's nvidia-uvm source.
 - ⊘ **CORRECTED 2026-10-03 (`V3_DISPLAY.md` §4.11) — the next bullet, three ways.** The firmware is built
   (branch `v3-gop-rom`): a zero-dependency Rust EFI driver, `firmware/kf-gop`, not EDK2 or `uefi-rs`.
-  It is **not** loaded through `romfile=`: PCIR must carry the host die's ids and class and the
-  descriptor is per VM, so the tarball ships the constant PE, `kf3-gop.efi`, with its sha256, and kf3
-  wraps it into a ROM per host at realize (`crates/kf-oprom`; found with `qemu_find_file`, so
-  `share/qemu/` is where it belongs). And there is **no** fake-GSP answer for
+  It is **not** loaded through `romfile=` and it is **not a file in the tarball at all**: by the owner's
+  decision of 2026-10-03 the release `.efi` is committed beside its source and embedded in kayfabe
+  (`kf_oprom::KF_GOP_EFI`, like the PTX kernels), CI rebuilds it and requires the same bytes, and kf3
+  wraps it at realize with per-device config data — the PCIR ids and class it already presents and the
+  `KFGP` descriptor (`V3_DISPLAY.md` §4.11.6). And there is **no** fake-GSP answer for
   `uefiScanoutSurfaceSizeInMB` to agree with: it is a CPU-RM field for Windows; what must agree is the
   FB layout and the fn 65 region table (`V3_DISPLAY.md` §4.11.4). Its own CI job exists (`firmware`).
 - **The boot-display GOP option ROM.** It is a design (`docs/design/V3_DISPLAY.md:12-26`): an EFI GOP driver
