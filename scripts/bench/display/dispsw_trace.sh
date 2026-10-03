@@ -9,8 +9,7 @@
 #   function of the NVIDIA module ("Could not probe notrace function") — a module's own kprobes can.
 set -uo pipefail
 CMD=${1:?start|stop}; OUT=${2:-/workspace/bench/dispsw_trace.log}
-HERE="$(cd "$(dirname "$0")" && pwd)"; SRC=$HERE/kfdsw_probe
-[ -d "$SRC" ] || SRC=/root/kfp
+HERE="$(cd "$(dirname "$0")" && pwd)"; SRC=${KFDSW_SRC:-$HERE/kfdsw_probe}
 B=/root/kfdsw_build
 case "$CMD" in
 start)
@@ -23,13 +22,14 @@ start)
     ;;
 stop)
     P=/sys/module/kfdsw_probe/parameters
-    tot=""; for f in dsw_calls dsw_addr_valid dsw_sem dsw_ntf dsw_err sem_calls sem_err ntf_calls ntf_err map_found map_null map_kva_null map_kva_set; do
+    tot=""; for f in dsw_calls dsw_addr_valid dsw_sem dsw_ntf dsw_err sem_calls sem_err ntf_calls ntf_err map_found map_null map_kva_null map_kva_set drains drain_client_lookups drain_client_fail drain_dev_lookups drain_dev_fail drain_event_lookups drain_event_fail; do
         tot="$tot $f=$(cat $P/$f 2>/dev/null || echo NA)"; done
     rmmod kfdsw_probe 2>/dev/null
     m=$(cat "$B/mark" 2>/dev/null || echo 0)
     { echo "DSW_TRACE_TOTALS$tot"; dmesg | tail -n +$((m + 1)) | grep -a 'kfdsw:'; } > "$OUT"
     echo "DSW_TRACE_TOTALS$tot"
     echo "DSW_TRACE_MAPS $(grep -a 'kfdsw: map ' "$OUT" | sed 's/.*kfdsw: map //; s/dma=0x[0-9a-f]* //' | sort | uniq -c | sort -rn | head -6 | tr '\n' ';')"
+    echo "DSW_TRACE_DRAIN_LOOKUPS $(grep -a -o 'kfdsw: drain [a-z]* 0x[0-9a-f]* -> 0x[0-9a-f]*' "$OUT" | sed 's/kfdsw: drain //' | sort | uniq -c | sort -rn | head -8 | tr '\n' ';')"
     echo "DSW_TRACE_FLAGS $(grep -a 'kfdsw: dsw ' "$OUT" | grep -o 'flags=0x[0-9a-f]*' | sort | uniq -c | tr '\n' ' ')"
     echo "DSW_TRACE_LINES $(grep -ac 'kfdsw:' "$OUT") -> $OUT"
     ;;

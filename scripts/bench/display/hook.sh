@@ -191,7 +191,10 @@ fi
 #     glxgears windowed and fullscreen (vsync on), X11 vkcube FIFO; host screendumps; FPS recorded.
 if [ "${DISPLAY_X11_BARE:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
     gq 'sudo systemctl stop lightdm 2>/dev/null; sleep 2; sudo pkill -x Xorg 2>/dev/null; sleep 2; echo ok' 60 > /dev/null
-    gq "sudo sh -c 'nohup Xorg :0 -nolisten tcp -noreset -ac > /tmp/xbare.log 2>&1 &' && echo started" 30 > "$OUT/xbare_start.log"
+    # ⊘ the guest's dmesg is the whole boot's: count only what THIS step adds (the Cinnamon step's
+    # crash, if any, is already in DESKTOP_CRASHES)
+    x0=$(gq 'sudo dmesg | wc -l'); x0=${x0:-0}
+    gq "sudo sh -c 'nohup Xorg :0 -nolisten tcp -noreset -ac -logfile /var/log/Xorg.9.log > /tmp/xbare.log 2>&1 &' && echo started" 30 > "$OUT/xbare_start.log"
     BX='sudo -u ubuntu env DISPLAY=:0'
     up=no
     for i in $(seq 1 30); do
@@ -207,9 +210,9 @@ if [ "${DISPLAY_X11_BARE:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]
     ( gq "$BX timeout 12 vkcube --c 480 --present_mode 2 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/xbare_vkcube.log" ) &
     VP=$!; sleep 6; shot "$OUT/xbare_vkcube.ppm"; wait $VP
     say "X11_BARE_VKCUBE_FIFO $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/xbare_vkcube.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/xbare_vkcube.log")"
-    gq 'sudo cat /tmp/xbare.log' 30 > "$OUT/xbare_Xorg.log"
-    say "X11_BARE_XORG EE=$(grep -c '(EE)' "$OUT/xbare_Xorg.log") $(grep -m1 'display software' "$OUT/xbare_Xorg.log" | cut -c1-120)"
-    gq 'sudo dmesg | grep -i "segfault\|traps:" | tail -10' 60 > "$OUT/xbare_crashes.log"
+    gq 'sudo cat /var/log/Xorg.9.log' 30 > "$OUT/xbare_Xorg.log"
+    say "X11_BARE_XORG EE=$(grep '(EE)' "$OUT/xbare_Xorg.log" | grep -vc 'warning, (EE)') $(grep -m1 'display software' "$OUT/xbare_Xorg.log" | cut -c1-120)"
+    gq "sudo dmesg | tail -n +$((x0 + 1)) | grep -i 'segfault\|traps:' | tail -10" 60 > "$OUT/xbare_crashes.log"
     say "X11_BARE_CRASHES $(grep -c 'segfault\|traps:' "$OUT/xbare_crashes.log")"
     for f in xbare_glxgears_fs xbare_vkcube; do
         [ -s "$OUT/$f.ppm" ] && say "SHOT $f md5=$(md5sum < "$OUT/$f.ppm" | cut -c1-12)" || say "SHOT $f absent"
