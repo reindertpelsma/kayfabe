@@ -222,8 +222,10 @@ jobs:
                  "unterminated, so this step reports nothing about the tree."
             exit 2
           fi
-          ran_u=$(grep -o 'CAP-GATE: RAN' "$log" | wc -l)
-          vac_u=$(grep -o 'CAP-GATE: VACUOUS' "$log" | wc -l)
+          # `|| true`: under pipefail a grep with no match fails the substitution, and a count of
+          # zero is an answer here, not an error (the floor below decides).
+          ran_u=$(grep -o 'CAP-GATE: RAN' "$log" | wc -l || true)
+          vac_u=$(grep -o 'CAP-GATE: VACUOUS' "$log" | wc -l || true)
           echo "CAP-gate, runner user: ran=$ran_u vacuous=$vac_u (reached floor 6)"
           if [ $((ran_u + vac_u)) -lt 6 ]; then
             echo "::error::the live capability tests were not reached: $((ran_u + vac_u)) < 6"
@@ -245,8 +247,8 @@ jobs:
           for e in "${exes[@]}"; do
             sudo "$e" live_cap_ --test-threads=1 2>&1 | tee -a "$rootlog"
           done
-          ran=$(grep -o 'CAP-GATE: RAN' "$rootlog" | wc -l)
-          vac=$(grep -o 'CAP-GATE: VACUOUS' "$rootlog" | wc -l)
+          ran=$(grep -o 'CAP-GATE: RAN' "$rootlog" | wc -l || true)
+          vac=$(grep -o 'CAP-GATE: VACUOUS' "$rootlog" | wc -l || true)
           echo "CAP-gate, root: ran=$ran vacuous=$vac (floor 6; vacuous must be 0)"
           if [ "$vac" -ne 0 ] || [ "$ran" -lt 6 ]; then
             echo "::error::as root every live capability test must exercise the real capset:" \
