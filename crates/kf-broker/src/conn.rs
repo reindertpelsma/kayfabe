@@ -308,6 +308,9 @@ struct Conn<S> {
     /// What the VMM currently watches the socket for.
     watched: (bool, bool),
     rung_logged: Option<Rung>,
+    /// The broker window's last reported size (SURFACE is logged on a change only: some backends
+    /// send it with every frame).
+    surface: Option<(i32, i32)>,
     seq: u32,
 }
 
@@ -520,6 +523,7 @@ impl<L: Link> Relay<L> {
             want_write: false,
             watched: (true, false),
             rung_logged: None,
+            surface: None,
             seq: 0,
         });
         host.watch(fd, true, false);
@@ -1263,11 +1267,18 @@ impl<L: Link> Relay<L> {
                     "inactive (input suspended)"
                 }
             ),
-            EV_SURFACE => say!(
-                "broker window is now {}x{} (scaled by the broker)",
-                p.x,
-                p.y
-            ),
+            EV_SURFACE => {
+                if let Some(c) = self.conn.as_mut()
+                    && c.surface != Some((p.x, p.y))
+                {
+                    c.surface = Some((p.x, p.y));
+                    say!(
+                        "broker window is now {}x{} (scaled by the broker)",
+                        p.x,
+                        p.y
+                    );
+                }
+            }
             EV_FRAME => {
                 if let Some(c) = self.conn.as_mut() {
                     c.credit = true;

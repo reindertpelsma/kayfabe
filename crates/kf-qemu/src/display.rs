@@ -562,7 +562,7 @@ pub struct DisplayPlane {
     scan: Option<ScanVocab>,
     /// ★ Display step 3d: the cursor methods the composition's top layer reads (`None`: the
     /// family's table lacks one — its cursor is not composed).
-    cursor: Option<kf_disp::engine::CursorVocab>,
+    cursor_vocab: Option<kf_disp::engine::CursorVocab>,
     /// The window formats the console can show.
     formats: ScanFormats,
 }
@@ -635,7 +635,7 @@ impl DisplayPlane {
         let engine = Engine::new(vocab, row.heads, row.windows);
         let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);
         let formats = ScanFormats::resolve(t, classes.window);
-        let cursor = kf_disp::engine::CursorVocab::resolve(t, classes.core, classes.cursor);
+        let cursor_vocab = kf_disp::engine::CursorVocab::resolve(t, classes.core, classes.cursor);
         let (console, broker) = if broker {
             let ring = Arc::new(kf_broker::FrameRing::new(
                 kf_broker::slots::BROKER_SLOTS,
@@ -663,7 +663,7 @@ impl DisplayPlane {
             console,
             broker,
             scan,
-            cursor,
+            cursor_vocab,
             formats,
         })
     }
@@ -1212,7 +1212,7 @@ impl Device {
             scan.active = console.is_some();
             // ★ 3d: the cursor on top of the console's head; a move or a new image recomposes
             let cursor = console.as_ref().and_then(|c| {
-                dp.cursor
+                dp.cursor_vocab
                     .as_ref()
                     .and_then(|cv| engine.cursor_scan(cv, c.head))
             });
