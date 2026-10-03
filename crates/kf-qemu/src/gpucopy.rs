@@ -293,21 +293,18 @@ impl VramSetup {
     }
 }
 
+/// The worker's ends of the provisioning thread: requests out, made slots (or the refusal) back.
+pub type ProvisionChannels = (
+    mpsc::Sender<Request>,
+    mpsc::Receiver<Result<Provisioned, String>>,
+);
+
 /// ★ Start the provisioning thread: it serves [`Request`]s (`Provisioning`'s, sent by the worker)
 /// and hands each made slot — or the first refusal, after which it stops — back to the worker.
 ///
 /// # Errors
 /// The thread could not be started.
-pub fn spawn(
-    setup: &'static VramSetup,
-    ring: Arc<FrameRing>,
-) -> Result<
-    (
-        mpsc::Sender<Request>,
-        mpsc::Receiver<Result<Provisioned, String>>,
-    ),
-    String,
-> {
+pub fn spawn(setup: &'static VramSetup, ring: Arc<FrameRing>) -> Result<ProvisionChannels, String> {
     let (req_tx, req_rx) = mpsc::channel::<Request>();
     let (got_tx, got_rx) = mpsc::channel();
     std::thread::Builder::new()
@@ -361,7 +358,7 @@ mod tests {
         for b in [SLOT_CLASS0, kf_disp::vramslot::SLOT_MAX] {
             assert!(kf_host::display_slot_size_ok(b), "{b:#x}");
         }
-        assert!(kf_disp::vramslot::SLOT_MAX <= kf_host::DISPLAY_SLOT_CAP);
+        const { assert!(kf_disp::vramslot::SLOT_MAX <= kf_host::DISPLAY_SLOT_CAP) };
     }
 
     #[test]
