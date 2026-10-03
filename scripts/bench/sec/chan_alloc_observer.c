@@ -16,6 +16,7 @@
 //
 //   CHANOBS tid=<tid> thread=<comm> class=0x.. client=0x.. h=0x.. status=0x..
 //           request_flags=0x.. reply_flags=0x.. PRIVILEGED_CHANNEL=<0|1|?> capeff_sys_admin=<0|1>
+//           nvos=<21|64> params=<set|null> params_size=N nvos_flags=0x..
 //
 // It never changes an argument or a result. A FINN-serialized NVOS64 block (flags bit 0) is not
 // decoded and reads PRIVILEGED_CHANNEL=? — an unmeasured reading, never a zero.
@@ -115,10 +116,10 @@ int ioctl(int fd, unsigned long req, ...) {
         int n = snprintf(buf, sizeof buf,
                          "CHANOBS tid=%ld thread=%s class=%#06x client=%#010x h=%#010x rc=%d "
                          "status=%#x request_flags=%#010x reply_flags=%#010x PRIVILEGED_CHANNEL=%s "
-                         "capeff_sys_admin=%d nvos=%u%s\n",
+                         "capeff_sys_admin=%d nvos=%u params=%s params_size=%u nvos_flags=%#x\n",
                          (long)syscall(SYS_gettid), comm, cls, client, h, rc, status, req_flags,
                          reply_flags, verdict, capeff_sys_admin(), size == 32 ? 21 : 64,
-                         (nvos64_flags & 1) ? " finn=1" : "");
+                         parms ? "set" : "null", psize, nvos64_flags);
         if (n > 0) emit(buf, n < (int)sizeof buf ? n : (int)sizeof buf - 1);
     }
     return rc;
