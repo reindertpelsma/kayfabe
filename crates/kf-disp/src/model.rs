@@ -1291,15 +1291,16 @@ mod tests {
         ));
     }
 
-    /// ★ The claim set is enumerable and exact: six subdevice-internal controls plus the thirty
-    /// named ones, every name resolved through the derived layouts, no id twice, and nothing in the
-    /// display interfaces' command pages claimed that the set does not list.
+    /// ★ The claim set is enumerable and exact: six subdevice-internal controls plus the named
+    /// ones (34 since display step 3c added the internal hotplug state), every name resolved through
+    /// the derived layouts, no id twice, and nothing in the display interfaces' command pages
+    /// claimed that the set does not list.
     #[test]
     fn the_claim_set_is_enumerable_and_exact() {
         let m = model();
         let set = m.claimed();
         assert_eq!(set.len(), INTERNAL_CONTROLS.len() + NAMED_CONTROLS.len());
-        assert_eq!(set.len(), 39);
+        assert_eq!(set.len(), 40);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
@@ -1439,10 +1440,10 @@ mod tests {
         let r = ask(&mut m);
         assert_eq!(get(&m, s, &r, "hotPlugMask"), 0, "cleared on read");
         let e = "NV0073_CTRL_SPECIFIC_GET_EDID_V2_PARAMS";
-        let mut q = vec![0u8; size(&m, e)];
-        q[..4].copy_from_slice(&0x100u32.to_le_bytes());
+        let mut q = Params::new(m.layouts(), e, &vec![0; size(&m, e)]).unwrap();
+        q.set("displayId", 0x100);
         let r = m
-            .control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q)
+            .control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q.buf)
             .unwrap()
             .unwrap();
         let edid = Params::new(m.layouts(), e, &r)
