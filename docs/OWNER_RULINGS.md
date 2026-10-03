@@ -315,4 +315,20 @@ citation: ask whether its reason still holds before relying on it.
   them.
 - Design: `traces/v3_design_review_20261003/` (gop), and `design/V3_DISPLAY.md` once `v3-gop-rom` and
   `v3-gop-kf3` land.
+- **aarch64 later (owner, the same day: *"Also later needs aarch64 as well."*).** x86_64 ships first,
+  but the ROM stays arch-neutral:
+  - the ROM header's EFI machine type comes from the built driver (0x8664 or 0xAA64), never a
+    constant;
+  - x86 port I/O, used for test-build debug output only, is behind `cfg(target_arch = "x86_64")`;
+  - build.rs builds the driver for the arch kayfabe itself is built for;
+  - CI's aarch64 job also builds the driver for `aarch64-unknown-uefi`, so x86-isms cannot creep in.
+  - Unchecked: whether AAVMF (OVMF's Arm build) runs PCI option ROMs.
+  - ⚠ **Found 2026-10-03, and it concerns all of kf3 on arm64, not only the ROM.** arm64 KVM maps a
+    non-cacheable PFNMAP memslot as Normal-NC only when the host VMA carries `VM_ALLOW_ANY_UNCACHED`,
+    and as Device memory otherwise (Linux 7.1 `arch/arm64/kvm/mmu.c:1966-1968`). vfio-pci sets that
+    flag (`drivers/vfio/pci/vfio_pci_core.c:1831`); nvidia.ko never does (no occurrence in
+    `ogkm-580: kernel-open`). kf3's BAR1 views are nvidia.ko mmaps, so on an arm64 host the guest
+    would see the framebuffer and every BAR1 view as Device memory: no write combining, and an
+    unaligned access faults. The likely fix is the one-flag host patch in nvidia.ko's mmap path,
+    since a host patch is already required for UVM (`design/V3_COOPERATIVE_TIERS.md`).
 
