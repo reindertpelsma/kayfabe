@@ -527,7 +527,15 @@ them is under **Attempts** below, and every attempt stays in the ledger.
   FAIL, and both block the release. A twin whose notifier is unarmed or undeclared turns a fault into a
   silent hang, so a managed-memory row whose kf3 slice names an `RC-UNARMED` birth is KF3_DEFECT, and
   one naming an `RC-NONE` birth is SILENT. Every lane-14 row also records the boot's `rc_unarmed` and
-  `rc_none` counts from kf3's status line, and the lane asserts both are 0.
+  `rc_none` counts from kf3's status line, and its own `rc_silent_births`.
+  - ⊘ CORRECTED 2026-10-03 (review of `5af7e644`): this bullet said *"the lane asserts both are 0"*
+    while nothing asserted it — the counts were recorded and read by no consumer. The assertion is now
+    built: after each guest boot `scripts/apps/apps_matrix.sh` runs `scripts/apps/boot_gate.sh` over the
+    boot's whole kf3 log and records `APPS_BOOT_GATE … gate=PASS|FAIL|UNMEASURED`. Any boot that is not
+    PASS — a nonzero `rc[unarmed=]`/`rc[none=]`, an `RC-UNARMED`/`RC-NONE` birth line, or a counter it
+    cannot read — fails the lane: `apps_matrix.sh guest` exits 3 and `summarize.py` prints
+    `BOOT_GATE … lane=FAIL` (`V3_APP_MATRIX.md` §R5.3). The gate is over every row of the boot, not
+    only the managed-memory rows.
 
 **Verdict rules.** The per-box runner applies these to parsed counts, never to a step's exit code
 (task S7):

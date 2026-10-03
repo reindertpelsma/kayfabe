@@ -47,8 +47,9 @@ Not yet:
 
 - **CUDA managed memory is not supported** (not a release target). A GPU access to managed memory
   (`cudaMallocManaged`), or HMM pageable memory, whose page is not resident and mapped fails with
-  CUDA error 719 at the next sync. In the guest's kernel log it appears as
-  `NVRM: Xid (…): 31, pid=…, name=…, kayfabe: …`. These are the four failing apps.
+  CUDA error 719 at the next sync. kayfabe also reports it to the guest's kernel log, where it is
+  expected to appear as `NVRM: Xid (…): 31, pid=…, name=…, kayfabe: …` (built, not yet seen on a
+  GPU: pending the box run in `docs/design/V3_APP_MATRIX.md` §R5.7). These are the four failing apps.
   - Two patterns work: CPU-initialised + `cudaMemPrefetchAsync`, and CPU-initialised +
     `cudaMemAdviseSetAccessedBy`. Any other access to a non-resident page fails as above.
   - Opt-ins to avoid: llama.cpp's `GGML_CUDA_ENABLE_UNIFIED_MEMORY`, and RAPIDS cudf.pandas, which

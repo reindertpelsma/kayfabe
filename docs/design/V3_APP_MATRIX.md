@@ -23,7 +23,15 @@ as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3
 **STATUS: BUILT 2026-10-03 on branch `v3-loud-uvm` (cut from master `5d70e9c2`). GitHub CI run
 `37131299412` at `539a04cb` was green: it ran the new unit tests (`kf-abi` `oserrorlog`, `kf-qemu`
 `chan::rc_delivery_tests`, `kf-rm` `rpc`) and the 42 verdict fixtures. NOT run on a box: every
-guest/host expectation below is a prediction until §R5.7 runs.** The
+guest/host expectation below is a prediction until §R5.7 runs.**
+★ *2026-10-03, review round (adversarial review of `5af7e644`, every finding fixed on this branch):
+the classifier keyed on bare words and scored every isolated managed row KF3_DEFECT on kf3's own boot
+sentence (§R5.3 ⊘); the boot gate the design required is now BUILT (§R5.3, `boot_gate.sh`); twin
+identity is a birth generation, not the host chid (§R5.2); `deliver_rc`'s decisions are a pure,
+unit-tested function; the Xid-31 texts name managed memory as the common cause, not the certain one
+(§R5.2); the wedge probe also follows a PASS row with an Xid (§R5.4); the `uvm_disable_hmm` guest
+check is back in §R5.7. The fixtures are now 84 + 12 (`test_verdicts.sh`, `test_hook.sh`), every kf3
+line in them rendered from the Rust source (`kf3_lines.py`). Still NOT run on a box.* The
 item is `OWNER_RULINGS.md` §I: *"unsupported must fail loudly … every such fault must reach the app as an
 error"*, plus *"add a sample such as `vectorAddMMAP` to the sweep"*.
 
@@ -66,9 +74,16 @@ Evidence: R3 at kf3 `4c48ca0c` (2026-09-28), each row run alone in a fresh boot
 
 - **A guest Xid.** kf3 posts one `OS_ERROR_LOG` (`0x1006`) per (guest client, exception) group of an
   RC batch, before the group's `RC_TRIGGERED`s.
-  - The guest prints `NVRM: Xid (PCI:…): 31, pid=<pid>, name=<comm, 15 chars>, kayfabe: GPU MMU fault;
-    N channel(s) of this process stopped. kayfabe services no GPU page faults: CUDA managed memory or
-    pageable (HMM) access to a non-resident page is unsupported. Otherwise this is a kayfabe bug - please
+  - ⊘ CORRECTED 2026-10-03 (review of `5af7e644`): the text below used to read *"… kayfabe: GPU MMU
+    fault; … kayfabe services no GPU page faults: CUDA managed memory or pageable (HMM) access to a
+    non-resident page is unsupported. Otherwise this is a kayfabe bug"*. Every Xid 31 gets it — an app's
+    own out-of-bounds access, or `vmm_probe`'s deliberate `ro_write`, too, which faults on bare metal as
+    well — so it no longer asserts the cause (`chan::xid_text`, pinned by
+    `the_xid_31_texts_name_managed_memory_as_common_not_certain`).
+  - The guest is expected to print (⊘ PENDING the §R5.7 box run; read from the receiver's source, not
+    seen) `NVRM: Xid (PCI:…): 31, pid=<pid>, name=<comm, 15 chars>, kayfabe: unserviced GPU page fault;
+    N channel(s) of this process stopped. Common cause: CUDA managed memory or HMM pageable access
+    (unsupported). Else an invalid GPU access by the app (as on bare metal) or a kayfabe bug: please
     report.` The source is `ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:769-806` →
     `kernel_rc.c:297-412`. The print needs `RmLogonRC=1`, the default.
   - The wire layout is versioned. Three layouts exist across 535–615, and the encoder takes offsets by
@@ -79,15 +94,25 @@ Evidence: R3 at kf3 `4c48ca0c` (2026-09-28), each row run alone in a fresh boot
     with a runlist the served FIFO table names. Otherwise kf3 posts `INVALID_CHID`, and the Xid prints
     without `pid=`/`name=`.
   - `xid_done` makes a requeued group (GSP queue full) never post a second Xid.
+  - ⊘ CORRECTED 2026-10-03 (review of `5af7e644`): "still live" compared the host token, which is the
+    host chid — and host RM hands the lowest free chid out again, so a twin freed and reborn under the
+    same `(client, handle)` between `rc_scan` and delivery could match and receive the old twin's RC.
+    Each twin now carries a birth generation (`ChanPlane::pt_birth_gen`, stamped at insert), and
+    liveness compares that (`chan::same_twin`). Every delivery decision — stale life, liveness, the
+    Xid's chid (incl. `INVALID_CHID`), Xid before `RC_TRIGGERED`, `xid_done` on each `QueueFull` path
+    — is the pure function `chan::deliver_rc_batch`, unit-tested with injected effects
+    (`chan::rc_delivery_tests`, 15 tests; each decision was bite-checked by mutating it).
   - An event from an earlier GSP life (the phase left `Running`: unload, teardown) is dropped whole and
     counted `rc[stale=]`. A guest reboot needs a QEMU restart: kf3 has no reset path.
 - **⊘ Deviation from the design, named:** a group member whose twin the guest freed before delivery
   gets no `RC_TRIGGERED` either (`rc[freed=]`). Its chid may already name a new channel of another
   process, and `_kgspRpcRCTriggered` would notify that channel. The design kept the post unchanged.
 - **A named host line**, once per guest client per RC scan, rate-limited per client (10 s; at most 64
-  clients tracked, the held count carried into the next line). Example:
-  `kf3: UNSERVICED-GPU-FAULT guest client 0x… chids [0x7 0x8 …] host Xid 31 — kayfabe services no GPU page
-  faults; guest gets RC_TRIGGERED + Xid 31`.
+  clients tracked, the held count carried into the next line). Example (⊘ CORRECTED 2026-10-03, neutral
+  about the cause like the guest text; `chan::unserviced_line`):
+  `kf3: UNSERVICED-GPU-FAULT guest client 0x… chids [0x7 0x8 …] host Xid 31 — an unserviced GPU page
+  fault (common cause: CUDA managed memory or HMM pageable access, which kayfabe does not service; an
+  invalid GPU access by the app faults the same way on bare metal); guest gets RC_TRIGGERED + Xid 31`.
 - **The silent holes counted.** Two kinds of twin turn a fault into a silent hang:
   - a twin whose notifier could not be armed (`RC-UNARMED`, counted before);
   - a twin whose guest declared **no** error notifier. It was counted nowhere; it is now named at birth
@@ -103,11 +128,43 @@ Evidence: R3 at kf3 `4c48ca0c` (2026-09-28), each row run alone in a fresh boot
 
 ### R5.3 Verdict classes for the managed-memory rows (`scripts/apps/loud_verdict.sh`)
 
+⊘ **CORRECTED 2026-10-03 (review of `5af7e644`) — the classifier as first built scored EVERY isolated
+managed row KF3_DEFECT.** Its kf3 conditions were bare-word greps (`RC-UNARMED`, `RC-NONE`, `not
+applied`, …), and this branch's own boot sentence (`DELIVERY_UNBUILT`, printed once per QEMU at the
+first fault-buffer registration — the first CUDA process's `cuInit`, inside the managed app's slice)
+names `RC-UNARMED`. The 42 fixtures could not see it: R3's slices predate that line. Each condition now
+matches the SHAPE of the line kf3 prints (`kf3: chan 0x…:0x… RC-UNARMED: `, `kf3: mem t=…s REFUSED
+VasKey(`, `kf3: UNSERVICED-GPU-FAULT guest client 0x`, `kf3: RC_TRIGGERED posted: guest chid 0x`), and
+the fixtures are rendered from the Rust format strings and the `DELIVERY_UNBUILT` constant
+(`scripts/apps/kf3_lines.py`), with the boot sentence in every loud/defect/none slice. The old script
+fails 19 of the new fixtures. The same bare-word reading was in `triage.py`'s RC column (the boot
+sentence was its first line); fixed the same way.
+
 The list is `UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM attach_verify um_cpuinit
 um_gpufirst um_pageable`. It is the one exception to *"bare metal passes + guest fails ⇒ kayfabe bug"*
-(`OWNER_RULINGS.md` §A.10), sanctioned by §I. `apps_hook.sh` appends `loud=<class>` and the boot's
-`rc_unarmed=`/`rc_none=` (from the last status line in the slice) to every `guest.res` row.
-`triage.py` and `summarize.py` count the classes separately.
+(`OWNER_RULINGS.md` §A.10), sanctioned by §I. `apps_hook.sh` appends `loud=<class>`, the boot's
+`rc_unarmed=`/`rc_none=` (from the last status line in the slice) and `rc_silent_births=` (RC-UNARMED /
+RC-NONE birth lines in the row's own slice) to every `guest.res` row. `triage.py` and `summarize.py`
+count the classes separately.
+
+**The boot gate (BUILT 2026-10-03, review of `5af7e644`; design §3.5 "every apps boot asserts
+`rc[unarmed=0 none=0]`").** ⊘ As first built it was recorded per row and asserted nowhere — the one
+remaining silent-hang class (a twin with no notifier, or an unarmed one) was unflagged on every row the
+classifier does not list. Now: after each guest boot's QEMU exits, `apps_matrix.sh` runs
+`scripts/apps/boot_gate.sh` over the boot's whole kf3 log and appends `APPS_BOOT_GATE boot=<tag>
+gate=PASS|FAIL|UNMEASURED unarmed= none= births= why=` to that boot's `guest.res`.
+- PASS: the last `rc[armed= unarmed= none=` status counter reads 0 and 0, and the log has no
+  `kf3: chan 0x…:0x… RC-UNARMED:`/`RC-NONE:` birth line.
+- FAIL: either count nonzero, or a birth line.
+- UNMEASURED (never a pass): no readable log, or no status line with `none=` (a kf3 older than this
+  branch).
+- Any boot not `gate=PASS` FAILS THE LANE: `apps_matrix.sh guest` exits 3, and `summarize.py` closes
+  with `BOOT_GATE boots= pass= fail= unmeasured= lane=FAIL`. A boot that ran apps but has no gate line
+  is UNMEASURED; results that predate the gate print `lane=UNMEASURED`. A row whose slice holds a
+  birth line shows `/RC_SILENT` after its guest verdict.
+- At R3 (kf3 `4c48ca0c`) every isolated boot's last status line reads `pt_births=32 … rc[armed=32
+  unarmed=0 …]`: every Passthrough twin armed, so `none` would have been 0 (the counter did not exist
+  yet). The gate is expected to pass on a healthy boot; a box run at this branch is what shows it.
 
 | class | when | release |
 |---|---|---|
@@ -121,8 +178,9 @@ um_gpufirst um_pageable`. It is the one exception to *"bare metal passes + guest
 The Xid text says *"otherwise this is a kayfabe bug"* for that reason. The design's optional step 2
 would tell the two apart: read the fault's VA from the host twin with `0x906f0106`, which is
 unprivileged. It is gated on a box probe and not built. The classifier is tested offline by
-`scripts/apps/test_verdicts.sh`, on the R3 slices plus synthetic lines (42 cases, CI step
-"App-matrix verdict fixtures").
+`scripts/apps/test_verdicts.sh`, on the R3 slices plus lines rendered from the source (84 cases, CI
+step "App-matrix verdict fixtures"; ⊘ 42 before the review round), which also runs
+`scripts/apps/test_hook.sh` — `apps_hook.sh` driven offline through a fake guest ssh (12 cases).
 
 ### R5.4 The CUDA virtual-memory API rows
 
@@ -155,7 +213,11 @@ them is UNVERIFIED; `vmm_probe`'s `fd_import` check is the test.
 
 ⚠ `vmm_probe`'s `ro_write` faults on purpose. One Xid 31 per run is expected on both lanes; in a kf3
 guest that includes a guest `Xid 31 … kayfabe:` for the child process. That row is the one exception to
-"`guest_xid=0` on every passing row". The bundle builds `vmm_probe` against the toolkit's libcuda stub
+"`guest_xid=0` on every passing row". ⊘ CORRECTED 2026-10-03 (review of `5af7e644`): the wedge probe
+used to run only after a non-PASS row, so a boot wedged by this deliberate fault would have burned the
+rows after it (`attach_verify`, the `um_*` rows) and scored them SILENT — a blocker blamed on the wrong
+row. `apps_hook.sh` now also probes after any row whose guest dmesg gained an Xid
+(`test_hook.sh` pins both the probe and the stop). The bundle builds `vmm_probe` against the toolkit's libcuda stub
 (`build_bundle.sh`), and `apps_hook.sh` pushes `samples/vectorAddMMAP` and
 `samples/vectorAdd_kernel64.fatbin` beside `bin/`, so neither needs a re-provisioned guest image. The
 fatbin's name collides with `vectorAddDrv`'s, which defines the identical `VecAdd_kernel`.
@@ -174,7 +236,8 @@ fatbin's name collides with `vectorAddDrv`'s, which defines the identical `VecAd
 
 - CUDA **managed memory** (`cudaMallocManaged`) and **HMM pageable access** to a page that is not
   resident and mapped on the GPU are **unsupported**. Such an access fails with CUDA error 719 at the
-  next sync, plus a guest kernel line `NVRM: Xid (…): 31, …, kayfabe: …`.
+  next sync (R3), plus — expected, ⊘ pending the §R5.7 box run — a guest kernel line
+  `NVRM: Xid (…): 31, …, kayfabe: …`.
 - Two managed-memory patterns work, from the 2026-09 `v3-appfix` runs on an RTX 3060
   (`V3_UVM_DEMAND_PAGING.md` §1):
   - CPU-initialised, then `cudaMemPrefetchAsync` to the GPU;
@@ -196,11 +259,15 @@ UM="UnifiedMemoryStreams UnifiedMemoryPerf conjugateGradientUM attach_verify um_
 bash scripts/apps/apps_matrix.sh host r5host $R5 $UM          # every new row PASS on bare metal first
 KF3_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 APPS_PER_BOOT=1 \
   bash scripts/apps/apps_matrix.sh guest r5iso $UM            # each managed row alone, fresh boot
-grep -E 'loud=|APPS_WEDGE' /workspace/apps/results/r5iso/guest.res   # want loud=EXPECTED_LOUD, rc_unarmed=0 rc_none=0, no WEDGE
+grep -E 'loud=|APPS_WEDGE|APPS_BOOT_GATE' /workspace/apps/results/r5iso/guest.res   # want loud=EXPECTED_LOUD, rc_unarmed=0 rc_none=0 rc_silent_births=0, gate=PASS, no WEDGE
 for a in $UM; do grep -h 'NVRM: Xid' /workspace/apps/results/r5iso/$a.guest_dmesg.log; grep -hc UNSERVICED-GPU-FAULT /workspace/apps/results/r5iso/$a.kf3.log; done
 KF3_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 APPS_PER_BOOT=8 \
   bash scripts/apps/apps_matrix.sh guest r5full all          # the full 82-row matrix
 python3 scripts/apps/summarize.py /workspace/apps/results/r5full; python3 scripts/apps/triage.py /workspace/apps/results/r5full
+# the guest with HMM off (design §6; owner question: may release guidance mention uvm_disable_hmm=1?)
+KF_DEVICE=kf3 QEMU_BIN=/workspace/bench/kf3-bins/<rev>/qemu-system-x86_64 \
+  POST_CAPTURE_HOOK="$PWD/scripts/apps/hmm0_hook.sh" bash scripts/bench/boot_capture.sh r5hmm0
+cat /workspace/apps/results/r5hmm0.txt
 ```
 
 Expected:
@@ -214,7 +281,15 @@ Expected:
   - `UNSERVICED-GPU-FAULT` in the kf3 slice and `rc[… none=0 … xid=≥1 …]`;
   - the post-row `vectorAdd` passes.
 - Full matrix: no regression from master's 61/65 apps + 6/6 probes (kf3 `2830988f`, §R3). `guest_xid=0`
-  on every passing row except `vmm_probe` (§R5.4). The `torch_expseg` digest equals the host's.
+  on every passing row except `vmm_probe` (§R5.4), and an `APPS_HOOK wedge probe after vmm_probe`
+  line with `sanity_vectorAdd=1`. The `torch_expseg` digest equals the host's.
+- The boot gate: every `APPS_BOOT_GATE` line `gate=PASS`, `summarize.py` closing with
+  `BOOT_GATE … lane=PASS`, and `apps_matrix.sh guest` exiting 0 (it exits 3 on any boot not PASS).
+- HMM off (`r5hmm0.txt`, written by `scripts/apps/hmm0_hook.sh`): `hmm_disabled=Y`, `ATTR managed=1
+  concurrentManagedAccess=1 pageableMemoryAccess=0` (bare metal with HMM off reads the same:
+  `traces/v3_uvm_research/bm_rtx3060ti_580.159.04_hmm0.out:8`), and `um_probe pageable` still fails
+  (`-> 719`, a guest `Xid 31 … kayfabe:`) — so `uvm_disable_hmm=1` changes the attribute only. This
+  answers the owner question on mentioning it (`V3_UVM_DEMAND_PAGING.md` §1.2's ⊘ note).
 - Still open (design §6): the optional `0x906f0106` fault-identity probe after an RC; one non-Ampere die
   (`um_probe cpuinit` attribution, `vmm_probe remap_same_va` against the Hopper/Blackwell walker gaps
   L4/L5 of `V3_HW_BOUNDARY_INVENTORY.md`), whose bundle must be built for that die.

@@ -574,7 +574,9 @@ drops that restriction, which weakens a guest-internal boundary. I did not find 
   still faults: on bare metal with HMM off, `um_probe pageable` returned **700** plus a host
   `Xid 31 … FAULT_PDE` (§1.2, 2026-09-26). In a kf3 guest the same access returns 719. It is a guest
   configuration item, neither a correctness lever nor a loudness lever, and **not** part of the release
-  guidance (owner question open, `V3_APP_MATRIX.md` §R5).
+  guidance (owner question open, `V3_APP_MATRIX.md` §R5). The kf3-guest half of that reading is not run
+  yet: the guest with `uvm_disable_hmm=1` (its ATTR line, and whether `um_probe pageable` still fails
+  loudly) is a pending box test, `scripts/apps/hmm0_hook.sh` in `V3_APP_MATRIX.md` §R5.7.
 - **Guest `uvm_disable_hmm=1`** makes `pageableMemoryAccess` report 0 (`uvm_gpu.c:3861`, via
   `uvm_va_space_pageable_mem_access_enabled`). Well-behaved runtimes then take their non-HMM
   paths, and an app that dereferences malloc memory on the GPU fails as it would on a non-HMM
@@ -600,8 +602,13 @@ faults, mapping everything at launch as on a non-faultable GPU? **No.** Read in 
    `uvm_hopper.c:94`, `uvm_blackwell.c:80`). UVM-Lite behaviour applies only to non-faultable GPUs
    (`uvm_va_range.c:1620-1643`), and no module parameter overrides the choice.
 2. **Every RM-side lever kf3 owns leaves the GPU faultable or kills registration.**
-   - Failing `0x20800a9b`, or omitting class `0xc369`, fails `nvUvmInterfaceInitFaultInfo` and `cuInit`
-     dies (boot `pu1448` at `ef20ccc`, 2026-08-09).
+   - ⊘ CORRECTED 2026-10-03 (review of `5af7e644`): this bullet cited boot `pu1448` for both levers;
+     that boot measured only the `0x20800a9b` refusal. Failing `0x20800a9b` fails
+     `nvUvmInterfaceInitFaultInfo`, and `cuInit` dies (boot `pu1448` at `ef20ccc`, 2026-08-09).
+     Omitting class `0xc369` is read from source, not run: the guest's RM picks the fault-buffer class
+     from the class list (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8649,8690-8691`) and
+     allocates it for UVM (`nv_gpu_ops.c:9198-9206`), so with no such class the allocation fails and
+     UVM's fault-buffer setup returns the error (`ogkm-580: kernel-open/nvidia-uvm/uvm_gpu_isr.c:359-365`).
    - A pre-Pascal identity is impossible: the open RM is GSP-only, and the HAL must drive the real chip.
    - Legacy-vGPU mode refuses UVM outright (`uvm_gpu.c:1452-1456`).
    - `accessCntrBufferCount` gates access counters, not faults.
