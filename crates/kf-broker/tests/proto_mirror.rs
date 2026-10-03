@@ -71,6 +71,13 @@ fn values_of(src: &str) -> BTreeMap<String, u64> {
             }
         } else if let Some((name, val)) = l.trim_end_matches(',').split_once('=')
             && name.trim().starts_with("NVKVM_BROKER_")
+            // ⊘ an identifier, not an expression: the newer header's `_Static_assert(... *
+            // NVKVM_BROKER_CURSOR_MAX_DIM <= 0x7fffffffull, ...)` is no enum entry (found
+            // 2026-10-04, the first run of the check below against the COMMITTED `badf2d7` header)
+            && name
+                .trim()
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_')
         {
             let v = eval(val, &m).expect("an enum value");
             m.insert(name.trim().to_string(), v);

@@ -1,5 +1,17 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS ADDENDUM 3, 2026-10-04 — built in code on `v3-broker`, GPU-free-tested locally and in CI;
+> NOTHING of it has run on a box.** (1) The relay handles the six behaviours of nvkvm-pv's broker
+> at `badf2d7` (wire unchanged; §8.15) — run locally against that REAL broker, including one that
+> cannot read `/proc/self/fdinfo`. (2) The compose kernel's XOR blend (`OWNER_RULINGS.md` §O; §8.14):
+> an XOR cursor is now composed, visibly, in every mode — its semantics are a DEFINITION (NVKMS never
+> programs XOR), and the committed hand-written PTX is executed on the host against a CPU reference.
+> (3) QEMU's own console gets the guest cursor through its cursor API while a cursor-capable broker
+> hovers (§8.13) — **a coordinator decision the owner may revisit**; without a broker the console
+> keeps the composed cursor. (4) The cursor's composition word is logged once per change beside an
+> alpha census of its pixels, so the next box run settles §8.12's premultiplied/straight question
+> (§8.14). KF3 ABI stays 12. Evidence of the local runs: `traces/v3_display/broker_20261004/`.
+
 > ⊘ **MERGED 2026-10-03 — `v3-broker` took `master` (the boot display, KF3 ABI 11).** The broker
 > branch had numbered its own steps KF3 ABI 11 (3a), 12 (3c) and 13 (the GPU-copy rung); after the
 > merge the whole broker surface is **ONE bump above master's 11: KF3 ABI 12** (`kf3_realize(…,
@@ -2561,6 +2573,14 @@ are posted between two entries the broker gets ONE SET, of the newest
 (`posts_between_two_entries_coalesce_to_one_set_of_the_newest`); the broker paces uploads again at
 125 Hz (`nvkvm_broker.c:1547-1553`).
 
+> ⊘ **SUPERSEDED IN CODE 2026-10-04 (branch `v3-broker`, not run on a box): deviations 1 and 4
+> below.** (1) In hover QEMU's console now gets the guest cursor through `dpy_cursor_define` +
+> `dpy_mouse_set` (§8.13), so a VNC client shows it as a real pointer; a `screendump` still has none
+> in hover (a defined cursor is not part of the surface). (4) XOR is composed by the kernel's XOR
+> blend, visibly, and the host's cursor is hidden as before (§8.14). And the box run's colour
+> finding below (the guest's colour times alpha on partially transparent pixels) is now answerable:
+> the composition word is logged once per change beside an alpha census of the pixels (§8.14).
+
 **Deviations and limits.**
 1. **The console loses the cursor in hover.** Frames are shared by the broker and QEMU's console, so a
    `screendump`/VNC shows no cursor while a `CAP_CURSOR` broker is hovered (it does under grab and
@@ -2696,3 +2716,166 @@ Evidence: `traces/v3_display/broker_20261003/<run>/`; harness `scripts/bench/dis
   server's own cursor is 24x24 with hot spot 11,11 — the case an underived hot spot 0,0 gets wrong
   by half the image; and E3's SIGSTOP of the broker for ~7 s did not hold the guest (it answered,
   `glxgears` ran at 82 FPS meanwhile).
+
+### 8.13 The guest cursor on QEMU's console in hover (the coordinator's decision, 2026-10-04)
+
+**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-04 (branch `v3-broker`); not run on a box.**
+
+**Decision (the coordinating session's, for the owner, 2026-10-04; the owner may revisit):** while a
+`CAP_CURSOR` broker hovers, QEMU's own console (VNC, GTK, SDL) receives the guest cursor through
+QEMU's cursor API — `dpy_cursor_define` + `dpy_mouse_set` — so a VNC client shows it as a real
+pointer; under grab the cursor stays composed into the frame. It closes §8.12's deviation 1: the
+frames are shared by the broker and the console, and in hover they carry no cursor (§O).
+
+**The console's own mode without a broker: composed, unchanged** (decided here, same day). QEMU
+gives a device no way to know whether a viewer can draw a defined cursor: its VNC server sends one
+only to a client that negotiated the rich- or alpha-cursor encoding and silently not otherwise
+(QEMU 10.2.4 `ui/vnc.c:992-1027`), and a `screendump` never contains one. Moving the cursor out of
+the frame for the console alone would make it vanish for exactly the viewers that cannot say so,
+while composing shows it on every frontend; with no broker there is no second viewer and so no
+second cursor to avoid. (The alternative — the console's own "hover" whenever its input is
+absolute — would suit cursor-capable VNC clients better; it is an owner question, not built.)
+
+**What the console is told** (`kf_broker::console::ConsoleCursor`, VMM-agnostic, main loop only):
+
+| relay mode (§8.12) | guest cursor | console |
+|---|---|---|
+| hover | an image | that image, defined once per image or hot spot; moved once per position (the image's top-left on the head, which the worker stores every pass, plus the hot spot) |
+| hover | hidden, or one the frame composes (XOR) | the hidden cursor, pointer off |
+| grab, or no `CAP_CURSOR` broker / broker gone | (composed into the frame) | nothing — or, once the console was ever given a cursor, the hidden one, so a viewer never shows a stale image beside the composed one |
+
+**Ownership and bounds (QEMU 10.2.4).** `kf3.c`'s `kf3_console_cursor` runs at the top of the
+console's `gfx_update` (a cursor change in hover makes no frame). `cursor_alloc` and
+`cursor_builtin_hidden` hand the caller one reference (`ui/cursor.c:93-108`); `dpy_cursor_define`
+takes its own (`ui/console.c:961-980`), and kf3.c drops its own right after. The pixels are kayfabe's
+own copy of the image (the `CursorShare` post the broker is sent, made by a GPU copy into memory kf
+owns) — never guest memory — copied into the `QEMUCursor`'s data: exactly `width * height` words
+(`kf3_display_cursor_pixels` refuses a null or misaligned pointer, more than 256x256 words, or a
+count that is not the defined image's), each a host-endian `0xAARRGGBB` with STRAIGHT alpha (QEMU's
+SDL frontend reads the words as straight ARGB, `ui/sdl2.c:763-764`; the broker's image is
+premultiplied, so each channel is divided by its alpha).
+
+**KF3 ABI stays 12**: the broker's surface is unmerged, so `Kf3Cursor`, `kf3_display_cursor` and
+`kf3_display_cursor_pixels` join it; an archive without them fails to LINK with a kf3.c that calls
+them, never at run time. `tests/wire_mirror.rs` carries the new layout and constants; the unsafe
+ratchet of kf-qemu moves 55 → 59, itemised in `ci.yml`.
+
+**Tests (GPU-free, `kf-broker` `console.rs`, each with a known-positive):** an image defined once
+and moved per position, nothing for the same posts under grab or without a broker; hidden, XOR,
+grab and a broker gone each define the hidden cursor once and turn the pointer off, and the image
+comes back in hover; the copy is straight ARGB of exactly `width * height` words or nothing.
+Bite-mutations, each applied and restored on 2026-10-04: the hidden cursor defined before any
+hover, an image shown under grab, premultiplied pixels passed through — each turns a test red.
+kf3.c: `-fsyntax-only -Werror` with QEMU 10.2.4's own warning flags (gcc 15), clean.
+
+**Not run:** any of it on a box. The grading is ready, opt-in: `BRK_VNC=1 broker_lane.sh run <tag>`
+gives QEMU `-vnc 127.0.0.1:7`, and the hook's hover step then reports (`BRK_VNC_HOVER`) the cursor an
+alpha-cursor VNC client receives — `scripts/bench/display/vnc_cursor.py`, an RFB client in the stdlib
+whose `--selftest` replays QEMU 10.2.4's own bytes (`ui/vnc.c:992-1027`) — and compares it with the
+guest X server's own through XFixes (`xcursor.py compare`; the straight↔premultiplied round trip may
+cost a channel step of rounding); under grab (`BRK_VNC_GRAB`) it must be the hidden cursor. Also
+not run: GTK and SDL frontends, and `dpy_mouse_set`'s position (only SPICE and D-Bus listeners use
+it; VNC ignores it, GTK and SDL ignore it under an absolute pointer). The composition word line is
+collected by the hook too (`BRK_CURSOR_COMPOSITION`, §8.14).
+
+### 8.14 XOR cursors, and the cursor's alpha (`OWNER_RULINGS.md` §O; 2026-10-04)
+
+**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-04 (branch `v3-broker`); not run on a GPU.**
+
+**What NVKMS can program that is XOR- or invert-like: nothing** (`ogkm-580`, read 2026-10-04). Its
+cursor composition table writes `MODE_BLEND` for each of the five blending modes it supports
+(`src/nvidia-modeset/src/nvkms-evo3.c:6646-6702`; the same at `nvkms-evo4.c:965-1019`; the mode set
+is `NV_EVO3_SUPPORTED_CURSOR_COMP_BLEND_MODES`, `nvkms-evo3.h:44-49`: opaque, premultiplied and
+straight alpha, each with or without a surface alpha in K1), EVO2's only `_ALPHA_BLEND` and
+`_PREMULT_ALPHA_BLEND` (`nvkms-evo2.c:3194-3206`); its only cursor format is `A8R8G8B8`
+(`nvkms-evo3.c:6517-6524`); and no factor pair can invert (`out = src*fs + dst*fd`, both factors in
+0..=1). The class has `MODE_XOR` (`clc37d.h:859-861`) and a second cursor format, `A1R5G5B5`
+(`clc37d.h:836`), so an XOR cursor reaches a head only from a guest that writes the core channel
+itself — a hostile one, or another OS's driver.
+
+**The XOR blend, as built — a DEFINITION, stated as one:** `out = below XOR (source & 0x00ffffff)`;
+alpha and the composition factors play no part (the class header names the mode and says nothing of
+what it computes). The literal reading was taken: an all-zero image composes to nothing, a white
+pixel inverts. ⚠ The alternative is the masked-colour reading (alpha as the AND mask, which lets one
+surface carry opaque pixels too — what a Windows monochrome pointer needs); only hardware, with a
+producer that programs the mode, can settle it. `A1R5G5B5` stays refused by name (the kernel moves
+32-bit pixels). The host cursor still refuses XOR (no ARGB "over" expresses it), so in hover an XOR
+cursor is composed AND the host's is hidden — now visibly, where before it was refused in the frame
+too.
+
+**Built:** `kf_disp::scanout` — `COMPOSE_*` flag constants; `plan_cursor` plans `MODE_XOR` as an XOR
+layer (factors not consulted; an unknown MODE refused by name); `compose_reference`, the CPU
+reference of the kernel's whole per-pixel arithmetic (address, swap, opaque, XOR, blend with C's
+truncating division). `cuda/display/kf_scanout.ptx` (hand-written, no generated source and so no FNV
+pin): flags bit 3 = XOR, one branch, no parameter change (kf-cuda's parameter-list test holds).
+`kf_cuda::display::ComposeLayer::check` refuses a flag bit the kernel does not know
+(`COMPOSE_FLAGS`), and kf-qemu pins the two flag sets equal at compile time. The display worker's
+bring-up GPU self-test gains an XOR pixel: alpha 0 and factors that would make a blend write black,
+so a kernel without the path, or one that lets alpha gate it, fails before a guest cursor is
+composed.
+
+**"The same arithmetic on the host" for hand-written PTX** (`kf-disp/tests/compose_kernel.rs`): the
+committed PTX TEXT is parsed and executed, instruction by instruction, for every (CTA, thread) of the
+launch kf-cuda makes, and the frame it leaves is compared byte for byte with `compose_reference` —
+pitch and block-linear (block heights 1 and 16 GOBs) surfaces, every blend NVKMS programs with and
+without source alpha, red/blue swap, XOR over a non-black frame, a 300-pixel row (the threads'
+stride loop), clipping at the frame. Every load and store must fall in the source extent or the
+frame, so the kernel's own bounds claim is checked; an instruction the interpreter does not model
+panics, so a kernel edit cannot pass unmodelled. Bite-mutations on the PTX, each applied and
+restored on 2026-10-04 — the XOR branch skipped, the alpha byte XORed too, the blend's rounding
+dropped — each turn two tests red. ⚠ It is the kernel's logic, not the PTX JIT or the GPU: those
+are graded by the bring-up self-test on a box.
+
+**The cursor's alpha (§8.12's open item).** On box 54032077 the host's semi-transparent cursor
+pixels were the guest's colour times alpha — inferred, not read, as a straight-alpha blend
+programmed over premultiplied pixels. Source reading cannot settle it: kf-disp's mapping is the
+head's own arithmetic for each of the five modes (unit-tested since 3d); nvidia-drm maps DRM's
+default "Pre-multiplied" blend mode (the plane state's reset value in DRM core) to `PREMULT_ALPHA`, or
+to `PREMULT_SURFACE_ALPHA` with K1 = the plane alpha, 255 by default
+(`ogkm-580: kernel-open/nvidia-drm/nvidia-drm-crtc.c:306-353`); and the guest X driver that would
+choose a straight blend (the NVIDIA DDX, which drives NVKMS directly) is closed. So the worker now logs,
+once per change of the word, on the read the host cursor already makes:
+
+```text
+kf3: display: guest cursor composition 0x075ff = NON_PREMULT_ALPHA (straight alpha) (K1 255, cursor
+factor 5, viewport factor 7, mode 0); its 64x64 pixels: N partially transparent, 0 with a colour
+channel above alpha (consistent with premultiplied pixels)
+```
+
+(`kf_disp::scanout::cursor_composition` — the word as programmed, `clc37d.h:850-861` — and
+`HostCursorSrc::alpha_census`; a pixel with a channel above its alpha is impossible when
+premultiplied.) If the line says a straight blend over premultiplied-consistent pixels, the head
+itself scans out the darker edge and the host shows what the head would: the mapping stays, and
+the darker edge is the guest driver's.
+
+### 8.15 nvkvm-pv's broker at `badf2d7` — what the relay now handles (2026-10-04)
+
+**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-04 (branch `v3-broker`); run locally against the
+real `badf2d7` broker (dev host, root, `/dev/udmabuf`); not run on a box.**
+
+nvkvm-pv's review fixes (`broker-cursor-gpucopy` at `badf2d7`) change what the broker DOES on an
+unchanged wire. The protocol header is byte-identical at `8665a2d`, `9cb736f` and `badf2d7`, so the
+vendored copy (still `368d2db`, with the newer values carried "ahead" in `wire.rs`) needs no bump;
+`proto_mirror.rs`'s check against the newer header (`KF_BROKER_PROTO_NEXT`) now runs against the
+committed `badf2d7` header — its first run found the census reading a `_Static_assert` as an enum
+entry, fixed. Each behaviour, with its relay change and the test that turns red without it
+(`kf-broker/tests/relay_machine.rs` unless named):
+
+| # | the broker (`badf2d7`) | the relay | test |
+|---|---|---|---|
+| 1 | sends unsolicited `EV_FORMAT x=0` whenever an ATTACH is dropped at its format gate — once per pair per connection, possibly a pair the relay never asked about (`nvkvm_broker.c:1735-1749`) | RECORDS it (it used to log "stale" and drop it); an unasked `x=1` is still never an upgrade. The verdict table grows 4 → 16 rows and evicts, in order, a question, a volunteered "no", and only then a "no" for a pair the relay sends | `an_unasked_no_is_recorded_and_its_pair_is_not_sent`, `volunteered_noes_never_push_out_a_no_for_a_pair_the_relay_sends` |
+| 2 | on X11 sends two `x=0` for one refusal — XR24 and AR24, the same modifier (`:781-821`) | both kept; the frames held under the refused pair come back once | `an_x11_refusal_names_both_alpha_twins_and_both_are_kept` |
+| 3 | forgets its refusals at detach, on both backends | carries none across a reconnect: verdicts and both acknowledgement detectors are connection state (`Conn`) | `no_refusal_or_back_off_outlives_its_connection` (an unasked no, the block-linear no, a detector back-off) |
+| 4 | accepts a dma-buf only when `/proc/self/fdinfo` proves it (`exp_name:`), and drops one it cannot prove with NO word on the wire (`:1675-1689`, `:2219-2231`) | the host dma-buf rungs (LINEAR, implicit) get their own acknowledgement detector (the GPU-copy detector, refactored into `Ack`): unacknowledged dma-buf commits back off to `F_SHM` for 5 s, doubling to 60 s, until a RELEASE acknowledges the class; the log names the cause | `unacknowledged_dma_buf_frames_back_off_to_shared_memory_and_retry`; `broker_loopback.rs` `a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory` — the REAL broker in a mount namespace with a tmpfs over `/proc` logs `cannot read /proc/self/fdinfo`, the detector trips, `F_SHM` frames are released |
+| 5 | closes any fd it cannot prove is shmem or a dma-buf on a helper thread (`nb_fd_drop`, `:1487-1520`) | every descriptor the relay sends is classified first with the broker's own two tests in its order (`kf_linux_raw::fd_carrier`: `F_GET_SEALS`, `fstatfs` only after it succeeded, then `/proc/self/fdinfo`'s `exp_name:`; never an `fstatfs` on an unproven descriptor); an `F_SHM` or cursor memfd must carry `F_SEAL_SHRINK`. A refused frame is refused by name, counted (`carrier_refused`), the connection stays up | `a_descriptor_that_is_neither_memfd_nor_dma_buf_never_reaches_the_broker`; `host_fd_unsafe.rs` `the_brokers_descriptor_proof_tells_shmem_dma_buf_and_neither` (memfd, unsealed memfd, regular file, `/dev/null`, pipe, and a udmabuf) |
+| 6 | paces cursor uploads itself (at most one per 8 ms, latest wins, a published snapshot) and scales the hot spot as `ceil(hot * out / in)` | no change: the relay sends at most one command per entry, never paces on its own, and sends the hot spot in guest pixels | `host_cursor.rs` `the_relay_leaves_the_cursor_pacing_to_the_broker` |
+
+Bite-mutations, each applied and restored on 2026-10-04: an unasked "no" ignored (4 tests red), the
+dma-buf back-off ignored (2), the descriptor check always passing (1), the eviction ignoring which
+pairs the relay asked about (1). Not bitten: a "no" carried across connections (it would need the
+verdicts moved out of `Conn`). The unsafe ratchet of kf-linux-raw moves 93 → 94 (`fd_carrier`'s
+one `fcntl(F_GET_SEALS)`). Local runs, all against `badf2d7`:
+`traces/v3_display/broker_20261004/local_runs.txt` (`broker_loopback.rs` 8/8 with `--ignored`).
+
+**Not run:** any of it on the box; X11's DRI3 refusal itself (it needs the NVIDIA DDX; `brkA`'s
+LINEAR refusal predates `badf2d7`); a Wayland broker.

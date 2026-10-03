@@ -1,0 +1,58 @@
+# Local runs, dev host (no GPU), 2026-10-04, kayfabe v3-broker at 28b5b6fe
+# broker: nvkvm-pv badf2d7 (git archive src/broker src/common | make nvkvm-display-broker), /dev/udmabuf present, root
+
+## cargo test -p kf-broker --test broker_loopback -- --ignored --test-threads=1 (KF_BROKER_BIN = the badf2d7 broker)
+test a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory ... UDMABUF-GATE: RAN a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory
+kf3: broker: frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)
+nvkvm-broker: ERROR: ATTACH: cannot read /proc/self/fdinfo (No such file or directory), so the fd cannot be proved to be a dma-buf without asking its filesystem -- which a hostile sender can make block; refused
+kf3: broker: dma-buf frames are not acknowledged (3 committed, no RELEASE for 1000 ms): the broker drops a dma-buf it cannot prove without a word on the wire — it needs a readable /proc/self/fdinfo (its own log says why) — so frames go as shared memory for 5 s, then the dma-buf rung is tried again (trip 1)
+kf3: broker: frames go as shared memory (F_SHM) — an X11 broker accepts it only with --present-mode=shm, and a refusal is not reported back
+test a_rejected_attach_is_reclaimed_by_rule ... [broker] nvkvm-broker: TEST BACKEND: no display is being driven, no input is being grabbed, and a memfd is accepted where a real backend demands a dma-buf. Events come from stdin.
+kf3: broker: connected to /tmp/kfb-loop-reject-74548-1791067410320929977/display.sock, capabilities 0xfff — no /dev/udmabuf here, so frames go as shared memory only
+test a_squatter_under_another_uid_is_refused_before_hello ... kf3: broker: connection attempt failed: REFUSED the listener on /tmp/kfb-loop-squat-74548-1791067412059885968/display.sock: it runs as uid 65534, which is not an allowed broker (allowed: uid 0, QEMU's effective uid 0). If uid 65534 is your broker, set display-broker-uid=65534 on the device or run QEMU as that user (-run-with user=)
+test a_squatter_who_owns_the_sockets_directory_is_refused ... kf3: broker: connection attempt failed: REFUSED the listener on /tmp/kfb-loop-squatdir-74548-1791067412582674945/display.sock: it runs as uid 65534, which is not an allowed broker (allowed: uid 0, QEMU's effective uid 0). If uid 65534 is your broker, set display-broker-uid=65534 on the device or run QEMU as that user (-run-with user=)
+test a_stopped_broker_never_blocks_the_relay ... [broker] nvkvm-broker: TEST BACKEND: no display is being driven, no input is being grabbed, and a memfd is accepted where a real backend demands a dma-buf. Events come from stdin.
+kf3: broker: connected to /tmp/kfb-loop-stop-74548-1791067413109934884/display.sock, capabilities 0xfff — no /dev/udmabuf here, so frames go as shared memory only
+test linear_udmabuf_frames_release_and_scripted_input ... UDMABUF-GATE: RAN linear_udmabuf_frames_release_and_scripted_input
+test shm_frames_and_an_shm_replay_after_kill_9 ... [broker] nvkvm-broker: TEST BACKEND: no display is being driven, no input is being grabbed, and a memfd is accepted where a real backend demands a dma-buf. Events come from stdin.
+kf3: broker: connected to /tmp/kfb-loop-shm-74548-1791067418937702112/display.sock, capabilities 0xfff — no /dev/udmabuf here, so frames go as shared memory only
+test the_broker_answers_query_format_for_the_implicit_modifier ... [broker] nvkvm-broker: TEST BACKEND: no display is being driven, no input is being grabbed, and a memfd is accepted where a real backend demands a dma-buf. Events come from stdin.
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.92s
+
+## cargo test -p kf-disp --test compose_kernel (the committed kf_scanout.ptx executed on the host against compose_reference)
+test the_interpreter_refuses_what_it_does_not_model ... ok
+test the_kernel_clips_at_the_frame_and_reads_only_its_extent ... ok
+test the_kernel_xors_the_colour_into_what_lies_below ... ok
+test the_kernel_composes_pitch_layers_as_the_reference_does ... ok
+test the_kernel_reads_block_linear_surfaces_as_the_reference_does ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.91s
+
+## cargo test -p kf-broker (relay_machine, host_cursor, console, lib)
+     Running unittests src/lib.rs
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+     Running tests/broker_loopback.rs
+test result: ok. 0 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/host_cursor.rs
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/proto_mirror.rs
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/relay_machine.rs
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+## kf3.c: cc -fsyntax-only -Werror with QEMU 10.2.4's own flags (compile_commands.json of hw/display/virtio-gpu.c), CONFIG_PIXMAN forced on (the local build has pixman off), gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+kf3.c: SYNTAX-OK
+
+## the protocol header: nvkvm-pv's src/common/nvkvm_broker_proto.h is byte-identical at 8665a2d, 9cb736f and badf2d7
+8665a2d 7f17df60305e8966
+9cb736f 7f17df60305e8966
+badf2d7 7f17df60305e8966
+## KF_BROKER_PROTO_NEXT=<badf2d7 header> cargo test -p kf-broker --test proto_mirror
+# (the first run found the census parser reading a _Static_assert as an enum entry, NVKVM_BROKER_CURSOR_MAX_DIM <; fixed in proto_mirror.rs, then:)
+test the_header_is_vendored_verbatim_with_its_own_licence ... ok
+test every_protocol_value_matches_the_header_text_both_ways ... ok
+test values_ahead_of_the_header_are_absent_from_it_and_collide_with_nothing ... ok
+PROTO-NEXT: RAN against <scratch>/src/common/nvkvm_broker_proto.h
+test values_ahead_of_the_header_match_the_newer_header_when_given ... ok
+test the_record_layouts_match_the_compiled_header ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s

@@ -143,9 +143,17 @@ export NVKVM_RAM_MB=${NVKVM_RAM_MB:-8192} KF_SMP=${KF_SMP:-6}
 export KF3_DEV_EXTRA="display=on,display-broker=$SOCK,display-broker-uid=$SUID${BRK_KF3_EXTRA:+,$BRK_KF3_EXTRA}"
 export POST_CAPTURE_HOOK="$HERE/broker_hook.sh"
 export PRE_POWEROFF_GUEST_CMD=${PRE_POWEROFF_GUEST_CMD:-"sudo systemctl stop lightdm; sudo sync; echo s | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1; echo u | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1"}
+# §8.13 (2026-10-04, opt-in): BRK_VNC=1 gives QEMU a VNC server on 127.0.0.1:5907 for the hook's
+# console-cursor checks (vnc_cursor.py); unset, the QEMU command line is as before
+VNC_ARGS=()
+if [ "${BRK_VNC:-}" = 1 ]; then
+    VNC_ARGS=(-vnc 127.0.0.1:7); export BRK_VNC=127.0.0.1:5907
+else
+    unset BRK_VNC
+fi
 exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
 bash "$REPO/scripts/bench/boot_capture.sh" "$TAG" -- -vga none -device virtio-keyboard-pci \
-    -device virtio-tablet-pci,display=kf0,head=0 -device virtio-mouse-pci
+    -device virtio-tablet-pci,display=kf0,head=0 -device virtio-mouse-pci "${VNC_ARGS[@]}"
 rc=$?
 kill "$BPID" 2>/dev/null
 brokers_down "$SOCK"

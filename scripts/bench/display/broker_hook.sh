@@ -147,6 +147,15 @@ gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_cross.pam" | sed 's/^/
 "$G" 'cat /tmp/cur_guest_cross.pam' > "$OUT/cur_guest_cross.pam" 2>/dev/null
 python3 "$XC" compare "$OUT/cur_guest_cross.pam" "$OUT/cur_host_cross.pam" | sed 's/^/BRK_CROSS_/'
 say "CROSS_SETS $(grep -a 'guest cursor image' "$Q" | tail -3 | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-240) xsetroot=[$(tr '\n' ' ' < "$OUT/xsetroot.log")]"
+# §8.13/§8.14 (2026-10-04): the cursor composition word and the pixels' alpha census, as logged
+say "CURSOR_COMPOSITION $(grep -a 'guest cursor composition' "$Q" | tail -2 | sed 's/^.*kf3: display: //' | tr '\n' '|' | cut -c1-400)"
+# §8.13 (BRK_VNC=host:port, the lane's `-vnc`): in hover QEMU's console gets the same cursor through
+# its cursor API — what a VNC client with the alpha-cursor encoding receives, against the guest's own
+# (xcursor.py compare tolerates the straight<->premultiplied round trip as a small channel difference)
+if [ -n "${BRK_VNC:-}" ]; then
+    timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" "$OUT/cur_vnc_cross.pam" | sed 's/^/BRK_VNC_HOVER /'
+    python3 "$XC" compare "$OUT/cur_guest_cross.pam" "$OUT/cur_vnc_cross.pam" 2>&1 | sed 's/^/BRK_VNC_HOVER_/'
+fi
 # the rest (hide, grab) happens with the crosshair at this spot; the shots below are taken here
 gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
 set -- $gpos; gx=${1:-0}; gy=${2:-0}
@@ -177,6 +186,8 @@ say "GRAB_ON $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | sed 's
 HX python3 "$XC" image "$OUT/cur_host_grab.pam" | sed 's/^/BRK_HOST_GRAB /'
 shot grab
 hshot host_grab
+# §8.13: under grab the frame carries the cursor, and the console's defined cursor is the hidden one
+[ -n "${BRK_VNC:-}" ] && timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" | sed 's/^/BRK_VNC_GRAB /' 
 say "GRAB_FRAME_DIFF host_hover_vs_host_grab_px=$(boxdiff host_hover host_grab "$hx" "$hy") console_hover_vs_grab_px=$(boxdiff hover grab "$gx" "$gy") (the composed cursor near the guest pointer; the host shot is what the broker shows — the console's frames are fresh only on the host-memory rungs)"
 HX xdotool mousemove_relative -- 60 40 >/dev/null 2>&1; sleep 2
 gpos2=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
