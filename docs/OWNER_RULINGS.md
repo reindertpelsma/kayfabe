@@ -416,6 +416,30 @@ citation: ask whether its reason still holds before relying on it.
     That bound is per submission, not per frame, and is not promised until a box run shows it holds.
   - The status line reports the achieved rate per path, so a bound that does not hold is visible.
 
+- **Design decisions (2026-10-04).** The design is reviewed and kept outside the repo until the
+  `v3-maxfps` branch carries it. Owner, verbatim: *"Why copying when not flipping. Yes a tearing copy
+  seems not great though. The rest seems good to md"*.
+  - **Mechanism:** the limit clamps kf-disp's own emulated vblank tick (the display thread's
+    deadline). Nothing blocks a vCPU, and no lock is held while waiting.
+  - **D1, tearing flips are gated (adopted).** An async/tearing flip that arrives sooner than the
+    limit allows waits for the next tick. In kayfabe a flip copies a finished buffer, so the gate is
+    about rate, not image tearing.
+  - **D2, copies made without a flip (proposed by Claude in answer to the owner's question; adopted
+    unless the owner objects).** These exist for front-buffer rendering: the boot console, X11
+    without a compositor, front-buffer applications. kayfabe has no physical scanout, so without a
+    copy the host never sees those writes.
+    - Instead of a fixed 30 Hz timer, a copy is made at the head's emulated (clamped) vblank. That is
+      real scanout's cadence and phase, so tearing is no worse than bare metal.
+    - A copy is sent only when a GPU-side checksum of the surface changed.
+    - Nothing is copied while nobody watches. A `screendump` asks for a fresh copy on demand.
+  - **D3 (adopted):** values above 75 Hz are refused. The virtual monitor is single-link DVI
+    (165 MHz), so 1080p tops out near 71 Hz.
+  - **D4 (adopted, pending one box run):** on hardware no display-SW release was ever requested.
+    X11 vsync clients are paced by the guest's driver off kayfabe's own tick, so the clamp should
+    bound X11 too, replacing the two X11 levers above. The correction is folded into the text above
+    only after a run with `display-max-fps=30` and `x11-dispsw=on` shows it holds.
+  - **D5 (adopted):** unset means a cap of 75 Hz, and the EDID stays byte-identical to today.
+
 ## N. X11 desktops: GF100_DISP_SW option A is the design (2026-10-03)
 
 - **Owner, after the design was laid out:** *"I think this is the best design i intended."* This answers
