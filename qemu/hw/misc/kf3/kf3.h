@@ -12,8 +12,15 @@
  * kf3_doorbell_page_offset, kf3_set_ioeventfd, kf3_doorbell_site). The two 9s name DIFFERENT
  * surfaces, so an archive from either branch must be refused here: one new number above both.
  * ★ 11 (2026-10-03, v3-gop-kf3, docs/design/V3_DISPLAY.md §4.11): the boot display — kf3_realize
- * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device. */
-#define KF3_ABI 11
+ * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device.
+ * ★ 13 (2026-10-03, v3-dispsw-exp, on top of 11): kf3_realize also takes x11_dispsw, after gop (the
+ * EXPERIMENT property, default off; docs/design/V3_DISPLAY.md, the 2026-10-03 note). 13, not 12: 12 is
+ * v3-broker's (display_broker), a DIFFERENT kf3_realize signature, so its archive must be refused.
+ * ⊘ 2026-10-04 (v3-cand-1, which merges v3-dispsw-exp and not v3-broker): v3-broker may keep 12 only
+ * while it merges into a master still at 11. Merged into a master at 13, its kf3_realize has BOTH
+ * x11_dispsw and display_broker, a signature neither 12 nor 13 names, so it must take 14 (display_broker
+ * after x11_dispsw, here, in ffi_unsafe.rs, kf3.c's call and wire_mirror.rs). */
+#define KF3_ABI 13
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -37,10 +44,11 @@ typedef struct Kf3Frame {
 
 uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
- * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1. */
+ * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1.
+ * ★ ABI 13: `x11_dispsw` (0/1) — EXPERIMENT: twin the guest's GF100_DISP_SW objects; needs display=1. */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
-                    const char *guest_driver, uint32_t display, uint32_t gop, void **out,
-                    char *err, size_t err_len);
+                    const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
+                    void **out, char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
 int32_t kf3_config_word(void *h, uint32_t idx, uint16_t *off, uint32_t *val);

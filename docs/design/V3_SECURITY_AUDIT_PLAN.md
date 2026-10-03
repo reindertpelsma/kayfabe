@@ -92,7 +92,8 @@ Each area lists its method and what already exists. **Stage** says when it runs.
 - **Known so far:**
   - the scratch memfd bound (`v3-scratch-bound`);
   - mapping-count growth (the same branch);
-  - display-SW twins (caps being added on `v3-dispsw-exp`);
+  - display-SW twins (caps being added on `v3-dispsw-exp`; ⊘ corrected 2026-10-04, `v3-cand-1`: built
+    at `86b4fa10`, 16 live twins per channel and 1024 per VM, `kf_qemu::dispsw::PER_CHANNEL_CAP`/`PER_VM_CAP`);
   - the window-advice and kernel-mapping counters;
   - unbounded log lines found in several reviews.
 - **Output:** one table of every guest-steered resource, with its cap and the cap's test.
@@ -177,7 +178,7 @@ Each area lists its method and what already exists. **Stage** says when it runs.
 | P1: identity windows in every twin address space = **S1-21 (blocker)**: in-guest isolation A.9 does not hold | same; `crates/kf-qemu/src/mem.rs:1755-1762` | design in progress: windows only where Translated work runs |
 | P2: kayfabe's Translated rings writable from the guest kernel's space = **S1-23 (major)** | same; `crates/kf-chan/src/translated.rs:26`, `crates/kf-qemu/src/mem.rs:487-503` | design in progress: Translated in its own address space |
 | Scratch memfd host-RAM amplification; mapping growth | owner question | fixed on `v3-scratch-bound`, merge bar passed |
-| Display-SW twins uncapped | `v3-dispsw-exp` review | caps in progress |
+| Display-SW twins uncapped | `v3-dispsw-exp` review | caps in progress. ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` at `86b4fa10`): built, 16 live twins per channel and 1024 per VM, refused by name past either (`kf_qemu::dispsw::PER_CHANNEL_CAP`, `PER_VM_CAP`, and their unit test); the experiment stays default off |
 
 **Stage-1 blockers and majors (2026-10-03).** Every row is open; the location, the check that
 catches it and who can trigger it are in `docs/audits/2026-10-03-v3-stage1.md` under the same ID.

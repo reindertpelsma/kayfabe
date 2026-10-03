@@ -8,7 +8,7 @@ security decisions) was added.*
 | # | decision | blocks | recommendation |
 |---|---|---|---|
 | 1 | the sweep and install plan: go-ahead, and Q2–Q8 | the installable binary and every support claim | approve; answers below |
-| 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | ⊘ ANSWERED: option A (§N) |
+| 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | ⊘ ANSWERED: option A (§N) — box data and review fixes on `v3-dispsw-exp` below |
 | 3 | the archived traces that contain a full VBIOS | nothing technical; a legal liability | scrub the PROM values forward in both public repos |
 | 4 | renting a GPU box for display work | every display test, every merge bar | ⊘ ANSWERED: rent as needed |
 | 6 | three security decisions (§6 below) | merging `v3-scratch-bound`, `v3-sec-nonpriv`, and building P2 | 6c ⊘ ANSWERED (§Q); 6a, 6b open |
@@ -100,7 +100,62 @@ it dies with it.
 ## 2. `GF100_DISP_SW` (X11 desktops)
 
 ⊘ **ANSWERED 2026-10-03 by the owner — option A is the design** (`OWNER_RULINGS.md` §N, with §M for
-pacing). The text below is kept as it was written.
+pacing). The box data and review fixes from `v3-dispsw-exp` follow; the text after them is kept as
+it was written.
+
+★ **Review fixes and re-run, 2026-10-03 (later) — read before the box result below; where they
+differ, this stands.** Branch `v3-dispsw-exp` at `d84086df` (`design/V3_DISPLAY.md`, the x11-dispsw
+note's "review fixes" block; runs 9-13 of `traces/v3_display/dispsw_20261003/`): the A/B result
+holds at the fixed code (desktop, X11 vkcube, ~60 FPS vsync on; the same failures off; host Xid 0),
+every twin's number read back equal to the guest's, and the caps were not hit (peaks 4 and 20).
+- **Each twin now carries the guest's own software classID, or the alloc is refused by name.** The
+  number a guest client puts in `SET_OBJECT` comes from the guest's own RM, numbered per channel; the
+  twin's comes from the host's. kayfabe now mirrors the guest's numbering, reads the host's back, and
+  repays a gap with throwaway objects or refuses. One case stays invisible to any physical RM (a guest
+  constructor that fails after numbering, which names no channel): it is counted, and its effect stays
+  on that guest's own channel. On the box, a test client that forces the repairable case ran at
+  ~60 FPS with 0 host Xid; the same client on the pre-fix code, or forcing the unrepairable case,
+  raised 26 host Xid 32 on its own channels and dropped to 1.2 FPS (runs 11-13).
+- **Caps:** 16 live display-SW twins per channel, 1024 per VM, refused by name past either (the runs
+  peaked at 4 and 20).
+- **Corrections to the box result below.** "No release ever reached host RM" is narrower than it
+  reads: the probe counts entries into the host's CPU-side RM, which ran its release path 0 times;
+  the class's methods are serviced by GSP firmware, which the probe cannot see. "A unit test pins it"
+  is now the map-flag builder itself clearing the kernel-mapping bit, plus a gate that keeps it the
+  only builder. Kernel-mapping guest RAM was tried and dropped — it was never shown to fix anything,
+  had no budget, and was incomplete by design — so it is not a ready fallback.
+
+★ **Box result, 2026-10-03 — option A works on hardware; still the owner's call.** vast 54044296,
+RTX 3060 (GA106), host + guest 580.159.04, the default-off experiment `x11-dispsw` on branch
+`v3-dispsw-exp`, A/B pair at its final code `c1cc4482` (`traces/v3_display/dispsw_20261003/`, eight
+runs in all; `design/V3_DISPLAY.md`, the x11-dispsw note's box block):
+
+- **Off:** `(EE) NVIDIA(0): Failed to allocate display software resources.`, Cinnamon X11 segfaults
+  into the fallback dialog, X11 vkcube aborts (`RC=134`); on a bare Xorg with no compositor,
+  fullscreen GL runs at 1.7 FPS. **On:** Cinnamon X11 is up with 0 crashes, X11 vkcube exits 0
+  (IMMEDIATE and FIFO, in a Cinnamon window and on bare X), vsync glxgears 59.8 FPS (60.0 fullscreen
+  on bare X), no-vsync ~2 500 FPS. Host Xid 0, an empty host-dmesg delta, every display-SW twin freed
+  (`dispsw[twins=80 live=0 host_refused=0 no_twin=0]`). The object's one control,
+  `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK`, was never sent.
+- **No release ever reached host RM** (a host-side kretprobe module, `scripts/bench/display/kfdsw_probe/`:
+  0 calls of the release functions in every run). ⊘ *Narrowed (review fixes above): host CPU-RM's
+  release path ran 0 times; GSP firmware services the class's methods and is not seen.* So the 2026-10-03 review's worry — host RM writes
+  these releases only through a host kernel mapping kayfabe never creates, so they would be dropped
+  silently — did not bite: nothing asked. Kernel-mapping the display-SW spaces' guest RAM was tried
+  (5 986 rows, 33 868 KiB of host kernel address space at peak) and changed nothing; it is not shipped.
+- **The true security bound,** replacing the third bullet of the "new facts" below: kayfabe has ONE
+  host client per VM, so host RM's address check is client-wide (per guest VA space only if GSP
+  firmware names the channel's VA space, which is closed); and since kayfabe never asks host RM for a
+  kernel mapping (⊘ *now: the one map-flag builder clears the bit, and a gate keeps it the only
+  builder — review fixes above*), host RM has no address to write a display-SW release through
+  at all — the object makes host RM write no memory for the guest. What remains: the host object's
+  existence, host vblank timing as a side channel when the host drives a monitor (this box is
+  headless), and whatever GSP firmware does with the class's methods (ogkm-580 defines none, so
+  "cannot flip or set a mode" is a hypothesis). If a future client does ask for a release, it is
+  dropped and that client waits on its own semaphore; the probe shows it.
+- ⊘ *ANSWERED 2026-10-03 by `OWNER_RULINGS.md` §N: default-on once its four conditions hold.*
+  **What the owner is asked:** turn `x11-dispsw` on by default for display-capable hosts (it refuses
+  by name where the host cannot), or keep it opt-in.
 
 **The problem.** X11 compositors and X11 Vulkan presentation allocate a display-software object
 (class `0x9072`) on their 3D channel. Its methods ask for a semaphore release at the next vblank.
@@ -127,7 +182,9 @@ without one logged 186 host Xid 32 and 1.3 FPS GL. So kayfabe refuses it today (
 - The host object is only a vblank timer. Its methods release a semaphore or notifier at an address
   that RM checks against the calling client's own mappings (`CliGetDmaMappingInfo`, `:146`). The
   twin's client is the guest's own, so a guest can write only into its own memory, at host vblank
-  times. It cannot flip, set a mode or change host display state.
+  times. It cannot flip, set a mode or change host display state. ⊘ *Corrected 2026-10-03 (box
+  result above): the client is kayfabe's one host client, so the check is client-wide; host RM writes
+  nothing (no kernel mapping); "cannot flip" is a hypothesis.*
 - The host allocation needs a display engine (`:69`) and a valid head (`:83`). On GPUs without one,
   such as data-centre parts, it fails, so B stays the fallback there.
 - On a host GPU with no monitor, RM runs each vblank callback immediately (`V3_DISPLAY.md` cites
@@ -147,6 +204,12 @@ HOST display heads"* (`crates/kf-rm/src/chanlink.rs`, `alloc_shape`) becomes "tw
 authored head; it writes only into the twin's own address space". That is a rule change, hence the
 owner's call. The box test: the Cinnamon X11 session starts, X11 `vkcube` presents, there are zero
 host Xid 32, and frame rates are recorded.
+
+★ *2026-10-03 (later): option A is built as a default-off experiment so this can be decided on box
+data — branch `v3-dispsw-exp`, device property `x11-dispsw` (default off; with it off nothing changes).
+What it does, the rule change it embodies, and the exact A/B box test are in `design/V3_DISPLAY.md`, the
+`x11-dispsw` note. No box has run it yet; this item stays open.* ⊘ *Superseded the same day: the box
+result at the top of this item. The item stays open for the owner's ruling.*
 
 ## 3. The archived traces that contain a full VBIOS
 

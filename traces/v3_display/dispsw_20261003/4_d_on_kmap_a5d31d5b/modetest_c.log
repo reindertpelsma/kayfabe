@@ -1,0 +1,49 @@
+opened device `NVIDIA DRM driver` on driver `nvidia-drm` (version 0.0.0 at 20160202)
+Connectors:
+id	encoder	status		name		size (mm)	modes	encoders
+126	125	connected	DVI-D-1        	250x250		7	125
+  modes:
+	index name refresh (Hz) hdisp hss hse htot vdisp vss vse vtot
+  #0 1920x1080 60.00 1920 2008 2052 2200 1080 1084 1089 1125 148500 flags: phsync, pvsync; type: preferred
+  #1 1680x1050 59.95 1680 1784 1960 2240 1050 1053 1059 1089 146250 flags: nhsync, pvsync; type: 
+  #2 1600x900 60.00 1600 1624 1704 1800 900 901 904 1000 108000 flags: phsync, pvsync; type: 
+  #3 1280x1024 60.02 1280 1328 1440 1688 1024 1025 1028 1066 108000 flags: phsync, pvsync; type: 
+  #4 1024x768 60.00 1024 1048 1184 1344 768 771 777 806 65000 flags: nhsync, nvsync; type: 
+  #5 800x600 60.32 800 840 968 1056 600 601 605 628 40000 flags: phsync, pvsync; type: 
+  #6 640x480 59.94 640 656 752 800 480 490 492 525 25175 flags: nhsync, nvsync; type: 
+  props:
+	1 EDID:
+		flags: immutable blob
+		blobs:
+
+		value:
+			00ffffffffffff002cc2010001000000
+			27240104a119197806ee91a3544c9926
+			0f50542108008180a9c0b30001010101
+			010101010101023a801871382d40582c
+			4500fc1d1100001e000000fd00184b0f
+			a011000a202020202020000000fc006b
+			6179666162650a202020202000000010
+			00000000000000000000000000000083
+	2 DPMS:
+		flags: enum
+		enums: On=0 Standby=1 Suspend=2 Off=3
+		value: 0
+	5 link-status:
+		flags: enum
+		enums: Good=0 Bad=1
+		value: 0
+	6 non-desktop:
+		flags: immutable range
+		values: 0 1
+		value: 0
+	4 TILE:
+		flags: immutable blob
+		blobs:
+
+		value:
+	127 vrr_capable:
+		flags: immutable range
+		values: 0 1
+		value: 0
+

@@ -1,0 +1,254 @@
+# EXCERPT of run_dsw_d_kmap_qemu.log (the full log, 1205721 bytes, stayed on the box): the revision stamp, every x11-dispsw / display-SW / kmap line, every GSP REFUSED and Xid line, and the last status line.
+kf3: ⚠ EXPERIMENT x11-dispsw ON (pending the owner's ruling): every guest GF100_DISP_SW is twinned under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name; display-SW spaces' guest-RAM rows host-kernel-mapped: yes
+kf-rm: display: EXPERIMENT x11-dispsw — GF100_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+2026-10-03T18:43:09.016436Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,x11-dispsw=on: info: kf3: display console registered (head 0 of kf0)
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=7 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=24 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=25 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=42 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=49 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=50 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=60 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=62 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=64 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=65 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=67 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012b=0x56 (GSP_RM_CONTROL) first_seq=104 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=110 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000c36f=0x56 (GSP_RM_ALLOC) first_seq=119 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=127 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800294=0x56 (GSP_RM_CONTROL) first_seq=136 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=138 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080014b=0x56 (GSP_RM_CONTROL) first_seq=145 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800157=0x56 (GSP_RM_CONTROL) first_seq=146 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801357=0x56 (GSP_RM_CONTROL) first_seq=151 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=152 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808513=0x56 (GSP_RM_CONTROL) first_seq=154 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=156 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=157 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a612=0x56 (GSP_RM_CONTROL) first_seq=158 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a097=0x56 (GSP_RM_CONTROL) first_seq=164 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000208f=0x56 (GSP_RM_ALLOC) first_seq=173 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a38=0x56 (GSP_RM_CONTROL) first_seq=202 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=137 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800301=0x56 (GSP_RM_CONTROL) first_seq=155 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073013d=0x56 (GSP_RM_CONTROL) first_seq=221 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=222 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730291=0x56 (GSP_RM_CONTROL) first_seq=224 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=227 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00731144=0x56 (GSP_RM_CONTROL) first_seq=280 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073012c=0x56 (GSP_RM_CONTROL) first_seq=281 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800102=0x56 (GSP_RM_CONTROL) first_seq=354 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208001a4=0x56 (GSP_RM_CONTROL) first_seq=357 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803083=0x56 (GSP_RM_CONTROL) first_seq=359 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800156=0x56 (GSP_RM_CONTROL) first_seq=360 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x000090e7=0x56 (GSP_RM_ALLOC) first_seq=368 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801813=0x56 (GSP_RM_CONTROL) first_seq=376 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801819=0x56 (GSP_RM_CONTROL) first_seq=378 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801829=0x56 (GSP_RM_CONTROL) first_seq=380 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801830=0x56 (GSP_RM_CONTROL) first_seq=381 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a080=0x56 (GSP_RM_CONTROL) first_seq=385 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808546=0x56 (GSP_RM_CONTROL) first_seq=386 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809038=0x56 (GSP_RM_CONTROL) first_seq=403 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802087=0x56 (GSP_RM_CONTROL) first_seq=411 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803401=0x56 (GSP_RM_CONTROL) first_seq=416 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=417 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803404=0x56 (GSP_RM_CONTROL) first_seq=418 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801322=0x56 (GSP_RM_CONTROL) first_seq=419 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801344=0x56 (GSP_RM_CONTROL) first_seq=420 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852a=0x56 (GSP_RM_CONTROL) first_seq=423 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808536=0x56 (GSP_RM_CONTROL) first_seq=425 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a63c=0x56 (GSP_RM_CONTROL) first_seq=428 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0f2=0x56 (GSP_RM_CONTROL) first_seq=429 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=431 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0a7=0x56 (GSP_RM_CONTROL) first_seq=436 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810103=0x56 (GSP_RM_CONTROL) first_seq=472 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809019=0x56 (GSP_RM_CONTROL) first_seq=485 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0a4=0x56 (GSP_RM_CONTROL) first_seq=486 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800153=0x56 (GSP_RM_CONTROL) first_seq=489 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=491 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=492 — the guest read a non-OK status
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d00019:0x15070 under 0x1000012 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d00019:0x15070 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe003f (authored: head 0, displayMask 0, caps 0) (701 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15071 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0040 (authored: head 0, displayMask 0, caps 0) (537 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15072 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0041 (authored: head 0, displayMask 0, caps 0) (597 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15073 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0042 (authored: head 0, displayMask 0, caps 0) (599 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x20810107=0x56 (GSP_RM_CONTROL) first_seq=670 — the guest read a non-OK status
+kf3: act free: 0xc1d00019:0x15070: display-SW object host 0xcafe003f freed (654 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15071: display-SW object host 0xcafe0040 freed (460 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15072: display-SW object host 0xcafe0041 freed (464 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15073: display-SW object host 0xcafe0042 freed (467 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15070 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0055 (authored: head 0, displayMask 0, caps 0) (666 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15071 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0056 (authored: head 0, displayMask 0, caps 0) (535 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15072 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0057 (authored: head 0, displayMask 0, caps 0) (523 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15073 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0058 (authored: head 0, displayMask 0, caps 0) (553 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=922 — the guest read a non-OK status
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d0002b:0xbeef4900 under 0xbeef0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d0002b:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0075 (authored: head 0, displayMask 0, caps 0) (547 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002b:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0076 (authored: head 0, displayMask 0, caps 0) (4492 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002b:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0077 (authored: head 0, displayMask 0, caps 0) (599 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002b:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0078 (authored: head 0, displayMask 0, caps 0) (626 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d0002d:0xbeef4900 under 0xbeef0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d0002d:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe0097 (authored: head 0, displayMask 0, caps 0) (750 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002d:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe0098 (authored: head 0, displayMask 0, caps 0) (598 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002d:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe0099 (authored: head 0, displayMask 0, caps 0) (596 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002d:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe009a (authored: head 0, displayMask 0, caps 0) (620 us, off the GSP lock)
+kf3: act free: 0xc1d0002d:0xbeef4903: display-SW object host 0xcafe009a freed (565 us, off the GSP lock)
+kf3: act free: 0xc1d0002d:0xbeef4902: display-SW object host 0xcafe0099 freed (516 us, off the GSP lock)
+kf3: act free: 0xc1d0002d:0xbeef4901: display-SW object host 0xcafe0098 freed (565 us, off the GSP lock)
+kf3: act free: 0xc1d0002d:0xbeef4900: display-SW object host 0xcafe0097 freed (440 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d0002f:0xbeef4900 under 0xbeef0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d0002f:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00b8 (authored: head 0, displayMask 0, caps 0) (734 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002f:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00b9 (authored: head 0, displayMask 0, caps 0) (611 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002f:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00ba (authored: head 0, displayMask 0, caps 0) (608 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002f:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00bb (authored: head 0, displayMask 0, caps 0) (592 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xbeef4903: display-SW object host 0xcafe00bb freed (537 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xbeef4902: display-SW object host 0xcafe00ba freed (495 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xbeef4901: display-SW object host 0xcafe00b9 freed (457 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xbeef4900: display-SW object host 0xcafe00b8 freed (449 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d00031:0xbeef4900 under 0xbeef0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d00031:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00d8 (authored: head 0, displayMask 0, caps 0) (694 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00031:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00d9 (authored: head 0, displayMask 0, caps 0) (656 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00031:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00da (authored: head 0, displayMask 0, caps 0) (648 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00031:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00db (authored: head 0, displayMask 0, caps 0) (712 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xbeef4903: display-SW object host 0xcafe00db freed (593 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xbeef4902: display-SW object host 0xcafe00da freed (536 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xbeef4901: display-SW object host 0xcafe00d9 freed (472 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xbeef4900: display-SW object host 0xcafe00d8 freed (499 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x2080a0d1=0x56 (GSP_RM_CONTROL) first_seq=2071 — the guest read a non-OK status
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d00033:0xbeeb4900 under 0xbeeb0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0130 (authored: head 0, displayMask 0, caps 0) (622 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0131 (authored: head 0, displayMask 0, caps 0) (573 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0132 (authored: head 0, displayMask 0, caps 0) (612 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0133 (authored: head 0, displayMask 0, caps 0) (529 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0137 (authored: head 0, displayMask 0, caps 0) (624 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0138 (authored: head 0, displayMask 0, caps 0) (593 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0139 (authored: head 0, displayMask 0, caps 0) (511 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe013a (authored: head 0, displayMask 0, caps 0) (576 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe013c (authored: head 0, displayMask 0, caps 0) (741 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe013d (authored: head 0, displayMask 0, caps 0) (572 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe013e (authored: head 0, displayMask 0, caps 0) (542 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe013f (authored: head 0, displayMask 0, caps 0) (567 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4907: display-SW object host 0xcafe013a freed (595 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4906: display-SW object host 0xcafe0139 freed (424 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4905: display-SW object host 0xcafe0138 freed (412 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4904: display-SW object host 0xcafe0137 freed (404 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb490b: display-SW object host 0xcafe013f freed (482 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb490a: display-SW object host 0xcafe013e freed (422 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4909: display-SW object host 0xcafe013d freed (414 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4908: display-SW object host 0xcafe013c freed (433 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4903: display-SW object host 0xcafe0133 freed (501 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4902: display-SW object host 0xcafe0132 freed (436 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4901: display-SW object host 0xcafe0131 freed (433 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4900: display-SW object host 0xcafe0130 freed (418 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d00037:0xbeeb4900 under 0xbeeb0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01d3 (authored: head 0, displayMask 0, caps 0) (573 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01d4 (authored: head 0, displayMask 0, caps 0) (535 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01d5 (authored: head 0, displayMask 0, caps 0) (652 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01d6 (authored: head 0, displayMask 0, caps 0) (567 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01da (authored: head 0, displayMask 0, caps 0) (594 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01db (authored: head 0, displayMask 0, caps 0) (603 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01dc (authored: head 0, displayMask 0, caps 0) (560 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01dd (authored: head 0, displayMask 0, caps 0) (582 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01df (authored: head 0, displayMask 0, caps 0) (568 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01e0 (authored: head 0, displayMask 0, caps 0) (570 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01e1 (authored: head 0, displayMask 0, caps 0) (560 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01e2 (authored: head 0, displayMask 0, caps 0) (484 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4907: display-SW object host 0xcafe01dd freed (582 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4906: display-SW object host 0xcafe01dc freed (462 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4905: display-SW object host 0xcafe01db freed (432 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4904: display-SW object host 0xcafe01da freed (420 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb490b: display-SW object host 0xcafe01e2 freed (494 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb490a: display-SW object host 0xcafe01e1 freed (457 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4909: display-SW object host 0xcafe01e0 freed (431 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4908: display-SW object host 0xcafe01df freed (412 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4903: display-SW object host 0xcafe01d6 freed (506 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4902: display-SW object host 0xcafe01d5 freed (456 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4901: display-SW object host 0xcafe01d4 freed (448 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4900: display-SW object host 0xcafe01d3 freed (451 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d00039:0xbeeb4900 under 0xbeeb0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0238 (authored: head 0, displayMask 0, caps 0) (619 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0239 (authored: head 0, displayMask 0, caps 0) (616 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe023a (authored: head 0, displayMask 0, caps 0) (641 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe023b (authored: head 0, displayMask 0, caps 0) (641 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe023f (authored: head 0, displayMask 0, caps 0) (542 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0240 (authored: head 0, displayMask 0, caps 0) (535 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0241 (authored: head 0, displayMask 0, caps 0) (587 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0242 (authored: head 0, displayMask 0, caps 0) (603 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0244 (authored: head 0, displayMask 0, caps 0) (557 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0245 (authored: head 0, displayMask 0, caps 0) (555 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0246 (authored: head 0, displayMask 0, caps 0) (559 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0247 (authored: head 0, displayMask 0, caps 0) (558 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4907: display-SW object host 0xcafe0242 freed (606 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4906: display-SW object host 0xcafe0241 freed (443 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4905: display-SW object host 0xcafe0240 freed (417 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4904: display-SW object host 0xcafe023f freed (437 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb490b: display-SW object host 0xcafe0247 freed (473 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb490a: display-SW object host 0xcafe0246 freed (428 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4909: display-SW object host 0xcafe0245 freed (426 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4908: display-SW object host 0xcafe0244 freed (431 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4903: display-SW object host 0xcafe023b freed (487 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4902: display-SW object host 0xcafe023a freed (458 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4901: display-SW object host 0xcafe0239 freed (482 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4900: display-SW object host 0xcafe0238 freed (461 us, off the GSP lock)
+kf3: act free: 0xc1d0002b:0xbeef4903: display-SW object host 0xcafe0078 freed (510 us, off the GSP lock)
+kf3: act free: 0xc1d0002b:0xbeef4902: display-SW object host 0xcafe0077 freed (429 us, off the GSP lock)
+kf3: act free: 0xc1d0002b:0xbeef4901: display-SW object host 0xcafe0076 freed (403 us, off the GSP lock)
+kf3: act free: 0xc1d0002b:0xbeef4900: display-SW object host 0xcafe0075 freed (405 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15070: display-SW object host 0xcafe0055 freed (570 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15071: display-SW object host 0xcafe0056 freed (433 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15072: display-SW object host 0xcafe0057 freed (426 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15073: display-SW object host 0xcafe0058 freed (436 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d0003d:0x15070 under 0x1000012 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d0003d:0x15070 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0294 (authored: head 0, displayMask 0, caps 0) (684 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0003d:0x15071 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0295 (authored: head 0, displayMask 0, caps 0) (566 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0003d:0x15072 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0296 (authored: head 0, displayMask 0, caps 0) (588 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0003d:0x15073 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0297 (authored: head 0, displayMask 0, caps 0) (579 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d00048:0xbeef4900 under 0xbeef0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02b5 (authored: head 0, displayMask 0, caps 0) (3606 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02b6 (authored: head 0, displayMask 0, caps 0) (1230 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02b7 (authored: head 0, displayMask 0, caps 0) (963 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02b8 (authored: head 0, displayMask 0, caps 0) (502 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe02b8 freed (586 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe02b7 freed (502 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe02b6 freed (485 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe02b5 freed (467 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d0004a:0xbeef4900 under 0xbeef0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d0004a:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02d6 (authored: head 0, displayMask 0, caps 0) (662 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004a:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02d7 (authored: head 0, displayMask 0, caps 0) (571 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004a:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02d8 (authored: head 0, displayMask 0, caps 0) (590 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004a:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02d9 (authored: head 0, displayMask 0, caps 0) (584 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeef4903: display-SW object host 0xcafe02d9 freed (515 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeef4902: display-SW object host 0xcafe02d8 freed (464 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeef4901: display-SW object host 0xcafe02d7 freed (485 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeef4900: display-SW object host 0xcafe02d6 freed (436 us, off the GSP lock)
+kf3: x11-dispsw: GF100_DISP_SW 0xc1d0004c:0xbeeb4900 under 0xbeeb0100 — its space's guest-RAM rows are placed with a host kernel mapping from now on
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4900 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0337 (authored: head 0, displayMask 0, caps 0) (600 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4901 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0338 (authored: head 0, displayMask 0, caps 0) (559 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4902 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0339 (authored: head 0, displayMask 0, caps 0) (481 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4903 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe033a (authored: head 0, displayMask 0, caps 0) (555 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4904 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe033e (authored: head 0, displayMask 0, caps 0) (591 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4905 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe033f (authored: head 0, displayMask 0, caps 0) (565 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4906 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe0340 (authored: head 0, displayMask 0, caps 0) (553 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4907 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe0341 (authored: head 0, displayMask 0, caps 0) (562 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4908 GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0343 (authored: head 0, displayMask 0, caps 0) (569 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb4909 GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0344 (authored: head 0, displayMask 0, caps 0) (477 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb490a GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0345 (authored: head 0, displayMask 0, caps 0) (563 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0004c:0xbeeb490b GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0346 (authored: head 0, displayMask 0, caps 0) (562 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4907: display-SW object host 0xcafe0341 freed (625 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4906: display-SW object host 0xcafe0340 freed (446 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4905: display-SW object host 0xcafe033f freed (421 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4904: display-SW object host 0xcafe033e freed (419 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb490b: display-SW object host 0xcafe0346 freed (498 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb490a: display-SW object host 0xcafe0345 freed (487 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4909: display-SW object host 0xcafe0344 freed (433 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4908: display-SW object host 0xcafe0343 freed (412 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4903: display-SW object host 0xcafe033a freed (519 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4902: display-SW object host 0xcafe0339 freed (439 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4901: display-SW object host 0xcafe0338 freed (453 us, off the GSP lock)
+kf3: act free: 0xc1d0004c:0xbeeb4900: display-SW object host 0xcafe0337 freed (431 us, off the GSP lock)
+kf3: act free: 0xc1d0003d:0x15070: display-SW object host 0xcafe0294 freed (565 us, off the GSP lock)
+kf3: act free: 0xc1d0003d:0x15071: display-SW object host 0xcafe0295 freed (465 us, off the GSP lock)
+kf3: act free: 0xc1d0003d:0x15072: display-SW object host 0xcafe0296 freed (414 us, off the GSP lock)
+kf3: act free: 0xc1d0003d:0x15073: display-SW object host 0xcafe0297 freed (409 us, off the GSP lock)
+kf3: family=Ampere phase=Running trapped=421081 applied=8585 refused=4 serviced=6287 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=4784 walks=4811/4811 cleared=4784 superseded=0 named_missed=2 unreconciled=0 mapped=15160 unmapped=14917 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=16203 priv_withheld_bytes=0x8c2442000 priv_mirrored=12 sked=12/0held fn70=3 roots=26 root_moves=0 stmts=279/279 refused=0 pramin_repoints=38 pramin_miss=0 last_miss=0x0 pramin_worst_us=701 (map 597 mmap 146) pramin_maps=38 pramin_mmaps=38 inline_opens=0 reaped=37 cache_ops=444 sysmembars=227 root_unsets=0] mirrors=4 reused=22 prewarmed=3 mirror_avg_us=265554 mirror_max_us=268684 vat[invals=0 arrive->clear_avg_us=0 max_us=179761 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=16 host_calls=0] chan[births=4 pt_births=72 acts=810/0refused worst_act_us=31296 nsi=[GR0:37671/37309raised CE2:891/722raised CE3:6417/5922raised] served=1598 parks=55650 host_rings=906 contended=0 poisoned=0 tokens=[0x801:fwd=952,subs=952,serves=1587,put=Some(952),gp_get=Some(952) 0x802:fwd=2,subs=2,serves=5,put=Some(2),gp_get=Some(2)]] views[armed=1911 released=1664 refused=0 held=247] rc[armed=72 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=284304 raised=53690 held=227 oor=0] disp[writes=13623 puts=4785 methods=484219 updates=3244 notifies=183 releases=3016 vblanks=13875 irqs=8712 exceptions=0 refused=0 scanouts=4038 scanout_refused=0 scanout_avg_us=1172 scanout_max_us=5070] dispsw[twins=84 live=0 host_refused=0 no_twin=0] kmap[rows=5986 live=0KiB peak=33868KiB refused=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38,0x20802a12,0x0073013d,0x20802801,0x00730293,0x00731144,0x0073012c,0x208001a4,0x20803083,0x20800156,0x20801813,0x20801819,0x20801829,0x20801830,0x2080a080,0x20808546,0x20809038,0x20802087,0x20803401,0x2080012f,0x20803404,0x20801322,0x20801344,0x2080852a,0x20808536,0x2080a63c,0x2080a0f2,0x20809004,0x2080a0a7,0x20810103,0x20809019,0x2080a0a4,0x20800153,0x2080a088,0x20808524,0x20810107,0x20800a9a,0x2080a0d1] gsp_refusals[total=604 distinct=69 [fn76/0x20800a87=0x56x2 fn76/0x20800afe=0x56x3 fn76/0x20800aff=0x56x11 fn76/0x20800a80=0x56x4 fn76/0x20802a0f=0x56x2 fn76/0x2080017e=0x56x2 fn76/0x20800a30=0x56x2 fn76/0x20800a2e=0x56x2 fn76/0x20800b03=0x56x2 fn76/0x20800b05=0x56x2 fn76/0x20800a3f=0x56x2 fn76/0x2080012b=0x56x2 fn76/0x2080013f=0x56x5 fn103/0x0000c36f=0x56x2 fn103/0x0000402c=0x56x2 fn76/0x00800294=0x56x2 fn76/0x20810108=0x56x3 fn76/0x2080014b=0x56x10 fn76/0x20800157=0x56x2 fn76/0x20801357=0x56x2 fn76/0x2080852e=0x56x4 fn76/0x20808513=0x56x4 fn76/0x20802068=0x56x2 fn76/0x2080a618=0x56x2 fn76/0x2080a612=0x56x2 fn76/0x2080a097=0x56x2 fn103/0x0000208f=0x56x2 fn76/0x20800a38=0x56x1 fn76/0x20802a12=0x56x308 fn76/0x20800301=0x56x3 fn76/0x0073013d=0x56x1 fn76/0x20802801=0x56x1 fn76/0x00730291=0x56x13 fn76/0x00730293=0x56x1 fn76/0x00731144=0x56x9 fn76/0x0073012c=0x56x11 fn76/0x20800102=0x56x1 fn76/0x208001a4=0x56x1 fn76/0x20803083=0x56x1 fn76/0x20800156=0x56x1 fn103/0x000090e7=0x56x1 fn76/0x20801813=0x56x2 fn76/0x20801819=0x56x2 fn76/0x20801829=0x56x1 fn76/0x20801830=0x56x1 fn76/0x2080a080=0x56x1 fn76/0x20808546=0x56x18 fn76/0x20809038=0x56x1 fn76/0x20802087=0x56x4 fn76/0x20803401=0x56x1 fn76/0x2080012f=0x56x21 fn76/0x20803404=0x56x1 fn76/0x20801322=0x56x1 fn76/0x20801344=0x56x1 fn76/0x2080852a=0x56x1 fn76/0x20808536=0x56x1 fn76/0x2080a63c=0x56x1 fn76/0x2080a0f2=0x56x1 fn76/0x20809004=0x56x4 fn76/0x2080a0a7=0x56x1 fn76/0x20810103=0x56x2 fn76/0x20809019=0x56x2 fn76/0x2080a0a4=0x56x2 fn76/0x20800153=0x56x4 fn76/0x2080a088=0x56x2 fn76/0x20808524=0x56x2 fn76/0x20810107=0x56x15 fn76/0x20800a9a=0x56x28 fn76/0x2080a0d1=0x56x48]]

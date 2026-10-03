@@ -20,8 +20,8 @@ use kf_abi::bringup::{
     NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
     NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV20_SUBDEVICE_0, NVOS02_FLAGS_COHERENCY_CACHED,
     NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP, NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS,
-    NVOS46_FLAGS_CACHE_SNOOP_ENABLE, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters,
-    Nvos02ParametersWithFd, RegisterFd,
+    NVOS46_FLAGS_CACHE_SNOOP_ENABLE, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
+    NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, Nv2080AllocParameters, Nvos02ParametersWithFd, RegisterFd,
 };
 use kf_abi::generated::classes::{NV01_DEVICE_0, NV01_ROOT_CLIENT, Nv0080AllocParameters};
 use kf_abi::generated::nvos::{
@@ -105,6 +105,12 @@ pub const CAP_BRACKET_REFUSED: u32 = 0x4B74;
 /// the birth path (`birth::born_user`): refused before any host call, so no channel can be created
 /// without `CAP_SYS_ADMIN` cleared for the call and RM's reply checked.
 pub const CHANNEL_CLASS_OUTSIDE_BIRTH: u32 = 0x4B75;
+/// ★ x11-dispsw: `NV906F_CTRL_GET_CLASS_ENGINEID`'s reply named another class than the
+/// `GF100_DISP_SW` object asked about (`HostRm::disp_sw_class_id`).
+/// ⊘ `0x4B76`, not the branch's `0x4B73`: `v3-sec-nonpriv` took `0x4B73`-`0x4B75` for the birth
+/// refusals above, and the two lanes met in `v3-cand-1` (2026-10-04). A status is a name only while
+/// it is unique.
+pub const DISP_SW_CLASS_ID_UNREADABLE: u32 = 0x4B76;
 /// The store reservation and which form RM granted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reservation {
@@ -240,15 +246,25 @@ fn abi_refused(what: &str, e: &kf_abi::hostabi::HostAbiError) -> RmError {
 /// without it on a bare-metal Ryzen/B550 box, 10/10 PASS with it). On vidmem RM never reads it
 /// (`virt_mem_allocator_gm107.c:1338-1350` is the sysmem branch), which is why RM's own helper
 /// sets it on every map too (`nv_gpu_ops.c:5130-5132`).
+///
+/// ★★ x11-dispsw (review 2026-10-03, LOW): **and never [`NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`]** —
+/// cleared here, after every caller's bits are in, so no `extra`, page-size pin or future caller
+/// can give a kayfabe map a host KERNEL CPU mapping (`CLI_DMA_MAPPING_INFO::KernelVAddr`). That
+/// address is the only one through which host RM writes a display-SW semaphore or notifier
+/// (`ogkm-580: method_notification.c:624-627`, `:349-351`), so this one mask is what bounds a
+/// twinned `GF100_DISP_SW` to writing no memory at all. This is the bound's ENFORCEMENT, not a
+/// convention: `the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets` feeds every bit, and
+/// `only_the_one_builder_can_name_the_kernel_mapping_bit` keeps this the only `NVOS46` built.
 pub(crate) const fn nvos46_map_flags(extra: u32, page_size: u32, fixed: bool) -> u32 {
-    extra
+    (extra
         | page_size
         | NVOS46_FLAGS_CACHE_SNOOP_ENABLE
         | if fixed {
             NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
         } else {
             0
-        }
+        })
+        & !NVOS46_FLAGS_KERNEL_MAPPING_ENABLE
 }
 
 fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
@@ -2007,5 +2023,118 @@ impl HostRm {
         status_check(out.status)?;
         self.forget(object);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod kernel_mapping_tests {
+    use super::nvos46_map_flags;
+    use kf_abi::bringup::{NVOS46_FLAGS_CACHE_SNOOP_ENABLE, NVOS46_FLAGS_KERNEL_MAPPING_ENABLE};
+
+    /// ★★ x11-dispsw (review 2026-10-03, LOW — the old pin only tried the callers' current bits):
+    /// the one `NVOS46` flags builder clears `KERNEL_MAPPING` whatever reaches it — every single
+    /// bit, every bit at once, the bit itself, each page-size pin and `FIXED` — and clears nothing
+    /// else. So a caller's `extra` (`map_kind`, `map_window`, a new caller of `raw_map_dma_slice`)
+    /// cannot give a kayfabe map a host kernel CPU mapping, the only address host RM writes a
+    /// display-SW release through (`ogkm-580: method_notification.c:624-627`, `:349-351`).
+    /// ⊘ Negative control: drop the `& !NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` and this fails at
+    /// `extra = 0x20`.
+    #[test]
+    fn the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets() {
+        assert_eq!(
+            NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, 0x20,
+            "nvos.h:1999-2001: KERNEL_MAPPING is 5:5, _ENABLE is 1"
+        );
+        let mut extras: Vec<u32> = (0..32).map(|b| 1u32 << b).collect();
+        extras.extend([0, u32::MAX, NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, 0x0010_0020]);
+        for extra in extras {
+            for page_size in [0u32, 1 << 8, 2 << 8, 3 << 8, u32::MAX] {
+                for fixed in [false, true] {
+                    let f = nvos46_map_flags(extra, page_size, fixed);
+                    assert_eq!(
+                        f & NVOS46_FLAGS_KERNEL_MAPPING_ENABLE,
+                        0,
+                        "extra {extra:#x} page {page_size:#x} fixed {fixed}: {f:#x}"
+                    );
+                    // Nothing else is taken away, and snoop is still forced on.
+                    let wanted = extra | page_size | NVOS46_FLAGS_CACHE_SNOOP_ENABLE;
+                    assert_eq!(
+                        f | NVOS46_FLAGS_KERNEL_MAPPING_ENABLE,
+                        wanted
+                            | NVOS46_FLAGS_KERNEL_MAPPING_ENABLE
+                            | if fixed { 1 << 15 } else { 0 },
+                        "extra {extra:#x}: only the kernel-mapping bit is cleared"
+                    );
+                }
+            }
+        }
+    }
+
+    /// ★★ x11-dispsw (review 2026-10-03, LOW): the mask above holds only while it sits on the ONE
+    /// path every v3 map takes. Over every `crates/kf-*` source (the v3 crates; the frozen
+    /// `kayfabe-*` prototype is not built into kf3): exactly one `Nvos46Parameters` literal is built
+    /// — `raw_map_dma_slice`'s, whose `flags` come from `nvos46_map_flags` — and the
+    /// `KERNEL_MAPPING` bit is named only where it is defined (`kf-abi`) and here (the mask and
+    /// these tests). ⊘ It reads source, not behaviour: a map built by hand-encoding the 64 bytes
+    /// would not be seen. None exists today; this keeps the structured way in the one builder.
+    #[test]
+    fn only_the_one_builder_can_name_the_kernel_mapping_bit() {
+        fn rs_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            let Ok(rd) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    rs_files(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("crates/");
+        let mut files = Vec::new();
+        for e in std::fs::read_dir(crates).expect("crates/").flatten() {
+            if e.file_name().to_string_lossy().starts_with("kf-") {
+                rs_files(&e.path().join("src"), &mut files);
+            }
+        }
+        assert!(
+            files.len() > 50,
+            "the sweep must see the v3 crates: {}",
+            files.len()
+        );
+        let (mut literals, mut naming) = (Vec::new(), Vec::new());
+        for f in &files {
+            let text = std::fs::read_to_string(f).expect("source");
+            let rel = f
+                .strip_prefix(crates)
+                .expect("under crates/")
+                .to_string_lossy()
+                .into_owned();
+            // A struct LITERAL: not the type's own `struct`/`impl … for` line (the needle is
+            // split so this file's text does not match itself).
+            for (i, _) in text.match_indices(&["Nvos46", "Parameters {"].concat()) {
+                let before = text[..i].trim_end();
+                if before.ends_with("struct") || before.ends_with("for") || before.ends_with("impl")
+                {
+                    continue;
+                }
+                let after = &text[i..text.len().min(i + 1200)];
+                literals.push((rel.clone(), after.contains("flags: nvos46_map_flags(")));
+            }
+            if text.contains(&["NVOS46_FLAGS_KERNEL", "_MAPPING_ENABLE"].concat()) {
+                naming.push(rel);
+            }
+        }
+        assert_eq!(
+            literals,
+            vec![("kf-host/src/lib.rs".to_string(), true)],
+            "one NVOS46 literal, its flags from nvos46_map_flags"
+        );
+        naming.sort();
+        assert_eq!(naming, ["kf-abi/src/bringup.rs", "kf-host/src/lib.rs"]);
     }
 }

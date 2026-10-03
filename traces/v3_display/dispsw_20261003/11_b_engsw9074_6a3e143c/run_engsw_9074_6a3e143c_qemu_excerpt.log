@@ -1,0 +1,382 @@
+# EXCERPT of run_engsw_9074_6a3e143c_qemu.log (the full log, 1150360 bytes, stayed on the box): every x11-dispsw / display-SW / software-classID line, every kf-rm display pairing line, every GSP REFUSED and Xid line, the kf3 binary line, and every status line's dispsw[...] segment.
+kf3: ⚠ EXPERIMENT x11-dispsw ON (pending the owner's ruling): every guest GF100_DISP_SW is twinned under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name
+kf-rm: display: EXPERIMENT x11-dispsw — GF100_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+2026-10-03T20:22:06.087792Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,x11-dispsw=on: info: kf3: display console registered (head 0 of kf0)
+2026-10-03T20:22:06.087905Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,x11-dispsw=on: info: kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 ca (BAR0 pieces=5)
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=7 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=24 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=25 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=42 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=49 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=50 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=60 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=62 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=64 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=65 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=67 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012b=0x56 (GSP_RM_CONTROL) first_seq=104 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=110 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000c36f=0x56 (GSP_RM_ALLOC) first_seq=119 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=127 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800294=0x56 (GSP_RM_CONTROL) first_seq=136 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=138 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080014b=0x56 (GSP_RM_CONTROL) first_seq=145 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800157=0x56 (GSP_RM_CONTROL) first_seq=146 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801357=0x56 (GSP_RM_CONTROL) first_seq=151 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=152 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808513=0x56 (GSP_RM_CONTROL) first_seq=154 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=156 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=157 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a612=0x56 (GSP_RM_CONTROL) first_seq=158 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a097=0x56 (GSP_RM_CONTROL) first_seq=164 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000208f=0x56 (GSP_RM_ALLOC) first_seq=173 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a38=0x56 (GSP_RM_CONTROL) first_seq=202 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=137 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800301=0x56 (GSP_RM_CONTROL) first_seq=155 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073013d=0x56 (GSP_RM_CONTROL) first_seq=221 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=222 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730291=0x56 (GSP_RM_CONTROL) first_seq=224 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=227 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00731144=0x56 (GSP_RM_CONTROL) first_seq=280 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073012c=0x56 (GSP_RM_CONTROL) first_seq=281 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800102=0x56 (GSP_RM_CONTROL) first_seq=354 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208001a4=0x56 (GSP_RM_CONTROL) first_seq=357 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803083=0x56 (GSP_RM_CONTROL) first_seq=359 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800156=0x56 (GSP_RM_CONTROL) first_seq=360 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x000090e7=0x56 (GSP_RM_ALLOC) first_seq=368 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801813=0x56 (GSP_RM_CONTROL) first_seq=376 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801819=0x56 (GSP_RM_CONTROL) first_seq=378 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801829=0x56 (GSP_RM_CONTROL) first_seq=380 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801830=0x56 (GSP_RM_CONTROL) first_seq=381 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a080=0x56 (GSP_RM_CONTROL) first_seq=385 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808546=0x56 (GSP_RM_CONTROL) first_seq=386 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809038=0x56 (GSP_RM_CONTROL) first_seq=403 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802087=0x56 (GSP_RM_CONTROL) first_seq=411 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803401=0x56 (GSP_RM_CONTROL) first_seq=416 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=417 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803404=0x56 (GSP_RM_CONTROL) first_seq=418 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801322=0x56 (GSP_RM_CONTROL) first_seq=419 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801344=0x56 (GSP_RM_CONTROL) first_seq=420 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852a=0x56 (GSP_RM_CONTROL) first_seq=423 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808536=0x56 (GSP_RM_CONTROL) first_seq=425 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a63c=0x56 (GSP_RM_CONTROL) first_seq=428 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0f2=0x56 (GSP_RM_CONTROL) first_seq=429 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=431 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0a7=0x56 (GSP_RM_CONTROL) first_seq=436 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810103=0x56 (GSP_RM_CONTROL) first_seq=472 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809019=0x56 (GSP_RM_CONTROL) first_seq=485 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0a4=0x56 (GSP_RM_CONTROL) first_seq=486 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800153=0x56 (GSP_RM_CONTROL) first_seq=489 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=491 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=492 — the guest read a non-OK status
+kf3: act display-SW twin: 0xc1d00019:0x15070 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe003e (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (748 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15071 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe003f (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (610 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15072 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0040 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (622 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15073 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0041 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (620 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x20810107=0x56 (GSP_RM_CONTROL) first_seq=670 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=712 — the guest read a non-OK status
+kf3: act display-SW twin: 0xc1d00024:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0066 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (755 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00024:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0067 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (620 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00024:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0068 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (642 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00024:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0069 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (640 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00026:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe008c (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (761 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00026:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe008d (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (609 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00026:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe008e (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (612 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00026:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe008f (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (611 us, off the GSP lock)
+kf3: act free: 0xc1d00026:0xbeef4903: display-SW object host 0xcafe008f freed (542 us, off the GSP lock)
+kf3: act free: 0xc1d00026:0xbeef4902: display-SW object host 0xcafe008e freed (467 us, off the GSP lock)
+kf3: act free: 0xc1d00026:0xbeef4901: display-SW object host 0xcafe008d freed (523 us, off the GSP lock)
+kf3: act free: 0xc1d00026:0xbeef4900: display-SW object host 0xcafe008c freed (448 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00028:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00b0 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (711 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00028:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00b1 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (617 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00028:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00b2 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (643 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00028:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00b3 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (645 us, off the GSP lock)
+kf3: act free: 0xc1d00028:0xbeef4903: display-SW object host 0xcafe00b3 freed (556 us, off the GSP lock)
+kf3: act free: 0xc1d00028:0xbeef4902: display-SW object host 0xcafe00b2 freed (481 us, off the GSP lock)
+kf3: act free: 0xc1d00028:0xbeef4901: display-SW object host 0xcafe00b1 freed (454 us, off the GSP lock)
+kf3: act free: 0xc1d00028:0xbeef4900: display-SW object host 0xcafe00b0 freed (464 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002a:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00dc (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (754 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002a:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00dd (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (668 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002a:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00de (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (802 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002a:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00df (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (673 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xbeef4903: display-SW object host 0xcafe00df freed (507 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xbeef4902: display-SW object host 0xcafe00de freed (448 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xbeef4901: display-SW object host 0xcafe00dd freed (429 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xbeef4900: display-SW object host 0xcafe00dc freed (456 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x2080a0d1=0x56 (GSP_RM_CONTROL) first_seq=1885 — the guest read a non-OK status
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0141 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (675 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0142 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (636 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0143 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (622 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0144 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (677 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0148 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (657 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0149 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (602 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe014a (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (604 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe014b (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (661 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe014d (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (612 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe014e (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (630 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe014f (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (675 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002c:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0150 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (625 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4907: display-SW object host 0xcafe014b freed (583 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4906: display-SW object host 0xcafe014a freed (446 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4905: display-SW object host 0xcafe0149 freed (392 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4904: display-SW object host 0xcafe0148 freed (412 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb490b: display-SW object host 0xcafe0150 freed (491 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb490a: display-SW object host 0xcafe014f freed (449 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4909: display-SW object host 0xcafe014e freed (393 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4908: display-SW object host 0xcafe014d freed (466 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4903: display-SW object host 0xcafe0144 freed (494 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4902: display-SW object host 0xcafe0143 freed (468 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4901: display-SW object host 0xcafe0142 freed (468 us, off the GSP lock)
+kf3: act free: 0xc1d0002c:0xbeeb4900: display-SW object host 0xcafe0141 freed (427 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01ea (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (737 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01eb (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (682 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01ec (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (688 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01ed (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (667 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01f1 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (674 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01f2 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (642 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01f3 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (662 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01f4 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (666 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01f6 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (660 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01f7 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (650 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01f8 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (641 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00030:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01f9 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (647 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4907: display-SW object host 0xcafe01f4 freed (587 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4906: display-SW object host 0xcafe01f3 freed (448 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4905: display-SW object host 0xcafe01f2 freed (458 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4904: display-SW object host 0xcafe01f1 freed (434 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb490b: display-SW object host 0xcafe01f9 freed (493 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb490a: display-SW object host 0xcafe01f8 freed (458 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4909: display-SW object host 0xcafe01f7 freed (432 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4908: display-SW object host 0xcafe01f6 freed (481 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4903: display-SW object host 0xcafe01ed freed (562 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4902: display-SW object host 0xcafe01ec freed (453 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4901: display-SW object host 0xcafe01eb freed (449 us, off the GSP lock)
+kf3: act free: 0xc1d00030:0xbeeb4900: display-SW object host 0xcafe01ea freed (446 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0255 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (699 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0256 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (525 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0257 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (627 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0258 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (650 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe025c (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (652 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe025d (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (609 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe025e (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (614 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe025f (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (639 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0261 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (650 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0262 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (612 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0263 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (605 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00032:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0264 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (653 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4907: display-SW object host 0xcafe025f freed (638 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4906: display-SW object host 0xcafe025e freed (482 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4905: display-SW object host 0xcafe025d freed (473 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4904: display-SW object host 0xcafe025c freed (438 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb490b: display-SW object host 0xcafe0264 freed (518 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb490a: display-SW object host 0xcafe0263 freed (437 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4909: display-SW object host 0xcafe0262 freed (460 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4908: display-SW object host 0xcafe0261 freed (428 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4903: display-SW object host 0xcafe0258 freed (530 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4902: display-SW object host 0xcafe0257 freed (478 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4901: display-SW object host 0xcafe0256 freed (449 us, off the GSP lock)
+kf3: act free: 0xc1d00032:0xbeeb4900: display-SW object host 0xcafe0255 freed (488 us, off the GSP lock)
+kf3: act free: 0xc1d00024:0xbeef4903: display-SW object host 0xcafe0069 freed (436 us, off the GSP lock)
+kf3: act free: 0xc1d00024:0xbeef4902: display-SW object host 0xcafe0068 freed (394 us, off the GSP lock)
+kf3: act free: 0xc1d00024:0xbeef4901: display-SW object host 0xcafe0067 freed (386 us, off the GSP lock)
+kf3: act free: 0xc1d00024:0xbeef4900: display-SW object host 0xcafe0066 freed (375 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15070: display-SW object host 0xcafe003e freed (586 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15071: display-SW object host 0xcafe003f freed (490 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15072: display-SW object host 0xcafe0040 freed (467 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15073: display-SW object host 0xcafe0041 freed (431 us, off the GSP lock)
+kf3: chan 0xc1d00036:0x1000012: class 0x9074 took the guest's software classID 1 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: GSP REFUSED fn103/0x00009074=0x56 (GSP_RM_ALLOC) first_seq=4678 — the guest read a non-OK status
+kf3: act display-SW twin: 0xc1d00036:0x15070 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe02b3 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's (the twin was at 1: 0 numbers repaid)) [kept] (1883 us, off the GSP lock)
+kf3: chan 0xc1d00036:0x1000012: class 0x9074 took the guest's software classID 3 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00036:0x15071 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe02b5 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's (the twin was at 3: 0 numbers repaid)) [kept] (1692 us, off the GSP lock)
+kf3: chan 0xc1d00036:0x1000012: class 0x9074 took the guest's software classID 5 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00036:0x15072 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe02b7 (authored: head 0, displayMask 0, caps 0; software classID 6 = the guest's (the twin was at 5: 0 numbers repaid)) [kept] (1665 us, off the GSP lock)
+kf3: chan 0xc1d00036:0x1000012: class 0x9074 took the guest's software classID 7 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00036:0x15073 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe02b9 (authored: head 0, displayMask 0, caps 0; software classID 8 = the guest's (the twin was at 7: 0 numbers repaid)) [kept] (1774 us, off the GSP lock)
+kf3: chan 0xc1d00041:0xbeef0100: class 0x9074 took the guest's software classID 1 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00041:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02d8 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's (the twin was at 1: 0 numbers repaid)) [kept] (2023 us, off the GSP lock)
+kf3: chan 0xc1d00041:0xbeef0100: class 0x9074 took the guest's software classID 3 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00041:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02da (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's (the twin was at 3: 0 numbers repaid)) [kept] (1768 us, off the GSP lock)
+kf3: chan 0xc1d00041:0xbeef0100: class 0x9074 took the guest's software classID 5 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00041:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02dc (authored: head 0, displayMask 0, caps 0; software classID 6 = the guest's (the twin was at 5: 0 numbers repaid)) [kept] (1742 us, off the GSP lock)
+kf3: chan 0xc1d00041:0xbeef0100: class 0x9074 took the guest's software classID 7 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00041:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02de (authored: head 0, displayMask 0, caps 0; software classID 8 = the guest's (the twin was at 7: 0 numbers repaid)) [kept] (1820 us, off the GSP lock)
+kf3: act free: 0xc1d00041:0xbeef4903: display-SW object host 0xcafe02de freed (586 us, off the GSP lock)
+kf3: act free: 0xc1d00041:0xbeef4902: display-SW object host 0xcafe02dc freed (513 us, off the GSP lock)
+kf3: act free: 0xc1d00041:0xbeef4901: display-SW object host 0xcafe02da freed (488 us, off the GSP lock)
+kf3: act free: 0xc1d00041:0xbeef4900: display-SW object host 0xcafe02d8 freed (498 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0100: class 0x9074 took the guest's software classID 1 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4900 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0347 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's (the twin was at 1: 0 numbers repaid)) [kept] (1582 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0100: class 0x9074 took the guest's software classID 3 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4901 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0349 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's (the twin was at 3: 0 numbers repaid)) [kept] (1554 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0100: class 0x9074 took the guest's software classID 5 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4902 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe034b (authored: head 0, displayMask 0, caps 0; software classID 6 = the guest's (the twin was at 5: 0 numbers repaid)) [kept] (2298 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0100: class 0x9074 took the guest's software classID 7 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4903 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe034d (authored: head 0, displayMask 0, caps 0; software classID 8 = the guest's (the twin was at 7: 0 numbers repaid)) [kept] (1650 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0101: class 0x9074 took the guest's software classID 1 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4904 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe0352 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's (the twin was at 1: 0 numbers repaid)) [kept] (1678 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0101: class 0x9074 took the guest's software classID 3 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4905 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe0354 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's (the twin was at 3: 0 numbers repaid)) [kept] (1559 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0101: class 0x9074 took the guest's software classID 5 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4906 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe0356 (authored: head 0, displayMask 0, caps 0; software classID 6 = the guest's (the twin was at 5: 0 numbers repaid)) [kept] (1566 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0101: class 0x9074 took the guest's software classID 7 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4907 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe0358 (authored: head 0, displayMask 0, caps 0; software classID 8 = the guest's (the twin was at 7: 0 numbers repaid)) [kept] (1358 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0102: class 0x9074 took the guest's software classID 1 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4908 GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe035b (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's (the twin was at 1: 0 numbers repaid)) [kept] (1692 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0102: class 0x9074 took the guest's software classID 3 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb4909 GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe035d (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's (the twin was at 3: 0 numbers repaid)) [kept] (1481 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0102: class 0x9074 took the guest's software classID 5 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb490a GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe035f (authored: head 0, displayMask 0, caps 0; software classID 6 = the guest's (the twin was at 5: 0 numbers repaid)) [kept] (1444 us, off the GSP lock)
+kf3: chan 0xc1d00043:0xbeeb0102: class 0x9074 took the guest's software classID 7 on this channel (no host twin takes one; its next display-SW twin is repaid to match)
+kf3: act display-SW twin: 0xc1d00043:0xbeeb490b GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0361 (authored: head 0, displayMask 0, caps 0; software classID 8 = the guest's (the twin was at 7: 0 numbers repaid)) [kept] (1781 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4907: display-SW object host 0xcafe0358 freed (607 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4906: display-SW object host 0xcafe0356 freed (480 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4905: display-SW object host 0xcafe0354 freed (459 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4904: display-SW object host 0xcafe0352 freed (433 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb490b: display-SW object host 0xcafe0361 freed (493 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb490a: display-SW object host 0xcafe035f freed (451 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4909: display-SW object host 0xcafe035d freed (445 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4908: display-SW object host 0xcafe035b freed (463 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4903: display-SW object host 0xcafe034d freed (523 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4902: display-SW object host 0xcafe034b freed (500 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4901: display-SW object host 0xcafe0349 freed (490 us, off the GSP lock)
+kf3: act free: 0xc1d00043:0xbeeb4900: display-SW object host 0xcafe0347 freed (477 us, off the GSP lock)
+kf3: act free: 0xc1d00036:0x15070: display-SW object host 0xcafe02b3 freed (879 us, off the GSP lock)
+kf3: act free: 0xc1d00036:0x15071: display-SW object host 0xcafe02b5 freed (418 us, off the GSP lock)
+kf3: act free: 0xc1d00036:0x15072: display-SW object host 0xcafe02b7 freed (425 us, off the GSP lock)
+kf3: act free: 0xc1d00036:0x15073: display-SW object host 0xcafe02b9 freed (427 us, off the GSP lock)
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=4 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=4 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=4 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=13 live=9 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=32 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=32 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=32 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=32 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=44 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=44 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=44 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=44 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=56 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=4 free_refused=0]
+STATUS dispsw[twins=64 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=8 free_refused=0]
+STATUS dispsw[twins=64 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=8 free_refused=0]
+STATUS dispsw[twins=64 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=8 free_refused=0]
+STATUS dispsw[twins=64 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=8 free_refused=0]
+STATUS dispsw[twins=64 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=8 free_refused=0]
+STATUS dispsw[twins=64 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=8 free_refused=0]
+STATUS dispsw[twins=64 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=8 free_refused=0]
+STATUS dispsw[twins=76 live=16 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=16 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=16 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=16 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]
+STATUS dispsw[twins=76 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=20 free_refused=0]

@@ -8628,6 +8628,26 @@ pub const NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV9072_ALLOCATION_PARAMETERS_L0: Layout = Layout {
+    size: 12,
+    fields: &[
+        f("caps", 8, 4, 0),
+        f("displayMask", 4, 4, 0),
+        f("logicalHeadId", 0, 4, 0),
+    ],
+};
+/// `NV9072_ALLOCATION_PARAMETERS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV9072_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
+    name: "NV9072_ALLOCATION_PARAMETERS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV9072_ALLOCATION_PARAMETERS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS_L0: Layout = Layout {
     size: 12,
     fields: &[
@@ -32651,6 +32671,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_RC_GET_WATCHDOG_INFO_PARAMS,
     &NV83DE_ALLOC_PARAMETERS,
     &NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS,
+    &NV9072_ALLOCATION_PARAMETERS,
     &NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS,
     &NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS,
     &NVA06C_CTRL_BIND_PARAMS,

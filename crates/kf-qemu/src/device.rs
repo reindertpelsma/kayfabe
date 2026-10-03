@@ -48,10 +48,36 @@ pub struct Config {
     /// Off is today's displayless posture. On a chip whose bare metal has no display engine the
     /// device REFUSES to realize rather than invent one.
     pub display: bool,
+    /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note;
+    /// option A, the design by `docs/OWNER_RULINGS.md` §N — default-on only once §N's conditions
+    /// hold): offer the
+    /// `GF100_DISP_SW` object X11 compositors and X11 Vulkan presentation need, twinning each one
+    /// under its channel's host twin with authored params (head 0, displayMask 0, caps 0) and
+    /// refusing it by name where the host cannot (`kf_rm::DisplaySeat::x11_dispsw`). Needs
+    /// `display=on` ([`Config::check`]). Off, every path is the path it was.
+    pub x11_dispsw: bool,
     /// ★ The boot display (`gop=on`, [`crate::gop`], `docs/design/V3_DISPLAY.md` §4.11): an option
     /// ROM with a UEFI GOP driver whose framebuffer is BAR1 `[0, G)`, the BAR1 seed, the boot layer
     /// and the console region in fn 65. Needs `display=on`. Off (the default) is today's device.
     pub gop: bool,
+}
+
+impl Config {
+    /// ★ Refusals that need nothing but the configuration — asked first, so they cost nothing.
+    ///
+    /// # Errors
+    /// `x11-dispsw=on` without `display=on`: with no virtual display the guest's own CPU-RM
+    /// refuses the display-SW object before it asks us (`disp_sw.c:67-71`), so the switch could do
+    /// nothing — a property that silently does nothing is refused by name instead.
+    pub fn check(&self) -> Result<(), String> {
+        if self.x11_dispsw && !self.display {
+            return Err("x11-dispsw=on needs display=on: without the virtual display the guest's driver \
+                 refuses GF100_DISP_SW itself, so there is nothing to twin (docs/design/V3_DISPLAY.md, \
+                 the 2026-10-03 x11-dispsw note)"
+                .into());
+        }
+        Ok(())
+    }
 }
 
 /// What the C device needs to present the PCI function.
@@ -239,6 +265,9 @@ pub struct Device {
     b5_logged: AtomicU64,
     /// Decoded fn-47 lines logged (bounded).
     fn47_logged: AtomicU64,
+    /// ★ EXPERIMENT `x11-dispsw` ([`Config::x11_dispsw`]): the status line's `dispsw[...]` segment
+    /// is printed only when it is on.
+    x11_dispsw: bool,
 }
 
 impl Device {
@@ -247,6 +276,7 @@ impl Device {
     /// # Errors
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
+        cfg.check()?;
         // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
         // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
         // reads it is then skipped, and the device is today's.
@@ -610,6 +640,12 @@ impl Device {
                 "kf3: display plane ON — virtual NVDisplay for {} (IP {:#010x}, display class {:#06x}, {} heads)",
                 row.chips, row.ip_version, row.classes.display, row.heads
             );
+            if cfg.x11_dispsw {
+                eprintln!(
+                    "kf3: ⚠ EXPERIMENT x11-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GF100_DISP_SW is twinned \
+                     under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name"
+                );
+            }
             Some(row)
         } else {
             None
@@ -644,6 +680,7 @@ impl Device {
         // census, the memory inbox, the channel plane) is the SAME across a rebuild — only the
         // links that read layouts are new.
         let build = {
+            let x11_dispsw = cfg.x11_dispsw;
             let (board, host, chain_logs, census, inbox, console) = (
                 board.clone(),
                 host.clone(),
@@ -682,6 +719,7 @@ impl Device {
                         display: display_row.map(|row| kf_rm::DisplaySeat {
                             row,
                             model: display_plane.map(|p| p.model.clone()),
+                            x11_dispsw,
                         }),
                         // ★ The boot display: fn 65's region table follows the guest's preserved
                         // console with `gop=on`; with `gop=off` there is no seat (today's table).
@@ -879,6 +917,7 @@ impl Device {
             qhead_off,
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             display: display_plane,
+            x11_dispsw: cfg.x11_dispsw,
             gop,
             gop_rom,
             bar1_mode,
@@ -2243,6 +2282,8 @@ impl Device {
                 )
             })
         });
+        // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
+        let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
         let db = format!(" {}", self.dbfast.status());
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",
@@ -2917,4 +2958,34 @@ fn on_cuda_thread<T: Send>(
             .join()
             .map_err(|_| format!("{name}: the CUDA thread panicked"))?
     })
+}
+
+#[cfg(test)]
+mod config_tests {
+    use super::Config;
+
+    fn cfg(display: bool, x11_dispsw: bool) -> Config {
+        Config {
+            gpu_minor: 0,
+            fb_mb: 8192,
+            bar1_bytes: 256 << 20,
+            bar2_bytes: 32 << 20,
+            guest_driver: None,
+            display,
+            x11_dispsw,
+            gop: false,
+        }
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw`: refused by name before anything is opened when the virtual
+    /// display is off (the guest's own driver would refuse the object first, so the switch could
+    /// do nothing); accepted with `display=on`; and the default configuration is unaffected.
+    #[test]
+    fn x11_dispsw_needs_display_on() {
+        assert!(cfg(false, false).check().is_ok(), "the default");
+        assert!(cfg(true, false).check().is_ok(), "display alone");
+        assert!(cfg(true, true).check().is_ok(), "the experiment");
+        let e = cfg(false, true).check().expect_err("refused");
+        assert!(e.contains("x11-dispsw=on needs display=on"), "{e}");
+    }
 }

@@ -1,0 +1,4 @@
+Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu
+vkcube: ./cube/cube.c:1369: demo_prepare_buffers: Assertion `!err' failed.
+timeout: the monitored command dumped core
+VKCUBE_RC=134

@@ -14,7 +14,16 @@ use std::ffi::CStr;
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
 /// ★ 11 (2026-10-03, `v3-gop-kf3`, `docs/design/V3_DISPLAY.md` §4.11): the boot display —
 /// [`kf3_realize`] takes `gop`, and [`kf3_option_rom`] hands the C device the ROM to register.
-pub const KF3_ABI: u32 = 11;
+/// ★ 13 (2026-10-03, `v3-dispsw-exp`, on top of 11): [`kf3_realize`] also takes `x11_dispsw`,
+/// after `gop` (the EXPERIMENT property, default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03
+/// note). ⊘ 13, not 12: 12 is `v3-broker`'s (`display_broker`), a DIFFERENT `kf3_realize`
+/// signature, so its archive must fail this check.
+/// ⊘ 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` and not `v3-broker`): `v3-broker` may
+/// keep 12 only while it merges into a master still at 11. Merged into a master at 13, its
+/// [`kf3_realize`] has BOTH `x11_dispsw` and `display_broker`, a signature neither 12 nor 13
+/// names, so it must take **14**: `display_broker` after `x11_dispsw`, in this file, `kf3.h`,
+/// `kf3.c`'s call and `tests/wire_mirror.rs`, so that archives at 12 and at 13 are both refused.
+pub const KF3_ABI: u32 = 13;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -92,6 +101,7 @@ pub unsafe extern "C" fn kf3_realize(
     guest_driver: *const c_char,
     display: u32,
     gop: u32,
+    x11_dispsw: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -115,6 +125,7 @@ pub unsafe extern "C" fn kf3_realize(
         guest_driver: guest,
         display: display != 0,
         gop: gop != 0,
+        x11_dispsw: x11_dispsw != 0,
     };
     match Device::realize(&cfg) {
         Ok(d) => {

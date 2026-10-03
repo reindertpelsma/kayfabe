@@ -1,0 +1,739 @@
+# EXCERPT of run_engsw_badhead_6a3e143c_qemu.log (the full log, 1568663 bytes, stayed on the box): every x11-dispsw / display-SW / software-classID line, every kf-rm display pairing line, every GSP REFUSED and Xid line, the kf3 binary line, and every status line's dispsw[...] segment.
+kf3: ⚠ EXPERIMENT x11-dispsw ON (pending the owner's ruling): every guest GF100_DISP_SW is twinned under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name
+kf-rm: display: EXPERIMENT x11-dispsw — GF100_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+2026-10-03T20:31:34.671379Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,x11-dispsw=on: info: kf3: display console registered (head 0 of kf0)
+2026-10-03T20:31:34.671473Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,x11-dispsw=on: info: kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 ca (BAR0 pieces=5)
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=7 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=24 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=25 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=42 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=49 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=50 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=60 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=62 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=64 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=65 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=67 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012b=0x56 (GSP_RM_CONTROL) first_seq=104 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=110 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000c36f=0x56 (GSP_RM_ALLOC) first_seq=119 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=127 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800294=0x56 (GSP_RM_CONTROL) first_seq=136 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=138 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080014b=0x56 (GSP_RM_CONTROL) first_seq=145 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800157=0x56 (GSP_RM_CONTROL) first_seq=146 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801357=0x56 (GSP_RM_CONTROL) first_seq=151 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=152 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808513=0x56 (GSP_RM_CONTROL) first_seq=154 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=156 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=157 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a612=0x56 (GSP_RM_CONTROL) first_seq=158 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a097=0x56 (GSP_RM_CONTROL) first_seq=164 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x0000208f=0x56 (GSP_RM_ALLOC) first_seq=173 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a38=0x56 (GSP_RM_CONTROL) first_seq=202 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=137 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800301=0x56 (GSP_RM_CONTROL) first_seq=155 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073013d=0x56 (GSP_RM_CONTROL) first_seq=221 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=222 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730291=0x56 (GSP_RM_CONTROL) first_seq=224 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=227 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00731144=0x56 (GSP_RM_CONTROL) first_seq=280 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073012c=0x56 (GSP_RM_CONTROL) first_seq=281 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800102=0x56 (GSP_RM_CONTROL) first_seq=354 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208001a4=0x56 (GSP_RM_CONTROL) first_seq=357 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803083=0x56 (GSP_RM_CONTROL) first_seq=359 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800156=0x56 (GSP_RM_CONTROL) first_seq=360 — the guest read a non-OK status
+kf3: GSP REFUSED fn103/0x000090e7=0x56 (GSP_RM_ALLOC) first_seq=368 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801813=0x56 (GSP_RM_CONTROL) first_seq=376 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801819=0x56 (GSP_RM_CONTROL) first_seq=378 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801829=0x56 (GSP_RM_CONTROL) first_seq=380 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801830=0x56 (GSP_RM_CONTROL) first_seq=381 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a080=0x56 (GSP_RM_CONTROL) first_seq=385 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808546=0x56 (GSP_RM_CONTROL) first_seq=386 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809038=0x56 (GSP_RM_CONTROL) first_seq=403 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802087=0x56 (GSP_RM_CONTROL) first_seq=411 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803401=0x56 (GSP_RM_CONTROL) first_seq=416 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=417 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20803404=0x56 (GSP_RM_CONTROL) first_seq=418 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801322=0x56 (GSP_RM_CONTROL) first_seq=419 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801344=0x56 (GSP_RM_CONTROL) first_seq=420 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852a=0x56 (GSP_RM_CONTROL) first_seq=423 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808536=0x56 (GSP_RM_CONTROL) first_seq=425 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a63c=0x56 (GSP_RM_CONTROL) first_seq=428 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0f2=0x56 (GSP_RM_CONTROL) first_seq=429 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=431 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0a7=0x56 (GSP_RM_CONTROL) first_seq=436 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810103=0x56 (GSP_RM_CONTROL) first_seq=472 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809019=0x56 (GSP_RM_CONTROL) first_seq=485 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0a4=0x56 (GSP_RM_CONTROL) first_seq=486 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800153=0x56 (GSP_RM_CONTROL) first_seq=489 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=491 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=492 — the guest read a non-OK status
+kf3: act display-SW twin: 0xc1d00019:0x15070 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe003f (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (853 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15071 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0040 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (755 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15072 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0041 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (644 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15073 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0042 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (637 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x20810107=0x56 (GSP_RM_CONTROL) first_seq=670 — the guest read a non-OK status
+kf3: act free: 0xc1d00019:0x15070: display-SW object host 0xcafe003f freed (615 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15071: display-SW object host 0xcafe0040 freed (502 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15072: display-SW object host 0xcafe0041 freed (429 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15073: display-SW object host 0xcafe0042 freed (422 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15070 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe0059 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (842 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15071 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe005a (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (619 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15072 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe005b (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (614 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00019:0x15073 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe005c (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (610 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=922 — the guest read a non-OK status
+kf3: act display-SW twin: 0xc1d0002b:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe007e (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (839 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002b:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe007f (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (733 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002b:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0080 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (715 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002b:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0081 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (701 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002d:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00a6 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (677 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002d:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00a7 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (665 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002d:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00a8 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (529 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002d:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00a9 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (586 us, off the GSP lock)
+kf3: act free: 0xc1d0002d:0xbeef4903: display-SW object host 0xcafe00a9 freed (536 us, off the GSP lock)
+kf3: act free: 0xc1d0002d:0xbeef4902: display-SW object host 0xcafe00a8 freed (455 us, off the GSP lock)
+kf3: act free: 0xc1d0002d:0xbeef4901: display-SW object host 0xcafe00a7 freed (496 us, off the GSP lock)
+kf3: act free: 0xc1d0002d:0xbeef4900: display-SW object host 0xcafe00a6 freed (460 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002f:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00ca (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (845 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002f:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00cb (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (643 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002f:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00cc (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (594 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d0002f:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00cd (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (607 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xbeef4903: display-SW object host 0xcafe00cd freed (517 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xbeef4902: display-SW object host 0xcafe00cc freed (495 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xbeef4901: display-SW object host 0xcafe00cb freed (463 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xbeef4900: display-SW object host 0xcafe00ca freed (513 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00031:0xbeef4900 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00f5 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (822 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00031:0xbeef4901 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00f6 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (651 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00031:0xbeef4902 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00f7 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (680 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00031:0xbeef4903 GF100_DISP_SW on twin host 0x2f -> host object 0xcafe00f8 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (651 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xbeef4903: display-SW object host 0xcafe00f8 freed (579 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xbeef4902: display-SW object host 0xcafe00f7 freed (478 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xbeef4901: display-SW object host 0xcafe00f6 freed (440 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xbeef4900: display-SW object host 0xcafe00f5 freed (444 us, off the GSP lock)
+kf3: GSP REFUSED fn76/0x2080a0d1=0x56 (GSP_RM_CONTROL) first_seq=2077 — the guest read a non-OK status
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0154 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (656 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0155 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (607 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0156 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (686 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe0157 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (642 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe015b (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (730 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe015c (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (633 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe015d (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (722 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe015e (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (640 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0160 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (661 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0161 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (638 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0162 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (624 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00033:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0163 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (642 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4907: display-SW object host 0xcafe015e freed (643 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4906: display-SW object host 0xcafe015d freed (424 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4905: display-SW object host 0xcafe015c freed (512 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4904: display-SW object host 0xcafe015b freed (401 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb490b: display-SW object host 0xcafe0163 freed (469 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb490a: display-SW object host 0xcafe0162 freed (421 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4909: display-SW object host 0xcafe0161 freed (411 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4908: display-SW object host 0xcafe0160 freed (404 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4903: display-SW object host 0xcafe0157 freed (491 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4902: display-SW object host 0xcafe0156 freed (457 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4901: display-SW object host 0xcafe0155 freed (431 us, off the GSP lock)
+kf3: act free: 0xc1d00033:0xbeeb4900: display-SW object host 0xcafe0154 freed (417 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01f2 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (773 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01f3 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (604 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01f4 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (624 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe01f5 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (650 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01f9 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (545 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01fa (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (604 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01fb (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (606 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe01fc (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (580 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01fe (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (608 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe01ff (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (600 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0200 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (639 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00037:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0201 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (646 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4907: display-SW object host 0xcafe01fc freed (632 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4906: display-SW object host 0xcafe01fb freed (447 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4905: display-SW object host 0xcafe01fa freed (500 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4904: display-SW object host 0xcafe01f9 freed (456 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb490b: display-SW object host 0xcafe0201 freed (527 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb490a: display-SW object host 0xcafe0200 freed (443 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4909: display-SW object host 0xcafe01ff freed (438 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4908: display-SW object host 0xcafe01fe freed (421 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4903: display-SW object host 0xcafe01f5 freed (515 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4902: display-SW object host 0xcafe01f4 freed (450 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4901: display-SW object host 0xcafe01f3 freed (437 us, off the GSP lock)
+kf3: act free: 0xc1d00037:0xbeeb4900: display-SW object host 0xcafe01f2 freed (454 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4900 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe025c (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (734 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4901 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe025d (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (631 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4902 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe025e (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (632 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4903 GF100_DISP_SW on twin host 0x35 -> host object 0xcafe025f (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (645 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4904 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0263 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (654 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4905 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0264 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (630 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4906 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0265 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (628 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4907 GF100_DISP_SW on twin host 0x10036 -> host object 0xcafe0266 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (653 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4908 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0268 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (616 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb4909 GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe0269 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (696 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb490a GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe026a (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (613 us, off the GSP lock)
+kf3: act display-SW twin: 0xc1d00039:0xbeeb490b GF100_DISP_SW on twin host 0x20037 -> host object 0xcafe026b (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (725 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4907: display-SW object host 0xcafe0266 freed (664 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4906: display-SW object host 0xcafe0265 freed (487 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4905: display-SW object host 0xcafe0264 freed (464 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4904: display-SW object host 0xcafe0263 freed (514 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb490b: display-SW object host 0xcafe026b freed (529 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb490a: display-SW object host 0xcafe026a freed (543 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4909: display-SW object host 0xcafe0269 freed (479 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4908: display-SW object host 0xcafe0268 freed (455 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4903: display-SW object host 0xcafe025f freed (570 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4902: display-SW object host 0xcafe025e freed (476 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4901: display-SW object host 0xcafe025d freed (519 us, off the GSP lock)
+kf3: act free: 0xc1d00039:0xbeeb4900: display-SW object host 0xcafe025c freed (510 us, off the GSP lock)
+kf3: act free: 0xc1d0002b:0xbeef4903: display-SW object host 0xcafe0081 freed (464 us, off the GSP lock)
+kf3: act free: 0xc1d0002b:0xbeef4902: display-SW object host 0xcafe0080 freed (417 us, off the GSP lock)
+kf3: act free: 0xc1d0002b:0xbeef4901: display-SW object host 0xcafe007f freed (414 us, off the GSP lock)
+kf3: act free: 0xc1d0002b:0xbeef4900: display-SW object host 0xcafe007e freed (409 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15070: display-SW object host 0xcafe0059 freed (591 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15071: display-SW object host 0xcafe005a freed (572 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15072: display-SW object host 0xcafe005b freed (485 us, off the GSP lock)
+kf3: act free: 0xc1d00019:0x15073: display-SW object host 0xcafe005c freed (455 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=1 of 62 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0003d:0x15070 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe02c0 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (828 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=2 of 64 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0003d:0x15071 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe02c1 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (665 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=3 of 66 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0003d:0x15072 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe02c2 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (598 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=4 of 68 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0003d:0x15073 GF100_DISP_SW on twin host 0x2a -> host object 0xcafe02c3 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (679 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=5 of 70 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02e1 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (688 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=6 of 72 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02e2 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (626 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=7 of 74 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02e3 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (615 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=8 of 76 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe02e4 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (625 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe02e4 freed (463 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe02e3 freed (404 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe02e2 freed (350 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe02e1 freed (353 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=9 of 78 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0304 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (747 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=10 of 80 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0305 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (596 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=11 of 82 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0306 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (613 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=12 of 84 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0307 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (617 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0307 freed (441 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0306 freed (355 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0305 freed (373 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0304 freed (358 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=13 of 86 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0324 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (712 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=14 of 88 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0325 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (568 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=15 of 90 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0326 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (928 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=16 of 92 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0327 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (620 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0327 freed (453 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0326 freed (354 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0325 freed (352 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0324 freed (403 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=17 of 94 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0346 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (699 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=18 of 96 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0347 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (645 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=19 of 98 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0348 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (678 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=20 of 100 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0349 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (664 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0349 freed (472 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0348 freed (360 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0347 freed (352 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0346 freed (350 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=21 of 102 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0367 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (650 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=22 of 104 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0368 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (604 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=23 of 106 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0369 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (818 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=24 of 108 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe036a (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (585 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe036a freed (444 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0369 freed (360 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0368 freed (356 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0367 freed (360 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=25 of 110 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0388 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (634 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=26 of 112 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0389 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (616 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=27 of 114 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe038a (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (816 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=28 of 116 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe038b (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (597 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe038b freed (442 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe038a freed (349 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0389 freed (350 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0388 freed (347 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=29 of 118 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03a8 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (655 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=30 of 120 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03a9 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (586 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=31 of 122 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03aa (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (634 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=32 of 124 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03ab (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (593 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe03ab freed (487 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe03aa freed (368 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe03a9 freed (356 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe03a8 freed (348 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=33 of 126 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03c9 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (658 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=34 of 128 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03ca (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (616 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=35 of 130 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03cb (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (594 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=36 of 132 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03cc (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (854 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe03cc freed (450 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe03cb freed (353 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe03ca freed (343 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe03c9 freed (353 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=37 of 134 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03ea (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (677 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=38 of 136 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03eb (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (569 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=39 of 138 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03ec (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (586 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=40 of 140 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe03ed (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (607 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe03ed freed (532 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe03ec freed (347 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe03eb freed (347 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe03ea freed (352 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=41 of 142 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe040a (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (733 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=42 of 144 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe040b (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (621 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=43 of 146 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe040c (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (610 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=44 of 148 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe040d (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (614 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe040d freed (470 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe040c freed (411 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe040b freed (343 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe040a freed (345 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=45 of 150 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe042b (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (664 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=46 of 152 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe042c (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (646 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=47 of 154 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe042d (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (638 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=48 of 156 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe042e (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (592 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe042e freed (438 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe042d freed (351 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe042c freed (352 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe042b freed (349 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=49 of 158 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe044c (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (663 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=50 of 160 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe044d (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (614 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=51 of 162 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe044e (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (609 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=52 of 164 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe044f (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (569 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe044f freed (429 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe044e freed (358 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe044d freed (344 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe044c freed (346 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=53 of 166 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe046d (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (727 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=54 of 168 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe046e (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (599 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=55 of 170 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe046f (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (597 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=56 of 172 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0470 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (620 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0470 freed (433 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe046f freed (349 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe046e freed (350 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe046d freed (343 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=57 of 174 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe048e (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (596 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=58 of 176 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe048f (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (651 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=59 of 178 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0490 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (531 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=60 of 180 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0491 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (609 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0491 freed (434 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0490 freed (348 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe048f freed (340 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe048e freed (345 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=61 of 182 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04ae (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (670 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=62 of 184 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04af (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (598 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=63 of 186 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04b0 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (684 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=64 of 188 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04b1 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (670 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe04b1 freed (432 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe04b0 freed (354 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe04af freed (355 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe04ae freed (358 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=65 of 190 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04ce (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (777 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=66 of 192 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04cf (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (615 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=67 of 194 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04d0 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (615 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=68 of 196 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04d1 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (590 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe04d1 freed (425 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe04d0 freed (351 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe04cf freed (351 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe04ce freed (347 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=69 of 198 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04ef (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (682 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=70 of 200 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04f0 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (594 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=71 of 202 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04f1 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (608 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=72 of 204 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe04f2 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (664 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe04f2 freed (421 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe04f1 freed (345 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe04f0 freed (352 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe04ef freed (350 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=73 of 206 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0510 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (789 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=74 of 208 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0511 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (626 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=75 of 210 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0512 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (622 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=76 of 212 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0513 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (683 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0513 freed (481 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0512 freed (354 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0511 freed (346 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0510 freed (350 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=77 of 214 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0531 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (671 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=78 of 216 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0532 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (579 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=79 of 218 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0533 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (907 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=80 of 220 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0534 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (729 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0534 freed (437 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0533 freed (351 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0532 freed (388 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0531 freed (344 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=81 of 222 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0552 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (632 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=82 of 224 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0553 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (653 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=83 of 226 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0554 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (652 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=84 of 228 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0555 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (920 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0555 freed (504 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0554 freed (329 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0553 freed (317 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0552 freed (320 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=85 of 230 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0572 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (635 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=86 of 232 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0573 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (569 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=87 of 234 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0574 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (573 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=88 of 236 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0575 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (944 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0575 freed (462 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0574 freed (353 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0573 freed (350 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0572 freed (364 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=89 of 238 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0593 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (704 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=90 of 240 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0594 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (847 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=91 of 242 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0595 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (674 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=92 of 244 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe0596 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (598 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe0596 freed (457 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe0595 freed (350 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe0594 freed (347 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe0593 freed (345 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=93 of 246 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe05b4 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (711 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=94 of 248 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe05b5 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (580 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=95 of 250 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe05b6 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (665 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=96 of 252 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe05b7 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (578 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe05b7 freed (434 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe05b6 freed (400 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe05b5 freed (353 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe05b4 freed (354 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=97 of 254 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4900 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe05d4 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (732 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=98 of 256 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4901 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe05d5 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (584 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=99 of 258 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4902 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe05d6 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (650 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=100 of 260 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d00048:0xbeef4903 GF100_DISP_SW on twin host 0x2c -> host object 0xcafe05d7 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (595 us, off the GSP lock)
+kf3: RC host twin 0x1002d (guest chid 0x6, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2002e (guest chid 0x7, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x2c (guest chid 0x5, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d00048:0xbeef4903: display-SW object host 0xcafe05d7 freed (466 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4902: display-SW object host 0xcafe05d6 freed (355 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4901: display-SW object host 0xcafe05d5 freed (350 us, off the GSP lock)
+kf3: act free: 0xc1d00048:0xbeef4900: display-SW object host 0xcafe05d4 freed (353 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=101 of 262 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4900 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0634 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (752 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=102 of 264 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4901 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0635 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (685 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=103 of 266 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4902 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0636 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (604 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=104 of 268 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4903 GF100_DISP_SW on twin host 0x32 -> host object 0xcafe0637 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (590 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=105 of 270 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4904 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe063b (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (664 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=106 of 272 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4905 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe063c (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (636 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=107 of 274 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4906 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe063d (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (999 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=108 of 276 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4907 GF100_DISP_SW on twin host 0x10033 -> host object 0xcafe063e (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (711 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=109 of 278 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4908 GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0640 (authored: head 0, displayMask 0, caps 0; software classID 1 = the guest's) [kept] (658 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=110 of 280 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb4909 GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0641 (authored: head 0, displayMask 0, caps 0; software classID 2 = the guest's) [kept] (902 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=111 of 282 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb490a GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0642 (authored: head 0, displayMask 0, caps 0; software classID 3 = the guest's) [kept] (669 us, off the GSP lock)
+kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc (unpaired=112 of 284 queries) — that constructor failed after its channel numbered it, so the channel's later display-SW objects are numbered one past their twins' (no channel is named: the query carries none)
+kf3: act display-SW twin: 0xc1d0004a:0xbeeb490b GF100_DISP_SW on twin host 0x20034 -> host object 0xcafe0643 (authored: head 0, displayMask 0, caps 0; software classID 4 = the guest's) [kept] (701 us, off the GSP lock)
+kf3: RC host twin 0x20034 (guest chid 0xd, engine 0xc) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x32 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x10033 (guest chid 0xc, engine 0xb) wrote its notifier: except_type=0x20 (Xid 32) — forwarding RC_TRIGGERED
+kf3: act free: 0xc1d0004a:0xbeeb4903: display-SW object host 0xcafe0637 freed (450 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4902: display-SW object host 0xcafe0636 freed (358 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4901: display-SW object host 0xcafe0635 freed (347 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4900: display-SW object host 0xcafe0634 freed (351 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4907: display-SW object host 0xcafe063e freed (495 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4906: display-SW object host 0xcafe063d freed (482 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4905: display-SW object host 0xcafe063c freed (428 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4904: display-SW object host 0xcafe063b freed (431 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb490b: display-SW object host 0xcafe0643 freed (480 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb490a: display-SW object host 0xcafe0642 freed (420 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4909: display-SW object host 0xcafe0641 freed (420 us, off the GSP lock)
+kf3: act free: 0xc1d0004a:0xbeeb4908: display-SW object host 0xcafe0640 freed (420 us, off the GSP lock)
+kf3: act free: 0xc1d0003d:0x15070: display-SW object host 0xcafe02c0 freed (625 us, off the GSP lock)
+kf3: act free: 0xc1d0003d:0x15071: display-SW object host 0xcafe02c1 freed (451 us, off the GSP lock)
+kf3: act free: 0xc1d0003d:0x15072: display-SW object host 0xcafe02c2 freed (447 us, off the GSP lock)
+kf3: act free: 0xc1d0003d:0x15073: display-SW object host 0xcafe02c3 freed (481 us, off the GSP lock)
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=0 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=8 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=12 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=14 live=10 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=16 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=20 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=24 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=24 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=24 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=24 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=24 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=24 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=24 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=36 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=36 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=36 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=48 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=48 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=48 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=48 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=20 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=8 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=60 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=68 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=84 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=100 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=116 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=132 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=148 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=160 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=12 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=4 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
+STATUS dispsw[twins=172 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0]
