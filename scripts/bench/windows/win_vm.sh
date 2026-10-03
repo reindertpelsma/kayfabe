@@ -14,6 +14,7 @@
 #                    prevented, OpenSSH keyed to the harness; then a check boot; then the disk is sealed
 #   win_vm.sh run [--overlay NAME] [--once] [--arm A|B] [--no-kf3] [--guest-driver V]
 #                 [--kf3-extra PROPS] [--tag TAG] [--ssh-port N] [--ssh-bind ADDR] [--detach]
+#                 [--no-rpc-trace]
 #                    boot the installed disk with kf3 (its signed GOP ROM, display on). kf3 has no
 #                    reset path, so every guest reboot is a fresh QEMU: -action reboot=shutdown and a
 #                    restart loop; the SAME OVMF vars and the SAME TPM state every time
@@ -410,10 +411,13 @@ vm_start() {
   EVPID=$!
   log "QEMU_START tag=$tag boot=$n pid=$QPID log=logs/${tag}_b${n}_qemu.log"
   # one screendump every SHOT_EVERY seconds while this QEMU lives
+  # (named by this boot's start time too, so a re-run of a tag never overwrites an earlier boot's)
+  local started
+  started=$(date -u +%Y%m%dT%H%M%SZ)
   ( local s=0
     while kill -0 "$QPID" 2>/dev/null; do
       sleep "${SHOT_EVERY:-30}"; s=$((s + 1))
-      shot_to "$VM/logs/shots/${tag}_b${n}_$(printf %04d "$s").png" >/dev/null 2>&1 || true
+      shot_to "$VM/logs/shots/${tag}_b${n}_${started}_$(printf %04d "$s").png" >/dev/null 2>&1 || true
     done ) &
   SHOTPID=$!
 }
@@ -657,6 +661,7 @@ cmd_run() {
       --ssh-bind) SSH_BIND=$2; shift 2 ;;
       --max-boots) max_boots=$2; shift 2 ;;
       --detach) detach=1; shift ;;
+      --no-rpc-trace) export KF3_RPC_TRACE=0; shift ;;
       *) die "run: unknown option $1" ;;
     esac
   done
@@ -691,6 +696,8 @@ cmd_run() {
     [ -z "$gdrv" ] || dev+=",guest-driver=$gdrv"
     [ -z "$extra" ] || dev+=",$extra"
     QA+=(-vga none -device "$dev")
+    # every command kf3's chain answers, logged with its id and result (kf-rm census, log only)
+    export KF3_RPC_TRACE=${KF3_RPC_TRACE:-1}
     exec 8>"$GPU_LOCK"
     log "waiting for the GPU lock $GPU_LOCK (GPU work is strictly serial)"
     flock -w 7200 8 || die "the GPU lock $GPU_LOCK was not free in 2 h"

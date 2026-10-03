@@ -325,6 +325,50 @@ impl ControlCensusLog {
     }
 }
 
+/// ★ 2026-10-04 (branch `v3-windows`, runbook C3): `KF3_RPC_TRACE=1` logs every command this chain
+/// answers — the function, the control id or the alloc class, and the result the guest reads — so a
+/// Windows guest's command stream can be diffed against a Linux guest's
+/// (`docs/design/V3_WINDOWS_DISCOVERY.md`). Log only and off by default: it changes no reply.
+fn rpc_trace() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_RPC_TRACE").is_some_and(|v| v == "1"))
+}
+
+/// One `KF3_RPC_TRACE` line.
+fn trace_line(
+    driver: &DriverAbiTable,
+    cmd: &RpcCommand,
+    control: Option<&kf_abi::view::RpcControlReq>,
+    reply: Option<&Reply>,
+) {
+    let what = match cmd.function {
+        RpcFunction::RmControl => control.map_or_else(
+            || "cmd=undecodable".to_owned(),
+            |q| {
+                format!(
+                    "cmd={:#010x} client={:#x} object={:#x}",
+                    q.cmd, q.client, q.object
+                )
+            },
+        ),
+        RpcFunction::RmAlloc => driver.decode_rpc_alloc(&cmd.payload).map_or_else(
+            |_| "class=undecodable".to_owned(),
+            |a| {
+                format!(
+                    "class={:#06x} client={:#x} parent={:#x} handle={:#x}",
+                    a.class, a.client, a.parent, a.handle
+                )
+            },
+        ),
+        _ => String::new(),
+    };
+    let result = reply.map_or_else(|| "none".to_owned(), |r| format!("{:#x}", r.rpc_result));
+    eprintln!(
+        "kf-rm: rpc-trace fn={} {:?} seq={} {what} result={result}",
+        cmd.code, cmd.function, cmd.sequence
+    );
+}
+
 /// The observing wrapper: decodes the control header, forwards to the inner policy, and
 /// records what came back — **unchanged**.
 ///
@@ -365,6 +409,9 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
             None
         };
         let reply = self.inner.respond(cmd);
+        if rpc_trace() {
+            trace_line(&self.driver, cmd, req.as_ref(), reply.as_ref());
+        }
         if let Some(req) = req {
             if let Some(r) = &reply {
                 self.log.note_served(req.cmd, r.rpc_result);

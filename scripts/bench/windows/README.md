@@ -60,6 +60,7 @@ $S status
 | `--ssh-port N` | The host port for ssh. |
 | `--ssh-bind ADDR` | Bind the ssh port wider than `127.0.0.1`. **Explicit only.** |
 | `--detach` | Run in the background. |
+| `--no-rpc-trace` | Do not set `KF3_RPC_TRACE=1` (on by default for kf3 runs: one log line per command kf3 answers). |
 
 **Remote access.** Use `ssh -J <gpu-host> -p 2224 kf@127.0.0.1` with a key you passed to
 `install --authorized-key`. No public port is opened.
