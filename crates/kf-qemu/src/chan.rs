@@ -109,6 +109,10 @@ struct PtChan {
     runlist: Option<u32>,
     /// ★ 2026-10-03: the guest GSP life ([`ChanPlane::gsp_life`]) the twin was born in.
     life: u64,
+    /// ★ 2026-10-03 (review of `5af7e644`): this twin's birth generation, unique for the plane's
+    /// lifetime ([`ChanPlane::pt_birth_gen`]). ⊘ The host token cannot tell a reborn twin from the
+    /// one it replaced: it is the host chid, and host RM hands out the lowest free chid again.
+    birth: u64,
 }
 
 /// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
@@ -187,8 +191,9 @@ pub struct RcEvent {
     pub engine: u32,
     /// `info32` of the record the host wrote — the `ROBUST_CHANNEL_*` code.
     pub except_type: u32,
-    /// The twin's host token (for the log, and the liveness check: a reused `(client, handle)`
-    /// names a NEW twin with a new token).
+    /// The twin's host token (for the log). ⊘ CORRECTED 2026-10-03: it is NOT the twin's identity
+    /// — a twin freed and reborn under the same `(client, handle)` may get the same host chid back
+    /// (host RM reuses the lowest free one). [`RcEvent::birth`] is the identity.
     pub host_token: u32,
     /// ★ 2026-10-03: the guest channel `(hClient, hChannel)` — the twin's key in the plane, so
     /// delivery can ask whether the guest has freed it since.
@@ -199,6 +204,9 @@ pub struct RcEvent {
     pub runlist: Option<u32>,
     /// ★ 2026-10-03: the guest GSP life the twin was born in ([`ChanPlane::gsp_life`]).
     pub life: u64,
+    /// ★ 2026-10-03: the twin's birth generation ([`ChanPlane::pt_birth_gen`]) — what delivery
+    /// compares to ask whether the twin at `(client, handle)` is still THIS one.
+    pub birth: u64,
     /// ★ 2026-10-03: this event's group already had its `OS_ERROR_LOG` posted — a requeued event
     /// (the GSP queue was full for its `RC_TRIGGERED`) never posts a second Xid.
     pub xid_done: bool,
@@ -248,19 +256,191 @@ pub fn group_rc(evs: Vec<RcEvent>) -> Vec<RcGroup> {
 /// ★ 2026-10-03: the guest Xid's text — guest-side facts only (no VMM address, rule A.5), and at
 /// most `kf_abi::oserrorlog::ERR_STRING_MAX` bytes for any channel count. The guest prints it after
 /// `NVRM: Xid (PCI:…): <except_type>, pid=…, name=…, `.
+///
+/// ⊘ CORRECTED 2026-10-03 (review of `5af7e644`): the Xid 31 text used to ASSERT managed memory
+/// as the cause — *"CUDA managed memory or pageable (HMM) access to a non-resident page is
+/// unsupported. Otherwise this is a kayfabe bug"*. But every Xid 31 gets this text, and an app's
+/// own invalid access (out of bounds, a write through a read-only mapping — `vmm_probe`'s
+/// `ro_write` does it on purpose) raises Xid 31 on bare metal too. The text now names the fault
+/// neutrally (*unserviced GPU page fault*), managed memory as the COMMON cause, and the app's own
+/// bug beside a kayfabe bug.
 #[must_use]
 pub fn xid_text(except_type: u32, channels: usize) -> String {
     if except_type == kf_abi::oserrorlog::ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT {
         format!(
-            "kayfabe: GPU MMU fault; {channels} channel(s) of this process stopped. kayfabe \
-             services no GPU page faults: CUDA managed memory or pageable (HMM) access to a \
-             non-resident page is unsupported. Otherwise this is a kayfabe bug - please report."
+            "kayfabe: unserviced GPU page fault; {channels} channel(s) of this process stopped. \
+             Common cause: CUDA managed memory or HMM pageable access (unsupported). Else an \
+             invalid GPU access by the app (as on bare metal) or a kayfabe bug: please report."
         )
     } else {
         format!(
             "kayfabe: host GPU robust-channel error; {channels} channel(s) of this process stopped."
         )
     }
+}
+
+/// ★ 2026-10-03: the host's named line for one guest client's Xid-31 twins. `UNSERVICED-GPU-FAULT
+/// guest client 0x…` is the shape `scripts/apps/loud_verdict.sh` keys on. ⊘ CORRECTED 2026-10-03
+/// (review of `5af7e644`), like [`xid_text`]: neutral about the cause — managed memory is the
+/// COMMON cause, and an app's own invalid GPU access faults the same way on bare metal.
+#[must_use]
+pub fn unserviced_line(client: u32, chids: &[u32], held: u64) -> String {
+    let mmu = kf_abi::oserrorlog::ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT;
+    let chids: Vec<String> = chids.iter().map(|c| format!("{c:#x}")).collect();
+    format!(
+        "kf3: UNSERVICED-GPU-FAULT guest client {client:#x} chids [{}] host Xid {mmu} — an unserviced GPU page fault (common cause: CUDA managed memory or HMM pageable access, which kayfabe does not service; an invalid GPU access by the app faults the same way on bare metal); guest gets RC_TRIGGERED + Xid {mmu}{}",
+        chids.join(" "),
+        if held > 0 {
+            format!(" (+{held} line(s) held by the rate limit)")
+        } else {
+            String::new()
+        }
+    )
+}
+
+/// ★ 2026-10-03 (review of `5af7e644`): one message [`deliver_rc_batch`] asks the guest's GSP
+/// queue to carry. The caller encodes and posts it, and answers with a [`PostOutcome`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RcPost {
+    /// A group's guest `OS_ERROR_LOG` — its `Xid` line.
+    Xid {
+        /// The guest client.
+        client: u32,
+        /// The `ROBUST_CHANNEL_*` code (the Xid number).
+        except_type: u32,
+        /// The guest chid the receiver attributes pid/name to, or
+        /// [`kf_abi::oserrorlog::INVALID_CHID`] when no member is live on a known runlist.
+        chid: u32,
+        /// The runlist of `chid` (0 with `INVALID_CHID`).
+        runlist_id: u32,
+        /// How many of the group's channels the host stopped (this life's members).
+        channels: usize,
+    },
+    /// One live member's `RC_TRIGGERED`.
+    Rc(RcEvent),
+}
+
+/// What the GSP queue did with one [`RcPost`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PostOutcome {
+    /// Posted.
+    Posted,
+    /// The queue is full: this post and everything after it in the batch are requeued.
+    QueueFull,
+    /// Refused for any other reason (the caller names it) — dropped, never retried.
+    Refused,
+}
+
+/// What [`deliver_rc_batch`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RcDelivered {
+    /// `OS_ERROR_LOG`s posted.
+    pub xids: usize,
+    /// `RC_TRIGGERED`s posted.
+    pub rcs: usize,
+    /// Events dropped because their twin was born in an earlier GSP life.
+    pub stale: Vec<RcEvent>,
+    /// Events whose twin the guest freed before delivery: no `RC_TRIGGERED`.
+    pub freed: Vec<RcEvent>,
+    /// Events to requeue (the queue filled), in order, with `xid_done` as delivery left it.
+    pub back: Vec<RcEvent>,
+}
+
+/// ★ 2026-10-03 (review of `5af7e644`): the drainer's whole RC delivery decision, with its two
+/// effects injected — `live` (is this event's twin still the guest's channel?) and `post` (put
+/// one message on the GSP queue) — so every rule below is unit-tested (`rc_delivery_tests`):
+/// - an event from an earlier GSP `life` is dropped (`stale`), never posted into this one;
+/// - `live` is asked once per remaining member, before anything of its group is posted;
+/// - per `(client, exception)` group that [`RcGroup::needs_xid`]: ONE `Xid`, BEFORE the group's
+///   `RC_TRIGGERED`s (the guest handles its queue in order, so the channel is still there to
+///   attribute pid/name to), naming the first member that is live AND on a known runlist —
+///   otherwise `INVALID_CHID`: an Xid without pid/name, never with another process's;
+/// - `QueueFull` at the Xid requeues the whole group with `xid_done` still false, so the retry
+///   posts it; any other outcome sets `xid_done` on every member, so a retry never posts a second;
+/// - a member the guest freed gets no `RC_TRIGGERED` (`freed`) — its chid may already name a new
+///   channel of another process;
+/// - the first `QueueFull` requeues that post and everything after it, in order.
+pub fn deliver_rc_batch(
+    evs: Vec<RcEvent>,
+    life: u64,
+    mut live: impl FnMut(&RcEvent) -> bool,
+    mut post: impl FnMut(&RcPost) -> PostOutcome,
+) -> RcDelivered {
+    let mut out = RcDelivered::default();
+    let mut full = false;
+    for grp in group_rc(evs) {
+        if full {
+            out.back.extend(grp.members);
+            continue;
+        }
+        let (mut members, stale): (Vec<_>, Vec<_>) =
+            grp.members.into_iter().partition(|e| e.life == life);
+        out.stale.extend(stale);
+        if members.is_empty() {
+            continue;
+        }
+        let alive: Vec<bool> = members.iter().map(&mut live).collect();
+        if grp.needs_xid {
+            let (chid, runlist_id) = members
+                .iter()
+                .zip(&alive)
+                .find_map(|(e, l)| {
+                    if *l {
+                        e.runlist.map(|r| (e.chid, r))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or((kf_abi::oserrorlog::INVALID_CHID, 0));
+            let xid = RcPost::Xid {
+                client: grp.client,
+                except_type: grp.except_type,
+                chid,
+                runlist_id,
+                channels: members.len(),
+            };
+            match post(&xid) {
+                PostOutcome::Posted => out.xids += 1,
+                PostOutcome::QueueFull => {
+                    full = true;
+                    out.back.extend(members);
+                    continue;
+                }
+                PostOutcome::Refused => {}
+            }
+            for e in &mut members {
+                e.xid_done = true;
+            }
+        }
+        for (e, l) in members.into_iter().zip(alive) {
+            if full {
+                out.back.push(e);
+                continue;
+            }
+            if !l {
+                out.freed.push(e);
+                continue;
+            }
+            match post(&RcPost::Rc(e)) {
+                PostOutcome::Posted => out.rcs += 1,
+                PostOutcome::QueueFull => {
+                    full = true;
+                    out.back.push(e);
+                }
+                PostOutcome::Refused => {}
+            }
+        }
+    }
+    out
+}
+
+/// ★ 2026-10-03 (review of `5af7e644`): is the twin now at an event's `(client, handle)` key —
+/// `at_key` = `(host token, birth)`, `None` when the key is empty — the twin the event came from?
+/// By BIRTH only: a twin freed and reborn under the same key may get the same host chid (token)
+/// back, and must not receive the old twin's RC.
+#[must_use]
+pub fn same_twin(e: &RcEvent, at_key: Option<(u32, u64)>) -> bool {
+    at_key.is_some_and(|(_token, birth)| birth == e.birth)
 }
 
 /// ★ 2026-10-03: a per-guest-client rate limit for ONE host log line — a hostile guest can RC at
@@ -1082,6 +1262,10 @@ pub struct ChanPlane {
     /// `Running` (driver unload, teardown). A twin records the life it was born in, and an RC event
     /// from an earlier life is never posted into the next one.
     pub gsp_life: AtomicU64,
+    /// ★ 2026-10-03 (review of `5af7e644`): the next Passthrough twin's birth generation — every
+    /// twin inserted into `pt` takes one, so an RC event names the twin it came from even when the
+    /// guest frees and re-allocates the same `(client, handle)` and host RM hands back the chid.
+    pub pt_birth_gen: AtomicU64,
     /// ★ 2026-10-03: `UNSERVICED-GPU-FAULT` groups seen (host Xid 31 on a guest client's twins).
     pub rc_unserviced: AtomicU64,
     /// ★ 2026-10-03: the `UNSERVICED-GPU-FAULT` line's per-client rate limit.
@@ -1263,6 +1447,7 @@ impl ChanPlane {
             rc_unarmed: AtomicU64::new(0),
             rc_none: AtomicU64::new(0),
             gsp_life: AtomicU64::new(0),
+            pt_birth_gen: AtomicU64::new(0),
             rc_unserviced: AtomicU64::new(0),
             unserviced_lines: Mutex::new(LineLimiter::default()),
             rc_seen: AtomicU64::new(0),
@@ -3032,6 +3217,7 @@ impl ChanPlane {
                             falcon_ctx: None,
                             runlist: runlist_of,
                             life,
+                            birth: me.pt_birth_gen.fetch_add(1, Ordering::Relaxed),
                         });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
@@ -3260,6 +3446,7 @@ impl ChanPlane {
                         handle: key.1,
                         runlist: t.runlist,
                         life: t.life,
+                        birth: t.birth,
                         xid_done: false,
                     });
                 }
@@ -3319,20 +3506,12 @@ impl ChanPlane {
             else {
                 continue;
             };
-            let chids: Vec<String> = found
+            let chids: Vec<u32> = found
                 .iter()
                 .filter(|e| e.client == c && e.except_type == mmu)
-                .map(|e| format!("{:#x}", e.chid))
+                .map(|e| e.chid)
                 .collect();
-            eprintln!(
-                "kf3: UNSERVICED-GPU-FAULT guest client {c:#x} chids [{}] host Xid {mmu} — kayfabe services no GPU page faults; guest gets RC_TRIGGERED + Xid {mmu}{}",
-                chids.join(" "),
-                if held > 0 {
-                    format!(" (+{held} line(s) held by the rate limit)")
-                } else {
-                    String::new()
-                }
-            );
+            eprintln!("{}", unserviced_line(c, &chids, held));
         }
     }
 
@@ -3340,11 +3519,17 @@ impl ChanPlane {
     /// guest's FREE removes a twin from the plane on this same thread, in statement order, under the
     /// GSP lock ([`ChanPlane::statement`] → `free`), so the answer cannot change between this check
     /// and a post the caller makes while still holding that lock. A reused `(client, handle)` is a
-    /// NEW twin, told apart by its host token.
+    /// NEW twin, told apart by its birth generation ([`same_twin`]).
+    /// ⊘ CORRECTED 2026-10-03 (review of `5af7e644`): it was told apart by its host token, which is
+    /// the host chid — and host RM reuses the lowest free chid, so a twin reborn under the same key
+    /// (births run on the act thread, frees here) could match and receive the old twin's RC.
     pub fn rc_twin_live(&self, e: &RcEvent) -> bool {
         self.pt.lock().is_ok_and(|m| {
-            m.get(&(e.client, e.handle))
-                .is_some_and(|t| t.chan.token == e.host_token && t.life == e.life)
+            same_twin(
+                e,
+                m.get(&(e.client, e.handle))
+                    .map(|t| (t.chan.token, t.birth)),
+            )
         })
     }
 
@@ -3944,7 +4129,11 @@ mod scope_tests {
 
 #[cfg(test)]
 mod rc_delivery_tests {
-    use super::{LineLimiter, RcEvent, group_rc, xid_text};
+    use super::{
+        LineLimiter, PostOutcome, RcDelivered, RcEvent, RcPost, deliver_rc_batch, group_rc,
+        same_twin, unserviced_line, xid_text,
+    };
+    use kf_abi::oserrorlog::INVALID_CHID;
     use std::time::{Duration, Instant};
 
     fn ev(client: u32, handle: u32, except_type: u32, xid_done: bool) -> RcEvent {
@@ -3957,8 +4146,267 @@ mod rc_delivery_tests {
             handle,
             runlist: Some(0),
             life: 0,
+            birth: u64::from(handle),
             xid_done,
         }
+    }
+
+    /// One delivery with scripted effects: `dead` = handles whose twin is no longer live;
+    /// `outcomes` = the queue's answer to each post in order (then `Posted`). Returns what delivery
+    /// did and every post it attempted, in order.
+    fn deliver(
+        evs: Vec<RcEvent>,
+        life: u64,
+        dead: &[u32],
+        outcomes: &[PostOutcome],
+    ) -> (RcDelivered, Vec<RcPost>) {
+        let mut posts = Vec::new();
+        let mut asked = 0usize;
+        let done = deliver_rc_batch(
+            evs,
+            life,
+            |e| !dead.contains(&e.handle),
+            |p| {
+                posts.push(p.clone());
+                let o = outcomes.get(asked).copied().unwrap_or(PostOutcome::Posted);
+                asked += 1;
+                o
+            },
+        );
+        (done, posts)
+    }
+
+    fn rc_handles(posts: &[RcPost]) -> Vec<u32> {
+        posts
+            .iter()
+            .filter_map(|p| match p {
+                RcPost::Rc(e) => Some(e.handle),
+                RcPost::Xid { .. } => None,
+            })
+            .collect()
+    }
+
+    fn xid_chids(posts: &[RcPost]) -> Vec<(u32, u32)> {
+        posts
+            .iter()
+            .filter_map(|p| match p {
+                RcPost::Xid {
+                    chid, runlist_id, ..
+                } => Some((*chid, *runlist_id)),
+                RcPost::Rc(_) => None,
+            })
+            .collect()
+    }
+
+    /// ★ An event whose twin was born in an earlier GSP life is never posted into this one — not as
+    /// an RC_TRIGGERED and not as a member of the group's Xid. A group of only stale events posts
+    /// nothing at all.
+    #[test]
+    fn a_stale_life_is_dropped_and_never_posted() {
+        let a = 0xc1d0_0010;
+        let mut old = ev(a, 0xcafe_0007, 31, false);
+        old.life = 0;
+        let mut new = ev(a, 0xcafe_0008, 31, false);
+        new.life = 1;
+        let (d, posts) = deliver(vec![old, new], 1, &[], &[]);
+        assert_eq!(d.stale, vec![old]);
+        assert_eq!(rc_handles(&posts), vec![0xcafe_0008]);
+        assert!(
+            matches!(posts[0], RcPost::Xid { channels: 1, .. }),
+            "the Xid counts only this life's channels: {posts:?}"
+        );
+        let (d, posts) = deliver(vec![old], 1, &[], &[]);
+        assert!(posts.is_empty(), "{posts:?}");
+        assert_eq!((d.xids, d.rcs, d.stale.len()), (0, 0, 1));
+    }
+
+    /// ★ A member the guest freed before delivery gets no RC_TRIGGERED (its chid may already name
+    /// another process's new channel); its live siblings still do.
+    #[test]
+    fn a_freed_member_is_skipped() {
+        let a = 0xc1d0_0010;
+        let evs = vec![
+            ev(a, 0xcafe_0007, 31, false),
+            ev(a, 0xcafe_0008, 31, false),
+            ev(a, 0xcafe_0009, 31, false),
+        ];
+        let (d, posts) = deliver(evs, 0, &[0xcafe_0008], &[]);
+        assert_eq!(rc_handles(&posts), vec![0xcafe_0007, 0xcafe_0009]);
+        assert_eq!(d.freed.len(), 1);
+        assert_eq!(d.freed[0].handle, 0xcafe_0008);
+        assert_eq!((d.xids, d.rcs), (1, 2));
+        assert!(d.back.is_empty());
+    }
+
+    /// ★ The Xid names the FIRST member that is live AND on a known runlist — never a freed one
+    /// (its chid may be another process's now), never a guessed runlist.
+    #[test]
+    fn the_xid_names_the_first_live_member_on_a_known_runlist() {
+        let a = 0xc1d0_0010;
+        let freed = ev(a, 0xcafe_0007, 31, false);
+        let mut no_runlist = ev(a, 0xcafe_0008, 31, false);
+        no_runlist.runlist = None;
+        let mut named = ev(a, 0xcafe_0009, 31, false);
+        named.runlist = Some(3);
+        let (_, posts) = deliver(vec![freed, no_runlist, named], 0, &[0xcafe_0007], &[]);
+        assert_eq!(xid_chids(&posts), vec![(named.chid, 3)]);
+    }
+
+    /// ★ No live member on a known runlist ⇒ `INVALID_CHID` (runlist 0): the guest prints the Xid
+    /// without pid/name rather than with another process's. Every member freed still posts the Xid
+    /// (the host DID stop those channels), and no RC_TRIGGERED.
+    #[test]
+    fn no_live_member_on_a_known_runlist_names_invalid_chid() {
+        let a = 0xc1d0_0010;
+        let mut unknown = ev(a, 0xcafe_0008, 31, false);
+        unknown.runlist = None;
+        let (_, posts) = deliver(vec![unknown], 0, &[], &[]);
+        assert_eq!(xid_chids(&posts), vec![(INVALID_CHID, 0)]);
+        let evs = vec![ev(a, 0xcafe_0007, 31, false), ev(a, 0xcafe_0009, 31, false)];
+        let (d, posts) = deliver(evs, 0, &[0xcafe_0007, 0xcafe_0009], &[]);
+        assert_eq!(xid_chids(&posts), vec![(INVALID_CHID, 0)]);
+        assert!(rc_handles(&posts).is_empty());
+        assert_eq!((d.xids, d.rcs, d.freed.len()), (1, 0, 2));
+    }
+
+    /// ★ Each group's Xid is posted BEFORE that group's RC_TRIGGEREDs: the guest handles its queue
+    /// in order, and its RC_TRIGGERED handling may tear the channel down, after which the Xid could
+    /// no longer attribute pid/name.
+    #[test]
+    fn each_groups_xid_precedes_its_rc_triggereds() {
+        let (a, b) = (0xc1d0_0010, 0xc1d0_0011);
+        let evs = vec![
+            ev(a, 0xcafe_0007, 31, false),
+            ev(b, 0xcafe_0001, 31, false),
+            ev(a, 0xcafe_0008, 31, false),
+        ];
+        let (d, posts) = deliver(evs, 0, &[], &[]);
+        let shape: Vec<String> = posts
+            .iter()
+            .map(|p| match p {
+                RcPost::Xid { client, .. } => format!("X{client:x}"),
+                RcPost::Rc(e) => format!("R{:x}", e.handle),
+            })
+            .collect();
+        assert_eq!(
+            shape,
+            [
+                "Xc1d00010",
+                "Rcafe0007",
+                "Rcafe0008",
+                "Xc1d00011",
+                "Rcafe0001"
+            ]
+        );
+        assert_eq!((d.xids, d.rcs), (2, 3));
+    }
+
+    /// ★ The queue is full AT THE XID: the whole batch is requeued in order with `xid_done` still
+    /// false, so the retry posts the Xid — exactly once over both deliveries.
+    #[test]
+    fn queue_full_at_the_xid_requeues_with_xid_done_false() {
+        let (a, b) = (0xc1d0_0010, 0xc1d0_0011);
+        let evs = vec![
+            ev(a, 0xcafe_0007, 31, false),
+            ev(a, 0xcafe_0008, 31, false),
+            ev(b, 0xcafe_0001, 31, false),
+        ];
+        let (d, posts) = deliver(evs.clone(), 0, &[], &[PostOutcome::QueueFull]);
+        assert_eq!(posts.len(), 1, "nothing after the full post: {posts:?}");
+        assert_eq!((d.xids, d.rcs), (0, 0));
+        assert_eq!(d.back, evs, "requeued in order, xid_done untouched");
+        let (d2, posts2) = deliver(d.back, 0, &[], &[]);
+        assert_eq!(xid_chids(&posts2).len(), 2, "each group's Xid, once");
+        assert_eq!((d2.xids, d2.rcs), (2, 3));
+    }
+
+    /// ★ The queue is full at the group's SECOND RC_TRIGGERED: the Xid is already in the guest's
+    /// log, so that member and its siblings are requeued with `xid_done` set (the retry posts NO
+    /// second Xid for them), and the next group is requeued untouched (its Xid still owed).
+    #[test]
+    fn queue_full_mid_group_requeues_with_xid_done_true() {
+        let (a, b) = (0xc1d0_0010, 0xc1d0_0011);
+        let evs = vec![
+            ev(a, 0xcafe_0007, 31, false),
+            ev(a, 0xcafe_0008, 31, false),
+            ev(a, 0xcafe_0009, 31, false),
+            ev(b, 0xcafe_0001, 31, false),
+        ];
+        let script = [
+            PostOutcome::Posted,
+            PostOutcome::Posted,
+            PostOutcome::QueueFull,
+        ];
+        let (d, posts) = deliver(evs, 0, &[], &script);
+        assert_eq!(posts.len(), 3);
+        assert_eq!((d.xids, d.rcs), (1, 1));
+        let back: Vec<(u32, bool)> = d.back.iter().map(|e| (e.handle, e.xid_done)).collect();
+        assert_eq!(
+            back,
+            [
+                (0xcafe_0008, true),
+                (0xcafe_0009, true),
+                (0xcafe_0001, false)
+            ]
+        );
+        let (d2, posts2) = deliver(d.back, 0, &[], &[]);
+        assert_eq!(
+            xid_chids(&posts2),
+            vec![(0x01, 0)],
+            "only client b's Xid — client a's is not posted twice"
+        );
+        assert_eq!(
+            rc_handles(&posts2),
+            vec![0xcafe_0008, 0xcafe_0009, 0xcafe_0001]
+        );
+        assert_eq!((d2.xids, d2.rcs), (1, 3));
+    }
+
+    /// ★ An Xid refused for any reason but a full queue (an encoding the guest version cannot
+    /// carry, a queue error) is decided: `xid_done` is set, the RC_TRIGGEREDs still go, and a later
+    /// requeue never retries the Xid.
+    #[test]
+    fn a_refused_xid_is_decided_not_retried() {
+        let a = 0xc1d0_0010;
+        let evs = vec![ev(a, 0xcafe_0007, 31, false), ev(a, 0xcafe_0008, 31, false)];
+        let script = [
+            PostOutcome::Refused,
+            PostOutcome::Posted,
+            PostOutcome::QueueFull,
+        ];
+        let (d, posts) = deliver(evs, 0, &[], &script);
+        assert_eq!(rc_handles(&posts), vec![0xcafe_0007, 0xcafe_0008]);
+        assert_eq!((d.xids, d.rcs), (0, 1));
+        assert_eq!(d.back.len(), 1);
+        assert!(d.back[0].xid_done, "the refused Xid is not retried");
+        let (_, posts2) = deliver(d.back, 0, &[], &[]);
+        assert!(xid_chids(&posts2).is_empty(), "{posts2:?}");
+    }
+
+    /// ★ A requeued group posts no Xid at all — only the members' RC_TRIGGEREDs.
+    #[test]
+    fn a_requeued_group_posts_only_its_rc_triggereds() {
+        let a = 0xc1d0_0010;
+        let (d, posts) = deliver(vec![ev(a, 0xcafe_0007, 31, true)], 0, &[], &[]);
+        assert!(xid_chids(&posts).is_empty());
+        assert_eq!((d.xids, d.rcs), (0, 1));
+    }
+
+    /// ★ Twin identity is the BIRTH, not the host token: host RM reuses the lowest free chid, so a
+    /// twin freed and reborn under the same `(client, handle)` can carry the old twin's token. It
+    /// must not receive the old twin's RC. (⊘ The token comparison this replaces called it live.)
+    #[test]
+    fn a_reborn_twin_with_the_same_host_chid_is_not_the_same_twin() {
+        let e = ev(0xc1d0_0010, 0xcafe_0007, 31, false);
+        assert!(
+            same_twin(&e, Some((e.host_token, e.birth))),
+            "the twin itself"
+        );
+        assert!(
+            !same_twin(&e, Some((e.host_token, e.birth + 1))),
+            "a reborn twin that got the same host chid back"
+        );
+        assert!(!same_twin(&e, None), "freed, nothing at the key");
     }
 
     /// ★ One group per `(client, exception)`, in first-arrival order, members in arrival order —
@@ -4019,6 +4467,33 @@ mod rc_delivery_tests {
         let t = xid_text(31, 8);
         assert!(t.contains("8 channel(s)"), "{t}");
         assert!(t.contains("managed memory"), "{t}");
+    }
+
+    /// ★ Every Xid 31 gets this text — including an app's own invalid access (out of bounds, a
+    /// write through a read-only mapping: `vmm_probe`'s `ro_write`), which faults on bare metal
+    /// too. So neither the guest text nor the host line may ASSERT managed memory: they name the
+    /// fault (unserviced GPU page fault), managed memory as the COMMON cause, and the app's own
+    /// invalid access beside a kayfabe bug.
+    #[test]
+    fn the_xid_31_texts_name_managed_memory_as_common_not_certain() {
+        let guest = xid_text(31, 8);
+        let host = unserviced_line(0xc1d0_001e, &[0xb, 0x8], 0);
+        for t in [&guest, &host] {
+            let l = t.to_lowercase();
+            assert!(l.contains("unserviced gpu page fault"), "{t}");
+            assert!(l.contains("common cause"), "{t}");
+            assert!(l.contains("invalid gpu access by the app"), "{t}");
+            assert!(l.contains("bare metal"), "{t}");
+        }
+        assert!(
+            !guest.contains("is unsupported. Otherwise"),
+            "the old text asserted the cause: {guest}"
+        );
+        assert!(
+            host.starts_with("kf3: UNSERVICED-GPU-FAULT guest client 0xc1d0001e chids [0xb 0x8] "),
+            "the shape loud_verdict.sh keys on: {host}"
+        );
+        assert!(unserviced_line(1, &[2], 3).ends_with(" (+3 line(s) held by the rate limit)"));
     }
 
     /// ★ One line per client per window; the held count rides on the next line; a full client

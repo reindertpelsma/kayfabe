@@ -115,7 +115,10 @@
 //! the fault, so it never waits on `PUT`. ⇒ The hang below remains only for a twin whose
 //! notifier was NOT armed (`RC-UNARMED`) or that declared none (`RC-NONE`) — both counted in kf3's
 //! `rc[...]` status. Since 2026-10-03 kf3 also posts one `OS_ERROR_LOG` per RC'd group, so the
-//! guest prints `Xid 31 … kayfabe: …` (`crate::oserrorlog`). [`DELIVERY_UNBUILT`] says this now.
+//! guest is expected to print `Xid 31 … kayfabe: …` (`crate::oserrorlog`) — ⊘ PENDING a box run
+//! (`docs/design/V3_APP_MATRIX.md` §R5.7): no box has run this path, so the guest line is read
+//! from the receiver's source (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:769-806`),
+//! not seen. [`DELIVERY_UNBUILT`] says this now.
 //!
 //! ⊘ **And it becomes a lie the moment a fault should have been raised.** That day the guest
 //! does not get an error: it gets a **hang**, in `replayable_faults_isr_bottom_half`, waiting
@@ -140,14 +143,22 @@ use crate::wire::{AbiError, u32_at, u64_at};
 /// module's ⊘ CORRECTED block, R3 at kf3 `4c48ca0c`): the host twin is RC'd and the app gets
 /// CUDA 719. The sentence now names the error path, and keeps the hang only where it still
 /// applies — a twin whose notifier is unarmed or undeclared.
+///
+/// ⊘ CORRECTED 2026-10-03 (review of `5af7e644`): the guest's Xid line is a PREDICTION until the
+/// §R5.7 box run (`docs/design/V3_APP_MATRIX.md`) shows it, so the sentence says *expected …
+/// pending a box run*, not *prints*. The 719 is from R3 (kf3 `4c48ca0c`). ⚠ This sentence is
+/// printed into every boot log that registers a fault buffer, and it names `RC-UNARMED`: a log
+/// grep must key on the birth line's shape (`kf3: chan 0x…:0x… RC-UNARMED:`), never on the bare
+/// word — `scripts/apps/test_verdicts.sh` feeds this exact text to the classifier for that reason.
 pub const DELIVERY_UNBUILT: &str = "fault DELIVERY is UNBUILT: this port raises no replayable \
      fault and never advances MMU_FAULT_BUFFER_PUT(1). A GPU access the guest's UVM would have \
      serviced by fault (CUDA managed memory or HMM pageable memory not resident) faults on the \
      host twin instead: the host RCs it (host Xid 31), kf3 posts RC_TRIGGERED plus an \
-     OS_ERROR_LOG the guest prints as Xid 31 naming kayfabe, and the app gets CUDA 719 at its \
-     next sync. Only a twin born RC-UNARMED or with no error notifier (rc[unarmed=], rc[none=]) \
-     turns it into a silent HANG (docs/design/V3_UVM_DEMAND_PAGING.md; \
-     docs/design/resume_from_fault.md §7 steps 5b-5d)";
+     OS_ERROR_LOG the guest is expected to print as Xid 31 naming kayfabe (pending a box run, \
+     docs/design/V3_APP_MATRIX.md §R5.7), and the app gets CUDA 719 at its next sync. Only a \
+     twin born RC-UNARMED or with no error notifier (rc[unarmed=], rc[none=]) turns it into a \
+     silent HANG (docs/design/V3_UVM_DEMAND_PAGING.md; docs/design/resume_from_fault.md §7 \
+     steps 5b-5d)";
 
 /// `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1810`).
@@ -690,6 +701,8 @@ mod tests {
             "RC-UNARMED",
             "rc[none=]",
             "HANG",
+            "expected to print",
+            "pending a box run",
             "MMU_FAULT_BUFFER_PUT",
             "resume_from_fault.md",
         ] {
@@ -701,6 +714,10 @@ mod tests {
         assert!(
             !DELIVERY_UNBUILT.contains("not an error"),
             "the old sentence said the opposite of what the boots show"
+        );
+        assert!(
+            !DELIVERY_UNBUILT.contains("the guest prints"),
+            "⊘ 2026-10-03: the guest Xid is a prediction until a box shows it"
         );
     }
 
