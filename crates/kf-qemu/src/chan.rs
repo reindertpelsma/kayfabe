@@ -83,6 +83,10 @@ struct PtChan {
     engine: u32,
     /// Engine objects on the twin: guest handle → (host handle, its class kind).
     objects: HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    /// ★ EXPERIMENT `x11-dispsw`: the guest's `GF100_DISP_SW` objects on this channel, twinned on
+    /// the twin: guest handle → host handle. Always empty with the switch off. Host RM frees them
+    /// with the twin's channel (`HostRm::free` forgets the subtree), so they go with the twin.
+    disp_sw: HashMap<u32, u32>,
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
     /// satisfied by the twin (never forwarded).
     ctx: CtxBind,
@@ -960,6 +964,42 @@ pub struct ChanPlane {
     pub rc_seen: AtomicU64,
     /// Wakes of the RC fd.
     pub rc_wakes: AtomicU64,
+    /// ★ EXPERIMENT `x11-dispsw`: the display-SW twins' counters (all zero with the switch off).
+    pub dispsw: DispSwCounters,
+}
+
+/// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note): what
+/// the plane did with the guest's `GF100_DISP_SW` objects — the status line's `dispsw[...]`.
+#[derive(Debug, Default)]
+pub struct DispSwCounters {
+    /// Twinned on the host (host RM accepted the authored alloc).
+    pub twins: AtomicU64,
+    /// Twins gone: freed by the guest's own free, or with their channel's twin.
+    pub freed: AtomicU64,
+    /// Allocs the HOST refused (e.g. a host GPU with no display engine) — refused to the guest.
+    pub host_refused: AtomicU64,
+    /// Allocs under a channel no passthrough twin holds — refused to the guest, never left
+    /// twinless.
+    pub no_twin: AtomicU64,
+}
+
+impl DispSwCounters {
+    /// The status line's segment: `""` with the switch off, so a default-off line is the line it
+    /// was, byte for byte.
+    #[must_use]
+    pub fn status(&self, on: bool) -> String {
+        if !on {
+            return String::new();
+        }
+        let o = Ordering::Relaxed;
+        let (twins, freed) = (self.twins.load(o), self.freed.load(o));
+        format!(
+            " dispsw[twins={twins} live={} host_refused={} no_twin={}]",
+            twins.saturating_sub(freed),
+            self.host_refused.load(o),
+            self.no_twin.load(o)
+        )
+    }
 }
 
 impl ChanPlane {
@@ -1126,6 +1166,7 @@ impl ChanPlane {
             rc_unarmed: AtomicU64::new(0),
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
+            dispsw: DispSwCounters::default(),
             dbfast,
             token_fmt,
         })
@@ -1481,6 +1522,11 @@ impl ChanPlane {
                 app_client,
                 obj3d,
             } => self.debugger(client, parent, handle, app_client, obj3d),
+            ChanStatement::DisplaySw {
+                client,
+                parent,
+                handle,
+            } => self.display_sw(client, parent, handle),
             ChanStatement::DebuggerExceptionMask {
                 client,
                 object,
@@ -2256,6 +2302,69 @@ impl ChanPlane {
         )
     }
 
+    /// ★ EXPERIMENT `x11-dispsw` (default off; carried only when the device property is on,
+    /// `kf_rm::chanlink::ChannelPolicy::with_display_sw_twins`): the guest's `GF100_DISP_SW` object
+    /// under its channel, twinned under that channel's PASSTHROUGH twin with params WE author
+    /// (`kf_host::HostRm::alloc_disp_sw`: head 0, displayMask 0, caps 0 — the guest's own params
+    /// never reach this plane). Its software methods (semaphore / notifier releases at vblank) then
+    /// meet a host object on the twin instead of raising host Xid 32 (run m3c), and host RM checks
+    /// every address they release to against the TWIN client's own mappings (`disp_sw.c:146`).
+    /// ⊘ Refused `NOT_SUPPORTED` by name — what the guest meets with the switch off — when no
+    /// passthrough twin holds the channel, or when the host refuses the alloc (a host GPU with no
+    /// display engine, `disp_sw.c:67-71`).
+    fn display_sw(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
+        let Some(chan) = self
+            .pt
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, parent)).map(|v| v.chan))
+        else {
+            self.dispsw.no_twin.fetch_add(1, Ordering::Relaxed);
+            return ChanAnswer::Refused {
+                status: NV_ERR_NOT_SUPPORTED,
+                why: format!(
+                    "GF100_DISP_SW {client:#x}:{handle:#x} under {parent:#x}: no passthrough twin holds that channel"
+                ),
+            };
+        };
+        self.defer(
+            "display-SW twin",
+            Box::new(move |me: &ChanPlane| {
+                let h = me.rm.alloc_disp_sw(chan).map_err(|e| {
+                    me.dispsw.host_refused.fetch_add(1, Ordering::Relaxed);
+                    (
+                        NV_ERR_NOT_SUPPORTED,
+                        format!(
+                            "GF100_DISP_SW {client:#x}:{handle:#x} on twin host {:#x}: the host refused the authored alloc ({e:?})",
+                            chan.token
+                        ),
+                    )
+                })?;
+                me.dispsw.twins.fetch_add(1, Ordering::Relaxed);
+                // ⊘ The twin may have been taken by a free statement queued behind this act: host RM
+                // then frees this object with its channel, and nothing here may name it again.
+                let kept = me
+                    .pt
+                    .lock()
+                    .ok()
+                    .and_then(|mut m| m.get_mut(&(client, parent)).map(|v| v.disp_sw.insert(handle, h)))
+                    .is_some();
+                if kept {
+                    if let Ok(mut m) = me.pt_objs.lock() {
+                        m.insert((client, handle), (client, parent));
+                    }
+                } else {
+                    me.dispsw.freed.fetch_add(1, Ordering::Relaxed);
+                }
+                Ok(format!(
+                    "{client:#x}:{handle:#x} GF100_DISP_SW on twin host {:#x} -> host object {h:#x} (authored: head 0, displayMask 0, caps 0){}",
+                    chan.token,
+                    if kept { "" } else { " [its channel is already going: freed with it]" }
+                ))
+            }),
+        )
+    }
+
     /// ★ A free the plane may own: a Translated channel, a passthrough twin (by channel, its group,
     /// its device, or its client), or an engine object on one. Tokens stop routing to a twin NOW
     /// (atomics, no host call); the host frees run as ONE act whose outcome the reply waits for.
@@ -2436,7 +2545,8 @@ impl ChanPlane {
             }
             .freed_by(*k, client, object)
         });
-        // Engine objects freed on their own (their twin still lives).
+        // Engine objects freed on their own (their twin still lives) — and, x11-dispsw only, a
+        // display-SW twin (`true`).
         let obj = if twins.is_empty() {
             self.pt_objs
                 .lock()
@@ -2444,13 +2554,24 @@ impl ChanPlane {
                 .and_then(|mut m| m.remove(&(client, object)))
                 .and_then(|key| {
                     self.pt.lock().ok().and_then(|mut m| {
-                        m.get_mut(&key)
-                            .and_then(|v| v.objects.remove(&object).map(|o| o.0))
+                        m.get_mut(&key).and_then(|v| {
+                            v.objects
+                                .remove(&object)
+                                .map(|o| (o.0, false))
+                                .or_else(|| v.disp_sw.remove(&object).map(|h| (h, true)))
+                        })
                     })
                 })
         } else {
             None
         };
+        // ★ x11-dispsw: display-SW twins that go WITH their channel's twin (host RM frees them).
+        let disp_sw_with_twins: u64 = twins.iter().map(|(_, t)| t.disp_sw.len() as u64).sum();
+        if disp_sw_with_twins > 0 {
+            self.dispsw
+                .freed
+                .fetch_add(disp_sw_with_twins, Ordering::Relaxed);
+        }
         let sessions = client == object
             && self
                 .enc_sessions
@@ -2532,11 +2653,16 @@ impl ChanPlane {
                         t.chan.token,
                         Self::fast_fields(fast)
                     );
-                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                    let disp_sw = if t.disp_sw.is_empty() { String::new() } else { format!(" disp_sw={}", t.disp_sw.len()) };
+                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={}{disp_sw} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
                 }
-                if let Some(h) = obj {
+                if let Some((h, disp_sw)) = obj {
                     let r = me.rm.free(h);
-                    line.push(format!("engine object host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                    if disp_sw {
+                        me.dispsw.freed.fetch_add(1, Ordering::Relaxed);
+                    }
+                    let what = if disp_sw { "display-SW object" } else { "engine object" };
+                    line.push(format!("{what} host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
                 }
                 // ⊘ A host free that refuses leaks a host object; the guest's object is gone
                 // either way, so the guest is answered OK and the leak is named here.
@@ -2868,6 +2994,7 @@ impl ChanPlane {
                             device: a.device,
                             engine,
                             objects: HashMap::new(),
+                            disp_sw: HashMap::new(),
                             ctx: CtxBind::default(),
                             live,
                             notifier,
@@ -3676,6 +3803,34 @@ impl ChanPlane {
     /// Stop serving (device teardown).
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
+    }
+}
+
+#[cfg(test)]
+mod dispsw_tests {
+    use super::DispSwCounters;
+    use std::sync::atomic::Ordering;
+
+    /// ★ EXPERIMENT `x11-dispsw`: with the switch off the status line gains NOTHING (byte for byte
+    /// the line it was, whatever the counters say); on, it states twins, the live ones (twins less
+    /// those freed), and both kinds of refusal.
+    #[test]
+    fn the_dispsw_status_segment_is_empty_off_and_counts_on() {
+        let c = DispSwCounters::default();
+        assert_eq!(c.status(false), "");
+        assert_eq!(
+            c.status(true),
+            " dispsw[twins=0 live=0 host_refused=0 no_twin=0]"
+        );
+        c.twins.fetch_add(5, Ordering::Relaxed);
+        c.freed.fetch_add(2, Ordering::Relaxed);
+        c.host_refused.fetch_add(1, Ordering::Relaxed);
+        c.no_twin.fetch_add(3, Ordering::Relaxed);
+        assert_eq!(c.status(false), "", "off stays silent whatever was counted");
+        assert_eq!(
+            c.status(true),
+            " dispsw[twins=5 live=3 host_refused=1 no_twin=3]"
+        );
     }
 }
 

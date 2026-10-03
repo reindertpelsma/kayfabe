@@ -12,7 +12,11 @@ use std::ffi::CStr;
 /// ([`kf3_doorbell_page_offset`], [`kf3_set_ioeventfd`], [`kf3_doorbell_site`]). The two 9s name
 /// different surfaces, so an archive from either branch must fail the device's check: one new
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
-pub const KF3_ABI: u32 = 10;
+/// ★ 13 (2026-10-03, `v3-dispsw-exp`): [`kf3_realize`] takes `x11_dispsw` (the EXPERIMENT property,
+/// default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note). ⊘ 13, not 11: 11 and 12 are
+/// already taken by `v3-gop` / `v3-gop-kf3` (`gop`) and `v3-broker` (`display_broker`) for
+/// DIFFERENT `kf3_realize` signatures, so an archive from any of them must fail this check.
+pub const KF3_ABI: u32 = 13;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -89,6 +93,7 @@ pub unsafe extern "C" fn kf3_realize(
     bar2_bytes: u64,
     guest_driver: *const c_char,
     display: u32,
+    x11_dispsw: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -111,6 +116,7 @@ pub unsafe extern "C" fn kf3_realize(
         bar2_bytes,
         guest_driver: guest,
         display: display != 0,
+        x11_dispsw: x11_dispsw != 0,
     };
     match Device::realize(&cfg) {
         Ok(d) => {

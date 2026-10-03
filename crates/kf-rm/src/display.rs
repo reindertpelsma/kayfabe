@@ -302,6 +302,25 @@ impl DisplayPolicy {
         }
     }
 
+    /// ★ EXPERIMENT `x11-dispsw` (default off): offer the `GF100_DISP_SW` object — the model answers
+    /// its constructor's `GET_ACTIVE_DISPLAY_DEVICES` query instead of refusing it
+    /// ([`DisplayModel::offer_display_sw`]). `false` touches nothing (no lock is taken), so a
+    /// default-off link is the link it was. ⊘ Only [`crate::served_chain`] calls this, and only
+    /// together with the channel link's [`crate::chanlink::ChannelPolicy::with_display_sw_twins`]:
+    /// offered without a host twin, the object's software methods trap on the host GPU (run m3c).
+    /// With no derived layouts (the M0 link) the query is not claimed and stays refused.
+    #[must_use]
+    pub fn offering_display_sw(self, on: bool) -> DisplayPolicy {
+        if on && let Some(m) = &self.model {
+            lock(m).offer_display_sw(true);
+            eprintln!(
+                "kf-rm: display: EXPERIMENT x11-dispsw — GF100_DISP_SW is OFFERED (its constructor's query \
+                 is answered; every alloc is twinned on the host or refused by name)"
+            );
+        }
+        self
+    }
+
     /// The separate lifecycle observer. It is seated inside the object policy, not in
     /// `respond`, so only successfully applied, fully reassembled events reach it.
     pub(crate) fn registry(&self) -> Option<DisplayRegistry> {

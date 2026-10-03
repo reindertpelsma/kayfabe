@@ -802,6 +802,33 @@ impl HostRm {
         Ok(h)
     }
 
+    /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note): a
+    /// `GF100_DISP_SW` object on `chan` — the host twin of a guest's display-software object, so the
+    /// software methods the guest's channel sends reach a host object instead of raising Xid 32.
+    /// Params WE author, never the guest's: [`DISP_SW_AUTHORED_PARAMS`] = `{logicalHeadId 0,
+    /// displayMask 0, caps 0}` (`ogkm-580: class/cl9072.h`). Host RM's constructor needs a display
+    /// engine (`disp_sw.c:67-71`) and head 0 < its head count (`:83-88`); `displayMask 0` skips the
+    /// active-display check (`:90-98`). Unprivileged (`RS_FLAGS_ALLOC_NON_PRIVILEGED`,
+    /// `resource_list.h:1502-1511`). A host GPU without a display engine refuses it here.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn alloc_disp_sw(&self, chan: Channel) -> Result<u32, RmError> {
+        let mut params = DISP_SW_AUTHORED_PARAMS;
+        let want = self.mint();
+        let h = self.raw_alloc(
+            chan.chan,
+            want,
+            GF100_DISP_SW,
+            Some(kf_abi::hostabi::HostParams::Measured(
+                &kf_abi::generated::matrix::NV9072_ALLOCATION_PARAMETERS,
+            )),
+            &mut params,
+        )?;
+        self.remember(h, chan.chan);
+        Ok(h)
+    }
+
     /// ★ w827: a `GT200_DEBUGGER` session on OUR device, bound to `obj3d` — a GR object this
     /// session allocated (a twin's engine object). Params WE author:
     /// `NV83DE_ALLOC_PARAMETERS {hDebuggerClient_Obsolete = 0, hAppClient = our client,
@@ -1186,6 +1213,44 @@ fn reap_view(view: kf_linux_raw::MappedRegion) {
 
 /// Stitched views that may wait for the reaper at once.
 const REAP_QUEUE: usize = 2;
+
+/// `GF100_DISP_SW` (`ogkm-580: class/cl9072.h`).
+pub const GF100_DISP_SW: u32 = 0x9072;
+
+/// ★ EXPERIMENT `x11-dispsw`: the ONLY `NV9072_ALLOCATION_PARAMETERS` kayfabe sends its host —
+/// `{logicalHeadId 0, displayMask 0, caps 0}`, a constant: [`HostRm::alloc_disp_sw`] takes no guest
+/// input at all (owner rule: author host flags, never forward them).
+pub const DISP_SW_AUTHORED_PARAMS: [u8; 12] = [0; 12];
+
+#[cfg(test)]
+mod disp_sw_tests {
+    /// ★ The authored display-SW params have the driver matrix's `NV9072_ALLOCATION_PARAMETERS`
+    /// layout at every tag it covers (one 12-byte layout, the three words at 0/4/8; the sweep of
+    /// 2026-10-03, `traces/driver_matrix/ranges.tsv`), and each word is zero: head 0, no display
+    /// mask, no caps.
+    #[test]
+    fn the_authored_disp_sw_params_are_head_0_mask_0_caps_0_at_every_tag() {
+        let s = &kf_abi::generated::matrix::NV9072_ALLOCATION_PARAMETERS;
+        for &v in kf_abi::generated::matrix::MEASURED {
+            let l = s.at(v).expect("measured").expect("present at every tag");
+            assert_eq!(l.size(), super::DISP_SW_AUTHORED_PARAMS.len(), "{v:?}");
+            for (name, off) in [("logicalHeadId", 0), ("displayMask", 4), ("caps", 8)] {
+                let f = l.field(name).expect("consumed field");
+                assert_eq!((f.off, f.size), (off, 4), "{name} at {v:?}");
+                let at = off as usize;
+                assert_eq!(
+                    u32::from_le_bytes(
+                        super::DISP_SW_AUTHORED_PARAMS[at..at + 4]
+                            .try_into()
+                            .expect("4 bytes")
+                    ),
+                    0,
+                    "{name}"
+                );
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod perm_tests {

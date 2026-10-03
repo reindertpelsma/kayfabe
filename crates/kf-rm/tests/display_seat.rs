@@ -475,3 +475,213 @@ fn on_everything_else_is_answered_exactly_as_off() {
     assert_eq!(log_on.total(), log_off.total());
     assert_eq!(log_on.sample(), log_off.sample());
 }
+
+// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note; owner
+// question 2026-10-03 item 2, option A) — through the WHOLE served chain.
+
+/// `NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES` and its params, at the derived size.
+fn display_sw_query() -> (u32, Vec<u8>) {
+    let l = kf_disp::layout::for_version("580.159.04").unwrap();
+    (
+        l.k32("NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES")
+            .unwrap(),
+        vec![
+            0;
+            l.size("NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS")
+                .unwrap()
+        ],
+    )
+}
+
+/// A `GF100_DISP_SW` alloc under channel `0xcafe_0013` with a HOSTILE body: head 7, every display,
+/// caps set — what the experiment must never forward.
+fn display_sw_alloc() -> RpcCommand {
+    let hostile: Vec<u8> = [7u32, 0xffff_ffff, 0xdead_beef]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+    alloc(CLIENT, 0xcafe_0013, 0xcafe_9072, 0x9072, &hostile)
+}
+
+type Seen = std::sync::Arc<std::sync::Mutex<Vec<kf_rm::chanlink::ChanStatement>>>;
+
+/// The served chain with the display seat ON (`x11_dispsw` as given), the object seat, and — when
+/// `answer` is given — a channel plane that records every statement and answers each with it.
+fn dispsw_chain(
+    x11_dispsw: bool,
+    answer: Option<kf_rm::chanlink::ChanAnswer>,
+    seen: &Seen,
+) -> Box<dyn CommandPolicy> {
+    let channels = answer.map(|a| {
+        let s = seen.clone();
+        let sink: kf_rm::chanlink::ChanSink = std::sync::Arc::new(move |st| {
+            s.lock().unwrap().push(st);
+            match st {
+                kf_rm::chanlink::ChanStatement::DisplaySw { .. } => a.clone(),
+                _ => kf_rm::chanlink::ChanAnswer::NotOurs,
+            }
+        });
+        sink
+    });
+    let links = kf_rm::ObjectLinks {
+        objects: Some(kf_rm::rmrpc::ObjectPolicy::over(
+            &driver(),
+            kf_abi::GuestOs::Linux,
+            Box::new(kf_rm::rmrpc::GraphObjects::new(kf_chip::Family::Ampere)),
+            Default::default(),
+        )),
+        memory: None,
+        channels,
+        display: Some(kf_rm::DisplaySeat {
+            row: &kf_chip::display::AMPERE,
+            model: None,
+            x11_dispsw,
+        }),
+    };
+    kf_rm::served_policy(
+        ga106::board(),
+        ga106::host(),
+        driver(),
+        kf_rm::ChainLogs::default(),
+        kf_rm::census::ControlCensusLog::new(),
+        links,
+    )
+}
+
+/// ★ OFF (the device default) is the chain it was: the display-SW constructor's query is refused
+/// `NOT_SUPPORTED` by name (what the stock X driver meets today), and a `GF100_DISP_SW` alloc
+/// reaches no channel plane — its reply is the object seat's, the same as a chain with no channel
+/// plane at all. A seat built from a bare row is off.
+#[test]
+fn x11_dispsw_off_refuses_the_query_and_carries_no_alloc() {
+    let seat: kf_rm::DisplaySeat = (&kf_chip::display::AMPERE).into();
+    assert!(!seat.x11_dispsw, "off unless asked for");
+    let seen = Seen::default();
+    let mut off = dispsw_chain(false, Some(kf_rm::chanlink::ChanAnswer::Done), &seen);
+    let mut bare = dispsw_chain(false, None, &seen);
+    let (q, p) = display_sw_query();
+    for c in [&mut off, &mut bare] {
+        let r = c.respond(&control(q, 0, &p)).expect("claimed");
+        assert_eq!(r.rpc_result, NV_ERR_NOT_SUPPORTED);
+    }
+    root_and_display(&mut *off);
+    root_and_display(&mut *bare);
+    assert_eq!(
+        off.respond(&display_sw_alloc()),
+        bare.respond(&display_sw_alloc()),
+        "the channel link declined it: the object seat answered, as before"
+    );
+    assert!(
+        !seen
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|st| matches!(st, kf_rm::chanlink::ChanStatement::DisplaySw { .. })),
+        "no display-SW statement with the switch off"
+    );
+}
+
+/// ★ ON: the query is answered (the lit displays, the heads), and every `GF100_DISP_SW` alloc is
+/// the plane's: twinned (the object seat then answers, exactly as off), refused by the host (the
+/// guest reads the plane's status), or declined — which the link refuses `NOT_SUPPORTED` by name
+/// rather than leave a display-SW object with no host object (run m3c). The statement carries only
+/// the three handles. ⊘ With no channel plane the object is not offered at all.
+#[test]
+fn x11_dispsw_on_answers_the_query_and_every_alloc_is_twinned_or_refused() {
+    use kf_rm::chanlink::{ChanAnswer, ChanStatement};
+    let (q, p) = display_sw_query();
+    let l = kf_disp::layout::for_version("580.159.04").unwrap();
+    let s = "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS";
+    let seen = Seen::default();
+    let mut twinned = dispsw_chain(true, Some(ChanAnswer::Done), &seen);
+    let r = twinned.respond(&control(q, 0, &p)).expect("answered");
+    assert_eq!(r.rpc_result, NV_OK);
+    let a = kf_disp::layout::Params::new(l, s, &r.body[PARAMS_AT..]).unwrap();
+    assert_eq!(
+        (a.get("displayMask"), a.get("numHeads")),
+        (Some(0), Some(u64::from(kf_chip::display::AMPERE.heads))),
+        "nothing lit yet; the row's heads"
+    );
+    // twinned: the plane acted, so the object seat records and answers it — as it does off
+    let mut reference = dispsw_chain(false, Some(ChanAnswer::Done), &Seen::default());
+    root_and_display(&mut *reference);
+    root_and_display(&mut *twinned);
+    assert_eq!(
+        twinned.respond(&display_sw_alloc()),
+        reference.respond(&display_sw_alloc())
+    );
+    assert_eq!(
+        seen.lock()
+            .unwrap()
+            .iter()
+            .filter(|st| matches!(st, ChanStatement::DisplaySw { .. }))
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![ChanStatement::DisplaySw {
+            client: CLIENT,
+            parent: 0xcafe_0013,
+            handle: 0xcafe_9072
+        }],
+        "carried once, naming only the handles"
+    );
+    // the host refused (a GPU with no display engine): the guest reads it
+    let mut refused = dispsw_chain(
+        true,
+        Some(ChanAnswer::Refused {
+            status: NV_ERR_NOT_SUPPORTED,
+            why: "the host has no display engine".into(),
+        }),
+        &Seen::default(),
+    );
+    root_and_display(&mut *refused);
+    assert_eq!(
+        refused
+            .respond(&display_sw_alloc())
+            .expect("refused")
+            .rpc_result,
+        NV_ERR_NOT_SUPPORTED
+    );
+    // declined (no twin holds the channel): refused by name, never a twinless graph node
+    let mut declined = dispsw_chain(true, Some(ChanAnswer::NotOurs), &Seen::default());
+    root_and_display(&mut *declined);
+    assert_eq!(
+        declined
+            .respond(&display_sw_alloc())
+            .expect("refused")
+            .rpc_result,
+        NV_ERR_NOT_SUPPORTED
+    );
+    // no channel plane: nothing could twin it, so it is not offered
+    let mut planeless = dispsw_chain(true, None, &Seen::default());
+    assert_eq!(
+        planeless
+            .respond(&control(q, 0, &p))
+            .expect("claimed")
+            .rpc_result,
+        NV_ERR_NOT_SUPPORTED
+    );
+}
+
+/// ★ The switch's blast radius is ONE control: every other control the display model claims gets
+/// the same reply, byte for byte, with `x11_dispsw` on as off.
+#[test]
+fn x11_dispsw_changes_one_claimed_control_and_no_other() {
+    let (q, _) = display_sw_query();
+    let mut off = dispsw_chain(
+        false,
+        Some(kf_rm::chanlink::ChanAnswer::Done),
+        &Seen::default(),
+    );
+    let mut on = dispsw_chain(
+        true,
+        Some(kf_rm::chanlink::ChanAnswer::Done),
+        &Seen::default(),
+    );
+    let mut differ = Vec::new();
+    for (cmd, p) in claimed() {
+        if on.respond(&control(cmd, 0, &p)) != off.respond(&control(cmd, 0, &p)) {
+            differ.push(cmd);
+        }
+    }
+    assert_eq!(differ, vec![q]);
+}

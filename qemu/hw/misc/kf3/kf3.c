@@ -20,6 +20,9 @@
  *    docs/design/V3_DOORBELL_IOEVENTFD.md): Rust registers one KVM ioeventfd (DATAMATCH = the
  *    guest's token) per live channel at every place the doorbell register is mapped, through
  *    kf3_ioeventfd below; its register drainer services the eventfds. Unmatched values still trap.
+ *  - ★ 2026-10-03, EXPERIMENT x11-dispsw (property x11-dispsw, default off, pending the owner's ruling;
+ *    docs/design/V3_DISPLAY.md, the x11-dispsw note): handed to Rust at realize (needs display=on).
+ *    Everything it changes is Rust's: the guest's GF100_DISP_SW objects are twinned on the host.
  *  - MSI-X lives in its own BAR. Interrupts (P5, V3_P5_PORT_MAP.md §2.7): Rust owns one eventfd
  *    per vector (kf3_irq_fd); this device registers each as a KVM irqfd on the vector's MSI route
  *    when the guest unmasks it (msix vector notifiers, virtio-pci's pattern). A raise is then one
@@ -118,6 +121,9 @@ struct Kf3State {
     bool dummy_bar;
     /* v3-display (docs/design/V3_DISPLAY.md): the virtual NVDisplay; off = the displayless posture */
     bool display;
+    /* ★ EXPERIMENT x11-dispsw (2026-10-03, default off, pending the owner's ruling; V3_DISPLAY.md): twin the
+     * guest's GF100_DISP_SW objects on the host with authored params, or refuse them by name. Rust's. */
+    bool x11_dispsw;
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -726,7 +732,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         return;
     }
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    &s->h, err, sizeof(err)) != 0) {
+                    s->x11_dispsw ? 1 : 0, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }
@@ -892,6 +898,8 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_STRING("guest-driver", Kf3State, guest_driver),
     DEFINE_PROP_BOOL("dummy-bar", Kf3State, dummy_bar, false),
     DEFINE_PROP_BOOL("display", Kf3State, display, false),
+    /* ★ 2026-10-03: EXPERIMENT (V3_DISPLAY.md, the x11-dispsw note). OFF until the owner rules; needs display=on. */
+    DEFINE_PROP_BOOL("x11-dispsw", Kf3State, x11_dispsw, false),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),

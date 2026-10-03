@@ -143,6 +143,11 @@ authored head; it writes only into the twin's own address space". That is a rule
 owner's call. The box test: the Cinnamon X11 session starts, X11 `vkcube` presents, there are zero
 host Xid 32, and frame rates are recorded.
 
+★ *2026-10-03 (later): option A is built as a default-off experiment so this can be decided on box
+data — branch `v3-dispsw-exp`, device property `x11-dispsw` (default off; with it off nothing changes).
+What it does, the rule change it embodies, and the exact A/B box test are in `design/V3_DISPLAY.md`, the
+`x11-dispsw` note. No box has run it yet; this item stays open.*
+
 ## 3. The archived traces that contain a full VBIOS
 
 **Found on 2026-10-03** by decoding the files with the repo's own record format

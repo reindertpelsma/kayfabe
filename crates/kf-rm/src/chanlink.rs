@@ -31,6 +31,9 @@ use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 const NV_OK: u32 = 0;
 /// `NV_ERR_INVALID_ARGUMENT`.
 const NV_ERR_INVALID_ARGUMENT: u32 = 0x1f;
+/// `NV_ERR_NOT_SUPPORTED` — what the guest's display-SW alloc meets today (its constructor's query
+/// is refused with it, `kf_disp::model`, `no_display_sw`), and so what x11-dispsw refuses with.
+const NV_ERR_NOT_SUPPORTED: u32 = 0x56;
 /// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`ogkm-580: ctrla06fgpfifo.h:69`).
 pub const GPFIFO_SCHEDULE: u32 = 0xa06f_0103;
 /// `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` — the TSG form (`ctrla06c.h`).
@@ -180,6 +183,11 @@ pub struct ChannelAlloc {
 }
 
 /// A statement for the channel plane.
+// ★ The size is `DisableChannels`' inline list (≤ 64 `(hClient, hChannel)` pairs, RM's own bound,
+// [`ChanList`]): the statement is `Copy`, built once per RPC on the drainer and handed to the
+// sink by value, so a heap box per statement would buy nothing. (Until 2026-10-03 this was a
+// recorded clippy-debt site keyed on the enum's whole text, which any new variant re-keys.)
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChanStatement {
     /// A GPFIFO channel alloc.
@@ -379,6 +387,20 @@ pub enum ChanStatement {
         /// Acquire (`true`) or release.
         acquire: bool,
     },
+    /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note): a
+    /// `GF100_DISP_SW` object allocated under a guest channel. ⊘ It carries NO alloc params — the
+    /// plane twins it with params it authors (`kf_host::HostRm::alloc_disp_sw`), so nothing of the
+    /// guest's `NV9072_ALLOCATION_PARAMETERS` can reach the host. Carried only by a link built
+    /// [`ChannelPolicy::with_display_sw_twins`]; off, the alloc is a graph node as before.
+    DisplaySw {
+        /// `hClient`.
+        client: u32,
+        /// The channel (`hParent`; the class's only parent is `KernelChannel`,
+        /// `ogkm-580: resource_list.h:1502-1511`).
+        parent: u32,
+        /// The object's handle.
+        handle: u32,
+    },
     /// An object was freed (maybe one of ours).
     Free {
         /// `hClient`.
@@ -447,6 +469,10 @@ pub struct ChannelPolicy {
     pub carried: u64,
     /// Allocs the plane refused.
     pub refused: u64,
+    /// ★ EXPERIMENT `x11-dispsw`: carry `GF100_DISP_SW` allocs to the plane as
+    /// [`ChanStatement::DisplaySw`] ([`Self::with_display_sw_twins`]); `false` (the default) leaves
+    /// them graph nodes, byte for byte as before.
+    display_sw_twins: bool,
 }
 
 impl ChannelPolicy {
@@ -467,7 +493,20 @@ impl ChannelPolicy {
             pending: None,
             carried: 0,
             refused: 0,
+            display_sw_twins: false,
         }
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw` (default off; owner question 2026-10-03 item 2, option A): every
+    /// `GF100_DISP_SW` alloc is carried to the plane ([`ChanStatement::DisplaySw`]), which twins it
+    /// under the channel's host twin or refuses it. ⊘ With this on, the link never lets the alloc
+    /// become a twinless graph node: a plane that declines it ([`ChanAnswer::NotOurs`]) gets the
+    /// alloc refused by name — a display-SW object with no host object is run m3c (its software
+    /// methods trap on the host GPU: 186 host Xid 32, 1.3 FPS GL).
+    #[must_use]
+    pub fn with_display_sw_twins(mut self, on: bool) -> ChannelPolicy {
+        self.display_sw_twins = on;
+        self
     }
 
     fn refusal(status: u32, why: &str, cmd: &RpcCommand) -> Reply {
@@ -548,6 +587,29 @@ impl ChannelPolicy {
             };
             self.carried += 1;
             return self.carry_alloc(st, cmd, h.client, h.handle);
+        }
+        if h.class == GF100_DISP_SW && self.display_sw_twins {
+            self.carried += 1;
+            let st = ChanStatement::DisplaySw {
+                client: h.client,
+                parent: h.parent,
+                handle: h.handle,
+            };
+            return match (self.sink)(st) {
+                ChanAnswer::NotOurs => {
+                    self.refused += 1;
+                    Some(Self::refusal(
+                        NV_ERR_NOT_SUPPORTED,
+                        &format!(
+                            "{:#x}:{:#x} GF100_DISP_SW under {:#x}: no host twin holds that channel \
+                             (x11-dispsw never leaves a display-SW object without a host object)",
+                            h.client, h.handle, h.parent
+                        ),
+                        cmd,
+                    ))
+                }
+                answer => self.settle_alloc(answer, cmd, h.client, h.handle),
+            };
         }
         match alloc_shape(&self.abi, h.class) {
             Some(AllocParams::VaSpace) => {
@@ -707,7 +769,19 @@ impl ChannelPolicy {
         client: u32,
         handle: u32,
     ) -> Option<Reply> {
-        match (self.sink)(st) {
+        let answer = (self.sink)(st);
+        self.settle_alloc(answer, cmd, client, handle)
+    }
+
+    /// [`Self::carry_alloc`]'s second half: what the plane's answer to an alloc statement means.
+    fn settle_alloc(
+        &mut self,
+        answer: ChanAnswer,
+        cmd: &RpcCommand,
+        client: u32,
+        handle: u32,
+    ) -> Option<Reply> {
+        match answer {
             ChanAnswer::Refused { status, why } => {
                 self.refused += 1;
                 Some(Self::refusal(
@@ -1310,6 +1384,13 @@ pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
     //    channel and never methods it. ⊘ NOT twinned: host RM's dispsw acts on HOST display heads,
     //    so a guest's methods must never reach it. A guest that does method it faults its own
     //    twin (contained, `gpu_fault_is_contained`).
+    //    ★ EXPERIMENT `x11-dispsw` (2026-10-03, default off, PENDING THE OWNER'S RULING — owner
+    //    question 2026-10-03 item 2, option A): with it on, `ChannelPolicy::on_alloc` carries the
+    //    alloc to the plane BEFORE this shape is asked, and the plane twins it under the channel's
+    //    host twin with AUTHORED params (head 0, displayMask 0, caps 0) or refuses it by name. The
+    //    rule then reads "twinned with an authored head; host RM validates every release it makes
+    //    against the twin client's OWN mappings" (`disp_sw.c:146`, `CliGetDmaMappingInfo`). Off,
+    //    this graph-node row is what answers, unchanged.
     //  `[measured vgfx 2026-09-26]` the host's own Vulkan/EGL run allocs 0x9072 ×12, 0x9096 ×3.
     if class == GF100_ZBC_CLEAR || class == GF100_DISP_SW {
         return Some(AllocParams::NoDeclaredFacts);
@@ -1726,8 +1807,9 @@ mod tests {
         assert_eq!(link.vas_canonical(alias.0, alias.1), alias);
     }
 
-    /// ★ v3-gfx: `GF100_ZBC_CLEAR` and `GF100_DISP_SW` are graph nodes (no host twin); 2D and
-    /// inline-to-memory are engine objects carried to the twin like 3D.
+    /// ★ v3-gfx: `GF100_ZBC_CLEAR` and `GF100_DISP_SW` are graph nodes (no host twin; with the
+    /// default-off x11-dispsw experiment `GF100_DISP_SW` is carried first, by its own statement); 2D
+    /// and inline-to-memory are engine objects carried to the twin like 3D.
     #[test]
     fn graphics_classes_have_a_shape() {
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
@@ -1756,7 +1838,7 @@ mod tests {
         assert_eq!(
             engine_class_kind(GF100_DISP_SW),
             None,
-            "DISP_SW is not an engine object: it is never twinned"
+            "DISP_SW is not an engine object: only the x11-dispsw experiment twins it, by its own statement"
         );
     }
 
@@ -1873,6 +1955,105 @@ mod tests {
             n + 1,
             "neither refusal reached the plane"
         );
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw`. OFF (the default): a `GF100_DISP_SW` alloc reaches no plane — the
+    /// link declines it and the object seat answers it as the graph node it was. ON: it is carried
+    /// as [`ChanStatement::DisplaySw`] naming only `(client, channel, handle)` — the guest's
+    /// `NV9072_ALLOCATION_PARAMETERS` (here a hostile head 7, every display, caps set) appear nowhere
+    /// in it; the plane's refusal is the guest's; a plane that DECLINES it (no twin) gets the alloc
+    /// refused `NOT_SUPPORTED` by name, never a twinless graph node; a deferred act holds the reply.
+    #[test]
+    fn display_sw_is_carried_only_with_x11_dispsw_and_never_left_twinless() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let seen: Arc<Mutex<Vec<ChanStatement>>> = Arc::default();
+        let answer: Arc<Mutex<ChanAnswer>> = Arc::new(Mutex::new(ChanAnswer::Done));
+        let sink = |seen: &Arc<Mutex<Vec<ChanStatement>>>, answer: &Arc<Mutex<ChanAnswer>>| {
+            let (s2, a2) = (seen.clone(), answer.clone());
+            let f: ChanSink = Arc::new(move |st| {
+                s2.lock().unwrap().push(st);
+                a2.lock().unwrap().clone()
+            });
+            f
+        };
+        let (c, ch, h) = (0xc1d0_0021, 0xcafe_0013, 0xcafe_9072);
+        // NV9072_ALLOCATION_PARAMETERS {logicalHeadId, displayMask, caps}: what a hostile guest says
+        let hostile: Vec<u8> = [7u32, 0xffff_ffff, 0xdead_beef]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let alloc = |params: &[u8]| {
+            let mut payload: Vec<u8> = [c, ch, h, GF100_DISP_SW, 0, params.len() as u32, 0, 0]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect();
+            payload.extend_from_slice(params);
+            RpcCommand {
+                function: RpcFunction::RmAlloc,
+                code: 0x67,
+                sequence: 1,
+                payload,
+                elements: 1,
+                delivered: Vec::new(),
+            }
+        };
+        // OFF: nothing is carried, the chain answers as before
+        let mut off = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink(&seen, &answer));
+        assert!(off.respond(&alloc(&hostile)).is_none());
+        assert!(
+            off.defers(&alloc(&hostile)).is_none(),
+            "nothing is held off"
+        );
+        assert!(seen.lock().unwrap().is_empty(), "no statement off");
+        assert_eq!((off.carried, off.refused), (0, 0));
+        let off_explicit = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink(&seen, &answer))
+            .with_display_sw_twins(false);
+        assert!(!off_explicit.display_sw_twins);
+        // ON, the plane twins it: carried, params nowhere in the statement, the seat answers
+        let mut on = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink(&seen, &answer))
+            .with_display_sw_twins(true);
+        assert!(on.respond(&alloc(&hostile)).is_none());
+        assert_eq!(
+            seen.lock().unwrap().last().copied(),
+            Some(ChanStatement::DisplaySw {
+                client: c,
+                parent: ch,
+                handle: h
+            })
+        );
+        assert_eq!(on.carried, 1);
+        // ON, the plane's act is deferred: the reply is held until it resolves
+        let d = kf_gsp::Deferred::new();
+        *answer.lock().unwrap() = ChanAnswer::Deferred(d.clone());
+        assert!(on.respond(&alloc(&hostile)).is_none());
+        assert!(on.defers(&alloc(&hostile)).is_some(), "held for the act");
+        // ON, the host refused (no display engine): the guest reads the plane's refusal
+        *answer.lock().unwrap() = ChanAnswer::Refused {
+            status: NV_ERR_NOT_SUPPORTED,
+            why: "host has no display engine".into(),
+        };
+        let r = on.respond(&alloc(&hostile)).expect("refused");
+        assert_eq!(r.rpc_result, NV_ERR_NOT_SUPPORTED);
+        assert_eq!(on.refused, 1);
+        // ON, the plane declines (no twin holds the channel): refused by name, never a graph node
+        *answer.lock().unwrap() = ChanAnswer::NotOurs;
+        let r = on.respond(&alloc(&hostile)).expect("refused, not declined");
+        assert_eq!(r.rpc_result, NV_ERR_NOT_SUPPORTED);
+        assert_eq!(on.refused, 2);
+        // every statement named the same three handles, whatever the params said
+        assert!(seen.lock().unwrap().iter().all(|st| *st
+            == ChanStatement::DisplaySw {
+                client: c,
+                parent: ch,
+                handle: h
+            }));
+        // ON, another class is untouched by the switch (ZBC_CLEAR stays a graph node)
+        let n = seen.lock().unwrap().len();
+        let mut zbc = alloc(&[]);
+        zbc.payload[12..16].copy_from_slice(&GF100_ZBC_CLEAR.to_le_bytes());
+        assert!(on.respond(&zbc).is_none());
+        assert_eq!(seen.lock().unwrap().len(), n);
     }
 
     #[test]

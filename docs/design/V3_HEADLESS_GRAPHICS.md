@@ -473,7 +473,10 @@ kinds carried to the GR twin like 3D; `GF100_DISP_SW`/`GF100_ZBC_CLEAR` graph no
   twin space. `KF3_NO_GUEST_VA_RESERVE=1` restores the old behaviour; a refused reservation degrades
   to it and says so. ⚠ The ranges assume RM's split window and `vaStartMin` (both family-invariant
   in 580 and 610) — a future RM that moves them needs these rows moved.
-- **GF100_DISP_SW is not twinned** (host dispsw acts on HOST display heads). A guest that methods it
+- ⊘ *2026-10-03: a default-off EXPERIMENT (`x11-dispsw`, branch `v3-dispsw-exp`, pending the owner's
+  ruling) twins it under the channel's host twin with authored params — `V3_DISPLAY.md`, the x11-dispsw
+  note. With the property off the rule below stands unchanged:*
+  **GF100_DISP_SW is not twinned** (host dispsw acts on HOST display heads). A guest that methods it
   faults its own twin.
 - **`NV2081_BINAPI` 0x20810107 and `PERF_BOOST` 0x2080200a still answer 0x56.** Both are
   fire-and-forget on bare metal (params unchanged) and the UMD proceeds past them; BINAPI is an

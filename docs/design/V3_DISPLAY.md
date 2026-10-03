@@ -24,7 +24,9 @@
 >   from `uefiScanoutSurfaceSizeInMB` (`bSmoothTransitionEnabled = (uefiScanoutSurfaceSizeInMB != 0) &&
 >   RMCFG_FEATURE_PLATFORM_WINDOWS`, `kern_bus_gm107.c:889`, found 2026-09-20) — the fake GSP's answer for it
 >   must agree with what the option ROM set up.
-> - X11 desktops need `GF100_DISP_SW` (owner choice A/B, `STATUS_AND_HANDOFF.md` §0).
+> - X11 desktops need `GF100_DISP_SW` (owner choice A/B, `STATUS_AND_HANDOFF.md` §0). ⊘ *2026-10-03
+>   (later): option A exists as the default-off experiment `x11-dispsw` — the note below the release-focus
+>   block.*
 > - The lightdm autologin is a bench convenience, not a display requirement.
 > - Leftovers for daily use: cursor plane, scaled windows, 16-bit/YUV surfaces, mode lists and
 >   resize (hotplug with a new EDID when the broker's window changes size).
@@ -85,7 +87,80 @@
 >   3. the broker;
 >   4. the unload tests.
 >
+>   ⊘ *Corrected 2026-10-03 (later): the recommendation is now **A, guarded**, with B as the fallback
+>   (`docs/OWNER_QUESTIONS_2026-10-03.md` item 2), and A is built as a default-off experiment so the owner
+>   can rule on box data — the `x11-dispsw` note directly below. The sentence it corrects:*
 >   X11 still waits on the `GF100_DISP_SW` choice (A/B; recommendation B).
+
+> **⊘ 2026-10-03 (later) — `GF100_DISP_SW` OPTION A IS BUILT AS A DEFAULT-OFF EXPERIMENT, PENDING THE
+> OWNER'S RULING** (branch `v3-dispsw-exp`, cut from `v3-b0a`; device property **`x11-dispsw`**, default
+> off; `OWNER_QUESTIONS_2026-10-03.md` item 2). **No box has run it: nothing in this note is a box
+> result.** It qualifies the M3 block below (*"`kf-rm`'s rule stands: NOT twinned"*) for a device
+> realized with `x11-dispsw=on` only. With the property off, every path is the path it was and that
+> block stands as written (tests pin it: `crates/kf-rm/tests/display_seat.rs`
+> `x11_dispsw_off_refuses_the_query_and_carries_no_alloc`, `x11_dispsw_changes_one_claimed_control_and_no_other`;
+> the status line gains nothing, `kf-qemu` `chan.rs::dispsw_tests`).
+> - **What `display=on,x11-dispsw=on` does.** `x11-dispsw=on` without `display=on` refuses to realize by
+>   name (`Config::check`): the guest's own CPU-RM refuses the object first on a displayless device
+>   (`disp_sw.c:67-71`), so the switch could do nothing.
+>   1. kf-disp ANSWERS the display-SW constructor's `INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES` (the lit
+>      displays and the heads — m3c's answer) instead of `no_display_sw` (`DisplayModel::offer_display_sw`).
+>      The guest's own CPU-RM then checks the guest's `logicalHeadId`/`displayMask` against it
+>      (`disp_sw.c:83-98`) and RPCs the alloc (`RS_FLAGS_ALLOC_RPC_TO_ALL`, after the constructor:
+>      `alloc_free.c:860` constructs, `:916` RPCs).
+>   2. The channel link carries that alloc as `ChanStatement::DisplaySw {client, channel, handle}` —
+>      it has no params field, so the guest's `NV9072_ALLOCATION_PARAMETERS` cannot reach the host.
+>   3. The channel plane allocates `GF100_DISP_SW` under that channel's **passthrough twin** with
+>      AUTHORED params `{logicalHeadId 0, displayMask 0, caps 0}` (`kf_host::HostRm::alloc_disp_sw`,
+>      `DISP_SW_AUTHORED_PARAMS`). Host RM's constructor needs a display engine (`disp_sw.c:69`) and
+>      head 0 < its heads (`:83`); `displayMask 0` skips its active-display check (`:92`). The class is
+>      `RS_FLAGS_ALLOC_NON_PRIVILEGED` (`resource_list.h:1502-1511`).
+>   4. **Refused `NOT_SUPPORTED` by name** — the status the X driver meets today — when the host
+>      refuses the alloc (a host GPU without a display engine), when no passthrough twin holds the
+>      channel, or when the device has no channel plane. ⊘ The link never leaves a display-SW object
+>      without a host object: that is m3c (186 host Xid 32, 1.3 FPS GL, 2026-09-30).
+>   5. **Freed** with the guest's own free; with its channel's twin (a free of the channel, its group,
+>      its device or its client — host RM frees the object with its channel, and `HostRm::free` forgets
+>      the subtree); hence at a guest driver unload / GSP re-init, which reaches the plane as the
+>      guest's own frees, exactly as every channel twin does; at device teardown with the host client.
+>   6. **Status line:** `dispsw[twins=N live=N host_refused=N no_twin=N]` after `disp[...]`, printed only
+>      with the property on.
+> - **The rule it changes (the owner's call).** *"NOT twinned: host RM's dispsw acts on HOST display
+>   heads"* becomes *"twinned with an authored head; host RM releases only into addresses the TWIN
+>   client has mapped"* — `dispswReleaseSemaphoreAndNotifierFill` validates against the calling client's
+>   own DMA mappings (`CliGetDmaMappingInfo`, `disp_sw.c:146`), and on a GSP host that call arrives as
+>   the `SEMAPHORE_SCHEDULE_CALLBACK` event for OUR client (`kernel_gsp.c:1110-1135`). The guest learns
+>   the host's vblank timing (a minor side channel). It cannot flip, set a mode or touch host display
+>   state.
+> - **Open — only a box answers:** (a) whether host RM finds the guest's semaphore/notifier VA among the
+>   twin client's mappings (kayfabe maps the twin's VA space with RM `MAP_MEMORY_DMA` calls, so it
+>   should; if it does not, host RM refuses the release, `NV_ERR_INVALID_ADDRESS`, `disp_sw.c:152-153`,
+>   and what the guest's client does then is for the box to show);
+>   (b) the pacing: a headless host runs each vblank callback at once (`vblank.c:87, 209-243`), so X11
+>   should run UNTHROTTLED (glxgears well above 60 FPS); a host that drives a monitor paces the guest at
+>   that monitor's refresh; (c) whether Cinnamon's X11 crash in `libnvidia-glcore` and X11 vkcube's abort
+>   (rc 134, `traces/v3_display/b0a_20261003/`) have no other cause.
+> - Carried with it: the driver matrix gains `NV9072_ALLOCATION_PARAMETERS` (the sweep of 2026-10-03 at
+>   all 29 tags: one 12-byte layout, `traces/driver_matrix/ranges.tsv`), and `kf3_realize` takes
+>   `x11_dispsw` — **KF3 ABI 13** (11 and 12 are taken by `v3-gop` and `v3-broker` for other signatures).
+> - **The box test** (one GPU box with a display engine, e.g. the RTX 3060 of `b0a_20261003`; strictly
+>   serial; the lane runs the per-revision binary, so build at this branch's head first):
+>   ```
+>   bash scripts/bench/build_kf3.sh <qemu-10.2.4-source-tree>
+>   # A — control, the property off (today's behaviour; b0a run 3 is the reference):
+>   DISPLAY_DESKTOP=1 KF_DEVICE=kf3 bash scripts/bench/display/lane.sh dsw_off
+>   # B — the experiment:
+>   DISPLAY_DESKTOP=1 KF_DEVICE=kf3 DISPLAY_KF3_EXTRA=x11-dispsw=on bash scripts/bench/display/lane.sh dsw_on
+>   ```
+>   **Pass (B):** `DISPLAY_DESKTOP_SESSION=yes`; `DISPLAY_DESKTOP_CRASHES 0`; `DISPLAY_VKCUBE … VKCUBE_RC=0`
+>   (and the `DISPLAY_VKCUBE_PM0/1/2` lines' `RC=`); `DISPLAY_HOST_XID=0`; in `run_dsw_on_qemu.log` the
+>   realize line `EXPERIMENT x11-dispsw ON` and a status line with `dispsw[twins=` > 0, `host_refused=0`,
+>   `no_twin=0`. **Record, do not grade:** `DISPLAY_GLXGEARS` and `DISPLAY_GLXGEARS_NOVSYNC` (expected
+>   unthrottled on a headless host), the `desk_1`/`desk_vkcube` screendumps, and the same lines from A for
+>   the comparison. ⊘ A chip with no display engine on bare metal (GA100, GH100, GB10x) cannot take this
+>   test at all — `display=on` refuses to realize there (§2.2). The B-fallback path (`host_refused` > 0,
+>   the guest then exactly as in A) is reachable only on a host whose RM has no display engine on a
+>   display-capable chip (a board with its display disabled); no such box has been named.
 
 > **STATUS: M3 MET FOR THE WAYLAND DESKTOP; X11 DESKTOP PARTIAL — 2026-09-30 (branch `v3-display2`;
 > display stays default-off).** RTX 3060 (GA106), host + guest 580.159.04, vast 53505783.

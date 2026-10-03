@@ -11,7 +11,10 @@
  * (Kf3Frame, kf3_display_frame) and v3-ioeventfd's doorbell fast path (Kf3IoeventfdFn,
  * kf3_doorbell_page_offset, kf3_set_ioeventfd, kf3_doorbell_site). The two 9s name DIFFERENT
  * surfaces, so an archive from either branch must be refused here: one new number above both. */
-#define KF3_ABI 10
+/* ★ 13 (2026-10-03, v3-dispsw-exp): kf3_realize takes x11_dispsw (the EXPERIMENT property, default off;
+ * docs/design/V3_DISPLAY.md, the 2026-10-03 note). 13, not 11: 11 and 12 are taken by v3-gop (gop) and
+ * v3-broker (display_broker) for DIFFERENT kf3_realize signatures, so their archives must be refused. */
+#define KF3_ABI 13
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -34,9 +37,10 @@ typedef struct Kf3Frame {
 } Kf3Frame;
 
 uint32_t kf3_abi_version(void);
-/* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md). */
+/* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
+ * ★ ABI 13: `x11_dispsw` (0/1) — EXPERIMENT: twin the guest's GF100_DISP_SW objects; needs display=1. */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
-                    const char *guest_driver, uint32_t display, void **out,
+                    const char *guest_driver, uint32_t display, uint32_t x11_dispsw, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

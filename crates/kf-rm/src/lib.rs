@@ -143,11 +143,23 @@ pub struct DisplaySeat {
     pub row: &'static kf_chip::display::DisplayRow,
     /// The plane's model, shared across chain rebuilds.
     pub model: Option<display::SharedDisplayModel>,
+    /// ★ EXPERIMENT `x11-dispsw` (the device property, default off; `docs/design/V3_DISPLAY.md`, the
+    /// 2026-10-03 note, pending the owner's ruling): OFFER the `GF100_DISP_SW` object X11
+    /// compositors and X11 Vulkan presentation need — the display link answers its constructor's
+    /// query ([`kf_disp::model::DisplayModel::offer_display_sw`]) and the channel link carries every
+    /// such alloc to the plane, which twins it under the channel's host twin with authored params or
+    /// refuses it by name ([`chanlink::ChannelPolicy::with_display_sw_twins`]). `false`: both links
+    /// answer exactly as before. Display-scoped by construction: with no display seat it cannot be on.
+    pub x11_dispsw: bool,
 }
 
 impl From<&'static kf_chip::display::DisplayRow> for DisplaySeat {
     fn from(row: &'static kf_chip::display::DisplayRow) -> DisplaySeat {
-        DisplaySeat { row, model: None }
+        DisplaySeat {
+            row,
+            model: None,
+            x11_dispsw: false,
+        }
     }
 }
 
@@ -425,6 +437,11 @@ pub fn served_chain(
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
+    // ★ EXPERIMENT x11-dispsw: one switch, read off the display seat, sets BOTH halves — the query
+    // answered and the alloc twinned (or refused) — so neither can be on without the other.
+    // ⊘ Without a channel plane there is nothing to twin with, so the object is not offered at all
+    // (an offered object with no host twin is run m3c: 186 host Xid 32).
+    let x11_dispsw = channels.is_some() && display.as_ref().is_some_and(|s| s.x11_dispsw);
     // ★ v3-display: the display link claims only its own controls, so its place is a matter of
     // which link answers first; it goes first so no other link's refusal can shadow it.
     // Lifecycle observation belongs to the object seat AFTER acceptance, not to this front link:
@@ -434,7 +451,8 @@ pub fn served_chain(
         let policy = match &seat.model {
             Some(shared) => display::DisplayPolicy::over_shared(driver, seat.row, shared),
             None => display::DisplayPolicy::new(driver, seat.row),
-        };
+        }
+        .offering_display_sw(x11_dispsw);
         if let Some(mut registry) = policy.registry() {
             objects = objects.map(|p| p.with_accepted_observer(move |cmd| registry.observe(cmd)));
         }
@@ -446,9 +464,9 @@ pub fn served_chain(
         let guest_os = memory
             .as_ref()
             .map_or(kf_abi::GuestOs::Linux, |m| m.guest_os);
-        chain.push(Box::new(chanlink::ChannelPolicy::new(
-            driver, guest_os, sink,
-        )));
+        chain.push(Box::new(
+            chanlink::ChannelPolicy::new(driver, guest_os, sink).with_display_sw_twins(x11_dispsw),
+        ));
     }
     // ★ P4: the page-directory carrier is FIRST — ahead of `InitTablePolicy`, which terminates
     // the chain for the publication ids — and answers nothing; fn 70's link answers only fn 70.
