@@ -336,6 +336,7 @@ version = "0.1.0"
 dependencies = [
  "kf-abi",
  "kf-arch",
+ "kf-broker",
  "kf-chan",
  "kf-chip",
  "kf-core",
