@@ -737,19 +737,25 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
      * they showed at that moment, stale after every re-point Rust makes behind QEMU's back -- a
      * released host BAR1 aperture among them, reachable by the guest-programmed device. 10.2 has
      * no per-region opt-out (memory_region_set_skip_iommu_map arrives in QEMU 11.1). Every 10.2
-     * device that pins RAM first disables RAM discard (vfio legacy and iommufd, vfio-user; also
-     * vhost-vdpa and SEV, refused as collateral), and ram_block_discard_require() inhibits exactly
-     * that, in both realize orders and for hotplug: a later such device fails its own realize with
-     * "Cannot set discarding of RAM broken". Not caught: the nvme:// block driver, which maps every
-     * RAM block through a RAMBlockNotifier (util/vfio-helpers.c:464-478) and disables nothing.
+     * technology that pins guest RAM first disables RAM discard, and ram_block_discard_require()
+     * inhibits exactly that, in both realize orders and for hotplug: vfio legacy and iommufd,
+     * vfio-user, and the nvme:// userspace block driver, which DMA-maps every RAM block through a
+     * RAMBlockNotifier (util/vfio-helpers.c: qemu_vfio_open_pci disables discard before it
+     * registers the notifier), so a later one fails with "Cannot set discarding of RAM broken";
+     * also refused, as collateral: libblkio drivers that may pin memory (block/blkio.c), vhost-vdpa
+     * (it skips ram_device sections, so it was never the hazard), SEV/SEV-ES and incoming COLO.
+     * ⊘ Corrected 2026-10-03 (third review): this said nvme:// was "not caught" and "disables
+     * nothing"; it disables discard first, so it is refused like VFIO.
      * ★ Taken FIRST, before kf3_realize builds anything (the host store, the RM client, the
      * threads, the windows), so a refused realize builds and holds nothing; every later failure
      * goes to `fail`, which gives it back (QEMU calls no exit for a failed realize: 10.2.4
      * hw/pci/pci.c pci_qdev_realize only unregisters the device). */
     if (ram_block_discard_require(true) != 0) {
-        error_setg(errp, "kf3: this VM has a device that pins guest RAM for DMA (VFIO, iommufd, "
-                   "vfio-user, vhost-vdpa or SEV); kf3 refuses to share a VM with one, since it "
-                   "would DMA-map kf3's BAR windows and keep stale mappings after every re-point");
+        error_setg(errp, "kf3: RAM discard is already disabled by something that pins guest RAM "
+                   "(a VFIO, iommufd or vfio-user device, an nvme:// drive, a libblkio drive that may "
+                   "pin memory, vhost-vdpa, SEV or COLO); kf3 refuses to share a VM with one, since "
+                   "a DMA-mapping one would map kf3's BAR windows and keep stale mappings after "
+                   "every re-point");
         return;
     }
     s->discard_required = true;

@@ -391,11 +391,16 @@ The order is forced:
 >   QEMU's life, once per `device_add` retry.* Every 10.2.4 device that pins RAM disables discard first (vfio legacy
 >   `container-legacy.c:568`, iommufd `iommufd.c:564`, `:599`, vfio-user `container.c:220`), so
 >   whichever realizes second is refused, hotplug included: kf3 names the conflict; a VFIO device
->   fails with *"Cannot set discarding of RAM broken"*. Collateral refusals: vhost-vdpa (which
->   skips `ram_device` sections and so was never the hazard, `hw/virtio/vhost-vdpa.c:55-57`), SEV,
->   COLO. ⚠ Not caught: the userspace NVMe block driver (`nvme://`), which DMA-maps every RAM block
->   through a `RAMBlockNotifier` (`util/vfio-helpers.c:464-478`) and disables no discard. Do not
->   combine it with kf3. On QEMU 11.1 the skip flag is the precise fix. Checked by compiling kf3.c
+>   fails with *"Cannot set discarding of RAM broken"*. The userspace NVMe block driver
+>   (`nvme://`), which DMA-maps every RAM block through a `RAMBlockNotifier`
+>   (`util/vfio-helpers.c:464-478`), is refused the same way, in both orders: `qemu_vfio_open_pci`
+>   disables discard before it registers that notifier (`:508-516`, same error text). Collateral
+>   refusals: libblkio drives whose driver may pin memory (`block/blkio.c:881-887`), vhost-vdpa
+>   (which skips `ram_device` sections and so was never the hazard, `hw/virtio/vhost-vdpa.c:55-57`),
+>   SEV/SEV-ES, incoming COLO. ⊘ *Corrected the same day (third review): this bullet said `nvme://`
+>   was "not caught", "disables no discard" and must not be combined with kf3; 10.2.4 refuses it,
+>   so there is no operator rule to follow. kf3's error text now names `nvme://` and libblkio too.*
+>   On QEMU 11.1 the skip flag is the precise fix. Checked by compiling kf3.c
 >   against the 10.2.4 headers (`-Werror -fsyntax-only`); not run in a VM.
 > - **Residual, the other side of the requirement (third review; pre-existing hazard, not built).**
 >   `ram_block_discard_require` and `ram_block_discard_disable` exclude each other (10.2.4
