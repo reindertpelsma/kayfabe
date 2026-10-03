@@ -336,7 +336,10 @@ citation: ask whether its reason still holds before relying on it.
     - the `VM_ALLOW_ANY_UNCACHED` patch below would give *more* than bare metal (Normal-NC), which
       NVIDIA chose not to use on arm64, and ARM does not guarantee Normal-NC is safe on every MMIO
       region (`drivers/vfio/pci/vfio_pci_core.c:1815-1830`). Not planned.
-    - kf3's BAR2 is memfd RAM, ordinary cacheable memory, so none of this applies to it.
+    - The same holds for BAR2 (PCI BAR3) and the PRAMIN window. Under the single store
+      (`design/THE_CONSTRAINTS.md:1011-1020`) every mapped page of all three windows is a view of
+      the one reserved host-VRAM object (`crates/kf-qemu/src/mem.rs:1-30`). Only unmapped pages show
+      the per-window scratch memfd, which exists because a memslot hole kills the guest.
   - (superseded, kept as written) ⚠ **Found 2026-10-03, and it concerns all of kf3 on arm64, not only the ROM.** arm64 KVM maps a
     non-cacheable PFNMAP memslot as Normal-NC only when the host VMA carries `VM_ALLOW_ANY_UNCACHED`,
     and as Device memory otherwise (Linux 7.1 `arch/arm64/kvm/mmu.c:1966-1968`). vfio-pci sets that
