@@ -653,6 +653,13 @@ CUDA ladder, headless set 38/38) must stay green with display on.
 
 ### 4.11 Boot display: kf3's UEFI GOP option ROM (display step 1)
 
+**STATUS: B5 (unload) MEASURED AND FIXED, 2026-10-03, branch `v3-gop-unload`** (box 54032077, kf3
+`4a4b95f7`; `traces/v3_display/gop_unload_20261003/`): the guest's RM gives BAR1 up at every teardown and
+kf3 now returns BAR1 `[0, G)` to its physical view then; nothing scanned is a black frame; a scanout
+freed with `PRESERVE_HW` stays. B1 and B0 re-run at the same binary pass. The causes, the trigger and
+what is not modelled: §4.11.13. ⊘ The STATUS below says *"nothing has run on a GPU box"*: B0–B3 ran the
+same day (`traces/v3_display/gop_box_20261003/`).
+
 **STATUS: BUILT, 2026-10-03 (late), branch `v3-gop`; nothing has run on a GPU box.** The two halves below
 plus `OWNER_RULINGS.md` §K (no committed binary; arch-neutral ROM) and the review's fixes — what changed
 against the text below is §4.11.12's ⊘ block, and each changed statement carries its own ⊘ note.
@@ -732,6 +739,13 @@ QEMU 10.2.4 and 11.1.1 sources; EDK2 **edk2-stable202408**, which *is* local, un
 (`crates/kf-mem/src/cpuwin.rs`) and the boot layer (`kf_disp::scanout::boot_layer`, `Shown` in
 `crates/kf-qemu/src/display.rs`); the release at stop is the VA thread's (§4.11.12, deviation 2).
 
+⊘ **CORRECTED 2026-10-03 (B5, §4.11.13) — the lifecycle below has one life; the guest's RM has many.**
+The guest RM initialises the adapter at the first open and tears it down at the last close (five RM lives
+in one B5 boot), and every teardown unmaps the console at BAR1 VA 0 and writes the BAR1-mode register back
+to PHYSICAL. The seed is now placed AGAIN then (`CpuWindow::reseed`, on the VA thread) and retires again
+exactly as below when an RM takes BAR1 back (`[measured b5f]` *"… ONE run, VA 0 -> store 0 … (seed life
+N …)"*).
+
 **The seed's lifecycle.** Today every BAR1 page shows the per-BAR scratch until the walker reports the
 guest's BAR1 page tables (`MemPlane::build`, `mem.rs:1544-1566`; `CpuWindow::map`/`unmap`,
 `crates/kf-mem/src/cpuwin.rs:163-240`; `Bar1Target`, `mem.rs:1126-1208`).
@@ -758,6 +772,18 @@ a new pure `kf_disp::scanout::boot_layer(geom)` (src 0, pitch P, W×H, opaque XR
 `W·H ≤ MAX_PIXELS`, refused by name otherwise). A sticky `boot_done` is set at the first armed head.
 
 #### 4.11.3 What the guest RM does with it
+
+⊘ **CORRECTED 2026-10-03 (B5, measured on box 54032077; §4.11.13) — three statements below.**
+- *"efifb or simpledrm keeps drawing through BAR1 VA 0 for the VM's life"* holds only while some RM
+  client keeps the adapter up. With no client (a CUDA-only guest between jobs) RM is torn down, its console
+  mapping is gone and BAR1 is in physical mode, which kf3 now models for `[0, G)`; the console keeps
+  drawing either way.
+- *"which kf-disp follows as a window at FB 0"* (`modeset=0`): measured true (`window 6 store 0x0`), and
+  NVKMS then frees its channels with `PRESERVE_HW` (`NV5070_CTRL_CMD_SET_RMFREE_FLAGS`), which kf-disp
+  now honours — before, the scanout ended at the free.
+- `modeset=1 fbdev=1`: the eviction also makes NVKMS drop its console surface
+  (`nvRmUnmapFbConsoleMemory`, `ogkm-580: src/nvidia-modeset/src/nvkms-rm.c:4967-4998`), so removing
+  nvidia-drm restores nothing: NVKMS shuts the heads down and the screen is black, as on bare metal.
 
 - **Linux, nvidia.ko only** (a CUDA guest with a firmware console): the guest sends C in fn 72; region 0
   is the console (§4.11.4); `memmgrAllocateConsoleRegion` describes it (`mem_mgr.c:672-678`); `kbusInitBar1`
@@ -821,6 +847,8 @@ with the kf3 integration, together with the ROM BAR, never after it.
   exits to QEMU core and is discarded there (not a kf3 path). It becomes a memslot whenever the guest
   enables ROM decode (OVMF does, briefly; Linux's x86 fixup then replaces the resource,
   `arch/x86/pci/fixup.c:381-397`) — setup-time only; churn a guest causes by toggling is self-harm.
+- ⊘ *2026-10-03 (B5, §4.11.13): plus one view (RM map + `mmap`) at each RM teardown and its retirement at
+  the next RM init, on the VA thread; the budget term below already covers the overlap.*
 - **Memslots are setup-only** (§16): no new BAR1 memslot; one `mmap(MAP_FIXED)` at realize and one at
   retirement, on the VA thread.
 - **No blocking on a vCPU or under a lock** (A.4, §25): no new trap; fn 72 stash = a bounded copy on the
@@ -1133,6 +1161,12 @@ Every result cites the kf3 binary's revision (`build_kf3.sh`'s `kf3-bins/<rev>/`
   console's 4 KiB PTEs: N host BAR1 views (§4.11.10).
 - **B3** (`modeset=1 fbdev=1`): eviction, `NOTIFY_CONSOLE_DISABLED`, `boot_done`, no black gap.
 - **B4**: Xorg with no `xorg.conf`, plus Wayland; the M3 probes pass.
+- ⊘ **CORRECTED 2026-10-03 — B5 RAN** (`traces/v3_display/gop_unload_20261003/`, §4.11.13; kf3
+  `4a4b95f7`): (c) the console shows new text with no RM client, with one, and after a second teardown;
+  (a) as first run was a Wayland compositor on simpledrm, not X (the image's lightdm autologin still named
+  B3's `cinnamon-wayland`): it is now that arm, by name, and the X arm is (a2) — the NVIDIA X driver,
+  `modeset=0`, X11 Cinnamon; both bring the text console back and keep it updating; (b) is black. The hook
+  (`scripts/bench/display/unload_hook.sh`) prints each arm's expectation. (d) was not run.
 - **B5** (unload): (a) `modeset=0` + X restore, on the 6.8 guest; (b) `fbdev=1` rmmod gives black; (c) a
   CUDA-only guest keeps its console for the VM's life; (d) a 7.x guest arm records which
   `nv_get_screen_info` path ran.
@@ -1258,6 +1292,9 @@ flags of `hw/display/ati.c`, pixman on), and the C seam by `tests/wire_mirror.rs
   a fn 72 struct whose size is not the serving version's, a version or field not in the driver matrix, C
   not a multiple of 64 KiB, C at or past the carve-out, C larger than BAR1, a board table that is not
   kf-chip's layout. Logged on every fn 65 with a console: C against G and the region count.
+- ⊘ *2026-10-03 (B5, §4.11.13): "then never again" stands, but what follows is no longer "nothing": once a
+  frame was shown, nothing to scan is `Shown::Blank` (black), and a scanout freed with `PRESERVE_HW` is
+  `Shown::Preserved` until a head is armed again.*
 - **The display worker** shows `Shown::Boot` — chosen before the window-vocabulary gate, so GB20x shows
   it too — until the first armed head, then never again (`choose_shown`); the Boot arm composes one
   authored layer with no context DMA. Counters in the status line: `boot[frames=N retired=+Tms]`.
@@ -1309,6 +1346,77 @@ committed `.efi`; the arch-neutral ROM: EFI machine type from the PE, x86 port I
 `cfg(target_arch)`, an `aarch64-unknown-uefi` CI build); a reset path (owner question 4); `-no-reboot`
 and the Windows arm in the bench scripts (B10); SPDX headers on the existing kf3 overlay files
 (`OWNER_RULINGS.md` §G, task I7).
+
+
+#### 4.11.13 B5 — when RM, NVKMS or nvidia-drm lets go (measured 2026-10-03, branch `v3-gop-unload`)
+
+**STATUS: BUILT and MEASURED, 2026-10-03.** Box 54032077 (RTX 3060, host 580.159.04, guest noble 6.8 with
+580.159.04, OVMF), evidence `traces/v3_display/gop_unload_20261003/`: the first run at `f20ab853`, the
+diagnosis at `e2c6e1d5` (instruments only), B5, B1 and B0 at `4a4b95f7`. CI green at `4a4b95f7` (run
+37142859887).
+
+**The first run, and each arm's cause** (diagnosis run d1):
+
+| arm | first run | cause, measured | bare metal |
+|---|---|---|---|
+| (c) nvidia.ko, no RM client | 40 lines on tty1 never shown | The guest RM has no persistence: it initialises the adapter at the first open and tears it down at the last close (five RM lives in d1's one boot). At each teardown it unmaps the console at BAR1 VA 0 (kf3: BAR1 `[0, G)` holds no guest view → SCRATCH), ≤ 1 ms later writes `NV_PBUS_BAR1_BLOCK = 0` (MODE PHYSICAL, target VID_MEM: `kbusStatePreUnload_GM107` → `kbusTeardownMailbox_GM107`, `ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:746-787`), then sends fn 47 (`bInPMTransition = 0`). simpledrm's writes landed in kf3's scratch. Positive control: with a `/dev/nvidia0` holder keeping RM up, the same writes showed. | BAR1 physical: `[0, G)` is FB `[0, G)`, the console keeps drawing |
+| (a) as first run | the session's last frame stays | Not X, not NVKMS: the image's lightdm autologin still named B3's `cinnamon-wayland` (muffin on simpledrm; `Xorg.0.log` was B3's; nvidia-modeset first loaded at (b); no display channel during the session). NVIDIA's EGL held RM up; at the session's end RM was torn down and the console's redraw went to scratch — (c)'s cause. | the text console comes back |
+| (a2) (new) the NVIDIA X driver, `modeset=0` | — | NVKMS restores the console when X closes (`ReleaseModesetOwnership` → `RestoreConsole`, `ogkm-580: src/nvidia-modeset/src/nvkms.c:1107-1161`) and frees each channel after `NV5070_CTRL_CMD_SET_RMFREE_FLAGS(PRESERVE_HW)` (`nvkms-rm.c:2990-3017`; ROUTE_TO_PHYSICAL, so GSP-bound — it reaches kf3). kf-disp did not claim it, and dropped the scanout at the free. | the restored console stays |
+| (b) `fbdev=1`, fbcon unbound, `rmmod nvidia_drm` | the last fbcon frame stays | `fbdev=1` makes nvidia-drm evict the firmware framebuffer and call `framebufferConsoleDisabled` (`kernel-open/nvidia-drm/nvidia-drm-drv.c:2031-2049`), and NVKMS drops its console surface (`nvRmUnmapFbConsoleMemory`, `nvkms-rm.c:4967-4998`). At `rmmod`, `nvEvoRestoreConsole` has no surface (`nvkms-console-restore.c:796-799`), fails, and NVKMS shuts the heads down (`:971-977`); it never sends `PRESERVE_HW` (`0x50700117` appears nowhere in d1's log). kf-disp measured the head left with no window — and then produced no further frame, so QEMU kept the last one. | black (no signal) |
+
+**The fixes** (kf3 `4a4b95f7`):
+1. **BAR1 back to physical at teardown.** The register drainer — never a vCPU — recognises the guest's
+   write of its BAR1-mode register with MODE PHYSICAL (per die group from hwref: `NV_PBUS_BAR1_BLOCK`
+   31:31 through Ada, `NV_VIRTUAL_FUNCTION_PRIV_FUNC_BAR1_BLOCK_LOW_ADDR` 9:9 behind the VF window from
+   Hopper, the `kbusTeardownMailbox` HAL split of `g_kern_bus_nvoc.c:1825-1834`; `kf_chip::bar1mode`) and
+   a fn 47 without `bInPMTransition` (decoded with the generated layout; `kf_qemu::bar1phys`), and only
+   bumps a counter and wakes the VA thread (`Inbox::request_bar1_physical`). The VA thread, once no walk
+   is in flight or pending, places the seed again (`CpuWindow::reseed`: one RM map + one `mmap` over
+   scratch, no view released) — unless BAR1 changed since it noticed the request (an RM took BAR1 back
+   first: its placements win, logged). The re-seed retires exactly as the first seed did at the next
+   RM's first BAR1 change (place, sink the rest, release). A guest placement still inside `[0, G)` refuses
+   the re-seed by name.
+2. **Nothing scanned is black** (`Shown::Blank`): once a frame was shown, a moment with no armed head
+   scanning a window presents one black frame of the last size, instead of leaving QEMU's last frame.
+3. **`PRESERVE_HW`** (`Shown::Preserved`): kf-disp claims `NV5070_CTRL_CMD_SET_RMFREE_FLAGS` (its layout
+   derived by `tools/derive_display_layouts.sh`), marks the channels of the next free, and on such a free
+   keeps the last armed composition's planned layers on the monitor until a head is armed again.
+4. **`unload_hook.sh`**: per-step guest uptime; (c2)/(c3) as the positive control; (a) and (a2) set their
+   lightdm session explicitly and restore the image's after; each arm prints its expectation.
+
+**The trigger, decided from source and measurement.** Two guest acts give BAR1 up, in this order
+(`gpuStateUnload` then `gpuStateDestroy` → `kgspUnloadRm`, `ogkm-580: src/nvidia/arch/nvalloc/unix/src/osinit.c:2352-2375`,
+`src/nvidia/src/kernel/gpu/gpu.c:3970-3975`): CPU-RM's `NV_PBUS_BAR1_BLOCK` write, then fn 47, after which
+GSP-RM runs its own unload. Both are honoured and the second is a no-op (`[measured b5f]` *"already shows
+its physical view"*). The register write is the primary one because the guest holds the console lock
+across the whole teardown (`os_disable_console_access` … `os_enable_console_access`, `osinit.c:2352`, `:2375`, = `console_lock()`,
+`kernel-open/nvidia/os-interface.c:75-78`): fbcon's first write after it comes after fn 47's reply, and
+the register write precedes that by the rest of the teardown. `[measured b5f, 5 teardowns]` unmap →
+write in the same ms, re-seed ≤ 1 ms later, fn 47's request served 24–36 ms later. ⚠ The re-seed is
+asynchronous (the VA thread): this ordering is a measured margin, not a guarantee.
+
+**Why `[0, G)` and not all of BAR1.** On a real card physical mode is BAR1 `[0, bar1-size)` → FB. kf3
+restores only the boot framebuffer: the firmware console is the only user of BAR1 in physical mode (a
+Linux guest's efifb/simpledrm, Windows' Basic Display on the GOP), and a whole-BAR1 view would need
+`bar1-size` more host BAR1 for the moment an RM takes BAR1 back (its new views are placed before the
+physical view is released, scratch-first) — 128 MiB on the default device, against `G` (8 MiB at 1080p)
+already in `Demand::with_boot_fb`. `[G, bar1-size)` stays scratch while no RM holds BAR1.
+
+**Constraints.** No trap is added (the register write is an ordinary privileged-ring item); the drainer
+only bumps an atomic; host verbs run on the VA thread; the re-seed replaces scratch and releases nothing,
+and retirement keeps place → sink → release; no VMM address reaches the guest. Hostile guest: a write
+storm costs one atomic per write and at most one re-seed per BAR1 change; the log lines are bounded.
+`gop=off`: no boot range, so no re-seed and no line (`[measured b0f]` none).
+
+**Not modelled / open:**
+- Physical mode for BAR1 `[G, bar1-size)` (above). A guest that keeps a mapping inside `[0, G)` through
+  its teardown keeps it (re-seed refused by name, its own console).
+- `Shown::Blank` also applies with `gop=off` once a frame was shown, and on GB20x (no window vocabulary
+  until M5) the boot layer is now followed by black instead of its last frame.
+- GSP-RM's behaviour on a channel free WITHOUT `PRESERVE_HW` is closed firmware; kf-disp shows black then.
+- One *"Flip event timeout on head 0"* at `rmmod nvidia_drm` (in the first run and in b5f): nvidia-drm's
+  last commit waits 3 s for a flip event kf-disp does not deliver. Not investigated here.
+- (d) — a 7.x guest's `nv_get_screen_info` path — was not run.
 
 ---
 
