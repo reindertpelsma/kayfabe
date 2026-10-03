@@ -114,6 +114,26 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
         format => "format", serial => "serial"]);
     layout!(Kf3BrokerEvent, [kind => "kind", x => "x", y => "y", w0 => "w0", w1 => "w1"]);
     value!("abi", "KF3_ABI", KF3_ABI);
+    // ★ ABI 13 (V3_DISPLAY.md §8.11): the C device's display_broker word for each
+    // display-broker-vram value is the one kf_broker::gpucopy::VramMode decodes
+    {
+        use kf_broker::gpucopy::VramMode;
+        value!(
+            "vram_auto",
+            "KF3_BROKER_ON | (KF3_BROKER_VRAM_AUTO << KF3_BROKER_VRAM_SHIFT)",
+            VramMode::Auto.abi_word()
+        );
+        value!(
+            "vram_on",
+            "KF3_BROKER_ON | (KF3_BROKER_VRAM_ON << KF3_BROKER_VRAM_SHIFT)",
+            VramMode::On.abi_word()
+        );
+        value!(
+            "vram_off",
+            "KF3_BROKER_ON | (KF3_BROKER_VRAM_OFF << KF3_BROKER_VRAM_SHIFT)",
+            VramMode::Off.abi_word()
+        );
+    }
     program.push_str("return 0; }\n");
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

@@ -15,7 +15,15 @@
  * display_broker, and the broker relay's surface (Kf3BrokerEvent, the two verbs, kf3_broker_*). */
 /* ★ 12 (2026-10-03, display step 3c): kf3_display_ui_info (the console's ui_info hook) and the
  * broker's SURFACE event (KF3_BROKER_SURFACE). */
-#define KF3_ABI 12
+/* ★ 13 (2026-10-03, the GPU-copy rung — docs/design/V3_DISPLAY.md sec. 8.11): kf3_realize's
+ * display_broker word carries display-broker-vram in bits 1-2 (KF3_BROKER_VRAM_*) beside the
+ * broker in bit 0; the signature is unchanged. */
+#define KF3_ABI 13
+#define KF3_BROKER_ON 1u
+#define KF3_BROKER_VRAM_AUTO 0u
+#define KF3_BROKER_VRAM_ON 1u
+#define KF3_BROKER_VRAM_OFF 2u
+#define KF3_BROKER_VRAM_SHIFT 1
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;

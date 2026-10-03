@@ -28,6 +28,17 @@
 //! - **The ATTACH flags travel with the frame** on the live, owed AND replay paths (nvkvm-pv's
 //!   replay dropped `F_SHM`, `relay.c:1965-1973`).
 //! - **Rung 1b** — the implicit modifier (`MOD_INVALID`) for a broker without `CAP_MODIFIERS`.
+//! - ★ **Rung 0, the GPU copy** (`V3_DISPLAY.md` §8.11, `OWNER_RULINGS.md` §L, 2026-10-03): a
+//!   frame packed into a VRAM object kayfabe owns goes as a block-linear dma-buf
+//!   (`DRM_FORMAT_MOD_NVIDIA_BLOCK_LINEAR_2D`), only on an EXPLICIT yes to
+//!   `QUERY_FORMAT(XR24, that modifier)` with `CAP_MODIFIERS` and `CAP_RELEASE`, never while the
+//!   broker says its compositor renders on another GPU (`EV_DEVICE`), and never while the
+//!   acknowledgement detector backs off: X11 reports a refused DRI3 import NOWHERE, so a native
+//!   frame unconfirmed by a RELEASE after [`DETECT_COMMITS`] commits and [`DETECT_MS`] backs the
+//!   rung off for [`BACKOFF_MIN_MS`] (doubling to [`BACKOFF_MAX_MS`]) — a timed back-off, never a
+//!   permanent "no", because on X11 with the NVIDIA DDX the host rungs may well be a black window.
+//!   The relay's per-connection choice reaches the display worker through one atomic
+//!   ([`FrameRing::want_vram`]).
 //! - All per-connection knowledge lives in one [`Conn`] that is dropped on disconnect, so the
 //!   "reconnect inherits partial state" class (nvkvm-pv audits B-2, S-11, RR-07) cannot be
 //!   written.
@@ -37,12 +48,12 @@
 //! the time (`now_ms`), so the machine is deterministic under test. Every syscall is
 //! non-blocking; nothing here waits.
 
-use crate::slots::{FrameRing, MAX_SLOTS, Take};
+use crate::slots::{FrameRing, Kind, MAX_SLOTS, Take};
 use crate::wire::{
-    CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CLOSE_FORCE, CMD_ATTACH, CMD_F_SHM, CMD_SIZE, Cmd,
-    EV_ABS, EV_BTN, EV_BYE, EV_CLIPBOARD, EV_CLOSE, EV_FOCUS, EV_FORMAT, EV_FRAME, EV_GRAB,
-    EV_HELLO, EV_KEY, EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, MOD_INVALID,
-    MOD_LINEAR, PKT_SIZE, PROTO_VERSION, Pkt, fourcc_name,
+    CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CLOSE_FORCE, CMD_ATTACH, CMD_F_SHM,
+    CMD_SIZE, Cmd, EV_ABS, EV_BTN, EV_BYE, EV_CLIPBOARD, EV_CLOSE, EV_DEVICE, EV_FOCUS, EV_FORMAT,
+    EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL,
+    FOURCC_XR24, MOD_INVALID, MOD_LINEAR, PKT_SIZE, PROTO_VERSION, Pkt, fourcc_name,
 };
 use std::os::fd::BorrowedFd;
 use std::path::{Path, PathBuf};
@@ -65,6 +76,15 @@ pub const RECLAIM_AFTER_MS: u64 = 1000;
 pub const READ_BATCH: usize = 64;
 /// Distinct (fourcc, modifier) verdicts remembered per connection (`relay.c:92`).
 const VERDICTS: usize = 4;
+/// ★ The GPU-copy acknowledgement detector: this many native commits with no RELEASE naming a
+/// native frame …
+pub const DETECT_COMMITS: u32 = 3;
+/// … and at least this long since the first of them, trip a back-off.
+pub const DETECT_MS: u64 = 1000;
+/// The first back-off from the GPU-copy rung; doubled per trip …
+pub const BACKOFF_MIN_MS: u64 = 5000;
+/// … up to this; a native RELEASE resets it.
+pub const BACKOFF_MAX_MS: u64 = 60_000;
 /// The largest Linux input code (`KEY_MAX`); anything above is not an evdev code.
 const KEY_MAX: i32 = 0x2ff;
 
@@ -202,9 +222,11 @@ pub struct RelayConfig {
     pub extra_uid: Option<u32>,
 }
 
-/// A presentation rung (`V3_DISPLAY.md` §8.2).
+/// A presentation rung (`V3_DISPLAY.md` §8.2, §8.11).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rung {
+    /// 0: the GPU copy — a block-linear dma-buf of the slot's kayfabe-owned VRAM backing.
+    Native,
     /// 1: the udmabuf as a LINEAR dma-buf.
     Linear,
     /// 1b: the udmabuf with the implicit modifier, for a broker without `CAP_MODIFIERS`.
@@ -248,6 +270,21 @@ pub struct Counters {
     pub packets: u64,
     /// Frames refused before the wire (no backing, an impossible geometry).
     pub refused: u64,
+    /// ★ Of `sent`, frames committed on the GPU-copy rung.
+    pub native: u64,
+    /// GPU-copy back-offs the acknowledgement detector tripped.
+    pub native_trips: u64,
+}
+
+/// What the broker said about its compositor's device (`EV_DEVICE`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Device {
+    /// Nothing said (an older broker), or "cannot tell".
+    Unknown,
+    /// One of this GPU's DRM nodes.
+    Same,
+    /// Another device: the GPU-copy rung is not offered on this connection.
+    Other(u32, u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -336,6 +373,16 @@ struct Conn<S> {
     /// send it with every frame).
     surface: Option<(i32, i32)>,
     seq: u32,
+    /// ★ The compositor's device (`EV_DEVICE`).
+    device: Device,
+    /// ★ The acknowledgement detector: a RELEASE named a native frame on this connection.
+    native_confirmed: bool,
+    /// Native commits since the last confirmation, and when the first of them went.
+    native_unacked: u32,
+    native_unacked_since: Option<u64>,
+    /// No native frame before this; the next back-off's length.
+    backoff_until: Option<u64>,
+    backoff_ms: u64,
 }
 
 /// ★ The relay. VM-lifetime: it outlives connections, holds the backoff, the held-frame table
@@ -355,6 +402,8 @@ pub struct Relay<L: Link> {
     stopped: bool,
     powerdown: Option<(u64, u32)>,
     counters: Counters,
+    /// The time of the entry being run (every public entry sets it first).
+    now_ms: u64,
 }
 
 macro_rules! say {
@@ -430,6 +479,7 @@ impl<L: Link> Relay<L> {
             stopped: false,
             powerdown: None,
             counters: Counters::default(),
+            now_ms: 0,
         }
     }
 
@@ -468,9 +518,11 @@ impl<L: Link> Relay<L> {
     pub fn status(&self) -> String {
         let c = &self.counters;
         format!(
-            "broker[up={} sent={} dropped={} uncommitted={} recovered={} releases={} unknown_releases={} reclaims={} blocked={} backstops={} reconnects={} failed_attempts={} peer_refused={}]",
+            "broker[up={} sent={} gpucopy={} gpucopy_backoffs={} dropped={} uncommitted={} recovered={} releases={} unknown_releases={} reclaims={} blocked={} backstops={} reconnects={} failed_attempts={} peer_refused={}]",
             u8::from(self.active()),
             c.sent,
+            c.native,
+            c.native_trips,
             c.dropped,
             c.uncommitted,
             c.recovered,
@@ -492,6 +544,7 @@ impl<L: Link> Relay<L> {
     /// as the uid QEMU is about to become. ⊘ Not a startup dependency: a failure is logged once
     /// and retried in the background; the VM boots regardless.
     pub fn start(&mut self, now: u64, host: &mut dyn Host) {
+        self.now_ms = now;
         if self.stopped || self.conn.is_some() || self.retry_at.is_some() {
             return;
         }
@@ -512,6 +565,7 @@ impl<L: Link> Relay<L> {
         out: &mut Vec<Input>,
         cap: usize,
     ) {
+        self.now_ms = now;
         if writable {
             self.on_writable(now, host);
         }
@@ -523,6 +577,7 @@ impl<L: Link> Relay<L> {
 
     /// ★ The worker published a frame.
     pub fn on_frame(&mut self, now: u64, host: &mut dyn Host) {
+        self.now_ms = now;
         self.counters.frames_announced += 1;
         self.progress(now, host);
         self.finish(now, host);
@@ -530,6 +585,7 @@ impl<L: Link> Relay<L> {
 
     /// ★ The machine's timer fired (or any wakeup: deadlines are checked on every entry).
     pub fn on_timer(&mut self, now: u64, host: &mut dyn Host) {
+        self.now_ms = now;
         self.finish(now, host);
     }
 
@@ -606,6 +662,12 @@ impl<L: Link> Relay<L> {
             rung_logged: None,
             surface: None,
             seq: 0,
+            device: Device::Unknown,
+            native_confirmed: false,
+            native_unacked: 0,
+            native_unacked_since: None,
+            backoff_until: None,
+            backoff_ms: BACKOFF_MIN_MS,
         });
         host.watch(fd, true, false);
     }
@@ -614,6 +676,8 @@ impl<L: Link> Relay<L> {
     /// the next connection's replay frame when nothing newer is ready.
     fn close(&mut self, host: &mut dyn Host) {
         let Some(c) = self.conn.take() else { return };
+        // no connection, no GPU-copy demand: the worker stops packing at its next frame
+        self.ring.set_want_vram(false);
         host.watch(c.fd, false, false);
         drop(c.sock);
         if let Some(j) = c.last_commit
@@ -681,11 +745,10 @@ impl<L: Link> Relay<L> {
             return Sent::Failed("no connection".into());
         };
         let rec = cmd.encode();
-        let fd = slot_fd.and_then(|j| {
-            self.ring.fds(j).and_then(|f| match rung {
-                Rung::Shm => Some(f.memfd()),
-                Rung::Linear | Rung::Implicit => f.dmabuf(),
-            })
+        let fd = slot_fd.and_then(|j| match rung {
+            Rung::Native => self.ring.vram(j).map(crate::slots::VramFds::fd),
+            Rung::Shm => self.ring.fds(j).map(crate::SlotFds::memfd),
+            Rung::Linear | Rung::Implicit => self.ring.fds(j).and_then(crate::SlotFds::dmabuf),
         });
         if slot_fd.is_some() && fd.is_none() {
             return Sent::Failed("an ATTACH without its descriptor".into());
@@ -693,27 +756,80 @@ impl<L: Link> Relay<L> {
         self.link.send(&c.sock, &rec, fd)
     }
 
-    /// The rung for a frame of `fourcc` on this connection, its modifier and ATTACH flags.
-    fn rung(&self, fourcc: u32, slot: usize) -> (Rung, u64) {
-        let Some(c) = self.conn.as_ref() else {
-            return (Rung::Shm, MOD_LINEAR);
-        };
-        let has_dmabuf = self.ring.fds(slot).is_some_and(|f| f.dmabuf().is_some());
-        if has_dmabuf {
-            if c.caps & CAP_MODIFIERS != 0 {
-                // an unknown verdict counts as yes (`relay.c:753-793`)
-                if verdict(c, fourcc, MOD_LINEAR) != Some(Verdict::No) {
-                    return (Rung::Linear, MOD_LINEAR);
-                }
-            } else if verdict(c, fourcc, MOD_INVALID) == Some(Verdict::Yes) {
-                return (Rung::Implicit, MOD_INVALID);
-            }
-        }
-        (Rung::Shm, MOD_LINEAR)
+    /// ★ Whether the GPU-copy rung may be used on this connection NOW, and its modifier: the
+    /// device offers it (a modifier from the render node), the broker negotiates modifiers and
+    /// sends real RELEASEs, it said an EXPLICIT yes to `(XR24, modifier)`, its compositor is not
+    /// on another GPU, and the detector is not backing off.
+    fn native_allowed(&self) -> Option<u64> {
+        let m = self.ring.vram_modifier()?;
+        let c = self.conn.as_ref()?;
+        let ok = c.phase != Phase::Hello
+            && c.caps & CAP_MODIFIERS != 0
+            && c.caps & CAP_RELEASE != 0
+            && verdict(c, FOURCC_XR24, m) == Some(Verdict::Yes)
+            && !matches!(c.device, Device::Other(..))
+            && c.backoff_until.is_none_or(|t| self.now_ms >= t);
+        ok.then_some(m)
     }
 
-    /// Ask once per connection whether the dma-buf rung for `fourcc` can be shown.
+    /// ★ The rung for `slot`'s published frame on this connection and its modifier — `None` when
+    /// no backing that holds the frame can be sent (none fresh, its kind withdrawn, or a geometry
+    /// that does not fit it). Rung 0 first, then the host rungs as before (§8.2).
+    fn choose(&self, slot: usize) -> Option<(Rung, u64)> {
+        let g = self.ring.geometry(slot);
+        if g.width == 0
+            || g.height == 0
+            || g.width > crate::wire::MAX_DIM
+            || g.height > crate::wire::MAX_DIM
+        {
+            return None;
+        }
+        let w4 = u64::from(g.width) * 4;
+        if g.fourcc == FOURCC_XR24
+            && self.ring.backed(slot, Kind::Vram)
+            && let Some(m) = self.native_allowed()
+            && let Some(v) = self.ring.vram(slot)
+        {
+            let vg = self.ring.vram_geometry(slot);
+            let stride = u64::from(vg.stride);
+            // the broker's own bounds (`4w <= stride <= 8w + 4096`, `stride * h <= size`), and
+            // the extent inside the object the GPU wrote
+            if stride >= w4
+                && stride <= 2 * w4 + 4096
+                && stride * u64::from(g.height) <= vg.extent
+                && vg.extent <= v.bytes()
+            {
+                return Some((Rung::Native, m));
+            }
+        }
+        if !self.ring.backed(slot, Kind::Host) {
+            return None;
+        }
+        let fds = self.ring.fds(slot)?;
+        if u64::from(g.stride) < w4 || u64::from(g.stride) * u64::from(g.height) > fds.bytes() {
+            return None;
+        }
+        let Some(c) = self.conn.as_ref() else {
+            return Some((Rung::Shm, MOD_LINEAR));
+        };
+        if fds.dmabuf().is_some() {
+            if c.caps & CAP_MODIFIERS != 0 {
+                // an unknown verdict counts as yes (`relay.c:753-793`)
+                if verdict(c, g.fourcc, MOD_LINEAR) != Some(Verdict::No) {
+                    return Some((Rung::Linear, MOD_LINEAR));
+                }
+            } else if verdict(c, g.fourcc, MOD_INVALID) == Some(Verdict::Yes) {
+                return Some((Rung::Implicit, MOD_INVALID));
+            }
+        }
+        Some((Rung::Shm, MOD_LINEAR))
+    }
+
+    /// Ask once per connection whether the dma-buf rung for `fourcc` can be shown — and, when
+    /// this device offers the GPU-copy rung, whether the block-linear pair can
+    /// ([`Self::ensure_native_query`]).
     fn ensure_query(&mut self, fourcc: u32, slot: usize) {
+        self.ensure_native_query();
         let has_dmabuf = self.ring.fds(slot).is_some_and(|f| f.dmabuf().is_some());
         let Some(c) = self.conn.as_ref() else { return };
         if !has_dmabuf {
@@ -724,6 +840,28 @@ impl<L: Link> Relay<L> {
         } else {
             MOD_INVALID
         };
+        self.ask(fourcc, modifier);
+    }
+
+    /// ★ Ask `(XR24, the GPU-copy modifier)` once per connection, when the device offers the rung
+    /// and the broker negotiates modifiers — whether or not a slot has a VRAM backing yet: with
+    /// `display-broker-vram=auto` the slots are provisioned only at the first explicit yes.
+    fn ensure_native_query(&mut self) {
+        let Some(m) = self.ring.vram_modifier() else {
+            return;
+        };
+        if self
+            .conn
+            .as_ref()
+            .is_some_and(|c| c.caps & CAP_MODIFIERS != 0)
+        {
+            self.ask(FOURCC_XR24, m);
+        }
+    }
+
+    /// `QUERY_FORMAT(fourcc, modifier)` unless this connection already asked.
+    fn ask(&mut self, fourcc: u32, modifier: u64) {
+        let Some(c) = self.conn.as_ref() else { return };
         if verdict(c, fourcc, modifier).is_some() {
             return;
         }
@@ -756,27 +894,12 @@ impl<L: Link> Relay<L> {
         }
     }
 
-    /// Whether `slot` may be sent: it is broker-backed ([`FrameRing::broker_backed`] — a broker
-    /// backing, and the ring not withdrawn by a refused one), and that CURRENT backing (the one
-    /// the GPU writes) holds its published geometry, inside the broker's bounds (the broker
-    /// re-checks all of it; a frame it would reject is not sent). ★ The withdrawal check is what
-    /// stops a held frame requeued for a replay after [`FrameRing::withdraw_all`]: the ring
-    /// requeues whatever was held.
+    /// Whether `slot` may be sent: some rung can carry its published frame now ([`Self::choose`]
+    /// — a fresh backing of a kind not withdrawn, holding its geometry inside the broker's
+    /// bounds). ★ The per-kind withdrawal check is what stops a held frame requeued for a replay
+    /// after [`FrameRing::withdraw`]: the ring requeues whatever was held.
     fn fits(&self, slot: usize) -> bool {
-        let g = self.ring.geometry(slot);
-        if !self.ring.broker_backed(slot) {
-            return false;
-        }
-        let Some(fds) = self.ring.fds(slot) else {
-            return false;
-        };
-        let need = u64::from(g.stride) * u64::from(g.height);
-        g.width > 0
-            && g.height > 0
-            && g.width <= crate::wire::MAX_DIM
-            && g.height <= crate::wire::MAX_DIM
-            && u64::from(g.stride) >= u64::from(g.width) * 4
-            && need <= fds.bytes()
+        self.choose(slot).is_some()
     }
 
     /// A frame just claimed that [`Self::fits`] refused: counted, logged at a bounded rate
@@ -796,8 +919,9 @@ impl<L: Link> Relay<L> {
                 );
             } else {
                 say!(
-                    "REFUSED frame slot {j}: the broker is withdrawn from the frame ring (the VMM's \
-                     broker frame backing was refused) or the slot has no broker backing ({n} so far)"
+                    "REFUSED frame slot {j}: no backing holding this frame may be sent — its kind is \
+                     withdrawn (a broker frame backing of that kind was refused), or the slot has no \
+                     broker backing ({n} so far)"
                 );
             }
         }
@@ -805,15 +929,21 @@ impl<L: Link> Relay<L> {
     }
 
     fn attach_cmd(&mut self, slot: usize) -> Option<(Cmd, Rung)> {
-        if !self.fits(slot) {
-            return None;
-        }
+        let (rung, modifier) = self.choose(slot)?;
         let g = self.ring.geometry(slot);
-        let (rung, modifier) = self.rung(g.fourcc, slot);
+        let stride = if rung == Rung::Native {
+            self.ring.vram_geometry(slot).stride
+        } else {
+            g.stride
+        };
         let c = self.conn.as_mut()?;
         if c.rung_logged != Some(rung) {
             c.rung_logged = Some(rung);
             match rung {
+                Rung::Native => say!(
+                    "frames go as a GPU copy in host VRAM (a block-linear dma-buf, modifier \
+                     {modifier:#018x}; no byte crosses PCIe, nothing of the guest's is exported)"
+                ),
                 Rung::Linear => {
                     say!("frames go as a LINEAR dma-buf (udmabuf, zero-copy for the broker)")
                 }
@@ -834,7 +964,7 @@ impl<L: Link> Relay<L> {
                 flags: if rung == Rung::Shm { CMD_F_SHM } else { 0 },
                 width: g.width,
                 height: g.height,
-                stride: g.stride,
+                stride,
                 offset: 0,
                 fourcc: g.fourcc,
                 modifier,
@@ -845,10 +975,12 @@ impl<L: Link> Relay<L> {
     }
 
     fn sent_id(&self, slot: usize, rung: Rung) -> Option<u64> {
-        let f = self.ring.fds(slot)?;
         match rung {
-            Rung::Shm => Some(f.memfd_id()),
-            Rung::Linear | Rung::Implicit => f.dmabuf_id(),
+            Rung::Native => self.ring.vram(slot).map(crate::slots::VramFds::id),
+            Rung::Shm => self.ring.fds(slot).map(crate::SlotFds::memfd_id),
+            Rung::Linear | Rung::Implicit => {
+                self.ring.fds(slot).and_then(crate::SlotFds::dmabuf_id)
+            }
         }
     }
 
@@ -913,6 +1045,15 @@ impl<L: Link> Relay<L> {
         if r == Sent::Done {
             self.commits += 1;
             self.counters.sent += 1;
+            if self.held[slot].is_some_and(|h| h.rung == Rung::Native) {
+                self.counters.native += 1;
+                if let Some(c) = self.conn.as_mut()
+                    && !c.native_confirmed
+                {
+                    c.native_unacked += 1;
+                    c.native_unacked_since.get_or_insert(now);
+                }
+            }
             if let Some(h) = self.held[slot].as_mut() {
                 h.at_ms = now;
                 h.commit_no = self.commits;
@@ -1487,6 +1628,7 @@ impl<L: Link> Relay<L> {
                 emit(out, Input::Close { force });
             }
             EV_BYE => say!("the broker is going away (reason {})", p.x),
+            EV_DEVICE => self.device(p),
             // POINTER, a second HELLO, CLIPBOARD (not offered: CAPS bit 0 is clear), the
             // out-of-range values filtered above, and types from a NEWER broker: fixed-size
             // packets, so skipping one is exact
@@ -1530,6 +1672,9 @@ impl<L: Link> Relay<L> {
         if let Some(c) = self.conn.as_mut() {
             c.caps = p.w1;
         }
+        // ★ ask the block-linear pair at once: with `display-broker-vram=auto` the VRAM slots are
+        // provisioned only at the first explicit yes, so it must not wait for a frame
+        self.ensure_native_query();
         self.begin_replay(now, host);
     }
 
@@ -1540,6 +1685,19 @@ impl<L: Link> Relay<L> {
             return;
         };
         self.counters.releases += 1;
+        // ★ a RELEASE names only a buffer the compositor imported: the GPU copy is acknowledged
+        if self.held[j].is_some_and(|h| h.rung == Rung::Native)
+            && let Some(c) = self.conn.as_mut()
+        {
+            if !c.native_confirmed {
+                say!("the display imported a GPU-copy frame (its RELEASE came back)");
+            }
+            c.native_confirmed = true;
+            c.native_unacked = 0;
+            c.native_unacked_since = None;
+            c.backoff_until = None;
+            c.backoff_ms = BACKOFF_MIN_MS;
+        }
         if let Some(c) = self.conn.as_mut()
             && c.last_commit == Some(j)
         {
@@ -1610,6 +1768,65 @@ impl<L: Link> Relay<L> {
             c.credit_at = None;
         }
         self.progress(now, host);
+    }
+
+    /// ★ `EV_DEVICE`: which DRM device the compositor renders on. Another device than this GPU's
+    /// nodes ⇒ no GPU-copy frame on this connection (`DupMemory` refuses vidmem from another
+    /// device, `ogkm-580: nvkms-kapi.c:1789-1806`; a non-NVIDIA importer gets no `sg_table`).
+    fn device(&mut self, p: &Pkt) {
+        let nodes = self.ring.gpu_nodes();
+        let d = if p.x < 0 || p.y < 0 || nodes.is_empty() {
+            Device::Unknown
+        } else {
+            let dev = (p.x as u32, p.y as u32);
+            if nodes.contains(&dev) {
+                Device::Same
+            } else {
+                Device::Other(dev.0, dev.1)
+            }
+        };
+        let Some(c) = self.conn.as_mut() else { return };
+        if c.device == d {
+            return;
+        }
+        c.device = d;
+        match d {
+            Device::Same => {
+                say!("the compositor renders on this GPU: the GPU-copy rung may be used")
+            }
+            Device::Other(a, b) => say!(
+                "the compositor renders on DRM device {a}:{b}, not this GPU's ({nodes:?}): \
+                 no GPU-copy frame on this connection; frames go through host memory"
+            ),
+            Device::Unknown => {}
+        }
+    }
+
+    /// ★ The acknowledgement detector (X11 reports a refused import nowhere): native commits
+    /// that no RELEASE acknowledged, [`DETECT_COMMITS`] of them over at least [`DETECT_MS`], back the
+    /// rung off — loud once per trip, never permanent.
+    fn detect(&mut self, now: u64) {
+        let Some(c) = self.conn.as_mut() else { return };
+        let due = !c.native_confirmed
+            && c.native_unacked >= DETECT_COMMITS
+            && c.native_unacked_since.is_some_and(|t| now >= t + DETECT_MS);
+        if !due {
+            return;
+        }
+        let ms = c.backoff_ms;
+        c.backoff_until = Some(now + ms);
+        c.backoff_ms = (ms * 2).min(BACKOFF_MAX_MS);
+        let n = c.native_unacked;
+        c.native_unacked = 0;
+        c.native_unacked_since = None;
+        self.counters.native_trips += 1;
+        say!(
+            "GPU-copy frames are not acknowledged ({n} committed, no RELEASE for {DETECT_MS} ms — \
+             the compositor may not import them): backing off to the host rungs for {} s, then \
+             trying again (trip {})",
+            ms / 1000,
+            self.counters.native_trips
+        );
     }
 
     /// The close policy is the VMM's (`proto.h:73-91`); this keeps nvkvm-pv's repeat-ask message
@@ -1700,7 +1917,13 @@ impl<L: Link> Relay<L> {
                 self.reclaim_overdue(now);
                 self.progress(now, host);
             }
+            self.detect(now);
             break;
+        }
+        // ★ the worker reads this once per frame: pack (or not) for the broker
+        let want = self.native_allowed().is_some();
+        if want != self.ring.want_vram() {
+            self.ring.set_want_vram(want);
         }
         // the watch is set at connect and changed only here (and removed before a close)
         if let Some(c) = self.conn.as_mut() {
@@ -1726,6 +1949,10 @@ impl<L: Link> Relay<L> {
             c.owed.and(c.owed_at),
             (!c.credit).then_some(c.credit_at).flatten(),
             self.reclaim_deadline(),
+            c.native_unacked_since
+                .filter(|_| !c.native_confirmed && c.native_unacked >= DETECT_COMMITS)
+                .map(|t| t + DETECT_MS),
+            c.backoff_until.filter(|t| *t > self.now_ms),
         ]
         .into_iter()
         .flatten()

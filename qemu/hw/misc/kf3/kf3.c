@@ -25,6 +25,9 @@
  *    per vector (kf3_irq_fd); this device registers each as a KVM irqfd on the vector's MSI route
  *    when the guest unmasks it (msix vector notifiers, virtio-pci's pattern). A raise is then one
  *    write(2) from any Rust thread — never a BQL-taking msix_notify.
+ *  - ★ 2026-10-03, the GPU-copy broker rung (property display-broker-vram=auto|on|off, ABI 13;
+ *    docs/design/V3_DISPLAY.md sec. 8.11): Rust allocates kayfabe's own VRAM frame slots and hands
+ *    the broker their dma-bufs; this file only passes the mode.
  *  - ★ 2026-10-03, the display broker (property display-broker, unset = off;
  *    docs/design/V3_DISPLAY.md §8): Rust (crates/kf-broker, crates/kf-qemu/src/broker.rs) owns the
  *    socket and decides everything; this file registers the fd handlers and the timer Rust asks
@@ -148,6 +151,7 @@ struct Kf3State {
     /* ★ ABI 11 (display step 3): the display-broker relay. Main loop only, BQL held. */
     char *display_broker;            /* property: the broker's socket path; NULL = off */
     int64_t display_broker_uid;      /* property: one more uid accepted as the broker; -1 = none */
+    char *display_broker_vram;       /* ★ ABI 13: "auto" (NULL), "on" or "off" — the GPU-copy rung */
     QEMUTimer *broker_timer;
     int broker_sock;                 /* the socket Rust asked us to watch, or -1 */
     int broker_frame_fd;             /* the display worker's frame eventfd, or -1 */
@@ -1056,8 +1060,27 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         error_setg(errp, "kf3: display-broker needs display=on (the broker shows the virtual display)");
         return;
     }
+    /* ★ ABI 13 (docs/design/V3_DISPLAY.md sec. 8.11): display-broker-vram rides in bits 1-2 */
+    uint32_t broker_word = 0;
+    if (s->display_broker_vram && !s->display_broker) {
+        error_setg(errp, "kf3: display-broker-vram needs display-broker (it is the broker's GPU-copy rung)");
+        return;
+    }
+    if (s->display_broker) {
+        uint32_t vram = KF3_BROKER_VRAM_AUTO;
+        if (s->display_broker_vram && !strcmp(s->display_broker_vram, "on")) {
+            vram = KF3_BROKER_VRAM_ON;
+        } else if (s->display_broker_vram && !strcmp(s->display_broker_vram, "off")) {
+            vram = KF3_BROKER_VRAM_OFF;
+        } else if (s->display_broker_vram && strcmp(s->display_broker_vram, "auto")) {
+            error_setg(errp, "kf3: display-broker-vram=%s: the values are auto, on and off",
+                       s->display_broker_vram);
+            return;
+        }
+        broker_word = KF3_BROKER_ON | (vram << KF3_BROKER_VRAM_SHIFT);
+    }
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    s->display_broker ? 1 : 0, &s->h, err, sizeof(err)) != 0) {
+                    broker_word, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }
@@ -1240,6 +1263,11 @@ static const Property kf3_properties[] = {
      * owner of the socket's directory is not (anyone can create a missing /tmp directory). */
     DEFINE_PROP_STRING("display-broker", Kf3State, display_broker),
     DEFINE_PROP_INT64("display-broker-uid", Kf3State, display_broker_uid, -1),
+    /* ★ 2026-10-03, the GPU-copy rung (docs/design/V3_DISPLAY.md sec. 8.11, OWNER_RULINGS L):
+     * auto (default: probe at realize, allocate kayfabe's own VRAM frame slots at the broker's
+     * first yes for the block-linear pair), on (allocate at realize; a refusal fails realize),
+     * off (host-memory rungs only). Never guest memory: the slots are kayfabe's. */
+    DEFINE_PROP_STRING("display-broker-vram", Kf3State, display_broker_vram),
 };
 
 static void kf3_class_init(ObjectClass *klass, const void *data)

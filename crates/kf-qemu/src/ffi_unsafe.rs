@@ -18,7 +18,12 @@ use std::os::unix::ffi::OsStrExt as _;
 /// [`kf3_broker_ready`], [`kf3_broker_stop`]).
 /// ★ 12 (2026-10-03, `v3-broker`, display step 3c): [`kf3_display_ui_info`] (the console's
 /// `ui_info` hook) and the broker's `SURFACE` event (kind 8).
-pub const KF3_ABI: u32 = 12;
+/// ★ 13 (2026-10-03, `v3-broker`, the GPU-copy rung, `V3_DISPLAY.md` §8.11): `kf3_realize`'s
+/// `display_broker` word carries `display-broker-vram` in bits 1-2 (0 auto, 1 on, 2 off;
+/// [`kf_broker::gpucopy::VramMode::from_abi`]) beside the broker in bit 0. The signature is
+/// unchanged, so the number is what keeps an ABI-12 archive (which reads any nonzero word as
+/// "broker on") from meeting a device that sends the mode.
+pub const KF3_ABI: u32 = 13;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -111,6 +116,13 @@ pub unsafe extern "C" fn kf3_realize(
         )
         .filter(|s| !s.is_empty())
     };
+    let vram = match kf_broker::gpucopy::VramMode::from_abi(display_broker) {
+        Ok(v) => v,
+        Err(e) => {
+            write_err(err, err_len, &e);
+            return -1;
+        }
+    };
     let cfg = Config {
         gpu_minor,
         fb_mb,
@@ -118,7 +130,8 @@ pub unsafe extern "C" fn kf3_realize(
         bar2_bytes,
         guest_driver: guest,
         display: display != 0,
-        display_broker: display_broker != 0,
+        display_broker: vram.is_some(),
+        display_broker_vram: vram.unwrap_or_default(),
     };
     match Device::realize(&cfg) {
         Ok(d) => {
@@ -712,8 +725,9 @@ pub unsafe extern "C" fn kf3_broker_ready(
     let mut evs = Vec::with_capacity(cap.min(kf_broker::conn::READ_BATCH));
     let active = seat.ready(fd, rd != 0, wr != 0, now_ms, &mut evs, cap.max(1));
     if active {
-        // broker activity is demand: the refresh clock runs at the watched rate
-        dp.console.note_demand();
+        // broker activity keeps the refresh clock at the watched rate; it asks for a host copy
+        // only while the broker is fed through host memory (§8.11, two demand signals)
+        dp.console.note_broker_demand();
     }
     let n = evs.len().min(cap);
     for (i, e) in evs.iter().take(n).enumerate() {

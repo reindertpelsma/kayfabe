@@ -51,6 +51,17 @@ pub const EV_CLIPBOARD: u16 = 15;
 /// `w0`,`w1` = the modifier.
 pub const EV_FORMAT: u16 = 16;
 
+/// ★ **AHEAD OF THE VENDORED HEADER** (2026-10-03, `docs/design/V3_DISPLAY.md` §8.11) — the
+/// compositor's DRM device: `x` = major, `y` = minor of the node it renders on (primary or render
+/// node), `x < 0` = the broker cannot tell. Append-only in protocol v2, sent once after HELLO by a
+/// broker that knows it; an older broker never sends it (unknown types are skipped exactly, so the
+/// relay then falls back to the acknowledgement detector). The value is THIS relay's proposal to
+/// nvkvm-pv's broker (the coordinator's default for the owner: the change goes into nvkvm-pv's
+/// broker in the same revision as the cursor message); `tests/proto_mirror.rs` asserts the
+/// vendored header does not define it yet, so the day it does, the test forces the value to be
+/// checked against the header's.
+pub const EV_DEVICE: u16 = 17;
+
 /// `NVKVM_BROKER_CLOSE_POWERDOWN`.
 pub const CLOSE_POWERDOWN: i32 = 0;
 /// `NVKVM_BROKER_CLOSE_FORCE`.

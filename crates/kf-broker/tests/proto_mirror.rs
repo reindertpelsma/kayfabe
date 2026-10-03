@@ -152,6 +152,30 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
     }
 }
 
+/// ★ Values `wire.rs` carries AHEAD of the vendored header (proposed to nvkvm-pv's broker, not yet
+/// in its protocol header): each must still be absent from the header, and must not collide with
+/// any value of its family there. The day the header gains one, this fails and the value moves
+/// into the mirrored map above, checked against the header's own.
+#[test]
+fn values_ahead_of_the_header_are_absent_from_it_and_collide_with_nothing() {
+    let theirs = header_values();
+    for (name, v, family) in [(
+        "NVKVM_BROKER_EV_DEVICE",
+        u64::from(wire::EV_DEVICE),
+        "NVKVM_BROKER_EV_",
+    )] {
+        assert!(
+            !theirs.contains_key(name),
+            "{name} is in the header now: mirror it above and drop it from this list"
+        );
+        let clash: Vec<_> = theirs
+            .iter()
+            .filter(|(n, x)| n.starts_with(family) && **x == v)
+            .collect();
+        assert!(clash.is_empty(), "{name} = {v} collides with {clash:?}");
+    }
+}
+
 #[test]
 fn the_header_is_vendored_verbatim_with_its_own_licence() {
     let h = header();

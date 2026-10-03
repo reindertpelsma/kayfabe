@@ -49,10 +49,93 @@
 //! read can never name a recycled descriptor number (a host-RM fd, the guest-RAM memfd) that
 //! would then be sent to a process in the user's session.
 
+//!
+//! ★★ **Two backings per slot, withdrawn per KIND** (`docs/design/V3_DISPLAY.md` §8.11, the
+//! GPU-copy rung, 2026-10-03). A slot may carry a HOST backing ([`SlotFds`]: the sealed memfd and
+//! its udmabuf, which the D2H copy fills) and a VRAM backing ([`VramFds`]: the dma-buf of a frame
+//! object kayfabe allocated in host VRAM, which the pack kernel fills). The worker says which of
+//! them hold the published frame ([`FrameRing::describe_backings`] — a backing nobody wrote this
+//! frame is STALE and is never sent), and each kind is withdrawn on its own
+//! ([`FrameRing::withdraw`]): a refused memfd registration takes the host rungs down and leaves
+//! the GPU-copy rung, and the reverse. ⊘ Corrected the same day: `withdraw_all` (80271bec) was
+//! ring-wide and required a host backing, so a refused memfd would have disabled the GPU-copy
+//! rung too and a VRAM-only slot could never be offered. The console is offered a frame only
+//! when its host backing is fresh. Both ready fields still name only the LAST published slot, so
+//! the cap argument below is unchanged.
+
 use kf_linux_raw::{RawError, SharedRam, fd_inode};
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+
+/// ★ Which backing of a slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Kind {
+    /// The host-RAM backing ([`SlotFds`]): rungs 1, 1b and 2.
+    Host,
+    /// The VRAM backing ([`VramFds`]): rung 0, the GPU copy.
+    Vram,
+}
+
+impl Kind {
+    const fn index(self) -> usize {
+        match self {
+            Kind::Host => 0,
+            Kind::Vram => 1,
+        }
+    }
+    const fn fresh_bit(self) -> u32 {
+        1 << self.index()
+    }
+}
+
+/// ★ One generation of a slot's VRAM backing: the dma-buf the render node made of a kayfabe VRAM
+/// frame object (never guest memory), its identity (`st_ino`, what a RELEASE names), and its
+/// length. Any descriptor is accepted here; kf-qemu checks `DMA_BUF_MAGIC` before it installs.
+#[derive(Debug)]
+pub struct VramFds {
+    fd: OwnedFd,
+    id: u64,
+    bytes: u64,
+}
+
+impl VramFds {
+    /// Describe a VRAM backing of `bytes` bytes, reading the descriptor's identity.
+    ///
+    /// # Errors
+    /// The `fstat` failure.
+    pub fn new(fd: OwnedFd, bytes: u64) -> Result<VramFds, RawError> {
+        let id = fd_inode(fd.as_fd())?;
+        Ok(VramFds { fd, id, bytes })
+    }
+
+    /// The dma-buf.
+    #[must_use]
+    pub fn fd(&self) -> BorrowedFd<'_> {
+        self.fd.as_fd()
+    }
+
+    /// Its identity.
+    #[must_use]
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// Its length in bytes.
+    #[must_use]
+    pub fn bytes(&self) -> u64 {
+        self.bytes
+    }
+}
+
+/// ★ The VRAM copy of a frame: its block-linear stride and the bytes the pack wrote.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VramGeom {
+    /// Bytes per row as the ATTACH states it (`64 · GOBs per row`).
+    pub stride: u32,
+    /// Bytes from the start the frame occupies (whole block rows).
+    pub extent: u64,
+}
 
 /// The most slots a ring has (the held mask is 5 bits).
 pub const MAX_SLOTS: usize = 5;
@@ -210,7 +293,7 @@ pub enum InstallRefusal {
 }
 
 /// One slot's published description.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct SlotMeta {
     width: AtomicU32,
     height: AtomicU32,
@@ -220,6 +303,38 @@ struct SlotMeta {
     gens: [OnceLock<SlotFds>; GENERATIONS],
     /// How many generations are installed; the newest is the current one.
     installed: AtomicU32,
+    /// ★ The VRAM backing's generations, and how many are installed.
+    vram: [OnceLock<VramFds>; GENERATIONS],
+    vram_installed: AtomicU32,
+    /// Which backings hold the published frame ([`Kind::fresh_bit`]).
+    fresh: AtomicU32,
+    /// The VRAM copy's stride and extent.
+    vram_stride: AtomicU32,
+    vram_extent: AtomicU64,
+    /// When the broker last gave the slot back ([`FrameRing::release_held`]): a ring-wide
+    /// sequence number, 0 = never — the LRU fill's key.
+    released: AtomicU64,
+}
+
+impl Default for SlotMeta {
+    /// A slot nobody described is a host frame (what every pre-GPU-copy caller publishes).
+    fn default() -> SlotMeta {
+        SlotMeta {
+            width: AtomicU32::new(0),
+            height: AtomicU32::new(0),
+            stride: AtomicU32::new(0),
+            fourcc: AtomicU32::new(0),
+            serial: AtomicU64::new(0),
+            gens: core::array::from_fn(|_| OnceLock::new()),
+            installed: AtomicU32::new(0),
+            vram: core::array::from_fn(|_| OnceLock::new()),
+            vram_installed: AtomicU32::new(0),
+            fresh: AtomicU32::new(Kind::Host.fresh_bit()),
+            vram_stride: AtomicU32::new(0),
+            vram_extent: AtomicU64::new(0),
+            released: AtomicU64::new(0),
+        }
+    }
 }
 
 /// ★ The ring. See the module docs.
@@ -228,9 +343,22 @@ pub struct FrameRing {
     state: AtomicU32,
     count: usize,
     broker: bool,
-    /// ★ The broker is withdrawn for the ring's life ([`FrameRing::withdraw_all`]).
-    withdrawn: AtomicBool,
+    /// ★ Per [`Kind`]: that kind is withdrawn from the broker for the ring's life
+    /// ([`FrameRing::withdraw`]).
+    withdrawn: [AtomicBool; 2],
     meta: [SlotMeta; MAX_SLOTS],
+    /// The release sequence ([`SlotMeta::released`]).
+    release_seq: AtomicU64,
+    /// ★ The GPU-copy rung's modifier (`DRM_FORMAT_MOD_NVIDIA_BLOCK_LINEAR_2D`, from the render
+    /// node's `GET_DEV_INFO`); 0 = this device offers no GPU-copy rung.
+    vram_modifier: AtomicU64,
+    /// ★ The relay's per-connection choice, read by the worker once per frame: the broker would
+    /// take a VRAM frame now (an explicit yes for the block-linear pair, the capabilities, not
+    /// backing off, the compositor not on another GPU). A stale read costs one frame.
+    want_vram: AtomicBool,
+    /// The DRM nodes (`major:minor`) of the GPU kf3 drives — the same-GPU test of the
+    /// compositor's device (`EV_DEVICE`).
+    gpu_nodes: OnceLock<Vec<(u32, u32)>>,
 }
 
 impl FrameRing {
@@ -242,8 +370,12 @@ impl FrameRing {
             state: AtomicU32::new(pack(NO_SLOT, NO_SLOT, NO_SLOT, 0)),
             count: count.clamp(1, MAX_SLOTS),
             broker,
-            withdrawn: AtomicBool::new(false),
+            withdrawn: [AtomicBool::new(false), AtomicBool::new(false)],
             meta: core::array::from_fn(|_| SlotMeta::default()),
+            release_seq: AtomicU64::new(0),
+            vram_modifier: AtomicU64::new(0),
+            want_vram: AtomicBool::new(false),
+            gpu_nodes: OnceLock::new(),
         }
     }
 
@@ -277,13 +409,37 @@ impl FrameRing {
         (0..self.count).find(|&i| busy & (1 << i) == 0 && Some(i) != inflight)
     }
 
+    /// ★ **Worker**, the GPU-copy rung: a free slot (named nowhere, not `inflight`, not in
+    /// `exclude`) — the one the broker gave back LONGEST ago ([`FrameRing::release_held`]; never
+    /// released counts as oldest, ties by index). ⊘ A RELEASE is not GPU-idle (X11 presents with
+    /// no idle fence and the XRender path sends RELEASE right after queuing its composite), so
+    /// refilling the slot released most recently is the one most likely to tear; `exclude` names
+    /// slots whose dma-buf still carries an unsignalled fence. `None` is legitimate here — the
+    /// frame is then not packed (§8.11) — unlike [`FrameRing::fill_target`]'s.
+    #[must_use]
+    pub fn fill_target_lru(&self, inflight: Option<usize>, exclude: u32) -> Option<usize> {
+        let busy = Self::occupied(self.state.load(Ordering::Acquire)) | exclude;
+        (0..self.count)
+            .filter(|&i| busy & (1 << i) == 0 && Some(i) != inflight)
+            .min_by_key(|&i| (self.meta[i].released.load(Ordering::Acquire), i))
+    }
+
+    /// When the broker last gave `slot` back (0 = never) — the LRU order.
+    #[must_use]
+    pub fn released_order(&self, slot: usize) -> u64 {
+        self.meta
+            .get(slot)
+            .map_or(0, |m| m.released.load(Ordering::Acquire))
+    }
+
     /// Whether `slot` is named anywhere in the word.
     #[must_use]
     pub fn is_free(&self, slot: usize) -> bool {
         slot < self.count && Self::occupied(self.state.load(Ordering::Acquire)) & (1 << slot) == 0
     }
 
-    /// **Worker**: describe a free slot's next frame (before [`FrameRing::publish`]).
+    /// **Worker**: describe a free slot's next frame (before [`FrameRing::publish`]). The frame
+    /// is taken to be in the HOST backing only; [`FrameRing::describe_backings`] says otherwise.
     pub fn describe(&self, slot: usize, g: FrameGeom) {
         let Some(m) = self.meta.get(slot) else { return };
         m.width.store(g.width, Ordering::Release);
@@ -291,6 +447,43 @@ impl FrameRing {
         m.stride.store(g.stride, Ordering::Release);
         m.fourcc.store(g.fourcc, Ordering::Release);
         m.serial.store(g.serial, Ordering::Release);
+        m.fresh.store(Kind::Host.fresh_bit(), Ordering::Release);
+    }
+
+    /// ★ **Worker**, after [`FrameRing::describe`]: which backings the GPU wrote for this frame —
+    /// `host` (the D2H copy ran) and `vram` (the pack ran, at this geometry). A backing not named
+    /// here holds an OLDER frame and is never offered or sent with this one.
+    pub fn describe_backings(&self, slot: usize, host: bool, vram: Option<VramGeom>) {
+        let Some(m) = self.meta.get(slot) else { return };
+        let mut fresh = 0;
+        if host {
+            fresh |= Kind::Host.fresh_bit();
+        }
+        if let Some(v) = vram {
+            m.vram_stride.store(v.stride, Ordering::Release);
+            m.vram_extent.store(v.extent, Ordering::Release);
+            fresh |= Kind::Vram.fresh_bit();
+        }
+        m.fresh.store(fresh, Ordering::Release);
+    }
+
+    /// Whether `slot`'s `kind` backing holds its published frame.
+    #[must_use]
+    pub fn fresh(&self, slot: usize, kind: Kind) -> bool {
+        self.meta
+            .get(slot)
+            .is_some_and(|m| m.fresh.load(Ordering::Acquire) & kind.fresh_bit() != 0)
+    }
+
+    /// The VRAM copy's shape for `slot`'s published frame.
+    #[must_use]
+    pub fn vram_geometry(&self, slot: usize) -> VramGeom {
+        self.meta
+            .get(slot)
+            .map_or_else(VramGeom::default, |m| VramGeom {
+                stride: m.vram_stride.load(Ordering::Acquire),
+                extent: m.vram_extent.load(Ordering::Acquire),
+            })
     }
 
     /// ★ **Worker**: install a new backing generation for a FREE slot. The previous one is
@@ -306,10 +499,7 @@ impl FrameRing {
         if !self.is_free(slot) {
             return Err((InstallRefusal::NotFree, fds));
         }
-        let clash = self.meta[..self.count]
-            .iter()
-            .flat_map(|other| other.gens.iter().filter_map(OnceLock::get))
-            .find_map(|g| fds.ids().find(|id| g.ids().any(|o| o == *id)));
+        let clash = fds.ids().find(|id| self.carries_id(*id));
         if let Some(id) = clash {
             return Err((InstallRefusal::IdCollision(id), fds));
         }
@@ -324,6 +514,126 @@ impl FrameRing {
         Ok(())
     }
 
+    /// ★ Whether any backing (either kind, any slot, any generation) carries identity `id` — the
+    /// provisioner's collision check before it hands a new dma-buf over (a RELEASE could not
+    /// tell two such apart).
+    #[must_use]
+    pub fn carries_id(&self, id: u64) -> bool {
+        self.meta[..self.count].iter().any(|m| {
+            m.gens
+                .iter()
+                .filter_map(OnceLock::get)
+                .any(|g| g.ids().any(|o| o == id))
+                || m.vram.iter().filter_map(OnceLock::get).any(|v| v.id == id)
+        })
+    }
+
+    /// ★ **Worker / provisioner**: install a VRAM backing generation for a FREE slot — the same
+    /// rules as [`FrameRing::install`] (free only, at most [`GENERATIONS`], an identity no other
+    /// backing of EITHER kind carries; the previous generation retired, never dropped).
+    ///
+    /// # Errors
+    /// [`InstallRefusal`], with the backing handed back.
+    pub fn install_vram(&self, slot: usize, v: VramFds) -> Result<(), (InstallRefusal, VramFds)> {
+        let Some(m) = self.meta.get(slot).filter(|_| slot < self.count) else {
+            return Err((InstallRefusal::NoSlot, v));
+        };
+        if !self.is_free(slot) {
+            return Err((InstallRefusal::NotFree, v));
+        }
+        if self.carries_id(v.id) {
+            return Err((InstallRefusal::IdCollision(v.id), v));
+        }
+        let n = m.vram_installed.load(Ordering::Acquire) as usize;
+        let Some(cell) = m.vram.get(n) else {
+            return Err((InstallRefusal::NoGeneration, v));
+        };
+        if let Err(v) = cell.set(v) {
+            return Err((InstallRefusal::NoGeneration, v));
+        }
+        m.vram_installed.store(n as u32 + 1, Ordering::Release);
+        Ok(())
+    }
+
+    /// The current VRAM backing of `slot` — read only by the slot's holder.
+    #[must_use]
+    pub fn vram(&self, slot: usize) -> Option<&VramFds> {
+        let m = self.meta.get(slot)?;
+        let n = m.vram_installed.load(Ordering::Acquire) as usize;
+        n.checked_sub(1)
+            .and_then(|i| m.vram.get(i))
+            .and_then(OnceLock::get)
+    }
+
+    /// ★ **Worker / provisioner**: withdraw `kind` from the broker for the ring's life — at the
+    /// first refused backing of that kind (a memfd registration for [`Kind::Host`], a slot
+    /// allocation, import or export for [`Kind::Vram`]), before any slot is refilled without it.
+    /// No slot is offered or sent on that kind's rungs again, and the broker-ready frame is
+    /// dropped if it was offered only through that kind. The OTHER kind is untouched. Frames the
+    /// broker holds stay held until released; the relay refuses an owed frame that no longer fits
+    /// and keeps the connection (the third review, 2026-10-03).
+    pub fn withdraw(&self, kind: Kind) {
+        self.withdrawn[kind.index()].store(true, Ordering::Release);
+        let _ = self.update(|s| {
+            let r = broker_ready(s);
+            (r != NO_SLOT && !self.broker_backed(r as usize))
+                .then(|| pack(front(s), console_ready(s), NO_SLOT, held(s)))
+        });
+    }
+
+    /// Whether `kind` was withdrawn ([`FrameRing::withdraw`]).
+    #[must_use]
+    pub fn withdrawn(&self, kind: Kind) -> bool {
+        self.withdrawn[kind.index()].load(Ordering::Acquire)
+    }
+
+    /// ★ Whether `slot` may be offered (and sent) through `kind`: it carries that backing, the
+    /// backing holds the published frame, and the kind is not withdrawn.
+    #[must_use]
+    pub fn backed(&self, slot: usize, kind: Kind) -> bool {
+        slot < self.count
+            && !self.withdrawn(kind)
+            && self.fresh(slot, kind)
+            && match kind {
+                Kind::Host => self.fds(slot).is_some(),
+                Kind::Vram => self.vram(slot).is_some(),
+            }
+    }
+
+    /// The GPU-copy rung's modifier, set once the render node answered (0: none).
+    pub fn set_vram_modifier(&self, modifier: u64) {
+        self.vram_modifier.store(modifier, Ordering::Release);
+    }
+
+    /// The GPU-copy rung's modifier, when this device offers the rung.
+    #[must_use]
+    pub fn vram_modifier(&self) -> Option<u64> {
+        let m = self.vram_modifier.load(Ordering::Acquire);
+        (m != 0).then_some(m)
+    }
+
+    /// **Relay**: whether the broker would take a VRAM frame now.
+    pub fn set_want_vram(&self, want: bool) {
+        self.want_vram.store(want, Ordering::Release);
+    }
+
+    /// **Worker**: whether to pack this frame (one read per frame).
+    #[must_use]
+    pub fn want_vram(&self) -> bool {
+        self.want_vram.load(Ordering::Acquire)
+    }
+
+    /// The GPU's DRM nodes, set once at realize.
+    pub fn set_gpu_nodes(&self, nodes: Vec<(u32, u32)>) {
+        let _ = self.gpu_nodes.set(nodes);
+    }
+
+    /// The GPU's DRM nodes (`major:minor`); empty before they are known.
+    #[must_use]
+    pub fn gpu_nodes(&self) -> &[(u32, u32)] {
+        self.gpu_nodes.get().map_or(&[], Vec::as_slice)
+    }
+
     /// ★ **Worker**, at the first refused broker backing: the console goes on with memory the
     /// broker cannot receive, so the broker is withdrawn from the WHOLE ring for the ring's life.
     /// From this call on no slot — free, ready, held, or requeued for a replay; reallocated or
@@ -335,24 +645,19 @@ impl FrameRing {
     /// broker (its ATTACH, or only its COMMIT) is refused by the relay at its next send and
     /// gives its slot back; the connection stays up (corrected 2026-10-03, the third review:
     /// the relay used to read that refusal as a dead socket).
+    ///
+    /// ⊘ SUPERSEDED IN PART the same day (§8.11): the worker now withdraws one KIND
+    /// ([`FrameRing::withdraw`]); this withdraws both and remains for a caller that means both.
     pub fn withdraw_all(&self) {
-        self.withdrawn.store(true, Ordering::Release);
-        let _ = self.update(|s| {
-            (broker_ready(s) != NO_SLOT).then(|| pack(front(s), console_ready(s), NO_SLOT, held(s)))
-        });
+        self.withdraw(Kind::Host);
+        self.withdraw(Kind::Vram);
     }
 
-    /// Whether the broker was withdrawn ([`FrameRing::withdraw_all`]).
-    #[must_use]
-    pub fn withdrawn(&self) -> bool {
-        self.withdrawn.load(Ordering::Acquire)
-    }
-
-    /// ★ Whether `slot` may be offered to (and sent to) the broker: it carries a broker backing
-    /// ([`FrameRing::install`]) and the broker is not withdrawn ([`FrameRing::withdraw_all`]).
+    /// ★ Whether `slot` may be offered to (and sent to) the broker through ANY kind
+    /// ([`FrameRing::backed`]).
     #[must_use]
     pub fn broker_backed(&self, slot: usize) -> bool {
-        !self.withdrawn() && slot < self.count && self.fds(slot).is_some()
+        self.backed(slot, Kind::Host) || self.backed(slot, Kind::Vram)
     }
 
     /// The current backing of `slot` — read only by the slot's holder (the worker for a free
@@ -399,6 +704,10 @@ impl FrameRing {
     /// broker backing, or the ring withdrawn — [`FrameRing::broker_backed`]) is not offered to
     /// the broker, and drops the older broker-ready frame too: the broker never shows a frame
     /// older than one it could not be sent.
+    ///
+    /// ★ The console is offered the frame only when its HOST backing is fresh (a VRAM-only frame
+    /// leaves the console its front, and drops an older console-ready frame: both ready fields
+    /// name only the last published slot or nothing, which is the cap argument).
     pub fn publish(&self, slot: usize) {
         let j = slot as u32;
         let broker = if self.broker {
@@ -406,10 +715,15 @@ impl FrameRing {
         } else {
             None
         };
+        let console = if self.fresh(slot, Kind::Host) {
+            j
+        } else {
+            NO_SLOT
+        };
         let _ = self.update(|s| {
             Some(pack(
                 front(s),
-                j,
+                console,
                 broker.unwrap_or(broker_ready(s)),
                 held(s),
             ))
@@ -468,11 +782,23 @@ impl FrameRing {
     /// it was held.
     pub fn release_held(&self, slot: usize) -> bool {
         let b = 1u32 << slot;
-        self.update(|s| {
-            (held(s) & b != 0)
-                .then(|| pack(front(s), console_ready(s), broker_ready(s), held(s) & !b))
-        })
-        .is_some()
+        let was = self
+            .update(|s| {
+                (held(s) & b != 0)
+                    .then(|| pack(front(s), console_ready(s), broker_ready(s), held(s) & !b))
+            })
+            .is_some();
+        if was {
+            self.stamp_released(slot);
+        }
+        was
+    }
+
+    fn stamp_released(&self, slot: usize) {
+        if let Some(m) = self.meta.get(slot) {
+            let n = self.release_seq.fetch_add(1, Ordering::AcqRel) + 1;
+            m.released.store(n, Ordering::Release);
+        }
     }
 
     /// **Relay**, on disconnect: move held `slot` back to broker-ready when nothing newer is
@@ -488,10 +814,17 @@ impl FrameRing {
 
     /// **Relay**, on disconnect: no frame is held any more. Returns the mask that was held.
     pub fn clear_held(&self) -> u32 {
-        self.update(|s| {
-            (held(s) != 0).then(|| pack(front(s), console_ready(s), broker_ready(s), 0))
-        })
-        .map_or(0, |(was, _)| held(was))
+        let was = self
+            .update(|s| {
+                (held(s) != 0).then(|| pack(front(s), console_ready(s), broker_ready(s), 0))
+            })
+            .map_or(0, |(was, _)| held(was));
+        for j in 0..self.count {
+            if was & (1 << j) != 0 {
+                self.stamp_released(j);
+            }
+        }
+        was
     }
 
     /// The raw word, for tests and diagnostics.
@@ -676,9 +1009,9 @@ mod tests {
         let b = r.fill_target(None).unwrap();
         r.publish(b);
         assert_eq!(r.broker_ready(), Some(b), "b waits for the broker");
-        assert!(!r.withdrawn());
+        assert!(!r.withdrawn(Kind::Host));
         r.withdraw_all(); // the worker: a broker backing was refused
-        assert!(r.withdrawn());
+        assert!(r.withdrawn(Kind::Host) && r.withdrawn(Kind::Vram));
         assert_eq!(r.broker_ready(), None, "the ready frame is dropped");
         assert_eq!(
             r.held_mask(),
@@ -718,6 +1051,202 @@ mod tests {
         bare.install(t + 1, fds(c"kfb-late")).unwrap();
         bare.publish(t + 1);
         assert_eq!(bare.take_broker(), Take::Taken(t + 1));
+    }
+
+    fn vram_fds(tag: &std::ffi::CStr, bytes: u64) -> VramFds {
+        // a memfd stands in for the dma-buf: the ring accepts any descriptor (kf-qemu checks
+        // DMA_BUF_MAGIC before it installs)
+        let fd = SharedRam::create_named(tag, 4096)
+            .expect("memfd")
+            .dup_for_export()
+            .expect("dup");
+        VramFds::new(fd, bytes).expect("id")
+    }
+
+    const VG: VramGeom = VramGeom {
+        stride: 256,
+        extent: 4096,
+    };
+
+    /// ★ The kinds are independent (§8.11): a refused HOST backing withdraws the host rungs and
+    /// leaves the GPU copy, and the reverse; a VRAM-only frame is offered to the broker and not to
+    /// the console; a backing the GPU did not write for this frame is never offered.
+    #[test]
+    fn each_kind_is_offered_and_withdrawn_on_its_own() {
+        let r = FrameRing::new(BROKER_SLOTS, true);
+        for j in 0..r.slots() {
+            r.install(j, fds(c"kfb-k-host")).unwrap();
+            r.install_vram(j, vram_fds(c"kfb-k-vram", 10 << 20))
+                .unwrap();
+        }
+        // a frame in both backings
+        let a = r.fill_target(None).unwrap();
+        r.describe(a, FrameGeom::default());
+        r.describe_backings(a, true, Some(VG));
+        assert!(r.backed(a, Kind::Host) && r.backed(a, Kind::Vram));
+        assert_eq!(r.vram_geometry(a), VG);
+        r.publish(a);
+        assert_eq!(r.broker_ready(), Some(a));
+        assert_eq!(r.take_console(), Some(a));
+        // host withdrawn: a VRAM frame is still offered, a host-only one is not
+        r.withdraw(Kind::Host);
+        assert!(!r.withdrawn(Kind::Vram));
+        let b = r.fill_target(None).unwrap();
+        r.describe(b, FrameGeom::default());
+        r.describe_backings(b, false, Some(VG));
+        r.publish(b);
+        assert_eq!(
+            r.broker_ready(),
+            Some(b),
+            "the GPU copy survives a host refusal"
+        );
+        assert_eq!(
+            r.take_console(),
+            Some(a),
+            "a VRAM-only frame is not the console's"
+        );
+        let c = r.fill_target(None).unwrap();
+        r.describe(c, FrameGeom::default()); // host only, and host is withdrawn
+        r.publish(c);
+        assert_eq!(r.broker_ready(), None, "the newer host-only frame drops it");
+        assert_eq!(r.take_console(), Some(c));
+        // the reverse, on a fresh ring
+        let r = FrameRing::new(BROKER_SLOTS, true);
+        for j in 0..r.slots() {
+            r.install(j, fds(c"kfb-k2-host")).unwrap();
+            r.install_vram(j, vram_fds(c"kfb-k2-vram", 10 << 20))
+                .unwrap();
+        }
+        let a = r.fill_target(None).unwrap();
+        r.describe(a, FrameGeom::default());
+        r.describe_backings(a, false, Some(VG));
+        r.publish(a);
+        assert_eq!(r.broker_ready(), Some(a));
+        r.withdraw(Kind::Vram);
+        assert_eq!(
+            r.broker_ready(),
+            None,
+            "a ready frame offered only through VRAM is dropped"
+        );
+        let b = r.fill_target(None).unwrap();
+        r.describe(b, FrameGeom::default());
+        r.describe_backings(b, true, Some(VG));
+        r.publish(b);
+        assert!(r.backed(b, Kind::Host) && !r.backed(b, Kind::Vram));
+        assert_eq!(
+            r.broker_ready(),
+            Some(b),
+            "the host rungs survive a VRAM refusal"
+        );
+        // a STALE backing: installed but not written for this frame
+        let c = r.fill_target(None).unwrap();
+        r.describe(c, FrameGeom::default());
+        r.describe_backings(c, false, None);
+        assert!(!r.broker_backed(c));
+        r.publish(c);
+        assert_eq!(r.broker_ready(), None, "neither backing holds the frame");
+    }
+
+    /// ★ The cap argument with two backings: whatever mix of host-only, VRAM-only and both the
+    /// worker publishes, a fill target always exists and the broker holds at most two.
+    #[test]
+    fn the_cap_argument_holds_with_two_backings() {
+        let r = FrameRing::new(BROKER_SLOTS, true);
+        for j in 0..r.slots() {
+            r.install(j, fds(c"kfb-cap-host")).unwrap();
+            r.install_vram(j, vram_fds(c"kfb-cap-vram", 10 << 20))
+                .unwrap();
+        }
+        for step in 0..600u32 {
+            let t = r.fill_target(None).expect("a fill target must exist");
+            r.describe(t, FrameGeom::default());
+            match step % 3 {
+                0 => r.describe_backings(t, true, None),
+                1 => r.describe_backings(t, false, Some(VG)),
+                _ => r.describe_backings(t, true, Some(VG)),
+            }
+            r.publish(t);
+            if step % 4 == 0 {
+                let _ = r.take_console();
+            }
+            let _ = r.take_broker();
+            assert!(r.held_mask().count_ones() <= HELD_CAP);
+            assert!(r.fill_target(None).is_some());
+            if step % 5 == 0 {
+                let m = r.held_mask();
+                if m != 0 {
+                    assert!(r.release_held(m.trailing_zeros() as usize));
+                }
+            }
+        }
+    }
+
+    /// ★ The LRU fill: the free slot released longest ago (never released first), an excluded
+    /// slot never, and `None` only when every free slot is excluded.
+    #[test]
+    fn the_lru_fill_takes_the_slot_released_longest_ago() {
+        let r = backed(BROKER_SLOTS);
+        for j in 0..2 {
+            r.publish(j);
+            assert_eq!(r.take_broker(), Take::Taken(j));
+        }
+        r.publish(2);
+        assert_eq!(r.take_broker(), Take::Full);
+        assert!(r.release_held(1));
+        assert!(r.release_held(0));
+        assert!(r.released_order(1) < r.released_order(0));
+        // 2 is broker-ready (and console-ready); 3 and 4 never released: they come first
+        assert_eq!(r.fill_target_lru(None, 0), Some(3));
+        assert_eq!(r.fill_target_lru(Some(3), 0), Some(4));
+        assert_eq!(
+            r.fill_target_lru(None, 0b1_1000),
+            Some(1),
+            "then the one released longest ago"
+        );
+        assert_eq!(r.fill_target_lru(None, 0b1_1010), Some(0));
+        assert_eq!(r.fill_target_lru(None, 0b1_1011), None, "all excluded");
+        assert_eq!(r.fill_target(None), Some(0), "the plain fill is unchanged");
+    }
+
+    /// Identities are distinct ACROSS kinds: a VRAM backing whose id a host backing carries (or
+    /// the reverse) is refused; VRAM installs follow the same free/generation rules.
+    #[test]
+    fn vram_backings_are_checked_against_every_identity() {
+        let r = FrameRing::new(BROKER_SLOTS, true);
+        r.install(0, fds(c"kfb-id-host")).unwrap();
+        let host_id = r.fds(0).unwrap().memfd_id();
+        let clash = VramFds {
+            fd: SharedRam::create_named(c"kfb-id-x", 4096)
+                .unwrap()
+                .dup_for_export()
+                .unwrap(),
+            id: host_id,
+            bytes: 10 << 20,
+        };
+        let (e, _) = r.install_vram(1, clash).unwrap_err();
+        assert_eq!(e, InstallRefusal::IdCollision(host_id));
+        r.install_vram(1, vram_fds(c"kfb-id-v", 10 << 20)).unwrap();
+        let vid = r.vram(1).unwrap().id();
+        let host_clash = SlotFds {
+            memfd: SharedRam::create_named(c"kfb-id-y", 4096).unwrap(),
+            memfd_id: vid,
+            dmabuf: None,
+            dmabuf_id: None,
+        };
+        let (e, _) = r.install(2, host_clash).unwrap_err();
+        assert_eq!(e, InstallRefusal::IdCollision(vid));
+        r.install_vram(1, vram_fds(c"kfb-id-v2", 36 << 20))
+            .expect("growth");
+        assert_eq!(
+            r.vram(1).unwrap().bytes(),
+            36 << 20,
+            "the newest is current"
+        );
+        let (e, _) = r.install_vram(1, vram_fds(c"kfb-id-v3", 4096)).unwrap_err();
+        assert_eq!(e, InstallRefusal::NoGeneration);
+        r.publish(3);
+        let (e, _) = r.install_vram(3, vram_fds(c"kfb-id-v4", 4096)).unwrap_err();
+        assert_eq!(e, InstallRefusal::NotFree);
     }
 
     #[test]

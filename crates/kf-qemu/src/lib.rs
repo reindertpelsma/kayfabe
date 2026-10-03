@@ -13,6 +13,7 @@ pub mod chan;
 pub mod device;
 pub mod display;
 pub mod ffi_unsafe;
+pub mod gpucopy;
 pub mod hostfacts;
 pub mod mem;
 pub mod prof;

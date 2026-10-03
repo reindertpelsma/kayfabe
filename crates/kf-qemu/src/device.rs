@@ -52,6 +52,9 @@ pub struct Config {
     /// frames with sealed memfds the broker can receive (five slots). Unset: `cuMemAllocHost` and
     /// three slots, exactly as before. Refused without `display`.
     pub display_broker: bool,
+    /// ★ `display-broker-vram=auto|on|off` (§8.11, the GPU-copy rung): VRAM frame slots kayfabe
+    /// allocates for a compositor on the same GPU. Meaningful only with `display_broker`.
+    pub display_broker_vram: kf_broker::gpucopy::VramMode,
 }
 
 /// What the C device needs to present the PCI function.
@@ -319,9 +322,17 @@ impl Device {
         let store = rm.reserve_gpga(fb_length).map_err(|e| {
             format!(
                 "store of {} MiB refused: {e:?} (host card {bdf}: {n_neighbours} other kf3 device(s) \
-                 of this process already hold {} MiB of store on it)",
+                 of this process already hold {} MiB of store on it{})",
                 cfg.fb_mb,
-                store_neighbours >> 20
+                store_neighbours >> 20,
+                if cfg.display_broker
+                    && cfg.display_broker_vram != kf_broker::gpucopy::VramMode::Off
+                {
+                    "; display-broker-vram allocates up to 50 MiB of display VRAM after the store \
+                     (230 MiB after a 4K mode), and a compositor on this card needs room too"
+                } else {
+                    ""
+                }
             )
         })?;
         let export = rm
@@ -550,13 +561,48 @@ impl Device {
                 let export = rm
                     .export_to_new_fd(store.handle)
                     .map_err(|e| format!("display=on: store export: {e:?}"))?;
+                // ★ §8.11: the GPU-copy rung's probe — at realize (QEMU still has its privileges
+                // for the render node), AFTER the store (the guest's memory wins), on the display's
+                // own RM client (OWNER_RULINGS §N)
+                let broker = cfg.display_broker.then(|| {
+                    use kf_broker::gpucopy::VramMode;
+                    let mode = cfg.display_broker_vram;
+                    let setup = match mode {
+                        VramMode::Off => {
+                            eprintln!("kf3: broker: display-broker-vram=off — host-memory rungs only");
+                            Ok(None)
+                        }
+                        VramMode::On | VramMode::Auto => {
+                            match crate::gpucopy::VramSetup::probe(
+                                &dev,
+                                &bdf,
+                                cfg.gpu_minor,
+                                rm.driver_version(),
+                            ) {
+                                Ok(s) => Ok(Some(&*Box::leak(Box::new(s)))),
+                                Err(e) if mode == VramMode::On => {
+                                    Err(format!("display-broker-vram=on: {e}"))
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "kf3: broker: the GPU-copy rung is NOT offered: {e}; frames \
+                                         go through host memory"
+                                    );
+                                    Ok(None)
+                                }
+                            }
+                        }
+                    };
+                    setup.map(|setup| crate::display::BrokerVram { mode, setup })
+                });
+                let broker = broker.transpose()?;
                 let plane = crate::display::DisplayPlane::build(
                     row,
                     table,
                     &bdf,
                     export.fd_number(),
                     fb_length,
-                    cfg.display_broker,
+                    broker,
                 )?;
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
@@ -2036,7 +2082,14 @@ impl Device {
                 d.scanout_refused.load(o),
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
-            ) + &format!(" scanout_no_slot={}", d.scanout_no_slot.load(o))
+            ) + &format!(
+                " scanout_no_slot={} scanout_d2h={} scanout_pack={} pack_skipped={} display_vram_mib={}",
+                d.scanout_no_slot.load(o),
+                d.scanout_d2h.load(o),
+                d.scanout_pack.load(o),
+                d.scanout_pack_skipped.load(o),
+                d.vram_bytes.load(o) >> 20
+            )
                 + &dp
                     .broker
                     .as_ref()

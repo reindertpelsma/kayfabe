@@ -8,7 +8,10 @@ use kf_broker::wire::{
     EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, FOURCC_XR24,
     MOD_INVALID, MOD_LINEAR, PKT_SIZE, Pkt,
 };
-use kf_broker::{FrameGeom, FrameRing, Host, Input, Link, Recv, Relay, RelayConfig, Sent, SlotFds};
+use kf_broker::{
+    FrameGeom, FrameRing, Host, Input, Kind, Link, Recv, Relay, RelayConfig, Sent, SlotFds,
+    VramFds, VramGeom,
+};
 use kf_linux_raw::{SharedRam, fd_inode};
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -1302,4 +1305,408 @@ fn a_withdrawal_between_two_sends_refuses_the_frame_and_keeps_the_connection() {
     let c = t.relay.counters();
     assert_eq!((c.refused, c.attempts_failed), (1, 0));
     assert!(lost_lines(&log.lines()).is_empty(), "{:?}", log.lines());
+}
+
+// ── rung 0: the GPU copy (V3_DISPLAY.md §8.11, OWNER_RULINGS.md §L) ─────────────────────────
+
+/// The GPU-copy modifier the fixture's device answers (`0x0300000000606014`, Turing+ XR24 h=4).
+const BL: u64 = 0x0300_0000_0060_6014;
+/// The fixture GPU's DRM nodes.
+const NODES: [(u32, u32); 2] = [(226, 1), (226, 129)];
+
+impl T {
+    /// As [`T::new`], plus a VRAM backing per slot (a memfd standing in for the dma-buf: the ring
+    /// takes any descriptor), the device's GPU-copy modifier and its DRM nodes.
+    fn with_vram() -> T {
+        let t = T::new(false);
+        for j in 0..t.ring.slots() {
+            let fd = SharedRam::create_named(c"kfb-test-vram", 64 * 1024)
+                .unwrap()
+                .dup_for_export()
+                .unwrap();
+            t.ring
+                .install_vram(j, VramFds::new(fd, 64 * 1024).unwrap())
+                .unwrap();
+        }
+        t.ring.set_vram_modifier(BL);
+        t.ring.set_gpu_nodes(NODES.to_vec());
+        t
+    }
+
+    /// Publish a `w`x`h` frame whose host backing is fresh when `host`, and whose VRAM backing is
+    /// fresh (packed at the slot geometry) when `vram`.
+    fn publish_kinds(&mut self, w: u32, h: u32, host: bool, vram: bool) -> usize {
+        let t = self.publish_unannounced(w, h);
+        let gpr = (w * 4).div_ceil(64);
+        let vg = VramGeom {
+            stride: gpr * 64,
+            extent: u64::from(h.div_ceil(128)) * u64::from(gpr) * 8192,
+        };
+        self.ring.describe_backings(t, host, vram.then_some(vg));
+        self.ring.publish(t);
+        t
+    }
+
+    fn publish_unannounced(&mut self, w: u32, h: u32) -> usize {
+        let t = self.ring.fill_target(None).expect("a fill target");
+        self.serial += 1;
+        self.ring.describe(
+            t,
+            FrameGeom {
+                width: w,
+                height: h,
+                stride: w * 4,
+                fourcc: FOURCC_XR24,
+                serial: self.serial,
+            },
+        );
+        t
+    }
+
+    fn vram_id(&self, j: usize) -> u64 {
+        self.ring.vram(j).unwrap().id()
+    }
+
+    /// The broker's answer for the block-linear pair.
+    fn bl_verdict(&self, yes: bool) {
+        self.pkt(
+            EV_FORMAT,
+            i32::from(yes),
+            FOURCC_XR24 as i32,
+            BL as u32,
+            (BL >> 32) as u32,
+        );
+    }
+
+    /// The broker is done with the native frame in `slot`.
+    fn release_vram(&self, slot: usize) {
+        let id = self.vram_id(slot);
+        self.pkt(EV_RELEASE, 0, 0, id as u32, (id >> 32) as u32);
+    }
+}
+
+const NATIVE_CAPS: u32 = CAP_MODIFIERS | CAP_RELEASE;
+
+/// ★ Rung 0 needs an EXPLICIT yes to the block-linear pair, asked right after HELLO (with
+/// `display-broker-vram=auto` the slots are provisioned only then), plus `CAP_MODIFIERS` and
+/// `CAP_RELEASE`. Then a frame whose VRAM backing is fresh goes as the VRAM dma-buf, with the
+/// block-linear modifier and stride, and the worker is told to pack (`want_vram`).
+#[test]
+fn the_gpu_copy_goes_only_after_an_explicit_yes() {
+    let mut t = T::with_vram();
+    t.up_keep(NATIVE_CAPS);
+    let q: Vec<_> = t
+        .sent()
+        .into_iter()
+        .filter(|(c, _)| c.ty == CMD_QUERY_FORMAT)
+        .map(|(c, _)| (c.fourcc, c.modifier))
+        .collect();
+    assert_eq!(
+        q,
+        vec![(FOURCC_XR24, BL)],
+        "the block-linear pair, at HELLO"
+    );
+    t.clear();
+    assert!(!t.ring.want_vram(), "no verdict yet");
+    // before the answer: the host rung, never the VRAM backing
+    let j = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    let att = t
+        .sent()
+        .into_iter()
+        .find(|(c, _)| c.ty == CMD_ATTACH)
+        .unwrap();
+    assert_eq!(att.0.flags, CMD_F_SHM);
+    assert_eq!(att.1, Some(t.memfd_id(j)));
+    t.clear();
+    t.bl_verdict(true);
+    t.read();
+    assert!(t.ring.want_vram(), "the worker packs now");
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read();
+    let k = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    let att = t
+        .sent()
+        .into_iter()
+        .find(|(c, _)| c.ty == CMD_ATTACH)
+        .unwrap();
+    assert_eq!(
+        (att.0.modifier, att.0.stride, att.0.flags),
+        (BL, 256, 0),
+        "the block-linear modifier and stride"
+    );
+    assert_eq!(att.1, Some(t.vram_id(k)), "the VRAM dma-buf went");
+    assert_eq!(t.relay.counters().native, 1);
+    // without CAP_RELEASE (no real RELEASE, so no detector) or CAP_MODIFIERS: never rung 0
+    for caps in [CAP_MODIFIERS, CAP_RELEASE] {
+        let mut t = T::with_vram();
+        t.up(caps);
+        t.bl_verdict(true);
+        t.read();
+        assert!(!t.ring.want_vram(), "caps {caps:#x}");
+        t.publish_kinds(64, 32, true, true);
+        t.frame();
+        assert!(
+            t.sent().iter().all(|(c, _)| c.modifier != BL),
+            "caps {caps:#x}: a VRAM frame went"
+        );
+    }
+}
+
+/// A device without a GPU-copy modifier never asks the pair and never sends rung 0.
+#[test]
+fn a_device_without_the_rung_never_asks_or_sends_it() {
+    let mut t = T::with_vram();
+    t.ring.set_vram_modifier(0);
+    t.up_keep(NATIVE_CAPS);
+    assert!(t.types().iter().all(|ty| *ty != CMD_QUERY_FORMAT));
+    t.clear();
+    t.publish_kinds(64, 32, true, true);
+    t.frame();
+    assert!(t.sent().iter().all(|(c, _)| c.modifier != BL));
+    assert_eq!(t.relay.counters().native, 0);
+}
+
+/// ★ A later "no" for the block-linear pair (Wayland's failed probe; X11 once the broker sends
+/// it) stops rung 0, reclaims the frames attached under it, and the next frame goes on a host
+/// rung.
+#[test]
+fn a_later_no_for_the_block_linear_pair_falls_back_and_reclaims() {
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    t.bl_verdict(true);
+    t.read();
+    let j = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    assert_eq!(t.relay.counters().native, 1);
+    assert_eq!(t.ring.held_mask(), 1 << j);
+    t.clear();
+    t.bl_verdict(false);
+    t.read();
+    assert!(!t.ring.want_vram());
+    assert_eq!(t.ring.held_mask(), 0, "the native frame was reclaimed");
+    let k = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    let att = t
+        .sent()
+        .into_iter()
+        .find(|(c, _)| c.ty == CMD_ATTACH)
+        .unwrap();
+    assert_eq!(att.1, Some(t.memfd_id(k)), "back on the host rung");
+}
+
+/// ★ The acknowledgement detector — the box experiment E2(d)'s logic without a GPU: three native
+/// commits and a second with no RELEASE trip a 5 s back-off (frames go on a host rung, the worker
+/// stops packing), rung 0 is tried again after it, a second trip doubles it, and a native RELEASE
+/// confirms the rung and clears the back-off.
+#[test]
+fn the_detector_backs_off_retries_and_clears_on_a_release() {
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    t.bl_verdict(true);
+    t.read();
+    let log = kf_broker::capture_log();
+    let native_frame = |t: &mut T| {
+        t.publish_kinds(64, 32, true, true);
+        t.frame();
+        t.pkt(EV_FRAME, 0, 0, 0, 0); // pacing, but no RELEASE: the compositor never imported it
+        t.read();
+    };
+    // an unimported frame is never released, so the cap of 2 and the 1 s reclaim pace the
+    // commits: the third goes once the first is reclaimed, and the trip follows
+    let t0 = t.now;
+    while t.relay.counters().native_trips == 0 {
+        assert!(t.now - t0 <= 3000, "no trip within 3 s");
+        native_frame(&mut t);
+        t.tick(100);
+    }
+    assert!(t.relay.counters().native >= 3);
+    assert!(!t.ring.want_vram(), "the worker stops packing");
+    assert!(
+        log.lines()
+            .iter()
+            .any(|l| l.contains("not acknowledged") && l.contains("5 s")),
+        "{:?}",
+        log.lines()
+    );
+    t.clear();
+    t.publish_kinds(64, 32, true, true);
+    t.frame();
+    assert!(
+        t.sent().iter().all(|(c, _)| c.modifier != BL),
+        "backing off: a host rung"
+    );
+    // after the back-off, rung 0 again; unconfirmed again ⇒ a 10 s back-off
+    t.tick(5000);
+    assert!(t.ring.want_vram(), "tried again after 5 s");
+    let t1 = t.now;
+    while t.relay.counters().native_trips == 1 {
+        assert!(t.now - t1 <= 3000, "no second trip within 3 s");
+        native_frame(&mut t);
+        t.tick(100);
+    }
+    assert_eq!(t.relay.counters().native_trips, 2);
+    assert!(log.lines().iter().any(|l| l.contains("10 s")));
+    t.tick(10_000);
+    assert!(t.ring.want_vram());
+    // a native RELEASE confirms the rung: no more trips however long it goes unreleased
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read();
+    let j = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    t.release_vram(j);
+    t.read();
+    assert!(
+        log.lines()
+            .iter()
+            .any(|l| l.contains("imported a GPU-copy frame"))
+    );
+    for _ in 0..6 {
+        native_frame(&mut t);
+        t.tick(600);
+    }
+    assert_eq!(t.relay.counters().native_trips, 2, "confirmed: never again");
+    assert!(t.ring.want_vram());
+}
+
+/// ★ `EV_DEVICE`: a compositor on another device gets no GPU-copy frame on this connection, even
+/// after a yes; one on this GPU's primary or render node does. A reconnect forgets it.
+#[test]
+fn a_compositor_on_another_gpu_gets_no_gpu_copy() {
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    let log = kf_broker::capture_log();
+    t.pkt(kf_broker::wire::EV_DEVICE, 226, 130, 0, 0);
+    t.bl_verdict(true);
+    t.read();
+    assert!(!t.ring.want_vram());
+    assert!(
+        log.lines()
+            .iter()
+            .any(|l| l.contains("226:130") && l.contains("not this GPU")),
+        "{:?}",
+        log.lines()
+    );
+    t.publish_kinds(64, 32, true, true);
+    t.frame();
+    assert!(t.sent().iter().all(|(c, _)| c.modifier != BL));
+    for (major, minor) in NODES {
+        let mut t = T::with_vram();
+        t.up(NATIVE_CAPS);
+        t.pkt(kf_broker::wire::EV_DEVICE, major as i32, minor as i32, 0, 0);
+        t.bl_verdict(true);
+        t.read();
+        assert!(t.ring.want_vram(), "{major}:{minor} is this GPU");
+    }
+    // "cannot tell" is unknown: the yes and the detector decide
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    t.pkt(kf_broker::wire::EV_DEVICE, -1, -1, 0, 0);
+    t.bl_verdict(true);
+    t.read();
+    assert!(t.ring.want_vram());
+}
+
+/// ★ Freshness: a frame only in VRAM is never sent on a host rung (it would show stale pixels)
+/// and is refused while rung 0 is not allowed; a frame only in host memory is never sent from
+/// the stale VRAM backing.
+#[test]
+fn a_stale_backing_is_never_sent() {
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    // no verdict yet: a VRAM-only frame has nothing to go on
+    t.publish_kinds(64, 32, false, true);
+    t.frame();
+    assert!(t.sent().iter().all(|(c, _)| c.ty != CMD_ATTACH));
+    assert_eq!(t.relay.counters().refused, 1);
+    t.bl_verdict(true);
+    t.read();
+    t.clear();
+    // rung 0 allowed, but this frame was not packed: the host backing goes
+    let j = t.publish_kinds(64, 32, true, false);
+    t.frame();
+    let att = t
+        .sent()
+        .into_iter()
+        .find(|(c, _)| c.ty == CMD_ATTACH)
+        .unwrap();
+    assert_eq!(att.1, Some(t.memfd_id(j)));
+}
+
+/// ★ Per-kind withdrawal in the relay: with the host kind withdrawn the GPU copy goes on; with
+/// the VRAM kind withdrawn the host rungs go on — neither failure takes the other rung down.
+#[test]
+fn a_withdrawn_kind_leaves_the_other_rung_working() {
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    t.bl_verdict(true);
+    t.read();
+    t.ring.withdraw(Kind::Host);
+    let j = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    let att = t
+        .sent()
+        .into_iter()
+        .find(|(c, _)| c.ty == CMD_ATTACH)
+        .unwrap();
+    assert_eq!(att.1, Some(t.vram_id(j)));
+    t.clear();
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    t.bl_verdict(true);
+    t.read();
+    t.ring.withdraw(Kind::Vram);
+    assert!(
+        !t.ring.want_vram() || t.ring.withdrawn(Kind::Vram),
+        "the worker sees the withdrawal itself"
+    );
+    let j = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    let att = t
+        .sent()
+        .into_iter()
+        .find(|(c, _)| c.ty == CMD_ATTACH)
+        .unwrap();
+    assert_eq!(att.1, Some(t.memfd_id(j)));
+}
+
+/// A VRAM backing too small for the frame's block-linear extent is never sent (the host rung
+/// takes the frame), and a stride outside the broker's bounds is refused before the wire.
+#[test]
+fn a_vram_frame_outside_its_object_or_the_brokers_bounds_is_not_sent() {
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    t.bl_verdict(true);
+    t.read();
+    // 4096 rows of 64 px: extent 32 block rows * 4 GOBs * 8 KiB = 1 MiB > the 64 KiB backing
+    let t2 = t.publish_unannounced(64, 4096);
+    t.ring.describe_backings(
+        t2,
+        false,
+        Some(VramGeom {
+            stride: 256,
+            extent: 1 << 20,
+        }),
+    );
+    t.ring.publish(t2);
+    t.frame();
+    assert!(t.sent().iter().all(|(c, _)| c.ty != CMD_ATTACH));
+    assert_eq!(t.relay.counters().refused, 1);
+    // a stride the broker would refuse (> 8w + 4096)
+    let t3 = t.publish_unannounced(64, 32);
+    t.ring.describe_backings(
+        t3,
+        false,
+        Some(VramGeom {
+            stride: 8192,
+            extent: 32768,
+        }),
+    );
+    t.ring.publish(t3);
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read();
+    t.frame();
+    assert!(t.sent().iter().all(|(c, _)| c.ty != CMD_ATTACH));
+    assert_eq!(t.relay.counters().refused, 2);
 }

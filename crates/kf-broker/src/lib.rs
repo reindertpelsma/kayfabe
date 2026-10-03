@@ -26,6 +26,7 @@
 //! keeps its own SPDX line (`GPL-2.0 OR Apache-2.0`).
 
 pub mod conn;
+pub mod gpucopy;
 pub mod link;
 pub mod slots;
 pub mod wire;
@@ -34,4 +35,6 @@ pub use conn::{Counters, Host, Input, Link, Recv, Relay, RelayConfig, Rung, Sent
 #[doc(hidden)]
 pub use conn::{LogCapture, capture_log};
 pub use link::{MAX_BROKER_UID, UnixLink, broker_uid_property, broker_uids, effective_uid};
-pub use slots::{FrameGeom, FrameRing, InstallRefusal, SlotFds, Take, frame_bytes};
+pub use slots::{
+    FrameGeom, FrameRing, InstallRefusal, Kind, SlotFds, Take, VramFds, VramGeom, frame_bytes,
+};
