@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+#
+# kf3's boot-display GOP: a zero-dependency, no_std UEFI boot-service driver (docs/design/V3_DISPLAY.md
+# §4.11). Guest-side code: it runs inside OVMF, never inside the VMM. Hence its OWN workspace (the
+# empty [workspace] table below), outside the root one (`exclude = ["archive", "firmware"]`).
+#
+# Build (the root rust-toolchain.toml pins 1.99.0; it is resolved from the working directory):
+#   rustup target add x86_64-unknown-uefi --toolchain 1.99.0
+#   cargo build --release --target x86_64-unknown-uefi --manifest-path firmware/kf-gop/Cargo.toml
+# Host unit tests of the safe library:
+#   cargo test --lib --target x86_64-unknown-linux-gnu --manifest-path firmware/kf-gop/Cargo.toml
+#
+# The ONE external input is `kf-oprom`, this repository's own pure crate, with default features off:
+# the descriptor has a single definition, shared with the VMM that writes it.
+[package]
+name = "kf-gop"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 OR GPL-2.0-or-later"
+publish = false
+description = "kf3's boot-display UEFI GOP driver, and the UEFI application that tests it."
+
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+
+# The driver that ships inside kf3's option ROM. build.rs links it as subsystem 11.
+[[bin]]
+name = "kf-gop"
+path = "src/main.rs"
+test = false
+bench = false
+
+# The local stand-in's checker (scripts/display/gop_standin.sh). An EFI application; never shipped.
+[[bin]]
+name = "kf-gop-test"
+path = "src/bin/kf-gop-test/main.rs"
+test = false
+bench = false
+
+[features]
+# Debug lines on I/O port 0x402 (QEMU's isa-debugcon). TEST BUILDS ONLY: each byte is a VM exit, and
+# the release ROM must not write to an I/O port at all. Without this feature the port code is not
+# compiled into the driver.
+debugcon = []
+
+[dependencies]
+kf-oprom = { path = "../../crates/kf-oprom", default-features = false }
+
+[dev-dependencies]
+# Host tests pack real ROMs to probe. Dev-dependency features never reach the firmware build.
+kf-oprom = { path = "../../crates/kf-oprom" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+
+[profile.dev]
+panic = "abort"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+# The repository's audited crates carry the same rule: every relaxation names its invariant.
+undocumented_unsafe_blocks = "deny"
