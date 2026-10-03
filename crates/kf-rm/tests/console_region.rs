@@ -25,14 +25,6 @@ fn table(v: DriverVersion) -> DriverAbiTable {
     *table_for(v).expect("a version in the matrix")
 }
 
-fn v(major: u16, minor: u16, patch: u16) -> DriverVersion {
-    DriverVersion {
-        major,
-        minor,
-        patch,
-    }
-}
-
 /// A `GspSystemInfo` body at `version`'s size in the driver matrix, `consoleMemSize = console` at its
 /// offset there, and a marker everywhere else (so a read at another version's offset is not zero).
 fn fn72_body(version: DriverVersion, console: u64) -> Vec<u8> {

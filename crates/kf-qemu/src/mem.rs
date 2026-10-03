@@ -455,6 +455,20 @@ pub enum Target {
     Gpu(GpuMirror),
 }
 
+impl Target {
+    /// ★ The guest CPU window behind a BAR target (BAR2, or BAR1 on either arm) — BAR1's is where the
+    /// boot display's seed lives (`kf_mem::cpuwin::CpuWindow::seed`, `docs/design/V3_DISPLAY.md`
+    /// §4.11.2). `None` for a host GPU VA space.
+    #[must_use]
+    pub fn cpu_window(&self) -> Option<&CpuWindow<WindowOps>> {
+        match self {
+            Target::Window(w) => Some(w),
+            Target::Bar1(b) => Some(&b.win),
+            Target::Gpu(_) => None,
+        }
+    }
+}
+
 /// ★ P5: OUR placements in one mirrored host VA space, `va → (len, offset, ram)` — the rows the
 /// reconcile made, recorded AS it makes them, so a Translated channel can find the bytes behind a
 /// guest VA (its GPFIFO, a pushbuffer segment) through what WE mapped (`THE_TRANSLATED_PLANE.md`

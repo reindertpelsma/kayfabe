@@ -10,8 +10,10 @@
 /* ★ 10 (2026-09-30, v3-mc22): the union of two INDEPENDENT 9s — v3-display2's frame hand-off
  * (Kf3Frame, kf3_display_frame) and v3-ioeventfd's doorbell fast path (Kf3IoeventfdFn,
  * kf3_doorbell_page_offset, kf3_set_ioeventfd, kf3_doorbell_site). The two 9s name DIFFERENT
- * surfaces, so an archive from either branch must be refused here: one new number above both. */
-#define KF3_ABI 10
+ * surfaces, so an archive from either branch must be refused here: one new number above both.
+ * ★ 11 (2026-10-03, v3-gop-kf3, docs/design/V3_DISPLAY.md §4.11): the boot display — kf3_realize
+ * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device. */
+#define KF3_ABI 11
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -34,9 +36,10 @@ typedef struct Kf3Frame {
 } Kf3Frame;
 
 uint32_t kf3_abi_version(void);
-/* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md). */
+/* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
+ * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1. */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
-                    const char *guest_driver, uint32_t display, void **out,
+                    const char *guest_driver, uint32_t display, uint32_t gop, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
@@ -72,5 +75,9 @@ typedef int32_t (*Kf3IoeventfdFn)(void *opaque, uint64_t gpa, uint32_t len, uint
 int64_t kf3_doorbell_page_offset(void *h);
 int32_t kf3_set_ioeventfd(void *h, Kf3IoeventfdFn f, void *opaque, uint32_t budget);
 void kf3_doorbell_site(void *h, uint64_t gpa, uint32_t add);
+/* ★ ABI 11 (docs/design/V3_DISPLAY.md §4.11.6): the boot display's option ROM (gop=1) — the
+ * embedded GOP driver wrapped with this device's ids and its KFGP descriptor. 0 and *rom, *rom_len
+ * (valid for the process; the device copies them into its ROM BAR), or -1 (gop=0). */
+int32_t kf3_option_rom(void *h, const uint8_t **rom, uint64_t *rom_len);
 void kf3_unrealize(void *h);
 #endif

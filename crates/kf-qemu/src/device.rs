@@ -48,6 +48,10 @@ pub struct Config {
     /// Off is today's displayless posture. On a chip whose bare metal has no display engine the
     /// device REFUSES to realize rather than invent one.
     pub display: bool,
+    /// ★ The boot display (`gop=on`, [`crate::gop`], `docs/design/V3_DISPLAY.md` §4.11): an option
+    /// ROM with a UEFI GOP driver whose framebuffer is BAR1 `[0, G)`, the BAR1 seed, the boot layer
+    /// and the console region in fn 65. Needs `display=on`. Off (the default) is today's device.
+    pub gop: bool,
 }
 
 /// What the C device needs to present the PCI function.
@@ -220,6 +224,10 @@ pub struct Device {
     /// ★ v3-display: the emulated NVDisplay (`display=on`), leaked for the process so the vCPU path
     /// holds a plain reference (`crate::display`). `None`: the displayless posture, unchanged.
     pub display: Option<&'static crate::display::DisplayPlane>,
+    /// ★ The boot display (`gop=on`, [`crate::gop`]): the framebuffer it serves. `None` with `gop=off`.
+    pub boot: Option<crate::gop::BootPlan>,
+    /// The option ROM packed for this device at realize (`kf3_option_rom`); `None` with `gop=off`.
+    boot_rom: Option<Vec<u8>>,
 }
 
 impl Device {
@@ -228,6 +236,15 @@ impl Device {
     /// # Errors
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
+        // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
+        // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
+        // reads it is then skipped, and the device is today's.
+        let monitor = kf_rm::display::monitors()
+            .into_iter()
+            .next()
+            .ok_or("no virtual monitor behind the display")?;
+        let boot =
+            crate::gop::BootPlan::for_config(cfg.gop, cfg.display, cfg.bar1_bytes, &monitor)?;
         let dev = kf_linux_raw::DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
         let rm: &'static kf_host::HostRm = Box::leak(Box::new(
             kf_host::HostRm::open(
@@ -264,13 +281,20 @@ impl Device {
             ));
         }
         let pci = crate::hostfacts::read_host_pci(&sysfs)?;
+        // ★ The boot display's option ROM: the embedded GOP driver wrapped with the identity this
+        // device presents (`kf3_identity`) and the boot framebuffer's descriptor.
+        let boot_rom = boot
+            .as_ref()
+            .map(|b| b.rom(pci.vendor, pci.device, pci.class))
+            .transpose()?;
         // ★ The per-host-card budget, summed over this process's kf3 devices on the same card —
         // before anything is reserved, so the refusal costs nothing (`crate::cardbudget`).
         let (store_neighbours, n_neighbours) = crate::cardbudget::store_held(&bdf);
         crate::cardbudget::admit(
             &bdf,
             pci.bar1_bytes,
-            crate::cardbudget::Demand::of(cfg.bar1_bytes, cfg.bar2_bytes, cfg.fb_mb << 20),
+            crate::cardbudget::Demand::of(cfg.bar1_bytes, cfg.bar2_bytes, cfg.fb_mb << 20)
+                .with_boot_fb(boot.as_ref().map_or(0, crate::gop::BootPlan::bytes)),
         )?;
 
         let fb_length = cfg.fb_mb << 20;
@@ -340,6 +364,22 @@ impl Device {
             kernel
                 .write_store(root, &zero)
                 .map_err(|e| format!("zeroing our root @{root:#x}: {e}"))?;
+        }
+        // ★ The boot display: store [0, G) is what BAR1 offset 0 shows from the first instruction
+        // and what the boot layer scans out — zeroed on the GPU before either exists, so nothing a
+        // previous user of these VRAM pages left is visible (kayfabe never scrubs the store
+        // otherwise). One MiB of zeros at a time: the CPU writes no guest vidmem, the walker's
+        // copy engine does.
+        if let Some(b) = &boot {
+            let chunk = vec![0u8; 1 << 20];
+            let mut at = 0u64;
+            while at < b.bytes() {
+                let n = (b.bytes() - at).min(chunk.len() as u64);
+                kernel
+                    .write_store(at, &chunk[..n as usize])
+                    .map_err(|e| format!("gop=on: zeroing the boot framebuffer @{at:#x}: {e}"))?;
+                at += n;
+            }
         }
         let ram: &'static crate::mem::RamMap = Box::leak(Box::default());
         let inbox = std::sync::Arc::new(crate::mem::Inbox::new()?);
@@ -512,6 +552,9 @@ impl Device {
         // invisible on the wire); this device answers as a Linux guest.
         let chain_logs = kf_rm::ChainLogs::default();
         let census = kf_rm::census::ControlCensusLog::new();
+        // ★ The boot display: fn 72's body, kept by the GSP state machine for fn 65's encoder —
+        // ONE cell across every `ReselectAtFn1` rebuild, like the census (`kf_gsp::sysinfo`).
+        let system_info = kf_gsp::SystemInfoCell::new();
         // ★ v3-display (`docs/design/V3_DISPLAY.md` §4.1): the chip's display row, when asked for.
         // ⊘ A chip whose bare metal has no display engine (GA100, GH100, GB10x datacenter) is
         // REFUSED by name: the guest driver hard-wires those as displayless, so a display here
@@ -544,7 +587,12 @@ impl Device {
                     &bdf,
                     export.fd_number(),
                     fb_length,
-                )?;
+                )?
+                .with_boot(
+                    boot.as_ref()
+                        .map(crate::display::BootScan::of)
+                        .transpose()?,
+                );
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
                 eprintln!(
@@ -560,12 +608,17 @@ impl Device {
         // census, the memory inbox, the channel plane) is the SAME across a rebuild — only the
         // links that read layouts are new.
         let build = {
-            let (board, host, chain_logs, census, inbox) = (
+            let (board, host, chain_logs, census, inbox, system_info) = (
                 board.clone(),
                 host.clone(),
                 chain_logs.clone(),
                 census.clone(),
                 inbox.clone(),
+                system_info.clone(),
+            );
+            let (bar1_bytes, boot_fb) = (
+                cfg.bar1_bytes,
+                boot.as_ref().map(crate::gop::BootPlan::bytes),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
@@ -598,7 +651,13 @@ impl Device {
                             row,
                             model: display_plane.map(|p| p.model.clone()),
                         }),
-                        console: None,
+                        // ★ The boot display: fn 65's region table follows the guest's preserved
+                        // console with `gop=on`; with `gop=off` the console is only read and logged.
+                        console: Some(kf_rm::staticinfo::ConsoleSeat {
+                            system_info: system_info.clone(),
+                            bar1_bytes,
+                            boot_fb,
+                        }),
                     },
                 )
             })
@@ -622,7 +681,7 @@ impl Device {
             _ => u64::MAX,
         };
         let gsp = Gsp {
-            fsm: GspFsm::new(abi),
+            fsm: GspFsm::new(abi).with_system_info_cell(system_info),
             model,
             policy,
             published: std::collections::HashMap::new(),
@@ -692,6 +751,28 @@ impl Device {
         // PDEs straight into that page (no RPC) and invalidates it; the walk places store views.
         let bar1_overlay = std::sync::Arc::new(crate::mem::Bar1Overlay::default());
         let bar1_win = kf_mem::cpuwin::CpuWindow::new(bar1_ops, cfg.bar1_bytes);
+        // ★ The boot display's seed: BAR1 [0, G) shows store [0, G) — FB 0, the GOP's framebuffer —
+        // from before the first vCPU instruction, as a real card's BAR1 does before RM switches it to
+        // virtual mode. ONE view, placed here on the realize thread; it retires at the first BAR1
+        // batch that changes anything (`kf_mem::cpuwin::CpuWindow::retire_seed`), or when the device
+        // stops if the guest never loads its driver.
+        if let Some(b) = &boot {
+            bar1_win
+                .seed(crate::gop::FB_OFFSET, 0, b.bytes())
+                .map_err(|e| format!("gop=on: the BAR1 seed: {e}"))?;
+            eprintln!(
+                "kf3: boot display ON — option ROM {} bytes ({:04x}:{:04x}, KFGP BAR{} +{:#x}, {}x{} pitch {}, G = {:#x}); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU",
+                boot_rom.as_ref().map_or(0, Vec::len),
+                pci.vendor,
+                pci.device,
+                b.fb.bar,
+                b.fb.offset,
+                b.fb.geometry.width,
+                b.fb.geometry.height,
+                b.fb.geometry.pitch,
+                b.bytes()
+            );
+        }
         va.table.insert(
             crate::mem::K_BAR1,
             // ★ Hopper+: the guest places BAR1 usermode views where ITS allocator chooses; they
@@ -770,7 +851,16 @@ impl Device {
             qhead_off,
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             display: display_plane,
+            boot,
+            boot_rom,
         })
+    }
+
+    /// ★ The boot display's option ROM (`gop=on`), packed at realize — what `kf3_option_rom` hands the
+    /// C device to register as the ROM BAR. `None` with `gop=off`.
+    #[must_use]
+    pub fn option_rom(&self) -> Option<&[u8]> {
+        self.boot_rom.as_deref()
     }
 
     /// The BAR0 memory map for the C device to build (family-scoped: shadow / plain RAM /
@@ -1589,6 +1679,19 @@ impl Device {
                 *s = m.stats.clone();
             }
         }
+        // ★ The boot display: a seed the guest never retired (it never loaded its driver) goes with
+        // the device — scratch first, then the view's host aperture (`CpuWindow::retire_seed`).
+        if let Some(w) = m
+            .table
+            .target(crate::mem::K_BAR1)
+            .and_then(crate::mem::Target::cpu_window)
+        {
+            match w.retire_seed() {
+                Ok(Some(r)) => eprintln!("kf3: at stop: {}", r.line()),
+                Ok(None) => {}
+                Err(e) => eprintln!("kf3: at stop: the boot display's seed was not released: {e}"),
+            }
+        }
     }
 
     /// Re-publish every GSP register's current answer into the shadow.
@@ -2022,7 +2125,20 @@ impl Device {
                 d.scanout_refused.load(o),
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
-            )
+            ) + &dp.boot().map_or_else(String::new, |_| {
+                // ★ The boot display (`gop=on`): frames shown from the boot layer, and when the
+                // guest's first armed head retired it.
+                let done = d.boot_done_ms.load(o);
+                format!(
+                    " boot[frames={} retired={}]",
+                    d.boot_frames.load(o),
+                    if done == 0 {
+                        "no".to_string()
+                    } else {
+                        format!("+{done}ms")
+                    }
+                )
+            })
         });
         let db = format!(" {}", self.dbfast.status());
         format!(

@@ -1499,7 +1499,14 @@ jobs:
           #   port_unsafe.rs (1)   one `out dx, al` to the debug port. Compiled into the driver
           #                        only with `--features debugcon` (test builds).
           #   bin/kf-gop-test/check_unsafe.rs (22) the stand-in's test application, never shipped.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:44 firmware/kf-gop:77"
+          #
+          # ★★ `kf-qemu` 44 -> 46, 2026-10-03 (`v3-gop-kf3`, KF3 ABI 11, the boot display's option ROM,
+          # docs/design/V3_DISPLAY.md §4.11.6). `ffi_unsafe.rs` (+2): `kf3_option_rom` (`unsafe extern
+          # "C" fn`: `rom` and `rom_len` must be writable) and its one `unsafe { }` storing the ROM's
+          # address and length through them. The bytes are the leaked device's (`Device::option_rom`,
+          # packed at realize, never freed), so the pointer the C device copies from is valid for the
+          # process. ⊘ No new power: the C device copies VMM-authored bytes into a read-only ROM region.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:46 firmware/kf-gop:77"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
