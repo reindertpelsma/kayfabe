@@ -3861,3 +3861,34 @@ emulating a mechanism; we are using the one RM uses internally, under RM's own n
 zero-`PHYS`-in-GR fact as a *limit* on the rewrite; this ruling shows it is instead the boundary
 that makes the split clean — the rewrite was never needed for compute, and RM's kernel work is
 precisely what it was written to serve.
+
+## §58 — NO WINDOW IN A SPACE AN UNPRIVILEGED GUEST CHANNEL USES. Added 2026-10-04 (P1+P2), owner ruling §Q.
+
+**STATUS: LIVE as a constraint; being implemented behind `KF3_TSPACE` (default OFF) —
+`V3_P1P2_TSPACE.md` holds the design and the implementation record.** Until `KF3_TSPACE` is
+default-on (inc E), the default path still breaks this constraint (audit S1-21).
+
+> `[owner, 2026-10-03, OWNER_RULINGS.md §Q]` *"channel guest says is unprivileged cannot contain a
+> full vram map ever, forbidden. real hardware must be told, so ogkm indicates it, as on bare metal
+> channel userd and the ring and push buffers are mapped in an unprivileged cpu process, so the gpu
+> is told any data at those addresses must be confined without ogkm checking it as it doesn't
+> inspect in the first place."*
+
+> **The constraint.** A host VA space in which **any** channel the guest created non-kernel runs
+> holds only rows derived from the guest's own page tables, placed FIXED at the guest's own VAs, at
+> **user** privilege. None of those rows names the firmware carve-out. It holds no window and
+> nothing kayfabe owns. The one space that holds the windows is kayfabe's per-VM Translated space
+> (the **T-space**). Only kayfabe-authored work runs there, and every address that work
+> dereferences is computed by kayfabe.
+
+- **Keyed on privilege, known at the alloc.** The guest's RM sets each channel's privilege from the
+  call's security context; guest userspace cannot claim KERNEL. kayfabe services the allocation, so
+  the decision needs no knowledge of what the space will later hold.
+- **"At user privilege" is load-bearing** and inherited from P0 (`v3-sec-nonpriv`): host RM places
+  its own privileged GR context buffers in every GR twin, and only the PRIV PTE bit keeps a USER
+  channel off them. The bit-5 birth assert is a stated precondition of every P1 claim.
+- **The named checks** (`V3_P1P2_TSPACE.md` §7): `every_emitted_pair_is_allowlisted_or_an_authored_address`,
+  `a_guest_address_value_is_never_emitted`, `carve_out_is_excluded`,
+  `tspace_builder_never_grows_down`, `placed_rows_track_host_unmap_at_both_edges`,
+  `userd_and_notifier_bounded_to_the_usable_heap`; on a box, T-WINDOW-USER (user mirrors log
+  `windows=none`, a reach into an old window base faults on that twin only) and T-RING-TRANSLATED.

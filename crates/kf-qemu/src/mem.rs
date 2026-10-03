@@ -1617,7 +1617,7 @@ pub struct MemPlane {
     /// Counters.
     pub counters: MemCounters,
     /// Guest RAM as QEMU registered it.
-    ram: &'static RamMap,
+    pub(crate) ram: &'static RamMap,
     /// ★ The guest-RAM host object — an OS descriptor over the WHOLE guest memfd (gate 3's
     /// recipe), created once, on the VA thread, the first time a space needs it: `(handle, len)`.
     ram_obj: std::sync::OnceLock<Result<(u32, u64), String>>,

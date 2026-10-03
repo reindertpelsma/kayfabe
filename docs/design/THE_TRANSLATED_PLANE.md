@@ -10,6 +10,13 @@ Supersedes nothing; **collects** `gpga_is_one_reserved_object.md` (LIVE 09-10),
 
 ⊘ Read this first, then those for detail. Where they disagree with this file, this file is later.
 
+⊘ **AMENDED 2026-10-04 (P1+P2, `V3_P1P2_TSPACE.md`):** §12's *"the identity window goes in every
+host VAS we create"* (ruling `8ecad812`, 2026-09-22) is **SUPERSEDED** by owner ruling
+`OWNER_RULINGS.md` §Q (2026-10-03) — the supersession is recorded in §12's own text, and §24.2's
+"verbatim in a mirror of the guest's kernel space, windows `GROWS_DOWN`" in §24.2's. The new
+design is §28 (the T-space). ⚠ The code still follows the 2026-09-22 ruling by default until
+`KF3_TSPACE` goes default-on (`V3_P1P2_TSPACE.md` §8, inc E).
+
 ---
 
 ## §1 — The problem this solves, stated as the measurement
@@ -415,9 +422,22 @@ generally, **silently aliases a different object.** Keep this port's `VA_ALREADY
 
 ## §12 — What we will not do
 
+⊘⊘⊘ **SUPERSEDED 2026-10-04 — the second bullet below (ruling `8ecad812`, 2026-09-22) no longer
+holds, and its code is the critical audit finding S1-21.** Owner ruling `OWNER_RULINGS.md` §Q
+(2026-10-03): *a channel the guest created unprivileged may never sit in a space holding a full
+VRAM map; a passthrough twin's space maps only rows derived from the guest's own page tables.* The
+windows therefore live **only in the per-VM Translated space** (§28, `V3_P1P2_TSPACE.md`). UVM's
+mixed apertures are handled by **resolving every virtual operand through kayfabe's own placement
+rows** and authoring the window address, not by a window in every VAS. **Why the 2026-09-22 ruling
+no longer holds:** it assumed the rewriter would FORWARD virtual operands as written, so the windows
+had to sit beside the guest rows in the same space; under §Q the rewriter authors every address it
+emits (`V3_P1P2_TSPACE.md` §3), so nothing the engine dereferences needs a guest row and a window in
+one space. ⚠ The 2026-09-22 code path stays the default until `KF3_TSPACE` goes default-on (inc E).
+
 - Treat `0x51` on FIXED as success.
-- Put the identity window in a Translated-only VAS — UVM mixes apertures in one stream ⇒ it goes in
-  **every** host VAS we create, above the guest's range, from the first commit.
+- ~~Put the identity window in a Translated-only VAS — UVM mixes apertures in one stream ⇒ it goes in
+  **every** host VAS we create, above the guest's range, from the first commit.~~ (superseded
+  2026-10-04, above)
 - Load libcuda into QEMU for pushbuffer reads; use the R17 CE. (UVM's pushbuffer is **sysmem** by
   default anyway — `uvm_pushbuffer.c:98-117` — so it is a memfd read at RAM speed.)
 - Re-enable the CPU executor to move the scoreboard.
@@ -1043,6 +1063,13 @@ into **our own** host channel and rewrites exactly two things:
 2. **A `MEM_OP` TLB invalidate** — a split point: submit up to it, and on that submission's
    completion (an fd, not a wait on the worker's stack) walk the named root, reconcile, resume.
 
+⊘ **SUPERSEDED 2026-10-04 (P1+P2, §28):** the next paragraph and the window-collision note below
+describe the 2026-09-22 design. Under §Q the Translated channel runs in the per-VM T-space, NOTHING
+is forwarded verbatim (every word is authored from decoded fields, every address resolved through
+our placement rows), and the T-space windows are mapped BOTTOM-UP, below 2^40 — `GROWS_DOWN` would
+truncate every CeUtils legacy host-semaphore release (40-bit on every family,
+`V3_P1P2_TSPACE.md` §2.2).
+
 Everything else — semaphores, virtual operands, host methods — runs **verbatim** in a host VA
 space that **mirrors the guest's kernel VA space** (the same walk + reconcile as user spaces,
 now including the system proc).
@@ -1151,3 +1178,19 @@ USERD at creation (poison → zero), per `rm_takes_a_guest_userd_and_zeroes_it`.
 ⊘ Not yet: a real kernel launch (QMD + shader + constant buffers) — `cuCtxCreate → matmul` needs the
 guest driver; GR context buffers were placed by host RM at RM-chosen VAs in the mirrored space and did
 not collide here (guest VAs at 64 GiB+); in the product that collision is refused `0x51` by name.
+
+## §28 — The T-space (P1+P2, 2026-10-04): the one host VA space that holds the windows
+
+**STATUS: DESIGN being implemented behind `KF3_TSPACE` (default OFF); full text and the
+implementation record in `V3_P1P2_TSPACE.md`.** No box has run it.
+
+- **One per VM.** A bare `FERMI_VASPACE_A` (no guest-range reservations) with: the ring region
+  `[RING_REGION_BASE, 2^40)` reserved first; the store window over guest VRAM `[0, carve)` — never the
+  firmware carve-out that holds kayfabe's roots; the guest-RAM window, GPU-uncached. Both windows
+  bottom-up, bases read back, both ends refused by name past the ring region. Built at prewarm, never
+  lazily; a Translated birth before it exists is refused by name (`kf_qemu::tspace`, inc B).
+- **Only kayfabe-authored work runs there.** Translated rings are born in it; every address the
+  engine dereferences is computed by kayfabe from the guest's placement rows (virtual) or by window
+  arithmetic (physical) — §3 of `V3_P1P2_TSPACE.md`.
+- **Mirrors carry no window and no ring** (inc D): a twin's space holds only rows derived from the
+  guest's page tables, at user privilege, bounded below the carve-out — `THE_CONSTRAINTS.md` §58.

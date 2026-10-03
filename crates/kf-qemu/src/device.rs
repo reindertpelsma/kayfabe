@@ -195,6 +195,9 @@ pub struct Device {
     drainer_efd: &'static Notifier,
     /// ★ P5: the channel plane (the guest kernel's CE channels, Translated).
     pub chans: &'static crate::chan::ChanPlane,
+    /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2): the T-space, built once at prewarm with
+    /// `KF3_TSPACE=1` ([`crate::tspace`]); empty otherwise.
+    pub tspace: crate::tspace::TSpaceCell,
     /// ★ 2026-09-30: the doorbell fast path (`docs/design/V3_DOORBELL_IOEVENTFD.md`) — a KVM
     /// ioeventfd per live token, serviced by THIS device's register drainer. Off (every doorbell
     /// trapped) until the C device's `doorbell-ioeventfd` property hands it the KVM verb.
@@ -550,6 +553,16 @@ impl Device {
             }
         };
         let mirrors = crate::mem::Mirrors::default();
+        // ★ P1+P2 inc B: the T-space cell — filled once, on the VA thread, at prewarm.
+        let tspace = crate::tspace::TSpaceCell::default();
+        eprintln!(
+            "kf3: P1+P2 T-space {} (KF3_TSPACE; docs/design/V3_P1P2_TSPACE.md)",
+            if crate::tspace::enabled() {
+                "ON: built at prewarm"
+            } else {
+                "OFF: today's mirrors and windows"
+            }
+        );
         let chans: &'static crate::chan::ChanPlane =
             Box::leak(Box::new(crate::chan::ChanPlane::new(
                 rm,
@@ -854,6 +867,7 @@ impl Device {
             vbios,
             worker_efd,
             chans,
+            tspace,
             dbfast,
             worker_stats: kf_chan::worker::WorkerStats::default(),
             intr: kf_trap::cpuintr::CpuIntr::new(family, kf_trap::memmap::VF_USERMODE_PAGE)
@@ -1541,9 +1555,26 @@ impl Device {
         // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
         // object) — never while a statement, a walk or an armed invalidate is waiting on us.
         let mut prewarmed = 0u64;
+        // ★ P1+P2 inc B (`V3_P1P2_TSPACE.md` §2.3): with `KF3_TSPACE=1`, the T-space is the FIRST
+        // thing prewarm builds, on the first tick guest RAM is registered.
+        let carve = kf_chip::bar0::fb_layout(self.mem.fb_len).map_or(0, |l| l.carve());
         let mut va_busy_from = crate::prof::now_ns();
         let mut cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
         while !self.stop.load(Ordering::Acquire) {
+            if crate::tspace::enabled()
+                && let Some(line) = crate::tspace::prewarm(
+                    &self.tspace,
+                    &self.mem,
+                    self.rm,
+                    self.store.handle,
+                    carve,
+                )
+            {
+                eprintln!(
+                    "kf3: mem t={:.3}s {line}",
+                    self.born.elapsed().as_secs_f64()
+                );
+            }
             if prewarmed < crate::mem::PREWARM_SPARES
                 && (prewarmed == 0
                     || (!m.in_flight()
