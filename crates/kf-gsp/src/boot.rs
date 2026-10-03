@@ -882,6 +882,12 @@ pub struct GspFsm {
     /// … and the FRTS offset its command named, served while WPR2 is up
     /// ([`GspObservation::frts_offset`]). Cleared when WPR2 comes down.
     frts_offset: Option<u64>,
+    /// ★ The boot display (`docs/design/V3_DISPLAY.md` §4.11.4 row 2): where fn 72's body is kept
+    /// for fn 65's encoder ([`crate::sysinfo`]). `None`: fn 72 is dropped unread, as before the boot
+    /// display — kf3's posture with `gop=off`, which since 2026-10-03 (`v3-gop`) attaches no cell
+    /// (`kf_qemu::gop::ConsoleWiring`; before that every kf3 device carried one).
+    /// ⊘ Survives [`GspFsm::device_reset`]: it is the chain's, not one driver life's.
+    system_info: Option<crate::sysinfo::SystemInfoCell>,
 }
 
 /// ★★★ v3-initrace — **FWSEC's FRTS command, read out of the DMEM image RM loaded it from.**
@@ -964,7 +970,17 @@ impl GspFsm {
             fwsec_image: None,
             frts_image: None,
             frts_offset: None,
+            system_info: None,
         }
+    }
+
+    /// ★ Keep every `GSP_SET_SYSTEM_INFO` (fn 72) body in `cell` ([`crate::sysinfo`]) — it is still
+    /// answered with nothing, as an asynchronous RPC must be; the cell is what fn 65's encoder reads
+    /// the guest's `consoleMemSize` from.
+    #[must_use]
+    pub fn with_system_info_cell(mut self, cell: crate::sysinfo::SystemInfoCell) -> GspFsm {
+        self.system_info = Some(cell);
+        self
     }
 
     /// ★★★ v3-initrace — **read the FRTS command of the FWSEC that raised WPR2**, once, and serve
@@ -1040,7 +1056,9 @@ impl GspFsm {
     pub fn device_reset(&mut self) -> Transition {
         // ⊘ w472b's fix (carrying a `defer_commands` flag across the reset) is gone with the flag:
         // deferral is structural in v3, so a reset cannot disarm it.
+        let system_info = self.system_info.take();
         *self = GspFsm::new(self.abi);
+        self.system_info = system_info;
         Transition::E11
     }
 
@@ -2091,6 +2109,13 @@ impl GspFsm {
             // derives the set from `rpc.c` rather than trusting this comment, which is how
             // the third one was found. Echoing one surfaces in the driver as an unexpected
             // event and desyncs the sequence.
+            // ★ Fn 72's body is KEPT (never answered) for fn 65's encoder: the boot display's
+            // `consoleMemSize`, decoded there with the table that serves fn 65 ([`crate::sysinfo`]).
+            if cmd.function == RpcFunction::GspSetSystemInfo
+                && let Some(cell) = &self.system_info
+            {
+                cell.store(&cmd.payload, cmd.sequence);
+            }
             return Ok(());
         }
         // ★★★ **THE DEFAULT IS A NAMED REFUSAL** (task #127). A policy that has no answer
@@ -3223,5 +3248,102 @@ mod a_retry_after_a_failed_boot_reads_its_own_frts_command {
             "an unreadable command derives"
         );
         assert_eq!(f.observe().frts_offset, None);
+    }
+}
+
+#[cfg(test)]
+mod fn72_is_kept_for_fn65 {
+    //! ★ The boot display (`docs/design/V3_DISPLAY.md` §4.11.4 row 2): fn 72 stays unanswered and
+    //! reaches no policy, and its body lands in the shared cell — or, with no cell, nothing changes.
+    use super::a_life_ends_and_the_next_one_boots::abi;
+    use super::*;
+    use crate::sysinfo::{StashedSystemInfo, SystemInfoCell};
+
+    /// Guest RAM nothing may touch: an asynchronous RPC posts no reply.
+    struct NoReplyRam;
+    impl GuestRam for NoReplyRam {
+        fn read(&mut self, gpa: u64, _buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
+            panic!("an asynchronous RPC read guest RAM at {gpa:#x}");
+        }
+        fn write(&mut self, gpa: u64, _bytes: &[u8]) -> Result<(), crate::fault::RamRefused> {
+            panic!("an asynchronous RPC was answered (a write at {gpa:#x})");
+        }
+    }
+
+    /// A policy no asynchronous RPC may reach.
+    struct NoPolicy;
+    impl CommandPolicy for NoPolicy {
+        fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+            panic!("fn {} reached a policy", cmd.code);
+        }
+    }
+
+    fn rpc(function: RpcFunction, code: u32, payload: Vec<u8>, sequence: u32) -> RpcCommand {
+        RpcCommand {
+            function,
+            code,
+            sequence,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    fn answer(f: &mut GspFsm, cmd: &RpcCommand) -> ServiceReport {
+        let mut report = ServiceReport::default();
+        f.answer(&mut NoReplyRam, &mut NoPolicy, cmd, &mut report)
+            .expect("an asynchronous RPC is consumed");
+        report
+    }
+
+    #[test]
+    fn fn72_lands_in_the_cell_and_is_never_answered() {
+        let cell = SystemInfoCell::new();
+        let mut f = GspFsm::new(abi()).with_system_info_cell(cell.clone());
+        let report = answer(
+            &mut f,
+            &rpc(RpcFunction::GspSetSystemInfo, 72, vec![7; 936], 3),
+        );
+        assert_eq!(report, ServiceReport::default(), "nothing posted or logged");
+        assert_eq!(
+            cell.latest(),
+            Some(StashedSystemInfo {
+                declared_len: 936,
+                bytes: vec![7; 936],
+                sequence: 3
+            })
+        );
+        // SET_REGISTRY (73) is asynchronous too, and is not kept
+        answer(&mut f, &rpc(RpcFunction::SetRegistry, 73, vec![1; 64], 4));
+        assert_eq!(cell.latest().map(|s| s.sequence), Some(3));
+    }
+
+    #[test]
+    fn the_cell_survives_a_device_reset_and_the_next_life_replaces_it() {
+        let cell = SystemInfoCell::new();
+        let mut f = GspFsm::new(abi()).with_system_info_cell(cell.clone());
+        answer(
+            &mut f,
+            &rpc(RpcFunction::GspSetSystemInfo, 72, vec![1; 936], 1),
+        );
+        assert_eq!(f.device_reset(), Transition::E11);
+        answer(
+            &mut f,
+            &rpc(RpcFunction::GspSetSystemInfo, 72, vec![2; 928], 1),
+        );
+        let s = cell.latest().expect("the next driver life's fn 72");
+        assert_eq!((s.declared_len, s.bytes[0]), (928, 2));
+    }
+
+    /// ⊘ The default (no cell, `gop=off`): fn 72 is dropped unread and the state machine is
+    /// byte-identical to one that never saw it.
+    #[test]
+    fn without_a_cell_fn72_changes_nothing() {
+        let mut f = GspFsm::new(abi());
+        answer(
+            &mut f,
+            &rpc(RpcFunction::GspSetSystemInfo, 72, vec![7; 936], 3),
+        );
+        assert_eq!(f, GspFsm::new(abi()));
     }
 }

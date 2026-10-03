@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+[package]
+name = "kf-oprom"
+description = "kf3's boot-display option ROM container: the KFGP descriptor, PCI expansion ROM pack (PCIR rev 3, uncompressed EFI image, the PE's own machine type) and parse. Pure, no_std, no unsafe; shared by the VMM (which packs per device at realize) and the guest-side GOP firmware (which reads the descriptor). The driver itself is built and embedded by kf-gop-image. docs/design/V3_DISPLAY.md §4.11."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["alloc"]
+# `pack` and `parse` return owned buffers. The GOP firmware (firmware/kf-gop) depends on this crate
+# with `default-features = false`: it only decodes a descriptor out of a ROM it was handed, and it
+# has no allocator.
+alloc = []
+# ⊘ `embedded-gop` (the committed kf-gop.efi, `include_bytes!`d here) was REMOVED 2026-10-03 on
+# branch v3-gop — OWNER_RULINGS §K: no compiled binary in the repo. crates/kf-gop-image builds the
+# driver from source in its build script and embeds that.
+
+[[bin]]
+name = "kf-oprom"
+required-features = ["alloc"]
+
+[dependencies]
+
+[lints]
+workspace = true

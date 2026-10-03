@@ -455,6 +455,20 @@ pub enum Target {
     Gpu(GpuMirror),
 }
 
+impl Target {
+    /// ★ The guest CPU window behind a BAR target (BAR2, or BAR1 on either arm) — BAR1's is where the
+    /// boot display's seed lives (`kf_mem::cpuwin::CpuWindow::seed`, `docs/design/V3_DISPLAY.md`
+    /// §4.11.2). `None` for a host GPU VA space.
+    #[must_use]
+    pub fn cpu_window(&self) -> Option<&CpuWindow<WindowOps>> {
+        match self {
+            Target::Window(w) => Some(w),
+            Target::Bar1(b) => Some(&b.win),
+            Target::Gpu(_) => None,
+        }
+    }
+}
+
 /// ★ P5: OUR placements in one mirrored host VA space, `va → (len, offset, ram)` — the rows the
 /// reconcile made, recorded AS it makes them, so a Translated channel can find the bytes behind a
 /// guest VA (its GPFIFO, a pushbuffer segment) through what WE mapped (`THE_TRANSLATED_PLANE.md`
@@ -1336,6 +1350,9 @@ pub struct Inbox {
     /// ★ P6: finished splits waiting for their channel's next pump.
     split_results: Mutex<std::collections::HashMap<u64, Result<(), String>>>,
     next_ticket: AtomicU64,
+    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): how many times the guest's RM gave BAR1 up
+    /// (the drainer bumps it; the VA thread re-seeds the boot framebuffer when it moved).
+    bar1_physical: AtomicU64,
 }
 
 impl Inbox {
@@ -1355,7 +1372,21 @@ impl Inbox {
             split_tokens: Mutex::new(std::collections::HashMap::new()),
             split_results: Mutex::new(std::collections::HashMap::new()),
             next_ticket: AtomicU64::new(1),
+            bar1_physical: AtomicU64::new(0),
         })
+    }
+
+    /// ★ 2026-10-03 (B5), the drainer: the guest's RM gave BAR1 up — ask the VA thread to show the
+    /// boot framebuffer's physical view again (`kf_mem::cpuwin::CpuWindow::reseed`). ⊘ Never waits.
+    pub fn request_bar1_physical(&self) {
+        self.bar1_physical.fetch_add(1, Ordering::AcqRel);
+        let _ = self.wake.signal();
+    }
+
+    /// The VA thread: how many such requests were made so far.
+    #[must_use]
+    pub fn bar1_physical_requests(&self) -> u64 {
+        self.bar1_physical.load(Ordering::Acquire)
     }
 
     /// ★ P6, a WORKER: channel `token` reached a `MEM_OP` invalidate of `pdb` and its prior work

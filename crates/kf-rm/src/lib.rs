@@ -131,6 +131,10 @@ pub struct ObjectLinks {
     /// delegates to a `kf_disp::model::DisplayModel` built for the guest driver's derived layouts
     /// and observes accepted display-object allocs and frees (`tests/display_seat.rs`).
     pub display: Option<DisplaySeat>,
+    /// ★ The boot display's console seat in fn 65 ([`staticinfo::ConsoleSeat`],
+    /// `docs/design/V3_DISPLAY.md` §4.11.4): fn 72's kept body, the BAR1 aperture and — with
+    /// `gop=on` — the boot framebuffer's size. `None` serves the board's region table, as before.
+    pub console: Option<staticinfo::ConsoleSeat>,
 }
 
 /// ★ The display seat: the chip's display row, and — when a display PLANE consumes the model (the
@@ -173,6 +177,10 @@ impl core::fmt::Debug for ObjectLinks {
                     .display
                     .as_ref()
                     .map(|d| (d.row.chips, d.model.is_some())),
+            )
+            .field(
+                "console",
+                &self.console.as_ref().map(|c| (c.bar1_bytes, c.boot_fb)),
             )
             .finish()
     }
@@ -418,9 +426,13 @@ pub fn served_chain(
         memory,
         channels,
         display,
+        console,
     } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
         .with_engine_caps(authored::engine_caps(&host.engines));
+    if let Some(seat) = console {
+        static_info = static_info.with_console(seat);
+    }
     if let (Some(n), Some(sn)) = (host.gpu_name, host.gpu_short_name.or(host.gpu_name)) {
         static_info = static_info.with_name(n, sn);
     }

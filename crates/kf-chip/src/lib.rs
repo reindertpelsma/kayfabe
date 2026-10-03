@@ -17,6 +17,7 @@
 //! ⊘ There is no pinned generation. The family is what the HOST reports (`MC_GET_ARCH_INFO`).
 
 pub mod bar0;
+pub mod bar1mode;
 pub mod classes;
 pub mod display;
 pub mod falcon_gsp;

@@ -782,6 +782,10 @@ estimates with recorded ones after its first run.
 
 ### 2.2 Exact contents
 
+⊘ **CORRECTED 2026-10-03 (`v3-gop-kf3`) — the tree's `KF3_ABI 10` is now 11.** The boot display added
+`gop` to `kf3_realize` and the `kf3_option_rom` entry point (`docs/design/V3_DISPLAY.md` §4.11.12); the
+derived device arguments gain `gop=on` where the boot display is wanted (it needs `display=on`).
+
 ```text
 kayfabe-<version>-x86_64-linux-gnu.tar.xz
 └── kayfabe-<version>/
@@ -800,7 +804,8 @@ kayfabe-<version>-x86_64-linux-gnu.tar.xz
         ├── qemu/                  QEMU's relocatable data: BIOS, keymaps, edk2-x86_64-code.fd and
         │                          edk2-x86_64-secure-code.fd (installed by default)
         ├── kayfabe/MANIFEST.json  build identity and pinned inputs (§2.4), per-file sha256
-        ├── kayfabe/rom/           (later) kf3-gop.rom, the boot-display option ROM, own version + sha256
+        ├── kayfabe/rom/           ⊘ 2026-10-03: no entry — the GOP driver is embedded in the kf3 binary
+        │                          and wrapped per device at realize (V3_DISPLAY.md §4.11.6)
         └── doc/kayfabe/           README.install.md, LICENSES/ (QEMU's COPYING and LICENSE, edk2's
                                    and the other installed firmware's licenses, each bundled
                                    library's license, kayfabe's LICENSE, the libc crate's)
@@ -930,7 +935,7 @@ the same commit must produce the same sha256, or the differences are listed in t
 - A per-commit CI build is versioned `0.0.0+g<sha>` and is never published as a release. It is attested
   like a release (task I3), so the sweep can check every artifact it runs the same way (§2.8).
 - The C and Rust halves are locked by `KF3_ABI`. Realize refuses an archive whose
-  `kf3_abi_version()` differs (`qemu/hw/misc/kf3/kf3.h:14`; `qemu/hw/misc/kf3/kf3.c:724-727`), so a
+  `kf3_abi_version()` differs (`qemu/hw/misc/kf3/kf3.h:16`; `qemu/hw/misc/kf3/kf3.c:782-785`, at `v3-gop-kf3`), so a
   release always ships both halves from one commit.
 
 **Fields of `MANIFEST.json`:**
@@ -1041,6 +1046,25 @@ value that fits.
     host version needs a port (`V3_DRIVER_MATRIX.md:17-20`).
   - Ship it as one DKMS source package per host tag, plus a CI check that runs `patch --dry-run` against
     every accepted host tag's nvidia-uvm source.
+- ⊘ **CORRECTED AGAIN 2026-10-03 (late; `OWNER_RULINGS.md` §K, built on branch `v3-gop`) — the next
+  note's *"the release `.efi` is committed beside its source and embedded in kayfabe
+  (`kf_oprom::KF_GOP_EFI` …), CI rebuilds it and requires the same bytes"* is withdrawn.** The owner, the
+  same day: *"We aren't going to put compiled stuff in the repo right? … the efi driver is compiled when
+  building the repo."* Nothing compiled is committed: `crates/kf-gop-image/build.rs` builds
+  `firmware/kf-gop` during the ordinary cargo build for `<arch>-unknown-uefi` and embeds it
+  (`kf_gop_image::KF_GOP_EFI`), and `rust-toolchain.toml` lists `x86_64-unknown-uefi`. For install that
+  changes nothing visible — the driver is still inside the kf3 binary and there is still no file in the
+  tarball — but the release build host needs the UEFI target (the build names it when missing), and an
+  aarch64 release builds an AArch64 driver.
+- ⊘ **CORRECTED 2026-10-03 (`V3_DISPLAY.md` §4.11) — the next bullet, three ways.** The firmware is built
+  (branch `v3-gop-rom`): a zero-dependency Rust EFI driver, `firmware/kf-gop`, not EDK2 or `uefi-rs`.
+  It is **not** loaded through `romfile=` and it is **not a file in the tarball at all**: by the owner's
+  decision of 2026-10-03 the release `.efi` is committed beside its source and embedded in kayfabe
+  (`kf_oprom::KF_GOP_EFI`, like the PTX kernels), CI rebuilds it and requires the same bytes, and kf3
+  wraps it at realize with per-device config data — the PCIR ids and class it already presents and the
+  `KFGP` descriptor (`V3_DISPLAY.md` §4.11.6). And there is **no** fake-GSP answer for
+  `uefiScanoutSurfaceSizeInMB` to agree with: it is a CPU-RM field for Windows; what must agree is the
+  FB layout and the fn 65 region table (`V3_DISPLAY.md` §4.11.4). Its own CI job exists (`firmware`).
 - **The boot-display GOP option ROM.** It is a design (`docs/design/V3_DISPLAY.md:12-26`): an EFI GOP driver
   built with EDK2 or `uefi-rs`, loaded through `romfile=`.
   - It needs its own UEFI toolchain, so it is built in its own CI job.

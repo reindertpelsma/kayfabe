@@ -77,12 +77,32 @@ case "${NVKVM_RAM_BACKEND:-}" in
   *) echo "★ NVKVM_RAM_BACKEND=${NVKVM_RAM_BACKEND} is not a backend I know" >&2; exit 2 ;;
 esac
 
+# ★ 2026-10-03 — KF_FIRMWARE=ovmf boots UEFI firmware instead of SeaBIOS (the boot display's box tests,
+# docs/design/V3_DISPLAY.md §4.11.9: kf3's option ROM is a UEFI GOP driver, which SeaBIOS skips).
+# OVMF's code read-only, and a per-run copy of its variable store beside this run's logs, so no boot
+# inherits another's NVRAM. KF_OVMF_CODE / KF_OVMF_VARS override the Ubuntu `ovmf` package's 4M
+# files. Unset = SeaBIOS, the boot every earlier capture took, byte for byte.
+FWARGS=()
+case "${KF_FIRMWARE:-seabios}" in
+  seabios) ;;
+  ovmf)
+    OVMF_CODE=${KF_OVMF_CODE:-/usr/share/OVMF/OVMF_CODE_4M.fd}
+    OVMF_VARS_TEMPLATE=${KF_OVMF_VARS:-/usr/share/OVMF/OVMF_VARS_4M.fd}
+    [ -r "$OVMF_CODE" ] && [ -r "$OVMF_VARS_TEMPLATE" ] || { echo "★ KF_FIRMWARE=ovmf: no $OVMF_CODE / $OVMF_VARS_TEMPLATE (apt install ovmf)" >&2; exit 2; }
+    cp "$OVMF_VARS_TEMPLATE" "${LOG}_ovmf_vars.fd"
+    FWARGS=(-drive "if=pflash,format=raw,unit=0,readonly=on,file=$OVMF_CODE"
+            -drive "if=pflash,format=raw,unit=1,file=${LOG}_ovmf_vars.fd")
+    echo "== firmware: OVMF $OVMF_CODE (vars copy ${LOG}_ovmf_vars.fd)" >&2
+    ;;
+  *) echo "★ KF_FIRMWARE=${KF_FIRMWARE} is neither seabios nor ovmf" >&2; exit 2 ;;
+esac
+
 # ★ `KF_GUEST_IMG` also carries the driver matrix's per-version fat guests (V3_DRIVER_MATRIX.md
 # §5): a qcow2 overlay on guest.qcow2 with that version installed (`scripts/drivermatrix/
 # stage_fat_guest.sh`). Unset = the bench image, i.e. the host's version.
 [ -f "${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}" ] || { echo "★ no guest image at ${KF_GUEST_IMG}" >&2; exit 2; }
 exec "$Q" \
-  "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
+  "${RAMARGS[@]}" "${FWARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
   -drive if=virtio,file="${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}",format=qcow2 \
   -netdev tap,id=n0,ifname=nvktap0,script=no,downscript=no \
   -device virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56 \

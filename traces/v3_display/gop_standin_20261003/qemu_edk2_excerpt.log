@@ -1,0 +1,9 @@
+Loading driver at 0x0001EAF1000 EntryPoint=0x0001EAF3FA4 GraphicsConsoleDxe.efi
+Loading driver at 0x0001E8EF000 EntryPoint=0x0001E8F2AD4 QemuVideoDxe.efi
+[Security] 3rd party image[0] is deferred to load before EndOfDxe: PciRoot(0x0)/Pci(0x1,0x0)/Offset(0x0,0x25FF).
+Found PCI display device
+[Security] 3rd party image[1E990D18] can be loaded after EndOfDxe: PciRoot(0x0)/Pci(0x1,0x0)/Offset(0x0,0x25FF).
+Found PCI display device
+GraphicsConsole video resolution 1152 x 648
+Graphics Console Started, Mode: 3
+[Security] 3rd party image[0] can be loaded after EndOfDxe: PciRoot(0x0)/Pci(0x2,0x0)/HD(1,MBR,0xBE1AFDFA,0x3F,0xFBFC1)/\EFI\BOOT\BOOTX64.EFI.

@@ -8,12 +8,18 @@
 #      DISPLAY_KF3_EXTRA (appended to the device line), DISPLAY_HOLD_S / DISPLAY_FLIPS (hook.sh)
 # output: /workspace/bench/run_<tag>_{probe,dmesg,qemu,hostdmesg}.log (boot_capture.sh) and
 #         /workspace/bench/display/<tag>/ (hook.sh); the verdict lines are DISPLAY_* in the probe log.
+# exit: boot_capture's status; else 3 when a graded check below fails — DISPLAY_BOOT_HANDOFF (a black
+#       frame between the boot layer and the first window an armed head scans, from kf3's own
+#       "the console shows" lines) or, with DISPLAY_HOOK=unload_hook, DISPLAY_B5_VERDICT not PASS
+#       (or missing). ⊘ CORRECTED 2026-10-03 (the review of v3-gop-unload): this script ended with an
+#       echo, so it exited 0 whatever boot_capture and the hook found.
 set -uo pipefail
 TAG=${1:?usage: lane.sh <tag>}
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
 export NVKVM_RAM_MB=${NVKVM_RAM_MB:-8192} KF_SMP=${KF_SMP:-6}
 export KF3_DEV_EXTRA="display=on${DISPLAY_KF3_EXTRA:+,$DISPLAY_KF3_EXTRA}"
-export POST_CAPTURE_HOOK="$HERE/hook.sh"
+# DISPLAY_HOOK selects the hook (default hook.sh; unload_hook = box test B5)
+export POST_CAPTURE_HOOK="$HERE/${DISPLAY_HOOK:-hook}.sh"
 # ★ Leave the guest's filesystems clean before a poweroff the display teardown may wedge
 # (coordinator 2026-09-30: an unclean shutdown leaves the image's journal dirty and the next fast-guest
 # build cannot mount it): sync, then the kernel's emergency sync + remount read-only.
@@ -34,4 +40,25 @@ fi
 # (`[measured m3c]` 186 x Xid 32 while the guest's display-SW object was offered)
 echo "DISPLAY_HOST_XID=$(grep -c 'Xid' "/workspace/bench/run_${TAG}_hostdmesg.log" 2>/dev/null) $(grep -o 'Xid ([^)]*): [0-9]*' "/workspace/bench/run_${TAG}_hostdmesg.log" 2>/dev/null | awk '{print $NF}' | sort | uniq -c | tr '\n' ' ')"
 grep -a '^DISPLAY_' "/workspace/bench/run_${TAG}_probe.log" 2>/dev/null
+graded=0
+# ★ the boot display's handoff (gop=on): kf3's own account, from the boot layer to the first window an
+# armed head scans — a BLACK there is the flash §4.11 says the handover never shows
+Q="/workspace/bench/run_${TAG}_qemu.log"
+if grep -aq 'the console shows the BOOT layer' "$Q" 2>/dev/null; then
+    hand=$(awk '/the console shows the BOOT layer/ { on = 1 } on && /the console shows/ { print; if (/the console shows head /) exit }' "$Q")
+    blacks=$(grep -c 'the console shows BLACK' <<<"$hand")
+    first=$(grep -o -m1 '+[0-9]* ms the console shows head [0-9]*' <<<"$hand")
+    echo "DISPLAY_BOOT_HANDOFF black_frames=$blacks first_window=[${first:-none}] lines=$(grep -c . <<<"$hand") (expected: black_frames=0)"
+    sed 's/^kf3: display: /DISPLAY_BOOT_HANDOFF_LINE /' <<<"$hand" | cut -c1-200 | head -8
+    [ "$blacks" -eq 0 ] || graded=3
+fi
+if [ "${DISPLAY_HOOK:-hook}" = unload_hook ]; then
+    v=$(grep -a '^DISPLAY_B5_VERDICT' "/workspace/bench/run_${TAG}_probe.log" 2>/dev/null | tail -1)
+    case "$v" in
+        "DISPLAY_B5_VERDICT PASS "*) ;;
+        *) echo "DISPLAY_LANE_GRADED_FAIL ${v:-no DISPLAY_B5_VERDICT line in the probe log}"; graded=3 ;;
+    esac
+fi
+[ "$rc" -eq 0 ] && rc=$graded
 echo "DISPLAY_LANE_EXIT rc=$rc $(date -Is)"
+exit "$rc"
