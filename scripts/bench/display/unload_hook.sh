@@ -80,6 +80,11 @@ QLOG=$BENCH/run_${TAG}_qemu.log
 qlines(){ wc -l < "$QLOG" 2>/dev/null || echo 0; }
 # the device's own lines written since QEMU log line <n>
 qsince(){ tail -n +"$(( $1 + 1 ))" "$QLOG" 2>/dev/null; }
+# how many of them match <ERE>. ⊘ Never `qsince | grep -q` (measured 2026-10-03, box run b5g at
+# 445367a8): under pipefail grep -q exits at the first match, tail takes SIGPIPE, and the pipeline
+# FAILS on a match — (a2)'s PRESERVED line was present and judged absent. Count instead: grep -c reads
+# everything.
+qcount(){ local n; n=$(qsince "$1" | grep -a -c -E "$2"); echo "${n:-0}"; }
 # write <n> lines tagged <tag> to tty1, then shoot <name>; prints "before=[..] after=[..] changed=.."
 lines_and_shot(){
     local tag=$1 n=$2 name=$3 b a
@@ -140,7 +145,7 @@ up_wayland(){ for _ in $(seq 1 45); do
     sleep 2; done; echo no; }
 gone(){ for _ in $(seq 1 20); do gq 'pgrep -x Xorg >/dev/null || pgrep -u ubuntu -x cinnamon >/dev/null && echo RUNNING' 10 | grep -q RUNNING || break; sleep 1; done; }
 a_arm(){  # a_arm <label> <shot prefix> <up check> <expect X: yes|no>
-    local label=$1 p=$2 upcheck=$3 want_x=$4 t0 up epoch xlog xorg xdrv q0 r after cs ok
+    local label=$1 p=$2 upcheck=$3 want_x=$4 t0 up epoch xlog xorg xdrv q0 r after cs ok n
     # ⊘ the previous arm's (or boot's) Xorg log goes aside; only a log newer than this arm is read
     epoch=$(gq 'date +%s' 15)
     gq "sudo mv -f /var/log/Xorg.0.log /var/log/Xorg.0.log.kf3-before-$p 2>/dev/null; echo ok" 20 >/dev/null
@@ -177,8 +182,8 @@ a_arm(){  # a_arm <label> <shot prefix> <up check> <expect X: yes|no>
     say "${label}_DEVICE console_shows=[$cs]"
     if [ "$want_x" = yes ]; then
         # NVKMS restored the console and freed its channels with PRESERVE_HW: the scanout stays
-        ok=no; qsince "$q0" | grep -aq 'the console shows the PRESERVED scanout' && ok=yes
-        judge "${label}_PRESERVED" "kf3 kept the console NVKMS restored (the PRESERVED scanout)" "$([ $ok = yes ] && echo present || echo absent)" "$ok"
+        n=$(qcount "$q0" 'the console shows the PRESERVED scanout')
+        judge "${label}_PRESERVED" "kf3 kept the console NVKMS restored (the PRESERVED scanout)" "lines=$n" "$([ "$n" -gt 0 ] && echo yes || echo no)"
     fi
 }
 # (a) a KMS compositor on the firmware framebuffer: Cinnamon on Wayland (muffin) drives simpledrm —
@@ -221,8 +226,8 @@ sa=$(stats "$OUT/b5b_after.ppm")
 say "B5B_AFTER_RMMOD up=$t0 $(tr '\n' ' ' < "$OUT/b5b_unload.log") shot=[$sa] modules=[$(gq 'lsmod | awk "/^nvidia/{print \$1}" | tr "\n" " "')] (expected: nonblack=0 — black, as bare metal)"
 ok=no; grep -q '^rc=0' "$OUT/b5b_unload.log" && [ "$(nonblack "$sa")" = 0 ] && ok=yes
 judge B5B_AFTER_RMMOD "rmmod rc=0, black (nonblack=0)" "$(grep -o '^rc=[0-9]*' "$OUT/b5b_unload.log" | head -1) nonblack=$(nonblack "$sa")" "$ok"
-ok=no; qsince "$q0" | grep -aq 'the console shows BLACK' && ok=yes
-judge B5B_DEVICE "kf3 chose black (the console shows BLACK)" "$([ $ok = yes ] && echo present || echo absent)" "$ok"
+n=$(qcount "$q0" 'the console shows BLACK')
+judge B5B_DEVICE "kf3 chose black (the console shows BLACK)" "lines=$n" "$([ "$n" -gt 0 ] && echo yes || echo no)"
 gq 'sudo dmesg | tail -60' 30 > "$OUT/b5_dmesg_tail.log"
 # the device's own account of each arm: what the console showed, BAR1's boot range, the teardowns
 grep -a -E 'the console shows|BAR1 boot framebuffer|wrote NV_|BAR1_BLOCK|fn 47|boot display seed|physical view|armed its first head|ChannelFreed \{ kind: Core|ChannelAllocated \{ kind: Core|lines logged' \

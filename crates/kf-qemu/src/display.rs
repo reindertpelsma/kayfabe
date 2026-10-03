@@ -670,11 +670,18 @@ fn fnv(words: impl IntoIterator<Item = u64>) -> u64 {
 /// unlogged. The key leaves out what a flip changes; the line still prints it.
 fn shown_key(shown: Option<&Shown>, held: &Held, boot_done: bool) -> u64 {
     match shown {
+        // what the heads say matters to the line only once a scanout was shown (`shown_digest`):
+        // `[measured 2026-10-03, b0g at 445367a8]` keyed on it before, gop=off printed "NOTHING yet"
+        // twice in a row
         None => fnv([
             0,
             u64::from(held.scanned.is_some()),
             u64::from(boot_done),
-            held.dark as u64,
+            if held.scanned.is_some() {
+                held.dark as u64
+            } else {
+                u64::MAX
+            },
         ]),
         Some(Shown::Blank((w, h))) => fnv([1, u64::from(*w), u64::from(*h)]),
         Some(Shown::Preserved(l, (w, h))) => fnv([2, u64::from(*w), u64::from(*h)]
@@ -2480,6 +2487,19 @@ mod tests {
         assert_ne!(
             shown_key(Some(&Shown::Blank((1920, 1080))), &held, true),
             shown_key(None, &held, true)
+        );
+        // before any scanout was shown the heads' state changes nothing on screen, nor the line
+        let unlit = Held {
+            dark: Dark::Unlit,
+            ..Held::default()
+        };
+        let brief = Held {
+            dark: Dark::WindowlessBrief,
+            ..Held::default()
+        };
+        assert_eq!(
+            shown_key(None, &unlit, false),
+            shown_key(None, &brief, false)
         );
     }
 
