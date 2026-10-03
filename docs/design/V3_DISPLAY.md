@@ -1355,7 +1355,13 @@ without a broker now grades the OPPOSITE way, and items 11–12 are new.
    1080p, up to 230 MiB after a 4K mode, for the VM's life. Implemented default:
    `display-broker-vram=auto` (allocate at the first explicit yes for the block-linear pair); `on`
    fails realize on a refusal; `off` never allocates. Owner to confirm.
-8. **(2026-10-03, §8.11) The broker changes in nvkvm-pv**, append-only in protocol v2: (a) the X11
+8. ⊘ **CORRECTED the same day (`22a3e10a`): (b) below is no longer kf-broker's proposal — nvkvm-pv's
+   broker defines `EV_DEVICE` itself** (branch `broker-cursor-gpucopy`, its `nvkvm_broker_proto.h`):
+   type 17 behind `CAP_DEVICE` (1 << 11), `x` = `DEVICE_F_KNOWN | DEVICE_F_RENDER` flags (0 = does not
+   know), `y` = 0, `w0`:`w1` = major:minor, sent once after the handshake's priming FRAME and again
+   whenever the display server reports another device; the same revision adds `CMD_CURSOR` (7, behind
+   `CAP_CURSOR` = 1 << 10). kf-broker follows that header (§8.11). (a) needs no new type.
+   **(2026-10-03, §8.11) The broker changes in nvkvm-pv**, append-only in protocol v2: (a) the X11
    backend sends the unsolicited `EV_FORMAT x=0` on a refused DRI3 import, as Wayland does; (b)
    `EV_DEVICE` (type 17 as kf-broker implements it, `x:y` = the compositor's DRM device); (c)
    optionally, an idle fence on X11 `PresentPixmap` and the XRender path's RELEASE after its composite,
@@ -1364,7 +1370,8 @@ without a broker now grades the OPPOSITE way, and items 11–12 are new.
 
 ### 8.11 The GPU-copy rung (`OWNER_RULINGS.md` §L) — rung 0 for a compositor on the same GPU
 
-**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-03 (branch `v3-broker`, `bd37049f` + `b3ec2d21`).
+**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-03 (branch `v3-broker`, `bd37049f` + `b3ec2d21`;
+`EV_DEVICE` re-read by nvkvm-pv's header at `22a3e10a`).
 Nothing has run on a GPU or a box.** The design was read from source and revised the same day after
 an adversarial review; the revision is what is built. Every claim below that needs hardware is
 listed in *What has not run* and the box experiments E0-E6.
@@ -1435,6 +1442,22 @@ of §8.2, unchanged, each requiring its own backing fresh and not withdrawn.
 - Once nvkvm-pv's X11 backend sends `EV_FORMAT x=0` on a refused DRI3 import (the coordinator's
   default for the owner, same protocol revision as the cursor message), the existing "later no" path
   handles it — no relay change.
+- ⊘ **CORRECTED the same day (`22a3e10a`, the coordinator relaying nvkvm-pv's header — the broker
+  owns the protocol): the next bullet's encoding and its "proposal" were wrong.** `EV_DEVICE` is
+  nvkvm-pv's: type 17 behind `CAP_DEVICE` (1 << 11); `x` = `DEVICE_F_KNOWN` (1) | `DEVICE_F_RENDER`
+  (2), 0 = the broker does not know; `y` = 0; `w0`:`w1` = major:minor; sent once after the
+  handshake's priming FRAME, and again whenever the display server reports another device. The relay
+  now reads it so: another device's RENDER node ⇒ no rung 0 on that connection; this GPU's primary or
+  render node ⇒ allowed; `x` = 0 ⇒ the yes and the detector decide; KNOWN without RENDER (an
+  unresolved node, "compare with care") decides only when it IS this GPU's node; a broker advertising
+  `CAP_DEVICE` gets no rung-0 frame before its `EV_DEVICE`; a later, different device moves the
+  decision (`a_compositor_on_another_gpu_gets_no_gpu_copy`, three bite-mutations each fail it). The
+  values (and `CMD_CURSOR` = 7, `CAP_CURSOR`, the cursor record, its ops and bounds) are in `wire.rs`,
+  AHEAD of the vendored `368d2db` header: `proto_mirror.rs` asserts each is absent from it (the day
+  it lands, the test forces it into the mirrored map) and, with `KF_BROKER_PROTO_NEXT` naming the
+  newer header, equal to it both ways, the cursor record's layout compiled from it (run locally
+  against the nvkvm-pv worktree: `PROTO-NEXT: RAN`; a mutated `CAP_DEVICE` fails it). The hover-mode
+  host cursor that would send `CMD_CURSOR` is NOT built: frames keep composing the cursor.
 - **`EV_DEVICE`** (type 17, `x:y` = the compositor's DRM device; AHEAD of the vendored header, a
   proposal to nvkvm-pv's broker): another device ⇒ no rung 0 on that connection; this GPU's primary
   or render node ⇒ allowed; absent or "cannot tell" ⇒ the yes and the detector decide.
