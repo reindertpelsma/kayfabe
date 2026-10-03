@@ -1673,7 +1673,7 @@ impl Device {
             // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): what BAR1's boot-framebuffer range shows
             // after every BAR1 change (bounded) — the guest's views, the seed, or scratch.
             if r.collected
-                && bar1_lines < 64
+                && bar1_lines < 96
                 && r.applied
                     .iter()
                     .any(|(k, a)| *k == crate::mem::K_BAR1 && a.mapped + a.unmapped > 0)
@@ -1719,7 +1719,10 @@ impl Device {
                     .target(crate::mem::K_BAR1)
                     .and_then(crate::mem::Target::cpu_window)
                     .and_then(|w| crate::bar1phys::restore_physical_view(w, at_change))
+                    && bar1_lines < 128
                 {
+                    // ⊘ bounded: a guest can ask as often as it writes the register
+                    bar1_lines += 1;
                     eprintln!(
                         "kf3: mem t={:.3}s {line}",
                         self.born.elapsed().as_secs_f64()

@@ -90,7 +90,7 @@ pub fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
              again (seed life {life}) — the guest's RM gave BAR1 up"
         ),
         Ok(kf_mem::cpuwin::Reseed::AlreadyShown) => format!(
-            "BAR1 [{at:#x}, +{len:#x}) already shows its physical view (the seed never retired)"
+            "BAR1 [{at:#x}, +{len:#x}) already shows its physical view (the seed is placed)"
         ),
         Ok(kf_mem::cpuwin::Reseed::NoBootFramebuffer) => return None,
         Err(e) => format!("BAR1's physical view REFUSED: {e}"),
