@@ -47,6 +47,12 @@
 #   sb_deny_unsigned              the same firmware: the unsigned ROM MUST NOT start.
 #   sb_deny_tailpad               the same firmware: the signed PE with padding after it MUST NOT
 #                                 start — the premise of kf-oprom's end-aligned layout (pack.rs).
+#   ⊘ CORRECTED 2026-10-03 (the review of v3-gop): a deny arm PASSed whenever the ROM did not start,
+#   for any reason — a malformed tail-padded ROM would have passed sb_deny_tailpad. Each deny arm now
+#   first boots the SAME ROM file on the distribution's Secure Boot OVMF (option-ROM policy 0x00:
+#   trusts every ROM) with the same keys and ESP — its positive control — and PASSes only if the ROM
+#   started there and not under the deny policy. (The deny firmware is RELEASE: it prints no
+#   verification-failure line to look for, so the control is what makes "not started" a denial.)
 #   The sb_deny_* arms SKIP, saying so, unless OVMF_DENY_CODE (and OVMF_DENY_VARS, its VARS with the
 #   snakeoil keys enrolled) name such a build; stock distribution OVMF never verifies option ROMs.
 #   OVMF_DENY_CODE is booted like Ubuntu's Secure Boot build (SMM on, secure flash), so build it the
@@ -654,10 +660,18 @@ sb_deny() { # sb_deny <arm> <rom> <expect: load|deny>
                 verdict "$arm" FAIL "the signed ROM did not start under a deny policy: $f"
             fi ;;
         deny)
-            if [ "$started" -eq 0 ]; then
-                verdict "$arm" PASS "observed=rom_denied $f"
-            else
+            if [ "$started" -ne 0 ]; then
                 verdict "$arm" FAIL "the ROM started under a deny policy: $f"
+                return
+            fi
+            # the positive control: the same ROM on a firmware that trusts option ROMs must start
+            local c cstarted=0
+            c=$(sb_arm "${arm}_control" "$OVMF_DIR/OVMF_VARS_4M.snakeoil.fd" "$rom" "$WORK/sb/esp")
+            grep -q 'rom_started=[1-9]' <<<"$c" && cstarted=1
+            if [ "$cstarted" -eq 1 ]; then
+                verdict "$arm" PASS "observed=rom_denied control_on_stock_ovmf=[$c] $f"
+            else
+                verdict "$arm" FAIL "not started under the deny policy, but not on stock OVMF either (control: $c) — a ROM that cannot start, not a denial: $f"
             fi ;;
     esac
 }

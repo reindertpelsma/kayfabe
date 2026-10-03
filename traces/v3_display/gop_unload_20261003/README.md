@@ -1,5 +1,22 @@
 # B5 on hardware — what the screen shows when the driver lets go (2026-10-03)
 
+> ⊘ **CORRECTED 2026-10-03 (late) — the review of `v3-gop-unload`; the re-runs after the fixes are
+> `traces/v3_display/gop_final_20261003/`.** Read these four before anything below:
+> - **`b5f/b5a_Xorg.0.log` is NOT b5f's.** It reads *"Time: Sat Oct 3 18:00:45"*, before b5f started
+>   (18:05:24, `b5f/final_b5f.log`): it is d2's (a2) log, left in `/var/log` and copied by the (a) arm,
+>   whose `DISPLAY_B5A_SESSION` line printed its `x_driver=[(II) NVIDIA(0): …]` from it. (a) ran no X.
+>   The hook now moves the old log aside and reads only a log newer than the arm.
+> - *"Every teardown in `b5_device.log`: SCRATCH → the … PHYSICAL write (same ms)"* holds for **4 of
+>   5**: the boot-range line shared its bound with the re-seed lines and stopped at change #88, so the
+>   fifth teardown's unmap is in no log (its write and re-seed are).
+> - The (a2) cause in `docs/design/V3_DISPLAY.md` §4.11.13's table was never measured: d1's a-arms ran no
+>   X or NVKMS, and d2 (not kept) already had the fix.
+> - b1f's and b5f's *"the console shows BLACK"* right before head 3's first window (+52936 ms, +132338 ms)
+>   is a black frame at the boot layer → first-head handoff — the review's MEDIUM finding, fixed since.
+>   *"The B1 regression passes"* below did not look for it.
+> - The B5 lane could not fail: `final_runs.log`'s `B5_LANE_RC=0` is what it printed whatever the arms
+>   showed.
+
 Box: vast 54032077, RTX 3060 (GA106, 10de:2504), host driver 580.159.04 (open); guest Ubuntu noble
 6.8.0-142 with 580.159.04, OVMF (Ubuntu's `ovmf`), kf3 with `display=on,gop=on` (B0f: `gop=off`).
 Branch `v3-gop-unload`. Design and findings: `docs/design/V3_DISPLAY.md` §4.11.13. Text logs and PNG

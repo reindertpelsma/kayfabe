@@ -5,7 +5,8 @@
 # another; provisioning a broken box wastes the time the preflight exists to save.
 #
 # ⚠ THE ONE STEP THAT IS NOT OBVIOUS AND FAILS LOUDLY-BUT-MISLEADINGLY:
-#   `rustup target add x86_64-unknown-linux-musl`   (and, since 2026-10-03, x86_64-unknown-uefi)
+#   `rustup target add --toolchain <rust-toolchain.toml's channel> x86_64-unknown-linux-musl`
+#   (and, since 2026-10-03, x86_64-unknown-uefi) — for the PINNED toolchain, which is what builds
 # `kayfabe-isolate-host/build.rs` builds the embedded isolate as a **static musl binary**
 # (`:164`), so without the musl std the WHOLE WORKSPACE fails with a bare
 #   error[E0463]: can't find crate for `std`
@@ -200,22 +201,13 @@ if ! command -v cargo >/dev/null 2>&1; then
   curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
 fi
 . "$HOME/.cargo/env"
-# ⚠ see the header -- not optional. Idempotent, so unconditional is fine, but report it:
-# a silent success here and a silent no-op look identical in the log.
-if rustup target list --installed | grep -qx x86_64-unknown-linux-musl; then
-  echo "musl target already installed"
-else
-  rustup target add x86_64-unknown-linux-musl && echo "musl target ADDED"
-fi
-# ★ 2026-10-03 (OWNER_RULINGS §K): kf3's boot-display GOP driver is built from firmware/kf-gop by
-# crates/kf-gop-image/build.rs during every kf3 build (`build_kf3.sh`), for x86_64-unknown-uefi. Without
-# it that build stops with a named error that prints this same command. rust-toolchain.toml lists it,
-# so rustup also adds it when it installs the pinned toolchain; this covers a toolchain installed first.
-if rustup target list --installed | grep -qx x86_64-unknown-uefi; then
-  echo "uefi target already installed"
-else
-  rustup target add x86_64-unknown-uefi && echo "uefi target ADDED"
-fi
+# ⚠ The targets (musl, see the header; x86_64-unknown-uefi since 2026-10-03, OWNER_RULINGS §K: kf3's
+# boot-display GOP driver is built from firmware/kf-gop by crates/kf-gop-image/build.rs during every kf3
+# build) are added to the PINNED toolchain below, after the clone, where rust-toolchain.toml is.
+# ⊘ CORRECTED 2026-10-03 (the review of v3-gop): they were added HERE, before `cd ~/kayfabe`, so they
+# went to the default toolchain (`stable`), not the pinned one — and the comment claimed it "covers a
+# toolchain installed first". A box with the pinned toolchain and no UEFI target still stopped at
+# kf-gop-image's named error.
 
 # ⊘⊘⊘ **THE BRANCH, EXPLICITLY, AND THE REVISION, PRINTED — w825.**
 #
@@ -245,6 +237,19 @@ cd ~/kayfabe
 # silently rewound the named branch to master — a box provisioned with KAYFABE_BRANCH=v3 built
 # `e24bc063` (master). Only this HEAD line exposed it. The branch is set ONCE, above.
 echo "HEAD=$(git rev-parse --short HEAD) branch=$(git branch --show-current)"
+# ★ The pinned toolchain (rust-toolchain.toml) and its targets — the ones every build in this tree
+# uses. Idempotent, so unconditional is fine, but report it: a silent success here and a silent no-op
+# look identical in the log.
+PIN=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
+[ -n "$PIN" ] || die "rust-toolchain.toml names no channel"
+rustup toolchain install "$PIN" --profile minimal >/dev/null 2>&1 || die "could not install toolchain $PIN"
+for t in x86_64-unknown-linux-musl x86_64-unknown-uefi; do
+  if rustup target list --installed --toolchain "$PIN" | grep -qx "$t"; then
+    echo "$t already installed for $PIN"
+  else
+    rustup target add --toolchain "$PIN" "$t" && echo "$t ADDED for $PIN" || die "rustup target add --toolchain $PIN $t failed"
+  fi
+done
 
 # ⊘ Do NOT pipe cargo into tail: `cargo build | tail` makes $? the status of TAIL, which
 #    always succeeds, so a FAILED build reports success. That exact bug produced a green

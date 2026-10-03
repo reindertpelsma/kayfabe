@@ -780,7 +780,9 @@ a new pure `kf_disp::scanout::boot_layer(geom)` (src 0, pitch P, W×H, opaque XR
   drawing either way.
 - *"which kf-disp follows as a window at FB 0"* (`modeset=0`): measured true (`window 6 store 0x0`), and
   NVKMS then frees its channels with `PRESERVE_HW` (`NV5070_CTRL_CMD_SET_RMFREE_FLAGS`), which kf-disp
-  now honours — before, the scanout ended at the free.
+  now honours. ⊘ *CORRECTED 2026-10-03 (late, the review of `v3-gop-unload`):* *"before, the scanout
+  ended at the free"* was never measured — no kept run had X on NVKMS without the fix (§4.11.13) — and
+  by the code before the fix an unclaimed free left the last frame frozen, not dropped.
 - `modeset=1 fbdev=1`: the eviction also makes NVKMS drop its console surface
   (`nvRmUnmapFbConsoleMemory`, `ogkm-580: src/nvidia-modeset/src/nvkms-rm.c:4967-4998`), so removing
   nvidia-drm restores nothing: NVKMS shuts the heads down and the screen is black, as on bare metal.
@@ -938,9 +940,11 @@ committed as `firmware/kf-gop/kf-gop.efi` and embedded by
   design's (PE at 0x200). OVMF does not verify option ROMs at all (§4.11.7), so the stand-in cannot
   tell the two layouts apart; the arm records that. ★ *Tested 2026-10-03 (late), F1 at `adbe6fcd`
   (§4.11.9): on a ROM-verifying OVMF the signed end-aligned ROM runs and the same PE with padding after
-  it does not — the layout's premise holds (`traces/v3_display/gop_standin_20261003_v3gop/`).* ⊘ *2026-10-03 (late, `v3-gop`):* so the layout is
-  **untested against a firmware that denies unsigned ROMs** — it rests on reading
-  `DxeImageVerificationLib.c` alone. The stand-in's `sb_deny_*` arms test it on an OVMF built with
+  it does not — the layout's premise holds (`traces/v3_display/gop_standin_20261003_v3gop/`). This
+  closes the ⊘ "untested" sentence right after it* (folded 2026-10-03, the review of `v3-gop`: the two
+  read as a contradiction). ⊘ *2026-10-03 (late, `v3-gop`; SUPERSEDED the same day by F1, the ★ note
+  just before):* so the layout is **untested against a firmware that denies unsigned ROMs** — it rests
+  on reading `DxeImageVerificationLib.c` alone. The stand-in's `sb_deny_*` arms test it on an OVMF built with
   `PcdOptionRomImageVerificationPolicy=0x04` when one is supplied (`OVMF_DENY_CODE`; test F1, §4.11.9).
 - `parse` accepts PCIR revision 0 and 3 and reports compression: QEMU's own `efi-virtio.rom` (read
   2026-10-03) has two images, the EFI one with PCIR rev 0, length 0x18, compression 1, header offset
@@ -1292,6 +1296,12 @@ flags of `hw/display/ati.c`, pixman on), and the C seam by `tests/wire_mirror.rs
   a fn 72 struct whose size is not the serving version's, a version or field not in the driver matrix, C
   not a multiple of 64 KiB, C at or past the carve-out, C larger than BAR1, a board table that is not
   kf-chip's layout. Logged on every fn 65 with a console: C against G and the region count.
+- ⊘ *2026-10-03 (late, the review of `v3-gop-unload`; §4.11.13): the note below this one is CORRECTED —
+  its black was chosen whenever a frame had been shown and nothing was scanned, so the boot layer →
+  first-head handoff showed one black frame. `Shown::Blank` is now chosen only when a head's scanout
+  that WAS shown is lost (no head lit; or a lit head with no window for 250 ms); until a head first
+  scans a window — the handoff, GB20x, `gop=off` before its first window — there is no new frame and the
+  last one stays.*
 - ⊘ *2026-10-03 (B5, §4.11.13): "then never again" stands, but what follows is no longer "nothing": once a
   frame was shown, nothing to scan is `Shown::Blank` (black), and a scanout freed with `PRESERVE_HW` is
   `Shown::Preserved` until a head is armed again.*
@@ -1361,7 +1371,7 @@ diagnosis at `e2c6e1d5` (instruments only), B5, B1 and B0 at `4a4b95f7`. CI gree
 |---|---|---|---|
 | (c) nvidia.ko, no RM client | 40 lines on tty1 never shown | The guest RM has no persistence: it initialises the adapter at the first open and tears it down at the last close (five RM lives in d1's one boot). At each teardown it unmaps the console at BAR1 VA 0 (kf3: BAR1 `[0, G)` holds no guest view → SCRATCH), ≤ 1 ms later writes `NV_PBUS_BAR1_BLOCK = 0` (MODE PHYSICAL, target VID_MEM: `kbusStatePreUnload_GM107` → `kbusTeardownMailbox_GM107`, `ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:746-787`), then sends fn 47 (`bInPMTransition = 0`). simpledrm's writes landed in kf3's scratch. Positive control: with a `/dev/nvidia0` holder keeping RM up, the same writes showed. | BAR1 physical: `[0, G)` is FB `[0, G)`, the console keeps drawing |
 | (a) as first run | the session's last frame stays | Not X, not NVKMS: the image's lightdm autologin still named B3's `cinnamon-wayland` (muffin on simpledrm; `Xorg.0.log` was B3's; nvidia-modeset first loaded at (b); no display channel during the session). NVIDIA's EGL held RM up; at the session's end RM was torn down and the console's redraw went to scratch — (c)'s cause. | the text console comes back |
-| (a2) (new) the NVIDIA X driver, `modeset=0` | — | NVKMS restores the console when X closes (`ReleaseModesetOwnership` → `RestoreConsole`, `ogkm-580: src/nvidia-modeset/src/nvkms.c:1107-1161`) and frees each channel after `NV5070_CTRL_CMD_SET_RMFREE_FLAGS(PRESERVE_HW)` (`nvkms-rm.c:2990-3017`; ROUTE_TO_PHYSICAL, so GSP-bound — it reaches kf3). kf-disp did not claim it, and dropped the scanout at the free. | the restored console stays |
+| (a2) (new) the NVIDIA X driver, `modeset=0` | — | ⊘ *NOT measured at `e2c6e1d5` — inferred* (corrected 2026-10-03, late, the review of `v3-gop-unload`: run d1's two a-arms ran neither X nor NVKMS — `modules=[nvidia_uvm nvidia]`, nvidia-modeset first loaded at 355.4 s in (b) — and d2, the only other run before b5f, already carried the fix and is not kept; by the code before the fix an unclaimed free left the last frame frozen, not dropped, so *"dropped the scanout"* below is also wrong). The mechanism, from source and from b5f (which ran it with the fix): NVKMS restores the console when X closes (`ReleaseModesetOwnership` → `RestoreConsole`, `ogkm-580: src/nvidia-modeset/src/nvkms.c:1107-1161`) and frees each channel after `NV5070_CTRL_CMD_SET_RMFREE_FLAGS(PRESERVE_HW)` (`nvkms-rm.c:2990-3017`; ROUTE_TO_PHYSICAL, so GSP-bound — it reaches kf3). kf-disp did not claim it, and dropped the scanout at the free. | the restored console stays |
 | (b) `fbdev=1`, fbcon unbound, `rmmod nvidia_drm` | the last fbcon frame stays | `fbdev=1` makes nvidia-drm evict the firmware framebuffer and call `framebufferConsoleDisabled` (`kernel-open/nvidia-drm/nvidia-drm-drv.c:2031-2049`), and NVKMS drops its console surface (`nvRmUnmapFbConsoleMemory`, `nvkms-rm.c:4967-4998`). At `rmmod`, `nvEvoRestoreConsole` has no surface (`nvkms-console-restore.c:796-799`), fails, and NVKMS shuts the heads down (`:971-977`); it never sends `PRESERVE_HW` (`0x50700117` appears nowhere in d1's log). kf-disp measured the head left with no window — and then produced no further frame, so QEMU kept the last one. | black (no signal) |
 
 **The fixes** (kf3 `4a4b95f7`):
@@ -1376,24 +1386,65 @@ diagnosis at `e2c6e1d5` (instruments only), B5, B1 and B0 at `4a4b95f7`. CI gree
    first: its placements win, logged). The re-seed retires exactly as the first seed did at the next
    RM's first BAR1 change (place, sink the rest, release). A guest placement still inside `[0, G)` refuses
    the re-seed by name.
-2. **Nothing scanned is black** (`Shown::Blank`): once a frame was shown, a moment with no armed head
-   scanning a window presents one black frame of the last size, instead of leaving QEMU's last frame.
+2. **A lost scanout is black** (`Shown::Blank`). ⊘ *CORRECTED 2026-10-03 (late, the review of
+   `v3-gop-unload`, MEDIUM):* as first built — *"once a frame was shown, a moment with no armed head
+   scanning a window presents one black frame of the last size"* — it flashed black at the boot layer →
+   first-head handoff (`[measured b1f, b5f at 4a4b95f7]` *"+52936 ms the console shows BLACK"* 4 ms before
+   head 3's window), followed GB20x's boot layer (no window vocabulary until M5) with black, and changed
+   `gop=off`. Now (`crates/kf-qemu/src/display.rs`, `choose_shown`): black only when a head's scanout
+   that WAS shown (an armed composition was chosen) is lost — at once when no head is lit (every head
+   disarmed, or the core channel freed), after a 250 ms hold when a lit head scans no window (b5f's X
+   modeset left one for 22 ms). Anything else with nothing to show is no new frame: the boot layer's
+   last frame stays through the handoff, and on GB20x for good. **`gop=off` now:** QEMU's placeholder
+   until a head first scans a window, as before; after that a lost scanout is black where it used to
+   freeze the last frame (the bare-metal answer: a monitor with no scanout shows black).
 3. **`PRESERVE_HW`** (`Shown::Preserved`): kf-disp claims `NV5070_CTRL_CMD_SET_RMFREE_FLAGS` (its layout
-   derived by `tools/derive_display_layouts.sh`), marks the channels of the next free, and on such a free
-   keeps the last armed composition's planned layers on the monitor until a head is armed again.
+   derived by `tools/derive_display_layouts.sh`) and on a preserving free keeps the last armed
+   composition's planned layers on the monitor until a head is armed again. ⊘ *CORRECTED 2026-10-03
+   (late, the review of `v3-gop-unload`):* it *"marks the channels of the next free"* with ONE model-wide
+   flag cleared after every `GSP_RM_FREE` — so another client's flag marked this client's free, and a
+   child's free (the guest's RM sends one RPC per object, children first) spent it before the channel's.
+   RM keeps the flag on the `DispObject` (`rmFreeFlags`, `ogkm-580: src/nvidia/src/kernel/gpu/disp/disp_objs.c:563-578`)
+   for "the next RmFree() only" (`ctrl5070chnc.h:901-913`). Now the mark is the display object's the
+   control names (`(hClient, hObject)` of the `GSP_RM_CONTROL`; NVKMS sends it to `displayHandle`, the
+   channels' parent, `nvkms-rm.c:2815-2819`, `:3010-3013`); a channel's free reads its parent's mark; the
+   free that read it — or freed the display object or its client — spends it; an unrelated free neither
+   reads nor spends it; at most 64 marks. Where GSP-RM clears it is closed firmware (`ogkm-580` has the
+   accessors and no caller).
 4. **`unload_hook.sh`**: per-step guest uptime; (c2)/(c3) as the positive control; (a) and (a2) set their
    lightdm session explicitly and restore the image's after; each arm prints its expectation.
+   ⊘ *CORRECTED 2026-10-03 (late, the review of `v3-gop-unload`):* *"prints its expectation"* graded
+   nothing — the hook always exited 0 and so did the lane (`lane.sh` ended with an echo). Now each arm is
+   judged (`DISPLAY_B5_JUDGE`), `DISPLAY_B5_VERDICT PASS|FAIL` lists every arm, the hook exits 1 on any
+   mismatch or skipped arm, and `lane.sh` exits 3 on a failing or missing verdict. And the stale-evidence
+   trap that misread the first (a) run was still open: `b5f/b5a_Xorg.0.log` reads *"Time: Sat Oct 3
+   18:00:45"*, before b5f started (18:05:24) — it is d2's (a2) log, and b5f's (a) line printed its
+   `x_driver=` from it. Each X arm now moves the old `/var/log/Xorg.0.log` aside and reads the file only if
+   it is newer than the arm's start; device checks read only QEMU log lines written after the arm began.
 
 **The trigger, decided from source and measurement.** Two guest acts give BAR1 up, in this order
 (`gpuStateUnload` then `gpuStateDestroy` → `kgspUnloadRm`, `ogkm-580: src/nvidia/arch/nvalloc/unix/src/osinit.c:2352-2375`,
 `src/nvidia/src/kernel/gpu/gpu.c:3970-3975`): CPU-RM's `NV_PBUS_BAR1_BLOCK` write, then fn 47, after which
 GSP-RM runs its own unload. Both are honoured and the second is a no-op (`[measured b5f]` *"already shows
-its physical view"*). The register write is the primary one because the guest holds the console lock
-across the whole teardown (`os_disable_console_access` … `os_enable_console_access`, `osinit.c:2352`, `:2375`, = `console_lock()`,
-`kernel-open/nvidia/os-interface.c:75-78`): fbcon's first write after it comes after fn 47's reply, and
-the register write precedes that by the rest of the teardown. `[measured b5f at 4a4b95f7, 5 teardowns]` unmap →
-write in the same ms, re-seed ≤ 1 ms later, fn 47's request served 24–36 ms later. ⚠ The re-seed is
-asynchronous (the VA thread): this ordering is a measured margin, not a guarantee.
+its physical view"*). ⊘ *CORRECTED 2026-10-03 (late, the review of `v3-gop-unload`) — the reasoning
+that stood here:* *"the register write is the primary one because the guest holds the console lock across
+the whole teardown … fbcon's first write after it comes after fn 47's reply"*. The lock is real
+(`os_disable_console_access` … `os_enable_console_access`, `osinit.c:2352`, `:2375`, = `console_lock()`,
+`kernel-open/nvidia/os-interface.c:75-78`), but it orders only fbcon's drawing into simpledrm's SHADOW
+buffer. The write that reaches BAR1 is the fbdev helper's damage worker — `drm_fb_helper_damage`
+schedules `damage_work` and `drm_fb_helper_damage_work` blits the damaged rectangle later, on a
+workqueue, outside `console_lock` (Linux 7.1-rc6 `drivers/gpu/drm/drm_fb_helper.c:268-276`, `:446-463`;
+simpledrm's fbdev is `drm_fbdev_shmem`, `drivers/gpu/drm/sysfb/simpledrm.c:21`; the 6.8 guest's
+generic shadowed fbdev takes the same path — the review's reading, not re-read here) — and a KMS
+client's commit (muffin in arm (a)) is not under the lock either. **The real ordering:** a blit queued
+before the teardown (or a client's commit during it) can land in BAR1 `[0, G)` between the console's
+unmap and the re-seed, and lands in scratch: that rectangle stays stale until it is drawn again. The
+margin is that window's length — `[measured b5f at 4a4b95f7]` the unmap and the register write in the
+same ms, the re-seed ≤ 1 ms after it (for the 4 teardowns the instrument logged; the 5th's unmap was past
+its bound, below) — not a lock. A real card has the same kind of window: `kbusStatePreUnload_GM107`
+unmaps the preserved console before `kbusTeardownMailbox_GM107` writes the physical mode
+(`kern_bus_gm107.c:746-787`, `:1278-1310`), and a CPU write to BAR1 VA 0 in between reaches no console.
+⚠ The re-seed is asynchronous (the VA thread): the window is measured, not bounded.
 
 **Why `[0, G)` and not all of BAR1.** On a real card physical mode is BAR1 `[0, bar1-size)` → FB. kf3
 restores only the boot framebuffer: the firmware console is the only user of BAR1 in physical mode (a
@@ -1406,13 +1457,31 @@ already in `Demand::with_boot_fb`. `[G, bar1-size)` stays scratch while no RM ho
 only bumps an atomic; host verbs run on the VA thread; the re-seed replaces scratch and releases nothing,
 and retirement keeps place → sink → release; no VMM address reaches the guest. Hostile guest: a write
 storm costs one atomic per write and at most one re-seed per BAR1 change; the log lines are bounded.
+⊘ *CORRECTED 2026-10-03 (late, the review of `v3-gop-unload`):* they were not all bounded, and the
+bounded ones ran out too early. The fn-47 decode line printed once per fn 47; the *"console shows"*
+digest named each window's context DMA and offset, so a page flip changed it and `[measured b1f at
+4a4b95f7]` its 256 lines were spent in ~4 s of flips; and the BAR1 boot-range line shared one counter
+with the re-seed lines, so `[measured b5f at 4a4b95f7]` it stopped at change #88 and the fifth teardown's
+unmap was never logged (*"every teardown: SCRATCH → write"* held for 4 of 5). Now each family has its own
+bound and one closing *"N … lines logged — later ones are not"* line: BAR1 boot-range view 256, printed
+only when what `[0, G)` shows CHANGES (about two per RM life); re-seeds 128; BAR1-mode writes 64; fn-47
+decodes 64; *"console shows"* 256, keyed without what a flip changes and compared as a hash (formatted
+only when it changes). And the coalescing of the two triggers: ⊘ the change baseline was taken at the
+FIRST request's notice and a later request merged in without refreshing it, so a register-write
+trigger skipped for a BAR1 change swallowed fn 47's too; every newly noticed request now re-baselines
+(`kf_qemu::bar1phys::PhysicalViewDue`, unit-tested).
 `gop=off`: no boot range, so no re-seed and no line (`[measured b0f at 4a4b95f7]` none).
 
 **Not modelled / open:**
 - Physical mode for BAR1 `[G, bar1-size)` (above). A guest that keeps a mapping inside `[0, G)` through
   its teardown keeps it (re-seed refused by name, its own console).
-- `Shown::Blank` also applies with `gop=off` once a frame was shown, and on GB20x (no window vocabulary
-  until M5) the boot layer is now followed by black instead of its last frame.
+- ⊘ *CORRECTED 2026-10-03 (late):* ~~`Shown::Blank` also applies with `gop=off` once a frame was shown, and
+  on GB20x (no window vocabulary until M5) the boot layer is now followed by black instead of its last
+  frame.~~ GB20x keeps the boot layer's last frame (no head ever scans a window it can name), as before
+  this branch. `gop=off` (with `display=on`) does change, and so do its logs: a lost scanout after a
+  head first scanned a window is black (it froze the last frame), a `PRESERVE_HW` free keeps the
+  preserved scanout, and the BAR1-mode write and fn-47 lines print (bounded); the BAR1 re-seed does
+  nothing without a boot range. None of this was run on GB20x or any non-GA10x box.
 - GSP-RM's behaviour on a channel free WITHOUT `PRESERVE_HW` is closed firmware; kf-disp shows black then.
 - One *"Flip event timeout on head 0"* at `rmmod nvidia_drm` (in the first run and in b5f): nvidia-drm's
   last commit waits 3 s for a flip event kf-disp does not deliver. Not investigated here.

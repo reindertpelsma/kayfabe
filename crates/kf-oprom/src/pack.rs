@@ -25,8 +25,10 @@
 //! AFTER it does not run, nor does an unsigned ROM (`traces/v3_display/gop_standin_20261003_v3gop/`,
 //! arms `sb_deny_*`). Local, snakeoil keys; no GPU box involved.
 //!
-//! ⊘ **CORRECTED 2026-10-03 (`v3-gop`, the review of `v3-gop-kf3`) — the sentence above overstates
-//! it: the end-aligned layout is UNTESTED against a firmware that denies unsigned ROMs.** OVMF trusts
+//! ⊘ **CORRECTED 2026-10-03 (`v3-gop`, the review of `v3-gop-kf3`; SUPERSEDED the same day by the ★
+//! TESTED note above) — "The local stand-in test (`scripts/display/gop_standin.sh`) runs both layouts
+//! under Secure Boot" overstates it: the end-aligned layout is UNTESTED against a firmware that denies
+//! unsigned ROMs.** OVMF trusts
 //! every option ROM (`PcdOptionRomImageVerificationPolicy` 0x00, `OvmfPkg/OvmfPkgX64.dsc:689`), so the
 //! stand-in's Secure Boot arms load the signed, the unsigned and the tail-padded ROM alike and can only
 //! *observe* (`verdict=OBSERVED`). The layout rests on reading `DxeImageVerificationLib.c` alone.

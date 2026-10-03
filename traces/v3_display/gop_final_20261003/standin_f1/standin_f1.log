@@ -1,0 +1,24 @@
+GOP_STANDIN_START rev=445367a8-dirty 2026-10-03T21:14:11+02:00
+GOP_STANDIN_HOST qemu="QEMU emulator version 10.2.1 (Debian 1:10.2.1+ds-1ubuntu3.2)" accel=kvm kernel=vmlinuz-7.0.0-34-generic work=/tmp/claude-0/-workspace-nvidia-gpu-passthrough/85f9c0ab-d91a-47ab-b068-c099d453dd8f/scratchpad/standin/work
+GOP_STANDIN_HOST ovmf_package=2025.11-3ubuntu7
+GOP_STANDIN_PE release pe=/tmp/claude-0/kf-tgt-gopfinal-fw/fw-release/x86_64-unknown-uefi/release/kf-gop.efi file_bytes=9216 machine=0x8664 subsystem=11 size_of_image=0x4000 signed=false abi_marker=true
+GOP_STANDIN_PE release kf3_accepts=1
+GOP_STANDIN_PE debugcon pe=/tmp/claude-0/kf-tgt-gopfinal-fw/fw-debugcon/x86_64-unknown-uefi/release/kf-gop.efi file_bytes=17408 machine=0x8664 subsystem=11 size_of_image=0x7000 signed=false abi_marker=true
+GOP_STANDIN_PE debugcon kf3_accepts=1
+GOP_STANDIN_PE release_sha256=e2616ad8d4cb09da88399218144b6bdea9d2cb3148b701964f926604b7d6dff6
+GOP_STANDIN_ROM rom_bytes=9728
+GOP_STANDIN_ROM image=0 offset=0x0 bytes=0x2600 pcir_offset=0x1c vendor=0x1002 device=0x5046 pcir_rev=3 pcir_len=0x1c class=030000 code_type=3 indicator=0x80
+GOP_STANDIN_ROM image=0 efi_init_blocks=19 subsystem=11 machine=0x8664 compression=None image_header_offset=0x200
+GOP_STANDIN_ROM kfgp=1 vendor=0x1002 device=0x5046 bar=0 offset=0x0 width=1152 height=648 pitch=4608 fb_size=0x2e0000 edid_bytes=128
+GOP_STANDIN_HOST qemu_edk2=/workspace/bench/qemu-10.2.4/pc-bios/edk2-x86_64-code.fd.bz2 md5=661c68c8b0a2ed59d5e4a13563cd6e13
+GOP_STANDIN_PE snakeoil-signed pe=/tmp/claude-0/-workspace-nvidia-gpu-passthrough/85f9c0ab-d91a-47ab-b068-c099d453dd8f/scratchpad/standin/work/sb/kf-gop-signed.efi file_bytes=19256 machine=0x8664 subsystem=11 size_of_image=0x7000 signed=true abi_marker=true
+GOP_STANDIN_PE snakeoil-signed kf3_accepts=1
+GOP_STANDIN_ROM tailpad pe_at=0x200 pe_bytes=19256 padding_after=200
+GOP_STANDIN arm=sb_snakeoil_signed verdict=PASS observed=signed_rom_loaded rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" 
+GOP_STANDIN arm=sb_snakeoil_tailpad_observe verdict=OBSERVED observed=loaded rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" 
+GOP_STANDIN arm=sb_deny_signed verdict=PASS observed=rom_verified_and_started rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" 
+GOP_STANDIN arm=sb_deny_unsigned verdict=PASS observed=rom_denied control_on_stock_ovmf=[rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" ] rom_loaded=0 rom_started=0 secure_boot=1 app_result="KFGOP-TEST RESULT FAIL checks=1 failed=2" app_denied="no" 
+GOP_STANDIN arm=sb_deny_tailpad verdict=PASS observed=rom_denied control_on_stock_ovmf=[rom_loaded=1 rom_started=1 secure_boot=1 app_result="KFGOP-TEST RESULT PASS checks=21 failed=0" app_denied="no" ] rom_loaded=0 rom_started=0 secure_boot=1 app_result="KFGOP-TEST RESULT FAIL checks=1 failed=2" app_denied="no" 
+GOP_STANDIN_SUMMARY arms=5 passed=4 observed=1 skipped=0 failed=0 sb_snakeoil_signed=PASS sb_snakeoil_tailpad_observe=OBSERVED sb_deny_signed=PASS sb_deny_unsigned=PASS sb_deny_tailpad=PASS 2026-10-03T21:14:51+02:00
+GOP_STANDIN_KEPT /tmp/claude-0/-workspace-nvidia-gpu-passthrough/85f9c0ab-d91a-47ab-b068-c099d453dd8f/scratchpad/standin/work
+STANDIN_EXIT rc=0
