@@ -2302,7 +2302,8 @@ without a broker now grades the OPPOSITE way, and items 11–12 are new.
    `CAP_CURSOR` = 1 << 10). kf-broker follows that header (§8.11). (a) needs no new type.
    **(2026-10-03, §8.11) The broker changes in nvkvm-pv**, append-only in protocol v2: (a) the X11
    backend sends the unsolicited `EV_FORMAT x=0` on a refused DRI3 import, as Wayland does; (b)
-   `EV_DEVICE` (type 17 as kf-broker implements it, `x:y` = the compositor's DRM device); (c)
+   `EV_DEVICE` (type 17 as kf-broker implements it, `x:y` = the compositor's DRM device — ⊘ superseded
+   2026-10-03 by the correction at the top of this item: `x` = flags, `w0`:`w1` = the device); (c)
    optionally, an idle fence on X11 `PresentPixmap` and the XRender path's RELEASE after its composite,
    so RELEASE means GPU-idle. The coordinator took (a) and (b) as the owner's default; until the broker
    sends them, kf3 runs the acknowledgement detector with back-off, the LRU fill and the fence check.
@@ -2397,9 +2398,14 @@ of §8.2, unchanged, each requiring its own backing fresh and not withdrawn.
   newer header, equal to it both ways, the cursor record's layout compiled from it (run locally
   against the nvkvm-pv worktree: `PROTO-NEXT: RAN`; a mutated `CAP_DEVICE` fails it). The hover-mode
   host cursor that would send `CMD_CURSOR` is NOT built: frames keep composing the cursor.
-- **`EV_DEVICE`** (type 17, `x:y` = the compositor's DRM device; AHEAD of the vendored header, a
-  proposal to nvkvm-pv's broker): another device ⇒ no rung 0 on that connection; this GPU's primary
-  or render node ⇒ allowed; absent or "cannot tell" ⇒ the yes and the detector decide.
+- ⊘ **SUPERSEDED 2026-10-03 (`22a3e10a`) by the correction directly above — kept as first written,
+  do not build from it.** Its encoding (`x:y` = the device) and "a proposal" are both wrong: the
+  broker owns the protocol, and nvkvm-pv's header (`broker-cursor-gpucopy`, `9cb736f`) defines
+  `x` = `DEVICE_F_KNOWN | DEVICE_F_RENDER`, `y` = 0 and `w0`:`w1` = major:minor. What follows is the
+  text as first written: **`EV_DEVICE`** (type 17, `x:y` = the compositor's DRM device; AHEAD of the
+  vendored header, a proposal to nvkvm-pv's broker): another device ⇒ no rung 0 on that connection;
+  this GPU's primary or render node ⇒ allowed; absent or "cannot tell" ⇒ the yes and the detector
+  decide.
 
 **Slots and reuse.** Five ring slots as before; each may carry a VRAM backing besides its host one.
 `display-broker-vram=auto` (default): realize only probes (render node, `GET_DEV_INFO`, the ABI gate)
