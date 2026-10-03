@@ -230,7 +230,7 @@ nothing waits on them; each one is cheap to change later.
 
 | question | default used | why |
 |---|---|---|
-| Secure Boot with the GOP ROM | documented as off for the boot display; no signing yet | An unsigned option ROM does not run under Secure Boot. The alternatives are a kayfabe key enrolled through an OVMF vars template, or Microsoft third-party CA signing. Windows 11 makes this a release question. |
+| Secure Boot with the GOP ROM | ⊘ ANSWERED 2026-10-04 (`OWNER_RULINGS.md` §K): Secure Boot on, ROM self-signed with a per-install kayfabe key enrolled in the VM's OVMF `db` beside Microsoft's keys; swtpm per VM | An unsigned option ROM does not run under Secure Boot. The alternatives are a kayfabe key enrolled through an OVMF vars template, or Microsoft third-party CA signing. Windows 11 makes this a release question. |
 | The firmware crate is unsafe by nature (raw UEFI tables) | a named exception under `firmware/` only, outside the cargo workspace | It never links into the VMM. |
 | OVMF for every bench lane, or only the display lane | display lane only; no legacy VGA BIOS | SeaBIOS lanes stay as the baseline. A legacy VGA BIOS is an estimated 1–2 weeks more. |
 | kf3 has no reset path | a guest reboot needs a QEMU restart; documented | Windows Setup reboots several times, so the Windows lane needs either this or a reset path. |

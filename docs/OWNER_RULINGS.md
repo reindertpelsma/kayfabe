@@ -349,6 +349,25 @@ citation: ask whether its reason still holds before relying on it.
     unaligned access faults. The likely fix is the one-flag host patch in nvidia.ko's mmap path,
     since a host patch is already required for UVM (`design/V3_COOPERATIVE_TIERS.md`).
 
+- **Secure Boot (owner, 2026-10-04, verbatim):** *"In qemu we can just enable 'secure boot' for a
+  windows vm and self sign the rom, I mean windows vms just work normally without complaint"*.
+  - The ROM's EFI driver is signed with a kayfabe key, and the VM's OVMF variables enroll
+    Microsoft's standard keys plus that certificate in `db`. Windows' boot manager and the ROM then
+    both verify, and the guest runs with Secure Boot on.
+  - The private key is never committed (the repo is public). It is generated per installation or
+    per build on the user's machine, and that installation's variables file enrolls its
+    certificate.
+  - A guest that seals BitLocker to TPM measurements may ask for its recovery key once after the
+    ROM changes, because the measurement of the option ROM changes.
+- **The vTPM (swtpm), from the owner's question the same day** (*"For swtpm a secure seed must be
+  provided probably?"*):
+  - No seed is supplied. `swtpm_setup --tpm2` manufactures the TPM once per VM, and its primary
+    seeds come from the TPM's own random generator, seeded from host entropy.
+  - The rules are about the state file: one state per VM, created fresh at install and never copied
+    into an image or template, since a copy duplicates the seeds and the endorsement key. Owner-only
+    permissions. Optional state encryption (`--key`/`--pwdfile`) with a host-held key when the host
+    disk is not trusted. A self-signed EK certificate is enough for Windows 11 and BitLocker.
+
 ## L. Broker frames: a GPU copy into kayfabe's own frames, never guest memory (2026-10-03)
 
 - **Owner:** *"exact zero copy isn't needed though, what we do need is that we can avoid a GPU-CPU copy.
