@@ -1,12 +1,14 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
-> **STATUS: BROKER RELAY AND CURSOR COMPOSITION BUILT, GPU-FREE — 2026-10-03 (branch `v3-broker`;
-> nothing run on a box).** Display step 3 ("the broker") sub-steps 3a (frames + input), 3b (reconnect,
-> pacing) and 3d (the head's cursor composed as the top layer) are in code: the VMM-agnostic crate
-> `kf-broker`, its OS doors in `kf-linux-raw`, the kf3 glue (KF3 ABI 11, properties `display-broker` /
-> `display-broker-uid`), and `kf_disp::engine::CursorScan` + `kf_disp::scanout::plan_cursor`. With
-> `display-broker` unset nothing changes for the broker; the cursor layer applies to the console too.
-> 3c (resize) is NOT built. Design, deviations, local runs and the pending box tests: **§8**.
+> **STATUS: DISPLAY STEP 3 BUILT IN CODE, GPU-FREE — 2026-10-03 (branch `v3-broker`; nothing run on
+> a box).** All four sub-steps are in code: 3a (frames + input), 3b (reconnect, pacing), 3d (the
+> head's cursor composed as the top layer) and 3c (resize: authored EDID + a hotplug the register
+> drainer posts). The VMM-agnostic crate `kf-broker`, its OS doors in `kf-linux-raw`, the kf3 glue
+> (KF3 ABI 12, properties `display-broker` / `display-broker-uid`, the console's `ui_info` hook),
+> `kf_disp` (cursor, EDID, the internal hotplug state), `kf-abi` (the LIST `POST_EVENT`) and a narrow
+> hotplug-registration seat in `kf-rm`. With `display-broker` unset nothing changes for the broker;
+> the cursor layer and the resize hook apply to the console (VNC/GTK) too. Design, deviations, local
+> runs and the pending box tests: **§8**.
 
 > **NEXT — owner direction 2026-10-01 (design only, nothing built): (1) a STOCK guest display with no
 > guest-side tweaks, then (2) a VMM-agnostic display BROKER instead of QEMU's UI — both before Windows.**
@@ -671,8 +673,8 @@ its dependency chain, in one commit).
 
 ## 8. The display broker — display step 3
 
-**STATUS: LIVE — 3a, 3b and 3d BUILT IN CODE, GPU-FREE, 2026-10-03 (branch `v3-broker`).** Local
-runs are §8.8; nothing has run on a box (renting needs the owner's approval). 3c is not built (§8.6). This section folds in the reviewed design (the adversarial review of 2026-10-03 applied);
+**STATUS: LIVE — 3a, 3b, 3d and 3c BUILT IN CODE, GPU-FREE, 2026-10-03 (branch `v3-broker`).**
+Local runs are §8.8; nothing has run on a box (renting needs the owner's approval). This section folds in the reviewed design (the adversarial review of 2026-10-03 applied);
 where the code departs from it, §8.7 says so.
 
 ### 8.0 Decision
@@ -802,7 +804,7 @@ Rust bounds every value (`kf_broker::Input`) and kf3.c dispatches on kf3's own c
 | WHEEL | vertical only: press and release `WHEEL_UP/DOWN` |
 | GRAB | `qmp_query_mice` + `qemu_mouse_set`, preferring Virtio (`relay_set_relative`, copied; mouse-look is known not to work) |
 | CLOSE | FORCE → `qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_UI)`; otherwise `qemu_system_powerdown_request()`, with nvkvm-pv's repeat-ask message |
-| SURFACE | 3a/3b: logged; the broker scales (no `.ui_info` hook before 3c) |
+| SURFACE | 3c: clamped to 64..8192 and deduplicated in Rust, then `dpy_set_ui_info(con, …, true)` with the broker's refresh (mHz) when it has one — the console's `ui_info` hook does the rest (§8.6) |
 | FOCUS / BYE | logged; POINTER, HELLO, CLIPBOARD ignored (no clipboard: CAPS bit 0 is clear) |
 | RELEASE / FRAME / FORMAT | consumed by the relay |
 
@@ -818,7 +820,7 @@ control buffer**: a descriptor the peer attaches is dropped by the kernel and `M
 violation. Outbound descriptors are dedicated, sealed frame copies — never guest RAM or the store — and
 are never closed while the device lives. No clipboard (owner default).
 
-### 8.6 Cursor composition (3d), and what is not built
+### 8.6 Cursor composition (3d), resize (3c), and what is not built
 
 **3d — built in code.** Both broker backends hide the host pointer while a guest frame shows, and
 stock compositors on nvidia-drm use the cursor plane, so the composition's TOP layer is now the head's
@@ -842,12 +844,41 @@ cursor:
 - Tests: `kf-disp` `a_head_cursor_is_scanned_from_the_core_and_its_pio_point` (engine/tests.rs) and
   the three `plan_cursor` cases in `scanout.rs` (CI-compiled: `kf-disp` is not built on the dev host).
 
+**3c — resize, built in code** (owner question 5's narrow seat, as the brief specified):
+1. A resize hint reaches the console's `ui_info` hook (`kf3_ui_info`, installed only now, because it
+   now does something): from VNC/GTK, or from the broker's `EV_SURFACE` — clamped to 64..8192 and
+   handed to `dpy_set_ui_info(con, …, delay=true)` (every hint forwarded, as nvkvm-pv's relay does;
+   QEMU coalesces for 1 s and calls the hook only on a change).
+2. `kf3_display_ui_info` stores the request in one atomic and wakes the display worker.
+3. The worker authors the monitor — `kf_disp::edid::Monitor::for_window(w, h, mHz, PCLK_LIMIT)`:
+   clamped to 640..3840 x 480..2160 and 24..75 Hz, CEA 1080p60 or CVT-RB, scaled down at the same
+   aspect ratio until the clock fits the connector's 165 MHz (DVI single-link; the broker scales the
+   rest), with 1080p60 as the EDID's second detailed timing — and puts it behind connector 0
+   (`DisplayModel::set_monitor`, deduplicated; a custom EDID the guest set still shadows it).
+4. If the monitor changed and a hotplug registration is live, it queues the display id for the
+   **register drainer** (the GSP queue's owner), which posts like `deliver_rc`: GSP lock, a LIST
+   `POST_EVENT` (`bNotifyList = 1`, the bare `notifyIndex = NV2080_NOTIFIERS_HOTPLUG = 1`,
+   `Nv2080HotplugNotification { plugDisplayMask = id }` at `eventData` = +29, the flexible array's
+   offset), publish, requeue on `QueueFull`, the GSP stall vector raised outside the lock.
+5. The guest RM resolves the pair, wakes NVKMS's callback, NVKMS asks the public
+   `SYSTEM_GET_HOTPLUG_UNPLUG_STATE`, and kernel RM asks physical RM **`INTERNAL_GET_HOTPLUG_UNPLUG_STATE`
+   (0x730401)** — which the model now claims, returning the pending plug mask and clearing it; NVKMS
+   makes an unplug/plug pair, nvidia-drm raises a DRM hotplug, and userspace's reprobe reads the new
+   EDID.
+- **The registration seat** (`kf_rm::display::DisplayRegistry`, `osevent` untouched): an ACCEPTED
+  `NV01_EVENT_KERNEL_CALLBACK_EX` (`0x7e`) whose `notifyIndex` is `HOTPLUG | NV01_EVENT_CLIENT_RM`
+  records `(hClient, hEvent, hParent)` in the shared model (at most 4); only `notifyIndex` is read
+  (`data` is a guest pointer). It is retired by the FREE of the event, its parent or its client, and
+  all at once by fn 1 (`SET_GUEST_SYSTEM_INFO`, the first RPC of every GSP boot — a re-init, §40 Tier
+  B). With no live registration a resize only changes the monitor, and the next probe reads it.
+- Tests (CI-compiled): `kf-disp` `a_window_becomes_a_monitor_fitted_under_the_connector`,
+  `a_new_monitor_is_reported_once_by_the_internal_hotplug_state`,
+  `hotplug_registrations_retire_with_their_objects`; `kf-abi`
+  `the_hotplug_list_post_carries_its_data_at_the_flexible_arrays_offset`,
+  `a_list_post_refuses_an_index_at_or_above_maxcount`; `kf-rm`
+  `the_hotplug_event_registers_and_retires`; `kf-broker` (SURFACE clamped and deduplicated).
+
 **Not built:**
-- **3c, resize** — not built: no `.ui_info` hook, no authored-on-request EDID, no hotplug. Its design
-  (claim `NV0073_CTRL_CMD_INTERNAL_GET_HOTPLUG_UNPLUG_STATE` 0x730401 — not the public 0x73012d, which
-  kernel RM serves itself; a narrow `NV01_EVENT_KERNEL_CALLBACK_EX` HOTPLUG registration in the kf-rm
-  display link with `osevent` untouched; a `bNotifyList` post with the bare `notifyIndex = 1`, posted by
-  the register drainer; the registration retired on FREE and on GSP re-init) stands as reviewed.
 - Zero-copy export of the guest's surface with NVIDIA's modifier (later, as before).
 - The broker's clipboard.
 
@@ -869,7 +900,8 @@ cursor:
    know at realize whether to back frames with memfds, before `kf3_broker_start` runs.
 5. **The effective uid comes from `/proc/self/status`** (safe code) rather than `geteuid` (one more
    unsafe relaxation).
-6. **No `kf3_display_ui_info` entry yet** — it belongs to 3c.
+6. **KF3 ABI 12**, not 11: 3c added `kf3_display_ui_info` and the broker's `SURFACE` event kind on
+   top of 3a's ABI 11 (the device refuses an archive of either other number).
 7. **The loopback's SIGSTOP case grades "never blocks"** (every relay call returned within 50 ms, frames
    waited or were reclaimed) rather than owed/dropped counts: pacing commits at most ~10 frames/s to a
    stopped broker, which does not fill a socket buffer in 5 s. The owed/dropped paths are covered by the
@@ -877,6 +909,11 @@ cursor:
 8. **The rung-1b loopback case asks the real broker's `QUERY_FORMAT` answers** for (XR24, MOD_INVALID)
    directly: the test backend always sets `CAP_MODIFIERS`, so the relay never takes 1b against it. The
    relay's 1b path is `rung_1b_is_the_implicit_modifier_after_an_explicit_yes` (scripted link).
+9. **The GSP re-init that retires the hotplug registrations is fn 1** (`SET_GUEST_SYSTEM_INFO`, the
+   first RPC of every GSP boot), observed by the display link at the front of the chain — the
+   reviewed design named "every GSP re-init" without a mechanism.
+10. **The hotplug post goes to the newest live registration** (NVKMS makes one per GPU it drives;
+    the bound is 4).
 
 ### 8.8 Local runs (dev host, 2026-10-03; no GPU)
 
@@ -943,8 +980,15 @@ Every result cites the kf3 binary's revision (§5.2). On the box, with the branc
    replayed (broker log `TEST attach`), VM unaffected.
 9. **Absent at boot:** boot with no broker; the VM boots, the console and VNC work; start the broker
    later: it attaches.
-10. **Resize** — needs 3c; graded when 3c lands (SURFACE 1600x900 → one hotplug → `modetest` lists the new
-    preferred mode and 1080p; 2560x1440 fitted under 165 MHz).
+10. **Resize (3c):** with the broker on `--backend test` and a guest desktop up, resize the broker's
+    window (`nvkvm-display-broker … --resolution auto`; the test backend announces a new SURFACE on
+    `resize`) to 1600x900; one second later the QEMU log shows `resize 1600x900 -> monitor 1600x900 …
+    hotplug queued` and `hotplug posted for display 0x100`; in the guest `modetest -c` (or `xrandr`)
+    lists 1600x900 as preferred and 1920x1080; repeat at 2560x1440 (fitted to 1976x1110 under 165 MHz).
+    Then `rmmod nvidia_drm nvidia_modeset` and reload: the log shows the registration retired (FREE) and
+    re-registered, and no post ever names a dead pair (no `Bad sequence number` in the guest log). Compare
+    the compositor's behaviour with bare metal under a forced EDID (`nvidia-settings`
+    `CustomEDID`/`drm.edid_firmware`). Also a VNC client's resize, with `display-broker` unset.
 
 ### 8.10 Owner questions (each implemented with the stated default; the owner confirms later)
 
@@ -952,5 +996,6 @@ Every result cites the kf3 binary's revision (§5.2). On the box, with the branc
 2. Broker distribution: installed separately, pinned to nvkvm-pv `368d2db` — as above.
 3. Clipboard: left out of step 3.
 4. Native resizes above ~1920×1200@60 (DVI single-link): not in this step.
-5. The 3c hotplug registration amending A.11's `osevent` rule: not built.
+5. The 3c hotplug registration beside A.11's `osevent` rule: built as the separate, narrow seat the
+   brief specified (§8.6); `osevent` and its pinned refusal of `0x7e` are untouched. Owner to confirm.
 6. Reuse without RELEASE: the narrowed rule of §8.3, with the deviations §8.7 (1)-(2).

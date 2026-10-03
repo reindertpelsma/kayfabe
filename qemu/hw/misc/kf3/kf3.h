@@ -13,7 +13,9 @@
  * surfaces, so an archive from either branch must be refused here: one new number above both. */
 /* ★ 11 (2026-10-03, v3-broker, display step 3 — docs/design/V3_DISPLAY.md §8): kf3_realize gains
  * display_broker, and the broker relay's surface (Kf3BrokerEvent, the two verbs, kf3_broker_*). */
-#define KF3_ABI 11
+/* ★ 12 (2026-10-03, display step 3c): kf3_display_ui_info (the console's ui_info hook) and the
+ * broker's SURFACE event (KF3_BROKER_SURFACE). */
+#define KF3_ABI 12
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -49,6 +51,7 @@ typedef struct Kf3BrokerEvent {
 #define KF3_BROKER_WHEEL 5
 #define KF3_BROKER_GRAB 6
 #define KF3_BROKER_CLOSE 7
+#define KF3_BROKER_SURFACE 8   /* x, y = the broker window's size; w0 = its refresh in mHz (0: unknown) */
 
 uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md). */
@@ -103,5 +106,7 @@ int32_t kf3_broker_frame_fd(void *h);
 int32_t kf3_broker_ready(void *h, int32_t fd, uint32_t rd, uint32_t wr, uint64_t now_ms,
                          Kf3BrokerEvent *out, uint32_t cap);
 void kf3_broker_stop(void *h);
+/* ★ ABI 12 (display step 3c): the console's ui_info — a resize hint for `head` (main loop). */
+int32_t kf3_display_ui_info(void *h, uint32_t head, uint32_t width, uint32_t height, uint32_t refresh_mhz);
 void kf3_unrealize(void *h);
 #endif

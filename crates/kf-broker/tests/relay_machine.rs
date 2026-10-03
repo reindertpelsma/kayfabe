@@ -5,8 +5,8 @@
 use kf_broker::wire::{
     CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CMD_ATTACH, CMD_CAPS, CMD_COMMIT,
     CMD_F_SHM, CMD_QUERY_FORMAT, CMD_SIZE, CMD_WINDOW, Cmd, EV_ABS, EV_BTN, EV_CLOSE, EV_FORMAT,
-    EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, EV_WHEEL, FOURCC_XR24, MOD_INVALID,
-    MOD_LINEAR, PKT_SIZE, Pkt,
+    EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, FOURCC_XR24,
+    MOD_INVALID, MOD_LINEAR, PKT_SIZE, Pkt,
 };
 use kf_broker::{FrameGeom, FrameRing, Host, Input, Link, Recv, Relay, RelayConfig, Sent, SlotFds};
 use kf_linux_raw::{SharedRam, fd_inode};
@@ -834,6 +834,9 @@ fn input_is_bounded_before_the_vmm_sees_it() {
     t.pkt(EV_CLOSE, 0, 0, 0, 0);
     t.pkt(EV_CLOSE, 0, 0, 0, 0);
     t.pkt(EV_CLOSE, 1, 0, 0, 0);
+    t.pkt(EV_SURFACE, 1600, 900, 59_940, 0);
+    t.pkt(EV_SURFACE, 1600, 900, 59_940, 0); // the same size again: no second hint
+    t.pkt(EV_SURFACE, 20_000, 10, 0, 0); // clamped
     assert_eq!(
         t.read(),
         vec![
@@ -860,6 +863,16 @@ fn input_is_bounded_before_the_vmm_sees_it() {
             Input::Close { force: false },
             Input::Close { force: false },
             Input::Close { force: true },
+            Input::Surface {
+                w: 1600,
+                h: 900,
+                mhz: 59_940
+            },
+            Input::Surface {
+                w: 8192,
+                h: 64,
+                mhz: 0
+            },
         ]
     );
     assert!(t.relay.active(), "nothing above is a protocol violation");

@@ -172,6 +172,18 @@ pub enum Input {
         /// The user chose "force off".
         force: bool,
     },
+    /// ★ Display step 3c: the broker's window is now `w` x `h` (clamped to 64..=8192) at `mhz`
+    /// millihertz (0: unknown) — the VMM hands it to its UI layer as a resize hint (QEMU
+    /// coalesces for 1 s); whether a windowed resize re-modes the guest is the broker's
+    /// `--resolution` policy, not the relay's.
+    Surface {
+        /// Width.
+        w: i32,
+        /// Height.
+        h: i32,
+        /// Refresh in millihertz, 0 when the broker does not know.
+        mhz: u32,
+    },
 }
 
 /// The relay's configuration.
@@ -1268,15 +1280,15 @@ impl<L: Link> Relay<L> {
                 }
             ),
             EV_SURFACE => {
-                if let Some(c) = self.conn.as_mut()
-                    && c.surface != Some((p.x, p.y))
+                let (w, h) = (p.x.clamp(64, 8192), p.y.clamp(64, 8192));
+                if p.x > 0
+                    && p.y > 0
+                    && let Some(c) = self.conn.as_mut()
+                    && c.surface != Some((w, h))
                 {
-                    c.surface = Some((p.x, p.y));
-                    say!(
-                        "broker window is now {}x{} (scaled by the broker)",
-                        p.x,
-                        p.y
-                    );
+                    c.surface = Some((w, h));
+                    say!("broker window is now {w}x{h}");
+                    emit(out, Input::Surface { w, h, mhz: p.w0 });
                 }
             }
             EV_FRAME => {

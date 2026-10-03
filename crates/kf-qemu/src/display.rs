@@ -563,6 +563,10 @@ pub struct DisplayPlane {
     /// ★ Display step 3d: the cursor methods the composition's top layer reads (`None`: the
     /// family's table lacks one — its cursor is not composed).
     cursor_vocab: Option<kf_disp::engine::CursorVocab>,
+    /// ★ Display step 3c: the newest resize request from the VMM's UI (`ui_info`), packed
+    /// `width << 48 | height << 32 | refresh_mHz`; 0 = none. Set on the main loop, taken by the
+    /// worker — one atomic, no lock.
+    ui_request: AtomicU64,
     /// The window formats the console can show.
     formats: ScanFormats,
 }
@@ -664,6 +668,7 @@ impl DisplayPlane {
             broker,
             scan,
             cursor_vocab,
+            ui_request: AtomicU64::new(0),
             formats,
         })
     }
@@ -785,6 +790,24 @@ impl DisplayPlane {
                 return;
             }
         }
+    }
+
+    /// ★ Display step 3c (QEMU's main loop, the console's `ui_info` — a VNC/GTK resize, or the
+    /// broker's SURFACE): ask for a `width` x `height` monitor at `refresh_mhz` (0 = 60 Hz) on
+    /// `head`. Only head 0 has a console. Lock-free: one atomic store and one eventfd write; the
+    /// worker authors the EDID and queues the hotplug.
+    pub fn request_ui(&self, head: u32, width: u32, height: u32, refresh_mhz: u32) -> bool {
+        if head != 0 || width == 0 || height == 0 {
+            return false;
+        }
+        let w = u64::from(width.min(0xFFFF));
+        let h = u64::from(height.min(0xFFFF));
+        self.ui_request.store(
+            (w << 48) | (h << 32) | u64::from(refresh_mhz),
+            Ordering::Release,
+        );
+        let _ = self.wake.signal();
+        true
     }
 
     fn take_init(&self) -> Option<WorkerInit> {
@@ -1111,6 +1134,11 @@ impl Device {
                     }
                 }
             }
+            // 1b. ★ 3c: a resize asked for by the VMM's UI — a new monitor, then a hotplug
+            let req = dp.ui_request.swap(0, Ordering::AcqRel);
+            if req != 0 {
+                self.apply_ui_request(dp, req);
+            }
             // 2. every DMA channel whose PUT moved
             for chn in 0..kf_disp::ports::NUM_CHANNELS as u32 {
                 let Some((pb, decoded, life)) = engine.pushbuffer(chn) else {
@@ -1424,6 +1452,40 @@ impl Device {
         // until it ends): the frames and their context stay mapped until the process exits.
         std::mem::forget(scan);
         std::mem::forget(io.gpu.take());
+    }
+
+    /// ★ Display step 3c (the worker): author the monitor a resize asked for — clamped, fitted under
+    /// the connector's pixel-clock limit at the same aspect ratio (`Monitor::for_window`) — put it
+    /// behind connector 0 under the model's lock, and when it CHANGED and a hotplug registration
+    /// is live, queue the hotplug for the drainer.
+    fn apply_ui_request(&self, dp: &DisplayPlane, req: u64) {
+        let (w, h, mhz) = (
+            (req >> 48) as u32,
+            ((req >> 32) & 0xFFFF) as u32,
+            req as u32,
+        );
+        let changed = dp.model.lock().ok().and_then(|mut g| {
+            let max = g
+                .connectors
+                .first()
+                .map_or(165_000, |c| c.monitor.max_pixel_khz);
+            let m = kf_disp::edid::Monitor::for_window(w, h, mhz, max);
+            let (mw, mh) = (m.preferred.h_active, m.preferred.v_active);
+            let id = g.set_monitor(0, m)?;
+            Some((id, mw, mh, g.hotplug_target().is_some()))
+        });
+        match changed {
+            Some((id, mw, mh, true)) => {
+                eprintln!(
+                    "kf3: display: resize {w}x{h} -> monitor {mw}x{mh} on display {id:#x}; hotplug queued"
+                );
+                self.queue_hotplug(id);
+            }
+            Some((id, mw, mh, false)) => eprintln!(
+                "kf3: display: resize {w}x{h} -> monitor {mw}x{mh} on display {id:#x}; no hotplug registration (the next probe reads it)"
+            ),
+            None => {}
+        }
     }
 
     /// Publish a channel's CHNCTL allocation bit and CHNSTATUS state: `Some(idle)` allocated, `None`

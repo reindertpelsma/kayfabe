@@ -725,14 +725,26 @@ static void kf3_gfx_update(void *opaque)
     dpy_gfx_update_full(s->con);
 }
 
+/* ★ ABI 12 (display step 3c, docs/design/V3_DISPLAY.md §8.6): a resize hint from the UI (VNC/GTK, or
+ * the broker's SURFACE through dpy_set_ui_info) after QEMU's 1 s coalescing. Rust authors the new
+ * monitor's EDID on its worker and the register drainer posts the hotplug; nothing here waits. */
+static void kf3_ui_info(void *opaque, uint32_t head, QemuUIInfo *info)
+{
+    Kf3State *s = opaque;
+
+    if (s->h && info) {
+        kf3_display_ui_info(s->h, head, info->width, info->height, info->refresh_rate);
+    }
+}
+
 static const GraphicHwOps kf3_gfx_ops = {
     .gfx_update = kf3_gfx_update,
+    .ui_info = kf3_ui_info,
 };
 
 /* ── the display-broker relay (display step 3, docs/design/V3_DISPLAY.md §8) ─────────────────
  * Rust decides; this file registers what Rust asks for and injects input. Every function here
- * runs on the main loop with the BQL held. ⊘ No .ui_info hook yet (3c): a hook that did nothing
- * would tell VNC/GTK the guest can resize; SURFACE is logged by Rust and the broker scales. */
+ * runs on the main loop with the BQL held. */
 
 #define KF3_BROKER_BATCH 64
 
@@ -886,6 +898,21 @@ static void kf3_broker_input(Kf3State *s, const Kf3BrokerEvent *e)
         break;
     case KF3_BROKER_GRAB:
         kf3_broker_set_relative(e->x != 0);
+        break;
+    case KF3_BROKER_SURFACE:
+        /* 3c: forward every hint, as nvkvm-pv's relay.c:1259-1306 does — whether a windowed resize
+         * re-modes the guest is the broker's --resolution policy; QEMU coalesces for 1 s and only
+         * a change reaches kf3_ui_info */
+        if (con && e->x > 0 && e->y > 0 && dpy_ui_info_supported(con)) {
+            QemuUIInfo info = *dpy_get_ui_info(con);
+
+            info.width = (uint32_t)e->x;
+            info.height = (uint32_t)e->y;
+            if (e->w0 > 0) {
+                info.refresh_rate = e->w0;
+            }
+            dpy_set_ui_info(con, &info, true);
+        }
         break;
     case KF3_BROKER_CLOSE:
         /* the policy is the VMM's (proto.h): force = stop now; otherwise an ACPI powerdown the

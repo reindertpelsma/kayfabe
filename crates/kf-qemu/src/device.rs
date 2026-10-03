@@ -22,7 +22,7 @@ use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
 use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Action, Class, Route, WriteSemantics};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
@@ -209,6 +209,9 @@ pub struct Device {
     /// Interrupt counters for the boot log.
     pub irq_counts: IrqCounts,
     pub(crate) stop: AtomicBool,
+    /// ★ Display step 3c: display ids whose monitor changed and whose hotplug the register drainer
+    /// still owes the guest (set by the display worker, taken by the drainer).
+    hotplug_pending: AtomicU32,
     /// Boot-log counters.
     pub counters: Counters,
     /// ★ P5c: the VA timing at the previous heartbeat (the heartbeat prints the window).
@@ -772,6 +775,7 @@ impl Device {
             irq_counts: IrqCounts::default(),
             drainer_efd,
             stop: AtomicBool::new(false),
+            hotplug_pending: AtomicU32::new(0),
             counters: Counters::default(),
             vat_prev: Mutex::new(kf_mem::vasmgr::VaTiming::default()),
             prof: Box::default(),
@@ -1751,6 +1755,7 @@ impl Device {
             }
             after_timeout = false;
             self.deliver_rc();
+            self.deliver_hotplug();
             // The experiment's bounded spin: only while doorbells are flowing, only if the privileged
             // ring is empty (register work never waits behind it), and never past the bound.
             if let (Some(d), Some(t)) = (spin, last_delivery)
@@ -2234,6 +2239,73 @@ impl Device {
         }
         if !back.is_empty() {
             self.chans.requeue_rc(back);
+        }
+    }
+
+    /// ★ Display step 3c (display worker): the monitor behind `display_ids` changed and a hotplug
+    /// registration is live — the drainer (the GSP queue's owner) posts it.
+    pub(crate) fn queue_hotplug(&self, display_ids: u32) {
+        self.hotplug_pending.fetch_or(display_ids, Ordering::AcqRel);
+        let _ = self.drainer_efd.signal();
+    }
+
+    /// ★ Display step 3c, on the drainer (the GSP queue's owner), like [`Self::deliver_rc`]: post
+    /// the pending hotplug to the guest as a LIST `POST_EVENT` (`bNotifyList`, the bare
+    /// `NV2080_NOTIFIERS_HOTPLUG`, `plugDisplayMask` = the changed ids) addressed to the LIVE
+    /// registration, publish, and raise the GSP's stall vector outside the lock. The guest's own RM
+    /// wakes NVKMS, which asks `INTERNAL_GET_HOTPLUG_UNPLUG_STATE` and re-reads the EDID.
+    /// ⊘ With no live registration nothing is posted (a post to a dead pair wedges the RPC path):
+    /// the next probe simply reads the new EDID. A full queue requeues the mask.
+    fn deliver_hotplug(&self) {
+        let mask = self.hotplug_pending.swap(0, Ordering::AcqRel);
+        if mask == 0 {
+            return;
+        }
+        let Some(dp) = self.display else { return };
+        let target = dp.model.lock().ok().and_then(|g| g.hotplug_target());
+        let Some(t) = target else {
+            eprintln!(
+                "kf3: display: hotplug for {mask:#x} NOT posted: no live registration (the next probe reads the new EDID)"
+            );
+            return;
+        };
+        let payload =
+            match kf_abi::postevent::SubdeviceNotify::hotplug(t.client, t.event, mask).encode() {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("kf3: display: hotplug NOT posted: {e}");
+                    return;
+                }
+            };
+        let Ok(mut guard) = self.gsp.lock() else {
+            self.hotplug_pending.fetch_or(mask, Ordering::AcqRel);
+            return;
+        };
+        let g = &mut *guard;
+        let mut ram = Ram(self);
+        let posted = match g.fsm.post_subdevice_event(&mut ram, payload) {
+            Ok(()) => {
+                eprintln!(
+                    "kf3: display: hotplug posted for display {mask:#x} to {:#x}:{:#x}",
+                    t.client, t.event
+                );
+                true
+            }
+            Err(kf_gsp::GspFault::QueueFull { .. }) => {
+                self.hotplug_pending.fetch_or(mask, Ordering::AcqRel);
+                false
+            }
+            Err(f) => {
+                eprintln!("kf3: display: hotplug REFUSED by the queue: {f:?}");
+                false
+            }
+        };
+        if posted {
+            self.publish(g);
+        }
+        drop(guard);
+        if posted {
+            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR);
         }
     }
 

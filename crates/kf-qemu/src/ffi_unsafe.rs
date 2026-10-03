@@ -16,7 +16,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// ★ 11 (2026-10-03, `v3-broker`, display step 3): `kf3_realize` gains `display_broker`, and the
 /// broker relay's surface ([`Kf3BrokerEvent`], [`kf3_broker_start`], [`kf3_broker_frame_fd`],
 /// [`kf3_broker_ready`], [`kf3_broker_stop`]).
-pub const KF3_ABI: u32 = 11;
+/// ★ 12 (2026-10-03, `v3-broker`, display step 3c): [`kf3_display_ui_info`] (the console's
+/// `ui_info` hook) and the broker's `SURFACE` event (kind 8).
+pub const KF3_ABI: u32 = 12;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -501,7 +503,8 @@ pub struct Kf3Frame {
 }
 
 /// ★ ABI 11 (display step 3): one input event from the display broker for the C device to inject
-/// (`kind`: 1 key, 2 button, 3 absolute, 4 relative, 5 wheel, 6 grab, 7 close). Every value is
+/// (`kind`: 1 key, 2 button, 3 absolute, 4 relative, 5 wheel, 6 grab, 7 close; ABI 12: 8 surface —
+/// `x`, `y` = the broker window's size, `w0` = its refresh in mHz). Every value is
 /// already bounded by the relay (`kf_broker::Input`); the C device still checks a key code
 /// against QEMU's own map.
 #[repr(C)]
@@ -536,6 +539,7 @@ impl Kf3BrokerEvent {
             I::Wheel { up } => (5, if up { 1 } else { -1 }, 0, 0, 0),
             I::Grab(on) => (6, i32::from(on), 0, 0, 0),
             I::Close { force } => (7, i32::from(force), 0, 0, 0),
+            I::Surface { w, h, mhz } => (8, w, h, mhz, 0),
         };
         Kf3BrokerEvent { kind, x, y, w0, w1 }
     }
@@ -727,6 +731,24 @@ pub extern "C" fn kf3_broker_stop(h: *mut c_void) {
         .and_then(|dp| dp.broker.as_ref())
     {
         seat.stop();
+    }
+}
+
+/// ★ ABI 12 (display step 3c; QEMU's main loop, the console's `ui_info` hook after QEMU's 1 s
+/// coalescing): the UI wants head `head` to be `width` x `height` at `refresh_mhz` (0: unknown). The
+/// worker authors a new monitor (EDID) and, when a hotplug registration is live, the drainer posts
+/// the hotplug. Lock-free. Returns 0, or -1 (no display, a head without a console, a zero size).
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_ui_info(
+    h: *mut c_void,
+    head: u32,
+    width: u32,
+    height: u32,
+    refresh_mhz: u32,
+) -> i32 {
+    match dev(h).and_then(|d| d.display) {
+        Some(dp) if dp.request_ui(head, width, height, refresh_mhz) => 0,
+        _ => -1,
     }
 }
 
