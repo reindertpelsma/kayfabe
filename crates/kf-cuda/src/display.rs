@@ -182,6 +182,11 @@ impl std::fmt::Debug for Frame {
     }
 }
 
+/// Every [`ComposeLayer::flags`] bit `kf_compose` knows: alpha, swap red/blue, opaque, and (§O,
+/// 2026-10-04) XOR — `out = below XOR (source & 0x00ffffff)`. A layer with another bit is refused
+/// before a launch: the kernel would silently treat it as a blend.
+pub const COMPOSE_FLAGS: u32 = 0xf;
+
 /// ★ One window's compose-kernel program (the mirror of `kf_disp::scanout::LayerPlan`): every read
 /// is bounded by `extent` inside the store and every write by the frame, before it is queued.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,7 +213,8 @@ pub struct ComposeLayer {
     pub ox: u32,
     /// Output row.
     pub oy: u32,
-    /// `bit0` alpha, `bit1` swap red/blue, `bit2` opaque.
+    /// `bit0` alpha, `bit1` swap red/blue, `bit2` opaque, `bit3` XOR ([`COMPOSE_FLAGS`]; the
+    /// mirror of `kf_disp::scanout::COMPOSE_*`, pinned equal by kf-qemu).
     pub flags: u32,
     /// Blend coefficients (see `kf_compose`).
     pub a_s: i32,
@@ -230,6 +236,9 @@ impl ComposeLayer {
         }
         if !fits(l.ox, l.width, fw) || !fits(l.oy, l.rows, fh) {
             return Err(format!("{l:?} leaves the {fw}x{fh} frame"));
+        }
+        if l.flags & !COMPOSE_FLAGS != 0 {
+            return Err(format!("{l:?}: flag bits the kernel does not know"));
         }
         let row = u64::from(l.width) * 4;
         let need = if l.block_linear {
@@ -997,5 +1006,11 @@ mod tests {
         let mut t = p;
         t.pitch = 7676;
         assert!(t.check(1920, 1080).is_err(), "a row wider than the pitch");
+        // §O: the XOR bit is known; a bit beyond it is refused
+        assert_eq!(ComposeLayer { flags: 8, ..p }.check(1920, 1080), Ok(()));
+        assert!(
+            ComposeLayer { flags: 16, ..p }.check(1920, 1080).is_err(),
+            "an unknown flag"
+        );
     }
 }

@@ -310,6 +310,20 @@ fn plan_block_linear(
     })
 }
 
+/// [`LayerPlan::flags`] — the compose kernel's (`cuda/display/kf_scanout.ptx`, `kf_compose`): the
+/// source has alpha (else it reads as 255) …
+pub const COMPOSE_ALPHA: u32 = 1;
+/// … swap red and blue (an `A8B8G8R8`/`X8B8G8R8` source) …
+pub const COMPOSE_SWAP_RB: u32 = 2;
+/// … opaque: store the source word …
+pub const COMPOSE_OPAQUE: u32 = 4;
+/// … ★ XOR (`OWNER_RULINGS.md` §O, 2026-10-04): `out = below XOR (source & 0x00ffffff)` — the
+/// cursor composition `MODE_XOR` (`ogkm-580: clc37d.h:859-861`); alpha and the factors play no
+/// part (see [`plan_cursor`] for why this is a definition, not a measurement).
+pub const COMPOSE_XOR: u32 = 8;
+/// Every flag the kernel knows; a layer carrying another bit is refused before a launch.
+pub const COMPOSE_FLAGS: u32 = COMPOSE_ALPHA | COMPOSE_SWAP_RB | COMPOSE_OPAQUE | COMPOSE_XOR;
+
 /// ★ One window's program for the compose kernel (`cuda/display/kf_scanout.ptx`, `kf_compose`):
 /// where to read (bounded), where it lands in the head's frame (clipped), and how it blends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -339,7 +353,7 @@ pub struct LayerPlan {
     pub ox: u32,
     /// Its row in the frame.
     pub oy: u32,
-    /// `bit0` the source has alpha, `bit1` swap red/blue, `bit2` opaque (store the source word).
+    /// [`COMPOSE_ALPHA`], [`COMPOSE_SWAP_RB`], [`COMPOSE_OPAQUE`], [`COMPOSE_XOR`].
     pub flags: u32,
     /// Source factor `as + bs * alpha / 255` and destination factor `ad + bd * alpha / 255`.
     pub a_s: i32,
@@ -427,7 +441,9 @@ pub fn plan_layer(
     };
     let alpha = formats.has_alpha(s.format);
     let opaque = (a_s, b_s, a_d, b_d) == (255, 0, 0, 0);
-    let flags = u32::from(alpha) | (u32::from(swap) << 1) | (u32::from(opaque) << 2);
+    let flags = if alpha { COMPOSE_ALPHA } else { 0 }
+        | if swap { COMPOSE_SWAP_RB } else { 0 }
+        | if opaque { COMPOSE_OPAQUE } else { 0 };
     let (block_linear, pitch, bh, x0_bytes, y0, extent) = match c.layout {
         SurfaceLayout::Pitch => (
             false,
@@ -466,6 +482,98 @@ pub fn plan_layer(
     }))
 }
 
+/// ★ The compose kernel's arithmetic on the CPU — the REFERENCE `cuda/display/kf_scanout.ptx`
+/// (`kf_compose`) must match byte for byte: `tests/compose_kernel.rs` runs the committed PTX
+/// itself, instruction by instruction, over every (row, thread) of the launch and compares; the
+/// display worker's bring-up self-test compares the real launch on the GPU. `src` holds the
+/// store's bytes from [`LayerPlan::src`] (at most [`LayerPlan::extent`] of them are read); `frame`
+/// is the `fw` x `fh` XRGB8888 staging frame, rows `fw * 4` bytes, composed into in place.
+///
+/// Per pixel, in the kernel's order: the source word (red and blue swapped with
+/// [`COMPOSE_SWAP_RB`]); [`COMPOSE_OPAQUE`] stores it; [`COMPOSE_XOR`] XORs its colour into what
+/// lies below; otherwise `out = (src * fs + below * fd + 127) / 255` per channel (at most 255,
+/// the X byte 0), `fs = clamp(a_s + b_s * a / 255)` and `fd = clamp(a_d + b_d * a / 255)` in
+/// 0..=255 with C's truncating division, `a` the source alpha (255 without [`COMPOSE_ALPHA`]).
+/// Pixels past the frame's right or bottom edge are skipped, as the kernel skips them.
+///
+/// # Errors
+/// A read outside `src` (the plan's extent is the kernel's whole bound), or a `frame` shorter than
+/// `fw * fh * 4` bytes.
+pub fn compose_reference(
+    l: &LayerPlan,
+    src: &[u8],
+    frame: &mut [u8],
+    fw: u32,
+    fh: u32,
+) -> Result<(), Refused> {
+    let need = u64::from(fw) * u64::from(fh) * 4;
+    if (frame.len() as u64) < need {
+        return Err(Refused(format!(
+            "a {}-byte frame for {fw}x{fh}",
+            frame.len()
+        )));
+    }
+    let clamp = |a: i32, b: i32, alpha: i32| {
+        a.wrapping_add(b.wrapping_mul(alpha) / 255).clamp(0, 255) as u32
+    };
+    for row in 0..l.rows {
+        let dy = l.oy.wrapping_add(row);
+        if dy >= fh {
+            break;
+        }
+        for x in 0..l.width {
+            let dx = l.ox.wrapping_add(x);
+            if dx >= fw {
+                break;
+            }
+            let at = if l.block_linear {
+                bl_offset(
+                    u64::from(l.x0_bytes.wrapping_add(x * 4)),
+                    u64::from(l.y0.wrapping_add(row)),
+                    u64::from(l.pitch),
+                    l.block_height_log2,
+                )
+            } else {
+                u64::from(row) * u64::from(l.pitch) + u64::from(x) * 4
+            };
+            let Some(word) = usize::try_from(at)
+                .ok()
+                .and_then(|a| src.get(a..a.checked_add(4)?))
+            else {
+                return Err(Refused(format!(
+                    "pixel ({x}, {row}) reads {at:#x}, past the {:#x} source bytes",
+                    src.len()
+                )));
+            };
+            let mut w = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+            if l.flags & COMPOSE_SWAP_RB != 0 {
+                w = (w & 0xff00_ff00) | ((w >> 16) & 0xff) | ((w & 0xff) << 16);
+            }
+            let p = ((dy as usize) * (fw as usize) + dx as usize) * 4;
+            let below = u32::from_le_bytes([frame[p], frame[p + 1], frame[p + 2], frame[p + 3]]);
+            let out = if l.flags & COMPOSE_OPAQUE != 0 {
+                w
+            } else if l.flags & COMPOSE_XOR != 0 {
+                below ^ (w & 0x00ff_ffff)
+            } else {
+                let a = if l.flags & COMPOSE_ALPHA != 0 {
+                    (w >> 24) as i32
+                } else {
+                    255
+                };
+                let (fs, fd) = (clamp(l.a_s, l.b_s, a), clamp(l.a_d, l.b_d, a));
+                let ch = |shift: u32| {
+                    let (sc, dc) = ((w >> shift) & 0xff, (below >> shift) & 0xff);
+                    ((sc * fs + dc * fd + 127) / 255).min(255) << shift
+                };
+                ch(0) | ch(8) | ch(16)
+            };
+            frame[p..p + 4].copy_from_slice(&out.to_le_bytes());
+        }
+    }
+    Ok(())
+}
+
 /// The [`LayerPlan::window`] a cursor layer carries (logs only: the cursor is no window). One below
 /// [`BOOT_WINDOW`] (the merge of 2026-10-03: both had taken `u32::MAX`), so a log tells them apart.
 pub const CURSOR_LAYER: u32 = u32::MAX - 1;
@@ -477,9 +585,29 @@ pub const CURSOR_LAYER: u32 = u32::MAX - 1;
 /// frame on every side; blended by `HEAD_SET_CONTROL_CURSOR_COMPOSITION` with the window factor
 /// numbering. `Ok(None)` when it lies wholly outside the frame.
 ///
+/// ★ **`MODE_XOR`** (2026-10-04, `OWNER_RULINGS.md` §O: "the compose kernel gains an XOR blend") is
+/// composed with [`COMPOSE_XOR`]: `out = below XOR colour`, alpha and the factors ignored. ⊘ This
+/// is a DEFINITION, not a measurement, and here is why it had to be one: NVKMS never programs it.
+/// Its cursor composition table (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6646-6702`, the
+/// same five cases at `nvkms-evo4.c:965-1019`, and EVO2's two at `nvkms-evo2.c:3194-3206`) writes
+/// `MODE_BLEND` (EVO2: `_ALPHA_BLEND`/`_PREMULT_ALPHA_BLEND`) for
+/// all five blending modes it supports (`NV_EVO3_SUPPORTED_CURSOR_COMP_BLEND_MODES`,
+/// `nvkms-evo3.h:44-49`: opaque, premultiplied and straight alpha, each with or without a surface
+/// alpha), and its only cursor format is `A8R8G8B8` (`nvkms-evo3.c:6517-6524`); no factor pair can
+/// invert either (`out = src*fs + dst*fd` with both factors in 0..=1). So an XOR or inverting
+/// cursor reaches the head only from a guest that writes the core channel itself — a hostile one,
+/// or another OS's driver — and the class header names the mode without saying what it computes.
+/// The literal reading is taken: the colour is XORed into what lies below, so an all-zero image
+/// composes to nothing and a white pixel inverts. ⚠ The masked-colour reading (alpha as the AND
+/// mask, so one surface can carry opaque pixels too — what a Windows monochrome pointer needs) is
+/// the alternative; it can be settled only on hardware, by a producer that programs the mode.
+/// `A1R5G5B5` (`clc37d.h:836`), the class's other cursor format and the classic AND/XOR one, stays
+/// refused: the kernel moves 32-bit pixels.
+///
 /// # Errors
-/// [`Refused`], naming the bound: a non-`A8R8G8B8` format, `XOR` composition, a system-memory or
-/// block-linear context DMA, an unknown factor, or any byte outside the context DMA.
+/// [`Refused`], naming the bound: a non-`A8R8G8B8` format, an unknown composition mode, a
+/// system-memory or block-linear context DMA, an unknown factor (blend only), or any byte outside
+/// the context DMA.
 pub fn plan_cursor(
     c: &CursorScan,
     dma: &CtxDma,
@@ -490,9 +618,11 @@ pub fn plan_cursor(
     if !c.argb8888 {
         return no("only an A8R8G8B8 cursor is composable".into());
     }
-    if c.mode != 0 {
-        return no("XOR cursor composition is not composable".into());
-    }
+    let xor = match c.mode {
+        0 => false,
+        1 => true,
+        m => return no(format!("cursor composition mode {m} is not known")),
+    };
     if dma.target != Target::Vidmem || dma.block_linear {
         return no("the cursor surface is not pitch video memory".into());
     }
@@ -530,13 +660,19 @@ pub fn plan_cursor(
             dma.base, dma.limit
         ));
     };
-    let Some(((a_s, b_s), (a_d, b_d))) = cursor_blend(c) else {
-        return no(format!(
-            "composition factors {:#x}/{:#x} are not known",
-            c.cursor_factor, c.viewport_factor
-        ));
+    let (flags, ((a_s, b_s), (a_d, b_d))) = if xor {
+        (COMPOSE_XOR, ((0, 0), (0, 0)))
+    } else {
+        let Some(f) = cursor_blend(c) else {
+            return no(format!(
+                "composition factors {:#x}/{:#x} are not known",
+                c.cursor_factor, c.viewport_factor
+            ));
+        };
+        let opaque = f == ((255, 0), (0, 0));
+        // A8R8G8B8 carries alpha; no red/blue swap
+        (COMPOSE_ALPHA | if opaque { COMPOSE_OPAQUE } else { 0 }, f)
     };
-    let opaque = (a_s, b_s, a_d, b_d) == (255, 0, 0, 0);
     Ok(Some(LayerPlan {
         window: CURSOR_LAYER,
         src,
@@ -550,8 +686,7 @@ pub fn plan_cursor(
         rows,
         ox,
         oy,
-        // A8R8G8B8 carries alpha; no red/blue swap
-        flags: 1 | (u32::from(opaque) << 2),
+        flags,
         a_s,
         b_s,
         a_d,
@@ -1212,18 +1347,91 @@ mod tests {
         assert_eq!((l.pitch, l.width), (256, 32));
     }
 
-    /// ⊘ Refused by name: XOR, a non-ARGB format, a sysmem surface, bytes past the context DMA.
+    /// ★ §O (2026-10-04): an XOR cursor is composed — one pitch layer with [`COMPOSE_XOR`] and no
+    /// factors, whatever its factor word says (an unknown one included: XOR does not read it);
+    /// an unknown MODE is refused by name.
     #[test]
-    fn a_cursor_the_kernel_cannot_compose_is_refused_by_name() {
+    fn an_xor_cursor_is_an_xor_layer_and_an_unknown_mode_is_refused() {
         let dma = vid(0x4000_0000, 1 << 20);
-        let mut x = cursor(0, 0);
+        let mut x = cursor(100, 50);
         x.mode = 1;
+        x.cursor_factor = 0xf; // unknown: irrelevant to XOR
+        let l = plan_cursor(&x, &dma, 1920, 1080).unwrap().unwrap();
+        assert_eq!(l.flags, COMPOSE_XOR);
+        assert_eq!((l.a_s, l.b_s, l.a_d, l.b_d), (0, 0, 0, 0));
+        assert_eq!(
+            (l.src, l.ox, l.oy, l.width, l.rows),
+            (0x4000_1000, 100, 50, 64, 64)
+        );
+        x.mode = 2;
         assert!(
             plan_cursor(&x, &dma, 1920, 1080)
                 .unwrap_err()
                 .0
-                .contains("XOR")
+                .contains("mode 2")
         );
+    }
+
+    /// ★ The reference's arithmetic on hand-worked pixels (the kernel is checked against the same
+    /// function by `tests/compose_kernel.rs`): XOR takes the colour, never the alpha, and an
+    /// all-zero XOR pixel leaves the frame as it was; a premultiplied blend at a = 0x80 over grey;
+    /// an opaque layer stores the word; a read past the source is refused.
+    #[test]
+    fn the_reference_composes_xor_blend_and_opaque_pixels_as_worked_by_hand() {
+        let one = |flags, f: (i32, i32, i32, i32)| LayerPlan {
+            window: 0,
+            src: 0,
+            extent: 8,
+            block_linear: false,
+            pitch: 8,
+            block_height_log2: 0,
+            x0_bytes: 0,
+            y0: 0,
+            width: 2,
+            rows: 1,
+            ox: 0,
+            oy: 0,
+            flags,
+            a_s: f.0,
+            b_s: f.1,
+            a_d: f.2,
+            b_d: f.3,
+        };
+        // B G R A, twice: a white pixel with alpha 0, an all-zero one
+        let src = [0xff, 0xff, 0xff, 0x00, 0, 0, 0, 0];
+        let mut frame = [0x12, 0x34, 0x56, 0x00, 0x9a, 0xbc, 0xde, 0x00];
+        compose_reference(&one(COMPOSE_XOR, (0, 0, 0, 0)), &src, &mut frame, 2, 1).unwrap();
+        assert_eq!(frame, [0xed, 0xcb, 0xa9, 0x00, 0x9a, 0xbc, 0xde, 0x00]);
+        // premultiplied (1, 1 - a): fs = 255, fd = 255 - 255 * 128 / 255 = 127
+        let src = [0x40, 0x40, 0x40, 0x80, 0, 0, 0, 0xff];
+        let mut frame = [0x80, 0x80, 0x80, 0x00, 0x80, 0x80, 0x80, 0x00];
+        let pm = (255, 0, 255, -255);
+        compose_reference(&one(COMPOSE_ALPHA, pm), &src, &mut frame, 2, 1).unwrap();
+        assert_eq!(
+            &frame[..3],
+            &[128, 128, 128],
+            "(64*255 + 128*127 + 127) / 255"
+        );
+        assert_eq!(&frame[4..7], &[0, 0, 0], "an opaque black pixel");
+        let mut frame = [0u8; 8];
+        compose_reference(&one(COMPOSE_OPAQUE, (255, 0, 0, 0)), &src, &mut frame, 2, 1).unwrap();
+        assert_eq!(frame, src, "opaque: the word");
+        assert!(
+            compose_reference(
+                &one(COMPOSE_OPAQUE, (255, 0, 0, 0)),
+                &src[..7],
+                &mut frame,
+                2,
+                1
+            )
+            .is_err()
+        );
+    }
+
+    /// ⊘ Refused by name: a non-ARGB format, a sysmem surface, bytes past the context DMA.
+    #[test]
+    fn a_cursor_the_kernel_cannot_compose_is_refused_by_name() {
+        let dma = vid(0x4000_0000, 1 << 20);
         let mut f = cursor(0, 0);
         f.argb8888 = false;
         assert!(
@@ -1253,7 +1461,7 @@ mod tests {
         let mut o = cursor(0, 0);
         o.viewport_factor = 0;
         let l = plan_cursor(&o, &dma, 1920, 1080).unwrap().unwrap();
-        assert_eq!(l.flags, 1 | 4, "opaque");
+        assert_eq!(l.flags, COMPOSE_ALPHA | COMPOSE_OPAQUE, "opaque");
     }
     // ── §O: the host cursor ─────────────────────────────────────────────────────────────────
 

@@ -2307,9 +2307,10 @@ struct Inflight {
     d2h: bool,
 }
 
-/// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, then a
-/// premultiplied-alpha pixel blended over it — and compare with the reference address function
-/// (`kf_disp::scanout::bl_offset`) and the blend arithmetic, at bring-up, before any guest copy.
+/// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, a
+/// premultiplied-alpha pixel blended, and (§O, 2026-10-04) an XOR pixel — and compare with the
+/// reference address function (`kf_disp::scanout::bl_offset`) and the blend arithmetic
+/// (`kf_disp::scanout::compose_reference`), at bring-up, before any guest copy.
 fn selftest_compose(gpu: &mut DisplayGpu) -> Result<(), String> {
     // 4 GOBs wide, 2-GOB blocks, 3 block rows; a rectangle offset in both axes, landing at (5, 2)
     let (gpr, bh, block_rows) = (4u32, 1u32, 3u64);
@@ -2393,8 +2394,31 @@ fn selftest_compose(gpu: &mut DisplayGpu) -> Result<(), String> {
             &px[..3]
         ));
     }
+    // ★ §O (2026-10-04): the XOR blend over the black frame, from an alpha-0 pixel with factors
+    // that would make a blend write black: XOR leaves exactly the colour (and the X byte 0), so a
+    // kernel without the XOR path, or one that lets alpha gate it, fails here before any guest
+    // cursor is composed (`kf_disp::scanout::compose_reference` is the arithmetic)
+    let xpx = [0x5a, 0xc3, 0x3c, 0x00]; // B G R A
+    let xor = ComposeLayer {
+        flags: kf_disp::scanout::COMPOSE_XOR,
+        a_s: 0,
+        b_s: 0,
+        a_d: 255,
+        b_d: 0,
+        ..one
+    };
+    let got = gpu
+        .selftest_compose(&xpx, &xor, 1, 1)
+        .map_err(|e| format!("did not run (XOR): {e}"))?;
+    if got[..4] != xpx {
+        return Err(format!("the XOR blend wrote {:?}, not {xpx:?}", &got[..4]));
+    }
     Ok(())
 }
+
+// ★ §O: the compose kernel's flag bits as kf-disp plans them and as kf-cuda's launch check knows
+// them — one set (a drift is a layer refused, or worse, composed as a blend)
+const _: () = assert!(kf_disp::scanout::COMPOSE_FLAGS == kf_cuda::display::COMPOSE_FLAGS);
 
 /// ★ Display step 3 — the worker's choice of memory for a FREE slot it must (re)allocate, kept
 /// GPU-free so a test drives the refusal (the second review of `v3-broker`, 2026-10-03: the
