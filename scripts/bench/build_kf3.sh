@@ -48,9 +48,13 @@ flock 9
 # (VNC; `screendump` needs only pixman). ⊘ The configure line is part of the build's identity: a build
 # dir configured with other flags is RE-configured, never silently reused (the first version of this
 # script configured once and kept whatever an earlier revision had chosen).
+# ★ 2026-10-04 (v3-windows, OWNER_RULINGS §K): `--enable-tpm`, was `--disable-tpm`. A Windows 11 guest
+# needs a TPM 2.0 (`-tpmdev emulator` + `-device tpm-crb`, backed by swtpm; scripts/bench/windows/).
+# The TPM code is inert unless a VM names a tpmdev, and it needs no extra library. Changing the line
+# changes the build's identity, so every existing build dir is rebuilt once (see below).
 CONF_FLAGS="--target-list=x86_64-softmmu --disable-docs --disable-tools --disable-guest-agent \
 --disable-werror --disable-slirp --enable-vnc --enable-pixman --disable-gtk --disable-sdl \
---disable-curses --disable-libssh --disable-vde --disable-tpm --without-default-features \
+--disable-curses --disable-libssh --disable-vde --enable-tpm --without-default-features \
 --enable-kvm --enable-system"
 if [ ! -f "$BUILD/build.ninja" ] || [ "$(cat "$BUILD/.kf3-configure" 2>/dev/null)" != "$CONF_FLAGS" ]; then
   # a stale configuration is removed whole (a full rebuild, minutes) rather than reconfigured in place
