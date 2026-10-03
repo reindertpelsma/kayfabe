@@ -793,6 +793,44 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
     })
 }
 
+/// ★ The cursor's `HEAD_SET_CONTROL_CURSOR_COMPOSITION` word as programmed (`K1` 7:0,
+/// `CURSOR_COLOR_FACTOR_SELECT` 11:8, `VIEWPORT_COLOR_FACTOR_SELECT` 15:12, `MODE` 16:16,
+/// `ogkm-580: clc37d.h:850-861`), and the NVKMS blending mode it spells
+/// (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6649-6701`) — for the log line that settles which
+/// blend a guest programs over which pixels (§8.12: on the box the host's semi-transparent cursor
+/// pixels were the guest's times alpha, which a straight-alpha blend over premultiplied pixels
+/// would produce; the word was not logged then).
+#[must_use]
+pub fn cursor_composition(c: &CursorScan) -> (u32, &'static str) {
+    let word = (c.k1 & 0xff)
+        | (c.cursor_factor & 0xf) << 8
+        | (c.viewport_factor & 0xf) << 12
+        | (c.mode & 1) << 16;
+    let name = match (c.mode, c.cursor_factor, c.viewport_factor, c.k1) {
+        (1, ..) => "XOR (no NVKMS mode)",
+        (0, 0, 0, 0) => "never programmed (composed as PREMULT_ALPHA)",
+        (0, 2, 0, 255) => "OPAQUE",
+        (0, 2, 7, 255) => "PREMULT_ALPHA",
+        (0, 5, 7, 255) => "NON_PREMULT_ALPHA (straight alpha)",
+        (0, 2, 7, _) => "PREMULT_SURFACE_ALPHA (K1 = the surface alpha)",
+        (0, 5, 7, _) => "NON_PREMULT_SURFACE_ALPHA (straight alpha, K1 = the surface alpha)",
+        _ => "no NVKMS mode",
+    };
+    (word, name)
+}
+
+/// ★ What a cursor image's pixels say about their own alpha convention: how many are partially
+/// transparent, and how many carry a colour channel ABOVE their alpha — impossible in a
+/// premultiplied image, so 0 of those with some partial pixels is consistent with premultiplied
+/// pixels (an X server's cursor), and any is proof of straight ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AlphaCensus {
+    /// Pixels with 0 < alpha < 255.
+    pub partial: u32,
+    /// Pixels with a colour channel above their alpha.
+    pub above_alpha: u32,
+}
+
 /// ★★ §O, found on hardware (box 54032077, run `brkA`, 2026-10-03): **NVKMS hard-codes the
 /// hardware hot spot to 0** (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6565-6569`, "Hard code
 /// the cursor hotspot") and moves the image's top-left instead, so the hot spot the guest MEANT is
@@ -837,6 +875,26 @@ pub fn hot_from_pointer(
 }
 
 impl HostCursorSrc {
+    /// ★ The [`AlphaCensus`] of the image `raw` (the [`Self::extent`] bytes copied from
+    /// [`Self::src`]); `None` when `raw` is not that extent.
+    #[must_use]
+    pub fn alpha_census(&self, raw: &[u8]) -> Option<AlphaCensus> {
+        if raw.len() as u64 != self.extent {
+            return None;
+        }
+        let (n, pitch) = (self.size as usize, self.pitch as usize);
+        let mut c = AlphaCensus::default();
+        for y in 0..n {
+            let row = raw.get(y * pitch..y * pitch + n * 4)?;
+            let (px, _) = row.as_chunks::<4>();
+            for p in px {
+                c.partial += u32::from(p[3] != 0 && p[3] != 255);
+                c.above_alpha += u32::from(p[..3].iter().any(|ch| *ch > p[3]));
+            }
+        }
+        Some(c)
+    }
+
     /// ★ The image as the host takes it: `size` x `size` premultiplied `ARGB8888` (B, G, R, A
     /// bytes), rows tight — what the head's blend `out = src * fs(a) + dst * fd(a)` means as an
     /// "over" of premultiplied pixels: coverage `A' = 1 - fd(a)`, colour `P' = c * fs(a)`. Every
@@ -1345,6 +1403,62 @@ mod tests {
         small.size = 32;
         let l = plan_cursor(&small, &dma, 1920, 1080).unwrap().unwrap();
         assert_eq!((l.pitch, l.width), (256, 32));
+    }
+
+    /// ★ The composition word and its NVKMS name, for each of the five modes NVKMS programs
+    /// (`nvkms-evo3.c:6649-6701`), XOR, an unprogrammed word and a foreign one; and the alpha census
+    /// telling premultiplied-consistent pixels from straight ones.
+    #[test]
+    fn the_composition_word_names_its_nvkms_mode_and_the_census_reads_the_pixels() {
+        let mut c = cursor(0, 0);
+        for (k1, cf, vf, mode, word, name) in [
+            (255, 2, 0, 0, 0x0_02ff, "OPAQUE"),
+            (255, 2, 7, 0, 0x0_72ff, "PREMULT_ALPHA"),
+            (255, 5, 7, 0, 0x0_75ff, "NON_PREMULT_ALPHA (straight alpha)"),
+            (
+                128,
+                2,
+                7,
+                0,
+                0x0_7280,
+                "PREMULT_SURFACE_ALPHA (K1 = the surface alpha)",
+            ),
+            (
+                128,
+                5,
+                7,
+                0,
+                0x0_7580,
+                "NON_PREMULT_SURFACE_ALPHA (straight alpha, K1 = the surface alpha)",
+            ),
+            (255, 2, 7, 1, 0x1_72ff, "XOR (no NVKMS mode)"),
+            (
+                0,
+                0,
+                0,
+                0,
+                0,
+                "never programmed (composed as PREMULT_ALPHA)",
+            ),
+            (255, 3, 7, 0, 0x0_73ff, "no NVKMS mode"),
+        ] {
+            (c.k1, c.cursor_factor, c.viewport_factor, c.mode) = (k1, cf, vf, mode);
+            assert_eq!(cursor_composition(&c), (word, name));
+        }
+        let h = plan_host_cursor(&cursor(0, 0), &vid(0x4000_0000, 1 << 20)).unwrap();
+        let mut raw = vec![0u8; h.extent as usize];
+        // premultiplied: (64, 64, 64, 128) and an opaque pixel
+        raw[..8].copy_from_slice(&[64, 64, 64, 128, 10, 20, 30, 255]);
+        assert_eq!(
+            h.alpha_census(&raw),
+            Some(AlphaCensus {
+                partial: 1,
+                above_alpha: 0
+            })
+        );
+        raw[8..12].copy_from_slice(&[200, 0, 0, 100]); // straight: a channel above its alpha
+        assert_eq!(h.alpha_census(&raw).unwrap().above_alpha, 1);
+        assert_eq!(h.alpha_census(&raw[1..]), None);
     }
 
     /// ★ §O (2026-10-04): an XOR cursor is composed — one pitch layer with [`COMPOSE_XOR`] and no

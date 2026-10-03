@@ -2319,6 +2319,9 @@ struct ScanState {
     cursor_posted: Option<(u8, u64)>,
     /// … host-cursor refusals logged so far (bounded) …
     cursor_refusals: u64,
+    /// … the cursor composition word last logged (logged once per change, §8.12's open alpha
+    /// question) …
+    cursor_comp: Option<u32>,
     /// … and the hot spot NVKMS does not program, derived from the injected pointer.
     hot: HotTracker,
     /// The worker's clock for [`HotTracker`] (its first use).
@@ -2653,6 +2656,7 @@ impl ScanState {
         )
         .unwrap_or(u64::MAX);
         let hot = &mut self.hot;
+        let comp_logged = &mut self.cursor_comp;
         let got = io
             .resolve(cs.client, cs.handle, 0)
             .and_then(|dma| kf_disp::scanout::plan_host_cursor(cs, &dma).map_err(|r| r.0))
@@ -2665,6 +2669,34 @@ impl ScanState {
                 dp.counters
                     .host_cursor_reads
                     .fetch_add(1, Ordering::Relaxed);
+                // ★ §8.12's open question (premultiplied pixels under a straight blend?): the
+                // composition word the guest programmed, once per change, beside what the pixels
+                // say about their own alpha — the next box run reads the answer off this line
+                let (word, mode) = kf_disp::scanout::cursor_composition(cs);
+                if *comp_logged != Some(word) {
+                    *comp_logged = Some(word);
+                    let c = h.alpha_census(&raw).unwrap_or_default();
+                    eprintln!(
+                        "kf3: display: guest cursor composition {word:#07x} = {mode} (K1 {}, cursor \
+                         factor {}, viewport factor {}, mode {}); its {}x{} pixels: {} partially \
+                         transparent, {} with a colour channel above alpha ({})",
+                        cs.k1,
+                        cs.cursor_factor,
+                        cs.viewport_factor,
+                        cs.mode,
+                        h.size,
+                        h.size,
+                        c.partial,
+                        c.above_alpha,
+                        if c.above_alpha > 0 {
+                            "straight pixels"
+                        } else if c.partial > 0 {
+                            "consistent with premultiplied pixels"
+                        } else {
+                            "no partial alpha to tell"
+                        }
+                    );
+                }
                 match h.image(&raw).map_err(|r| r.0)? {
                     None => Ok(CursorWant::Hidden),
                     Some(px) => {
