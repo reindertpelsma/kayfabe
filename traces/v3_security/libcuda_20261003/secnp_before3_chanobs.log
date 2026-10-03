@@ -1,0 +1,70 @@
+START 2026-10-03T21:13:14+00:00 checkout=1d71f3db qemu=/workspace/bench/kf3-bins/4b864b5f/qemu-system-x86_64
+qemu_built=2026-10-03T21:08:44+00:00
+=== config=walker 2026-10-03T21:13:15+00:00
+=== FAST GUEST secnp_before3_walker — 21s of a 180s budget, qemu rc=0 ===
+FAST_VERDICT=PASS (21s)
+--- qemu process: 929 log lines in /workspace/bench/fast_secnp_before3_walker_qemu.log
+    kf-host: channel birth h=0xcafe0020 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+    kf-host: channel birth h=0xcafe0024 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000019 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c00001f rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000023 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000027 rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c00002b rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c00002f rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000033 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000037 rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c00003d rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000040 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000043 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000046 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c00004b rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c00004e rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000051 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137722 thread=qemu-system-x86 class=0xc56f client=0xc1d00f70 h=0x5c000054 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137739 thread=kf3-chan-act class=0xc56f client=0xc1d00f6e h=0xcafe0020 rc=0 status=0 request_flags=0x00000080 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 capeff_sys_admin=0 nvos=21 params=set params_size=368 nvos_flags=0
+    CHANOBS tid=137739 thread=kf3-chan-act class=0xc56f client=0xc1d00f6e h=0xcafe0024 rc=0 status=0 request_flags=0x00000080 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 capeff_sys_admin=0 nvos=21 params=set params_size=368 nvos_flags=0
+CHANOBS_SUMMARY config=walker libcuda_channels=16 libcuda_user=0 libcuda_admin=16 libcuda_unmeasured=0 kfhost_channels=2 kfhost_user=2 kfhost_admin=0 kfhost_unmeasured=0
+=== config=display 2026-10-03T21:13:41+00:00
+=== FAST GUEST secnp_before3_display — 20s of a 180s budget, qemu rc=0 ===
+FAST_VERDICT=PASS (20s)
+--- qemu process: 952 log lines in /workspace/bench/fast_secnp_before3_display_qemu.log
+    kf-host: channel birth h=0xcafe001f engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+    kf-host: channel birth h=0xcafe0023 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000019 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c00001f rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000023 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000027 rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c00002b rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c00002f rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000033 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000037 rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c00003d rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000040 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000043 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000046 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c00004b rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c00004e rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000051 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c000054 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000a7 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000ad rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000b1 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000b5 rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000b9 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000bd rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000c1 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000c5 rc=0 status=0 request_flags=0x00000010 reply_flags=0x00000030 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000cb rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000ce rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000d1 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000d4 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000d9 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000dc rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000df rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137848 thread=qemu-system-x86 class=0xc56f client=0xc1d00f93 h=0x5c0000e2 rc=0 status=0 request_flags=0000000000 reply_flags=0x00000020 PRIVILEGED_CHANNEL=1 capeff_sys_admin=1 nvos=64 params=set params_size=0 nvos_flags=0
+    CHANOBS tid=137865 thread=kf3-chan-act class=0xc56f client=0xc1d00f91 h=0xcafe001f rc=0 status=0 request_flags=0x00000080 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 capeff_sys_admin=0 nvos=21 params=set params_size=368 nvos_flags=0
+    CHANOBS tid=137865 thread=kf3-chan-act class=0xc56f client=0xc1d00f91 h=0xcafe0023 rc=0 status=0 request_flags=0x00000080 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 capeff_sys_admin=0 nvos=21 params=set params_size=368 nvos_flags=0
+CHANOBS_SUMMARY config=display libcuda_channels=32 libcuda_user=0 libcuda_admin=32 libcuda_unmeasured=0 kfhost_channels=2 kfhost_user=2 kfhost_admin=0 kfhost_unmeasured=0
+CHANOBS_CONFIGS_WITHOUT_OBSERVATIONS=0
+EXIT rc=0 2026-10-03T21:14:07+00:00

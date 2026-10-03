@@ -597,6 +597,7 @@ and the per-client host MMU fault above.
 > | before | `3e0f6dee` | 6 | all `PRIVILEGED_CHANNEL=1` |
 > | after | `dc64b22b` | the same 6 | all `0x00000080`, `PRIVILEGED_CHANNEL=0` |
 > | merge bar, 30-arm suite and gates | `55743ecd` | 161 + 11 | all `PRIVILEGED_CHANNEL=0` (suite 30/30, gates 9/9) |
+> | merge bar with the census gate (`traces/v3_security/merge_bar_1d71f3db/`) | `1d71f3db` | 161 + 11 | all `PRIVILEGED_CHANNEL=0`, `BIRTH_CENSUS_OK` (tests 1879/0, gates 9/9, bare 30/30, suite 30/30) |
 >
 > With the bracket skipped (`KF3_NEGCTL_SKIP_CAP_BRACKET=1`), the tripwire refused the first
 > birth on a live `0x000000a0` reply.
@@ -612,6 +613,14 @@ and the per-client host MMU fault above.
 > are the only ones guest work runs on. libcuda's own channels (the walker and display contexts)
 > are created under the VMM's capabilities and are not covered. They run only kayfabe's
 > kernels."*
+>
+> libcuda's channels on the box (RTX 3060, 580.159.04, QEMU as root, box 54049598; read by the
+> observer below, `traces/v3_security/libcuda_20261003/`):
+>
+> | kf3 revision | walker run | `display=on` run |
+> |---|---|---|
+> | `4b864b5f` (before) | 16 libcuda channels, all `PRIVILEGED_CHANNEL=1`, on QEMU's thread | 32, all `PRIVILEGED_CHANNEL=1` |
+> | `1d71f3db` (after) | 16, all `PRIVILEGED_CHANNEL=0`, on `kf3-cuda-walk` | 32, all `PRIVILEGED_CHANNEL=0` |
 >
 > **The merge bar gates on it.** `scripts/bench/box/birth_census.sh` (run by `merge_check.sh`
 > after a self-test on planted logs) fails unless every suite arm and the gates log at least one

@@ -72,7 +72,8 @@ usual way:
 - 30-arm thin-guest suite: 30/30.
 
 All 161 channel births in the suite and all 11 in the gates read `PRIVILEGED_CHANNEL=0`; none
-was refused.
+was refused. (That count was a manual grep. Since the review, `merge_check.sh` gates on it; the bar
+at `1d71f3db`, with the census, is `../merge_bar_1d71f3db/`.)
 
 ## What this does not cover
 

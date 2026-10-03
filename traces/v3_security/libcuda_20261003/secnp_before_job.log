@@ -1,0 +1,7 @@
+START 2026-10-03T21:08:01+00:00
+KF3_RC=0 KF3_BUILT /workspace/bench/kf3-bins/4b864b5f/qemu-system-x86_64 rev=4b864b5f mtime=2026-10-03 21:08:44.991651820 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+CENSUS_RC=0
+CHANOBS_SUMMARY config=walker libcuda_channels=16 libcuda_user=0 libcuda_admin=0 libcuda_unmeasured=16 kfhost_channels=2 kfhost_user=2 kfhost_admin=0 kfhost_unmeasured=0
+CHANOBS_SUMMARY config=display libcuda_channels=32 libcuda_user=0 libcuda_admin=0 libcuda_unmeasured=32 kfhost_channels=2 kfhost_user=2 kfhost_admin=0 kfhost_unmeasured=0
+EXIT rc=0 2026-10-03T21:09:39+00:00
+EXIT rc=0 2026-10-03T21:09:39+00:00

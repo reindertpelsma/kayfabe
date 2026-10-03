@@ -84,6 +84,13 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF
   `PRIVILEGED_CHANNEL=0 privilege=USER` and every arm logged at least one birth and one CUDA thread
   posture line (`docs/design/THE_CONSTRAINTS.md` §30); `v3_gates.sh` now fails a gate run with no
   birth line or a non-USER one (`V3_GATES_BIRTHS … ok=0`).
+- ⊘ *[2026-10-03, box 54049598, `traces/v3_security/libcuda_20261003/secnp_after_job_staletarget.log`]*
+  **Two checkouts sharing one `CARGO_TARGET_DIR` can build against each other's artifacts.** Cargo
+  gave both checkouts' crates the same artifacts, and it rebuilds only when a source file is newer
+  than the artifact. A worktree created
+  *before* another checkout's build therefore gets that checkout's code: here kf-cuda failed to compile
+  against a `kf-linux-raw` from another revision. `merge_check.sh` is safe because it creates its
+  worktree right before it builds. For any other build, give the checkout its own target directory.
 - *[2026-09-27]* A `REBOOT_NEEDED` line in `prov.log` means an unattended upgrade installed a kernel
   newer than the running one: the host driver this run built will not survive a reboot. Either do not
   reboot that box, or reboot it and provision again.
