@@ -220,6 +220,10 @@ citation: ask whether its reason still holds before relying on it.
       `ogkm-580: src/nvidia/src/kernel/gpu/hwpm/profiler_v2/kern_profiler_v2.c:31-63`), so a stub
       matches what a non-root user gets on bare metal. If it is ever offered, make it opt-in for
       single-tenant hosts only: profiler counters are a side channel across tenants.
+    - The debugger does **not** service GPU faults. cuda-gdb's own table lists the memory
+      exceptions as "Not precise" and says continuing after them "can lead to undefined behavior"
+      (NVIDIA's cuda-gdb documentation, read 2026-10-02). Resumable fault service exists only below
+      the debugger, in UVM, and in kayfabe's EFS patch (`tools/uvm_efs/patch/uvm_efs.c`).
 - **Guest-side NVIDIA vGPU: crossed off** (owner).
   - Running NVIDIA's licensed vGPU guest stack on kayfabe needs its license check faked, the way
     vgpu_unlock setups do. That is piracy, however little reverse engineering it takes.
@@ -230,3 +234,39 @@ citation: ask whether its reason still holds before relying on it.
     libvirt and OpenStack attach kayfabe unmodified. Not NVIDIA's vGPU software, and no licensing.
     See `design/V3_VFIO_USER_FRONTEND.md` §2, option 0.
   - MIG: map host MIG instances into guests, on MIG-capable cards.
+
+## I. Release scope and priorities (2026-10-03)
+
+- **Post-release:** the cooperation stages in `design/V3_COOPERATIVE_TIERS.md` (owner). These are
+  the patched guest driver, the patched host driver and the host helper module.
+- **Release focus, in order (owner):**
+  1. the display path (`design/V3_DISPLAY.md`, NEXT block of 2026-10-03);
+  2. the install path and the sweep (`design/V3_SWEEP_AND_INSTALL.md`);
+  3. Windows.
+- **Non-GSP (pre-Turing) was raised as possibly more useful.** The review's view:
+  - It is the largest new emulation surface: the GSP-side three quarters of RM, running against
+    emulated registers.
+  - It targets a frozen platform. R580 is NVIDIA's last driver branch for Maxwell, Pascal and
+    Volta, and CUDA 13 dropped them.
+  - §B ("Non-GSP guests: a future target, not v1") stands. Decide after Windows, on demand.
+- **Guest doorbell helper (stage 1): a release candidate,** decided after two steps:
+  - a per-token breakdown on nested boxes, where doorbells explain about 22 of PyTorch eager's
+    ~58 ms per-token gap (0.29× of host) and the rest is unattributed;
+  - a non-nested baseline (§D, 2026-09-28).
+  - llama.cpp already decodes at 0.92× of host there.
+- **Managed memory (UVM demand paging): not a release target (owner).** PyTorch, TensorFlow, JAX,
+  vLLM, llama.cpp by default, games and Vulkan, GL and desktop apps do not use it.
+  - Exceptions to document:
+    - opt-in switches such as llama.cpp's `GGML_CUDA_ENABLE_UNIFIED_MEMORY`;
+    - RAPIDS cudf.pandas, which, as far as the review knows, defaults to managed memory when the
+      GPU reports concurrent managed access.
+  - **Release item: unsupported must fail loudly.** The four managed-memory apps fail on master,
+    and `conjugateGradientUM` prints a wrong answer with `result = SUCCESS`
+    (`design/V3_APP_MATRIX.md`). Every such fault must reach the app as an error.
+  - A stock Linux guest cannot use the Windows-style mode: guest UVM hard-codes fault support
+    (`ogkm-580: kernel-open/nvidia-uvm/uvm_ampere.c:81`). Windows guests should get managed memory
+    without a fault plane; that is unverified until a Windows guest runs CUDA.
+- **Pinned DMA stays supported.** `bandwidthTest` and `simpleZeroCopy` pass on master
+  (`design/V3_APP_MATRIX.md`).
+  - Coverage gap: no row uses the CUDA virtual memory API (`cuMemCreate`/`cuMemMap`), which PyTorch's
+    expandable segments and vLLM rely on. Add a sample such as `vectorAddMMAP` to the sweep.

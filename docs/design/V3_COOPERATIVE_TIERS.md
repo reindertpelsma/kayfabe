@@ -1,6 +1,6 @@
 # V3 — the stock tier and the opt-in cooperation stages
 
-**STATUS: DESIGN-ONLY, 2026-10-03; §5.1 corrected the same day (pool backing, owner).** The owner sketched this plan on 2026-10-02 and 2026-10-03,
+**STATUS: DESIGN-ONLY, 2026-10-03; §5.1 corrected the same day (pool backing, owner).** **Owner, 2026-10-03: post-release work**, except stage 1 (the guest doorbell helper), which is a release candidate once a per-token breakdown and a non-nested baseline exist (`OWNER_RULINGS.md` §I). The owner sketched this plan on 2026-10-02 and 2026-10-03,
 and the review's corrections are folded in. Nothing here is decided or built, apart from what
 `docs/OWNER_RULINGS.md` §H already rules (the stub rule, and the vGPU guest stack crossed off).
 

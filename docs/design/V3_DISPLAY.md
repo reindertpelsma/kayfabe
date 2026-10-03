@@ -37,6 +37,55 @@
 > one VMM-specific part). It replaces the QEMU console as the product path (the console stays for tests
 > and screendumps), works for VMMs with no display stack, and keeps the display-server connection out
 > of the VMM (privilege separation, the broker's original reason).
+>
+> **2026-10-03 — the display path is the release focus (owner; `OWNER_RULINGS.md` §I).** The plan,
+> with that day's review:
+> - **Broker: reuse nvkvm-pv's broker process and protocol unchanged.**
+>   - Port its QEMU-side relay (`nvkvm-pv src/qemu/nvkvm_display_relay.c`) into the kf3 device,
+>     including input through `qemu_input_queue_*`. No QEMU patch is then needed.
+>   - **Frames.** The broker accepts only dma-bufs (`ATTACH`). First send the existing de-tiled copy
+>     (§4.6) as a memfd-backed udmabuf, linear XRGB8888; this needs `/dev/udmabuf`. Zero-copy export
+>     with NVIDIA's modifier comes later, and works only for a host desktop on the same NVIDIA GPU.
+>   - Keep at least two copy targets, and reuse one only after the broker's `RELEASE`.
+>   - A `SURFACE` resize sends a new EDID plus a hotplug event (§4.7).
+>   - nvkvm-pv is Apache-2.0 and the owner's, so its code can come under kayfabe's dual license.
+> - **The GOP framebuffer must lie inside a kf3 BAR.**
+>   - Linux ties the firmware framebuffer to the PCI device whose BAR contains it. That device's
+>     driver evicts it (`aperture_remove_conflicting_pci_devices`, `drivers/video/aperture.c`).
+>   - The VGA arbiter picks the boot device by the same test (`vga_is_firmware_default`,
+>     `drivers/pci/vgaarb.c:566-569`, Linux 7.1). That is what fixes Xorg's missing boot VGA device.
+>   - kf-disp keeps scanning out the GOP region until the guest's first modeset, so the handover shows
+>     no black flash.
+> - **Speed.**
+>   - BAR1 writes are write-combined, and boot consoles only write (simpledrm keeps a shadow buffer).
+>     A BAR framebuffer therefore costs what it costs on a real card, with no VM exits.
+>   - Reads are the slow direction (~48 MiB/s; memory note of 2026-09-11, bare-metal RTX 3060), and
+>     scanout never uses them.
+>   - A framebuffer in plain RAM is rejected. It breaks the ownership above, and the handover expects
+>     VRAM (BAR1 = real VRAM views, owner 2026-09-14).
+>   - Optional, only if boot is found to be slow: back the GOP region with host RAM during boot, and
+>     move it into VRAM before the NVIDIA driver touches it through the GPU.
+> - **Driver unload.**
+>   - NVIDIA's modeset driver restores the boot console (`nvEvoRestoreConsole`,
+>     `ogkm-580: src/nvidia-modeset/src/nvkms-console-restore.c:756`). It finds the console through
+>     `NV0080_CTRL_CMD_OS_UNIX_VT_GET_FB_INFO`. kf-disp must follow that restore.
+>   - The Linux console does not come back. nvidia-drm's eviction calls `sysfb_disable()`, which
+>     unregisters the firmware framebuffer device and sets a flag nothing clears
+>     (`drivers/firmware/sysfb.c:67-80`, `:156`). Bare metal behaves the same; a small guest module
+>     could re-register the device.
+>   - Windows hands the framebuffer to its basic display driver when the NVIDIA driver stops
+>     (`DxgkDdiStopDeviceAndReleasePostDisplayOwnership`). kf-disp must keep scanning out what the
+>     driver left programmed; that keeps the screen alive during Windows driver updates.
+> - **The frame to capture** is, per head, the window surface latched at vblank plus the cursor
+>   (built, §4.4–§4.6). Write the flip-completion notifier only after the frame was taken, and with
+>   the broker never overwrite a copy before `RELEASE`.
+> - **Order:**
+>   1. the GOP option ROM;
+>   2. a stock guest display with no tweaks;
+>   3. the broker;
+>   4. the unload tests.
+>
+>   X11 still waits on the `GF100_DISP_SW` choice (A/B; recommendation B).
 
 > **STATUS: M3 MET FOR THE WAYLAND DESKTOP; X11 DESKTOP PARTIAL — 2026-09-30 (branch `v3-display2`;
 > display stays default-off).** RTX 3060 (GA106), host + guest 580.159.04, vast 53505783.

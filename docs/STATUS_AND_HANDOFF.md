@@ -9,6 +9,35 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+- ★ **RESUME HERE — 2026-10-03 (session wrap before compaction).** Master and v3 are equal and CI
+  is green. No Vast box is running.
+  - **Done this session, all on master:**
+    - the dual licence (`LICENSE`, `OWNER_RULINGS.md` §G);
+    - the section-number gate, wired into CI and made able to fail;
+    - `design/V3_UVM_STATE_MACHINE.md`;
+    - rulings §H (the stub rule; the vGPU guest stack crossed off) and §I (release scope);
+    - `design/V3_COOPERATIVE_TIERS.md` (post-release);
+    - the display plan of 2026-10-03, in `design/V3_DISPLAY.md` (NEXT block);
+    - `reference/gsp_rm_size_and_rpc_surface_580.md`.
+  - **Next, in order (owner, §I):**
+    1. The display path:
+       1. the GOP option ROM;
+       2. a stock guest display with no tweaks;
+       3. the broker;
+       4. the unload tests.
+    2. The install path and the sweep.
+    3. Windows.
+  - **Waiting on the owner:**
+    - the go-ahead and the eight open questions in `design/V3_SWEEP_AND_INSTALL.md` §4;
+    - the `GF100_DISP_SW` choice (A or B);
+    - whether the archived C traces holding VBIOS-served PROM reads stay public (§G);
+    - renting a GPU box before display testing.
+  - **Release items found:**
+    - managed-memory faults must fail loudly (`conjugateGradientUM` is silent);
+    - add a CUDA virtual-memory-API sample to the sweep;
+    - ship the doorbell helper only after the per-token breakdown and a non-nested baseline.
+  - **Assumed, not contradicted:** the git identities `x <x>`, `r <r@r>` and `w330 <a@b>` are the
+    owner's box sessions. They committed the w384, E0b/E1 and w330 work.
 - **2026-10-03 — DESIGN, nothing built:** `design/V3_COOPERATIVE_TIERS.md` is the stock tier plus opt-in stages:
   - doorbell passthrough by token;
   - Linux dynamic memory with allocations that can fail;
