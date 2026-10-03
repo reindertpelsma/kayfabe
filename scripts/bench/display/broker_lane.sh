@@ -43,6 +43,25 @@ session() {
     return 1
 }
 
+# ⊘ [box 54032077, runs brkA2/brkA3, 2026-10-03] the KDE session locked itself while idle
+# (kscreenlocker_greet, LockedHint=yes): the locker holds the keyboard and pointer, so CTRL+ALT+F/G
+# and the pointer never reached the broker, and no ABS reached the guest — two runs that graded
+# nothing. Unlocked, the broker's own test client saw every key and the grab toggle.
+unlock() {
+    local s
+    for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk -v u="${1:-user}" '$3 == u {print $1}'); do
+        if [ "$(loginctl show-session "$s" -p LockedHint --value 2>/dev/null)" = yes ]; then
+            loginctl unlock-session "$s"; echo "BRK_SESSION session=$s was LOCKED: unlocked"
+        fi
+    done
+}
+# every broker on <socket> — the runuser wrapper ignores SIGTERM ([run brkA3]: it outlived the lane)
+brokers_down() {
+    pkill -9 -f "^runuser -u [a-z0-9_-]* -- env .*nvkvm-display-broker --socket $1( |\$)" 2>/dev/null
+    pkill -f "^[^ ]*nvkvm-display-broker --socket $1( |\$)" 2>/dev/null
+    sleep 1
+}
+
 if [ "$cmd" = prep ]; then
     REV=${2:?prep needs the nvkvm-pv revision}
     export DEBIAN_FRONTEND=noninteractive
@@ -81,6 +100,15 @@ if [ "$cmd" = prep ]; then
     for _ in $(seq 120); do session && break; sleep 1; done
     if session; then
         echo "PREP_SESSION user=$SU uid=$SUID display=$XD xauth=$([ -n "$XA" ] && echo set || echo none)"
+        # no screen lock and no blanking for the lane's session (see unlock above)
+        db=$(tr '\0' '\n' < "/proc/$(pgrep -o -x plasmashell)/environ" | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p')
+        for k in Autolock LockOnResume; do
+            runuser -u "$SU" -- env DBUS_SESSION_BUS_ADDRESS="$db" kwriteconfig5 --file kscreenlockerrc --group Daemon --key "$k" false
+        done
+        runuser -u "$SU" -- env DBUS_SESSION_BUS_ADDRESS="$db" qdbus org.freedesktop.ScreenSaver /ScreenSaver configure >/dev/null 2>&1
+        env DISPLAY="$XD" XAUTHORITY="$XA" xset s off -dpms
+        unlock "$SU"
+        echo "PREP_SESSION_LOCK autolock=off $(grep -h Autolock "/home/$SU/.config/kscreenlockerrc" 2>/dev/null)"
         echo "PREP_XORG $(grep -aE 'NVIDIA GLX Module' /var/log/Xorg.0.log | tail -1 | cut -c1-80)"
         env DISPLAY="$XD" XAUTHORITY="$XA" xdpyinfo 2>/dev/null | grep -E 'dimensions|DRI3|Present' | head -4 | sed 's/^/PREP_XDPY /'
     else
@@ -97,6 +125,9 @@ session || { echo "BRK_LANE_EXIT rc=20 no desktop session (run prep)"; exit 20; 
 [ -x "$B" ] || { echo "BRK_LANE_EXIT rc=21 no broker at $B (run prep)"; exit 21; }
 echo "BRK_REVS kf3=$(git -C "$REPO" rev-parse HEAD) broker=$(git -C "$NVPV" rev-parse HEAD)"
 SOCKD=/run/user/$SUID/nvkvm; SOCK=$SOCKD/display.sock
+unlock "$SU"
+echo "BRK_SESSION_LOCKED=$(loginctl show-session "$(loginctl list-sessions --no-legend | awk -v u="$SU" '$3 == u && $0 !~ /closing/ {print $1}' | tail -1)" -p LockedHint --value 2>/dev/null)"
+brokers_down "$SOCK"
 install -d -o "$SU" -m 0700 "$SOCKD"; rm -f "$SOCK"
 # shellcheck disable=SC2086  # BROKER_ARGS is a flag list
 runuser -u "$SU" -- env DISPLAY="$XD" XAUTHORITY="$XA" "$B" --socket "$SOCK" --backend x11 --persist \
@@ -116,7 +147,9 @@ exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
 bash "$REPO/scripts/bench/boot_capture.sh" "$TAG" -- -vga none -device virtio-keyboard-pci \
     -device virtio-tablet-pci,display=kf0,head=0 -device virtio-mouse-pci
 rc=$?
-kill "$BPID" 2>/dev/null; sleep 1
+kill "$BPID" 2>/dev/null
+brokers_down "$SOCK"
+echo "BRK_BROKERS_LEFT=$(pgrep -c -f "[n]vkvm-display-broker --socket $SOCK")"
 for f in qemu probe dmesg dmesg_after hostdmesg rev; do
     s=$BENCH/run_${TAG}_$f.log; [ "$f" = rev ] && s=$BENCH/run_${TAG}_rev.txt
     [ -s "$s" ] && cp "$s" "$OUT/"
