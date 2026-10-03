@@ -270,9 +270,11 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     check("size KfField", size_of::<KfField>());
     check("size KfDir", size_of::<KfDir>());
     check("size KfFormat", size_of::<KfFormat>());
-    check("size KfWin", size_of::<KfWin>());
+    // ★ `v3-sec-rawaddr`: `KfWin`/`KfArgs` carry device addresses and are declared only inside
+    // the perimeter; their layouts are exported as data for exactly this comparison.
+    check("size KfWin", KF_WIN_LAYOUT.size);
     check("size KfDev", size_of::<KfDev>());
-    check("size KfArgs", size_of::<KfArgs>());
+    check("size KfArgs", KF_ARGS_LAYOUT.size);
     check("size KfReportHeader", size_of::<KfReportHeader>());
     check("size KfPdbEntry", size_of::<KfPdbEntry>());
     check("size KfMapRun", size_of::<KfMapRun>());
@@ -286,6 +288,19 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
             check($k, std::mem::offset_of!($t, $f));
         };
     }
+    let args_off = |f: &str| {
+        KF_ARGS_LAYOUT
+            .fields
+            .iter()
+            .find(|(n, _)| *n == f)
+            .unwrap_or_else(|| panic!("KF_ARGS_LAYOUT has no field `{f}`"))
+            .1
+    };
+    assert_eq!(
+        KF_ARGS_LAYOUT.fields.len(),
+        18,
+        "every KfArgs field is in the exported layout"
+    );
     off!(KfFormat, abi_version, "off KfFormat.abi_version");
     off!(KfFormat, table_version, "off KfFormat.table_version");
     off!(KfFormat, dir, "off KfFormat.dir");
@@ -299,24 +314,24 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     off!(KfFormat, bit_volatile, "off KfFormat.bit_volatile");
     off!(KfFormat, pcf, "off KfFormat.pcf");
     off!(KfFormat, ps_log2, "off KfFormat.ps_log2");
-    off!(KfArgs, win, "off KfArgs.win");
-    off!(KfArgs, fmt, "off KfArgs.fmt");
-    off!(KfArgs, dev, "off KfArgs.dev");
-    off!(KfArgs, walk, "off KfArgs.walk");
-    off!(KfArgs, com, "off KfArgs.com");
-    off!(KfArgs, slot, "off KfArgs.slot");
-    off!(KfArgs, pdbs, "off KfArgs.pdbs");
-    off!(KfArgs, slots, "off KfArgs.slots");
-    off!(KfArgs, npdb, "off KfArgs.npdb");
-    off!(KfArgs, key_perm, "off KfArgs.key_perm");
-    off!(KfArgs, ack, "off KfArgs.ack");
-    off!(KfArgs, ack_code, "off KfArgs.ack_code");
-    off!(KfArgs, scratch, "off KfArgs.scratch");
-    off!(KfArgs, iscratch, "off KfArgs.iscratch");
-    off!(KfArgs, hdr, "off KfArgs.hdr");
-    off!(KfArgs, rpdb, "off KfArgs.rpdb");
-    off!(KfArgs, rrun, "off KfArgs.rrun");
-    off!(KfArgs, lay, "off KfArgs.lay");
+    check("off KfArgs.win", args_off("win"));
+    check("off KfArgs.fmt", args_off("fmt"));
+    check("off KfArgs.dev", args_off("dev"));
+    check("off KfArgs.walk", args_off("walk"));
+    check("off KfArgs.com", args_off("com"));
+    check("off KfArgs.slot", args_off("slot"));
+    check("off KfArgs.pdbs", args_off("pdbs"));
+    check("off KfArgs.slots", args_off("slots"));
+    check("off KfArgs.npdb", args_off("npdb"));
+    check("off KfArgs.key_perm", args_off("key_perm"));
+    check("off KfArgs.ack", args_off("ack"));
+    check("off KfArgs.ack_code", args_off("ack_code"));
+    check("off KfArgs.scratch", args_off("scratch"));
+    check("off KfArgs.iscratch", args_off("iscratch"));
+    check("off KfArgs.hdr", args_off("hdr"));
+    check("off KfArgs.rpdb", args_off("rpdb"));
+    check("off KfArgs.rrun", args_off("rrun"));
+    check("off KfArgs.lay", args_off("lay"));
     off!(KfDev, need, "off KfDev.need");
     off!(KfLayout, walk_cap, "off KfLayout.walk_cap");
     off!(KfLayout, prev_off, "off KfLayout.prev_off");
@@ -737,10 +752,10 @@ fn assert_descriptor_matches(cu_fn: &str, rust: &kf_cuda::abi::KfFormat, tag: &s
     let run = Command::new(&bin).output().expect("run the probe");
     let c_hex = String::from_utf8_lossy(&run.stdout).trim().to_string();
 
-    let rust_hex: String = kf_cuda::driver_unsafe::view_bytes(rust)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
+    // ★ T17: the ENCODER the launches use (`KfFormat::encode`, every field at its offset, padding
+    // zero by construction) — no longer the compiler's raw bytes of the value.
+    let rust_bytes = rust.encode();
+    let rust_hex: String = rust_bytes.iter().map(|b| format!("{b:02x}")).collect();
 
     if c_hex != rust_hex {
         // ⊘ Name the FIRST differing byte and the field it lands in. "the bytes differ" is
@@ -748,7 +763,7 @@ fn assert_descriptor_matches(cu_fn: &str, rust: &kf_cuda::abi::KfFormat, tag: &s
         let cb: Vec<u8> = (0..c_hex.len() / 2)
             .map(|i| u8::from_str_radix(&c_hex[i * 2..i * 2 + 2], 16).unwrap_or(0))
             .collect();
-        let rb = kf_cuda::driver_unsafe::view_bytes(rust);
+        let rb = &rust_bytes[..];
         let at = cb
             .iter()
             .zip(rb.iter())
@@ -785,14 +800,13 @@ fn the_committed_ptx_declares_the_same_kfargs_size() {
     let end = rest.find(']').expect("the .param declaration is closed");
     let declared: usize = rest[..end].parse().expect("a decimal size");
     assert_eq!(
-        declared,
-        size_of::<KfArgs>(),
+        declared, KF_ARGS_LAYOUT.size,
         "★ THE COMMITTED PTX AND THE RUST MIRROR DISAGREE ABOUT KfArgs. The PTX's own \
          `.param` says {declared} bytes and abi.rs says {}. Regenerate the PTX \
          (`python3 cuda/walk/make_ptx.py kf_walk.cu kf_walk.ptx compute_75` in cuda/walk) or \
          fix the mirror — but do not ship them disagreeing: the kernel takes this struct BY \
          VALUE.",
-        size_of::<KfArgs>()
+        KF_ARGS_LAYOUT.size
     );
 }
 
@@ -1002,4 +1016,174 @@ fn the_report_constants_match_the_header() {
     ] {
         assert_eq!(parse(n), u64::from(r), "{n} differs");
     }
+}
+
+/// ★★ **T17 — every host-to-device launch struct encodes to exactly the C compiler's bytes**
+/// (`v3-sec-rawaddr`, 2026-10-04). `KfDev`, `KfLayout` and `KfAck` reach the GPU only through
+/// their `encode()` (each field at its `offset_of!`, padding zero by construction). A `g++` program
+/// zeroes each struct as the `.cu` does, assigns every field (every array element) a distinct value,
+/// and prints its bytes; the Rust encoder of the same values must produce them byte for byte — a
+/// field the encoder skipped, misplaced or narrowed differs here.
+#[test]
+fn every_launch_struct_encodes_to_the_c_compilers_bytes() {
+    let root = repo_root();
+    let cu = std::fs::read_to_string(root.join("cuda/walk/kf_walk.cu")).expect("the .cu");
+    let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h")).expect("the header");
+    // A distinct value per (field, element), truncated by the field's width on both sides.
+    let v = |k: u64, j: u64| {
+        (k << 40) ^ j.wrapping_mul(0x9E37_79B9).wrapping_add(0x5A5A_A5A5) ^ 0x3C00_0000_0000_00C3
+    };
+    let arr = |k: u64| -> [u32; KF_MAX_PDB] { core::array::from_fn(|j| v(k, j as u64) as u32) };
+    let dev = KfDev {
+        generation: v(0, 0),
+        committed: v(1, 0),
+        runs_per_pdb: v(2, 0) as u32,
+        entry_budget: v(3, 0) as u32,
+        run_capacity: v(4, 0) as u32,
+        pdb_capacity: v(5, 0) as u32,
+        max_pdbs: v(6, 0) as u32,
+        max_slots: v(7, 0) as u32,
+        tbl_run_count: arr(8),
+        diff_count: arr(9),
+        diff_vflags: arr(10),
+        entry_refuse: arr(11),
+        entries_visited: v(12, 0),
+        refusals: v(13, 0) as u32,
+        refuse_mask: v(14, 0) as u32,
+        hdr_flags: v(15, 0) as u32,
+        walk_trunc: v(16, 0) as u32,
+        walk_abort: v(17, 0) as u32,
+        sparse_slots: v(18, 0) as u32,
+        need: arr(19),
+    };
+    let slots = |k: u64| -> [u32; KF_MAX_SLOTS] { core::array::from_fn(|j| v(k, j as u64) as u32) };
+    let lay = KfLayout {
+        walk_off: arr(20),
+        walk_cap: arr(21),
+        prev_off: arr(22),
+        prev_cap: arr(23),
+        slot_off: slots(24),
+        slot_cap: slots(25),
+    };
+    let ack = KfAck {
+        generation: v(26, 0),
+        nrun: v(27, 0) as u32,
+        nreset: v(28, 0) as u32,
+        reset: core::array::from_fn(|j| v(29, j as u64) as u32),
+    };
+    // The C side: the same values, assigned field by field into a zeroed struct.
+    let mut set = String::new();
+    let mut scalar =
+        |var: &str, f: &str, k: u64| set.push_str(&format!("{var}.{f} = {}ULL;\n", v(k, 0)));
+    for (f, k) in [
+        ("generation", 0),
+        ("committed", 1),
+        ("runs_per_pdb", 2),
+        ("entry_budget", 3),
+        ("run_capacity", 4),
+        ("pdb_capacity", 5),
+        ("max_pdbs", 6),
+        ("max_slots", 7),
+        ("entries_visited", 12),
+        ("refusals", 13),
+        ("refuse_mask", 14),
+        ("hdr_flags", 15),
+        ("walk_trunc", 16),
+        ("walk_abort", 17),
+        ("sparse_slots", 18),
+    ] {
+        scalar("D", f, k);
+    }
+    for (f, k) in [("generation", 26), ("nrun", 27), ("nreset", 28)] {
+        scalar("A", f, k);
+    }
+    let mut array = |var: &str, f: &str, k: u64, n: usize| {
+        for j in 0..n {
+            set.push_str(&format!("{var}.{f}[{j}] = {}ULL;\n", v(k, j as u64)));
+        }
+    };
+    for (f, k) in [
+        ("tbl_run_count", 8),
+        ("diff_count", 9),
+        ("diff_vflags", 10),
+        ("entry_refuse", 11),
+        ("need", 19),
+    ] {
+        array("D", f, k, KF_MAX_PDB);
+    }
+    for (f, k) in [
+        ("walk_off", 20),
+        ("walk_cap", 21),
+        ("prev_off", 22),
+        ("prev_cap", 23),
+    ] {
+        array("L", f, k, KF_MAX_PDB);
+    }
+    for (f, k) in [("slot_off", 24), ("slot_cap", 25)] {
+        array("L", f, k, KF_MAX_SLOTS);
+    }
+    array("A", "reset", 29, KF_MAX_RESET);
+
+    let mut prog = String::from(
+        "#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n#include <string.h>\n",
+    );
+    for (d, src) in [
+        ("KF_DIRS", &cu),
+        ("KF_MAX_PDB", &h),
+        ("KF_MAX_RESET", &h),
+        ("KF_MAX_PDB_L", &h),
+        ("KF_MAX_SLOTS", &h),
+    ] {
+        prog.push_str(&format!("#define {d} {}\n", extract_define(src, d)));
+    }
+    for name in ["KfAck", "KfLayout"] {
+        prog.push_str(&extract_struct(&h, name));
+        prog.push('\n');
+    }
+    prog.push_str(&extract_struct(&cu, "KfDev"));
+    prog.push('\n');
+    prog.push_str(
+        "static void dump(const void *p, size_t n){const unsigned char *b=(const unsigned char*)p;\
+         for(size_t i=0;i<n;i++)printf(\"%02x\",b[i]);printf(\"\\n\");}\n\
+         int main(void){KfDev D; KfLayout L; KfAck A; memset(&D,0,sizeof D); memset(&L,0,sizeof L); \
+         memset(&A,0,sizeof A);\n",
+    );
+    prog.push_str(&set);
+    prog.push_str("dump(&D,sizeof D); dump(&L,sizeof L); dump(&A,sizeof A); return 0;}\n");
+    let dir = std::env::temp_dir().join(format!("kf_t17_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a temp dir");
+    let (src, bin) = (dir.join("t17.cpp"), dir.join("t17"));
+    std::fs::write(&src, &prog).expect("write the probe");
+    let out = Command::new("g++")
+        .args(["-std=c++14", "-O0", "-w", "-o"])
+        .arg(&bin)
+        .arg(&src)
+        .output()
+        .expect("g++ must be present — a check that cannot RUN is not a check that passed");
+    assert!(
+        out.status.success(),
+        "{}\n{prog}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let run = Command::new(&bin).output().expect("run the probe");
+    let text = String::from_utf8_lossy(&run.stdout).to_string();
+    let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 3, "{text}");
+    assert_eq!(
+        lines[0],
+        hex(&dev.encode()),
+        "KfDev: the encoder and the C compiler disagree"
+    );
+    assert_eq!(
+        lines[1],
+        hex(&lay.encode()),
+        "KfLayout: the encoder and the C compiler disagree"
+    );
+    assert_eq!(
+        lines[2],
+        hex(&ack.encode()),
+        "KfAck: the encoder and the C compiler disagree"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

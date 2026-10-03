@@ -13,7 +13,7 @@
 //!
 //! ⊘ **Not a CUDA dependency of the workspace.** Nothing here links `libcuda` at build time;
 //! the library is found at run time and every failure to find it is a **named refusal**
-//! ([`driver::CudaError::NoLibrary`], carrying `dlerror()` verbatim). So a machine with no
+//! ([`CudaError::NoLibrary`], carrying `dlerror()` verbatim). So a machine with no
 //! NVIDIA driver builds and tests this crate exactly like one that has it.
 //!
 //! # ⊘⊘⊘ THE PREMISE, MEASURED RATHER THAN ASSUMED
@@ -30,10 +30,13 @@ pub mod abi;
 pub mod capacity;
 pub mod diffmodel;
 pub mod display;
-pub mod driver_unsafe;
+/// ★ `v3-sec-rawaddr` (2026-10-04, audit S1-04): the perimeter is PRIVATE. No other crate can name
+/// the driver binding, a device address type, or a raw launch — only the opaque handles re-exported
+/// below and from [`walk`] and [`display`], whose every entry point validates its own inputs.
+mod driver_unsafe;
 pub mod selftest;
 pub mod synth;
 pub mod walk;
 
-pub use driver_unsafe::{CompletionFd, Cuda, CudaError};
+pub use driver_unsafe::{CUresult, CompletionFd, CudaError, driver_leaks};
 pub use walk::{Collected, Report, ReportError, WALK_PTX, WalkCfg, WalkEntry, WalkKernel};

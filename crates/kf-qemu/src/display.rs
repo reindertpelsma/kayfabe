@@ -31,17 +31,19 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
-use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
+use kf_cuda::display::{ComposeLayer, ConsoleFrame, DisplayGpu};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::model::{ChannelKind, Statement, Waker};
 use kf_disp::ports::{EventReg, Ports};
 use kf_disp::regs::Regs;
 use kf_disp::scanout::{LayerPlan, ScanFormats};
+use kf_linux_raw::StaticSpan;
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_rm::display::SharedDisplayModel;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -412,10 +414,18 @@ fn unpack(s: u32) -> (u32, u32) {
     (s & 0xF, (s >> 4) & 0xF)
 }
 
-/// One published frame's description (the slot's frame memory is the worker's).
-#[derive(Debug, Default)]
+/// "No frame" in a [`FrameSlot`]'s span id.
+const NO_SPAN: u32 = u32::MAX;
+/// ★ How many console frames the plane can ever register: every slot grows at most once
+/// (`FRAME_SMALL → FRAME_MAX`), so `2 × SLOTS` spans cover the worker's whole life — below kf-cuda's
+/// cap of 16 console frames per plane (F3).
+const SPAN_TABLE: usize = 2 * SLOTS;
+
+/// One published frame's description: WHICH registered frame (an index into
+/// [`ConsoleShare`]'s span table — never an address) and its geometry.
+#[derive(Debug)]
 struct FrameSlot {
-    addr: AtomicUsize,
+    frame: AtomicU32,
     width: AtomicU32,
     height: AtomicU32,
     stride: AtomicU32,
@@ -423,11 +433,29 @@ struct FrameSlot {
     serial: AtomicU64,
 }
 
-/// ★ What the console reads: a frame's host address, geometry, format and serial.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl Default for FrameSlot {
+    fn default() -> FrameSlot {
+        FrameSlot {
+            frame: AtomicU32::new(NO_SPAN),
+            width: AtomicU32::new(0),
+            height: AtomicU32::new(0),
+            stride: AtomicU32::new(0),
+            format: AtomicU32::new(0),
+            serial: AtomicU64::new(0),
+        }
+    }
+}
+
+/// ★ What the console reads (`v3-sec-rawaddr`, 2026-10-04, audit S1-03): the frame's memory as an
+/// opaque [`StaticSpan`] — never a host address as a number — its span id, geometry, format and
+/// serial. `span` is `None` when the slot names no registered frame. ⊘ No `PartialEq`, `Hash` or
+/// derived `Debug`: each would read the span.
+#[derive(Clone, Copy)]
 pub struct FrameView {
-    /// Host address of the first pixel (page-locked memory the worker owns for the process).
-    pub addr: usize,
+    /// The frame's memory (page-locked, never unmapped), or `None`.
+    pub span: Option<StaticSpan>,
+    /// Which registered frame (an index into the span table).
+    pub id: u32,
     /// Width in pixels.
     pub width: u32,
     /// Height in pixels.
@@ -440,18 +468,51 @@ pub struct FrameView {
     pub serial: u64,
 }
 
+impl std::fmt::Debug for FrameView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FrameView")
+            .field("span_len", &self.span.map(|s| s.len()))
+            .field("id", &self.id)
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("stride", &self.stride)
+            .field("format", &self.format)
+            .field("serial", &self.serial)
+            .finish()
+    }
+}
+
+/// What the worker publishes for a slot: which registered frame, and its geometry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Published {
+    id: u32,
+    width: u32,
+    height: u32,
+    stride: u32,
+    format: u32,
+    serial: u64,
+}
+
 /// ★★ M2 — the frames the display worker hands QEMU's console, lock-free (`V3_DISPLAY.md` §4.6).
 ///
 /// Triple buffering in one atomic word `(front, ready)`: the console takes `ready` as its new
 /// `front` ([`ConsoleShare::take`]); the worker fills a slot that is NEITHER (there is always one,
 /// three slots minus two), then publishes it as `ready`, dropping an untaken older one. The console
 /// can only move `ready` to `front`, so the slot the GPU is writing is never the one on screen.
-/// ⊘ Frame memory is never freed while the device lives (a screendump may still hold a pixman image
-/// of an old front after the console moved on — a stale read is harmless, a freed page is not).
+///
+/// ★ `v3-sec-rawaddr` (S1-03): a slot carries a SPAN ID, resolved through an append-only table of
+/// [`StaticSpan`]s the worker registered, so no host address is ever stored as an integer. The id
+/// and the geometry are separate atomics and can come from two different publishes; the FFI checks
+/// the geometry against THAT id's span length (`ffi_unsafe::check_frame`), so a torn read becomes a
+/// refusal or stale pixels, never an out-of-bounds read.
+/// ⊘ Frame memory is never freed (a screendump may still hold a pixman image of an old front after
+/// the console moved on — a stale read is harmless, a freed page is not).
 #[derive(Debug)]
 pub struct ConsoleShare {
     state: AtomicU32,
     slots: [FrameSlot; SLOTS],
+    /// Every console frame the worker registered, append-only (each set exactly once).
+    spans: [OnceLock<StaticSpan>; SPAN_TABLE],
     /// Milliseconds (since the plane's start) of the console's last request — the refresh rate
     /// follows demand.
     demand_ms: AtomicU64,
@@ -463,6 +524,7 @@ impl Default for ConsoleShare {
         ConsoleShare {
             state: AtomicU32::new(pack(NO_SLOT, NO_SLOT)),
             slots: core::array::from_fn(|_| FrameSlot::default()),
+            spans: core::array::from_fn(|_| OnceLock::new()),
             demand_ms: AtomicU64::new(0),
             epoch: Instant::now(),
         }
@@ -491,8 +553,10 @@ impl ConsoleShare {
                 continue;
             }
             let sl = &self.slots[show as usize];
+            let id = sl.frame.load(Ordering::Acquire);
             return Some(FrameView {
-                addr: sl.addr.load(Ordering::Acquire),
+                span: self.spans.get(id as usize).and_then(|s| s.get().copied()),
+                id,
                 width: sl.width.load(Ordering::Acquire),
                 height: sl.height.load(Ordering::Acquire),
                 stride: sl.stride.load(Ordering::Acquire),
@@ -510,10 +574,21 @@ impl ConsoleShare {
             .unwrap_or(0) as usize
     }
 
+    /// **Worker**: register a console frame's span; its id, or `None` when the table is full (the
+    /// frame is then refused and never published). Append-only: an id names one span forever.
+    fn register(&self, span: StaticSpan) -> Option<u32> {
+        for (i, cell) in self.spans.iter().enumerate() {
+            if cell.set(span).is_ok() {
+                return u32::try_from(i).ok();
+            }
+        }
+        None
+    }
+
     /// **Worker**: describe slot `i`'s finished frame, then make it the ready one.
-    fn publish(&self, i: usize, f: FrameView) {
+    fn publish(&self, i: usize, f: Published) {
         let sl = &self.slots[i];
-        sl.addr.store(f.addr, Ordering::Release);
+        sl.frame.store(f.id, Ordering::Release);
         sl.width.store(f.width, Ordering::Release);
         sl.height.store(f.height, Ordering::Release);
         sl.stride.store(f.stride, Ordering::Release);
@@ -822,7 +897,7 @@ impl DisplayPlane {
         row: &'static kf_chip::display::DisplayRow,
         table: &kf_abi::versions::DriverAbiTable,
         bdf: &str,
-        store_fd: i32,
+        store_fd: std::os::fd::BorrowedFd<'_>,
         store_bytes: u64,
     ) -> Result<DisplayPlane, String> {
         let version = table.driver_version().to_string();
@@ -1740,8 +1815,10 @@ impl Device {
             }
         }
         // ⊘ QEMU's console may still point at a frame after the worker stops (its main loop refreshes
-        // until it ends): the frames and their context stay mapped until the process exits.
-        std::mem::forget(scan);
+        // until it ends). The frames' pages are never unmapped (kf-cuda leaks them by construction),
+        // so dropping `scan` is harmless; the plane's context is kept too, so teardown does no driver
+        // work on this thread (a convenience, not what keeps the frames valid).
+        drop(scan);
         std::mem::forget(io.gpu.take());
     }
 
@@ -1859,9 +1936,9 @@ struct ScanState {
     active: bool,
     /// The copy in flight: its number, slot, frame size and start.
     inflight: Option<(u64, usize, (u32, u32), Instant)>,
-    /// Page-locked frames per slot — grown, never freed while the device lives ([`ConsoleShare`]).
-    frames: [Option<Frame>; SLOTS],
-    retired: Vec<Frame>,
+    /// Page-locked frames per slot, with their span id in [`ConsoleShare`]'s table — grown, never
+    /// freed (a replaced frame's pages stay mapped for the process: QEMU may still read them).
+    frames: [Option<(ConsoleFrame, u32)>; SLOTS],
     /// When the last copy started.
     last: Option<Instant>,
     serial: u64,
@@ -2010,17 +2087,21 @@ impl ScanState {
             .scanout_us_total
             .fetch_add(us, Ordering::Relaxed);
         dp.counters.scanout_us_max.fetch_max(us, Ordering::Relaxed);
-        if let Some(f) = &self.frames[slot] {
+        if let Some((f, id)) = &self.frames[slot] {
             if self.trace && (n <= 8 || n.is_multiple_of(50)) {
                 let (wu, hu, st) = (w as usize, h as usize, w as usize * 4);
-                let fnv = fnv_rgb_xrgb8888(&f.read(0, st * hu), st, wu, hu);
+                let fnv = f
+                    .read(0, st * hu)
+                    .map_or(0, |b| fnv_rgb_xrgb8888(&b, st, wu, hu));
                 eprintln!("kf3: display: TRACE scanout copy {n} done: {w}x{h} fnv={fnv:016x}");
             }
             self.serial += 1;
+            // ⊘ The stride stays `w × 4` (the composition's tight rows); the FFI checks it against
+            // the frame's own length (`ffi_unsafe::check_frame`), never trusting this line.
             dp.console.publish(
                 slot,
-                FrameView {
-                    addr: f.addr(),
+                Published {
+                    id: *id,
                     width: w,
                     height: h,
                     stride: w * 4,
@@ -2143,18 +2224,29 @@ impl ScanState {
             self.done = n;
             return;
         };
-        if self.frames[slot].as_ref().is_none_or(|f| f.len() < need) {
+        if self.frames[slot]
+            .as_ref()
+            .is_none_or(|(f, _)| f.len() < need)
+        {
             let cap = if need <= FRAME_SMALL {
                 FRAME_SMALL
             } else {
                 FRAME_MAX
             };
-            match gpu.frame(cap) {
-                Ok(f) => {
-                    if let Some(old) = self.frames[slot].replace(f) {
-                        self.retired.push(old);
-                    }
-                }
+            // ★ v3-sec-rawaddr: the frame is registered with the GPU and then leaked (kf-cuda's
+            // `console_frame`), and its span is registered with the console BEFORE it is used, so
+            // a frame the console cannot name is refused here, never published.
+            let minted = gpu
+                .console_frame(cap)
+                .map_err(|e| e.to_string())
+                .and_then(|f| {
+                    dp.console
+                        .register(f.span())
+                        .map(|id| (f, id))
+                        .ok_or_else(|| "the console's span table is full".to_string())
+                });
+            match minted {
+                Ok(fid) => self.frames[slot] = Some(fid),
                 Err(e) => {
                     self.refuse(dp, &format!("a {cap:#x}-byte console frame: {e}"));
                     self.done = n;
@@ -2162,22 +2254,21 @@ impl ScanState {
                 }
             }
         }
-        let Some(frame) = self.frames[slot].as_ref() else {
+        let Some((frame, _)) = self.frames[slot].as_ref() else {
             self.done = n;
             return;
         };
         let queued = gpu
             .compose_begin(w, h)
             .map_err(|e| format!("composition {w}x{h}: {e}"))
-            .and_then(|()| {
-                layers.iter().try_for_each(|l| {
-                    gpu.compose_layer(&compose_layer(l), w, h)
-                        .map_err(|e| format!("window {}: {e}", l.window))
-                })
-            })
-            .and_then(|()| {
-                gpu.compose_finish(w, h, frame)
-                    .map_err(|e| format!("the frame copy: {e}"))
+            .and_then(|c| {
+                layers
+                    .iter()
+                    .try_for_each(|l| {
+                        c.layer(&compose_layer(l))
+                            .map_err(|e| format!("window {}: {e}", l.window))
+                    })
+                    .and_then(|()| c.finish(frame).map_err(|e| format!("the frame copy: {e}")))
             });
         match queued {
             Ok(()) => {
@@ -2264,15 +2355,31 @@ mod tests {
         assert_eq!(m.classify(0x0061_2078), DispWrite::Plain);
     }
 
-    fn frame(addr: usize, serial: u64) -> FrameView {
-        FrameView {
-            addr,
+    fn frame(id: u32, serial: u64) -> Published {
+        Published {
+            id,
             width: 1920,
             height: 1080,
             stride: 7680,
             format: 1,
             serial,
         }
+    }
+
+    /// A span over a leaked one-page private anonymous region (a test's console frame).
+    pub(crate) fn test_span() -> StaticSpan {
+        let page = kf_linux_raw::HostPageSize::query();
+        let r: &'static kf_linux_raw::MappedRegion = Box::leak(Box::new(
+            kf_linux_raw::MappedRegion::map(
+                kf_linux_raw::Backing::PrivateAnonymous,
+                page.bytes(),
+                kf_linux_raw::HostProt::ReadWrite,
+                kf_linux_raw::CachePolicy::WriteBack,
+                page,
+            )
+            .expect("a page"),
+        ));
+        r.static_span().expect("owned anonymous memory")
     }
 
     fn boot_scan() -> BootScan {
@@ -2508,11 +2615,14 @@ mod tests {
     #[test]
     fn the_console_takes_the_newest_frame_and_the_gpu_never_writes_the_shown_one() {
         let c = ConsoleShare::default();
-        assert_eq!(c.take(), None, "no frame before the first copy");
+        assert!(c.take().is_none(), "no frame before the first copy");
+        let ids: Vec<u32> = (0..4).map(|_| c.register(test_span()).unwrap()).collect();
+        assert_eq!(ids, [0, 1, 2, 3], "the table is append-only");
         let a = c.free_slot();
-        c.publish(a, frame(0x1000, 1));
+        c.publish(a, frame(ids[0], 1));
         let shown = c.take().unwrap();
-        assert_eq!((shown.addr, shown.serial), (0x1000, 1));
+        assert_eq!((shown.id, shown.serial), (ids[0], 1));
+        assert!(shown.span.is_some(), "a registered id resolves to its span");
         assert_eq!(
             c.take().unwrap().serial,
             1,
@@ -2521,10 +2631,10 @@ mod tests {
         // two copies complete before the console asks: the second replaces the first
         let b = c.free_slot();
         assert_ne!(b, a, "never the shown slot");
-        c.publish(b, frame(0x2000, 2));
+        c.publish(b, frame(ids[1], 2));
         let d = c.free_slot();
         assert!(d != a && d != b, "neither shown nor ready");
-        c.publish(d, frame(0x3000, 3));
+        c.publish(d, frame(ids[2], 3));
         let e = c.free_slot();
         assert_ne!(e, a, "the shown slot is still the console's");
         assert_ne!(e, d, "the ready slot is not a target");
@@ -2537,7 +2647,7 @@ mod tests {
             let (front, ready) = unpack(c.state.load(Ordering::Acquire));
             let t = c.free_slot() as u32;
             assert!(t != front && t != ready);
-            c.publish(t as usize, frame(0x4000, 4));
+            c.publish(t as usize, frame(ids[3], 4));
             if t.is_multiple_of(2) {
                 c.take();
             }

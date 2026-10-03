@@ -1,81 +1,68 @@
-//! ★★★★★ **THE CUDA DRIVER API, `dlopen`ed** — no build-time link, no `libcudart`, no CUDA
-//! toolkit anywhere in this tree's build.
+//! ★★★★★ **THE CUDA DRIVER API, `dlopen`ed — AND THE ONLY PLACE A DEVICE OR HOST ADDRESS EXISTS IN
+//! THIS CRATE** (`v3-sec-rawaddr`, 2026-10-04; audit S1-03/S1-04; `THE_CONSTRAINTS.md` §13;
+//! `OWNER_RULINGS.md` §R).
 //!
-//! # ⊘⊘⊘ THE PREMISE THIS WHOLE MODULE EXISTS FOR, AND IT IS MEASURED
+//! # The perimeter, and its two tiers
 //!
-//! `[measured 2026-09-14, locally, no GPU]` a **musl static-pie** Rust binary's `dlopen`
-//! returns `NULL` with `dlerror()` = **`"Dynamic loading not supported"`** — for
-//! `libcuda.so.1`, for `libc.so.6` and for `libm.so.6` alike. ⇒ the refusal is **musl's**,
-//! not `libcuda`'s, and it arrives **before any question about CUDA is asked**. Every other
-//! isolate in this tree is exactly that binary (`kayfabe-isolate-host/build.rs` refuses a
-//! non-static image by name), so **no other isolate could ever load CUDA**, whatever it did
-//! about privilege ordering.
+//! This file is the audit perimeter of `kf-cuda` (§R: *"this file can violate memory safety"*).
+//! Everything that constructs, stores or opens a device address, a host address, or a driver handle
+//! lives in the inline module [`raw`] below — **every `unsafe` block of the crate is in it**, and
+//! every field of every address-carrying type is private to it. Its two child files are perimeter
+//! too, one tier out:
 //!
-//! ⊘ `THE_CONSTRAINTS.md` §w724d states the blocker as *"`libcuda` is a glibc shared object,
-//! and musl static binaries do not support `dlopen` at all"*. Both halves are true and the
-//! second is the load-bearing one: it is not *"the wrong kind of shared object"*, it is
-//! *"there is no dynamic linker in this process"*. ⇒ the fix has to be a **different build**,
-//! which is what §w724d prescribes.
+//! - `driver_unsafe/walk_gpu_unsafe.rs` — the walker's GPU half (`WalkGpu`, `DeviceImage`);
+//! - `driver_unsafe/display_gpu_unsafe.rs` — the display plane's (`DisplayGpu`, `Composer`,
+//!   `ConsoleFrame`).
+//!
+//! The children call `raw`'s validating methods and nothing else: Rust's privacy (a child module
+//! cannot see a sibling's private fields or struct literals) means a child **cannot build** a
+//! [`raw`] range around an address of its choosing — the compiler enforces it, not a convention.
+//! The children contain no `unsafe` at all.
+//!
+//! Outside the perimeter (`walk.rs`, `display.rs`, every other crate) no address is held, built or
+//! passed: only the opaque handles and offsets into objects named by handle.
+//!
+//! # The boundary rule
+//!
+//! Every function reachable from safe code that leads into a driver call validates ALL of its own
+//! inputs — offset plus length with `checked_add`, the range inside the real allocation, context
+//! identity of every range AND of the stream, kernel argument kinds and capacities, alignment,
+//! lifetime (by type) and GPU-flight state (owned here, never promised by a caller). A precondition
+//! left to a caller would be *"unsafe code declared as safe"* (§R) and there is none.
 //!
 //! # Why the driver API and not the runtime API
 //!
-//! `libcudart` is a second shared object, it is not present on a machine that has only the
-//! driver installed, and it owns a context lifecycle we do not want. The driver API is what
-//! `libcuda.so.1` — the file the **driver package** installs, beside `nvidia-smi` — exports.
-//! ⇒ a bench box provisioned with nothing but the NVIDIA driver can run this. That is the
-//! same reason the PTX is JITted rather than shipped as a cubin.
+//! `libcudart` is a second shared object, absent on a machine that has only the driver, and it owns
+//! a context lifecycle we do not want. The driver API is what `libcuda.so.1` — the file the
+//! **driver package** installs — exports. ⊘ A **musl static-pie** binary cannot `dlopen` at all
+//! (`dlerror()` = *"Dynamic loading not supported"*, 2026-09-14, locally, no GPU), so this crate is
+//! only ever loaded by a dynamically linked process (QEMU, the harness binaries).
 //!
-//! ⚠ **Every symbol is resolved by name and a missing one is a named refusal**, never a null
-//! call. A partially-resolved binding that runs until it reaches the symbol nobody checked is
-//! the shape this tree keeps paying for.
+//! ⚠ **Every required symbol is resolved by name and a missing one is a named refusal**, never a
+//! null call.
 
-use core::ffi::{c_char, c_int, c_uint, c_void};
-use std::ffi::CString;
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
+pub(crate) mod display_gpu_unsafe;
+#[cfg(test)]
+mod tests_unsafe;
+pub(crate) mod walk_gpu_unsafe;
+
+pub use raw::CompletionFd;
+pub use raw::{KF_ARGS_LAYOUT, KF_WIN_LAYOUT, StructLayout};
 
 /// A CUDA driver-API status. `0` is `CUDA_SUCCESS`.
-pub type CUresult = c_int;
-/// `CUDA_SUCCESS`.
-pub const CUDA_SUCCESS: CUresult = 0;
+pub type CUresult = core::ffi::c_int;
 
-/// A device-memory address, as the driver spells it.
-pub type CUdeviceptr = u64;
-
-unsafe extern "C" {
-    fn dlopen(filename: *const c_char, flag: c_int) -> *mut c_void;
-    fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
-    fn dlerror() -> *const c_char;
-    // ★ P4 (w826, `V3_P4_PORT_MAP.md` §2.1(d)) — the walk's completion fd. libc, which every
-    // glibc process already links; no new build dependency.
-    fn eventfd(initval: c_uint, flags: c_int) -> c_int;
-    fn read(fd: c_int, buf: *mut c_void, count: usize) -> isize;
-    fn write(fd: c_int, buf: *const c_void, count: usize) -> isize;
-    fn poll(fds: *mut PollFd, nfds: core::ffi::c_ulong, timeout: c_int) -> c_int;
-}
-
-/// `struct pollfd`.
-#[repr(C)]
-struct PollFd {
-    fd: c_int,
-    events: i16,
-    revents: i16,
-}
-/// `POLLIN`.
-const POLLIN: i16 = 0x1;
-/// `EFD_NONBLOCK | EFD_CLOEXEC` (`<sys/eventfd.h>`; the same values on x86-64 and aarch64).
-const EFD_NONBLOCK_CLOEXEC: c_int = 0o4000 | 0o2_000_000;
-/// `CUDA_ERROR_NOT_READY` — `cuEventQuery`'s "not yet", which is an answer and not a failure.
-pub const CUDA_ERROR_NOT_READY: CUresult = 600;
-
-const RTLD_NOW: c_int = 2;
-const RTLD_GLOBAL: c_int = 0x100;
-
-/// Why CUDA could not be brought up, or what it refused.
+/// Why CUDA could not be brought up, or what it (or this crate's perimeter) refused.
+///
+/// ⊘ No variant carries an address: an error text naming a device pointer or a host address would
+/// hand it to safe code as a string (design §1 R1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CudaError {
     /// `libcuda.so.1` could not be loaded. ⊘ Carries `dlerror()` verbatim, because
     /// *"Dynamic loading not supported"* (a musl build) and *"cannot open shared object
-    /// file"* (no driver installed) are **different diagnoses** and a collapsed message
-    /// would send a reader to the wrong one.
+    /// file"* (no driver installed) are **different diagnoses**.
     NoLibrary {
         /// What was tried.
         soname: String,
@@ -84,13 +71,13 @@ pub enum CudaError {
     },
     /// A symbol the binding requires is absent from the library that did load.
     MissingSymbol(&'static str),
-    /// A driver call refused.
+    /// A driver call refused, or the perimeter refused an input by name.
     Refused {
-        /// Which call.
+        /// Which call, or which check.
         what: &'static str,
-        /// Its `CUresult`.
+        /// Its `CUresult` (`0` for a perimeter refusal).
         code: CUresult,
-        /// `cuGetErrorName`, if the library could give one.
+        /// `cuGetErrorName`, or the refusal's reason.
         name: String,
     },
 }
@@ -109,1704 +96,2699 @@ impl core::fmt::Display for CudaError {
     }
 }
 
-/// The subset of the driver API the walk kernel needs, resolved once.
+/// A perimeter refusal, by name.
+pub(crate) fn refused(what: &'static str, name: String) -> CudaError {
+    CudaError::Refused {
+        what,
+        code: 0,
+        name,
+    }
+}
+
+/// How many device allocations, completion descriptors and other driver resources the perimeter
+/// LEAKED because the context could not be drained before their release (failure policy F1:
+/// freeing after a failed drain races queued work; closing a descriptor a queued host function will
+/// write lets a reused fd number receive it). A count, never an address.
+#[must_use]
+pub fn driver_leaks() -> u64 {
+    raw::leaks()
+}
+
+/// ═══ THE RAW TIER ═════════════════════════════════════════════════════════════════════════════
 ///
-/// ⊘ It is a **struct of function pointers and not a set of `extern` declarations**, because
-/// an `extern` block is a link-time dependency: it would make every build of this workspace
-/// require `libcuda`, including the ones on machines with no NVIDIA driver at all. The whole
-/// point is that the dependency is discovered at run time, in one process, and refused by
-/// name everywhere else.
-#[allow(non_snake_case)]
-pub struct Cuda {
-    _handle: *mut c_void,
-    pub(crate) cuInit: unsafe extern "C" fn(c_uint) -> CUresult,
-    pub(crate) cuDeviceGet: unsafe extern "C" fn(*mut c_int, c_int) -> CUresult,
-    pub(crate) cuDeviceGetCount: unsafe extern "C" fn(*mut c_int) -> CUresult,
-    pub(crate) cuDeviceGetName: unsafe extern "C" fn(*mut c_char, c_int, c_int) -> CUresult,
-    /// ★ `cuDeviceGetByPCIBusId(CUdevice*, const char*)` — select the device by the host GPU's
-    /// PCI address, never by ordinal (V3_MULTI_GPU_AUDIT §2 blocker 1: ordinals are
-    /// fastest-first and `CUDA_VISIBLE_DEVICES` reorders them). Present since CUDA 4.1, so a
-    /// missing symbol refuses the binding by name.
-    pub(crate) cuDeviceGetByPCIBusId: unsafe extern "C" fn(*mut c_int, *const c_char) -> CUresult,
-    pub(crate) cuCtxCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint, c_int) -> CUresult,
-    pub(crate) cuCtxDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
-    pub(crate) cuCtxSynchronize: unsafe extern "C" fn() -> CUresult,
-    pub(crate) cuCtxSetCurrent: unsafe extern "C" fn(*mut c_void) -> CUresult,
-    pub(crate) cuModuleLoadData: unsafe extern "C" fn(*mut *mut c_void, *const c_void) -> CUresult,
-    pub(crate) cuModuleGetFunction:
-        unsafe extern "C" fn(*mut *mut c_void, *mut c_void, *const c_char) -> CUresult,
-    pub(crate) cuMemAlloc: unsafe extern "C" fn(*mut CUdeviceptr, usize) -> CUresult,
-    pub(crate) cuMemFree: unsafe extern "C" fn(CUdeviceptr) -> CUresult,
-    pub(crate) cuMemsetD8: unsafe extern "C" fn(CUdeviceptr, u8, usize) -> CUresult,
-    pub(crate) cuMemcpyHtoD: unsafe extern "C" fn(CUdeviceptr, *const c_void, usize) -> CUresult,
-    pub(crate) cuMemcpyDtoH: unsafe extern "C" fn(*mut c_void, CUdeviceptr, usize) -> CUresult,
-    pub(crate) cuLaunchKernel: unsafe extern "C" fn(
-        *mut c_void,
-        c_uint,
-        c_uint,
-        c_uint,
-        c_uint,
-        c_uint,
-        c_uint,
-        c_uint,
-        *mut c_void,
-        *mut *mut c_void,
-        *mut *mut c_void,
-    ) -> CUresult,
-    cuGetErrorName: Option<unsafe extern "C" fn(CUresult, *mut *const c_char) -> CUresult>,
-    // ★★★★★ **P4 — THE ASYNCHRONOUS WALK** (`V3_P4_PORT_MAP.md` §2.1(d), Q6). A walk is a
-    // stream of launches ending in a host function that writes an eventfd; the submitting
-    // thread never waits on the GPU. Required, not optional: every driver since CUDA 10 exports
-    // them, and a walker that cannot complete asynchronously is one v3 refuses (§5, §41).
-    pub(crate) cuStreamCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint) -> CUresult,
-    pub(crate) cuStreamDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
-    pub(crate) cuEventCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint) -> CUresult,
-    pub(crate) cuEventDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
-    pub(crate) cuEventRecord: unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult,
-    pub(crate) cuEventQuery: unsafe extern "C" fn(*mut c_void) -> CUresult,
-    pub(crate) cuEventElapsedTime:
-        unsafe extern "C" fn(*mut f32, *mut c_void, *mut c_void) -> CUresult,
-    pub(crate) cuLaunchHostFunc:
-        unsafe extern "C" fn(*mut c_void, extern "C" fn(*mut c_void), *mut c_void) -> CUresult,
-    pub(crate) cuMemAllocHost: unsafe extern "C" fn(*mut *mut c_void, usize) -> CUresult,
-    pub(crate) cuMemFreeHost: unsafe extern "C" fn(*mut c_void) -> CUresult,
-    pub(crate) cuMemHostGetDevicePointer:
-        unsafe extern "C" fn(*mut CUdeviceptr, *mut c_void, c_uint) -> CUresult,
-    pub(crate) cuMemcpyHtoDAsync:
-        unsafe extern "C" fn(CUdeviceptr, *const c_void, usize, *mut c_void) -> CUresult,
-    pub(crate) cuMemcpyDtoHAsync:
-        unsafe extern "C" fn(*mut c_void, CUdeviceptr, usize, *mut c_void) -> CUresult,
-    pub(crate) cuMemcpyDtoDAsync:
-        unsafe extern "C" fn(CUdeviceptr, CUdeviceptr, usize, *mut c_void) -> CUresult,
-    pub(crate) cuMemsetD8Async:
-        unsafe extern "C" fn(CUdeviceptr, u8, usize, *mut c_void) -> CUresult,
-    // ★★★★★ **P4b (w827) — THE WALK AS ONE CUDA GRAPH.** `[measured GA106 cc3caf1f]` the
-    // walk's ~25 stream operations cost `submit_us p50=172` (ver2) / `212` (ver3) on the
-    // submitting thread against a 50 µs budget: the cost is per-launch DRIVER time, not GPU
-    // time. Captured once and replayed with one `cuGraphLaunch`, the per-walk cost is one call.
-    // ⊘ `Option`, like the VMM set below and for the same reason: this binding is loaded on
-    // every boot, and a driver without graphs (pre-11.4) must degrade the walker to per-launch
-    // submission — VISIBLY, via `WalkKernel::submits_as_graph` — not lose it.
-    pub(crate) cuStreamBeginCapture: Option<unsafe extern "C" fn(*mut c_void, c_uint) -> CUresult>,
-    pub(crate) cuStreamEndCapture:
-        Option<unsafe extern "C" fn(*mut c_void, *mut *mut c_void) -> CUresult>,
-    pub(crate) cuStreamGetCaptureInfo: Option<
-        unsafe extern "C" fn(
+/// Every `unsafe` block of `kf-cuda`. Every address-carrying field is private to this module; the
+/// child files reach memory only through the methods below, each of which validates its inputs.
+#[allow(clippy::module_name_repetitions)]
+mod raw {
+    use super::{CUresult, CudaError, refused};
+    use crate::abi::{KF_MAX_PDB, KfFormat};
+    use core::ffi::{c_char, c_int, c_uint, c_void};
+    use kf_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, StaticSpan};
+    use std::ffi::CString;
+    use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    /// `CUDA_SUCCESS`.
+    const CUDA_SUCCESS: CUresult = 0;
+    /// `CUDA_ERROR_NOT_READY` — `cuEventQuery`'s "not yet", which is an answer and not a failure.
+    const CUDA_ERROR_NOT_READY: CUresult = 600;
+    /// A device address, as the driver spells it. ⊘ Private to this module: nothing outside it can
+    /// name the type, let alone hold one.
+    type DevAddr = u64;
+
+    unsafe extern "C" {
+        fn dlopen(filename: *const c_char, flag: c_int) -> *mut c_void;
+        fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
+        fn dlerror() -> *const c_char;
+        fn eventfd(initval: c_uint, flags: c_int) -> c_int;
+        fn read(fd: c_int, buf: *mut c_void, count: usize) -> isize;
+        fn write(fd: c_int, buf: *const c_void, count: usize) -> isize;
+        fn poll(fds: *mut PollFd, nfds: core::ffi::c_ulong, timeout: c_int) -> c_int;
+    }
+
+    /// `struct pollfd`.
+    #[repr(C)]
+    struct PollFd {
+        fd: c_int,
+        events: i16,
+        revents: i16,
+    }
+    /// `POLLIN`.
+    const POLLIN: i16 = 0x1;
+    /// `EFD_NONBLOCK | EFD_CLOEXEC` (the same values on x86-64 and aarch64).
+    const EFD_NONBLOCK_CLOEXEC: c_int = 0o4000 | 0o2_000_000;
+    const RTLD_NOW: c_int = 2;
+    const RTLD_GLOBAL: c_int = 0x100;
+    /// The soname the **driver package** installs (never `libcuda.so`, which only a toolkit has).
+    const LIBCUDA_SONAME: &str = "libcuda.so.1";
+    /// `CU_STREAM_CAPTURE_MODE_THREAD_LOCAL`.
+    const CU_STREAM_CAPTURE_MODE_THREAD_LOCAL: c_uint = 1;
+    /// `CU_STREAM_CAPTURE_STATUS_ACTIVE`.
+    const CU_STREAM_CAPTURE_STATUS_ACTIVE: c_uint = 1;
+    /// `CU_MEM_LOCATION_TYPE_DEVICE`.
+    const CU_MEM_LOCATION_TYPE_DEVICE: u32 = 0x1;
+    /// `CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR`.
+    const CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR: u32 = 0x1;
+    /// The architectural maximum of threads per block on every part kayfabe supports.
+    pub(in crate::driver_unsafe) const MAX_BLOCK: u32 = 1024;
+
+    // ═══ The binding ═════════════════════════════════════════════════════════════════════════
+
+    /// The subset of the driver API the walker and the display plane need, resolved once.
+    ///
+    /// ⊘ A struct of function pointers and not an `extern` block: an `extern` block is a link-time
+    /// dependency, and every build of this workspace would then need `libcuda`. No `Debug`.
+    #[allow(non_snake_case)]
+    struct Cuda {
+        _handle: *mut c_void,
+        cuInit: unsafe extern "C" fn(c_uint) -> CUresult,
+        cuDeviceGet: unsafe extern "C" fn(*mut c_int, c_int) -> CUresult,
+        cuDeviceGetCount: unsafe extern "C" fn(*mut c_int) -> CUresult,
+        cuDeviceGetName: unsafe extern "C" fn(*mut c_char, c_int, c_int) -> CUresult,
+        /// ★ Select the device by the host GPU's PCI address, never by ordinal
+        /// (V3_MULTI_GPU_AUDIT §2 blocker 1).
+        cuDeviceGetByPCIBusId: unsafe extern "C" fn(*mut c_int, *const c_char) -> CUresult,
+        cuCtxCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint, c_int) -> CUresult,
+        cuCtxDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
+        cuCtxSynchronize: unsafe extern "C" fn() -> CUresult,
+        cuCtxSetCurrent: unsafe extern "C" fn(*mut c_void) -> CUresult,
+        cuModuleLoadData: unsafe extern "C" fn(*mut *mut c_void, *const c_void) -> CUresult,
+        cuModuleGetFunction:
+            unsafe extern "C" fn(*mut *mut c_void, *mut c_void, *const c_char) -> CUresult,
+        cuMemAlloc: unsafe extern "C" fn(*mut DevAddr, usize) -> CUresult,
+        cuMemFree: unsafe extern "C" fn(DevAddr) -> CUresult,
+        cuMemsetD8: unsafe extern "C" fn(DevAddr, u8, usize) -> CUresult,
+        cuMemcpyHtoD: unsafe extern "C" fn(DevAddr, *const c_void, usize) -> CUresult,
+        cuMemcpyDtoH: unsafe extern "C" fn(*mut c_void, DevAddr, usize) -> CUresult,
+        cuLaunchKernel: unsafe extern "C" fn(
             *mut c_void,
-            *mut c_uint,
-            *mut u64,
+            c_uint,
+            c_uint,
+            c_uint,
+            c_uint,
+            c_uint,
+            c_uint,
+            c_uint,
+            *mut c_void,
             *mut *mut c_void,
-            *mut *const *mut c_void,
-            *mut usize,
+            *mut *mut c_void,
         ) -> CUresult,
-    >,
-    pub(crate) cuGraphInstantiateWithFlags:
-        Option<unsafe extern "C" fn(*mut *mut c_void, *mut c_void, u64) -> CUresult>,
-    pub(crate) cuGraphLaunch: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult>,
-    pub(crate) cuGraphExecKernelNodeSetParams:
-        Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const KernelNodeParams) -> CUresult>,
-    pub(crate) cuGraphExecDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
-    pub(crate) cuGraphDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
-    pub(crate) cuGraphUpload: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult>,
-    pub(crate) cuEventRecordWithFlags:
-        Option<unsafe extern "C" fn(*mut c_void, *mut c_void, c_uint) -> CUresult>,
-    /// ★ How many times `cuCtxSynchronize` ran through this binding — the falsifier of
-    /// `V3_P4_PORT_MAP.md` §3 row 2 (*"fails if any `cuCtxSynchronize` runs on the worker
-    /// (count the calls)"*). A counter, not a promise: gate 8 reads it around its walks.
-    ctx_sync_calls: core::sync::atomic::AtomicU64,
-    // ★★★★★ **w755i — THE VMM (virtual-memory-management) ENTRY POINTS, OPTIONAL BY DESIGN.**
-    //
-    // They exist to answer ONE question: can a device allocation CUDA owns be exported to an
-    // fd and IMPORTED INTO OUR RM CLIENT? If yes, the single store can be allocated through
-    // CUDA — making it CUDA-addressable by construction, so the walk kernel reads guest page
-    // tables LIVE at their own GPGA instead of a relocated copy, and `cuMemcpyAsync` can serve
-    // the emulated CE plane — while still yielding the RM handle `map_store_slice` needs to
-    // place slices into GUEST VA spaces.
-    //
-    // ⊘ `Option`, not required, and the distinction is load-bearing: this binding is loaded on
-    // EVERY boot for the walk kernel. A required symbol absent from an older `libcuda` would
-    // take the whole binding down and turn a missing *experiment* into a missing *walker*.
-    // ⚠ `None` is therefore a measurement ("this driver has no VMM API"), never a failure.
-    pub(crate) cuMemGetAllocationGranularity:
-        Option<unsafe extern "C" fn(*mut usize, *const c_void, c_uint) -> CUresult>,
-    pub(crate) cuMemCreate:
-        Option<unsafe extern "C" fn(*mut u64, usize, *const c_void, u64) -> CUresult>,
-    pub(crate) cuMemExportToShareableHandle:
-        Option<unsafe extern "C" fn(*mut c_void, u64, c_uint, u64) -> CUresult>,
-    pub(crate) cuMemRelease: Option<unsafe extern "C" fn(u64) -> CUresult>,
-    // ★★★★★ **w755w — THE IMPORT SIDE, which is the direction that can work.**
-    //
-    // `[measured w755v]` RM refuses to import CUDA's fd (`nvfp->handles == NULL`,
-    // `os.c:2377`) because RM registers `handles[0]` only in its **own** export. So the
-    // store is exported BY RM and imported BY CUDA, and these are the symbols for that half.
-    //
-    // ⊘ `osHandle` is a `void *` that, for `CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR`, is the
-    // **fd itself** cast to a pointer — not a pointer to the fd. Getting that backwards
-    // yields `INVALID_VALUE` and reads like a rejected handle.
-    pub(crate) cuMemImportFromShareableHandle:
-        Option<unsafe extern "C" fn(*mut u64, *mut c_void, c_uint) -> CUresult>,
-    pub(crate) cuMemAddressReserve:
-        Option<unsafe extern "C" fn(*mut u64, usize, usize, u64, u64) -> CUresult>,
-    pub(crate) cuMemMap: Option<unsafe extern "C" fn(u64, usize, usize, u64, u64) -> CUresult>,
-    pub(crate) cuMemSetAccess:
-        Option<unsafe extern "C" fn(u64, usize, *const c_void, usize) -> CUresult>,
-    pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
-    pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
-}
-
-// SAFETY: every field is a code pointer into a library loaded `RTLD_GLOBAL` for the life of
-// the process. Nothing here is interior-mutable and nothing is freed.
-unsafe impl Send for Cuda {}
-// SAFETY: as above — the struct is immutable after construction.
-unsafe impl Sync for Cuda {}
-
-/// The soname the **driver package** installs. ⊘ Not `libcuda.so`, which only a *toolkit*
-/// (or a `-dev` package) provides: the whole point is that a box carrying nothing but the
-/// NVIDIA driver can run this.
-pub const LIBCUDA_SONAME: &str = "libcuda.so.1";
-
-/// `dlsym`, returning NULL rather than refusing. ⊘ One place, so the NULL-tolerant and the
-/// required lookups share exactly one `unsafe` between them.
-fn sym_or_null(handle: *mut c_void, name: &str) -> *mut c_void {
-    let Ok(n) = CString::new(name) else {
-        return core::ptr::null_mut();
-    };
-    // SAFETY: `handle` is a live library handle and `n` is NUL-terminated.
-    unsafe { dlsym(handle, n.as_ptr()) }
-}
-
-impl Cuda {
-    /// `dlopen` the driver and resolve every symbol.
-    ///
-    /// # Errors
-    /// [`CudaError::NoLibrary`] if the library will not load — carrying `dlerror()` verbatim,
-    /// because *"Dynamic loading not supported"* and *"cannot open shared object file"* are
-    /// different diagnoses. [`CudaError::MissingSymbol`] naming the first absent symbol.
-    pub fn open() -> Result<Cuda, CudaError> {
-        Self::open_soname(LIBCUDA_SONAME)
+        cuGetErrorName: Option<unsafe extern "C" fn(CUresult, *mut *const c_char) -> CUresult>,
+        // ★ P4 — the asynchronous walk: a stream of launches ending in a host function that
+        // writes an eventfd. Required: every driver since CUDA 10 exports them.
+        cuStreamCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint) -> CUresult,
+        cuStreamDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
+        cuEventCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint) -> CUresult,
+        cuEventDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
+        cuEventRecord: unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult,
+        cuEventQuery: unsafe extern "C" fn(*mut c_void) -> CUresult,
+        cuEventElapsedTime: unsafe extern "C" fn(*mut f32, *mut c_void, *mut c_void) -> CUresult,
+        cuLaunchHostFunc:
+            unsafe extern "C" fn(*mut c_void, extern "C" fn(*mut c_void), *mut c_void) -> CUresult,
+        cuMemAllocHost: unsafe extern "C" fn(*mut *mut c_void, usize) -> CUresult,
+        cuMemHostGetDevicePointer:
+            unsafe extern "C" fn(*mut DevAddr, *mut c_void, c_uint) -> CUresult,
+        cuMemcpyDtoHAsync:
+            unsafe extern "C" fn(*mut c_void, DevAddr, usize, *mut c_void) -> CUresult,
+        cuMemcpyDtoDAsync: unsafe extern "C" fn(DevAddr, DevAddr, usize, *mut c_void) -> CUresult,
+        cuMemsetD8Async: unsafe extern "C" fn(DevAddr, u8, usize, *mut c_void) -> CUresult,
+        // ★ P4b — the walk as ONE CUDA graph. `Option`: a driver without graphs (pre-11.4)
+        // degrades the walker to per-launch submission, visibly, rather than losing it.
+        cuStreamBeginCapture: Option<unsafe extern "C" fn(*mut c_void, c_uint) -> CUresult>,
+        cuStreamEndCapture: Option<unsafe extern "C" fn(*mut c_void, *mut *mut c_void) -> CUresult>,
+        cuStreamGetCaptureInfo: Option<
+            unsafe extern "C" fn(
+                *mut c_void,
+                *mut c_uint,
+                *mut u64,
+                *mut *mut c_void,
+                *mut *const *mut c_void,
+                *mut usize,
+            ) -> CUresult,
+        >,
+        cuGraphInstantiateWithFlags:
+            Option<unsafe extern "C" fn(*mut *mut c_void, *mut c_void, u64) -> CUresult>,
+        cuGraphLaunch: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult>,
+        cuGraphExecKernelNodeSetParams: Option<
+            unsafe extern "C" fn(*mut c_void, *mut c_void, *const KernelNodeParams) -> CUresult,
+        >,
+        cuGraphExecDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
+        cuGraphDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
+        cuGraphUpload: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult>,
+        cuEventRecordWithFlags:
+            Option<unsafe extern "C" fn(*mut c_void, *mut c_void, c_uint) -> CUresult>,
+        // ★ w755w — the store is exported BY RM and imported BY CUDA. `Option`: absent is an
+        // ANSWER about this driver, never a load failure of the walker.
+        cuMemImportFromShareableHandle:
+            Option<unsafe extern "C" fn(*mut u64, *mut c_void, c_uint) -> CUresult>,
+        cuMemAddressReserve:
+            Option<unsafe extern "C" fn(*mut u64, usize, usize, u64, u64) -> CUresult>,
+        cuMemMap: Option<unsafe extern "C" fn(u64, usize, usize, u64, u64) -> CUresult>,
+        cuMemSetAccess: Option<unsafe extern "C" fn(u64, usize, *const c_void, usize) -> CUresult>,
+        cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+        cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+        cuMemRelease: Option<unsafe extern "C" fn(u64) -> CUresult>,
+        // ★ v3-sec-rawaddr: the console frame's page-lock registration (`console_pages`).
+        cuMemHostRegister: Option<unsafe extern "C" fn(*mut c_void, usize, c_uint) -> CUresult>,
     }
 
-    /// As [`Cuda::open`], for a caller that must name the library (a test, or a box that puts
-    /// it somewhere unusual).
-    ///
-    /// # Errors
-    /// As [`Cuda::open`].
-    pub fn open_soname(soname: &str) -> Result<Cuda, CudaError> {
-        let c = CString::new(soname).map_err(|_| CudaError::NoLibrary {
-            soname: soname.to_string(),
-            dlerror: "the soname contains a NUL".to_string(),
-        })?;
-        // ⊘ `RTLD_GLOBAL` because the driver's own lazy paths resolve against the global
-        // scope; `RTLD_NOW` because a lazy binding would move a missing symbol from here —
-        // where it is a named refusal — to an arbitrary later call.
-        // SAFETY: `c` is a valid NUL-terminated C string that outlives the call.
-        let handle = unsafe {
-            let _ = dlerror(); // clear any stale error
-            dlopen(c.as_ptr(), RTLD_NOW | RTLD_GLOBAL)
+    // SAFETY: every field is a code pointer into a library loaded `RTLD_GLOBAL` for the life of
+    // the process. Nothing here is interior-mutable and nothing is freed.
+    unsafe impl Send for Cuda {}
+    // SAFETY: as above — the struct is immutable after construction.
+    unsafe impl Sync for Cuda {}
+
+    /// `dlsym`, returning NULL rather than refusing. ⊘ ONE place: every lookup, required or
+    /// optional, shares exactly this `unsafe` (design §7: `sym!`'s own lookup and the closure that
+    /// duplicated it were folded here).
+    fn sym_or_null(handle: *mut c_void, name: &str) -> *mut c_void {
+        let Ok(n) = CString::new(name) else {
+            return core::ptr::null_mut();
         };
-        if handle.is_null() {
-            // SAFETY: `dlerror` returns either NULL or a NUL-terminated string owned by libdl.
-            let e = unsafe {
-                let p = dlerror();
-                if p.is_null() {
-                    "dlopen returned NULL and dlerror said nothing".to_string()
-                } else {
-                    core::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
-                }
-            };
-            return Err(CudaError::NoLibrary {
+        // SAFETY: `handle` is a live library handle and `n` is NUL-terminated.
+        unsafe { dlsym(handle, n.as_ptr()) }
+    }
+
+    impl Cuda {
+        /// `dlopen` the driver and resolve every symbol.
+        fn open() -> Result<Cuda, CudaError> {
+            let soname = LIBCUDA_SONAME;
+            let c = CString::new(soname).map_err(|_| CudaError::NoLibrary {
                 soname: soname.to_string(),
-                dlerror: e,
-            });
-        }
-
-        // ⚠ `_v2` is not decoration. The driver keeps the ORIGINAL 32-bit-pointer entry
-        // points under the unsuffixed names for binary compatibility, so resolving
-        // `cuMemAlloc` (rather than `cuMemAlloc_v2`) on a 64-bit host silently truncates every
-        // device pointer. The same is true of `cuCtxCreate`, `cuMemcpy*` and `cuMemFree`.
-        // ⇒ every size-carrying entry point here is asked for by its versioned name.
-        // ★ The NULL-tolerant twin of `sym!`. See the VMM fields: a symbol this driver does
-        // not have must yield `None` rather than refusing the whole binding.
-        //
-        // ⊘ It resolves through `sym_or_null` rather than repeating `sym!`'s body. The first
-        // draft duplicated the `dlsym` + `transmute` pair, which added TWO more `unsafe`
-        // blocks doing what two existing ones already did — and the crate's relaxation
-        // ratchet is what said so. Duplicated `unsafe` is duplicated review surface.
-        macro_rules! opt {
-            ($name:literal) => {{
-                let raw = sym_or_null(handle, $name);
-                if raw.is_null() {
-                    None
-                } else {
-                    // SAFETY: the driver's ABI for this symbol; `raw` is non-NULL and came
-                    // from `dlsym` on a live handle.
-                    Some(unsafe { core::mem::transmute(raw) })
-                }
-            }};
-        }
-        macro_rules! sym {
-            ($name:literal) => {{
-                let n = CString::new($name).expect("a literal with no NUL");
-                // SAFETY: `handle` is a live library handle and `n` is NUL-terminated.
-                let p = unsafe { dlsym(handle, n.as_ptr()) };
-                if p.is_null() {
-                    return Err(CudaError::MissingSymbol($name));
-                }
-                // SAFETY: the driver's ABI for this symbol is the signature at the field.
-                unsafe { core::mem::transmute(p) }
-            }};
-        }
-        let opt_sym = |name: &str| -> *mut c_void {
-            let n = CString::new(name).expect("a literal with no NUL");
-            // SAFETY: as above.
-            unsafe { dlsym(handle, n.as_ptr()) }
-        };
-        let err_name = opt_sym("cuGetErrorName");
-
-        Ok(Cuda {
-            _handle: handle,
-            cuInit: sym!("cuInit"),
-            cuDeviceGet: sym!("cuDeviceGet"),
-            cuDeviceGetCount: sym!("cuDeviceGetCount"),
-            cuDeviceGetName: sym!("cuDeviceGetName"),
-            cuDeviceGetByPCIBusId: sym!("cuDeviceGetByPCIBusId"),
-            cuCtxCreate: sym!("cuCtxCreate_v2"),
-            cuCtxDestroy: sym!("cuCtxDestroy_v2"),
-            cuCtxSynchronize: sym!("cuCtxSynchronize"),
-            cuCtxSetCurrent: sym!("cuCtxSetCurrent"),
-            cuModuleLoadData: sym!("cuModuleLoadData"),
-            cuModuleGetFunction: sym!("cuModuleGetFunction"),
-            cuMemAlloc: sym!("cuMemAlloc_v2"),
-            cuMemFree: sym!("cuMemFree_v2"),
-            cuMemsetD8: sym!("cuMemsetD8_v2"),
-            cuMemcpyHtoD: sym!("cuMemcpyHtoD_v2"),
-            cuMemcpyDtoH: sym!("cuMemcpyDtoH_v2"),
-            cuLaunchKernel: sym!("cuLaunchKernel"),
-            cuStreamCreate: sym!("cuStreamCreate"),
-            cuStreamDestroy: sym!("cuStreamDestroy_v2"),
-            cuEventCreate: sym!("cuEventCreate"),
-            cuEventDestroy: sym!("cuEventDestroy_v2"),
-            cuEventRecord: sym!("cuEventRecord"),
-            cuEventQuery: sym!("cuEventQuery"),
-            cuEventElapsedTime: sym!("cuEventElapsedTime"),
-            cuLaunchHostFunc: sym!("cuLaunchHostFunc"),
-            cuMemAllocHost: sym!("cuMemAllocHost_v2"),
-            cuMemFreeHost: sym!("cuMemFreeHost"),
-            cuMemHostGetDevicePointer: sym!("cuMemHostGetDevicePointer_v2"),
-            cuMemcpyHtoDAsync: sym!("cuMemcpyHtoDAsync_v2"),
-            cuMemcpyDtoHAsync: sym!("cuMemcpyDtoHAsync_v2"),
-            cuMemcpyDtoDAsync: sym!("cuMemcpyDtoDAsync_v2"),
-            cuMemsetD8Async: sym!("cuMemsetD8Async"),
-            // ⚠ Versioned names, as everywhere here. `cuStreamBeginCapture` (unsuffixed) is the
-            // CUDA 10.0 entry with no mode argument; `_v2` takes the mode. `_v2` of the capture
-            // query and of the kernel-node setter take the CUDA 12 structs (the setter's is a
-            // strict SUPERSET of the v1 struct, so the unsuffixed fallback reads a valid prefix).
-            cuStreamBeginCapture: opt!("cuStreamBeginCapture_v2"),
-            cuStreamEndCapture: opt!("cuStreamEndCapture"),
-            cuStreamGetCaptureInfo: opt!("cuStreamGetCaptureInfo_v2"),
-            cuGraphInstantiateWithFlags: opt!("cuGraphInstantiateWithFlags"),
-            cuGraphLaunch: opt!("cuGraphLaunch"),
-            cuGraphExecKernelNodeSetParams: match opt!("cuGraphExecKernelNodeSetParams_v2") {
-                Some(f) => Some(f),
-                None => opt!("cuGraphExecKernelNodeSetParams"),
-            },
-            cuGraphExecDestroy: opt!("cuGraphExecDestroy"),
-            cuGraphDestroy: opt!("cuGraphDestroy"),
-            cuGraphUpload: opt!("cuGraphUpload"),
-            cuEventRecordWithFlags: opt!("cuEventRecordWithFlags"),
-            ctx_sync_calls: core::sync::atomic::AtomicU64::new(0),
-            // ⊘ Resolved with a NULL-tolerant lookup, unlike `sym!`, for the reason the field
-            // docs give: absent is an ANSWER here, not a load failure.
-            cuMemGetAllocationGranularity: opt!("cuMemGetAllocationGranularity"),
-            cuMemCreate: opt!("cuMemCreate"),
-            cuMemExportToShareableHandle: opt!("cuMemExportToShareableHandle"),
-            cuMemRelease: opt!("cuMemRelease"),
-            cuMemImportFromShareableHandle: opt!("cuMemImportFromShareableHandle"),
-            cuMemAddressReserve: opt!("cuMemAddressReserve"),
-            cuMemMap: opt!("cuMemMap"),
-            cuMemSetAccess: opt!("cuMemSetAccess"),
-            cuMemUnmap: opt!("cuMemUnmap"),
-            cuMemAddressFree: opt!("cuMemAddressFree"),
-            cuGetErrorName: if err_name.is_null() {
-                None
-            } else {
-                // SAFETY: the driver's ABI for `cuGetErrorName`.
-                Some(unsafe { core::mem::transmute(err_name) })
-            },
-        })
-    }
-
-    /// Turn a `CUresult` into a refusal that names the call.
-    pub(crate) fn check(&self, what: &'static str, r: CUresult) -> Result<(), CudaError> {
-        if r == CUDA_SUCCESS {
-            return Ok(());
-        }
-        let mut p: *const c_char = core::ptr::null();
-        let name = match self.cuGetErrorName {
-            // SAFETY: `p` is a valid out-pointer; the driver writes a static string into it.
-            Some(f) if unsafe { f(r, &raw mut p) } == CUDA_SUCCESS && !p.is_null() => {
-                // SAFETY: the driver guarantees a NUL-terminated static string.
-                unsafe { core::ffi::CStr::from_ptr(p) }
-                    .to_string_lossy()
-                    .into_owned()
+                dlerror: "the soname contains a NUL".to_string(),
+            })?;
+            // ⊘ `RTLD_GLOBAL` because the driver's own lazy paths resolve against the global
+            // scope; `RTLD_NOW` so a missing symbol is refused HERE rather than at a later call.
+            // SAFETY: `c` is a valid NUL-terminated C string that outlives the call.
+            let handle = unsafe {
+                let _ = dlerror(); // clear any stale error
+                dlopen(c.as_ptr(), RTLD_NOW | RTLD_GLOBAL)
+            };
+            if handle.is_null() {
+                // SAFETY: `dlerror` returns either NULL or a NUL-terminated string owned by libdl.
+                let e = unsafe {
+                    let p = dlerror();
+                    if p.is_null() {
+                        "dlopen returned NULL and dlerror said nothing".to_string()
+                    } else {
+                        core::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
+                    }
+                };
+                return Err(CudaError::NoLibrary {
+                    soname: soname.to_string(),
+                    dlerror: e,
+                });
             }
-            _ => "unnamed".to_string(),
-        };
-        Err(CudaError::Refused {
-            what,
-            code: r,
-            name,
-        })
-    }
-}
-
-/// ═══ THE SAFE SURFACE ═══════════════════════════════════════════════════════════════════
-///
-/// ★★★ Everything above this line is the foreign ABI; everything below is the **only** way
-/// the rest of this crate reaches it. `walk.rs`, `selftest.rs`, `synth.rs` and `abi.rs`
-/// contain **no `unsafe` at all**, which is what makes gate B's *"read the audited surface in
-/// one sitting"* true of this crate: the surface is this file.
-impl Cuda {
-    /// `cuInit(0)`.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn init(&self) -> Result<(), CudaError> {
-        // SAFETY: `cuInit` takes an integer and returns a status; it has no pointer
-        // arguments and no aliasing obligations at all.
-        self.check("cuInit", unsafe { (self.cuInit)(0) })
-    }
-
-    /// `cuDeviceGetCount`.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn device_count(&self) -> Result<i32, CudaError> {
-        let mut n: c_int = 0;
-        // SAFETY: `n` is a live, correctly-aligned `c_int` for the whole call, which is the
-        // only obligation the driver's out-pointer carries.
-        self.check("cuDeviceGetCount", unsafe {
-            (self.cuDeviceGetCount)(&raw mut n)
-        })?;
-        Ok(n)
-    }
-
-    /// `cuDeviceGet` for ordinal `ord`.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn device_get(&self, ord: i32) -> Result<i32, CudaError> {
-        let mut d: c_int = 0;
-        // SAFETY: as `device_count` — one live out-pointer, no aliasing.
-        self.check("cuDeviceGet", unsafe {
-            (self.cuDeviceGet)(&raw mut d, ord)
-        })?;
-        Ok(d)
-    }
-
-    /// ★ `cuDeviceGetByPCIBusId` — the CUDA device at PCI address `bdf`
-    /// (`[domain]:[bus]:[device].[function]`, hex, as `CardInfo::bdf` spells it).
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`] — including `CUDA_ERROR_INVALID_DEVICE` when this process's CUDA
-    /// cannot see that GPU (e.g. `CUDA_VISIBLE_DEVICES` excludes it): refused, never an
-    /// ordinal fallback.
-    pub fn device_by_pci_bus_id(&self, bdf: &str) -> Result<i32, CudaError> {
-        let c = CString::new(bdf).map_err(|_| CudaError::Refused {
-            what: "cuDeviceGetByPCIBusId",
-            code: 0,
-            name: format!("the PCI bus id {bdf:?} contains a NUL"),
-        })?;
-        let mut d: c_int = 0;
-        // SAFETY: one live out-pointer and a NUL-terminated string that outlives the call.
-        self.check("cuDeviceGetByPCIBusId", unsafe {
-            (self.cuDeviceGetByPCIBusId)(&raw mut d, c.as_ptr())
-        })?;
-        Ok(d)
-    }
-
-    /// `cuDeviceGetName`. ⊘ Never fails the caller: a device whose name we cannot read is
-    /// still a device, and refusing the bring-up over a diagnostic string would be the
-    /// instrument deciding the experiment.
-    pub fn device_name(&self, dev: i32) -> String {
-        let mut buf = [0i8; 128];
-        // SAFETY: the buffer is live for the call and its length is passed as the bound the
-        // driver is required to honour; the driver NUL-terminates within it.
-        let r = unsafe {
-            (self.cuDeviceGetName)(
-                buf.as_mut_ptr().cast::<c_char>(),
-                c_int::try_from(buf.len()).unwrap_or(128),
-                dev,
-            )
-        };
-        if r != CUDA_SUCCESS {
-            return "<unnamed>".to_string();
+            // ⚠ `_v2` is not decoration: the unsuffixed entry points are the 32-bit-pointer ABI,
+            // so every size-carrying entry point is asked for by its versioned name.
+            macro_rules! opt {
+                ($name:literal) => {{
+                    let raw = sym_or_null(handle, $name);
+                    if raw.is_null() {
+                        None
+                    } else {
+                        // SAFETY: the driver's ABI for this symbol; `raw` is non-NULL and came
+                        // from `dlsym` on a live handle.
+                        Some(unsafe { core::mem::transmute(raw) })
+                    }
+                }};
+            }
+            // A required symbol: `opt!`, refused by name when absent. ⊘ No second transmute.
+            macro_rules! sym {
+                ($name:literal) => {{
+                    match opt!($name) {
+                        Some(f) => f,
+                        None => return Err(CudaError::MissingSymbol($name)),
+                    }
+                }};
+            }
+            Ok(Cuda {
+                _handle: handle,
+                cuInit: sym!("cuInit"),
+                cuDeviceGet: sym!("cuDeviceGet"),
+                cuDeviceGetCount: sym!("cuDeviceGetCount"),
+                cuDeviceGetName: sym!("cuDeviceGetName"),
+                cuDeviceGetByPCIBusId: sym!("cuDeviceGetByPCIBusId"),
+                cuCtxCreate: sym!("cuCtxCreate_v2"),
+                cuCtxDestroy: sym!("cuCtxDestroy_v2"),
+                cuCtxSynchronize: sym!("cuCtxSynchronize"),
+                cuCtxSetCurrent: sym!("cuCtxSetCurrent"),
+                cuModuleLoadData: sym!("cuModuleLoadData"),
+                cuModuleGetFunction: sym!("cuModuleGetFunction"),
+                cuMemAlloc: sym!("cuMemAlloc_v2"),
+                cuMemFree: sym!("cuMemFree_v2"),
+                cuMemsetD8: sym!("cuMemsetD8_v2"),
+                cuMemcpyHtoD: sym!("cuMemcpyHtoD_v2"),
+                cuMemcpyDtoH: sym!("cuMemcpyDtoH_v2"),
+                cuLaunchKernel: sym!("cuLaunchKernel"),
+                cuGetErrorName: opt!("cuGetErrorName"),
+                cuStreamCreate: sym!("cuStreamCreate"),
+                cuStreamDestroy: sym!("cuStreamDestroy_v2"),
+                cuEventCreate: sym!("cuEventCreate"),
+                cuEventDestroy: sym!("cuEventDestroy_v2"),
+                cuEventRecord: sym!("cuEventRecord"),
+                cuEventQuery: sym!("cuEventQuery"),
+                cuEventElapsedTime: sym!("cuEventElapsedTime"),
+                cuLaunchHostFunc: sym!("cuLaunchHostFunc"),
+                cuMemAllocHost: sym!("cuMemAllocHost_v2"),
+                cuMemHostGetDevicePointer: sym!("cuMemHostGetDevicePointer_v2"),
+                cuMemcpyDtoHAsync: sym!("cuMemcpyDtoHAsync_v2"),
+                cuMemcpyDtoDAsync: sym!("cuMemcpyDtoDAsync_v2"),
+                cuMemsetD8Async: sym!("cuMemsetD8Async"),
+                // ⚠ `cuStreamBeginCapture_v2` takes the capture mode; `_v2` of the setter takes
+                // the CUDA 12 struct (a strict superset of v1's, so the fallback reads a prefix).
+                cuStreamBeginCapture: opt!("cuStreamBeginCapture_v2"),
+                cuStreamEndCapture: opt!("cuStreamEndCapture"),
+                cuStreamGetCaptureInfo: opt!("cuStreamGetCaptureInfo_v2"),
+                cuGraphInstantiateWithFlags: opt!("cuGraphInstantiateWithFlags"),
+                cuGraphLaunch: opt!("cuGraphLaunch"),
+                cuGraphExecKernelNodeSetParams: match opt!("cuGraphExecKernelNodeSetParams_v2") {
+                    Some(f) => Some(f),
+                    None => opt!("cuGraphExecKernelNodeSetParams"),
+                },
+                cuGraphExecDestroy: opt!("cuGraphExecDestroy"),
+                cuGraphDestroy: opt!("cuGraphDestroy"),
+                cuGraphUpload: opt!("cuGraphUpload"),
+                cuEventRecordWithFlags: opt!("cuEventRecordWithFlags"),
+                cuMemImportFromShareableHandle: opt!("cuMemImportFromShareableHandle"),
+                cuMemAddressReserve: opt!("cuMemAddressReserve"),
+                cuMemMap: opt!("cuMemMap"),
+                cuMemSetAccess: opt!("cuMemSetAccess"),
+                cuMemUnmap: opt!("cuMemUnmap"),
+                cuMemAddressFree: opt!("cuMemAddressFree"),
+                cuMemRelease: opt!("cuMemRelease"),
+                cuMemHostRegister: opt!("cuMemHostRegister_v2"),
+            })
         }
-        // SAFETY: the call above succeeded, so the driver wrote a NUL-terminated string
-        // inside `buf`, which is still live and owned here.
-        unsafe { core::ffi::CStr::from_ptr(buf.as_ptr().cast::<c_char>()) }
-            .to_string_lossy()
-            .into_owned()
-    }
 
-    /// `cuCtxCreate_v2`. The returned pointer is opaque and is only ever handed back.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn ctx_create(&self, dev: i32) -> Result<CtxHandle, CudaError> {
-        let mut ctx: *mut c_void = core::ptr::null_mut();
-        // SAFETY: one live out-pointer; the driver writes an opaque handle we never
-        // dereference.
-        self.check("cuCtxCreate_v2", unsafe {
-            (self.cuCtxCreate)(&raw mut ctx, 0, dev)
-        })?;
-        Ok(CtxHandle(ctx as usize))
-    }
+        /// Turn a `CUresult` into a refusal that names the call.
+        fn check(&self, what: &'static str, r: CUresult) -> Result<(), CudaError> {
+            if r == CUDA_SUCCESS {
+                return Ok(());
+            }
+            let mut p: *const c_char = core::ptr::null();
+            let name = match self.cuGetErrorName {
+                // SAFETY: `p` is a valid out-pointer; the driver writes a static string into it.
+                Some(f) if unsafe { f(r, &raw mut p) } == CUDA_SUCCESS && !p.is_null() => {
+                    // SAFETY: the driver guarantees a NUL-terminated static string.
+                    unsafe { core::ffi::CStr::from_ptr(p) }
+                        .to_string_lossy()
+                        .into_owned()
+                }
+                _ => "unnamed".to_string(),
+            };
+            Err(CudaError::Refused {
+                what,
+                code: r,
+                name,
+            })
+        }
 
-    /// `cuCtxDestroy_v2`. ⊘ Infallible by design: it runs in a `Drop` and there is nobody
-    /// left to tell.
-    pub fn ctx_destroy(&self, ctx: CtxHandle) {
-        // SAFETY: `ctx` is a handle this binding produced and is destroyed exactly once —
-        // `WalkKernel::drop` nulls its copy before returning.
-        unsafe { (self.cuCtxDestroy)(ctx.0 as *mut c_void) };
-    }
-
-    /// ★★★★★ `cuCtxSetCurrent` — **BIND THIS CONTEXT TO THE CALLING THREAD.**
-    ///
-    /// ⊘⊘⊘ **A CUDA context is CURRENT PER THREAD, and this cost a boot.**
-    /// `[measured 2026-09-15, w731, RTX 3060, 580.159.04]` the scratchpad isolate brings CUDA
-    /// up on its **startup** thread (before the sandbox, as §w724d requires), and
-    /// `cuCtxCreate` makes the context current **only there**. A later request is served on a
-    /// **worker** thread, which has no current context — so the first `cuMemAlloc` of the live
-    /// walk shadow returned **`CUDA_ERROR_INVALID_CONTEXT` (201)**, 2 115 times, and the
-    /// census came back `compared=0 skipped[isolate_refused=2115]`.
-    ///
-    /// ⚠ The selftest could not have caught it: `bring_up_and_prove` runs on the **same**
-    /// thread as the bring-up, so `CUDA_WALK=OK` and both post-sandbox probes passed on the
-    /// very boot where every cross-thread call refused.
-    ///
-    /// # Errors
-    /// [`CudaError`].
-    pub fn ctx_set_current(&self, ctx: CtxHandle) -> Result<(), CudaError> {
-        // SAFETY: `ctx` came from this library's own `cuCtxCreate_v2` and is only ever handed
-        // back to it. `cuCtxSetCurrent` takes the handle and affects the calling thread only.
-        self.check("cuCtxSetCurrent", unsafe {
-            (self.cuCtxSetCurrent)(ctx.0 as *mut c_void)
-        })
-    }
-
-    /// `cuCtxSynchronize`.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`] — including a device-side fault raised by an earlier launch,
-    /// which is where an illegal access surfaces.
-    pub fn ctx_synchronize(&self) -> Result<(), CudaError> {
-        self.ctx_sync_calls
-            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-        // SAFETY: no arguments.
-        self.check("cuCtxSynchronize", unsafe { (self.cuCtxSynchronize)() })
-    }
-
-    /// `cuModuleLoadData` over a NUL-terminated PTX image. **This is where the PTX JIT runs.**
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`] — a driver too old for the PTX ISA version refuses here, by
-    /// name, which is the diagnosis a reader needs.
-    pub fn module_load(&self, ptx_with_nul: &[u8]) -> Result<ModuleHandle, CudaError> {
-        assert!(
-            ptx_with_nul.last() == Some(&0),
-            "cuModuleLoadData reads until a NUL and the image handed to it has none; \
-             passing it would read past the end of our own buffer"
-        );
-        let mut m: *mut c_void = core::ptr::null_mut();
-        // SAFETY: the image is a live slice for the whole call and is NUL-terminated (checked
-        // immediately above), which is the driver's documented requirement; `m` is a live
-        // out-pointer.
-        self.check("cuModuleLoadData", unsafe {
-            (self.cuModuleLoadData)(&raw mut m, ptx_with_nul.as_ptr().cast::<c_void>())
-        })?;
-        Ok(ModuleHandle(m as usize))
-    }
-
-    /// `cuModuleGetFunction`.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`], renamed to say **which** entry point is absent.
-    pub fn module_function(&self, m: ModuleHandle, sym: &'static str) -> Result<Func, CudaError> {
-        let c = CString::new(sym).map_err(|_| CudaError::MissingSymbol(sym))?;
-        let mut f: *mut c_void = core::ptr::null_mut();
-        // SAFETY: `m` is a handle this binding produced, `c` is NUL-terminated and live for
-        // the call, and `f` is a live out-pointer.
-        let r = unsafe { (self.cuModuleGetFunction)(&raw mut f, m.0 as *mut c_void, c.as_ptr()) };
-        self.check("cuModuleGetFunction", r).map_err(|e| match e {
-            CudaError::Refused { code, .. } => CudaError::Refused {
-                what: "cuModuleGetFunction",
-                code,
-                name: format!("the committed PTX has no entry `{sym}`"),
-            },
-            other => other,
-        })?;
-        Ok(Func(f as usize))
-    }
-
-    /// `cuMemAlloc_v2` followed by `cuMemsetD8_v2` to zero. ⊘ The zeroing is not hygiene: the
-    /// kernel reads its own `KfDev` state, and uninitialised device memory would make the
-    /// first refresh's behaviour a function of what the previous tenant left behind.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn mem_alloc_zeroed(
-        &self,
-        bytes: usize,
-        what: &'static str,
-    ) -> Result<CUdeviceptr, CudaError> {
-        let mut p: CUdeviceptr = 0;
-        // SAFETY: one live out-pointer; `bytes` is a length the driver owns entirely.
-        self.check(what, unsafe { (self.cuMemAlloc)(&raw mut p, bytes) })?;
-        // SAFETY: `p` is the allocation just returned and `bytes` is exactly its length.
-        self.check(what, unsafe { (self.cuMemsetD8)(p, 0, bytes) })?;
-        Ok(p)
-    }
-
-    /// `cuMemFree_v2`. ⊘ Infallible: it runs in a `Drop`.
-    pub fn mem_free(&self, p: CUdeviceptr) {
-        if p != 0 {
-            // SAFETY: `p` came from `mem_alloc_zeroed` on a live context and is freed once —
-            // `DevBuf` zeroes its copy on the only other path that reclaims it.
-            unsafe { (self.cuMemFree)(p) };
+        fn has_graph_api(&self) -> bool {
+            self.cuStreamBeginCapture.is_some()
+                && self.cuStreamEndCapture.is_some()
+                && self.cuStreamGetCaptureInfo.is_some()
+                && self.cuGraphInstantiateWithFlags.is_some()
+                && self.cuGraphLaunch.is_some()
+                && self.cuGraphExecKernelNodeSetParams.is_some()
+                && self.cuGraphExecDestroy.is_some()
+                && self.cuGraphDestroy.is_some()
+                && self.cuGraphUpload.is_some()
+                && self.cuEventRecordWithFlags.is_some()
         }
     }
 
-    /// `cuMemcpyHtoD_v2` from a host slice.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn memcpy_h2d(
-        &self,
-        dst: CUdeviceptr,
-        src: &[u8],
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        // SAFETY: `src` is a live slice for the call and the byte count passed is its own
-        // length, so the driver cannot read past it; `dst` is a live allocation of at least
-        // that size, which every caller sizes from the same expression.
-        self.check(what, unsafe {
-            (self.cuMemcpyHtoD)(dst, src.as_ptr().cast::<c_void>(), src.len())
-        })
-    }
-
-    /// `cuMemcpyDtoH_v2` into a host slice.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn memcpy_d2h(
-        &self,
-        dst: &mut [u8],
-        src: CUdeviceptr,
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        // SAFETY: `dst` is a live, exclusively-borrowed slice and the byte count passed is
-        // its own length, so the driver cannot write past it.
-        self.check(what, unsafe {
-            (self.cuMemcpyDtoH)(dst.as_mut_ptr().cast::<c_void>(), src, dst.len())
-        })
-    }
-
-    /// `cuLaunchKernel` with **one** by-value parameter, whose bytes are `param`.
-    ///
-    /// ⚠ The `CUresult` is returned rather than checked, because [`Cuda::launch_raw`]'s one
-    /// deliberate caller is the failed-launch probe, for which a refusal is the **expected**
-    /// outcome and an error return would discard it.
-    pub fn launch_raw(&self, f: Func, grid: u32, block: u32, param: &mut [u8]) -> CUresult {
-        let mut p: [*mut c_void; 1] = [param.as_mut_ptr().cast::<c_void>()];
-        // SAFETY: `param` is a live, exclusively-borrowed buffer holding the kernel's
-        // by-value argument, and `p` is a live array of one pointer into it. The driver reads
-        // exactly the parameter size the module declares — which the ABI differential test
-        // pins to `param.len()`, and which `launch` asserts below.
-        unsafe {
-            (self.cuLaunchKernel)(
-                f.0 as *mut c_void,
-                grid,
-                1,
-                1,
-                block,
-                1,
-                1,
-                0,
-                core::ptr::null_mut(),
-                p.as_mut_ptr(),
-                core::ptr::null_mut(),
-            )
-        }
-    }
-
-    /// ★ w826 — launch with SEVERAL by-value parameters and dynamic shared memory: the parallel
-    /// walk's kernels take pointers and scalars beside `KfArgs`. Each element of `params` is
-    /// one parameter's bytes, in declaration order.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn launch_args(
-        &self,
-        stream: StreamHandle,
-        f: Func,
-        grid: u32,
-        block: u32,
-        shmem: u32,
-        params: &mut [Vec<u8>],
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        let mut p: Vec<*mut c_void> = params
-            .iter_mut()
-            .map(|b| b.as_mut_ptr().cast::<c_void>())
-            .collect();
-        // SAFETY: every element of `p` points into a live, exclusively-borrowed Vec in
-        // `params`, each holding one by-value parameter of the kernel `f`; the driver copies
-        // them during the call. The array has exactly one entry per parameter.
-        let r = unsafe {
-            (self.cuLaunchKernel)(
-                f.0 as *mut c_void,
-                grid,
-                1,
-                1,
-                block,
-                1,
-                1,
-                shmem,
-                stream.0 as *mut c_void,
-                p.as_mut_ptr(),
-                core::ptr::null_mut(),
-            )
-        };
-        self.check(what, r)
-    }
-
-    /// `cuMemcpyDtoDAsync_v2` — device to device, ordered in `stream` with the kernels around
-    /// it. ⊘ Was the synchronous `cuMemcpyDtoD_v2` on the legacy stream until P4 moved the walk
-    /// onto its own stream; a legacy-stream copy between two stream launches is ordered only
-    /// by the blocking-stream rule, which is a property of how the stream was created and not
-    /// something this call site should lean on.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn memcpy_d2d_async(
-        &self,
-        stream: StreamHandle,
-        dst: CUdeviceptr,
-        src: CUdeviceptr,
-        n: usize,
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        // SAFETY: both are live device allocations of at least `n` bytes (callers size them
-        // from the same constants); the driver reads and writes device memory only, and
-        // `stream` is a handle this binding produced.
-        self.check(what, unsafe {
-            (self.cuMemcpyDtoDAsync)(dst, src, n, stream.0 as *mut c_void)
-        })
-    }
-
-    /// `cuMemsetD8_v2` over `n` bytes (synchronous, the legacy stream).
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn memset_d8(
-        &self,
-        dst: CUdeviceptr,
-        v: u8,
-        n: usize,
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        // SAFETY: `dst` is a live device mapping of at least `n` bytes — every caller bounds
-        // `[dst, dst+n)` against the mapping it came from before calling.
-        self.check(what, unsafe { (self.cuMemsetD8)(dst, v, n) })
-    }
-
-    /// `cuMemsetD8Async` over `n` bytes, in `stream`.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn memset_d8_async(
-        &self,
-        stream: StreamHandle,
-        dst: CUdeviceptr,
-        v: u8,
-        n: usize,
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        // SAFETY: `dst` is a live device allocation of at least `n` bytes; `stream` is ours.
-        self.check(what, unsafe {
-            (self.cuMemsetD8Async)(dst, v, n, stream.0 as *mut c_void)
-        })
-    }
-
-    /// How many `cuCtxSynchronize` calls this binding has made — see the field.
-    #[must_use]
-    pub fn ctx_sync_calls(&self) -> u64 {
-        self.ctx_sync_calls
-            .load(core::sync::atomic::Ordering::Relaxed)
-    }
-
-    /// `cuStreamCreate(flags = 0)` — ★ a **blocking** stream, deliberately.
-    ///
-    /// ⊘ Not `CU_STREAM_NON_BLOCKING`: a blocking stream is ordered against the legacy default
-    /// stream, so a synchronous `cuMemcpyHtoD` a harness issues before a walk (writing the
-    /// guest's tables, `WalkKernel::write_at`) is complete before the walk reads them, and a
-    /// synchronous read-back after a collected walk sees what the walk saw. A non-blocking
-    /// stream would make that ordering every caller's problem, silently.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn stream_create(&self) -> Result<StreamHandle, CudaError> {
-        let mut h: *mut c_void = core::ptr::null_mut();
-        // SAFETY: one live out-pointer; the driver writes an opaque handle.
-        self.check("cuStreamCreate", unsafe {
-            (self.cuStreamCreate)(&raw mut h, 0)
-        })?;
-        Ok(StreamHandle(h as usize))
-    }
-
-    /// `cuStreamDestroy_v2`. ⊘ Infallible: it runs in a `Drop`.
-    pub fn stream_destroy(&self, s: StreamHandle) {
-        if s.0 != 0 {
-            // SAFETY: `s` came from `stream_create` and is destroyed once by its owner.
-            unsafe { (self.cuStreamDestroy)(s.0 as *mut c_void) };
-        }
-    }
-
-    /// `cuEventCreate(flags = 0)` — timing enabled, so a walk's GPU time is measurable.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn event_create(&self) -> Result<EventHandle, CudaError> {
-        let mut h: *mut c_void = core::ptr::null_mut();
-        // SAFETY: one live out-pointer.
-        self.check("cuEventCreate", unsafe {
-            (self.cuEventCreate)(&raw mut h, 0)
-        })?;
-        Ok(EventHandle(h as usize))
-    }
-
-    /// `cuEventDestroy_v2`. ⊘ Infallible: it runs in a `Drop`.
-    pub fn event_destroy(&self, e: EventHandle) {
-        if e.0 != 0 {
-            // SAFETY: `e` came from `event_create` and is destroyed once by its owner.
-            unsafe { (self.cuEventDestroy)(e.0 as *mut c_void) };
-        }
-    }
-
-    /// `cuEventRecord(e, stream)`.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn event_record(&self, e: EventHandle, s: StreamHandle) -> Result<(), CudaError> {
-        // SAFETY: both handles came from this binding.
-        self.check("cuEventRecord", unsafe {
-            (self.cuEventRecord)(e.0 as *mut c_void, s.0 as *mut c_void)
-        })
-    }
-
-    /// `cuEventQuery` — **never blocks.** `Ok(true)`: the work before the record is done;
-    /// `Ok(false)`: not yet ([`CUDA_ERROR_NOT_READY`]); `Err`: the stream failed (a device
-    /// fault in an earlier launch surfaces here, by name).
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn event_query(&self, e: EventHandle) -> Result<bool, CudaError> {
-        // SAFETY: `e` came from this binding.
-        let r = unsafe { (self.cuEventQuery)(e.0 as *mut c_void) };
-        if r == CUDA_ERROR_NOT_READY {
-            return Ok(false);
-        }
-        self.check("cuEventQuery", r).map(|()| true)
-    }
-
-    /// `cuEventElapsedTime(start, end)`, in microseconds. Both must have completed.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn event_elapsed_us(&self, start: EventHandle, end: EventHandle) -> Result<u64, CudaError> {
-        let mut ms: f32 = 0.0;
-        // SAFETY: one live out-pointer; both handles came from this binding.
-        self.check("cuEventElapsedTime", unsafe {
-            (self.cuEventElapsedTime)(&raw mut ms, start.0 as *mut c_void, end.0 as *mut c_void)
-        })?;
-        Ok((f64::from(ms) * 1000.0) as u64)
-    }
-
-    /// ★★★ `cuLaunchHostFunc(stream, signal, fd)` — once every earlier operation in `stream`
-    /// has completed, a driver thread writes `1` to `fd`. **This is how a walk completes: a
-    /// host event on an fd, never an inline wait** (owner rule; `THE_TRANSLATED_PLANE.md` §5,
-    /// *"the walk is one more epoll entry"*).
-    ///
-    /// ⊘ The callback makes no CUDA call (the driver forbids it) — it is one `write(2)`.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn launch_host_signal(&self, s: StreamHandle, fd: &CompletionFd) -> Result<(), CudaError> {
-        // SAFETY: `s` came from this binding; the user datum is the fd NUMBER cast to a
-        // pointer, never dereferenced by `completion_hostfn`. The fd outlives every queued
-        // callback because `WalkKernel::drop` destroys the context (which drains the stream)
-        // before its `CompletionFd` field drops.
-        self.check("cuLaunchHostFunc", unsafe {
-            (self.cuLaunchHostFunc)(
-                s.0 as *mut c_void,
-                completion_hostfn,
-                usize::try_from(fd.raw()).unwrap_or(usize::MAX) as *mut c_void,
-            )
-        })
-    }
-
-    /// `cuMemAllocHost_v2` — page-locked host memory an async copy can target.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub(crate) fn pinned_alloc(
-        &self,
-        len: usize,
-        what: &'static str,
-    ) -> Result<PinnedBuf, CudaError> {
-        let mut p: *mut c_void = core::ptr::null_mut();
-        // SAFETY: one live out-pointer; `len` is owned by the driver entirely.
-        self.check(what, unsafe { (self.cuMemAllocHost)(&raw mut p, len) })?;
-        Ok(PinnedBuf {
-            ptr: p as usize,
-            len,
-        })
-    }
-
-    /// `cuMemFreeHost` — give back a [`Self::pinned_alloc`] buffer. ⊘ Only once no queued copy can
-    /// still target it (the caller observed the completion of the last one).
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub(crate) fn pinned_free(&self, buf: PinnedBuf, what: &'static str) -> Result<(), CudaError> {
-        // SAFETY: `buf.ptr` is the base of a live `cuMemAllocHost` allocation, consumed here, so
-        // no safe code can reach it afterwards.
-        self.check(what, unsafe {
-            (self.cuMemFreeHost)(buf.ptr as *mut c_void)
-        })
-    }
-
-    /// `cuMemHostGetDevicePointer_v2` — the DEVICE address of `buf[off]`, so a kernel can read
-    /// the pinned bytes directly (zero-copy) instead of through a copy node.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    ///
-    /// # Panics
-    /// If `off` leaves `buf`.
-    pub(crate) fn pinned_device_ptr(
-        &self,
-        buf: &PinnedBuf,
-        off: usize,
-    ) -> Result<CUdeviceptr, CudaError> {
-        assert!(
-            off < buf.len,
-            "pinned_device_ptr: offset leaves the pinned buffer"
-        );
-        let mut d: CUdeviceptr = 0;
-        // SAFETY: one live out-pointer; `buf.ptr` is the base of a live `cuMemAllocHost`
-        // allocation of this context, which is what the call requires.
-        self.check("cuMemHostGetDevicePointer_v2", unsafe {
-            (self.cuMemHostGetDevicePointer)(&raw mut d, buf.ptr as *mut c_void, 0)
-        })?;
-        Ok(d + off as u64)
-    }
-
-    /// `cuMemcpyHtoDAsync_v2` from `buf[off..off+n]`, in `stream`.
-    /// ⊘ Unused since P4b (the walk reads its pdb list from pinned memory in place); kept as
-    /// the audited spelling of the call.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    ///
-    /// # Panics
-    /// If the range leaves `buf`.
-    #[allow(dead_code)]
-    pub(crate) fn memcpy_h2d_async(
-        &self,
-        s: StreamHandle,
-        dst: CUdeviceptr,
-        buf: &PinnedBuf,
-        off: usize,
-        n: usize,
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        assert!(
-            off.checked_add(n).is_some_and(|e| e <= buf.len),
-            "{what}: range leaves the pinned buffer"
-        );
-        // SAFETY: `[off, off+n)` lies inside the pinned allocation (asserted above); the
-        // caller (`WalkKernel`) does not rewrite that range until the stream has passed this
-        // copy — at most one walk is in flight, which `WalkKernel::submit` enforces.
-        self.check(what, unsafe {
-            (self.cuMemcpyHtoDAsync)(dst, (buf.ptr + off) as *const c_void, n, s.0 as *mut c_void)
-        })
-    }
-
-    /// `cuMemcpyDtoHAsync_v2` into `buf[off..off+n]`, in `stream`. ⊘ Unused since the report is
-    /// written straight into pinned memory (2026-09-25); kept for a harness that stages a copy.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    ///
-    /// # Panics
-    /// If the range leaves `buf`.
-    #[allow(dead_code)]
-    pub(crate) fn memcpy_d2h_async(
-        &self,
-        s: StreamHandle,
-        buf: &PinnedBuf,
-        off: usize,
-        src: CUdeviceptr,
-        n: usize,
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        assert!(
-            off.checked_add(n).is_some_and(|e| e <= buf.len),
-            "{what}: range leaves the pinned buffer"
-        );
-        // SAFETY: as `memcpy_h2d_async`; `WalkKernel` reads the range only after the walk's
-        // completion was observed (the host function ran, so this copy had finished).
-        self.check(what, unsafe {
-            (self.cuMemcpyDtoHAsync)((buf.ptr + off) as *mut c_void, src, n, s.0 as *mut c_void)
-        })
-    }
-
-    /// ★ Whether every graph entry point the walk's one-call submission needs resolved.
-    #[must_use]
-    pub fn has_graph_api(&self) -> bool {
-        self.cuStreamBeginCapture.is_some()
-            && self.cuStreamEndCapture.is_some()
-            && self.cuStreamGetCaptureInfo.is_some()
-            && self.cuGraphInstantiateWithFlags.is_some()
-            && self.cuGraphLaunch.is_some()
-            && self.cuGraphExecKernelNodeSetParams.is_some()
-            && self.cuGraphExecDestroy.is_some()
-            && self.cuGraphDestroy.is_some()
-            && self.cuGraphUpload.is_some()
-            && self.cuEventRecordWithFlags.is_some()
-    }
-
-    fn graph_fn<T: Copy>(f: Option<T>, name: &'static str) -> Result<T, CudaError> {
+    fn need<T: Copy>(f: Option<T>, name: &'static str) -> Result<T, CudaError> {
         f.ok_or(CudaError::MissingSymbol(name))
     }
 
-    /// `cuStreamBeginCapture_v2(s, THREAD_LOCAL)` — every operation queued on `s` from here to
-    /// [`Cuda::stream_end_capture`] is RECORDED into a graph and not executed.
-    ///
-    /// # Errors
-    /// [`CudaError`].
-    pub fn stream_begin_capture(&self, s: StreamHandle) -> Result<(), CudaError> {
-        let f = Self::graph_fn(self.cuStreamBeginCapture, "cuStreamBeginCapture_v2")?;
-        // SAFETY: `s` came from `stream_create`; the mode is a documented enumerator.
-        self.check("cuStreamBeginCapture_v2", unsafe {
-            f(s.0 as *mut c_void, CU_STREAM_CAPTURE_MODE_THREAD_LOCAL)
-        })
+    /// A process-wide counter that names contexts. ⊘ Never the `CUcontext` value, which is a
+    /// pointer into libcuda's heap.
+    static NEXT_CTX: AtomicU64 = AtomicU64::new(1);
+    /// Failure policy F1: resources leaked because their context could not be drained.
+    static LEAKS: AtomicU64 = AtomicU64::new(0);
+
+    pub(super) fn leaks() -> u64 {
+        LEAKS.load(Ordering::Relaxed)
     }
 
-    /// `cuStreamEndCapture` — the graph recorded since [`Cuda::stream_begin_capture`]. ⚠ Must be
-    /// called on every path out of a capture, the failing ones included, or the stream stays in
-    /// capture mode and every later submission on it is recorded instead of run.
-    ///
-    /// # Errors
-    /// [`CudaError`] (the capture was invalidated); the stream has left capture mode either way.
-    pub fn stream_end_capture(&self, s: StreamHandle) -> Result<GraphHandle, CudaError> {
-        let f = Self::graph_fn(self.cuStreamEndCapture, "cuStreamEndCapture")?;
-        let mut g: *mut c_void = core::ptr::null_mut();
-        // SAFETY: `s` is ours; one live out-pointer.
-        let r = unsafe { f(s.0 as *mut c_void, &raw mut g) };
-        if r != CUDA_SUCCESS && !g.is_null() {
-            self.graph_destroy(GraphHandle(g as usize));
-        }
-        self.check("cuStreamEndCapture", r)?;
-        Ok(GraphHandle(g as usize))
+    // ═══ Contexts ════════════════════════════════════════════════════════════════════════════
+
+    struct CtxInner {
+        cu: Cuda,
+        raw: usize,
+        device: c_int,
+        id: u64,
+        name: String,
+        sync_calls: AtomicU64,
     }
 
-    /// The node the capture on `s` most recently added — i.e. the node for the operation just
-    /// queued, on a linear (single-stream) capture. How a captured launch is named so its
-    /// parameters can be updated in the instantiated graph without re-capturing.
-    ///
-    /// # Errors
-    /// [`CudaError`]; also refused by name when `s` is not capturing or the capture is not a
-    /// single chain (more or fewer than one dependency).
-    pub fn capture_leaf(&self, s: StreamHandle) -> Result<GraphNode, CudaError> {
-        let f = Self::graph_fn(self.cuStreamGetCaptureInfo, "cuStreamGetCaptureInfo_v2")?;
-        let mut status: c_uint = 0;
-        let mut id: u64 = 0;
-        let mut g: *mut c_void = core::ptr::null_mut();
-        let mut deps: *const *mut c_void = core::ptr::null();
-        let mut n: usize = 0;
-        // SAFETY: `s` is ours; five live out-pointers. `deps` points at driver-owned storage
-        // valid until the next capture call on `s`, and is read (once) before any.
-        let r = unsafe {
-            f(
-                s.0 as *mut c_void,
-                &raw mut status,
-                &raw mut id,
-                &raw mut g,
-                &raw mut deps,
-                &raw mut n,
-            )
-        };
-        self.check("cuStreamGetCaptureInfo_v2", r)?;
-        if status != CU_STREAM_CAPTURE_STATUS_ACTIVE || n != 1 || deps.is_null() {
-            return Err(CudaError::Refused {
-                what: "cuStreamGetCaptureInfo_v2",
-                code: 0,
-                name: format!(
-                    "expected an ACTIVE linear capture with exactly one leaf; status={status} \
-                     leaves={n}"
-                ),
-            });
-        }
-        // SAFETY: `n == 1` and `deps` is non-NULL, so `deps[0]` is a valid element.
-        let node = unsafe { *deps };
-        Ok(GraphNode(node as usize))
-    }
-
-    /// `cuGraphInstantiateWithFlags(g, 0)`.
-    ///
-    /// # Errors
-    /// [`CudaError`].
-    pub fn graph_instantiate(&self, g: GraphHandle) -> Result<GraphExecHandle, CudaError> {
-        let f = Self::graph_fn(
-            self.cuGraphInstantiateWithFlags,
-            "cuGraphInstantiateWithFlags",
-        )?;
-        let mut e: *mut c_void = core::ptr::null_mut();
-        // SAFETY: `g` came from `stream_end_capture`; one live out-pointer.
-        self.check("cuGraphInstantiateWithFlags", unsafe {
-            f(&raw mut e, g.0 as *mut c_void, 0)
-        })?;
-        Ok(GraphExecHandle(e as usize))
-    }
-
-    /// `cuGraphLaunch(e, s)` — the whole walk, queued with ONE driver call.
-    ///
-    /// # Errors
-    /// [`CudaError`].
-    pub fn graph_launch(&self, e: GraphExecHandle, s: StreamHandle) -> Result<(), CudaError> {
-        let f = Self::graph_fn(self.cuGraphLaunch, "cuGraphLaunch")?;
-        // SAFETY: both handles came from this binding.
-        self.check("cuGraphLaunch", unsafe {
-            f(e.0 as *mut c_void, s.0 as *mut c_void)
-        })
-    }
-
-    /// `cuGraphExecKernelNodeSetParams` — replace the launch parameters (grid, block, shared
-    /// memory, every by-value argument) of kernel node `node` in `e`. Takes effect for the
-    /// NEXT `cuGraphLaunch`; the driver copies `params` during the call.
-    ///
-    /// # Errors
-    /// [`CudaError`] (e.g. `f` is not the node's function: the topology may not change).
-    #[allow(clippy::too_many_arguments)]
-    pub fn graph_exec_kernel_set(
-        &self,
-        e: GraphExecHandle,
-        node: GraphNode,
-        f: Func,
-        grid: u32,
-        block: u32,
-        shmem: u32,
-        params: &mut [Vec<u8>],
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        let set = Self::graph_fn(
-            self.cuGraphExecKernelNodeSetParams,
-            "cuGraphExecKernelNodeSetParams",
-        )?;
-        let mut p: Vec<*mut c_void> = params
-            .iter_mut()
-            .map(|b| b.as_mut_ptr().cast::<c_void>())
-            .collect();
-        let kp = KernelNodeParams {
-            func: f.0 as *mut c_void,
-            grid_x: grid,
-            grid_y: 1,
-            grid_z: 1,
-            block_x: block,
-            block_y: 1,
-            block_z: 1,
-            shmem,
-            kernel_params: p.as_mut_ptr(),
-            extra: core::ptr::null_mut(),
-            kern: core::ptr::null_mut(),
-            ctx: core::ptr::null_mut(),
-        };
-        // SAFETY: as `launch_args` — every element of `p` points into a live Vec of `params`,
-        // one per by-value parameter of `f`, and the driver copies them during the call. `kp`
-        // is a live, fully-initialised `CUDA_KERNEL_NODE_PARAMS_v2`; `e`/`node` came from
-        // this binding and `node` belongs to the graph `e` was instantiated from.
-        self.check(what, unsafe {
-            set(e.0 as *mut c_void, node.0 as *mut c_void, &raw const kp)
-        })
-    }
-
-    /// `cuGraphUpload(e, s)` — move the instantiated graph's work descriptors to the device
-    /// now, so the FIRST `cuGraphLaunch` does not pay for it on the submitting thread.
-    ///
-    /// # Errors
-    /// [`CudaError`].
-    pub fn graph_upload(&self, e: GraphExecHandle, s: StreamHandle) -> Result<(), CudaError> {
-        let f = Self::graph_fn(self.cuGraphUpload, "cuGraphUpload")?;
-        // SAFETY: both handles came from this binding.
-        self.check("cuGraphUpload", unsafe {
-            f(e.0 as *mut c_void, s.0 as *mut c_void)
-        })
-    }
-
-    /// `cuEventRecordWithFlags(e, s, CU_EVENT_RECORD_EXTERNAL)` — under stream capture this
-    /// becomes an EVENT-RECORD NODE of the graph (a plain `cuEventRecord` during capture only
-    /// expresses a dependency and records nothing), so every replay records `e` on the GPU.
-    ///
-    /// # Errors
-    /// [`CudaError`].
-    pub fn event_record_external(&self, e: EventHandle, s: StreamHandle) -> Result<(), CudaError> {
-        let f = Self::graph_fn(self.cuEventRecordWithFlags, "cuEventRecordWithFlags")?;
-        // SAFETY: both handles came from this binding; `1` is `CU_EVENT_RECORD_EXTERNAL`.
-        self.check("cuEventRecordWithFlags", unsafe {
-            f(e.0 as *mut c_void, s.0 as *mut c_void, 1)
-        })
-    }
-
-    /// `cuGraphExecDestroy`. ⊘ Infallible: it runs in a `Drop`.
-    pub fn graph_exec_destroy(&self, e: GraphExecHandle) {
-        if let (Some(f), true) = (self.cuGraphExecDestroy, e.0 != 0) {
-            // SAFETY: `e` came from `graph_instantiate` and is destroyed once by its owner.
-            unsafe { f(e.0 as *mut c_void) };
+    impl Drop for CtxInner {
+        fn drop(&mut self) {
+            // SAFETY: `raw` came from this binding's own `cuCtxCreate_v2` and is destroyed exactly
+            // once: `CtxInner` is reachable only through `Arc`s, and this is the last one. Every
+            // object of the context (allocations, streams, events, modules, the pinned stage, the
+            // console registrations) holds a `Ctx` clone, so none outlives the context.
+            unsafe { (self.cu.cuCtxDestroy)(self.raw as *mut c_void) };
         }
     }
 
-    /// `cuGraphDestroy`. ⊘ Infallible: it runs in a `Drop`.
-    pub fn graph_destroy(&self, g: GraphHandle) {
-        if let (Some(f), true) = (self.cuGraphDestroy, g.0 != 0) {
-            // SAFETY: `g` came from `stream_end_capture` and is destroyed once by its owner.
-            unsafe { f(g.0 as *mut c_void) };
-        }
+    /// ★ A CUDA context. Every object made in it holds a clone, so the context is destroyed only
+    /// when the last of them drops — never under a live allocation or stream.
+    pub(in crate::driver_unsafe) struct Ctx(Arc<CtxInner>);
+
+    /// ★ PROOF that every operation queued in context `ctx_id` before it was minted has completed.
+    /// Minted only by [`Ctx::drain`] and by [`Event::query`] answering *done*; consumed by
+    /// [`PinnedStage::end_flight`], the only way a walk's stage returns to `Idle`.
+    pub(in crate::driver_unsafe) struct Drained {
+        ctx_id: u64,
     }
 
-    /// As [`Cuda::launch_raw`], checked.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`].
-    pub fn launch(
-        &self,
-        f: Func,
-        grid: u32,
-        block: u32,
-        param: &mut [u8],
-        what: &'static str,
-    ) -> Result<(), CudaError> {
-        self.check(what, self.launch_raw(f, grid, block, param))
-    }
-}
-
-/// An opaque CUDA context handle. ⊘ A `usize` and not a pointer, so nothing outside this file
-/// can dereference it and `WalkKernel` can stay `Send`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CtxHandle(usize);
-
-impl CtxHandle {
-    /// Whether this handle names nothing.
-    #[must_use]
-    pub fn is_null(self) -> bool {
-        self.0 == 0
-    }
-    /// The null handle.
-    #[must_use]
-    pub fn null() -> Self {
-        CtxHandle(0)
-    }
-}
-
-/// An opaque CUDA stream handle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct StreamHandle(usize);
-
-impl StreamHandle {
-    /// The legacy default stream (`0`).
-    #[must_use]
-    pub fn legacy() -> Self {
-        StreamHandle(0)
-    }
-}
-
-/// An opaque CUDA event handle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EventHandle(usize);
-
-/// ★ Page-locked host memory the walk's async copies land in. `pub(crate)` on purpose: its
-/// bytes are written by DMA **after** the call that queued the copy returns, so reading them
-/// means something only once the walk's completion was observed — a state machine
-/// `WalkKernel` owns and nothing outside this crate can be trusted to follow. Reclaimed by
-/// `cuCtxDestroy`, like every other allocation of the walker's context.
-#[derive(Debug)]
-pub(crate) struct PinnedBuf {
-    ptr: usize,
-    len: usize,
-}
-
-impl PinnedBuf {
-    /// The allocation's host address, as an integer — handed across an FFI (the display console
-    /// reads a finished frame there); never dereferenced by safe code.
-    pub(crate) fn addr(&self) -> usize {
-        self.ptr
-    }
-
-    /// Its length.
-    pub(crate) fn len(&self) -> usize {
-        self.len
-    }
-
-    /// Copy `n` bytes at `off` out. ⊘ Only after the copy that filled them completed.
-    ///
-    /// # Panics
-    /// If the range leaves the buffer.
-    pub(crate) fn read(&self, off: usize, n: usize) -> Vec<u8> {
-        assert!(
-            off.checked_add(n).is_some_and(|e| e <= self.len),
-            "pinned read leaves the buffer"
-        );
-        let mut out = vec![0u8; n];
-        // SAFETY: the range is inside the live pinned allocation (asserted); `out` is a fresh
-        // local of exactly `n` bytes, so the regions cannot overlap. The DMA that wrote the
-        // range completed before the caller's completion observation (see the type doc).
-        unsafe {
-            core::ptr::copy_nonoverlapping((self.ptr + off) as *const u8, out.as_mut_ptr(), n)
-        };
-        out
-    }
-
-    /// Copy `bytes` in at `off`. ⊘ Only while no queued copy reads the range.
-    ///
-    /// # Panics
-    /// If the range leaves the buffer.
-    pub(crate) fn write(&mut self, off: usize, bytes: &[u8]) {
-        assert!(
-            off.checked_add(bytes.len()).is_some_and(|e| e <= self.len),
-            "pinned write leaves the buffer"
-        );
-        // SAFETY: the range is inside the live pinned allocation (asserted) and `bytes` is a
-        // distinct Rust slice; no queued copy reads it (`WalkKernel` writes only between walks).
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                bytes.as_ptr(),
-                (self.ptr + off) as *mut u8,
-                bytes.len(),
-            );
-        }
-    }
-}
-
-/// ★★★ **THE WALK'S COMPLETION FD** — an `eventfd(EFD_NONBLOCK|EFD_CLOEXEC)` a CUDA host
-/// function writes when a walk's last copy has landed. Put [`CompletionFd::raw`] in the
-/// worker's `epoll` set; readiness is the wake and [`CompletionFd::drain`] consumes it.
-#[derive(Debug)]
-pub struct CompletionFd {
-    fd: std::os::fd::OwnedFd,
-}
-
-impl CompletionFd {
-    /// A fresh non-blocking eventfd.
-    ///
-    /// # Errors
-    /// [`CudaError::Refused`] naming `eventfd`.
-    pub fn new() -> Result<CompletionFd, CudaError> {
-        // SAFETY: `eventfd` takes two integers and returns an fd or -1.
-        let fd = unsafe { eventfd(0, EFD_NONBLOCK_CLOEXEC) };
-        if fd < 0 {
-            return Err(CudaError::Refused {
-                what: "eventfd (the walk's completion fd)",
-                code: fd,
-                name: "eventfd(2) refused".to_string(),
-            });
-        }
-        // SAFETY: `fd` was just returned by `eventfd`, is open, and is owned by nothing else.
-        let fd = unsafe { <std::os::fd::OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(fd) };
-        Ok(CompletionFd { fd })
-    }
-
-    /// The fd number. Borrowed: this value owns it.
-    #[must_use]
-    pub fn raw(&self) -> i32 {
-        std::os::fd::AsRawFd::as_raw_fd(&self.fd)
-    }
-
-    /// Signal it once, as the walk's host function does. For a caller that multiplexes other
-    /// work onto the same kind of fd (a harness's request queue); a walk never needs it.
-    pub fn signal(&self) {
-        completion_hostfn(usize::try_from(self.raw()).unwrap_or(usize::MAX) as *mut c_void);
-    }
-
-    /// Consume every pending signal; `0` when none was pending. **Never blocks.**
-    #[must_use]
-    pub fn drain(&self) -> u64 {
-        let mut v: u64 = 0;
-        // SAFETY: `v` is a live 8-byte buffer; the fd is non-blocking, so an empty counter
-        // returns -1/EAGAIN at once rather than waiting.
-        let n = unsafe { read(self.raw(), (&raw mut v).cast::<c_void>(), 8) };
-        if n == 8 { v } else { 0 }
-    }
-
-    /// `poll(2)` for readability, up to `timeout_ms`; whether it became readable.
-    /// ⚠ This **blocks the calling thread**. It exists for harnesses and the selftest — never
-    /// for a worker, whose only wait is its `epoll` (§35).
-    #[must_use]
-    pub fn wait_readable(&self, timeout_ms: i32) -> bool {
-        let mut p = PollFd {
-            fd: self.raw(),
-            events: POLLIN,
-            revents: 0,
-        };
-        // SAFETY: one live `pollfd`, count 1.
-        let r = unsafe { poll(&raw mut p, 1, timeout_ms) };
-        r > 0 && (p.revents & POLLIN) != 0
-    }
-}
-
-impl std::os::fd::AsFd for CompletionFd {
-    fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
-        self.fd.as_fd()
-    }
-}
-
-/// ★ The host function every walk's stream ends with: `write(fd, 1)`, `user` being the fd
-/// NUMBER. ⊘ A plain `extern "C" fn`: it dereferences nothing it is handed. It runs on a CUDA
-/// driver thread and makes no CUDA call (the driver forbids that).
-pub(crate) extern "C" fn completion_hostfn(user: *mut c_void) {
-    let fd = c_int::try_from(user as usize).unwrap_or(-1);
-    let one: u64 = 1;
-    // SAFETY: `one` is a live 8-byte value; `write` on a bad fd returns -1 and touches nothing.
-    let _ = unsafe { write(fd, (&raw const one).cast::<c_void>(), 8) };
-}
-
-#[cfg(test)]
-mod completion_fd_tests {
-    use super::*;
-
-    /// ★ The completion path WITHOUT a GPU: the exact function the driver will call, called
-    /// here, must make the fd readable and drain to exactly one signal.
-    #[test]
-    fn the_host_function_signals_the_fd_and_drain_consumes_it() {
-        let fd = CompletionFd::new().expect("eventfd");
-        assert_eq!(fd.drain(), 0, "a fresh fd has nothing pending");
-        assert!(!fd.wait_readable(0), "and is not readable");
-        completion_hostfn(usize::try_from(fd.raw()).unwrap() as *mut c_void);
-        assert!(
-            fd.wait_readable(0),
-            "the host function must make the fd readable"
-        );
-        assert_eq!(fd.drain(), 1, "exactly one signal per walk");
-        assert_eq!(
-            fd.drain(),
-            0,
-            "drain consumed it — a stale count would complete the NEXT walk early"
-        );
-    }
-}
-
-/// An opaque CUDA module handle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ModuleHandle(usize);
-
-/// An opaque CUDA kernel-function handle.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Func(usize);
-
-/// An opaque CUDA graph (the captured, un-instantiated walk).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GraphHandle(usize);
-
-/// An opaque instantiated CUDA graph — what `cuGraphLaunch` submits.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GraphExecHandle(usize);
-
-/// An opaque node of a [`GraphHandle`]; valid while the graph lives.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GraphNode(usize);
-
-/// `CUDA_KERNEL_NODE_PARAMS_v2` (`cuda.h`, CUDA 12). ⊘ The v1 struct is its first seven fields;
-/// `kern`/`ctx` are NULL here, which the driver reads as "use `func`" / "the current context".
-#[repr(C)]
-pub(crate) struct KernelNodeParams {
-    func: *mut c_void,
-    grid_x: c_uint,
-    grid_y: c_uint,
-    grid_z: c_uint,
-    block_x: c_uint,
-    block_y: c_uint,
-    block_z: c_uint,
-    shmem: c_uint,
-    kernel_params: *mut *mut c_void,
-    extra: *mut *mut c_void,
-    kern: *mut c_void,
-    ctx: *mut c_void,
-}
-
-/// `CU_STREAM_CAPTURE_MODE_THREAD_LOCAL`: an unsafe API call on THIS thread during the capture
-/// is an error (so a stray synchronous call cannot be silently left out of the graph), while
-/// other threads of the isolate are not constrained.
-const CU_STREAM_CAPTURE_MODE_THREAD_LOCAL: c_uint = 1;
-/// `CU_STREAM_CAPTURE_STATUS_ACTIVE`.
-const CU_STREAM_CAPTURE_STATUS_ACTIVE: c_uint = 1;
-
-/// ★ **A `&[u8]` over one `Copy`, `#[repr(C)]` value** — the only way the safe half of this
-/// crate turns a struct into the bytes `cuLaunchKernel` and `cuMemcpyHtoD_v2` want.
-///
-/// ⊘ It lives here rather than beside its callers for the containment rule: this is the file
-/// the audit reads, and a `from_raw_parts` anywhere else would put a second file in it.
-#[must_use]
-pub fn view_bytes<T: Copy>(v: &T) -> &[u8] {
-    // SAFETY: `v` is a live, aligned `T` borrowed for the returned lifetime, and the length
-    // is exactly `size_of::<T>()`. ⚠ The caller's obligation — discharged at every call site
-    // in this crate by the `#[repr(C)]` integer-aggregate types in `abi.rs` — is that `T`
-    // contains no padding holding uninitialised bytes and no pointer Rust tracks. The ABI
-    // differential test pins the layouts these are used with.
-    unsafe { core::slice::from_raw_parts((v as *const T).cast::<u8>(), core::mem::size_of::<T>()) }
-}
-
-// ⊘ `read_struct` (a raw `copy_nonoverlapping` of device bytes into any `Copy` type) was removed
-// 2026-09-27: its only callers decoded the walk report, which now has ONE safe decoder per
-// struct (`abi.rs`, `report_codec!`, by `offset_of!`). One fewer unsafe block in the audited file.
-
-/// ★★★★★ **AN ALL-ZERO VALUE, INCLUDING ITS PADDING** — and the padding is the whole point.
-///
-/// # ⊘⊘⊘ WHY THIS EXISTS, AND WHAT IT CAUGHT
-///
-/// `KfFormat` has interior padding (two bytes between `small_ps` and `root_align`, three after
-/// `pcf_sparse`). A Rust struct literal leaves padding **undefined** — so the 216 bytes
-/// [`view_bytes`] hands `cuLaunchKernel` contained whatever was on the stack, and the ABI
-/// differential's byte comparison failed at **byte 58** against a `.cu` that begins its own
-/// builder with `memset(&F, 0, sizeof(F))`.
-///
-/// ⚠ Two separate problems, and the second is the serious one:
-/// 1. the differential could not compare bytes it could not predict;
-/// 2. reading uninitialised padding is **undefined behaviour**, and it was being read on every
-///    launch. The kernel only touches named fields, so nothing misbehaved — which is exactly
-///    why it survived: a defect whose consequence is invisible is one the tests must catch.
-///
-/// ⇒ Every descriptor this crate hands the GPU is built on a zeroed base, as the `.cu`'s is.
-#[must_use]
-pub fn zeroed<T: Copy>() -> T {
-    // SAFETY: the caller's obligation is that the all-zero bit pattern is a valid value of
-    // `T`. Every call site in this crate is a `#[repr(C)]` aggregate of integers and integer
-    // arrays (`abi.rs`), for which it is; the types contain no reference, no `NonZero`, no
-    // enum with a niche, and no pointer Rust tracks.
-    unsafe { core::mem::zeroed() }
-}
-
-/// ★★★★★ **w755i — A DEVICE ALLOCATION CUDA OWNS, EXPORTED TO AN fd.**
-///
-/// This is one half of the question the single store's design now turns on. The other half —
-/// *"will our RM client IMPORT that fd"* — lives in `kayfabe-isolate-host`, because only it
-/// can issue `NV_ESC_RM_IMPORT_OBJECT_FROM_FD`. ⊘ Deliberately split at the crate boundary:
-/// this half must not pretend to know what RM will say.
-///
-/// # Why the answer matters
-///
-/// If CUDA can own the store and RM can name it, then the store is CUDA-addressable **by
-/// construction** — the walk kernel reads the guest's page tables LIVE at their own GPGA
-/// instead of a relocated copy (which today **forecloses** the one disagreement direction the
-/// second walker exists for), and `cuMemcpyAsync`/`cuMemsetAsync` can serve the emulated CE
-/// and scrub planes without the CPU. And `map_store_slice` still has an RM handle for guest
-/// VA spaces, which is the thing everything else rests on.
-///
-/// # Errors
-/// [`CudaError::NoVmmApi`] when this driver has no VMM entry points — a **measurement**, not a
-/// failure — or the driver's own refusal, by name.
-pub struct ExportedAllocation {
-    /// The CUDA handle, kept so the allocation outlives the fd.
-    pub handle: u64,
-    /// The POSIX fd the allocation was exported to.
-    pub fd: i32,
-    /// The granularity CUDA required, rounded up into the request.
-    pub granularity: usize,
-    /// The size actually requested after rounding.
-    pub bytes: usize,
-}
-
-/// `CU_MEM_ALLOCATION_TYPE_PINNED`.
-const CU_MEM_ALLOCATION_TYPE_PINNED: u32 = 0x1;
-/// `CU_MEM_LOCATION_TYPE_DEVICE`.
-const CU_MEM_LOCATION_TYPE_DEVICE: u32 = 0x1;
-/// `CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR`.
-const CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR: u32 = 0x1;
-/// `CU_MEM_ALLOC_GRANULARITY_RECOMMENDED`.
-const CU_MEM_ALLOC_GRANULARITY_RECOMMENDED: u32 = 0x1;
-
-/// `CUmemAllocationProp`, transcribed. ⚠ Layout is the driver's; a field added in a later
-/// CUDA would shift `win_desc` and this must be re-read rather than assumed.
-#[repr(C)]
-#[derive(Default, Clone, Copy)]
-struct CuMemAllocationProp {
-    kind: u32,
-    requested_handle_types: u32,
-    location_type: u32,
-    location_id: i32,
-    win_security_attributes: *const core::ffi::c_void,
-    alloc_flags_compression_type: u8,
-    alloc_flags_gpu_direct_rdma_capable: u8,
-    alloc_flags_usage: u16,
-    alloc_flags_reserved: [u8; 4],
-}
-
-impl Cuda {
-    /// Does this driver expose the VMM API at all? ⊘ A measurement: `false` is an answer.
-    #[must_use]
-    pub fn has_vmm_api(&self) -> bool {
-        self.cuMemCreate.is_some()
-            && self.cuMemExportToShareableHandle.is_some()
-            && self.cuMemGetAllocationGranularity.is_some()
-    }
-
-    /// Allocate `bytes` of device memory through CUDA and export it to a POSIX fd.
-    ///
-    /// # Errors
-    /// The driver's refusal, by name, or a marker that this driver has no VMM API.
-    /// ★★★★★ **w755w — IMPORT AN RM-EXPORTED fd AND MAP IT TO A DEVICE POINTER.**
-    ///
-    /// The direction `[measured w755v]` established: RM allocates and exports; CUDA imports.
-    /// The reverse is refused by RM at `os.c:2377` (`nvfp->handles == NULL`), because RM
-    /// registers `handles[0]` only in its own export path.
-    ///
-    /// ⊘ **This is the question the whole table-refresh design waits on.** The walk kernel
-    /// dereferences `KfWin { base, len }` at **GPGA offsets** — so if the single store can be
-    /// given a device pointer here, the kernel walks the guest's tables **in place** and the
-    /// blind CPU walk (refused by CUT A) is deleted rather than worked around.
-    ///
-    /// ⚠ `osHandle` for `POSIX_FILE_DESCRIPTOR` is the **fd cast to a pointer**, not a
-    /// pointer to the fd. The other reading yields `INVALID_VALUE`, which reads like a
-    /// rejected handle rather than a mis-passed argument — the shape that cost w755v two
-    /// wrong answers.
-    ///
-    /// # Errors
-    /// A string naming the call that refused **and its rc**, so a precondition failure can
-    /// never be read as CUDA's verdict (w755v).
-    pub fn import_and_map(&self, device: i32, fd: i32, bytes: usize) -> Result<u64, String> {
-        let (Some(import), Some(reserve), Some(map), Some(set_access)) = (
-            self.cuMemImportFromShareableHandle,
-            self.cuMemAddressReserve,
-            self.cuMemMap,
-            self.cuMemSetAccess,
-        ) else {
-            return Err(
-                "NO-VMM-API: this libcuda has no Import/AddressReserve/Map/SetAccess".into(),
-            );
-        };
-        let mut handle: u64 = 0;
-        // SAFETY: `handle` is a live local; `fd` is cast to the pointer-sized osHandle the
-        // POSIX_FILE_DESCRIPTOR type specifies.
-        let rc = unsafe {
-            import(
-                &raw mut handle,
-                usize::try_from(fd).unwrap_or(0) as *mut c_void,
-                CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR,
-            )
-        };
-        if rc != 0 {
-            return Err(format!("cuMemImportFromShareableHandle rc={rc} fd={fd}"));
-        }
-        let mut ptr: u64 = 0;
-        // SAFETY: `ptr` is a live local. Alignment 0 lets CUDA choose.
-        let rc = unsafe { reserve(&raw mut ptr, bytes, 0, 0, 0) };
-        if rc != 0 {
-            return Err(format!("cuMemAddressReserve rc={rc} bytes={bytes}"));
-        }
-        // SAFETY: `ptr` is a reservation of `bytes` and `handle` is a live imported handle.
-        let rc = unsafe { map(ptr, bytes, 0, handle, 0) };
-        if rc != 0 {
-            return Err(format!("cuMemMap rc={rc} ptr={ptr:#x} bytes={bytes}"));
-        }
-        // `CUmemAccessDesc { CUmemLocation { type, id }, flags }` — 12 bytes, transcribed and
-        // checked against `cuda.h`'s own layout rather than remembered (w755v).
-        #[repr(C)]
-        struct AccessDesc {
-            location_type: c_uint,
-            location_id: c_int,
-            flags: c_uint,
-        }
-        let desc = AccessDesc {
-            location_type: CU_MEM_LOCATION_TYPE_DEVICE,
-            location_id: device,
-            flags: 3, // CU_MEM_ACCESS_FLAGS_PROT_READWRITE
-        };
-        // SAFETY: one live `AccessDesc` for a mapped range of `bytes`.
-        let rc = unsafe { set_access(ptr, bytes, (&raw const desc).cast::<c_void>(), 1) };
-        if rc != 0 {
-            return Err(format!("cuMemSetAccess rc={rc} ptr={ptr:#x}"));
-        }
-        Ok(ptr)
-    }
-
-    pub fn export_device_allocation(
-        &self,
-        device: i32,
-        bytes: usize,
-    ) -> Result<ExportedAllocation, String> {
-        let (Some(gran_fn), Some(create), Some(export)) = (
-            self.cuMemGetAllocationGranularity,
-            self.cuMemCreate,
-            self.cuMemExportToShareableHandle,
-        ) else {
-            return Err("NO-VMM-API: this libcuda has no cuMemCreate/Export/Granularity".into());
-        };
-
-        let mut prop = CuMemAllocationProp {
-            kind: CU_MEM_ALLOCATION_TYPE_PINNED,
-            requested_handle_types: CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR,
-            location_type: CU_MEM_LOCATION_TYPE_DEVICE,
-            location_id: device,
-            win_security_attributes: core::ptr::null(),
-            ..Default::default()
-        };
-
-        let mut gran: usize = 0;
-        // SAFETY: `prop` is a live, fully-initialised transcription of `CUmemAllocationProp`.
-        let rc = unsafe {
-            gran_fn(
-                &raw mut gran,
-                (&raw const prop).cast(),
-                CU_MEM_ALLOC_GRANULARITY_RECOMMENDED,
-            )
-        };
-        if rc != 0 || gran == 0 {
-            return Err(format!("cuMemGetAllocationGranularity rc={rc} gran={gran}"));
-        }
-        // ⊘ Round UP. A request below the granularity is refused outright, and a request that
-        // is not a multiple of it is the kind of near-miss that reads as a capability problem.
-        let rounded = bytes.div_ceil(gran) * gran;
-
-        let mut handle: u64 = 0;
-        // SAFETY: as above; `handle` is written only on success.
-        let rc = unsafe { create(&raw mut handle, rounded, (&raw const prop).cast(), 0) };
-        if rc != 0 {
-            return Err(format!("cuMemCreate rc={rc} bytes={rounded} gran={gran}"));
-        }
-
-        let mut fd: i32 = -1;
-        // SAFETY: `handle` is live; the out-param for a POSIX fd is an `int`.
-        let rc = unsafe {
-            export(
-                (&raw mut fd).cast(),
-                handle,
-                CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR,
-                0,
-            )
-        };
-        if rc != 0 || fd < 0 {
-            if let Some(release) = self.cuMemRelease {
-                // SAFETY: `handle` is live and unexported.
-                let _ = unsafe { release(handle) };
+    impl Ctx {
+        /// `cuInit`, the device (by PCI address, or ordinal 0 for single-GPU harnesses), its name,
+        /// `cuCtxCreate` (current on this thread).
+        pub(in crate::driver_unsafe) fn create(bdf: Option<&str>) -> Result<Ctx, CudaError> {
+            let cu = Cuda::open()?;
+            // SAFETY: `cuInit` takes an integer and returns a status; no pointers.
+            cu.check("cuInit", unsafe { (cu.cuInit)(0) })?;
+            let mut n: c_int = 0;
+            // SAFETY: one live, aligned out-pointer for the whole call.
+            cu.check("cuDeviceGetCount", unsafe {
+                (cu.cuDeviceGetCount)(&raw mut n)
+            })?;
+            if n < 1 {
+                return Err(refused(
+                    "cuDeviceGetCount",
+                    "the driver loaded and reports ZERO devices — a fact about this host, not \
+                     about CUDA"
+                        .to_string(),
+                ));
             }
-            return Err(format!("cuMemExportToShareableHandle rc={rc} fd={fd}"));
+            let mut device: c_int = 0;
+            match bdf {
+                None => {
+                    // SAFETY: one live out-pointer, no aliasing.
+                    cu.check("cuDeviceGet", unsafe {
+                        (cu.cuDeviceGet)(&raw mut device, 0)
+                    })?;
+                }
+                Some(bdf) => {
+                    let c = CString::new(bdf).map_err(|_| {
+                        refused(
+                            "cuDeviceGetByPCIBusId",
+                            format!("the PCI bus id {bdf:?} contains a NUL"),
+                        )
+                    })?;
+                    // SAFETY: one live out-pointer and a NUL-terminated string outliving the call.
+                    cu.check("cuDeviceGetByPCIBusId", unsafe {
+                        (cu.cuDeviceGetByPCIBusId)(&raw mut device, c.as_ptr())
+                    })?;
+                }
+            }
+            let mut buf = [0u8; 128];
+            // SAFETY: the buffer is live for the call and its length is passed as the bound the
+            // driver must honour. The bytes are then read by `CStr::from_bytes_until_nul`, which is
+            // bounded by the array even if the driver wrote no NUL.
+            let r = unsafe { (cu.cuDeviceGetName)(buf.as_mut_ptr().cast::<c_char>(), 128, device) };
+            let name = if r == CUDA_SUCCESS {
+                core::ffi::CStr::from_bytes_until_nul(&buf).map_or_else(
+                    |_| "<unterminated>".to_string(),
+                    |c| c.to_string_lossy().into_owned(),
+                )
+            } else {
+                "<unnamed>".to_string()
+            };
+            let mut ctx: *mut c_void = core::ptr::null_mut();
+            // SAFETY: one live out-pointer; the driver writes an opaque handle we never deref.
+            cu.check("cuCtxCreate_v2", unsafe {
+                (cu.cuCtxCreate)(&raw mut ctx, 0, device)
+            })?;
+            Ok(Ctx(Arc::new(CtxInner {
+                cu,
+                raw: ctx as usize,
+                device,
+                id: NEXT_CTX.fetch_add(1, Ordering::Relaxed),
+                name,
+                sync_calls: AtomicU64::new(0),
+            })))
         }
-        prop.alloc_flags_reserved = [0; 4];
-        Ok(ExportedAllocation {
-            handle,
-            fd,
-            granularity: gran,
-            bytes: rounded,
+
+        fn cu(&self) -> &Cuda {
+            &self.0.cu
+        }
+
+        fn share(&self) -> Ctx {
+            Ctx(Arc::clone(&self.0))
+        }
+
+        /// This context's process-local identity (a counter, never the `CUcontext` value).
+        pub(in crate::driver_unsafe) fn id(&self) -> u64 {
+            self.0.id
+        }
+
+        /// The device's name (`cuDeviceGetName`).
+        pub(in crate::driver_unsafe) fn device_name(&self) -> &str {
+            &self.0.name
+        }
+
+        /// Whether every graph entry point the walk's one-call submission needs resolved.
+        pub(in crate::driver_unsafe) fn has_graph_api(&self) -> bool {
+            self.0.cu.has_graph_api()
+        }
+
+        /// ★ `cuCtxSetCurrent` — bind this context to the calling thread. A context is current
+        /// PER THREAD (`[measured w731, RTX 3060, 580.159.04]` a worker thread without it got
+        /// `CUDA_ERROR_INVALID_CONTEXT` 2 115 times).
+        pub(in crate::driver_unsafe) fn make_current(&self) -> Result<(), CudaError> {
+            // SAFETY: `raw` came from this library's own `cuCtxCreate_v2` and is alive (this `Ctx`
+            // holds the `Arc`). `cuCtxSetCurrent` affects the calling thread only.
+            self.cu().check("cuCtxSetCurrent", unsafe {
+                (self.0.cu.cuCtxSetCurrent)(self.0.raw as *mut c_void)
+            })
+        }
+
+        /// ★ Make this context current and wait for everything queued in it (`cuCtxSynchronize`):
+        /// the one way to mint a [`Drained`] for the whole context. Counted ([`Ctx::sync_calls`]):
+        /// a walk must make none (gate 8, `tests/walk_never_synchronizes.rs`).
+        pub(in crate::driver_unsafe) fn drain(&self) -> Result<Drained, CudaError> {
+            self.make_current()?;
+            self.0.sync_calls.fetch_add(1, Ordering::Relaxed);
+            // SAFETY: no arguments; it waits on the context current on this thread (made so above).
+            self.cu().check("cuCtxSynchronize", unsafe {
+                (self.0.cu.cuCtxSynchronize)()
+            })?;
+            Ok(Drained { ctx_id: self.0.id })
+        }
+
+        /// How many `cuCtxSynchronize` this context has made — gate 8's falsifier.
+        pub(in crate::driver_unsafe) fn sync_calls(&self) -> u64 {
+            self.0.sync_calls.load(Ordering::Relaxed)
+        }
+    }
+
+    // ═══ V1 — ranges ════════════════════════════════════════════════════════════════════════
+
+    /// ★★★ **V1, pure: `[off, off+n)` inside a `len`-byte allocation**, `n ≥ 1`, overflow checked
+    /// before the bound. An exact fit (`off + n == len`) is inside.
+    pub(in crate::driver_unsafe) fn sub_range(len: u64, off: u64, n: u64) -> Option<u64> {
+        let end = off.checked_add(n)?;
+        (n >= 1 && end <= len).then_some(off)
+    }
+
+    /// ★ V1b, pure: every range of an async operation belongs to the stream's context.
+    pub(in crate::driver_unsafe) fn ctx_matches(stream_ctx: u64, ranges: &[u64]) -> bool {
+        ranges.iter().all(|r| *r == stream_ctx)
+    }
+
+    /// What keeps a range's memory alive while a launch (or a graph) can still use it.
+    enum Keep {
+        Mem(#[allow(dead_code)] Arc<Alloc>),
+        Ctx(#[allow(dead_code)] Ctx),
+    }
+
+    #[derive(Clone, Copy)]
+    enum KeepRef<'a> {
+        Mem(&'a Arc<Alloc>),
+        Ctx(&'a Ctx),
+    }
+
+    impl KeepRef<'_> {
+        fn keep(self) -> Keep {
+            match self {
+                KeepRef::Mem(a) => Keep::Mem(Arc::clone(a)),
+                KeepRef::Ctx(c) => Keep::Ctx(c.share()),
+            }
+        }
+    }
+
+    /// ★★ **A validated device range** `[addr, addr+len)`, `len ≥ 1`, inside one live allocation
+    /// (or one pinned-stage region) of context `ctx_id`, borrowing what it lies in.
+    ///
+    /// Minted ONLY by [`DevMem::range`], [`DevMem::whole`], [`DevRange::sub`] and the pinned
+    /// stage; its fields are private to this module, so no other code — the perimeter's children
+    /// included — can make one. `Copy` because it owns nothing; no `Debug`, no `Hash`.
+    #[derive(Clone, Copy)]
+    pub(in crate::driver_unsafe) struct DevRange<'a> {
+        addr: DevAddr,
+        len: u64,
+        ctx_id: u64,
+        keep: KeepRef<'a>,
+    }
+
+    impl<'a> DevRange<'a> {
+        /// Bytes.
+        pub(in crate::driver_unsafe) fn len(&self) -> u64 {
+            self.len
+        }
+
+        /// ★ V1 on a range: `[off, off+n)` of THIS range.
+        pub(in crate::driver_unsafe) fn sub(
+            &self,
+            off: u64,
+            n: u64,
+        ) -> Result<DevRange<'a>, CudaError> {
+            let o = sub_range(self.len, off, n).ok_or_else(|| {
+                refused(
+                    "DevRange::sub (V1)",
+                    format!("[{off:#x}, +{n:#x}) leaves a {:#x}-byte range", self.len),
+                )
+            })?;
+            Ok(DevRange {
+                addr: self.addr + o,
+                len: n,
+                ctx_id: self.ctx_id,
+                keep: self.keep,
+            })
+        }
+
+        fn same_ctx(&self, stream: &Stream, what: &'static str) -> Result<(), CudaError> {
+            if !ctx_matches(stream.ctx.id(), &[self.ctx_id]) {
+                return Err(refused(
+                    what,
+                    "the range and the stream belong to different CUDA contexts (V1b)".to_string(),
+                ));
+            }
+            Ok(())
+        }
+
+        /// ★ V1b: `cuMemcpyDtoDAsync` of this whole range into `dst`, on `stream`. Refused unless
+        /// both ranges and the stream share one context, the lengths are equal, and the ranges are
+        /// disjoint (the driver's copy is undefined on overlap).
+        pub(in crate::driver_unsafe) fn copy_async(
+            &self,
+            stream: &Stream,
+            dst: &DevRange<'_>,
+        ) -> Result<(), CudaError> {
+            let what = "cuMemcpyDtoDAsync";
+            self.same_ctx(stream, what)?;
+            dst.same_ctx(stream, what)?;
+            if dst.len != self.len {
+                return Err(refused(
+                    what,
+                    format!("{:#x} bytes into a {:#x}-byte range", self.len, dst.len),
+                ));
+            }
+            if !(self.addr + self.len <= dst.addr || dst.addr + dst.len <= self.addr) {
+                return Err(refused(
+                    what,
+                    "the source and destination overlap".to_string(),
+                ));
+            }
+            let n = usize::try_from(self.len).map_err(|_| refused(what, "length".into()))?;
+            // SAFETY: both ranges are live allocations of this context (`DevRange`'s invariant;
+            // they borrow their owners and `DevMem`'s drop drains before freeing), each exactly `n`
+            // bytes, disjoint (checked above); `stream` is a live stream of the same context.
+            stream.cu().check(what, unsafe {
+                (stream.cu().cuMemcpyDtoDAsync)(dst.addr, self.addr, n, stream.raw as *mut c_void)
+            })
+        }
+
+        /// ★ V1b: `cuMemsetD8Async` of this whole range to `v`, on `stream`.
+        pub(in crate::driver_unsafe) fn fill_async(
+            &self,
+            stream: &Stream,
+            v: u8,
+        ) -> Result<(), CudaError> {
+            let what = "cuMemsetD8Async";
+            self.same_ctx(stream, what)?;
+            let n = usize::try_from(self.len).map_err(|_| refused(what, "length".into()))?;
+            // SAFETY: `[addr, addr+n)` is a live allocation of this context (`DevRange`); `stream`
+            // is a live stream of the same context.
+            stream.cu().check(what, unsafe {
+                (stream.cu().cuMemsetD8Async)(self.addr, v, n, stream.raw as *mut c_void)
+            })
+        }
+
+        /// ★★ V1b + V11's copy: this whole range into the console frame `dst`, on `stream`
+        /// (`cuMemcpyDtoHAsync`). Refused unless the range, the frame's registration and the
+        /// stream share one context and the range fits the frame.
+        pub(in crate::driver_unsafe) fn copy_to_console(
+            &self,
+            stream: &Stream,
+            dst: &ConsoleDst,
+        ) -> Result<(), CudaError> {
+            let what = "cuMemcpyDtoHAsync (console frame)";
+            self.same_ctx(stream, what)?;
+            if dst.ctx_id != self.ctx_id {
+                return Err(refused(
+                    what,
+                    "the frame is registered in another CUDA context".to_string(),
+                ));
+            }
+            let n = usize::try_from(self.len).map_err(|_| refused(what, "length".into()))?;
+            if n > dst.span.len() {
+                return Err(refused(
+                    what,
+                    format!("{n:#x} bytes do not fit a {:#x}-byte frame", dst.span.len()),
+                ));
+            }
+            // SAFETY: destination — `dst.span` is a `StaticSpan` (memory that is never unmapped)
+            // page-locked in this context by `console_pages`, and `n <= span.len()` (checked
+            // above), so the copy writes only `[ptr, ptr+n)` of it, as `HostSpan::as_ptr`'s
+            // contract allows for a registered span. No Rust reference into it exists. Source —
+            // `[addr, addr+n)` is a live allocation of this context (`DevRange`).
+            stream.cu().check(what, unsafe {
+                (stream.cu().cuMemcpyDtoHAsync)(
+                    dst.span.host_span().as_ptr().cast::<c_void>(),
+                    self.addr,
+                    n,
+                    stream.raw as *mut c_void,
+                )
+            })
+        }
+    }
+
+    // ═══ Device memory ══════════════════════════════════════════════════════════════════════
+
+    enum AllocKind {
+        /// `cuMemAlloc`.
+        Alloc,
+        /// An RM export imported and mapped (`cuMemImportFromShareableHandle` + `cuMemMap`).
+        Import {
+            map: Option<VaMapping>,
+            res: Option<VaReservation>,
+        },
+    }
+
+    struct Alloc {
+        ctx: Ctx,
+        addr: DevAddr,
+        len: u64,
+        kind: AllocKind,
+    }
+
+    /// ★ F1, pure: what an owner does with a resource after trying to drain its context.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(in crate::driver_unsafe) enum Disposition {
+        /// The drain succeeded: nothing queued can still reach the resource; release it.
+        Release,
+        /// The drain failed: queued work may still reach it. Leak it, and count it.
+        Leak,
+    }
+
+    /// ★ F1: a failed drain is never "freed anyway".
+    pub(in crate::driver_unsafe) fn drop_disposition<T, E>(drain: &Result<T, E>) -> Disposition {
+        if drain.is_ok() {
+            Disposition::Release
+        } else {
+            Disposition::Leak
+        }
+    }
+
+    impl Drop for Alloc {
+        fn drop(&mut self) {
+            let drained = self.ctx.drain();
+            match (drop_disposition(&drained), &mut self.kind) {
+                (Disposition::Release, AllocKind::Alloc) => {
+                    // SAFETY: `addr` is this allocation's base from `cuMemAlloc` in `ctx`, freed
+                    // exactly once (this is the last `Arc` of it); the drain above returned, so no
+                    // queued operation can still touch it.
+                    unsafe { (self.ctx.cu().cuMemFree)(self.addr) };
+                }
+                (Disposition::Release, AllocKind::Import { map, res }) => {
+                    // The guards release in order: unmap, then the address range.
+                    drop(map.take());
+                    drop(res.take());
+                }
+                (Disposition::Leak, AllocKind::Alloc) => {
+                    LEAKS.fetch_add(1, Ordering::Relaxed);
+                }
+                (Disposition::Leak, AllocKind::Import { map, res }) => {
+                    core::mem::forget(map.take());
+                    core::mem::forget(res.take());
+                    LEAKS.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+    }
+
+    /// ★ A device allocation of this crate's: allocated zeroed, or an RM export imported. Not
+    /// `Copy`, not `Clone` (a perimeter-internal [`DevMem::share`] keeps it alive for a graph or a
+    /// retained window; the memory is released when the last share drops, after a drain).
+    pub(in crate::driver_unsafe) struct DevMem {
+        a: Arc<Alloc>,
+    }
+
+    /// The import's access descriptor (`CUmemAccessDesc`, 12 bytes, transcribed from `cuda.h`).
+    #[repr(C)]
+    struct AccessDesc {
+        location_type: c_uint,
+        location_id: c_int,
+        flags: c_uint,
+    }
+
+    impl DevMem {
+        /// `cuMemAlloc_v2` of exactly `len ≥ 1` bytes, then a synchronous zero-fill of all of
+        /// them (the kernels read their own state; uninitialised memory would make a first walk
+        /// depend on a previous tenant).
+        pub(in crate::driver_unsafe) fn alloc_zeroed(
+            ctx: &Ctx,
+            len: u64,
+        ) -> Result<DevMem, CudaError> {
+            let what = "cuMemAlloc_v2";
+            if len == 0 {
+                return Err(refused(what, "a zero-length allocation".to_string()));
+            }
+            let n = usize::try_from(len).map_err(|_| refused(what, format!("{len:#x} bytes")))?;
+            ctx.make_current()?;
+            let mut p: DevAddr = 0;
+            // SAFETY: one live out-pointer; `n` is a length the driver owns entirely.
+            let r = unsafe { (ctx.cu().cuMemAlloc)(&raw mut p, n) };
+            ctx.cu().check(what, r)?;
+            let m = DevMem {
+                a: Arc::new(Alloc {
+                    ctx: ctx.share(),
+                    addr: p,
+                    len,
+                    kind: AllocKind::Alloc,
+                }),
+            };
+            m.fill(0, len, 0)?;
+            Ok(m)
+        }
+
+        /// ★★ **V2 — import an RM-exported object** (`fd`, borrowed for the call) and map `len`
+        /// bytes of it, read-write for this context's device. `len ≥ 1`; a negative fd cannot be
+        /// expressed (`BorrowedFd`). Every step that fails releases the steps before it (the
+        /// guards drop in reverse), and no error text names an address.
+        ///
+        /// ⚠ CUDA cannot report the size of an imported RM object: that `len` is no larger than
+        /// the object is enforced by `cuMemMap`, which refuses an `offset + size` past the
+        /// allocation — UNVERIFIED on the target drivers (design §2.6 Res-1, hardware row H1, a
+        /// merge blocker). Callers pass RM's own allocation length.
+        pub(in crate::driver_unsafe) fn import(
+            ctx: &Ctx,
+            fd: BorrowedFd<'_>,
+            len: u64,
+        ) -> Result<DevMem, CudaError> {
+            let what = "cuMemImportFromShareableHandle + cuMemMap";
+            if len == 0 {
+                return Err(refused(what, "a zero-length import".to_string()));
+            }
+            let n = usize::try_from(len).map_err(|_| refused(what, format!("{len:#x} bytes")))?;
+            let cu = ctx.cu();
+            let import = need(
+                cu.cuMemImportFromShareableHandle,
+                "cuMemImportFromShareableHandle",
+            )?;
+            let reserve = need(cu.cuMemAddressReserve, "cuMemAddressReserve")?;
+            let map = need(cu.cuMemMap, "cuMemMap")?;
+            let set_access = need(cu.cuMemSetAccess, "cuMemSetAccess")?;
+            need(cu.cuMemUnmap, "cuMemUnmap")?;
+            need(cu.cuMemAddressFree, "cuMemAddressFree")?;
+            need(cu.cuMemRelease, "cuMemRelease")?;
+            ctx.make_current()?;
+            let raw_fd = fd.as_raw_fd();
+            let mut handle: u64 = 0;
+            // SAFETY: `handle` is a live local. For `POSIX_FILE_DESCRIPTOR` the `osHandle` is the
+            // fd NUMBER cast to a pointer (never dereferenced); `fd` is borrowed, so it is open for
+            // the whole call, and non-negative by `BorrowedFd`'s own invariant.
+            cu.check("cuMemImportFromShareableHandle", unsafe {
+                import(
+                    &raw mut handle,
+                    raw_fd as usize as *mut c_void,
+                    CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR,
+                )
+            })?;
+            let handle = ImportHandle {
+                ctx: ctx.share(),
+                handle,
+            };
+            let mut addr: u64 = 0;
+            // SAFETY: `addr` is a live local; alignment 0 lets CUDA choose.
+            cu.check("cuMemAddressReserve", unsafe {
+                reserve(&raw mut addr, n, 0, 0, 0)
+            })?;
+            let res = VaReservation {
+                ctx: ctx.share(),
+                addr,
+                len: n,
+            };
+            // SAFETY: `addr` is a reservation of exactly `n` bytes made above and `handle` a live
+            // imported handle; the driver refuses a size past the imported object (Res-1).
+            cu.check("cuMemMap", unsafe { map(addr, n, 0, handle.handle, 0) })?;
+            let mapping = VaMapping {
+                ctx: ctx.share(),
+                addr,
+                len: n,
+            };
+            let desc = AccessDesc {
+                location_type: CU_MEM_LOCATION_TYPE_DEVICE,
+                location_id: ctx.0.device,
+                flags: 3, // CU_MEM_ACCESS_FLAGS_PROT_READWRITE
+            };
+            // SAFETY: one live `AccessDesc` for the mapped range of `n` bytes made above.
+            cu.check("cuMemSetAccess", unsafe {
+                set_access(addr, n, (&raw const desc).cast::<c_void>(), 1)
+            })?;
+            // The mapping keeps the memory; the import handle is released now (its guard drops).
+            drop(handle);
+            Ok(DevMem {
+                a: Arc::new(Alloc {
+                    ctx: ctx.share(),
+                    addr,
+                    len,
+                    kind: AllocKind::Import {
+                        map: Some(mapping),
+                        res: Some(res),
+                    },
+                }),
+            })
+        }
+
+        /// Bytes.
+        pub(in crate::driver_unsafe) fn len(&self) -> u64 {
+            self.a.len
+        }
+
+        /// The context it was made in.
+        pub(in crate::driver_unsafe) fn ctx_id(&self) -> u64 {
+            self.a.ctx.id()
+        }
+
+        /// A second owner of the same memory (refcounted; never exposed to safe code).
+        pub(in crate::driver_unsafe) fn share(&self) -> DevMem {
+            DevMem {
+                a: Arc::clone(&self.a),
+            }
+        }
+
+        /// ★★★ **V1 — `[off, off+n)` of this allocation**, refused by name unless wholly inside.
+        pub(in crate::driver_unsafe) fn range(
+            &self,
+            off: u64,
+            n: u64,
+        ) -> Result<DevRange<'_>, CudaError> {
+            let o = sub_range(self.a.len, off, n).ok_or_else(|| {
+                refused(
+                    "DevMem::range (V1)",
+                    format!(
+                        "[{off:#x}, +{n:#x}) leaves the {:#x}-byte allocation",
+                        self.a.len
+                    ),
+                )
+            })?;
+            Ok(DevRange {
+                addr: self.a.addr + o,
+                len: n,
+                ctx_id: self.a.ctx.id(),
+                keep: KeepRef::Mem(&self.a),
+            })
+        }
+
+        /// The whole allocation as a range (never empty: every constructor refuses `len == 0`).
+        pub(in crate::driver_unsafe) fn whole(&self) -> DevRange<'_> {
+            DevRange {
+                addr: self.a.addr,
+                len: self.a.len,
+                ctx_id: self.a.ctx.id(),
+                keep: KeepRef::Mem(&self.a),
+            }
+        }
+
+        /// `cuMemcpyHtoD_v2` of `bytes` to `[off, off+len)` (V1). Synchronous, on the legacy
+        /// stream — which the walker's blocking stream is ordered behind.
+        pub(in crate::driver_unsafe) fn write(
+            &self,
+            off: u64,
+            bytes: &[u8],
+        ) -> Result<(), CudaError> {
+            if bytes.is_empty() {
+                return Ok(());
+            }
+            let r = self.range(off, bytes.len() as u64)?;
+            self.a.ctx.make_current()?;
+            // SAFETY: destination — `r` is inside this live allocation (V1 above) and exactly
+            // `bytes.len()` long; source — `bytes` is a live slice of that length.
+            self.a.ctx.cu().check("cuMemcpyHtoD_v2", unsafe {
+                (self.a.ctx.cu().cuMemcpyHtoD)(r.addr, bytes.as_ptr().cast::<c_void>(), bytes.len())
+            })
+        }
+
+        /// `cuMemcpyDtoH_v2` of `[off, off+buf.len())` into `buf` (V1). Synchronous.
+        pub(in crate::driver_unsafe) fn read(
+            &self,
+            off: u64,
+            buf: &mut [u8],
+        ) -> Result<(), CudaError> {
+            if buf.is_empty() {
+                return Ok(());
+            }
+            let r = self.range(off, buf.len() as u64)?;
+            self.a.ctx.make_current()?;
+            // SAFETY: destination — `buf` is a live, exclusively borrowed slice and the byte count
+            // is its own length; source — `r` is inside this live allocation (V1).
+            self.a.ctx.cu().check("cuMemcpyDtoH_v2", unsafe {
+                (self.a.ctx.cu().cuMemcpyDtoH)(buf.as_mut_ptr().cast::<c_void>(), r.addr, buf.len())
+            })
+        }
+
+        /// `cuMemsetD8_v2` of `[off, off+n)` to `v` (V1). Synchronous.
+        pub(in crate::driver_unsafe) fn fill(
+            &self,
+            off: u64,
+            n: u64,
+            v: u8,
+        ) -> Result<(), CudaError> {
+            if n == 0 {
+                return Ok(());
+            }
+            let r = self.range(off, n)?;
+            let count =
+                usize::try_from(n).map_err(|_| refused("cuMemsetD8_v2", "length".into()))?;
+            self.a.ctx.make_current()?;
+            // SAFETY: `[r.addr, r.addr+count)` is inside this live allocation (V1 above).
+            self.a.ctx.cu().check("cuMemsetD8_v2", unsafe {
+                (self.a.ctx.cu().cuMemsetD8)(r.addr, v, count)
+            })
+        }
+    }
+
+    /// The imported RM object's handle; released (`cuMemRelease`) when the import is done with it.
+    struct ImportHandle {
+        ctx: Ctx,
+        handle: u64,
+    }
+
+    impl Drop for ImportHandle {
+        fn drop(&mut self) {
+            if let Some(f) = self.ctx.cu().cuMemRelease {
+                // SAFETY: `handle` came from `cuMemImportFromShareableHandle` in this context and is
+                // released exactly once (this guard is its only owner and is not `Clone`). A live
+                // mapping of it keeps the memory, as the VMM API specifies.
+                unsafe { f(self.handle) };
+            }
+        }
+    }
+
+    /// An address reservation (`cuMemAddressReserve`); freed on drop (`cuMemAddressFree`).
+    struct VaReservation {
+        ctx: Ctx,
+        addr: u64,
+        len: usize,
+    }
+
+    impl Drop for VaReservation {
+        fn drop(&mut self) {
+            if let Some(f) = self.ctx.cu().cuMemAddressFree {
+                // SAFETY: `[addr, addr+len)` is exactly the reservation `cuMemAddressReserve`
+                // returned in this context; this guard is its only owner. Its mapping, if any, is
+                // a separate guard that drops (unmaps) first.
+                unsafe { f(self.addr, self.len) };
+            }
+        }
+    }
+
+    /// A mapping of an imported object into a reservation (`cuMemMap`); unmapped on drop.
+    struct VaMapping {
+        ctx: Ctx,
+        addr: u64,
+        len: usize,
+    }
+
+    impl Drop for VaMapping {
+        fn drop(&mut self) {
+            if let Some(f) = self.ctx.cu().cuMemUnmap {
+                // SAFETY: `[addr, addr+len)` is exactly the range `cuMemMap` mapped in this
+                // context; this guard is its only owner, and its owner drained the context first.
+                unsafe { f(self.addr, self.len) };
+            }
+        }
+    }
+
+    // ═══ Streams and events ═════════════════════════════════════════════════════════════════
+
+    /// ★ A blocking CUDA stream (ordered against the legacy stream, so a synchronous copy issued
+    /// before a walk is complete before the walk reads it). Keeps every completion descriptor it
+    /// was asked to signal alive until its drop drains the context (F1).
+    pub(in crate::driver_unsafe) struct Stream {
+        ctx: Ctx,
+        raw: usize,
+        capturing: AtomicBool,
+        signals: Mutex<Vec<Arc<OwnedFd>>>,
+    }
+
+    impl Stream {
+        /// `cuStreamCreate(flags = 0)`.
+        pub(in crate::driver_unsafe) fn create(ctx: &Ctx) -> Result<Stream, CudaError> {
+            ctx.make_current()?;
+            let mut h: *mut c_void = core::ptr::null_mut();
+            // SAFETY: one live out-pointer; the driver writes an opaque handle.
+            ctx.cu().check("cuStreamCreate", unsafe {
+                (ctx.cu().cuStreamCreate)(&raw mut h, 0)
+            })?;
+            Ok(Stream {
+                ctx: ctx.share(),
+                raw: h as usize,
+                capturing: AtomicBool::new(false),
+                signals: Mutex::new(Vec::new()),
+            })
+        }
+
+        fn cu(&self) -> &Cuda {
+            self.ctx.cu()
+        }
+
+        /// ★★★ `cuLaunchHostFunc(stream, signal, fd)` — once everything queued before it has
+        /// completed, a driver thread writes `1` to `fd`. The stream keeps the descriptor alive
+        /// (an `Arc`) until its own drop has drained the context, so a queued — or, in a graph,
+        /// replayed — signal never writes into a closed or reused fd number.
+        pub(in crate::driver_unsafe) fn host_signal(
+            &self,
+            fd: &CompletionFd,
+        ) -> Result<(), CudaError> {
+            {
+                let mut s = self
+                    .signals
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !s.iter().any(|k| Arc::ptr_eq(k, &fd.fd)) {
+                    s.push(Arc::clone(&fd.fd));
+                }
+            }
+            // SAFETY: `raw` is this binding's live stream. The user datum is the fd NUMBER cast to
+            // a pointer, never dereferenced by `completion_hostfn`; the descriptor is kept open by
+            // the `Arc` this stream now holds, released only after a successful drain (Drop).
+            self.cu().check("cuLaunchHostFunc", unsafe {
+                (self.cu().cuLaunchHostFunc)(
+                    self.raw as *mut c_void,
+                    completion_hostfn,
+                    usize::try_from(fd.fd.as_raw_fd()).unwrap_or(usize::MAX) as *mut c_void,
+                )
+            })
+        }
+
+        /// `cuStreamBeginCapture_v2(THREAD_LOCAL)`: every operation queued from here to
+        /// [`Stream::end_capture`] is recorded into a graph, not executed.
+        pub(in crate::driver_unsafe) fn begin_capture(&self) -> Result<(), CudaError> {
+            let f = need(self.cu().cuStreamBeginCapture, "cuStreamBeginCapture_v2")?;
+            // SAFETY: `raw` is this binding's live stream; the mode is a documented enumerator.
+            self.cu().check("cuStreamBeginCapture_v2", unsafe {
+                f(self.raw as *mut c_void, CU_STREAM_CAPTURE_MODE_THREAD_LOCAL)
+            })?;
+            self.capturing.store(true, Ordering::Release);
+            Ok(())
+        }
+
+        fn is_capturing(&self) -> bool {
+            self.capturing.load(Ordering::Acquire)
+        }
+
+        /// The node the capture most recently added (a linear capture has exactly one leaf).
+        fn capture_leaf(&self) -> Result<usize, CudaError> {
+            let f = need(
+                self.cu().cuStreamGetCaptureInfo,
+                "cuStreamGetCaptureInfo_v2",
+            )?;
+            let mut status: c_uint = 0;
+            let mut id: u64 = 0;
+            let mut g: *mut c_void = core::ptr::null_mut();
+            let mut deps: *const *mut c_void = core::ptr::null();
+            let mut n: usize = 0;
+            // SAFETY: `raw` is our stream; five live out-pointers. `deps` points at driver-owned
+            // storage valid until the next capture call on this stream, and is read once below.
+            let r = unsafe {
+                f(
+                    self.raw as *mut c_void,
+                    &raw mut status,
+                    &raw mut id,
+                    &raw mut g,
+                    &raw mut deps,
+                    &raw mut n,
+                )
+            };
+            self.cu().check("cuStreamGetCaptureInfo_v2", r)?;
+            if status != CU_STREAM_CAPTURE_STATUS_ACTIVE || n != 1 || deps.is_null() {
+                return Err(refused(
+                    "cuStreamGetCaptureInfo_v2",
+                    format!(
+                        "expected an ACTIVE linear capture with exactly one leaf; status={status} \
+                         leaves={n}"
+                    ),
+                ));
+            }
+            // SAFETY: `n == 1` and `deps` is non-NULL, so `deps[0]` is a valid element.
+            let node = unsafe { *deps };
+            Ok(node as usize)
+        }
+
+        /// ★ End the capture and instantiate it. ⚠ Must be called on every path out of a capture,
+        /// failing ones included; the stream leaves capture mode either way. `nodes` are the
+        /// launches recorded during the capture ([`Kernel::launch`]'s `Some`), kept by the graph so
+        /// a per-walk argument change is one setter per node, and so every allocation they name
+        /// stays alive for the graph's life.
+        pub(in crate::driver_unsafe) fn end_capture(
+            &self,
+            nodes: Vec<Captured>,
+        ) -> Result<GraphExec, CudaError> {
+            let end = need(self.cu().cuStreamEndCapture, "cuStreamEndCapture")?;
+            let inst = need(
+                self.cu().cuGraphInstantiateWithFlags,
+                "cuGraphInstantiateWithFlags",
+            )?;
+            let mut g: *mut c_void = core::ptr::null_mut();
+            // SAFETY: `raw` is our stream; one live out-pointer.
+            let r = unsafe { end(self.raw as *mut c_void, &raw mut g) };
+            self.capturing.store(false, Ordering::Release);
+            let mut exec = GraphExec {
+                ctx: self.ctx.share(),
+                graph: g as usize,
+                exec: 0,
+                nodes,
+                baked: None,
+                updates: 0,
+            };
+            self.cu().check("cuStreamEndCapture", r)?;
+            let mut e: *mut c_void = core::ptr::null_mut();
+            // SAFETY: `graph` came from the capture above; one live out-pointer.
+            self.cu().check("cuGraphInstantiateWithFlags", unsafe {
+                inst(&raw mut e, exec.graph as *mut c_void, 0)
+            })?;
+            exec.exec = e as usize;
+            Ok(exec)
+        }
+    }
+
+    impl Drop for Stream {
+        fn drop(&mut self) {
+            let drained = self.ctx.drain();
+            let signals = core::mem::take(
+                &mut *self
+                    .signals
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+            if drop_disposition(&drained) == Disposition::Leak {
+                // F1: a host function may still be queued; never close the descriptor it names.
+                for s in signals {
+                    core::mem::forget(s);
+                }
+                LEAKS.fetch_add(1, Ordering::Relaxed);
+            }
+            // SAFETY: `raw` came from `Stream::create` and is destroyed exactly once, here.
+            unsafe { (self.ctx.cu().cuStreamDestroy)(self.raw as *mut c_void) };
+        }
+    }
+
+    /// A CUDA event (timing enabled).
+    pub(in crate::driver_unsafe) struct Event {
+        ctx: Ctx,
+        raw: usize,
+    }
+
+    impl Event {
+        /// `cuEventCreate(flags = 0)`.
+        pub(in crate::driver_unsafe) fn create(ctx: &Ctx) -> Result<Event, CudaError> {
+            ctx.make_current()?;
+            let mut h: *mut c_void = core::ptr::null_mut();
+            // SAFETY: one live out-pointer.
+            ctx.cu().check("cuEventCreate", unsafe {
+                (ctx.cu().cuEventCreate)(&raw mut h, 0)
+            })?;
+            Ok(Event {
+                ctx: ctx.share(),
+                raw: h as usize,
+            })
+        }
+
+        /// Record on `stream` — under capture as an EXTERNAL record, which becomes a graph node (a
+        /// plain record during capture only expresses a dependency).
+        pub(in crate::driver_unsafe) fn record(&self, stream: &Stream) -> Result<(), CudaError> {
+            if stream.ctx.id() != self.ctx.id() {
+                return Err(refused(
+                    "cuEventRecord",
+                    "the event and the stream belong to different CUDA contexts".to_string(),
+                ));
+            }
+            if stream.is_capturing() {
+                let f = need(
+                    self.ctx.cu().cuEventRecordWithFlags,
+                    "cuEventRecordWithFlags",
+                )?;
+                // SAFETY: both handles came from this binding; `1` is `CU_EVENT_RECORD_EXTERNAL`.
+                self.ctx.cu().check("cuEventRecordWithFlags", unsafe {
+                    f(self.raw as *mut c_void, stream.raw as *mut c_void, 1)
+                })
+            } else {
+                // SAFETY: both handles came from this binding and are live.
+                self.ctx.cu().check("cuEventRecord", unsafe {
+                    (self.ctx.cu().cuEventRecord)(
+                        self.raw as *mut c_void,
+                        stream.raw as *mut c_void,
+                    )
+                })
+            }
+        }
+
+        /// `cuEventQuery` — never blocks. `Ok(Some(proof))`: everything recorded before the event
+        /// completed; `Ok(None)`: not yet; `Err`: the stream failed.
+        pub(in crate::driver_unsafe) fn query(&self) -> Result<Option<Drained>, CudaError> {
+            // SAFETY: `raw` came from this binding and is live.
+            let r = unsafe { (self.ctx.cu().cuEventQuery)(self.raw as *mut c_void) };
+            if r == CUDA_ERROR_NOT_READY {
+                return Ok(None);
+            }
+            self.ctx.cu().check("cuEventQuery", r)?;
+            Ok(Some(Drained {
+                ctx_id: self.ctx.id(),
+            }))
+        }
+
+        /// `cuEventElapsedTime(self, end)` in microseconds. Both must have completed.
+        pub(in crate::driver_unsafe) fn elapsed_us(&self, end: &Event) -> Result<u64, CudaError> {
+            let mut ms: f32 = 0.0;
+            // SAFETY: one live out-pointer; both handles came from this binding.
+            self.ctx.cu().check("cuEventElapsedTime", unsafe {
+                (self.ctx.cu().cuEventElapsedTime)(
+                    &raw mut ms,
+                    self.raw as *mut c_void,
+                    end.raw as *mut c_void,
+                )
+            })?;
+            Ok((f64::from(ms) * 1000.0) as u64)
+        }
+    }
+
+    impl Drop for Event {
+        fn drop(&mut self) {
+            // SAFETY: `raw` came from `Event::create` and is destroyed exactly once, here.
+            unsafe { (self.ctx.cu().cuEventDestroy)(self.raw as *mut c_void) };
+        }
+    }
+
+    // ═══ Modules, kernels and V3 ════════════════════════════════════════════════════════════
+
+    /// Which committed PTX to load. ⊘ An enum, not bytes: no other program can reach the JIT.
+    #[derive(Clone, Copy)]
+    pub(in crate::driver_unsafe) enum Ptx {
+        /// `cuda/walk/kf_walk.ptx` ([`crate::walk::WALK_PTX`]).
+        Walk,
+        /// `cuda/display/kf_scanout.ptx` ([`crate::display::SCANOUT_PTX`]).
+        Scanout,
+    }
+
+    /// A loaded module (reclaimed by `cuCtxDestroy`; holds the context).
+    pub(in crate::driver_unsafe) struct Module {
+        ctx: Ctx,
+        raw: usize,
+    }
+
+    impl Module {
+        /// `cuModuleLoadData` over the committed PTX plus a NUL — **the PTX JIT runs here**.
+        pub(in crate::driver_unsafe) fn load(ctx: &Ctx, ptx: Ptx) -> Result<Module, CudaError> {
+            let bytes = match ptx {
+                Ptx::Walk => crate::walk::WALK_PTX,
+                Ptx::Scanout => crate::display::SCANOUT_PTX,
+            };
+            let mut image = bytes.to_vec();
+            image.push(0);
+            ctx.make_current()?;
+            let mut m: *mut c_void = core::ptr::null_mut();
+            // SAFETY: `image` is live for the call and NUL-terminated (pushed above), which is the
+            // driver's documented requirement; `m` is a live out-pointer.
+            ctx.cu().check("cuModuleLoadData", unsafe {
+                (ctx.cu().cuModuleLoadData)(&raw mut m, image.as_ptr().cast::<c_void>())
+            })?;
+            Ok(Module {
+                ctx: ctx.share(),
+                raw: m as usize,
+            })
+        }
+
+        /// ★ The entry `name`, with the argument signature [`KERNEL_SIGS`] pins for it. A name the
+        /// table does not know is refused before the driver is asked.
+        pub(in crate::driver_unsafe) fn kernel(
+            &self,
+            name: &'static str,
+        ) -> Result<Kernel, CudaError> {
+            let sig = sig_of(name).ok_or(CudaError::MissingSymbol(name))?;
+            let c = CString::new(name).map_err(|_| CudaError::MissingSymbol(name))?;
+            let mut f: *mut c_void = core::ptr::null_mut();
+            // SAFETY: `raw` is this binding's live module, `c` is NUL-terminated and live for the
+            // call, and `f` is a live out-pointer.
+            let r = unsafe {
+                (self.ctx.cu().cuModuleGetFunction)(&raw mut f, self.raw as *mut c_void, c.as_ptr())
+            };
+            self.ctx
+                .cu()
+                .check("cuModuleGetFunction", r)
+                .map_err(|e| match e {
+                    CudaError::Refused { code, .. } => CudaError::Refused {
+                        what: "cuModuleGetFunction",
+                        code,
+                        name: format!("the committed PTX has no entry `{name}`"),
+                    },
+                    other => other,
+                })?;
+            Ok(Kernel {
+                ctx: self.ctx.share(),
+                raw: f as usize,
+                name,
+                sig,
+            })
+        }
+    }
+
+    /// ★ One parameter kind of a kernel, as its PTX declares it (pinned by
+    /// `tests_unsafe.rs::the_kernel_table_is_the_ptx`, T4).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(in crate::driver_unsafe) enum ArgKind {
+        /// The by-value `KfArgs` (`.param .align 8 .b8 X[264]`), only as an [`ArgBlock`].
+        Block,
+        /// A device pointer (`.param .u64`) to at least `min` bytes.
+        Ptr {
+            /// Bytes the kernel may address from it.
+            min: u64,
+        },
+        /// A `.u32` that is the CAPACITY of pointer parameter `of`, in `elem`-byte elements —
+        /// only an [`Arg::CapOf`] of that very range, so a capacity is never larger than its
+        /// buffer.
+        Cap {
+            /// The pointer parameter it bounds.
+            of: usize,
+            /// Bytes per element.
+            elem: u64,
+        },
+        /// A plain `.u32` scalar.
+        U32,
+        /// A plain `.s32` scalar.
+        I32,
+    }
+
+    /// Bytes of `KfArgs` (`kf_walk.ptx:59`, `.b8 …_param_0[264]`).
+    pub(in crate::driver_unsafe) const KF_ARGS_BYTES: usize = 264;
+
+    /// The walk's frontier capacity and the leaf phase's staging capacity (`kf_walk.cu`
+    /// `KF_MAX_FRONTIER`, `KF_MAX_SCRATCH`), and the sizes of its two device structs — pinned to
+    /// the `.cu` by T6 (`walk_gpu_unsafe.rs`).
+    pub(in crate::driver_unsafe) const KF_MAX_FRONTIER: u64 = 131_072;
+    pub(in crate::driver_unsafe) const KF_MAX_SCRATCH: u64 = 4 << 20;
+    pub(in crate::driver_unsafe) const KF_ENT_BYTES: u64 = 40;
+    pub(in crate::driver_unsafe) const KF_SUM_BYTES: u64 = 64;
+    pub(in crate::driver_unsafe) const KF_RUN_BYTES: u64 = 32;
+    const F: u64 = KF_MAX_FRONTIER;
+
+    const P_ENTS: ArgKind = ArgKind::Ptr {
+        min: F * KF_ENT_BYTES,
+    };
+    const P_WORDS: ArgKind = ArgKind::Ptr { min: F * 4 };
+    const P_ONE: ArgKind = ArgKind::Ptr { min: 4 };
+    const P_SUMS: ArgKind = ArgKind::Ptr {
+        min: F * KF_SUM_BYTES,
+    };
+    const P_HEADS: ArgKind = ArgKind::Ptr { min: F };
+    const P_PDBBASE: ArgKind = ArgKind::Ptr {
+        min: KF_MAX_PDB as u64 * 4,
+    };
+    const P_RUNSTAGE: ArgKind = ArgKind::Ptr {
+        min: KF_MAX_SCRATCH * KF_RUN_BYTES,
+    };
+    const B: ArgKind = ArgKind::Block;
+    const U: ArgKind = ArgKind::U32;
+    const I: ArgKind = ArgKind::I32;
+
+    /// ★★★ **Every kernel this crate launches, and its argument signature** — the PTX's own
+    /// declaration (T4) plus, per pointer, the bytes the kernel's loops can address (bounded by
+    /// the `.cu`'s compile-time constants), and per capacity, the buffer it bounds. V3 checks every
+    /// launch against this table.
+    pub(in crate::driver_unsafe) static KERNEL_SIGS: &[(&str, &[ArgKind])] = &[
+        ("_Z15kf_begin_kernel6KfArgs", &[B]),
+        ("_Z14kf_walk_kernel6KfArgs", &[B]),
+        ("_Z13kf_diff_slots6KfArgs", &[B]),
+        ("_Z12kf_diff_emit6KfArgs", &[B]),
+        ("_Z16kf_commit_kernel6KfArgs", &[B]),
+        // (KfArgs, KfEnt *fr, uint *nfr, uint *used): fr[t], t < npdb <= 64; *nfr; used[0..2].
+        (
+            "_Z11kf_par_seed6KfArgsP5KfEntPjS2_",
+            &[B, P_ENTS, P_ONE, ArgKind::Ptr { min: 8 }],
+        ),
+        // (KfArgs, level, in, nin, stage, stagecap, used, start, cnt)
+        (
+            "_Z13kf_par_expand6KfArgsjPK5KfEntPKjPS0_jPjS6_S6_",
+            &[
+                B,
+                U,
+                P_ENTS,
+                P_ONE,
+                ArgKind::Ptr { min: KF_ENT_BYTES },
+                ArgKind::Cap {
+                    of: 4,
+                    elem: KF_ENT_BYTES,
+                },
+                P_ONE,
+                P_WORDS,
+                P_WORDS,
+            ],
+        ),
+        // (in, nin, out, total)
+        (
+            "_Z11kf_par_scanPKjS0_PjS1_",
+            &[P_WORDS, P_ONE, P_WORDS, P_ONE],
+        ),
+        // (KfArgs, stage, start, cnt, off, nin, dst, cap)
+        (
+            "_Z14kf_par_compact6KfArgsPK5KfEntPKjS4_S4_S4_PS0_j",
+            &[
+                B,
+                P_ENTS,
+                P_WORDS,
+                P_WORDS,
+                P_WORDS,
+                P_ONE,
+                ArgKind::Ptr { min: KF_ENT_BYTES },
+                ArgKind::Cap {
+                    of: 6,
+                    elem: KF_ENT_BYTES,
+                },
+            ],
+        ),
+        // (KfArgs, task, nt, runstage, stagecap, used, sum)
+        (
+            "_Z11kf_par_leaf6KfArgsPK5KfEntPKjP8KfMapRunjPjP5KfSum",
+            &[
+                B,
+                P_ENTS,
+                P_ONE,
+                P_RUNSTAGE,
+                ArgKind::Cap {
+                    of: 3,
+                    elem: KF_RUN_BYTES,
+                },
+                P_ONE,
+                P_SUMS,
+            ],
+        ),
+        // (KfArgs, task, sum, nt, contrib, head)
+        (
+            "_Z12kf_par_heads6KfArgsPK5KfEntPK5KfSumPKjPjPh",
+            &[B, P_ENTS, P_SUMS, P_ONE, P_WORDS, P_HEADS],
+        ),
+        // (KfArgs, pdbbase)
+        ("_Z12kf_par_bases6KfArgsPj", &[B, P_PDBBASE]),
+        // (KfArgs, task, sum, nt, off, head, pdbbase, runstage)
+        (
+            "_Z11kf_par_emit6KfArgsPK5KfEntPK5KfSumPKjS7_PKhS7_PK8KfMapRun",
+            &[
+                B, P_ENTS, P_SUMS, P_ONE, P_WORDS, P_HEADS, P_PDBBASE, P_RUNSTAGE,
+            ],
+        ),
+        // (KfArgs, task, sum, nt, off, head, pdbbase)
+        (
+            "_Z11kf_par_join6KfArgsPK5KfEntPK5KfSumPKjS7_PKhS7_",
+            &[B, P_ENTS, P_SUMS, P_ONE, P_WORDS, P_HEADS, P_PDBBASE],
+        ),
+        // kf_compose (display.rs): src, dst, 12 × u32, 4 × s32. Its extents are V10's.
+        (
+            "kf_compose",
+            &[
+                ArgKind::Ptr { min: 4 },
+                ArgKind::Ptr { min: 4 },
+                U,
+                U,
+                U,
+                U,
+                U,
+                U,
+                U,
+                U,
+                U,
+                U,
+                U,
+                U,
+                I,
+                I,
+                I,
+                I,
+            ],
+        ),
+    ];
+
+    fn sig_of(name: &str) -> Option<&'static [ArgKind]> {
+        KERNEL_SIGS
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, s)| *s)
+    }
+
+    /// ★ One kernel argument. Pointers are only [`DevRange`]s; a capacity only the length of one.
+    pub(in crate::driver_unsafe) enum Arg<'a> {
+        /// The by-value `KfArgs`.
+        Block(&'a ArgBlock),
+        /// A device pointer.
+        Ptr(DevRange<'a>),
+        /// `range.len / elem` as a `.u32`.
+        CapOf(DevRange<'a>, u64),
+        /// A `.u32` scalar.
+        U32(u32),
+        /// A `.s32` scalar.
+        I32(i32),
+    }
+
+    /// What V3 checks about an argument: its kind and, for a pointer or a capacity, its range.
+    /// ⊘ Its `Debug` (used in V3's refusals) names lengths and contexts, never the start.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(in crate::driver_unsafe) enum ArgDesc {
+        /// An [`ArgBlock`] of context `ctx`.
+        Block {
+            /// Its context.
+            ctx: u64,
+        },
+        /// A range.
+        Ptr {
+            /// Its start (compared, never exposed).
+            addr: u64,
+            /// Its bytes.
+            len: u64,
+            /// Its context.
+            ctx: u64,
+        },
+        /// A capacity of a range.
+        Cap {
+            /// The range's start.
+            addr: u64,
+            /// The range's bytes.
+            len: u64,
+            /// Its context.
+            ctx: u64,
+            /// Bytes per element.
+            elem: u64,
+        },
+        /// A `.u32` scalar.
+        U32,
+        /// A `.s32` scalar.
+        I32,
+    }
+
+    impl core::fmt::Debug for ArgDesc {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            match self {
+                ArgDesc::Block { ctx } => write!(f, "Block(ctx {ctx})"),
+                ArgDesc::Ptr { len, ctx, .. } => write!(f, "Ptr({len:#x} bytes, ctx {ctx})"),
+                ArgDesc::Cap { len, ctx, elem, .. } => {
+                    write!(f, "Cap(of {len:#x} bytes / {elem}, ctx {ctx})")
+                }
+                ArgDesc::U32 => write!(f, "U32"),
+                ArgDesc::I32 => write!(f, "I32"),
+            }
+        }
+    }
+
+    impl Arg<'_> {
+        fn desc(&self) -> ArgDesc {
+            match self {
+                Arg::Block(b) => ArgDesc::Block { ctx: b.ctx_id },
+                Arg::Ptr(r) => ArgDesc::Ptr {
+                    addr: r.addr,
+                    len: r.len,
+                    ctx: r.ctx_id,
+                },
+                Arg::CapOf(r, elem) => ArgDesc::Cap {
+                    addr: r.addr,
+                    len: r.len,
+                    ctx: r.ctx_id,
+                    elem: *elem,
+                },
+                Arg::U32(_) => ArgDesc::U32,
+                Arg::I32(_) => ArgDesc::I32,
+            }
+        }
+
+        fn bytes(&self) -> Vec<u8> {
+            match self {
+                Arg::Block(b) => b.bytes.to_vec(),
+                Arg::Ptr(r) => r.addr.to_le_bytes().to_vec(),
+                // `check_args` refused any quotient that does not fit a `u32` before any bytes are made.
+                Arg::CapOf(r, elem) => u32::try_from(r.len / (*elem).max(1))
+                    .unwrap_or(0)
+                    .to_le_bytes()
+                    .to_vec(),
+                Arg::U32(v) => v.to_le_bytes().to_vec(),
+                Arg::I32(v) => v.to_le_bytes().to_vec(),
+            }
+        }
+    }
+
+    /// ★★★ **V3, pure** — a launch of a kernel of context `ctx` with signature `sig`:
+    /// the argument count and every kind match; every range, block and the stream belong to the
+    /// kernel's context; every pointer reaches the bytes the kernel can address; every capacity is
+    /// a capacity OF the range it bounds (same start, same length) and fits a `u32`;
+    /// `grid ≥ 1` and `1 ≤ block ≤ 1024` (the block limit waived only for the failed-launch probe).
+    pub(in crate::driver_unsafe) fn check_args(
+        ctx: u64,
+        stream_ctx: u64,
+        sig: &[ArgKind],
+        args: &[ArgDesc],
+        grid: u32,
+        block: u32,
+        waive_block_limit: bool,
+    ) -> Result<(), String> {
+        if stream_ctx != ctx {
+            return Err("the stream belongs to another CUDA context".to_string());
+        }
+        if args.len() != sig.len() {
+            return Err(format!(
+                "{} arguments for a {}-parameter kernel",
+                args.len(),
+                sig.len()
+            ));
+        }
+        if grid == 0 || block == 0 || (block > MAX_BLOCK && !waive_block_limit) {
+            return Err(format!("grid {grid} x block {block}"));
+        }
+        for (i, (k, a)) in sig.iter().zip(args).enumerate() {
+            let ok = match (*k, *a) {
+                (ArgKind::Block, ArgDesc::Block { ctx: c }) => c == ctx,
+                (ArgKind::Ptr { min }, ArgDesc::Ptr { len, ctx: c, .. }) => c == ctx && len >= min,
+                (
+                    ArgKind::Cap { of, elem },
+                    ArgDesc::Cap {
+                        addr,
+                        len,
+                        ctx: c,
+                        elem: e,
+                    },
+                ) => {
+                    let paired = matches!(
+                        args.get(of),
+                        Some(ArgDesc::Ptr { addr: pa, len: pl, ctx: pc }) if *pa == addr && *pl == len && *pc == c
+                    );
+                    c == ctx && e == elem && paired && u32::try_from(len / elem.max(1)).is_ok()
+                }
+                (ArgKind::U32, ArgDesc::U32) | (ArgKind::I32, ArgDesc::I32) => true,
+                _ => false,
+            };
+            if !ok {
+                return Err(format!("argument {i}: {a:?} does not satisfy {k:?}"));
+            }
+        }
+        Ok(())
+    }
+
+    /// A kernel entry (held with its context; reclaimed by `cuCtxDestroy`). No `Debug`: its
+    /// handle is a pointer into libcuda's heap.
+    pub(in crate::driver_unsafe) struct Kernel {
+        ctx: Ctx,
+        raw: usize,
+        name: &'static str,
+        sig: &'static [ArgKind],
+    }
+
+    /// `CUDA_KERNEL_NODE_PARAMS_v2` (`cuda.h`, CUDA 12); v1 is its first seven fields.
+    #[repr(C)]
+    struct KernelNodeParams {
+        func: *mut c_void,
+        grid_x: c_uint,
+        grid_y: c_uint,
+        grid_z: c_uint,
+        block_x: c_uint,
+        block_y: c_uint,
+        block_z: c_uint,
+        shmem: c_uint,
+        kernel_params: *mut *mut c_void,
+        extra: *mut *mut c_void,
+        kern: *mut c_void,
+        ctx: *mut c_void,
+    }
+
+    /// ★ A launch recorded during a stream capture: its graph node, its encoded arguments, and
+    /// what keeps every range it names alive while the graph exists. Perimeter-internal.
+    pub(in crate::driver_unsafe) struct Captured {
+        node: usize,
+        kernel: usize,
+        name: &'static str,
+        sig: &'static [ArgKind],
+        grid: u32,
+        block: u32,
+        shm: u32,
+        params: Vec<Vec<u8>>,
+        _keep: Vec<Keep>,
+    }
+
+    /// A launch's encoded parameters, what keeps its ranges alive, and the driver's answer.
+    type Launched = (Vec<Vec<u8>>, Vec<Keep>, CUresult);
+
+    impl Kernel {
+        fn launch_checked(
+            &self,
+            stream: &Stream,
+            grid: u32,
+            block: u32,
+            shm: u32,
+            args: &[Arg<'_>],
+            waive: bool,
+        ) -> Result<Launched, CudaError> {
+            let descs: Vec<ArgDesc> = args.iter().map(Arg::desc).collect();
+            check_args(
+                self.ctx.id(),
+                stream.ctx.id(),
+                self.sig,
+                &descs,
+                grid,
+                block,
+                waive,
+            )
+            .map_err(|e| refused("cuLaunchKernel (V3)", format!("{}: {e}", self.name)))?;
+            let capturing = stream.is_capturing();
+            let mut keep = Vec::new();
+            for a in args {
+                match a {
+                    // ★ V4: a launch that reads the pinned stage puts it in flight BEFORE it is
+                    // queued (not under capture: a recorded launch runs only when the graph does).
+                    Arg::Block(b) => {
+                        if !capturing {
+                            b.stage.begin()?;
+                        }
+                        keep.push(Keep::Ctx(b.ctx.share()));
+                        keep.extend(b.keep.iter().map(Keep::clone_of));
+                    }
+                    Arg::Ptr(r) | Arg::CapOf(r, _) => keep.push(r.keep.keep()),
+                    Arg::U32(_) | Arg::I32(_) => {}
+                }
+            }
+            let mut params: Vec<Vec<u8>> = args.iter().map(Arg::bytes).collect();
+            let mut p: Vec<*mut c_void> = params
+                .iter_mut()
+                .map(|b| b.as_mut_ptr().cast::<c_void>())
+                .collect();
+            // SAFETY: `raw` is a live function of this context (V3 checked the stream's context);
+            // every element of `p` points into a live `Vec` of `params`, one per by-value
+            // parameter — V3 checked the count and each kind against the PTX-pinned signature, so
+            // the driver reads exactly the bytes each `Vec` holds (8 for a pointer, 4 for a
+            // scalar, 264 for the block) and copies them during the call. Every pointer argument
+            // is a `DevRange` reaching the bytes the kernel's own bounds can address (V3's `min`),
+            // and every capacity is one of its own range.
+            let r = unsafe {
+                (self.ctx.cu().cuLaunchKernel)(
+                    self.raw as *mut c_void,
+                    grid,
+                    1,
+                    1,
+                    block,
+                    1,
+                    1,
+                    shm,
+                    stream.raw as *mut c_void,
+                    p.as_mut_ptr(),
+                    core::ptr::null_mut(),
+                )
+            };
+            Ok((params, keep, r))
+        }
+
+        /// ★★ **V3 — launch on `stream`.** Refused by name unless every argument satisfies the
+        /// kernel's pinned signature. Under a stream capture, returns the recorded node.
+        pub(in crate::driver_unsafe) fn launch(
+            &self,
+            stream: &Stream,
+            grid: u32,
+            block: u32,
+            shm: u32,
+            args: &[Arg<'_>],
+        ) -> Result<Option<Captured>, CudaError> {
+            let (params, keep, r) = self.launch_checked(stream, grid, block, shm, args, false)?;
+            self.ctx
+                .cu()
+                .check("cuLaunchKernel", r)
+                .map_err(|e| match e {
+                    CudaError::Refused { code, name, .. } => CudaError::Refused {
+                        what: "cuLaunchKernel",
+                        code,
+                        name: format!("{}: {name}", self.name),
+                    },
+                    other => other,
+                })?;
+            if !stream.is_capturing() {
+                return Ok(None);
+            }
+            Ok(Some(Captured {
+                node: stream.capture_leaf()?,
+                kernel: self.raw,
+                name: self.name,
+                sig: self.sig,
+                grid,
+                block,
+                shm,
+                params,
+                _keep: keep,
+            }))
+        }
+
+        /// ★★ **A launch that must FAIL** (THE_CONSTRAINTS §w724d probe (b)): one block of 2048
+        /// threads, above the architectural maximum on every part, so the DRIVER refuses at launch.
+        /// The block limit is the only check waived; everything else is V3. `Err` = refused as
+        /// intended; `Ok(())` = it unexpectedly launched (a finding).
+        pub(in crate::driver_unsafe) fn probe_oversized_block(
+            &self,
+            stream: &Stream,
+            args: &[Arg<'_>],
+        ) -> Result<(), CudaError> {
+            let (_params, _keep, r) = self.launch_checked(stream, 1, 2048, 0, args, true)?;
+            self.ctx
+                .cu()
+                .check("cuLaunchKernel (deliberately malformed)", r)
+        }
+    }
+
+    impl Keep {
+        fn clone_of(k: &Keep) -> Keep {
+            match k {
+                Keep::Mem(a) => Keep::Mem(Arc::clone(a)),
+                Keep::Ctx(c) => Keep::Ctx(c.share()),
+            }
+        }
+    }
+
+    /// ★ An instantiated graph of a captured walk. Keeps every allocation its nodes name and the
+    /// block its by-value arguments currently carry, so nothing the graph can replay is freed.
+    pub(in crate::driver_unsafe) struct GraphExec {
+        ctx: Ctx,
+        graph: usize,
+        exec: usize,
+        nodes: Vec<Captured>,
+        baked: Option<ArgBlock>,
+        updates: u64,
+    }
+
+    impl GraphExec {
+        /// `cuGraphUpload` — pay the first launch's upload now, at bring-up.
+        pub(in crate::driver_unsafe) fn upload(&self, stream: &Stream) -> Result<(), CudaError> {
+            let f = need(self.ctx.cu().cuGraphUpload, "cuGraphUpload")?;
+            if stream.ctx.id() != self.ctx.id() {
+                return Err(refused("cuGraphUpload", "another context's stream".into()));
+            }
+            // SAFETY: both handles came from this binding and are live.
+            self.ctx.cu().check("cuGraphUpload", unsafe {
+                f(self.exec as *mut c_void, stream.raw as *mut c_void)
+            })
+        }
+
+        /// How many launches had to rewrite the nodes' arguments.
+        pub(in crate::driver_unsafe) fn updates(&self) -> u64 {
+            self.updates
+        }
+
+        /// ★★ **Replay the walk with `block` as every node's by-value `KfArgs`** (and the named
+        /// kernels' grids from `regrid`) — ONE `cuGraphLaunch`, plus one setter per node only when
+        /// the block or a grid changed. V3 again for every rewritten node (the block's context; a
+        /// grid ≥ 1). Puts the block's pinned stage in flight before the launch is queued.
+        pub(in crate::driver_unsafe) fn launch(
+            &mut self,
+            stream: &Stream,
+            block: &ArgBlock,
+            regrid: &[(&'static str, u32)],
+        ) -> Result<(), CudaError> {
+            let launch = need(self.ctx.cu().cuGraphLaunch, "cuGraphLaunch")?;
+            let set = need(
+                self.ctx.cu().cuGraphExecKernelNodeSetParams,
+                "cuGraphExecKernelNodeSetParams",
+            )?;
+            if stream.ctx.id() != self.ctx.id() || block.ctx_id != self.ctx.id() {
+                return Err(refused(
+                    "cuGraphLaunch (V3)",
+                    "the stream or the block belongs to another CUDA context".to_string(),
+                ));
+            }
+            let grid_of = |n: &Captured| {
+                regrid
+                    .iter()
+                    .find(|(k, _)| *k == n.name)
+                    .map_or(n.grid, |(_, g)| *g)
+            };
+            if regrid.iter().any(|(_, g)| *g == 0) {
+                return Err(refused("cuGraphLaunch (V3)", "a zero grid".to_string()));
+            }
+            let stale = self.baked.as_ref().is_none_or(|b| b.bytes != block.bytes)
+                || self.nodes.iter().any(|n| grid_of(n) != n.grid);
+            if stale {
+                // Unknown until every node took the new values: a failure part-way forces the next
+                // launch to rewrite them all.
+                self.baked = None;
+                for i in 0..self.nodes.len() {
+                    let grid = grid_of(&self.nodes[i]);
+                    let n = &mut self.nodes[i];
+                    if n.sig.first() == Some(&ArgKind::Block) {
+                        n.params[0] = block.bytes.to_vec();
+                    }
+                    n.grid = grid;
+                    let mut p: Vec<*mut c_void> = n
+                        .params
+                        .iter_mut()
+                        .map(|b| b.as_mut_ptr().cast::<c_void>())
+                        .collect();
+                    let kp = KernelNodeParams {
+                        func: n.kernel as *mut c_void,
+                        grid_x: n.grid,
+                        grid_y: 1,
+                        grid_z: 1,
+                        block_x: n.block,
+                        block_y: 1,
+                        block_z: 1,
+                        shmem: n.shm,
+                        kernel_params: p.as_mut_ptr(),
+                        extra: core::ptr::null_mut(),
+                        kern: core::ptr::null_mut(),
+                        ctx: core::ptr::null_mut(),
+                    };
+                    // SAFETY: `exec`/`node` came from this binding and `node` belongs to the graph
+                    // `exec` was instantiated from. Every element of `p` points into a live `Vec`
+                    // of `n.params`, one per parameter of the node's kernel — validated by V3 when
+                    // it was captured; the only bytes replaced are parameter 0 by a block of this
+                    // context (checked above), the same kind and size. `kp` is fully initialised;
+                    // the driver copies everything during the call.
+                    let r = unsafe {
+                        set(
+                            self.exec as *mut c_void,
+                            n.node as *mut c_void,
+                            &raw const kp,
+                        )
+                    };
+                    self.ctx.cu().check("cuGraphExecKernelNodeSetParams", r)?;
+                }
+                self.baked = Some(block.share());
+                self.updates += 1;
+            }
+            block.stage.begin()?;
+            // SAFETY: both handles came from this binding and are live; every allocation the graph
+            // names is kept alive by `self.nodes` and `self.baked`.
+            self.ctx.cu().check("cuGraphLaunch", unsafe {
+                launch(self.exec as *mut c_void, stream.raw as *mut c_void)
+            })
+        }
+    }
+
+    impl Drop for GraphExec {
+        fn drop(&mut self) {
+            let drained = self.ctx.drain();
+            if drop_disposition(&drained) == Disposition::Leak {
+                // F1: a replay may still be queued; the graph and everything it names stay.
+                core::mem::forget(core::mem::take(&mut self.nodes));
+                core::mem::forget(self.baked.take());
+                LEAKS.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+            if let (Some(f), true) = (self.ctx.cu().cuGraphExecDestroy, self.exec != 0) {
+                // SAFETY: `exec` came from `cuGraphInstantiateWithFlags` and is destroyed once.
+                unsafe { f(self.exec as *mut c_void) };
+            }
+            if let (Some(f), true) = (self.ctx.cu().cuGraphDestroy, self.graph != 0) {
+                // SAFETY: `graph` came from the capture and is destroyed once, after its exec.
+                unsafe { f(self.graph as *mut c_void) };
+            }
+        }
+    }
+
+    // ═══ The pinned stage and V4 ════════════════════════════════════════════════════════════
+
+    /// ★ A region of the walker's pinned stage.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(in crate::driver_unsafe) enum Region {
+        /// The root list (`KF_MAX_PDB` × u64), host-written.
+        Pdbs,
+        /// The slot list (`KF_MAX_PDB` × u32), host-written.
+        Slots,
+        /// The verdict (`KfAck`), host-written.
+        Ack,
+        /// One verdict byte per previous report run, host-written.
+        AckCode,
+        /// The report header, written by the kernels only.
+        Hdr,
+        /// The report's `PdbEntry` array, written by the kernels only.
+        Rpdb,
+        /// The report's run array, written by the kernels only.
+        Rrun,
+        /// The capacity layout (`KfLayout`), host-written.
+        Lay,
+    }
+
+    impl Region {
+        /// Every region, in stage order.
+        pub(in crate::driver_unsafe) const ALL: [Region; 8] = [
+            Region::Pdbs,
+            Region::Slots,
+            Region::Ack,
+            Region::AckCode,
+            Region::Hdr,
+            Region::Rpdb,
+            Region::Rrun,
+            Region::Lay,
+        ];
+
+        fn index(self) -> usize {
+            self as usize
+        }
+
+        /// ★ V4: the host may write only the regions the kernels READ (and never one they write).
+        pub(in crate::driver_unsafe) fn host_writable(self) -> bool {
+            matches!(
+                self,
+                Region::Pdbs | Region::Slots | Region::Ack | Region::AckCode | Region::Lay
+            )
+        }
+    }
+
+    /// ★ V4, pure: the stage's offsets from its regions' lengths — each region at the next 64-byte
+    /// boundary after the previous one, so they are monotonic, aligned and disjoint by
+    /// construction; `None` on an empty region or an overflow.
+    pub(in crate::driver_unsafe) fn stage_layout(
+        lens: &[usize; 8],
+    ) -> Option<([(usize, usize); 8], usize)> {
+        let mut at = [(0usize, 0usize); 8];
+        let mut end = 0usize;
+        for (i, &len) in lens.iter().enumerate() {
+            if len == 0 {
+                return None;
+            }
+            let off = end.checked_next_multiple_of(64)?;
+            end = off.checked_add(len)?;
+            at[i] = (off, len);
+        }
+        Some((at, end))
+    }
+
+    /// ★ The walk's GPU-flight state (V4). (`InFlight` is the walker's own word for it.)
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    #[allow(clippy::enum_variant_names)]
+    pub(in crate::driver_unsafe) enum Flight {
+        /// Nothing queued reads or writes the stage: the host may.
+        Idle,
+        /// Work that reads or writes the stage may be running.
+        InFlight,
+        /// A completion query failed: nothing about the stage is known any more. Final.
+        Poisoned(String),
+    }
+
+    /// What happens to the flight state.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub(in crate::driver_unsafe) enum FlightEvent {
+        /// The host wants to read or write the stage.
+        Access,
+        /// A launch that uses the stage is about to be queued.
+        Begin,
+        /// A proof of completion arrived.
+        Drained,
+        /// A completion query failed.
+        Error(String),
+    }
+
+    impl Flight {
+        /// ★★ V4, pure: the one transition function. Only [`FlightEvent::Drained`] returns to
+        /// `Idle`; an error poisons, and poisoned is final.
+        pub(in crate::driver_unsafe) fn step(&self, ev: FlightEvent) -> Result<Flight, String> {
+            match (self, ev) {
+                (Flight::Poisoned(w), FlightEvent::Error(_))
+                | (Flight::Poisoned(w), FlightEvent::Drained) => Ok(Flight::Poisoned(w.clone())),
+                (Flight::Poisoned(w), _) => Err(format!("the walker is poisoned: {w}")),
+                (_, FlightEvent::Error(w)) => Ok(Flight::Poisoned(w)),
+                (Flight::Idle, FlightEvent::Access) => Ok(Flight::Idle),
+                (Flight::InFlight, FlightEvent::Access) => Err(
+                    "a walk is in flight: the pinned stage belongs to the GPU until its \
+                     completion is observed"
+                        .to_string(),
+                ),
+                (Flight::Idle | Flight::InFlight, FlightEvent::Begin) => Ok(Flight::InFlight),
+                (Flight::Idle | Flight::InFlight, FlightEvent::Drained) => Ok(Flight::Idle),
+            }
+        }
+    }
+
+    /// The stage's flight state, shared with every [`ArgBlock`] minted over it.
+    struct StageShared {
+        ctx_id: u64,
+        flight: Mutex<Flight>,
+    }
+
+    impl StageShared {
+        fn apply(&self, ev: FlightEvent) -> Result<(), CudaError> {
+            let mut f = self
+                .flight
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let next = f
+                .step(ev)
+                .map_err(|e| refused("the pinned stage (V4)", e))?;
+            *f = next;
+            Ok(())
+        }
+
+        fn begin(&self) -> Result<(), CudaError> {
+            self.apply(FlightEvent::Begin)
+        }
+    }
+
+    /// ★★ **The walker's page-locked stage** — the root and slot lists, the verdict, the layout
+    /// the kernels read in place, and the report they write straight into host memory. Its device
+    /// address is reachable only from `encode_kf_args`; its host bytes only through V4.
+    pub(in crate::driver_unsafe) struct PinnedStage {
+        ctx: Ctx,
+        host: usize,
+        dev: DevAddr,
+        at: [(usize, usize); 8],
+        shared: Arc<StageShared>,
+    }
+
+    impl PinnedStage {
+        /// `cuMemAllocHost` of the regions' layout, zero-filled (the commit node's first read of
+        /// "the previous report" must find no magic), and its one device address.
+        pub(in crate::driver_unsafe) fn new(
+            ctx: &Ctx,
+            lens: &[usize; 8],
+        ) -> Result<PinnedStage, CudaError> {
+            let what = "cuMemAllocHost_v2 (the walk's pinned stage)";
+            let (at, total) =
+                stage_layout(lens).ok_or_else(|| refused(what, format!("{lens:?}")))?;
+            ctx.make_current()?;
+            let mut p: *mut c_void = core::ptr::null_mut();
+            // SAFETY: one live out-pointer; `total` is owned by the driver entirely.
+            ctx.cu().check(what, unsafe {
+                (ctx.cu().cuMemAllocHost)(&raw mut p, total)
+            })?;
+            let mut d: DevAddr = 0;
+            // SAFETY: one live out-pointer; `p` is the base of the live `cuMemAllocHost` allocation
+            // just made in this context, which is what the call requires.
+            ctx.cu().check("cuMemHostGetDevicePointer_v2", unsafe {
+                (ctx.cu().cuMemHostGetDevicePointer)(&raw mut d, p, 0)
+            })?;
+            let mut s = PinnedStage {
+                ctx: ctx.share(),
+                host: p as usize,
+                dev: d,
+                at,
+                shared: Arc::new(StageShared {
+                    ctx_id: ctx.id(),
+                    flight: Mutex::new(Flight::Idle),
+                }),
+            };
+            for r in Region::ALL {
+                let zero = vec![0u8; s.at[r.index()].1];
+                s.copy_in(r, 0, &zero)?;
+            }
+            Ok(s)
+        }
+
+        /// A region's length.
+        pub(in crate::driver_unsafe) fn region_len(&self, r: Region) -> usize {
+            self.at[r.index()].1
+        }
+
+        fn span(
+            &self,
+            r: Region,
+            off: usize,
+            n: usize,
+            what: &'static str,
+        ) -> Result<usize, CudaError> {
+            let (base, len) = self.at[r.index()];
+            let end = off.checked_add(n);
+            if end.is_none_or(|e| e > len) {
+                return Err(refused(
+                    what,
+                    format!("[{off:#x}, +{n:#x}) leaves the {len:#x}-byte {r:?} region"),
+                ));
+            }
+            Ok(base + off)
+        }
+
+        fn copy_in(&mut self, r: Region, off: usize, bytes: &[u8]) -> Result<(), CudaError> {
+            let at = self.span(r, off, bytes.len(), "PinnedStage::write (V4)")?;
+            // SAFETY: `[at, at+len)` is inside region `r`, which `stage_layout` placed inside the
+            // live `cuMemAllocHost` allocation (`span` above checked the bound with overflow first);
+            // `bytes` is a distinct Rust slice. No queued work reads the range: the callers are
+            // `new` (nothing queued yet) and `write`, which refuses unless the flight is `Idle`.
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    bytes.as_ptr(),
+                    (self.host + at) as *mut u8,
+                    bytes.len(),
+                );
+            }
+            Ok(())
+        }
+
+        /// ★ V4: write `bytes` at `off` of a HOST-WRITABLE region, only while `Idle`.
+        pub(in crate::driver_unsafe) fn write(
+            &mut self,
+            r: Region,
+            off: usize,
+            bytes: &[u8],
+        ) -> Result<(), CudaError> {
+            if !r.host_writable() {
+                return Err(refused(
+                    "PinnedStage::write (V4)",
+                    format!("the {r:?} region is written by the kernels only"),
+                ));
+            }
+            self.shared.apply(FlightEvent::Access)?;
+            self.copy_in(r, off, bytes)
+        }
+
+        /// ★ V4: `n` bytes at `off` of a region, only while `Idle`.
+        pub(in crate::driver_unsafe) fn read(
+            &self,
+            r: Region,
+            off: usize,
+            n: usize,
+        ) -> Result<Vec<u8>, CudaError> {
+            self.shared.apply(FlightEvent::Access)?;
+            let at = self.span(r, off, n, "PinnedStage::read (V4)")?;
+            let mut out = vec![0u8; n];
+            // SAFETY: `[at, at+n)` is inside the live pinned allocation (`span` checked it); `out`
+            // is a fresh local of exactly `n` bytes, so the regions cannot overlap. The flight is
+            // `Idle` (checked above): the DMA that wrote the range completed before the proof that
+            // returned the stage to `Idle`.
+            unsafe {
+                core::ptr::copy_nonoverlapping((self.host + at) as *const u8, out.as_mut_ptr(), n)
+            };
+            Ok(out)
+        }
+
+        /// ★ V4: the only way back to `Idle` — a proof of completion from THIS context.
+        pub(in crate::driver_unsafe) fn end_flight(&self, d: Drained) -> Result<(), CudaError> {
+            if d.ctx_id != self.shared.ctx_id {
+                return Err(refused(
+                    "PinnedStage::end_flight (V4)",
+                    "a completion proof from another CUDA context".to_string(),
+                ));
+            }
+            self.shared.apply(FlightEvent::Drained)
+        }
+
+        /// ★ F2: a failed completion query. Final.
+        pub(in crate::driver_unsafe) fn poison(&self, why: String) {
+            let _ = self.shared.apply(FlightEvent::Error(why));
+        }
+
+        /// The flight state.
+        pub(in crate::driver_unsafe) fn flight(&self) -> Flight {
+            self.shared
+                .flight
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        }
+
+        fn device_range(&self, r: Region) -> DevRange<'_> {
+            let (off, len) = self.at[r.index()];
+            DevRange {
+                addr: self.dev + off as u64,
+                len: len as u64,
+                ctx_id: self.ctx.id(),
+                keep: KeepRef::Ctx(&self.ctx),
+            }
+        }
+    }
+
+    // ═══ The launch argument block ══════════════════════════════════════════════════════════
+
+    /// ★★★ **The kernels' by-value `KfArgs`, encoded here and nowhere else** (§R(b): launch
+    /// arguments are perimeter material). Opaque: its bytes contain device addresses. Holds the
+    /// context, the stage's flight state, and what keeps the window it names alive.
+    pub(in crate::driver_unsafe) struct ArgBlock {
+        bytes: [u8; KF_ARGS_BYTES],
+        ctx_id: u64,
+        ctx: Ctx,
+        stage: Arc<StageShared>,
+        keep: Vec<Keep>,
+    }
+
+    impl ArgBlock {
+        fn share(&self) -> ArgBlock {
+            ArgBlock {
+                bytes: self.bytes,
+                ctx_id: self.ctx_id,
+                ctx: self.ctx.share(),
+                stage: Arc::clone(&self.stage),
+                keep: self.keep.iter().map(Keep::clone_of).collect(),
+            }
+        }
+    }
+
+    /// The walker's device buffers a `KfArgs` names (the stage's regions come from the stage).
+    pub(in crate::driver_unsafe) struct KfArgsRanges<'a> {
+        /// The GPGA window walked (`None`: the empty window, base 0 length 0).
+        pub win: Option<DevRange<'a>>,
+        /// `KfDev`.
+        pub dev: DevRange<'a>,
+        /// The walk table.
+        pub walk: DevRange<'a>,
+        /// The committed placements.
+        pub com: DevRange<'a>,
+        /// `KfSlot` per slot.
+        pub slot: DevRange<'a>,
+        /// The run stage the diff reuses as scratch.
+        pub scratch: DevRange<'a>,
+        /// The diff's integer scratch.
+        pub iscratch: DevRange<'a>,
+        /// The pinned stage.
+        pub stage: &'a PinnedStage,
+    }
+
+    /// `struct KfWin` (`kf_walk.cu`): mirrored here, where its pointer field lives.
+    #[repr(C)]
+    struct KfWin {
+        base: u64,
+        len: u64,
+        span: u64,
+    }
+
+    /// `struct KfArgs` (`kf_walk.cu`), by value — 264 bytes, pinned to the `.cu` by
+    /// `tests/walk_abi_matches_the_cu.rs` through [`KF_ARGS_LAYOUT`] and to the PTX's own `.param`
+    /// declaration. ⊘ Never instantiated: it exists for `size_of`/`offset_of!`, and the encoder
+    /// writes each field at its offset into a zeroed buffer, so padding is zero by construction.
+    #[repr(C)]
+    #[allow(dead_code)]
+    struct KfArgs {
+        win: KfWin,
+        fmt: KfFormat,
+        dev: u64,
+        walk: u64,
+        com: u64,
+        slot: u64,
+        pdbs: u64,
+        slots: u64,
+        npdb: u32,
+        key_perm: u32,
+        ack: u64,
+        ack_code: u64,
+        scratch: u64,
+        iscratch: u64,
+        hdr: u64,
+        rpdb: u64,
+        rrun: u64,
+        lay: u64,
+    }
+
+    const _: () = assert!(core::mem::size_of::<KfArgs>() == KF_ARGS_BYTES);
+
+    /// A struct's layout as `(size, [(field, offset)])` — for the ABI differential only.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct StructLayout {
+        /// `size_of`.
+        pub size: usize,
+        /// `offset_of!` per field, in declaration order.
+        pub fields: &'static [(&'static str, usize)],
+    }
+
+    macro_rules! layout_of {
+        ($t:ty { $($f:ident),+ $(,)? }) => {
+            StructLayout {
+                size: core::mem::size_of::<$t>(),
+                fields: &[$((stringify!($f), core::mem::offset_of!($t, $f))),+],
+            }
+        };
+    }
+
+    /// `KfArgs`' layout (re-exported as `kf_cuda::abi::KF_ARGS_LAYOUT`).
+    pub const KF_ARGS_LAYOUT: StructLayout = layout_of!(KfArgs {
+        win,
+        fmt,
+        dev,
+        walk,
+        com,
+        slot,
+        pdbs,
+        slots,
+        npdb,
+        key_perm,
+        ack,
+        ack_code,
+        scratch,
+        iscratch,
+        hdr,
+        rpdb,
+        rrun,
+        lay
+    });
+    /// `KfWin`'s layout (re-exported as `kf_cuda::abi::KF_WIN_LAYOUT`).
+    pub const KF_WIN_LAYOUT: StructLayout = layout_of!(KfWin { base, len, span });
+
+    /// ★★★ **Encode `KfArgs`** over ranges of ONE context — the only producer of the kernels'
+    /// by-value parameter. Every pointer field is a [`DevRange`] or a stage region of that context;
+    /// a range of another context is refused by name. `win.span == win.len` (the single store is
+    /// the whole of guest vidmem and all of it is mapped).
+    pub(in crate::driver_unsafe) fn encode_kf_args(
+        r: &KfArgsRanges<'_>,
+        fmt: &KfFormat,
+        npdb: u32,
+        key_perm: u32,
+    ) -> Result<ArgBlock, CudaError> {
+        let ctx = r.stage.ctx.id();
+        let ranges = [r.dev, r.walk, r.com, r.slot, r.scratch, r.iscratch];
+        if ranges.iter().chain(r.win.iter()).any(|x| x.ctx_id != ctx) {
+            return Err(refused(
+                "encode_kf_args",
+                "a range of another CUDA context".to_string(),
+            ));
+        }
+        let st = r.stage;
+        let mut b = [0u8; KF_ARGS_BYTES];
+        let mut put = |off: usize, v: &[u8]| b[off..off + v.len()].copy_from_slice(v);
+        let o = |f: &str| {
+            KF_ARGS_LAYOUT
+                .fields
+                .iter()
+                .find(|(n, _)| *n == f)
+                .map_or(0, |(_, o)| *o)
+        };
+        let w = |f: &str| {
+            KF_WIN_LAYOUT
+                .fields
+                .iter()
+                .find(|(n, _)| *n == f)
+                .map_or(0, |(_, o)| *o)
+        };
+        let (wb, wl) = r.win.map_or((0, 0), |x| (x.addr, x.len));
+        put(o("win") + w("base"), &wb.to_le_bytes());
+        put(o("win") + w("len"), &wl.to_le_bytes());
+        put(o("win") + w("span"), &wl.to_le_bytes());
+        put(o("fmt"), &fmt.encode());
+        put(o("dev"), &r.dev.addr.to_le_bytes());
+        put(o("walk"), &r.walk.addr.to_le_bytes());
+        put(o("com"), &r.com.addr.to_le_bytes());
+        put(o("slot"), &r.slot.addr.to_le_bytes());
+        put(o("pdbs"), &st.device_range(Region::Pdbs).addr.to_le_bytes());
+        put(
+            o("slots"),
+            &st.device_range(Region::Slots).addr.to_le_bytes(),
+        );
+        put(o("npdb"), &npdb.to_le_bytes());
+        put(o("key_perm"), &key_perm.to_le_bytes());
+        put(o("ack"), &st.device_range(Region::Ack).addr.to_le_bytes());
+        put(
+            o("ack_code"),
+            &st.device_range(Region::AckCode).addr.to_le_bytes(),
+        );
+        put(o("scratch"), &r.scratch.addr.to_le_bytes());
+        put(o("iscratch"), &r.iscratch.addr.to_le_bytes());
+        put(o("hdr"), &st.device_range(Region::Hdr).addr.to_le_bytes());
+        put(o("rpdb"), &st.device_range(Region::Rpdb).addr.to_le_bytes());
+        put(o("rrun"), &st.device_range(Region::Rrun).addr.to_le_bytes());
+        put(o("lay"), &st.device_range(Region::Lay).addr.to_le_bytes());
+        let keep = ranges
+            .iter()
+            .chain(r.win.iter())
+            .map(|x| x.keep.keep())
+            .collect();
+        Ok(ArgBlock {
+            bytes: b,
+            ctx_id: ctx,
+            ctx: st.ctx.share(),
+            stage: Arc::clone(&st.shared),
+            keep,
         })
+    }
+
+    // ═══ The console frame's pages ══════════════════════════════════════════════════════════
+
+    /// ★ A console frame's page-locked destination: a [`StaticSpan`] registered with context
+    /// `ctx_id`. Minted only by [`console_pages`].
+    pub(in crate::driver_unsafe) struct ConsoleDst {
+        span: StaticSpan,
+        ctx_id: u64,
+    }
+
+    impl ConsoleDst {
+        /// The frame's span (opaque).
+        pub(in crate::driver_unsafe) fn span(&self) -> StaticSpan {
+            self.span
+        }
+
+        /// The context the pages are registered with.
+        pub(in crate::driver_unsafe) fn ctx_id(&self) -> u64 {
+            self.ctx_id
+        }
+    }
+
+    /// ★★★ **Map, page-lock, and only then leak, `bytes` of console frame** (design D6/D7, V12's
+    /// mechanism). The mapping is made HERE, private anonymous and owned, so its
+    /// [`MappedRegion::static_span`] cannot be refused; it is registered with the driver while
+    /// still owned (on a refusal it drops — unmapped, nothing registered); and it is leaked only
+    /// after the registration succeeded, so a registered page is never unmapped. `bytes` must be
+    /// a whole number of host pages (the caller rounds).
+    pub(in crate::driver_unsafe) fn console_pages(
+        ctx: &Ctx,
+        bytes: u64,
+    ) -> Result<(&'static MappedRegion, ConsoleDst), CudaError> {
+        let what = "cuMemHostRegister_v2 (console frame)";
+        let register = need(ctx.cu().cuMemHostRegister, "cuMemHostRegister_v2")?;
+        let page = HostPageSize::query();
+        let region = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            bytes,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .map_err(|e| refused(what, format!("the frame mapping: {e}")))?;
+        let span = region.host_span();
+        ctx.make_current()?;
+        // SAFETY: `span` is the whole of `region`, a live private-anonymous mapping this function
+        // owns; the driver pins exactly `[ptr, ptr+len)` of it, as `HostSpan::as_ptr`'s contract
+        // allows. On success the region is leaked below before this function returns, so the
+        // registered pages are never unmapped; on failure nothing was registered and the region
+        // is dropped (unmapped) by the `?`.
+        ctx.cu().check(what, unsafe {
+            register(span.as_ptr().cast::<c_void>(), span.len(), 0)
+        })?;
+        let pages: &'static MappedRegion = Box::leak(Box::new(region));
+        let span = pages
+            .static_span()
+            .expect("console_pages maps owned private anonymous memory, which is always eligible");
+        Ok((
+            pages,
+            ConsoleDst {
+                span,
+                ctx_id: ctx.id(),
+            },
+        ))
+    }
+
+    // ═══ The completion fd ══════════════════════════════════════════════════════════════════
+
+    /// ★★★ **A walk's (or a scanout copy's) completion fd** — an
+    /// `eventfd(EFD_NONBLOCK|EFD_CLOEXEC)` a CUDA host function writes once everything queued
+    /// before it has completed. Put it in the worker's `epoll` set (`AsFd`); [`CompletionFd::drain`]
+    /// consumes the wake.
+    #[derive(Debug)]
+    pub struct CompletionFd {
+        fd: Arc<OwnedFd>,
+    }
+
+    impl CompletionFd {
+        /// A fresh non-blocking eventfd.
+        ///
+        /// # Errors
+        /// [`CudaError::Refused`] naming `eventfd`.
+        pub fn new() -> Result<CompletionFd, CudaError> {
+            // SAFETY: `eventfd` takes two integers and returns an fd or -1.
+            let fd = unsafe { eventfd(0, EFD_NONBLOCK_CLOEXEC) };
+            if fd < 0 {
+                return Err(CudaError::Refused {
+                    what: "eventfd (the completion fd)",
+                    code: fd,
+                    name: "eventfd(2) refused".to_string(),
+                });
+            }
+            // SAFETY: `fd` was just returned by `eventfd`, is open, and is owned by nothing else.
+            let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+            Ok(CompletionFd { fd: Arc::new(fd) })
+        }
+
+        /// Signal it once, as a queued host function does (a harness multiplexing other work).
+        pub fn signal(&self) {
+            completion_hostfn(
+                usize::try_from(self.fd.as_raw_fd()).unwrap_or(usize::MAX) as *mut c_void
+            );
+        }
+
+        /// Consume every pending signal; `0` when none was pending. **Never blocks.**
+        #[must_use]
+        pub fn drain(&self) -> u64 {
+            let mut v: u64 = 0;
+            // SAFETY: `v` is a live 8-byte buffer; the fd is non-blocking and open (owned here).
+            let n = unsafe { read(self.fd.as_raw_fd(), (&raw mut v).cast::<c_void>(), 8) };
+            if n == 8 { v } else { 0 }
+        }
+
+        /// `poll(2)` for readability, up to `timeout_ms`. ⚠ **Blocks the calling thread** —
+        /// harnesses and the self-test only, never a worker (§35).
+        #[must_use]
+        pub fn wait_readable(&self, timeout_ms: i32) -> bool {
+            let mut p = PollFd {
+                fd: self.fd.as_raw_fd(),
+                events: POLLIN,
+                revents: 0,
+            };
+            // SAFETY: one live `pollfd`, count 1.
+            let r = unsafe { poll(&raw mut p, 1, timeout_ms) };
+            r > 0 && (p.revents & POLLIN) != 0
+        }
+    }
+
+    impl AsFd for CompletionFd {
+        fn as_fd(&self) -> BorrowedFd<'_> {
+            self.fd.as_fd()
+        }
+    }
+
+    /// ★ The host function every walk and scanout copy ends with: `write(fd, 1)`, `user` being
+    /// the fd NUMBER. It dereferences nothing it is handed and makes no CUDA call.
+    extern "C" fn completion_hostfn(user: *mut c_void) {
+        let fd = c_int::try_from(user as usize).unwrap_or(-1);
+        let one: u64 = 1;
+        // SAFETY: `one` is a live 8-byte value; `write` on a bad fd returns -1 and touches nothing.
+        let _ = unsafe { write(fd, (&raw const one).cast::<c_void>(), 8) };
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// ★ The completion path WITHOUT a GPU: the exact function the driver calls makes the fd
+        /// readable and drains to exactly one signal.
+        #[test]
+        fn the_host_function_signals_the_fd_and_drain_consumes_it() {
+            let fd = CompletionFd::new().expect("eventfd");
+            assert_eq!(fd.drain(), 0, "a fresh fd has nothing pending");
+            assert!(!fd.wait_readable(0), "and is not readable");
+            completion_hostfn(usize::try_from(fd.fd.as_raw_fd()).unwrap() as *mut c_void);
+            assert!(
+                fd.wait_readable(0),
+                "the host function must make the fd readable"
+            );
+            assert_eq!(fd.drain(), 1, "exactly one signal per walk");
+            assert_eq!(fd.drain(), 0, "drain consumed it");
+        }
+
+        /// ★ T18 (raw tier): the encoder's layout is the compiler's, and the block is the PTX's
+        /// size — the only test that looks at the addresses' container.
+        #[test]
+        fn the_kfargs_layout_is_the_compilers() {
+            assert_eq!(KF_ARGS_LAYOUT.size, KF_ARGS_BYTES);
+            assert_eq!(KF_WIN_LAYOUT.size, 24);
+            let names: Vec<&str> = KF_ARGS_LAYOUT.fields.iter().map(|(n, _)| *n).collect();
+            assert_eq!(names.len(), 18);
+            assert!(KF_ARGS_LAYOUT.fields.windows(2).all(|w| w[0].1 < w[1].1));
+        }
     }
 }

@@ -1519,7 +1519,34 @@ jobs:
           # `Ctx::planes` keeps its one block, which now forms only the RAM shadow's slice — the BAR is
           # never a slice again, so `blt` cannot reach it with `copy_from_slice`/`fill`. ⊘ No new power:
           # the same bytes of the same BAR the old slice covered, now one aligned word at a time.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:46 firmware/kf-gop:78"
+          # ★★★ `kf-cuda` 75 -> 64, 2026-10-04 (`v3-sec-rawaddr`, audit S1-03/S1-04/S1-09, OWNER_RULINGS
+          # §R; the perimeter design is docs/design/V3_RAWADDR_PERIMETER.md). The crate's raw-address API is
+          # DELETED, not marked `unsafe fn`: every block now lives in the inline `raw` module of
+          # `driver_unsafe.rs`, behind handles whose methods validate their own inputs; the two child files
+          # (`driver_unsafe/{walk,display}_gpu_unsafe.rs`) and `tests_unsafe.rs` hold 0. Itemised:
+          #   removed (-15):
+          #     `view_bytes` and `zeroed` (2) — the safe generics S1-09 found unsound; replaced by
+          #       per-struct `encode()` (`abi.rs`, each field at its `offset_of!`, padding zero by
+          #       construction) and `raw::encode_kf_args`;
+          #     dead `export_device_allocation` (4) and dead `memcpy_h2d_async` (1);
+          #     `launch_raw` (1) — folded into the one `cuLaunchKernel` block, behind V3 (`check_args`);
+          #     `pinned_free` (1) — the pinned stage is reclaimed by `cuCtxDestroy` and never freed alone;
+          #     §R "unsafe only where Rust needs it" (6): `sym!`'s own `dlsym` and its `transmute` (now
+          #       `opt!` + a named refusal), the `opt_sym` closure's `dlsym` (folded into `sym_or_null`),
+          #       `cuGetErrorName`'s separate `transmute` (now `opt!`), `device_name`'s `CStr::from_ptr`
+          #       (now `CStr::from_bytes_until_nul` over the bounded array), and `mem_alloc_zeroed`'s own
+          #       `cuMemsetD8` (now through the bounded `DevMem::fill`).
+          #   added (+4):
+          #     `raw::console_pages` (1) — ONE `cuMemHostRegister_v2` over a `HostSpan` of a private
+          #       anonymous region it mapped and still owns; leaked only after the registration succeeded,
+          #       so a registered page is never unmapped (V12);
+          #     the import guards' `Drop`s (3) — `ImportHandle` (`cuMemRelease`), `VaReservation`
+          #       (`cuMemAddressFree`), `VaMapping` (`cuMemUnmap`): one driver call each, so a failed import
+          #       step unwinds the steps before it (the old `import_and_map` leaked them).
+          #   Everything else moved unchanged into its handle method. No `unsafe fn` was added.
+          #   ⊘ No new power: the same driver calls on the same memory, each now reachable only through a
+          #   validating method (V1-V4), and the new registration pins pages this crate mapped itself.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:64 kf-qemu:46 firmware/kf-gop:78"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

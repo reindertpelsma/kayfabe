@@ -188,11 +188,9 @@ pub fn bring_up_and_prove() -> (SelftestOutcome, Option<WalkKernel>) {
             }
         }
     }
-    // ⊘ Released explicitly: `DeviceImage` deliberately does not free itself (it would need
-    // a borrow of the kernel that cannot coexist with `&mut self` on `refresh`), so a `drop`
-    // here would have leaked silently. The probes below re-upload, so probe (a) exercises an
-    // allocation as well as a launch.
-    k.release(dev_img);
+    // ★ `v3-sec-rawaddr`: a `DeviceImage` frees itself on drop (after its context drained). The
+    // probes below re-upload, so probe (a) exercises an allocation as well as a launch.
+    drop(dev_img);
     (out, Some(k))
 }
 
@@ -224,7 +222,7 @@ pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
                      cuCtxSetCurrent: {e}"
                 ),
                 Ok(d) => {
-                    k.release(d);
+                    drop(d);
                     "PASS a second thread can use this context (cuCtxSetCurrent + cuMemAlloc \
                      + cuMemFree)"
                         .to_string()

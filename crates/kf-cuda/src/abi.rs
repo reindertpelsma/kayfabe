@@ -7,7 +7,7 @@
 //! `kf_walk_kernel` takes `KfArgs` **by value**, and `cuLaunchKernel` passes a
 //! by-value parameter as *"a pointer to its bytes"*. So the kernel's whole contract with
 //! this crate is a **byte layout** — 216 bytes of it, which is what the committed PTX
-//! declares (`.param .align 8 .b8 _Z14kf_walk_kernel6KfArgs_param_0[216]`).
+//! declares (`.param .align 8 .b8 _Z14kf_walk_kernel6KfArgs_param_0[264]`).
 //!
 //! ⚠ **A mirror that is merely believed is the defect this tree keeps paying for.** So it
 //! is not believed: `tests/walk_abi_matches_the_cu.rs` extracts the struct definitions from
@@ -50,7 +50,7 @@ pub const KF_MAX_SCOPE: usize = 256;
 /// ⚠ A host/PTX skew must fail **loudly at launch** rather than decode garbage field offsets
 /// and look like a page-table bug (`THE_CONSTRAINTS.md` §21). Mirrors `KF_ABI_VERSION`.
 /// ★ 5 (v3-roperm): permission bits joined the diff key, selected per launch by
-/// [`KfArgs::key_perm`] — a PTX built before it would keep a guest RW→RO downgrade as "same" while
+/// `KfArgs::key_perm` — a PTX built before it would keep a guest RW→RO downgrade as "same" while
 /// this crate's model re-maps, and would read the field as padding.
 pub const KF_ABI_VERSION: u32 = 5;
 
@@ -98,7 +98,7 @@ pub const KFWR_RF_VOLATILE: u32 = 1 << 5;
 pub const KFWR_RF_PRIVILEGE: u32 = 1 << 6;
 /// ★★★ v3-roperm: the permission bits that MAY join the diff key (`kf_hkey` /
 /// [`crate::diffmodel::host_key_with`]); which of them do is the host's policy, passed per launch
-/// in [`KfArgs::key_perm`]. Mirrors `KFWR_RF_KEY_PERM_ALL`.
+/// in `KfArgs::key_perm`. Mirrors `KFWR_RF_KEY_PERM_ALL`.
 pub const KFWR_RF_KEY_PERM_ALL: u32 =
     KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE;
 /// ★★★ v3-roperm: the default key — what the host carries by default (read-only, volatile) plus
@@ -157,7 +157,11 @@ pub struct KfDir {
 /// ★★★★★ **THE SETUP DATA** — `THE_CONSTRAINTS.md` §21: *"no bit position lives in the
 /// kernel"*. The host derives this once per VM and hands it over; the kernel holds the
 /// algorithm.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// ★ `Default` is all-zero fields; its bytes reach the kernel only through [`KfFormat::encode`],
+/// which writes field by field into a zeroed buffer, so the padding is zero by construction
+/// (`v3-sec-rawaddr`, 2026-10-04: the unsound `zeroed()`/`view_bytes()` pair is gone).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(C)]
 pub struct KfFormat {
     /// Checked against [`KF_ABI_VERSION`] **at launch**, by name.
@@ -239,29 +243,18 @@ pub struct KfFormat {
     pub ps_log2: [u8; 4],
 }
 
-/// ★★★ Invariant I2's window: the base and length of the buffer standing in for GPGA. The
-/// kernel bounds-checks **every** dereference against this.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[repr(C)]
-pub struct KfWin {
-    /// Device pointer to the buffer.
-    pub base: u64,
-    /// How many bytes of it are MAPPED, and so how far a table read may reach.
-    pub len: u64,
-    /// ★★★★★ §39(c): how large the guest's GPGA space is, and so how far a LEAF
-    /// may point. Distinct from [`Self::len`]: in production the single store is
-    /// the whole of guest vidmem and both are the store length, but a captured
-    /// corpus image holds table pages and no framebuffer, so its leaves point
-    /// legitimately outside the bytes it contains. `0` refuses every leaf.
-    pub span: u64,
-}
+/// ★★★ `KfWin` and `KfArgs` — the two launch structs that carry DEVICE ADDRESSES — are no longer
+/// declared here (`v3-sec-rawaddr`, 2026-10-04, audit S1-04; `OWNER_RULINGS.md` §R(b)): they are
+/// encoded inside the perimeter (`driver_unsafe.rs`, `raw::encode_kf_args`) from validated ranges,
+/// and safe code never assembles one. Their layouts are re-exported for the ABI differential.
+pub use crate::driver_unsafe::{KF_ARGS_LAYOUT, KF_WIN_LAYOUT, StructLayout};
 
 /// The kernel's cross-refresh state, in device memory.
 ///
 /// ⊘ Mirrored in full because it is **written by the host at creation** (`cuMemcpyHtoD` of a
 /// zeroed-but-configured image), exactly as the `.cu`'s `kf_create` does. Its tail is written
 /// only by the kernel. ⊘ It holds no snapshot of the guest's tables: what persists across walks
-/// is the committed placements ([`KfArgs::com`], per slot, written only on the host's ack).
+/// is the committed placements (`KfArgs::com`, per slot, written only on the host's ack).
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct KfDev {
@@ -418,50 +411,6 @@ pub const KFWR_ACK_FAILED: u8 = 0;
 pub const KFWR_ACK_APPLIED: u8 = 1;
 /// A MAP the host already held — satisfied, not ours.
 pub const KFWR_ACK_HELD: u8 = 2;
-
-/// ★★★★★ **The kernel's one parameter, passed BY VALUE**, and the committed PTX says how many
-/// bytes it is in its own `.param` declaration.
-#[derive(Debug, Clone, Copy)]
-#[repr(C)]
-pub struct KfArgs {
-    /// Invariant I2's bounds.
-    pub win: KfWin,
-    /// The setup data — immutable for the VM's lifetime.
-    pub fmt: KfFormat,
-    /// Device pointer to [`KfDev`].
-    pub dev: u64,
-    /// The walk's runs: `runs_per_pdb` per entry.
-    pub walk: u64,
-    /// The committed placements: `runs_per_pdb` per slot.
-    pub com: u64,
-    /// [`KfSlot`] per slot.
-    pub slot: u64,
-    /// Per entry: the root walked.
-    pub pdbs: u64,
-    /// Per entry: the slot it is diffed against.
-    pub slots: u64,
-    /// How many entries.
-    pub npdb: u32,
-    /// ★ v3-roperm: the permission bits that join the diff key — a subset of
-    /// [`KFWR_RF_KEY_PERM_ALL`], the host's policy. Occupies what was padding after `npdb`.
-    pub key_perm: u32,
-    /// The host's verdict on the PREVIOUS report ([`KfAck`]); `0` = none.
-    pub ack: u64,
-    /// One `KFWR_ACK_*` byte per previous report run.
-    pub ack_code: u64,
-    /// `4 * runs_per_pdb` runs of scratch per entry.
-    pub scratch: u64,
-    /// `3 * runs_per_pdb` words of scratch per entry.
-    pub iscratch: u64,
-    /// Device pointer to the report header.
-    pub hdr: u64,
-    /// Device pointer to the report's `PdbEntry` array.
-    pub rpdb: u64,
-    /// Device pointer to the report's run array.
-    pub rrun: u64,
-    /// ★ w829: device pointer to the [`KfLayout`] (host-managed capacity).
-    pub lay: u64,
-}
 
 /// The report header. `KfReportHeader` in the `.cu`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -802,6 +751,154 @@ report_codec!(KfMapRun {
     pdb_index: u16,
 });
 
+// ── The launch-side structs, encoded: ONE encoder per `#[repr(C)]` struct ─────────────────────
+//
+// ★★★ `v3-sec-rawaddr` (2026-10-04, audit S1-09). The host-to-device structs used to reach the
+// GPU as `view_bytes(&value)` — a safe generic that turned ANY `Copy` value's bytes, padding
+// included, into a slice (uninitialised padding is undefined behaviour to read, and a reference's
+// bytes are an address). Now each struct has an encoder generated from its field list:
+// - the field list is an EXHAUSTIVE destructuring, so a field added to the struct and not to the
+//   list is a compile error;
+// - each field is written at its `offset_of!` into a zeroed buffer, so padding is zero by
+//   construction, never by remembering a `memset`;
+// - nested structs and arrays encode element by element at their own stride.
+// The bytes are little-endian, as the device and every supported host are.
+
+/// A value written at a byte offset of a launch buffer.
+trait Put {
+    /// Write `self` at `at` of `b`, little-endian.
+    fn put_at(&self, b: &mut [u8], at: usize);
+}
+
+macro_rules! put_int {
+    ($($t:ty),+) => {$(
+        impl Put for $t {
+            fn put_at(&self, b: &mut [u8], at: usize) {
+                b[at..at + core::mem::size_of::<$t>()].copy_from_slice(&self.to_le_bytes());
+            }
+        }
+    )+};
+}
+put_int!(u8, u16, u32, u64);
+
+impl<T: Put, const N: usize> Put for [T; N] {
+    fn put_at(&self, b: &mut [u8], at: usize) {
+        for (i, v) in self.iter().enumerate() {
+            v.put_at(b, at + i * core::mem::size_of::<T>());
+        }
+    }
+}
+
+/// Generate a launch struct's encoder from its EXHAUSTIVE field list.
+macro_rules! launch_codec {
+    ($t:ident { $($f:ident),+ $(,)? }) => {
+        impl Put for $t {
+            fn put_at(&self, b: &mut [u8], at: usize) {
+                let $t { $($f),+ } = self;
+                $( Put::put_at($f, b, at + core::mem::offset_of!($t, $f)); )+
+            }
+        }
+        impl $t {
+            /// ★ The bytes the device reads: every field at its `offset_of!`, little-endian,
+            /// padding zero (`v3-sec-rawaddr`).
+            #[must_use]
+            pub fn encode(&self) -> [u8; core::mem::size_of::<$t>()] {
+                let mut b = [0u8; core::mem::size_of::<$t>()];
+                self.put_at(&mut b, 0);
+                b
+            }
+        }
+    };
+}
+
+launch_codec!(KfField {
+    lo,
+    bits,
+    shift,
+    pad
+});
+launch_codec!(KfDir {
+    active,
+    va_lo,
+    entry_bytes,
+    leaf_ps,
+    entries,
+    pad
+});
+launch_codec!(KfFormat {
+    abi_version,
+    table_version,
+    dir,
+    big_va_lo,
+    small_va_lo,
+    big_entry_bytes,
+    small_entry_bytes,
+    big_entries,
+    small_entries,
+    big_ps,
+    small_ps,
+    root_align,
+    first_dir,
+    pad0,
+    valid_bit,
+    ap_lo,
+    ap_bits,
+    pde_ap_invalid,
+    pte_ap_map,
+    pde_ap_map,
+    addr_sel,
+    addr_local,
+    addr_sys,
+    big_addr_local,
+    big_addr_sys,
+    bit_volatile,
+    bit_privilege,
+    bit_read_only,
+    bit_atomic_disable,
+    pcf,
+    pcf_sparse,
+    pad1,
+    kind,
+    ps_log2,
+});
+launch_codec!(KfDev {
+    generation,
+    committed,
+    runs_per_pdb,
+    entry_budget,
+    run_capacity,
+    pdb_capacity,
+    max_pdbs,
+    max_slots,
+    tbl_run_count,
+    diff_count,
+    diff_vflags,
+    entry_refuse,
+    entries_visited,
+    refusals,
+    refuse_mask,
+    hdr_flags,
+    walk_trunc,
+    walk_abort,
+    sparse_slots,
+    need,
+});
+launch_codec!(KfLayout {
+    walk_off,
+    walk_cap,
+    prev_off,
+    prev_cap,
+    slot_off,
+    slot_cap
+});
+launch_codec!(KfAck {
+    generation,
+    nrun,
+    nreset,
+    reset
+});
+launch_codec!(KfSlot { n });
+
 /// `{pdb, va_base, va_len}`; `va_len == 0` means "walk this whole PDB".
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(C)]
@@ -825,16 +922,16 @@ pub struct KfScope {
 /// than transcribed. That is increment 6's, because it needs the walker wired into refresh to
 /// mean anything; increment 4 only has to prove the kernel runs and answers correctly.
 #[must_use]
+// ⊘ Field by field from `Default`, deliberately: the `.cu`'s own `kf_format_ver2` is written that
+// way, and the two are read side by side when the descriptor differential names a byte.
+#[allow(clippy::field_reassign_with_default)]
 pub fn kf_format_ver2() -> KfFormat {
-    // ★★★ **ZEROED FIRST, AS THE `.cu` DOES** (`memset(&F, 0, sizeof(F))`). A Rust struct
-    // literal leaves interior PADDING undefined, and this value's bytes are handed to
-    // `cuLaunchKernel` verbatim — so the padding is part of the ABI whether we name it or not.
-    // ⊘ The descriptor differential caught this at byte 58, which is padding.
-    let mut f: KfFormat = crate::driver_unsafe::zeroed();
-    // ⊘ FIELD BY FIELD, not a struct literal: a literal produces a FRESH value whose
-    // padding is undefined again, which is what the first attempt at this fix did and
-    // why the differential still failed at byte 58. Assigning into the zeroed value
-    // leaves the padding alone.
+    // ★★★ The padding the `.cu` zeroes (`memset(&F, 0, sizeof(F))`) — the descriptor differential
+    // once failed at byte 58, which is padding — is zero by construction now: the kernel sees this
+    // value only through `KfFormat::encode`, which writes each FIELD into a zeroed buffer. ⊘ So the
+    // value starts from `Default` (all-zero fields), and is still filled field by field so the
+    // transcription reads like the `.cu`'s.
+    let mut f = KfFormat::default();
     f.abi_version = KF_ABI_VERSION;
     f.table_version = KF_TBL_VER2;
     f.dir = [KfDir::default(); KF_DIRS];
@@ -960,8 +1057,8 @@ pub fn kf_format_ver2() -> KfFormat {
 /// `20:12`; ONE address field `51:12` (no vid/sys split); PCF `7:3` whose low four enumerant bits
 /// are UNCACHED/PRIVILEGE/RO/NO_ATOMIC; `PCF_SPARSE = 1`; KIND `11:8`.
 ///
-/// ⚠ Built from [`kf_format_ver2`] and overridden field by field, so the zeroed padding the ABI
-/// depends on is inherited, never re-created by a struct literal.
+/// ⚠ Built from [`kf_format_ver2`] and overridden field by field, so every field VER3 shares with
+/// VER2 is inherited rather than restated.
 #[must_use]
 pub fn kf_format_ver3() -> KfFormat {
     let mut f = kf_format_ver2();
@@ -1107,10 +1204,9 @@ mod tests {
     }
 
     /// ★★★ **EACH DECODER READS THE DOCUMENTED BYTES AS THE DOCUMENTED VALUES** — little-endian,
-    /// every field at its offset — and round-trips through the struct's own layout: the bytes the
-    /// compiler lays the value out in (`view_bytes`, what the device writes) decode back to the
-    /// value, `encode` produces exactly those bytes, and `encode ∘ decode` is the identity on any
-    /// buffer (the fields tile the struct, so no byte is skipped or left stale).
+    /// every field at its offset — `encode` produces exactly those bytes, and `encode ∘ decode` is
+    /// the identity on any buffer (the fields tile the struct, so no byte is skipped or left
+    /// stale).
     #[test]
     fn every_report_struct_round_trips_through_its_own_layout() {
         let hdr = KfReportHeader {
@@ -1151,12 +1247,10 @@ mod tests {
                 let doc = seq($t::BYTES);
                 assert_eq!($t::decode(&doc), v, "{}: the documented bytes decode to the documented values", stringify!($t));
                 assert_eq!(&v.encode()[..], &doc[..], "{}: encode is decode's inverse", stringify!($t));
-                // The struct's own layout — the bytes the device writes — on a little-endian host.
-                if cfg!(target_endian = "little") {
-                    let laid_out = crate::driver_unsafe::view_bytes(&v);
-                    assert_eq!(laid_out, &doc[..], "{}: the compiler lays it out as documented", stringify!($t));
-                    assert_eq!($t::decode(laid_out), v, "{}: layout → decode → equal", stringify!($t));
-                }
+                // ⊘ The compiler's own layout of the struct is pinned field by field
+                // (`offset_of!`/`size_of`) in `the_report_structs_have_the_headers_documented_layout`
+                // and against `g++` in `tests/walk_abi_matches_the_cu.rs`; reading the value's raw
+                // bytes here would need the unsound `view_bytes` this crate no longer has.
                 // Any buffer: every byte is read and written back.
                 let mut x = 0x9E37_79B9_7F4A_7C15u64;
                 for _ in 0..64 {

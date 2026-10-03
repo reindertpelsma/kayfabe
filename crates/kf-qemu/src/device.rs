@@ -355,7 +355,7 @@ impl Device {
             .export_to_new_fd(store.handle)
             .map_err(|e| format!("store export: {e:?}"))?;
         kernel
-            .import_store(export.fd_number(), fb_length)
+            .import_store(export.as_fd(), fb_length)
             .map_err(|e| format!("store import into the walker: {e}"))?;
         // The export node stays open for the process (CUDA holds the import).
         std::mem::forget(export);
@@ -612,7 +612,7 @@ impl Device {
                     row,
                     table,
                     &bdf,
-                    export.fd_number(),
+                    export.as_fd(),
                     fb_length,
                 )?
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);

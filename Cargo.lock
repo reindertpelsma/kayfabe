@@ -257,6 +257,11 @@ dependencies = [
 [[package]]
 name = "kf-cuda"
 version = "0.1.0"
+dependencies = [
+ "kf-disp",
+ "kf-linux-raw",
+ "trybuild",
+]
 
 [[package]]
 name = "kf-disp"

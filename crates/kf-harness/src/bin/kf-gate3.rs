@@ -232,7 +232,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf()),
     )
     .map_err(|e| e.to_string())?;
-    walk.import_store(fd.fd_number(), STORE_BYTES)
+    walk.import_store(fd.as_fd(), STORE_BYTES)
         .map_err(|e| e.to_string())?;
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
     let t0 = std::time::Instant::now();

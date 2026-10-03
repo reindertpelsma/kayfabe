@@ -475,7 +475,7 @@ fn differential(
             format!("{census}"),
         );
     }
-    k.release(img);
+    drop(img);
     Ok(())
 }
 
@@ -555,6 +555,6 @@ fn throughput(l: &mut Checks) -> Result<(), String> {
         la <= e + 1_000,
         format!("gpu p50 {e} us @1000 rows -> {la} us @13000 rows"),
     );
-    k.release(img);
+    drop(img);
     Ok(())
 }

@@ -361,7 +361,7 @@ fn phase(
     )
     .map_err(|e| format!("{tag}: {e}"))?;
     kernel
-        .import_store(fd.fd_number(), STORE_BYTES)
+        .import_store(fd.as_fd(), STORE_BYTES)
         .map_err(|e| format!("{tag}: {e}"))?;
     let sync0 = kernel.ctx_sync_calls();
 

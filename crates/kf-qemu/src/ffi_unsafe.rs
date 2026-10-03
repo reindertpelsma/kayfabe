@@ -513,16 +513,22 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
     let Some(f) = d.display.and_then(|dp| dp.console.take()) else {
         return -1;
     };
-    let fr = Kf3Frame {
-        data: f.addr as *mut u8,
-        width: f.width,
-        height: f.height,
-        stride: f.stride,
-        format: f.format,
-        serial: f.serial,
+    let Some(span) = f.span else {
+        return -1;
     };
-    // SAFETY: `out` is writable (caller contract).
-    unsafe { *out = fr };
+    // SAFETY: `out` is writable (caller contract). The span is a `StaticSpan` — memory the display
+    // plane mapped, page-locked and leaked, so it is never unmapped — and `HostSpan::as_ptr`'s
+    // contract allows a VMM console surface to read `[ptr, ptr+len)` of it.
+    unsafe {
+        *out = Kf3Frame {
+            data: span.host_span().as_ptr(),
+            width: f.width,
+            height: f.height,
+            stride: f.stride,
+            format: f.format,
+            serial: f.serial,
+        };
+    }
     0
 }
 

@@ -6,8 +6,15 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# ★ v3-sec-rawaddr (2026-10-04): the console frame's memory is a `kf_linux_raw::MappedRegion`, and it
+# leaves this crate only as the opaque `kf_linux_raw::StaticSpan` (THE_CONSTRAINTS.md §13). Allowed:
+# kf-cuda is not a PURE crate (scripts/ci/dependencies.py).
+kf-linux-raw.workspace = true
 
 [dev-dependencies]
+# T12 drives the compose kernel's address model with the display plane's own `bl_offset`.
+kf-disp.workspace = true
+trybuild = "1.0"
 
 # ★★★ DELIBERATELY NOT `[lints] workspace = true` — the THIRD crate to omit it, and the
 # first one added since the QEMU adapter. `l1_os_shell.md` §4.1's gate A says in as many
@@ -26,12 +33,13 @@ license.workspace = true
 #
 # ## What the surface actually is, and why it is small
 #
-# ⊘ One file, `driver_unsafe.rs`, and three shapes: the `dlopen`/`dlsym` binding, the
-# by-value launch marshalling (`view_bytes` / `zeroed`; ⊘ `read_struct` was removed 2026-09-27 —
-# the walk report is decoded in safe code, `abi.rs`), and two `unsafe impl` for a
-# handle this crate never dereferences. Everything else in the crate — `abi.rs`, `walk.rs`,
-# `synth.rs`, `selftest.rs` — contains no `unsafe` at all, so gate B's acceptance criterion
-# ("read the audited surface in one sitting") is one file of this crate.
+# ⊘ One perimeter, `driver_unsafe.rs` (OWNER_RULINGS §R): its inline `raw` module holds every
+# `unsafe` block of the crate — the `dlopen`/`dlsym` binding, the driver calls, the launch
+# argument encoding — and every address. Its two child files (`driver_unsafe/*_unsafe.rs`, the
+# walker's and the display plane's GPU halves) hold the remaining validation sites and no `unsafe`.
+# `view_bytes`/`zeroed` were removed 2026-10-04 (v3-sec-rawaddr, audit S1-09). Everything else in
+# the crate — `abi.rs`, `walk.rs`, `display.rs`, `synth.rs`, `selftest.rs` — is safe code that holds
+# no address.
 [lints.rust]
 unsafe_code = "allow"
 missing_docs = "warn"
