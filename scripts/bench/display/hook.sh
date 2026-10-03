@@ -184,6 +184,39 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     gq 'sudo systemctl stop lightdm; echo rc=$?' 60 > "$OUT/lightdm_stop.log"
 fi
 
+# 4a. ★ x11-dispsw (DISPLAY_X11_BARE=1, docs/design/V3_DISPLAY.md): X11 with NO compositor — the
+#     NVIDIA X driver alone, a bare Xorg on :0 (`-ac`: no auth, the guest is the bench's own) — where
+#     a vsync'd windowed GL swap and an X11 Vulkan FIFO present are the X driver's to pace, not a
+#     compositor's: the paths most likely to ask the display-SW object for a vblank release.
+#     glxgears windowed and fullscreen (vsync on), X11 vkcube FIFO; host screendumps; FPS recorded.
+if [ "${DISPLAY_X11_BARE:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
+    gq 'sudo systemctl stop lightdm 2>/dev/null; sleep 2; sudo pkill -x Xorg 2>/dev/null; sleep 2; echo ok' 60 > /dev/null
+    gq "sudo sh -c 'nohup Xorg :0 -nolisten tcp -noreset -ac > /tmp/xbare.log 2>&1 &' && echo started" 30 > "$OUT/xbare_start.log"
+    BX='sudo -u ubuntu env DISPLAY=:0'
+    up=no
+    for i in $(seq 1 30); do
+        if gq "$BX xset q >/dev/null 2>&1 && echo UP" | grep -q UP; then up=yes; break; fi
+        sleep 2
+    done
+    say "X11_BARE up=$up $(tr '\n' ' ' < "$OUT/xbare_start.log")"
+    gq "$BX timeout 12 glxgears 2>&1 | tail -3" 30 > "$OUT/xbare_glxgears.log"
+    say "X11_BARE_GLXGEARS $(grep 'frames in' "$OUT/xbare_glxgears.log" | tail -2 | tr '\n' ' ')"
+    ( gq "$BX timeout 12 glxgears -fullscreen 2>&1 | tail -3" 30 > "$OUT/xbare_glxgears_fs.log" ) &
+    VP=$!; sleep 7; shot "$OUT/xbare_glxgears_fs.ppm"; wait $VP
+    say "X11_BARE_GLXGEARS_FULLSCREEN $(grep 'frames in' "$OUT/xbare_glxgears_fs.log" | tail -2 | tr '\n' ' ')"
+    ( gq "$BX timeout 12 vkcube --c 480 --present_mode 2 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/xbare_vkcube.log" ) &
+    VP=$!; sleep 6; shot "$OUT/xbare_vkcube.ppm"; wait $VP
+    say "X11_BARE_VKCUBE_FIFO $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/xbare_vkcube.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/xbare_vkcube.log")"
+    gq 'sudo cat /tmp/xbare.log' 30 > "$OUT/xbare_Xorg.log"
+    say "X11_BARE_XORG EE=$(grep -c '(EE)' "$OUT/xbare_Xorg.log") $(grep -m1 'display software' "$OUT/xbare_Xorg.log" | cut -c1-120)"
+    gq 'sudo dmesg | grep -i "segfault\|traps:" | tail -10' 60 > "$OUT/xbare_crashes.log"
+    say "X11_BARE_CRASHES $(grep -c 'segfault\|traps:' "$OUT/xbare_crashes.log")"
+    for f in xbare_glxgears_fs xbare_vkcube; do
+        [ -s "$OUT/$f.ppm" ] && say "SHOT $f md5=$(md5sum < "$OUT/$f.ppm" | cut -c1-12)" || say "SHOT $f absent"
+    done
+    gq 'sudo pkill -x Xorg; echo ok' 30 > /dev/null
+fi
+
 # 4b. ★ M3 Cinnamon on Wayland (DISPLAY_CINNAMON_WAYLAND=1): the Mint desktop's own compositor
 #     (muffin) driving KMS directly — no X driver, so no display-SW object — through lightdm's
 #     autologin into the `cinnamon-wayland` session, then a Vulkan client in it; host screendumps

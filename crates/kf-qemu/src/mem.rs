@@ -620,6 +620,13 @@ impl KmapCounters {
     }
 }
 
+/// ★ EXPERIMENT `x11-dispsw`: `KF3_DISPSW_NO_KMAP=1` turns the display-SW spaces' kernel mappings
+/// (and their no-batching rule) off — for A/B measurement on one binary. Read once.
+pub(crate) fn kmap_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_DISPSW_NO_KMAP").is_none())
+}
+
 /// ★ EXPERIMENT `x11-dispsw`: which rows of a display-SW space get a host kernel CPU mapping.
 /// Guest RAM only: a `vmap` of host kernel address space, no host BAR1 (`virtual_mem.c:1440-1451`).
 /// ⊘ A store row would take host BAR1 (`_virtmemAllocKernelMapping`) — 256 MiB on the RTX 3060
@@ -799,7 +806,7 @@ impl MapTarget for GpuMirror {
         // ★ EXPERIMENT `x11-dispsw`: a display-SW space's guest-RAM row carries a host kernel
         // mapping. ⊘ A refused one falls back to the plain placement, named and counted: the GPU
         // path must not lose the row because host RM could not map it for itself.
-        let kmapped = self.dispsw.load(Ordering::Acquire) && kmap_wanted(d);
+        let kmapped = self.dispsw.load(Ordering::Acquire) && kmap_enabled() && kmap_wanted(d);
         let m = if kmapped {
             match self.vas.map_kernel_mapped(d, defer) {
                 Ok(m) => {
@@ -839,7 +846,7 @@ impl MapTarget for GpuMirror {
         // ★ EXPERIMENT `x11-dispsw`: a kernel-mapped placement can only be unmapped WHOLE
         // (`virtual_mem.c:1685-1689`), and a batch is unmapped piece by piece — so a display-SW
         // space places its rows one by one.
-        if self.dispsw.load(Ordering::Acquire) {
+        if self.dispsw.load(Ordering::Acquire) && kmap_enabled() {
             return Err(kf_mem::ledger::NOT_BATCHED.into());
         }
         let (Some(ram), true) = (self.ram, batching_enabled()) else {

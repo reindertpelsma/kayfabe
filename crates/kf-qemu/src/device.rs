@@ -558,7 +558,13 @@ impl Device {
             if cfg.x11_dispsw {
                 eprintln!(
                     "kf3: ⚠ EXPERIMENT x11-dispsw ON (pending the owner's ruling): every guest GF100_DISP_SW is twinned \
-                     under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name"
+                     under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name; \
+                     display-SW spaces' guest-RAM rows host-kernel-mapped: {}",
+                    if crate::mem::kmap_enabled() {
+                        "yes"
+                    } else {
+                        "NO (KF3_DISPSW_NO_KMAP)"
+                    }
                 );
             }
             Some(row)
