@@ -51,6 +51,12 @@ const REQUIRED_ROWS: &[&str] = &[
     "page_size_literal.rs",
     "region_is_not_sync.rs",
     "view_outlives_region.rs",
+    // ★ v3-sec-rawaddr (audit S1-02/S1-03, 2026-10-04): the opaque spans.
+    "host_span_not_forgeable.rs",
+    "host_span_open_needs_unsafe.rs",
+    "span_is_not_hash.rs",
+    "span_is_not_ord.rs",
+    "static_span_needs_static.rs",
 ];
 
 /// ★ The universe is DERIVED from the directory and compared against [`REQUIRED_ROWS`] in

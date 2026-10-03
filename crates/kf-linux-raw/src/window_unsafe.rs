@@ -76,7 +76,9 @@ use std::os::fd::{AsRawFd, BorrowedFd};
 /// construction until `Drop`, into which page-granular backings are placed and restored.
 ///
 /// See the module docs for the invariants and for the `Send`/`Sync` argument.
-#[derive(Debug)]
+///
+/// ★ `Debug` is hand-written and prints the length only (2026-10-04, `v3-sec-rawaddr`): a derived
+/// impl formats `base`, the window's host address.
 pub struct GuestWindow {
     /// **Type invariant:** the start of a live mapping of exactly `len` bytes, for this
     /// object's whole life. Established by the single `mmap` in [`GuestWindow::create`],
@@ -84,6 +86,15 @@ pub struct GuestWindow {
     base: NonNull<u8>,
     len: usize,
     page: HostPageSize,
+}
+
+impl core::fmt::Debug for GuestWindow {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("GuestWindow")
+            .field("len", &self.len)
+            .field("page", &self.page)
+            .finish_non_exhaustive()
+    }
 }
 
 // SAFETY: `GuestWindow` owns a process-wide mapping, not a thread-affine resource: the

@@ -2,10 +2,20 @@
 //! writes. Everything else in this crate is safe code over it.
 
 /// `[ptr, ptr+len)` of memory QEMU allocated and keeps mapped for the device's lifetime.
-#[derive(Debug, Clone, Copy)]
+///
+/// ★ `Debug` prints the length only (2026-10-04, `v3-sec-rawaddr`): a derived impl formats `ptr`.
+#[derive(Clone, Copy)]
 pub struct RawRegion {
     ptr: *mut u8,
     len: usize,
+}
+
+impl core::fmt::Debug for RawRegion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RawRegion")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
 }
 
 // SAFETY: the region is process memory QEMU keeps mapped from registration until the device (or
@@ -136,10 +146,17 @@ pub type OverlayFn = unsafe extern "C" fn(
 ) -> i32;
 
 /// The registered overlay verb and its opaque device pointer.
-#[derive(Debug, Clone, Copy)]
+/// `Debug` prints nothing of the hook: both fields are addresses (a C function, the C device).
+#[derive(Clone, Copy)]
 pub struct OverlayHook {
     f: OverlayFn,
     opaque: *mut core::ffi::c_void,
+}
+
+impl core::fmt::Debug for OverlayHook {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("OverlayHook").finish_non_exhaustive()
+    }
 }
 
 // SAFETY: `opaque` is the C device's state, which lives for the process (the device is never
@@ -188,10 +205,17 @@ pub type IoeventfdFn = unsafe extern "C" fn(
 ) -> i32;
 
 /// The registered ioeventfd verb and its opaque device pointer.
-#[derive(Debug, Clone, Copy)]
+/// `Debug` prints nothing of the hook: both fields are addresses (a C function, the C device).
+#[derive(Clone, Copy)]
 pub struct IoeventfdHook {
     f: IoeventfdFn,
     opaque: *mut core::ffi::c_void,
+}
+
+impl core::fmt::Debug for IoeventfdHook {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("IoeventfdHook").finish_non_exhaustive()
+    }
 }
 
 // SAFETY: `opaque` is the C device's state, which lives for the process (the device is never freed —

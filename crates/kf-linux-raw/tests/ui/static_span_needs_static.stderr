@@ -1,0 +1,13 @@
+error[E0597]: `region` does not live long enough
+  --> tests/ui/static_span_needs_static.rs:17:37
+   |
+ 9 |     let region = MappedRegion::map(
+   |         ------ binding `region` declared here
+...
+17 |     let _span: Option<StaticSpan> = region.static_span();
+   |                                     ^^^^^^--------------
+   |                                     |
+   |                                     borrowed value does not live long enough
+   |                                     argument requires that `region` is borrowed for `'static`
+18 | }
+   | - `region` dropped here while still borrowed

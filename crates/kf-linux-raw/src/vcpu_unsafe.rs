@@ -261,11 +261,19 @@ pub struct KvmVcpu {
     run: RunMapping,
 }
 
-/// The `mmap`ed `struct kvm_run`, owned so it is unmapped exactly once.
-#[derive(Debug)]
+/// The `mmap`ed `struct kvm_run`, owned so it is unmapped exactly once. `Debug` prints the length
+/// only (a derived impl would format the mapping's host address).
 struct RunMapping {
     base: *mut u8,
     len: usize,
+}
+
+impl core::fmt::Debug for RunMapping {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RunMapping")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Drop for RunMapping {

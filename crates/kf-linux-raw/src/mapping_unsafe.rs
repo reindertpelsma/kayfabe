@@ -226,11 +226,46 @@ enum Disposition {
 /// with something behind it: `MappedRegion::write_from` is a bulk `memcpy` through `&self`,
 /// so two threads sharing one could race. ⚠ The row used to say `Send`, which was the
 /// property that was easiest to state and not the one that was protecting anything.
-#[derive(Debug)]
+///
+/// ★ `Debug` is written by hand and prints the length and disposition only (2026-10-04,
+/// `v3-sec-rawaddr`, audit S1-02): a derived `Debug` would format `base`, i.e. put the host
+/// address into any log line that prints a region.
 struct Mapping {
     base: NonNull<u8>,
     len: usize,
     disposition: Disposition,
+}
+
+impl core::fmt::Debug for Mapping {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Mapping")
+            .field("len", &self.len)
+            .field("disposition", &self.disposition)
+            .finish_non_exhaustive()
+    }
+}
+
+/// ★ What a [`MappedRegion`] was mapped over, RECORDED at the mapping (the [`Backing`] borrows
+/// its descriptor and cannot be kept). [`MappedRegion::static_span`] reads it: only private
+/// anonymous memory this process owns may become a span that outlives every borrow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BackingKind {
+    /// [`Backing::PrivateAnonymous`].
+    PrivateAnonymous,
+    /// [`Backing::SharedFile`], including a stitched view: another process may hold the file.
+    SharedFile,
+    /// [`Backing::DeviceFile`]: a driver's mapping (MMIO, or memory the driver may take back).
+    DeviceFile,
+}
+
+impl BackingKind {
+    fn of(b: &Backing<'_>) -> BackingKind {
+        match b {
+            Backing::PrivateAnonymous => BackingKind::PrivateAnonymous,
+            Backing::SharedFile { .. } => BackingKind::SharedFile,
+            Backing::DeviceFile { .. } => BackingKind::DeviceFile,
+        }
+    }
 }
 
 impl Mapping {
@@ -407,6 +442,7 @@ pub struct MappedRegion {
     map: Mapping,
     prot: HostProt,
     cache: CachePolicy,
+    backing: BackingKind,
 }
 
 // SAFETY: a `MappedRegion` owns a process-wide mapping, not a thread-affine resource. Its
@@ -493,8 +529,14 @@ impl MappedRegion {
         page: HostPageSize,
     ) -> Result<Self, RawError> {
         cache::require_attainable(cache, backing.attainable_cache_policy(), backing.describe())?;
+        let kind = BackingKind::of(&backing);
         let map = Mapping::anywhere(len, prot.bits(), 0, backing, page, "mapping length")?;
-        Ok(MappedRegion { map, prot, cache })
+        Ok(MappedRegion {
+            map,
+            prot,
+            cache,
+            backing: kind,
+        })
     }
 
     /// ★★★ **One CONTIGUOUS host view of SCATTERED file pieces** — `pieces` are `(file offset,
@@ -609,7 +651,12 @@ impl MappedRegion {
         // a live `MAP_SHARED` file mapping (the pieces tile it — `cursor == total`), and the single
         // `OwnedMunmap` releases all of them in one `munmap`.
         debug_assert_eq!(cursor, total);
-        Ok(MappedRegion { map, prot, cache })
+        Ok(MappedRegion {
+            map,
+            prot,
+            cache,
+            backing: BackingKind::SharedFile,
+        })
     }
 
     /// The cache policy this region was mapped under.
@@ -800,6 +847,47 @@ impl MappedRegion {
     pub(crate) fn is_writable(&self) -> bool {
         self.prot == HostProt::ReadWrite
     }
+
+    /// ★ The whole region as an opaque [`HostSpan`] — minted through [`HostSpan::within`], so a
+    /// span is never longer than the mapping and never empty. Its address is reachable only by
+    /// the `unsafe` [`HostSpan::as_ptr`], whose contract says it must not outlive this region.
+    ///
+    /// # Panics
+    /// Never on caller input: a `MappedRegion` is never empty (every constructor refuses a zero
+    /// length), so `within` cannot refuse the whole of it. A panic here is an internal
+    /// inconsistency of this file.
+    #[must_use]
+    pub fn host_span(&self) -> HostSpan {
+        HostSpan::within(self.map.base, self.map.len, 0, self.map.len)
+            .expect("a MappedRegion is never empty, so its whole span is always mintable")
+    }
+
+    /// ★★★ **A span that outlives every borrow** — `Some` only for a region borrowed for
+    /// `'static` (so it is never dropped, never unmapped) that this process mapped ITSELF over
+    /// private anonymous memory and owns outright (`munmap` on drop, not a placement inside a
+    /// [`Reservation`]).
+    ///
+    /// Every other region is refused, each for a reason that is about memory safety, not taste:
+    /// a [`Backing::DeviceFile`] mapping is a driver's (MMIO, or pages the driver may revoke); a
+    /// [`Backing::SharedFile`] mapping may be truncated by another holder of the file (a `SIGBUS`
+    /// on every later access); a placement inside a [`Reservation`] is unmapped when the
+    /// reservation goes, whatever its own borrow says.
+    ///
+    /// ⊘ The `'static` borrow is the compile-time half (`tests/ui/static_span_needs_static.rs`);
+    /// the backing and disposition checks are the run-time half, and they live HERE, beside the
+    /// mapping, not at a caller.
+    #[must_use]
+    pub fn static_span(&'static self) -> Option<StaticSpan> {
+        static_span_allowed(self.backing, self.map.disposition).then(|| StaticSpan {
+            span: self.host_span(),
+        })
+    }
+}
+
+/// The pure half of [`MappedRegion::static_span`]: which recorded backings and dispositions may
+/// become a [`StaticSpan`]. Exactly one: private anonymous memory this process owns.
+fn static_span_allowed(backing: BackingKind, disposition: Disposition) -> bool {
+    backing == BackingKind::PrivateAnonymous && disposition == Disposition::OwnedMunmap
 }
 
 // =====================================================================================
@@ -924,13 +1012,25 @@ impl AtomicWord for AtomicU64 {}
 ///
 /// Safe code may hold, copy and pass it — its length is public, its address is not. It is minted
 /// only by the owners of live mappings ([`VolatileRegion::host_span`],
-/// `GuestWindow::host_span`), bounds-checked at the mint, and opened only by
-/// [`HostSpan::as_ptr`], which is `unsafe`: the one place a pointer leaves is an FFI boundary that
-/// hands it to a hypervisor as a memory region's backing.
-#[derive(Debug, Clone, Copy)]
+/// [`MappedRegion::host_span`], `GuestWindow::host_span`), bounds-checked at the mint, and opened
+/// only by [`HostSpan::as_ptr`], which is `unsafe`.
+///
+/// ★ No `Hash`, `Ord`, `PartialOrd` or `PartialEq`, and a hand-written `Debug` that prints the
+/// length only (2026-10-04, `v3-sec-rawaddr`): a derived impl would hand the address to a
+/// caller-written `Hasher`, ordering or formatter, i.e. turn it back into a number safe code can
+/// read (`tests/ui/span_is_not_hash.rs`, `span_is_not_ord.rs`).
+#[derive(Clone, Copy)]
 pub struct HostSpan {
     base: NonNull<u8>,
     len: usize,
+}
+
+impl core::fmt::Debug for HostSpan {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("HostSpan")
+            .field("len", &self.len)
+            .finish_non_exhaustive()
+    }
 }
 
 // SAFETY: a `HostSpan` is an address and a length — no reference, no access. Moving or sharing it
@@ -973,12 +1073,64 @@ impl HostSpan {
     /// The start address.
     ///
     /// # Safety
-    /// The caller must only hand it to a consumer that treats `[ptr, ptr + len)` as the backing of
-    /// a memory region (a hypervisor memslot / `memory_region_init_*_ptr`) for no longer than the
-    /// minting mapping lives, and must never form a Rust reference into it.
+    /// The caller must hand it only to one of these consumers, each of which may use only
+    /// `[ptr, ptr + len)`:
+    /// - a hypervisor memory region's backing (a memslot / `memory_region_init_*_ptr`);
+    /// - a GPU driver's page-lock registration of the span (`cuMemHostRegister`), and the async
+    ///   copies the driver then makes into the registered span;
+    /// - a VMM console surface that reads the span's pixels.
+    ///
+    /// The consumer must never form a Rust reference into it and must not use it after the
+    /// minting mapping is gone. A [`StaticSpan`]'s mapping is never gone (`'static`, owned, never
+    /// unmapped), which is what makes that span safe to hand to a consumer that keeps it.
     #[must_use]
     pub unsafe fn as_ptr(&self) -> *mut u8 {
         self.base.as_ptr()
+    }
+}
+
+/// ★★★ **A host span whose memory is valid for the rest of the process** (`v3-sec-rawaddr`,
+/// audit S1-03) — minted only by [`MappedRegion::static_span`], i.e. over a `&'static` region of
+/// private anonymous memory this process mapped and owns, which is therefore never unmapped.
+///
+/// It exists for a consumer that KEEPS an address beyond any borrow Rust can see — the VMM's
+/// console reads a frame zero-copy, and QEMU may still read it after the surface is replaced
+/// (screendump, the D-Bus listener). A plain [`HostSpan`] promises nothing about its lifetime; this
+/// type carries that promise in its construction.
+///
+/// Opaque like [`HostSpan`]: no address accessor, no `Hash`, `Ord` or `PartialEq`, and a `Debug`
+/// that prints the length only.
+#[derive(Clone, Copy)]
+pub struct StaticSpan {
+    span: HostSpan,
+}
+
+impl core::fmt::Debug for StaticSpan {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("StaticSpan")
+            .field("len", &self.span.len)
+            .finish_non_exhaustive()
+    }
+}
+
+impl StaticSpan {
+    /// Length in bytes (never zero).
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.span.len
+    }
+
+    /// Never true (a zero-length span is refused at the mint).
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.span.len == 0
+    }
+
+    /// The same span as a [`HostSpan`], for the consumer that opens it (`unsafe`
+    /// [`HostSpan::as_ptr`]). Still opaque.
+    #[must_use]
+    pub fn host_span(&self) -> HostSpan {
+        self.span
     }
 }
 
@@ -1342,6 +1494,7 @@ impl Reservation {
                 });
             }
         }
+        let kind = BackingKind::of(&backing);
         let (fd, file_offset, share_flags) = decode_backing(backing, self.page)?;
 
         // SAFETY: this is the `MAP_FIXED` call, and its whole argument is that the target
@@ -1417,6 +1570,7 @@ impl Reservation {
                 map: Mapping::adopt(base, len_host, Disposition::InsideReservation),
                 prot,
                 cache,
+                backing: kind,
             },
         });
         Ok(id)
@@ -1504,6 +1658,126 @@ mod tests {
             got, want,
             "the fault-in changed bytes it was only supposed to touch"
         );
+    }
+
+    /// ★ `v3-sec-rawaddr` (audit S1-03, design V15): the run-time half of `static_span`. Only a
+    /// `'static`, OWNED, private-anonymous region becomes a `StaticSpan`; a shared-file region and a
+    /// placement inside a reservation do not, even when borrowed for `'static`. The table itself is
+    /// pinned in full, so a loosened predicate (an `||`, a dropped arm) is red here.
+    #[test]
+    fn only_owned_private_anonymous_memory_becomes_a_static_span() {
+        let pg = page();
+        let anon: &'static MappedRegion = Box::leak(Box::new(
+            MappedRegion::map(
+                Backing::PrivateAnonymous,
+                pg.bytes(),
+                HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+                pg,
+            )
+            .expect("anonymous page"),
+        ));
+        let span = anon
+            .static_span()
+            .expect("owned private anonymous memory is eligible");
+        assert_eq!(span.len() as u64, pg.bytes());
+        assert_eq!(span.host_span().len(), span.len());
+
+        let f = shared_file(pg.bytes());
+        let shared: &'static MappedRegion = Box::leak(Box::new(
+            MappedRegion::map(
+                Backing::SharedFile {
+                    fd: std::os::fd::AsFd::as_fd(&f),
+                    offset: 0,
+                },
+                pg.bytes(),
+                HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+                pg,
+            )
+            .expect("shared file page"),
+        ));
+        assert!(
+            shared.static_span().is_none(),
+            "another holder of the file can truncate it under the console"
+        );
+
+        let res: &'static mut Reservation = Box::leak(Box::new(
+            Reservation::new(2 * pg.bytes(), pg).expect("reservation"),
+        ));
+        let id = res
+            .map_fixed_in(
+                HostOffset::ZERO,
+                pg.bytes(),
+                Backing::PrivateAnonymous,
+                HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .expect("placement");
+        let res: &'static Reservation = res;
+        let placed: &'static MappedRegion = res.placement(id).expect("placed");
+        assert!(
+            placed.static_span().is_none(),
+            "a placement is unmapped with its reservation, whatever its own borrow says"
+        );
+
+        for (b, d, ok) in [
+            (
+                BackingKind::PrivateAnonymous,
+                Disposition::OwnedMunmap,
+                true,
+            ),
+            (
+                BackingKind::PrivateAnonymous,
+                Disposition::InsideReservation,
+                false,
+            ),
+            (BackingKind::SharedFile, Disposition::OwnedMunmap, false),
+            (
+                BackingKind::SharedFile,
+                Disposition::InsideReservation,
+                false,
+            ),
+            (BackingKind::DeviceFile, Disposition::OwnedMunmap, false),
+            (
+                BackingKind::DeviceFile,
+                Disposition::InsideReservation,
+                false,
+            ),
+        ] {
+            assert_eq!(static_span_allowed(b, d), ok, "{b:?} {d:?}");
+        }
+    }
+
+    /// ★ `v3-sec-rawaddr` (audit S1-02, design D8): a span's or a region's `Debug` names its length
+    /// and never the address — the formatted text contains no hex digit run of the base.
+    #[test]
+    fn no_debug_output_carries_the_address() {
+        let pg = page();
+        let r = MappedRegion::map(
+            Backing::PrivateAnonymous,
+            pg.bytes(),
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            pg,
+        )
+        .expect("page");
+        let base = r.map.base.as_ptr() as usize;
+        let span = r.host_span();
+        for text in [
+            format!("{r:?}"),
+            format!("{span:?}"),
+            format!("{:?}", r.map),
+        ] {
+            assert!(
+                !text.contains(&format!("{base:x}")) && !text.contains(&format!("{base}")),
+                "the address leaked into {text}"
+            );
+            assert!(
+                text.contains(&pg.bytes().to_string()),
+                "the length is shown: {text}"
+            );
+        }
     }
 
     fn page() -> HostPageSize {

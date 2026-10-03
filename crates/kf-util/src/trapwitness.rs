@@ -378,7 +378,8 @@ pub fn slow_site_overflow() -> u64 {
 }
 
 const INLINE_REASON_SLOTS: usize = 16;
-static INLINE_REASON_PTR: [AtomicUsize; INLINE_REASON_SLOTS] =
+/// Each slot's key: the reason TEXT, hashed (`crate::textkey::str_key`) — never its address.
+static INLINE_REASON_KEY: [AtomicUsize; INLINE_REASON_SLOTS] =
     [const { AtomicUsize::new(0) }; INLINE_REASON_SLOTS];
 /// The reason text itself. ⊘ A `OnceLock` and not a reconstructed pointer: this crate
 /// forbids `unsafe`, and rebuilding a `&'static str` from a recorded (ptr, len) needs it.
@@ -395,16 +396,16 @@ static INLINE_REASON_OVERFLOW: AtomicU64 = AtomicU64::new(0);
 
 /// Record one inline mint against its reason. Lock-free; safe under the VMM's global lock.
 fn note_inline_reason(what: &'static str) {
-    let ptr = what.as_ptr() as usize;
+    let key = crate::textkey::str_key(what);
     for i in 0..INLINE_REASON_SLOTS {
-        let cur = INLINE_REASON_PTR[i].load(Ordering::Relaxed);
-        if cur == ptr {
+        let cur = INLINE_REASON_KEY[i].load(Ordering::Relaxed);
+        if cur == key {
             INLINE_REASON_HITS[i].fetch_add(1, Ordering::Relaxed);
             return;
         }
         if cur == 0
-            && INLINE_REASON_PTR[i]
-                .compare_exchange(0, ptr, Ordering::AcqRel, Ordering::Acquire)
+            && INLINE_REASON_KEY[i]
+                .compare_exchange(0, key, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok()
         {
             let _ = INLINE_REASON_TEXT[i].set(what);
@@ -424,9 +425,9 @@ fn note_inline_reason(what: &'static str) {
 pub fn inline_by_reason() -> Vec<(&'static str, u64)> {
     let mut out: Vec<(&'static str, u64)> = Vec::new();
     for i in 0..INLINE_REASON_SLOTS {
-        let ptr = INLINE_REASON_PTR[i].load(Ordering::Acquire);
+        let key = INLINE_REASON_KEY[i].load(Ordering::Acquire);
         let hits = INLINE_REASON_HITS[i].load(Ordering::Relaxed);
-        if ptr == 0 || hits == 0 {
+        if key == 0 || hits == 0 {
             continue;
         }
         // ⊘ A claimed slot whose text is not yet visible is counted, not guessed: the

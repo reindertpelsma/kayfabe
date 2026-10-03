@@ -877,13 +877,13 @@ pub const COORDINATOR_SLOW_US: u64 = 1_000;
 /// where a blocking site is forbidden. An instrument that took a mutex here would be inside
 /// the hazard it measures.
 fn note_vcpu_blocking(what: &'static str, allowed: bool) {
-    let ptr = what.as_ptr() as usize;
+    let key = crate::textkey::str_key(what);
     for i in 0..VCPU_BLOCK_SLOTS {
         let cur = VB_CLAIMED[i].load(AtomicOrdering::Relaxed);
-        if cur != ptr {
+        if cur != key {
             if cur != 0
                 || VB_CLAIMED[i]
-                    .compare_exchange(0, ptr, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
+                    .compare_exchange(0, key, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
                     .is_err()
             {
                 continue;
@@ -920,13 +920,13 @@ fn note_responsive(_what: &'static str, us: u64) {
 fn note_slow_coordinator(what: &'static str, us: u64) {
     SLOW_COORD.fetch_add(1, AtomicOrdering::Relaxed);
     SLOW_COORD_WORST_US.fetch_max(us, AtomicOrdering::Relaxed);
-    let ptr = what.as_ptr() as usize;
+    let key = crate::textkey::str_key(what);
     for i in 0..VCPU_BLOCK_SLOTS {
         let cur = SLOW_COORD_CLAIMED[i].load(AtomicOrdering::Relaxed);
-        if cur != ptr {
+        if cur != key {
             if cur != 0
                 || SLOW_COORD_CLAIMED[i]
-                    .compare_exchange(0, ptr, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
+                    .compare_exchange(0, key, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
                     .is_err()
             {
                 continue;
@@ -1331,7 +1331,9 @@ pub mod lockcost {
     /// Publish `site` as the current holder of `rank`. Called once per acquisition.
     pub(super) fn note_holder(rank: LockRank, site: &'static core::panic::Location<'static>) {
         note_if_in_trap(rank, site);
-        CURRENT_HOLDER[slot(rank)].store(claim_site(site) + 1, Ordering::Relaxed);
+        // `wrapping_add`: an overflowed table (`usize::MAX`) publishes `0`, "unattributed",
+        // rather than panicking a debug build inside a lock acquisition.
+        CURRENT_HOLDER[slot(rank)].store(claim_site(site).wrapping_add(1), Ordering::Relaxed);
     }
 
     /// The file/line of a slot recorded by [`sample_holder`] or [`note_holder`].
@@ -1345,10 +1347,15 @@ pub mod lockcost {
 
     /// Find or claim `site`'s slot in the site table. Returns `usize::MAX` on overflow.
     fn claim_site(site: &'static core::panic::Location<'static>) -> usize {
-        let key = std::ptr::from_ref(site) as usize;
-        // A pointer's low bits are its alignment; mix the high ones down so distinct sites
-        // do not all land in the same probe chain.
-        let mut i = ((key >> 4) ^ (key >> 17)) % SITE_SLOTS;
+        // ★ Keyed by file, line and column (`crate::textkey`), never by the `Location`'s
+        // address: a census key must not be a host address held as an integer (S1-02). O(1).
+        let key = crate::textkey::site_key(site.file(), site.line(), site.column());
+        // ⊘ The probe start is a full mix of the key (`crate::textkey::probe`). The old
+        // `(key >> 4) ^ (key >> 17)` relied on an ADDRESS's spread; over a file/line/column key
+        // it ignored the line, so every site of one file shared one 8-slot probe chain and the
+        // table overflowed (2026-10-04: `the_census_names_who_held_the_lock_when_the_waiter_arrived`
+        // failed on exactly that).
+        let mut i = crate::textkey::probe(key) % SITE_SLOTS;
         for _ in 0..8 {
             let cur = ACQ_SITE_KEY[i].load(Ordering::Relaxed);
             if cur == key

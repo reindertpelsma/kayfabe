@@ -1,0 +1,13 @@
+error[E0451]: fields `base` and `len` of struct `HostSpan` are private
+ --> tests/ui/host_span_not_forgeable.rs:8:27
+  |
+8 |     let span = HostSpan { base, len: 4096 };
+  |                           ^^^^  ^^^ private field
+  |                           |
+  |                           private field
+
+error[E0451]: field `span` of struct `StaticSpan` is private
+ --> tests/ui/host_span_not_forgeable.rs:9:33
+  |
+9 |     let _forever = StaticSpan { span };
+  |                                 ^^^^ private field

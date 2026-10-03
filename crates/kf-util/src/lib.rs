@@ -34,6 +34,7 @@ pub mod interval_map;
 pub mod leafwitness;
 pub mod lock;
 pub mod lockwitness;
+mod textkey;
 pub mod time;
 pub mod trapwitness;
 
