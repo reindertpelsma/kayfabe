@@ -82,17 +82,40 @@ echo "holds remaining after unhold: $remaining_holds  ⇒ MUST be 0"
 # Stop anything holding the module open, then purge. ⚠ rmmod may return non-zero on the
 # second attempt because the first already succeeded -- check lsmod, not $?.
 systemctl stop nvidia-persistenced 2>/dev/null
+# ⊘ [2026-10-03, box 54032077] The "Ubuntu Desktop (VM)" template runs sddm → Xorg → KDE on the GPU,
+# which holds nvidia_drm/nvidia_modeset, so the rmmods below cannot unload anything. Stop the host
+# display manager for the swap and keep it off (the bench needs no host desktop). Recorded in
+# /root/prov/host_dm_stopped so a later broker test knows to start it again on the new driver.
+for dm in display-manager sddm gdm3 lightdm; do
+  if systemctl is-active --quiet "$dm" 2>/dev/null; then
+    systemctl stop "$dm"; systemctl disable "$dm" >/dev/null 2>&1
+    echo "stopped host display manager: $dm"; mkdir -p /root/prov; echo "$dm" >> /root/prov/host_dm_stopped
+  fi
+done
 for m in nvidia_uvm nvidia_drm nvidia_modeset nvidia; do rmmod $m 2>/dev/null; done
 echo "modules still loaded: $(lsmod | grep -c '^nvidia')"
 
-DEBIAN_FRONTEND=noninteractive apt-get purge -y --allow-change-held-packages \
-  'nvidia-driver-575*' 'nvidia-dkms-575*' 'nvidia-kernel-source-575*' \
-  'nvidia-kernel-common-575*' 'nvidia-compute-utils-575*' 'nvidia-utils-575*' \
-  'libnvidia-*-575*' 'xserver-xorg-video-nvidia-575*' 'nvidia-firmware-575*' \
-  nvidia-settings 2>&1 | tail -5
-PURGE_RC=$?
-NREM=$(dpkg -l | grep -c nvidia)
-echo "purge_rc=$PURGE_RC  nvidia packages remaining: $NREM"
+# ⊘ [2026-10-03, box 54032077] THE PURGE MUST NOT NAME A VERSION. It used to purge the 575 packages
+# the vast CLI template ships. The "Ubuntu Desktop (VM)" template ships Ubuntu's packaged
+# nvidia-driver-580-open 580.105.08 plus nvidia-driver-pinning-580, so 21 driver packages survived,
+# purge_rc was still 0, and the .run refused with "alternate driver installation". Purge every
+# installed or config-files NVIDIA DRIVER package, at whatever version, and keep the container
+# toolkit (libnvidia-container*, nvidia-container-*), which is not a driver.
+driver_pkgs() {
+  dpkg-query -W -f='${Package}:${Architecture} ${db:Status-Abbrev}\n' 2>/dev/null \
+    | awk '$2 ~ /^(ii|hi|rc|iF|iU|hF|hU)/ {print $1}' \
+    | grep -E '^(nvidia-|libnvidia-|xserver-xorg-video-nvidia)' | grep -v -E 'container'
+}
+PKGS=$(driver_pkgs | tr '\n' ' ')
+echo "driver packages to purge: ${PKGS:-<none>}"
+PURGE_RC=0
+if [ -n "$PKGS" ]; then
+  DEBIAN_FRONTEND=noninteractive apt-get purge -y --allow-change-held-packages $PKGS 2>&1 | tail -5
+  PURGE_RC=${PIPESTATUS[0]}
+fi
+NREM=$(driver_pkgs | wc -l)
+echo "purge_rc=$PURGE_RC  nvidia driver packages remaining: $NREM  ⇒ MUST be 0"
+[ "$NREM" -eq 0 ] || PURGE_RC=7
 # ⊘ Do NOT run the installer over a failed purge: it produces the documented symptom from
 #    the wrong cause, which is exactly how this cost an hour.
 if [ "$PURGE_RC" -ne 0 ]; then
