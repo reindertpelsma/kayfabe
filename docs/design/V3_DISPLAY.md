@@ -2745,7 +2745,10 @@ absolute — would suit cursor-capable VNC clients better; it is an owner questi
 | grab, or no `CAP_CURSOR` broker / broker gone | (composed into the frame) | nothing — or, once the console was ever given a cursor, the hidden one, so a viewer never shows a stale image beside the composed one |
 
 **Ownership and bounds (QEMU 10.2.4).** `kf3.c`'s `kf3_console_cursor` runs at the top of the
-console's `gfx_update` (a cursor change in hover makes no frame). `cursor_alloc` and
+console's `gfx_update` (a cursor change in hover makes no frame) and after every broker pump (each
+cursor post is followed by a frame publish, which lands there — VNC's refresh backs off to
+`VNC_REFRESH_INTERVAL_MAX` = `GUI_REFRESH_INTERVAL_IDLE`, 3 s, on a still picture, `ui/vnc.c:61`,
+`include/ui/console.h:48`). `cursor_alloc` and
 `cursor_builtin_hidden` hand the caller one reference (`ui/cursor.c:93-108`); `dpy_cursor_define`
 takes its own (`ui/console.c:961-980`), and kf3.c drops its own right after. The pixels are kayfabe's
 own copy of the image (the `CursorShare` post the broker is sent, made by a GPU copy into memory kf

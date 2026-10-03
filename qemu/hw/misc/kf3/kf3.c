@@ -1048,6 +1048,11 @@ static void kf3_broker_pump(Kf3State *s, int fd, bool rd, bool wr)
     for (i = 0; i < n && i < KF3_BROKER_BATCH; i++) {
         kf3_broker_input(s, &ev[i]);
     }
+    /* §8.13: every cursor post is followed by a frame publish, which lands here — so the console's
+     * cursor follows at once, not at its next refresh (VNC's backs off to seconds when idle) */
+    if (s->con) {
+        kf3_console_cursor(s);
+    }
 }
 
 /* Realize, after the console exists. The path rules (absolute, < sun_path, no abstract namespace)
