@@ -405,3 +405,32 @@ citation: ask whether its reason still holds before relying on it.
   - the client split is built;
   - a release aimed outside the guest's own memory lands nowhere outside the store and guest RAM.
 
+## O. The guest cursor (2026-10-03)
+
+- **Owner:** *"For hover broker receives the cursor image of the guest, and sets using wl/x api that as
+  cursor … if the guest doesn't draw a cursor then it remains hidden in hover/absolute. For grab mode …
+  we follow the cursor as is."* And: *"frame copy in gpu is cheap. Best is copy to a nvidia buf on the
+  gpu … draw cursor there, then copy to linear over dma as dmabuf (in case of host ram)."*
+- The host's hardware cursor plane is never used. The guest programs kf-disp's emulated cursor channel,
+  and kf-disp knows the cursor's image (from the store), hot spot, position and visibility per head.
+- **Hover / absolute pointer:**
+  - The broker receives the guest's cursor image and hot spot, and sets it as the host cursor
+    (Wayland `wl_pointer.set_cursor`; X11 an ARGB cursor on the window).
+  - The guest's cursor position is ignored, because the absolute device already makes the host
+    pointer the guest pointer. A cursor move produces no frame.
+  - If the guest hides its cursor, the host cursor is hidden.
+  - The image is sent only when it changes, detected by a hash.
+  - kf-disp does not compose the cursor into frames in this mode, so there is never a second,
+    lagging cursor.
+  - If the broker scales the guest frame, it scales the cursor image and hot spot by the same factor.
+- **Grab / relative pointer:** the guest owns the position. kf-disp composes the cursor as the top layer
+  of the frame (display step 3d), and frames are coalesced to the display rate (§M).
+- **XOR / monochrome cursors** cannot be expressed as a host ARGB cursor, so they are composed into the
+  frame in either mode. The compose kernel gains an XOR blend.
+- **Where composition happens:** always on the GPU, into kayfabe's VRAM staging frame. The GPU-copy rung
+  packs that frame into the exported VRAM slot (§L). The host-RAM rungs (linear dma-buf, F_SHM) take
+  one copy-engine DMA from staging into the CUDA-registered host frame; the CPU never copies a frame.
+- **Protocol:** the broker protocol gains a cursor message (image fd, size, hot spot, hide) behind a
+  capability bit. A broker without the bit gets composed cursors. The change goes into nvkvm-pv's
+  broker too, so both projects get it.
+
