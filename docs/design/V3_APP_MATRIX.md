@@ -20,8 +20,10 @@ as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3
 
 ## R5 — release item §I: managed memory fails loudly; the CUDA VMM API joins the sweep (2026-10-03)
 
-**STATUS: BUILT 2026-10-03 on branch `v3-loud-uvm` (cut from master `5d70e9c2`). GitHub CI builds and
-tests it. NOT run on a box: every guest/host expectation below is a prediction until §R5.7 runs.** The
+**STATUS: BUILT 2026-10-03 on branch `v3-loud-uvm` (cut from master `5d70e9c2`). GitHub CI run
+`37131299412` at `539a04cb` was green: it ran the new unit tests (`kf-abi` `oserrorlog`, `kf-qemu`
+`chan::rc_delivery_tests`, `kf-rm` `rpc`) and the 42 verdict fixtures. NOT run on a box: every
+guest/host expectation below is a prediction until §R5.7 runs.** The
 item is `OWNER_RULINGS.md` §I: *"unsupported must fail loudly … every such fault must reach the app as an
 error"*, plus *"add a sample such as `vectorAddMMAP` to the sweep"*.
 
