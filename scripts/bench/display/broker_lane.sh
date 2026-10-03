@@ -16,7 +16,10 @@
 #
 # env (run): BROKER_ARGS (extra broker flags, e.g. --present-mode=shm), BRK_KF3_EXTRA (extra kf3
 #   properties, e.g. display-broker-vram=off), KF3_VRAM_ATTRS (s0|s1|s2, E1), BRK_DESKTOP (1: bring
-#   up the guest's Cinnamon session; default 1), BRK_CURSOR (1: the cursor experiments; default 1).
+#   up the guest's Cinnamon session; default 1), BRK_CURSOR (1: the cursor experiments; default 1),
+#   BRK_VNC (1: QEMU's VNC for the console cursor, §8.13), BRK_DRI3 (1: the DRI3 refusal client
+#   before the VMM connects, §8.15), BRK_RESILIENCE (1: E3), BRK_HOLD (seconds the hook holds the
+#   guest up for manual checks; `touch <out>/release` ends it).
 # Every claim cites the kf3 binary's revision (boot_capture's run_<tag>_rev.txt) and the broker's
 # (PREP_BROKER_REV, /root/nvkvm-pv). A start marker and an EXIT line are written by this script.
 set -uo pipefail
@@ -27,6 +30,7 @@ NVPV=${NVPV_DIR:-/root/nvkvm-pv}
 # traverse /root (mode 0700): "env: .../nvkvm-display-broker: Permission denied", and the relay
 # retried an absent listener. prep installs the build world-readable here.
 B=${BROKER_BIN:-/opt/nvkvm-broker/nvkvm-display-broker}
+DMASRC=${DMASRC_BIN:-/opt/nvkvm-broker/nvkvm-broker-dmabuf-src}
 cmd=${1:?usage: broker_lane.sh prep <nvkvm-pv-rev> | run <tag>}
 echo "BRK_LANE_START $cmd ${2:-} kf=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)"
 
@@ -81,6 +85,10 @@ if [ "$cmd" = prep ]; then
     install -D -m 0755 "$NVPV/src/broker/nvkvm-display-broker" "$B" \
         || { echo "BRK_LANE_EXIT rc=12 no broker binary"; exit 12; }
     echo "PREP_BROKER_BIN $B sha256=$(sha256sum "$B" | cut -c1-16)"
+    # nvkvm-pv's dma-buf test source (links libgbm; test tooling, never the broker) for BRK_DRI3
+    make -C "$NVPV/src/broker" nvkvm-broker-dmabuf-src >> "$BENCH/brk_prep_make.log" 2>&1 \
+        && install -D -m 0755 "$NVPV/src/broker/nvkvm-broker-dmabuf-src" "$DMASRC"
+    echo "PREP_DMABUF_SRC rc=$? $([ -x "$DMASRC" ] && sha256sum "$DMASRC" | cut -c1-16)"
     # E0: the host driver, nvidia-drm's modeset, the render node
     echo "PREP_E0 driver=$(cat /sys/module/nvidia/version) drm=$(cat /sys/module/nvidia_drm/version) modeset=$(cat /sys/module/nvidia_drm/parameters/modeset) fbdev=$(cat /sys/module/nvidia_drm/parameters/fbdev 2>/dev/null)"
     echo "PREP_E0 nodes $(stat -c '%A %U %G %t:%T %n' /dev/dri/card* /dev/dri/renderD* 2>/dev/null | tr '\n' ';')"
@@ -136,6 +144,30 @@ BPID=$!
 for _ in $(seq 50); do [ -S "$SOCK" ] && break; sleep 0.2; done
 echo "BRK_BROKER pid=$BPID socket=$([ -S "$SOCK" ] && echo up || echo MISSING) args=[${BROKER_ARGS:-}] bin=$B sha256=$(sha256sum "$B" | cut -c1-16)"
 [ -S "$SOCK" ] || { echo "BRK_BROKER_LOG $(tail -3 "$OUT/broker.log" | tr '\n' ' ')"; echo "BRK_LANE_EXIT rc=22 no broker socket"; exit 22; }
+# §8.15 (2026-10-04, opt-in BRK_DRI3=1): before the VMM connects, a real GPU dma-buf (nvkvm-pv's
+# dmabuf-src, block-linear 0x0300000000606014 — the relay's own GPU-copy pair) is attached under
+# malformed descriptors, one connection each, so the X server's DRI3 import refuses one — the
+# broker's unsolicited EV_FORMAT x=0 for both alpha twins, then a new connection told yes again.
+# The VMM connects after it, to the same --persist broker: its yes for that pair is the refusal
+# not outliving its connection, end to end.
+if [ "${BRK_DRI3:-0}" = 1 ]; then
+    if [ -x "$DMASRC" ]; then
+        SRCS=/run/kf-dri3-src.sock; rm -f "$SRCS"
+        "$DMASRC" --serve "$SRCS" --size 512x512 --modifier 0x0300000000606014 > "$OUT/dri3_source.log" 2>&1 &
+        SPID=$!
+        for _ in $(seq 50); do [ -S "$SRCS" ] && break; sleep 0.2; done
+        bl=$(wc -l < "$OUT/broker.log")
+        timeout 120 python3 "$HERE/dri3_refusal.py" --broker "$SOCK" --source "$SRCS" --udmabuf \
+            > "$OUT/dri3.log" 2>&1
+        echo "BRK_DRI3_RC=$? source=[$(head -c 400 "$OUT/dri3_source.log" | tr '\n' ' ')]"
+        sed 's/^/BRK_/' "$OUT/dri3.log"
+        tail -n +"$(( bl + 1 ))" "$OUT/broker.log" | grep -aE 'DRI3|EV_FORMAT|refused|REJECTED|accepted uid|detached' \
+            | cut -c1-260 | head -40 | sed 's/^/BRK_DRI3_BROKER /'
+        kill "$SPID" 2>/dev/null; wait "$SPID" 2>/dev/null; rm -f "$SRCS"
+    else
+        echo "BRK_DRI3 SKIPPED: no $DMASRC (run prep)"
+    fi
+fi
 export BRK_XD="$XD" BRK_XA="$XA" BRK_OUT="$OUT" BRK_BROKER_LOG="$OUT/broker.log"
 # for the hook's E3 resilience step (BRK_RESILIENCE=1): who runs the broker, and how to start it again
 export BRK_SU="$SU" BRK_SOCK="$SOCK" BRK_BIN="$B" BRK_BROKER_ARGS="${BROKER_ARGS:-}"
@@ -168,6 +200,14 @@ grep -aE 'kf3: broker: (GPU-copy rung|connected|the compositor|the display (CAN|
 grep -ao 'broker\[[^]]*\]' "$Q" 2>/dev/null | tail -1 | sed 's/^/BRK_STATUS /'
 grep -ao 'host_cursor_reads=[0-9]* host_cursor_refused=[0-9]*\|scanout_d2h=[0-9]* scanout_pack=[0-9]* pack_skipped=[0-9]* display_vram_mib=[0-9]*' "$Q" 2>/dev/null | tail -2 | sed 's/^/BRK_DISP /'
 grep -aE 'REFUSED|refused' "$Q" 2>/dev/null | grep -a broker | cut -c1-200 | head -8 | sed 's/^/BRK_REFUSED_LINE /'
+# §8.14: the bring-up self-tests on the GPU (the compose kernel's includes the XOR pixel)
+grep -aE 'kf3: (display|broker): .*self-test' "$Q" 2>/dev/null | cut -c1-200 | sort | uniq -c | sed 's/^/BRK_SELFTEST /'
+# §8.15: every format verdict the relay recorded, and what the broker asked and answered per
+# connection (a "no" must be asked again on each new connection: the refusal is connection state)
+grep -aE 'kf3: broker: (the display (CAN|CANNOT) show|unasked EV_FORMAT|reclaimed frame slot|dma-buf frames are not|REFUSED frame slot|sent unchecked)' "$Q" 2>/dev/null \
+    | cut -c1-230 | head -20 | sed 's/^/BRK_FORMAT_LINE /'
+awk '/accepted uid/{n++} /QUERY_FORMAT|DRI3 pixmap import refused|EV_FORMAT x=0|is not advertised/{print "conn" n ": " $0}' "$OUT/broker.log" 2>/dev/null \
+    | cut -c1-230 | head -30 | sed 's/^/BRK_BROKER_FORMAT /'
 grep -a '^BRK_' "$BENCH/run_${TAG}_probe.log" 2>/dev/null
 echo "BRK_LANE_EXIT rc=$rc $(date -Is)"
 exit "$rc"

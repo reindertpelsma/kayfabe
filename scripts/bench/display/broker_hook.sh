@@ -156,6 +156,26 @@ if [ -n "${BRK_VNC:-}" ]; then
     timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" "$OUT/cur_vnc_cross.pam" | sed 's/^/BRK_VNC_HOVER /'
     python3 "$XC" compare "$OUT/cur_guest_cross.pam" "$OUT/cur_vnc_cross.pam" 2>&1 | sed 's/^/BRK_VNC_HOVER_/'
 fi
+# 4c. §8.14 (2026-10-04): an "invert"-style cursor — the X core font's xterm glyph, a two-colour
+#     cursor with no theme behind it (XCURSOR_PATH names nothing, so libXcursor finds no theme file
+#     and the X server gets the core glyph). NVKMS has no XOR mode (§8.14), so the guest's head is
+#     given whatever the DDX makes of it: the composition line, the host's cursor and the console's
+#     say what kayfabe did with it. The crosshair is put back for the steps below.
+m=$(qline)
+gq "$GX env XCURSOR_PATH=/nonexistent XCURSOR_THEME=kf-none xsetroot -cursor_name xterm; echo rc=\$?" > "$OUT/xsetroot_xterm.log"
+HX xdotool mousemove --window "$W" 70 60 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 3
+HX python3 "$XC" image "$OUT/cur_host_xterm.pam" | sed 's/^/BRK_HOST_XTERM /'
+gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_xterm.pam" | sed 's/^/BRK_GUEST_XTERM /'
+"$G" 'cat /tmp/cur_guest_xterm.pam' > "$OUT/cur_guest_xterm.pam" 2>/dev/null
+python3 "$XC" compare "$OUT/cur_guest_xterm.pam" "$OUT/cur_host_xterm.pam" | sed 's/^/BRK_XTERM_/'
+say "XTERM_RELAY xsetroot=[$(tr '\n' ' ' < "$OUT/xsetroot_xterm.log")] $(since "$m" | grep -aE 'kf3: (broker: guest cursor|display: guest cursor composition|display: host cursor REFUSED|display: .*XOR)' | sed 's/^.*kf3: //' | tr '\n' '|' | cut -c1-500)"
+if [ -n "${BRK_VNC:-}" ]; then
+    timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" "$OUT/cur_vnc_xterm.pam" | sed 's/^/BRK_VNC_XTERM /'
+fi
+gq "$GX xsetroot -cursor_name crosshair; echo rc=\$?" >> "$OUT/xsetroot.log"
+HX xdotool mousemove --window "$W" 70 60 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 3
 # the rest (hide, grab) happens with the crosshair at this spot; the shots below are taken here
 gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
 set -- $gpos; gx=${1:-0}; gy=${2:-0}
@@ -230,6 +250,13 @@ if [ "${BRK_RESILIENCE:-0}" = 1 ] && [ -n "${BRK_SU:-}" ]; then
     say "E3_KILL9 $(since "$m" | grep -aE 'kf3: broker: (the display broker closed|reconnected|re-sent geometry|connected to)' | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-300)"
     hshot host_after_restart
     say "E3_AFTER_RESTART guest=[$(gq 'echo ALIVE' 20)] window=[$(HX xdotool search --onlyvisible --name '^nvkvm' 2>/dev/null | head -1)]"
+fi
+
+# BRK_HOLD=<seconds>: keep the guest up for manual checks (ends early on `touch $OUT/release`)
+if [ -n "${BRK_HOLD:-}" ]; then
+    say "HOLD up to ${BRK_HOLD}s from $(date -Is) (touch $OUT/release to end it)"
+    for _ in $(seq 1 "$BRK_HOLD"); do [ -e "$OUT/release" ] && break; sleep 1; done
+    say "HOLD_END $(date -Is)"
 fi
 
 # E5 (part): what QEMU holds — descriptors by kind, its VRAM
