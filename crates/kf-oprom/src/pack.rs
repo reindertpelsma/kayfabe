@@ -19,6 +19,12 @@
 //! "PE at 0x200". The local stand-in test (`scripts/display/gop_standin.sh`) runs both layouts under
 //! Secure Boot.
 //!
+//! ★ **TESTED 2026-10-03 (late), test F1 at `adbe6fcd` — the "untested" of the next note is closed.**
+//! On an OVMF built with `PcdOptionRomImageVerificationPolicy=0x04` (`scripts/display/build_ovmf_deny.sh`)
+//! the snakeoil-signed ROM in this layout is verified and runs, while the same signed PE with padding
+//! AFTER it does not run, nor does an unsigned ROM (`traces/v3_display/gop_standin_20261003_v3gop/`,
+//! arms `sb_deny_*`). Local, snakeoil keys; no GPU box involved.
+//!
 //! ⊘ **CORRECTED 2026-10-03 (`v3-gop`, the review of `v3-gop-kf3`) — the sentence above overstates
 //! it: the end-aligned layout is UNTESTED against a firmware that denies unsigned ROMs.** OVMF trusts
 //! every option ROM (`PcdOptionRomImageVerificationPolicy` 0x00, `OvmfPkg/OvmfPkgX64.dsc:689`), so the

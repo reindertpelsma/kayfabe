@@ -14,7 +14,8 @@ fix this file. Entries below the first are dated history.
   built from source by `crates/kf-gop-image/build.rs`; the ROM is arch-neutral; CI's `aarch64` job builds
   the driver) and every finding of the halves' review fixed (`design/V3_DISPLAY.md` §4.11.12's ⊘ block).
   Merge `v3-gop` instead of `v3-gop-rom`/`v3-gop-kf3`, whose history carries the old `.efi`. Resume: B0a,
-  as below; nothing has run on a GPU box. The *Open* and *Merge order* lines below are superseded.
+  as below; nothing has run on a GPU box. Local stand-in at `adbe6fcd`: 11 PASS, 3 OBSERVED, 0 FAIL,
+  including test F1 (a ROM-verifying OVMF runs the signed ROM and refuses unsigned/tail-padded ones). The *Open* and *Merge order* lines below are superseded.
 - (superseded the same day, kept as written) ★ **DISPLAY STEP 1 (the boot display) — 2026-10-03: both halves BUILT on branches, not merged, nothing
   run on a GPU box.** `v3-gop-rom` (the `kf-gop` UEFI GOP firmware, `crates/kf-oprom`, the local stand-in,
   11/11 at `3dd574e5`) and, on top of it, `v3-gop-kf3` (the kf3 integration behind property `gop`,

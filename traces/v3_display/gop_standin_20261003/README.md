@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later -->
 # gop_standin_20261003 — kf3's GOP option ROM on a stand-in device, no GPU
 
+⊘ **2026-10-03 (late) — read this run as history.** Its revisions (`3dd574e5`, `2c6178fe`, `da5cc07f`) are
+on branch `v3-gop-rom`, which carries the committed `kf-gop.efi` that `OWNER_RULINGS.md` §K withdrew and
+is not merged; branch `v3-gop` squashes that work without the binary. The blob it packed (`f11ab0b9…`) no
+longer exists in the tree, and three of its Secure Boot arms were renamed `*_observe` and no longer
+PASS. The run at `v3-gop`'s head, with a ROM-verifying OVMF, is `../gop_standin_20261003_v3gop/`.
+
 **STATUS: MEASURED, 2026-10-03 — 11/11 arms PASS at `3dd574e5` (branch `v3-gop-rom`, clean worktree).**
 Local dev host, no GPU and no kf3: QEMU 10.2.1 (Ubuntu `1:10.2.1+ds-1ubuntu3.2`), KVM, 512 MiB, 1 vCPU,
 q35. Firmware: Ubuntu `ovmf 2025.11-3ubuntu7` (`OVMF_CODE_4M.fd`, `.secboot.fd`, VARS plain / `ms` /

@@ -908,7 +908,9 @@ committed as `firmware/kf-gop/kf-gop.efi` and embedded by
   signed PE would break its signature on firmware that verifies option ROMs. kf-oprom pads **before**
   the PE. An unsigned linker output is already a multiple of 512 bytes, so for it the layout is the
   design's (PE at 0x200). OVMF does not verify option ROMs at all (§4.11.7), so the stand-in cannot
-  tell the two layouts apart; the arm records that. ⊘ *2026-10-03 (late, `v3-gop`):* so the layout is
+  tell the two layouts apart; the arm records that. ★ *Tested 2026-10-03 (late), F1 at `adbe6fcd`
+  (§4.11.9): on a ROM-verifying OVMF the signed end-aligned ROM runs and the same PE with padding after
+  it does not — the layout's premise holds (`traces/v3_display/gop_standin_20261003_v3gop/`).* ⊘ *2026-10-03 (late, `v3-gop`):* so the layout is
   **untested against a firmware that denies unsigned ROMs** — it rests on reading
   `DxeImageVerificationLib.c` alone. The stand-in's `sb_deny_*` arms test it on an OVMF built with
   `PcdOptionRomImageVerificationPolicy=0x04` when one is supplied (`OVMF_DENY_CODE`; test F1, §4.11.9).
@@ -998,6 +1000,11 @@ Read in edk2-stable202408 (QEMU 10.2.4's `roms/edk2`); shown by the stand-in on 
 | **Option ROMs are not signature-checked, Secure Boot or not** | `PcdOptionRomImageVerificationPolicy\|0x00` (always trust) in `[PcdsDynamicDefault]`, `OvmfPkg/OvmfPkgX64.dsc:689`; set to 0x04 (deny) only under AMD SEV (`OvmfPkg/PlatformPei/AmdSev.c:468`) | with Secure Boot enforcing — the unsigned boot app is *"Access Denied -- rejected probably by Secure Boot"* in the same boot — the unsigned ROM runs (Microsoft-keyed and snakeoil VARS); the snakeoil-signed ROM and the tail-padded signed ROM run too (arms `sb_*`) |
 
 #### 4.11.8 The local stand-in
+
+★ **Run 2026-10-03 (late) at `adbe6fcd`, clean tree, with a ROM-verifying OVMF: 14 arms — 11 PASS,
+3 OBSERVED, 0 SKIP, 0 FAIL** (`traces/v3_display/gop_standin_20261003_v3gop/`; F1 below). Same host as
+the table below. CI run 37136448638 (`ac10c23f`, the same code before the history was squashed): 7 PASS,
+3 OBSERVED, 4 SKIP (QEMU's edk2 and the deny-policy firmware are not on the runner), 0 FAIL.
 
 ⊘ **CORRECTED 2026-10-03 (late, `v3-gop`, the review of `v3-gop-kf3`) — the three Secure Boot arms
 below that only observe are renamed, and none of them is a PASS any more.** `sb_ms_unsigned`,
@@ -1139,6 +1146,9 @@ Every result cites the kf3 binary's revision (`build_kf3.sh`'s `kf3-bins/<rev>/`
   safe mode visible; nvlddmkm install and the Basic Display handover; a GOP framebuffer above 4 GiB;
   whether Windows sends `consoleMemSize`.
 - ★ **Added 2026-10-03 (late, `v3-gop`) — no GPU needed:**
+  - ★ *F1 RAN locally 2026-10-03 (late) at `adbe6fcd` (clean tree; `traces/v3_display/gop_standin_20261003_v3gop/`):
+    `sb_deny_signed` PASS (verified, started, 21/21), `sb_deny_unsigned` PASS (did not run),
+    `sb_deny_tailpad` PASS (did not run). Snakeoil keys; CI SKIPs these arms (no such firmware there).*
   - **F1** (a firmware that verifies option ROMs — the only test of kf-oprom's end-aligned layout):
     build OVMF from QEMU 10.2.4's `roms/edk2` with Secure Boot, SMM and
     `PcdOptionRomImageVerificationPolicy` 0x04 (`scripts/display/build_ovmf_deny.sh <edk2> <out>`, ~3 min;
@@ -1166,7 +1176,10 @@ Every result cites the kf3 binary's revision (`build_kf3.sh`'s `kf3-bins/<rev>/`
 #### 4.11.11 Owner questions, and the defaults in force (2026-10-03)
 
 The owner will confirm; until then the build follows these defaults.
-1. **Secure Boot:** documented **off** for the boot display; no signing infrastructure yet. ⊘ The
+1. ★ *2026-10-03 (late): F1 (§4.11.9) shows the ROM layout signs correctly — on a ROM-verifying OVMF a
+   snakeoil-signed kf-gop ROM runs and an unsigned one does not — so option (b) below needs only the key
+   and the signing step, not a layout change.*
+   **Secure Boot:** documented **off** for the boot display; no signing infrastructure yet. ⊘ The
    question's premise ("an unsigned ROM will not run under Secure Boot-enforcing OVMF") does not hold
    for OVMF: it trusts option ROMs unconditionally except under AMD SEV (§4.11.7). Physical-machine-style
    firmware with a deny policy would need option (b) (a kayfabe key in a VARS template; the PE is
@@ -1214,7 +1227,8 @@ into a header CI does compile).
 5. **Supersession notes** for the committed-blob text: `V3_SWEEP_AND_INSTALL.md`, `kf-oprom`'s crate
    docs, `CI_V3.md`, `firmware/README.md`, and this document (§4.11.6, §4.11.8).
 6. **The stand-in's observe arms** are named and judged as observations (`verdict=OBSERVED`), and the
-   arms that can fail on the ROM outcome exist (`sb_deny_*`, test F1) — §4.11.8's ⊘ note.
+   arms that can fail on the ROM outcome exist (`sb_deny_*`, test F1) — §4.11.8's ⊘ note. F1 ran locally
+   at `adbe6fcd` and passes (§4.11.9).
 
 **STATUS: BUILT 2026-10-03, CI green at `37740a4b` (run 37132057723: stable, aarch64 and firmware
 jobs); not run on a GPU box.** Everything is behind the kf3 property `gop` (default off). kf3.c is not
