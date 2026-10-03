@@ -364,3 +364,18 @@ citation: ask whether its reason still holds before relying on it.
   or vendor, and F_SHM.
 - Design pass of 2026-10-03; research in `traces/` once the broker branch lands.
 
+## M. The display frame-rate bound is configurable (2026-10-03)
+
+- **Owner:** *"I think the fps bound must be configurable."* Context: with `GF100_DISP_SW` twinned on
+  the host (`x11-dispsw`, still an experiment), host RM fires vblank releases at the host head's vblank,
+  and immediately on a headless host. Vsync'd X11 clients would then run uncapped.
+- One device property (working name `display-max-fps`), defaulting to the virtual monitor's refresh.
+  - **KMS flips** (Wayland, fullscreen X, nvidia-drm) are paced by kf-disp's own vblank timer, so the
+    bound is exact there. The EDID's preferred mode follows the same rate.
+  - **X11 display-SW paths** (windowed GLX, X11 Vulkan FIFO): host RM owns the release timing, so the
+    bound needs a kayfabe lever. If clients use `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK` (`0x90720101`), it
+    reaches kayfabe and kf-disp services it at the configured rate. If they use software methods,
+    kayfabe paces only the channels that own a display-SW object, through the trapped-doorbell path.
+    That bound is per submission, not per frame, and is not promised until a box run shows it holds.
+  - The status line reports the achieved rate per path, so a bound that does not hold is visible.
+
