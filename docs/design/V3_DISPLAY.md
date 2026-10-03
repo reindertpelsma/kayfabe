@@ -937,9 +937,10 @@ Every cargo run under the shared flock, `-j2`, a throwaway target dir (owner rul
 - The broker's own `make check`: 81 of 82; the failing case is its `SO_PEERCRED` one, which runs the
   test client as uid 65534 out of a build tree under a mode-0700 directory it cannot traverse here
   (environmental, not a broker or relay finding).
-- GitHub CI (`stable`, `aarch64`) green at `78051779` (run 37126498993) and `df35472f` (run
-  37127120277): it builds the workspace, runs kf-qemu's tests including `wire_mirror` at ABI 11, Clippy
-  and the gates — including `UDMABUF-gate reached-count` (the runner's `/dev/udmabuf` is not permitted,
+- GitHub CI (`stable`, `aarch64`) green at `78051779` (run 37126498993, 3a/3b core), `df35472f` (run
+  37127120277, the kf3 glue), `5af2c04b` (run 37127763760, 3d) and `4ed1a002` (run 37128902174, 3c,
+  KF3 ABI 12): it builds the workspace, runs kf-qemu's tests including `wire_mirror`, Clippy and the
+  gates — including `UDMABUF-gate reached-count` (the runner's `/dev/udmabuf` is not permitted,
   so both gated tests print `SKIPPED` and are counted). CI does **not** compile kf3.c: every QEMU call in
   it was read against v10.2.4's headers.
 
