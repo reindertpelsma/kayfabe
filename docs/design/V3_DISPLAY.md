@@ -2492,6 +2492,15 @@ through it changes no guest byte); **E6** E1 on Turing, Ada and GB20x.
 
 ### 8.12 The guest cursor as the host pointer — hover mode (`OWNER_RULINGS.md` §O)
 
+> ⊘⊘ **CORRECTED AGAIN the same day (run `brkA4`, kf3 `18562ba4`) — the derivation below was one
+> pixel off on both axes, every time.** On the box it derived `4,2` for the arrow the guest's X server
+> holds at `3,1`, and `12,12` for its `11,11` crosshair (the images themselves matched: 254 and 281
+> visible pixels on both sides). The injected position reaches the guest through two truncating
+> scalings, not one: QEMU's onto the tablet's axis (`v = abs * 0x7fff / range`, QEMU 10.2.4
+> `ui/input.c:470-481`) and the guest's back onto the head (libinput's `v * size / 0x8000`): brkA4's
+> 48 of 1024 arrived as 47, its 8 of 695 as 7. `hot_from_pointer` now models both; its test carries
+> the measured case, and the single-scaling formula fails it with exactly the box's `(4, 2)`.
+
 > ⊘ **CORRECTED 2026-10-03 (box 54032077, run `brkA`, kf3 `6da16d2f` + broker `9cb736f`) — the hot
 > spot was wrong as built.** The first SET on hardware said `256x256 hot 0,0`: **NVKMS hard-codes the
 > hardware hot spot to 0** (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6565-6569`, "Hard code the
@@ -2616,3 +2625,16 @@ Evidence: `traces/v3_display/broker_20261003/<run>/`; harness `scripts/bench/dis
     closed after the imports" is NOT graded by it.
   - **display-max-fps:** NOT built anywhere (`OWNER_RULINGS.md` §M is a ruling, no branch carries the
     property), so it could not be graded.
+- **Runs `brkA2` (kf3 `1ddccbdf`) and `brkA3` (kf3 `7753459b`) graded NOTHING about the cursor, and
+  the cause is the bench, not kayfabe.** Both connected, took rung 0 and imported every frame
+  (`brkA3`: `sent=4088 gpucopy=4086 releases=4073`), but CTRL+ALT+F/G never reached the broker and
+  the guest pointer never moved (no ABS, so both SETs said `hot 0,0`). The KDE session had locked
+  itself while idle between `brkA` and `brkA2` (`kscreenlocker_greet`, `LockedHint=yes`): the locker
+  holds the keyboard and pointer. Unlocked, the broker's own test client received every key and the
+  grab toggled. A second harness defect surfaced on the way: the `runuser` wrapper ignores SIGTERM,
+  so `brkA3`'s broker restarted by its E3 step outlived the lane. Both fixed in `18562ba4` (`prep`
+  turns auto-lock off; `run` unlocks and stops every broker on its socket before and after).
+  ⊘ What `brkA2`/`brkA3` DID show: on a crosshair (`xsetroot -cursor_name crosshair`) the guest X
+  server's own cursor is 24x24 with hot spot 11,11 — the case an underived hot spot 0,0 gets wrong
+  by half the image; and E3's SIGSTOP of the broker for ~7 s did not hold the guest (it answered,
+  `glxgears` ran at 82 FPS meanwhile).

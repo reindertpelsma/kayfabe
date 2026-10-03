@@ -666,8 +666,16 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
 /// programmed hot`). In hover the VMM knows that pointer — it injected it: `abs` in the broker's
 /// `range`, which QEMU scales to the tablet's axis and the guest maps onto the head's `frame` — so
 /// the hot spot is derived from it. `None` when the result lies outside the image (the pointer and
-/// the cursor point belong to different moments, or the pointer is not over this head). Within a
-/// pixel of rounding (QEMU's and the guest's scaling).
+/// the cursor point belong to different moments, or the pointer is not over this head).
+///
+/// ⊘ CORRECTED the same day (run `brkA4`, kf3 `18562ba4`): one scaling (`abs * frame / range`)
+/// derived `4,2` for an arrow the guest's X server holds at `3,1`, and `12,12` for its `11,11`
+/// crosshair — one pixel off on both axes, every time. The pointer goes through TWO integer
+/// scalings, each truncating: QEMU's onto the tablet's axis (`qemu_input_scale_axis`, QEMU 10.2.4
+/// `ui/input.c:470-481`, `v = abs * 0x7fff / range` — kf3.c passes the broker's range as the
+/// maximum) and the guest's back onto the head (libinput's `(v - min) * size / (max - min + 1)`,
+/// truncated: brkA4's injected 48 of 1024 reached the guest as 47, its 8 of 695 as 7). Both are
+/// modelled here.
 #[must_use]
 pub fn hot_from_pointer(
     c: &CursorScan,
@@ -678,8 +686,13 @@ pub fn hot_from_pointer(
     if range.0 == 0 || range.1 == 0 {
         return None;
     }
-    let gx = i64::from(abs.0) * i64::from(frame.0) / i64::from(range.0);
-    let gy = i64::from(abs.1) * i64::from(frame.1) / i64::from(range.1);
+    // QEMU's INPUT_EVENT_ABS_MAX: the tablet's axis is 0..=0x7fff
+    const TABLET_MAX: i64 = 0x7fff;
+    let guest = |a: i32, r: u32, f: u32| {
+        (i64::from(a) * TABLET_MAX / i64::from(r)) * i64::from(f) / (TABLET_MAX + 1)
+    };
+    let gx = guest(abs.0, range.0, frame.0);
+    let gy = guest(abs.1, range.1, frame.1);
     let hx = gx - (i64::from(c.x) - i64::from(c.hot_x));
     let hy = gy - (i64::from(c.y) - i64::from(c.hot_y));
     let s = i64::from(c.size);
@@ -1343,40 +1356,50 @@ mod tests {
     }
 
     /// ★ NVKMS programs hot spot 0 and places the image's top-left at the point, so the hot spot
-    /// is the pointer minus the point — in the head's pixels, from the broker's range; outside the
-    /// image is no answer.
+    /// is the pointer minus the point — the pointer as the GUEST computes it from what was
+    /// injected (QEMU's tablet scaling, then the guest's, each truncating); outside the image is
+    /// no answer.
     #[test]
     fn the_hot_spot_is_the_pointer_minus_the_images_top_left() {
-        // NVKMS: hot 0, the image's top-left at (700, 400); the guest pointer at (703, 405)
+        // [measured brkA4, 2026-10-03, RTX 3060 / 580.159.04] 48 of 1024 reached the guest as 47,
+        // 8 of 695 as 7: a cursor whose top-left is at (44, 6) has its hot spot at (3, 1)
+        let mut m = cursor(44, 6);
+        (m.hot_x, m.hot_y) = (0, 0);
+        assert_eq!(
+            hot_from_pointer(&m, (48, 8), (1024, 695), (1024, 695)),
+            Some((3, 1))
+        );
+        // NVKMS: hot 0, the image's top-left at (700, 400); injected (704, 406) is the guest's
+        // (703, 405)
         let mut c = cursor(700, 400);
         (c.hot_x, c.hot_y) = (0, 0);
         assert_eq!(
-            hot_from_pointer(&c, (703, 405), (1024, 768), (1024, 768)),
+            hot_from_pointer(&c, (704, 406), (1024, 768), (1024, 768)),
             Some((3, 5))
         );
         // the broker's range is not the head's size: scaled into the head's pixels
         assert_eq!(
-            hot_from_pointer(&c, (1406, 810), (2048, 1536), (1024, 768)),
+            hot_from_pointer(&c, (1408, 812), (2048, 1536), (1024, 768)),
             Some((3, 5))
         );
         // a driver that programs its hot spot: the point IS the pointer, the result the same
         let mut p = cursor(703, 405);
         (p.hot_x, p.hot_y) = (3, 5);
         assert_eq!(
-            hot_from_pointer(&p, (703, 405), (1024, 768), (1024, 768)),
+            hot_from_pointer(&p, (704, 406), (1024, 768), (1024, 768)),
             Some((3, 5))
         );
         // the pointer left of / below the image, a range of 0: no answer
         assert_eq!(
-            hot_from_pointer(&c, (699, 405), (1024, 768), (1024, 768)),
+            hot_from_pointer(&c, (700, 406), (1024, 768), (1024, 768)),
             None
         );
         assert_eq!(
-            hot_from_pointer(&c, (703, 464), (1024, 768), (1024, 768)),
+            hot_from_pointer(&c, (704, 465), (1024, 768), (1024, 768)),
             None
         );
         assert_eq!(
-            hot_from_pointer(&c, (703, 405), (0, 768), (1024, 768)),
+            hot_from_pointer(&c, (704, 406), (0, 768), (1024, 768)),
             None
         );
     }

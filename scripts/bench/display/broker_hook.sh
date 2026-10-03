@@ -119,7 +119,7 @@ gq "$GX xsetroot -cursor_name left_ptr; echo rc=\$?" > "$OUT/xsetroot_arrow.log"
 HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
 HX xdotool mousemove --window "$W" 30 30 >/dev/null 2>&1; sleep 1
 HX xdotool mousemove --window "$W" 48 44 >/dev/null 2>&1; sleep 3
-say "MODE_LINES $(grep -a 'kf3: broker: guest cursor:' "$Q" | cut -d: -f4- | tr '\n' '|' | cut -c1-300)"
+say "MODE_LINES $(grep -a 'kf3: broker: guest cursor:' "$Q" | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-300)"
 HX python3 "$XC" image "$OUT/cur_host_hover.pam" | sed 's/^/BRK_HOST_HOVER /'
 gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
 say "GUEST_POINTER $gpos"
@@ -146,7 +146,7 @@ HX python3 "$XC" image "$OUT/cur_host_cross.pam" | sed 's/^/BRK_HOST_CROSS /'
 gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_cross.pam" | sed 's/^/BRK_GUEST_CROSS /'
 "$G" 'cat /tmp/cur_guest_cross.pam' > "$OUT/cur_guest_cross.pam" 2>/dev/null
 python3 "$XC" compare "$OUT/cur_guest_cross.pam" "$OUT/cur_host_cross.pam" | sed 's/^/BRK_CROSS_/'
-say "CROSS_SETS $(grep -a 'guest cursor image' "$Q" | tail -3 | cut -d: -f4- | tr '\n' '|' | cut -c1-240) xsetroot=[$(tr '\n' ' ' < "$OUT/xsetroot.log")]"
+say "CROSS_SETS $(grep -a 'guest cursor image' "$Q" | tail -3 | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-240) xsetroot=[$(tr '\n' ' ' < "$OUT/xsetroot.log")]"
 # the rest (hide, grab) happens with the crosshair at this spot; the shots below are taken here
 gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
 set -- $gpos; gx=${1:-0}; gy=${2:-0}
@@ -173,7 +173,7 @@ m=$(qline)
 HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
 HX xdotool key --clearmodifiers ctrl+alt+g >/dev/null 2>&1
 sleep 3
-say "GRAB_ON $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | cut -d: -f4- | tr '\n' '|' | cut -c1-240)"
+say "GRAB_ON $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-240)"
 HX python3 "$XC" image "$OUT/cur_host_grab.pam" | sed 's/^/BRK_HOST_GRAB /'
 shot grab
 hshot host_grab
@@ -188,7 +188,7 @@ say "GRAB_MOVE guest_pointer=$gpos -> $gpos2 host_moved_cursor_px=$(boxdiff host
 m=$(qline)
 HX xdotool key --clearmodifiers ctrl+alt+g >/dev/null 2>&1
 sleep 3
-say "GRAB_OFF $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | cut -d: -f4- | tr '\n' '|' | cut -c1-240)"
+say "GRAB_OFF $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-240)"
 HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 2
 HX python3 "$XC" image "$OUT/cur_host_after_grab.pam" | sed 's/^/BRK_HOST_AFTER_GRAB /'
 shot after_grab
@@ -216,7 +216,7 @@ if [ "${BRK_RESILIENCE:-0}" = 1 ] && [ -n "${BRK_SU:-}" ]; then
         --backend x11 --persist --verbose ${BRK_BROKER_ARGS:-} >> "${BRK_BROKER_LOG:-/dev/null}" 2>&1 &
     for _ in $(seq 1 40); do since "$m" | grep -aq 're-sent geometry\|reconnected to the display broker' && break; sleep 0.5; done
     sleep 3
-    say "E3_KILL9 $(since "$m" | grep -aE 'kf3: broker: (the display broker closed|reconnected|re-sent geometry|connected to)' | cut -d: -f4- | tr '\n' '|' | cut -c1-300)"
+    say "E3_KILL9 $(since "$m" | grep -aE 'kf3: broker: (the display broker closed|reconnected|re-sent geometry|connected to)' | sed 's/^.*kf3: broker: //' | tr '\n' '|' | cut -c1-300)"
     hshot host_after_restart
     say "E3_AFTER_RESTART guest=[$(gq 'echo ALIVE' 20)] window=[$(HX xdotool search --onlyvisible --name '^nvkvm' 2>/dev/null | head -1)]"
 fi
