@@ -331,7 +331,10 @@ impl FrameRing {
     /// sent by the relay ([`FrameRing::broker_backed`] is false for every slot, and a later
     /// [`FrameRing::install`] does not undo it), and the broker-ready frame is dropped. Frames
     /// the broker already holds stay held until it releases them (it may be reading them). Call
-    /// it BEFORE any slot is refilled with other memory.
+    /// it BEFORE any slot is refilled with other memory. ★ A held frame the relay still OWES the
+    /// broker (its ATTACH, or only its COMMIT) is refused by the relay at its next send and
+    /// gives its slot back; the connection stays up (corrected 2026-10-03, the third review:
+    /// the relay used to read that refusal as a dead socket).
     pub fn withdraw_all(&self) {
         self.withdrawn.store(true, Ordering::Release);
         let _ = self.update(|s| {

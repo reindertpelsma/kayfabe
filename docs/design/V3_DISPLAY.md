@@ -52,7 +52,9 @@
 > cross as dma-buf fds (`ATTACH`, `SCM_RIGHTS`) and come back as `RELEASE`; the broker sends `SURFACE`
 > (window size — drives resize), keyboard/pointer/focus input, and capability bits; input never blocks
 > on rendering. kayfabe's side: export kf-disp's scanout surfaces (host GPU memory) as dma-bufs through
-> the host driver's dma-buf exporter, and inject the broker's input through the VMM's input device (the
+> the host driver's dma-buf exporter (⊘ **superseded 2026-10-03 by `OWNER_RULINGS.md` §L**: never the
+> guest's surfaces — kf-disp copies each finished frame GPU→GPU into a VRAM object kayfabe allocated,
+> and exports that, §8.11), and inject the broker's input through the VMM's input device (the
 > one VMM-specific part). It replaces the QEMU console as the product path (the console stays for tests
 > and screendumps), works for VMMs with no display stack, and keeps the display-server connection out
 > of the VMM (privilege separation, the broker's original reason).
@@ -65,6 +67,8 @@
 >   - **Frames.** The broker accepts only dma-bufs (`ATTACH`). First send the existing de-tiled copy
 >     (§4.6) as a memfd-backed udmabuf, linear XRGB8888; this needs `/dev/udmabuf`. Zero-copy export
 >     with NVIDIA's modifier comes later, and works only for a host desktop on the same NVIDIA GPU.
+>     ⊘ **SUPERSEDED the same day by `OWNER_RULINGS.md` §L:** no guest surface is ever exported; the
+>     same-GPU path is a GPU→GPU copy into a VRAM frame object kayfabe owns (§8.11).
 >   - Keep at least two copy targets, and reuse one only after the broker's `RELEASE`.
 >   - A `SURFACE` resize sends a new EDID plus a hotplug event (§4.7).
 >   - nvkvm-pv is Apache-2.0 and the owner's, so its code can come under kayfabe's dual license.
@@ -582,8 +586,10 @@ must report IDLE when GET == PUT; the cursor `Free` register must read non-zero.
   schedule) swaps the finished buffer in and calls the console update. That serves VNC, SPICE, GTK/SDL,
   dbus and `screendump` with no further code. QEMU's `gfx_update` may defer to the next copy so a
   `screendump` always sees a finished frame.
-- **Later:** export the latched range of the store as a dma-buf with its NVIDIA modifier and hand it to a GL
-  UI (`dpy_gl_scanout_dmabuf`, nvkvm-pv's GL zero-copy path), or to nvkvm-pv's broker protocol.
+- ⊘ **SUPERSEDED 2026-10-03 by `OWNER_RULINGS.md` §L** (no guest surface or store slice is ever
+  exported; the broker gets a GPU copy into kayfabe's own VRAM, §8.11): **Later:** export the latched
+  range of the store as a dma-buf with its NVIDIA modifier and hand it to a GL UI
+  (`dpy_gl_scanout_dmabuf`, nvkvm-pv's GL zero-copy path), or to nvkvm-pv's broker protocol.
 - ⚠ `build_kf3.sh` configures QEMU with `--disable-vnc` and without default features; the display build
   enables `pixman` and `vnc`.
 
@@ -681,6 +687,30 @@ its dependency chain, in one commit).
 - Measurements: see §5 per milestone, under `traces/v3_display/`.
 
 ## 8. The display broker — display step 3
+
+> ⊘⊘⊘ **CORRECTED A THIRD TIME 2026-10-03 — the third review found one major and one stale design
+> line; both fixed on `v3-broker`, nothing run on a box.**
+> - **Major: after the withdrawal, an OWED frame tore down a healthy broker connection.** The
+>   relay's `attach()` turned a slot that no longer fits (`withdraw_all`, run on the worker's thread,
+>   flips `broker_backed` for held and owed slots too) into `Sent::Failed`, which every caller reads
+>   as a dead socket: an owed ATTACH (or the replay's) after a refused backing dropped the connection,
+>   blamed the socket, and lost input until the reconnect — so "the relay keeps running, so input still
+>   flows" (§8.2) was false there. The same path was reachable through the cross-thread window between
+>   the relay's `fits()` and its ATTACH. And an owed COMMIT was still sent after the withdrawal,
+>   contradicting "sent no frame after the refusal". **Now** an unfit slot is a refusal on every path
+>   (live, owed, replay): the frame is refused by name (`REFUSED frame slot … withdrawn`), its slot
+>   comes back, nothing more of it goes — no ATTACH, and **no COMMIT once the relay has observed the
+>   withdrawal**, the owed COMMIT of a frame attached before it included (that frame is never shown,
+>   like a superseded one) — and the connection stays ACTIVE. Tests that fail on the previous code:
+>   `relay_machine.rs` `an_owed_frame_after_the_withdrawal_is_refused_and_the_connection_stays_up`
+>   (owed ATTACH by writability and by the timer, owed COMMIT) and
+>   `a_withdrawal_between_two_sends_refuses_the_frame_and_keeps_the_connection` (the worker withdraws
+>   between the WINDOW and the ATTACH, between the ATTACH and the COMMIT, and during a replay).
+> - **§L supersedes the zero-copy plan** (`OWNER_RULINGS.md` §L, 2026-10-03): no guest surface and no
+>   slice of the store is ever exported to the broker. Each place this document planned "zero-copy
+>   export of the guest's surface with NVIDIA's modifier" now says so in its own text (the top
+>   NEXT block, §4.6, §8.2's expectations, §8.6's *Not built*). The replacement is a GPU→GPU copy into
+>   kayfabe's own VRAM frame object (§8.11); the host-RAM rungs of §8.2 become its fallbacks.
 
 > ⊘⊘ **CORRECTED AGAIN 2026-10-03 — the re-review of the fixes below found item 2 half-built and
 > two bench gaps. All four are fixed here; nothing has run on a box.**
@@ -810,6 +840,13 @@ asynchronous D2H scanout copy lands in it, plus a udmabuf over the same pages wh
 (`root:kvm 0660`). The frame is registered **before** its descriptors enter the ring, so the ring never
 names a backing the GPU does not write.
 
+⊘⊘⊘ **CORRECTED A THIRD TIME 2026-10-03 (the third review): two sentences of the paragraph below
+were false for an owed frame.** "The relay keeps running, so input still flows": an owed ATTACH (or
+a replay's) after the withdrawal came back from `attach()` as `Sent::Failed` and DROPPED the
+connection. "Sent no frame after the refusal": an owed COMMIT still went. Both hold now on every path
+— an unfit slot is a refusal, never a socket failure, and the relay commits nothing once it has
+observed the withdrawal (§8's top correction; the two `relay_machine.rs` tests named there).
+
 ⊘⊘ **CORRECTED AGAIN 2026-10-03 (the re-review): the paragraph below still overstated.** It
 withdrew only a slot the worker REALLOCATED after the refusal; every slot that kept its broker memfd
 (the GPU still writes it, and it was never refilled) stayed offered, so the broker kept receiving
@@ -853,6 +890,14 @@ showing the last frame it received. A CPU copy is never the fallback. The descri
    a box question.
 2. **F_SHM memfd** — always available; an X11 broker takes it only with `--present-mode=shm`, and a
    refusal is not reported back (the relay's log says so once).
+
+⊘ **SUPERSEDED IN PART 2026-10-03 by `OWNER_RULINGS.md` §L** (broker frames are a GPU→GPU copy into
+kayfabe-owned VRAM, never guest memory): the expectation below still describes the host-RAM rungs,
+but on a compositor on the **same NVIDIA GPU** they are now §L's **fallbacks** behind rung 0, the
+GPU-copy rung (§8.11: a block-linear dma-buf of a VRAM frame object kf3 allocated itself; no byte
+crosses PCIe, and nothing of the guest's is exported). A compositor on another GPU or vendor keeps
+rung 1 (the host-RAM LINEAR udmabuf), and F_SHM stays the last resort. "Zero-copy" below means
+zero-copy *for the broker*: kf3 still makes the one GPU copy into the frame.
 
 Expected: rung 2 on an all-NVIDIA Wayland desktop (NVIDIA's GL refuses LINEAR dma-bufs), rung 1
 zero-copy on Intel/AMD compositors, rung 2 only without `/dev/udmabuf`.
@@ -1014,7 +1059,11 @@ included, and a VNC `SetDesktopSize` re-moded the guest (QEMU v10.2.4 `ui/gtk.c:
   `the_hotplug_event_registers_and_retires`; `kf-broker` (SURFACE clamped and deduplicated).
 
 **Not built:**
-- Zero-copy export of the guest's surface with NVIDIA's modifier (later, as before).
+- ⊘ **SUPERSEDED 2026-10-03 by `OWNER_RULINGS.md` §L — never to be built:** "Zero-copy export of the
+  guest's surface with NVIDIA's modifier (later, as before)." A shared RM object would let the guest
+  change the bytes under the compositor, and no guest surface or store slice is ever exported. Its
+  replacement is the GPU-copy rung (§8.11): the finished frame copied GPU→GPU into a VRAM object
+  kayfabe allocated itself, exported as a block-linear dma-buf.
 - The broker's clipboard.
 
 ### 8.7 Deviations from the reviewed design
@@ -1062,6 +1111,13 @@ included, and a VNC `SetDesktopSize` re-moded the guest (QEMU v10.2.4 `ui/gtk.c:
     memory, which left every other slot offered (§8.2).
 
 ### 8.8 Local runs (dev host, 2026-10-03; no GPU)
+
+⊘⊘⊘ **Added 2026-10-03 — the third review's fixes, re-run locally (same rules):**
+- `cargo test -p kf-broker`: `relay_machine.rs` 27 passed (25 + the two withdrawal tests of §8's
+  top correction).
+- Both new tests FAIL against the previous `conn.rs` (`80271bec`, swapped in from a copy and
+  restored): the owed-frame test at its first `active()` assertion (the connection was dropped), the
+  between-sends test at its `types()` assertion.
 
 ⊘⊘ **Added 2026-10-03 — the re-review fixes, re-run locally (same rules):**
 - `cargo test -p kf-broker`: 43 passed (lib 15, `proto_mirror.rs` 3, `relay_machine.rs` 25), with
@@ -1269,3 +1325,9 @@ without a broker now grades the OPPOSITE way, and items 11–12 are new.
 5. The 3c hotplug registration beside A.11's `osevent` rule: built as the separate, narrow seat the
    brief specified (§8.6); `osevent` and its pinned refusal of `0x7e` are untouched. Owner to confirm.
 6. Reuse without RELEASE: the narrowed rule of §8.3, with the deviations §8.7 (1)-(2).
+
+### 8.11 The GPU-copy rung (`OWNER_RULINGS.md` §L) — rung 0 for a compositor on the same GPU
+
+**STATUS: DESIGN, BEING BUILT on `v3-broker`, 2026-10-03.** The design was read from source and
+revised the same day after an adversarial review; what is built, and how it is tested, is added
+here as it lands. Nothing has run on a box.

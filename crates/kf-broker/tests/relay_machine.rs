@@ -32,6 +32,9 @@ struct Wire {
     /// Sends allowed before the socket reports Full (`None`: unlimited).
     budget: Option<usize>,
     open: i32,
+    /// ★ Runs after a record of this type was sent — what another thread does in the window
+    /// between two of the relay's sends (the worker's `withdraw_all`, for one).
+    after_send: Option<(u16, Box<dyn FnMut()>)>,
 }
 
 #[derive(Clone)]
@@ -76,7 +79,19 @@ impl Link for Fake {
             *b -= 1;
         }
         let id = fd.map(|f| fd_inode(f).expect("a live descriptor"));
-        w.sent.push((Cmd::decode(rec).expect("reserved1 zero"), id));
+        let cmd = Cmd::decode(rec).expect("reserved1 zero");
+        w.sent.push((cmd, id));
+        let hook = match w.after_send.take() {
+            Some((ty, f)) if ty == cmd.ty => Some(f),
+            other => {
+                w.after_send = other;
+                None
+            }
+        };
+        drop(w);
+        if let Some(mut f) = hook {
+            f();
+        }
         Sent::Done
     }
     fn recv(&mut self, _s: &Sock, buf: &mut [u8]) -> Recv {
@@ -1145,4 +1160,146 @@ fn stop_unwatches_then_closes() {
         1,
         "a stopped relay never reconnects"
     );
+}
+
+// ── the withdrawal on the owed and replay paths (the third review, 2026-10-03) ─────────────
+
+/// Lines that say the connection went down or an attempt failed.
+fn lost_lines(lines: &[String]) -> Vec<String> {
+    lines
+        .iter()
+        .filter(|l| {
+            l.contains("gone for now") || l.contains("attempt failed") || l.contains("failed:")
+        })
+        .cloned()
+        .collect()
+}
+
+/// ★ The third review's major: once the worker WITHDREW the ring, an owed frame — its ATTACH
+/// owed, or only its COMMIT — is refused and forgotten. The connection stays ACTIVE (no "lost"
+/// or "failed" line, input still flows), and nothing more of the frame goes: no ATTACH, no
+/// COMMIT, `sent` unchanged. ⊘ Before the fix, `attach` turned the unfit slot into
+/// `Sent::Failed`, and `flush_owed` dropped the connection over it.
+#[test]
+fn an_owed_frame_after_the_withdrawal_is_refused_and_the_connection_stays_up() {
+    // owed ATTACH (the WINDOW found the socket full), then via writability and via the timer
+    for by_timer in [false, true] {
+        let mut t = T::new(false);
+        t.up(0);
+        t.wire.borrow_mut().budget = Some(0);
+        let j = t.publish(64, 32);
+        t.frame();
+        assert_eq!(t.relay.counters().dropped, 1, "the ATTACH is owed");
+        assert_eq!(t.ring.held_mask(), 1 << j);
+        let log = kf_broker::capture_log();
+        t.ring.withdraw_all(); // the worker, on its own thread
+        t.wire.borrow_mut().budget = None;
+        if by_timer {
+            t.tick(kf_broker::conn::OWED_MS);
+        } else {
+            t.writable();
+        }
+        assert!(t.relay.active(), "the withdrawal tore the connection down");
+        assert!(
+            t.sent().is_empty(),
+            "the owed frame was sent: {:?}",
+            t.types()
+        );
+        let c = t.relay.counters();
+        assert_eq!((c.sent, c.refused, c.recovered), (0, 1, 0));
+        assert_eq!(t.ring.held_mask(), 0, "its slot came back");
+        assert!(lost_lines(&log.lines()).is_empty(), "{:?}", log.lines());
+        assert!(
+            log.lines()
+                .iter()
+                .any(|l| l.contains("REFUSED frame slot") && l.contains("withdrawn")),
+            "{:?}",
+            log.lines()
+        );
+        // input still flows, and no owed write is watched for
+        t.pkt(EV_KEY, 30, 1, 0, 0);
+        assert_eq!(
+            t.read(),
+            vec![Input::Key {
+                code: 30,
+                down: true
+            }]
+        );
+        assert_eq!(t.host.watches.last().map(|w| w.2), Some(false));
+        t.tick(1000);
+        assert!(t.sent().is_empty() && t.relay.active());
+    }
+    // owed COMMIT (WINDOW and ATTACH went): the COMMIT is dropped, never sent
+    let mut t = T::new(false);
+    t.up(0);
+    t.wire.borrow_mut().budget = Some(2);
+    let j = t.publish(64, 32);
+    t.frame();
+    assert_eq!(t.types(), vec![CMD_WINDOW, CMD_ATTACH]);
+    assert_eq!(t.relay.counters().uncommitted, 1, "the COMMIT is owed");
+    t.clear();
+    let log = kf_broker::capture_log();
+    t.ring.withdraw_all();
+    t.wire.borrow_mut().budget = None;
+    t.writable();
+    assert!(t.relay.active());
+    assert!(
+        t.sent().is_empty(),
+        "an owed COMMIT went after the withdrawal"
+    );
+    let c = t.relay.counters();
+    assert_eq!((c.sent, c.refused), (0, 1));
+    assert_eq!(t.ring.held_mask() & (1 << j), 0);
+    assert!(lost_lines(&log.lines()).is_empty(), "{:?}", log.lines());
+}
+
+/// ★ The cross-thread race the review named: the worker withdraws the ring BETWEEN two of the
+/// relay's sends for one frame (after the relay's `fits` passed). The live path, after the
+/// WINDOW and after the ATTACH; and the replay, after its ATTACH. Each time the frame is
+/// refused, the connection stays up (the replay reaches CAPS), and no COMMIT follows.
+#[test]
+fn a_withdrawal_between_two_sends_refuses_the_frame_and_keeps_the_connection() {
+    for after in [CMD_WINDOW, CMD_ATTACH] {
+        let mut t = T::new(false);
+        t.up(0);
+        let ring = t.ring.clone();
+        t.wire.borrow_mut().after_send = Some((after, Box::new(move || ring.withdraw_all())));
+        let log = kf_broker::capture_log();
+        t.publish(64, 32);
+        t.frame();
+        let want = if after == CMD_WINDOW {
+            vec![CMD_WINDOW]
+        } else {
+            vec![CMD_WINDOW, CMD_ATTACH]
+        };
+        assert_eq!(t.types(), want, "withdrawn after {after}");
+        assert!(t.relay.active());
+        let c = t.relay.counters();
+        assert_eq!((c.sent, c.refused), (0, 1), "withdrawn after {after}");
+        assert_eq!(t.ring.held_mask(), 0);
+        assert!(lost_lines(&log.lines()).is_empty(), "{:?}", log.lines());
+    }
+    // the replay: a held frame is requeued; the ring is withdrawn after the replay's ATTACH
+    let mut t = T::new(false);
+    t.up(0);
+    let k = t.publish(64, 32);
+    t.frame();
+    t.wire.borrow_mut().eof = true;
+    t.read();
+    assert_eq!(t.ring.broker_ready(), Some(k));
+    t.wire.borrow_mut().eof = false;
+    t.clear();
+    let ring = t.ring.clone();
+    t.wire.borrow_mut().after_send = Some((CMD_ATTACH, Box::new(move || ring.withdraw_all())));
+    let log = kf_broker::capture_log();
+    t.now = t.host.timer.unwrap();
+    t.pkt(EV_HELLO, 0, 0, 2, CAP_DMABUF);
+    let now = t.now;
+    t.relay.on_timer(now, &mut t.host);
+    t.read();
+    assert!(t.relay.active(), "the replay must reach CAPS");
+    assert_eq!(t.types(), vec![CMD_WINDOW, CMD_ATTACH, CMD_CAPS]);
+    let c = t.relay.counters();
+    assert_eq!((c.refused, c.attempts_failed), (1, 0));
+    assert!(lost_lines(&log.lines()).is_empty(), "{:?}", log.lines());
 }

@@ -874,11 +874,17 @@ impl<L: Link> Relay<L> {
         r
     }
 
-    /// ATTACH `slot` (and record what was sent for it).
-    fn attach(&mut self, now: u64, slot: usize) -> Sent {
-        let Some((cmd, rung)) = self.attach_cmd(slot) else {
-            return Sent::Failed(format!("frame slot {slot} has no backing for its geometry"));
-        };
+    /// ATTACH `slot` (and record what was sent for it). `None`: the slot may no longer be sent
+    /// ([`Self::fits`] — the ring was withdrawn by the worker, on its own thread, since the
+    /// caller last looked); the caller refuses the frame ([`Self::refuse_unfit`]) and the
+    /// connection stays up.
+    ///
+    /// ⊘ CORRECTED 2026-10-03 (the third review of `v3-broker`): an unfit slot used to come back
+    /// as `Sent::Failed`, and every caller treats `Failed` as a dead socket — so an owed ATTACH
+    /// (or a replay's) after [`FrameRing::withdraw_all`] tore down a healthy broker connection,
+    /// blamed the socket, and lost input until the reconnect.
+    fn attach(&mut self, now: u64, slot: usize) -> Option<Sent> {
+        let (cmd, rung) = self.attach_cmd(slot)?;
         let r = self.send(&cmd, Some(slot), rung);
         if r == Sent::Done {
             self.held[slot] = Some(Held {
@@ -892,11 +898,17 @@ impl<L: Link> Relay<L> {
                 superseded: false,
             });
         }
-        r
+        Some(r)
     }
 
-    /// COMMIT `slot` and spend the credit.
-    fn commit(&mut self, now: u64, slot: usize) -> Sent {
+    /// COMMIT `slot` and spend the credit. `None`: the slot may no longer be sent (withdrawn
+    /// since its ATTACH went) — nothing is committed, and the caller refuses the frame. ★ So
+    /// the relay commits NO frame once it has observed the withdrawal, the owed COMMIT of a
+    /// frame attached before it included: that frame is never shown, like a superseded one.
+    fn commit(&mut self, now: u64, slot: usize) -> Option<Sent> {
+        if !self.ring.broker_backed(slot) {
+            return None;
+        }
         let r = self.send(&Cmd::commit(), None, Rung::Shm);
         if r == Sent::Done {
             self.commits += 1;
@@ -917,7 +929,7 @@ impl<L: Link> Relay<L> {
                 self.unhold(p);
             }
         }
-        r
+        Some(r)
     }
 
     /// Give back a held frame the broker never heard of (or no longer reads).
@@ -1020,8 +1032,13 @@ impl<L: Link> Relay<L> {
         self.send_frame(now, host, j);
     }
 
-    /// WINDOW (if stale) → ATTACH → COMMIT for held `j`, recording what is owed on `Full`.
+    /// WINDOW (if stale) → ATTACH → COMMIT for held `j`, recording what is owed on `Full`. A
+    /// slot that stops fitting on the way (withdrawn by the worker meanwhile) is refused, never
+    /// a socket failure.
     fn send_frame(&mut self, now: u64, host: &mut dyn Host, j: usize) {
+        if !self.fits(j) {
+            return self.refuse_unfit(j);
+        }
         match self.window_if_stale(j) {
             Sent::Done => {}
             Sent::Full => return self.owe(now, Owed::Attach(j), true),
@@ -1030,15 +1047,17 @@ impl<L: Link> Relay<L> {
             }
         }
         match self.attach(now, j) {
-            Sent::Done => {}
-            Sent::Full => return self.owe(now, Owed::Attach(j), true),
-            Sent::Failed(e) => {
+            None => return self.refuse_unfit(j),
+            Some(Sent::Done) => {}
+            Some(Sent::Full) => return self.owe(now, Owed::Attach(j), true),
+            Some(Sent::Failed(e)) => {
                 return self.lost(now, host, &format!("the broker socket failed: {e}"));
             }
         }
         match self.commit(now, j) {
-            Sent::Done => {}
-            Sent::Full => {
+            None => self.refuse_unfit(j),
+            Some(Sent::Done) => {}
+            Some(Sent::Full) => {
                 self.counters.uncommitted += 1;
                 let n = self.counters.uncommitted;
                 if loud(n) {
@@ -1049,7 +1068,7 @@ impl<L: Link> Relay<L> {
                 }
                 self.owe(now, Owed::Commit(j), false);
             }
-            Sent::Failed(e) => self.lost(
+            Some(Sent::Failed(e)) => self.lost(
                 now,
                 host,
                 &format!("the broker socket failed on commit: {e}"),
@@ -1068,13 +1087,18 @@ impl<L: Link> Relay<L> {
         }
     }
 
-    /// ★ Re-send as much of the owed frame as the socket now takes (`relay.c:636-707`).
+    /// ★ Re-send as much of the owed frame as the socket now takes (`relay.c:636-707`). An owed
+    /// frame whose slot no longer fits — the worker withdrew the ring since it was owed — is
+    /// refused and forgotten ([`Self::drop_owed_unfit`]); the connection stays up.
     fn flush_owed(&mut self, now: u64, host: &mut dyn Host) {
         let Some(owed) = self.conn.as_ref().and_then(|c| c.owed) else {
             return;
         };
         let j = match owed {
             Owed::Attach(j) => {
+                if !self.fits(j) {
+                    return self.drop_owed_unfit(j);
+                }
                 // a stale WINDOW first: the owed frame may be the last one, with no next frame
                 // to fix the window size
                 match self.window_if_stale(j) {
@@ -1085,9 +1109,10 @@ impl<L: Link> Relay<L> {
                     }
                 }
                 match self.attach(now, j) {
-                    Sent::Done => {}
-                    Sent::Full => return self.rearm_owed(now),
-                    Sent::Failed(e) => {
+                    None => return self.drop_owed_unfit(j),
+                    Some(Sent::Done) => {}
+                    Some(Sent::Full) => return self.rearm_owed(now),
+                    Some(Sent::Failed(e)) => {
                         return self.lost(now, host, &format!("redelivering a frame failed: {e}"));
                     }
                 }
@@ -1099,17 +1124,32 @@ impl<L: Link> Relay<L> {
             Owed::Commit(j) => j,
         };
         match self.commit(now, j) {
-            Sent::Done => {
+            None => self.drop_owed_unfit(j),
+            Some(Sent::Done) => {
                 self.counters.recovered += 1;
-                if let Some(c) = self.conn.as_mut() {
-                    c.owed = None;
-                    c.owed_at = None;
-                    c.want_write = false;
-                }
+                self.clear_owed();
             }
-            Sent::Full => self.rearm_owed(now),
-            Sent::Failed(e) => self.lost(now, host, &format!("redelivering a commit failed: {e}")),
+            Some(Sent::Full) => self.rearm_owed(now),
+            Some(Sent::Failed(e)) => {
+                self.lost(now, host, &format!("redelivering a commit failed: {e}"));
+            }
         }
+    }
+
+    fn clear_owed(&mut self) {
+        if let Some(c) = self.conn.as_mut() {
+            c.owed = None;
+            c.owed_at = None;
+            c.want_write = false;
+        }
+    }
+
+    /// The owed frame in `j` may no longer be sent: nothing more of it goes (an ATTACH already on
+    /// the stream gets no COMMIT, so the broker never shows it), it is refused by name, and its
+    /// slot comes back.
+    fn drop_owed_unfit(&mut self, j: usize) {
+        self.clear_owed();
+        self.refuse_unfit(j);
     }
 
     fn rearm_owed(&mut self, now: u64) {
@@ -1199,11 +1239,42 @@ impl<L: Link> Relay<L> {
             else {
                 return;
             };
+            // ★ a replay frame that stopped fitting (the ring was withdrawn meanwhile) is refused
+            // and the replay goes on to CAPS — never a failed attempt
+            let unfit = |r: &Relay<L>, j: usize| match step {
+                Step::Window | Step::Attach => !r.fits(j),
+                Step::Commit => !r.ring.broker_backed(j),
+                Step::Caps => false,
+            };
+            if let Some(j) = replay
+                && unfit(self, j)
+            {
+                self.refuse_unfit(j);
+                if let Some(c) = self.conn.as_mut() {
+                    c.replay = None;
+                }
+                continue;
+            }
             let (r, next) = match (step, replay) {
                 (Step::Window, Some(j)) => (self.window_if_stale(j), Step::Attach),
-                (Step::Attach, Some(j)) => (self.attach(now, j), Step::Commit),
+                (Step::Attach, Some(j)) => match self.attach(now, j) {
+                    Some(r) => (r, Step::Commit),
+                    None => {
+                        self.refuse_unfit(j);
+                        if let Some(c) = self.conn.as_mut() {
+                            c.replay = None;
+                        }
+                        continue;
+                    }
+                },
                 (Step::Commit, Some(j)) => {
-                    let r = self.commit(now, j);
+                    let Some(r) = self.commit(now, j) else {
+                        self.refuse_unfit(j);
+                        if let Some(c) = self.conn.as_mut() {
+                            c.replay = None;
+                        }
+                        continue;
+                    };
                     if r == Sent::Done {
                         let g = self.ring.geometry(j);
                         say!(
