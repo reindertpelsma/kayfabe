@@ -1458,7 +1458,16 @@ jobs:
           #     10: `out` must be writable) and its one `unsafe { *out = fr }`.
           #   ⊘ No new power: page-locked host memory the display worker already owns, handed to
           #     QEMU's console by address; both CUDA calls act on memory this library allocated.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:44"
+          #
+          # ★★ `kf-linux-raw` 75 -> 77, 2026-10-03 (`v3-sec-nonpriv`) — the per-birth
+          # CAP_SYS_ADMIN bracket (`docs/design/THE_CONSTRAINTS.md` §30).
+          #   kf-linux-raw `capability_unsafe.rs` (+2): `capget_self` and `capset_self` — one
+          #     `syscall(SYS_capget/SYS_capset)` each, `pid = 0` (the calling thread only), on a
+          #     version-3 header `[u32; 2]` and two records `[u32; 6]` owned by the frame and alive
+          #     across the call; the kernel keeps no pointer and reports failure by return value.
+          #   ⊘ No new power: `capset` can only lower a thread's own effective set or raise it back
+          #     within its permitted set; the kernel refuses anything else.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:77 kf-cuda:75 kf-qemu:44"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
