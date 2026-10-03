@@ -621,7 +621,7 @@ impl KmapCounters {
 }
 
 /// ★ EXPERIMENT `x11-dispsw`: `KF3_DISPSW_NO_KMAP=1` turns the display-SW spaces' kernel mappings
-/// (and their no-batching rule) off — for A/B measurement on one binary. Read once.
+/// (and their no-batching rule) off — an A/B comparison on one binary. Read once.
 pub(crate) fn kmap_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_DISPSW_NO_KMAP").is_none())
