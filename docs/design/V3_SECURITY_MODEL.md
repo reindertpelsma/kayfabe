@@ -197,14 +197,16 @@ Each link must hold for "the guest cannot reach host memory or another tenant" t
 
 | # | link | where it lives | status |
 |---|---|---|---|
-| 1 | No guest bytes are forwarded to RM; every host struct is authored | kf-host verbs; the §2.6 inventory | holds by construction; the set is closed by review only (S1-41) |
+| 1 | No guest bytes are forwarded to RM; every host struct is authored | kf-host verbs; the inventory in `docs/audits/2026-10-03-v3-stage1.md` §3.2 | holds by construction; the set is closed by review only (S1-41) |
 | 2 | The raw layer re-validates what safe code hands it | `kf-linux-raw` `CharDevice::ioctl` (`chardev_unsafe.rs:565-776`) | holds for `_IOC_SIZE` and pointer placement; the companion size fields are the caller's (S1-40) |
 | 3 | Every mapping is a store or guest-RAM row | `kf-mem` `apply_entry` (`apply.rs:297-310`); RM's object bound | holds |
 | 4 | Guest work runs in per-twin VA spaces | kf-host twins | holds, but the identity windows (S1-21) and the Translated rings (S1-23) sit inside those spaces |
 | 5 | USER host channels refuse physical-mode and privileged methods | closed GSP firmware; `DENY_PHYSICAL_MODE_CE` requested at birth (`crates/kf-host/src/channel.rs:603-611`) | **UNVERIFIED** (S1-20) |
 | 6 | Kayfabe's own GPU kernels stay in bounds | walker I2 with a known-positive; compose kernel bounded host-side only | walker gated in its Makefile but not in CI (S1-68); compose unchecked in-kernel (S1-05) |
 
-## 4. The RM call surface (summary of the stage-1 §2.6 inventory)
+## 4. The RM call surface
+
+A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-stage1.md` §3.2).
 
 - **One funnel.** Every NVIDIA ioctl goes through `kf_linux_raw::CharDevice::ioctl`, and only
   kf-host calls it. The funnel re-derives `_IOC_SIZE` and refuses an overrun, bounds and
