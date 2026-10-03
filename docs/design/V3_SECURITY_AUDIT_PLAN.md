@@ -1,8 +1,8 @@
 # V3 security audit — plan and gate
 
-**STATUS: PLAN, 2026-10-03 (owner request).** Nothing in this document has been audited yet. It
-records what the audit must cover, how, and when. Findings go into their own dated documents and
-are linked from §6.
+**STATUS: PLAN, 2026-10-03 (owner request). Stage 1 written up the same day (§6); stage 2 not
+started.** This document records what the audit must cover, how, and when. Findings go into their
+own dated documents and are linked from §6; the stage-1 blockers and majors are in §4.
 
 ## 0. Why, and when
 
@@ -27,13 +27,21 @@ The audit runs in two stages.
 
 ## 1. The threat model, by role
 
-There is no isolate in v3, so nvkvm-pv's isolate boundary no longer applies. The roles remain:
+There is no isolate in v3, so nvkvm-pv's isolate boundary no longer applies. The roles remain.
+The table states what must hold; which rows hold today is in `V3_SECURITY_MODEL.md` §9 (stage 1:
+not all of them do).
+
+⊘ **Corrected 2026-10-03 (stage 1, S1-29).** The VMM row named `NV01_ROOT_NON_PRIV` as the
+mechanism. RM rewrites every userspace root allocation to `NV01_ROOT_CLIENT`
+(`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:396-403`), so that class changes nothing. The
+mechanism on `v3-sec-nonpriv` is the effective-`CAP_SYS_ADMIN` bracket around each channel birth plus
+the `PRIVILEGED_CHANNEL` reply tripwire; the row below now says so.
 
 | role | trust | what must hold |
 |---|---|---|
 | guest userspace | untrusted | It cannot reach another guest process's memory, the guest kernel's memory, kayfabe's memory or any host memory, through any path (GPU work, mappings, RM calls). Owner rule A.9. |
 | guest kernel / guest root | untrusted to the host | It can harm only its own VM: crash it, hang it, use its own resources. It cannot reach host memory, other VMs, kayfabe-owned memory, or host resources beyond a bounded, documented amount (§2.4). |
-| the VMM process (QEMU + kf3) | the host trust boundary | kayfabe grants the guest nothing beyond the VMM's own unprivileged rights. Sandboxing the VMM is not kayfabe's job (owner, 2026-10-03), but kayfabe must not depend on the VMM being privileged, and must not make its host channels privileged when it is (`v3-sec-nonpriv`: `NV01_ROOT_NON_PRIV`). |
+| the VMM process (QEMU + kf3) | the host trust boundary | kayfabe grants the guest nothing beyond the VMM's own unprivileged rights. Sandboxing the VMM is not kayfabe's job (owner, 2026-10-03), but kayfabe must not depend on the VMM being privileged, and must not make its host channels privileged when it is (`v3-sec-nonpriv`: the effective-`CAP_SYS_ADMIN` bracket around each channel birth and the `PRIVILEGED_CHANNEL` reply tripwire; libcuda's own channels and the other RM calls are not yet covered, S1-22). |
 | the display broker | a separate, less trusted process | It sees only finished frames and the cursor image kayfabe gives it; never guest memory (§L). kayfabe validates everything it receives. |
 | other tenants on the same host GPU | must be isolated | No guest-steered operation reaches their memory. Shared-resource exhaustion is bounded per VM. |
 | host RM and driver | trusted | Their behaviour is cited from ogkm-580; anything closed-firmware is marked UNVERIFIED. |
@@ -165,11 +173,40 @@ Each area lists its method and what already exists. **Stage** says when it runs.
 
 | finding | where | status |
 |---|---|---|
-| P0: host twins were privileged when QEMU runs as root | client audit 2026-10-03 | fix on `v3-sec-nonpriv` (`NV01_ROOT_NON_PRIV` + a per-birth tripwire) |
-| P1: identity windows in every twin address space | same | design in progress: windows only where Translated work runs |
-| P2: kayfabe's Translated rings writable from the guest kernel's space | same | design in progress: Translated in its own address space |
+| P0: host twins were privileged when QEMU runs as root | client audit 2026-10-03 | fix on `v3-sec-nonpriv`: the effective-`CAP_SYS_ADMIN` bracket around each birth + the `PRIVILEGED_CHANNEL` (bit 5) reply tripwire (corrected 2026-10-03, S1-29; `NV01_ROOT_NON_PRIV` is rewritten by RM) |
+| P1: identity windows in every twin address space = **S1-21 (blocker)**: in-guest isolation A.9 does not hold | same; `crates/kf-qemu/src/mem.rs:1755-1762` | design in progress: windows only where Translated work runs |
+| P2: kayfabe's Translated rings writable from the guest kernel's space = **S1-23 (major)** | same; `crates/kf-chan/src/translated.rs:26`, `crates/kf-qemu/src/mem.rs:487-503` | design in progress: Translated in its own address space |
 | Scratch memfd host-RAM amplification; mapping growth | owner question | fixed on `v3-scratch-bound`, merge bar passed |
 | Display-SW twins uncapped | `v3-dispsw-exp` review | caps in progress |
+
+**Stage-1 blockers and majors (2026-10-03).** Every row is open; the location, the check that
+catches it and who can trigger it are in `docs/audits/2026-10-03-v3-stage1.md` under the same ID.
+P1 and P2 are the rows above.
+
+| finding | where | status |
+|---|---|---|
+| **S1-20 (blocker):** USER host channels refusing physical-mode and privileged work is the host boundary, and it is untested in v3 | `crates/kf-host/src/channel.rs:603-611`; closed GSP firmware | open: client-audit box test T-PHYS-CE, both privilege arms, every family |
+| S1-01: the four lexical unsafe gates can all be passed at once by rustfmt-clean code | `.github/workflows/ci.yml:1462-1473`, `:676-682` | open |
+| S1-02: the host-pointer gate sees only pointer type names | `.github/workflows/ci.yml:734-751` | open |
+| S1-03: the console frame's host address crosses safe code as a `usize`; `Kf3Frame` has no length | `crates/kf-cuda/src/display.rs:44-53`, `crates/kf-qemu/src/ffi_unsafe.rs:513` | open |
+| S1-04: kf-cuda's public safe API takes raw device addresses | `crates/kf-cuda/src/driver_unsafe.rs:672-842` | open |
+| S1-05: under unified addressing or HMM the in-process CUDA contexts can address the VMM; the compose kernel has no in-kernel bound | `crates/kf-cuda/src/display.rs:122-154`; `cuda/display/kf_scanout.ptx` | open |
+| S1-06: the v3 unsafe-soundness ledger walks the v2 crates | `crates/kf-linux-raw/tests/unsafe_naming.rs:41` | open |
+| S1-22: under a root VMM only births are de-privileged; other RM calls and both libcuda contexts run as admin | `crates/kf-qemu/src/device.rs:303`; `crates/kf-cuda/src/driver_unsafe.rs:364-429` | open |
+| S1-24: kayfabe's RPC and control decoders are reachable from unprivileged guest userspace | `crates/kf-rm/src/rmrpc/` | open (stage 2 fuzz/property tests) |
+| S1-25: shared host-GPU resources are not bounded per VM | `V3_SECURITY_MODEL.md` §7 | open (§2.4 table) |
+| S1-26: `THE_CONSTRAINTS.md` §20's walker placement argument is stale | `THE_CONSTRAINTS.md:1531-1542` | open |
+| S1-27: copy-then-check is the only guard against guest writes underneath; only the PTX side is gated | §39(a); the Rust guest-memory readers | open (stage 2, §2.3) |
+| S1-28: this plan omits packaging, install and supply chain | §2 | open: a proposed stage-2 area for the owner |
+| S1-40: RM companion size fields (`paramsSize`, NVOS02 `limit`) are a safe-caller contract | `crates/kf-linux-raw/src/chardev_unsafe.rs:365-377`, `:565-776` | open |
+| S1-41: no host-side allowlist of RM controls and classes | `crates/kf-host/src/lib.rs:793`, `:1029`; `crates/kf-abi/src/hostabi.rs:849` | open |
+| S1-42: NVENC session slots are GPU-wide with no per-VM cap | `crates/kf-qemu/src/chan.rs:2551-2598` | open |
+| S1-60: VER3 (Hopper, Blackwell): an unmapped big PTE does not veto stale 4 KiB PTEs | `cuda/walk/kf_walk.cu:363-368` | open; a blocker for any Hopper or Blackwell release |
+| S1-61: walk resources are shared per refresh, so one space can fail every batched space's walk | `cuda/walk/kf_walk.cu:1849-1852`; `crates/kf-mem/src/vasmgr.rs:396-434` | open |
+| S1-80: kf3 is hot-unpluggable and its exit neither joins threads nor deletes its bottom half | `qemu/hw/misc/kf3/kf3.c:858-912` | open |
+| S1-81: the late-invalidate tripwire is never called | `crates/kf-trap/src/shadow.rs:186-195` | open |
+| S1-82: twins' RM-owned context buffers take host VRAM outside `fb-mb`, uncapped | `crates/kf-host/src/channel.rs:57-97`; `crates/kf-qemu/src/cardbudget.rs:1-19` | open |
+| S1-83: the hostile-input instruments (fuzz, tsan, mutants, the adversarial guest kernel) were retired at the v3 cutover | `.github/workflows/ci.yml:17-19` | open |
 
 ## 5. Not in scope
 
@@ -178,4 +215,12 @@ Each area lists its method and what already exists. **Stage** says when it runs.
 
 ## 6. Findings documents
 
-None yet.
+- **Stage 1, 2026-10-03:** `docs/audits/2026-10-03-v3-stage1.md`. Areas §2.1, §2.5, §2.6, §2.7 and
+  §2.10, read at `12a526df` (code-identical to `7c9234d2`): 67 findings, of which 2 are blockers,
+  22 major, 26 minor and 17 info. Each has its location, the check or test that catches it, who can
+  trigger it, and its status. The document also carries each area's inventory: the kf3 link graph and
+  gates (§2.1), every host-driver call (§2.6), the walker's bounds and tests (§2.7), and 33 bug classes
+  from history (§2.10).
+- **The security model:** `V3_SECURITY_MODEL.md` (STATUS: LIVE, 2026-10-03), the §2.5 output, refined
+  by the other stage-1 areas. Its §9 says which rows of §1 above hold today.
+- **Stage 2:** not started. §4 of the stage-1 document lists what it inherits.
