@@ -38,7 +38,11 @@ by the BAR size") was reachable by guest root and was host RAM outside the VM's 
 is now one small tile per window, repeated; see the correction at the top of Q3. The same day's
 review then found the first correction's mapping bound false in production (QEMU's own `madvise`
 kept every sink from merging back); that, a PRAMIN view retired while still reachable, and the VFIO
-note are corrected in the block above it.
+note are corrected in the block above it. A third review the same day corrected that block in
+place (each marked *"Corrected the same day (third review)"*): kept PRAMIN views are retired across
+re-points and counted once, the discard requirement is taken first, `nvme://` and libblkio are
+refused (not "not caught"), and a refused sink advice no longer refuses the sink; it also records
+the balloon/virtio-mem residual of the discard requirement.
 
 **Summary.** P4 is **~2.2k lines of product code plus ~0.9k of harness**. Only **~0.4k** of it is
 copied old-tree code; the rest is new, because the old tree walked and mirrored guest tables on
@@ -433,7 +437,9 @@ The order is forced:
 >   (the first releases `0x10_0000` while the guest still reaches it). `crates/kf-qemu/src/mem.rs`:
 >   `a_bar_sink_merges_back_after_qemu_has_advised_the_window` runs the production doors (CI only).
 >   ⚠ All of these run on the host CPU; nothing here was run in a VM or on a box.
-> - **Tests, third review (2026-10-03; bites run locally on Linux 7.0).** `crates/kf-mem/src/cpuwin.rs`:
+> - **Tests, third review (2026-10-03; all ran and passed in GitHub CI run 37137277410 at
+>   `530a4dda`; the kf-mem and kf3.c bites were run locally on Linux 7.0, the three kf-qemu bites
+>   in CI run 37137602238 on a temporary commit `2f20f86e`, branch deleted after).** `crates/kf-mem/src/cpuwin.rs`:
 >   `a_view_landed_over_piecewise_is_retired_and_kept_views_stay_bounded` (200 re-points that
 >   alternately refuse each half; the first view must go by round 1, at most 2 views live, `kept`
 >   = one per view); with retirement bitten back to "this re-point landed every slot" it fails at
@@ -453,7 +459,11 @@ The order is forced:
 >   sink leaves none (mirrored locally the same way).
 >   `a_sink_whose_advice_is_refused_still_unmaps_and_is_counted` drives a `CpuWindow` over a real
 >   window whose sinks go through the production sink with the advice refused: the unmap must land,
->   the view be released and the refusal counted (kf-qemu, CI only).
+>   the view be released and the refusal counted (kf-qemu, CI only). **CI bites (run
+>   37137602238), exactly these three failed:** a plain initial cover → *"dump-guest-core=true:
+>   … does not merge back"*, `(543, 543)` against `(32, 32)`; `window_advises` always true →
+>   *"a window with a trap (PRAMIN, on the vCPU) must not madvise"*; a refused advice refusing the
+>   sink → the unmap fails *"re-point to scratch: … advice refused"*.
 
 > ⊘⊘ **CORRECTED 2026-10-03 (branch `v3-scratch-bound`) — the recommendation below bounded scratch
 > by the BAR size, and guest root can reach that bound. The scratch is now TILED.**
