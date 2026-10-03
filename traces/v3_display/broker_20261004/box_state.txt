@@ -1,0 +1,28 @@
+# Box vdisp = vast 54032077 (RTX 3060 GA106, host driver 580.159.04, Ubuntu 22.04.5, KDE Plasma on Xorg
+# via sddm), 2026-10-03T23:04Z .. 23:35Z (UTC; 2026-10-04 local). Read over ssh; no instance created,
+# destroyed or relabelled.
+
+## as found (23:04Z)
+nvidia_drm loaded: modeset=N fbdev=Y
+sddm (the display manager): inactive; no Xorg; no qemu-system-x86; nothing on :2223; GPU 0 MiB used
+/root/kayfabe at c38032f3 (GitHub kayfabe); /root/nvkvm-pv at 9cb736f (GitHub nvkvm-pv)
+
+## what this stage did to it
+/root/kayfabe: git fetch from GitHub, detached at 49f1e1df, then 3aeac81b, then cc19632e (each built with
+  scripts/bench/build_kf3.sh into /workspace/bench/kf3-bins/<rev>/; the Rust and C sources of all three are
+  34696441's — the three commits after it change scripts/bench/display/ only)
+/root/nvkvm-pv: `broker_lane.sh prep badf2d7` — fetched from GitHub, detached at badf2d707da4, built and
+  installed /opt/nvkvm-broker/nvkvm-display-broker (sha256 6d07e97718afe222) and nvkvm-broker-dmabuf-src
+  (4fd08f002069f5e4); prep reloaded nvidia_drm modeset=1 (no X up) and started sddm
+runs brkF1 (49f1e1df), brkF2 (3aeac81b), brkF3 (cc19632e): /workspace/bench/brk/<run>/, each a fresh QEMU
+
+## as left (23:35Z)
+sddm stopped (inactive), Xorg exited; nvidia_drm unloaded and reloaded with its defaults: modeset=N fbdev=Y
+no qemu-system-x86 (pgrep -x qemu-system-x86: none), nothing on :2223, no nvkvm-display-broker or
+  nvkvm-broker-dmabuf-src process, /run/kf-dri3-src.sock gone; GPU 0 MiB used
+host dmesg since the mark taken before brkF3 (827 lines): 0 lines matching Xid or NVRM; the whole host log
+  (833 lines at the end): 0 Xid. Seen, not graded: one `x86/PAT: qemu-system-x86:<pid> freeing invalid
+  memtype [mem 0xc0bb0000-0xc0bb0fff]` per QEMU exit (and one from kf-view-reaper) — 32 in the log, the
+  first at uptime 2049 s, long before this stage
+/root/kayfabe left at cc19632e (the evidence's revision); /root/nvkvm-pv left at badf2d7
+the session's kscreenlocker Autolock=false (set by an earlier box stage's prep, re-applied by this one)

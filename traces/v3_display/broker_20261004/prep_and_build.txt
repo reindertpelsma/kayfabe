@@ -1,0 +1,39 @@
+# prep (broker_lane.sh prep badf2d7)
+JOB_START 2026-10-03T23:14:26+00:00
+BRK_LANE_START prep badf2d7 kf=49f1e1df 2026-10-03T23:14:26+00:00
+PREP_APT_RC=0
+PREP_BROKER_REV badf2d707da47a625e0ce69172a84785d20f81b8 dirty=[0]
+PREP_BROKER_MAKE_RC=0 nvkvm-display-broker backends:  dma-buf test source : yes (libgbm)  wayland : yes  x11 : yes (dri3+present +xrender scaling and guest cursor) + xi2 raw motion  test : yes (always) 
+PREP_BROKER_BIN /opt/nvkvm-broker/nvkvm-display-broker sha256=6d07e97718afe222
+PREP_DMABUF_SRC rc=0 4fd08f002069f5e4
+PREP_E0 driver=580.159.04 drm=580.159.04 modeset=N fbdev=Y
+PREP_E0 nodes crw-rw---- root video e2:0 /dev/dri/card0;crw-rw---- root render e2:80 /dev/dri/renderD128;
+PREP_E0 render_acl user::rw- user:user:rw- group::rw- mask::rw- other::---  
+PREP_MODESET reloaded rc=0 modeset=Y
+PREP_DM sddm start_rc=0
+PREP_SESSION user=user uid=1000 display=:0 xauth=set
+PREP_SESSION_LOCK autolock=off Autolock=false
+PREP_XORG [ 26143.402] (II) NVIDIA GLX Module  580.159.04  Wed Apr 29 17:07:05 UTC 2026
+PREP_XDPY     DRI3
+PREP_XDPY     Present
+PREP_XDPY   dimensions:    1024x768 pixels (347x260 millimeters)
+BRK_LANE_EXIT rc=0 2026-10-03T23:14:39+00:00
+PREP_RC=0
+JOB_EXIT 2026-10-03T23:14:39+00:00
+
+# kf3 builds (scripts/bench/build_kf3.sh /workspace/bench/qemu-10.2.4)
+JOB_START 2026-10-03T23:13:17+00:00 rev=49f1e1df
+BUILD_RC=0
+JOB_EXIT 2026-10-03T23:13:39+00:00
+== kf3 build: QEMU 10.2.4 rev 49f1e1df
+    Finished `release` profile [optimized] target(s) in 9.60s
+== archive 2026-10-03 23:13:26.953153047 +0000 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /workspace/bench/kf3-bins/49f1e1df/qemu-system-x86_64 rev=49f1e1df mtime=2026-10-03 23:13:39.210645816 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+== kf3 build: QEMU 10.2.4 rev 3aeac81b
+    Finished `release` profile [optimized] target(s) in 0.05s
+== archive 2026-10-03 23:13:26.953153047 +0000 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /workspace/bench/kf3-bins/3aeac81b/qemu-system-x86_64 rev=3aeac81b mtime=2026-10-03 23:19:47.846438630 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+== kf3 build: QEMU 10.2.4 rev cc19632e
+    Finished `release` profile [optimized] target(s) in 0.06s
+== archive 2026-10-03 23:13:26.953153047 +0000 (cargo succeeded: current for this revision by cargo's fingerprints)
+KF3_BUILT /workspace/bench/kf3-bins/cc19632e/qemu-system-x86_64 rev=cc19632e mtime=2026-10-03 23:28:02.717599194 +0000 (shared build dir /workspace/bench/qemu-build-kf3)

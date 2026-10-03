@@ -1,0 +1,32 @@
+# The cursor's alpha (V3_DISPLAY.md §8.14's open item), box 54032077, 2026-10-04
+# kf3 49f1e1df (brkF1) and 3aeac81b (brkF2) -- kayfabe code = 34696441 -- broker nvkvm-pv badf2d7
+# The composition word the guest's head was programmed with (the worker's own log line, both runs):
+#   kf3: display: guest cursor composition 0x072ff = PREMULT_ALPHA (K1 255, cursor factor 2, viewport factor 7, mode 0); its 256x256 pixels: 163 partially transparent, 0 with a colour channel above alpha (consistent with premultiplied pixels)
+#   kf3: display: guest cursor composition 0x072ff = PREMULT_ALPHA (K1 255, cursor factor 2, viewport factor 7, mode 0); its 256x256 pixels: 163 partially transparent, 0 with a colour channel above alpha (consistent with premultiplied pixels)
+#   clc37d.h:850-861: CURSOR_COLOR_FACTOR_SELECT 2 = K1, VIEWPORT_COLOR_FACTOR_SELECT 7 = NEG_K1_TIMES_SRC, MODE 0 = BLEND
+#   => out = c*K1 + d*(1 - K1*a) with K1 = 255: a PREMULTIPLIED blend; kf_disp::scanout::HostCursorSrc::image maps it to colour c*255*255/(255*255) = c, unchanged.
+#
+# Per pixel, the guest X server's own cursor (XFixes, in the guest) against the host's (XFixes, on the host), aligned at the hot spot.
+# 'times_alpha' = the host's colour is round(guest * a / 255) (+-1) on every channel, same alpha.
+brkF1 hover guest_vs_host visible=254 partially_transparent=163 identical=192 times_alpha=62 other=0 missing=0 extra=0
+brkF1 cross guest_vs_host visible=281 partially_transparent=150 identical=268 times_alpha=13 other=0 missing=0 extra=0
+brkF1 cross guest_vs_vnc  visible=281 partially_transparent=150 identical=268 times_alpha=13 other=0 missing=0 extra=0
+brkF1 xterm guest_vs_host visible=86 partially_transparent=0 identical=86 times_alpha=0 other=0 missing=0 extra=0
+brkF1 xterm guest_vs_vnc  visible=86 partially_transparent=0 identical=86 times_alpha=0 other=0 missing=0 extra=0
+brkF2 hover guest_vs_host visible=254 partially_transparent=163 identical=192 times_alpha=62 other=0 missing=0 extra=0
+brkF2 cross guest_vs_host visible=281 partially_transparent=150 identical=268 times_alpha=13 other=0 missing=0 extra=0
+brkF2 cross guest_vs_vnc  visible=281 partially_transparent=150 identical=268 times_alpha=13 other=0 missing=0 extra=0
+brkF2 xterm guest_vs_host visible=86 partially_transparent=0 identical=86 times_alpha=0 other=0 missing=0 extra=0
+brkF2 xterm guest_vs_vnc  visible=86 partially_transparent=0 identical=86 times_alpha=0 other=0 missing=0 extra=0
+#
+# Reading (2026-10-04): every pixel the host shows differently is EXACTLY the guest's colour times
+# its alpha, and the VNC console's cursor (kayfabe's same CursorImage, made straight by kf3.c and
+# premultiplied again by vnc_cursor.py, never through the broker) is the same as the host's, pixel
+# for pixel. So the darker edge is already in kayfabe's image, and with this word kayfabe's mapping
+# passes the surface colour through unchanged: the cursor SURFACE holds the guest X server's
+# premultiplied pixels multiplied by alpha once more (the guest NVIDIA DDX 580.159.04 premultiplies
+# what X already premultiplied), and the head is programmed with a premultiplied blend over them —
+# so the guest's own head would scan out the same darker edge. The 2026-10-03 inference ("a
+# straight-alpha blend programmed over premultiplied pixels") is REFUTED by the register value.
+# The host shows what the head would; kayfabe's mapping stays. Opaque and fully transparent
+# pixels, and the two-colour xterm glyph (no partial alpha), are identical.

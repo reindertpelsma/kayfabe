@@ -2512,6 +2512,19 @@ through it changes no guest byte); **E6** E1 on Turing, Ada and GB20x.
 
 ### 8.12 The guest cursor as the host pointer — hover mode (`OWNER_RULINGS.md` §O)
 
+> ⊘⊘⊘ **CORRECTED 2026-10-04 (box 54032077, runs `brkF1`/`brkF2`, kf3 code `34696441`, broker
+> `badf2d7`) — the colour inference in the box section below ("a straight-alpha blend programmed over
+> premultiplied pixels") is REFUTED by the register.** The head's cursor composition word is
+> `0x072ff` = `PREMULT_ALPHA` (K1 255, cursor factor `K1`, viewport factor `NEG_K1_TIMES_SRC`,
+> `MODE_BLEND`), under which kayfabe passes the surface colour through unchanged; every pixel the host
+> shows differently from the guest X server's own cursor is exactly the guest's colour times its alpha,
+> and QEMU's VNC console — kayfabe's same image, never through the broker — matches the host's pixel
+> for pixel. So the cursor SURFACE holds X's premultiplied pixels premultiplied once more by the guest's
+> NVIDIA DDX, under a premultiplied blend: the guest's own head scans out the same darker edge, and the
+> host shows what the head would. The mapping stays. Evidence: `traces/v3_display/broker_20261004/`
+> (`cursor_alpha.txt`, `README.md`). The same runs graded deviations 1 and 4's replacements (§8.13,
+> §8.14) and the hot spot under the broker's `ceil` scaling (exact at x1.28 and x0.75).
+
 > ⊘⊘ **CORRECTED AGAIN 2026-10-03 (run `brkA4`, kf3 at `18562ba4`) — the derivation below was one
 > pixel off on both axes, every time.** On the box it derived `4,2` for the arrow the guest's X server
 > holds at `3,1`, and `12,12` for its `11,11` crosshair (the images themselves matched: 254 and 281
@@ -2573,7 +2586,8 @@ are posted between two entries the broker gets ONE SET, of the newest
 (`posts_between_two_entries_coalesce_to_one_set_of_the_newest`); the broker paces uploads again at
 125 Hz (`nvkvm_broker.c:1547-1553`).
 
-> ⊘ **SUPERSEDED IN CODE 2026-10-04 (branch `v3-broker`, not run on a box): deviations 1 and 4
+> ⊘ **SUPERSEDED IN CODE 2026-10-04 (branch `v3-broker`; run on box 54032077 the same day, runs
+> `brkF1`/`brkF2` — §8.13, §8.14 and the correction at the top of this section): deviations 1 and 4
 > below.** (1) In hover QEMU's console now gets the guest cursor through `dpy_cursor_define` +
 > `dpy_mouse_set` (§8.13), so a VNC client shows it as a real pointer; a `screendump` still has none
 > in hover (a defined cursor is not part of the surface). (4) XOR is composed by the kernel's XOR
@@ -2672,7 +2686,9 @@ Evidence: `traces/v3_display/broker_20261003/<run>/`; harness `scripts/bench/dis
     `11,11`, 281 pixels on both sides. The relay sent one SET per shape (`hot 0,0` before the
     pointer ever entered the window, then `3,1`, then `11,11`). Colours: identical on every opaque
     pixel; on partially transparent ones the host's is the guest's times alpha (62 of the arrow's
-    254, 13 of the crosshair's 281; e.g. 137 at alpha 166 became 89). ⚠ Inferred, not read from a
+    254, 13 of the crosshair's 281; e.g. 137 at alpha 166 became 89). ⊘ REFUTED 2026-10-04 by the
+    register (`0x072ff`, a premultiplied blend; the correction at the top of this section) — the
+    darker edge is in the surface's pixels. As written then: ⚠ Inferred, not read from a
     register (the composition word is not logged): the cursor surface holds the X server's
     premultiplied pixels and the head is programmed with the non-premultiplied blend, so the
     head itself scans out the darker edge, and the host shows what the head would.
@@ -2719,7 +2735,14 @@ Evidence: `traces/v3_display/broker_20261003/<run>/`; harness `scripts/bench/dis
 
 ### 8.13 The guest cursor on QEMU's console in hover (the coordinator's decision, 2026-10-04)
 
-**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-04 (branch `v3-broker`); not run on a box.**
+**STATUS: RUN ON A BOX — 2026-10-04 (box 54032077, runs `brkF1`/`brkF2` with `BRK_VNC=1`, kf3 code
+`34696441`, broker `badf2d7`; `traces/v3_display/broker_20261004/`).** In hover an alpha-cursor VNC
+client received the crosshair as `256x256 hot=11,11`, 281 visible pixels, with the host pointer's
+digest exactly (`fnv_rel_hot=0xf6108d49685ef58f`), and the xterm glyph (`hot=4,8`, 86 pixels) with the
+guest X server's own digest; under grab QEMU's hidden cursor (`32x32`, nothing visible). With the guest
+scaled into the broker window the console's cursor stays in guest pixels (the console is not scaled).
+Not run: GTK, SDL, `dpy_mouse_set`'s position (VNC ignores it). (As first written: "BUILT IN CODE,
+GPU-FREE-TESTED — 2026-10-04 (branch `v3-broker`); not run on a box.")
 
 **Decision (the coordinating session's, for the owner, 2026-10-04; the owner may revisit):** while a
 `CAP_CURSOR` broker hovers, QEMU's own console (VNC, GTK, SDL) receives the guest cursor through
@@ -2771,7 +2794,7 @@ Bite-mutations, each applied and restored on 2026-10-04: the hidden cursor defin
 hover, an image shown under grab, premultiplied pixels passed through — each turns a test red.
 kf3.c: `-fsyntax-only -Werror` with QEMU 10.2.4's own warning flags (gcc 15), clean.
 
-**Not run:** any of it on a box. The grading is ready, opt-in: `BRK_VNC=1 broker_lane.sh run <tag>`
+**Not run (as first written; run since — the STATUS above):** any of it on a box. The grading is ready, opt-in: `BRK_VNC=1 broker_lane.sh run <tag>`
 gives QEMU `-vnc 127.0.0.1:7`, and the hook's hover step then reports (`BRK_VNC_HOVER`) the cursor an
 alpha-cursor VNC client receives — `scripts/bench/display/vnc_cursor.py`, an RFB client in the stdlib
 whose `--selftest` replays QEMU 10.2.4's own bytes (`ui/vnc.c:992-1027`) — and compares it with the
@@ -2783,7 +2806,15 @@ collected by the hook too (`BRK_CURSOR_COMPOSITION`, §8.14).
 
 ### 8.14 XOR cursors, and the cursor's alpha (`OWNER_RULINGS.md` §O; 2026-10-04)
 
-**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-04 (branch `v3-broker`); not run on a GPU.**
+**STATUS: RUN ON A BOX — 2026-10-04 (box 54032077, runs `brkF1`/`brkF2`/`brkF3`, kf3 code
+`34696441`; `traces/v3_display/broker_20261004/`), the XOR blend only as the GPU self-test.** The
+compose kernel's bring-up self-test, with its XOR pixel, `PASSED` on the RTX 3060 in all three runs.
+No guest cursor reached the head as XOR: the guest X server's xterm core glyph with no theme arrived as
+a two-colour ARGB image under the unchanged word `0x072ff` (`MODE_BLEND`) and was shown as the host
+pointer, identical to the guest's (86 pixels) — the source reading below, now on hardware. So "an XOR
+cursor composed in hover with the host's hidden" is still not run: it needs a guest that writes the
+core channel itself. The composition word was read: see "The cursor's alpha" below. (As first
+written: "BUILT IN CODE, GPU-FREE-TESTED — 2026-10-04 (branch `v3-broker`); not run on a GPU.")
 
 **What NVKMS can program that is XOR- or invert-like: nothing** (`ogkm-580`, read 2026-10-04). Its
 cursor composition table writes `MODE_BLEND` for each of the five blending modes it supports
@@ -2851,10 +2882,32 @@ premultiplied.) If the line says a straight blend over premultiplied-consistent 
 itself scans out the darker edge and the host shows what the head would: the mapping stays, and
 the darker edge is the guest driver's.
 
+**On the box (2026-10-04, `brkF1`/`brkF2`):** `guest cursor composition 0x072ff = PREMULT_ALPHA (K1
+255, cursor factor 2, viewport factor 7, mode 0); its 256x256 pixels: 163 partially transparent, 0 with
+a colour channel above alpha`. A premultiplied blend, not a straight one: the inference this paragraph
+opens with is refuted. Every pixel the host shows differently from the guest X server's own cursor is
+exactly the guest's colour times its alpha, and the VNC console's copy of kayfabe's image is identical
+to the host's — so the surface holds X's premultiplied pixels premultiplied again by the guest DDX, and
+the head itself would scan out the darker edge. The mapping stays
+(`traces/v3_display/broker_20261004/cursor_alpha.txt`).
+
 ### 8.15 nvkvm-pv's broker at `badf2d7` — what the relay now handles (2026-10-04)
 
-**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-04 (branch `v3-broker`); run locally against the
-real `badf2d7` broker (dev host, root, `/dev/udmabuf`); not run on a box.**
+**STATUS: RUN ON A BOX — 2026-10-04 (box 54032077, runs `brkF1`/`brkF2`/`brkF3`, kf3 code
+`34696441`, broker `badf2d7` built on the box; `traces/v3_display/broker_20261004/`), except a DRI3
+refusal, which the NVIDIA X server never made.** Rung 0 carried every frame and each came back
+released (`brkF2`: `gpucopy=7262 releases=7262`). After E3's `kill -9` the relay's new connection asked
+LINEAR and block-linear again (no "no" carried across connections). A DRI3 client
+(`scripts/bench/display/dri3_refusal.py`) had the NVIDIA DDX 580.159.04 import ten malformed
+descriptors of a real block-linear bo — wrong pitch, offset, kind, block height, a udmabuf under the
+NVIDIA modifier, block-linear extents past the buffer's end — and every one was imported and presented
+with no X error, so no unsolicited `x=0` and no twins were seen on the GPU. The only refusal this X
+server makes is the format gate (LINEAR, not advertised), and the relay asks about LINEAR before that
+drop's `x=0` arrives, so its reaction to a volunteered "no" for an unasked pair was not run there. The
+twins and their per-connection lifetime were shown on `badf2d7`'s test backend by the same client
+(`local_dri3_testbackend.txt`). (As first written: "BUILT IN CODE, GPU-FREE-TESTED — 2026-10-04 (branch
+`v3-broker`); run locally against the real `badf2d7` broker (dev host, root, `/dev/udmabuf`); not run
+on a box.")
 
 nvkvm-pv's review fixes (`broker-cursor-gpucopy` at `badf2d7`) change what the broker DOES on an
 unchanged wire. The protocol header is byte-identical at `8665a2d`, `9cb736f` and `badf2d7`, so the
@@ -2880,5 +2933,7 @@ verdicts moved out of `Conn`). The unsafe ratchet of kf-linux-raw moves 93 → 9
 one `fcntl(F_GET_SEALS)`). Local runs, all against `badf2d7`:
 `traces/v3_display/broker_20261004/local_runs.txt` (`broker_loopback.rs` 8/8 with `--ignored`).
 
-**Not run:** any of it on the box; X11's DRI3 refusal itself (it needs the NVIDIA DDX; `brkA`'s
-LINEAR refusal predates `badf2d7`); a Wayland broker.
+**Not run:** X11's DRI3 refusal itself — the NVIDIA DDX refused none of the ten descriptors the box
+stage tried (2026-10-04, above); a Wayland broker. (As first written, the same day: "any of it on the
+box; X11's DRI3 refusal itself (it needs the NVIDIA DDX; `brkA`'s LINEAR refusal predates `badf2d7`); a
+Wayland broker.")
