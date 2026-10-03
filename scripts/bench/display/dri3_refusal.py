@@ -31,7 +31,17 @@ ONE descriptor field the broker's validator still passes — `4w <= stride <= 8w
   bh0          the declared block height changed to one GOB (advertised; allocated with another)
   udmabuf      (--udmabuf) a host-memory udmabuf of the same size declared with the buffer's
                block-linear modifier: a dma-buf the NVIDIA driver did not export
+  tail4k       plane 0 at byte 4096 and as many rows as then fit: the broker's linear extent
+               `stride * h + offset` is the whole buffer, the block-linear surface (rows rounded
+               up to whole blocks) ends past it
+  tail64k      the same at byte 65536
+  udmabuf_short (--udmabuf) a udmabuf of `stride * (h - 12)` bytes declared with h - 12 rows: its
+               linear extent fits, its block-linear one (whole blocks of rows) does not
   own_again    the control again, on a new connection after all of the above
+(Added 2026-10-04 after run brkF2: the NVIDIA DDX 580.159.04 imported every one of the first seven
+without an X error. The `tail` variants ask whether it checks a block-linear extent against the
+dma-buf's size at all; a GPU read past a udmabuf's end, if it happens, is a fault in the X server's
+context — check the host's dmesg for an Xid after the run.)
 """
 import argparse
 import fcntl
@@ -197,12 +207,18 @@ def variants(src, want, ufd):
         ("kind", dict(w=w, h=h, stride=st, offset=off, modifier=kind), None),
         ("bh0", dict(w=w, h=h, stride=st, offset=off, modifier=mod & ~0xF), None),
         ("udmabuf", dict(w=w, h=h, stride=st, offset=0, modifier=mod), "udmabuf"),
+        ("tail4k", dict(w=w, h=(src["size"] - off - 4096) // st, stride=st, offset=off + 4096,
+                        modifier=mod), None),
+        ("tail64k", dict(w=w, h=(src["size"] - off - 65536) // st, stride=st, offset=off + 65536,
+                         modifier=mod), None),
+        ("udmabuf_short", dict(w=w, h=max(1, h - 12), stride=st, offset=0, modifier=mod),
+         "udmabuf_short"),
         ("own_again", dict(w=w, h=h, stride=st, offset=off, modifier=mod), None),
     ]
     for name, d, which in table:
         if want and name not in want:
             continue
-        if which == "udmabuf" and ufd is None:
+        if which and (ufd is None or ufd.get(which) is None):
             continue
         yield name, d, which
 
@@ -224,16 +240,21 @@ def main(argv):
     print("DRI3_SOURCE %dx%d stride=%d offset=%d fourcc=%s modifier=%#018x size=%d" % (
         src["w"], src["h"], src["stride"], src["offset"], fcc(src["fourcc"]), src["modifier"],
         src["size"]), flush=True)
-    ufd = None
+    ufd = {}
     if a.udmabuf:
-        try:
-            ufd = make_udmabuf(src["size"])
-        except (OSError, RuntimeError) as e:
-            print("DRI3_UDMABUF unavailable: %s" % e, flush=True)
+        for which, size in (("udmabuf", src["size"]),
+                            ("udmabuf_short", src["stride"] * max(1, src["h"] - 12))):
+            try:
+                ufd[which] = make_udmabuf(size)
+                print("DRI3_UDMABUF %s %d bytes" % (which, os.fstat(ufd[which]).st_size or
+                                                     os.lseek(ufd[which], 0, os.SEEK_END)),
+                      flush=True)
+            except (OSError, RuntimeError) as e:
+                print("DRI3_UDMABUF %s unavailable: %s" % (which, e), flush=True)
     want = set(x for x in a.variants.split(",") if x)
     for name, d, which in variants(src, want, ufd):
         try:
-            print(run_variant(a.broker, name, d, ufd if which == "udmabuf" else fd, a.settle),
+            print(run_variant(a.broker, name, d, ufd[which] if which else fd, a.settle),
                   flush=True)
         except OSError as e:
             print("DRI3_VARIANT %s ERROR %s" % (name, e), flush=True)
@@ -307,7 +328,7 @@ def selftest():
     threading.Thread(target=serve_broker, daemon=True).start()
     s, fd = get_source(ssock)
     lines = [run_variant(bsock, n, dd, fd, 0.3) for n, dd, _ in
-             variants(s, {"own", "pitch+4", "own_again"}, None)]
+             variants(s, {"own", "pitch+4", "own_again"}, {})]
     stop.set()
     ls.close()
     lb.close()
