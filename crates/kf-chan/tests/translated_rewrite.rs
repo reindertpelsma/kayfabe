@@ -537,3 +537,80 @@ fn releases_are_recorded_and_the_words_are_unchanged() {
         writes(&out)
     );
 }
+
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.2, §7 test 8): every method on the refused
+/// list is refused BY NAME — a host one on any subchannel, a copy-engine one on a hardware
+/// subchannel — and its neighbours are not.
+#[test]
+fn refusals_by_name_every_refused_method() {
+    use kf_chan::translated::REFUSED_METHODS;
+    for &(lo, hi, name) in &REFUSED_METHODS {
+        for mm in [lo, hi] {
+            let subs: &[u32] = if mm < 0x100 { &[0, SUB, 6] } else { &[0, SUB] };
+            for &sub in subs {
+                let mut pb = setup();
+                pb.extend(m(sub, mm, &[0x1234]));
+                let r = rewrite(&pb, is_ce, &mut CeState::default(), &W);
+                assert_eq!(
+                    r,
+                    Err(Refusal::RefusedMethod {
+                        subch: sub,
+                        method: mm,
+                        name
+                    }),
+                    "{name} {mm:#x} on subchannel {sub}"
+                );
+            }
+        }
+    }
+    // The neighbours of the refused ranges still pass (state methods today's rewriter keeps).
+    for mm in [ce::SET_SEMAPHORE_PAYLOAD, ce::SET_SRC_PHYS_MODE, 0x700] {
+        let mut pb = setup();
+        pb.extend(m(SUB, mm, &[0]));
+        assert!(
+            rewrite(&pb, is_ce, &mut CeState::default(), &W).is_ok(),
+            "{mm:#x}"
+        );
+    }
+}
+
+/// ★ P1+P2 inc A (§3.7): a SUB-DEVICE-MASK header is refused by name, never pushed raw.
+#[test]
+fn a_subdevice_mask_header_is_refused() {
+    for tert in 1..=3u32 {
+        let mut pb = setup();
+        pb.push((tert << 16) | (0x1 << 4)); // GRP0_USE_TERT, TERT_OP = SET/STORE/USE
+        pb.extend(m(SUB, ce::LAUNCH_DMA, &[0]));
+        assert_eq!(
+            rewrite(&pb, is_ce, &mut CeState::default(), &W),
+            Err(Refusal::SubDeviceMask { at: 2 }),
+            "tert_op {tert}"
+        );
+    }
+}
+
+/// ★ P1+P2 inc A (§3.6): the census counts every write — including one that is then refused —
+/// with its header form, its `LAUNCH_DMA` word and its operation values.
+#[test]
+fn the_census_counts_what_the_channel_pushed() {
+    use kf_chan::census::{Census, OpKind, SubKind};
+    use kf_chan::translated::rewrite_counted;
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182]));
+    pb.extend(m(0, 0x10, &[0x1, 0x2000, 7, 2])); // SEMAPHOREA-D, RELEASE
+    pb.extend(m(0, 0x5c, &[0x3000, 0x1, 9, 0, 1])); // SEM_ADDR_LO..SEM_EXECUTE, RELEASE
+    let mut c = Census::default();
+    rewrite_counted(&pb, is_ce, &mut CeState::default(), &W, Some(&mut c)).unwrap();
+    assert_eq!(c.count(CE_CLASS, SubKind::Ce, ce::LAUNCH_DMA), 1);
+    assert_eq!(c.launches_of(CE_CLASS, 0x182), 1);
+    assert_eq!(c.count(CE_CLASS, SubKind::Host, 0x1c), 1);
+    assert_eq!(c.ops_of(OpKind::SemaphoreD, 2), 1);
+    assert_eq!(c.ops_of(OpKind::SemExecute, 1), 1);
+    assert_eq!(c.forms_of("inc"), 4);
+    // A refused write is counted before it is refused.
+    let mut pb = setup();
+    pb.extend(m(SUB, 0x220, &[0x1]));
+    let mut c = Census::default();
+    assert!(rewrite_counted(&pb, is_ce, &mut CeState::default(), &W, Some(&mut c)).is_err());
+    assert_eq!(c.count(CE_CLASS, SubKind::Ce, 0x220), 1);
+}

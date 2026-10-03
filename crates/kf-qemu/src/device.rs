@@ -555,6 +555,7 @@ impl Device {
                 rm,
                 plane,
                 store.handle,
+                layout.clone(),
                 ram,
                 mirrors.clone(),
                 inbox.clone(),
@@ -750,7 +751,11 @@ impl Device {
         // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM
         // (`V3_BAR1_DOORBELL.md`). `None` on Turing … Ada: unchanged.
         .with_usermode_mmio(usermode_mmio)
-        .with_per_map_kind(per_map_kind);
+        .with_per_map_kind(per_map_kind)
+        // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §4.3): leaves into the firmware carve-out are
+        // COUNTED (`carve_gpu=` / `carve_cpu=` on the status line); refusal on twins is inc A2,
+        // after a count-only A/B on each measured family.
+        .with_carve(layout.carve(), false);
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -2081,7 +2086,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_cpu={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -2099,6 +2104,8 @@ impl Device {
             va.priv_mirrored,
             va.sked_placed,
             va.sked_held,
+            va.carve_gpu,
+            va.carve_cpu,
             mc.bar_pdes.load(o),
             mc.roots.load(o),
             mc.root_moves.load(o),
@@ -2164,13 +2171,14 @@ impl Device {
             .collect();
         let (va, vr, vx) = self.rm.view_counts();
         let rc = format!(
-            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} wakes={} seen={} posted={}]",
+            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} wakes={} seen={} posted={}] heap_refused={}",
             va.saturating_sub(vr),
             self.chans.rc_armed.load(o),
             self.chans.rc_unarmed.load(o),
             self.chans.rc_wakes.load(o),
             self.chans.rc_seen.load(o),
-            self.counters.rc_posted.load(o)
+            self.counters.rc_posted.load(o),
+            self.chans.heap_refused.load(o)
         );
         let chan = format!(
             " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",

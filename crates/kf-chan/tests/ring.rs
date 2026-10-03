@@ -289,3 +289,84 @@ fn zero_userd_clears_the_channel_size_and_no_further() {
     let mut p = Page([0xAA; 4096], Some(0x88));
     assert!(zero_userd(&mut p, 512).unwrap_err().contains("+0x88"));
 }
+
+/// A control entry: `LENGTH == 0`, `GP_ENTRY1_OPCODE` = `opcode`, entry0 = `operand`.
+fn control(opcode: u32, operand: u32) -> u64 {
+    (u64::from(opcode) << 32) | u64::from(operand)
+}
+
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.7, §7 test 15): Hopper's
+/// `SET_PB_SEGMENT_EXTENDED_BASE` sets address bits 56:40 of every LATER segment entry.
+#[test]
+fn extended_base_applies_to_later_entries() {
+    let base: u64 = 0x1_23 << 40;
+    let mut mem = Mem::default();
+    let launch = |v: u32| {
+        let mut a = m(4, 0, &[CE_CLASS]);
+        a.extend(m(4, ce::LAUNCH_DMA, &[v]));
+        a
+    };
+    // The same low 40 bits hold DIFFERENT words with and without the base, so the read says
+    // which address the ring used.
+    mem.words(PB, &launch(0x111));
+    mem.words(base | PB, &launch(0x222));
+    let seg = gp_entry(PB, 4 * launch(0).len() as u64).unwrap();
+    mem.entry(0, control(4, u32::try_from((base >> 40) << 8).unwrap()));
+    mem.entry(1, seg);
+    let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+    let words = submitted(&mut r, 2, &mut mem);
+    assert_eq!(r.pb_extended_base(), base);
+    assert!(words.contains(&0x222), "read at the 57-bit VA: {words:x?}");
+    assert!(!words.contains(&0x111));
+    // ⊘ Negative control: without the control entry the same segment entry reads bits 39:0.
+    let mut mem2 = Mem::default();
+    mem2.words(PB, &launch(0x111));
+    mem2.entry(0, seg);
+    let mut r2 = TranslatedRing::new(GPFIFO, 8, 0);
+    assert!(submitted(&mut r2, 1, &mut mem2).contains(&0x111));
+}
+
+/// Every word the ring submits up to `put`, in order.
+fn submitted(r: &mut TranslatedRing, put: u32, mem: &mut Mem) -> Vec<u32> {
+    let mut out = Vec::new();
+    loop {
+        match r.next(put, mem, is_ce, &W).unwrap() {
+            Next::Idle => return out,
+            Next::Submit { words, .. } => out.extend(words),
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
+/// ★ P1+P2 inc A (§3.7, §7 test 8): `NOP` and `SET_PB_SEGMENT_EXTENDED_BASE` are the only control
+/// entries kept; `ILLEGAL`, `GP_CRC`, `PB_CRC` and an unnamed opcode are refused by name.
+#[test]
+fn control_entries_other_than_nop_and_extended_base_are_refused() {
+    for opcode in [1u32, 2, 3, 5, 0xff] {
+        let mut mem = Mem::default();
+        mem.entry(0, control(opcode, 0));
+        let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        assert_eq!(
+            r.next(1, &mut mem, is_ce, &W),
+            Err(RingRefusal::ControlEntry { gp: 0, opcode }),
+            "opcode {opcode}"
+        );
+    }
+    let mut mem = Mem::default();
+    mem.entry(0, control(0, 0));
+    let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+    r.set_census(true);
+    assert_eq!(
+        r.next(1, &mut mem, is_ce, &W),
+        Ok(Next::Submit {
+            words: Vec::new(),
+            retires: Some(1)
+        }),
+        "a NOP entry still retires"
+    );
+    assert_eq!(
+        r.census()
+            .map(|c| c.gp_of(kf_chan::census::GpKind::Control(0))),
+        Some(1)
+    );
+}

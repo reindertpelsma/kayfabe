@@ -556,6 +556,19 @@ struct Slot {
     probe: ProbeRec,
 }
 
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TCENSUS=1`** (or
+/// `KF3_TSHADOW=1`, which runs the census with the shadow): every Translated channel counts what it
+/// fetches and dumps one `TCENSUS` line at free. Default OFF; read once. Count-only: nothing the
+/// rewriter emits changes.
+fn tcensus_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        ["KF3_TCENSUS", "KF3_TSHADOW"]
+            .iter()
+            .any(|k| std::env::var_os(k).is_some_and(|v| v != "0"))
+    })
+}
+
 /// ★★★ v3-initrace — **`KF3_COMPLETION_PROBE=<ms>`** (default OFF; read once; any non-number
 /// means 1000). Records every Translated fence's guest semaphore RELEASES (the rewriter already
 /// decodes each method; the words stay forwarded unchanged) and, the moment a pump sees the fence
@@ -856,12 +869,44 @@ pub struct TokenCount {
     pub last_put: Option<u32>,
 }
 
+/// ★ P1+P2 inc A / audit S1-43 — see [`ChanPlane::heap_bounds`]: the guest-named FB USERD (its
+/// declared size, at least `NV_RAMUSERD_CHAN_SIZE`) and FB error notifier (16 bytes) each inside
+/// one usable heap region of `layout`; sysmem ranges are bounded at their guest-RAM lookup.
+fn heap_bounds(
+    layout: &kf_chip::bar0::FbLayout,
+    userd: Option<kf_arch::UserdMem>,
+    notifier: Option<kf_arch::fault::ErrorNotifier>,
+) -> Result<(), String> {
+    if let Some(kf_arch::UserdMem::Framebuffer { base, size }) = userd {
+        let len = size.max(kf_abi::submit::USERD_SIZE);
+        if !layout.in_usable_heap(base, len) {
+            return Err(format!(
+                "FB USERD {base:#x}+{len:#x} is outside the usable heap (carve-out at {:#x}, store {:#x})",
+                layout.carve(),
+                layout.fb_length
+            ));
+        }
+    }
+    if let Some(kf_arch::fault::ErrorNotifier::Framebuffer { off }) = notifier
+        && !layout.in_usable_heap(off, 16)
+    {
+        return Err(format!(
+            "FB error notifier {off:#x}+0x10 is outside the usable heap (carve-out at {:#x})",
+            layout.carve()
+        ));
+    }
+    Ok(())
+}
+
 /// ★★★ The channel plane.
 pub struct ChanPlane {
     rm: &'static HostRm,
     plane: &'static Plane<'static>,
     store: u32,
     ram: &'static RamMap,
+    /// ★ P1+P2 / S1-43: the framebuffer layout this device declared — a guest-named FB USERD or
+    /// notifier must lie inside one of its usable heap regions ([`ChanPlane::heap_bounds`]).
+    layout: kf_chip::bar0::FbLayout,
     mirrors: Mirrors,
     /// ★ P6: the VA thread's inbox — a Translated channel's `MEM_OP` split goes through it.
     inbox: std::sync::Arc<crate::mem::Inbox>,
@@ -949,6 +994,9 @@ pub struct ChanPlane {
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
     pub rc_unarmed: AtomicU64,
+    /// ★ P1+P2 inc A / S1-43: births refused because a guest-named FB USERD or notifier lay
+    /// outside the usable heap ([`ChanPlane::heap_bounds`]).
+    pub heap_refused: AtomicU64,
     /// ★ 2026-09-30: the doorbell fast path (`kf_chan::dbfast`, `V3_DOORBELL_IOEVENTFD.md`): every
     /// born channel — Passthrough AND Translated — registers its guest token; every free removes it
     /// before the twin goes.
@@ -972,6 +1020,7 @@ impl ChanPlane {
         rm: &'static HostRm,
         plane: &'static Plane<'static>,
         store: u32,
+        layout: kf_chip::bar0::FbLayout,
         ram: &'static RamMap,
         mirrors: Mirrors,
         inbox: std::sync::Arc<crate::mem::Inbox>,
@@ -1086,6 +1135,7 @@ impl ChanPlane {
             rm,
             plane,
             store,
+            layout,
             ram,
             mirrors,
             inbox,
@@ -1124,6 +1174,7 @@ impl ChanPlane {
             rc_queue: Mutex::new(Vec::new()),
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
+            heap_refused: AtomicU64::new(0),
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
             dbfast,
@@ -2693,6 +2744,12 @@ impl ChanPlane {
                 ),
             );
         }
+        // ★ P1+P2 inc A / S1-43: a guest-named FB USERD or error notifier inside the usable heap,
+        // checked here — before any host call — for both routes.
+        if let Err(why) = self.heap_bounds(&a) {
+            self.heap_refused.fetch_add(1, Ordering::Relaxed);
+            return refuse(NV_ERR_INVALID_ARGUMENT, why);
+        }
         let Some(vas) = a.vaspace else {
             return refuse(
                 NV_ERR_INVALID_STATE,
@@ -2950,6 +3007,7 @@ impl ChanPlane {
                 let ring_va = host.va();
                 let mut chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
                 chan.set_probe(completion_probe_ms().is_some());
+                chan.set_census(tcensus_on());
                 let alloc = me
                     .caps
                     .lock()
@@ -3007,6 +3065,18 @@ impl ChanPlane {
                 ))
             }),
         )
+    }
+
+    /// ★ P1+P2 inc A / audit S1-43: the FB ranges a channel allocation names — its USERD (the
+    /// declared size, at least `NV_RAMUSERD_CHAN_SIZE`: the engine's footprint and what
+    /// [`kf_chan::host::zero_userd`] may write) and its 16-byte error notifier — each inside ONE
+    /// usable heap region of the layout we declared ([`kf_chip::bar0::FbLayout::in_usable_heap`]).
+    /// ⊘ Never the firmware carve-out, where kayfabe's own BAR1/BAR2 roots live; before this check
+    /// host RM bounded these offsets only by the store object. Sysmem ranges are bounded by the
+    /// guest-RAM lookup at their use. ⚠ A preserved console region is reserved in the layout fn 72
+    /// produces, which this plane does not see: a USERD there is guest memory, accepted.
+    fn heap_bounds(&self, a: &ChannelAlloc) -> Result<(), String> {
+        heap_bounds(&self.layout, a.userd, a.error_notifier)
     }
 
     /// ★ P5c (act thread): the twin's host error context over the guest's notifier record, its
@@ -3301,6 +3371,16 @@ impl ChanPlane {
                     f.releases
                 );
             }
+        }
+        if let Some(c) = g.chan.census() {
+            // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.6): one census line per Translated channel.
+            eprintln!(
+                "kf3: TCENSUS tok={:#x} host={ht:#x} key={:?} privilege={:?} {}",
+                g.guest_idx,
+                g.key,
+                g.privilege,
+                c.line()
+            );
         }
         eprintln!(
             "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?}",
@@ -3726,5 +3806,61 @@ mod scope_tests {
         };
         assert!(bare.freed_by((c, ch), c, dev));
         assert!(!bare.freed_by((c, ch), c, tsg));
+    }
+}
+
+#[cfg(test)]
+mod heap_tests {
+    use super::heap_bounds;
+    use kf_arch::UserdMem;
+    use kf_arch::fault::ErrorNotifier;
+
+    /// ★ P1+P2 inc A / S1-43 (`docs/design/V3_P1P2_TSPACE.md` §7 test 17): a birth whose FB USERD
+    /// or FB notifier names the firmware carve-out (kayfabe's root pages), the store's end or 2^40
+    /// is refused before any host call; the USERD bound uses the DECLARED size when it is larger
+    /// than `NV_RAMUSERD_CHAN_SIZE`; sysmem descriptors are not this check's business.
+    #[test]
+    fn userd_and_notifier_bounded_to_the_usable_heap() {
+        let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
+        let carve = l.carve();
+        let fb = |base, size| Some(UserdMem::Framebuffer { base, size });
+        let nfb = |off| Some(ErrorNotifier::Framebuffer { off });
+        assert_eq!(
+            heap_bounds(&l, fb(0x10_0000, 0x200), nfb(0x20_0000)),
+            Ok(())
+        );
+        assert_eq!(heap_bounds(&l, fb(carve - 0x200, 0x200), None), Ok(()));
+        for base in [
+            carve,
+            l.bar1_pde_base,
+            l.bar2_pde_base,
+            l.fb_length - 8,
+            1 << 40,
+        ] {
+            assert!(
+                heap_bounds(&l, fb(base, 0x200), None).is_err(),
+                "USERD {base:#x}"
+            );
+            assert!(
+                heap_bounds(&l, None, nfb(base)).is_err(),
+                "notifier {base:#x}"
+            );
+        }
+        // The declared size counts: 512 bytes fit below the carve-out, 4 KiB do not.
+        assert!(heap_bounds(&l, fb(carve - 0x200, 0x1000), None).is_err());
+        // A declared size smaller than the engine's footprint is bounded at the footprint.
+        assert!(heap_bounds(&l, fb(carve - 0x10, 0x10), None).is_err());
+        // Sysmem: bounded at its guest-RAM lookup, not here.
+        assert_eq!(
+            heap_bounds(
+                &l,
+                Some(UserdMem::Sysmem {
+                    base: 1 << 40,
+                    size: 0x200
+                }),
+                Some(ErrorNotifier::Sysmem { gpa: 1 << 40 })
+            ),
+            Ok(())
+        );
     }
 }

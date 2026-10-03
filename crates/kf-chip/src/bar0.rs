@@ -373,6 +373,31 @@ pub struct FbLayout {
     pub bar2_pde_base: u64,
 }
 
+impl FbLayout {
+    /// ★ P1+P2: the firmware carve-out's base. Store offsets below it are guest VRAM; at and above
+    /// it is the firmware region kayfabe declares, which holds its own BAR1/BAR2 root pages
+    /// ([`FbLayout::bar1_pde_base`], [`FbLayout::bar2_pde_base`]). Zero for a store smaller than
+    /// the carve-out ([`fb_layout`] never builds one).
+    #[must_use]
+    pub fn carve(&self) -> u64 {
+        self.fb_length.saturating_sub(FW_CARVE_OUT_BYTES)
+    }
+
+    /// ★ S1-43 (`docs/audits/2026-10-03-v3-stage1.md`): `[off, off + len)` lies wholly inside ONE
+    /// usable heap region — a region the layout does not reserve (`reserved == 0`). That excludes
+    /// the firmware carve-out (kayfabe's root pages), a preserved console, and everything past the
+    /// store. A zero-length or overflowing range is not inside.
+    #[must_use]
+    pub fn in_usable_heap(&self, off: u64, len: u64) -> bool {
+        let Some(end) = off.checked_add(len).filter(|_| len > 0) else {
+            return false;
+        };
+        self.regions.iter().any(|r| {
+            r.reserved == 0 && off >= r.base && r.limit.checked_add(1).is_some_and(|e| end <= e)
+        })
+    }
+}
+
 /// The contiguous carve-out at the top of FB the GSP keeps for itself — read off a real RTX 3060's
 /// posted `GspStaticConfigInfo` (`traces/mode2_c_reference/cap1b_coldboot_hermetic_d6` record 141977:
 /// regions 2-4, contiguous, `reserved == size`, the top `0x1042_0000` bytes). ★ In v3 WE are the

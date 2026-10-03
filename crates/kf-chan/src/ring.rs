@@ -11,8 +11,9 @@
 //! ⊘ `GP_GET` is NOT owned here. It is the runner's to author, and only on COMPLETION: a guest
 //! that sees `GP_GET` advance may reuse the GPFIFO slot and the pushbuffer behind it.
 
-use crate::translated::{CeState, IsCeClass, Piece, Refusal, Release, Window, rewrite};
-use kf_abi::submit::{GP_ENTRY_SIZE, gp_entry_decode};
+use crate::census::{Census, GpKind};
+use crate::translated::{CeState, IsCeClass, Piece, Refusal, Release, Window, rewrite_counted};
+use kf_abi::submit::{GP_ENTRY_SIZE, GpEntryKind, gp_entry_classify, gp_extended_base, gp_opcode};
 use std::collections::VecDeque;
 
 /// Largest pushbuffer segment we read for one GP entry. The hardware limit is 2^21 dwords
@@ -83,6 +84,15 @@ pub enum RingRefusal {
         /// The guest GP index.
         gp: u32,
     },
+    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.7): a control entry that is neither `NOP` nor
+    /// `SET_PB_SEGMENT_EXTENDED_BASE` — `ILLEGAL`, `GP_CRC`, `PB_CRC`, or an opcode no class names.
+    /// Refused by name; until 2026-10-04 every control entry was skipped as a NOP.
+    ControlEntry {
+        /// The guest GP index.
+        gp: u32,
+        /// `GP_ENTRY1_OPCODE`.
+        opcode: u32,
+    },
     /// The rewriter refused the segment.
     Rewrite {
         /// The guest GP index.
@@ -102,6 +112,12 @@ pub struct TranslatedRing {
     pending: VecDeque<Piece>,
     pending_retires: Option<u32>,
     entries_fetched: u64,
+    /// ★ P1+P2 inc A (§3.7): address bits 56:40 of every later segment, from the guest's last
+    /// `SET_PB_SEGMENT_EXTENDED_BASE` control entry (Hopper+ UVM writes one before a channel's
+    /// first push, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:2536-2544`). Zero until then.
+    pb_ext_base: u64,
+    /// ★ P1+P2 inc A (§3.6): the count-only census, when on.
+    census: Option<Box<Census>>,
 }
 
 impl TranslatedRing {
@@ -123,7 +139,27 @@ impl TranslatedRing {
             pending: VecDeque::new(),
             pending_retires: None,
             entries_fetched: 0,
+            pb_ext_base: 0,
+            census: None,
         }
+    }
+
+    /// ★ P1+P2 inc A: count every header, method and GP entry this ring fetches
+    /// ([`crate::census`]). Off by default.
+    pub fn set_census(&mut self, on: bool) {
+        self.census = on.then(Box::default);
+    }
+
+    /// The census, when on.
+    #[must_use]
+    pub fn census(&self) -> Option<&Census> {
+        self.census.as_deref()
+    }
+
+    /// The address bits 56:40 the guest's last `SET_PB_SEGMENT_EXTENDED_BASE` set (0 before one).
+    #[must_use]
+    pub fn pb_extended_base(&self) -> u64 {
+        self.pb_ext_base
     }
 
     /// GP entries fetched so far (the per-channel `forwarded=` count).
@@ -190,9 +226,31 @@ impl TranslatedRing {
             mem.read(at, &mut raw)
                 .map_err(|why| RingRefusal::Read { gp, va: at, why })?;
             self.pending_retires = Some(self.cursor);
-            let Some(e) = gp_entry_decode(u64::from_le_bytes(raw)) else {
-                continue; // a control entry (NOP etc.): nothing to run, still retires
+            let mut e = match gp_entry_classify(u64::from_le_bytes(raw)) {
+                GpEntryKind::Segment(e) => {
+                    if let Some(c) = self.census.as_deref_mut() {
+                        c.gp(GpKind::Segment);
+                    }
+                    e
+                }
+                GpEntryKind::Control { opcode, operand } => {
+                    if let Some(c) = self.census.as_deref_mut() {
+                        c.gp(GpKind::Control(opcode));
+                    }
+                    match opcode {
+                        // Nothing to run; still retires.
+                        gp_opcode::NOP => continue,
+                        gp_opcode::SET_PB_SEGMENT_EXTENDED_BASE => {
+                            self.pb_ext_base = gp_extended_base(operand);
+                            continue;
+                        }
+                        _ => return Err(RingRefusal::ControlEntry { gp, opcode }),
+                    }
+                }
             };
+            // ★ §3.7: a segment entry carries address bits 39:0; 56:40 are the channel's
+            // extended base (zero before Hopper, and before the guest set one).
+            e.gpu_va |= self.pb_ext_base;
             if e.sync_wait {
                 return Err(RingRefusal::SyncWait { gp });
             }
@@ -213,8 +271,9 @@ impl TranslatedRing {
                 .chunks_exact(4)
                 .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
                 .collect();
-            let pieces = rewrite(&words, is_ce, &mut self.st, w)
-                .map_err(|why| RingRefusal::Rewrite { gp, why })?;
+            let pieces =
+                rewrite_counted(&words, is_ce, &mut self.st, w, self.census.as_deref_mut())
+                    .map_err(|why| RingRefusal::Rewrite { gp, why })?;
             self.pending.extend(pieces);
         }
     }

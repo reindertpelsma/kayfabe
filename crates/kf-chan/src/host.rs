@@ -610,6 +610,18 @@ impl TranslatedChannel {
         self.probe = on.then(Probe::default);
     }
 
+    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.6): count every header, method and GP entry this
+    /// channel fetches ([`crate::census`]). Off by default.
+    pub fn set_census(&mut self, on: bool) {
+        self.ring.set_census(on);
+    }
+
+    /// The channel's census, when on — the device dumps it at free.
+    #[must_use]
+    pub fn census(&self) -> Option<&crate::census::Census> {
+        self.ring.census()
+    }
+
     /// ★ v3-initrace: the fences seen complete since the last call (oldest first), each with the
     /// guest releases its work asked for. Empty while the probe is off.
     pub fn take_completed(&mut self) -> Vec<ProbeFence> {

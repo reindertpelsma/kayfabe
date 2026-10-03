@@ -476,7 +476,7 @@ impl Target {
 ///
 /// ★ Written INSIDE the apply, before the invalidate's `TRIGGER` is cleared — so a doorbell the
 /// guest rings after its invalidate completed always finds the rows that invalidate published.
-pub type PlacedRows = std::sync::Arc<RwLock<std::collections::BTreeMap<u64, (u64, u64, bool)>>>;
+pub type PlacedRows = std::sync::Arc<RwLock<std::collections::BTreeMap<u64, PlacedRow>>>;
 
 /// Resolve `[va, va+len)` against `rows`: `(ram, offset)` when ONE placement covers it whole.
 #[must_use]
@@ -497,6 +497,73 @@ pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u
     let (&start, &(rlen, off, ram)) = r.range(..=va).next_back()?;
     let end = start.checked_add(rlen)?;
     (va < end).then(|| (ram, off + (va - start), end - va))
+}
+
+/// One placement row: `(len, backing offset, in guest RAM)` — see [`PlacedRows`].
+pub type PlacedRow = (u64, u64, bool);
+
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.4): what [`cut_rows`] changed, so the record
+/// can be put back exactly when the host refuses the range unmap.
+#[derive(Debug, Default)]
+pub struct RowCut {
+    /// The rows as they were before the cut (removed whole or trimmed).
+    pub original: Vec<(u64, PlacedRow)>,
+    /// The keys of the remnants the cut inserted (a straddling row's outside parts).
+    pub remnants: Vec<u64>,
+}
+
+/// ★ P1+P2 inc A (§3.4) — **remove `[va, end)` from a row record EXACTLY as host RM removes it
+/// from the space.** A row wholly inside goes; a row that straddles an edge keeps its outside
+/// part(s), at their own VA and backing offset — host RM splits a straddling placement and keeps
+/// what lies outside the range ([`kf_host::HostRm::unmap_range`]).
+///
+/// ⊘ Before this the record removed only the rows whose START lay in the range: a row straddling
+/// the start stayed at full length (stale coverage — a reader resolved through a mapping that is
+/// gone), and a row starting inside but ending past the range was dropped whole while host RM kept
+/// its outside part (missing coverage — a false refusal that kills the reading channel). Once the
+/// rows are a translation the engine depends on (the T-space resolver), exactness is a safety
+/// property, not a convenience.
+pub fn cut_rows(
+    rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    end: u64,
+) -> RowCut {
+    let mut cut = RowCut::default();
+    if end <= va {
+        return cut;
+    }
+    let mut keys: Vec<u64> = rows
+        .range(..va)
+        .next_back()
+        .filter(|&(&k, &(len, _, _))| k.saturating_add(len) > va)
+        .map(|(&k, _)| k)
+        .into_iter()
+        .collect();
+    keys.extend(rows.range(va..end).map(|(&k, _)| k));
+    for k in keys {
+        let Some(row @ (len, off, ram)) = rows.remove(&k) else {
+            continue;
+        };
+        cut.original.push((k, row));
+        let row_end = k.saturating_add(len);
+        if k < va {
+            rows.insert(k, (va - k, off, ram));
+            cut.remnants.push(k);
+        }
+        if row_end > end {
+            rows.insert(end, (row_end - end, off + (end - k), ram));
+            cut.remnants.push(end);
+        }
+    }
+    cut
+}
+
+/// Undo a [`cut_rows`]: remove its remnants, put the original rows back.
+pub fn uncut_rows(rows: &mut std::collections::BTreeMap<u64, PlacedRow>, cut: RowCut) {
+    for k in cut.remnants {
+        rows.remove(&k);
+    }
+    rows.extend(cut.original);
 }
 
 /// ★★★ P6b: **where OUR rings live in a mirrored space** — `[RING_REGION_BASE, RING_VA_LIMIT)`,
@@ -727,6 +794,9 @@ impl MapTarget for GpuMirror {
     fn withholds_privileged(&self) -> bool {
         !self.kernel_vas.load(Ordering::Acquire)
     }
+    fn gpu_space(&self) -> bool {
+        true
+    }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let t = std::time::Instant::now();
         let m = self.vas.map(d, defer);
@@ -838,16 +908,12 @@ impl MapTarget for GpuMirror {
             ));
         }
         // ⊘ Forget the rows FIRST (as `unmap`); put them back if the host refuses, so the per-run
-        // fallback still knows each run's length.
-        let removed: Vec<(u64, (u64, u64, bool))> = self
+        // fallback still knows each run's length. ★ P1+P2 inc A: cut EXACTLY at both edges, as host
+        // RM does ([`cut_rows`]).
+        let cut = self
             .rows
             .write()
-            .map(|mut r| {
-                let keys: Vec<u64> = r.range(va..end).map(|(&k, _)| k).collect();
-                keys.into_iter()
-                    .filter_map(|k| r.remove(&k).map(|v| (k, v)))
-                    .collect()
-            })
+            .map(|mut r| cut_rows(&mut r, va, end))
             .unwrap_or_default();
         // ★★★ v3-cdp: the range takes any SKED-reflected placement of ours inside it down too.
         let sked_removed: Vec<(u64, u64)> = self
@@ -866,7 +932,7 @@ impl MapTarget for GpuMirror {
         self.calls.ranges.fetch_add(1, Ordering::Relaxed);
         if r.is_err() {
             if let Ok(mut rows) = self.rows.write() {
-                rows.extend(removed);
+                uncut_rows(&mut rows, cut);
             }
             if let Ok(mut k) = self.sked.lock() {
                 k.extend(sked_removed);
@@ -1052,6 +1118,14 @@ impl MapTarget for Target {
         match self {
             Target::Window(_) | Target::Bar1(_) => false,
             Target::Gpu(g) => g.withholds_privileged(),
+        }
+    }
+    // ★ P1+P2 inc A: forwarded EXPLICITLY — only a host GPU VA space is bounded by the carve-out;
+    // the CPU windows are the guest kernel's own views (count-only, §4.3).
+    fn gpu_space(&self) -> bool {
+        match self {
+            Target::Window(_) | Target::Bar1(_) => false,
+            Target::Gpu(g) => g.gpu_space(),
         }
     }
 }
@@ -2298,6 +2372,65 @@ mod tests {
             Some(RING_REGION_BASE + 2 * kf_chan::host::RING_BYTES),
             "a double give and a foreign VA are not slots"
         );
+    }
+
+    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §7 test 14): a range that cuts a row at its START and
+    /// one that cuts a row at its END both leave exactly host RM's remaining coverage — and a
+    /// refused unmap puts the record back as it was.
+    #[test]
+    fn placed_rows_track_host_unmap_at_both_edges() {
+        use std::collections::BTreeMap;
+        let base: BTreeMap<u64, PlacedRow> = [
+            (0x1000, (0x3000, 0x10_0000, false)), // [0x1000, 0x4000)
+            (0x4000, (0x1000, 0x20_0000, true)),  // [0x4000, 0x5000)
+            (0x8000, (0x4000, 0x30_0000, false)), // [0x8000, 0xC000)
+        ]
+        .into_iter()
+        .collect();
+        // Cut [0x2000, 0x9000): row 1 straddles the start, row 2 is inside, row 3 straddles the end.
+        let mut rows = base.clone();
+        let cut = cut_rows(&mut rows, 0x2000, 0x9000);
+        let want: BTreeMap<u64, PlacedRow> = [
+            (0x1000, (0x1000, 0x10_0000, false)), // the part before the range, same backing
+            (0x9000, (0x3000, 0x30_1000, false)), // the part after, its backing advanced
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(rows, want);
+        // Nothing the host removed is still resolvable; everything it kept is.
+        assert_eq!(resolve_in(&rows, 0x1800), Some((false, 0x10_0800)));
+        assert_eq!(
+            resolve_in(&rows, 0x2000),
+            None,
+            "stale coverage at the start"
+        );
+        assert_eq!(resolve_in(&rows, 0x4800), None);
+        assert_eq!(resolve_in(&rows, 0x8800), None);
+        assert_eq!(
+            resolve_in(&rows, 0x9800),
+            Some((false, 0x30_1800)),
+            "missing coverage at the end"
+        );
+        uncut_rows(&mut rows, cut);
+        assert_eq!(rows, base, "a refused unmap restores the record");
+        // A range inside one row splits it in two.
+        let mut rows = base.clone();
+        cut_rows(&mut rows, 0x9000, 0xA000);
+        assert_eq!(rows.get(&0x8000), Some(&(0x1000, 0x30_0000, false)));
+        assert_eq!(rows.get(&0xA000), Some(&(0x2000, 0x30_2000, false)));
+        // An empty range changes nothing.
+        let mut rows = base.clone();
+        cut_rows(&mut rows, 0x2000, 0x2000);
+        assert_eq!(rows, base);
+    }
+
+    /// `(ram, offset)` of the row covering `va` (the readers' lookup, over a plain map).
+    fn resolve_in(
+        rows: &std::collections::BTreeMap<u64, PlacedRow>,
+        va: u64,
+    ) -> Option<(bool, u64)> {
+        let (&start, &(len, off, ram)) = rows.range(..=va).next_back()?;
+        (va < start + len).then(|| (ram, off + (va - start)))
     }
 
     #[test]

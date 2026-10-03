@@ -58,6 +58,16 @@ pub struct ApplyCfg<'a> {
     /// ★★ The host driver can place a PER-MAP PTE kind (`kf_abi::hostabi::HostAbi::per_map_pte_kind`,
     /// 580.65.06+). `false` on an older host: see [`host_pte_kind`].
     pub per_map_kind: bool,
+    /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §4.3): the firmware carve-out's base
+    /// (`kf_chip::bar0::FbLayout::carve`). A vidmem or SKED leaf reaching `[carve, store_bytes)`
+    /// names kayfabe's declared firmware region (its BAR1/BAR2 roots): counted per target kind
+    /// ([`Applied::carve_gpu`], [`Applied::carve_cpu`]) and, on a GPU target with
+    /// [`ApplyCfg::carve_refuse`], refused. `store_bytes` (the default) disables both.
+    pub carve: u64,
+    /// ★ P1+P2 inc A2: refuse — not only count — a GPU-target leaf into the carve-out. Off until
+    /// a count-only A/B on each measured family shows the counter at 0 (§4.3: a false refusal here
+    /// fails `RmInitAdapter`).
+    pub carve_refuse: bool,
 }
 
 /// What one [`apply_entry`] did.
@@ -126,6 +136,11 @@ pub struct Applied {
     pub batch_fallbacks: usize,
     /// The first such fallback's reason.
     pub first_batch_fallback: Option<String>,
+    /// ★ P1+P2 inc A (§4.3): vidmem/SKED map runs into the firmware carve-out on a GPU target
+    /// ([`MapTarget::gpu_space`]) — counted, and refused only with [`ApplyCfg::carve_refuse`].
+    pub carve_gpu: usize,
+    /// ★ P1+P2 inc A (§4.3): the same on a CPU view (the guest kernel's BAR1/BAR2) — count-only.
+    pub carve_cpu: usize,
 }
 
 impl Applied {
@@ -294,6 +309,28 @@ impl PermPolicy {
     }
 }
 
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §4.3): does a vidmem/SKED leaf naming store
+/// `[off, off+len)` reach the firmware carve-out (`[cfg.carve, ..)`)? Counted per target kind;
+/// `true` (refuse) only for a GPU target under [`ApplyCfg::carve_refuse`].
+fn carve_reached(
+    target: &dyn MapTarget,
+    off: u64,
+    len: u64,
+    cfg: &ApplyCfg<'_>,
+    out: &mut Applied,
+) -> bool {
+    if off.saturating_add(len) <= cfg.carve {
+        return false;
+    }
+    if target.gpu_space() {
+        out.carve_gpu += 1;
+        cfg.carve_refuse
+    } else {
+        out.carve_cpu += 1;
+        false
+    }
+}
+
 /// ★★★★★ **Apply `runs` (one entry's diff) through `target`.** Unmaps first (a held placement
 /// is retired without a host call), then maps, then ONE invalidate if anything changed.
 ///
@@ -421,6 +458,16 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                     continue;
                 }
             };
+        if !d.ram && carve_reached(target, d.off, d.len, cfg, &mut out) {
+            out.refuse(
+                i,
+                format!(
+                    "leaf {:#x}+{:#x} names store {:#x}, inside the firmware carve-out at {:#x} — a twin maps no kayfabe memory (§Q)",
+                    d.va, d.len, d.off, cfg.carve
+                ),
+            );
+            continue;
+        }
         if !whole_pages(&d, cfg.grain) {
             out.refuse(
                 i,
@@ -589,6 +636,16 @@ fn apply_sked(
             format!(
                 "SKED-reflected leaf {:#x}+{:#x} (at {:#x}) is not whole {:#x}-byte pages",
                 s.va, s.len, s.off, cfg.grain
+            ),
+        );
+        return;
+    }
+    if carve_reached(target, s.off, s.len, cfg, out) {
+        out.refuse(
+            i,
+            format!(
+                "SKED-reflected leaf {:#x}+{:#x} names store {:#x}, inside the firmware carve-out at {:#x}",
+                s.va, s.len, s.off, cfg.carve
             ),
         );
         return;
@@ -788,8 +845,13 @@ mod tests {
         refuse_sked: Option<u64>,
         /// OUR VMM placements (a guest leaf over one is refused before the target is asked).
         reserved: Vec<(u64, u64)>,
+        /// ★ P1+P2 inc A: a host GPU VA space (a twin) rather than a CPU view.
+        gpu: bool,
     }
     impl MapTarget for Rec {
+        fn gpu_space(&self) -> bool {
+            self.gpu
+        }
         fn reserved(&self) -> Vec<(u64, u64)> {
             self.reserved.clone()
         }
@@ -903,6 +965,8 @@ mod tests {
             ram_offset: &|gpa, _| Some(gpa),
             usermode: None,
             per_map_kind: true,
+            carve: 1 << 30,
+            carve_refuse: false,
         }
     }
     fn m(va: u64, at: u64, len: u64) -> DiffRun {
@@ -1705,6 +1769,103 @@ mod tests {
             vec!["trap 0x1230000+0x8000 vf0x0", "inval"]
         );
         assert_eq!(a.clipped_bytes, 0x8000);
+    }
+
+    /// ★ P1+P2 inc A / A2 (`docs/design/V3_P1P2_TSPACE.md` §4.3, §7 test 9): a vidmem leaf or a
+    /// SKED leaf naming the firmware carve-out — its base, either declared root page, the store's
+    /// last page — is COUNTED on a GPU target (refused only in refusal mode) and counted on a CPU
+    /// view; one page below the carve-out maps on both, uncounted.
+    #[test]
+    fn carve_out_is_excluded() {
+        const STORE: u64 = 1 << 30;
+        const CARVE: u64 = STORE - 0x1042_0000;
+        // The two root pages at their layout offsets above the carve-out (`kf_chip::bar0`).
+        let bar1 = CARVE + 0x20C_C000;
+        let bar2 = CARVE + 0x37B_2000;
+        let cfg_with = |refuse: bool| ApplyCfg {
+            carve: CARVE,
+            carve_refuse: refuse,
+            ..cfg()
+        };
+        for at in [CARVE, bar1, bar2, STORE - 0x1000] {
+            for sked in [false, true] {
+                let leaf = if sked {
+                    sked_leaf(crate::ledger::AP_VIDMEM, at)
+                } else {
+                    m(0x2_0000_0000, at, 0x1000)
+                };
+                // GPU target, count-only (inc A): mapped, counted.
+                let t = Rec {
+                    gpu: true,
+                    ..Rec::default()
+                };
+                let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(false));
+                assert_eq!(
+                    (a.codes[0], a.carve_gpu, a.carve_cpu),
+                    (KFWR_ACK_APPLIED, 1, 0),
+                    "count-only {at:#x} sked={sked}"
+                );
+                // GPU target, refusal (inc A2): refused by name, never placed.
+                let t = Rec {
+                    gpu: true,
+                    ..Rec::default()
+                };
+                let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
+                assert_eq!(
+                    (a.codes[0], a.carve_gpu, a.refused),
+                    (KFWR_ACK_FAILED, 1, 1),
+                    "refusal {at:#x} sked={sked}"
+                );
+                assert!(
+                    t.ops
+                        .borrow()
+                        .iter()
+                        .all(|o| !o.starts_with("map") && !o.starts_with("sked")),
+                    "nothing placed: {:?}",
+                    t.ops.borrow()
+                );
+                assert!(
+                    a.first_refusal
+                        .as_deref()
+                        .is_some_and(|w| w.contains("carve-out"))
+                );
+                // CPU view: counted, never refused (the guest kernel's own BAR views).
+                let t = Rec::default();
+                let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
+                assert_eq!(
+                    (a.carve_gpu, a.carve_cpu),
+                    (0, 1),
+                    "cpu view {at:#x} sked={sked}"
+                );
+            }
+        }
+        // One page below the carve-out: mapped, uncounted, on either target and in either mode.
+        for gpu in [false, true] {
+            let t = Rec {
+                gpu,
+                ..Rec::default()
+            };
+            let a = apply_entry(
+                &t,
+                &[m(0x2_0000_0000, CARVE - 0x1000, 0x1000)],
+                &cfg_with(true),
+            );
+            assert_eq!(
+                (a.codes[0], a.carve_gpu, a.carve_cpu),
+                (KFWR_ACK_APPLIED, 0, 0)
+            );
+        }
+        // A guest-RAM leaf at the same numeric offset is not store memory: never counted.
+        let t = Rec {
+            gpu: true,
+            ..Rec::default()
+        };
+        let ram = DiffRun {
+            ap: crate::ledger::AP_SYS_NONCOHERENT,
+            ..m(0x2_0000_0000, CARVE, 0x1000)
+        };
+        let a = apply_entry(&t, &[ram], &cfg_with(true));
+        assert_eq!((a.codes[0], a.carve_gpu), (KFWR_ACK_APPLIED, 0));
     }
 
     // ★★★ v3-cdp (`V3_CDP.md`). The leaf the walker reported in a kf3 guest for libcuda's

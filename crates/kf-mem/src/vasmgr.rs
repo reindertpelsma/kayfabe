@@ -718,6 +718,11 @@ pub struct VaStats {
     /// ★★★ v3-cdp: SKED-reflected pages placed as message-kind host mappings (`V3_CDP.md`) — one
     /// per CUDA context that loaded a device-runtime module.
     pub sked_placed: u64,
+    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §4.3): vidmem/SKED map runs into the firmware carve-out
+    /// on host GPU VA spaces (twins) — count-only until inc A2 refuses them.
+    pub carve_gpu: u64,
+    /// ★ P1+P2 inc A: the same on the guest kernel's CPU views (BAR1/BAR2) — count-only.
+    pub carve_cpu: u64,
     /// ★ v3-cdp: SKED-reflected pages the host already held (not ours).
     pub sked_held: u64,
 }
@@ -819,6 +824,10 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     usermode: Option<kf_chip::usermode::UsermodeMmio>,
     /// ★★ The host can place a per-map PTE kind ([`VaManager::with_per_map_kind`]).
     per_map_kind: bool,
+    /// ★ P1+P2 inc A: the firmware carve-out's base and whether a GPU-target leaf into it is
+    /// refused ([`VaManager::with_carve`]); `store_bytes` (no bound) until set.
+    carve: u64,
+    carve_refuse: bool,
     /// Counters and named refusals.
     pub stats: VaStats,
 }
@@ -844,8 +853,21 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             page_grain: SMALL_PAGE,
             usermode: None,
             per_map_kind: true,
+            carve: store_bytes,
+            carve_refuse: false,
             stats: VaStats::default(),
         }
+    }
+
+    /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §4.3): the firmware carve-out's base
+    /// (`kf_chip::bar0::FbLayout::carve`). Every vidmem/SKED leaf into `[carve, store)` is counted
+    /// per target kind ([`VaStats::carve_gpu`], [`VaStats::carve_cpu`]); with `refuse`, one on a
+    /// host GPU VA space is refused (inc A2). A `carve` above the store is clamped to it.
+    #[must_use]
+    pub fn with_carve(mut self, carve: u64, refuse: bool) -> Self {
+        self.carve = carve.min(self.store_bytes);
+        self.carve_refuse = refuse;
+        self
     }
 
     /// ★ Hopper+: classify walked internal-MMIO leaves against the family's usermode page
@@ -1282,6 +1304,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             ram_offset: &*self.ram_offset,
             usermode: self.usermode,
             per_map_kind: self.per_map_kind,
+            carve: self.carve,
+            carve_refuse: self.carve_refuse,
         };
         for (&key, &(slot, walked_root)) in &batch.walked {
             let Some(space) = self.table.spaces.get(&key) else {
@@ -1393,6 +1417,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.priv_mirrored += a.priv_mirrored as u64;
             self.stats.sked_placed += a.sked_placed as u64;
             self.stats.sked_held += a.sked_held as u64;
+            self.stats.carve_gpu += a.carve_gpu as u64;
+            self.stats.carve_cpu += a.carve_cpu as u64;
             if a.priv_mirrored > 0 {
                 static MIRRORED: std::sync::atomic::AtomicU32 =
                     std::sync::atomic::AtomicU32::new(0);

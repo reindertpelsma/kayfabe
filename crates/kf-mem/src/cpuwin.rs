@@ -1129,6 +1129,8 @@ mod tests {
                 ram_offset: &|gpa, _| Some(gpa),
                 usermode: None,
                 per_map_kind: true,
+                carve: 8 << 30,
+                carve_refuse: false,
             },
         )
     }
