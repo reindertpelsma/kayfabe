@@ -2062,7 +2062,7 @@ impl Device {
             )
         });
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
-        let irq = irq + &self.chans.dispsw.status(self.x11_dispsw);
+        let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
         let db = format!(" {}", self.dbfast.status());
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq}{db} unserviced=[{}] gsp_refusals[{refusals}]",

@@ -64,6 +64,16 @@ pub const GT200_DEBUGGER: u32 = 0x83de;
 pub const GF100_ZBC_CLEAR: u32 = 0x9096;
 /// `GF100_DISP_SW` (`ogkm-580: resource_list.h:1502-1511`, parent `KernelChannel`).
 pub const GF100_DISP_SW: u32 = 0x9072;
+/// ★ EXPERIMENT `x11-dispsw` (review 2026-10-03, MEDIUM): the OTHER `ENG_SW` classes whose only
+/// parent is a channel — `GF100_TIMED_SEMAPHORE_SW` (`0x9074`), `NV50_DEFERRED_API_CLASS`
+/// (`0x5080`), `NV04_SOFTWARE_TEST` (`0x007d`) and `GP100_UVM_SW` (`0xc076`)
+/// (`ogkm-580: g_gpu_class_list.c`, `{ …, ENG_SW }`; `resource_list.h:1513-1556`, parent
+/// `KernelChannel`, `RS_FLAGS_CHANNEL_DESCENDANT_COMMON` = `RPC_TO_ALL`,
+/// `resource_desc_flags.h:45`). The guest's CPU-RM gives each of them, like `GF100_DISP_SW`, the
+/// channel's next 16-bit software classID BEFORE it RPCs the alloc (`kchannelRegisterChild`,
+/// `kernel_channel.c:3408-3453`; `alloc_free.c:788-916`), so every one that reaches us has moved
+/// the guest's numbering — twinned or not, accepted or refused.
+pub const OTHER_ENG_SW_CHANNEL_CLASSES: [u32; 4] = [0x9074, 0x5080, 0x007d, 0xc076];
 /// `NV83DE_ALLOCATION_PARAMETERS` size: `{hDebuggerClient_Obsolete, hAppClient, hClass3dObject}`
 /// (`ogkm-580: class/cl83de.h:51-55`).
 const NV83DE_ALLOC_PARAMS_SIZE: usize = 12;
@@ -401,6 +411,20 @@ pub enum ChanStatement {
         /// The object's handle.
         handle: u32,
     },
+    /// ★ EXPERIMENT `x11-dispsw` (review 2026-10-03, MEDIUM; carried only with
+    /// [`ChannelPolicy::with_display_sw_twins`]): an alloc of one of
+    /// [`OTHER_ENG_SW_CHANNEL_CLASSES`] under a channel — observed, never answered (the link
+    /// continues exactly as without it). The guest numbered it with the channel's next software
+    /// classID, which no host twin object takes, so the plane counts it to keep the twin's
+    /// display-SW numbering equal to the guest's.
+    SoftwareObject {
+        /// `hClient`.
+        client: u32,
+        /// The channel (`hParent`).
+        parent: u32,
+        /// The class.
+        class: u32,
+    },
     /// An object was freed (maybe one of ours).
     Free {
         /// `hClient`.
@@ -544,6 +568,16 @@ impl ChannelPolicy {
                 is_rm_internal_client(h.client)
             );
             return None;
+        }
+        // ★ x11-dispsw (review 2026-10-03, MEDIUM): ASKED BEFORE the boundary below, which refuses
+        // three of these classes — the guest numbered the object before it asked us, refused or
+        // not. Observed only: the answer is ignored and the alloc goes on exactly as before.
+        if self.display_sw_twins && OTHER_ENG_SW_CHANNEL_CLASSES.contains(&h.class) {
+            let _ = (self.sink)(ChanStatement::SoftwareObject {
+                client: h.client,
+                parent: h.parent,
+                class: h.class,
+            });
         }
         // ⊘ P5b: a class the boundary refuses is never carried — the object seat refuses it next,
         // and a twin born for it would be a host channel for an object that does not exist
@@ -2054,6 +2088,81 @@ mod tests {
         zbc.payload[12..16].copy_from_slice(&GF100_ZBC_CLEAR.to_le_bytes());
         assert!(on.respond(&zbc).is_none());
         assert_eq!(seen.lock().unwrap().len(), n);
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw` (review 2026-10-03, MEDIUM): with the switch ON, every alloc of
+    /// another channel `ENG_SW` class — the boundary-refused `0x9074`/`0x5080`/`0x007d` and the
+    /// permitted `0xc076` alike — is OBSERVED as one [`ChanStatement::SoftwareObject`] (the guest
+    /// numbered it either way), and the link then answers exactly as with the switch off, whatever
+    /// the plane said. OFF: no statement at all. Delete the observation and the plane's mirror of
+    /// the guest's numbering falls one behind for each.
+    #[test]
+    fn other_software_classes_are_observed_with_x11_dispsw_and_otherwise_untouched() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let seen: Arc<Mutex<Vec<ChanStatement>>> = Arc::default();
+        let s2 = seen.clone();
+        // A plane that would refuse anything it is asked: the observation must ignore it.
+        let sink: ChanSink = Arc::new(move |st| {
+            s2.lock().unwrap().push(st);
+            ChanAnswer::Refused {
+                status: 0x40,
+                why: "ignored".into(),
+            }
+        });
+        let (c, ch) = (0xc1d0_0021, 0xcafe_0013);
+        let alloc = |class: u32, h: u32| {
+            let payload: Vec<u8> = [c, ch, h, class, 0, 0, 0, 0]
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect();
+            RpcCommand {
+                function: RpcFunction::RmAlloc,
+                code: 0x67,
+                sequence: 1,
+                payload,
+                elements: 1,
+                delivered: Vec::new(),
+            }
+        };
+        let mut off = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink.clone());
+        let mut on =
+            ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink).with_display_sw_twins(true);
+        for (i, class) in OTHER_ENG_SW_CHANNEL_CLASSES.into_iter().enumerate() {
+            let cmd = alloc(class, 0xcafe_7000 + i as u32);
+            let before = seen.lock().unwrap().len();
+            let off_reply = off.respond(&cmd);
+            assert_eq!(
+                seen.lock().unwrap().len(),
+                before,
+                "{class:#x}: OFF says nothing"
+            );
+            let on_reply = on.respond(&cmd);
+            assert_eq!(on_reply, off_reply, "{class:#x}: ON answers as OFF does");
+            assert!(on.defers(&cmd).is_none(), "{class:#x}: nothing held");
+            assert_eq!(
+                seen.lock().unwrap().last().copied(),
+                Some(ChanStatement::SoftwareObject {
+                    client: c,
+                    parent: ch,
+                    class
+                }),
+                "{class:#x}"
+            );
+            assert_eq!(seen.lock().unwrap().len(), before + 1, "{class:#x}: once");
+        }
+        assert_eq!(
+            (on.carried, on.refused),
+            (0, 0),
+            "observed, never carried or refused"
+        );
+        // GF100_DISP_SW itself is NOT a SoftwareObject: it is carried by its own statement.
+        let before = seen.lock().unwrap().len();
+        let _ = on.respond(&alloc(GF100_DISP_SW, 0xcafe_9072));
+        assert!(matches!(
+            seen.lock().unwrap()[before..],
+            [ChanStatement::DisplaySw { .. }]
+        ));
     }
 
     #[test]

@@ -122,7 +122,12 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     # traces/v3_display/b0a_20261003/): kf3 is boot_vga and Xorg's primary, and the stock OutputClass file
     # loads the NVIDIA X driver. DISPLAY_XORG_PIN=1 restores the old M3 BusID pin for comparison.
     if [ "${DISPLAY_XORG_PIN:-0}" = 0 ]; then XCONF='sudo rm -f /etc/X11/xorg.conf'; else XCONF='sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf'; fi
-    gq "$XCONF"' && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && cp ~/desk/xsessionrc ~/.xsessionrc && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
+    # ⊘ 2026-10-03 (x11-dispsw review, LOW): the guest disk persists across boots, and Xorg rotates
+    # the PREVIOUS log to `.old` — so `.old` was the last BOOT's server (run 8's `last_EE` named run
+    # 7's error). Every Xorg log is removed before this boot's first server starts: from here a
+    # `.old` can only be a server THIS boot restarted (lightdm's crash loop), which is what it is
+    # read for.
+    gq "$XCONF"' && sudo rm -f /var/log/Xorg.0.log /var/log/Xorg.0.log.old /var/log/Xorg.9.log /var/log/Xorg.9.log.old && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && cp ~/desk/xsessionrc ~/.xsessionrc && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
     say "DESKTOP_CONF busid=$busid session=$session env=[${DISPLAY_SESSION_ENV:-}] $(tr '\n' ' ' < "$OUT/desk_conf.log")"
     gq 'sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/lightdm_start.log"
     # the session: Xorg up, then a Cinnamon process of the autologin user (≤ 90 s)
@@ -142,7 +147,9 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     gq 'sudo cat /var/log/Xorg.0.log.old' 60 > "$OUT/Xorg.0.log.old"
     gq 'sudo tail -80 /var/log/lightdm/lightdm.log; echo ===X0; sudo tail -60 /var/log/lightdm/x-0.log' 60 > "$OUT/lightdm_logs.log"
     gq 'ls -la /usr/share/X11/xorg.conf.d/ /etc/X11/xorg.conf.d/ 2>&1; ls -la /etc/X11/xorg.conf 2>&1' 60 > "$OUT/xorg_confd.log"
-    say "XORG_CONFD $(grep -c . "$OUT/xorg_confd.log") lines, nvidia_outputclass=$(grep -c -i 'nvidia' "$OUT/xorg_confd.log") last_EE=$(grep '(EE)' "$OUT/Xorg.0.log.old" | grep -v 'warning, (EE)' | tail -1 | cut -c1-200)"
+    # `last_EE` = this boot's current server; `last_EE_old` = a server this boot restarted (empty
+    # when it never restarted — the logs of earlier boots were removed above).
+    say "XORG_CONFD $(grep -c . "$OUT/xorg_confd.log") lines, nvidia_outputclass=$(grep -c -i 'nvidia' "$OUT/xorg_confd.log") last_EE=$(grep '(EE)' "$OUT/Xorg.0.log" | grep -v 'warning, (EE)' | tail -1 | cut -c1-160) last_EE_old=$(grep '(EE)' "$OUT/Xorg.0.log.old" 2>/dev/null | grep -v 'warning, (EE)' | tail -1 | cut -c1-160)"
     say "XORG_PRIMARY pin=${DISPLAY_XORG_PIN:-0} $(grep -m2 -E 'PCI:\*|Primary Device is' "$OUT/Xorg.0.log" | tr '\n' ' ' | cut -c1-240) EE=$(grep -c '(EE)' "$OUT/Xorg.0.log") no_screens=$(grep -c 'no screens found' "$OUT/Xorg.0.log")"
     sleep 20   # let the session paint (panel, wallpaper) before the first shot
     shot "$OUT/desk_1.ppm"

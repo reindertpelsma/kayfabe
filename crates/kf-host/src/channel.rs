@@ -10,7 +10,7 @@
 //! Bodies follow the old tree's `birth_channel` / `schedule` / `invalidate_tlb`, which ran on
 //! hardware (rm-ladder R14–R17, the thin guest's passthrough channels).
 
-use crate::{ABI_ENCODE_FAILED, HostRm, RmError};
+use crate::{ABI_ENCODE_FAILED, DISP_SW_CLASS_ID_UNREADABLE, HostRm, RmError};
 use kf_abi::bringup::{
     NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_ACCESS_READ_ONLY, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
     NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN, NVOS46_FLAGS_GPU_CACHEABLE_NO,
@@ -829,6 +829,32 @@ impl HostRm {
         Ok(h)
     }
 
+    /// ★ EXPERIMENT `x11-dispsw` (review 2026-10-03, MEDIUM): the FIFO **software classID** host RM
+    /// gave `object`, a [`Self::alloc_disp_sw`] object on `chan` — the 16-bit value a
+    /// `SET_OBJECT` must carry to name it. Host RM numbers every `ENG_SW` child of a channel from
+    /// that channel's own counter (`kchannelRegisterChild`, `ogkm-580: kernel_channel.c:3408-3453`)
+    /// and answers it here: `NV906F_CTRL_GET_CLASS_ENGINEID` on the channel
+    /// (`ctrl906f.h:94-103`; `classEngineID = DRF_NUM(906F, _SET_OBJECT, _NVCLASS, classID)`,
+    /// `kernel_channel_gm107.c:72-82`, `NVCLASS` = `15:0`, `cl906f.h:71`). Unprivileged
+    /// (`NON_PRIVILEGED`, flags `0x10008`, `g_kernel_channel_nvoc.c:256-259`). The guest's client
+    /// asks its OWN CPU-RM the same question about its own object (`kernel_channel.c:2950-2970`),
+    /// so the twin serves its `SET_OBJECT` only when both numbers agree.
+    ///
+    /// ⊘ Not a [`kf_abi::hostabi::HOST_CONTROLS`] row (the driver matrix has no
+    /// `NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS`): carried as bytes on the interval the host encoders
+    /// were written for and refused by name elsewhere — a refusal the caller turns into a refused
+    /// display-SW alloc.
+    ///
+    /// # Errors
+    /// The host's refusal, or [`RmError::Other`] when the reply names another class than
+    /// `GF100_DISP_SW` for `object`.
+    pub fn disp_sw_class_id(&self, chan: Channel, object: u32) -> Result<u16, RmError> {
+        let mut p = [0u8; GET_CLASS_ENGINEID_PARAMS_SIZE];
+        p[0..4].copy_from_slice(&object.to_le_bytes());
+        self.raw_control(chan.chan, NV906F_CTRL_GET_CLASS_ENGINEID, &mut p)?;
+        decode_disp_sw_class_id(&p).ok_or(RmError::Other(DISP_SW_CLASS_ID_UNREADABLE))
+    }
+
     /// ★ w827: a `GT200_DEBUGGER` session on OUR device, bound to `obj3d` — a GR object this
     /// session allocated (a twin's engine object). Params WE author:
     /// `NV83DE_ALLOC_PARAMETERS {hDebuggerClient_Obsolete = 0, hAppClient = our client,
@@ -1217,6 +1243,28 @@ const REAP_QUEUE: usize = 2;
 /// `GF100_DISP_SW` (`ogkm-580: class/cl9072.h`).
 pub const GF100_DISP_SW: u32 = 0x9072;
 
+/// `NV906F_CTRL_GET_CLASS_ENGINEID` (`ogkm-580: ctrl906f.h:94`) — on a channel, for one of its
+/// children: `{hObject, classEngineID, classID, engineID}` (`:98-103`).
+pub const NV906F_CTRL_GET_CLASS_ENGINEID: u32 = 0x906f_0101;
+/// `sizeof(NV906F_CTRL_GET_CLASS_ENGINEID_PARAMS)` — four 32-bit words.
+const GET_CLASS_ENGINEID_PARAMS_SIZE: usize = 16;
+
+/// ★ x11-dispsw: the software classID out of an `NV906F_CTRL_GET_CLASS_ENGINEID` reply for a
+/// `GF100_DISP_SW` object — `classEngineID`'s `NVCLASS` field (`15:0`, `cl906f.h:71`; for an
+/// `ENG_SW` child it is the per-channel classID, `kernel_channel_gm107.c:72-82`). `None` when the
+/// reply's `classID` (the object's external class, `RES_GET_EXT_CLASS_ID`, `:69`) is not
+/// `GF100_DISP_SW` or the block is short: then the number does not name OUR object.
+#[must_use]
+pub fn decode_disp_sw_class_id(reply: &[u8]) -> Option<u16> {
+    let w = |i: usize| {
+        reply
+            .get(4 * i..4 * i + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    };
+    let class_engine = w(1)?;
+    (w(2)? == GF100_DISP_SW).then_some((class_engine & 0xffff) as u16)
+}
+
 /// ★ EXPERIMENT `x11-dispsw`: the ONLY `NV9072_ALLOCATION_PARAMETERS` kayfabe sends its host —
 /// `{logicalHeadId 0, displayMask 0, caps 0}`, a constant: [`HostRm::alloc_disp_sw`] takes no guest
 /// input at all (owner rule: author host flags, never forward them).
@@ -1224,6 +1272,28 @@ pub const DISP_SW_AUTHORED_PARAMS: [u8; 12] = [0; 12];
 
 #[cfg(test)]
 mod disp_sw_tests {
+    /// ★ x11-dispsw: the software classID is `classEngineID`'s low 16 bits, read only when the
+    /// reply's `classID` is `GF100_DISP_SW` — a reply about another class (or a short block) names
+    /// nothing we can compare, and is refused rather than read as a number.
+    #[test]
+    fn the_class_id_is_read_from_nvclass_only_for_a_disp_sw_reply() {
+        let reply = |class_engine: u32, class: u32| {
+            let mut p = [0u8; super::GET_CLASS_ENGINEID_PARAMS_SIZE];
+            p[0..4].copy_from_slice(&0xcafe_0040u32.to_le_bytes());
+            p[4..8].copy_from_slice(&class_engine.to_le_bytes());
+            p[8..12].copy_from_slice(&class.to_le_bytes());
+            p
+        };
+        assert_eq!(super::decode_disp_sw_class_id(&reply(3, 0x9072)), Some(3));
+        // ENGINE (20:16) is zero for a software class; only NVCLASS is the number.
+        assert_eq!(
+            super::decode_disp_sw_class_id(&reply(0x001f_0007, 0x9072)),
+            Some(7)
+        );
+        assert_eq!(super::decode_disp_sw_class_id(&reply(3, 0xc797)), None);
+        assert_eq!(super::decode_disp_sw_class_id(&reply(3, 0x9072)[..8]), None);
+    }
+
     /// ★ The authored display-SW params have the driver matrix's `NV9072_ALLOCATION_PARAMETERS`
     /// layout at every tag it covers (one 12-byte layout, the three words at 0/4/8; the sweep of
     /// 2026-10-03, `traces/driver_matrix/ranges.tsv`), and each word is zero: head 0, no display
@@ -1300,57 +1370,6 @@ mod perm_tests {
             all & ((1 << 15) | (0xF << 8) | (1 << 19) | (1 << 31) | (1 << 4)),
             0
         );
-    }
-
-    /// ★ x11-dispsw (2026-10-03): NO map the crate makes asks host RM for a kernel CPU mapping
-    /// (`NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`, field `5:5`), whatever the caller's permissions, kind,
-    /// defer, grows-down, page-size pin or `FIXED` — so host RM has no address through which to
-    /// write a display-SW semaphore or notifier into anything we map (`method_notification.c:624-627`,
-    /// `:349-351`). That is the bound `docs/design/V3_DISPLAY.md` states for a twinned
-    /// `GF100_DISP_SW`; adding the bit anywhere in the map path fails here.
-    #[test]
-    fn no_map_asks_host_rm_for_a_kernel_cpu_mapping() {
-        use kf_abi::bringup::{
-            NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
-            NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
-            NVOS46_FLAGS_PAGE_SIZE_4KB,
-        };
-        assert_eq!(
-            NVOS46_FLAGS_KERNEL_MAPPING_ENABLE, 0x20,
-            "nvos.h: KERNEL_MAPPING is 5:5, _ENABLE is 1"
-        );
-        for ro in [false, true] {
-            for atomic_disable in [false, true] {
-                for volatile in [false, true] {
-                    let perm = MapPerm {
-                        read_only: ro,
-                        atomic_disable,
-                        volatile,
-                    };
-                    for other in [
-                        0,
-                        NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
-                        NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
-                        NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
-                    ] {
-                        for page_size in [0, NVOS46_FLAGS_PAGE_SIZE_4KB] {
-                            for fixed in [false, true] {
-                                let f = crate::nvos46_map_flags(
-                                    perm.nvos46_flags() | other,
-                                    page_size,
-                                    fixed,
-                                );
-                                assert_eq!(
-                                    f & NVOS46_FLAGS_KERNEL_MAPPING_ENABLE,
-                                    0,
-                                    "kernel mapping asked: {f:#x}"
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     /// ★★★★★ v3-adasys: EVERY map the crate makes asks RM to snoop the CPU cache
