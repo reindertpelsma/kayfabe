@@ -16,3 +16,5 @@ Text logs and PNG renders of the console screendumps only.
 
 Seen, not graded: for the first ~6 s the QEMU console shows its own *"Guest has not initialized the
 display (yet)"* placeholder before the boot layer's first frame (cosmetic).
+| B3 | `KF_FIRMWARE=ovmf DISPLAY_KF3_EXTRA=gop=on DISPLAY_DESKTOP=1 DISPLAY_CINNAMON_WAYLAND=1` (no xorg.conf: the lane's default since `v3-b0a`) | Xorg: PASS for device and driver selection with simpledrm holding `card0` (nvidia-drm is `card1`): `boot_vga=1`, `PCI:*(0@0:2:0)`, the NVIDIA X driver from the stock OutputClass file, GLX on the RTX 3060, direct. X11 desktop: FAIL on the known `GF100_DISP_SW` gap, now named by the X driver itself (`(EE) NVIDIA(0): Failed to allocate display software resources`), so Cinnamon X11 segfaults in `libnvidia-glcore`, X11 vkcube aborts, and one `Flip event timeout on head 0` follows at guest 80.48 s. Cinnamon Wayland: PASS — session up, vkcube-wayland running (`b3_cinnamon_wayland_vkcube.png`). Host Xid 0 |
+
