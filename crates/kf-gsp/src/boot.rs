@@ -2111,6 +2111,9 @@ impl GspFsm {
             // event and desyncs the sequence.
             // ★ Fn 72's body is KEPT (never answered) for fn 65's encoder: the boot display's
             // `consoleMemSize`, decoded there with the table that serves fn 65 ([`crate::sysinfo`]).
+            if cmd.function == RpcFunction::GspSetSystemInfo {
+                crate::sysinfo::log_nocat(&self.abi.driver, &cmd.payload, cmd.sequence);
+            }
             if cmd.function == RpcFunction::GspSetSystemInfo
                 && let Some(cell) = &self.system_info
             {

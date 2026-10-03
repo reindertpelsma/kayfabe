@@ -41,6 +41,63 @@ pub fn system_info_max() -> usize {
         .unwrap_or(0)
 }
 
+/// ★ 2026-10-04 (branch `v3-windows`, runbook C3; `docs/design/THE_WINDOWS_AXIS.md` §7): fn 72's
+/// `bGspNocatEnabled`, read at the PROVISIONAL driver's layout and logged — never decided on.
+///
+/// The only assignment in ogkm is `if (RMCFG_FEATURE_PLATFORM_WINDOWS) rpcInfo->bGspNocatEnabled =
+/// NV_TRUE;` (`ogkm-580: src/nvidia/src/kernel/vgpu/rpc.c:10650`), so `1` here says the guest RM
+/// was built for Windows. ⚠ Fn 72 precedes fn 1, where a defaulted device may re-select its tables
+/// (`kf_rm::ReselectAtFn1`), so the line names the layout it read with and its size against the
+/// guest's declared length; a mismatch is printed, not resolved.
+pub fn nocat_line(driver: &kf_abi::versions::DriverAbiTable, payload: &[u8]) -> String {
+    let version = driver.driver_version();
+    match kf_abi::matrix::Resolved::of(&kf_abi::generated::matrix::GSPSYSTEMINFO, version) {
+        Err(e) => {
+            format!("bGspNocatEnabled not read: no GspSystemInfo layout at driver {version}: {e}")
+        }
+        Ok(layout) => match layout.maybe("bGspNocatEnabled").and_then(|f| f.range()) {
+            None => {
+                format!("bGspNocatEnabled not read: absent from driver {version}'s GspSystemInfo")
+            }
+            Some(r) => {
+                let value = payload
+                    .get(r.clone())
+                    .map(|b| b.iter().rev().fold(0u64, |a, &x| (a << 8) | u64::from(x)));
+                let size_note = if payload.len() == layout.size() {
+                    String::new()
+                } else {
+                    format!(
+                        " ⚠ the guest's body is {} bytes, the layout {}",
+                        payload.len(),
+                        layout.size()
+                    )
+                };
+                match value {
+                    Some(v) => format!(
+                        "bGspNocatEnabled={v} at +{} (driver {version}'s layout{size_note}; 1 = a \
+                         Windows-built RM, THE_WINDOWS_AXIS §7)",
+                        r.start
+                    ),
+                    None => format!(
+                        "bGspNocatEnabled not read: +{} is past the guest's {}-byte body",
+                        r.start,
+                        payload.len()
+                    ),
+                }
+            }
+        },
+    }
+}
+
+/// Log [`nocat_line`] for one fn 72.
+pub fn log_nocat(driver: &kf_abi::versions::DriverAbiTable, payload: &[u8], sequence: u32) {
+    eprintln!(
+        "kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq={sequence} {} bytes: {}",
+        payload.len(),
+        nocat_line(driver, payload)
+    );
+}
+
 /// One stashed fn 72.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StashedSystemInfo {
@@ -102,6 +159,29 @@ kf_util::assert_send_sync!(SystemInfoCell);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ 2026-10-04 (v3-windows, runbook C3): the line reads `bGspNocatEnabled` at the driver's own
+    /// layout, and says when the guest's body is not that layout's size.
+    #[test]
+    fn the_nocat_line_reads_the_flag_at_the_drivers_layout() {
+        let v = kf_abi::DriverVersion::parse("580.159.04").unwrap();
+        let driver = kf_abi::versions::table_for(v).unwrap();
+        let layout =
+            kf_abi::matrix::Resolved::of(&kf_abi::generated::matrix::GSPSYSTEMINFO, v).unwrap();
+        let at = layout.need("bGspNocatEnabled").unwrap().off();
+        let mut body = vec![0u8; layout.size()];
+        assert!(nocat_line(driver, &body).starts_with("bGspNocatEnabled=0 at +"));
+        body[at] = 1;
+        let line = nocat_line(driver, &body);
+        assert!(
+            line.starts_with(&format!("bGspNocatEnabled=1 at +{at} ")),
+            "{line}"
+        );
+        assert!(!line.contains('⚠'), "{line}");
+        body.push(0);
+        assert!(nocat_line(driver, &body).contains('⚠'));
+        assert!(nocat_line(driver, &body[..at]).contains("past the guest's"));
+    }
 
     #[test]
     fn the_bound_is_the_largest_struct_in_the_matrix() {

@@ -164,6 +164,16 @@ impl CommandPolicy for GuestSystemInfoPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         match cmd.function {
             RpcFunction::SetGuestSystemInfo => {
+                // ★ 2026-10-04 (v3-windows, runbook C3): what the guest says it is, every field, for
+                // the log only — a Windows guest's strings and changelist are unmeasured.
+                match guestsysinfo::GuestIdentity::decode(&cmd.payload) {
+                    Ok(id) => eprintln!(
+                        "kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says {id}; this device answers \
+                         as driver {}",
+                        self.driver.driver_version()
+                    ),
+                    Err(e) => eprintln!("kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: undecodable: {e}"),
+                }
                 if let Err(why) = self.check_driver_version(&cmd.payload) {
                     eprintln!("kf-rm: SET_GUEST_SYSTEM_INFO refused: {why}");
                     return refuse();

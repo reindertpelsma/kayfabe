@@ -105,6 +105,77 @@ pub fn decode_guest_driver_version(payload: &[u8]) -> Result<&str, GuestSystemIn
     core::str::from_utf8(&arr[..end]).map_err(|_| GuestSystemInfoError::DriverVersionNotUtf8)
 }
 
+/// Byte offset of `guestClNum` — the sixth `NvU32` (`ogkm-580: g_rpc-structures.h:36-47`; the
+/// guest fills it with `NV_BUILD_CHANGELIST_NUM`, `src/nvidia/src/kernel/vgpu/rpc.c:8732` at 580.65.06).
+pub const GUEST_CL_NUM_OFF: usize = 5 * 4;
+
+/// Byte offset of `guestVersion` (`NV_BUILD_BRANCH_VERSION`, e.g. `rel/gpu_drv/r580/r580_78-179`
+/// on Linux and `r580_78-7` in nvBldVer.h's Windows block at 580.65.06).
+pub const GUEST_VERSION_OFF: usize = GUEST_DRIVER_VERSION_OFF + GUEST_STRING_LEN;
+
+/// Byte offset of `guestTitle` (`NV_DISPLAY_DRIVER_TITLE`).
+pub const GUEST_TITLE_OFF: usize = GUEST_VERSION_OFF + GUEST_STRING_LEN;
+
+/// ★ What a guest says about itself at fn 1, decoded for the LOG only (2026-10-04, branch
+/// `v3-windows`, runbook C3): the three `[IN]` strings, the changelist and the vGPU pair.
+///
+/// ⊘ Nothing decides on this. The strings are the guest's, so each is taken up to its NUL (or the
+/// whole array), decoded lossily and escaped by [`GuestIdentity`]'s `Display`; the only decision
+/// fn 1 makes stays [`decode_guest_driver_version`]'s strict parse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuestIdentity {
+    /// `vgxVersionMajorNum` / `vgxVersionMinorNum`.
+    pub vgx: VgxVersion,
+    /// `guestClNum`.
+    pub cl_num: u32,
+    /// `guestDriverVersion` (`NV_VERSION_STRING`).
+    pub driver_version: String,
+    /// `guestVersion` (`NV_BUILD_BRANCH_VERSION`).
+    pub version: String,
+    /// `guestTitle` (`NV_DISPLAY_DRIVER_TITLE`).
+    pub title: String,
+}
+
+impl GuestIdentity {
+    /// Decode fn 1's identity fields.
+    ///
+    /// # Errors
+    /// [`GuestSystemInfoError::Truncated`].
+    pub fn decode(payload: &[u8]) -> Result<GuestIdentity, GuestSystemInfoError> {
+        let vgx = decode_declared_vgx(payload)?;
+        let text = |at: usize| {
+            let arr = &payload[at..at + GUEST_STRING_LEN];
+            let end = arr.iter().position(|&b| b == 0).unwrap_or(arr.len());
+            String::from_utf8_lossy(&arr[..end]).into_owned()
+        };
+        let cl = &payload[GUEST_CL_NUM_OFF..GUEST_CL_NUM_OFF + 4];
+        Ok(GuestIdentity {
+            vgx,
+            cl_num: u32::from_le_bytes([cl[0], cl[1], cl[2], cl[3]]),
+            driver_version: text(GUEST_DRIVER_VERSION_OFF),
+            version: text(GUEST_VERSION_OFF),
+            title: text(GUEST_TITLE_OFF),
+        })
+    }
+}
+
+impl core::fmt::Display for GuestIdentity {
+    /// One log line's worth; every string escaped (`escape_debug`), so a guest cannot write a line
+    /// break or a terminal escape into the host log.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "guestDriverVersion=\"{}\" guestVersion=\"{}\" guestTitle=\"{}\" guestClNum={} vgx={:#x}.{:#x}",
+            self.driver_version.escape_debug(),
+            self.version.escape_debug(),
+            self.title.escape_debug(),
+            self.cl_num,
+            self.vgx.major,
+            self.vgx.minor
+        )
+    }
+}
+
 /// The vGPU RPC version a driver speaks.
 ///
 /// Two `NvU32` on the wire even though both values fit in a byte, because
@@ -219,4 +290,44 @@ pub fn encode_set_guest_system_info_reply(ours: VgxVersion) -> Vec<u8> {
     body[VGX_MAJOR_OFF..VGX_MAJOR_OFF + 4].copy_from_slice(&ours.major.to_le_bytes());
     body[VGX_MINOR_OFF..VGX_MINOR_OFF + 4].copy_from_slice(&ours.minor.to_le_bytes());
     body
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    /// ★ 2026-10-04 (v3-windows, runbook C3): fn 1's identity, decoded for the log. The values are
+    /// nvBldVer.h's Windows block at ogkm 580.65.06 (`NV_BUILD_NAME "580.88"`, `r580_78-7`, CL
+    /// 36308443); a guest string cannot break the log line.
+    #[test]
+    fn the_identity_decodes_every_field_and_escapes_the_strings() {
+        let mut p = vec![0u8; SET_GUEST_SYSTEM_INFO_SIZE];
+        p[VGX_MAJOR_OFF..VGX_MAJOR_OFF + 4].copy_from_slice(&0x2Bu32.to_le_bytes());
+        p[VGX_MINOR_OFF..VGX_MINOR_OFF + 4].copy_from_slice(&0x13u32.to_le_bytes());
+        p[GUEST_CL_NUM_OFF..GUEST_CL_NUM_OFF + 4].copy_from_slice(&36_308_443u32.to_le_bytes());
+        p[GUEST_DRIVER_VERSION_OFF..GUEST_DRIVER_VERSION_OFF + 6].copy_from_slice(b"580.88");
+        p[GUEST_VERSION_OFF..GUEST_VERSION_OFF + 9].copy_from_slice(b"r580_78-7");
+        p[GUEST_TITLE_OFF..GUEST_TITLE_OFF + 5].copy_from_slice(b"a\nb\x1b[");
+        let id = GuestIdentity::decode(&p).unwrap();
+        assert_eq!(id.cl_num, 36_308_443);
+        assert_eq!(id.driver_version, "580.88");
+        assert_eq!(id.version, "r580_78-7");
+        assert_eq!(
+            id.vgx,
+            VgxVersion {
+                major: 0x2B,
+                minor: 0x13
+            }
+        );
+        let line = id.to_string();
+        assert!(
+            line.contains("guestDriverVersion=\"580.88\"") && line.contains("guestClNum=36308443"),
+            "{line}"
+        );
+        assert!(!line.contains('\n') && !line.contains('\x1b'), "{line}");
+        assert!(matches!(
+            GuestIdentity::decode(&p[..100]),
+            Err(GuestSystemInfoError::Truncated { .. })
+        ));
+    }
 }
