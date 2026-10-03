@@ -15,7 +15,9 @@
 //!   RELEASE accounting, reclaim, reconnect with backoff — everything decided here, nothing
 //!   blocking, deterministic under a caller-supplied clock;
 //! - [`link`] — the real socket ([`UnixLink`]) and the peer policy's inputs (root, the VMM's
-//!   effective uid at each connect, `display-broker-uid`).
+//!   effective uid at each connect, `display-broker-uid`);
+//! - [`cursor`] — ★ the guest's cursor as the host pointer in hover mode (`OWNER_RULINGS.md` §O):
+//!   the [`CursorShare`] the worker and the relay meet in, and what the broker is sent.
 //!
 //! The VMM's part is small and is the only VMM-specific code: register the socket and a timer
 //! ([`Host`]), wake the relay when the worker publishes a frame, and inject [`Input`] through
@@ -26,6 +28,7 @@
 //! keeps its own SPDX line (`GPL-2.0 OR Apache-2.0`).
 
 pub mod conn;
+pub mod cursor;
 pub mod gpucopy;
 pub mod link;
 pub mod slots;
@@ -34,6 +37,7 @@ pub mod wire;
 pub use conn::{Counters, Host, Input, Link, Recv, Relay, RelayConfig, Rung, Sent};
 #[doc(hidden)]
 pub use conn::{LogCapture, capture_log};
+pub use cursor::{CursorImage, CursorMode, CursorShare, CursorWant};
 pub use link::{MAX_BROKER_UID, UnixLink, broker_uid_property, broker_uids, effective_uid};
 pub use slots::{
     FrameGeom, FrameRing, InstallRefusal, Kind, SlotFds, Take, VramFds, VramGeom, frame_bytes,

@@ -31,6 +31,7 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
+use kf_broker::{CursorImage, CursorMode, CursorWant};
 use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
@@ -404,6 +405,12 @@ pub struct DispCounters {
     pub scanout_pack_skipped: AtomicU64,
     /// … and the VRAM provisioned for slots, in bytes.
     pub vram_bytes: AtomicU64,
+    /// ★ §O, the host cursor: guest cursor images copied for the broker (a GPU copy into a buffer
+    /// kf owns, one per frame while a cursor-capable broker is attached) …
+    pub host_cursor_reads: AtomicU64,
+    /// … and cursors the host could not show (XOR, an additive blend, an unreadable surface),
+    /// composed into the frame in every mode instead.
+    pub host_cursor_refused: AtomicU64,
     /// ★ The boot display: copies started from the boot layer (`gop=on`).
     pub boot_frames: AtomicU64,
     /// ★ Milliseconds from the worker's start to the first armed head, when the boot layer retired
@@ -1868,9 +1875,23 @@ impl Device {
                     .and_then(|cv| engine.cursor_scan(cv, c.head)),
                 _ => None,
             };
+            // ★ §O: where the cursor goes, as the relay decided (hover: the host shows it; grab or
+            // no cursor-capable broker: the frame). A switch recomposes at once — the cursor goes
+            // into the frame or out of it — and in hover a MOVE makes no frame (the host pointer
+            // is the guest's), unless the last frame composed the cursor (one the host cannot
+            // show). Off and grab recompose on a move exactly as before.
+            let cursor_mode = dp
+                .broker
+                .as_ref()
+                .map_or(CursorMode::Off, |b| b.cursor().mode());
+            if cursor_mode != scan.cursor_mode {
+                scan.cursor_mode = cursor_mode;
+                scan.want = true;
+            }
             if let Some(Shown::Armed(c)) = &shown
                 && c.head < 32
                 && cursor_moved & (1 << c.head) != 0
+                && move_recomposes(cursor_mode, scan.cursor_in_frame)
             {
                 scan.want = true;
             }
@@ -2209,6 +2230,20 @@ const FRAME_SMALL: usize = 1920 * 1080 * 4;
 /// The largest frame ([`kf_disp::scanout::MAX_PIXELS`] at 4 bytes).
 const FRAME_MAX: usize = kf_disp::scanout::MAX_PIXELS as usize * 4;
 
+/// ★ §O, the worker's first cursor decision (GPU-free): whether this frame composes the head's
+/// cursor — always without a cursor-capable broker (`want` is `None`: nothing was read) and under
+/// grab; in hover only a cursor the host cannot show ([`CursorMode::composes`]).
+fn cursor_composed(mode: CursorMode, want: Option<&CursorWant>) -> bool {
+    want.is_none_or(|w| mode.composes(w))
+}
+
+/// ★ §O, the second: whether a cursor MOVE recomposes. In hover the host pointer IS the guest's,
+/// so a move makes no frame — unless the last frame composed the cursor (one the host cannot show).
+/// Off and grab recompose on a move exactly as before §O.
+fn move_recomposes(mode: CursorMode, cursor_in_frame: bool) -> bool {
+    mode != CursorMode::Hover || cursor_in_frame
+}
+
 /// ★ M2 — the worker's scanout copies (`V3_DISPLAY.md` §4.6). One copy in flight at a time, on the
 /// plane's own stream; its completion is the `cuLaunchHostFunc` signal queued after it.
 #[derive(Default)]
@@ -2245,6 +2280,14 @@ struct ScanState {
     last_plan: Option<(Vec<LayerPlan>, (u32, u32))>,
     /// ★ The GPU-copy rung's worker half (§8.11).
     vram: Option<VramWorker>,
+    /// ★ §O: the cursor mode the last pass saw (a change recomposes) …
+    cursor_mode: CursorMode,
+    /// … whether the last copy composed the head's cursor (only then does a move recompose) …
+    cursor_in_frame: bool,
+    /// … the key of the cursor last posted to the relay (posted again only when it changes) …
+    cursor_posted: Option<(u8, u64)>,
+    /// … and host-cursor refusals logged so far (bounded).
+    cursor_refusals: u64,
 }
 
 /// ★ The copy in flight: its number, slot, frame size and start — and which copies it made: the
@@ -2525,6 +2568,58 @@ impl ScanState {
         }
     }
 
+    /// ★ §O: what the guest shows as its cursor NOW, for the host — `Hidden` without an armed
+    /// composition or an enabled cursor, or for a wholly transparent image; the image (copied by the
+    /// GPU from the store into a buffer kf owns, converted to premultiplied ARGB) when the host can
+    /// show it; `Composed` — refused by name, at a bounded rate — when it cannot (XOR, an additive
+    /// blend, a surface that does not resolve or could not be copied).
+    fn host_cursor_want(
+        &mut self,
+        io: &mut Io<'_>,
+        shown: &Shown,
+        cursor: Option<&kf_disp::engine::CursorScan>,
+    ) -> CursorWant {
+        let (Shown::Armed(_), Some(cs)) = (shown, cursor) else {
+            return CursorWant::Hidden;
+        };
+        let dp = io.dp;
+        let got = io
+            .resolve(cs.client, cs.handle, 0)
+            .and_then(|dma| kf_disp::scanout::plan_host_cursor(cs, &dma).map_err(|r| r.0))
+            .and_then(|h| {
+                let gpu = io.gpu.as_ref().ok_or("no display GPU context")?;
+                let n = usize::try_from(h.extent).map_err(|_| "an impossible cursor extent")?;
+                let mut raw = vec![0u8; n];
+                gpu.read_store(h.src, &mut raw)
+                    .map_err(|e| format!("copying the cursor image: {e}"))?;
+                dp.counters
+                    .host_cursor_reads
+                    .fetch_add(1, Ordering::Relaxed);
+                match h.image(&raw).map_err(|r| r.0)? {
+                    None => Ok(CursorWant::Hidden),
+                    Some(px) => CursorImage::new(h.size, h.size, h.hot, px)
+                        .map(|i| CursorWant::Image(Arc::new(i))),
+                }
+            });
+        match got {
+            Ok(w) => w,
+            Err(e) => {
+                dp.counters
+                    .host_cursor_refused
+                    .fetch_add(1, Ordering::Relaxed);
+                self.cursor_refusals += 1;
+                let n = self.cursor_refusals;
+                if n <= 4 || n.is_multiple_of(256) {
+                    eprintln!(
+                        "kf3: display: host cursor REFUSED: {e} — composed into the frame instead, \
+                         and the host's is hidden ({n} so far)"
+                    );
+                }
+                CursorWant::Composed
+            }
+        }
+    }
+
     /// ★ Start the next copy of what the console shows: every enabled window of the head composed,
     /// back to front, into the device staging frame, then copied into a free console frame. A copy
     /// that cannot be made (nothing shown, no kernel) completes at once — the flip it follows still
@@ -2615,8 +2710,23 @@ impl ScanState {
                 }
             }
         }
+        // ★ §O: with a cursor-capable broker the guest's cursor image is read (a GPU copy into a
+        // buffer kf owns) and posted to the relay; in hover it is then left out of the frame —
+        // unless the host cannot show it, which is composed in every mode
+        let mode = self.cursor_mode;
+        let want = mode
+            .reads()
+            .then(|| self.host_cursor_want(io, shown, cursor));
+        let compose = cursor.filter(|_| cursor_composed(mode, want.as_ref()));
+        if let (Some(w), Some(seat)) = (want, dp.broker.as_ref()) {
+            let key = w.key();
+            if self.cursor_posted != Some(key) && seat.cursor().post(w) {
+                self.cursor_posted = Some(key);
+            }
+        }
+        self.cursor_in_frame = compose.is_some();
         // ★ 3d: the head's cursor, last — the top layer (its context DMA is the core channel's)
-        if let Some(cs) = cursor {
+        if let Some(cs) = compose {
             let planned = io
                 .resolve(cs.client, cs.handle, 0)
                 .and_then(|dma| kf_disp::scanout::plan_cursor(cs, &dma, w, h).map_err(|r| r.0));
@@ -2790,6 +2900,41 @@ impl ScanState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ §O: the worker's hover/grab switch. Without a cursor-capable broker (nothing read) and under
+    /// grab the cursor is composed; in hover it is left out unless the host cannot show it; and a
+    /// move recomposes everywhere but hover, where only a composed cursor's move does.
+    #[test]
+    fn hover_leaves_the_cursor_out_of_the_frame_and_its_moves_make_no_frame() {
+        let img = CursorWant::Image(Arc::new(
+            CursorImage::new(32, 32, (0, 0), vec![1; 32 * 32 * 4]).unwrap(),
+        ));
+        assert!(cursor_composed(CursorMode::Off, None), "today's path");
+        for w in [&img, &CursorWant::Hidden, &CursorWant::Composed] {
+            assert!(cursor_composed(CursorMode::Grabbed, Some(w)), "{w:?}");
+        }
+        assert!(!cursor_composed(CursorMode::Hover, Some(&img)));
+        assert!(!cursor_composed(
+            CursorMode::Hover,
+            Some(&CursorWant::Hidden)
+        ));
+        assert!(
+            cursor_composed(CursorMode::Hover, Some(&CursorWant::Composed)),
+            "XOR"
+        );
+        for in_frame in [false, true] {
+            assert!(move_recomposes(CursorMode::Off, in_frame));
+            assert!(move_recomposes(CursorMode::Grabbed, in_frame));
+        }
+        assert!(
+            !move_recomposes(CursorMode::Hover, false),
+            "a hover move makes no frame"
+        );
+        assert!(
+            move_recomposes(CursorMode::Hover, true),
+            "a composed cursor still moves"
+        );
+    }
 
     fn map() -> RegMap {
         let r = Regs::for_ip("580.159.04", 0x0401_0000).unwrap();

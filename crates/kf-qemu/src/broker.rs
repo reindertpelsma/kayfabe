@@ -15,12 +15,19 @@
 //!   passed, wakes the relay for socket readiness, the worker's frame eventfd and the timer, and
 //!   injects the [`Input`] that comes back.
 //!
-//! ⊘ The worker never touches the socket: it only publishes into the ring (CAS) and writes one
-//! non-blocking eventfd. No lock is shared between the worker and the main loop (the relay's
-//! mutex is taken only on the main loop; a status read from elsewhere only tries it).
+//! - ★ **the guest's cursor** ([`BrokerSeat::cursor`], `OWNER_RULINGS.md` §O): the
+//!   [`CursorShare`] the relay publishes the hover/grab mode in and the worker posts the guest's
+//!   cursor image to (`kf_broker::cursor`).
+//!
+//! ⊘ The worker never touches the socket: it only publishes into the ring (CAS), posts the cursor
+//! (a mutex both sides only TRY) and writes one non-blocking eventfd. No lock is waited on between
+//! the worker and the main loop (the relay's mutex is taken only on the main loop; a status read
+//! from elsewhere only tries it).
 
 use crate::raw_unsafe::BrokerHooks;
-use kf_broker::{FrameRing, Input, InstallRefusal, Relay, RelayConfig, SlotFds, UnixLink};
+use kf_broker::{
+    CursorShare, FrameRing, Input, InstallRefusal, Relay, RelayConfig, SlotFds, UnixLink,
+};
 use kf_cuda::display::{DisplayGpu, Frame};
 use kf_linux_raw::{
     Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, Notifier, SharedRam, udmabuf_create,
@@ -37,6 +44,8 @@ pub struct BrokerSeat {
     udmabuf: Option<std::fs::File>,
     /// The relay and the C device's hooks — the main loop only.
     relay: Mutex<Option<(Relay<UnixLink>, BrokerHooks)>>,
+    /// ★ §O: the guest's cursor between the worker and the relay.
+    cursor: Arc<CursorShare>,
 }
 
 impl std::fmt::Debug for BrokerSeat {
@@ -74,7 +83,15 @@ impl BrokerSeat {
             wake,
             udmabuf,
             relay: Mutex::new(None),
+            cursor: Arc::new(CursorShare::new()),
         })
+    }
+
+    /// ★ **Worker** (and the relay, through its own handle): the guest's cursor share — the mode
+    /// the worker composes by, and the mailbox it posts the guest's cursor to (§O).
+    #[must_use]
+    pub fn cursor(&self) -> &CursorShare {
+        &self.cursor
     }
 
     /// ★ **Worker**: a broker frame of at least `cap` bytes — whole host pages
@@ -192,7 +209,8 @@ impl BrokerSeat {
             },
             self.ring.clone(),
             UnixLink,
-        );
+        )
+        .with_cursor(self.cursor.clone());
         relay.start(now_ms, &mut hooks);
         *g = Some((relay, hooks));
         Ok(())

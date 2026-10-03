@@ -17,6 +17,12 @@
 > effective uid at each connect. All review findings and their fixes: §8, the correction above its
 > STATUS line.
 
+> **STATUS ADDENDUM 2, 2026-10-03 (night):** the hover-mode host cursor (`OWNER_RULINGS.md` §O) is
+> built in code on `v3-broker`, GPU-free-tested locally and in CI: with a `CAP_CURSOR` broker that
+> is not grabbed, kf3 sends the guest's cursor image as `CMD_CURSOR` and stops composing it; under
+> grab, and for an XOR cursor, it composes as before (§8.12). Box results, when they exist, are in
+> §8.12 and `traces/v3_display/`.
+
 > **STATUS ADDENDUM, later on 2026-10-03:** the broker's GPU-copy rung (`OWNER_RULINGS.md` §L) is
 > built in code, GPU-free-tested, on the same branch — kayfabe's own VRAM frame slots, a block-linear
 > dma-buf for a compositor on the same GPU, `display-broker-vram=auto|on|off`, KF3 ABI 13 (§8.11;
@@ -1717,7 +1723,10 @@ src/common/nvkvm_broker_proto.h` at `368d2db`, vendored verbatim as
 
 The relay runs on QEMU's **main loop** (one socket owner, as in nvkvm-pv). The display worker never
 touches the socket: it publishes into the ring (a CAS) and writes one non-blocking eventfd. No lock is
-shared between the worker and the main loop. Nothing new runs on a vCPU.
+shared between the worker and the main loop. Nothing new runs on a vCPU. ⊘ Narrowed 2026-10-03 by
+§8.12: the cursor mailbox is a mutex BOTH sides only `try_lock`, so the rule is now "no lock is ever
+WAITED on between the worker and the main loop" (a busy mailbox is retried on the next frame or
+entry).
 
 Usage:
 
@@ -2398,6 +2407,7 @@ of §8.2, unchanged, each requiring its own backing fresh and not withdrawn.
   newer header, equal to it both ways, the cursor record's layout compiled from it (run locally
   against the nvkvm-pv worktree: `PROTO-NEXT: RAN`; a mutated `CAP_DEVICE` fails it). The hover-mode
   host cursor that would send `CMD_CURSOR` is NOT built: frames keep composing the cursor.
+  (⊘ SUPERSEDED 2026-10-03 (night): it is built, §8.12.)
 - ⊘ **SUPERSEDED 2026-10-03 (`22a3e10a`) by the correction directly above — kept as first written,
   do not build from it.** Its encoding (`x:y` = the device) and "a proposal" are both wrong: the
   broker owns the protocol, and nvkvm-pv's header (`broker-cursor-gpucopy`, `9cb736f`) defines
@@ -2480,3 +2490,65 @@ through it changes no guest byte); **E6** E1 on Turing, Ada and GB20x.
 4. **`withdraw_all` is kept** as "both kinds" for any caller that means both; the worker withdraws one
    kind.
 
+### 8.12 The guest cursor as the host pointer — hover mode (`OWNER_RULINGS.md` §O)
+
+**STATUS: BUILT IN CODE, GPU-FREE-TESTED — 2026-10-03 (branch `v3-broker`, after the merge with
+master's boot display). Box results: see the end of this section; until a line there says
+otherwise, nothing of it has run on a GPU.**
+
+**What it does.** The owner's rule (§O): in hover the broker shows the guest's cursor IMAGE as the host
+pointer, the guest's position is ignored (the absolute device already makes the host pointer the
+guest's), nothing is composed and a move makes no frame; under grab the guest owns the position and the
+cursor is composed into the frame as before (3d, §8.6); an XOR cursor is composed in both modes and the
+host's is hidden. nvkvm-pv's broker carries the wire (`broker-cursor-gpucopy`, `9cb736f`):
+`CMD_CURSOR` (7) behind `CAP_CURSOR` (bit 10) — SET (a memfd the broker `pread`s, premultiplied
+`ARGB8888`, at most 256x256), HIDE, SHOW; the broker hides its image under grab by itself and learns
+nothing from kf3 about the grab.
+
+**Built, by crate:**
+
+| piece | where | test |
+|---|---|---|
+| the host's view of a head's cursor: the WHOLE image's store span (never clipped to a frame) and the blend as premultiplied ARGB per pixel — coverage `1 - fd(a)`, colour `c * fs(a)`; every blend NVKMS programs (`nvkms-evo3.c:6646-6700`: opaque, premultiplied, straight, both surface-alpha forms) maps exactly; a wholly transparent image is "no cursor"; refused by name: XOR, non-`A8R8G8B8`, sysmem/block-linear, a hot spot outside the image, an unknown factor, bytes past the context DMA, an additive blend (colour above coverage) | `kf-disp/src/scanout.rs` `plan_host_cursor`, `HostCursorSrc::image` | four tests in `scanout.rs` (expected pixels worked by hand) |
+| `CursorShare` (the relay's mode for the worker; the worker's newest cursor for the relay, latest wins, a generation per post, a mutex both sides only `try_lock`), `CursorImage` (bounded at construction; an FNV digest over size, hot spot and pixels), `BrokerCursor::next_op` (SET only for an image or hot spot the broker does not hold, HIDE for none, SHOW when the held image comes back) | `kf-broker/src/cursor.rs` | four unit tests |
+| the relay: the grab from `EV_GRAB` and from `F_GRABBED` on EVERY packet (HELLO included); the mode (`Hover` for an ACTIVE `CAP_CURSOR` broker not grabbed, `Grabbed`, `Off` otherwise — and on every disconnect); at most ONE `CMD_CURSOR` per entry, never under grab, never without the bit; the SET's memfd (`kayfabe-cursor`, sealed `SHRINK\|GROW\|SEAL`) made, filled, sent and closed in the call; `EAGAIN` owes the command (the watch asks for writability); status `cursor=… cursor_sets/hides/shows/refused` | `kf-broker/src/conn.rs` (`cursor_sync`, `send_cursor`) | eight tests in `kf-broker/tests/host_cursor.rs` |
+| the worker: with a cursor-capable broker (mode not `Off`) it reads the head's cursor once per frame — a GPU copy (`DisplayGpu::read_store`, the path that already reads instance memory and pushbuffers) into a buffer kf owns; the CPU reads that copy, never guest video memory (`THE_CONSTRAINTS.md` §38) — and posts it only when its key changed; in hover it leaves the cursor out of the frame unless the host cannot show it; a mode switch recomposes; in hover a move recomposes only a composed cursor. Counters `host_cursor_reads`, `host_cursor_refused`; a refusal is logged by name, the first four and every 256th | `kf-qemu/src/display.rs` (`host_cursor_want`, `cursor_composed`, `move_recomposes`), `broker.rs` (the seat owns the share) | `display.rs` `hover_leaves_the_cursor_out_of_the_frame_and_its_moves_make_no_frame` (CI-compiled: kf-qemu is not built on the dev host) |
+
+**Bounds.** Size: at most 256x256 (the cursor channel's own sizes are 32..256; `CursorImage` and
+`CursorCmd::set` refuse anything else), one memfd of at most 256 KiB per SET, closed before the call
+returns. Rate: the worker posts at most one cursor per frame and only on a change; the relay takes the
+newest and sends at most one command per entry, a SET only for a new digest — so however many cursors
+are posted between two entries the broker gets ONE SET, of the newest
+(`posts_between_two_entries_coalesce_to_one_set_of_the_newest`); the broker paces uploads again at
+125 Hz (`nvkvm_broker.c:1547-1553`).
+
+**Deviations and limits.**
+1. **The console loses the cursor in hover.** Frames are shared by the broker and QEMU's console, so a
+   `screendump`/VNC shows no cursor while a `CAP_CURSOR` broker is hovered (it does under grab and
+   without a broker). This follows §O ("kf-disp does not compose the cursor into frames in this mode").
+2. **A mode switch reaches the frame at the worker's next pass** — at most its 50 ms deadline, 33 ms
+   while the broker is active — so a grab shows no cursor, or an ungrab two, for up to one frame.
+3. **The image is read every frame in `Hover` and `Grabbed`** (a guest may rewrite a cursor surface in
+   place, and only a read sees it): at most 256 KiB per frame, 16 KiB for a 64x64 cursor.
+4. **XOR is composed by the existing kernel as "not composable"** — refused by name in the frame as in
+   3d (the compose kernel's XOR blend of §O is not built), and the host's cursor is hidden.
+5. **The worker → relay wake is the frame publish** that follows every post; a post whose frame copy
+   failed is taken at the relay's next entry.
+
+**Local runs (dev host, 2026-10-03; no GPU), each with `cargo test` under the shared flock:**
+- `cargo test -p kf-broker`: lib 27 (four new in `cursor.rs`), `tests/host_cursor.rs` 8,
+  `relay_machine.rs` 35, `proto_mirror.rs` 5 — all passed.
+- `cargo test -p kf-disp --lib`: 64 passed (four new host-cursor tests).
+- Bite-mutations, each applied to a copy and restored, each failing at least one test (with
+  `--no-fail-fast` where a unit test would otherwise stop the run): the relay ignoring the grab
+  (`grab_composes_and_sends_nothing_and_its_end_sends_what_changed`,
+  `a_broker_that_says_hello_grabbed_starts_composed`); `CursorMode::composes` composing in hover
+  (`hover_leaves_the_cursor_out_of_the_frame_and_grab_composes_it`); no digest compare (six tests,
+  incl. `hover_sends_the_image_once_in_a_memfd_and_again_only_when_it_or_its_hot_spot_changes`);
+  `F_GRABBED` ignored on ordinary packets; the `CAP_CURSOR` gate dropped; the mailbox keeping the
+  oldest post; the memfd left open after the send; a command sent under grab; in `scanout.rs` no
+  premultiply, inverted coverage, a transparent image shown, XOR accepted, an additive blend accepted,
+  the source pitch ignored.
+- kf3.c is unchanged by this step (the cursor is Rust's end to end); KF3 ABI stays 12.
+
+**Box (vdisp, RTX 3060, 580.159.04) — results land here with both revisions; see `traces/v3_display/`.**

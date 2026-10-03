@@ -530,16 +530,7 @@ pub fn plan_cursor(
             dma.base, dma.limit
         ));
     };
-    let k1 = i32::try_from(c.k1.min(255)).unwrap_or(255);
-    // ⊘ a composition word never programmed (all zero) would erase the cursor; NVKMS programs it
-    // with every image (`nvkms-evo3.c:6646-6700`), so zero is read as premultiplied alpha
-    let (k1, cur_sel, vp_sel) = if c.k1 == 0 && c.cursor_factor == 0 && c.viewport_factor == 0 {
-        (255, 2, 7)
-    } else {
-        (k1, c.cursor_factor, c.viewport_factor)
-    };
-    let (Some((a_s, b_s)), Some((a_d, b_d))) = (factor(cur_sel, k1, 0), factor(vp_sel, k1, 0))
-    else {
+    let Some(((a_s, b_s), (a_d, b_d))) = cursor_blend(c) else {
         return no(format!(
             "composition factors {:#x}/{:#x} are not known",
             c.cursor_factor, c.viewport_factor
@@ -566,6 +557,158 @@ pub fn plan_cursor(
         a_d,
         b_d,
     }))
+}
+
+/// The cursor's blend as `((a_s, b_s), (a_d, b_d))` in the compose kernel's factor numbering
+/// ([`factor`]); `None` for an unknown selector.
+fn cursor_blend(c: &CursorScan) -> Option<((i32, i32), (i32, i32))> {
+    let k1 = i32::try_from(c.k1.min(255)).unwrap_or(255);
+    // ⊘ a composition word never programmed (all zero) would erase the cursor; NVKMS programs it
+    // with every image (`nvkms-evo3.c:6646-6700`), so zero is read as premultiplied alpha
+    let (k1, cur_sel, vp_sel) = if c.k1 == 0 && c.cursor_factor == 0 && c.viewport_factor == 0 {
+        (255, 2, 7)
+    } else {
+        (k1, c.cursor_factor, c.viewport_factor)
+    };
+    Some((factor(cur_sel, k1, 0)?, factor(vp_sel, k1, 0)?))
+}
+
+/// ★★ **The host cursor** (`OWNER_RULINGS.md` §O, hover mode; `docs/design/V3_DISPLAY.md` §8.12):
+/// head `c.head`'s WHOLE cursor image as the host pointer's — the store span to copy (never clipped
+/// to a frame: the host pointer may be anywhere) and the blend that turns its pixels into
+/// premultiplied `ARGB8888` ([`HostCursorSrc::image`]). The GPU copies the span into a buffer the
+/// VMM owns (`kf_cuda::display::DisplayGpu::read_store`, the path that already reads the display's
+/// instance memory and pushbuffers); the CPU reads only that copy, never guest video memory
+/// (`THE_CONSTRAINTS.md` §38).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostCursorSrc {
+    /// The store offset of the image's first byte.
+    pub src: u64,
+    /// Bytes to copy: `size` rows `pitch` apart.
+    pub extent: u64,
+    /// The image's edge (32, 64, 128 or 256; square).
+    pub size: u32,
+    /// Bytes from one row to the next (`size * 4`, at least 256).
+    pub pitch: u32,
+    /// The hot spot, inside the image.
+    pub hot: (u32, u32),
+    /// The cursor's source factor `(a, b)`: `a + b * alpha / 255`, in 0..=255.
+    src_factor: (i32, i32),
+    /// The viewport's (destination) factor, likewise.
+    dst_factor: (i32, i32),
+}
+
+/// ★ Plan head `c.head`'s cursor for the host ([`HostCursorSrc`]). A cursor the host cannot show
+/// as premultiplied ARGB is refused by name — the caller then composes it into the frame in every
+/// mode and hides the host's (§O). Some of that is decided by content
+/// ([`HostCursorSrc::image`]).
+///
+/// # Errors
+/// [`Refused`], naming why: a non-`A8R8G8B8` format; `XOR` composition (no ARGB "over" expresses
+/// it); a system-memory or block-linear surface; a hot spot outside the image; an unknown factor;
+/// any byte outside the context DMA.
+pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, Refused> {
+    let no = |why: String| Err(Refused(format!("host cursor head {}: {why}", c.head)));
+    if !c.argb8888 {
+        return no("only an A8R8G8B8 cursor can be the host's".into());
+    }
+    if c.mode != 0 {
+        return no("an XOR cursor has no ARGB equivalent".into());
+    }
+    if dma.target != Target::Vidmem || dma.block_linear {
+        return no("the cursor surface is not pitch video memory".into());
+    }
+    if c.hot_x >= c.size || c.hot_y >= c.size {
+        return no(format!(
+            "hot spot {},{} outside the {}x{} image",
+            c.hot_x, c.hot_y, c.size, c.size
+        ));
+    }
+    let Some((src_factor, dst_factor)) = cursor_blend(c) else {
+        return no(format!(
+            "composition factors {:#x}/{:#x} are not known",
+            c.cursor_factor, c.viewport_factor
+        ));
+    };
+    // every selector of `factor` with K1 <= 255 and K2 = 0 gives a factor in 0..=255 at alpha 0
+    // and at 255 (it is linear in alpha); `image`'s arithmetic relies on it, so it is checked
+    let in_range = |(a, b): (i32, i32)| (0..=255).contains(&a) && (0..=255).contains(&(a + b));
+    if !in_range(src_factor) || !in_range(dst_factor) {
+        return no(format!(
+            "blend factors {src_factor:?}/{dst_factor:?} leave 0..=1"
+        ));
+    }
+    let size = c.size;
+    let pitch = (size * 4).max(256);
+    let extent = u64::from(size - 1) * u64::from(pitch) + u64::from(size) * 4;
+    let Some(src) = dma.span(c.offset, extent) else {
+        return no(format!(
+            "[{:#x}, +{extent:#x}) leaves context DMA {:#x}..={:#x}",
+            c.offset, dma.base, dma.limit
+        ));
+    };
+    Ok(HostCursorSrc {
+        src,
+        extent,
+        size,
+        pitch,
+        hot: (c.hot_x, c.hot_y),
+        src_factor,
+        dst_factor,
+    })
+}
+
+impl HostCursorSrc {
+    /// ★ The image as the host takes it: `size` x `size` premultiplied `ARGB8888` (B, G, R, A
+    /// bytes), rows tight — what the head's blend `out = src * fs(a) + dst * fd(a)` means as an
+    /// "over" of premultiplied pixels: coverage `A' = 1 - fd(a)`, colour `P' = c * fs(a)`. Every
+    /// blend NVKMS programs maps exactly (opaque, premultiplied, straight, and both with a surface
+    /// alpha in K1). `Ok(None)` for an image wholly transparent: the guest shows no cursor.
+    /// `raw` is the [`Self::extent`] bytes the GPU copied from [`Self::src`].
+    ///
+    /// # Errors
+    /// [`Refused`]: `raw` is not the extent; or a pixel's colour exceeds its coverage by more than
+    /// rounding (an additive blend, which a premultiplied "over" cannot express).
+    pub fn image(&self, raw: &[u8]) -> Result<Option<Vec<u8>>, Refused> {
+        if raw.len() as u64 != self.extent {
+            return Err(Refused(format!(
+                "host cursor: {} bytes copied for a {:#x}-byte image",
+                raw.len(),
+                self.extent
+            )));
+        }
+        let n = self.size as usize;
+        let pitch = self.pitch as usize;
+        let ((a_s, b_s), (a_d, b_d)) = (self.src_factor, self.dst_factor);
+        // round(v / d) for v >= 0
+        let div = |v: i64, d: i64| (v + d / 2) / d;
+        let mut out = vec![0u8; n * n * 4];
+        let mut any = false;
+        for y in 0..n {
+            for x in 0..n {
+                let p = &raw[y * pitch + x * 4..y * pitch + x * 4 + 4];
+                let a = i64::from(p[3]);
+                // both in 0..=255*255 (the factors were checked in range at both ends)
+                let fs = i64::from(a_s) * 255 + i64::from(b_s) * a;
+                let fd = i64::from(a_d) * 255 + i64::from(b_d) * a;
+                let cover = div(255 * 255 - fd, 255);
+                let o = &mut out[(y * n + x) * 4..(y * n + x) * 4 + 4];
+                for (k, &c) in p.iter().take(3).enumerate() {
+                    let v = div(i64::from(c) * fs, 255 * 255);
+                    if v > cover + 1 {
+                        return Err(Refused(format!(
+                            "host cursor: pixel {x},{y} has colour {v} over coverage {cover} \
+                             (an additive blend, not an ARGB \"over\")"
+                        )));
+                    }
+                    o[k] = u8::try_from(v.min(cover)).unwrap_or(u8::MAX);
+                }
+                o[3] = u8::try_from(cover).unwrap_or(u8::MAX);
+                any |= o.iter().any(|b| *b != 0);
+            }
+        }
+        Ok(any.then_some(out))
+    }
 }
 
 /// ★ The boot framebuffer kf3's option ROM published (`docs/design/V3_DISPLAY.md` §4.11): a pitch
@@ -1068,5 +1211,151 @@ mod tests {
         o.viewport_factor = 0;
         let l = plan_cursor(&o, &dma, 1920, 1080).unwrap().unwrap();
         assert_eq!(l.flags, 1 | 4, "opaque");
+    }
+    // ── §O: the host cursor ─────────────────────────────────────────────────────────────────
+
+    /// A 32x32 cursor with this blend, its plan, and a raw copy whose pixel (0, 0) is `px`
+    /// (B, G, R, A) and every other pixel zero.
+    fn host32(cur: u32, vp: u32, k1: u32, px: [u8; 4]) -> (HostCursorSrc, Vec<u8>) {
+        let mut c = cursor(0, 0);
+        (c.size, c.cursor_factor, c.viewport_factor, c.k1) = (32, cur, vp, k1);
+        let h = plan_host_cursor(&c, &vid(0x4000_0000, 1 << 20)).unwrap();
+        let mut raw = vec![0u8; h.extent as usize];
+        raw[..4].copy_from_slice(&px);
+        (h, raw)
+    }
+
+    /// ★ The host gets the WHOLE image wherever the guest's point is (the host pointer can be
+    /// anywhere): never clipped, at the 256-byte minimum pitch, with the hot spot.
+    #[test]
+    fn the_host_cursor_is_the_whole_image_wherever_the_point_is() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let mut c = cursor(-500, 5000);
+        (c.hot_x, c.hot_y) = (3, 7);
+        let h = plan_host_cursor(&c, &dma).unwrap();
+        assert_eq!(
+            (h.src, h.size, h.pitch, h.hot),
+            (0x4000_1000, 64, 256, (3, 7))
+        );
+        assert_eq!(h.extent, 63 * 256 + 256);
+        let mut s = cursor(0, 0);
+        s.size = 32;
+        let h = plan_host_cursor(&s, &dma).unwrap();
+        assert_eq!((h.pitch, h.extent), (256, 31 * 256 + 128));
+    }
+
+    /// ★ Every blend NVKMS programs for a cursor (`nvkms-evo3.c:6646-6700`) as premultiplied ARGB:
+    /// premultiplied as is, straight alpha premultiplied, opaque as alpha 255, both surface-alpha
+    /// forms scaled by K1, and the never-programmed word read as premultiplied. Expected values
+    /// worked by hand (round half up), not by the formula under test.
+    #[test]
+    fn every_nvkms_cursor_blend_becomes_premultiplied_argb() {
+        for (name, cur, vp, k1, px, want) in [
+            ("PREMULT", 2, 7, 255, [100, 50, 25, 128], [100, 50, 25, 128]),
+            (
+                "NON_PREMULT",
+                5,
+                7,
+                255,
+                [200, 100, 50, 128],
+                [100, 50, 25, 128],
+            ),
+            ("OPAQUE", 2, 0, 255, [10, 20, 30, 0], [10, 20, 30, 255]),
+            (
+                "PREMULT_SURFACE",
+                2,
+                7,
+                128,
+                [100, 50, 25, 128],
+                [50, 25, 13, 64],
+            ),
+            (
+                "NON_PREMULT_SURFACE",
+                5,
+                7,
+                128,
+                [200, 100, 50, 128],
+                [50, 25, 13, 64],
+            ),
+            (
+                "unprogrammed",
+                0,
+                0,
+                0,
+                [100, 50, 25, 128],
+                [100, 50, 25, 128],
+            ),
+        ] {
+            let (h, raw) = host32(cur, vp, k1, px);
+            let out = h.image(&raw).unwrap().unwrap_or_else(|| panic!("{name}"));
+            assert_eq!(out.len(), 32 * 32 * 4, "{name}: tight rows");
+            assert_eq!(out[..4], want, "{name}");
+            if name != "OPAQUE" {
+                assert!(out[4..].iter().all(|b| *b == 0), "{name}: the rest");
+            }
+        }
+        // the row pitch of the source is honoured: pixel (0, 1) is 256 bytes in, 128 out
+        let (h, mut raw) = host32(2, 7, 255, [0; 4]);
+        raw[256..260].copy_from_slice(&[9, 8, 7, 200]);
+        let out = h.image(&raw).unwrap().unwrap();
+        assert_eq!(out[128..132], [9, 8, 7, 200]);
+    }
+
+    /// ★ A wholly transparent image is NO cursor (the guest hides it that way too) — while the same
+    /// zero bytes under the OPAQUE blend are an opaque black square, which is shown.
+    #[test]
+    fn a_wholly_transparent_cursor_is_no_host_cursor() {
+        let (h, raw) = host32(2, 7, 255, [0; 4]);
+        assert_eq!(h.image(&raw), Ok(None));
+        let (h, raw) = host32(2, 0, 255, [0; 4]);
+        let out = h.image(&raw).unwrap().expect("an opaque square is visible");
+        assert!(out.chunks(4).all(|p| p == [0, 0, 0, 255]));
+    }
+
+    /// ⊘ What the host cannot show is refused by name — the caller composes it in every mode:
+    /// XOR, a non-ARGB format, a sysmem or block-linear surface, a hot spot outside the image, an
+    /// unknown factor, bytes past the context DMA, an additive blend, a short copy.
+    #[test]
+    fn a_cursor_the_host_cannot_show_is_refused_by_name() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let refused = |c: &CursorScan, d: &CtxDma, what: &str| {
+            let e = plan_host_cursor(c, d).unwrap_err().0;
+            assert!(e.contains(what), "{e}");
+        };
+        let mut x = cursor(0, 0);
+        x.mode = 1;
+        refused(&x, &dma, "XOR");
+        let mut f = cursor(0, 0);
+        f.argb8888 = false;
+        refused(&f, &dma, "A8R8G8B8");
+        let sys = CtxDma {
+            target: Target::Sysmem,
+            ..dma
+        };
+        refused(&cursor(0, 0), &sys, "pitch video memory");
+        let bl = CtxDma {
+            block_linear: true,
+            ..dma
+        };
+        refused(&cursor(0, 0), &bl, "pitch video memory");
+        let mut hot = cursor(0, 0);
+        hot.hot_x = 64;
+        refused(&hot, &dma, "hot spot");
+        let mut u = cursor(0, 0);
+        u.cursor_factor = 9;
+        refused(&u, &dma, "not known");
+        refused(
+            &cursor(0, 0),
+            &vid(0x4000_0000, 0x2000),
+            "leaves context DMA",
+        );
+        // additive: viewport ONE keeps the whole destination — coverage 0 under a coloured pixel
+        let (h, raw) = host32(2, 1, 255, [50, 0, 0, 0]);
+        assert!(h.image(&raw).unwrap_err().0.contains("additive"));
+        // ... and its transparent pixels are fine (no colour, nothing to cover)
+        let (h, raw) = host32(2, 1, 255, [0; 4]);
+        assert_eq!(h.image(&raw), Ok(None));
+        let (h, raw) = host32(2, 7, 255, [0; 4]);
+        assert!(h.image(&raw[1..]).unwrap_err().0.contains("bytes copied"));
     }
 }

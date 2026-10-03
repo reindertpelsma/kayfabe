@@ -2274,12 +2274,14 @@ impl Device {
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
             ) + &format!(
-                " scanout_no_slot={} scanout_d2h={} scanout_pack={} pack_skipped={} display_vram_mib={}",
+                " scanout_no_slot={} scanout_d2h={} scanout_pack={} pack_skipped={} display_vram_mib={} host_cursor_reads={} host_cursor_refused={}",
                 d.scanout_no_slot.load(o),
                 d.scanout_d2h.load(o),
                 d.scanout_pack.load(o),
                 d.scanout_pack_skipped.load(o),
-                d.vram_bytes.load(o) >> 20
+                d.vram_bytes.load(o) >> 20,
+                d.host_cursor_reads.load(o),
+                d.host_cursor_refused.load(o)
             )
                 + &dp
                     .broker

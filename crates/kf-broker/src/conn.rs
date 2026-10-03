@@ -39,6 +39,11 @@
 //!   permanent "no", because on X11 with the NVIDIA DDX the host rungs may well be a black window.
 //!   The relay's per-connection choice reaches the display worker through one atomic
 //!   ([`FrameRing::want_vram`]).
+//! - ★ **The guest's cursor as the host pointer** (`OWNER_RULINGS.md` §O, 2026-10-03): with a
+//!   [`CursorShare`] attached ([`Relay::with_cursor`]) and a broker advertising `CAP_CURSOR`, the
+//!   relay tracks the grab (`EV_GRAB`, and `F_GRABBED` on EVERY packet), publishes the mode the
+//!   worker composes by, and in hover brings the broker to the guest's newest cursor with at most
+//!   one `CMD_CURSOR` per entry ([`crate::cursor`]). Never under grab, never without the bit.
 //! - All per-connection knowledge lives in one [`Conn`] that is dropped on disconnect, so the
 //!   "reconnect inherits partial state" class (nvkvm-pv audits B-2, S-11, RR-07) cannot be
 //!   written.
@@ -48,15 +53,17 @@
 //! the time (`now_ms`), so the machine is deterministic under test. Every syscall is
 //! non-blocking; nothing here waits.
 
+use crate::cursor::{BrokerCursor, CursorMode, CursorOp, CursorShare, CursorWant};
 use crate::slots::{FrameRing, Kind, MAX_SLOTS, Take};
 use crate::wire::{
-    CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CLOSE_FORCE, CMD_ATTACH,
-    CMD_F_SHM, CMD_SIZE, Cmd, DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_ABS, EV_BTN, EV_BYE,
-    EV_CLIPBOARD, EV_CLOSE, EV_DEVICE, EV_FOCUS, EV_FORMAT, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY,
-    EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, FOURCC_XR24, MOD_INVALID, MOD_LINEAR,
-    PKT_SIZE, PROTO_VERSION, Pkt, fourcc_name,
+    CAP_CURSOR, CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CLOSE_FORCE,
+    CMD_ATTACH, CMD_F_SHM, CMD_SIZE, Cmd, CursorCmd, DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_ABS,
+    EV_BTN, EV_BYE, EV_CLIPBOARD, EV_CLOSE, EV_DEVICE, EV_FOCUS, EV_FORMAT, EV_FRAME, EV_GRAB,
+    EV_HELLO, EV_KEY, EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, F_GRABBED, FOURCC_XR24,
+    MOD_INVALID, MOD_LINEAR, PKT_SIZE, PROTO_VERSION, Pkt, fourcc_name,
 };
 use std::os::fd::BorrowedFd;
+use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -275,6 +282,14 @@ pub struct Counters {
     pub native: u64,
     /// GPU-copy back-offs the acknowledgement detector tripped.
     pub native_trips: u64,
+    /// ★ §O: `CMD_CURSOR` SETs sent (an image or hot spot the broker did not hold) …
+    pub cursor_sets: u64,
+    /// … HIDEs …
+    pub cursor_hides: u64,
+    /// … SHOWs …
+    pub cursor_shows: u64,
+    /// … and SETs that could not be made (no memfd) — nothing was sent for them.
+    pub cursor_refused: u64,
 }
 
 /// What the broker said about its compositor's device (`EV_DEVICE`, nvkvm-pv's header on
@@ -389,6 +404,22 @@ struct Conn<S> {
     /// No native frame before this; the next back-off's length.
     backoff_until: Option<u64>,
     backoff_ms: u64,
+    /// ★ §O: the broker's grab, from `EV_GRAB` and from `F_GRABBED` on every packet.
+    grabbed: bool,
+    /// ★ §O: the cursor as this connection knows it.
+    cursor: CursorConn,
+}
+
+/// ★ §O: the guest's cursor on one connection — what the broker holds, the newest want taken
+/// from the [`CursorShare`], and whether a command waits for the socket.
+#[derive(Debug, Default)]
+struct CursorConn {
+    broker: BrokerCursor,
+    want: Option<CursorWant>,
+    /// The share's generation last taken.
+    seen: u64,
+    /// The last command met `EAGAIN`: retried at the next entry (the watch asks for writability).
+    owed: bool,
 }
 
 /// ★ The relay. VM-lifetime: it outlives connections, holds the backoff, the held-frame table
@@ -410,6 +441,8 @@ pub struct Relay<L: Link> {
     counters: Counters,
     /// The time of the entry being run (every public entry sets it first).
     now_ms: u64,
+    /// ★ §O: the worker ↔ relay share for the guest's cursor; `None` = cursors stay composed.
+    cursor: Option<Arc<CursorShare>>,
 }
 
 macro_rules! say {
@@ -486,7 +519,22 @@ impl<L: Link> Relay<L> {
             powerdown: None,
             counters: Counters::default(),
             now_ms: 0,
+            cursor: None,
         }
+    }
+
+    /// ★ §O: give the relay the cursor share it and the display worker meet in. Without it a
+    /// broker's `CAP_CURSOR` is ignored and the cursor stays composed.
+    #[must_use]
+    pub fn with_cursor(mut self, share: Arc<CursorShare>) -> Relay<L> {
+        self.cursor = Some(share);
+        self
+    }
+
+    /// ★ §O: the cursor mode as the relay last published it ([`CursorMode::Off`] without a share).
+    #[must_use]
+    pub fn cursor_mode(&self) -> CursorMode {
+        self.cursor.as_ref().map_or(CursorMode::Off, |s| s.mode())
     }
 
     /// The counters.
@@ -524,7 +572,7 @@ impl<L: Link> Relay<L> {
     pub fn status(&self) -> String {
         let c = &self.counters;
         format!(
-            "broker[up={} sent={} gpucopy={} gpucopy_backoffs={} dropped={} uncommitted={} recovered={} releases={} unknown_releases={} reclaims={} blocked={} backstops={} reconnects={} failed_attempts={} peer_refused={}]",
+            "broker[up={} sent={} gpucopy={} gpucopy_backoffs={} dropped={} uncommitted={} recovered={} releases={} unknown_releases={} reclaims={} blocked={} backstops={} reconnects={} failed_attempts={} peer_refused={} cursor={} cursor_sets={} cursor_hides={} cursor_shows={} cursor_refused={}]",
             u8::from(self.active()),
             c.sent,
             c.native,
@@ -539,7 +587,12 @@ impl<L: Link> Relay<L> {
             c.backstops,
             c.reconnects,
             c.attempts_failed,
-            c.peer_refused
+            c.peer_refused,
+            self.cursor_mode().name(),
+            c.cursor_sets,
+            c.cursor_hides,
+            c.cursor_shows,
+            c.cursor_refused
         )
     }
 
@@ -674,6 +727,8 @@ impl<L: Link> Relay<L> {
             native_unacked_since: None,
             backoff_until: None,
             backoff_ms: BACKOFF_MIN_MS,
+            grabbed: false,
+            cursor: CursorConn::default(),
         });
         host.watch(fd, true, false);
     }
@@ -684,6 +739,12 @@ impl<L: Link> Relay<L> {
         let Some(c) = self.conn.take() else { return };
         // no connection, no GPU-copy demand: the worker stops packing at its next frame
         self.ring.set_want_vram(false);
+        // ★ §O: and no host cursor — the worker composes the cursor again from its next frame
+        if let Some(s) = &self.cursor
+            && s.set_mode(CursorMode::Off)
+        {
+            say!("guest cursor: composed into the frame (no broker)");
+        }
         host.watch(c.fd, false, false);
         drop(c.sock);
         if let Some(j) = c.last_commit
@@ -1553,6 +1614,15 @@ impl<L: Link> Relay<L> {
         if phase == Phase::Hello {
             return self.hello(now, host, p);
         }
+        // ★ §O: the grab is mirrored on EVERY packet (`proto.h`: "a client can never disagree with
+        // the broker about grab state"); EV_GRAB's own `x` is the edge it announces
+        if let Some(c) = self.conn.as_mut() {
+            c.grabbed = if p.ty == EV_GRAB {
+                p.x != 0
+            } else {
+                p.flags & F_GRABBED != 0
+            };
+        }
         let emit = |out: &mut Vec<Input>, i: Input| {
             if out.len() < cap {
                 out.push(i);
@@ -1677,6 +1747,7 @@ impl<L: Link> Relay<L> {
         }
         if let Some(c) = self.conn.as_mut() {
             c.caps = p.w1;
+            c.grabbed = p.flags & F_GRABBED != 0;
             if p.w1 & CAP_DEVICE != 0 {
                 c.device = Device::Pending;
             }
@@ -1948,9 +2019,11 @@ impl<L: Link> Relay<L> {
         if want != self.ring.want_vram() {
             self.ring.set_want_vram(want);
         }
+        // ★ §O: the cursor mode for the worker, and at most one cursor command
+        self.cursor_sync(now, host);
         // the watch is set at connect and changed only here (and removed before a close)
         if let Some(c) = self.conn.as_mut() {
-            let want = (true, c.want_write || c.owed.is_some());
+            let want = (true, c.want_write || c.owed.is_some() || c.cursor.owed);
             if want != c.watched {
                 c.watched = want;
                 host.watch(c.fd, want.0, want.1);
@@ -1960,6 +2033,145 @@ impl<L: Link> Relay<L> {
         if deadline != self.timer {
             self.timer = deadline;
             host.timer(deadline);
+        }
+    }
+
+    /// ★ §O (`crate::cursor`): publish the mode the worker composes by — [`CursorMode::Hover`]
+    /// for an ACTIVE `CAP_CURSOR` broker that is not grabbed, [`CursorMode::Grabbed`] when it is,
+    /// [`CursorMode::Off`] otherwise — take the guest's newest cursor, and in hover send at most
+    /// ONE command that brings the broker to it. Under grab nothing is sent: the broker hides its
+    /// image itself and puts it back when the grab ends, and the first entry after that sends
+    /// whatever changed meanwhile.
+    fn cursor_sync(&mut self, now: u64, host: &mut dyn Host) {
+        let Some(share) = self.cursor.clone() else {
+            return;
+        };
+        let mode = match self.conn.as_ref() {
+            Some(c) if c.phase == Phase::Active && c.caps & CAP_CURSOR != 0 => {
+                if c.grabbed {
+                    CursorMode::Grabbed
+                } else {
+                    CursorMode::Hover
+                }
+            }
+            _ => CursorMode::Off,
+        };
+        if share.set_mode(mode) {
+            say!(
+                "guest cursor: {}",
+                match mode {
+                    CursorMode::Hover => "the HOST pointer shows it (hover; not composed)",
+                    CursorMode::Grabbed =>
+                        "composed into the frame (grabbed; the broker hides its own image)",
+                    CursorMode::Off => "composed into the frame",
+                }
+            );
+        }
+        if mode == CursorMode::Off {
+            return;
+        }
+        let Some(c) = self.conn.as_mut() else { return };
+        if let Some((g, w)) = share.take_newer(c.cursor.seen) {
+            c.cursor.seen = g;
+            c.cursor.want = Some(w);
+        }
+        if mode != CursorMode::Hover {
+            c.cursor.owed = false;
+            return;
+        }
+        let Some(want) = c.cursor.want.clone() else {
+            return;
+        };
+        let Some(op) = c.cursor.broker.next_op(&want) else {
+            c.cursor.owed = false;
+            return;
+        };
+        match self.send_cursor(op, &want) {
+            Ok(Sent::Done) => {
+                if let Some(c) = self.conn.as_mut() {
+                    c.cursor.broker.applied(op, &want);
+                    c.cursor.owed = false;
+                }
+                let k = &mut self.counters;
+                match op {
+                    CursorOp::Set => {
+                        k.cursor_sets += 1;
+                        if loud(k.cursor_sets)
+                            && let CursorWant::Image(i) = &want
+                        {
+                            say!(
+                                "guest cursor image {}x{} hot {},{} sent ({} so far)",
+                                i.width(),
+                                i.height(),
+                                i.hot().0,
+                                i.hot().1,
+                                k.cursor_sets
+                            );
+                        }
+                    }
+                    CursorOp::Hide => k.cursor_hides += 1,
+                    CursorOp::Show => k.cursor_shows += 1,
+                }
+            }
+            Ok(Sent::Full) => {
+                if let Some(c) = self.conn.as_mut() {
+                    c.cursor.owed = true;
+                }
+            }
+            Ok(Sent::Failed(e)) => {
+                self.lost(
+                    now,
+                    host,
+                    &format!("the broker socket failed on a cursor command: {e}"),
+                );
+            }
+            Err(e) => {
+                self.counters.cursor_refused += 1;
+                let n = self.counters.cursor_refused;
+                if loud(n) {
+                    say!("guest cursor NOT sent: {e} ({n} so far)");
+                }
+            }
+        }
+    }
+
+    /// One `CMD_CURSOR`. A SET's image goes in a sealed memfd made here, filled, sent with the
+    /// record and CLOSED when this returns: the broker `pread`s its own copy, and nothing of the
+    /// guest's is ever handed over (the pixels are kayfabe's copy, `crate::cursor`).
+    ///
+    /// # Errors
+    /// The SET could not be made (the memfd, its write, a bound) — nothing was sent.
+    fn send_cursor(&mut self, op: CursorOp, want: &CursorWant) -> Result<Sent, String> {
+        let Some(c) = self.conn.as_ref() else {
+            return Ok(Sent::Failed("no connection".into()));
+        };
+        match (op, want) {
+            (CursorOp::Hide, _) => Ok(self.link.send(&c.sock, &CursorCmd::hide().encode(), None)),
+            (CursorOp::Show, _) => Ok(self.link.send(&c.sock, &CursorCmd::show().encode(), None)),
+            (CursorOp::Set, CursorWant::Image(i)) => {
+                let bytes = i.pixels().len() as u64;
+                let cmd = CursorCmd::set(i.width(), i.height(), i.stride(), 0, i.hot(), bytes)
+                    .ok_or_else(|| {
+                        format!(
+                            "a {}x{} cursor is outside the broker's bounds",
+                            i.width(),
+                            i.height()
+                        )
+                    })?;
+                let ram = kf_linux_raw::SharedRam::create_named(c"kayfabe-cursor", bytes)
+                    .map_err(|e| format!("the cursor memfd: {e}"))?;
+                let f = std::fs::File::from(
+                    ram.dup_for_export()
+                        .map_err(|e| format!("the cursor memfd: {e}"))?,
+                );
+                f.write_all_at(i.pixels(), 0)
+                    .map_err(|e| format!("writing the cursor memfd: {e}"))?;
+                drop(f);
+                Ok(self
+                    .link
+                    .send(&c.sock, &cmd.encode(), Some(ram.as_backing_fd())))
+            }
+            (CursorOp::Set, _) => Err("a SET with no image".into()),
         }
     }
 
