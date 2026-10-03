@@ -27,6 +27,13 @@ else, and publishes one GOP mode whose framebuffer is the descriptor's range of 
 The descriptor has one definition, `crates/kf-oprom` (pure, `no_std`), which this crate depends on
 by path with default features off; kf3 packs the ROM with the same crate.
 
+⊘ **CORRECTED by the owner the same day (`docs/OWNER_RULINGS.md` §K) — the paragraph below is to be
+withdrawn:** *"We aren't going to put compiled stuff in the repo right? … the efi driver is compiled when
+building the repo."* build.rs is to compile this crate during the normal cargo build (the nested-cargo
+pattern of `crates/kayfabe-isolate-host/build.rs`), with `x86_64-unknown-uefi` in `rust-toolchain.toml`,
+and the ROM kept arch-neutral for a later aarch64. ⚠ Not done yet (2026-10-03): the blob below is still
+committed and still what kf3 serves (`docs/design/V3_DISPLAY.md` §4.11.6, §4.11.12).
+
 **`kf-gop.efi` beside the source is the shipped driver.** Owner, 2026-10-03: the GOP is one constant
 blob inside kayfabe, like the PTX kernels. `crates/kf-oprom` embeds this file (`KF_GOP_EFI`,
 `include_bytes!`) and kf3 wraps it at realize with per-device data; nothing is installed. CI rebuilds it

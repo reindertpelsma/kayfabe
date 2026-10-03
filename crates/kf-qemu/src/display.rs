@@ -2010,8 +2010,6 @@ mod tests {
         }
     }
 
-    /// ★ M2 triple buffering: the console only ever takes the newest READY frame; the worker's next
-    /// target is never the one shown nor the one ready; an untaken frame is replaced, not queued.
     /// ★ The boot display: the boot layer until the first armed head — also on a family with no
     /// window vocabulary (no composition at all) — and never again; without it, today's choice.
     #[test]
@@ -2048,6 +2046,8 @@ mod tests {
         assert_eq!(choose_shown(None, Some(&boot), true), None);
     }
 
+    /// ★ M2 triple buffering: the console only ever takes the newest READY frame; the worker's next
+    /// target is never the one shown nor the one ready; an untaken frame is replaced, not queued.
     #[test]
     fn the_console_takes_the_newest_frame_and_the_gpu_never_writes_the_shown_one() {
         let c = ConsoleShare::default();
