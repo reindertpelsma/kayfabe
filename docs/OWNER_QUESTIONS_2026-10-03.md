@@ -97,6 +97,9 @@ it dies with it.
 
 ## 2. `GF100_DISP_SW` (X11 desktops)
 
+⊘ **ANSWERED 2026-10-03 by the owner — option A is the design** (`OWNER_RULINGS.md` §N, with §M for
+pacing). The text below is kept as it was written.
+
 **The problem.** X11 compositors and X11 Vulkan presentation allocate a display-software object
 (class `0x9072`) on their 3D channel. Its methods ask for a semaphore release at the next vblank.
 Software methods are serviced by the RM of the GPU that runs the channel, which here is the host GPU.

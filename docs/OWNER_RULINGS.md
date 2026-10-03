@@ -379,3 +379,29 @@ citation: ask whether its reason still holds before relying on it.
     That bound is per submission, not per frame, and is not promised until a box run shows it holds.
   - The status line reports the achieved rate per path, so a bound that does not hold is visible.
 
+## N. X11 desktops: GF100_DISP_SW option A is the design (2026-10-03)
+
+- **Owner, after the design was laid out:** *"I think this is the best design i intended."* This answers
+  `OWNER_QUESTIONS_2026-10-03.md` item 2.
+- **The design:**
+  - A guest `GF100_DISP_SW` (`0x9072`) allocation gets a real host twin under its channel's host
+    twin. Its parameters are authored by kayfabe (head 0, displayMask 0, caps 0); the guest's
+    parameters are never forwarded.
+  - The guest's display-SW software methods trap on the host GPU to host RM. Host RM writes the
+    vblank release directly into the guest's semaphore memory. That memory is a guest-RAM page or a
+    store slice, mapped with a host kernel mapping (`NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`) for exactly
+    that memory. kayfabe acts only at allocation, mapping and teardown, not per vblank.
+  - Pacing follows §M.
+- **It stays inside the single store (owner, the same day: "the guest cannot get an object outside
+  its allocated vram").** The object is not memory the guest can address, and releases land only
+  in the guest's own mappings. The host client that the address check uses must hold only the
+  guest's store, guest RAM and twins; kayfabe's own allocations, such as the broker frame slots,
+  live in separate clients. This is pending the client audit of 2026-10-03.
+- **Default-on once all of these hold, on hosts whose GPU has a display engine** (refusal by name
+  stays the fallback elsewhere):
+  - a box run shows releases landing: Cinnamon X11 up, X11 vkcube presenting, vsync clients
+    advancing;
+  - per-VM caps on display-SW objects and kernel-mapped bytes exist, and refuse by name;
+  - the client split is built;
+  - a release aimed outside the guest's own memory lands nowhere outside the store and guest RAM.
+
