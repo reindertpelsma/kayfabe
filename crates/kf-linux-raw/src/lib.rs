@@ -304,11 +304,12 @@ pub use mapping_unsafe::{
 };
 pub use page_size::HostPageSize;
 pub use scratch::{
-    SCRATCH_TILE_MIN, SCRATCH_TILES_MAX, ScratchTile, TilePiece, scratch_tile_len, tile_pieces,
+    SCRATCH_TILE_MIN, SCRATCH_TILES_MAX, ScratchTile, TilePiece, WINDOW_ADVICE, advise_window,
+    scratch_tile_len, tile_pieces,
 };
 pub use signal_unsafe::{
     BREAK_SIGNAL, ThreadId, current_thread_id, install_break_handler, interrupt_thread,
 };
 pub use vcpu_unsafe::{KvmVcpu, VcpuExit};
 pub use view::RegionView;
-pub use window_unsafe::GuestWindow;
+pub use window_unsafe::{GuestWindow, WindowAdvice};

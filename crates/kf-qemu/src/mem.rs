@@ -41,7 +41,7 @@
 use crate::raw_unsafe::{BackendFd, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{
-    Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, ScratchTile,
+    Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, RawError, ScratchTile,
 };
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
 use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, Settle, UsermodeRow};
@@ -277,6 +277,49 @@ pub struct WindowOps {
     ram: &'static RamMap,
     /// PRAMIN only: nodes opened ahead of time and the reaper that releases retired views.
     trap: Option<&'static TrapNodes>,
+    /// ★ 2026-10-03: whether this window's sinks and guest-RAM placements carry
+    /// [`kf_linux_raw::WINDOW_ADVICE`]. BAR1 and BAR2: yes (VA thread). PRAMIN: no, its verbs run
+    /// on the vCPU, which gets ONE `mmap` per move and no `madvise` (owner ruling 2026-09-25); it
+    /// needs none, since every move re-places all 16 slots.
+    advise: bool,
+}
+
+/// ★ Window sinks and guest-RAM placements whose `madvise` the kernel refused (2026-10-03), all
+/// windows of the process. A refused sink is also returned as a refusal (the caller retries it);
+/// a refused advice on a guest-RAM placement only costs that placement its flags while it lives.
+pub static WINDOW_ADVICE_REFUSED: AtomicU64 = AtomicU64::new(0);
+
+/// ★★ Re-point window `[at, at + len)` to scratch: the one sink door of every window (2026-10-03).
+///
+/// `advise` (BAR1, BAR2, on the VA thread): [`ScratchTile::cover_advised`], so the sunk range
+/// carries the same flags as the tiling around it and merges back into it; without that, every
+/// guest-driven place-then-sink cycle left two more mappings for the VM's life
+/// (`kf_linux_raw::scratch`, module docs). Not `advise` (PRAMIN, on the vCPU): a plain
+/// [`ScratchTile::cover`], ONE `mmap` (the window is its own tile).
+///
+/// `mmap`s: `ceil((at % T + len) / T)`, at most `ceil(len / T) + 1`, plus one retry only after a
+/// refusal. Returns that count.
+///
+/// # Errors
+/// The cover's or the advice's refusal, by name.
+pub fn window_sink(
+    win: &GuestWindow,
+    scratch: &ScratchTile,
+    advise: bool,
+    at: u64,
+    len: u64,
+) -> Result<usize, String> {
+    let r = if advise {
+        scratch.cover_advised(win, HostOffset::new(at), len)
+    } else {
+        scratch.cover(win, HostOffset::new(at), len)
+    };
+    r.map_err(|e| {
+        if matches!(e, RawError::Syscall { call, .. } if call.starts_with("madvise")) {
+            WINDOW_ADVICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+        }
+        format!("mmap scratch @{at:#x}+{len:#x}: {e:?}")
+    })
 }
 
 /// ★ The PRAMIN trap's helpers: device nodes opened AHEAD of time (so the trap's map is exactly one
@@ -383,19 +426,30 @@ impl ViewOps for WindowOps {
                 },
             )
             .map_err(|e| format!("mmap guest RAM @{at:#x}+{len:#x} (file {file_off:#x}): {e:?}"))?;
+        // ★ 2026-10-03: the window's flags (VA thread only). `DONTDUMP` keeps a guest-RAM page
+        // out of QEMU's core dump through this alias too (`dump-guest-core=off`). A refusal is
+        // counted, not returned: the placement landed, and a RAM mapping never merges with scratch
+        // (another file), so a missing flag costs no mapping once it is sunk.
+        if self.advise
+            && let Err(e) = kf_linux_raw::advise_window(self.win, HostOffset::new(at), len)
+            && WINDOW_ADVICE_REFUSED.fetch_add(1, Ordering::Relaxed) == 0
+        {
+            eprintln!(
+                "kf3: {} guest RAM @{at:#x}+{len:#x}: advice refused ({e:?}), counted",
+                self.name
+            );
+        }
         if let Some(ix) = view_index() {
             ix.sunk(self.name, at, len);
         }
         Ok(())
     }
 
-    /// ★ One `mmap` per scratch tile the run touches ([`ScratchTile::cover`]): exactly ONE for
-    /// any PRAMIN run (the window is its own tile), `ceil(len / tile)` at most elsewhere — and
-    /// those are VA-thread sinks, never a vCPU's.
+    /// ★ [`window_sink`]: exactly ONE `mmap` for any PRAMIN run (the window is its own tile, and
+    /// no advice on the vCPU); on BAR1 and BAR2 (VA thread) `ceil((at % T + len) / T)` `mmap`s,
+    /// at most `ceil(len / T) + 1`, then the window's advice.
     fn sink(&self, at: u64, len: u64) -> Result<(), String> {
-        self.scratch
-            .cover(self.win, HostOffset::new(at), len)
-            .map_err(|e| format!("mmap scratch @{at:#x}+{len:#x}: {e:?}"))?;
+        window_sink(self.win, self.scratch, self.advise, at, len)?;
         if let Some(ix) = view_index() {
             ix.sunk(self.name, at, len);
         }
@@ -1520,9 +1574,12 @@ pub fn window_with_scratch(
         GuestWindow::create(len, page).map_err(|e| format!("{what} window of {len:#x}: {e:?}"))?;
     let s = ScratchTile::for_window(name, &w)
         .map_err(|e| format!("{what} scratch tile for {len:#x}: {e:?}"))?;
-    // ⊘ Scratch over the WHOLE window before anyone can see it: never a hole.
+    // ⊘ Scratch over the WHOLE window before anyone can see it: never a hole. ★ With the window's
+    // flags (2026-10-03), set BEFORE QEMU registers the window (kf3.c runs kf3_realize first): its
+    // own `ram_block_add` advice then finds them set and changes nothing, and every later sink
+    // carries the same flags and merges back (`kf_linux_raw::WINDOW_ADVICE`).
     let mmaps = s
-        .cover(&w, HostOffset::ZERO, len)
+        .cover_advised(&w, HostOffset::ZERO, len)
         .map_err(|e| format!("{what} scratch placement: {e:?}"))?;
     eprintln!(
         "kf3: {what} scratch: tile {:#x} x {mmaps} over {len:#x} (host RAM bound {:#x})",
@@ -1609,7 +1666,8 @@ impl MemPlane {
             bar2_scratch.tile_len(),
             pramin_len + bar1_bytes + bar2_bytes,
         );
-        let ops = |name, win, scratch, trap| WindowOps {
+        // ★ PRAMIN (the one window with a trap) runs on the vCPU: no advice there.
+        let ops = |name, win, scratch, trap: Option<&'static TrapNodes>| WindowOps {
             name,
             rm,
             store,
@@ -1617,6 +1675,7 @@ impl MemPlane {
             scratch,
             ram,
             trap,
+            advise: trap.is_none(),
         };
         let trap = TrapNodes::start(rm, store)?;
         let pramin = PraminPool::new(
@@ -2360,6 +2419,64 @@ mod tests {
         );
     }
 
+    /// Mappings of this process whose file is the memfd `name`.
+    fn mappings_of(name: &std::ffi::CStr) -> usize {
+        let want = format!("/memfd:{} (deleted)", name.to_str().expect("utf-8"));
+        std::fs::read_to_string("/proc/self/maps")
+            .expect("/proc/self/maps")
+            .lines()
+            .filter(|l| l.ends_with(&want))
+            .count()
+    }
+
+    /// ★★★ 2026-10-03 (review finding 1), through the PRODUCTION doors: `window_with_scratch`, then
+    /// QEMU 10.2.4's `ram_block_add` advice (`system/physmem.c:2294-2304`, here with
+    /// `dump-guest-core=off`, the case that adds `MADV_DONTDUMP`), then guest-driven
+    /// place-then-sink cycles at distinct offsets through `window_sink` as BAR1 and BAR2 call it.
+    /// The scratch must be back to `ceil(W / T)` mappings after every sink. Before the fix each
+    /// cycle left two more (`kf_linux_raw` `scratch.rs::an_unadvised_sink_beside_qemus_advice_never_merges_back`).
+    #[test]
+    fn a_bar_sink_merges_back_after_qemu_has_advised_the_window() {
+        use kf_linux_raw::WindowAdvice;
+        let page = HostPageSize::query();
+        let pg = page.bytes();
+        let len: u64 = 64 << 20;
+        let name = c"kf3-scratch-test-advised-bar1";
+        let (w, s) = window_with_scratch(len, page, "BAR1", name).expect("window");
+        let canonical = usize::try_from(len / s.tile_len()).expect("small");
+        for a in [
+            WindowAdvice::DontDump,
+            WindowAdvice::HugePage,
+            WindowAdvice::DontFork,
+        ] {
+            // QEMU ignores a refusal (THP compiled out is EINVAL); so do we.
+            let _ = w.advise(HostOffset::ZERO, len, a);
+        }
+        assert_eq!(mappings_of(name), canonical, "QEMU's advice split nothing");
+        let stand_in = kf_linux_raw::SharedRam::create(4 * pg).expect("a stand-in view");
+        let cycles = 256u64;
+        let mut worst = 0;
+        for k in 0..cycles {
+            let at = (11 * k + 3) * pg;
+            w.place(
+                HostOffset::new(at),
+                4 * pg,
+                Backing::SharedFile {
+                    fd: stand_in.as_backing_fd(),
+                    offset: 0,
+                },
+            )
+            .expect("place");
+            window_sink(&w, &s, true, at, 4 * pg).expect("sink");
+            worst = worst.max(mappings_of(name));
+        }
+        assert_eq!(
+            (worst, mappings_of(name)),
+            (canonical, canonical),
+            "after {cycles} place-then-sink cycles the scratch does not merge back"
+        );
+    }
+
     /// ★ PRAMIN keeps its one-`mmap` sink (owner ruling 2026-09-25): the production PRAMIN window is
     /// its own tile, so every slot run of the trap's re-point is one placement.
     #[test]
@@ -2371,5 +2488,7 @@ mod tests {
         assert_eq!(s.tile_len(), len);
         assert_eq!(s.cover(&w, HostOffset::new(GRANULE), 3 * GRANULE), Ok(1));
         assert_eq!(s.cover(&w, HostOffset::ZERO, len), Ok(1));
+        // The door the PRAMIN trap goes through: no advice on the vCPU, one mmap per run.
+        assert_eq!(window_sink(&w, &s, false, GRANULE, 3 * GRANULE), Ok(1));
     }
 }

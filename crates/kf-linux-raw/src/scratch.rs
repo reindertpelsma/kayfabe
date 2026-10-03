@@ -45,6 +45,31 @@
 //! in the unmapped pages `T` bytes away, in the SAME window of the SAME VM. That is self-corruption
 //! only: no tile is shared between windows, devices or VMs.
 //!
+//! ## ⊘ Corrected 2026-10-03 (review of `v3-scratch-bound`): the mapping count is NOT `≤ 1024`
+//!
+//! The next section's *"at most 1024"* is the count of an UNMAPPED window's cover, and it was read
+//! as a bound on the window. It was not one in production. QEMU advises each window once when it
+//! registers it (`MADV_HUGEPAGE`, `MADV_DONTFORK`, and `MADV_DONTDUMP` with `dump-guest-core=off`;
+//! QEMU 10.2.4 `system/physmem.c:2294-2304`), AFTER this cover, and a later `MAP_FIXED` sink comes
+//! back without those flags. Linux merges neighbouring mappings only when their flags match (7.1
+//! `mm/vma.c:84-96`), so a sink beside the advised tiling never merged back, and every guest-driven
+//! place-then-sink cycle left two more mappings for the VM's life (the review measured 16 384
+//! after 8192 one-page cycles in a 64 MiB window whose tiling is 32). Each one is kernel slab
+//! (`vm_area_struct` + a maple-tree node, about 212 B) charged to QEMU's cgroup, outside `-m`.
+//!
+//! The fix: every off-vCPU sink, and the initial cover, carries [`WINDOW_ADVICE`]
+//! ([`ScratchTile::cover_advised`]), a superset of QEMU's flags set BEFORE QEMU registers the
+//! window, so QEMU's advice changes nothing and a sink merges back. The count is then:
+//! - `ceil(window / T)` (≤ 1024) once nothing is placed;
+//! - plus at most two per LIVE placement (the placement itself, and the tile it splits). Live
+//!   placements never overlap, so they are at most `window / page`; no cap below that is built
+//!   (`V3_P4_PORT_MAP.md` Q3 says why), and the memory cgroup has to cover that slab term.
+//! - PRAMIN (sunk on the vCPU, with no advice): at most its 16 slots, since every move re-places
+//!   the whole window at slot granularity.
+//!
+//! The test is `scratch.rs::a_sink_restores_the_canonical_tiling_after_qemu_has_advised_the_window`,
+//! and its known-positive is `scratch.rs::an_unadvised_sink_beside_qemus_advice_never_merges_back`.
+//!
 //! ## Why `T` is not a constant
 //!
 //! RSS × mappings ≈ window, so one of the two must grow with the window. 4 KiB tiles over 256 MiB
@@ -59,15 +84,18 @@
 //! - The host page tables and KVM's SPTEs for a fully touched window (about `window / 256` at 4 KiB
 //!   pages, charged to the same cgroup). A placed store view costs the same, so that term comes
 //!   from the BAR's size, not from scratch.
-//! - Guest RAM, which is pinned whole. The launcher's memory cgroup has to cover both
-//!   (`V3_SWEEP_AND_INSTALL.md` §2.6).
+//! - The mappings themselves: kernel slab, about 212 B each, at most two per live placement on top
+//!   of the tiling (see the correction above). Bounded by `vm.max_map_count` per process and by
+//!   `window / page` per window, not by `T`.
+//! - Guest RAM, which is pinned whole. The launcher's memory cgroup has to cover all of these
+//!   (`V3_SWEEP_AND_INSTALL.md` §2.5).
 
 use crate::bounds::{self, HostOffset};
 use crate::error::RawError;
 use crate::geometry;
 use crate::host_fd_unsafe::SharedRam;
 use crate::mapping_unsafe::Backing;
-use crate::window_unsafe::GuestWindow;
+use crate::window_unsafe::{GuestWindow, WindowAdvice};
 use std::ffi::CStr;
 
 /// The smallest tile a window larger than it gets: 2 MiB. Also the shmem huge-page size on x86,
@@ -156,6 +184,65 @@ pub fn tile_pieces(at: u64, len: u64, tile: u64) -> TilePieces {
     }
 }
 
+/// ★★★ The VMA flags every window mapping placed OFF the vCPU carries (2026-10-03):
+/// `VM_DONTDUMP`, `VM_HUGEPAGE` and `VM_DONTCOPY`.
+///
+/// **Why.** QEMU advises a window once, when it registers it as a `ram_device` region: QEMU 10.2.4
+/// `ram_block_add` applies `MADV_DONTDUMP` (only with `dump-guest-core=off`), `MADV_HUGEPAGE` and
+/// `MADV_DONTFORK` (unless qtest) to the whole range (`system/physmem.c:2294-2304`, `:1858-1871`;
+/// a `RAM_PREALLOC` block is never re-advised, `:2684-2685`). A `MAP_FIXED` placement made after
+/// that comes back without those flags, and Linux merges neighbouring mappings only when their
+/// flags match (7.1 `mm/vma.c:84-96`). So without this, a sink never merged back into the tiling
+/// and every place-then-sink cycle left its split boundaries behind (see the module docs).
+///
+/// **A superset, set FIRST.** The initial cover carries all three before QEMU registers the window
+/// (`kf_qemu::mem::window_with_scratch`), so QEMU's own `madvise` finds them set and changes
+/// nothing, whatever `dump-guest-core` says. Every later off-vCPU sink carries the same three, so
+/// every scratch mapping in the window agrees and a sink merges back. ⚠ This holds while QEMU's
+/// set stays inside this one: read in 10.2.4 only.
+///
+/// **Why each flag is right for a window, not only harmless.**
+/// - `DONTDUMP`: with `dump-guest-core=off`, a guest-RAM page placed into a window (a sysmem leaf)
+///   would otherwise land in QEMU's core dump; with `=on` (the default) that page is still dumped
+///   through guest RAM's own mapping, so nothing is lost.
+/// - `DONTFORK`: what QEMU asks of every RAM block; a child of `fork` gets no copy of a window.
+/// - `HUGEPAGE`: needed only so that QEMU's advice is a no-op. On the scratch tile it can make one
+///   touch allocate a 2 MiB huge page (under `shmem_enabled=advise`); the tile's size still bounds
+///   the total.
+///
+/// Device views are not advised: their mappings are `VM_IO | VM_PFNMAP` and never merge with
+/// anything (`VM_SPECIAL`), and the driver already marks them `VM_DONTDUMP`.
+pub const WINDOW_ADVICE: [WindowAdvice; 3] = [
+    WindowAdvice::DontDump,
+    WindowAdvice::HugePage,
+    WindowAdvice::DontFork,
+];
+
+/// ★ Apply [`WINDOW_ADVICE`] to window `[at, at + len)`: one `madvise` per flag.
+///
+/// `MADV_HUGEPAGE` refused with `EINVAL` (a kernel built without transparent huge pages) is not an
+/// error: QEMU's identical call is refused the same way, so no mapping in the window carries the
+/// flag and they still all agree.
+///
+/// # Errors
+/// As [`GuestWindow::advise`]: the first other refusal.
+///
+/// # Panics
+/// If called with any ranked lock held (R1, §4.5).
+pub fn advise_window(window: &GuestWindow, at: HostOffset, len: u64) -> Result<(), RawError> {
+    for a in WINDOW_ADVICE {
+        match window.advise(at, len, a) {
+            Ok(()) => {}
+            Err(RawError::Syscall {
+                errno: Some(libc::EINVAL),
+                ..
+            }) if a == WindowAdvice::HugePage => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
+}
+
 /// ★ One window's scratch: a sealed memfd of [`scratch_tile_len`] bytes, mapped again and again
 /// over every unmapped part of the window. See the module docs for the bound and the semantics.
 #[derive(Debug)]
@@ -183,13 +270,26 @@ impl ScratchTile {
     }
 
     /// ★ Show scratch over window `[at, at + len)`: one `MAP_FIXED` placement per tile piece
-    /// ([`tile_pieces`]). Returns the number of `mmap` calls made.
+    /// ([`tile_pieces`]), so `ceil((at % T + len) / T)` of them, at most `ceil(len / T) + 1`.
+    /// Returns the number of `mmap` calls made. It sets no VMA flag: off the vCPU, use
+    /// [`ScratchTile::cover_advised`].
     ///
     /// Every argument is checked BEFORE the first `mmap` (zero length, overflow, the window's
     /// bound, page alignment), so a refusal by argument places nothing. Only an `mmap` the kernel
-    /// refuses can stop the cover part-way; the error then says so, and the pieces before it show
-    /// scratch while the rest still show what they showed before. A caller that releases a view
-    /// only after a successful cover therefore never exposes a released view.
+    /// refuses can stop the cover part-way. The pieces before it then show scratch and the pieces
+    /// after it still show what they showed before.
+    ///
+    /// ⊘ **Corrected 2026-10-03: the REFUSED piece itself may be left as a HOLE**, not as what it
+    /// showed before. Linux 7.1 clears the old mapping's page tables before it allocates the new
+    /// mapping (`mm/vma.c:2476`, in `__mmap_setup`), and a refusal after that point (an allocation,
+    /// or the driver's `mmap`) cannot put the old mapping back: it leaves *"a gap where the
+    /// MAP_FIXED mapping failed"* (`mm/vma.c:2368-2388`). A guest touching a hole dies (`EFAULT`).
+    /// So a refused piece is retried ONCE (into a gap the retry needs no split, so it needs less
+    /// memory); if the retry is refused too, the error is returned and that piece may be a hole.
+    /// The retry is the only way one piece costs two `mmap`s, and it happens only after a refusal.
+    ///
+    /// A caller must therefore never assume a refused cover left the old backing visible, and
+    /// releases a view only after a successful cover: then the view is reachable nowhere.
     ///
     /// # Errors
     /// [`RawError::ZeroLength`], [`RawError::LengthOverflow`], [`RawError::OutOfRange`],
@@ -212,16 +312,46 @@ impl ScratchTile {
                     object_len: self.tile,
                 });
             }
-            window.place(
-                HostOffset::new(p.at),
-                p.len,
-                Backing::SharedFile {
-                    fd: self.ram.as_backing_fd(),
-                    offset: p.file_off,
-                },
-            )?;
+            let backing = Backing::SharedFile {
+                fd: self.ram.as_backing_fd(),
+                offset: p.file_off,
+            };
             mmaps += 1;
+            if window.place(HostOffset::new(p.at), p.len, backing).is_err() {
+                // ⊘ The refused piece may now be a hole (see the docs): one retry.
+                mmaps += 1;
+                window.place(HostOffset::new(p.at), p.len, backing)?;
+            }
         }
+        Ok(mmaps)
+    }
+
+    /// ★★ [`ScratchTile::cover`], then [`WINDOW_ADVICE`] over the same range ([`advise_window`]):
+    /// the initial cover of every window (`kf_qemu::mem::window_with_scratch`) and every sink made
+    /// OFF the vCPU. Returns the `mmap` calls made; the advice adds one `madvise` per flag.
+    ///
+    /// ⊘ Not optional there: without the advice a sink never merges back into the tiling QEMU
+    /// advised, and every place-then-sink cycle leaves its split boundaries for the VM's life
+    /// (module docs). An advice refusal is returned, so a caller does not count the sink as done:
+    /// the range already shows scratch, and a later sink re-covers and re-advises it.
+    ///
+    /// PRAMIN's trap calls [`ScratchTile::cover`] instead: no `madvise` on a vCPU (owner ruling
+    /// 2026-09-25, ONE `mmap` per window move), and it needs none, because every move re-places
+    /// all 16 slots, so that window never holds more than 16 mappings.
+    ///
+    /// # Errors
+    /// As [`ScratchTile::cover`] and [`advise_window`].
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn cover_advised(
+        &self,
+        window: &GuestWindow,
+        at: HostOffset,
+        len: u64,
+    ) -> Result<usize, RawError> {
+        let mmaps = self.cover(window, at, len)?;
+        advise_window(window, at, len)?;
         Ok(mmaps)
     }
 
@@ -366,45 +496,217 @@ mod tests {
 
     /// Window offset `o` shows tile byte `o % T`: a write lands at every `T` stride of the same
     /// window and nowhere else in it.
+    ///
+    /// ⊘ `T` is the POLICY's number ([`scratch_tile_len`]), never the object's own claim
+    /// (`s.tile_len()`): a scratch that made its tile the whole window would report `T = len`,
+    /// check a single stride, and pass (it did, in the 2026-10-03 review's bite run).
     #[test]
     fn scratch_aliases_every_tile_length_and_nowhere_else() {
         let p = page();
         let len = 8 * MIB;
+        let t = scratch_tile_len(len);
+        assert!(t < len, "an 8 MiB window is more than one tile ({t:#x})");
         let w = GuestWindow::create(len, p).expect("window");
         let s = ScratchTile::for_window(&named("alias"), &w).expect("tile");
         s.cover(&w, HostOffset::ZERO, len).expect("cover");
-        let t = s.tile_len();
         let x = p.bytes() + 8;
         w.write_from(HostOffset::new(x), &[0xAB]).expect("write");
         let mut b = [0u8; 1];
+        let mut strides = 0u64;
         for k in 0..len / t {
             w.read_into(HostOffset::new(x + k * t), &mut b)
                 .expect("read");
             assert_eq!(b[0], 0xAB, "tile {k} shows the same byte");
+            strides += 1;
         }
+        assert!(
+            strides > 1,
+            "only {strides} stride checked: nothing was shown to alias"
+        );
         w.read_into(HostOffset::new(x + 1), &mut b).expect("read");
         assert_eq!(b[0], 0, "the neighbouring byte is untouched");
     }
 
-    /// ★★ A sink (cover) after a placement restores the canonical tiling: the bound still holds,
-    /// and the scratch mappings merge back to `ceil(W / T)`, for a placement inside one tile and
-    /// for one that crosses a tile boundary.
+    /// The flags QEMU 10.2.4's `ram_block_add` gives a window when it registers it
+    /// (`system/physmem.c:2294-2304`): `MADV_DONTDUMP` only with `dump-guest-core=off`, then
+    /// `MADV_HUGEPAGE`, then `MADV_DONTFORK`. Applied the way QEMU does, AFTER our cover. Returns
+    /// whether the kernel has transparent huge pages (`MADV_HUGEPAGE` not refused with `EINVAL`).
+    fn qemu_registers(w: &GuestWindow, dump_guest_core: bool) -> bool {
+        let all = w.len_bytes();
+        if !dump_guest_core {
+            w.advise(HostOffset::ZERO, all, WindowAdvice::DontDump)
+                .expect("MADV_DONTDUMP");
+        }
+        let thp = match w.advise(HostOffset::ZERO, all, WindowAdvice::HugePage) {
+            Ok(()) => true,
+            Err(RawError::Syscall {
+                errno: Some(libc::EINVAL),
+                ..
+            }) => false,
+            Err(e) => panic!("MADV_HUGEPAGE: {e:?}"),
+        };
+        w.advise(HostOffset::ZERO, all, WindowAdvice::DontFork)
+            .expect("MADV_DONTFORK");
+        thp
+    }
+
+    /// The `VmFlags` of every mapping of memfd `name`, from `/proc/self/smaps`.
+    fn vmflags_of(name: &std::ffi::CStr) -> Vec<String> {
+        let want = format!("/memfd:{} (deleted)", name.to_str().expect("utf-8"));
+        let smaps = std::fs::read_to_string("/proc/self/smaps").expect("/proc/self/smaps");
+        let mut ours = false;
+        let mut out = Vec::new();
+        for l in smaps.lines() {
+            // A mapping's header line starts with `start-end`; every field line with `Key:`.
+            let header = l
+                .split_whitespace()
+                .next()
+                .is_some_and(|f| !f.ends_with(':'));
+            if header {
+                ours = l.ends_with(&want);
+            } else if let Some(flags) = l.strip_prefix("VmFlags:")
+                && ours
+            {
+                out.push(flags.trim().to_string());
+            }
+        }
+        out
+    }
+
+    /// Window pages for place-then-sink cycle `k`: distinct for every `k`, 13 pages apart so no two
+    /// stand-ins touch, and some of them straddle a tile boundary.
+    fn cycle_at(k: u64, pg: u64) -> u64 {
+        (13 * k + 5) * pg
+    }
+
+    /// ★★★ THE MAPPING BOUND, as production runs it (2026-10-03): the window is covered with the
+    /// advice ([`ScratchTile::cover_advised`], what `window_with_scratch` does), THEN QEMU
+    /// registers it and advises it, and then the guest drives many place-then-sink cycles at
+    /// distinct offsets. After every sink the scratch mappings are back to `ceil(W / T)`, for both
+    /// `dump-guest-core` settings, and every one of them carries the window's flags.
+    ///
+    /// ⊘ Against the shape before this fix (a plain [`ScratchTile::cover`] for the cover and the
+    /// sinks) it fails on the first cycle and ends at `canonical + 2 × cycles`: that is
+    /// `an_unadvised_sink_beside_qemus_advice_never_merges_back`, its known-positive.
     #[test]
-    fn a_sink_after_a_placement_restores_the_canonical_tiling() {
+    fn a_sink_restores_the_canonical_tiling_after_qemu_has_advised_the_window() {
         let p = page();
         let pg = p.bytes();
         let len = 64 * MIB;
-        let name = named("sink");
+        let t = scratch_tile_len(len);
+        let canonical = usize::try_from(len / t).expect("small");
+        assert!(canonical > 1, "the window must span several tiles");
+        for dump_guest_core in [true, false] {
+            let name = named(if dump_guest_core {
+                "sink-dump"
+            } else {
+                "sink-nodump"
+            });
+            let w = GuestWindow::create(len, p).expect("window");
+            let s = ScratchTile::for_window(&name, &w).expect("tile");
+            s.cover_advised(&w, HostOffset::ZERO, len)
+                .expect("the initial cover");
+            let thp = qemu_registers(&w, dump_guest_core);
+            assert_eq!(
+                mappings_of(&name),
+                canonical,
+                "QEMU's advice split nothing: the cover already carried it"
+            );
+
+            let stand_in = SharedRam::create_named(&named("view"), 8 * pg).expect("a stand-in");
+            let cycles = ((len / pg).saturating_sub(16) / 13).min(600);
+            assert!(cycles >= 100, "enough cycles to see growth ({cycles})");
+            let mut worst = (0usize, 0u64);
+            let mut worst_live = 0usize;
+            let mut crossed = 0;
+            for k in 0..cycles {
+                let at = cycle_at(k, pg);
+                w.place(
+                    HostOffset::new(at),
+                    8 * pg,
+                    Backing::SharedFile {
+                        fd: stand_in.as_backing_fd(),
+                        offset: 0,
+                    },
+                )
+                .expect("place a view");
+                // A live placement splits at most one tile into two.
+                worst_live = worst_live.max(mappings_of(&name));
+                let mmaps = s
+                    .cover_advised(&w, HostOffset::new(at), 8 * pg)
+                    .expect("sink");
+                let want = (at % t + 8 * pg).div_ceil(t);
+                assert_eq!(mmaps as u64, want, "one mmap per tile the sink touches");
+                if want == 2 {
+                    crossed += 1;
+                }
+                let after = mappings_of(&name);
+                if after > worst.0 {
+                    worst = (after, k);
+                }
+            }
+            assert!(crossed > 0, "some cycle straddled a tile boundary");
+            let end = mappings_of(&name);
+            assert_eq!(
+                (worst.0, end),
+                (canonical, canonical),
+                "dump-guest-core={dump_guest_core}: after {cycles} place-then-sink cycles the \
+                 scratch has {end} mappings (worst {} after cycle {}), canonical {canonical}: a \
+                 sink did not merge back",
+                worst.0,
+                worst.1
+            );
+            assert!(
+                worst_live <= canonical + 1,
+                "a live placement split more than one tile: {worst_live}"
+            );
+            let flags = vmflags_of(&name);
+            assert_eq!(flags.len(), canonical, "one VmFlags line per mapping");
+            for f in &flags {
+                let has = |x: &str| f.split_whitespace().any(|w| w == x);
+                assert!(
+                    has("dd") && has("dc"),
+                    "a scratch mapping without the advice: {f}"
+                );
+                assert!(
+                    !thp || has("hg"),
+                    "a scratch mapping without VM_HUGEPAGE: {f}"
+                );
+            }
+
+            read_every_page(&w);
+            write_every_page(&w, 0xA5);
+            assert_eq!(
+                s.allocated_bytes(),
+                Ok(t),
+                "the bound still holds after sinks"
+            );
+        }
+    }
+
+    /// ★ THE KNOWN-POSITIVE for the mapping bound: the shape before 2026-10-03. A sink with no
+    /// advice, beside a tiling QEMU advised, never merges back, and every cycle at a new offset
+    /// leaves two more mappings. If this ever reads `canonical`, the count is blind (or the kernel
+    /// stopped comparing flags) and the test above passes vacuously.
+    ///
+    /// PRAMIN still sinks this way (on the vCPU, no `madvise`); it stays bounded only because every
+    /// move re-places its 16 slots whole.
+    #[test]
+    fn an_unadvised_sink_beside_qemus_advice_never_merges_back() {
+        let p = page();
+        let pg = p.bytes();
+        let len = 64 * MIB;
+        let t = scratch_tile_len(len);
+        let canonical = usize::try_from(len / t).expect("small");
+        let name = named("unadvised");
         let w = GuestWindow::create(len, p).expect("window");
         let s = ScratchTile::for_window(&name, &w).expect("tile");
-        let t = s.tile_len();
         s.cover(&w, HostOffset::ZERO, len).expect("cover");
-        let canonical = usize::try_from(len / t).expect("small");
-        assert_eq!(mappings_of(&name), canonical, "one mapping per tile");
-
-        let stand_in = SharedRam::create_named(&named("view"), 8 * pg).expect("stand-in view");
-        // Inside tile 1, then across the tile 1 / tile 2 boundary.
-        for (at, crosses) in [(t + 4 * pg, false), (2 * t - 4 * pg, true)] {
+        qemu_registers(&w, true);
+        let stand_in = SharedRam::create_named(&named("view2"), 8 * pg).expect("a stand-in");
+        let cycles = 64u64;
+        for k in 0..cycles {
+            let at = cycle_at(k, pg);
             w.place(
                 HostOffset::new(at),
                 8 * pg,
@@ -414,31 +716,13 @@ mod tests {
                 },
             )
             .expect("place a view");
-            let split = if crosses { canonical } else { canonical + 1 };
-            assert_eq!(
-                mappings_of(&name),
-                split,
-                "the placement splits at most one tile"
-            );
-
-            let mmaps = s.cover(&w, HostOffset::new(at), 8 * pg).expect("sink");
-            assert_eq!(
-                mmaps,
-                if crosses { 2 } else { 1 },
-                "one mmap per tile touched"
-            );
-            assert_eq!(
-                mappings_of(&name),
-                canonical,
-                "the sink merges back into the canonical tiling"
-            );
+            s.cover(&w, HostOffset::new(at), 8 * pg).expect("sink");
         }
-        read_every_page(&w);
-        write_every_page(&w, 0xA5);
-        assert_eq!(
-            s.allocated_bytes(),
-            Ok(t),
-            "the bound still holds after sinks"
+        let got = mappings_of(&name);
+        assert!(
+            got >= canonical + usize::try_from(cycles).expect("small"),
+            "{got} mappings after {cycles} unadvised sinks (canonical {canonical}): the instrument \
+             no longer sees the growth"
         );
     }
 

@@ -1458,7 +1458,19 @@ jobs:
           #     10: `out` must be writable) and its one `unsafe { *out = fr }`.
           #   ⊘ No new power: page-locked host memory the display worker already owns, handed to
           #     QEMU's console by address; both CUDA calls act on memory this library allocated.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:44"
+          #
+          # ★★ `kf-linux-raw` 75 -> 76, 2026-10-03 (`v3-scratch-bound`, review finding 1,
+          # `docs/design/V3_P4_PORT_MAP.md` Q3) — `GuestWindow::advise`, ONE `unsafe { }` block in
+          # `window_unsafe.rs`: `madvise` over `[offset, offset + len)` of the window, after
+          # `checked_span` bounds it inside the object's own live mapping and the page alignment
+          # is checked. The advice comes from a closed three-variant enum (`MADV_DONTDUMP`,
+          # `MADV_DONTFORK`, `MADV_HUGEPAGE`), each of which only sets a VMA flag: nothing is
+          # unmapped, discarded, re-protected or written, so no concurrent copy through the window
+          # can observe it. Why it exists: QEMU advises a window when it registers it, a later
+          # `MAP_FIXED` comes back without those flags, and mappings with different flags never
+          # merge, so every guest-driven place-then-sink cycle left two mappings for the VM's life.
+          # ⊘ No new power: flags on our own window only.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:76 kf-cuda:75 kf-qemu:44"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

@@ -72,6 +72,18 @@ use core::ptr::NonNull;
 use kf_util::lockwitness;
 use std::os::fd::{AsRawFd, BorrowedFd};
 
+/// ★ A VMA flag [`GuestWindow::advise`] can set on a window's mappings. Closed on purpose: every
+/// variant only sets a flag, so none can discard or unmap a page another thread is reading.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowAdvice {
+    /// `MADV_DONTDUMP`: the mapping is left out of the process's core dump (`VM_DONTDUMP`).
+    DontDump,
+    /// `MADV_DONTFORK`: a child of `fork` does not inherit the mapping (`VM_DONTCOPY`).
+    DontFork,
+    /// `MADV_HUGEPAGE`: the mapping may use transparent huge pages (`VM_HUGEPAGE`).
+    HugePage,
+}
+
 /// A guest-physical window's host backing: an address range that is mapped from
 /// construction until `Drop`, into which page-granular backings are placed and restored.
 ///
@@ -334,6 +346,72 @@ impl GuestWindow {
             libc::PROT_READ | libc::PROT_WRITE,
             "restore",
         )
+    }
+
+    /// ★★ Set one VMA flag on every mapping in `[offset, offset + len)` of the window: one
+    /// `madvise(2)` with an advice that changes ONLY the mappings' flags (2026-10-03).
+    ///
+    /// Why a window needs this: Linux merges two neighbouring mappings only when their flags are
+    /// equal, apart from the sticky ones (Linux 7.1 `mm/vma.c:84-96`, `include/linux/mm.h:615-628`).
+    /// QEMU advises a window once, when it registers it (QEMU 10.2.4 `system/physmem.c:2294-2304`,
+    /// `ram_block_add`), and a later `MAP_FIXED` placement comes back WITHOUT that advice. So
+    /// unless every placement carries the same flags, a placement's split boundaries never merge
+    /// away again, and the window's mapping count grows with every place-then-sink cycle
+    /// (`crate::scratch::WINDOW_ADVICE` says which flags, and why a superset of QEMU's).
+    ///
+    /// ⊘ Only the three variants of [`WindowAdvice`] can be expressed. None of them unmaps,
+    /// discards, or changes the contents or the protection of any page, which is what keeps this
+    /// door sound on a window other threads are reading.
+    ///
+    /// # Errors
+    /// [`RawError::ZeroLength`], [`RawError::Misaligned`], [`RawError::OutOfRange`],
+    /// [`RawError::LengthOverflow`], [`RawError::TooLargeForHost`], [`RawError::Syscall`]: the
+    /// kernel's refusal by errno (`ENOMEM` when a flag change needs a split it cannot allocate,
+    /// `EINVAL` for [`WindowAdvice::HugePage`] on a kernel built without transparent huge pages).
+    ///
+    /// # Panics
+    /// If called with any ranked lock held (R1, §4.5).
+    pub fn advise(
+        &self,
+        offset: HostOffset,
+        len: u64,
+        advice: WindowAdvice,
+    ) -> Result<(), RawError> {
+        lockwitness::assert_lock_free("madvise (setting a window mapping's flags)");
+        if len == 0 {
+            return Err(RawError::ZeroLength { what: "advice" });
+        }
+        geometry::require_aligned(offset.get(), self.page, "advice offset")?;
+        geometry::require_aligned(len, self.page, "advice length")?;
+        let (start, len_host) = bounds::checked_span(self.len_bytes(), offset, len, "advice")?;
+        let (flag, call) = match advice {
+            WindowAdvice::DontDump => (libc::MADV_DONTDUMP, "madvise(MADV_DONTDUMP)"),
+            WindowAdvice::DontFork => (libc::MADV_DONTFORK, "madvise(MADV_DONTFORK)"),
+            WindowAdvice::HugePage => (libc::MADV_HUGEPAGE, "madvise(MADV_HUGEPAGE)"),
+        };
+
+        // SAFETY: (a) `self.base` is the type invariant, a live mapping of exactly `self.len`
+        // bytes owned by this object until `Drop`; (b) `start + len_host <= self.len` is proved
+        // above by `checked_span` (overflow checked first), so `base.add(start)` is in bounds of
+        // that allocation (the precondition of `add`) and the whole advised range lies inside the
+        // window; (c) offset and length are host-page-aligned (checked above), as `madvise`
+        // requires; (d) `flag` is one of exactly three advices, chosen by the `match` above from a
+        // closed enum, and each only sets a VMA flag (`VM_DONTDUMP`, `VM_DONTCOPY`, `VM_HUGEPAGE`;
+        // Linux 7.1 `mm/madvise.c:1382-1384`, `:1401-1403`, `:1417-1419`): no page is unmapped,
+        // discarded, re-protected or written, so no reference into the window and no concurrent
+        // `read_into`/`write_from` can observe a change. The kernel takes `mmap_lock` itself. The
+        // return value is checked below.
+        let rc = unsafe {
+            libc::madvise(
+                self.base.as_ptr().add(start).cast::<libc::c_void>(),
+                len_host,
+                flag,
+            )
+        };
+        if rc != 0 {
+            return Err(last_syscall_error(call));
+        }
+        Ok(())
     }
 
     /// The one `MAP_FIXED` in this file. Both doors above validate their own arguments
@@ -744,6 +822,66 @@ mod tests {
         w.read_into(HostOffset::ZERO, &mut head)
             .expect("read the head");
         assert_eq!(&head, b"\0\0", "and the head really did move to B");
+    }
+
+    /// ★ An advice only sets a flag: the bytes a placement shows are the same before and after,
+    /// and a range outside the window, misaligned or empty is refused before the syscall.
+    #[test]
+    fn an_advice_changes_no_byte_and_is_refused_by_argument() {
+        let p = page();
+        let ram = crate::SharedRam::create(2 * p.bytes()).expect("memfd");
+        let w = GuestWindow::create(2 * p.bytes(), p).expect("a two-page window");
+        w.place(
+            HostOffset::ZERO,
+            2 * p.bytes(),
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+        )
+        .expect("place");
+        w.write_from(HostOffset::new(p.bytes() - 4), b"ADVISED!")
+            .expect("write across the page boundary");
+        for a in [WindowAdvice::DontDump, WindowAdvice::DontFork] {
+            w.advise(HostOffset::ZERO, 2 * p.bytes(), a)
+                .expect("a flag-only advice on our own window");
+            w.advise(HostOffset::new(p.bytes()), p.bytes(), a)
+                .expect("and on a sub-range of it");
+        }
+        // Transparent huge pages may be compiled out; then the kernel says EINVAL, by errno.
+        match w.advise(HostOffset::ZERO, p.bytes(), WindowAdvice::HugePage) {
+            Ok(())
+            | Err(RawError::Syscall {
+                errno: Some(libc::EINVAL),
+                ..
+            }) => {}
+            Err(e) => panic!("MADV_HUGEPAGE: {e:?}"),
+        }
+        let mut got = [0u8; 8];
+        w.read_into(HostOffset::new(p.bytes() - 4), &mut got)
+            .expect("read back");
+        assert_eq!(&got, b"ADVISED!", "an advice changed what the window shows");
+
+        assert_eq!(
+            w.advise(
+                HostOffset::new(p.bytes()),
+                2 * p.bytes(),
+                WindowAdvice::DontDump
+            ),
+            Err(RawError::OutOfRange {
+                offset: p.bytes(),
+                len: 2 * p.bytes(),
+                object_len: 2 * p.bytes(),
+            })
+        );
+        assert!(matches!(
+            w.advise(HostOffset::new(8), p.bytes(), WindowAdvice::DontFork),
+            Err(RawError::Misaligned { .. })
+        ));
+        assert_eq!(
+            w.advise(HostOffset::ZERO, 0, WindowAdvice::DontFork),
+            Err(RawError::ZeroLength { what: "advice" })
+        );
     }
 
     #[test]
