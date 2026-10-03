@@ -554,6 +554,48 @@ and the per-client host MMU fault above.
     mechanism no longer expresses it, and **name the assert that now does**. An assert deleted
     without a successor named is a regression, however green the suite is.
 
+> ### ★★★ RULED AND BUILT 2026-10-03 (`v3-sec-nonpriv`) — **THE PRIVILEGE RULE FOR kf3'S HOST
+> ### CHANNELS.** Read this first; the w748 block below found both halves and this is how they landed.
+>
+> Owner, 2026-10-03: *"I dont think you should refuse cap sys admin if clearing a bit fixes it.
+> Sandboxing vmm is not our job though."* ⇒ kf3 does not refuse to run as root, and the bench
+> still starts QEMU as root.
+>
+> **The rule.** Every host channel kf3 creates runs guest-authored work, so every one is a
+> `PRIVILEGE_USER` channel, and a channel RM stamps otherwise never runs.
+>
+> - **The mechanism is the effective `CAP_SYS_ADMIN` bit of the thread making the channel-alloc
+>   call.** RM fixes the level from that thread's `capable(CAP_SYS_ADMIN)` at that one ioctl
+>   (`ogkm-580: kernel_channel.c:277-291`, `escape.c:304`). `kf_host::HostRm::birth_member`
+>   makes the call inside `kf_linux_raw::capability::with_effective_cap_cleared`. That clears the
+>   bit from the calling thread's effective set and restores it right after; the permitted set
+>   is untouched. If the bit cannot be cleared, the birth is refused before any host call
+>   (`CAP_BRACKET_REFUSED`).
+> - **The tripwire is the reply check.** `kf_host::channel::birth_privilege` reads RM's reply
+>   and refuses the birth by name, freeing the channel (`PRIVILEGED_CHANNEL_REFUSED`), when
+>   `NVOS04_FLAGS_PRIVILEGED_CHANNEL` (5:5) is set or the reply's privilege level is not
+>   `USER`. kf3 never asks for bit 5, so a set bit is RM's own verdict. This is (c) below, now
+>   built.
+> - **The client class is not a mechanism.** As (a) below says, `escape.c:394-403` rewrites
+>   `NV01_ROOT_NON_PRIV` to `NV01_ROOT_CLIENT`. On an RTX 3060 at 580.159.04, 2026-10-03, a
+>   `NV01_ROOT_NON_PRIV` client came back as class `0x41` and admin
+>   (`traces/v3_security/nonpriv_20261003/privprobe_root.log`).
+>
+> Box evidence, RTX 3060, 580.159.04, QEMU as root (uid 0, full `CapEff`), 2026-10-03
+> (`traces/v3_security/nonpriv_20261003/`):
+>
+> | run | revision | births | reply flags |
+> |---|---|---|---|
+> | before | `3e0f6dee` | 6 | all `PRIVILEGED_CHANNEL=1` |
+> | after | `dc64b22b` | the same 6 | all `0x00000080`, `PRIVILEGED_CHANNEL=0` |
+>
+> With the bracket skipped (`KF3_NEGCTL_SKIP_CAP_BRACKET=1`), the tripwire refused the first
+> birth on a live `0x000000a0` reply.
+>
+> ⚠ **Scope.** This covers channels kf-host creates, which are the only ones guest work runs
+> on. libcuda's own channels (the walker and display contexts) are created under the VMM's
+> capabilities and are not covered. They run only kayfabe's kernels.
+
 > ### ⊘⊘⊘ CORRECTED w748 — **30's PREMISE NAMES THE WRONG QUANTITY, AND ITS DEMANDED ASSERT
 > ### ALREADY EXISTS IN DATA WE RECEIVE.** Read this before the text below.
 >

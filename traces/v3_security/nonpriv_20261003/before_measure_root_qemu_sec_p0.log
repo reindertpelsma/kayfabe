@@ -1,0 +1,14 @@
+kf3: ⊘⊘⊘ UNSAFE OVERRIDE — KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 is set and this process HOLDS CAP_SYS_ADMIN (5 of 5 thread(s) hold CAP_SYS_ADMIN where it can take effect: tid 86135 (qemu-system-x86) in Prm+Eff, tid 86136 (qemu-system-x86) in Prm+Eff, tid 86138 (qemu-system-x86) in Prm+Eff, tid 86139 (qemu-system-x86) in Prm+Eff, tid 86140 (qemu-system-x86) in Prm+Eff). Every host channel kf3 births may be PRIVILEGED; guest-authored work would run at admin level. This violates the single-store rule (OWNER_RULINGS §N) and is for diagnostics ONLY. The per-birth privilege assert still refuses any channel RM stamps privileged.
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf-host: SEC_P0 channel birth engine=0xb flags=0x004000a0 PRIVILEGED_CHANNEL=1
+kf-host: ⊘⊘⊘ UNSAFE — this channel is PRIVILEGED (flags 0x004000a0, engine 0xb) and KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 permits it. Guest-authored work would run at admin level; single store NOT upheld.
+kf-host: SEC_P0 channel birth engine=0xb flags=0x004000a0 PRIVILEGED_CHANNEL=1
+kf-host: ⊘⊘⊘ UNSAFE — this channel is PRIVILEGED (flags 0x004000a0, engine 0xb) and KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 permits it. Guest-authored work would run at admin level; single store NOT upheld.
+kf-host: SEC_P0 channel birth engine=0x9 flags=0x004000a0 PRIVILEGED_CHANNEL=1
+kf-host: ⊘⊘⊘ UNSAFE — this channel is PRIVILEGED (flags 0x004000a0, engine 0x9) and KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 permits it. Guest-authored work would run at admin level; single store NOT upheld.
+kf-host: SEC_P0 channel birth engine=0x1 flags=0x004000a0 PRIVILEGED_CHANNEL=1
+kf-host: ⊘⊘⊘ UNSAFE — this channel is PRIVILEGED (flags 0x004000a0, engine 0x1) and KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 permits it. Guest-authored work would run at admin level; single store NOT upheld.
+kf-host: SEC_P0 channel birth engine=0x9 flags=0x004000a0 PRIVILEGED_CHANNEL=1
+kf-host: ⊘⊘⊘ UNSAFE — this channel is PRIVILEGED (flags 0x004000a0, engine 0x9) and KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 permits it. Guest-authored work would run at admin level; single store NOT upheld.
+kf-host: SEC_P0 channel birth engine=0x9 flags=0x004000a0 PRIVILEGED_CHANNEL=1
+kf-host: ⊘⊘⊘ UNSAFE — this channel is PRIVILEGED (flags 0x004000a0, engine 0x9) and KF3_UNSAFE_ALLOW_CAP_SYS_ADMIN=1 permits it. Guest-authored work would run at admin level; single store NOT upheld.
