@@ -141,6 +141,8 @@ pub mod mcintr;
 pub mod memsysconfig;
 pub mod notifier;
 pub mod oracle;
+// ★ 2026-10-03: the GSP `OS_ERROR_LOG` event — the guest's Xid line for a host RC (release §I).
+pub mod oserrorlog;
 pub mod pcibars;
 pub mod postevent;
 pub mod rc;

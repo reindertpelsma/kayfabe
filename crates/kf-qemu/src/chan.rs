@@ -102,6 +102,13 @@ struct PtChan {
     /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
     /// the host's own falcon context is steered onto (see `ChanPlane::engine_object`).
     falcon_ctx: Option<(u64, u64)>,
+    /// ★ 2026-10-03: the runlist the served FIFO table puts the channel's engine on — `None` when
+    /// the table names none. ⊘ Not the token index's `unwrap_or(0)`: a guest `OS_ERROR_LOG` that
+    /// names runlist 0 for an unknown runlist would resolve another runlist's chid on a
+    /// per-runlist-CHRAM guest; an unknown runlist posts `INVALID_CHID` instead.
+    runlist: Option<u32>,
+    /// ★ 2026-10-03: the guest GSP life ([`ChanPlane::gsp_life`]) the twin was born in.
+    life: u64,
 }
 
 /// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
@@ -170,8 +177,9 @@ impl PtNotifier {
     }
 }
 
-/// ★ P5c: one host robust-channel event, bound for the guest as `RC_TRIGGERED`.
-#[derive(Debug, Clone, Copy)]
+/// ★ P5c: one host robust-channel event, bound for the guest as `RC_TRIGGERED` — and, once per
+/// `(client, exception)` group, as the guest's `Xid` (`OS_ERROR_LOG`, 2026-10-03).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RcEvent {
     /// The guest's chid (the token-table index).
     pub chid: u32,
@@ -179,8 +187,126 @@ pub struct RcEvent {
     pub engine: u32,
     /// `info32` of the record the host wrote — the `ROBUST_CHANNEL_*` code.
     pub except_type: u32,
-    /// The twin's host token (for the log).
+    /// The twin's host token (for the log, and the liveness check: a reused `(client, handle)`
+    /// names a NEW twin with a new token).
     pub host_token: u32,
+    /// ★ 2026-10-03: the guest channel `(hClient, hChannel)` — the twin's key in the plane, so
+    /// delivery can ask whether the guest has freed it since.
+    pub client: u32,
+    /// The guest channel's handle.
+    pub handle: u32,
+    /// ★ 2026-10-03: the channel's runlist, `None` when the served table names none.
+    pub runlist: Option<u32>,
+    /// ★ 2026-10-03: the guest GSP life the twin was born in ([`ChanPlane::gsp_life`]).
+    pub life: u64,
+    /// ★ 2026-10-03: this event's group already had its `OS_ERROR_LOG` posted — a requeued event
+    /// (the GSP queue was full for its `RC_TRIGGERED`) never posts a second Xid.
+    pub xid_done: bool,
+}
+
+/// ★ 2026-10-03: one delivery group of an RC batch — the events of ONE guest client with ONE
+/// exception type, in arrival order. The drainer posts one `OS_ERROR_LOG` per group (if
+/// [`RcGroup::needs_xid`]), then each member's `RC_TRIGGERED`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RcGroup {
+    /// The guest client.
+    pub client: u32,
+    /// The `ROBUST_CHANNEL_*` code.
+    pub except_type: u32,
+    /// No member has had its `OS_ERROR_LOG` posted (a member that has — requeued — means the
+    /// group's Xid is already in the guest's log).
+    pub needs_xid: bool,
+    /// The events, in arrival order.
+    pub members: Vec<RcEvent>,
+}
+
+/// ★ 2026-10-03: group an RC batch by `(client, except_type)`, in first-arrival order (pure — the
+/// drainer's delivery plan).
+#[must_use]
+pub fn group_rc(evs: Vec<RcEvent>) -> Vec<RcGroup> {
+    let mut out: Vec<RcGroup> = Vec::new();
+    for e in evs {
+        match out
+            .iter_mut()
+            .find(|g| g.client == e.client && g.except_type == e.except_type)
+        {
+            Some(g) => {
+                g.needs_xid &= !e.xid_done;
+                g.members.push(e);
+            }
+            None => out.push(RcGroup {
+                client: e.client,
+                except_type: e.except_type,
+                needs_xid: !e.xid_done,
+                members: vec![e],
+            }),
+        }
+    }
+    out
+}
+
+/// ★ 2026-10-03: the guest Xid's text — guest-side facts only (no VMM address, rule A.5), and at
+/// most `kf_abi::oserrorlog::ERR_STRING_MAX` bytes for any channel count. The guest prints it after
+/// `NVRM: Xid (PCI:…): <except_type>, pid=…, name=…, `.
+#[must_use]
+pub fn xid_text(except_type: u32, channels: usize) -> String {
+    if except_type == kf_abi::oserrorlog::ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT {
+        format!(
+            "kayfabe: GPU MMU fault; {channels} channel(s) of this process stopped. kayfabe \
+             services no GPU page faults: CUDA managed memory or pageable (HMM) access to a \
+             non-resident page is unsupported. Otherwise this is a kayfabe bug - please report."
+        )
+    } else {
+        format!(
+            "kayfabe: host GPU robust-channel error; {channels} channel(s) of this process stopped."
+        )
+    }
+}
+
+/// ★ 2026-10-03: a per-guest-client rate limit for ONE host log line — a hostile guest can RC at
+/// will, and a log line per RC is a disk the guest writes. Bounded in clients too: past
+/// [`LineLimiter::CLIENTS`] live entries every new client's line is held, and the held count is
+/// carried into the next line that does print.
+#[derive(Debug, Default)]
+pub struct LineLimiter {
+    last: HashMap<u32, (std::time::Instant, u64)>,
+    overflow: u64,
+}
+
+impl LineLimiter {
+    /// At most one line per client per this window.
+    pub const EVERY: std::time::Duration = std::time::Duration::from_secs(10);
+    /// At most this many clients tracked at once.
+    pub const CLIENTS: usize = 64;
+
+    /// May `client`'s line print at `now`? `Some(held)` — print it, saying `held` lines were held
+    /// since (this client's, plus any held for want of a slot); `None` — hold it.
+    pub fn admit(&mut self, client: u32, now: std::time::Instant) -> Option<u64> {
+        if let Some((at, held)) = self.last.get_mut(&client) {
+            if now.saturating_duration_since(*at) < Self::EVERY {
+                *held += 1;
+                return None;
+            }
+            *at = now;
+            return Some(std::mem::take(held) + std::mem::take(&mut self.overflow));
+        }
+        if self.last.len() >= Self::CLIENTS {
+            let overflow = &mut self.overflow;
+            self.last.retain(|_, (at, held)| {
+                let keep = now.saturating_duration_since(*at) < Self::EVERY;
+                if !keep {
+                    *overflow += *held;
+                }
+                keep
+            });
+            if self.last.len() >= Self::CLIENTS {
+                self.overflow += 1;
+                return None;
+            }
+        }
+        self.last.insert(client, (now, 0));
+        Some(std::mem::take(&mut self.overflow))
+    }
 }
 
 /// ★ P5b §2.7: one host engine's non-stall event, and the guest vector it is announced on.
@@ -949,6 +1075,17 @@ pub struct ChanPlane {
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
     pub rc_unarmed: AtomicU64,
+    /// ★ 2026-10-03: twins whose guest declared NO error notifier (named at birth, `RC-NONE`) — their
+    /// faults are just as silent, and were counted nowhere.
+    pub rc_none: AtomicU64,
+    /// ★ 2026-10-03: the guest GSP's life — bumped by the drainer when the GSP phase leaves
+    /// `Running` (driver unload, teardown). A twin records the life it was born in, and an RC event
+    /// from an earlier life is never posted into the next one.
+    pub gsp_life: AtomicU64,
+    /// ★ 2026-10-03: `UNSERVICED-GPU-FAULT` groups seen (host Xid 31 on a guest client's twins).
+    pub rc_unserviced: AtomicU64,
+    /// ★ 2026-10-03: the `UNSERVICED-GPU-FAULT` line's per-client rate limit.
+    unserviced_lines: Mutex<LineLimiter>,
     /// ★ 2026-09-30: the doorbell fast path (`kf_chan::dbfast`, `V3_DOORBELL_IOEVENTFD.md`): every
     /// born channel — Passthrough AND Translated — registers its guest token; every free removes it
     /// before the twin goes.
@@ -1124,6 +1261,10 @@ impl ChanPlane {
             rc_queue: Mutex::new(Vec::new()),
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
+            rc_none: AtomicU64::new(0),
+            gsp_life: AtomicU64::new(0),
+            rc_unserviced: AtomicU64::new(0),
+            unserviced_lines: Mutex::new(LineLimiter::default()),
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
             dbfast,
@@ -2722,8 +2863,12 @@ impl ChanPlane {
         // ★ 2026-09-26: the index is per family (`kf_trap::tokenindex`) — on Blackwell chids are per
         // runlist, and the runlist is the one the served FIFO table gives this engine (what the
         // guest's own token carries in RUNLIST_ID). Through Hopper the runlist is ignored.
-        let runlist =
-            kf_rm::authored::runlist_of_engine_type(&self.engine_table, engine).unwrap_or(0);
+        // ★ 2026-10-03: the runlist as the table states it (`None` = unknown) is kept for the guest
+        // Xid's attribution; the token index keeps its historical `0`.
+        let runlist_of = kf_rm::authored::runlist_of_engine_type(&self.engine_table, engine);
+        let runlist = runlist_of.unwrap_or(0);
+        // ★ 2026-10-03: the GSP life this statement arrived in (the drainer holds the GSP lock).
+        let life = self.gsp_life.load(Ordering::Relaxed);
         let Some(idx) = self.plane.token_index.of_channel(runlist, chid) else {
             return refuse(
                 NV_ERR_INSUFFICIENT_RESOURCES,
@@ -2805,7 +2950,16 @@ impl ChanPlane {
                     );
                     None
                 }
-                None => None,
+                None => {
+                    // ★ 2026-10-03: counted and named like RC-UNARMED — no notifier, no host RC
+                    // record and no RC_TRIGGERED: a fault on this twin reaches the guest as nothing.
+                    self.rc_none.fetch_add(1, Ordering::Relaxed);
+                    eprintln!(
+                        "kf3: chan {:#x}:{:#x} RC-NONE: the guest declared no error notifier — this twin's faults are silent",
+                        a.client, a.handle
+                    );
+                    None
+                }
             };
             let g0 = kf_chan::passthrough::GuestChannel {
                 gpfifo_va: a.gpfifo_va,
@@ -2876,6 +3030,8 @@ impl ChanPlane {
                             space,
                             rows,
                             falcon_ctx: None,
+                            runlist: runlist_of,
+                            life,
                         });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
@@ -3076,7 +3232,7 @@ impl ChanPlane {
         self.rc_wakes.fetch_add(1, Ordering::Relaxed);
         let mut found = Vec::new();
         if let Ok(mut m) = self.pt.lock() {
-            for t in m.values_mut() {
+            for (key, t) in m.iter_mut() {
                 let Some(n) = t.notifier.as_mut() else {
                     continue;
                 };
@@ -3100,6 +3256,11 @@ impl ChanPlane {
                         engine: t.engine,
                         except_type: w[2],
                         host_token: t.chan.token,
+                        client: key.0,
+                        handle: key.1,
+                        runlist: t.runlist,
+                        life: t.life,
+                        xid_done: false,
                     });
                 }
             }
@@ -3127,12 +3288,64 @@ impl ChanPlane {
                     );
                 }
             }
+            self.say_unserviced(&found);
             if let Ok(mut q) = self.rc_queue.lock() {
                 q.extend(found);
             }
             let _ = self.release.signal();
         }
         k
+    }
+
+    /// ★ 2026-10-03 (worker, after the twin lock is released): one NAMED host line per guest client
+    /// whose twins the host RC'd with Xid 31 — the fault kayfabe does not service. Rate-limited per
+    /// client ([`LineLimiter`]); the per-twin `RC host twin` lines above stay as they were.
+    fn say_unserviced(&self, found: &[RcEvent]) {
+        let mmu = kf_abi::oserrorlog::ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT;
+        let mut clients: Vec<u32> = Vec::new();
+        for e in found.iter().filter(|e| e.except_type == mmu) {
+            if !clients.contains(&e.client) {
+                clients.push(e.client);
+            }
+        }
+        let now = std::time::Instant::now();
+        for c in clients {
+            self.rc_unserviced.fetch_add(1, Ordering::Relaxed);
+            let Some(held) = self
+                .unserviced_lines
+                .lock()
+                .ok()
+                .and_then(|mut l| l.admit(c, now))
+            else {
+                continue;
+            };
+            let chids: Vec<String> = found
+                .iter()
+                .filter(|e| e.client == c && e.except_type == mmu)
+                .map(|e| format!("{:#x}", e.chid))
+                .collect();
+            eprintln!(
+                "kf3: UNSERVICED-GPU-FAULT guest client {c:#x} chids [{}] host Xid {mmu} — kayfabe services no GPU page faults; guest gets RC_TRIGGERED + Xid {mmu}{}",
+                chids.join(" "),
+                if held > 0 {
+                    format!(" (+{held} line(s) held by the rate limit)")
+                } else {
+                    String::new()
+                }
+            );
+        }
+    }
+
+    /// ★ 2026-10-03 (drainer, under the GSP lock): is `e`'s twin still the guest's live channel? The
+    /// guest's FREE removes a twin from the plane on this same thread, in statement order, under the
+    /// GSP lock ([`ChanPlane::statement`] → `free`), so the answer cannot change between this check
+    /// and a post the caller makes while still holding that lock. A reused `(client, handle)` is a
+    /// NEW twin, told apart by its host token.
+    pub fn rc_twin_live(&self, e: &RcEvent) -> bool {
+        self.pt.lock().is_ok_and(|m| {
+            m.get(&(e.client, e.handle))
+                .is_some_and(|t| t.chan.token == e.host_token && t.life == e.life)
+        })
     }
 
     /// ★ P5c (drainer): the RC events waiting to be posted.
@@ -3726,5 +3939,122 @@ mod scope_tests {
         };
         assert!(bare.freed_by((c, ch), c, dev));
         assert!(!bare.freed_by((c, ch), c, tsg));
+    }
+}
+
+#[cfg(test)]
+mod rc_delivery_tests {
+    use super::{LineLimiter, RcEvent, group_rc, xid_text};
+    use std::time::{Duration, Instant};
+
+    fn ev(client: u32, handle: u32, except_type: u32, xid_done: bool) -> RcEvent {
+        RcEvent {
+            chid: handle & 0xff,
+            engine: 1,
+            except_type,
+            host_token: 0x1e + (handle & 0xff),
+            client,
+            handle,
+            runlist: Some(0),
+            life: 0,
+            xid_done,
+        }
+    }
+
+    /// ★ One group per `(client, exception)`, in first-arrival order, members in arrival order —
+    /// the eight twins one host RC wrote (R3) are ONE guest Xid, not eight.
+    #[test]
+    fn a_batch_groups_by_client_and_exception() {
+        let (a, b) = (0xc1d0_0010, 0xc1d0_0011);
+        let g = group_rc(vec![
+            ev(a, 0xcafe_0007, 31, false),
+            ev(b, 0xcafe_0001, 31, false),
+            ev(a, 0xcafe_0008, 31, false),
+            ev(a, 0xcafe_0009, 13, false),
+        ]);
+        assert_eq!(g.len(), 3);
+        assert_eq!(
+            (g[0].client, g[0].except_type, g[0].members.len()),
+            (a, 31, 2)
+        );
+        assert_eq!(g[0].members[1].handle, 0xcafe_0008);
+        assert_eq!((g[1].client, g[1].except_type), (b, 31));
+        assert_eq!((g[2].client, g[2].except_type), (a, 13));
+        assert!(g.iter().all(|g| g.needs_xid));
+    }
+
+    /// ★ A requeued member (`xid_done`) means the group's Xid is already in the guest's log: the
+    /// group never asks for a second one, even with a fresh member beside it.
+    #[test]
+    fn a_requeued_group_never_posts_a_second_xid() {
+        let a = 0xc1d0_0010;
+        let g = group_rc(vec![
+            ev(a, 0xcafe_0007, 31, true),
+            ev(a, 0xcafe_0008, 31, false),
+        ]);
+        assert_eq!(g.len(), 1);
+        assert!(!g[0].needs_xid);
+        let g = group_rc(vec![
+            ev(a, 0xcafe_0008, 31, false),
+            ev(a, 0xcafe_0007, 31, true),
+        ]);
+        assert!(!g[0].needs_xid, "in either order");
+    }
+
+    /// The text fits `errString` for any channel count, names kayfabe, and says what the fault is.
+    #[test]
+    fn the_xid_text_fits_and_names_kayfabe() {
+        for except_type in [31, 13, 45] {
+            for n in [1, 8, usize::MAX] {
+                let t = xid_text(except_type, n);
+                assert!(
+                    t.len() <= kf_abi::oserrorlog::ERR_STRING_MAX,
+                    "{} bytes: {t}",
+                    t.len()
+                );
+                assert!(t.starts_with("kayfabe: "), "{t}");
+                assert!(!t.contains('\0'));
+            }
+        }
+        let t = xid_text(31, 8);
+        assert!(t.contains("8 channel(s)"), "{t}");
+        assert!(t.contains("managed memory"), "{t}");
+    }
+
+    /// ★ One line per client per window; the held count rides on the next line; a full client
+    /// table holds new clients' lines instead of growing.
+    #[test]
+    fn the_unserviced_line_is_rate_limited_per_client() {
+        let t0 = Instant::now();
+        let mut l = LineLimiter::default();
+        assert_eq!(l.admit(1, t0), Some(0), "the first line prints");
+        assert_eq!(l.admit(1, t0 + Duration::from_secs(1)), None, "held");
+        assert_eq!(l.admit(1, t0 + Duration::from_secs(2)), None, "held");
+        assert_eq!(
+            l.admit(2, t0 + Duration::from_secs(2)),
+            Some(0),
+            "another client prints"
+        );
+        assert_eq!(
+            l.admit(1, t0 + LineLimiter::EVERY + Duration::from_secs(1)),
+            Some(2),
+            "after the window, with the two held lines counted"
+        );
+        let mut l = LineLimiter::default();
+        for c in 0..LineLimiter::CLIENTS as u32 {
+            assert_eq!(l.admit(c, t0), Some(0));
+        }
+        let extra = LineLimiter::CLIENTS as u32;
+        assert_eq!(
+            l.admit(extra, t0),
+            None,
+            "the table is full: held, not grown"
+        );
+        let later = t0 + LineLimiter::EVERY + Duration::from_secs(1);
+        assert_eq!(
+            l.admit(extra, later),
+            Some(1),
+            "expired entries make room, and the held line is counted"
+        );
     }
 }

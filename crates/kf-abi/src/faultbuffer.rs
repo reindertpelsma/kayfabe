@@ -103,6 +103,20 @@
 //! because none is generated. `PUT == GET` is not a lie about an empty buffer; the buffer
 //! **is** empty.
 //!
+//! ⊘ **CORRECTED 2026-10-03 — the paragraph below predicts a HANG; the v3 boots show an
+//! ERROR.** In v3 a guest user channel runs as a host twin in an RM-owned host VA space, where a
+//! GPU fault is fatal: when the guest's UVM would have serviced a fault (CUDA managed memory or HMM
+//! pageable memory not resident), the twin faults instead, host RM robust-channel-recovers it (host
+//! `Xid 31`) and writes the RC record into the guest's own error notifier, kf3 posts `RC_TRIGGERED`,
+//! and libcuda returns **719** at the next sync. `[measured 2026-09-28, R3 at kf3 4c48ca0c,
+//! traces/v3_app_matrix/vast53004208_rtx3060_4c48ca0c/all_logs.tgz m20/iso]` `UnifiedMemoryPerf`
+//! and `attach_verify` returned 719; `conjugateGradientUM` printed `SUCCESS` only because it
+//! discards its cuBLAS statuses (`docs/design/V3_APP_MATRIX.md` §R5). The guest's UVM never sees
+//! the fault, so it never waits on `PUT`. ⇒ The hang below remains only for a twin whose
+//! notifier was NOT armed (`RC-UNARMED`) or that declared none (`RC-NONE`) — both counted in kf3's
+//! `rc[...]` status. Since 2026-10-03 kf3 also posts one `OS_ERROR_LOG` per RC'd group, so the
+//! guest prints `Xid 31 … kayfabe: …` (`crate::oserrorlog`). [`DELIVERY_UNBUILT`] says this now.
+//!
 //! ⊘ **And it becomes a lie the moment a fault should have been raised.** That day the guest
 //! does not get an error: it gets a **hang**, in `replayable_faults_isr_bottom_half`, waiting
 //! on a `PUT` that will never move — the failure mode with no message, which is exactly why
@@ -121,12 +135,19 @@ use crate::wire::{AbiError, u32_at, u64_at};
 /// the registration count, so **every boot that serves the control also reports what the
 /// control did not buy.**
 ///
-/// ⊘ It names a *hang*, deliberately. A reader who knows only "faults are unbuilt" will look
-/// for an error; there is none to find.
+/// ⊘ **CORRECTED 2026-10-03.** It used to name a *hang* — "a reader who knows only 'faults are
+/// unbuilt' will look for an error; there is none to find". The v3 boots show the opposite (this
+/// module's ⊘ CORRECTED block, R3 at kf3 `4c48ca0c`): the host twin is RC'd and the app gets
+/// CUDA 719. The sentence now names the error path, and keeps the hang only where it still
+/// applies — a twin whose notifier is unarmed or undeclared.
 pub const DELIVERY_UNBUILT: &str = "fault DELIVERY is UNBUILT: this port raises no replayable \
-     fault and never advances MMU_FAULT_BUFFER_PUT(1), so a fault the guest should have been \
-     told about becomes a HANG inside UVM's replayable-fault service loop, not an error \
-     (docs/design/resume_from_fault.md §7 steps 5b-5d)";
+     fault and never advances MMU_FAULT_BUFFER_PUT(1). A GPU access the guest's UVM would have \
+     serviced by fault (CUDA managed memory or HMM pageable memory not resident) faults on the \
+     host twin instead: the host RCs it (host Xid 31), kf3 posts RC_TRIGGERED plus an \
+     OS_ERROR_LOG the guest prints as Xid 31 naming kayfabe, and the app gets CUDA 719 at its \
+     next sync. Only a twin born RC-UNARMED or with no error notifier (rc[unarmed=], rc[none=]) \
+     turns it into a silent HANG (docs/design/V3_UVM_DEMAND_PAGING.md; \
+     docs/design/resume_from_fault.md §7 steps 5b-5d)";
 
 /// `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER`
 /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h:1810`).
@@ -656,12 +677,31 @@ mod tests {
     }
 
     /// ⊘ The unbuilt half is a *sentence the boot prints*, so its content is pinned: a
-    /// reader who meets it must learn that the failure mode is a hang, not an error.
+    /// reader who meets it must learn that the failure mode is an ERROR the app sees (719, a
+    /// guest Xid 31) — ⊘ CORRECTED 2026-10-03, it used to pin "a hang, not an error" — and
+    /// that the hang survives only for an unarmed or undeclared notifier.
     #[test]
     fn the_unbuilt_half_names_the_failure_mode() {
-        assert!(DELIVERY_UNBUILT.contains("HANG"), "{DELIVERY_UNBUILT}");
-        assert!(DELIVERY_UNBUILT.contains("MMU_FAULT_BUFFER_PUT"));
-        assert!(DELIVERY_UNBUILT.contains("resume_from_fault.md"));
+        for needle in [
+            "719",
+            "Xid 31",
+            "RC_TRIGGERED",
+            "OS_ERROR_LOG",
+            "RC-UNARMED",
+            "rc[none=]",
+            "HANG",
+            "MMU_FAULT_BUFFER_PUT",
+            "resume_from_fault.md",
+        ] {
+            assert!(
+                DELIVERY_UNBUILT.contains(needle),
+                "{needle}: {DELIVERY_UNBUILT}"
+            );
+        }
+        assert!(
+            !DELIVERY_UNBUILT.contains("not an error"),
+            "the old sentence said the opposite of what the boots show"
+        );
     }
 
     // ═════════════════ 0x20800a9d — the client shadow fault buffer ═════════════════

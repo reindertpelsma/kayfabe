@@ -453,6 +453,12 @@ pub enum WantedTable {
     /// polling `PUT` seven times and reading `0` every time. *"Registered, and never a single
     /// fault"* is a state a real driver has been driven through to a correct matmul.
     ///
+    /// ⊘ **CORRECTED 2026-10-03** (`kf_abi::faultbuffer`'s ⊘ CORRECTED block, R3 at kf3
+    /// `4c48ca0c`): in v3 the guest gets an **error**, not a hang — the host twin takes the fault,
+    /// the host RCs it, and the app reads 719; kf3 adds the guest `Xid 31` (`kf_abi::oserrorlog`).
+    /// A hang is left only for a twin whose notifier is unarmed or undeclared. The sentence below
+    /// is the pre-v3 prediction, kept as the record.
+    ///
     /// ⊘ It stops being honest the first time a fault **should** be raised, and the guest
     /// gets a **hang** rather than an error. That is why serving it is paired with
     /// [`kf_abi::faultbuffer::DELIVERY_UNBUILT`], which the boot's own end-of-run report

@@ -33,7 +33,7 @@ pub enum Disposition {
 
 /// Every id §1.3 enumerates. ⊘ The list is the contract: a gate asserts it is complete, so
 /// "all RPCs are implemented" is a checkable fact rather than a claim.
-pub const SURFACE: [(u32, &str, Disposition); 20] = [
+pub const SURFACE: [(u32, &str, Disposition); 21] = [
     (1, "SET_GUEST_SYSTEM_INFO", Disposition::Serve),
     (64, "SET_GUEST_SYSTEM_INFO_EXT", Disposition::Serve),
     (65, "GET_GSP_STATIC_INFO", Disposition::Serve),
@@ -51,6 +51,13 @@ pub const SURFACE: [(u32, &str, Disposition); 20] = [
     (0x1001, "GSP_INIT_DONE", Disposition::OutboundOnly),
     (0x1003, "POST_EVENT", Disposition::OutboundOnly),
     (0x1004, "RC_TRIGGERED", Disposition::OutboundOnly),
+    // ★ 2026-10-03 (release §I, managed memory fails loudly): the guest's `Xid` line for a host RC
+    // — `kf_abi::oserrorlog`, posted by kf3's RC delivery beside `RC_TRIGGERED`.
+    (
+        kf_abi::oserrorlog::FUNCTION,
+        "OS_ERROR_LOG",
+        Disposition::OutboundOnly,
+    ),
     // ★★ The ≤575.64.05 carriers of `0x00801813` / `0x00801814` (`barpde::PageDirPolicy`), ids
     // from the driver matrix (identical at all 29 measured tags; a build failure if not).
     (
@@ -213,4 +220,17 @@ pub fn control_disposition(cmd: u32) -> ControlDisposition {
 /// collapsing them is how "the allowlist admits it" became "we handle it".
 pub fn control_is_served(cmd: u32) -> bool {
     matches!(control_disposition(cmd), ControlDisposition::ServedLocally)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ★ 2026-10-03: the guest's Xid event is one WE send — never a function the guest may call.
+    #[test]
+    fn os_error_log_is_outbound_only() {
+        assert_eq!(kf_abi::oserrorlog::FUNCTION, 0x1006);
+        assert_eq!(classify(0x1006), Disposition::OutboundOnly);
+        assert_eq!(name_of(0x1006), Some("OS_ERROR_LOG"));
+    }
 }

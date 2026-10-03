@@ -19,7 +19,7 @@ use kf_chip::bar0::{
     vbios_profile,
 };
 use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
-use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
+use kf_gsp::{GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Action, Class, Route, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -95,7 +95,9 @@ impl HoleShadow {
 struct Gsp {
     fsm: GspFsm,
     model: std::sync::Arc<dyn GspModel>,
-    policy: Box<dyn CommandPolicy>,
+    /// ★ 2026-10-03: the concrete chain (not `dyn CommandPolicy`), so an event we AUTHOR can be
+    /// encoded for the version the chain answers as ([`kf_rm::ReselectAtFn1::current`]).
+    policy: Box<kf_rm::ReselectAtFn1>,
     /// The value last PUBLISHED per BAR0 offset — [`Device::publish`] stores only what changed.
     published: std::collections::HashMap<u64, u64>,
 }
@@ -121,6 +123,14 @@ pub struct Counters {
     pub last_off: AtomicU64,
     /// ★ P5c: `RC_TRIGGERED` events posted to the guest.
     pub rc_posted: AtomicU64,
+    /// ★ 2026-10-03: `OS_ERROR_LOG` events posted (one guest `Xid` line per RC'd group).
+    pub xid_posted: AtomicU64,
+    /// ★ 2026-10-03: RC events dropped because their twin was born in an earlier GSP life.
+    pub rc_stale: AtomicU64,
+    /// ★ 2026-10-03: `RC_TRIGGERED`s not posted because the guest freed the twin first.
+    pub rc_freed: AtomicU64,
+    /// ★ 2026-10-03: `kf_abi::faultbuffer::DELIVERY_UNBUILT` was printed (once per process).
+    pub fault_delivery_said: AtomicBool,
 }
 
 /// Interrupt counters — boot log only.
@@ -607,8 +617,7 @@ impl Device {
         } else {
             kf_rm::GuestDriverSource::Defaulted
         };
-        let policy: Box<dyn kf_gsp::CommandPolicy> =
-            Box::new(kf_rm::ReselectAtFn1::new(*table, source, build));
+        let policy = Box::new(kf_rm::ReselectAtFn1::new(*table, source, build));
         let model: std::sync::Arc<dyn GspModel> = std::sync::Arc::from(
             family
                 .gsp_model(implementation, cfg.fb_mb)
@@ -1699,6 +1708,20 @@ impl Device {
                     eprintln!("{now}");
                 }
                 beat = (std::time::Instant::now(), now);
+                // ★ 2026-10-03: what serving the fault-buffer registration did NOT buy, said once
+                // in the boot log the first time a guest registers one.
+                let fb = self.chain_logs.fault_buffer.total();
+                if fb > 0
+                    && !self
+                        .counters
+                        .fault_delivery_said
+                        .swap(true, Ordering::Relaxed)
+                {
+                    eprintln!(
+                        "kf3: replayable fault buffer registered ({fb}): {}",
+                        kf_abi::faultbuffer::DELIVERY_UNBUILT
+                    );
+                }
             }
             if crate::prof::on() {
                 let m = self.prof.marks.load(Ordering::Relaxed);
@@ -1973,13 +1996,18 @@ impl Device {
             .collect();
         let (va, vr, vx) = self.rm.view_counts();
         let rc = format!(
-            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} wakes={} seen={} posted={}]",
+            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} none={} wakes={} seen={} posted={} xid={} unserviced={} stale={} freed={}]",
             va.saturating_sub(vr),
             self.chans.rc_armed.load(o),
             self.chans.rc_unarmed.load(o),
+            self.chans.rc_none.load(o),
             self.chans.rc_wakes.load(o),
             self.chans.rc_seen.load(o),
-            self.counters.rc_posted.load(o)
+            self.counters.rc_posted.load(o),
+            self.counters.xid_posted.load(o),
+            self.chans.rc_unserviced.load(o),
+            self.counters.rc_stale.load(o),
+            self.counters.rc_freed.load(o)
         );
         let chan = format!(
             " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
@@ -2161,52 +2189,168 @@ impl Device {
         let mut ram = Ram(self);
         let mut back = Vec::new();
         let mut posted = 0usize;
-        for e in evs {
-            let Some(engine) = kf_abi::rc::EngineRoute::declared(e.engine) else {
-                eprintln!(
-                    "kf3: RC chid {:#x}: engine type 0 — no route; NOT posted",
-                    e.chid
-                );
+        let mut full = false;
+        let life = self.chans.gsp_life.load(Ordering::Relaxed);
+        let version = g.policy.current();
+        for grp in crate::chan::group_rc(evs) {
+            if full {
+                back.extend(grp.members);
                 continue;
-            };
-            let ev = kf_abi::rc::RcTriggered {
-                engine,
-                chid: e.chid,
-                except_type: e.except_type,
-                // ⊘ CHANNEL, not TSG: our twin is its own host TSG, so only its record was
-                // written (a guest TSG's other members keep running on their own twins).
-                // ★ v3-promote (owner, TSG fault scope): this is CONSISTENT with the guest's view
-                // because the guest's CPU-RM does nothing on RC_TRIGGERED but notify exactly the
-                // scope we post (`_kgspRpcRCTriggered`, `kernel_gsp.c:548-676` →
-                // `krcErrorSendEventNotificationsCtxDma_FWCLIENT`, `kernel_rc_notification.c:385-410`:
-                // the TSG's channel list ONLY for `RC_NOTIFIER_SCOPE_TSG`). With CHANNEL scope the
-                // guest considers that one channel dead and its siblings alive — which they are.
-                // Group death the guest DECIDES (free of the channel/TSG/device/client, or TSG
-                // `GPFIFO_SCHEDULE` disable) reaches every twin of the group (`ChanScope::freed_by`,
-                // the schedule arm's `tsg == Some(object)`). ⊘ Posting TSG scope would require every
-                // sibling's notifier record, which only the host may write, and no unprivileged
-                // host verb RCs a sibling with a record — so a hardware-exact TSG-wide RC is an owner
-                // call (V3_P5_PORT_MAP item 24), not something to forge here.
-                scope: kf_abi::rc::RC_NOTIFIER_SCOPE_CHANNEL,
-                // ⊘ Not read by the receiver (`_kgspRpcRCTriggered` uses engine, chid, gfid, the
-                // exception, its level and scope); we hold no fault address, so none is invented.
-                mmu_fault_addr: 0,
-                mmu_fault_type: 0,
-            };
-            match g.fsm.post_rc_triggered(&mut ram, ev.encode()) {
-                Ok(()) => {
-                    posted += 1;
-                    self.counters.rc_posted.fetch_add(1, Ordering::Relaxed);
-                    eprintln!(
-                        "kf3: RC_TRIGGERED posted: guest chid {:#x} engine {:#x} except_type {:#x} (host {:#x})",
-                        e.chid, e.engine, e.except_type, e.host_token
-                    );
+            }
+            // ★ 2026-10-03: teardown / GSP re-init — an event whose twin was born in an earlier life
+            // is never posted into this one (its chid names nothing, or someone else's channel).
+            let (mut members, stale): (Vec<_>, Vec<_>) =
+                grp.members.into_iter().partition(|e| e.life == life);
+            for e in &stale {
+                self.counters.rc_stale.fetch_add(1, Ordering::Relaxed);
+                eprintln!(
+                    "kf3: RC chid {:#x} (host {:#x}) is from GSP life {} (now {life}) — NOT posted",
+                    e.chid, e.host_token, e.life
+                );
+            }
+            if members.is_empty() {
+                continue;
+            }
+            // ★ 2026-10-03: liveness, checked HERE — the drainer is the thread that applies the
+            // guest's FREE, and it holds the GSP lock, so no FREE lands between check and post.
+            let live: Vec<bool> = members.iter().map(|e| self.chans.rc_twin_live(e)).collect();
+            if grp.needs_xid {
+                // ★ The guest's Xid line, BEFORE the group's RC_TRIGGEREDs (the guest handles its
+                // queue in order, so the channel is still there to attribute pid/name to). Named only
+                // by a member that is still live with a known runlist; otherwise `INVALID_CHID`:
+                // the Xid prints without pid/name, never with another process's.
+                let at = members.iter().zip(&live).find_map(|(e, l)| {
+                    if *l {
+                        e.runlist.map(|r| (e.chid, r))
+                    } else {
+                        None
+                    }
+                });
+                let (chid, runlist_id) = at.unwrap_or((kf_abi::oserrorlog::INVALID_CHID, 0));
+                let text = crate::chan::xid_text(grp.except_type, members.len());
+                let body = kf_abi::oserrorlog::OsErrorLog {
+                    except_type: grp.except_type,
+                    runlist_id,
+                    chid,
+                    text: &text,
                 }
-                Err(kf_gsp::GspFault::QueueFull { .. }) => back.push(e),
-                Err(f) => eprintln!(
-                    "kf3: RC_TRIGGERED for chid {:#x} REFUSED by the queue: {f:?}",
-                    e.chid
-                ),
+                .encode(version);
+                match body {
+                    Ok(payload) => match g.fsm.post_event(
+                        &mut ram,
+                        &kf_gsp::OutgoingRpc {
+                            function: kf_abi::oserrorlog::FUNCTION,
+                            sequence: 0,
+                            rpc_result: 0,
+                            rpc_result_private: 0,
+                            payload,
+                        },
+                    ) {
+                        Ok(()) => {
+                            posted += 1;
+                            self.counters.xid_posted.fetch_add(1, Ordering::Relaxed);
+                            eprintln!(
+                                "kf3: OS_ERROR_LOG posted: guest client {:#x} Xid {} chid {chid:#x} runlist {runlist_id} ({} channel(s)) — the guest prints it",
+                                grp.client,
+                                grp.except_type,
+                                members.len()
+                            );
+                        }
+                        Err(kf_gsp::GspFault::QueueFull { .. }) => {
+                            full = true;
+                            back.extend(members);
+                            continue;
+                        }
+                        Err(f) => {
+                            eprintln!(
+                                "kf3: OS_ERROR_LOG for guest client {:#x} REFUSED by the queue: {f:?}",
+                                grp.client
+                            );
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!(
+                            "kf3: OS_ERROR_LOG for guest client {:#x} NOT encoded for guest driver {version}: {e}",
+                            grp.client
+                        );
+                    }
+                }
+                // Decided once per group — posted, or refused by name and dropped like an
+                // RC_TRIGGERED refusal: a requeued member never posts a second Xid.
+                for e in &mut members {
+                    e.xid_done = true;
+                }
+            }
+            for (e, l) in members.into_iter().zip(live) {
+                if full {
+                    back.push(e);
+                    continue;
+                }
+                if !l {
+                    // ★ 2026-10-03: the guest freed the channel first — its chid may already name a
+                    // NEW channel of another process, which an RC_TRIGGERED would notify.
+                    self.counters.rc_freed.fetch_add(1, Ordering::Relaxed);
+                    eprintln!(
+                        "kf3: RC chid {:#x} (host {:#x}): the guest freed the channel first — RC_TRIGGERED NOT posted",
+                        e.chid, e.host_token
+                    );
+                    continue;
+                }
+                let Some(engine) = kf_abi::rc::EngineRoute::declared(e.engine) else {
+                    eprintln!(
+                        "kf3: RC chid {:#x}: engine type 0 — no route; NOT posted",
+                        e.chid
+                    );
+                    continue;
+                };
+                let ev = kf_abi::rc::RcTriggered {
+                    engine,
+                    chid: e.chid,
+                    except_type: e.except_type,
+                    // ⊘ CORRECTED 2026-10-03: "our twin is its own host TSG" below is stale — since
+                    // v3-video the twins of one guest TSG join ONE host group (`ChanPlane::groups`),
+                    // so the host RCs the group and writes EVERY member's record (R3 at kf3
+                    // `4c48ca0c`: one host Xid 31, eight records, eight posts). Each member arrives
+                    // here as its own event, so CHANNEL scope per member still reaches every channel
+                    // the host stopped — and no channel it did not.
+                    // ⊘ CHANNEL, not TSG: our twin is its own host TSG, so only its record was
+                    // written (a guest TSG's other members keep running on their own twins).
+                    // ★ v3-promote (owner, TSG fault scope): this is CONSISTENT with the guest's view
+                    // because the guest's CPU-RM does nothing on RC_TRIGGERED but notify exactly the
+                    // scope we post (`_kgspRpcRCTriggered`, `kernel_gsp.c:548-676` →
+                    // `krcErrorSendEventNotificationsCtxDma_FWCLIENT`, `kernel_rc_notification.c:385-410`:
+                    // the TSG's channel list ONLY for `RC_NOTIFIER_SCOPE_TSG`). With CHANNEL scope the
+                    // guest considers that one channel dead and its siblings alive — which they are.
+                    // Group death the guest DECIDES (free of the channel/TSG/device/client, or TSG
+                    // `GPFIFO_SCHEDULE` disable) reaches every twin of the group (`ChanScope::freed_by`,
+                    // the schedule arm's `tsg == Some(object)`). ⊘ Posting TSG scope would require every
+                    // sibling's notifier record, which only the host may write, and no unprivileged
+                    // host verb RCs a sibling with a record — so a hardware-exact TSG-wide RC is an owner
+                    // call (V3_P5_PORT_MAP item 24), not something to forge here.
+                    scope: kf_abi::rc::RC_NOTIFIER_SCOPE_CHANNEL,
+                    // ⊘ Not read by the receiver (`_kgspRpcRCTriggered` uses engine, chid, gfid, the
+                    // exception, its level and scope); we hold no fault address, so none is invented.
+                    mmu_fault_addr: 0,
+                    mmu_fault_type: 0,
+                };
+                match g.fsm.post_rc_triggered(&mut ram, ev.encode()) {
+                    Ok(()) => {
+                        posted += 1;
+                        self.counters.rc_posted.fetch_add(1, Ordering::Relaxed);
+                        eprintln!(
+                            "kf3: RC_TRIGGERED posted: guest chid {:#x} engine {:#x} except_type {:#x} (host {:#x})",
+                            e.chid, e.engine, e.except_type, e.host_token
+                        );
+                    }
+                    Err(kf_gsp::GspFault::QueueFull { .. }) => {
+                        full = true;
+                        back.push(e);
+                    }
+                    Err(f) => eprintln!(
+                        "kf3: RC_TRIGGERED for chid {:#x} REFUSED by the queue: {f:?}",
+                        e.chid
+                    ),
+                }
             }
         }
         if posted > 0 {
@@ -2481,6 +2625,12 @@ impl HostOps for Device {
         if after != before {
             // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
             eprintln!("kf3: GSP phase {before:?} -> {after:?}");
+            // ★ 2026-10-03: leaving `Running` ends this GSP life (driver unload, teardown) — an RC
+            // queued for one of its twins must never be posted into the next life.
+            if before == kf_arch::BootPhase::Running {
+                let life = self.chans.gsp_life.fetch_add(1, Ordering::Relaxed);
+                eprintln!("kf3: GSP life {life} ended; its queued RC events will not be posted");
+            }
         }
         // ★★★ v3-initrace: the FWSEC that just raised WPR2 was commanded where to put FRTS — read it
         // before anything is published (the guest reads WPR2_ADDR_LO only after HALTED, published
