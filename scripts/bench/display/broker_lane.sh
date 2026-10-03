@@ -23,7 +23,10 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
 BENCH=${BENCH_DIR:-/workspace/bench}
 NVPV=${NVPV_DIR:-/root/nvkvm-pv}
-B=$NVPV/src/broker/nvkvm-display-broker
+# ⊘ [2026-10-03, box 54032077, run brkA] the broker runs as the desktop's user, who cannot
+# traverse /root (mode 0700): "env: .../nvkvm-display-broker: Permission denied", and the relay
+# retried an absent listener. prep installs the build world-readable here.
+B=${BROKER_BIN:-/opt/nvkvm-broker/nvkvm-display-broker}
 cmd=${1:?usage: broker_lane.sh prep <nvkvm-pv-rev> | run <tag>}
 echo "BRK_LANE_START $cmd ${2:-} kf=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)"
 
@@ -56,7 +59,9 @@ if [ "$cmd" = prep ]; then
     make -C "$NVPV/src/broker" clean > /dev/null 2>&1
     make -C "$NVPV/src/broker" report nvkvm-display-broker nvkvm-broker-testclient > "$BENCH/brk_prep_make.log" 2>&1
     echo "PREP_BROKER_MAKE_RC=$? $(grep -A4 'backends:' "$BENCH/brk_prep_make.log" | tr -s ' ' | tr '\n' ' ' | cut -c1-300)"
-    [ -x "$B" ] || { echo "BRK_LANE_EXIT rc=12 no broker binary"; exit 12; }
+    install -D -m 0755 "$NVPV/src/broker/nvkvm-display-broker" "$B" \
+        || { echo "BRK_LANE_EXIT rc=12 no broker binary"; exit 12; }
+    echo "PREP_BROKER_BIN $B sha256=$(sha256sum "$B" | cut -c1-16)"
     # E0: the host driver, nvidia-drm's modeset, the render node
     echo "PREP_E0 driver=$(cat /sys/module/nvidia/version) drm=$(cat /sys/module/nvidia_drm/version) modeset=$(cat /sys/module/nvidia_drm/parameters/modeset) fbdev=$(cat /sys/module/nvidia_drm/parameters/fbdev 2>/dev/null)"
     echo "PREP_E0 nodes $(stat -c '%A %U %G %t:%T %n' /dev/dri/card* /dev/dri/renderD* 2>/dev/null | tr '\n' ';')"
@@ -98,7 +103,8 @@ runuser -u "$SU" -- env DISPLAY="$XD" XAUTHORITY="$XA" "$B" --socket "$SOCK" --b
     --verbose ${BROKER_ARGS:-} > "$OUT/broker.log" 2>&1 &
 BPID=$!
 for _ in $(seq 50); do [ -S "$SOCK" ] && break; sleep 0.2; done
-echo "BRK_BROKER pid=$BPID socket=$([ -S "$SOCK" ] && echo up || echo MISSING) args=[${BROKER_ARGS:-}]"
+echo "BRK_BROKER pid=$BPID socket=$([ -S "$SOCK" ] && echo up || echo MISSING) args=[${BROKER_ARGS:-}] bin=$B sha256=$(sha256sum "$B" | cut -c1-16)"
+[ -S "$SOCK" ] || { echo "BRK_BROKER_LOG $(tail -3 "$OUT/broker.log" | tr '\n' ' ')"; echo "BRK_LANE_EXIT rc=22 no broker socket"; exit 22; }
 export BRK_XD="$XD" BRK_XA="$XA" BRK_OUT="$OUT" BRK_BROKER_LOG="$OUT/broker.log"
 export NVKVM_RAM_MB=${NVKVM_RAM_MB:-8192} KF_SMP=${KF_SMP:-6}
 export KF3_DEV_EXTRA="display=on,display-broker=$SOCK,display-broker-uid=$SUID${BRK_KF3_EXTRA:+,$BRK_KF3_EXTRA}"
