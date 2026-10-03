@@ -782,6 +782,10 @@ estimates with recorded ones after its first run.
 
 ### 2.2 Exact contents
 
+⊘ **CORRECTED 2026-10-03 (`v3-gop-kf3`) — the tree's `KF3_ABI 10` is now 11.** The boot display added
+`gop` to `kf3_realize` and the `kf3_option_rom` entry point (`docs/design/V3_DISPLAY.md` §4.11.12); the
+derived device arguments gain `gop=on` where the boot display is wanted (it needs `display=on`).
+
 ```text
 kayfabe-<version>-x86_64-linux-gnu.tar.xz
 └── kayfabe-<version>/
@@ -931,7 +935,7 @@ the same commit must produce the same sha256, or the differences are listed in t
 - A per-commit CI build is versioned `0.0.0+g<sha>` and is never published as a release. It is attested
   like a release (task I3), so the sweep can check every artifact it runs the same way (§2.8).
 - The C and Rust halves are locked by `KF3_ABI`. Realize refuses an archive whose
-  `kf3_abi_version()` differs (`qemu/hw/misc/kf3/kf3.h:14`; `qemu/hw/misc/kf3/kf3.c:724-727`), so a
+  `kf3_abi_version()` differs (`qemu/hw/misc/kf3/kf3.h:16`; `qemu/hw/misc/kf3/kf3.c:782-785`, at `v3-gop-kf3`), so a
   release always ships both halves from one commit.
 
 **Fields of `MANIFEST.json`:**

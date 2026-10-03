@@ -9,6 +9,18 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+- ★ **DISPLAY STEP 1 (the boot display) — 2026-10-03: both halves BUILT on branches, not merged, nothing
+  run on a GPU box.** `v3-gop-rom` (the `kf-gop` UEFI GOP firmware, `crates/kf-oprom`, the local stand-in,
+  11/11 at `3dd574e5`) and, on top of it, `v3-gop-kf3` (the kf3 integration behind property `gop`,
+  default off: ROM BAR, KF3 ABI 11; BAR1 seed of store `[0, G)`; the display worker's boot layer; fn 72 kept
+  → fn 65's console region). CI green at `37740a4b` (run 37132057723). Design and as-built:
+  `design/V3_DISPLAY.md` §4.11 (§4.11.12 = what was built and what changed).
+  - **Resume:** box test **B0a** first (today's bench, no build: `boot_vga` and Xorg with no `xorg.conf`),
+    then B0, B1, B2 — exact commands in §4.11.9 (`KF_FIRMWARE=ovmf`, `DISPLAY_KF3_EXTRA=gop=on`).
+  - **Open:** the owner's §K follow-up — build.rs compiles `firmware/kf-gop` instead of the committed
+    `.efi`, and the ROM made arch-neutral (`OWNER_RULINGS.md` §K); owner questions 1–6 in §4.11.11.
+  - **Merge order:** `v3-gop-rom`, then `v3-gop-kf3` (it contains the former and master `281a10a1`).
+
 - ★ **RESUME HERE — 2026-10-03 (session wrap before compaction).** Master and v3 are equal and CI
   is green. No Vast box is running.
   - **Done this session, all on master:**
