@@ -994,6 +994,10 @@ fn take_twin_object(
 /// The plane's passthrough twins, by `(client, channel handle)` ([`ChanPlane`]'s `pt`).
 type PtMap = HashMap<(u32, u32), PtChan>;
 
+/// The plane's object index, `(client, object handle) → (client, channel handle)` ([`ChanPlane`]'s
+/// `pt_objs`).
+type ObjIndex = HashMap<(u32, u32), (u32, u32)>;
+
 /// ★ x11-dispsw: what the act checks before a display-SW twin ([`crate::dispsw::twin_one`]), read
 /// from the plane's channel map on the act thread, where every display-SW alloc and free runs in
 /// order (review 2026-10-03, LOW: this had no test, and a body of zeros kept CI green while the
@@ -1077,7 +1081,7 @@ fn attach_dispsw_withdraw(
 fn withdraw_kept<H: crate::dispsw::DispSwHost>(
     host: &H,
     pt: &Mutex<PtMap>,
-    pt_objs: &Mutex<HashMap<(u32, u32), (u32, u32)>>,
+    pt_objs: &Mutex<ObjIndex>,
     key: (u32, u32),
     handle: u32,
     h: u32,
