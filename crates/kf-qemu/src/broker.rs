@@ -80,9 +80,11 @@ impl BrokerSeat {
     /// ★ **Worker**: a broker frame of at least `cap` bytes — whole host pages
     /// ([`kf_broker::frame_bytes`]) — for the FREE slot `slot`. The memfd is registered for the
     /// copy BEFORE its descriptors are installed, so the ring never names a backing the GPU does
-    /// not write. ⊘ On an error the caller must [`FrameRing::withdraw`] the slot before it
-    /// refills it with other memory (`display.rs`): the ring would otherwise go on offering the
-    /// slot's previous backing, which the GPU no longer writes.
+    /// not write. ⊘ On an error the caller withdraws the ring from the broker
+    /// ([`FrameRing::withdraw_all`], `display.rs` `broker_backing`) before any slot is refilled
+    /// with other memory: the ring would otherwise go on offering a reallocated slot's previous
+    /// backing, which the GPU no longer writes, and every other slot's frames to a broker the
+    /// worker said would be shown nothing.
     ///
     /// ⊘ CORRECTED 2026-10-03 (the review of `v3-broker`): a size that was not a multiple of the
     /// host page was REFUSED, and 1920x1080x4 is not a multiple of 64 KiB — so on a host with

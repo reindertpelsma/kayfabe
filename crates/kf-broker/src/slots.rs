@@ -33,13 +33,18 @@
 //! nowhere in the word, so only the worker can reach it — and read only by a thread that holds
 //! the slot through the word.
 //!
-//! ★ **A slot is offered to the broker only while its newest backing is the frame the GPU
-//! writes** (corrected 2026-10-03, the review of `v3-broker`). [`FrameRing::install`] makes a
-//! slot broker-backed; [`FrameRing::withdraw`] — the worker, when it refills a free slot with a
-//! frame the broker cannot receive (a refused memfd registration falls back to the console's
-//! own memory) — makes it not. [`FrameRing::publish`] of a withdrawn slot makes NO frame
-//! broker-ready. Before this, the ring went on naming the slot's previous, smaller memfd: the
-//! GPU no longer wrote it, and once the mode shrank back the broker was sent its stale pixels. ⊘ **Descriptors are never closed while the ring lives**: each slot
+//! ★ **A slot is offered to the broker only while it carries a broker backing AND the broker is
+//! not withdrawn** (corrected 2026-10-03, twice, by the reviews of `v3-broker`).
+//! [`FrameRing::install`] gives a slot a broker backing; [`FrameRing::withdraw_all`] — the
+//! worker, at the first refused broker backing, after which the console falls back to its own
+//! memory — withdraws the WHOLE ring from the broker for good: from that call on no slot (free,
+//! ready, held or requeued for a replay; reallocated or not) is offered to the broker or sent by
+//! the relay. ⊘ The first fix withdrew only a slot the worker REALLOCATED after the refusal: a
+//! slot that kept its broker memfd stayed offered, so the broker went on receiving frames while
+//! the worker had logged that it would be shown nothing. Before that, the ring went on naming
+//! a reallocated slot's previous, smaller memfd: the GPU no longer wrote it, and once the mode
+//! shrank back the broker was sent its stale pixels. ⊘ **Descriptors are never closed while the
+//! ring lives**: each slot
 //! keeps every generation of its backing in a `OnceLock` (at most [`GENERATIONS`]), so a stale
 //! read can never name a recycled descriptor number (a host-RM fd, the guest-RAM memfd) that
 //! would then be sent to a process in the user's session.
@@ -215,10 +220,6 @@ struct SlotMeta {
     gens: [OnceLock<SlotFds>; GENERATIONS],
     /// How many generations are installed; the newest is the current one.
     installed: AtomicU32,
-    /// ★ The newest generation is the memory the GPU writes for this slot — set by
-    /// [`FrameRing::install`], cleared by [`FrameRing::withdraw`]. Written only while the slot
-    /// is free (by the worker); read by the worker's publish and by the slot's holder.
-    broker_backed: AtomicBool,
 }
 
 /// ★ The ring. See the module docs.
@@ -227,6 +228,8 @@ pub struct FrameRing {
     state: AtomicU32,
     count: usize,
     broker: bool,
+    /// ★ The broker is withdrawn for the ring's life ([`FrameRing::withdraw_all`]).
+    withdrawn: AtomicBool,
     meta: [SlotMeta; MAX_SLOTS],
 }
 
@@ -239,6 +242,7 @@ impl FrameRing {
             state: AtomicU32::new(pack(NO_SLOT, NO_SLOT, NO_SLOT, 0)),
             count: count.clamp(1, MAX_SLOTS),
             broker,
+            withdrawn: AtomicBool::new(false),
             meta: core::array::from_fn(|_| SlotMeta::default()),
         }
     }
@@ -317,26 +321,35 @@ impl FrameRing {
             return Err((InstallRefusal::NoGeneration, fds));
         }
         m.installed.store(n as u32 + 1, Ordering::Release);
-        m.broker_backed.store(true, Ordering::Release);
         Ok(())
     }
 
-    /// ★ **Worker**: the FREE `slot` is being refilled with memory the broker cannot receive
-    /// (the console's own frame), so its newest backing is no longer what the GPU writes: until
-    /// a new generation is installed the slot is never offered to the broker, and the relay
-    /// never sends its descriptors. Call it BEFORE the slot's new memory is filled.
-    pub fn withdraw(&self, slot: usize) {
-        if let Some(m) = self.meta.get(slot) {
-            m.broker_backed.store(false, Ordering::Release);
-        }
+    /// ★ **Worker**, at the first refused broker backing: the console goes on with memory the
+    /// broker cannot receive, so the broker is withdrawn from the WHOLE ring for the ring's life.
+    /// From this call on no slot — free, ready, held, or requeued for a replay; reallocated or
+    /// still carrying its broker memfd — is offered to the broker ([`FrameRing::publish`]) or
+    /// sent by the relay ([`FrameRing::broker_backed`] is false for every slot, and a later
+    /// [`FrameRing::install`] does not undo it), and the broker-ready frame is dropped. Frames
+    /// the broker already holds stay held until it releases them (it may be reading them). Call
+    /// it BEFORE any slot is refilled with other memory.
+    pub fn withdraw_all(&self) {
+        self.withdrawn.store(true, Ordering::Release);
+        let _ = self.update(|s| {
+            (broker_ready(s) != NO_SLOT).then(|| pack(front(s), console_ready(s), NO_SLOT, held(s)))
+        });
     }
 
-    /// Whether `slot`'s newest backing is the memory the GPU writes (see [`FrameRing::withdraw`]).
+    /// Whether the broker was withdrawn ([`FrameRing::withdraw_all`]).
+    #[must_use]
+    pub fn withdrawn(&self) -> bool {
+        self.withdrawn.load(Ordering::Acquire)
+    }
+
+    /// ★ Whether `slot` may be offered to (and sent to) the broker: it carries a broker backing
+    /// ([`FrameRing::install`]) and the broker is not withdrawn ([`FrameRing::withdraw_all`]).
     #[must_use]
     pub fn broker_backed(&self, slot: usize) -> bool {
-        self.meta
-            .get(slot)
-            .is_some_and(|m| m.broker_backed.load(Ordering::Acquire))
+        !self.withdrawn() && slot < self.count && self.fds(slot).is_some()
     }
 
     /// The current backing of `slot` — read only by the slot's holder (the worker for a free
@@ -379,9 +392,10 @@ impl FrameRing {
     }
 
     /// ★ **Worker**: make `slot` the newest frame for the console (and the broker). An older
-    /// ready frame nobody took is dropped — latest wins. A slot that is not broker-backed
-    /// ([`FrameRing::withdraw`]) is not offered to the broker, and drops the older broker-ready
-    /// frame too: the broker never shows a frame older than one it could not be sent.
+    /// ready frame nobody took is dropped — latest wins. A slot that is not broker-backed (no
+    /// broker backing, or the ring withdrawn — [`FrameRing::broker_backed`]) is not offered to
+    /// the broker, and drops the older broker-ready frame too: the broker never shows a frame
+    /// older than one it could not be sent.
     pub fn publish(&self, slot: usize) {
         let j = slot as u32;
         let broker = if self.broker {
@@ -645,37 +659,55 @@ mod tests {
         );
     }
 
-    /// ★ The review's stale-pixels case (2026-10-03): a slot refilled with memory the broker
-    /// cannot receive is WITHDRAWN, and from then on its publishes are never broker-ready — the
-    /// ring went on naming the slot's previous memfd, which the GPU no longer wrote. A slot that
-    /// never had a backing is never offered either; a new generation offers it again.
+    /// ★ The reviews' stale-pixels case and "the broker is shown nothing" (2026-10-03): once
+    /// the ring is WITHDRAWN, no slot is offered to the broker again — not the one the worker
+    /// reallocates, not one that keeps its broker memfd, not the frame that was ready, not a
+    /// held frame requeued for a replay — and a later install does not undo it. The console
+    /// keeps every frame. A slot that never had a backing is never offered either.
     #[test]
-    fn a_withdrawn_slot_is_never_offered_to_the_broker() {
+    fn a_withdrawn_ring_offers_the_broker_no_slot_again() {
         let r = backed(BROKER_SLOTS);
         let a = r.fill_target(None).unwrap();
-        assert!(r.broker_backed(a));
         r.publish(a);
-        assert_eq!(r.broker_ready(), Some(a), "a backed slot is offered");
+        assert_eq!(r.take_broker(), Take::Taken(a), "the broker holds a");
         let b = r.fill_target(None).unwrap();
-        r.withdraw(b); // the worker refilled it with the console's own frame
-        assert!(!r.broker_backed(b));
         r.publish(b);
+        assert_eq!(r.broker_ready(), Some(b), "b waits for the broker");
+        assert!(!r.withdrawn());
+        r.withdraw_all(); // the worker: a broker backing was refused
+        assert!(r.withdrawn());
+        assert_eq!(r.broker_ready(), None, "the ready frame is dropped");
         assert_eq!(
-            r.broker_ready(),
-            None,
-            "not offered, and the older frame is dropped too (latest wins)"
+            r.held_mask(),
+            1 << a,
+            "a held frame stays held until released"
         );
+        for j in 0..r.slots() {
+            assert!(
+                r.fds(j).is_some(),
+                "every slot still carries its broker memfd"
+            );
+            assert!(!r.broker_backed(j), "slot {j} is offered nonetheless");
+        }
+        for _ in 0..20 {
+            let t = r.fill_target(None).unwrap();
+            r.publish(t);
+            assert_eq!(r.take_broker(), Take::Empty, "slot {t} was offered");
+            assert_eq!(r.take_console(), Some(t), "the console still gets it");
+        }
+        // the broker restarts: its held frame is requeued, and is still not sendable
+        assert!(r.requeue(a));
+        assert!(!r.broker_backed(a));
+        // a new generation does not offer a slot again
+        let _ = r.take_broker();
+        assert!(r.release_held(a));
+        let t = r.fill_target(None).unwrap();
+        r.install(t, fds(c"kfb-after"))
+            .expect("a second generation");
+        assert!(!r.broker_backed(t));
+        r.publish(t);
         assert_eq!(r.take_broker(), Take::Empty);
-        assert_eq!(r.take_console(), Some(b), "the console still gets it");
-        // a new generation for the slot offers it again
-        let c = r.fill_target(None).unwrap();
-        r.publish(c);
-        assert_eq!(r.take_broker(), Take::Taken(c));
-        let free_b = r.fill_target(Some(c)).unwrap();
-        assert_ne!(free_b, b, "b is the console's front");
-        assert!(r.release_held(c));
-        let _ = r.take_console(); // b stays front (nothing new)
-        // an unbacked ring never offers anything
+        // an unbacked ring never offers anything; an install offers that slot
         let bare = FrameRing::new(BROKER_SLOTS, true);
         let t = bare.fill_target(None).unwrap();
         bare.publish(t);

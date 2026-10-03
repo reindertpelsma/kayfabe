@@ -1606,7 +1606,8 @@ struct ScanState {
     frames: [Option<Frame>; SLOTS],
     retired: Vec<Frame>,
     /// ★ Display step 3: why the broker's frame backing was refused (logged once); the console
-    /// then keeps `cuMemAllocHost` frames and the broker is shown nothing — never a CPU copy.
+    /// then keeps its own frames, the ring is withdrawn from the broker ([`broker_backing`]) so
+    /// the broker is sent no frame again — never a CPU copy.
     broker_refused: Option<String>,
     /// When the last copy started.
     last: Option<Instant>,
@@ -1705,6 +1706,38 @@ fn selftest_compose(gpu: &mut DisplayGpu) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// ★ Display step 3 — the worker's choice of memory for a FREE slot it must (re)allocate, kept
+/// GPU-free so a test drives the refusal (the second review of `v3-broker`, 2026-10-03: the
+/// first fix's call site was untested). `seat` (the broker on) makes a broker-visible frame
+/// (`BrokerSeat::frame`); it is not asked once a refusal is recorded. `None` = the console's own
+/// memory (`DisplayGpu::frame`).
+///
+/// ⊘ CORRECTED 2026-10-03: at the first refusal this WITHDRAWS THE RING from the broker
+/// ([`kf_broker::FrameRing::withdraw_all`]) — every slot, reallocated or not. The first fix
+/// withdrew only the slot being reallocated, so a slot that kept its broker memfd went on
+/// feeding the broker while the line below said it would be shown nothing.
+fn broker_backing<F>(
+    ring: &kf_broker::FrameRing,
+    refused: &mut Option<String>,
+    seat: Option<impl FnOnce() -> Result<F, String>>,
+) -> Option<F> {
+    let seat = seat.filter(|_| refused.is_none())?;
+    match seat() {
+        Ok(f) => Some(f),
+        Err(e) => {
+            // before the slot is refilled with memory the broker cannot receive
+            ring.withdraw_all();
+            eprintln!(
+                "kf3: display: the BROKER frame backing is REFUSED ({e}) — the console keeps \
+                 working; the broker is withdrawn from every frame slot and is sent no frame \
+                 from now on"
+            );
+            *refused = Some(e);
+            None
+        }
+    }
 }
 
 /// FNV-1a over a frame's visible pixels as R,G,B bytes — the digest `kfdisp_probe` prints for its
@@ -1899,32 +1932,16 @@ impl ScanState {
             };
             // ★ with the broker on: a sealed memfd the broker also receives (registered for the
             // copy, a udmabuf over it when /dev/udmabuf opened); refused once, by name, the
-            // console falls back to its own frames and the broker is shown nothing
-            let seat = dp.broker.as_ref().filter(|_| self.broker_refused.is_none());
-            let broker_frame = match seat.map(|b| b.frame(gpu, slot, cap)) {
-                Some(Ok(f)) => Some(f),
-                Some(Err(e)) => {
-                    eprintln!(
-                        "kf3: display: the BROKER frame backing is REFUSED ({e}) — the console \
-                         keeps working; the broker will be shown nothing"
-                    );
-                    self.broker_refused = Some(e);
-                    None
-                }
-                None => None,
-            };
-            let made = match broker_frame {
+            // console falls back to its own frames and the ring is withdrawn from the broker
+            // ([`broker_backing`])
+            let shared: &DisplayGpu = gpu;
+            let seat = dp
+                .broker
+                .as_ref()
+                .map(|b| move || b.frame(shared, slot, cap));
+            let made = match broker_backing(dp.console.ring(), &mut self.broker_refused, seat) {
                 Some(f) => Ok(f),
-                None => {
-                    // ★ the slot is about to hold memory the broker cannot receive: the ring
-                    // must stop offering it, or it would go on naming the slot's previous broker
-                    // memfd — which the GPU no longer writes — and, once the mode fits it again,
-                    // send the broker those stale pixels (the review of `v3-broker`, 2026-10-03)
-                    if dp.broker.is_some() {
-                        dp.console.ring().withdraw(slot);
-                    }
-                    gpu.frame(cap).map_err(|e| e.to_string())
-                }
+                None => gpu.frame(cap).map_err(|e| e.to_string()),
             };
             match made {
                 Ok(f) => {
@@ -2135,16 +2152,76 @@ mod tests {
         assert!(ring.release_held(a));
     }
 
-    /// ★ A slot the worker refills with console-only memory (the broker's backing was refused)
-    /// is withdrawn: the console still gets its frames, the broker is offered none of them.
+    /// ★ The worker's refusal branch, DRIVEN (the second review of `v3-broker`, 2026-10-03: the
+    /// first fix's tests called the ring directly, so deleting the call site passed them all):
+    /// the first refused broker backing withdraws EVERY slot from the broker — the frame that
+    /// was ready, and a slot the worker never reallocates (it keeps its broker memfd and the GPU
+    /// goes on writing it) — while the console gets every frame; the seat is never asked again.
     #[test]
-    fn a_withdrawn_slot_feeds_the_console_and_never_the_broker() {
+    fn a_refused_broker_backing_withdraws_every_slot_from_the_broker() {
         let ring = broker_ring();
         let c = ConsoleShare::over(ring.clone());
-        let t = c.free_slot().unwrap();
-        ring.withdraw(t);
-        c.publish(t, frame(0x1000, 1));
-        assert_eq!(ring.take_broker(), kf_broker::Take::Empty);
-        assert_eq!(c.take().unwrap().serial, 1, "the console shows it");
+        let mut refused = None;
+        assert_eq!(
+            broker_backing(&ring, &mut refused, Some(|| Ok::<u32, String>(7))),
+            Some(7),
+            "before a refusal the seat's frame is used"
+        );
+        assert!(refused.is_none() && !ring.withdrawn());
+        let a = c.free_slot().unwrap();
+        c.publish(a, frame(0x1000, 1));
+        assert_eq!(
+            ring.take_broker(),
+            kf_broker::Take::Taken(a),
+            "the broker holds a"
+        );
+        let b = c.free_slot().unwrap();
+        c.publish(b, frame(0x2000, 2));
+        assert_eq!(ring.broker_ready(), Some(b), "b waits for the broker");
+        // a growing slot's broker backing is refused
+        let got = broker_backing(
+            &ring,
+            &mut refused,
+            Some(|| Err::<u32, String>("cuMemHostRegister of the frame memfd: refused".into())),
+        );
+        assert_eq!(got, None, "the console's own memory");
+        assert!(
+            refused
+                .as_deref()
+                .is_some_and(|e| e.contains("cuMemHostRegister"))
+        );
+        assert!(ring.withdrawn());
+        assert_eq!(ring.broker_ready(), None, "the ready frame b is dropped");
+        // slots the worker never reallocates still carry their broker memfd: none is offered
+        for i in 0..20u64 {
+            let t = c.free_slot().expect("five slots always leave a target");
+            assert!(ring.fds(t).is_some(), "slot {t} keeps its broker memfd");
+            c.publish(t, frame(0x3000, 3 + i));
+            assert_eq!(
+                ring.take_broker(),
+                kf_broker::Take::Empty,
+                "slot {t} was offered to the broker after the refusal"
+            );
+            assert_eq!(c.take().unwrap().serial, 3 + i, "the console shows it");
+        }
+        // the seat is never asked again
+        let again = broker_backing(
+            &ring,
+            &mut refused,
+            Some(|| -> Result<u32, String> { panic!("the seat was asked after a refusal") }),
+        );
+        assert_eq!(again, None);
+        assert!(
+            ring.release_held(a),
+            "the frame the broker held stays its own"
+        );
+        // without a broker nothing is withdrawn and no seat exists
+        let plain = ConsoleShare::default();
+        let mut none = None;
+        assert_eq!(
+            broker_backing(plain.ring(), &mut none, None::<fn() -> Result<u32, String>>),
+            None
+        );
+        assert!(none.is_none() && !plain.ring().withdrawn());
     }
 }

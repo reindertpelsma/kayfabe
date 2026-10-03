@@ -756,9 +756,12 @@ impl<L: Link> Relay<L> {
         }
     }
 
-    /// Whether `slot` has a CURRENT backing (the one the GPU writes) that holds its published
-    /// geometry, inside the broker's bounds (the broker re-checks all of it; a frame it would
-    /// reject is not sent).
+    /// Whether `slot` may be sent: it is broker-backed ([`FrameRing::broker_backed`] — a broker
+    /// backing, and the ring not withdrawn by a refused one), and that CURRENT backing (the one
+    /// the GPU writes) holds its published geometry, inside the broker's bounds (the broker
+    /// re-checks all of it; a frame it would reject is not sent). ★ The withdrawal check is what
+    /// stops a held frame requeued for a replay after [`FrameRing::withdraw_all`]: the ring
+    /// requeues whatever was held.
     fn fits(&self, slot: usize) -> bool {
         let g = self.ring.geometry(slot);
         if !self.ring.broker_backed(slot) {
@@ -774,6 +777,31 @@ impl<L: Link> Relay<L> {
             && g.height <= crate::wire::MAX_DIM
             && u64::from(g.stride) >= u64::from(g.width) * 4
             && need <= fds.bytes()
+    }
+
+    /// A frame just claimed that [`Self::fits`] refused: counted, logged at a bounded rate
+    /// ([`loud`]) with the reason, and its slot given back — on the live path and the replay's
+    /// alike (⊘ the replay's refusal used to be silent; since 2026-10-03 a held frame requeued
+    /// after [`FrameRing::withdraw_all`] is refused there, and says so).
+    fn refuse_unfit(&mut self, j: usize) {
+        self.counters.refused += 1;
+        let n = self.counters.refused;
+        if loud(n) {
+            if self.ring.broker_backed(j) {
+                let g = self.ring.geometry(j);
+                say!(
+                    "REFUSED frame slot {j}: no current backing fits its {}x{} geometry ({n} so far)",
+                    g.width,
+                    g.height
+                );
+            } else {
+                say!(
+                    "REFUSED frame slot {j}: the broker is withdrawn from the frame ring (the VMM's \
+                     broker frame backing was refused) or the slot has no broker backing ({n} so far)"
+                );
+            }
+        }
+        self.unhold(j);
     }
 
     fn attach_cmd(&mut self, slot: usize) -> Option<(Cmd, Rung)> {
@@ -984,17 +1012,7 @@ impl<L: Link> Relay<L> {
         };
         self.held[j] = Some(self.claimed(j, now));
         if !self.fits(j) {
-            self.counters.refused += 1;
-            let n = self.counters.refused;
-            if loud(n) {
-                let g = self.ring.geometry(j);
-                say!(
-                    "REFUSED frame slot {j}: no current backing fits its {}x{} geometry ({n} so far)",
-                    g.width,
-                    g.height
-                );
-            }
-            self.unhold(j);
+            self.refuse_unfit(j);
             return;
         }
         let fourcc = self.ring.geometry(j).fourcc;
@@ -1160,8 +1178,7 @@ impl<L: Link> Relay<L> {
         if let Some(j) = j {
             self.held[j] = Some(self.claimed(j, now));
             if !self.fits(j) {
-                self.counters.refused += 1;
-                self.unhold(j);
+                self.refuse_unfit(j);
             } else {
                 let fourcc = self.ring.geometry(j).fourcc;
                 self.ensure_query(fourcc, j);

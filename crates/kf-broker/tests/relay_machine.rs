@@ -1044,25 +1044,70 @@ fn a_superseded_owed_commit_never_freezes_the_display() {
     assert!(t.ring.held_mask().count_ones() <= 2);
 }
 
-/// ★ A slot the worker refilled with memory the broker cannot receive (a refused backing,
-/// `FrameRing::withdraw`) is never sent — its previous memfd is stale — and makes no log line.
+/// ★ "The broker is shown nothing" after a refused backing (the reviews of 2026-10-03): once the
+/// worker withdraws the ring (`FrameRing::withdraw_all`), a frame published in a slot that still
+/// carries its broker memfd is never sent and makes no line, and the frame the broker held —
+/// requeued by its restart — is NOT replayed: `fits()` refuses it, by name. ⊘ This is the one
+/// path where the relay's own `broker_backed` check is what stops the frame (the ring offers a
+/// requeued slot as broker-ready whatever its backing); remove that check and the replay sends
+/// WINDOW → ATTACH → COMMIT of the withdrawn slot.
 #[test]
-fn a_withdrawn_slot_is_never_sent_to_the_broker() {
+fn a_withdrawn_ring_sends_the_broker_nothing_not_even_a_replay() {
     let mut t = T::new(false);
     t.up(0);
-    let log = kf_broker::capture_log();
-    let j = t.ring.fill_target(None).unwrap();
-    t.ring.withdraw(j);
     let k = t.publish(64, 32);
-    assert_eq!(k, j);
-    t.frame();
-    assert!(t.sent().is_empty(), "the stale backing was not sent");
-    assert_eq!(t.relay.counters().refused, 0, "never even broker-ready");
-    assert!(log.lines().is_empty(), "{:?}", log.lines());
-    // the next frame, in a backed slot, goes
-    t.publish(64, 32);
     t.frame();
     assert_eq!(t.types(), vec![CMD_WINDOW, CMD_ATTACH, CMD_COMMIT]);
+    t.clear();
+    let log = kf_broker::capture_log();
+    t.ring.withdraw_all(); // the worker: a broker backing was refused
+    let j = t.publish(64, 32);
+    assert!(
+        t.ring.fds(j).is_some(),
+        "slot {j} still carries its broker memfd"
+    );
+    t.frame();
+    assert!(t.sent().is_empty(), "a frame after the refusal was sent");
+    assert_eq!(t.relay.counters().refused, 0, "never even broker-ready");
+    assert!(log.lines().is_empty(), "{:?}", log.lines());
+    // the broker restarts: its held frame is requeued for the replay, as any held frame is ...
+    t.wire.borrow_mut().eof = true;
+    t.read();
+    assert!(!t.relay.connected());
+    assert_eq!(t.ring.broker_ready(), Some(k), "requeued for the replay");
+    t.wire.borrow_mut().eof = false;
+    t.now = t.host.timer.unwrap();
+    t.pkt(EV_HELLO, 0, 0, 2, CAP_DMABUF);
+    let now = t.now;
+    t.relay.on_timer(now, &mut t.host);
+    t.read();
+    assert!(t.relay.active());
+    // ... and refused before the wire: the replay is CAPS alone
+    assert_eq!(
+        t.types(),
+        vec![CMD_CAPS],
+        "the withdrawn slot {k} was replayed"
+    );
+    assert_eq!(t.relay.counters().refused, 1);
+    assert_eq!(
+        t.ring.held_mask(),
+        0,
+        "the refused frame gave its slot back"
+    );
+    let said: Vec<_> = log
+        .lines()
+        .into_iter()
+        .filter(|l| l.contains("REFUSED frame slot"))
+        .collect();
+    assert_eq!(said.len(), 1, "{:?}", log.lines());
+    assert!(said[0].contains("withdrawn"), "{said:?}");
+    // and nothing after it either
+    for _ in 0..5 {
+        t.publish(64, 32);
+        t.frame();
+        t.tick(200);
+    }
+    assert_eq!(t.types(), vec![CMD_CAPS]);
 }
 
 /// ★ A refused frame is logged for the first four and then every 256th — not once per frame for

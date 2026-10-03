@@ -682,6 +682,22 @@ its dependency chain, in one commit).
 
 ## 8. The display broker — display step 3
 
+> ⊘⊘ **CORRECTED AGAIN 2026-10-03 — the re-review of the fixes below found item 2 half-built and
+> two bench gaps. All four are fixed here; nothing has run on a box.**
+> - **Item 2 was false as built:** only a slot the worker REALLOCATED after a refused broker backing
+>   was withdrawn. A slot that kept its broker memfd stayed offered, so the broker went on receiving
+>   frames (`broker[sent]` kept rising) while the worker had logged that it would be shown nothing.
+>   Now the first refusal withdraws the WHOLE ring (`FrameRing::withdraw_all`): no slot, whether
+>   reallocated, kept, ready, held or requeued, is offered or sent again (§8.2, §8.7 (13)).
+> - **The fix's call site had no test:** every test called the ring directly. The worker's choice is
+>   now a GPU-free function (`display.rs` `broker_backing`) that a kf-qemu test drives with a refusal,
+>   and the relay's own check in `fits()` has a test that fails without it: a held frame requeued
+>   by a broker restart after the withdrawal is refused, not replayed (§8.2).
+> - **The bench:** the branch now carries master's `4b077201` (`provision_host_driver.sh` purges the
+>   packaged driver at any version and stops the host display manager), without which provisioning
+>   fails on the vast "Ubuntu Desktop (VM)" template. §8.9 (5) now says how to bring that template's
+>   desktop back on the new driver and how the broker reaches its session under the peer policy.
+
 > ⊘ **CORRECTED 2026-10-03 — the adversarial review of this branch (the same day) found twelve
 > defects; all are fixed in code here, each with a test that fails without its fix (run against the
 > unfixed code or a bite-mutation, §8.8). Nothing has run on a box.**
@@ -689,7 +705,8 @@ its dependency chain, in one commit).
 >    latest commit and the superseded frame filled the cap of 2 — nothing was ever committed again.
 >    The superseded frame now yields its slot.
 > 2. **Stale pixels after a partial backing refusal** (§8.2): a slot refilled with the console's own
->    memory went on naming its previous memfd. It is now withdrawn from the broker.
+>    memory went on naming its previous memfd. It is now withdrawn from the broker. (⊘ Corrected
+>    again above: that withdrew only the refilled slot; now the whole ring is withdrawn.)
 > 3. **The peer policy admitted the owner of the socket's directory** (§8.5) — anyone, when the
 >    directory is missing under `/tmp`. Now uid 0, QEMU's euid at each connect, and
 >    `display-broker-uid` only.
@@ -793,21 +810,40 @@ asynchronous D2H scanout copy lands in it, plus a udmabuf over the same pages wh
 (`root:kvm 0660`). The frame is registered **before** its descriptors enter the ring, so the ring never
 names a backing the GPU does not write.
 
-⊘ **CORRECTED 2026-10-03 (the review of this branch): the next sentence was false as built, and is
-now true.** After a refusal the worker refilled a slot with the console's own memory while the ring
+⊘⊘ **CORRECTED AGAIN 2026-10-03 (the re-review): the paragraph below still overstated.** It
+withdrew only a slot the worker REALLOCATED after the refusal; every slot that kept its broker memfd
+(the GPU still writes it, and it was never refilled) stayed offered, so the broker kept receiving
+frames, `broker[sent]` kept rising, and the worker's log line said the opposite. **As built now:**
+the worker's first refused broker backing calls `FrameRing::withdraw_all` before any slot is
+refilled. From that call on, no slot is offered to the broker or sent by the relay: not one that was
+reallocated or kept, not the frame that was ready (it is dropped), and not a held frame requeued for
+the replay of a restarted broker. A later install does not undo it, and the seat is never asked
+again. Frames the broker already holds stay held until it releases them. The relay keeps running, so
+input still flows. The per-slot `withdraw(slot)` is gone; `broker_backed(slot)` is now "carries a
+broker backing, and the ring is not withdrawn". Tests, each shown to fail without its fix (§8.8):
+kf-qemu `a_refused_broker_backing_withdraws_every_slot_from_the_broker` drives the worker's
+decision (`display.rs` `broker_backing`, GPU-free, the seat's result an input) with a refusal;
+`slots.rs` `a_withdrawn_ring_offers_the_broker_no_slot_again`; and `relay_machine.rs`
+`a_withdrawn_ring_sends_the_broker_nothing_not_even_a_replay`, where the relay's own check in
+`fits()` is what stops the replayed frame. A refusal on the replay path is now logged at the same
+bounded rate as the live path's, and names the withdrawal. ⚠ No box test injects a refused backing;
+the path is GPU-free-tested only.
+
+⊘ **CORRECTED 2026-10-03 (the review of this branch): the next sentence was false as built** (and,
+⊘⊘ per the correction above, the fix described here was only half of it). After a refusal the worker
+refilled a slot with the console's own memory while the ring
 still named the slot's previous memfd, which the GPU no longer wrote: once the mode fitted it again
 the broker was sent those stale pixels, and until then the relay logged `REFUSED frame slot` for
-every frame. Now the worker **withdraws** such a slot before refilling it (`FrameRing::withdraw`);
-a withdrawn slot is never broker-ready and the relay checks the bit too
-(`a_withdrawn_slot_is_never_offered_to_the_broker`, `a_withdrawn_slot_is_never_sent_to_the_broker`,
-kf-qemu `a_withdrawn_slot_feeds_the_console_and_never_the_broker`); any `REFUSED frame` line left is
+every frame. That fix withdrew such a slot before refilling it (a per-slot `FrameRing::withdraw`,
+since replaced by `withdraw_all`); any `REFUSED frame` line left is
 rate-limited to the first four and every 256th (`a_refused_frame_is_logged_at_a_bounded_rate`). Each
 backing is also rounded up to whole host pages (`kf_broker::frame_bytes`): 1920×1080×4 is not
 64 KiB-aligned, and on a 64 KiB-page host every frame was refused.
 
 A refusal (no `cuMemHostRegister`, or a driver that will not
 pin these pages) is logged once by name; the console keeps its own frames and the broker is shown
-nothing — a CPU copy is never the fallback. The descriptor: `XR24`, `offset 0`, `stride = width × 4`,
+nothing more: it is sent no frame after the refusal (the whole ring is withdrawn, above), and keeps
+showing the last frame it received. A CPU copy is never the fallback. The descriptor: `XR24`, `offset 0`, `stride = width × 4`,
 `LINEAR` or `MOD_INVALID`.
 
 1. **LINEAR dma-buf** — udmabuf present, `CAP_MODIFIERS` set, verdict for (XR24, LINEAR) not "no" (an
@@ -1019,10 +1055,25 @@ included, and a VNC `SetDesktopSize` re-moded the guest (QEMU v10.2.4 `ui/gtk.c:
     review): realize precedes QEMU's privilege drop.
 12. **A superseded owed frame yields its slot** (2026-10-03, the review), beside the retained frame of
     (1); without it the display could freeze for good (§8.3).
-13. **The ring withdraws a slot refilled with console-only memory** (2026-10-03, the review) — the
-    design's "the broker is shown nothing" needed a per-slot bit the design did not have (§8.2).
+13. ⊘ Corrected again 2026-10-03 (the re-review): **the first refused broker backing withdraws the
+    whole ring from the broker** (`FrameRing::withdraw_all`, permanent for the device's life). The
+    design's "the broker is shown nothing" needed state the design did not have. As first built
+    (superseded the same day): a per-slot bit, cleared only for a slot refilled with console-only
+    memory, which left every other slot offered (§8.2).
 
 ### 8.8 Local runs (dev host, 2026-10-03; no GPU)
+
+⊘⊘ **Added 2026-10-03 — the re-review fixes, re-run locally (same rules):**
+- `cargo test -p kf-broker`: 43 passed (lib 15, `proto_mirror.rs` 3, `relay_machine.rs` 25), with
+  the withdrawal tests replaced by `a_withdrawn_ring_offers_the_broker_no_slot_again` and
+  `a_withdrawn_ring_sends_the_broker_nothing_not_even_a_replay`.
+- Bite-mutations, each failing its test: `fits()` without its `broker_backed` check (the replay
+  sends the withdrawn slot: `the withdrawn slot 0 was replayed`); `withdraw_all` not setting the
+  flag; `publish` ignoring `broker_backed`.
+- `display.rs` `broker_backing` and its kf-qemu test, copied verbatim into a throwaway crate over
+  `kf-broker` (kf-qemu itself is not built locally; a stand-in `ConsoleShare` over the same ring):
+  passes, and fails with `withdraw_all` removed (the first fix's behaviour: the kept slot is still
+  offered) and with the seat asked after a refusal. CI runs the real one.
 
 ⊘ **Added 2026-10-03 — the review fixes, re-run locally (same rules):**
 - `cargo test -p kf-linux-raw --lib`: 131 passed. Under `ulimit -n 1024` the unfixed
@@ -1074,6 +1125,12 @@ Every cargo run under the shared flock, `-j2`, a throwaway target dir (owner rul
 
 Every result cites the kf3 binary's revision (§5.2). On the box, with the branch head checked out:
 
+⊘⊘ Corrected again 2026-10-03 (the re-review): item 5 now covers the vast "Ubuntu Desktop (VM)"
+template, whose own desktop provisioning stops and disables. It says how to start that desktop again
+on the new driver and how the broker reaches the session under the peer policy of §8.5. Provision
+from this branch at `3d4e8dac` or later, which carries master's `provision_host_driver.sh` fix
+(`4b077201`); before it, provisioning failed on that template.
+
 ⊘ Corrected 2026-10-03 (the review): item 1 said ABI 11; the branch is **KF3 ABI 12** and the device
 refuses archives of 10 and 11. Item 1 also gains GTK/VNC cases without a broker, item 10's VNC resize
 without a broker now grades the OPPOSITE way, and items 11–12 are new.
@@ -1085,10 +1142,14 @@ without a broker now grades the OPPOSITE way, and items 11–12 are new.
    `display-broker` unset: a `-display vnc=…` boot where a VNC client asks `SetDesktopSize`, and (where
    GTK is built) a `-display gtk` boot — the guest's mode must stay what it was (no `resize … hotplug
    queued` line: without a broker there is no `ui_info` hook).
-2. **The broker.** `git -C <nvkvm-pv> archive 368d2db src/broker src/common | tar -x -C /opt/nvkvm-broker
-   && make -C /opt/nvkvm-broker/src/broker nvkvm-display-broker`; then the relay's own loopback on the
-   box: `KF_BROKER_BIN=/opt/nvkvm-broker/src/broker/nvkvm-display-broker cargo test -p kf-broker --test
-   broker_loopback -- --ignored --test-threads=1` (6/6, `UDMABUF-GATE: RAN`).
+2. **The broker.** Its X11 and Wayland backends are compiled in only when their libraries are
+   found (`pkg-config`; otherwise only `--backend test` works): `apt-get install -y pkg-config
+   libwayland-dev wayland-protocols libxcb1-dev libxcb-dri3-dev libxcb-present-dev libxcb-render0-dev
+   libxcb-xinput-dev libgbm-dev`. Then `git -C <nvkvm-pv> archive 368d2db src/broker src/common | tar
+   -x -C /opt/nvkvm-broker && make -C /opt/nvkvm-broker/src/broker nvkvm-display-broker`, and
+   `B=/opt/nvkvm-broker/src/broker/nvkvm-display-broker`. Then the relay's own loopback on the box:
+   `KF_BROKER_BIN=$B cargo test -p kf-broker --test broker_loopback -- --ignored --test-threads=1`
+   (7/7, `UDMABUF-GATE: RAN`; ⊘ corrected 2026-10-03: said 6/6 before the second squatter case).
 3. **Registration on 580.159.04.** Boot with `-display none -device
    kf3-gpu,id=kf0,display=on,display-broker=/run/kf3/display.sock -device virtio-keyboard-pci -device
    virtio-tablet-pci,display=kf0,head=0` and the broker on `--backend test`
@@ -1103,6 +1164,68 @@ without a broker now grades the OPPOSITE way, and items 11–12 are new.
    broker on `--backend wayland`; an Xvfb/Xorg session with `--backend x11` (and `--present-mode=shm`).
    Grade: frames presented; the rung chosen, as logged; a compositor screenshot equals the guest's
    screendump; `REUSE-IN-FLIGHT` stays 0 in the broker log.
+
+   ⊘ Added 2026-10-03 (the re-review). **On the vast "Ubuntu Desktop (VM)" template**
+   (`vms_enabled=true`; sddm, then Xorg, then KDE on the GPU), the host's own desktop is the X11
+   compositor. Run this item after the others, because they want no host desktop. Nothing here has
+   run on that template yet.
+   - **a. Start the host desktop again, on the new driver.** `provision_host_driver.sh` stops AND
+     disables the display manager for the driver swap, because Xorg holds `nvidia_drm`. It records
+     the name in `/root/prov/host_dm_stopped`; a missing file means the box ran no display manager,
+     so use weston or Xvfb as above. The name recorded is usually the alias `display-manager`, and
+     disabling the unit can remove that alias, so start the real unit (start only, never enable;
+     a reboot then comes back without it):
+     ```
+     dm=$(sort -u /root/prov/host_dm_stopped | head -1)
+     [ "$dm" = display-manager ] && dm=$(basename "$(cat /etc/X11/default-display-manager)")   # /usr/bin/sddm -> sddm
+     systemctl start "$dm"
+     for i in $(seq 90); do pgrep -x Xorg >/dev/null && break; sleep 1; done
+     ```
+     Grade the desktop on 580.159.04: `nvidia-smi --query-gpu=driver_version --format=csv,noheader`
+     prints `580.159.04`, `grep -E 'NVIDIA GLX Module +580\.159\.04' /var/log/Xorg.0.log` matches,
+     and `nvidia-smi` lists `Xorg` among its processes. Run `systemctl stop "$dm"` again before any
+     later merge-bar run on the same box.
+   - **b. Find the session.** The X display and its cookie are in the environment of a process in
+     the session. With a user logged in (KDE autologin), use the user's `plasmashell`:
+     ```
+     P=$(pgrep -o -x plasmashell)
+     sv() { tr '\0' '\n' < /proc/$P/environ | sed -n "s/^$1=//p"; }
+     XD=$(sv DISPLAY); XA=$(sv XAUTHORITY); U=$(stat -c %U /proc/$P); UU=$(stat -c %u /proc/$P)
+     ```
+     With only the sddm greeter up (no `plasmashell`), use its X server instead and way (ii) below:
+     `XD=:0; XA=$(ps -o args= -C Xorg | grep -o -- '-auth [^ ]*' | cut -d' ' -f2)`. A Wayland
+     session gives `WAYLAND_DISPLAY` and `XDG_RUNTIME_DIR` from the same environment instead, and the
+     broker then runs with `--backend wayland`. Give these variables to the broker's command only. Never
+     export `DISPLAY` into the shell that runs `boot_capture.sh`.
+   - **c. How the broker reaches the session, and how kf3 admits it.** The bench runs QEMU as root.
+     The relay admits uid 0, QEMU's euid, and `display-broker-uid` (§8.5). The broker's own default
+     allow-list admits uid 0 and the user who started it, so a root QEMU can always connect to it.
+     - **(i) The deployment shape: the broker as the session's user.** The socket goes in that
+       user's runtime directory, and kf3 must name the user's uid:
+       ```
+       install -d -o "$U" -m 0700 /run/user/$UU/nvkvm
+       nohup runuser -u "$U" -- env DISPLAY="$XD" XAUTHORITY="$XA" $B \
+         --socket /run/user/$UU/nvkvm/display.sock --backend x11 --persist \
+         > /workspace/bench/brk_x11.log 2>&1 &
+       KF3_DEV_EXTRA=display=on,display-broker=/run/user/$UU/nvkvm/display.sock,display-broker-uid=$UU \
+         bash scripts/bench/boot_capture.sh brk-x11 -- -vga none -display none \
+         -device virtio-keyboard-pci -device virtio-tablet-pci,display=kf0,head=0
+       ```
+       Expect the QEMU log's `relay to … (brokers accepted: uid 0, QEMU's effective uid at each
+       connect, display-broker-uid <UU>)` line and 0 `REFUSED the listener` lines. A second boot
+       without `display-broker-uid` must log `REFUSED the listener … uid <UU>` and keep retrying,
+       with the VM unaffected: item 11's case on a real session.
+     - **(ii) The broker as root, with the session's display:** `nohup env DISPLAY="$XD"
+       XAUTHORITY="$XA" $B --socket /run/kf3/display.sock --backend x11 --persist >
+       /workspace/bench/brk_x11.log 2>&1 &`, and `display-broker=/run/kf3/display.sock` with no
+       `display-broker-uid`, since uid 0 is always admitted. The broker's `running as root and
+       --drop-user was not given` warning is expected here.
+   - **d. Grade.** As at the top of this item, plus `--present-mode=shm` as a second run. For the
+     screenshot, as root: `apt-get install -y x11-apps imagemagick`, then
+     `env DISPLAY="$XD" XAUTHORITY="$XA" xwd -root -silent | convert xwd:- /workspace/bench/brk_x11.png`.
+     Crop the broker window's area (`xwininfo -root -tree` gives its geometry; the title is `nvkvm`)
+     and compare it with the guest's `screendump` of the same moment. Items 6 and 7 run in this same
+     session. `$B` is the broker built in item 2.
 6. **X11 with scaling active:** the broker window resized away from the guest's mode (XRender path);
    grade: the frame rate is not capped at 10 fps (`broker[sent=…]` over 10 s ≈ the guest's flip rate).
 7. **Pointer visible (3d):** in the Wayland and X11 broker runs of (5), move the guest pointer
