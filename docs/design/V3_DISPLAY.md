@@ -2492,14 +2492,14 @@ through it changes no guest byte); **E6** E1 on Turing, Ada and GB20x.
 
 ### 8.12 The guest cursor as the host pointer — hover mode (`OWNER_RULINGS.md` §O)
 
-> ⊘⊘ **CORRECTED AGAIN the same day (run `brkA4`, kf3 `18562ba4`) — the derivation below was one
+> ⊘⊘ **CORRECTED AGAIN 2026-10-03 (run `brkA4`, kf3 at `18562ba4`) — the derivation below was one
 > pixel off on both axes, every time.** On the box it derived `4,2` for the arrow the guest's X server
 > holds at `3,1`, and `12,12` for its `11,11` crosshair (the images themselves matched: 254 and 281
 > visible pixels on both sides). The injected position reaches the guest through two truncating
 > scalings, not one: QEMU's onto the tablet's axis (`v = abs * 0x7fff / range`, QEMU 10.2.4
 > `ui/input.c:470-481`) and the guest's back onto the head (libinput's `v * size / 0x8000`): brkA4's
 > 48 of 1024 arrived as 47, its 8 of 695 as 7. `hot_from_pointer` now models both; its test carries
-> the measured case, and the single-scaling formula fails it with exactly the box's `(4, 2)`.
+> brkA4's case (2026-10-03), and the single-scaling formula fails it with exactly the box's `(4, 2)`.
 
 > ⊘ **CORRECTED 2026-10-03 (box 54032077, run `brkA`, kf3 `6da16d2f` + broker `9cb736f`) — the hot
 > spot was wrong as built.** The first SET on hardware said `256x256 hot 0,0`: **NVKMS hard-codes the
