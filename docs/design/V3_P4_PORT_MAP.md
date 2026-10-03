@@ -33,9 +33,12 @@ schedule channel, status: 56` — `0xa06f0103` GPFIFO_SCHEDULE unserviced), as �
 has 6 sysmem leaves and the host VA space has no guest-RAM object yet — so the guest spins ~22 s
 to its own timeout. The guest-RAM object (`alloc_os_descriptor` over the memfd) is the fix.
 
-**STATUS UPDATE, 2026-10-03 (branch `v3-scratch-bound`): Q3 is CORRECTED.** Its bound ("bounded
+**STATUS UPDATE, 2026-10-03 (branch `v3-scratch-bound`): Q3 is CORRECTED, twice.** Its bound ("bounded
 by the BAR size") was reachable by guest root and was host RAM outside the VM's memory. The scratch
-is now one small tile per window, repeated; see the correction at the top of Q3.
+is now one small tile per window, repeated; see the correction at the top of Q3. The same day's
+review then found the first correction's mapping bound false in production (QEMU's own `madvise`
+kept every sink from merging back); that, a PRAMIN view retired while still reachable, and the VFIO
+note are corrected in the block above it.
 
 **Summary.** P4 is **~2.2k lines of product code plus ~0.9k of harness**. Only **~0.4k** of it is
 copied old-tree code; the rest is new, because the old tree walked and mirrored guest tables on
@@ -311,6 +314,91 @@ The order is forced:
 - Reject arming in the trap. It is 22 times per boot, but it establishes an RM ioctl on the vCPU path.
 
 **Q3. What backs the unmapped parts of the BAR1, BAR2 and PRAMIN HVAs?**
+
+> ⊘⊘⊘ **CORRECTED AGAIN 2026-10-03 (adversarial review of `v3-scratch-bound`) — the block below
+> is right about host RAM and wrong about mappings, and it called the VFIO case open.** Four fixes,
+> each with a test that fails on the code it replaces (bite runs of 2026-10-03, below).
+>
+> - **⊘ "Scratch mappings ≤ 1024 per window" was the count of an UNMAPPED window's cover, not a
+>   bound, and "a sink restores the canonical tiling" was false in production.** kf3 covers a window
+>   at realize; QEMU then registers it and advises the whole range (`MADV_HUGEPAGE`, `MADV_DONTFORK`,
+>   and `MADV_DONTDUMP` with `dump-guest-core=off`; QEMU 10.2.4 `system/physmem.c:2294-2304`). Every
+>   later `MAP_FIXED` (a view, a guest-RAM leaf, a sink) comes back without those flags, and Linux
+>   merges neighbouring mappings only when their flags match (7.1 `mm/vma.c:84-96`;
+>   `include/linux/mm.h:615-628`). So a sink never merged back, and every guest-driven
+>   place-then-sink cycle at a new offset left two mappings for the VM's life. The review counted
+>   16 384 after 8192 one-page cycles in a 64 MiB window whose tiling is 32 (master's whole-window
+>   shape: 16 385, so this predates the tiling). Each mapping is a `vm_area_struct` plus maple-tree
+>   slab, about 212 B (the review's host-wide estimate), charged to QEMU's cgroup outside `-m`:
+>   bounded only by `vm.max_map_count` (≈ 13 MiB at the default 65 530; ≈ 212 MiB at 1 048 576, the
+>   value on Ubuntu hosts). At the limit QEMU's own `mmap`s fail too: self-harm, but slab first.
+> - **Fix.** One VMA-flag set for every window mapping Rust places off the vCPU,
+>   `kf_linux_raw::WINDOW_ADVICE` = `DONTDUMP` + `HUGEPAGE` + `DONTFORK`, a superset of QEMU's,
+>   applied by the initial cover BEFORE QEMU registers the window (`window_with_scratch` runs inside
+>   `kf3_realize`, which precedes `kf3_bar_build`). QEMU's advice then finds the flags set and changes
+>   nothing, whatever `dump-guest-core` says, so no re-cover after registration is needed. Every BAR1
+>   and BAR2 sink (`kf_qemu::mem::window_sink` → `ScratchTile::cover_advised`) carries the same set
+>   and merges back. Guest-RAM placements on BAR1/BAR2 carry it too. Device views do not need it:
+>   they are `VM_IO | VM_PFNMAP`, never merge (`VM_SPECIAL`), and the driver marks them `VM_DONTDUMP`.
+>   PRAMIN gets no `madvise`: its verbs run on the vCPU (owner ruling 2026-09-25, ONE `mmap` per
+>   move), and every move re-places all 16 slots, so it holds at most 16 mappings regardless.
+>   ⚠ The superset holds while QEMU's set stays inside it; read in 10.2.4 only.
+> - **Decision: `VM_DONTDUMP` is preserved on placements.** With `dump-guest-core=off` a guest-RAM
+>   page placed into a window would otherwise land in QEMU's core dump; with `=on` (the default) the
+>   same page is still dumped through guest RAM's own mapping, so excluding the window alias loses
+>   nothing. Residual: a guest-RAM run placed into PRAMIN (vCPU, no advice) is not excluded, ≤ 1 MiB.
+> - **The mapping count now.** `ceil(W / T)` (≤ 1024) once nothing is placed, plus at most two per
+>   LIVE placement (itself, and the tile it splits). Live placements never overlap, so they are at
+>   most `W / page` per window. **No per-window cap on live placements is built**: BAR2 legitimately
+>   holds RM's own 4 KiB structures (page tables, instance blocks), and a cap below `W / page` needs
+>   a measured legitimate peak, which no box has taken; a refusal past a cap would only show the
+>   guest scratch (self-harm). The memory cgroup must carry the slab term instead (Residual below,
+>   and `V3_SWEEP_AND_INSTALL.md` §2.5).
+> - **Residual, added term.** Mapping slab: ≈ 212 B × (Σ windows `ceil(W / T)` + 2 × live
+>   placements), at most `vm.max_map_count` × 212 B per QEMU. Not bounded by `T`.
+> - **⊘ A PRAMIN view could be retired while the guest still reached it** (pre-existing; reachable
+>   once the guest can drive QEMU to `vm.max_map_count`). `PraminPool::repoint` retired every old
+>   view, even when a run's placement or sink was refused. A refusal before Linux clears the old
+>   page tables (7.1 `mm/vma.c:2439-2444`; `ENOMEM` at the map-count limit, `:1416-1418`) leaves
+>   the old view mapped, and nvidia.ko does not zap user mappings when RM unmaps (its only revocation
+>   is `nv_revoke_gpu_mappings_locked`, power-management paths; `ogkm-580:
+>   kernel-open/nvidia/nv-mmap.c:786-816`), so the guest kept a CPU mapping of a released host BAR1
+>   aperture. Now an old view is retired only when every window range it was placed over was
+>   re-placed by that re-point; otherwise it is kept and counted (`pramin_kept=` in the status
+>   line). `CpuWindow::map/unmap` were checked and already safe: unmap releases only after its
+>   sink lands, and a refused view placement never leaves the new view mapped (`mm/vma.c:2496-2506`).
+> - **A refused sink piece may be a HOLE**, not the old backing: Linux 7.1 clears the old page
+>   tables before allocating the new mapping (`mm/vma.c:2476`) and then leaves *"a gap where the
+>   MAP_FIXED mapping failed"* (`:2368-2388`). `ScratchTile::cover` now retries a refused piece
+>   once and documents the hole; callers already release a view only after a successful cover.
+> - **VFIO (was "Open, adjacent" below): refused, by mutual exclusion.** QEMU 10.2.4 has no
+>   per-region opt-out (`memory_region_set_skip_iommu_map` first ships in 11.1.0, commit
+>   `11b9798c7b`), and its VFIO listener DMA-maps every `ram_device` region
+>   (`hw/vfio/listener.c:598-631`), pinning window pages and keeping IOMMU mappings of what they
+>   showed then (a later re-point, or a view placed before a BAR re-enable, leaves them stale; a
+>   released aperture among them). kf3's realize now ends with `ram_block_discard_require(true)`,
+>   released at exit. Every 10.2.4 device that pins RAM disables discard first (vfio legacy
+>   `container-legacy.c:568`, iommufd `iommufd.c:564`, `:599`, vfio-user `container.c:220`), so
+>   whichever realizes second is refused, hotplug included: kf3 names the conflict; a VFIO device
+>   fails with *"Cannot set discarding of RAM broken"*. Collateral refusals: vhost-vdpa (which
+>   skips `ram_device` sections and so was never the hazard, `hw/virtio/vhost-vdpa.c:55-57`), SEV,
+>   COLO. ⚠ Not caught: the userspace NVMe block driver (`nvme://`), which DMA-maps every RAM block
+>   through a `RAMBlockNotifier` (`util/vfio-helpers.c:464-478`) and disables no discard. Do not
+>   combine it with kf3. On QEMU 11.1 the skip flag is the precise fix. Checked by compiling kf3.c
+>   against the 10.2.4 headers (`-Werror -fsyntax-only`); not run in a VM.
+> - **Tests (2026-10-03).** `crates/kf-linux-raw/src/scratch.rs`:
+>   `a_sink_restores_the_canonical_tiling_after_qemu_has_advised_the_window` (cover with the advice,
+>   QEMU's advice after it, 600 place-then-sink cycles at distinct offsets, both `dump-guest-core`
+>   settings, every mapping's `VmFlags` checked); with the advice bitten out it fails at
+>   **1229 mappings against 32**. Its known-positive,
+>   `an_unadvised_sink_beside_qemus_advice_never_merges_back`, holds the old shape's growth.
+>   `scratch_aliases_every_tile_length_and_nowhere_else` now takes `T` from the policy and fails
+>   when the tile is the whole window (it passed that bite before). `crates/kf-mem/src/cpuwin.rs`:
+>   `a_refused_placement_keeps_the_view_it_did_not_cover`, `a_refused_sink_keeps_the_view_it_did_not_cover`,
+>   `a_view_covered_only_in_part_is_kept`; with retirement made unconditional again each fails
+>   (the first releases `0x10_0000` while the guest still reaches it). `crates/kf-qemu/src/mem.rs`:
+>   `a_bar_sink_merges_back_after_qemu_has_advised_the_window` runs the production doors (CI only).
+>   ⚠ All of these run on the host CPU; nothing here was run in a VM or on a box.
 
 > ⊘⊘ **CORRECTED 2026-10-03 (branch `v3-scratch-bound`) — the recommendation below bounded scratch
 > by the BAR size, and guest root can reach that bound. The scratch is now TILED.**

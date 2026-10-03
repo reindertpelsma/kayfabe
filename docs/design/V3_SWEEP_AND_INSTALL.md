@@ -994,14 +994,23 @@ the same script CI runs.
 - ★ **a memory limit on QEMU's cgroup** (design only, 2026-10-03; nothing is built). `kayfabe-run` starts
   QEMU in its own cgroup with `memory.max` (systemd: `systemd-run --user --scope -p MemoryMax=… -p
   MemorySwapMax=…`, which needs the user manager to have the memory controller delegated; as root, a
-  system scope) sized as **guest RAM + the scratch bound + overhead**:
+  system scope) sized as **guest RAM + the scratch bound + overhead**.
+  ⊘ **Corrected 2026-10-03 (review of `v3-scratch-bound`):** the list below omitted the window
+  MAPPINGS' own kernel slab, which a guest drives and which `T` does not bound; it is the fifth term,
+  added at the end (`V3_P4_PORT_MAP.md` Q3, the block at its top):
   - guest RAM: all of it, since RM pins it whole for the VM's life (§2.6);
   - the scratch bound: one tile per window per device, from `kf_linux_raw::scratch_tile_len` —
     PRAMIN 1 MiB + BAR1 tile + BAR2 tile (2 MiB for `bar2-size=32M`): 5 MiB per device for a BAR1 up
     to 2 GiB, 19 MiB for the 16 GiB BAR1 a resizable-BAR card can give (`V3_P4_PORT_MAP.md` Q3);
   - host page tables and KVM SPTEs for fully touched windows and RAM: about (Σ windows + guest RAM) / 256;
   - QEMU's own overhead: a fixed allowance, to be taken from the `memory.peak` of a bench boot (not yet
-    measured).
+    measured);
+  - the window mappings' slab (`vm_area_struct` + maple-tree nodes, ≈ 212 B each): per window
+    `ceil(W / T)` + 2 × live placements, live placements ≤ `W / page`; at most `vm.max_map_count`
+    × 212 B per QEMU (≈ 13 MiB at the kernel default 65 530, ≈ 212 MiB at the 1 048 576 Ubuntu sets).
+    `vm.max_map_count` is one system-wide sysctl, so the launcher cannot lower it for one QEMU; it
+    budgets the term. Before the 2026-10-03 fix this term grew with every guest place-then-sink
+    cycle, not only with live placements.
 
   `MemorySwapMax` is set explicitly (0, or a small value), so a guest that fills its limit is reclaimed
   or OOM-killed inside its own cgroup and never pushes the host into swap. ⊘ Why the limit and not only
