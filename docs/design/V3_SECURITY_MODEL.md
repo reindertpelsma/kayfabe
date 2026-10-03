@@ -136,6 +136,13 @@ stage-2 scope and is not covered here.
   (unmerged): an effective-capability bracket around each channel allocation plus a
   `PRIVILEGED_CHANNEL` reply tripwire. **Not covered:** every other kf-host RM call, and the
   libcuda channels of the walker and display contexts (S1-22).
+  ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-sec-nonpriv` at `76dba5bd`; this model
+  read it at `55743ecd`): the libcuda half is now covered. kf-cuda clears `CAP_SYS_ADMIN` from each
+  CUDA thread's effective set for the thread's life before its first CUDA call (`kf_cuda::posture`),
+  and on an RTX 3060 at 580.159.04 the walker's 16 and `display=on`'s 32 libcuda channels read
+  `PRIVILEGED_CHANNEL=0` (`traces/v3_security/libcuda_20261003/`). Every other alloc entry refuses
+  channel classes (`kf_host::birth::admit_alloc_class`). Still not covered: the other kf-host RM
+  calls made on QEMU's own threads.
 - **R3.5** Kayfabe's own GPU kernels (the walker and the display compose kernel) stay inside their
   buffers. Where the in-process contexts can address pageable host memory, this is a host memory
   safety property, not only a GPU one (S1-05).

@@ -10,6 +10,9 @@
 #   killed job and a running one otherwise look identical.
 # - **The verdict is each gate's own `GATEn_VERDICT=` line**, never "the binary exited" or "we got to
 #   the end" (the_last_line_is_not_the_verdict). A gate that prints no verdict line is a FAIL.
+# - **Every channel the gates birth is USER** (THE_CONSTRAINTS §30): each `kf-host: channel birth`
+#   line must read `PRIVILEGED_CHANNEL=0 privilege=USER`, no refusal line may appear, and a run with
+#   no birth line at all fails (`V3_GATES_BIRTHS … ok=0`, exit 1).
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 OUT=${1:-/root/prov/v3_gates.log}
@@ -22,7 +25,7 @@ export PATH="$PATH:$HOME/.cargo/bin"
   if ! cargo build -q --release -p kf-harness --bins 2>&1 | tail -20; then
     echo "BUILD=FAIL"; echo "V3_GATES_EXIT pass=0 fail=all $(date -Is)"; exit 1
   fi
-  pass=0; fail=0; failed=""
+  pass=0; fail=0; failed=""; births=0; user=0; refused=0
   # Explicit census: a missing executable is a failure, never a zero-gate success.
   # Respect the same target directory cargo just built into.
   for n in {1..9}; do
@@ -34,10 +37,18 @@ export PATH="$PATH:$HOME/.cargo/bin"
     fi
     out=$(timeout 180 "$bin" 2>&1); rc=$?
     echo "$out"
+    # ★ THE_CONSTRAINTS §30: every channel a gate births through kf-host must read USER.
+    births=$((births + $(echo "$out" | grep -ac 'kf-host: channel birth ')))
+    user=$((user + $(echo "$out" | grep -a 'kf-host: channel birth ' | grep -ac ' PRIVILEGED_CHANNEL=0 privilege=USER ')))
+    refused=$((refused + $(echo "$out" | grep -acE 'PRIVILEGED CHANNEL REFUSED|CHANNEL BIRTH REFUSED|CHANNEL CLASS REFUSED|CUDA THREAD REFUSED')))
     v=$(echo "$out" | grep -E '^GATE[0-9]+_VERDICT=' | tail -1 | cut -d= -f2)
     if [ "$v" = "PASS" ] && [ "$rc" -eq 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); failed="$failed $g(rc=$rc,verdict=${v:-NONE})"; fi
   done
   echo "V3_GATES_SUMMARY pass=$pass fail=$fail${failed:+ failed:$failed}"
-  echo "V3_GATES_EXIT pass=$pass fail=$fail $(date -Is)"
-  [ "$pass" -eq 9 ] && [ "$fail" -eq 0 ]
+  # ⊘ A gate run with no channel birth at all has not shown the birth check can report one.
+  births_ok=0
+  [ "$births" -ge 1 ] && [ "$user" -eq "$births" ] && [ "$refused" -eq 0 ] && births_ok=1
+  echo "V3_GATES_BIRTHS births=$births user=$user refused=$refused ok=$births_ok"
+  echo "V3_GATES_EXIT pass=$pass fail=$fail births_ok=$births_ok $(date -Is)"
+  [ "$pass" -eq 9 ] && [ "$fail" -eq 0 ] && [ "$births_ok" -eq 1 ]
 } 2>&1 | tee "$OUT"

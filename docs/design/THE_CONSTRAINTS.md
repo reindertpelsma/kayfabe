@@ -554,6 +554,81 @@ and the per-client host MMU fault above.
     mechanism no longer expresses it, and **name the assert that now does**. An assert deleted
     without a successor named is a regression, however green the suite is.
 
+> ### ★★★ RULED AND BUILT 2026-10-03 (`v3-sec-nonpriv`) — **THE PRIVILEGE RULE FOR kf3'S HOST
+> ### CHANNELS.** Read this first; the w748 block below found both halves and this is how they landed.
+>
+> Owner, 2026-10-03: *"I dont think you should refuse cap sys admin if clearing a bit fixes it.
+> Sandboxing vmm is not our job though."* ⇒ kf3 does not refuse to run as root, and the bench
+> still starts QEMU as root.
+>
+> **The rule.** Every host channel kf3 creates runs guest-authored work, so every one is a
+> `PRIVILEGE_USER` channel, and a channel RM stamps otherwise never runs.
+>
+> - **The mechanism is the effective `CAP_SYS_ADMIN` bit of the thread making the channel-alloc
+>   call.** RM fixes the level from that thread's `capable(CAP_SYS_ADMIN)` at that one ioctl
+>   (`ogkm-580: kernel_channel.c:277-291`, `escape.c:304`). `kf_host::birth::born_user` (called
+>   by `HostRm::birth_member`) makes the call inside
+>   `kf_linux_raw::capability::with_effective_cap_cleared_on`. That clears the bit from the
+>   calling thread's effective set and restores it right after; the permitted set is untouched.
+>   If the bit cannot be cleared, the birth is refused before any host call
+>   (`CAP_BRACKET_REFUSED`).
+> - **The bound.** Every function in kf-host that builds an `NV_ESC_RM_ALLOC` request first calls
+>   `kf_host::birth::admit_alloc_class`, which refuses every GPFIFO channel class (derived from
+>   kf-abi's class table) unless the request carries the token only `born_user` can make
+>   (`CHANNEL_CLASS_OUTSIDE_BIRTH`, `0x4B75`). So the public `raw_alloc` entries cannot create a
+>   channel around the bracket and the reply check. `crates/kf-host/tests/channel_birth_bound.rs`
+>   pins the shape in the source; `src/birth.rs` tests the behaviour against a simulated root
+>   thread on any runner.
+> - **The tripwire is the reply check.** `kf_host::channel::birth_privilege` reads RM's reply
+>   and refuses the birth by name, freeing the channel (`PRIVILEGED_CHANNEL_REFUSED`), when
+>   `NVOS04_FLAGS_PRIVILEGED_CHANNEL` (5:5) is set or the reply's privilege level is not
+>   `USER`. kf3 never asks for bit 5, so a set bit is RM's own verdict. This is (c) below, now
+>   built.
+> - **The client class is not a mechanism.** As (a) below says, `escape.c:394-403` rewrites
+>   `NV01_ROOT_NON_PRIV` to `NV01_ROOT_CLIENT`. On an RTX 3060 at 580.159.04, 2026-10-03, a
+>   `NV01_ROOT_NON_PRIV` client came back as class `0x41` and admin
+>   (`traces/v3_security/nonpriv_20261003/privprobe_root.log`).
+>
+> Box evidence, RTX 3060, 580.159.04, QEMU as root (uid 0, full `CapEff`), 2026-10-03
+> (`traces/v3_security/nonpriv_20261003/`):
+>
+> | run | revision | births | reply flags |
+> |---|---|---|---|
+> | before | `3e0f6dee` | 6 | all `PRIVILEGED_CHANNEL=1` |
+> | after | `dc64b22b` | the same 6 | all `0x00000080`, `PRIVILEGED_CHANNEL=0` |
+> | merge bar, 30-arm suite and gates | `55743ecd` | 161 + 11 | all `PRIVILEGED_CHANNEL=0` (suite 30/30, gates 9/9) |
+> | merge bar with the census gate (`traces/v3_security/merge_bar_1d71f3db/`) | `1d71f3db` | 161 + 11 | all `PRIVILEGED_CHANNEL=0`, `BIRTH_CENSUS_OK` (tests 1879/0, gates 9/9, bare 30/30, suite 30/30) |
+>
+> With the bracket skipped (`KF3_NEGCTL_SKIP_CAP_BRACKET=1`), the tripwire refused the first
+> birth on a live `0x000000a0` reply.
+>
+> ⊘ **CORRECTED later on 2026-10-03 (`v3-sec-nonpriv`, after the branch's adversarial review):
+> libcuda's channels are covered too.** kf-cuda clears `CAP_SYS_ADMIN` from a thread's effective
+> set for the rest of that thread's life before the thread's first CUDA call: at the library
+> load, `cuInit`, `cuCtxCreate` and `cuCtxSetCurrent` (`kf_cuda::posture`). Threads started
+> afterwards, libcuda's own included, inherit the cleared set. kf3 makes realize's CUDA calls on
+> threads of their own (`kf_qemu::device::on_cuda_thread`), so QEMU's own thread keeps its
+> capabilities; the VA-manager and display threads clear the bit for themselves at their first
+> call. The paragraph this replaces read: *"Scope. This covers channels kf-host creates, which
+> are the only ones guest work runs on. libcuda's own channels (the walker and display contexts)
+> are created under the VMM's capabilities and are not covered. They run only kayfabe's
+> kernels."*
+>
+> libcuda's channels on the box (RTX 3060, 580.159.04, QEMU as root, box 54049598; read by the
+> observer below, `traces/v3_security/libcuda_20261003/`):
+>
+> | kf3 revision | walker run | `display=on` run |
+> |---|---|---|
+> | `4b864b5f` (before) | 16 libcuda channels, all `PRIVILEGED_CHANNEL=1`, on QEMU's thread | 32, all `PRIVILEGED_CHANNEL=1` |
+> | `1d71f3db` (after) | 16, all `PRIVILEGED_CHANNEL=0`, on `kf3-cuda-walk` | 32, all `PRIVILEGED_CHANNEL=0` |
+>
+> **The merge bar gates on it.** `scripts/bench/box/birth_census.sh` (run by `merge_check.sh`
+> after a self-test on planted logs) fails unless every suite arm and the gates log at least one
+> `kf-host: channel birth` line, every such line reads `PRIVILEGED_CHANNEL=0 privilege=USER`, no
+> refusal appears, and every arm logs a CUDA thread posture line. `v3_gates.sh` applies the same
+> birth rule to the gates. libcuda's replies are not visible in-process; the box observer
+> `scripts/bench/sec/chan_alloc_observer.c` reads them (`scripts/bench/sec/libcuda_channel_census.sh`).
+
 > ### ⊘⊘⊘ CORRECTED w748 — **30's PREMISE NAMES THE WRONG QUANTITY, AND ITS DEMANDED ASSERT
 > ### ALREADY EXISTS IN DATA WE RECEIVE.** Read this before the text below.
 >

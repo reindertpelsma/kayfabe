@@ -30,6 +30,13 @@ use kf_abi::submit::{
 /// `NV01_CONTEXT_DMA` (`ogkm-580: class/cl0002.h:40`).
 /// `NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE` at `7:7` (`ogkm-580 alloc_channel.h:168-170`).
 pub const NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE: u32 = 1 << 7;
+/// `NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE` at `5:5` (`ogkm-580: alloc_channel.h:141-143`) — the bit
+/// host RM SETS in the alloc reply when it stamps a channel `ADMIN` or `KERNEL`
+/// (`kernel_channel.c:278-287`). kf3 requests it clear and reads it back ([`birth_privilege`]).
+pub const NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE: u32 = 1 << 5;
+/// `flags` @ +20 of `NV_CHANNEL_ALLOC_PARAMS` — inside the +0..+32 prefix that 580 and 610 spell
+/// identically (`kf_abi::versions::DriverAbiTable::decode_channel_alloc_facts`).
+const CHANNEL_ALLOC_FLAGS_OFF: usize = 20;
 
 const NV01_CONTEXT_DMA: u32 = 0x0000_0002;
 /// `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` (`ogkm-580: ctrl2080dma.h`).
@@ -160,6 +167,136 @@ pub struct RingSpec {
     pub userd_offset: u64,
     /// Error notifier object, or 0.
     pub err_notifier: u32,
+}
+
+/// ★ NEGATIVE CONTROL — `KF3_NEGCTL_SKIP_CAP_BRACKET=1` issues the channel-alloc call WITHOUT
+/// clearing `CAP_SYS_ADMIN`. In a VMM that holds the capability, RM then stamps the channel
+/// `ADMIN` and the reply check must refuse **every** birth: the knob can only make births fail,
+/// never let a privileged channel live. It exists to show the check fires on a real RM reply
+/// (a check that has only ever reported zero has not shown it can report one).
+fn negctl_skip_cap_bracket() -> bool {
+    static SKIP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SKIP.get_or_init(|| {
+        let on = std::env::var_os("KF3_NEGCTL_SKIP_CAP_BRACKET").is_some_and(|v| v == "1");
+        if on {
+            eprintln!(
+                "kf-host: ⚠ NEGATIVE CONTROL KF3_NEGCTL_SKIP_CAP_BRACKET=1: channel-alloc calls \
+                 keep CAP_SYS_ADMIN; every birth RM stamps privileged must be refused"
+            );
+        }
+        on
+    })
+}
+
+/// ★ The `NV_CHANNEL_ALLOC_PARAMS` request every kf3 channel birth sends.
+///
+/// `flags` asks for exactly one thing, `DENY_PHYSICAL_MODE_CE` (P6b: an operand that escaped the
+/// rewriter must not reach host physical memory, `ogkm-580 alloc_channel.h:158-170`), and leaves
+/// `PRIVILEGED_CHANNEL` (5:5) **clear**. That clear request is what makes the reply check exact:
+/// RM never clears a requested bit 5 on a USER channel and always sets it on ADMIN or KERNEL
+/// (`kernel_channel.c:278-290`), so a set bit in the reply can only be RM's own verdict.
+#[must_use]
+pub fn channel_alloc_request(ring: &RingSpec, engine_type: u32) -> ChannelAllocParams {
+    ChannelAllocParams {
+        h_object_error: ring.err_notifier,
+        gp_fifo_offset: ring.gp_fifo_va,
+        gp_fifo_entries: ring.gp_fifo_entries,
+        // ★ P6b: DENY physical-mode CE on EVERY channel we birth (Translated rings and
+        // Passthrough twins alike) — `NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE` 7:7
+        // (`ogkm-580 alloc_channel.h:158-170`: "regardless of whether or not the client handle
+        // is admin"). No operand we author is physical (the rewriter turns them into window
+        // VAs), so this only ever stops one that ESCAPED the rewriter from reaching host
+        // physical memory: `[measured p6b8]` UVM's CE launches on subchannel 4 escaped a
+        // subchannel-keyed rewriter, verbatim and physical, with no Xid (fixed at commit
+        // 00f62991).
+        flags: NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE,
+        h_context_share: 0,
+        h_va_space: 0,
+        h_userd_memory_0: ring.userd_memory,
+        userd_offset_0: ring.userd_offset,
+        engine_type,
+    }
+}
+
+/// What RM stamped on a channel kf3 births, read from the alloc **reply**.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BirthPrivilege {
+    /// The reply's `flags` word (`PRIVILEGED_CHANNEL` clear).
+    pub reply_flags: u32,
+}
+
+/// Why a birth's privilege is refused — each one by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrivilegeRefusal {
+    /// The REQUEST asked for `PRIVILEGED_CHANNEL`. Then a set bit in the reply would be our own
+    /// request echoed back and the readback would prove nothing, so the request itself is refused.
+    RequestedPrivileged,
+    /// The reply is too short to hold `flags`.
+    ReplyUnreadable,
+    /// RM set `PRIVILEGED_CHANNEL` in the reply: the channel is `ADMIN` or `KERNEL`
+    /// (`kernel_channel.c:278-287` sets the bit on both; the reply does not say which).
+    PrivilegedChannel {
+        /// The reply's `flags` word.
+        reply_flags: u32,
+    },
+    /// The reply's `internalFlags` `PRIVILEGE` field (1:0) names a level other than `USER`.
+    /// ⊘ On 580 RM zeroes `internalFlags` before it copies the reply out
+    /// (`kernel_channel.c:1056-1058`), so this reads `USER` there and bit 5 is the load-bearing
+    /// reading; the field is checked so a driver that does return it is held to it too.
+    NotUser {
+        /// The `PRIVILEGE` field: 1 `ADMIN`, 2 `KERNEL`, 3 undefined.
+        level: u32,
+    },
+}
+
+impl core::fmt::Display for PrivilegeRefusal {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            PrivilegeRefusal::RequestedPrivileged => {
+                write!(f, "the request asked for PRIVILEGED_CHANNEL")
+            }
+            PrivilegeRefusal::ReplyUnreadable => write!(f, "the reply holds no flags word"),
+            PrivilegeRefusal::PrivilegedChannel { reply_flags } => write!(
+                f,
+                "RM stamped PRIVILEGED_CHANNEL=1 (reply flags {reply_flags:#010x}): an ADMIN or \
+                 KERNEL channel"
+            ),
+            PrivilegeRefusal::NotUser { level } => {
+                write!(f, "the reply's privilege level is {level}, not USER (0)")
+            }
+        }
+    }
+}
+
+/// ★★★ The per-birth tripwire: is the channel RM just created a `USER` channel?
+///
+/// `requested_flags` is the `flags` word kf3 sent; `reply` is the `NV_CHANNEL_ALLOC_PARAMS` image
+/// RM copied back (bench layout — `HostRm::raw_alloc` carries a different host layout back to it).
+///
+/// # Errors
+/// [`PrivilegeRefusal`], by name, for anything but a readable `USER` reply to a request that did
+/// not ask for privilege.
+pub fn birth_privilege(
+    requested_flags: u32,
+    reply: &[u8],
+) -> Result<BirthPrivilege, PrivilegeRefusal> {
+    if requested_flags & NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE != 0 {
+        return Err(PrivilegeRefusal::RequestedPrivileged);
+    }
+    let reply_flags = reply
+        .get(CHANNEL_ALLOC_FLAGS_OFF..CHANNEL_ALLOC_FLAGS_OFF + 4)
+        .and_then(|b| b.try_into().ok())
+        .map(u32::from_le_bytes)
+        .ok_or(PrivilegeRefusal::ReplyUnreadable)?;
+    if reply_flags & NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE != 0 {
+        return Err(PrivilegeRefusal::PrivilegedChannel { reply_flags });
+    }
+    if let Ok(Some(p)) = kf_abi::notifier::ChannelNotifierWire::V580.decode_privilege(reply)
+        && p.level != kf_abi::notifier::ChannelPrivilege::USER
+    {
+        return Err(PrivilegeRefusal::NotUser { level: p.level });
+    }
+    Ok(BirthPrivilege { reply_flags })
 }
 
 /// What a mapped object is to the caller — the fact the page-size rule turns on.
@@ -595,40 +732,50 @@ impl HostRm {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
+        let request = channel_alloc_request(&ring, engine_type);
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
-        let encoded = ChannelAllocParams {
-            h_object_error: ring.err_notifier,
-            gp_fifo_offset: ring.gp_fifo_va,
-            gp_fifo_entries: ring.gp_fifo_entries,
-            // ★ P6b: DENY physical-mode CE on EVERY channel we birth (Translated rings and
-            // Passthrough twins alike) — `NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE` 7:7
-            // (`ogkm-580 alloc_channel.h:158-170`: "regardless of whether or not the client handle
-            // is admin" — the VMM's is). No operand we author is physical (the rewriter turns
-            // them into window VAs), so this only ever stops one that ESCAPED the rewriter from
-            // reaching host physical memory: `[measured p6b8]` UVM's CE launches on subchannel 4
-            // escaped a subchannel-keyed rewriter, verbatim and physical, with no Xid.
-            flags: NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE,
-            h_context_share: 0,
-            h_va_space: 0,
-            h_userd_memory_0: ring.userd_memory,
-            userd_offset_0: ring.userd_offset,
-            engine_type,
-        }
-        .encode_into(&mut chan_params);
-        if encoded.is_err() {
+        if request.encode_into(&mut chan_params).is_err() {
             return Err(RmError::Other(ABI_ENCODE_FAILED));
         }
         let want = self.mint();
-        let chan = self.raw_alloc(
-            tsg,
-            want,
-            self.classes.gpfifo_channel().channel_id().0,
-            Some(kf_abi::hostabi::HostParams::Measured(
-                &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
-            )),
+        let class = self.classes.gpfifo_channel().channel_id().0;
+        // ★★★ THE ONLY WAY A CHANNEL CLASS REACHES HOST RM (`crate::birth`): the alloc runs with
+        // `CAP_SYS_ADMIN` cleared from this thread's EFFECTIVE set, and RM's reply is checked
+        // before the channel is used. RM stamps the channel's privilege from the calling thread's
+        // `capable(CAP_SYS_ADMIN)` at this one ioctl (`ogkm-580: kernel_channel.c:277-291`,
+        // `escape.c:304`), so the channel is `PRIVILEGE_USER` whatever the VMM runs as. The bit
+        // stays permitted and is put back right after (`kf_linux_raw::capability`). Every other
+        // alloc entry in this crate refuses the class (`birth::admit_alloc_class`). ⊘ Not the RM
+        // client class: `NV01_ROOT_NON_PRIV` is rewritten to `NV01_ROOT_CLIENT` before RM sees it
+        // (`escape.c:394-403`).
+        let born = crate::birth::born_user(
+            &kf_linux_raw::capability::ThisThread,
+            negctl_skip_cap_bracket(),
+            engine_type,
+            request.flags,
             &mut chan_params,
+            |inside, params| {
+                let h = self.carried_alloc(
+                    class,
+                    Some(kf_abi::hostabi::HostParams::Measured(
+                        &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+                    )),
+                    params,
+                    |p| self.raw_alloc_exact(tsg, want, class, p, Some(inside)),
+                )?;
+                self.remember(h, tsg);
+                Ok(h)
+            },
+            |h| {
+                let _ = self.free(h);
+            },
         )?;
-        self.remember(chan, tsg);
+        let chan = born.handle;
+        eprintln!(
+            "kf-host: channel birth h={chan:#x} engine={engine_type:#x} reply_flags={:#010x} \
+             PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin={}",
+            born.privilege.reply_flags, born.cap
+        );
         let unwind = |me: &Self| {
             let _ = me.free(chan);
         };
@@ -1299,5 +1446,123 @@ mod perm_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod privilege_tests {
+    use super::{
+        BirthPrivilege, NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE,
+        NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE, PrivilegeRefusal, RingSpec, birth_privilege,
+        channel_alloc_request,
+    };
+    use kf_abi::submit::ChannelAllocParams;
+
+    fn ring() -> RingSpec {
+        RingSpec {
+            gp_fifo_va: 0x1_0000_0000,
+            gp_fifo_entries: 512,
+            userd_memory: 0xcafe_0001,
+            userd_offset: 0x200,
+            err_notifier: 0,
+        }
+    }
+
+    /// The reply image RM would copy back for `request`, with `flags` as RM left it.
+    fn reply(request: &ChannelAllocParams, flags: u32) -> [u8; ChannelAllocParams::SIZE] {
+        let mut b = [0u8; ChannelAllocParams::SIZE];
+        ChannelAllocParams { flags, ..*request }
+            .encode_into(&mut b)
+            .expect("encode");
+        b
+    }
+
+    #[test]
+    fn the_constants_are_the_header_fields() {
+        // `ogkm-580: alloc_channel.h:141-143` (5:5) and `:168-170` (7:7).
+        assert_eq!(NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE, 0x20);
+        assert_eq!(NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE, 0x80);
+    }
+
+    /// ★ The request every birth sends: `PRIVILEGED_CHANNEL` clear (so the reply check is exact),
+    /// `DENY_PHYSICAL_MODE_CE` set, nothing else in `flags`, and on the wire at +20.
+    #[test]
+    fn the_birth_request_never_asks_for_privilege() {
+        for engine in [0x1, 0x9, 0xb, 0x13] {
+            let req = channel_alloc_request(&ring(), engine);
+            assert_eq!(req.flags & NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE, 0);
+            assert_eq!(req.flags, NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE);
+            let mut b = [0u8; ChannelAllocParams::SIZE];
+            req.encode_into(&mut b).expect("encode");
+            assert_eq!(&b[20..24], &0x80u32.to_le_bytes());
+            assert_eq!(
+                birth_privilege(req.flags, &b),
+                Ok(BirthPrivilege { reply_flags: 0x80 })
+            );
+        }
+    }
+
+    /// ★★★ The tripwire: RM's verdict `PRIVILEGED_CHANNEL=1` refuses the birth by name.
+    /// `0x004000a0` is the reply host RM wrote on an RTX 3060 at 580.159.04 on 2026-10-03 with the
+    /// VMM holding CAP_SYS_ADMIN (`traces/v3_security/nonpriv_20261003/`, BEFORE; that branch also
+    /// requested bit 22). `0xa0` is the same verdict on this request (bit 7), `0x20` bit 5 alone.
+    #[test]
+    fn a_privileged_reply_is_refused_by_name() {
+        let req = channel_alloc_request(&ring(), 0x1);
+        for flags in [0x0040_00a0, 0xa0, 0x20] {
+            assert_eq!(
+                birth_privilege(req.flags, &reply(&req, flags)),
+                Err(PrivilegeRefusal::PrivilegedChannel { reply_flags: flags })
+            );
+        }
+    }
+
+    /// A USER reply passes whatever else RM set in `flags`, as long as bit 5 is clear.
+    #[test]
+    fn a_user_reply_passes_with_any_other_flag() {
+        let req = channel_alloc_request(&ring(), 0x9);
+        for flags in [0x80, 0x0040_0080, 0xffff_ffdf] {
+            assert_eq!(
+                birth_privilege(req.flags, &reply(&req, flags)),
+                Ok(BirthPrivilege { reply_flags: flags })
+            );
+        }
+    }
+
+    /// The reply's `internalFlags` PRIVILEGE field (1:0, at +244 on 580) must read USER too.
+    #[test]
+    fn a_non_user_internal_level_is_refused() {
+        let req = channel_alloc_request(&ring(), 0x1);
+        for level in [1u32, 2, 3] {
+            let mut b = reply(&req, 0x80);
+            b[244..248].copy_from_slice(&(level | (1 << 2)).to_le_bytes());
+            assert_eq!(
+                birth_privilege(req.flags, &b),
+                Err(PrivilegeRefusal::NotUser { level })
+            );
+        }
+        // The notifier-type bits (3:2) are not a privilege.
+        let mut b = reply(&req, 0x80);
+        b[244..248].copy_from_slice(&(2u32 << 2).to_le_bytes());
+        assert!(birth_privilege(req.flags, &b).is_ok());
+    }
+
+    /// A request that itself asked for bit 5 makes the readback meaningless, so it is refused
+    /// before the reply is even read; a reply too short to hold `flags` is refused, never read
+    /// as zero.
+    #[test]
+    fn the_check_refuses_what_it_cannot_judge() {
+        let req = channel_alloc_request(&ring(), 0x1);
+        assert_eq!(
+            birth_privilege(
+                req.flags | NVOS04_FLAGS_PRIVILEGED_CHANNEL_TRUE,
+                &reply(&req, 0x80)
+            ),
+            Err(PrivilegeRefusal::RequestedPrivileged)
+        );
+        assert_eq!(
+            birth_privilege(req.flags, &[0u8; 23]),
+            Err(PrivilegeRefusal::ReplyUnreadable)
+        );
     }
 }

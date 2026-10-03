@@ -1,0 +1,19 @@
+START 2026-10-03T21:18:59+00:00
+Preparing worktree (detached HEAD 1d71f3db)
+Updating files:  55% (5826/10586)Updating files:  56% (5929/10586)Updating files:  57% (6035/10586)Updating files:  58% (6140/10586)Updating files:  59% (6246/10586)Updating files:  60% (6352/10586)Updating files:  61% (6458/10586)Updating files:  62% (6564/10586)Updating files:  63% (6670/10586)Updating files:  64% (6776/10586)Updating files:  65% (6881/10586)Updating files:  66% (6987/10586)Updating files:  67% (7093/10586)Updating files:  68% (7199/10586)Updating files:  69% (7305/10586)Updating files:  70% (7411/10586)Updating files:  71% (7517/10586)Updating files:  72% (7622/10586)Updating files:  73% (7728/10586)Updating files:  74% (7834/10586)Updating files:  75% (7940/10586)Updating files:  76% (8046/10586)Updating files:  77% (8152/10586)Updating files:  78% (8258/10586)Updating files:  79% (8363/10586)Updating files:  80% (8469/10586)Updating files:  81% (8575/10586)Updating files:  82% (8681/10586)Updating files:  83% (8787/10586)Updating files:  84% (8893/10586)Updating files:  85% (8999/10586)Updating files:  86% (9104/10586)Updating files:  87% (9210/10586)Updating files:  88% (9316/10586)Updating files:  89% (9422/10586)Updating files:  90% (9528/10586)Updating files:  91% (9634/10586)Updating files:  92% (9740/10586)Updating files:  93% (9845/10586)Updating files:  94% (9951/10586)Updating files:  95% (10057/10586)Updating files:  96% (10163/10586)Updating files:  97% (10269/10586)Updating files:  98% (10375/10586)Updating files:  99% (10481/10586)Updating files: 100% (10586/10586)Updating files: 100% (10586/10586), done.
+HEAD is now at 1d71f3db chan_alloc_observer: read the reply whatever paramsSize says
+HEAD=1d71f3dba7344304d47f95cdbcd99e22766567d1 CHECKOUT=/workspace/bench/verify-worktrees/secnpmc.4kvSL5
+TESTS passed 1879 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/1d71f3db/qemu-system-x86_64 rev=1d71f3db mtime=2026-10-03 21:21:36.670877689 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+BIRTH_CENSUS_GATES births=11 user=11 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=11 all PRIVILEGED_CHANNEL=0 privilege=USER
+EXIT rc=0 2026-10-03T21:41:32+00:00

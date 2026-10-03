@@ -6,6 +6,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# ★ 2026-10-03 (`v3-sec-nonpriv`): the first dependency. `crate::posture` clears CAP_SYS_ADMIN from
+# a thread's effective set before its first CUDA call, through kf-linux-raw's audited `capget`/
+# `capset` wrappers; this crate gains no `unsafe` for it.
+kf-linux-raw.workspace = true
 
 [dev-dependencies]
 

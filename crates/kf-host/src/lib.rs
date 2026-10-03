@@ -9,6 +9,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
+pub mod birth;
 pub mod channel;
 pub mod event;
 pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
@@ -91,6 +92,19 @@ pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
 /// host's version does not have, a control with no row, a struct absent at that version. The
 /// reason is printed once per refusal (`kf-host: HOST-ABI REFUSED …`) — the status is only the class.
 pub const HOST_ABI_REFUSED: u32 = 0x4B72;
+/// ★★★ A channel host RM stamped `ADMIN` or `KERNEL` (`NVOS04_FLAGS_PRIVILEGED_CHANNEL` set in the
+/// alloc reply, or a non-`USER` privilege level) — the birth is refused by name and the channel
+/// freed (`channel::birth_privilege`). Guest-authored work runs on these channels, so every kf3
+/// host channel must be a `USER` channel (`docs/design/THE_CONSTRAINTS.md` §30; OWNER_RULINGS §P).
+pub const PRIVILEGED_CHANNEL_REFUSED: u32 = 0x4B73;
+/// `CAP_SYS_ADMIN` could not be cleared from the calling thread's effective set for a
+/// channel-alloc call (`kf_linux_raw::capability`), so the call was not made: refused before any
+/// host call rather than risking an `ADMIN` channel.
+pub const CAP_BRACKET_REFUSED: u32 = 0x4B74;
+/// ★★★ A channel class (`birth::is_channel_class`) asked for through any alloc entry other than
+/// the birth path (`birth::born_user`): refused before any host call, so no channel can be created
+/// without `CAP_SYS_ADMIN` cleared for the call and RM's reply checked.
+pub const CHANNEL_CLASS_OUTSIDE_BIRTH: u32 = 0x4B75;
 /// The store reservation and which form RM granted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reservation {
@@ -254,6 +268,14 @@ fn read_version(ctl: &CharDevice) -> Option<String> {
 }
 
 /// Our own root client — minted by us, never a guest's.
+///
+/// ⊘ Allocated as `NV01_ROOT_CLIENT`, and asking for `NV01_ROOT_NON_PRIV` instead would change
+/// nothing: the Linux escape layer rewrites every userspace root allocation to `NV01_ROOT_CLIENT`
+/// before RM sees it (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:394-403`), so RM's
+/// `bIsRootNonPriv` (`rmapi/client.c:88`) is never true for this client. Read on an RTX 3060 at
+/// 580.159.04, 2026-10-03: a `NV01_ROOT_NON_PRIV` request came back as class `0x41` and admin
+/// (`traces/v3_security/nonpriv_20261003/privprobe_root.log`). What keeps kf3's channels
+/// unprivileged is the per-birth capability bracket and reply check in `channel.rs`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct OwnClient(u32);
 
@@ -265,6 +287,7 @@ impl core::fmt::Debug for OwnClient {
 
 impl OwnClient {
     fn allocate_root(ctl: &CharDevice) -> Result<Self, RmError> {
+        birth::admit_alloc_class(NV01_ROOT_CLIENT, None)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
             h_root: 0,
@@ -799,7 +822,7 @@ impl HostRm {
         params: &mut [u8],
     ) -> Result<u32, RmError> {
         self.carried_alloc(class, strukt, params, |p| {
-            self.raw_alloc_exact(parent, want, class, p)
+            self.raw_alloc_exact(parent, want, class, p, None)
         })
     }
 
@@ -850,14 +873,17 @@ impl HostRm {
         }
     }
 
-    /// The allocation ioctl with `params` exactly as given (already at the host's layout).
+    /// The allocation ioctl with `params` exactly as given (already at the host's layout). A
+    /// channel class is refused unless `inside` shows the call comes from `birth::born_user`.
     fn raw_alloc_exact(
         &self,
         parent: u32,
         want: u32,
         class: u32,
         params: &mut [u8],
+        inside: Option<&birth::InsideBirthPath>,
     ) -> Result<u32, RmError> {
+        birth::admit_alloc_class(class, inside)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
             h_root: self.client.raw(),
@@ -914,6 +940,7 @@ impl HostRm {
         class: u32,
         params: &mut [u8],
     ) -> Result<u32, RmError> {
+        birth::admit_alloc_class(class, None)?;
         let mut arg = [0u8; Nvos21Parameters::SIZE];
         Nvos21Parameters {
             h_root: self.client.raw(),
@@ -967,6 +994,7 @@ impl HostRm {
         inner_at: usize,
         inner: &mut [u8],
     ) -> Result<u32, RmError> {
+        birth::admit_alloc_class(class, None)?;
         // ⊘ The nested pointer is patched in place, so this block cannot be carried: it is sent
         // at the bench layout, which is only known correct on the interval the encoders were
         // written for. (No caller today — `NV_MEMORY_LIST_ALLOCATION_PARAMS`.)
@@ -1834,6 +1862,7 @@ impl HostRm {
         if len == 0 {
             return Err(RmError::NoMemory);
         }
+        birth::admit_alloc_class(NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, None)?;
         let want = self.mint();
         let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
         Nvos02ParametersWithFd {

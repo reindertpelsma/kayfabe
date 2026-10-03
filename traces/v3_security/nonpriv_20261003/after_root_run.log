@@ -1,0 +1,28 @@
+START 2026-10-03T19:38:35+00:00 rev=dc64b22b dirty=0
+launcher: euid=0 CapPrm: 000001ffffffffff CapEff: 000001ffffffffff 
+== kf3 binary: /workspace/bench/kf3-bins/dc64b22b/qemu-system-x86_64 (rev dc64b22b)
+== serializing on /tmp/kayfabe-fastguest.lock (GPU runs are strictly serial)
+== arms: --probe-launch-dma,--probe-launch-dma   budget: 180s   self-deadline: 176000ms   trace: ring
+== qemu:  /workspace/bench/kf3-bins/dc64b22b/qemu-system-x86_64  (built 2026-10-03 19:37:31)
+== device(s): -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+== console: hvc (console=ttyS0 console=hvc0)
+qemu pid=89538 Uid: 0 0 0 0 CapPrm: 000001ffffffffff CapEff: 000001ffffffffff 
+=== FAST GUEST nonprivafter — 18s of a 180s budget, qemu rc=0 ===
+    FASTGUEST: up 7.31s
+    FASTGUEST: switch_root prepared in 1.6s
+    FASTGUEST: up 9.02s
+    FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root
+    FASTGUEST: insmod ecc.ko ok
+    FASTGUEST: insmod nvidia.ko ok
+    FASTGUEST: insmod nvidia-uvm.ko ok
+    FASTGUEST: insmod wmi.ko ok
+    FASTGUEST: insmod video.ko ok
+    FASTGUEST: insmod nvidia-modeset.ko ok
+    FASTGUEST: nodes /dev/nvidia-caps/nvidia-cap1 /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 
+    FASTGUEST: ready 9.50s
+    FASTGUEST: arms --probe-launch-dma --probe-launch-dma  deadline 168s (budget 180s, 9s already spent booting)
+    FASTGUEST: client rc=0 at 12.27s
+    FASTGUEST: DONE
+== hardware: 2 doorbell(s) forwarded across 3 guest token(s); 0 stranded, 0 declared by the operand gate
+FAST_VERDICT=PASS (18s)
+EXIT rc=0 2026-10-03T19:38:58+00:00

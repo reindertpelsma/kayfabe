@@ -334,15 +334,22 @@ impl Device {
             },
             perm.key_perm()
         );
-        let mut kernel = kf_cuda::walk::WalkKernel::bring_up_on(
-            kf_cuda::walk::WalkCfg {
-                key_perm: perm.key_perm(),
-                ..kf_cuda::walk::WalkCfg::default()
-            },
-            fmt,
-            kf_cuda::walk::WalkDevice::PciBusId(&bdf),
-        )
-        .map_err(|e| format!("GPU walker bring-up on {bdf}: {e}"))?;
+        // ★★★ v3-sec-nonpriv: every CUDA call of realize runs on a thread of its own
+        // (`on_cuda_thread`). kf-cuda clears CAP_SYS_ADMIN from a thread's effective set for the
+        // rest of its life before its first CUDA call (`kf_cuda::posture`), so the walker's
+        // channels are born USER — and QEMU's own thread keeps its capabilities. The host-RM calls
+        // between them (the store reservation and its export) stay on this thread, as before.
+        let mut kernel = on_cuda_thread("kf3-cuda-walk", || {
+            kf_cuda::walk::WalkKernel::bring_up_on(
+                kf_cuda::walk::WalkCfg {
+                    key_perm: perm.key_perm(),
+                    ..kf_cuda::walk::WalkCfg::default()
+                },
+                fmt,
+                kf_cuda::walk::WalkDevice::PciBusId(&bdf),
+            )
+            .map_err(|e| format!("GPU walker bring-up on {bdf}: {e}"))
+        })?;
         let store = rm.reserve_gpga(fb_length).map_err(|e| {
             format!(
                 "store of {} MiB refused: {e:?} (host card {bdf}: {n_neighbours} other kf3 device(s) \
@@ -354,9 +361,39 @@ impl Device {
         let export = rm
             .export_to_new_fd(store.handle)
             .map_err(|e| format!("store export: {e:?}"))?;
-        kernel
-            .import_store(export.fd_number(), fb_length)
-            .map_err(|e| format!("store import into the walker: {e}"))?;
+        let export_fd = export.fd_number();
+        let roots = [layout.bar1_pde_base, layout.bar2_pde_base];
+        let boot_fb = gop.as_ref();
+        kernel = on_cuda_thread("kf3-cuda-store", move || {
+            let mut kernel = kernel;
+            kernel
+                .import_store(export_fd, fb_length)
+                .map_err(|e| format!("store import into the walker: {e}"))?;
+            // ★ Our two roots, zeroed on the GPU (the pages are ours: no CPU read, no guest table).
+            let zero = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
+            for root in roots {
+                kernel
+                    .write_store(root, &zero)
+                    .map_err(|e| format!("zeroing our root @{root:#x}: {e}"))?;
+            }
+            // ★ The boot display: store [0, G) is what BAR1 offset 0 shows from the first
+            // instruction and what the boot layer scans out — zeroed on the GPU before either
+            // exists, so nothing a previous user of these VRAM pages left is visible (kayfabe never
+            // scrubs the store otherwise). One MiB of zeros at a time: the CPU writes no guest
+            // vidmem, the walker's copy engine does.
+            if let Some(b) = boot_fb {
+                let chunk = vec![0u8; 1 << 20];
+                let mut at = 0u64;
+                while at < b.bytes() {
+                    let n = (b.bytes() - at).min(chunk.len() as u64);
+                    kernel.write_store(at, &chunk[..n as usize]).map_err(|e| {
+                        format!("gop=on: zeroing the boot framebuffer @{at:#x}: {e}")
+                    })?;
+                    at += n;
+                }
+            }
+            Ok(kernel)
+        })?;
         // The export node stays open for the process (CUDA holds the import).
         std::mem::forget(export);
         // ★ The identity line a multi-GPU run is graded on: minor → PCI → RM instance → CUDA.
@@ -368,29 +405,6 @@ impl Device {
             kernel.device_name,
             cfg.fb_mb
         );
-        // ★ Our two roots, zeroed on the GPU (the pages are ours: no CPU read, no guest table).
-        let zero = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
-        for root in [layout.bar1_pde_base, layout.bar2_pde_base] {
-            kernel
-                .write_store(root, &zero)
-                .map_err(|e| format!("zeroing our root @{root:#x}: {e}"))?;
-        }
-        // ★ The boot display: store [0, G) is what BAR1 offset 0 shows from the first instruction
-        // and what the boot layer scans out — zeroed on the GPU before either exists, so nothing a
-        // previous user of these VRAM pages left is visible (kayfabe never scrubs the store
-        // otherwise). One MiB of zeros at a time: the CPU writes no guest vidmem, the walker's
-        // copy engine does.
-        if let Some(b) = &gop {
-            let chunk = vec![0u8; 1 << 20];
-            let mut at = 0u64;
-            while at < b.bytes() {
-                let n = (b.bytes() - at).min(chunk.len() as u64);
-                kernel
-                    .write_store(at, &chunk[..n as usize])
-                    .map_err(|e| format!("gop=on: zeroing the boot framebuffer @{at:#x}: {e}"))?;
-                at += n;
-            }
-        }
         let ram: &'static crate::mem::RamMap = Box::leak(Box::default());
         let inbox = std::sync::Arc::new(crate::mem::Inbox::new()?);
 
@@ -608,13 +622,12 @@ impl Device {
                 let export = rm
                     .export_to_new_fd(store.handle)
                     .map_err(|e| format!("display=on: store export: {e:?}"))?;
-                let plane = crate::display::DisplayPlane::build(
-                    row,
-                    table,
-                    &bdf,
-                    export.fd_number(),
-                    fb_length,
-                )?
+                // ★ The display context's CUDA calls run on a thread of their own too
+                // (`on_cuda_thread`, `kf_cuda::posture`).
+                let fd = export.fd_number();
+                let plane = on_cuda_thread("kf3-cuda-disp", || {
+                    crate::display::DisplayPlane::build(row, table, &bdf, fd, fb_length)
+                })?
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
@@ -2878,4 +2891,27 @@ fn log_fresh_refusals(fsm: &mut kf_gsp::GspFsm) {
             r.first_sequence
         );
     }
+}
+
+/// ★★★ Run `f` on a thread of its own and return its result: for realize's CUDA calls.
+///
+/// kf-cuda clears `CAP_SYS_ADMIN` from a thread's effective set for the rest of its life before
+/// the thread's first CUDA call (`kf_cuda::posture`), so libcuda's channels are born `USER` even
+/// when QEMU runs as root (`docs/design/THE_CONSTRAINTS.md` §30). realize runs on QEMU's own
+/// thread, which must keep its capabilities, so the walker's and the display's bring-up run here
+/// instead. libcuda's own threads, started from this one, inherit the cleared set; the contexts
+/// outlive the thread and are made current again on the VA-manager and display threads, which
+/// clear the bit for themselves the same way.
+fn on_cuda_thread<T: Send>(
+    name: &str,
+    f: impl FnOnce() -> Result<T, String> + Send,
+) -> Result<T, String> {
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name(name.to_string())
+            .spawn_scoped(scope, f)
+            .map_err(|e| format!("{name}: could not start the CUDA thread: {e}"))?
+            .join()
+            .map_err(|_| format!("{name}: the CUDA thread panicked"))?
+    })
 }

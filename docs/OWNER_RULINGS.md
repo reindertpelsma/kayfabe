@@ -447,6 +447,12 @@ citation: ask whether its reason still holds before relying on it.
 - **Gate:** no public binary ships before every stage-2 blocker is closed or accepted by the owner.
 - **Out of scope:** sandboxing the VMM process. The owner, the same day: *"Sandboxing vmm is not our
   job."*
+- **kf3's host channels when the VMM is root** (the audit's P0, the same day). The owner's full
+  sentence: *"I dont think you should refuse cap sys admin if clearing a bit fixes it. Sandboxing vmm
+  is not our job though."* ⇒ kf3 does not refuse to run with `CAP_SYS_ADMIN`. It clears the bit from
+  a thread's effective set where host RM reads it: for each channel-alloc call kf-host makes, and
+  for the life of each thread that calls libcuda. `design/THE_CONSTRAINTS.md` §30 has the rule and
+  its checks (`v3-sec-nonpriv`, pending the owner's review).
 
 ## Q. The address model: what each kind of address may reach (2026-10-03)
 

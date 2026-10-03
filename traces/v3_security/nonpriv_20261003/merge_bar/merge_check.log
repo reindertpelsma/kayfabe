@@ -1,0 +1,15 @@
+START 2026-10-03T19:41:27+00:00
+Preparing worktree (detached HEAD 55743ecd)
+Updating files:  68% (7004/10292)Updating files:  69% (7102/10292)Updating files:  70% (7205/10292)Updating files:  71% (7308/10292)Updating files:  72% (7411/10292)Updating files:  73% (7514/10292)Updating files:  74% (7617/10292)Updating files:  75% (7719/10292)Updating files:  76% (7822/10292)Updating files:  77% (7925/10292)Updating files:  78% (8028/10292)Updating files:  79% (8131/10292)Updating files:  80% (8234/10292)Updating files:  81% (8337/10292)Updating files:  82% (8440/10292)Updating files:  83% (8543/10292)Updating files:  84% (8646/10292)Updating files:  85% (8749/10292)Updating files:  86% (8852/10292)Updating files:  87% (8955/10292)Updating files:  88% (9057/10292)Updating files:  89% (9160/10292)Updating files:  90% (9263/10292)Updating files:  91% (9366/10292)Updating files:  92% (9469/10292)Updating files:  93% (9572/10292)Updating files:  94% (9675/10292)Updating files:  95% (9778/10292)Updating files:  96% (9881/10292)Updating files:  97% (9984/10292)Updating files:  98% (10087/10292)Updating files:  99% (10190/10292)Updating files: 100% (10292/10292)Updating files: 100% (10292/10292), done.
+HEAD is now at 55743ecd V3_SEC_NONPRIV: box evidence and the privilege rule in THE_CONSTRAINTS §30
+HEAD=55743ecdf93c27b4b064034e5804792b994a0c60 CHECKOUT=/workspace/bench/verify-worktrees/nonprivmc.mnQCtY
+TESTS passed 1764 failed 0
+GATES_RC=0
+V3_GATES_SUMMARY pass=9 fail=0
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/55743ecd/qemu-system-x86_64 rev=55743ecd mtime=2026-10-03 19:43:49.298779001 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+FG_RC=0
+SUITE_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+EXIT rc=0 2026-10-03T20:02:03+00:00

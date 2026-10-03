@@ -271,6 +271,8 @@ pub mod affinity;
 mod affinity_unsafe;
 pub mod bounds;
 pub mod cache;
+pub mod capability;
+mod capability_unsafe;
 pub mod census;
 mod chardev_unsafe;
 mod epoll_unsafe;
