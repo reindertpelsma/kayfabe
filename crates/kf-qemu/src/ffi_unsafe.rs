@@ -23,6 +23,10 @@ use std::os::unix::ffi::OsStrExt as _;
 /// the broker relay's surface ([`Kf3BrokerEvent`], [`kf3_broker_start`], [`kf3_broker_frame_fd`],
 /// [`kf3_broker_ready`], [`kf3_broker_stop`]); [`kf3_display_ui_info`] (the console's `ui_info`
 /// hook) and the broker's `SURFACE` event (kind 8). (`v3-dispsw-exp` takes 13 when it merges.)
+/// ★ Still 12 on 2026-10-04 (§8.13): the console's cursor in hover ([`Kf3Cursor`],
+/// [`kf3_display_cursor`], [`kf3_display_cursor_pixels`]) joins the broker's surface while it is
+/// unmerged — the bump is per surface reaching master, and an archive without the two symbols
+/// fails to LINK with a kf3.c that calls them, never at run time.
 pub const KF3_ABI: u32 = 12;
 
 /// The PCI identity the C device presents.
@@ -537,6 +541,31 @@ pub struct Kf3BrokerEvent {
     pub w1: u32,
 }
 
+/// ★ §8.13 (KF3 ABI 12's broker surface, before it reaches master): what QEMU's console is told
+/// about the guest's cursor while a cursor-capable broker hovers ([`kf3_display_cursor`]). `what`:
+/// bit 0 DEFINE — `width` x `height` with the hot spot (`width` = 0: the hidden cursor), its pixels
+/// from [`kf3_display_cursor_pixels`]; bit 1 MOUSE — `dpy_mouse_set(x, y, on)`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Kf3Cursor {
+    /// `KF3_CURSOR_DEFINE` | `KF3_CURSOR_MOUSE`.
+    pub what: u32,
+    /// The image's width (0: the hidden cursor) …
+    pub width: u32,
+    /// … and height (at most 256 each).
+    pub height: u32,
+    /// The hot spot's column …
+    pub hot_x: u32,
+    /// … and row, inside the image.
+    pub hot_y: u32,
+    /// The guest pointer on the console's frame: column …
+    pub x: i32,
+    /// … and row.
+    pub y: i32,
+    /// Whether the cursor is shown.
+    pub on: u32,
+}
+
 impl Kf3BrokerEvent {
     fn of(i: kf_broker::Input) -> Kf3BrokerEvent {
         use kf_broker::Input as I;
@@ -586,6 +615,78 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
     // SAFETY: `out` is writable (caller contract).
     unsafe { *out = fr };
     0
+}
+
+/// ★ §8.13 (ABI 12, main thread, the console's `gfx_update`): what QEMU's console should be told
+/// about the guest's cursor now — the coordinator's decision of 2026-10-04: while a cursor-capable
+/// broker hovers the frames carry no cursor (§O), so the console gets it through QEMU's cursor API
+/// (VNC shows it as a real pointer); under grab, or with no such broker, it stays composed. Returns
+/// `out.what` (0: nothing to do, also without a display or a broker; `*out` untouched then).
+///
+/// # Safety
+/// `out` is writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_display_cursor(h: *mut c_void, out: *mut Kf3Cursor) -> i32 {
+    let (Some(dp), false) = (dev(h).and_then(|d| d.display), out.is_null()) else {
+        return 0;
+    };
+    let Some(seat) = dp.broker.as_ref() else {
+        return 0;
+    };
+    let u = seat.console_cursor(dp.console.cursor_point());
+    let mut c = Kf3Cursor::default();
+    if let Some(define) = u.define {
+        c.what |= 1;
+        if let Some(sh) = define {
+            (c.width, c.height, c.hot_x, c.hot_y) = (sh.width, sh.height, sh.hot.0, sh.hot.1);
+        }
+    }
+    if let Some((x, y, on)) = u.mouse {
+        c.what |= 2;
+        (c.x, c.y, c.on) = (x, y, u32::from(on));
+    }
+    if c.what == 0 {
+        return 0;
+    }
+    // SAFETY: `out` is writable (caller contract), checked non-null above.
+    unsafe { *out = c };
+    i32::try_from(c.what).unwrap_or(0)
+}
+
+/// The most words [`kf3_display_cursor_pixels`] writes: a 256x256 cursor (the broker's bound,
+/// `kf_broker::wire::CURSOR_MAX_DIM`).
+const CURSOR_MAX_WORDS: u32 = 256 * 256;
+
+/// ★ §8.13 (ABI 12, main thread, right after a DEFINE from [`kf3_display_cursor`]): the defined
+/// image's pixels into `data` — QEMU's `QEMUCursor` data, one host-endian `0xAARRGGBB` word per
+/// pixel, straight alpha — copied from kayfabe's own copy of the image, never guest memory.
+/// `words` must be exactly the defined `width * height`. 0, or -1 with nothing written.
+///
+/// # Safety
+/// `data` is null or writable for `words` aligned `u32`s (validated here: null, misalignment and
+/// more than 256x256 words are refused before a byte is written).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_display_cursor_pixels(
+    h: *mut c_void,
+    data: *mut u32,
+    words: u32,
+) -> i32 {
+    if data.is_null() || !data.is_aligned() || words == 0 || words > CURSOR_MAX_WORDS {
+        return -1;
+    }
+    let Some(seat) = dev(h)
+        .and_then(|d| d.display)
+        .and_then(|dp| dp.broker.as_ref())
+    else {
+        return -1;
+    };
+    // SAFETY: `data` is non-null, aligned, and writable for `words` u32s (caller contract);
+    // `words` is at most 256x256, so the slice is at most 256 KiB, and it lives only for the call.
+    let out = unsafe { core::slice::from_raw_parts_mut(data, words as usize) };
+    match seat.console_cursor_pixels(out) {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
 }
 
 /// ★ ABI 10 (`v3-ioeventfd`'s 9): the doorbell register's offset inside the 64 KiB usermode page

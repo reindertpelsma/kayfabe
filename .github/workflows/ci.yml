@@ -1616,7 +1616,18 @@ jobs:
           # `fs_magic`; `/proc/self/fdinfo` read with std, bounded at 4 KiB) adds no relaxation.
           #   ⊘ No new power: it classifies a descriptor this process already holds, and asks an
           #     unproven descriptor's filesystem nothing (no `fstatfs` on FUSE).
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:94 kf-cuda:78 kf-qemu:55 firmware/kf-gop:78"
+          # ★★ `kf-qemu` 55 -> 59, 2026-10-04 (`v3-broker`, V3_DISPLAY.md §8.13: the guest's cursor for
+          # QEMU's own console while a cursor-capable broker hovers; KF3 ABI 12's broker surface).
+          # `ffi_unsafe.rs` (+4): `kf3_display_cursor` (`unsafe extern "C" fn`: `out` writable) and
+          # its one `unsafe { *out = c }` (checked non-null first); `kf3_display_cursor_pixels`
+          # (`unsafe extern "C" fn`: `data` writable for `words` u32s) and its one
+          # `slice::from_raw_parts_mut`, formed only after `data` is checked non-null and aligned
+          # and `words` is checked to be 1..=256*256 — the slice lives for the call, and the safe
+          # side (`kf_broker::ConsoleCursor::pixels`) writes it only when `words` is exactly the
+          # defined image's width * height.
+          #   ⊘ No new power: VMM-owned pixels (kayfabe's copy of the cursor) copied into a buffer
+          #     the C device allocated with `cursor_alloc` for exactly that size.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:94 kf-cuda:78 kf-qemu:59 firmware/kf-gop:78"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

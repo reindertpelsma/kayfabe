@@ -717,13 +717,62 @@ static pixman_format_code_t kf3_pixman_format(uint32_t f)
     }
 }
 
+/* ★ ABI 12 (docs/design/V3_DISPLAY.md §8.13): the guest's cursor for THIS console while a
+ * cursor-capable broker hovers — the frames then carry none (OWNER_RULINGS §O), so the console gets
+ * it through QEMU's cursor API and a VNC client draws it as a real pointer (the coordinator's
+ * decision of 2026-10-04). Rust decides what and when; without a broker, under grab, or for a cursor
+ * the frame composes (XOR), it says nothing or "hidden". Ownership per QEMU 10.2.4: cursor_alloc and
+ * cursor_builtin_hidden return a cursor with one reference (ui/cursor.c:93-108);
+ * dpy_cursor_define takes its own (ui/console.c:961-980), so ours is dropped right after. The
+ * pixels are copied from kayfabe's own copy of the image (never guest memory), bounded to the
+ * width x height this function allocated. Main thread, BQL held; nothing here waits. */
+static void kf3_console_cursor(Kf3State *s)
+{
+    Kf3Cursor c;
+    QEMUCursor *qc;
+    int32_t what = kf3_display_cursor(s->h, &c);
+
+    if (what <= 0) {
+        return;
+    }
+    if (what & KF3_CURSOR_DEFINE) {
+        if (c.width == 0 || c.height == 0) {
+            qc = cursor_builtin_hidden();
+        } else if (c.width > KF3_CURSOR_MAX_DIM || c.height > KF3_CURSOR_MAX_DIM ||
+                   c.hot_x >= c.width || c.hot_y >= c.height) {
+            return;
+        } else {
+            qc = cursor_alloc((uint16_t)c.width, (uint16_t)c.height);
+            if (!qc) {
+                return;
+            }
+            if (kf3_display_cursor_pixels(s->h, qc->data, c.width * c.height) != 0) {
+                cursor_unref(qc);
+                return;
+            }
+            qc->hot_x = (int)c.hot_x;
+            qc->hot_y = (int)c.hot_y;
+        }
+        dpy_cursor_define(s->con, qc);
+        cursor_unref(qc);
+    }
+    if (what & KF3_CURSOR_MOUSE) {
+        dpy_mouse_set(s->con, c.x, c.y, c.on != 0);
+    }
+}
+
 static void kf3_gfx_update(void *opaque)
 {
     Kf3State *s = opaque;
     Kf3Frame f;
     pixman_format_code_t fmt;
 
-    if (!s->h || kf3_display_frame(s->h, &f) != 0 || f.serial == s->shown.serial) {
+    if (!s->h) {
+        return;
+    }
+    /* before the frame: in hover a cursor change makes no frame */
+    kf3_console_cursor(s);
+    if (kf3_display_frame(s->h, &f) != 0 || f.serial == s->shown.serial) {
         return;
     }
     fmt = kf3_pixman_format(f.format);

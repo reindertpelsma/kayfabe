@@ -63,6 +63,19 @@ typedef struct Kf3BrokerEvent {
 #define KF3_BROKER_CLOSE 7
 #define KF3_BROKER_SURFACE 8   /* x, y = the broker window's size; w0 = its refresh in mHz (0: unknown) */
 
+/* ★ ABI 12 (docs/design/V3_DISPLAY.md §8.13): the guest's cursor for the console while a
+ * cursor-capable broker hovers. what: KF3_CURSOR_DEFINE (width x height + hot spot; width 0 = the
+ * hidden cursor; pixels from kf3_display_cursor_pixels), KF3_CURSOR_MOUSE (x, y, on). */
+typedef struct Kf3Cursor {
+    uint32_t what;
+    uint32_t width, height, hot_x, hot_y;
+    int32_t x, y;
+    uint32_t on;
+} Kf3Cursor;
+#define KF3_CURSOR_DEFINE 1
+#define KF3_CURSOR_MOUSE 2
+#define KF3_CURSOR_MAX_DIM 256
+
 uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
  * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1.
@@ -119,6 +132,11 @@ int32_t kf3_broker_frame_fd(void *h);
 int32_t kf3_broker_ready(void *h, int32_t fd, uint32_t rd, uint32_t wr, uint64_t now_ms,
                          Kf3BrokerEvent *out, uint32_t cap);
 void kf3_broker_stop(void *h);
+/* ★ ABI 12 (§8.13): the console's cursor in hover (main loop, gfx_update). kf3_display_cursor
+ * returns out->what (0: nothing to do); after a DEFINE with width > 0, kf3_display_cursor_pixels
+ * fills exactly width*height QEMUCursor words (0xAARRGGBB, straight alpha) or returns -1. */
+int32_t kf3_display_cursor(void *h, Kf3Cursor *out);
+int32_t kf3_display_cursor_pixels(void *h, uint32_t *data, uint32_t words);
 /* ★ ABI 12 (display step 3c): the console's ui_info — a resize hint for `head` (main loop). */
 int32_t kf3_display_ui_info(void *h, uint32_t head, uint32_t width, uint32_t height, uint32_t refresh_mhz);
 /* ★ ABI 11 (docs/design/V3_DISPLAY.md §4.11.6): the boot display's option ROM (gop=1) — the

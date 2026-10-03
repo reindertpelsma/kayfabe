@@ -26,7 +26,8 @@
 
 use crate::raw_unsafe::BrokerHooks;
 use kf_broker::{
-    CursorShare, FrameRing, Input, InstallRefusal, Relay, RelayConfig, SlotFds, UnixLink,
+    ConsoleCursor, ConsoleCursorUpdate, CursorShare, FrameRing, Input, InstallRefusal, Relay,
+    RelayConfig, SlotFds, UnixLink,
 };
 use kf_cuda::display::{DisplayGpu, Frame};
 use kf_linux_raw::{
@@ -46,6 +47,9 @@ pub struct BrokerSeat {
     relay: Mutex<Option<(Relay<UnixLink>, BrokerHooks)>>,
     /// ★ §O: the guest's cursor between the worker and the relay.
     cursor: Arc<CursorShare>,
+    /// ★ §8.13: the same cursor for QEMU's own console while the broker hovers — the main loop
+    /// only (the console's `gfx_update`), so the lock is never contended; it is `try_lock`ed.
+    console: Mutex<ConsoleCursor>,
 }
 
 impl std::fmt::Debug for BrokerSeat {
@@ -84,7 +88,30 @@ impl BrokerSeat {
             udmabuf,
             relay: Mutex::new(None),
             cursor: Arc::new(CursorShare::new()),
+            console: Mutex::new(ConsoleCursor::default()),
         })
+    }
+
+    /// ★ §8.13, **main loop** (the console's `gfx_update`): what QEMU's console should be told about
+    /// the guest's cursor now ([`kf_broker::ConsoleCursor::poll`]), given `point`, the cursor
+    /// image's top-left on the console's frame. Nothing when the lock is busy (never, on one thread).
+    pub fn console_cursor(&self, point: Option<(i32, i32)>) -> ConsoleCursorUpdate {
+        self.console
+            .try_lock()
+            .map(|mut c| c.poll(&self.cursor, point))
+            .unwrap_or_default()
+    }
+
+    /// ★ §8.13, **main loop**: the image the last define described, into `out` — exactly its
+    /// `width * height` words of straight `0xAARRGGBB` ([`kf_broker::ConsoleCursor::pixels`]).
+    ///
+    /// # Errors
+    /// Nothing latched, a size mismatch, or the lock busy — nothing written.
+    pub fn console_cursor_pixels(&self, out: &mut [u32]) -> Result<(), String> {
+        self.console
+            .try_lock()
+            .map_err(|_| "the console cursor is busy".to_string())?
+            .pixels(out)
     }
 
     /// ★ **Worker** (and the relay, through its own handle): the guest's cursor share — the mode

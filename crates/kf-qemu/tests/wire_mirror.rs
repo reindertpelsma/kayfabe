@@ -1,7 +1,7 @@
 //! Compile the repository-owned C seam and compare every carried Rust field's layout.
 //! This uses the actual QEMU header, needs no QEMU build, and never opens a GPU.
 
-use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3BrokerEvent, Kf3Frame, Kf3Identity, Kf3Region};
+use kf_qemu::ffi_unsafe::{KF3_ABI, Kf3BrokerEvent, Kf3Cursor, Kf3Frame, Kf3Identity, Kf3Region};
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem::{align_of, offset_of, size_of};
 use std::process::Command;
@@ -54,7 +54,13 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let header = std::fs::read_to_string(root.join("qemu/hw/misc/kf3/kf3.h")).unwrap();
     let rust = include_str!("../src/ffi_unsafe.rs");
-    let names = ["Kf3Identity", "Kf3Region", "Kf3Frame", "Kf3BrokerEvent"];
+    let names = [
+        "Kf3Identity",
+        "Kf3Region",
+        "Kf3Frame",
+        "Kf3BrokerEvent",
+        "Kf3Cursor",
+    ];
     let declared: Vec<_> = rust
         .split("#[repr(C)]")
         .skip(1)
@@ -113,6 +119,15 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
     layout!(Kf3Frame, [data => "data", width => "width", height => "height", stride => "stride",
         format => "format", serial => "serial"]);
     layout!(Kf3BrokerEvent, [kind => "kind", x => "x", y => "y", w0 => "w0", w1 => "w1"]);
+    layout!(Kf3Cursor, [what => "what", width => "width", height => "height", hot_x => "hot_x",
+        hot_y => "hot_y", x => "x", y => "y", on => "on"]);
+    value!("cursor_define", "KF3_CURSOR_DEFINE", 1);
+    value!("cursor_mouse", "KF3_CURSOR_MOUSE", 2);
+    value!(
+        "cursor_max_dim",
+        "KF3_CURSOR_MAX_DIM",
+        kf_broker::wire::CURSOR_MAX_DIM
+    );
     value!("abi", "KF3_ABI", KF3_ABI);
     // ★ ABI 12 (V3_DISPLAY.md §8.11): the C device's display_broker word for each
     // display-broker-vram value is the one kf_broker::gpucopy::VramMode decodes
@@ -262,7 +277,7 @@ fn c_type(rust: &str) -> String {
         "usize" => "size_t",
         "c_void" | "()" => "void",
         "c_char" => "char",
-        "Kf3Identity" | "Kf3Region" | "Kf3Frame" | "Kf3BrokerEvent" => t,
+        "Kf3Identity" | "Kf3Region" | "Kf3Frame" | "Kf3BrokerEvent" | "Kf3Cursor" => t,
         other => panic!("the mirror cannot spell the Rust FFI type `{other}` in C — add it"),
     }
     .to_string()

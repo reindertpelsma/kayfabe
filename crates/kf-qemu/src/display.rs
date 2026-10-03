@@ -463,8 +463,15 @@ pub struct ConsoleShare {
     /// ★ The same for the broker's activity (§8.11): it keeps the refresh rate, but feeds the D2H
     /// copy only while the broker is shown through host memory (`kf_broker::gpucopy::plan`).
     broker_ms: AtomicU64,
+    /// ★ §8.13: the shown head's cursor image top-left on the console's frame, packed
+    /// `x as u32 | (y as u32) << 32`, or [`NO_CURSOR_POINT`] — the worker writes it every pass, the
+    /// console's cursor (`kf3_display_cursor`) adds the image's hot spot to it.
+    cursor_point: AtomicU64,
     epoch: Instant,
 }
+
+/// [`ConsoleShare`]'s cursor point when the shown head has no enabled cursor (or nothing is shown).
+const NO_CURSOR_POINT: u64 = u64::MAX;
 
 impl Default for ConsoleShare {
     fn default() -> ConsoleShare {
@@ -485,6 +492,7 @@ impl ConsoleShare {
             formats: core::array::from_fn(|_| AtomicU32::new(0)),
             demand_ms: AtomicU64::new(0),
             broker_ms: AtomicU64::new(0),
+            cursor_point: AtomicU64::new(NO_CURSOR_POINT),
             epoch: Instant::now(),
         }
     }
@@ -497,6 +505,21 @@ impl ConsoleShare {
 
     fn now_ms(&self) -> u64 {
         u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX)
+    }
+
+    /// ★ **Worker**, every pass: the shown head's cursor image top-left on the frame, or `None`.
+    fn note_cursor_point(&self, p: Option<(i32, i32)>) {
+        let v = p.map_or(NO_CURSOR_POINT, |(x, y)| {
+            u64::from(x.cast_unsigned()) | u64::from(y.cast_unsigned()) << 32
+        });
+        self.cursor_point.store(v, Ordering::Relaxed);
+    }
+
+    /// ★ **Console (QEMU's main thread)**: the point [`ConsoleShare::note_cursor_point`] last stored.
+    #[must_use]
+    pub fn cursor_point(&self) -> Option<(i32, i32)> {
+        let v = self.cursor_point.load(Ordering::Relaxed);
+        (v != NO_CURSOR_POINT).then(|| ((v as u32).cast_signed(), ((v >> 32) as u32).cast_signed()))
     }
 
     /// Record the console's request for frames now.
@@ -1875,6 +1898,14 @@ impl Device {
                     .and_then(|cv| engine.cursor_scan(cv, c.head)),
                 _ => None,
             };
+            // ★ §8.13: where the cursor image's top-left is, for the console's cursor in hover (a
+            // move makes no frame then, but the console still follows it)
+            dp.console.note_cursor_point(cursor.as_ref().map(|cs| {
+                (
+                    cs.x.saturating_sub(i32::try_from(cs.hot_x).unwrap_or(0)),
+                    cs.y.saturating_sub(i32::try_from(cs.hot_y).unwrap_or(0)),
+                )
+            }));
             // ★ §O: where the cursor goes, as the relay decided (hover: the host shows it; grab or
             // no cursor-capable broker: the frame). A switch recomposes at once — the cursor goes
             // into the frame or out of it — and in hover a MOVE makes no frame (the host pointer
