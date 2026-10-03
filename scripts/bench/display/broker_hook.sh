@@ -97,22 +97,28 @@ say "RUNGS $(grep -ao 'frames go as [^(;—]*' "$Q" | sort | uniq -c | tr '\n' '
 grep -aE 'kf3: broker: (the compositor|the display (CAN|CANNOT|imported)|GPU-copy frames are not)' "$Q" | cut -c1-200 | head -6 | sed 's/^/BRK_RUNG_LINE /'
 
 # 3. the broker window, fullscreen (1:1 with the guest)
-# ⊘ [run brkA] `search --name` found an unmapped 1024x768 window first: only a VISIBLE one is ours
-W=$(HX xdotool search --onlyvisible --name '^nvkvm' 2>/dev/null | head -1)
+# ⊘ [runs brkA, brkA2] a NAME search is not exact: brkA's first match happened to be the broker's
+# window, brkA2's `--onlyvisible` one was not (no focus, so neither CTRL+ALT+F nor CTRL+ALT+G
+# reached it). The broker sets WM_CLASS "nvkvm-display-broker" on its top-level window only.
+W=$(HX xdotool search --class '^nvkvm-display-broker$' 2>/dev/null | head -1)
 say "WINDOW id=[${W:-none}]"
 if [ -z "$W" ]; then say "HOOK_DONE (no broker window)"; exit 0; fi
 HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
+say "WINDOW active=[$(HX xdotool getactivewindow 2>/dev/null)] (must be the window above)"
 HX xdotool key --clearmodifiers ctrl+alt+f >/dev/null 2>&1
 sleep 4
 eval "$(HX xdotool getwindowgeometry --shell "$W" 2>/dev/null)"
-say "WINDOW geometry=${WIDTH:-?}x${HEIGHT:-?}+${X:-?}+${Y:-?}"
+say "WINDOW geometry=${WIDTH:-?}x${HEIGHT:-?}+${X:-?}+${Y:-?} root=[$(HX xdpyinfo 2>/dev/null | grep -m1 dimensions | tr -s ' ')]"
 hshot host_desktop
 
 [ "${BRK_CURSOR:-1}" = 1 ] || { say "HOOK_DONE (no cursor experiments)"; exit 0; }
-# 4. HOVER — the host pointer over the picture
+# 4. HOVER — the host pointer over the picture, near its top-left corner (the guest's root window
+#    there: Cinnamon's fallback dialog sits in the middle and its buttons change under a pointer),
+#    with the guest's root-window cursor set to a known arrow
+gq "$GX xsetroot -cursor_name left_ptr; echo rc=\$?" > "$OUT/xsetroot_arrow.log"
 HX xdotool windowactivate --sync "$W" >/dev/null 2>&1
-HX xdotool mousemove --window "$W" 700 400 >/dev/null 2>&1; sleep 1
-HX xdotool mousemove --window "$W" 720 410 >/dev/null 2>&1; sleep 3
+HX xdotool mousemove --window "$W" 30 30 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 48 44 >/dev/null 2>&1; sleep 3
 say "MODE_LINES $(grep -a 'kf3: broker: guest cursor:' "$Q" | cut -d: -f4- | tr '\n' '|' | cut -c1-300)"
 HX python3 "$XC" image "$OUT/cur_host_hover.pam" | sed 's/^/BRK_HOST_HOVER /'
 gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
@@ -134,14 +140,20 @@ say "MAP frame=${fr:-?} window=${WIDTH:-?}x${HEIGHT:-?}+${X:-?}+${Y:-?} guest_po
 #     near the centre, where an underived hot spot 0,0 would be off by half the image); the host
 #     pointer over the root window near the top-left corner
 gq "$GX xsetroot -cursor_name crosshair; echo rc=\$?" > "$OUT/xsetroot.log"
-HX xdotool mousemove --window "$W" 30 30 >/dev/null 2>&1; sleep 1
-HX xdotool mousemove --window "$W" 40 36 >/dev/null 2>&1; sleep 3
+HX xdotool mousemove --window "$W" 70 60 >/dev/null 2>&1; sleep 1
+HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 3
 HX python3 "$XC" image "$OUT/cur_host_cross.pam" | sed 's/^/BRK_HOST_CROSS /'
 gq "$GX python3 ~/display/xcursor.py image /tmp/cur_guest_cross.pam" | sed 's/^/BRK_GUEST_CROSS /'
 "$G" 'cat /tmp/cur_guest_cross.pam' > "$OUT/cur_guest_cross.pam" 2>/dev/null
 python3 "$XC" compare "$OUT/cur_guest_cross.pam" "$OUT/cur_host_cross.pam" | sed 's/^/BRK_CROSS_/'
 say "CROSS_SETS $(grep -a 'guest cursor image' "$Q" | tail -3 | cut -d: -f4- | tr '\n' '|' | cut -c1-240) xsetroot=[$(tr '\n' ' ' < "$OUT/xsetroot.log")]"
-HX xdotool mousemove --window "$W" 720 410 >/dev/null 2>&1; sleep 2
+# the rest (hide, grab) happens with the crosshair at this spot; the shots below are taken here
+gpos=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')
+set -- $gpos; gx=${1:-0}; gy=${2:-0}
+hx=$(( ${X:-0} + gx * ${WIDTH:-1} / ${fw:-1} )); hy=$(( ${Y:-0} + gy * ${HEIGHT:-1} / ${fh:-1} ))
+shot hover
+hshot host_hover
+say "CROSS_MAP guest_pointer=$gx,$gy -> host $hx,$hy"
 
 # 5. HIDE — the guest hides its cursor for 10 s
 m=$(qline)
@@ -177,7 +189,7 @@ m=$(qline)
 HX xdotool key --clearmodifiers ctrl+alt+g >/dev/null 2>&1
 sleep 3
 say "GRAB_OFF $(since "$m" | grep -aE 'kf3: broker: (grab|guest cursor)' | cut -d: -f4- | tr '\n' '|' | cut -c1-240)"
-HX xdotool mousemove --window "$W" 720 410 >/dev/null 2>&1; sleep 2
+HX xdotool mousemove --window "$W" 80 66 >/dev/null 2>&1; sleep 2
 HX python3 "$XC" image "$OUT/cur_host_after_grab.pam" | sed 's/^/BRK_HOST_AFTER_GRAB /'
 shot after_grab
 hshot host_after_grab
