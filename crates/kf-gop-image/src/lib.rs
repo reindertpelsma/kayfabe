@@ -13,10 +13,14 @@
 //! - [`TARGET`] — the UEFI triple it was built for.
 //! - [`pack_kf_gop`] — [`KF_GOP_EFI`] wrapped for one device by `kf_oprom::pack`: the ROM header with
 //!   the driver's own machine type, PCIR with the ids and class kf3 presents, the `KFGP` descriptor.
+//! - [`pack_kf_gop_signed`] — the same for a signed copy of [`KF_GOP_EFI`] supplied at run time
+//!   (kf3's `gop-efi=`), accepted only as that driver plus an Authenticode signature. The binary
+//!   `kf-gop-export` writes [`KF_GOP_EFI`] to a file for signing (`scripts/bench/windows/`).
 //!
 //! Its one consumer is `kf-qemu` (`BootPlan::rom`). `build.rs` says why the build lives here and not
 //! in the pure `kf-oprom`.
 
+use kf_oprom::pe::{SigError, SignedInfo};
 use kf_oprom::{BootFramebuffer, Identity, PackError};
 
 /// ★ kf3's boot-display GOP driver: `firmware/kf-gop`'s `kf-gop` binary, built by `build.rs` for
@@ -35,6 +39,51 @@ pub const TARGET: &str = env!("KF_GOP_IMAGE_TARGET");
 /// `kf_oprom::PackError` by name — above all a class that is not a display controller.
 pub fn pack_kf_gop(id: &Identity, fb: &BootFramebuffer, edid: &[u8]) -> Result<Vec<u8>, PackError> {
     kf_oprom::pack(KF_GOP_EFI, id, fb, edid)
+}
+
+/// Why a supplied signed driver was not packed ([`pack_kf_gop_signed`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignedPackError {
+    /// The file is not [`KF_GOP_EFI`] plus an Authenticode signature (`kf_oprom::pe::signed_twin_of`).
+    Signature(SigError),
+    /// The signed driver could not be packed (`kf_oprom::pack`).
+    Pack(PackError),
+}
+
+impl core::fmt::Display for SignedPackError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            SignedPackError::Signature(e) => write!(f, "signed kf-gop: {e}"),
+            SignedPackError::Pack(e) => write!(f, "packing the signed kf-gop: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for SignedPackError {}
+
+/// ★ Pack a SIGNED copy of [`KF_GOP_EFI`] for one device (2026-10-04, branch `v3-windows`,
+/// `docs/OWNER_RULINGS.md` §K: the ROM's EFI driver signed with a per-install kayfabe key enrolled in
+/// the VM's `db`).
+///
+/// The signature is supplied at run time and never built in: the private key stays out of cargo's
+/// environment and `OUT_DIR`, the embedded driver stays reproducible, and a Microsoft third-party
+/// signature can arrive the same way later. `signed` is accepted only as the embedded driver plus an
+/// Authenticode certificate table (`kf_oprom::pe::signed_twin_of`), so kf3 still serves exactly the
+/// driver it embeds. The ROM layout ends the PE on the last 512-byte block (`kf_oprom::pack`), so the
+/// signature verifies over exactly the bytes the firmware loads.
+///
+/// # Errors
+/// [`SignedPackError`], by name.
+pub fn pack_kf_gop_signed(
+    signed: &[u8],
+    id: &Identity,
+    fb: &BootFramebuffer,
+    edid: &[u8],
+) -> Result<(Vec<u8>, SignedInfo), SignedPackError> {
+    let info =
+        kf_oprom::pe::signed_twin_of(signed, KF_GOP_EFI).map_err(SignedPackError::Signature)?;
+    let rom = kf_oprom::pack(signed, id, fb, edid).map_err(SignedPackError::Pack)?;
+    Ok((rom, info))
 }
 
 /// The build script's decisions, run by the tests below (`build/support.rs`).

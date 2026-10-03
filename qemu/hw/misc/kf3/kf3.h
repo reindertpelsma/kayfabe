@@ -13,7 +13,9 @@
  * surfaces, so an archive from either branch must be refused here: one new number above both.
  * ★ 11 (2026-10-03, v3-gop-kf3, docs/design/V3_DISPLAY.md §4.11): the boot display — kf3_realize
  * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device. */
-#define KF3_ABI 11
+/* ★ 12 (2026-10-04, v3-windows, OWNER_RULINGS §K): kf3_realize takes `gop_efi`, the path of a signed
+ * copy of the embedded GOP driver (property gop-efi), or NULL. */
+#define KF3_ABI 12
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -37,10 +39,11 @@ typedef struct Kf3Frame {
 
 uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
- * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1. */
+ * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1.
+ * ★ ABI 12: `gop_efi` — a signed copy of the embedded GOP driver, or NULL; needs gop=1. */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
-                    const char *guest_driver, uint32_t display, uint32_t gop, void **out,
-                    char *err, size_t err_len);
+                    const char *guest_driver, uint32_t display, uint32_t gop, const char *gop_efi,
+                    void **out, char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
 int32_t kf3_config_word(void *h, uint32_t idx, uint16_t *off, uint32_t *val);

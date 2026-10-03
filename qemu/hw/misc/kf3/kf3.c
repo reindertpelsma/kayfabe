@@ -128,6 +128,7 @@ struct Kf3State {
     /* ★ ABI 11 (docs/design/V3_DISPLAY.md §4.11): the boot display — the option ROM here, the BAR1
      * seed, the boot layer and fn 65's console region in Rust. Needs display=on. Off = today. */
     bool gop;
+    char *gop_efi;  /* ★ ABI 12: a signed copy of the embedded GOP driver (OWNER_RULINGS §K) */
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -791,7 +792,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         }
     }
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    s->gop ? 1 : 0, &s->h, err, sizeof(err)) != 0) {
+                    s->gop ? 1 : 0, s->gop_efi, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }
@@ -964,6 +965,9 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_BOOL("display", Kf3State, display, false),
     /* ★ 2026-10-03: the boot display (docs/design/V3_DISPLAY.md §4.11). OFF = today's device. */
     DEFINE_PROP_BOOL("gop", Kf3State, gop, false),
+    /* ★ ABI 12 (2026-10-04, v3-windows): the boot display's driver, signed — validated by Rust as the
+     * embedded kf-gop plus an Authenticode signature; refused with gop=off. */
+    DEFINE_PROP_STRING("gop-efi", Kf3State, gop_efi),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),

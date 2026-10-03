@@ -14,7 +14,9 @@ use std::ffi::CStr;
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
 /// ★ 11 (2026-10-03, `v3-gop-kf3`, `docs/design/V3_DISPLAY.md` §4.11): the boot display —
 /// [`kf3_realize`] takes `gop`, and [`kf3_option_rom`] hands the C device the ROM to register.
-pub const KF3_ABI: u32 = 11;
+/// ★ 12 (2026-10-04, `v3-windows`, `docs/OWNER_RULINGS.md` §K): [`kf3_realize`] takes `gop_efi`, the
+/// path of a signed copy of the embedded GOP driver (`crate::gop::SignedGop`), or null.
+pub const KF3_ABI: u32 = 12;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -81,8 +83,8 @@ pub extern "C" fn kf3_abi_version() -> u32 {
 /// Realize the device and start its register drainer. Returns 0 and a handle, or -1 with a message.
 ///
 /// # Safety
-/// `guest_driver` is null or a NUL-terminated string; `out` is writable; `err` is null or writable
-/// for `err_len` bytes.
+/// `guest_driver` and `gop_efi` are each null or a NUL-terminated string; `out` is writable; `err`
+/// is null or writable for `err_len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_realize(
     gpu_minor: u32,
@@ -92,6 +94,7 @@ pub unsafe extern "C" fn kf3_realize(
     guest_driver: *const c_char,
     display: u32,
     gop: u32,
+    gop_efi: *const c_char,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -107,6 +110,17 @@ pub unsafe extern "C" fn kf3_realize(
         )
         .filter(|s| !s.is_empty())
     };
+    let gop_efi = if gop_efi.is_null() {
+        None
+    } else {
+        // SAFETY: the caller promises a NUL-terminated string.
+        Some(
+            unsafe { CStr::from_ptr(gop_efi) }
+                .to_string_lossy()
+                .into_owned(),
+        )
+        .filter(|s| !s.is_empty())
+    };
     let cfg = Config {
         gpu_minor,
         fb_mb,
@@ -115,6 +129,7 @@ pub unsafe extern "C" fn kf3_realize(
         guest_driver: guest,
         display: display != 0,
         gop: gop != 0,
+        gop_efi,
     };
     match Device::realize(&cfg) {
         Ok(d) => {
