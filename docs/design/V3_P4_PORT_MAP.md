@@ -347,8 +347,8 @@ The order is forced:
 >   same, so that term belongs to the BAR's size, not to scratch). Guest RAM is pinned whole and is
 >   the large term. A deployment without a memory limit on QEMU's cgroup still lets these terms
 >   press on the host: the launcher must size one (`V3_SWEEP_AND_INSTALL.md` §2.6).
-> - **Tests, 2026-10-03.** `crates/kf-linux-raw/src/scratch.rs` (run locally on Linux 7.0 and in
->   CI): `the_old_whole_window_scratch_allocates_the_whole_window_on_reads_alone` is the
+> - **Tests, 2026-10-03.** `crates/kf-linux-raw/src/scratch.rs` (run locally on Linux 7.0, and in
+>   GitHub CI run 37131187685 at commit `2b3062da`, all passing): `the_old_whole_window_scratch_allocates_the_whole_window_on_reads_alone` is the
 >   known-positive (reads alone: `st_blocks` = 64 MiB of a 64 MiB window);
 >   `a_tiled_scratch_holds_a_guest_that_touches_every_page_to_one_tile` is the bound (64 and 256 MiB
 >   windows, every page read then written: ≤ 2 MiB), and it fails against the whole-window shape
