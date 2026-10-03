@@ -1,11 +1,12 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
-> **STATUS: BROKER RELAY BUILT, GPU-FREE — 2026-10-03 (branch `v3-broker`; nothing run on a box).**
-> Display step 3 ("the broker") sub-steps 3a (frames + input) and 3b (reconnect, pacing) are in code:
-> the VMM-agnostic crate `kf-broker`, its OS doors in `kf-linux-raw`, and the kf3 glue (KF3 ABI 11,
-> properties `display-broker` / `display-broker-uid`). With `display-broker` unset nothing changes.
-> 3d (cursor composition) and 3c (resize) are NOT built. Design, deviations, local runs and the
-> pending box tests: **§8**.
+> **STATUS: BROKER RELAY AND CURSOR COMPOSITION BUILT, GPU-FREE — 2026-10-03 (branch `v3-broker`;
+> nothing run on a box).** Display step 3 ("the broker") sub-steps 3a (frames + input), 3b (reconnect,
+> pacing) and 3d (the head's cursor composed as the top layer) are in code: the VMM-agnostic crate
+> `kf-broker`, its OS doors in `kf-linux-raw`, the kf3 glue (KF3 ABI 11, properties `display-broker` /
+> `display-broker-uid`), and `kf_disp::engine::CursorScan` + `kf_disp::scanout::plan_cursor`. With
+> `display-broker` unset nothing changes for the broker; the cursor layer applies to the console too.
+> 3c (resize) is NOT built. Design, deviations, local runs and the pending box tests: **§8**.
 
 > **NEXT — owner direction 2026-10-01 (design only, nothing built): (1) a STOCK guest display with no
 > guest-side tweaks, then (2) a VMM-agnostic display BROKER instead of QEMU's UI — both before Windows.**
@@ -83,11 +84,11 @@
 >   - Windows hands the framebuffer to its basic display driver when the NVIDIA driver stops
 >     (`DxgkDdiStopDeviceAndReleasePostDisplayOwnership`). kf-disp must keep scanning out what the
 >     driver left programmed; that keeps the screen alive during Windows driver updates.
-> - ⊘ **CORRECTED 2026-10-03 (the broker design's review):** the cursor is **not** composed — the
->   composition carries window layers only (`kf-disp/src/engine.rs` `Composition`; the M3 status block
->   says so), so "(built, §4.4–§4.6)" below overstates the code. Both broker backends hide the host
->   pointer while a guest frame shows, so without cursor composition (display step **3d**, §8.9) the
->   broker window shows no pointer at all.
+> - ⊘ **CORRECTED 2026-10-03 (the broker design's review):** the cursor was **not** composed — the
+>   composition carried window layers only (`kf-disp/src/engine.rs` `Composition`; the M3 status block
+>   says so), so "(built, §4.4–§4.6)" below overstated the code. Both broker backends hide the host
+>   pointer while a guest frame shows, so without cursor composition the broker window shows no
+>   pointer at all. ★ Display step **3d** (same day, §8.6) composes it in code; not yet on a box.
 > - **The frame to capture** is, per head, the window surface latched at vblank plus the cursor
 >   (built, §4.4–§4.6). Write the flip-completion notifier only after the frame was taken, and with
 >   the broker never overwrite a copy before `RELEASE`.
@@ -129,7 +130,8 @@
 >   self-test), into a device staging frame copied to the console — the probe stays pixel-exact.
 >   The block-linear GOB order is MEASURED (`m3b`): `x[3:0] y[1:0] x[4] y[2] x[5]`, not the
 >   often-quoted Tegra order. Not composed yet: the cursor channel (the console shows the pointer
->   only when the compositor draws it), scaled windows (shown unscaled, clipped), YUV/16-bit layers.
+>   only when the compositor draws it — ⊘ superseded 2026-10-03: display step 3d composes it in code,
+>   §8.6), scaled windows (shown unscaled, clipped), YUV/16-bit layers.
 > - Also measured on the way: `BUS_GET_INFO_V2` index `0x14` (`PCIE_GEN2_INFO`) is served with
 >   `0x2d`'s word (the real GA106 answers both identically; the X driver's fatal "Failed to query PCI
 >   info" was its refusal); `SYSTEM_GET_ACTIVE` reports the lit display (`Display Active: Enabled`).
@@ -669,9 +671,8 @@ its dependency chain, in one commit).
 
 ## 8. The display broker — display step 3
 
-**STATUS: LIVE — 3a and 3b BUILT IN CODE, GPU-FREE, 2026-10-03 (branch `v3-broker`).** Local runs
-are §8.8; nothing has run on a box (renting needs the owner's approval). 3d and 3c are not built
-(§8.9). This section folds in the reviewed design (the adversarial review of 2026-10-03 applied);
+**STATUS: LIVE — 3a, 3b and 3d BUILT IN CODE, GPU-FREE, 2026-10-03 (branch `v3-broker`).** Local
+runs are §8.8; nothing has run on a box (renting needs the owner's approval). 3c is not built (§8.6). This section folds in the reviewed design (the adversarial review of 2026-10-03 applied);
 where the code departs from it, §8.7 says so.
 
 ### 8.0 Decision
@@ -817,10 +818,31 @@ control buffer**: a descriptor the peer attaches is dropped by the kernel and `M
 violation. Outbound descriptors are dedicated, sealed frame copies — never guest RAM or the store — and
 are never closed while the device lives. No clipboard (owner default).
 
-### 8.6 What is not built
+### 8.6 Cursor composition (3d), and what is not built
 
-- **3d, cursor composition** — not built. Until it is, the broker window shows no pointer (§8 STATUS;
-  the correction at the top of this file).
+**3d — built in code.** Both broker backends hide the host pointer while a guest frame shows, and
+stock compositors on nvidia-drm use the cursor plane, so the composition's TOP layer is now the head's
+cursor:
+- `kf_disp::engine::CursorVocab` resolves, from the derived class table, the core channel's
+  `HEAD_SET_CONTEXT_DMA_CURSOR(h, 0)`, `HEAD_SET_OFFSET_CURSOR(h, 0)` (256-byte units),
+  `HEAD_SET_CONTROL_CURSOR(h)` (`ENABLE`, `FORMAT`, `SIZE`, `HOT_SPOT_X/Y`) and
+  `HEAD_SET_CONTROL_CURSOR_COMPOSITION(h)` (`K1`, the two factor selects, `MODE`), and the cursor
+  PIO channel's `SET_CURSOR_HOT_SPOT_POINT_OUT(0)`; `Engine::cursor_scan` reads them from the ARMED
+  state (the point as signed 16-bit: the cursor may hang off the top or left edge). A family whose
+  table lacks one composes no cursor (nothing else changes).
+- `kf_disp::scanout::plan_cursor` makes it a pitch layer: `A8R8G8B8` only (NVKMS programs nothing else,
+  `ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6512-6524`), square 32/64/128/256 with pitch
+  `max(256, size × 4)` (`:6531-6552`), placed at the point minus the hot spot, clipped on every edge,
+  blended with the window factor numbering (`K1`, `K1_TIMES_SRC`, `ZERO`, `NEG_K1_TIMES_SRC`); `XOR`,
+  a sysmem or block-linear surface, and bytes past the context DMA are refused by name. The context
+  DMA is the core channel's (channel 0 in the hash key).
+- The worker composes it last with the existing kernel (no kernel change: a pitch layer with alpha), and
+  a cursor channel `Update` on the console's head starts a recompose at once; a new cursor IMAGE (a
+  core update) is picked up by the refresh clock (≤ 33 ms watched).
+- Tests: `kf-disp` `a_head_cursor_is_scanned_from_the_core_and_its_pio_point` (engine/tests.rs) and
+  the three `plan_cursor` cases in `scanout.rs` (CI-compiled: `kf-disp` is not built on the dev host).
+
+**Not built:**
 - **3c, resize** — not built: no `.ui_info` hook, no authored-on-request EDID, no hotplug. Its design
   (claim `NV0073_CTRL_CMD_INTERNAL_GET_HOTPLUG_UNPLUG_STATE` 0x730401 — not the public 0x73012d, which
   kernel RM serves itself; a narrow `NV01_EVENT_KERNEL_CALLBACK_EX` HOTPLUG registration in the kf-rm
@@ -912,7 +934,10 @@ Every result cites the kf3 binary's revision (§5.2). On the box, with the branc
    screendump; `REUSE-IN-FLIGHT` stays 0 in the broker log.
 6. **X11 with scaling active:** the broker window resized away from the guest's mode (XRender path);
    grade: the frame rate is not capped at 10 fps (`broker[sent=…]` over 10 s ≈ the guest's flip rate).
-7. **Pointer visible** — needs 3d; graded when 3d lands.
+7. **Pointer visible (3d):** in the Wayland and X11 broker runs of (5), move the guest pointer
+   (`a <x> <y>` on the test backend's stdin, or the real compositor's pointer) and grade a
+   compositor screenshot and the console's `screendump` for the pointer image at the point; the
+   same on the console alone with `display-broker` unset (the cursor layer applies there too).
 8. **Never holds the guest:** `kill -STOP <broker>` for 10 s while `kfdisp_probe` flips: ~60 Hz, 0 flip
    timeouts; `kill -CONT`; then `kill -9` and a restart: reconnect within the backoff and the last frame
    replayed (broker log `TEST attach`), VM unaffected.

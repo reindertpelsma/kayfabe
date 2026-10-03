@@ -560,6 +560,9 @@ pub struct DisplayPlane {
     /// The window-class methods a scanout reads (`None`: the family's windows name surfaces by
     /// address — no console yet, M5).
     scan: Option<ScanVocab>,
+    /// ★ Display step 3d: the cursor methods the composition's top layer reads (`None`: the
+    /// family's table lacks one — its cursor is not composed).
+    cursor: Option<kf_disp::engine::CursorVocab>,
     /// The window formats the console can show.
     formats: ScanFormats,
 }
@@ -632,6 +635,7 @@ impl DisplayPlane {
         let engine = Engine::new(vocab, row.heads, row.windows);
         let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);
         let formats = ScanFormats::resolve(t, classes.window);
+        let cursor = kf_disp::engine::CursorVocab::resolve(t, classes.core, classes.cursor);
         let (console, broker) = if broker {
             let ring = Arc::new(kf_broker::FrameRing::new(
                 kf_broker::slots::BROKER_SLOTS,
@@ -659,6 +663,7 @@ impl DisplayPlane {
             console,
             broker,
             scan,
+            cursor,
             formats,
         })
     }
@@ -1041,6 +1046,8 @@ impl Device {
             let _ = dp.wake.drain();
             io.img = None;
             let mut effects: Vec<Effect> = Vec::new();
+            // heads whose cursor channel posted an `Update` this pass (3d: the top layer moved)
+            let mut cursor_moved = 0u32;
             let mut gets: Vec<(u32, u32, u32)> = Vec::new();
             // 1. statements (the model's lock, only to take them)
             let st = dp
@@ -1136,6 +1143,7 @@ impl Device {
                     continue;
                 }
                 cursor_seen[h as usize] = n;
+                cursor_moved |= 1 << h;
                 for i in 0..c.offs.len() {
                     let o = c.offs[i].load(Ordering::Acquire);
                     if o != 0 {
@@ -1202,6 +1210,18 @@ impl Device {
             // queue below keeps effect order and holds each item until its copy is done.
             let console = console_composition(&engine, dp);
             scan.active = console.is_some();
+            // ★ 3d: the cursor on top of the console's head; a move or a new image recomposes
+            let cursor = console.as_ref().and_then(|c| {
+                dp.cursor
+                    .as_ref()
+                    .and_then(|cv| engine.cursor_scan(cv, c.head))
+            });
+            if console
+                .as_ref()
+                .is_some_and(|c| c.head < 32 && cursor_moved & (1 << c.head) != 0)
+            {
+                scan.want = true;
+            }
             for e in effects {
                 if let Effect::Latched { window } = &e
                     && console
@@ -1234,7 +1254,7 @@ impl Device {
                 scan.want = true;
             }
             if scan.want && scan.inflight.is_none() {
-                scan.start(&mut io, console.as_ref());
+                scan.start(&mut io, console.as_ref(), cursor.as_ref());
             }
             // 7. completions, IN ORDER — each after the state it reports and the copy it follows
             while queue.front().is_some_and(|q| q.need <= scan.done) {
@@ -1723,7 +1743,12 @@ impl ScanState {
     /// that cannot be made (nothing shown, no kernel) completes at once — the flip it follows still
     /// completes (the engine latched it); only the console keeps its previous frame. A window that
     /// cannot be composed is refused by name and left out.
-    fn start(&mut self, io: &mut Io<'_>, console: Option<&Composition>) {
+    fn start(
+        &mut self,
+        io: &mut Io<'_>,
+        console: Option<&Composition>,
+        cursor: Option<&kf_disp::engine::CursorScan>,
+    ) {
         self.want = false;
         self.last = Some(Instant::now());
         self.started += 1;
@@ -1777,6 +1802,17 @@ impl ScanState {
                 }
                 Ok(None) => {}
                 Err(e) => self.refuse(dp, &e),
+            }
+        }
+        // ★ 3d: the head's cursor, last — the top layer (its context DMA is the core channel's)
+        if let Some(cs) = cursor {
+            let planned = io
+                .resolve(cs.client, cs.handle, 0)
+                .and_then(|dma| kf_disp::scanout::plan_cursor(cs, &dma, w, h).map_err(|r| r.0));
+            match planned {
+                Ok(Some(l)) => layers.push(l),
+                Ok(None) => {}
+                Err(e) => self.refuse(dp, &format!("cursor: {e}")),
             }
         }
         let Some(slot) = dp.console.free_slot() else {

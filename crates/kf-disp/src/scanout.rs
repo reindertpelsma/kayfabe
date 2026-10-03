@@ -11,7 +11,7 @@
 //! display — the flip still completes (the engine latched it); only the console keeps its last frame.
 
 use crate::class::ClassTable;
-use crate::engine::Scanout;
+use crate::engine::{CursorScan, Scanout};
 use crate::inst::{CtxDma, Target};
 
 /// The largest frame the console takes (3840x2160). Three page-locked frames of this size are the
@@ -466,6 +466,107 @@ pub fn plan_layer(
     }))
 }
 
+/// The [`LayerPlan::window`] a cursor layer carries (logs only: the cursor is no window).
+pub const CURSOR_LAYER: u32 = u32::MAX;
+
+/// ★ Display step 3d: plan head `c.head`'s cursor as the TOP layer of a `fw` x `fh` composition.
+/// The image is pitch `A8R8G8B8` (NVKMS programs nothing else, `ogkm-580:
+/// src/nvidia-modeset/src/nvkms-evo3.c:6512-6524`), square, with a pitch of `size * 4` but at least
+/// 256 bytes (`:6531-6552`); placed with its hot spot at the cursor channel's point, clipped to the
+/// frame on every side; blended by `HEAD_SET_CONTROL_CURSOR_COMPOSITION` with the window factor
+/// numbering. `Ok(None)` when it lies wholly outside the frame.
+///
+/// # Errors
+/// [`Refused`], naming the bound: a non-`A8R8G8B8` format, `XOR` composition, a system-memory or
+/// block-linear context DMA, an unknown factor, or any byte outside the context DMA.
+pub fn plan_cursor(
+    c: &CursorScan,
+    dma: &CtxDma,
+    fw: u32,
+    fh: u32,
+) -> Result<Option<LayerPlan>, Refused> {
+    let no = |why: String| Err(Refused(format!("cursor head {}: {why}", c.head)));
+    if !c.argb8888 {
+        return no("only an A8R8G8B8 cursor is composable".into());
+    }
+    if c.mode != 0 {
+        return no("XOR cursor composition is not composable".into());
+    }
+    if dma.target != Target::Vidmem || dma.block_linear {
+        return no("the cursor surface is not pitch video memory".into());
+    }
+    let size = c.size;
+    let pitch = (size * 4).max(256);
+    let left = i64::from(c.x) - i64::from(c.hot_x);
+    let top = i64::from(c.y) - i64::from(c.hot_y);
+    // the part of the image left of / above the frame is clipped away
+    let (cx0, cy0) = ((-left).max(0), (-top).max(0));
+    let (ox, oy) = (left.max(0), top.max(0));
+    if cx0 >= i64::from(size)
+        || cy0 >= i64::from(size)
+        || ox >= i64::from(fw)
+        || oy >= i64::from(fh)
+    {
+        return Ok(None);
+    }
+    let width = (i64::from(size) - cx0).min(i64::from(fw) - ox);
+    let rows = (i64::from(size) - cy0).min(i64::from(fh) - oy);
+    let as_u32 =
+        |v: i64| u32::try_from(v).map_err(|_| Refused(format!("cursor head {}: {v}", c.head)));
+    let (cx0, cy0, ox, oy, width, rows) = (
+        as_u32(cx0)?,
+        as_u32(cy0)?,
+        as_u32(ox)?,
+        as_u32(oy)?,
+        as_u32(width)?,
+        as_u32(rows)?,
+    );
+    let first = c.offset + u64::from(cy0) * u64::from(pitch) + u64::from(cx0) * 4;
+    let extent = u64::from(rows - 1) * u64::from(pitch) + u64::from(width) * 4;
+    let Some(src) = dma.span(first, extent) else {
+        return no(format!(
+            "[{first:#x}, +{extent:#x}) leaves context DMA {:#x}..={:#x}",
+            dma.base, dma.limit
+        ));
+    };
+    let k1 = i32::try_from(c.k1.min(255)).unwrap_or(255);
+    // ⊘ a composition word never programmed (all zero) would erase the cursor; NVKMS programs it
+    // with every image (`nvkms-evo3.c:6646-6700`), so zero is read as premultiplied alpha
+    let (k1, cur_sel, vp_sel) = if c.k1 == 0 && c.cursor_factor == 0 && c.viewport_factor == 0 {
+        (255, 2, 7)
+    } else {
+        (k1, c.cursor_factor, c.viewport_factor)
+    };
+    let (Some((a_s, b_s)), Some((a_d, b_d))) = (factor(cur_sel, k1, 0), factor(vp_sel, k1, 0))
+    else {
+        return no(format!(
+            "composition factors {:#x}/{:#x} are not known",
+            c.cursor_factor, c.viewport_factor
+        ));
+    };
+    let opaque = (a_s, b_s, a_d, b_d) == (255, 0, 0, 0);
+    Ok(Some(LayerPlan {
+        window: CURSOR_LAYER,
+        src,
+        extent,
+        block_linear: false,
+        pitch,
+        block_height_log2: 0,
+        x0_bytes: 0,
+        y0: 0,
+        width,
+        rows,
+        ox,
+        oy,
+        // A8R8G8B8 carries alpha; no red/blue swap
+        flags: 1 | (u32::from(opaque) << 2),
+        a_s,
+        b_s,
+        a_d,
+        b_d,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -721,5 +822,113 @@ mod tests {
                 .0
                 .contains("composable")
         );
+    }
+
+    fn cursor(x: i32, y: i32) -> CursorScan {
+        CursorScan {
+            head: 0,
+            client: 0xc1d0_0015,
+            handle: 0x2000,
+            offset: 0x1000,
+            size: 64,
+            argb8888: true,
+            hot_x: 0,
+            hot_y: 0,
+            x,
+            y,
+            k1: 255,
+            cursor_factor: 2,
+            viewport_factor: 7,
+            mode: 0,
+        }
+    }
+
+    /// ★ 3d: a 64x64 premultiplied cursor inside the frame is one pitch layer at its point, with
+    /// the premultiplied blend (`src + dst * (1 - a)`), on top.
+    #[test]
+    fn a_cursor_inside_the_frame_is_a_premultiplied_pitch_layer_at_its_point() {
+        let l = plan_cursor(&cursor(100, 50), &vid(0x4000_0000, 1 << 20), 1920, 1080)
+            .unwrap()
+            .unwrap();
+        assert_eq!(l.window, CURSOR_LAYER);
+        assert_eq!(
+            (l.src, l.pitch, l.width, l.rows),
+            (0x4000_1000, 256, 64, 64)
+        );
+        assert_eq!((l.ox, l.oy), (100, 50));
+        assert_eq!((l.a_s, l.b_s, l.a_d, l.b_d), (255, 0, 255, -255));
+        assert_eq!(l.flags, 1, "alpha, no swap, not opaque");
+        assert_eq!(l.extent, 63 * 256 + 64 * 4);
+    }
+
+    /// The edges: hanging off the top-left (a negative point) clips the image's first rows and
+    /// columns; off the bottom-right clips its last; wholly outside is no layer.
+    #[test]
+    fn a_cursor_is_clipped_on_every_edge() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let l = plan_cursor(&cursor(-10, -20), &dma, 1920, 1080)
+            .unwrap()
+            .unwrap();
+        assert_eq!((l.ox, l.oy, l.width, l.rows), (0, 0, 54, 44));
+        assert_eq!(
+            l.src,
+            0x4000_1000 + 20 * 256 + 10 * 4,
+            "starts inside the image"
+        );
+        let l = plan_cursor(&cursor(1900, 1070), &dma, 1920, 1080)
+            .unwrap()
+            .unwrap();
+        assert_eq!((l.ox, l.oy, l.width, l.rows), (1900, 1070, 20, 10));
+        assert_eq!(plan_cursor(&cursor(-64, 0), &dma, 1920, 1080), Ok(None));
+        assert_eq!(plan_cursor(&cursor(1920, 0), &dma, 1920, 1080), Ok(None));
+        // a 32x32 cursor keeps the 256-byte minimum pitch
+        let mut small = cursor(0, 0);
+        small.size = 32;
+        let l = plan_cursor(&small, &dma, 1920, 1080).unwrap().unwrap();
+        assert_eq!((l.pitch, l.width), (256, 32));
+    }
+
+    /// ⊘ Refused by name: XOR, a non-ARGB format, a sysmem surface, bytes past the context DMA.
+    #[test]
+    fn a_cursor_the_kernel_cannot_compose_is_refused_by_name() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let mut x = cursor(0, 0);
+        x.mode = 1;
+        assert!(
+            plan_cursor(&x, &dma, 1920, 1080)
+                .unwrap_err()
+                .0
+                .contains("XOR")
+        );
+        let mut f = cursor(0, 0);
+        f.argb8888 = false;
+        assert!(
+            plan_cursor(&f, &dma, 1920, 1080)
+                .unwrap_err()
+                .0
+                .contains("A8R8G8B8")
+        );
+        let sys = CtxDma {
+            target: Target::Sysmem,
+            ..dma
+        };
+        assert!(plan_cursor(&cursor(0, 0), &sys, 1920, 1080).is_err());
+        let tiny = vid(0x4000_0000, 0x2000);
+        assert!(
+            plan_cursor(&cursor(0, 0), &tiny, 1920, 1080)
+                .unwrap_err()
+                .0
+                .contains("leaves context DMA")
+        );
+        // an unprogrammed composition word is premultiplied, never an eraser
+        let mut z = cursor(0, 0);
+        (z.k1, z.cursor_factor, z.viewport_factor) = (0, 0, 0);
+        let l = plan_cursor(&z, &dma, 1920, 1080).unwrap().unwrap();
+        assert_eq!((l.a_s, l.b_s, l.a_d, l.b_d), (255, 0, 255, -255));
+        // NVKMS's opaque mode: K1 = 255, cursor K1, viewport ZERO
+        let mut o = cursor(0, 0);
+        o.viewport_factor = 0;
+        let l = plan_cursor(&o, &dma, 1920, 1080).unwrap().unwrap();
+        assert_eq!(l.flags, 1 | 4, "opaque");
     }
 }

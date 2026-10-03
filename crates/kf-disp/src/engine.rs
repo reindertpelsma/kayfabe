@@ -1389,6 +1389,149 @@ impl Engine {
     }
 }
 
+/// ★ Display step 3d (`docs/design/V3_DISPLAY.md` §8.6): the core- and cursor-class methods a
+/// head's cursor is read from — RESOLVED from the derived class table; `None` for a family whose
+/// table lacks one (its cursor is then not composed, and nothing else changes).
+#[derive(Debug, Clone, Copy)]
+pub struct CursorVocab {
+    /// Core `HEAD_SET_CONTEXT_DMA_CURSOR(head, 0)`: base, head stride.
+    ctxdma: (u32, u32),
+    /// Core `HEAD_SET_OFFSET_CURSOR(head, 0)`: base, head stride (256-byte units).
+    offset: (u32, u32),
+    /// Core `HEAD_SET_CONTROL_CURSOR(head)`: base, head stride.
+    control: (u32, u32),
+    enable: (u8, u8),
+    format: (u8, u8),
+    size: (u8, u8),
+    hot_x: (u8, u8),
+    hot_y: (u8, u8),
+    /// `HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8` — the only format NVKMS programs
+    /// (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6517-6524`).
+    a8r8g8b8: u32,
+    /// Core `HEAD_SET_CONTROL_CURSOR_COMPOSITION(head)`: base, head stride.
+    comp: (u32, u32),
+    k1: (u8, u8),
+    cursor_factor: (u8, u8),
+    viewport_factor: (u8, u8),
+    mode: (u8, u8),
+    /// Cursor PIO `SET_CURSOR_HOT_SPOT_POINT_OUT(0)` and its `X`, `Y`.
+    point_out: MethodTwoFields,
+}
+
+impl CursorVocab {
+    /// Resolve for core class `core` and cursor PIO class `cursor`.
+    #[must_use]
+    pub fn resolve(t: &ClassTable, core: u32, cursor: u32) -> Option<CursorVocab> {
+        let a = |n: &str| -> Option<(u32, u32)> {
+            let b = t.a(core, n, 0)?;
+            Some((b, t.a(core, n, 1)?.checked_sub(b)?))
+        };
+        let a2 = |n: &str| -> Option<(u32, u32)> {
+            let b = t.a2(core, n, 0, 0)?;
+            Some((b, t.a2(core, n, 1, 0)?.checked_sub(b)?))
+        };
+        let f = |n: &str| t.f(core, n);
+        Some(CursorVocab {
+            ctxdma: a2("HEAD_SET_CONTEXT_DMA_CURSOR")?,
+            offset: a2("HEAD_SET_OFFSET_CURSOR")?,
+            control: a("HEAD_SET_CONTROL_CURSOR")?,
+            enable: f("HEAD_SET_CONTROL_CURSOR_ENABLE")?,
+            format: f("HEAD_SET_CONTROL_CURSOR_FORMAT")?,
+            size: f("HEAD_SET_CONTROL_CURSOR_SIZE")?,
+            hot_x: f("HEAD_SET_CONTROL_CURSOR_HOT_SPOT_X")?,
+            hot_y: f("HEAD_SET_CONTROL_CURSOR_HOT_SPOT_Y")?,
+            a8r8g8b8: t.v(core, "HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8")?,
+            comp: a("HEAD_SET_CONTROL_CURSOR_COMPOSITION")?,
+            k1: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_K1")?,
+            cursor_factor: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_CURSOR_COLOR_FACTOR_SELECT")?,
+            viewport_factor: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_VIEWPORT_COLOR_FACTOR_SELECT")?,
+            mode: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE")?,
+            point_out: (
+                t.a(cursor, "SET_CURSOR_HOT_SPOT_POINT_OUT", 0)?,
+                t.f(cursor, "SET_CURSOR_HOT_SPOT_POINT_OUT_X")?,
+                t.f(cursor, "SET_CURSOR_HOT_SPOT_POINT_OUT_Y")?,
+            ),
+        })
+    }
+}
+
+/// ★ A head's enabled cursor, as the armed core state and the cursor channel's last `Update` place
+/// it — the TOP layer of the head's composition (§8.6, display step 3d).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CursorScan {
+    /// The head.
+    pub head: u32,
+    /// The core channel's client (the context DMA's hash key, with channel 0).
+    pub client: u32,
+    /// `HEAD_SET_CONTEXT_DMA_CURSOR(head, 0)`.
+    pub handle: u32,
+    /// Byte offset into it (`HEAD_SET_OFFSET_CURSOR` is in 256-byte units, `nvCtxDmaOffsetFromBytes`).
+    pub offset: u64,
+    /// The image's edge in pixels (`SIZE`: 32, 64, 128 or 256; square).
+    pub size: u32,
+    /// `FORMAT` is `A8R8G8B8`.
+    pub argb8888: bool,
+    /// `HOT_SPOT_X` / `_Y` inside the image (NVKMS programs 0, `nvkms-evo3.c:6568-6569`).
+    pub hot_x: u32,
+    /// Hot spot row.
+    pub hot_y: u32,
+    /// Where the hot spot lands on the head (`SET_CURSOR_HOT_SPOT_POINT_OUT`, signed 16-bit: the
+    /// cursor may hang off the top or left edge).
+    pub x: i32,
+    /// Hot spot row on the head.
+    pub y: i32,
+    /// `HEAD_SET_CONTROL_CURSOR_COMPOSITION`: `K1`, the two factor selects (window-factor
+    /// numbering), and `MODE` (0 blend, 1 XOR).
+    pub k1: u32,
+    /// `CURSOR_COLOR_FACTOR_SELECT`.
+    pub cursor_factor: u32,
+    /// `VIEWPORT_COLOR_FACTOR_SELECT`.
+    pub viewport_factor: u32,
+    /// `MODE`.
+    pub mode: u32,
+}
+
+impl Engine {
+    /// ★ Head `head`'s cursor, if it is enabled and names a surface.
+    #[must_use]
+    pub fn cursor_scan(&self, cv: &CursorVocab, head: u32) -> Option<CursorScan> {
+        if head >= self.heads {
+            return None;
+        }
+        let core = self.chans.first()?.as_ref()?;
+        let at = |(b, s): (u32, u32)| b.checked_add(head.checked_mul(s)?);
+        let ctl = core.armed(at(cv.control)?);
+        if fld(ctl, cv.enable) == 0 {
+            return None;
+        }
+        let handle = core.armed(at(cv.ctxdma)?);
+        if handle == 0 {
+            return None;
+        }
+        let comp = core.armed(at(cv.comp)?);
+        let (pm, px, py) = cv.point_out;
+        let point = self.armed(ChannelKind::Cursor, head, pm).unwrap_or(0);
+        // two's-complement 16-bit fields: the cursor may hang off the top or left edge
+        let signed = |v: u32| i32::from((v & 0xFFFF) as u16 as i16);
+        Some(CursorScan {
+            head,
+            client: core.client,
+            handle,
+            offset: u64::from(core.armed(at(cv.offset)?)) << 8,
+            size: 32 << fld(ctl, cv.size).min(3),
+            argb8888: fld(ctl, cv.format) == cv.a8r8g8b8,
+            hot_x: fld(ctl, cv.hot_x),
+            hot_y: fld(ctl, cv.hot_y),
+            x: signed(fld(point, px)),
+            y: signed(fld(point, py)),
+            k1: fld(comp, cv.k1),
+            cursor_factor: fld(comp, cv.cursor_factor),
+            viewport_factor: fld(comp, cv.viewport_factor),
+            mode: fld(comp, cv.mode),
+        })
+    }
+}
+
 /// The channels an UPDATE on `c` (with data `update`) waits for.
 fn interlock_set(v: &Vocab, c: &Chan, update: u32) -> ChanSet {
     let mut s = 0;
