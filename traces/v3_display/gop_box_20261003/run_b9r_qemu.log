@@ -1,0 +1,1 @@
+2026-10-03T16:58:08.725063Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on,rombar=0: kf3: gop=on refused: rombar=0 asks for no ROM BAR (drop the property, or set gop=off; docs/design/V3_DISPLAY.md §4.11.12)

@@ -266,6 +266,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-gop-image"
+version = "0.1.0"
+dependencies = [
+ "kf-oprom",
+]
+
+[[package]]
 name = "kf-gsp"
 version = "0.1.0"
 dependencies = [
@@ -321,6 +328,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-oprom"
+version = "0.1.0"
+
+[[package]]
 name = "kf-qemu"
 version = "0.1.0"
 dependencies = [
@@ -331,10 +342,12 @@ dependencies = [
  "kf-core",
  "kf-cuda",
  "kf-disp",
+ "kf-gop-image",
  "kf-gsp",
  "kf-host",
  "kf-linux-raw",
  "kf-mem",
+ "kf-oprom",
  "kf-rm",
  "kf-trap",
 ]

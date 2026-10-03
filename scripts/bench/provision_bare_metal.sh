@@ -24,13 +24,25 @@ echo "== toolchain"
 # (`build.rs:303`). `[measured w814d]` a fresh CUDA container has the host triple only, so the
 # first provision failed here — and the error told us exactly what to add, which is the only
 # reason this cost minutes instead of an hour.
-$S 'command -v cargo >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq curl build-essential pkg-config git >/dev/null 2>&1; curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal >/dev/null 2>&1; }; export PATH=$HOME/.cargo/bin:$PATH; rustup target add x86_64-unknown-linux-musl >/dev/null 2>&1; cargo --version; rustup target list --installed | tr "\n" " "; echo' || exit 2
+# ★ x86_64-unknown-uefi (2026-10-03, OWNER_RULINGS §K): crates/kf-gop-image/build.rs builds kf3's
+# boot-display GOP driver from source in every build of kf-qemu, and names the target when it is missing.
+# ⊘ CORRECTED 2026-10-03 (the review of v3-gop): both targets were added here, before the clone, to the
+# DEFAULT toolchain; the tree builds with the one rust-toolchain.toml pins. They are added to that one
+# after the clone below.
+$S 'command -v cargo >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq curl build-essential pkg-config git >/dev/null 2>&1; curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal >/dev/null 2>&1; }; export PATH=$HOME/.cargo/bin:$PATH; cargo --version' || exit 2
 
 echo "== pull the tree (public repo; nothing is pushed to the box)"
 $S 'export PATH=$HOME/.cargo/bin:$PATH
     if [ -d /root/kayfabe/.git ]; then cd /root/kayfabe && git fetch -q origin; else
         git clone -q https://github.com/reindertpelsma/kayfabe.git /root/kayfabe && cd /root/kayfabe; fi
     git checkout -q w749-fable-legb && git reset -q --hard origin/w749-fable-legb && git log --oneline -1' || exit 2
+
+echo "== the pinned toolchain and its targets (rust-toolchain.toml)"
+$S 'export PATH=$HOME/.cargo/bin:$PATH; cd /root/kayfabe || exit 1
+    PIN=$(sed -n "s/^channel = \"\(.*\)\"/\1/p" rust-toolchain.toml); [ -n "$PIN" ] || { echo "no channel in rust-toolchain.toml"; exit 1; }
+    rustup toolchain install "$PIN" --profile minimal >/dev/null 2>&1 || exit 1
+    rustup target add --toolchain "$PIN" x86_64-unknown-linux-musl x86_64-unknown-uefi >/dev/null 2>&1 || exit 1
+    echo "toolchain $PIN: $(rustup target list --installed --toolchain "$PIN" | tr "\n" " ")"' || exit 2
 
 echo "== build the raw client (release, as the guest lane runs it)"
 $S 'export PATH=$HOME/.cargo/bin:$PATH; cd /root/kayfabe && cargo build -q --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder 2>&1 | tail -5; ls -la target/release/kayfabe-rm-ladder' || exit 2

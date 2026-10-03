@@ -60,6 +60,35 @@ proof. Archived QEMU headers are not live ABI declarations.
   removed or changed files fail that guard. Its tests still execute. This
   exception does not authorize new unsafe surfaces in the prototype.
 
+## Firmware (2026-10-03)
+
+⊘ **CORRECTED 2026-10-03 (late, branch `v3-gop`; `OWNER_RULINGS.md` §K) — the paragraph below
+describes a committed blob that no longer exists.** No compiled binary is committed. The driver kf3
+serves is built from `firmware/kf-gop` by `crates/kf-gop-image/build.rs` in every workspace build
+(`rust-toolchain.toml` lists `x86_64-unknown-uefi`; the `stable` and `slow` jobs install it, and a
+missing target is a named build error). The `firmware` job now: fails if any tracked file is a compiled
+binary (`.efi` or an `MZ` header, outside `archive/`); builds both flavours; checks that the driver
+`kf-gop-image` embeds equals the standalone build byte for byte (the property one future signature rests
+on — it replaced the committed-blob comparison); runs the host tests, Clippy with `-D warnings`, rustfmt,
+kf3's PE check, the no-port-I/O check, the size record and the stand-in. The `aarch64` job's
+workspace cross-check now embeds a real `aarch64-unknown-uefi` driver, and a step of its own builds the
+driver for that target, lints it, checks it is an AArch64 boot-service driver, and checks that the two
+x86-only pieces (`debugcon`, the test app) refuse to build there by name. The firmware ratchet entry is
+`firmware/kf-gop:78` (the framebuffer's one volatile word store).
+
+`firmware/kf-gop` is guest-side UEFI code (kf3's boot-display GOP, `docs/design/V3_DISPLAY.md` §4.11),
+outside the cargo workspace and built by its own job, `firmware`: `rustup target add
+x86_64-unknown-uefi --toolchain 1.99.0` (`rust-toolchain.toml` unchanged), both build flavours, the
+safe library's host tests, Clippy with `-D warnings`, rustfmt, **a byte-for-byte comparison of the
+committed `firmware/kf-gop/kf-gop.efi` (the blob `kf-oprom` embeds) with this source's build**, kf3's
+PE acceptance check, a check that the release driver has no port I/O, the `.efi` size in the job
+summary, and the local stand-in
+(`scripts/display/gop_standin.sh`, gating). Its unsafe code is a named exception under the same rules,
+checked in the `stable` job: `*_unsafe.rs` naming and the host-pointer gate apply unchanged; gate B and
+the ratchet take path entries, and `firmware/kf-gop` is the one such entry; the ABI-quarantine gate's
+firmware arm keeps every `#[repr(C)]` there inside a `*_unsafe.rs` file. `crates/kf-oprom` (the ROM
+container) is an ordinary pure workspace crate.
+
 ## Visible migration debt, not warning-free code
 
 The previously red workflow had hundreds of existing lint diagnostics and stale

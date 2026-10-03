@@ -49,12 +49,17 @@ pub struct Config {
     /// device REFUSES to realize rather than invent one.
     pub display: bool,
     /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note;
-    /// owner question 2026-10-03 item 2, option A — PENDING the owner's ruling): offer the
+    /// option A, the design by `docs/OWNER_RULINGS.md` §N — default-on only once §N's conditions
+    /// hold): offer the
     /// `GF100_DISP_SW` object X11 compositors and X11 Vulkan presentation need, twinning each one
     /// under its channel's host twin with authored params (head 0, displayMask 0, caps 0) and
     /// refusing it by name where the host cannot (`kf_rm::DisplaySeat::x11_dispsw`). Needs
     /// `display=on` ([`Config::check`]). Off, every path is the path it was.
     pub x11_dispsw: bool,
+    /// ★ The boot display (`gop=on`, [`crate::gop`], `docs/design/V3_DISPLAY.md` §4.11): an option
+    /// ROM with a UEFI GOP driver whose framebuffer is BAR1 `[0, G)`, the BAR1 seed, the boot layer
+    /// and the console region in fn 65. Needs `display=on`. Off (the default) is today's device.
+    pub gop: bool,
 }
 
 impl Config {
@@ -245,6 +250,21 @@ pub struct Device {
     /// ★ v3-display: the emulated NVDisplay (`display=on`), leaked for the process so the vCPU path
     /// holds a plain reference (`crate::display`). `None`: the displayless posture, unchanged.
     pub display: Option<&'static crate::display::DisplayPlane>,
+    /// ★ The boot display (`gop=on`, [`crate::gop`]): the framebuffer it serves. `None` with `gop=off`.
+    pub gop: Option<crate::gop::BootPlan>,
+    /// The option ROM packed for this device at realize (`kf3_option_rom`); `None` with `gop=off`.
+    gop_rom: Option<Vec<u8>>,
+    /// ★ 2026-10-03 (B5): the register the guest's RM writes to give BAR1 back to PHYSICAL mode
+    /// (`kf_chip::bar1mode`) — observed on the drainer, never trapped specially. `None`: the die
+    /// group does not resolve it (named at realize).
+    bar1_mode: Option<kf_chip::bar1mode::Bar1ModeReg>,
+    /// ★ 2026-10-03 (B5): the `UNLOADING_GUEST_DRIVER` (fn 47) body's layout at the declared guest
+    /// version (`kf_abi` generated matrix) — to tell a teardown from a PM transition.
+    unload_layout: Option<&'static kf_abi::matrix::Layout>,
+    /// Lines logged by the B5 observers of the BAR1-mode register (bounded).
+    b5_logged: AtomicU64,
+    /// Decoded fn-47 lines logged (bounded).
+    fn47_logged: AtomicU64,
     /// ★ EXPERIMENT `x11-dispsw` ([`Config::x11_dispsw`]): the status line's `dispsw[...]` segment
     /// is printed only when it is on.
     x11_dispsw: bool,
@@ -257,6 +277,14 @@ impl Device {
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
         cfg.check()?;
+        // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
+        // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
+        // reads it is then skipped, and the device is today's.
+        let monitor = kf_rm::display::monitors()
+            .into_iter()
+            .next()
+            .ok_or("no virtual monitor behind the display")?;
+        let gop = crate::gop::BootPlan::for_config(cfg.gop, cfg.display, cfg.bar1_bytes, &monitor)?;
         let dev = kf_linux_raw::DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
         let rm: &'static kf_host::HostRm = Box::leak(Box::new(
             kf_host::HostRm::open(
@@ -293,13 +321,20 @@ impl Device {
             ));
         }
         let pci = crate::hostfacts::read_host_pci(&sysfs)?;
+        // ★ The boot display's option ROM: the embedded GOP driver wrapped with the identity this
+        // device presents (`kf3_identity`) and the boot framebuffer's descriptor.
+        let gop_rom = gop
+            .as_ref()
+            .map(|b| b.rom(pci.vendor, pci.device, pci.class))
+            .transpose()?;
         // ★ The per-host-card budget, summed over this process's kf3 devices on the same card —
         // before anything is reserved, so the refusal costs nothing (`crate::cardbudget`).
         let (store_neighbours, n_neighbours) = crate::cardbudget::store_held(&bdf);
         crate::cardbudget::admit(
             &bdf,
             pci.bar1_bytes,
-            crate::cardbudget::Demand::of(cfg.bar1_bytes, cfg.bar2_bytes, cfg.fb_mb << 20),
+            crate::cardbudget::Demand::of(cfg.bar1_bytes, cfg.bar2_bytes, cfg.fb_mb << 20)
+                .with_boot_fb(gop.as_ref().map_or(0, crate::gop::BootPlan::bytes)),
         )?;
 
         let fb_length = cfg.fb_mb << 20;
@@ -369,6 +404,22 @@ impl Device {
             kernel
                 .write_store(root, &zero)
                 .map_err(|e| format!("zeroing our root @{root:#x}: {e}"))?;
+        }
+        // ★ The boot display: store [0, G) is what BAR1 offset 0 shows from the first instruction
+        // and what the boot layer scans out — zeroed on the GPU before either exists, so nothing a
+        // previous user of these VRAM pages left is visible (kayfabe never scrubs the store
+        // otherwise). One MiB of zeros at a time: the CPU writes no guest vidmem, the walker's
+        // copy engine does.
+        if let Some(b) = &gop {
+            let chunk = vec![0u8; 1 << 20];
+            let mut at = 0u64;
+            while at < b.bytes() {
+                let n = (b.bytes() - at).min(chunk.len() as u64);
+                kernel
+                    .write_store(at, &chunk[..n as usize])
+                    .map_err(|e| format!("gop=on: zeroing the boot framebuffer @{at:#x}: {e}"))?;
+                at += n;
+            }
         }
         let ram: &'static crate::mem::RamMap = Box::leak(Box::default());
         let inbox = std::sync::Arc::new(crate::mem::Inbox::new()?);
@@ -504,6 +555,21 @@ impl Device {
         let token_fmt = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
             .map_err(|e| format!("{e:?}"))
             .and_then(kf_trap::tokenindex::GuestTokenFormat::for_die_group);
+        // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): the BAR1-mode register of this die group.
+        let bar1_mode = kf_chip::hwref::DieGroup::from_arch(architecture, implementation)
+            .map_err(|e| format!("{e:?}"))
+            .and_then(kf_chip::bar1mode::bar1_mode_reg);
+        let bar1_mode = match bar1_mode {
+            Ok(r) => Some(r),
+            Err(e) => {
+                eprintln!("kf3: the BAR1-mode register does not resolve ({e}) — not observed");
+                None
+            }
+        };
+        let unload_layout = kf_abi::generated::matrix::RPC_UNLOADING_GUEST_DRIVER_V
+            .at(version)
+            .ok()
+            .flatten();
         let token_fmt = match token_fmt {
             Ok(f) => Some(f),
             Err(e) => {
@@ -541,6 +607,11 @@ impl Device {
         // invisible on the wire); this device answers as a Linux guest.
         let chain_logs = kf_rm::ChainLogs::default();
         let census = kf_rm::census::ControlCensusLog::new();
+        // ★ The boot display: fn 72's body, kept by the GSP state machine for fn 65's encoder —
+        // ONE cell across every `ReselectAtFn1` rebuild, like the census (`kf_gsp::sysinfo`) — with
+        // `gop=on` only. ONE decision for both halves (`crate::gop::ConsoleWiring`): with `gop=off`
+        // there is no cell and no seat, so fn 72 is dropped unread and fn 65 is today's.
+        let console = crate::gop::ConsoleWiring::for_plan(gop.as_ref(), cfg.bar1_bytes);
         // ★ v3-display (`docs/design/V3_DISPLAY.md` §4.1): the chip's display row, when asked for.
         // ⊘ A chip whose bare metal has no display engine (GA100, GH100, GB10x datacenter) is
         // REFUSED by name: the guest driver hard-wires those as displayless, so a display here
@@ -557,7 +628,7 @@ impl Device {
             );
             if cfg.x11_dispsw {
                 eprintln!(
-                    "kf3: ⚠ EXPERIMENT x11-dispsw ON (pending the owner's ruling): every guest GF100_DISP_SW is twinned \
+                    "kf3: ⚠ EXPERIMENT x11-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GF100_DISP_SW is twinned \
                      under its channel's host twin with authored params (head 0, displayMask 0, caps 0) or refused by name"
                 );
             }
@@ -579,7 +650,8 @@ impl Device {
                     &bdf,
                     export.fd_number(),
                     fb_length,
-                )?;
+                )?
+                .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
                 eprintln!(
@@ -596,12 +668,13 @@ impl Device {
         // links that read layouts are new.
         let build = {
             let x11_dispsw = cfg.x11_dispsw;
-            let (board, host, chain_logs, census, inbox) = (
+            let (board, host, chain_logs, census, inbox, console) = (
                 board.clone(),
                 host.clone(),
                 chain_logs.clone(),
                 census.clone(),
                 inbox.clone(),
+                console.clone(),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
@@ -635,6 +708,9 @@ impl Device {
                             model: display_plane.map(|p| p.model.clone()),
                             x11_dispsw,
                         }),
+                        // ★ The boot display: fn 65's region table follows the guest's preserved
+                        // console with `gop=on`; with `gop=off` there is no seat (today's table).
+                        console: console.seat(),
                     },
                 )
             })
@@ -658,7 +734,7 @@ impl Device {
             _ => u64::MAX,
         };
         let gsp = Gsp {
-            fsm: GspFsm::new(abi),
+            fsm: console.fsm(abi),
             model,
             policy,
             published: std::collections::HashMap::new(),
@@ -728,6 +804,28 @@ impl Device {
         // PDEs straight into that page (no RPC) and invalidates it; the walk places store views.
         let bar1_overlay = std::sync::Arc::new(crate::mem::Bar1Overlay::default());
         let bar1_win = kf_mem::cpuwin::CpuWindow::new(bar1_ops, cfg.bar1_bytes);
+        // ★ The boot display's seed: BAR1 [0, G) shows store [0, G) — FB 0, the GOP's framebuffer —
+        // from before the first vCPU instruction, as a real card's BAR1 does before RM switches it to
+        // virtual mode. ONE view, placed here on the realize thread; it retires at the first BAR1
+        // batch that changes anything (`kf_mem::cpuwin::CpuWindow::retire_seed`), or when the device
+        // stops if the guest never loads its driver.
+        if let Some(b) = &gop {
+            bar1_win
+                .seed(crate::gop::FB_OFFSET, 0, b.bytes())
+                .map_err(|e| format!("gop=on: the BAR1 seed: {e}"))?;
+            eprintln!(
+                "kf3: boot display ON — option ROM {} bytes ({:04x}:{:04x}, KFGP BAR{} +{:#x}, {}x{} pitch {}, G = {:#x}); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU",
+                gop_rom.as_ref().map_or(0, Vec::len),
+                pci.vendor,
+                pci.device,
+                b.fb.bar,
+                b.fb.offset,
+                b.fb.geometry.width,
+                b.fb.geometry.height,
+                b.fb.geometry.pitch,
+                b.bytes()
+            );
+        }
         va.table.insert(
             crate::mem::K_BAR1,
             // ★ Hopper+: the guest places BAR1 usermode views where ITS allocator chooses; they
@@ -807,7 +905,20 @@ impl Device {
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             display: display_plane,
             x11_dispsw: cfg.x11_dispsw,
+            gop,
+            gop_rom,
+            bar1_mode,
+            unload_layout,
+            b5_logged: AtomicU64::new(0),
+            fn47_logged: AtomicU64::new(0),
         })
+    }
+
+    /// ★ The boot display's option ROM (`gop=on`), packed at realize — what `kf3_option_rom` hands the
+    /// C device to register as the ROM BAR. `None` with `gop=off`.
+    #[must_use]
+    pub fn option_rom(&self) -> Option<&[u8]> {
+        self.gop_rom.as_deref()
     }
 
     /// The BAR0 memory map for the C device to build (family-scoped: shadow / plain RAM /
@@ -1450,6 +1561,15 @@ impl Device {
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
+        // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): BAR1 back to its physical view — the request
+        // waiting for the VA manager to go idle, with the BAR1 window's change count at the newest
+        // request's notice (a change since means an RM took BAR1 again first). Two log families,
+        // each with its own bound: what the boot range shows (a line only when it changes), and the
+        // re-seeds.
+        let mut bar1_phys = crate::bar1phys::PhysicalViewDue::default();
+        let mut bar1_view_last: Option<u64> = None;
+        let mut bar1_view_lines = 0u64;
+        let mut bar1_phys_lines = 0u64;
         // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
         // here, before the guest runs, as soon as QEMU has registered guest RAM.
         // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
@@ -1595,6 +1715,65 @@ impl Device {
                     r.unreconciled
                 );
             }
+            // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): what BAR1's boot-framebuffer range shows
+            // after a BAR1 change — the guest's views, the seed, or scratch — logged when it differs
+            // from the last line (about two per RM life), with its own bound.
+            if r.collected
+                && r.applied
+                    .iter()
+                    .any(|(k, a)| *k == crate::mem::K_BAR1 && a.mapped + a.unmapped > 0)
+                && let Some(w) = m
+                    .table
+                    .target(crate::mem::K_BAR1)
+                    .and_then(crate::mem::Target::cpu_window)
+                && let Some((at, _, len)) = w.boot_range()
+            {
+                let c = w.coverage(at, len);
+                let key = crate::bar1phys::view_key(&c, w.seeded().is_some());
+                if bar1_view_last != Some(key) {
+                    bar1_view_last = Some(key);
+                    if crate::bar1phys::bounded(bar1_view_lines, 256, "BAR1 boot-framebuffer view")
+                    {
+                        eprintln!(
+                            "kf3: mem t={:.3}s BAR1 boot framebuffer [{at:#x}, +{len:#x}) after BAR1 change #{}: guest views {:x?}; {:#x} bytes {}",
+                            self.born.elapsed().as_secs_f64(),
+                            w.changes(),
+                            c.inside,
+                            c.uncovered(),
+                            if w.seeded().is_some() {
+                                "show the seed (FB 0)"
+                            } else {
+                                "show SCRATCH"
+                            }
+                        );
+                    }
+                    bar1_view_lines = bar1_view_lines.saturating_add(1);
+                }
+            }
+            bar1_phys.notice(self.mem.inbox.bar1_physical_requests(), || {
+                m.table
+                    .target(crate::mem::K_BAR1)
+                    .and_then(crate::mem::Target::cpu_window)
+                    .map(kf_mem::cpuwin::CpuWindow::changes)
+            });
+            if !m.in_flight()
+                && m.pending() == 0
+                && let Some(at_change) = bar1_phys.take()
+                && let Some(line) = m
+                    .table
+                    .target(crate::mem::K_BAR1)
+                    .and_then(crate::mem::Target::cpu_window)
+                    .and_then(|w| crate::bar1phys::restore_physical_view(w, at_change))
+            {
+                // ⊘ bounded: a guest can ask as often as it writes the register
+                if crate::bar1phys::bounded(bar1_phys_lines, 128, "BAR1 physical-view") {
+                    eprintln!(
+                        "kf3: mem t={:.3}s {line}",
+                        self.born.elapsed().as_secs_f64()
+                    );
+                }
+                bar1_phys_lines = bar1_phys_lines.saturating_add(1);
+            }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
                 eprintln!(
                     "kf3: mem t={:.3}s REFUSED {why}",
@@ -1624,6 +1803,19 @@ impl Device {
             }
             if let Ok(mut s) = self.va_stats.lock() {
                 *s = m.stats.clone();
+            }
+        }
+        // ★ The boot display: a seed the guest never retired (it never loaded its driver) goes with
+        // the device — scratch first, then the view's host aperture (`CpuWindow::retire_seed`).
+        if let Some(w) = m
+            .table
+            .target(crate::mem::K_BAR1)
+            .and_then(crate::mem::Target::cpu_window)
+        {
+            match w.retire_seed() {
+                Ok(Some(r)) => eprintln!("kf3: at stop: {}", r.line()),
+                Ok(None) => {}
+                Err(e) => eprintln!("kf3: at stop: the boot display's seed was not released: {e}"),
             }
         }
     }
@@ -2059,7 +2251,20 @@ impl Device {
                 d.scanout_refused.load(o),
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
-            )
+            ) + &dp.boot().map_or_else(String::new, |_| {
+                // ★ The boot display (`gop=on`): frames shown from the boot layer, and when the
+                // guest's first armed head retired it.
+                let done = d.boot_done_ms.load(o);
+                format!(
+                    " boot[frames={} retired={}]",
+                    d.boot_frames.load(o),
+                    if done == 0 {
+                        "no".to_string()
+                    } else {
+                        format!("+{done}ms")
+                    }
+                )
+            })
         });
         // ★ EXPERIMENT x11-dispsw: `""` with the switch off (the line is the line it was).
         let irq = irq + &self.chans.dispsw_status(self.x11_dispsw);
@@ -2082,9 +2287,79 @@ impl Device {
     fn log_report(&self, r: &kf_gsp::ServiceReport) {
         for c in &r.commands {
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
+            if c.function == kf_gsp::RpcFunction::UnloadingGuestDriver {
+                self.observe_unloading(c);
+            }
         }
         for u in &r.unserviced {
             eprintln!("kf3: GSP rpc UNSERVICED {u:?}");
+        }
+    }
+
+    /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13), on the drainer: the guest's fn 47 — GSP-RM's
+    /// own unload. Decoded with the generated layout; logged.
+    fn observe_unloading(&self, c: &kf_gsp::RpcCommand) {
+        // ⊘ bounded (the review of `v3-gop-unload`): one line per fn 47 is one per RM life, which
+        // a guest controls
+        let log = crate::bar1phys::bounded(
+            self.fn47_logged.fetch_add(1, Ordering::Relaxed),
+            64,
+            "fn-47 decode",
+        );
+        match crate::bar1phys::decode_unloading(self.unload_layout, &c.payload) {
+            Ok(u) => {
+                if log {
+                    eprintln!(
+                        "kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq={}: bInPMTransition={} bGc6Entering={} newLevel={} — {}",
+                        c.sequence,
+                        u.pm,
+                        u.gc6,
+                        u.level,
+                        if u.gives_bar1_up() {
+                            "the guest's RM gives BAR1 up"
+                        } else {
+                            "a PM transition: BAR1 is preserved"
+                        }
+                    );
+                }
+                // ★ GSP-RM's own unload returns BAR1 to physical mode on a real card (the same
+                // `kbusStatePreUnload`): the second of the two triggers (`crate::bar1phys`).
+                if u.gives_bar1_up() && self.gop.is_some() {
+                    self.mem.inbox.request_bar1_physical();
+                }
+            }
+            Err(e) if log => {
+                eprintln!("kf3: GSP fn 47 seq={}: body not decoded ({e})", c.sequence);
+            }
+            Err(_) => {}
+        }
+    }
+
+    /// ★ 2026-10-03 (B5), on the drainer: a guest write of its BAR1-mode register
+    /// (`kf_chip::bar1mode`). Logged (bounded); the shadow already holds the guest's value.
+    fn observe_bar1_mode(
+        &self,
+        r: kf_chip::bar1mode::Bar1ModeReg,
+        value: u64,
+        phase: kf_arch::BootPhase,
+    ) {
+        let n = self.b5_logged.fetch_add(1, Ordering::Relaxed);
+        if crate::bar1phys::bounded(n, 64, "BAR1-mode write") {
+            eprintln!(
+                "kf3: mem t={:.3}s the guest wrote {} = {value:#x} (MODE {}) at GSP phase {phase:?}",
+                self.born.elapsed().as_secs_f64(),
+                r.name,
+                if r.is_physical(value) {
+                    "PHYSICAL"
+                } else {
+                    "VIRTUAL"
+                }
+            );
+        }
+        // ★ The first of the two triggers (`crate::bar1phys`): CPU-RM's `kbusTeardownMailbox` —
+        // on a real card this write IS BAR1 going physical, before the console is unlocked.
+        if r.is_physical(value) && self.gop.is_some() {
+            self.mem.inbox.request_bar1_physical();
         }
     }
 
@@ -2459,6 +2734,12 @@ impl HostOps for Device {
                 g.fsm.phase()
             );
         }
+        if bar == 0
+            && let Some(r) = self.bar1_mode
+            && u64::from(offset) == r.offset
+        {
+            self.observe_bar1_mode(r, value, g.fsm.phase());
+        }
         // ★ The register just applied is re-published unconditionally: the vCPU already stored
         // the GUEST's value there, and the FSM's answer may equal what was last published
         // (`[measured edfff3a9, 3/3 boots]` DMATRFCMD read back 'busy' forever: FWSEC timed out).
@@ -2653,6 +2934,7 @@ mod config_tests {
             guest_driver: None,
             display,
             x11_dispsw,
+            gop: false,
         }
     }
 

@@ -1,0 +1,201 @@
+===== sb_deny_signed: debugcon (kf-gop's lines, then the test app's)
+kf-gop: loaded
+kf-gop: Supported accepts
+kf-gop: started 1152x648 pitch 4608 fb 0x80000000 size 0x2e0000 bar 0
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+KFGOP-TEST start
+KFGOP-TEST secure_boot=1
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1152 height=648 ppsl=1152 format=1 fb_base=0x80000000 fb_size=0x2e0000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode ok max=1 cur=0
+KFGOP-TEST check mode_is_the_descriptors ok pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar ok base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered ok 128 bytes
+KFGOP-TEST check edid_active ok 128 bytes
+KFGOP-TEST check query_mode_0 ok status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid ok status=0x8000000000000002
+KFGOP-TEST check set_mode_1_unsupported ok status=0x8000000000000003
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer ok fb(8,8)=0x123456
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer ok 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap ok move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel ok status=0x8000000000000002
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern ok status=0x0
+KFGOP-TEST RESULT PASS checks=21 failed=0
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+===== sb_deny_signed: serial (boot manager)
+BdsDxe: loading Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+
+===== sb_deny_unsigned: debugcon (kf-gop's lines, then the test app's)
+KFGOP-TEST start
+KFGOP-TEST secure_boot=1
+KFGOP-TEST gop_handles total=0 ours=0
+KFGOP-TEST check one_kf_gop FAIL ours=0
+KFGOP-TEST RESULT FAIL checks=1 failed=2 reason=no-kf-gop
+===== sb_deny_unsigned: serial (boot manager)
+BdsDxe: loading Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+
+===== sb_deny_tailpad: debugcon (kf-gop's lines, then the test app's)
+KFGOP-TEST start
+KFGOP-TEST secure_boot=1
+KFGOP-TEST gop_handles total=0 ours=0
+KFGOP-TEST check one_kf_gop FAIL ours=0
+KFGOP-TEST RESULT FAIL checks=1 failed=2 reason=no-kf-gop
+===== sb_deny_tailpad: serial (boot manager)
+BdsDxe: loading Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+
+===== sb_snakeoil_signed: debugcon (kf-gop's lines, then the test app's)
+kf-gop: loaded
+kf-gop: Supported accepts
+kf-gop: started 1152x648 pitch 4608 fb 0x80000000 size 0x2e0000 bar 0
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+KFGOP-TEST start
+KFGOP-TEST secure_boot=1
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1152 height=648 ppsl=1152 format=1 fb_base=0x80000000 fb_size=0x2e0000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode ok max=1 cur=0
+KFGOP-TEST check mode_is_the_descriptors ok pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar ok base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered ok 128 bytes
+KFGOP-TEST check edid_active ok 128 bytes
+KFGOP-TEST check query_mode_0 ok status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid ok status=0x8000000000000002
+KFGOP-TEST check set_mode_1_unsupported ok status=0x8000000000000003
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer ok fb(8,8)=0x123456
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer ok 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap ok move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel ok status=0x8000000000000002
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern ok status=0x0
+KFGOP-TEST RESULT PASS checks=21 failed=0
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+===== sb_snakeoil_signed: serial (boot manager)
+BdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+
+===== sb_snakeoil_tailpad_observe: debugcon (kf-gop's lines, then the test app's)
+kf-gop: loaded
+kf-gop: Supported accepts
+kf-gop: started 1152x648 pitch 4608 fb 0x80000000 size 0x2e0000 bar 0
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x8000000000000014
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+kf-gop: Supported cannot open PCI I/O, status 0x800000000000000f
+KFGOP-TEST start
+KFGOP-TEST secure_boot=1
+KFGOP-TEST gop_handles total=2 ours=1
+KFGOP-TEST check one_kf_gop ok ours=1
+KFGOP-TEST mode width=1152 height=648 ppsl=1152 format=1 fb_base=0x80000000 fb_size=0x2e0000 bar=0 bar_base=0x80000000 bar_len=0x1000000
+KFGOP-TEST check one_mode ok max=1 cur=0
+KFGOP-TEST check mode_is_the_descriptors ok pitch=4608
+KFGOP-TEST check framebuffer_is_the_bar ok base=0x80000000 want=0x80000000
+KFGOP-TEST check edid_discovered ok 128 bytes
+KFGOP-TEST check edid_active ok 128 bytes
+KFGOP-TEST check query_mode_0 ok status=0x0 size=36
+KFGOP-TEST check query_mode_1_invalid ok status=0x8000000000000002
+KFGOP-TEST check set_mode_1_unsupported ok status=0x8000000000000003
+KFGOP-TEST check fill_and_read_back ok fill=0x0 read=0x0
+KFGOP-TEST check fill_reaches_framebuffer ok fb(8,8)=0x123456
+KFGOP-TEST check buffer_to_video_round_trip ok write=0x0 read=0x0
+KFGOP-TEST check buffer_to_video_reaches_framebuffer ok 64x32 at (100,100)
+KFGOP-TEST check delta_and_source_offset ok write=0x0 read=0x0
+KFGOP-TEST check video_to_video_overlap ok move=0x0 read=0x0
+KFGOP-TEST check refuse_zero_width ok status=0x8000000000000002
+KFGOP-TEST check refuse_off_screen ok status=0x8000000000000002
+KFGOP-TEST check refuse_unknown_op ok status=0x8000000000000002
+KFGOP-TEST check refuse_fill_without_pixel ok status=0x8000000000000002
+KFGOP-TEST check set_mode_0_clears ok status=0x0 shadow=0x0 fb=0x0
+KFGOP-TEST check full_screen_pattern ok status=0x0
+KFGOP-TEST RESULT PASS checks=21 failed=0
+KFGOP-TEST PATTERN fb_base=0x80000000 width=1152 height=648 pitch=4608
+KFGOP-TEST READY
+===== sb_snakeoil_tailpad_observe: serial (boot manager)
+BdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x2,0x0)
+

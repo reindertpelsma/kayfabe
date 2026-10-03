@@ -131,6 +131,10 @@ pub struct ObjectLinks {
     /// delegates to a `kf_disp::model::DisplayModel` built for the guest driver's derived layouts
     /// and observes accepted display-object allocs and frees (`tests/display_seat.rs`).
     pub display: Option<DisplaySeat>,
+    /// ★ The boot display's console seat in fn 65 ([`staticinfo::ConsoleSeat`],
+    /// `docs/design/V3_DISPLAY.md` §4.11.4): fn 72's kept body, the BAR1 aperture and — with
+    /// `gop=on` — the boot framebuffer's size. `None` serves the board's region table, as before.
+    pub console: Option<staticinfo::ConsoleSeat>,
 }
 
 /// ★ The display seat: the chip's display row, and — when a display PLANE consumes the model (the
@@ -144,7 +148,7 @@ pub struct DisplaySeat {
     /// The plane's model, shared across chain rebuilds.
     pub model: Option<display::SharedDisplayModel>,
     /// ★ EXPERIMENT `x11-dispsw` (the device property, default off; `docs/design/V3_DISPLAY.md`, the
-    /// 2026-10-03 note, pending the owner's ruling): OFFER the `GF100_DISP_SW` object X11
+    /// 2026-10-03 note; option A, `docs/OWNER_RULINGS.md` §N): OFFER the `GF100_DISP_SW` object X11
     /// compositors and X11 Vulkan presentation need — the display link answers its constructor's
     /// query ([`kf_disp::model::DisplayModel::offer_display_sw`]) and the channel link carries every
     /// such alloc to the plane, which twins it under the channel's host twin with authored params or
@@ -185,6 +189,10 @@ impl core::fmt::Debug for ObjectLinks {
                     .display
                     .as_ref()
                     .map(|d| (d.row.chips, d.model.is_some())),
+            )
+            .field(
+                "console",
+                &self.console.as_ref().map(|c| (c.bar1_bytes, c.boot_fb)),
             )
             .finish()
     }
@@ -430,9 +438,13 @@ pub fn served_chain(
         memory,
         channels,
         display,
+        console,
     } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
         .with_engine_caps(authored::engine_caps(&host.engines));
+    if let Some(seat) = console {
+        static_info = static_info.with_console(seat);
+    }
     if let (Some(n), Some(sn)) = (host.gpu_name, host.gpu_short_name.or(host.gpu_name)) {
         static_info = static_info.with_name(n, sn);
     }

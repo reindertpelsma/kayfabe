@@ -33,7 +33,9 @@ ARCHIVE="$TARGET/release/libkf_qemu.a"
 # fingerprints say the archive IS this revision's.
 echo "== archive $(stat -c '%y' "$ARCHIVE") (cargo succeeded: current for this revision by cargo's fingerprints)"
 mkdir -p "$QEMU/hw/misc/kf3"
-cp "$REPO"/qemu/hw/misc/kf3/kf3.c "$REPO"/qemu/hw/misc/kf3/kf3.h "$REPO"/qemu/hw/misc/kf3/meson.build "$QEMU/hw/misc/kf3/"
+# ⊘ [2026-10-03, box 54032077] every overlay source, not a list: v3-gop added kf3_gop.h and the first
+# box build failed "kf3_gop.h: No such file or directory" because this line named three files.
+cp "$REPO"/qemu/hw/misc/kf3/*.c "$REPO"/qemu/hw/misc/kf3/*.h "$REPO"/qemu/hw/misc/kf3/meson.build "$QEMU/hw/misc/kf3/"
 cp "$ARCHIVE" "$QEMU/hw/misc/kf3/libkf_qemu.a"
 grep -q "subdir('kf3')" "$QEMU/hw/misc/meson.build" || printf "\nsubdir('kf3')\n" >> "$QEMU/hw/misc/meson.build"
 grep -q '^config KF3' "$QEMU/hw/misc/Kconfig" || printf '\nconfig KF3\n    bool\n    default y if TEST_DEVICES\n    depends on PCI\n' >> "$QEMU/hw/misc/Kconfig"

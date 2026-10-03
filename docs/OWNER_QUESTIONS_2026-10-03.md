@@ -1,15 +1,17 @@
 # Decisions waiting on the owner — 2026-10-03
 
-**STATUS: LIVE, 2026-10-03.** Four decisions, each with the facts behind it and a recommendation.
-When the owner answers one, the answer goes into `docs/OWNER_RULINGS.md` and the item here is marked
-ANSWERED with a pointer. Nothing below is decided yet.
+**STATUS: LIVE, 2026-10-03.** Decisions, each with the facts behind it and a recommendation. When
+the owner answers one, the answer goes into `docs/OWNER_RULINGS.md` and the item here is marked
+ANSWERED with a pointer. ⊘ *Updated 2026-10-03 evening: items 2 and 4 are answered; item 6 (three
+security decisions) was added.*
 
 | # | decision | blocks | recommendation |
 |---|---|---|---|
 | 1 | the sweep and install plan: go-ahead, and Q2–Q8 | the installable binary and every support claim | approve; answers below |
-| 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | option A, guarded, with B as the fallback — ★ box data 2026-10-03: A works (below); review fixes `d84086df`: classID pinned, caps, re-run holds |
+| 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | ⊘ ANSWERED: option A (§N) — box data and review fixes on `v3-dispsw-exp` below |
 | 3 | the archived traces that contain a full VBIOS | nothing technical; a legal liability | scrub the PROM values forward in both public repos |
-| 4 | renting a GPU box for display work | every display test, every merge bar | a standing weekly budget, one box at a time |
+| 4 | renting a GPU box for display work | every display test, every merge bar | ⊘ ANSWERED: rent as needed |
+| 6 | three security decisions (§6 below) | merging `v3-scratch-bound`, `v3-sec-nonpriv`, and building P2 | approve each as recommended |
 
 ## 1. The sweep and install plan (`design/V3_SWEEP_AND_INSTALL.md`)
 
@@ -97,6 +99,10 @@ it dies with it.
 
 ## 2. `GF100_DISP_SW` (X11 desktops)
 
+⊘ **ANSWERED 2026-10-03 by the owner — option A is the design** (`OWNER_RULINGS.md` §N, with §M for
+pacing). The box data and review fixes from `v3-dispsw-exp` follow; the text after them is kept as
+it was written.
+
 ★ **Review fixes and re-run, 2026-10-03 (later) — read before the box result below; where they
 differ, this stands.** Branch `v3-dispsw-exp` at `d84086df` (`design/V3_DISPLAY.md`, the x11-dispsw
 note's "review fixes" block; runs 9-13 of `traces/v3_display/dispsw_20261003/`): the A/B result
@@ -147,7 +153,8 @@ runs in all; `design/V3_DISPLAY.md`, the x11-dispsw note's box block):
   headless), and whatever GSP firmware does with the class's methods (ogkm-580 defines none, so
   "cannot flip or set a mode" is a hypothesis). If a future client does ask for a release, it is
   dropped and that client waits on its own semaphore; the probe shows it.
-- **What the owner is asked:** turn `x11-dispsw` on by default for display-capable hosts (it refuses
+- ⊘ *ANSWERED 2026-10-03 by `OWNER_RULINGS.md` §N: default-on once its four conditions hold.*
+  **What the owner is asked:** turn `x11-dispsw` on by default for display-capable hosts (it refuses
   by name where the host cannot), or keep it opt-in.
 
 **The problem.** X11 compositors and X11 Vulkan presentation allocate a display-software object
@@ -249,6 +256,9 @@ the gate against the old file first, so it can be seen to fire.
 
 ## 4. Renting a GPU box for display work
 
+⊘ **ANSWERED 2026-10-03 by the owner:** *"feel free to rent vast boxes, I added some credits ... use
+the vast kvm desktop template + vms_enable=true"*. Boxes are rented per lane and destroyed when idle.
+
 **What needs a box.** kf3 needs a host NVIDIA GPU to realize, so these cannot run locally:
 
 - the GOP option ROM on the real device: OVMF boot screen → efifb/simpledrm → the nvidia-drm
@@ -307,4 +317,44 @@ nothing waits on them; each one is cheap to change later.
   primary** (the reviewer read the bench's serial and Xorg logs). The Xorg BusID pin may simply be
   unnecessary. The first box test of the display work checks that with no build at all. The GOP ROM
   is still needed for Windows and for any picture before nvidia-drm loads.
+
+## 6. Three security decisions (added 2026-10-03 evening)
+
+These come from the audit the owner asked for (`design/V3_SECURITY_AUDIT_PLAN.md`). Each one is
+security policy, so none merges without the owner (§F).
+
+**6a. Merge `v3-scratch-bound`.** It fixes the DoS the owner pointed at (*"The memfd is only scratch,
+isn't that a DoS target?"*): the host RAM behind the unmapped parts of BAR1, BAR2 and PRAMIN is now
+one small tile per window, mapped repeatedly, so it is bounded per device instead of growing with
+what the guest touches. Merge bar passed (1777/0, gates 9/9, 30/30). **The policy part:** kf3 now
+refuses to start in the same QEMU as a device that pins guest RAM, and such a device refuses to
+start after kf3: VFIO passthrough (legacy, iommufd, vfio-user), the userspace NVMe driver
+(`nvme://`), and libblkio drives that may pin memory. QEMU 10.2.4 maps every RAM-device region for
+those devices and has no per-region opt-out (one arrives in QEMU 11.1), so they would pin kf3's
+window pages and keep stale IOMMU mappings of them. Side effects: SEV/SEV-ES guests, vhost-vdpa and
+incoming COLO are refused too. **Recommendation: approve.** None of these are in the release
+scope; revisit with QEMU 11.1's opt-out.
+
+**6b. P0 fix, `v3-sec-nonpriv`.** When QEMU runs as root, every host channel kf3 created was an
+ADMIN channel. As the owner said, this is fixed by clearing a bit and not by refusing: the thread
+that creates a channel drops `CAP_SYS_ADMIN` from its effective set for that one call, and each
+channel's reply is checked to be a user channel (`NV01_ROOT_NON_PRIV` cannot do it on Linux; the
+driver rewrites it to an ordinary root client). Merge bar passed. A review asked for tests that fail
+when the wiring is removed, a gate on the merge bar's channel census, and the same bit cleared for
+the CUDA contexts kf3 runs itself; that work is in progress. **Recommendation: approve once that
+lands.**
+
+**6c. P2: guest RAM in the Translated address space.** The owner's ruling: Translated work gets its
+own host VA space, *"with for kernel/phys channels atmost the single store guest vram mapped"*. The
+design (`P1+P2`, 2026-10-03) agrees, with one exception it cannot avoid. The guest kernel's
+Translated producers, the driver's CeUtils and UVM, address system memory by guest-physical address
+(page-table writes, migrations, completions in guest RAM). Mapping guest RAM per operation would
+cost hundreds of host map calls per 2 MiB migration. So the Translated space would hold the store
+window **and one guest-RAM window**, built once per VM. Nothing else goes in it: kayfabe's rings are
+mapped read-only except the fence, and every address the engine uses is computed by kayfabe and
+checked to fall in a window. Guest user twins lose both windows (P1), which closes the in-guest
+isolation gap the audit found. **Recommendation: allow the guest-RAM window in the Translated space
+only.** The alternative, guest-RAM pages mapped per operation, is possible but slow, and not needed
+for isolation: Translated channels run only the guest kernel's work, which can already reach all
+guest RAM.
 
