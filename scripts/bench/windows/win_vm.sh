@@ -237,16 +237,20 @@ make_vars() {
   local vars=$VM/firmware/OVMF_VARS.fd
   if [ -s "$vars" ]; then
     log "VARS_EXIST $vars — reused, never regenerated (it is per-VM Secure Boot state)"
-    return 0
+  else
+    virt-fw-vars -i "$OVMF_VARS_TEMPLATE" -o "$vars.tmp" \
+      --enroll-generate "kayfabe VM $NAME PK/KEK" \
+      --add-db "$(cat "$SB/db.guid")" "$SB/db.crt" --secure-boot
+    chmod 0600 "$vars.tmp"
+    mv "$vars.tmp" "$vars"
+    log "VARS_CREATED $vars"
   fi
-  virt-fw-vars -i "$OVMF_VARS_TEMPLATE" -o "$vars.tmp" \
-    --enroll-generate "kayfabe VM $NAME PK/KEK" \
-    --add-db "$(cat "$SB/db.guid")" "$SB/db.crt" --secure-boot
-  chmod 0600 "$vars.tmp"
-  mv "$vars.tmp" "$vars"
-  virt-fw-vars -i "$vars" -p > "$VM/logs/ovmf_vars_print.txt" 2>&1 || true
-  grep -q 'kayfabe GOP db key' "$VM/logs/ovmf_vars_print.txt" || die "the generated vars carry no kayfabe db cert (see logs/ovmf_vars_print.txt)"
-  log "VARS_CREATED $vars (db: $(grep -cE 'CN=' "$VM/logs/ovmf_vars_print.txt") certificate lines; logs/ovmf_vars_print.txt)"
+  # The certificate subjects in PK, KEK and db (non-secret), checked on every install run.
+  virt-fw-vars -i "$vars" --print --verbose 2>&1 \
+    | grep -E '^name=|subject|siglist|SecureBootEnable' > "$VM/logs/ovmf_vars_print.txt" || true
+  grep -q 'subject CN=kayfabe GOP db key' "$VM/logs/ovmf_vars_print.txt" \
+    || die "the VM's db carries no kayfabe GOP db cert (logs/ovmf_vars_print.txt)"
+  log "VARS_DB $(awk '/^name=db /{f=1;next} /^name=/{f=0} f && /subject/{sub(/^ *subject /,""); printf "%s; ", $0}' "$VM/logs/ovmf_vars_print.txt")"
 }
 
 tpm_manufactured() { [ -e "$VM/tpm/tpm2-00.permall" ]; }
