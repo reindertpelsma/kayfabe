@@ -225,9 +225,9 @@ pub struct Device {
     /// holds a plain reference (`crate::display`). `None`: the displayless posture, unchanged.
     pub display: Option<&'static crate::display::DisplayPlane>,
     /// ★ The boot display (`gop=on`, [`crate::gop`]): the framebuffer it serves. `None` with `gop=off`.
-    pub boot: Option<crate::gop::BootPlan>,
+    pub gop: Option<crate::gop::BootPlan>,
     /// The option ROM packed for this device at realize (`kf3_option_rom`); `None` with `gop=off`.
-    boot_rom: Option<Vec<u8>>,
+    gop_rom: Option<Vec<u8>>,
 }
 
 impl Device {
@@ -243,8 +243,7 @@ impl Device {
             .into_iter()
             .next()
             .ok_or("no virtual monitor behind the display")?;
-        let boot =
-            crate::gop::BootPlan::for_config(cfg.gop, cfg.display, cfg.bar1_bytes, &monitor)?;
+        let gop = crate::gop::BootPlan::for_config(cfg.gop, cfg.display, cfg.bar1_bytes, &monitor)?;
         let dev = kf_linux_raw::DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
         let rm: &'static kf_host::HostRm = Box::leak(Box::new(
             kf_host::HostRm::open(
@@ -283,7 +282,7 @@ impl Device {
         let pci = crate::hostfacts::read_host_pci(&sysfs)?;
         // ★ The boot display's option ROM: the embedded GOP driver wrapped with the identity this
         // device presents (`kf3_identity`) and the boot framebuffer's descriptor.
-        let boot_rom = boot
+        let gop_rom = gop
             .as_ref()
             .map(|b| b.rom(pci.vendor, pci.device, pci.class))
             .transpose()?;
@@ -294,7 +293,7 @@ impl Device {
             &bdf,
             pci.bar1_bytes,
             crate::cardbudget::Demand::of(cfg.bar1_bytes, cfg.bar2_bytes, cfg.fb_mb << 20)
-                .with_boot_fb(boot.as_ref().map_or(0, crate::gop::BootPlan::bytes)),
+                .with_boot_fb(gop.as_ref().map_or(0, crate::gop::BootPlan::bytes)),
         )?;
 
         let fb_length = cfg.fb_mb << 20;
@@ -370,7 +369,7 @@ impl Device {
         // previous user of these VRAM pages left is visible (kayfabe never scrubs the store
         // otherwise). One MiB of zeros at a time: the CPU writes no guest vidmem, the walker's
         // copy engine does.
-        if let Some(b) = &boot {
+        if let Some(b) = &gop {
             let chunk = vec![0u8; 1 << 20];
             let mut at = 0u64;
             while at < b.bytes() {
@@ -588,11 +587,7 @@ impl Device {
                     export.fd_number(),
                     fb_length,
                 )?
-                .with_boot(
-                    boot.as_ref()
-                        .map(crate::display::BootScan::of)
-                        .transpose()?,
-                );
+                .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
                 eprintln!(
@@ -618,7 +613,7 @@ impl Device {
             );
             let (bar1_bytes, boot_fb) = (
                 cfg.bar1_bytes,
-                boot.as_ref().map(crate::gop::BootPlan::bytes),
+                gop.as_ref().map(crate::gop::BootPlan::bytes),
             );
             Box::new(move |t: kf_abi::versions::DriverAbiTable| {
                 let objects = kf_rm::rmrpc::ObjectPolicy::over(
@@ -756,13 +751,13 @@ impl Device {
         // virtual mode. ONE view, placed here on the realize thread; it retires at the first BAR1
         // batch that changes anything (`kf_mem::cpuwin::CpuWindow::retire_seed`), or when the device
         // stops if the guest never loads its driver.
-        if let Some(b) = &boot {
+        if let Some(b) = &gop {
             bar1_win
                 .seed(crate::gop::FB_OFFSET, 0, b.bytes())
                 .map_err(|e| format!("gop=on: the BAR1 seed: {e}"))?;
             eprintln!(
                 "kf3: boot display ON — option ROM {} bytes ({:04x}:{:04x}, KFGP BAR{} +{:#x}, {}x{} pitch {}, G = {:#x}); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU",
-                boot_rom.as_ref().map_or(0, Vec::len),
+                gop_rom.as_ref().map_or(0, Vec::len),
                 pci.vendor,
                 pci.device,
                 b.fb.bar,
@@ -851,8 +846,8 @@ impl Device {
             qhead_off,
             held_stamps: Mutex::new(std::collections::VecDeque::new()),
             display: display_plane,
-            boot,
-            boot_rom,
+            gop,
+            gop_rom,
         })
     }
 
@@ -860,7 +855,7 @@ impl Device {
     /// C device to register as the ROM BAR. `None` with `gop=off`.
     #[must_use]
     pub fn option_rom(&self) -> Option<&[u8]> {
-        self.boot_rom.as_deref()
+        self.gop_rom.as_deref()
     }
 
     /// The BAR0 memory map for the C device to build (family-scoped: shadow / plain RAM /
