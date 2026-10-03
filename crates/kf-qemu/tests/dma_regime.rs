@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ ABI 14 (`docs/design/V3_VIOMMU.md` §4.2): the device's DMA regime across the C/Rust seam.
+//! ★ ABI 15 (`docs/design/V3_VIOMMU.md` §4.2): the device's DMA regime across the C/Rust seam.
 //!
 //! 1. **The wire table.** The C device's `KF3_DMA_*` values (`kf3.h`) and Rust's reading of them
 //!    (`kf_arch::dma::DmaRegime::from_wire`) are ONE table. `tests/wire_mirror.rs` checks the entry

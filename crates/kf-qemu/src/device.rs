@@ -1422,7 +1422,7 @@ impl Device {
         self.ram.del(gpa);
     }
 
-    /// ★ ABI 14 (`docs/design/V3_VIOMMU.md` §4.2): the C device's classification of this device's
+    /// ★ ABI 15 (`docs/design/V3_VIOMMU.md` §4.2): the C device's classification of this device's
     /// DMA address space changed (`KF3_DMA_*`). Called under the BQL on whichever thread committed
     /// a memory change, a vCPU included: ONE atomic store, nothing else (`OWNER_RULINGS.md` §A.4).
     pub fn dma_regime(&self, wire: u32) {

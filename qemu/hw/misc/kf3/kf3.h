@@ -13,9 +13,10 @@
  * surfaces, so an archive from either branch must be refused here: one new number above both.
  * ★ 11 (2026-10-03, v3-gop-kf3, docs/design/V3_DISPLAY.md §4.11): the boot display — kf3_realize
  * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device.
- * ★ 14 (2026-10-04, v3-viommu, docs/design/V3_VIOMMU.md §4.2): kf3_dma_regime. 12 is v3-broker's
- * and 13 v3-dispsw-exp's; this surface differs from both, so one number above both. */
-#define KF3_ABI 14
+ * ★ 15 (2026-10-04, v3-viommu, docs/design/V3_VIOMMU.md §4.2): kf3_dma_regime. 12 is v3-broker's,
+ * 13 v3-dispsw-exp's, and 14 is the number v3-cand-1's kf3.h reserves for v3-broker merged onto 13;
+ * this surface differs from all three, so it takes the next one. */
+#define KF3_ABI 15
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -56,7 +57,7 @@ uint64_t kf3_bar0_read(void *h, uint64_t off, uint32_t width);
 int32_t kf3_ram_add(void *h, uint64_t gpa, uint8_t *hva, uint64_t len, int32_t fd, uint64_t fd_off);
 int32_t kf3_bar_ram(void *h, uint32_t bar, uint64_t base, uint64_t len, void **ptr);
 void kf3_ram_del(void *h, uint64_t gpa);
-/* ★ ABI 14 (v3-viommu, docs/design/V3_VIOMMU.md §4.2): the device's DMA regime — whether a device
+/* ★ ABI 15 (v3-viommu, docs/design/V3_VIOMMU.md §4.2): the device's DMA regime — whether a device
  * address the guest programs is a GPA. Published at machine-done and on every change, under the BQL
  * on whichever thread commits (a vCPU included); Rust stores it and refuses guest-RAM lookups of
  * device addresses unless DIRECT or IDENTITY. Any other value refuses. */

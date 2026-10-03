@@ -120,7 +120,7 @@ struct Kf3State {
     QEMUBH *bar1_bh;
     uint64_t bar1_ov_applied, bar1_ov_failed;
     MemoryListener listener;
-    /* ★ ABI 14 (docs/design/V3_VIOMMU.md §4.2): the device's DMA regime. A listener on the device's
+    /* ★ ABI 15 (docs/design/V3_VIOMMU.md §4.2): the device's DMA regime. A listener on the device's
      * DMA address space (only when a vIOMMU is in front of it), armed at machine-done. BQL only. */
     MemoryListener dma_listener;
     Notifier dma_done;
@@ -1062,7 +1062,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         .priority = MEMORY_LISTENER_PRIORITY_MIN,
     };
     memory_listener_register(&s->listener, &address_space_memory);
-    /* ★ ABI 14 (docs/design/V3_VIOMMU.md §4.2): classify the device's DMA address space once the
+    /* ★ ABI 15 (docs/design/V3_VIOMMU.md §4.2): classify the device's DMA address space once the
      * machine is assembled (at once on hot-plug), whatever the -device order. Until then Rust's
      * regime is Unset and every device-address lookup refuses. kf3_instance_finalize disarms it if a
      * later step of realize fails. */
@@ -1099,7 +1099,7 @@ static void kf3_dev_exit(PCIDevice *pci)
             graphic_console_close(s->con);
             s->con = NULL;
         }
-        /* ★ ABI 14: the DMA regime's notifier and listener go before the Rust device does. */
+        /* ★ ABI 15: the DMA regime's notifier and listener go before the Rust device does. */
         kf3_dma_disarm(s);
         kf3_unrealize(s->h);
     }
