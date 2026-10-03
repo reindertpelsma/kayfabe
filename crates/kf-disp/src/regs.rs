@@ -214,10 +214,17 @@ impl Regs {
 #[must_use]
 pub fn table_for(version: &str) -> Option<&'static RegTable> {
     static V580_159_04: OnceLock<RegTable> = OnceLock::new();
+    static V580_65_06: OnceLock<RegTable> = OnceLock::new();
     match version {
         "580.159.04" => Some(
             V580_159_04
                 .get_or_init(|| RegTable::parse(include_str!("../data/regs-580.159.04.tsv"))),
+        ),
+        // ★ 2026-10-04 (v3-windows): 580.65.06, the Linux twin of Windows 580.88 (same changelist
+        // 36308443). Derived by tools/derive_display_regs.sh from ogkm 580.65.06; the rows are
+        // identical to 580.159.04's apart from VERSION.
+        "580.65.06" => Some(
+            V580_65_06.get_or_init(|| RegTable::parse(include_str!("../data/regs-580.65.06.tsv"))),
         ),
         _ => None,
     }
