@@ -118,8 +118,10 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     sed "s/@SESSION@/$session/g" "$HERE/desktop/50-kf-autologin.conf.in" > "$DESK/50-kf-autologin.conf"
     tar -C "$DESK" -cf - xorg.conf 50-kf-autologin.conf xsessionrc | $G 'rm -rf ~/desk && mkdir -p ~/desk && tar -xf - -C ~/desk'
     # ★ B0a: DISPLAY_XORG_PIN=0 installs NO xorg.conf, so Xorg autoconfigures and picks its primary device
-    # from boot_vga, the way a stock guest does. The default (1) keeps the M3 BusID pin.
-    if [ "${DISPLAY_XORG_PIN:-1}" = 0 ]; then XCONF='sudo rm -f /etc/X11/xorg.conf'; else XCONF='sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf'; fi
+    # from boot_vga, the way a stock guest does. ★ The DEFAULT since 2026-10-03 (B0a run 3, box 54032077,
+    # traces/v3_display/b0a_20261003/): kf3 is boot_vga and Xorg's primary, and the stock OutputClass file
+    # loads the NVIDIA X driver. DISPLAY_XORG_PIN=1 restores the old M3 BusID pin for comparison.
+    if [ "${DISPLAY_XORG_PIN:-0}" = 0 ]; then XCONF='sudo rm -f /etc/X11/xorg.conf'; else XCONF='sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf'; fi
     gq "$XCONF"' && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && cp ~/desk/xsessionrc ~/.xsessionrc && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
     say "DESKTOP_CONF busid=$busid session=$session env=[${DISPLAY_SESSION_ENV:-}] $(tr '\n' ' ' < "$OUT/desk_conf.log")"
     gq 'sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/lightdm_start.log"
@@ -141,7 +143,7 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     gq 'sudo tail -80 /var/log/lightdm/lightdm.log; echo ===X0; sudo tail -60 /var/log/lightdm/x-0.log' 60 > "$OUT/lightdm_logs.log"
     gq 'ls -la /usr/share/X11/xorg.conf.d/ /etc/X11/xorg.conf.d/ 2>&1; ls -la /etc/X11/xorg.conf 2>&1' 60 > "$OUT/xorg_confd.log"
     say "XORG_CONFD $(grep -c . "$OUT/xorg_confd.log") lines, nvidia_outputclass=$(grep -c -i 'nvidia' "$OUT/xorg_confd.log") last_EE=$(grep '(EE)' "$OUT/Xorg.0.log.old" | grep -v 'warning, (EE)' | tail -1 | cut -c1-200)"
-    say "XORG_PRIMARY pin=${DISPLAY_XORG_PIN:-1} $(grep -m2 -E 'PCI:\*|Primary Device is' "$OUT/Xorg.0.log" | tr '\n' ' ' | cut -c1-240) EE=$(grep -c '(EE)' "$OUT/Xorg.0.log") no_screens=$(grep -c 'no screens found' "$OUT/Xorg.0.log")"
+    say "XORG_PRIMARY pin=${DISPLAY_XORG_PIN:-0} $(grep -m2 -E 'PCI:\*|Primary Device is' "$OUT/Xorg.0.log" | tr '\n' ' ' | cut -c1-240) EE=$(grep -c '(EE)' "$OUT/Xorg.0.log") no_screens=$(grep -c 'no screens found' "$OUT/Xorg.0.log")"
     sleep 20   # let the session paint (panel, wallpaper) before the first shot
     shot "$OUT/desk_1.ppm"
     gq "$XENV glxinfo -B 2>&1 | head -40" 60 > "$OUT/glxinfo.log"
