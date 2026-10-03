@@ -383,8 +383,12 @@ The order is forced:
 >   `11b9798c7b`), and its VFIO listener DMA-maps every `ram_device` region
 >   (`hw/vfio/listener.c:598-631`), pinning window pages and keeping IOMMU mappings of what they
 >   showed then (a later re-point, or a view placed before a BAR re-enable, leaves them stale; a
->   released aperture among them). kf3's realize now ends with `ram_block_discard_require(true)`,
->   released at exit. Every 10.2.4 device that pins RAM disables discard first (vfio legacy
+>   released aperture among them). kf3's realize now BEGINS with `ram_block_discard_require(true)`,
+>   before `kf3_realize` builds anything, and gives it back at exit or on any later realize
+>   failure (one `fail:` label; QEMU calls no `exit` for a failed realize). ⊘ *Corrected the same
+>   day (third review): it was first taken as realize's LAST step, so every refusal, an expected
+>   outcome, leaked the host store reservation, the RM client, the threads and the windows for
+>   QEMU's life, once per `device_add` retry.* Every 10.2.4 device that pins RAM disables discard first (vfio legacy
 >   `container-legacy.c:568`, iommufd `iommufd.c:564`, `:599`, vfio-user `container.c:220`), so
 >   whichever realizes second is refused, hotplug included: kf3 names the conflict; a VFIO device
 >   fails with *"Cannot set discarding of RAM broken"*. Collateral refusals: vhost-vdpa (which
@@ -393,6 +397,19 @@ The order is forced:
 >   through a `RAMBlockNotifier` (`util/vfio-helpers.c:464-478`) and disables no discard. Do not
 >   combine it with kf3. On QEMU 11.1 the skip flag is the precise fix. Checked by compiling kf3.c
 >   against the 10.2.4 headers (`-Werror -fsyntax-only`); not run in a VM.
+> - **Residual, the other side of the requirement (third review; pre-existing hazard, not built).**
+>   `ram_block_discard_require` and `ram_block_discard_disable` exclude each other (10.2.4
+>   `system/physmem.c`, both functions), so kf3 can never also DISABLE discard. Yet kf3 pins all of
+>   guest RAM through RM once the guest-RAM object exists (`MemPlane::guest_ram_object`), which in
+>   QEMU's model makes it a technology that disables discard, like VFIO. So virtio-balloon
+>   (free-page reporting included; it inhibits itself only on `ram_block_discard_is_disabled()`,
+>   `hw/virtio/virtio-balloon.c:75`) and virtio-mem (its coordinated requirement coexists with
+>   ours) stay enabled and can discard ranges of the shared guest memfd under RM's pin
+>   (`ram_block_discard_range`, `virtio-balloon.c:97`): the guest then sees fresh pages where the
+>   GPU keeps the pinned old ones, and host RAM can reach about 2× guest RAM. Master's kf3 never
+>   disabled discard either. Until it is refused by name at realize (not built), give a kf3 VM no
+>   virtio-balloon and no virtio-mem device. On QEMU 11.1, `memory_region_set_skip_iommu_map` plus
+>   `ram_block_discard_disable(true)` replaces the requirement and closes this too.
 > - **Tests (2026-10-03; all ran and passed in GitHub CI run 37134501679 at `b90c9307`, the
 >   kf-qemu one only there; the bites below were run locally on Linux 7.0).** `crates/kf-linux-raw/src/scratch.rs`:
 >   `a_sink_restores_the_canonical_tiling_after_qemu_has_advised_the_window` (cover with the advice,
@@ -412,7 +429,11 @@ The order is forced:
 >   alternately refuse each half; the first view must go by round 1, at most 2 views live, `kept`
 >   = one per view); with retirement bitten back to "this re-point landed every slot" it fails at
 >   round 1 holding 2 views. `a_view_kept_across_many_repoints_is_counted_once`; counting events
->   again it fails at 5 against 1.
+>   again it fails at 5 against 1. `crates/kf-qemu/tests/kf3_realize_discard.rs` reads kf3.c (CI
+>   does not compile it): the requirement precedes `kf3_realize`, and no path after it leaves
+>   without the `fail:` label that releases it. Against the previous kf3.c it fails with
+>   *"comes after kf3_realize"* and *"no `fail:` label"*; with one `goto fail` turned back into
+>   `return`, with *"2 `return;` after the requirement is held"*.
 
 > ⊘⊘ **CORRECTED 2026-10-03 (branch `v3-scratch-bound`) — the recommendation below bounded scratch
 > by the BAR size, and guest root can reach that bound. The scratch is now TILED.**
