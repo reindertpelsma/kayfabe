@@ -134,6 +134,9 @@ struct Kf3State {
     uint64_t db_sites_added, db_sites_removed;
     MemoryRegion dummy_pages[3];
     EventNotifier dummy_efd;   /* page 2's KVM ioeventfd — nobody reads it */
+    /* ★ 2026-10-03: this device holds ram_block_discard_require(true) (see realize), so no device
+     * that pins guest RAM for DMA can join the VM while it lives. Released at exit. */
+    bool discard_required;
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -839,6 +842,26 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
             return;
         }
     }
+    /* ★ 2026-10-03 (V3_P4_PORT_MAP.md Q3): never share a VM with a device that pins guest RAM for
+     * DMA. VFIO's listener DMA-maps every ram_device region (QEMU 10.2.4 hw/vfio/listener.c:
+     * 598-631): it would pin every page of PRAMIN/BAR1/BAR2 and keep IOMMU mappings of whatever
+     * they showed at that moment, stale after every re-point Rust makes behind QEMU's back -- a
+     * released host BAR1 aperture among them, reachable by the guest-programmed device. 10.2 has
+     * no per-region opt-out (memory_region_set_skip_iommu_map arrives in QEMU 11.1). Every 10.2
+     * device that pins RAM first disables RAM discard (vfio legacy and iommufd, vfio-user; also
+     * vhost-vdpa and SEV, refused as collateral), and ram_block_discard_require() inhibits exactly
+     * that, in both realize orders and for hotplug: a later such device fails its own realize with
+     * "Cannot set discarding of RAM broken". Not caught: the nvme:// block driver, which maps every
+     * RAM block through a RAMBlockNotifier (util/vfio-helpers.c:464-478) and disables nothing.
+     * Last fallible step, so a refused realize holds nothing. */
+    if (ram_block_discard_require(true) != 0) {
+        error_setg(errp, "kf3: this VM has a device that pins guest RAM for DMA (VFIO, iommufd, "
+                   "vfio-user, vhost-vdpa or SEV); kf3 refuses to share a VM with one, since it "
+                   "would DMA-map kf3's BAR windows and keep stale mappings after every re-point");
+        return;
+    }
+    s->discard_required = true;
+
     s->listener = (MemoryListener){
         .name = "kf3-guest-ram",
         .region_add = kf3_region_add,
@@ -880,6 +903,10 @@ static void kf3_dev_exit(PCIDevice *pci)
     if (s->msix_vectors > 0) {
         msix_unset_vector_notifiers(pci);
         msix_uninit(pci, &s->msix_bar, &s->msix_bar);
+    }
+    if (s->discard_required) {
+        ram_block_discard_require(false);
+        s->discard_required = false;
     }
 }
 
