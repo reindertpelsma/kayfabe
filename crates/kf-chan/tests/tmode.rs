@@ -624,6 +624,30 @@ fn chunking_keeps_every_piece_under_the_cap() {
     }
 }
 
+/// ★ §7 test 7, the other shape: a segment that is ONE long run of address-free methods (no
+/// trigger to cut at) is still cut into pieces under the cap — the decoder bounds every
+/// [`Ir::Words`] item.
+#[test]
+fn a_long_run_of_address_free_methods_is_still_chunked() {
+    let mut pb = Vec::new();
+    while pb.len() * 4 < 256 << 10 {
+        pb.extend(m(0, 0x78, &[0])); // WFI
+    }
+    let ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+    let pieces = chunk(&ir, |it, out| {
+        bind(it, &rows(), &windows(), out).map(|_| ())
+    })
+    .unwrap();
+    assert!(pieces.len() > 1);
+    for p in &pieces {
+        assert!(
+            4 * p.len() <= CHUNK_BYTES,
+            "a piece of {} bytes",
+            4 * p.len()
+        );
+    }
+}
+
 /// ★★ §7 test 8 — **`refusals_by_name`** (the T-mode half; the inc-A half is in
 /// `translated_rewrite.rs`).
 #[test]

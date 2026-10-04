@@ -317,8 +317,15 @@ pub fn decode(
     Ok(out)
 }
 
+/// Writes one [`Ir::Words`] item holds at most: each binds to two words, so an item never exceeds
+/// a quarter of [`CHUNK_BYTES`] and the chunker (which cuts only BETWEEN items) keeps every piece
+/// under the cap however long a run of address-free methods a segment carries.
+pub const WORDS_PER_ITEM: usize = CHUNK_BYTES / 32;
+
 fn words_ir(out: &mut Vec<Ir>, w: &[(u32, u32, u32)]) {
-    if let Some(Ir::Words(v)) = out.last_mut() {
+    if let Some(Ir::Words(v)) = out.last_mut()
+        && v.len() + w.len() <= WORDS_PER_ITEM
+    {
         v.extend_from_slice(w);
     } else {
         out.push(Ir::Words(w.to_vec()));
