@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+#
+# ★★★ G1d — the TYPE-RESOLVED half of the address gate (v3-sec-rawaddr, 2026-10-04; audit S1-02's
+# own recommendation; docs/design/V3_RAWADDR_PERIMETER.md §6). Used ONLY by
+# scripts/ci/address_clippy.sh (via CLIPPY_CONF_DIR), never by the workspace's ordinary clippy run,
+# so it binds exactly the kf-* crates that script names and never the frozen v2 crates or the
+# separately built firmware.
+#
+# Clippy resolves PATHS, so a rename (`use core::ptr as q`), a re-export or type inference cannot
+# hide a call the lexical gate (scripts/ci/address_gate.py) would miss. Every entry below was
+# checked to resolve on the pinned toolchain by the fixture
+# (scripts/ci/fixtures/address_clippy/positive.rs.txt: one diagnostic per entry). The perimeter
+# (`*_unsafe.rs`) opts out with `#![allow(clippy::disallowed_methods, clippy::disallowed_types)]`;
+# that attribute anywhere else is refused by the lexical gate.
+disallowed-methods = [
+  { path = "core::ptr::from_ref", reason = "an address outside the perimeter (OWNER_RULINGS §R)" },
+  { path = "core::ptr::from_mut", reason = "an address outside the perimeter (OWNER_RULINGS §R)" },
+  { path = "core::ptr::null", reason = "a raw pointer outside the perimeter" },
+  { path = "core::ptr::null_mut", reason = "a raw pointer outside the perimeter" },
+  { path = "core::ptr::dangling", reason = "a raw pointer outside the perimeter" },
+  { path = "core::ptr::dangling_mut", reason = "a raw pointer outside the perimeter" },
+  { path = "core::ptr::without_provenance", reason = "a raw pointer outside the perimeter" },
+  { path = "core::ptr::with_exposed_provenance", reason = "a raw pointer outside the perimeter" },
+  { path = "core::ptr::hash", reason = "hashes an address outside the perimeter" },
+  { path = "core::ptr::slice_from_raw_parts", reason = "a raw pointer outside the perimeter" },
+  { path = "alloc::boxed::Box::into_raw", reason = "an address outside the perimeter" },
+  { path = "alloc::sync::Arc::into_raw", reason = "an address outside the perimeter" },
+  { path = "alloc::sync::Arc::as_ptr", reason = "an address outside the perimeter" },
+  { path = "alloc::rc::Rc::into_raw", reason = "an address outside the perimeter" },
+  { path = "alloc::rc::Rc::as_ptr", reason = "an address outside the perimeter" },
+  { path = "alloc::ffi::CString::into_raw", reason = "an address outside the perimeter" },
+  { path = "core::ffi::CStr::as_ptr", reason = "an address outside the perimeter" },
+  { path = "alloc::vec::Vec::as_ptr", reason = "an address outside the perimeter" },
+  { path = "alloc::vec::Vec::as_mut_ptr", reason = "an address outside the perimeter" },
+  { path = "core::cell::Cell::as_ptr", reason = "an address outside the perimeter" },
+  { path = "str::as_ptr", reason = "an address outside the perimeter (key a census by content: kf-util textkey)" },
+  { path = "slice::as_ptr", reason = "an address outside the perimeter" },
+  { path = "slice::as_mut_ptr", reason = "an address outside the perimeter" },
+]
+disallowed-types = [
+  { path = "core::ptr::NonNull", reason = "a pointer outside the perimeter" },
+  { path = "core::sync::atomic::AtomicPtr", reason = "a pointer outside the perimeter" },
+  { path = "core::cell::UnsafeCell", reason = "interior mutability without a lock belongs in the perimeter" },
+]

@@ -39,6 +39,11 @@
 //! `include/uapi/linux/kvm.h`, spelled out with their encodings for the same reason
 //! `kvm_unsafe` spells its own out: a magic constant in a diff is unreviewable.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::error::{RawError, last_syscall_error};
 use crate::host_fd_unsafe::adopt_fd;
 use crate::kvm_unsafe::{Kvm, KvmVm, ioctl_arg};

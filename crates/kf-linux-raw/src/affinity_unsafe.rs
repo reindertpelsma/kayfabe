@@ -16,6 +16,11 @@
 //!
 //! ⚠ This is not a "make it faster" knob. Pinning here **removes** parallelism on purpose.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 /// The cores the calling thread is currently allowed to run on, or `None` if the kernel
 /// refused to say.
 ///

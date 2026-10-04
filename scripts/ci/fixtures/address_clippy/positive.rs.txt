@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1d known positive (scripts/ci/address_clippy.sh): every line marked `G1D` must draw exactly one
+// `disallowed_methods` / `disallowed_types` diagnostic — one per entry of
+// scripts/ci/address-clippy/clippy.toml, so an entry that stops resolving is a red self-test.
+use std::cell::Cell;
+use std::ffi::{CStr, CString};
+use std::rc::Rc;
+use std::sync::Arc;
+
+pub fn all(x: &u8, m: &mut u8, v: &mut Vec<u8>, s: &str, sl: &mut [u8], c: &Cell<u8>, cs: &CStr) -> usize {
+    let a = core::ptr::from_ref(x) as usize; // G1D
+    let b = core::ptr::from_mut(m) as usize; // G1D
+    let n = core::ptr::null::<u8>() as usize; // G1D
+    let nm = core::ptr::null_mut::<u8>() as usize; // G1D
+    let d = core::ptr::dangling::<u8>() as usize; // G1D
+    let dm = core::ptr::dangling_mut::<u8>() as usize; // G1D
+    let w = core::ptr::without_provenance::<u8>(8) as usize; // G1D
+    let e = core::ptr::with_exposed_provenance::<u8>(8) as usize; // G1D
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    core::ptr::hash(x, &mut h); // G1D
+    let sr = core::ptr::slice_from_raw_parts(x, 1) as *const u8 as usize; // G1D
+    let bx = Box::into_raw(Box::new(1u8)) as usize; // G1D
+    let ar = Arc::into_raw(Arc::new(1u8)) as usize; // G1D
+    let aa = Arc::as_ptr(&Arc::new(1u8)) as usize; // G1D
+    let rr = Rc::into_raw(Rc::new(1u8)) as usize; // G1D
+    let ra = Rc::as_ptr(&Rc::new(1u8)) as usize; // G1D
+    let ci = CString::new("a").unwrap().into_raw() as usize; // G1D
+    let cp = cs.as_ptr() as usize; // G1D
+    let vp = v.as_ptr() as usize; // G1D
+    let vm = v.as_mut_ptr() as usize; // G1D
+    let cl = c.as_ptr() as usize; // G1D
+    let sp = s.as_ptr() as usize; // G1D
+    let slp = sl.as_ptr() as usize; // G1D
+    let slm = sl.as_mut_ptr() as usize; // G1D
+    // a RENAMED module, which the lexical gate sees only at the `use`
+    use core::ptr as q;
+    let rn = q::from_ref(x) as usize; // G1D
+    let _nn: Option<core::ptr::NonNull<u8>> = None; // G1D
+    let _ap: Option<core::sync::atomic::AtomicPtr<u8>> = None; // G1D
+    let _uc: Option<core::cell::UnsafeCell<u8>> = None; // G1D
+    a + b + n + nm + d + dm + w + e + sr + bx + ar + aa + rr + ra + ci + cp + vp + vm + cl + sp + slp + slm + rn
+}

@@ -1,0 +1,21 @@
+error[E0369]: binary operation `==` cannot be applied to type `FrameView`
+   --> tests/ui/frame_view_has_no_address.rs:7:19
+    |
+  7 |     let _same = v == v;
+    |                 - ^^ - FrameView
+    |                 |
+    |                 FrameView
+    |
+note: `FrameView` does not implement `PartialEq`
+   --> src/display.rs
+    |
+    | pub struct FrameView {
+    | ^^^^^^^^^^^^^^^^^^^^ `FrameView` is defined in another crate
+
+error[E0560]: struct `FrameView` has no field named `addr`
+ --> tests/ui/frame_view_has_no_address.rs:8:17
+  |
+8 |     FrameView { addr: 0x1000, ..v }
+  |                 ^^^^ `FrameView` does not have this field
+  |
+  = note: available fields are: `span`, `id`, `width`, `height`, `stride` ... and 2 others

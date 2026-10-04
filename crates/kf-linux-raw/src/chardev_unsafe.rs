@@ -49,6 +49,11 @@
 //! "no business logic" rule, held by the fact that this file would compile unchanged
 //! against any driver.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::error::{RawError, last_syscall_error};
 use crate::ioctl::MAX_IOCTL_SIZE;
 use kf_util::{leafwitness, lockwitness};

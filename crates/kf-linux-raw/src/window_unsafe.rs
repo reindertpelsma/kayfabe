@@ -63,6 +63,11 @@
 //! synchronisation at all, so the adapter's map lock covers only the *lookup* — a bounded
 //! `BTreeMap` probe — and never the copy.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::bounds::{self, HostOffset};
 use crate::error::{RawError, last_syscall_error};
 use crate::geometry;

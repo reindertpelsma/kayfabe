@@ -27,6 +27,11 @@ kf-chan.workspace = true
 kf-rm.workspace = true
 kf-trap.workspace = true
 
+[dev-dependencies]
+# ★ v3-sec-rawaddr (2026-10-04): the compile-fail row that the console's frame view carries no
+# address (`tests/compile_fail.rs`).
+trybuild = "1.0"
+
 # ★ DELIBERATELY NOT `[lints] workspace = true` — this is the hypervisor FFI crate (extern "C"
 # entry points, pointers QEMU owns). Every `unsafe` lives in a `*_unsafe.rs` file and carries a
 # `// SAFETY:` naming its invariant; the safe composition lives beside it.

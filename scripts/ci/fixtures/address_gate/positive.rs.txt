@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1 known positives (scripts/ci/address_gate.py): EVERY code line below must be a hit. Not a
+// compiled file (the `.txt` suffix keeps it out of every `*.rs` scan but the gate's self-test).
+// master's S1-03 shapes
+pub fn addr(&self) -> usize {
+addr: AtomicUsize,
+pub addr: usize,
+// v3-broker's shapes
+addrs: [AtomicUsize; SLOTS],
+host.map_or(0, Frame::addr)
+// kf-util's four (2026-10-03)
+let ptr = what.as_ptr() as usize;
+let ptr = kind.as_ptr() as usize;
+let key = std::ptr::from_ref(site) as usize;
+let key = core::ptr::from_ref(site) as usize;
+// the rest of S1-02's list
+let p: CUdeviceptr = 0;
+let r = &raw const x;
+let r = &raw mut x;
+let s = format!("{:p}", r);
+let s = format!("{x:p}");
+let s = format!("{:#p}", r);
+let s = format!("{:>16p}", r);
+let b = Box::into_raw(b);
+let a = x as *const() as usize;
+let a = x as *mut[u8];
+use core::{ptr as q};
+let k = q::from_ref(&x);
+let n = ptr::null::<u8>();
+let n = core::ptr::null_mut::<u8>();
+let d = ptr::dangling::<u8>();
+let a = addr_of!(x);
+let a = core::ptr::addr_of_mut!(x);
+let p = v.as_mut_ptr();
+let p = s.as_ptr_range();
+let c = UnsafeCell::new(0);
+let a: AtomicPtr<u8> = AtomicPtr::default();
+impl fmt::Pointer for X {}
+use core::fmt::{self, Pointer};
+let d: DevAddr = 0;
+dev_ptr: u64,
+host_ptr: usize,
+fn frame_addr(&self) -> Option<usize> {
+fn base_ptr<T>(t: &T) -> usize {
+let p = r.expose_provenance();
+let p = ptr::with_exposed_provenance::<u8>(a);
+let p = r.with_addr(0);
+let n = u.addr();
+let h = ptr::hash(r, &mut s);
+use std::ptr::*;
+#[allow(clippy::disallowed_methods)]
+#[expect(clippy::disallowed_types)]

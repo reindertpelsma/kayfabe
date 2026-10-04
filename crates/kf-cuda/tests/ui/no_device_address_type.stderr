@@ -1,0 +1,5 @@
+error[E0425]: cannot find type `CUdeviceptr` in crate `kf_cuda`
+ --> tests/ui/no_device_address_type.rs:5:22
+  |
+5 |     let _p: kf_cuda::CUdeviceptr = 0x1000;
+  |                      ^^^^^^^^^^^ not found in `kf_cuda`

@@ -1,0 +1,9 @@
+error[E0499]: cannot borrow `g` as mutable more than once at a time
+  --> tests/ui/composer_holds_the_staging.rs:10:14
+   |
+ 9 |     let c = g.compose_begin(64, 64).unwrap();
+   |             - first mutable borrow occurs here
+10 |     let _d = g.compose_begin(4096, 4096);
+   |              ^ second mutable borrow occurs here
+11 |     c.finish(&frame).unwrap();
+   |     - first borrow later used here

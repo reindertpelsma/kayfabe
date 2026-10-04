@@ -1,6 +1,11 @@
 //! ★ The ONE raw-memory type: a region QEMU owns (BAR0 shadow RAM, guest RAM) that Rust reads and
 //! writes. Everything else in this crate is safe code over it.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 /// `[ptr, ptr+len)` of memory QEMU allocated and keeps mapped for the device's lifetime.
 ///
 /// ★ `Debug` prints the length only (2026-10-04, `v3-sec-rawaddr`): a derived impl formats `ptr`.

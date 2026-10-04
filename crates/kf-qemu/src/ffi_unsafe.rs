@@ -1,6 +1,11 @@
 //! ★ The `extern "C"` surface the kf3-gpu QOM device calls. Every entry point validates its handle
 //! and pointers and hands off to the safe [`crate::device::Device`] immediately.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::device::{Config, Device};
 use crate::raw_unsafe::RawRegion;
 use core::ffi::{c_char, c_void};

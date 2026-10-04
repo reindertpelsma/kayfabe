@@ -355,6 +355,7 @@ dependencies = [
  "kf-oprom",
  "kf-rm",
  "kf-trap",
+ "trybuild",
 ]
 
 [[package]]

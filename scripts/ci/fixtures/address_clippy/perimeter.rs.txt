@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1d look-alike: the perimeter's opt-out works — this file draws NO diagnostic.
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
+pub fn inside(x: &u8, v: &[u8]) -> usize {
+    let _nn: Option<core::ptr::NonNull<u8>> = None;
+    core::ptr::from_ref(x) as usize + v.as_ptr() as usize + std::slice::from_ref(x).len()
+}

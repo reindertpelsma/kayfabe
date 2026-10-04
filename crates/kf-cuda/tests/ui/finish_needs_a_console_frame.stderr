@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+   --> tests/ui/finish_needs_a_console_frame.rs:10:14
+    |
+ 10 |     c.finish(&frame.span()).unwrap();
+    |       ------ ^^^^^^^^^^^^^ expected `&ConsoleFrame`, found `&StaticSpan`
+    |       |
+    |       arguments to this method are incorrect
+    |
+    = note: expected reference `&ConsoleFrame`
+               found reference `&kf_linux_raw::mapping_unsafe::StaticSpan`
+note: method defined here
+   --> src/driver_unsafe/display_gpu_unsafe.rs
+    |
+    |     pub fn finish(self, frame: &ConsoleFrame) -> Result<(), CudaError> {
+    |            ^^^^^^

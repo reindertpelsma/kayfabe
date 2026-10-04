@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1 look-alikes: NOTHING below may be a hit (each was flagged by a draft of the gate, or is a
+// shape the tree legitimately uses). Comments say `as_ptr`, `&raw const`, `{:p}` and `*mut` freely.
+let s = std::slice::from_ref(&a);
+let s = core::array::from_ref(&a);
+let t = "as_ptr";
+let t = "&raw const x, Box::into_raw, ptr::null()";
+/* a block comment: .addr() and NonNull and *const u8 /* nested: {:p} */ still a comment */
+fn cmd_write_ptr_off(&self) -> u64 { 0 }
+struct A { addr: u64 }
+fn wpr2_reg(addr: u64) -> u32 { 0 }
+pub fn slot_addr(self, i: usize) -> Option<u64> { None }
+fn addr(&self, o: &Op) -> u64 { 0 }
+use crate::addr::{HostToken};
+let t = crate::addr::Gpa::new(0);
+struct M { _p: PhantomData<*mut ()> }
+let lifetime: &'static str = "x";
+let ch = '*';
+let q = '\'';
+let x = a * b;
+let y = *const_val;
+let z = format!("{:?} {x:>16} {:#x}", v, n);
+let w = r#"a raw string holding as_ptr and &raw const"#;
+let addr_len: usize = 0;
+let pointer_count = 3;

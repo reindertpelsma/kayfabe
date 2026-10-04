@@ -24,6 +24,11 @@
 //! (*"deregister then close, never close then deregister"*) is therefore expressible —
 //! and is the caller's, because only the caller knows when the last reference goes away.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::error::{RawError, last_syscall_error};
 use crate::host_fd_unsafe::adopt_fd;
 use kf_util::{leafwitness, lockwitness};

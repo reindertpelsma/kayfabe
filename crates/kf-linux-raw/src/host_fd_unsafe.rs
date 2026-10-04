@@ -16,6 +16,11 @@
 //!   in-lock syscall in the workspace, and the enumeration is the property we want — not
 //!   *"there are none"* but *"there are exactly these, and each was argued"*.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::error::{RawError, last_syscall_error};
 use kf_util::{leafwitness, lockwitness};
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};

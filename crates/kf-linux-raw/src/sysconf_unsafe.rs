@@ -8,6 +8,11 @@
 //! obtain the number, and a file that both calls the OS and decides what the answer means
 //! is two audits pretending to be one.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 /// The host page size the OS reports, unvalidated and possibly absurd.
 ///
 /// Deliberately returns the raw `i64` rather than a validated newtype — the caller owns

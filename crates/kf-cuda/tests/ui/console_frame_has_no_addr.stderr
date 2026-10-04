@@ -1,0 +1,5 @@
+error[E0599]: no method named `addr` found for struct `ConsoleFrame` in the current scope
+ --> tests/ui/console_frame_has_no_addr.rs:9:27
+  |
+9 |     let _a: usize = frame.addr();
+  |                           ^^^^ method not found in `ConsoleFrame`

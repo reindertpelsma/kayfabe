@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1b known positives: a derived Debug on a perimeter type that holds an address. The header line
+// of each offending item carries the marker the self-test expects a hit at.
+#[derive(Debug)]
+pub struct Mapping { // HIT
+    base: NonNull<u8>,
+    len: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Raw(*mut u8, usize); // HIT
+
+#[derive(Debug)]
+enum Hook { // HIT
+    Some(*const c_void),
+    None,
+}
+
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub(crate) struct Handle { // HIT
+    raw: usize,
+}

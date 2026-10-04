@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1b/G1c look-alikes: guest-space ABI values (`kvm_unsafe.rs` CoalescedZone's shape), lengths,
+// and a re-export of something that is not a pointer.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CoalescedZone {
+    pub addr: u64,
+    pub size: u32,
+    pub pad: u32,
+}
+
+#[derive(Debug)]
+struct Counts {
+    len: usize,
+    raw_len: usize,
+}
+
+pub use crate::bounds::HostOffset;
+pub use raw::{KF_ARGS_LAYOUT, StructLayout};

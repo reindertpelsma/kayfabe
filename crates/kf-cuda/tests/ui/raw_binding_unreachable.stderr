@@ -1,0 +1,21 @@
+error[E0432]: unresolved import `kf_cuda::Cuda`
+ --> tests/ui/raw_binding_unreachable.rs:4:5
+  |
+4 | use kf_cuda::Cuda;
+  |     ^^^^^^^^^----
+  |              |
+  |              no `Cuda` in the root
+
+error[E0603]: module `driver_unsafe` is private
+  --> tests/ui/raw_binding_unreachable.rs:7:22
+   |
+ 7 |     let _ = kf_cuda::driver_unsafe::CudaError::MissingSymbol("x");
+   |                      ^^^^^^^^^^^^^             ------------- tuple variant `MissingSymbol` is not publicly re-exported
+   |                      |
+   |                      private module
+   |
+note: the module `driver_unsafe` is defined here
+  --> src/lib.rs
+   |
+   | mod driver_unsafe;
+   | ^^^^^^^^^^^^^^^^^

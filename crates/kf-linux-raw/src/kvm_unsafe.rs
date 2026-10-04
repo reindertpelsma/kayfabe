@@ -34,6 +34,11 @@
 //! `include/uapi/linux/kvm.h`, spelled out as constants with the encoding shown, because a
 //! magic `0x4020_AE46` in a diff is unreviewable. `libc` does not export them.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::error::{RawError, last_syscall_error};
 use crate::host_fd_unsafe::adopt_fd;
 use crate::window_unsafe::GuestWindow;

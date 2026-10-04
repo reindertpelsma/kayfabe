@@ -30,6 +30,11 @@
 //! check stops a cancel landing on a later operation *of the same worker*; naming the
 //! thread stops it landing on a *different* worker entirely.
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::error::{RawError, last_syscall_error};
 
 /// The signal used to break a blocked host call.

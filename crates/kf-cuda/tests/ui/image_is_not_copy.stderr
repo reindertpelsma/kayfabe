@@ -1,0 +1,10 @@
+error[E0382]: borrow of moved value: `img`
+  --> tests/ui/image_is_not_copy.rs:11:18
+   |
+ 8 |     let img = k.upload(&[0u8; 4096]).unwrap();
+   |         --- move occurs because `img` has type `DeviceImage`, which does not implement the `Copy` trait
+ 9 |     drop(img);
+   |          --- value moved here
+10 |     let mut b = [0u8; 8];
+11 |     k.read_image(&img, 0, &mut b).unwrap();
+   |                  ^^^^ value borrowed here after move

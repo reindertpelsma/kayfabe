@@ -781,6 +781,26 @@ jobs:
             echo "lexical (PhantomData is a ZST), never editorial."
             exit 1
           fi
+      # ★★★ THE ADDRESS GATE — G1, G1b, G1c (v3-sec-rawaddr, 2026-10-04; audit S1-02/S1-03/S1-12;
+      # OWNER_RULINGS §R gate 2; docs/design/V3_RAWADDR_PERIMETER.md §6). The host-pointer gate above
+      # sees only the four pointer TYPE names; an address also crosses safe code disguised —
+      # `&raw const`, `ptr::from_ref`, `.as_ptr() as usize`, `Box::into_raw`, `.addr()`, an
+      # `addr: usize` field, `{:p}`, a CUDA device-pointer type. G1 refuses every such shape outside
+      # `*_unsafe.rs` in the kf-* crates and firmware/, with a real lexer (comments, char and string
+      # literals and `PhantomData` dropped; `{:p}` looked for INSIDE strings); G1b refuses a derived
+      # `Debug` over a pointer field inside the perimeter; G1c a pointer re-export from it. It runs
+      # its own self-test first (scripts/ci/fixtures/address_gate/: every known positive must be
+      # found, every look-alike must not) — a gate that reports zero must first report one.
+      - name: "Address gate (G1/G1b/G1c: no raw or disguised address outside *_unsafe.rs)"
+        run: python3 scripts/ci/address_gate.py
+      # ★★ G1d — the TYPE-RESOLVED half (S1-02's own recommendation): Clippy's
+      # `disallowed-methods`/`disallowed-types` (scripts/ci/address-clippy/clippy.toml) DENIED over
+      # every kf-* crate, all targets; a rename, re-export or inference cannot hide a call from it.
+      # The perimeter opts out with `#![allow(clippy::disallowed_methods, clippy::disallowed_types)]`,
+      # which G1 refuses anywhere else. Its own target dir, so this lint configuration and the
+      # workspace clippy's cache never mix; self-test first (one diagnostic per config entry).
+      - name: "Address gate, type-resolved (G1d: Clippy disallowed pointer functions/types)"
+        run: bash scripts/ci/address_clippy.sh
       # ★ The BRIDGE-EXCLUSIVITY gate (docs/design/gsp_core_bridge.md §1.2, which asks for
       # it in as many words: "It is the ONLY crate in the tree permitted to name both
       # `RpcCommand` and `RmEvent`. That is a one-line CI grep and should be added as one").
@@ -1913,6 +1933,42 @@ jobs:
             echo "invariant is — and add it to the per-file itemisation."
             echo "If you REMOVED one: change the number too — a ratchet that only catches"
             echo "growth stops being a count of the audit surface."
+            exit 1
+          fi
+
+          # --- The PERIMETER ratchet (OWNER_RULINGS §R(c), v3-sec-rawaddr 2026-10-04): the SIZE of each
+          # audited crate's perimeter, not only its `unsafe` count. §R makes every `*_unsafe.rs` file
+          # the memory-safety audit surface — validation code that needs no `unsafe` block included —
+          # so a perimeter that grows is more to audit even when the block count falls. Counted:
+          # non-blank lines not starting with `//` (doc and line comments excluded), in every
+          # `*_unsafe.rs` under the crate's src/, compared EXACTLY like the block count.
+          #   kf-linux-raw 4596 -> 4810 (+214): `StaticSpan`, `MappedRegion::static_span`/`host_span`,
+          #     the recorded `BackingKind`, hand-written `Debug` for HostSpan/StaticSpan/Mapping/
+          #     GuestWindow/RunMapping (no address in `{:?}`), their tests, and the G1d opt-out
+          #     attribute in each of the ten perimeter files.
+          #   kf-cuda 1084 -> 4428 (+3344): §R(b) moved the walker's and the display plane's launch
+          #     assembly and their validators INTO the perimeter (`driver_unsafe/walk_gpu_unsafe.rs`,
+          #     `display_gpu_unsafe.rs`: V5-V12, ~1500 code lines out of walk.rs/display.rs), the raw
+          #     tier gained the handle types and V1-V4 (`KERNEL_SIGS` is one line per argument), and the
+          #     GPU-free tests of every validation site live beside it (`tests_unsafe.rs` and the
+          #     children's test modules, ~1100 lines: T1-T12, T17-T23).
+          #   kf-qemu 571 -> 658 (+87): V13 `check_frame`/`check_frame_geometry`, `Kf3Frame.len`,
+          #     hand-written `Debug` for RawRegion/OverlayHook/IoeventfdHook, the G1d opt-out.
+          PERIMETER="kf-linux-raw:4810 kf-cuda:4428 kf-qemu:658"
+          fail=0
+          for entry in $PERIMETER; do
+            c="crates/${entry%%:*}"; want="${entry##*:}"
+            actual=$(find "$c/src" -name '*_unsafe.rs' -exec cat {} + \
+                       | grep -vE '^[[:space:]]*$' | grep -vcE '^[[:space:]]*//' || true)
+            echo "$c: $actual perimeter line(s) (bar: $want)"
+            [ "$actual" -ne "$want" ] && fail=1
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo ""
+            echo "★ PERIMETER RATCHET MOVED — OWNER_RULINGS §R(c)."
+            echo "An audited crate's *_unsafe.rs code grew or shrank. Change PERIMETER in the same"
+            echo "commit and say why in the itemisation above it: the perimeter is the memory-safety"
+            echo "audit surface, so its size is a reviewed number, not a by-product."
             exit 1
           fi
   aarch64:

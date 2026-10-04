@@ -26,6 +26,11 @@
 //! | [`VolatileRegion`] | **hardware** (semaphores, USERD, fences) | aligned `Relaxed` atomic loads/stores, ≤ 8 bytes |
 //! | [`Reservation`] | nobody (`PROT_NONE`) | placement of a `MappedRegion` *inside* it, by offset |
 
+// ★ G1d (v3-sec-rawaddr, scripts/ci/address_clippy.sh): this file is the memory-safety perimeter
+// (OWNER_RULINGS §R), the one place the pointer functions and types Clippy is told to refuse may
+// appear. The opt-out is refused anywhere else (scripts/ci/address_gate.py).
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
+
 use crate::bounds::{self, HostOffset};
 use crate::cache::{self, CachePolicy};
 use crate::error::{RawError, last_syscall_error};
