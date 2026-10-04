@@ -1,0 +1,200 @@
+=== boot_capture tag=c2x1130 at 2026-10-04T11:25:47+00:00 ===
+=== source revision: 9d82f259 ===
+=== qemu binary: -rwxr-xr-x 1 root root 90002544 Oct  4 11:08 /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Oct  4 11:25:55 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:02.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  4 11:25 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  4 11:25 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  4 11:25 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  4 11:25 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  4 11:25 .
+drwxr-xr-x 19 root root   4040 Oct  4 11:25 ..
+cr--------  1 root root 240, 1 Oct  4 11:25 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  4 11:25 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/display/max_fps_x11_hook.sh at 2026-10-04T11:25:57+00:00 ===
+DISPLAY_FPS_BOUND=30
+DISPLAY_PROBE_BUILD=ok
+DISPLAY_DRM_MODPROBE rc=0 
+DISPLAY_BOOT_VGA dev=0000:00:02.0 boot_vga=1 vgaarb_lines=2 
+DISPLAY_DRM_NODES by-path card1 renderD128 
+DISPLAY_DRM_DMESG_LINES=32 displayless=0
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_COUNTS connectors=1 crtcs=4 encoders=1 fbs=0
+DISPLAY_KFDISP_CONNECTOR id=126 type=DVI-D-1 status=connected modes=1 preferred=1920x1080@30 max_vrefresh=30
+DISPLAY_KFDISP_PLANE id=49 type=primary crtcs=0x1 formats=13
+DISPLAY_KFDISP_PLANE id=54 type=cursor crtcs=0x1 formats=1
+DISPLAY_KFDISP_PLANE id=61 type=overlay crtcs=0x1 formats=13
+DISPLAY_KFDISP_PLANE id=68 type=primary crtcs=0x2 formats=13
+DISPLAY_KFDISP_PLANE id=73 type=cursor crtcs=0x2 formats=1
+DISPLAY_KFDISP_PLANE id=80 type=overlay crtcs=0x2 formats=13
+DISPLAY_KFDISP_PLANE id=87 type=primary crtcs=0x4 formats=13
+DISPLAY_KFDISP_PLANE id=92 type=cursor crtcs=0x4 formats=1
+DISPLAY_KFDISP_PLANE id=99 type=overlay crtcs=0x4 formats=13
+DISPLAY_KFDISP_PLANE id=106 type=primary crtcs=0x8 formats=13
+DISPLAY_KFDISP_PLANE id=111 type=cursor crtcs=0x8 formats=1
+DISPLAY_KFDISP_PLANE id=118 type=overlay crtcs=0x8 formats=13
+DISPLAY_KFDISP_SUMMARY connected=1 primary=4 overlay=4 cursor=4
+DISPLAY_MODETEST_CONNECTED=1 modes_1080p=1
+DISPLAY_SMI_DISPLAY  Display Mode : Requested functionality has been deprecated Display Attached : Yes Display Active : Enabled Persistence Mode : Disabled Addressing Mode : HMM 
+DISPLAY_GPU_PROGRESS_ERRORS=0
+DISPLAY_CONNECTED=yes card=/dev/dri/card1
+(qemu)
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_DRIVER=nvidia-drm
+DISPLAY_KFDISP_MODE 1920x1080@30 clock=68250 connector=126 crtc=60
+DISPLAY_KFDISP_PATTERN_A_FNV=b46ca47163518677 pitch=7680
+DISPLAY_KFDISP_PATTERN_B_FNV=d42aac677e43ad67
+DISPLAY_KFDISP_SETCRTC_OK ms=18.7
+DISPLAY_KFDISP_FLIP_MODE=vsync gap_ms=0 cap_async_page_flip=1
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=29.22
+DISPLAY_KFDISP_SHOWING=A hold_s=10
+DISPLAY_KFDISP_RESTORED=ok fb=128
+DISPLAY_FLIP_EVENT_TIMEOUTS=0 DRM_WARNS=0
+DISPLAY_DESKTOP_CONF busid=PCI:0:2:0 session=cinnamon env=[] DESK_CONF_OK 
+DISPLAY_DESKTOP_SESSION=yes (rc=0  xorg_starts=/var/log/Xorg.0.log:1 )
+DISPLAY_XORG_CONFD 12 lines, nvidia_outputclass=1 last_EE=[    74.827] (EE) NVIDIA(GPU-0): Failed to get virtual display support info. last_EE_old=
+DISPLAY_XORG_PRIMARY pin=0 [    70.410] (--) PCI:*(0@0:2:0) 10de:2504:3842:3656 rev 161, Mem @ 0xc0000000/16777216, 0x800000000/134217728, 0x808000000/33554432, 0xc1040000/16384, BIOS @ 0x????????/131072  EE=9 no_screens=0
+(qemu)
+DISPLAY_GLX_RENDERER NVIDIA GeForce RTX 3060/PCIe/SSE2 DIRECT=Yes
+DISPLAY_GLXGEARS 150 frames in 5.0 seconds = 29.931 FPS 150 frames in 5.0 seconds = 29.919 FPS 
+DISPLAY_GLXGEARS_NOVSYNC 12492 frames in 5.0 seconds = 2498.235 FPS
+DISPLAY_VKCUBE_PM0 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=0 WALL_MS=3732
+DISPLAY_VKCUBE_PM1 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=1 WALL_MS=1897
+DISPLAY_VKCUBE_PM2 Selected GPU 0: NVIDIA GeForce RTX 3060 RC=0 WALL_MS=10949
+(qemu)
+DISPLAY_VKCUBE Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu VKCUBE_RC=0 WALL_MS=43130
+(qemu)
+DISPLAY_XORG_LOG errors=9 nvidia=50 [    78.676] (II) NVIDIA(0): Setting mode "DFP-0:nvidia-auto-select"
+DISPLAY_SHOT desk_1 md5=639e3cbb34c0 bytes=6220817
+DISPLAY_SHOT desk_vkcube md5=6d8fc766cde1 bytes=6220817
+DISPLAY_SHOT desk_2 md5=32b12e07b242 bytes=6220817
+DISPLAY_DESKTOP_GPU_PROGRESS_ERRORS=0 XID=0
+DISPLAY_DESKTOP_CRASHES 0 
+DISPLAY_HOOK_DONE
+D4_HOOK_SH_RC=0 [11:29:07]
+D4_X_edid up=yes mode=[ 1920x1080 29.94*+|] head 3 ACTIVE raster 2080x1096 period 33401904 ns (raster 33401904 ns, cap 30 Hz) [11:29:23]
+D4_bare_B1_GLXGEARS_WINDOWED_VSYNC [152 frames in 5.0 seconds = 30.221 FPS 150 frames in 5.0 seconds = 29.936 FPS 150 frames in 5.0 seconds = 29.940 FPS 150 frames in 5.0 seconds = 29.931 FPS ] fps=[fps[cap=30(cfg) h3[armed=29.938 tick=29.94 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]] [11:29:45]
+D4_bare_B2_GLXGEARS_FULLSCREEN_VSYNC [148 frames in 5.0 seconds = 29.472 FPS 150 frames in 5.0 seconds = 29.941 FPS 150 frames in 5.0 seconds = 29.942 FPS ] fps=[fps[cap=30(cfg) h3[armed=29.938 tick=29.92 clamped=0 late_max_us=2910 kms=29.9 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]] [11:30:02]
+D4_bare_B3_VKCUBE_FIFO_480 RC=0 WALL_MS=18395  fps=[fps[cap=30(cfg) h3[armed=29.938 tick=29.94 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]] [11:30:22]
+D4_bare_B4_GLXGEARS_FULLSCREEN_NOVSYNC [149 frames in 5.0 seconds = 29.674 FPS 150 frames in 5.0 seconds = 29.938 FPS 150 frames in 5.0 seconds = 29.940 FPS ] fps=[fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=29.9 tear=29.9 held=260 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]] [11:30:39]
+D4_bare_B5_VKCUBE_IMMEDIATE_480 RC=0 WALL_MS=2798  fps=[fps[cap=30(cfg) h3[armed=29.938 tick=28.96 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=454 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]] [11:30:44]
+D4_X_r1b up=yes mode=[] head 3 ACTIVE raster 2200x1125 period 33333333 ns (raster 16666666 ns, cap 30 Hz, CLAMPED) [11:30:58]
+D4_R1B_XORG 8 lines: [   325.065] (**) NVIDIA(0): Option "MetaModes" "1920x1080_60cea +0+0"|[   328.429] (II) NVIDIA(0):     "1920x1080_60cea+0+0"| [11:30:58]
+D4_r1b_B1_GLXGEARS_WINDOWED_VSYNC [152 frames in 5.0 seconds = 30.371 FPS 150 frames in 5.0 seconds = 29.994 FPS 151 frames in 5.0 seconds = 30.007 FPS 150 frames in 5.0 seconds = 29.993 FPS ] fps=[fps[cap=30(cfg) h3[armed=30.000 tick=30.96 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]] [11:31:20]
+D4_r1b_B2_GLXGEARS_FULLSCREEN_VSYNC [148 frames in 5.0 seconds = 29.579 FPS 151 frames in 5.0 seconds = 29.996 FPS 151 frames in 5.0 seconds = 29.999 FPS ] fps=[fps[cap=30(cfg) h3[armed=30.000 tick=29.96 clamped=1 late_max_us=3933 kms=29.9 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=30.9 checks=0.0 same=178 ondemand=4 over=0]] [11:31:38]
+D4_r1b_B3_VKCUBE_FIFO_480 RC=0 WALL_MS=18334  fps=[fps[cap=30(cfg) h3[armed=30.000 tick=29.03 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]] [11:31:57]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=29.9 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.92 clamped=0 late_max_us=2910 kms=29.9 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=29.9 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=28.97 clamped=0 late_max_us=2910 kms=28.9 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=1.9 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=1.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.92 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.95 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.94 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.92 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.94 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=0 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.91 clamped=0 late_max_us=2910 kms=21.9 tear=18.9 held=20 core_imm=9 vblirq=0.0] copies=21.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=30.91 clamped=0 late_max_us=2910 kms=30.9 tear=30.9 held=81 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.94 clamped=0 late_max_us=2910 kms=29.9 tear=29.9 held=140 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=29.9 tear=29.9 held=200 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=29.9 tear=29.9 held=260 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=28.95 clamped=0 late_max_us=2910 kms=28.9 tear=28.9 held=320 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.94 clamped=0 late_max_us=2910 kms=29.9 tear=29.9 held=380 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=2910 kms=29.9 tear=29.9 held=440 core_imm=9 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.92 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=454 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=28.96 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=454 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.92 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=454 core_imm=9 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.92 clamped=0 late_max_us=2910 kms=0.9 tear=0.0 held=454 core_imm=10 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=28.96 clamped=0 late_max_us=2910 kms=0.0 tear=0.0 held=454 core_imm=11 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=29.93 clamped=0 late_max_us=3933 kms=3.9 tear=0.0 held=454 core_imm=12 vblirq=0.0] copies=3.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=29.938 tick=30.92 clamped=0 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=12 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.65 clamped=1 late_max_us=3933 kms=0.9 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.96 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.07 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.96 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.06 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.99 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.03 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.99 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.96 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.99 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.96 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.98 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.98 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.99 clamped=1 late_max_us=3933 kms=21.9 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=21.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.95 clamped=1 late_max_us=3933 kms=29.9 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=30.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.18 clamped=1 late_max_us=3933 kms=29.1 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=29.1 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.96 clamped=1 late_max_us=3933 kms=30.9 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.96 clamped=1 late_max_us=3933 kms=29.9 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=30.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.17 clamped=1 late_max_us=3933 kms=29.1 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=29.1 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.98 clamped=1 late_max_us=3933 kms=29.9 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.97 clamped=1 late_max_us=3933 kms=29.9 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=29.9 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.97 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.99 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.96 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.03 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.05 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.99 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.06 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.05 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=29.97 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_FPSLINE fps[cap=30(cfg) h3[armed=30.000 tick=30.96 clamped=1 late_max_us=3933 kms=0.0 tear=0.0 held=454 core_imm=13 vblirq=0.0] copies=0.0 checks=0.0 same=178 ondemand=4 over=0]
+D4_PERIOD head 0 idle raster 0x0 period 0 ns (raster 0 ns, cap 30 Hz)
+D4_PERIOD head 1 idle raster 0x0 period 0 ns (raster 0 ns, cap 30 Hz)
+D4_PERIOD head 2 idle raster 0x0 period 0 ns (raster 0 ns, cap 30 Hz)
+D4_PERIOD head 3 ACTIVE raster 2080x1096 period 33401904 ns (raster 33401904 ns, cap 30 Hz)
+D4_PERIOD head 0 idle raster 0x0 period 0 ns (raster 0 ns, cap 30 Hz)
+D4_PERIOD head 1 idle raster 0x0 period 0 ns (raster 0 ns, cap 30 Hz)
+D4_PERIOD head 2 idle raster 0x0 period 0 ns (raster 0 ns, cap 30 Hz)
+D4_PERIOD head 3 ACTIVE raster 2200x1125 period 33333333 ns (raster 16666666 ns, cap 30 Hz, CLAMPED)
+D4_HOOK_DONE [11:31:59]
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=76
+GUEST_DMESG_AFTER_NVRM=57
+GUEST_DMESG_WORKLOAD_DELTA=48
+=== HOST dmesg delta for this boot (watermark 793 → 808) ===
+HOST_DMESG_LINES=15
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

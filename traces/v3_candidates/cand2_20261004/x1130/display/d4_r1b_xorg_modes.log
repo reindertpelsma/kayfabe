@@ -1,0 +1,8 @@
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+[   325.065] (**) NVIDIA(0): Option "ModeValidation" "AllowNonEdidModes, NoVertRefreshCheck, NoHorizSyncCheck, NoMaxPClkCheck, NoEdidMaxPClkCheck, NoEdidModes"
+[   325.065] (**) NVIDIA(0): Option "MetaModes" "1920x1080_60cea +0+0"
+[   325.119] (EE) NVIDIA(GPU-0): Failed to get virtual display support info.
+[   328.279] (**) NVIDIA(GPU-0):     NoVertRefreshCheck
+[   328.429] (II) NVIDIA(0): Validated MetaModes:
+[   328.429] (II) NVIDIA(0):     "1920x1080_60cea+0+0"
+[   329.249] (II) NVIDIA(0): Setting mode "1920x1080_60cea+0+0"

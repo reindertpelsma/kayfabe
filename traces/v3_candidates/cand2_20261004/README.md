@@ -100,3 +100,17 @@ three distinct full 1920x1080 frames with the correct dominant colours. Host
 Xid count zero. These times include parsing and the full pixel census. The
 negative control above ran on vmb; a same-box positive is still planned after
 the app matrix. The X11 cap-30 run `c2x1130` is now running on vdisp2.
+
+Exact-source `cand2b` bar at `9d82f259` finished `EXIT rc=0` at 11:33:28 UTC:
+2131/0 tests, gates 9/9, bare metal and guest 30/30, all 161 suite births and
+11 gate births USER, 90 CUDA posture lines; eleven census negative cases passed.
+Full logs, all arm traces and summary are in `cand2b/`. Applications follow.
+
+`x1130/` preserves the first complete cap-30 X11 run (11:32:15 UTC). Pixel-exact
+1920x1080, KMS 29.22 Hz; Cinnamon GLX 29.9 FPS. Bare windowed/fullscreen GLX
+hold about 30 FPS, including a forced CEA 60 Hz raster (CLAMPED, 33333333 ns).
+Vulkan FIFO 480 completes in 18.395s (forced-60: 18.334s), outside the planned
+15.5–17.5s total-time range; a startup/presentation-slope follow-up is required.
+Mailbox presentation is unsupported. Host Xid/GPU-progress errors are zero,
+but the guest records three flip-event timeouts: diagnosis pending, not an
+unqualified display PASS.
