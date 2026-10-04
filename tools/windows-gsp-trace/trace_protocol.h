@@ -1,7 +1,15 @@
 /* SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later */
 #ifndef KF_GSP_TRACE_PROTOCOL_H
 #define KF_GSP_TRACE_PROTOCOL_H
+#if defined(_KERNEL_MODE)
+/* WDK kernel CRT has no stdint.h. Do not mix the user-mode MSVC CRT into
+ * /kernel translation units; these compiler integer widths match the ABI. */
+typedef unsigned __int32 uint32_t;
+typedef unsigned __int64 uint64_t;
+#define UINT64_MAX (~(uint64_t)0)
+#else
 #include <stdint.h>
+#endif
 #define KFGT_ABI 1u
 #define KFGT_FILE_MAGIC 0x5457474bu /* KGWT */
 #define KFGT_RECORD_MAGIC 0x5247474bu /* KGGR */

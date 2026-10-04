@@ -54,7 +54,7 @@ $wdk = Get-PinnedKit 'microsoft.windows.wdk.x64' 'wdk' $wdkHash
 $sdk = Get-PinnedKit 'microsoft.windows.sdk.cpp' 'sdk' $sdkHash
 $kit = '10.0.28000.0'
 $compile = @('/nologo','/c','/kernel','/std:c11','/W4','/WX','/O2','/GS','/D_AMD64_','/DAMD64','/D_WIN64',
-    '/D_WIN32_WINNT=0x0A00','/DNTDDI_VERSION=0x0A000008','/D_KERNEL_MODE',
+    '/D_WIN32_WINNT=0x0A00','/DNTDDI_VERSION=0x0A000008',
     "/I$wdk\c\Include\$kit\km", "/I$wdk\c\Include\$kit\km\crt",
     "/I$sdk\c\Include\$kit\shared", "/I$sdk\c\Include\$kit\ucrt")
 $linkOptions = @('/nologo','/driver','/subsystem:native,10.0','/entry:GsDriverEntry','/machine:x64',
