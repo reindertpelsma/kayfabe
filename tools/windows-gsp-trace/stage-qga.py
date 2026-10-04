@@ -64,6 +64,16 @@ def stage(args):
             raise RuntimeError(f'Guest PowerShell exited {rc}: {error}\n{out}')
         return out.strip()
 
+    def file_rpc(name, arguments):
+        # Cold-boot Defender/servicing activity can delay QGA file operations.
+        # Never retry a write whose acknowledgement was lost: its file offset
+        # may already have advanced. A fresh staging invocation truncates and
+        # verifies the complete archive instead.
+        try:
+            return helper.rpc(sock, name, arguments, timeout=60)
+        except (OSError, EOFError, ValueError) as error:
+            raise RuntimeError(f'{name} failed; upload was not retried: {error}') from error
+
     powershell(r'''$ErrorActionPreference='Stop'
 if (-not (Test-Path C:\ProgramData\VastWindows\defer-native-gpu.flag)) { throw 'Native NVIDIA installation must be deferred before recorder staging' }
 $null=Get-ScheduledTask -TaskName VastWindowsNativeGpu
@@ -72,16 +82,22 @@ New-Item -ItemType Directory -Path C:\ProgramData\KayfabeGsp -Force | Out-Null
 if ($LASTEXITCODE) { throw 'Could not protect recorder directory' }
 ''')
     destination = DESTINATION + r'\stage.zip'
-    handle = helper.rpc(sock, 'guest-file-open', {'path': destination, 'mode': 'wb'})
+    print('Recorder directory ready; uploading trusted archive', file=sys.stderr, flush=True)
+    handle = file_rpc('guest-file-open', {'path': destination, 'mode': 'wb'})
+    uploaded = 0
     try:
         with args.bundle.open('rb') as stream:
             while block := stream.read(65536):
-                result = helper.rpc(sock, 'guest-file-write', {'handle': handle, 'buf-b64': base64.b64encode(block).decode('ascii')})
+                result = file_rpc('guest-file-write', {'handle': handle, 'buf-b64': base64.b64encode(block).decode('ascii')})
                 if result.get('count') != len(block):
                     raise RuntimeError('Short guest-file-write; staging archive is incomplete')
-        helper.rpc(sock, 'guest-file-flush', {'handle': handle})
+                uploaded += len(block)
+                if uploaded % (1024 * 1024) == 0:
+                    print(f'Uploaded {uploaded} archive bytes', file=sys.stderr, flush=True)
+        file_rpc('guest-file-flush', {'handle': handle})
     finally:
-        helper.rpc(sock, 'guest-file-close', {'handle': handle})
+        file_rpc('guest-file-close', {'handle': handle})
+    print(f'Uploaded {uploaded} bytes; verifying and enabling test signing for next boot', file=sys.stderr, flush=True)
     check = r'''$ErrorActionPreference='Stop'
 $root='C:\ProgramData\KayfabeGsp'
 if ((Get-FileHash "$root\stage.zip" -Algorithm SHA256).Hash -ne '__SHA256__') { throw 'Windows staging archive SHA256 mismatch' }
