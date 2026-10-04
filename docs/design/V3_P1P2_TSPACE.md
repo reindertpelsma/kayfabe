@@ -18,6 +18,69 @@ supersession is recorded in §12's own text).
 | C | landed, CI | `kf_chan::ttables` (the hand-written per-tier tables: CE methods per tier with inheritance, host methods, the `LAUNCH_DMA` / `SEMAPHORED` / `SEM_EXECUTE` field tables — each row held to the class header that states it, `hwref_check`); `kf_chan::tmode` (decode → unbound IR, `bind` against the placement rows at the call, launch splitting at row boundaries with the piece rules, chunking, the `Shadow`); `kf_chan::tspace_unsafe` (the perimeter, gate-3 table in §3.8; `kf-chan:0` added to the CI unsafe-containment list — zero `unsafe` blocks); `PlacedRow` carries the guest leaf's `MapPerm`; `RamMap::dma_to_file_range` (the §2.6 seam) routed through the walker's closure, `SlotWindow`, the T-mode resolver and sysmem USERD/notifiers (the PRAMIN closure waits for `v3-scratch-bound`); the shadow on today's path behind `KF3_TSHADOW=1` (one `TSHADOW` line per Translated channel at free). Deviation: host `NOP` payloads are consumed, not re-emitted — the engine reads UVM's inline data from the guest's own pushbuffer through the window, never from our ring | CENSUS (§8), with `KF3_TSHADOW=1` |
 | D | landed, CI | `KF3_TSPACE=1` (default OFF; read once): Translated births go to the T-space — refused by name when it is not built (`tspace: not built (…)`, never a fallback) — on a T-space ring slot in `kf_chan::host::TSPACE_LAYOUT` (one object, one CPU view, three FIXED maps: pushbuffer and GPFIFO read-only, the fence read-write, USERD unmapped), bound at push (`tmode::push_bound`; a `Busy` piece is stashed UNBOUND); mirrors, prewarmed spares and recycled spares carry no window and no ring (`windows=none`, `reserved` empty) and are always recorded; the per-twin state word (`kf_qemu::twin::TwinState`) replaces the `kernel_vas` flip — passthrough births count `User(n)` and are refused in `Kernel`, Translated births refused in `User(n>0)`; the stale-bind counter (`TSPACE-RETIRE … stale_binds=stale/checked`, positive control `KF3_NEGCTL_STALE_BIND=1`); counters `tspace[built= twin_refused= tspace_refused= slots_leaked=]` on the status line. The box-log gate every T-mode box step runs is `scripts/p1p2/tspace_log_gate.py` (T-TSPACE-BUILD ordering and bounds, `windows=none` on every mirror and spare, the counters, the stale-bind counter and its positive control, unprivileged births present; `--windows` is the `KF3_TSPACE=0` known-positive arm), self-tested in CI by `scripts/ci/test_tspace_log_gate.py` with one planted defect per check. ⚠ Not done: the walker-context test (§7.12 second half — it needs a CUDA context, so it is a box step: a `windows=none` boot whose walks complete) | T-TSPACE-BUILD, T-WINDOW-USER, T-RING-TRANSLATED, T-PHYS-CE, REGRESSION A/B, PERF A/B (§8) |
 
+★ **Mutations run on 2026-10-04** (each applied to the source, the named test run, the source restored and re-dated so cargo rebuilds it — `scratchpad` runner `mut.py`; an earlier pass whose restores left the files OLDER than the mutant artefacts was discarded and every batch re-run). One mutation survived its first test (`D-busy-loses-the-refused-chunk`: the test never refused a push inside the chunk loop); the test was strengthened to exercise both `Busy` arms and the mutation re-run red.
+
+| mutation | result | test that turned red |
+|---|---|---|
+| `A1-refused-method-check-removed` | RED | refusals_by_name_every_refused_method, the_census_counts_what_the_channel_pushed |
+| `A1-subdevice-mask-forwarded-raw` | RED | a_subdevice_mask_header_is_refused |
+| `A1-extended-base-not-applied` | RED | extended_base_applies_to_later_entries |
+| `A1-bad-control-entry-skipped` | RED | control_entries_other_than_nop_and_extended_base_are_refused |
+| `A1-census-cap-ignored` | RED | a_guest_cannot_grow_the_census_past_its_cap |
+| `A2-heap-accepts-reserved-regions` | RED | userd_and_notifier_bounded_to_the_usable_heap |
+| `A2-heap-bound-uses-store-not-carve` | RED | userd_and_notifier_bounded_to_the_usable_heap |
+| `A2-userd-bound-ignores-footprint` | RED | userd_and_notifier_bounded_to_the_usable_heap |
+| `A2-cut-rows-misses-straddling-start` | RED | placed_rows_track_host_unmap_at_both_edges |
+| `A2-cut-rows-drops-end-remnant` | RED | placed_rows_track_host_unmap_at_both_edges |
+| `A2-carve-bound-back-to-store` | RED | carve_out_is_excluded |
+| `A2-carve-refuse-flag-ignored` | RED | carve_out_is_excluded |
+| `B-store-window-grows-down` | RED | tspace_builder_never_grows_down |
+| `B-ring-region-check-removed` | RED | tspace_builder_never_grows_down |
+| `B-store-window-whole-store` | RED | tspace_builder_never_grows_down |
+| `B-ram-window-cached` | RED | tspace_builder_never_grows_down |
+| `C-unclassified-ce-forwarded-as-written` | RED | every_emitted_pair_is_allowlisted_or_an_authored_address |
+| `C-refused-ce-forwarded-as-written` | RED | every_emitted_pair_is_allowlisted_or_an_authored_address |
+| `C-subdevice-mask-ignored` | RED | refusals_by_name |
+| `C-launch-unnamed-bits-cleared-not-refused` | RED | no_guest_word_is_copied |
+| `C-set-object-guest-word-copied` | RED | no_guest_word_is_copied |
+| `C-no-chunking` | RED | chunking_keeps_every_piece_under_the_cap |
+| `C-last-piece-keeps-pipelined` | RED | uvm_pte_write_inline_source_splits_at_a_page_seam |
+| `C-every-piece-releases` | RED | uvm_pte_write_inline_source_splits_at_a_page_seam |
+| `C-store-window-covers-carve-out` | RED | carve_out_is_excluded |
+| `C-read-only-row-written` | RED | refusals_by_name |
+| `C-no-piece-bound` | RED | refusals_by_name |
+| `C-guest-va-forwarded-as-address` | RED | a_guest_address_value_is_never_emitted |
+| `C-shadow-not-observed` | RED | the_shadow_observes_every_segment_and_changes_nothing |
+| `C-resolve-rows-drops-permission` | RED | an_operand_resolves_through_our_rows_and_names_its_first_hole |
+| `D-ring-fence-at-legacy-offset` | RED | the_tspace_ring_layout |
+| `D-gpfifo-mapped-writable` | RED | the_tspace_ring_layout |
+| `D-busy-loses-the-refused-chunk` | GREEN(SURVIVED) | — |
+| `D-stale-negctl-ignored` | RED | the_stale_bind_counter_and_its_positive_control |
+| `D-stale-retired-before-fence` | RED | the_stale_bind_counter_and_its_positive_control |
+| `D-user-birth-in-kernel-space` | RED | kernel_is_sticky_and_a_recycled_space_is_reclassified, twin_state_cas |
+| `D-kernel-birth-in-user-space` | RED | kernel_is_sticky_and_a_recycled_space_is_reclassified, twin_state_cas |
+| `D-tmode-mirror-needs-a-window` | RED | a_tmode_mirror_is_recorded_without_any_window |
+| `D-tmode-ring-falls-back-to-legacy` | RED | a_tmode_ring_hands_out_unbound_work_and_splits |
+| `D-busy-loses-the-refused-chunk` | RED | a_busy_stash_is_unbound_and_rebinds_at_the_next_push |
+| `D-busy-final-arm-loses-chunk` | RED | a_busy_stash_is_unbound_and_rebinds_at_the_next_push |
+| `D-words-item-unbounded` | RED | a_long_run_of_address_free_methods_is_still_chunked |
+
+★ **Box steps owed, in order (none run; each records the source revision, kf3 `euid`/`CapEff` and
+bit 5 of every birth reply):**
+1. **Default-path regression at the inc-A head** (`KF3_TSPACE` unset): inc A changes today's path
+   (refusals by name, the GP control entries, the S1-43 heap bound, exact rows). 30-arm suite + app
+   matrix + `cup3`/`cup8`; pass = today's verdicts, `heap_refused=0`, no new `DEAD:`; record
+   `carve_gpu=`/`carve_cpu=` per family (the A2 input).
+2. **CENSUS** per measured family (TU116, GA106, AD106, GB203): `KF3_TSHADOW=1` on the same runs;
+   commit every `TCENSUS`/`TSHADOW` line; pass = §8's CENSUS criteria.
+3. **T-TSPACE-BUILD** (`KF3_TSPACE=1`, one boot per family): `scripts/p1p2/tspace_log_gate.py LOG`.
+4. **REGRESSION A/B + T-WINDOW-USER** (`KF3_TSPACE=0` vs `1`, at least one unprivileged guest user):
+   the gate on the `1` arm, `--windows` on the `0` arm (the known positive), plus the §8 user-process
+   CE probe; then once with `KF3_NEGCTL_STALE_BIND=1` and `--negctl-stale`.
+5. **T-RING-TRANSLATED** and **T-PHYS-CE** (guest kernel module; both privilege arms, after P0).
+6. **PERF A/B**. Then inc A2 (flip `with_carve(…, true)`) and inc E (default-on, delete the window
+   code) are owner decisions on that evidence.
+
 ⚠ Deviation from §8's inc A row, recorded here: the PRAMIN-plan carve-out counter is **not** in
 inc A. §10 keeps inc A out of the PRAMIN plan until `v3-scratch-bound` merges (it rewrites that
 code); the GPU-target and CPU-view counters in `kf-mem` `apply.rs` are in.
