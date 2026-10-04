@@ -53,7 +53,7 @@ const REQUIRED_ROWS: &[&str] = &[
     "view_outlives_region.rs",
     // ★ v3-sec-rawaddr (audit S1-02/S1-03, 2026-10-04): the opaque spans.
     "host_span_not_forgeable.rs",
-    "host_span_open_needs_unsafe.rs",
+    "span_address_needs_an_unsafe_block.rs",
     "span_is_not_hash.rs",
     "span_is_not_ord.rs",
     "static_span_needs_static.rs",

@@ -1045,7 +1045,7 @@ Each row is a dangerous pattern that must **not compile**:
 | ~~**10**~~ | ~~a host CPU address (`*mut u8`/`*const u8`/`NonNull`/`usize`-as-address) in the signature of any item reachable from outside `kayfabe-linux-raw`~~ | ~~§4.2.1's crate-boundary rule, in compile-fail form~~ — ★ **NOT A TRYBUILD ROW. Renumbered into a CI gate, 2026-07-28 (see below).** |
 | **11** | `CachePolicy` has no `Default` — a mapping's cacheability is a required parameter, never inherited | added by `a91f318`; a property §4.6 did not originally have a row for, and it does have a file (`cache_policy_has_no_default.rs`) |
 | **12** | building a `HostSpan` or a `StaticSpan` from parts (`HostSpan { base, len }`) | ★ `v3-sec-rawaddr`, 2026-10-04 (audit S1-03): a span is minted only by the owner of a live mapping, bounds-checked there (`host_span_not_forgeable.rs`) |
-| **13** | `span.as_ptr()` outside `unsafe` | the address is opened only under `HostSpan::as_ptr`'s contract, which names its consumers (`host_span_open_needs_unsafe.rs`) |
+| **13** | `span.as_ptr()` outside `unsafe` | the address is opened only under `HostSpan::as_ptr`'s contract, which names its consumers (`span_address_needs_an_unsafe_block.rs`; ⊘ not `…_unsafe.rs`: gate B refuses that suffix outside an audited `src/`) |
 | **14** | `Hash` of a `HostSpan`/`StaticSpan` | a derived `Hash` hands the address to a caller-written `Hasher` (`span_is_not_hash.rs`) |
 | **15** | `Ord`/`PartialEq` of a `HostSpan`/`StaticSpan` | comparing spans compares addresses (`span_is_not_ord.rs`) |
 | **16** | `MappedRegion::static_span` on a region that is not borrowed for `'static` | a span promised for the process must come from a region that is never unmapped (`static_span_needs_static.rs`) |

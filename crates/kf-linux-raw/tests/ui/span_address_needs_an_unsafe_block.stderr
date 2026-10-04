@@ -1,5 +1,5 @@
 error[E0133]: call to unsafe function `HostSpan::as_ptr` is unsafe and requires unsafe block
-  --> tests/ui/host_span_open_needs_unsafe.rs:17:14
+  --> tests/ui/span_address_needs_an_unsafe_block.rs:17:14
    |
 17 |     let _p = span.as_ptr();
    |              ^^^^^^^^^^^^^ call to unsafe function
