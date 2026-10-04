@@ -11,7 +11,7 @@ trap 'rc=$?; echo "EXIT rc=$rc $(date -Is)"' EXIT
 if pgrep -x qemu-system-x86 || pgrep -x cargo || pgrep -x ninja; then
     echo "another build or guest is active"; exit 2
 fi
-cd /root/kayfabe
+cd "${C2_REPO:-/root/kayfabe}"
 test "$(git rev-parse HEAD)" = 9d82f2598d267732c87476da27f501aaabe2c4af
 git diff --quiet
 git diff --cached --quiet
