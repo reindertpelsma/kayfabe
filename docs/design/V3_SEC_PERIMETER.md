@@ -310,6 +310,7 @@ It fails closed on an unterminated literal or comment. It scans **`git ls-files 
 - **L8.** Caller-obligation SAFETY comments inside safe fns of perimeter files: an exact count that only goes down. There are 7 sites at base, all LANE:
   - `driver_unsafe.rs`: `memcpy_h2d` `:684/:690`, `memcpy_d2d_async` `:792/:800`, `memset_d8` `:812/:819`, `memcpy_h2d_async` `:1026/:1039`, `view_bytes` `:1560/:1561`, `zeroed` `:1591/:1592`;
   - `ffi_unsafe.rs`: `write_err` `:63/:68`.
+  - ⊘ **As built at C2 (2026-10-04).** "Caller obligation" is a phrase family, not the bare word: `every/each/all caller(s)`, `caller(s) size/bound/must/ensure/guarantee/pass/promise`, `caller's obligation`, `the caller passed`, `the caller (`. The bare word matched 60 sites, most of them describing the call (*"the CALLING thread"*, *"borrowed … by the caller in this same expression"*). The family finds exactly the 7 kf3 sites above, plus 7 in the grader crates and firmware (`kayfabe-cuda` 5, `kayfabe-linux-raw` 1, `kf-gop` 1). The baseline is the exact SET in `perimeter.toml` `[l8]`, keyed `<file>::<Type::>fn`, so a fix in one fn cannot be traded for a new site in another. Fixture: `test_F10_a_new_caller_obligation_comment_in_a_safe_fn`.
 - **L9.** Mint sites (§5.3).
 - **L10.** No `unsafe` token in a doc-comment code fence (untagged, `rust`, `no_run`, `should_panic`, `editionNNNN`) outside the perimeter. Today: 303 fences, 0 hits.
 
@@ -382,6 +383,8 @@ New file `scripts/ci/perimeter.py` with subcommands `manifest` and `metadata`. M
 | `macro_unsafe` | per `macro_rules!`: `unsafe` tokens in the body × invocations in the crate |
 | `exports` | this file's rows in `PERIMETER_EXPORTS.md`; 0 for C and VALIDATES rows |
 | `reason` | as below |
+
+⊘ **As built at C2 (2026-10-04).** `exports` is a column from C2 on, 0 until the table lands at C5. The first landing has no base `sizes.tsv`, so every row carries `YYYY-MM-DD: baseline — …`; from then on the diff rule applies. The lexer reproduced every number below on `789dee9f` (kf-linux-raw's one `unsafe fn` is a method, as the compiler also says), plus `macro_unsafe` = 85 for kf-cuda (`opt!` 1 × 21, `sym!` 2 × 32). The C files' `code` is 780 / 52 / 22 code lines (999 / 83 / 44 total). The grader crates and firmware are counted too.
 
 **Baseline.** The rev 1 lexer baseline at `e4fb0190` stands:
 - kf-linux-raw 75: 66 blocks + 8 `unsafe impl` + 1 `unsafe fn`;
@@ -690,6 +693,7 @@ This adds a fourth class U crate. `perimeter.toml` is the list (§9 supersedes t
 ### 5.3 Mint sites (L9)
 
 - **Names:** as in rev 1 (`Nvos02ParametersWithFd` … `graph_exec_kernel_set`).
+  - ⊘ **As built at C2 (2026-10-04).** Rev 1's list was not in hand; the list in `perimeter.toml` `[mint]` was reconstructed from §5.1's producers: the NVOS 02/21/33/34/46/47/54/64 parameter structs, `Indirect`, `WindowVa` (no site on master yet; `v3-p1p2`), `KfArgs`, `Desired`, `launch_raw`, `launch_args`, `graph_exec_kernel_set`. Aliases introduced by `use … as` and `type … =` are followed to a fixpoint per crate, and their uses count. Baseline 81 sites in 10 files (`kf-host/src/lib.rs` 46).
 - **Scope:** code tokens in `src/` of kf3-graph crates, outside `#[cfg(test)]`.
 - **Not counted:** perimeter files and kf-abi.
 - **Counted exactly, and only goes down:** every other site, **plus** every `use … <name> as …` rename and every `type … = <name>`.

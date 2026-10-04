@@ -510,6 +510,155 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(rules(got), ["M9"])
 
 
+def row(**kw) -> dict:
+    r = {c: 0 for c in perimeter.SIZE_COLUMNS}
+    r.update(kw)
+    return r
+
+
+class SizeTests(unittest.TestCase):
+    """G6 (§2): exact counts, every perimeter file has a row, a rise carries a dated reason."""
+
+    A = "crates/u/src/a_unsafe.rs"
+    OK = "2026-10-04: baseline — fixture"
+
+    def test_SF2_code_moves_without_a_tsv_change(self):
+        for delta in (1, -1):
+            got = perimeter.size_findings({self.A: row(code=10 + delta)}, {self.A: {**row(code=10), "reason": self.OK}},
+                                          None)
+            self.assertEqual([g.rule for g in got], ["SF2"])
+
+    def test_SF3_a_file_without_a_row_and_a_stale_row(self):
+        got = perimeter.size_findings({self.A: row(code=1)}, {"crates/u/src/gone_unsafe.rs": {**row(), "reason": self.OK}},
+                                      None)
+        self.assertEqual(sorted(g.rule for g in got), ["SF3", "SF3"])
+
+    def test_SF1_first_landing_needs_a_dated_baseline_reason(self):
+        got = perimeter.size_findings({self.A: row(code=1)}, {self.A: {**row(code=1), "reason": "because"}}, None)
+        self.assertEqual([g.rule for g in got], ["SF1"])
+        self.assertEqual(perimeter.size_findings({self.A: row(code=1)}, {self.A: {**row(code=1), "reason": self.OK}},
+                                                 None), [])
+
+    def test_SF1_a_rise_with_an_unchanged_reason(self):
+        base = {self.A: {**row(code=10, blocks=1), "reason": self.OK}}
+        got = perimeter.size_findings({self.A: row(code=12, blocks=2)}, {self.A: {**row(code=12, blocks=2),
+                                                                                 "reason": self.OK}}, base)
+        self.assertEqual([g.rule for g in got], ["SF1"])
+
+    def test_SF1_a_rise_reusing_the_previous_reason_verbatim(self):
+        prior = "2026-10-05: code+2 blocks+1 — an earlier rise"
+        base = {self.A: {**row(code=10, blocks=1), "reason": prior}}
+        got = perimeter.size_findings({self.A: row(code=12, blocks=2)},
+                                      {self.A: {**row(code=12, blocks=2), "reason": prior}}, base)
+        self.assertEqual([g.rule for g in got], ["SF1"])
+
+    def test_SF1_first_landing_reason_must_say_baseline(self):
+        got = perimeter.size_findings({self.A: row(code=1)},
+                                      {self.A: {**row(code=1), "reason": "2026-10-04: code+1 — new"}}, None)
+        self.assertEqual([g.rule for g in got], ["SF1"])
+
+    def test_SF1_a_rise_missing_one_token(self):
+        base = {self.A: {**row(code=10, blocks=1), "reason": self.OK}}
+        new = {**row(code=12, blocks=2), "reason": "2026-10-05: blocks+1 — a new mmap"}
+        got = perimeter.size_findings({self.A: row(code=12, blocks=2)}, {self.A: new}, base)
+        self.assertEqual([g.rule for g in got], ["SF1"])
+
+    def test_SF1_control_a_rise_with_every_token(self):
+        base = {self.A: {**row(code=10, blocks=1), "reason": self.OK}}
+        new = {**row(code=12, blocks=2), "reason": "2026-10-05: code+2 blocks+1 — a new mmap"}
+        self.assertEqual(perimeter.size_findings({self.A: row(code=12, blocks=2)}, {self.A: new}, base), [])
+
+    def test_SF1_a_decrease_needs_only_the_number(self):
+        base = {self.A: {**row(code=10, blocks=2), "reason": self.OK}}
+        self.assertEqual(perimeter.size_findings({self.A: row(code=9, blocks=1)},
+                                                 {self.A: {**row(code=9, blocks=1), "reason": self.OK}}, base), [])
+
+    def test_SF1_a_new_row_after_the_baseline_needs_its_tokens(self):
+        base = {"crates/u/src/b_unsafe.rs": {**row(code=1), "reason": self.OK}}
+        stored = {**base, self.A: {**row(code=3, blocks=1), "reason": "2026-10-05: code+3 — new"}}
+        actual = {"crates/u/src/b_unsafe.rs": row(code=1), self.A: row(code=3, blocks=1)}
+        self.assertEqual([g.rule for g in perimeter.size_findings(actual, stored, base)], ["SF1"])
+        stored[self.A]["reason"] = "2026-10-05: code+3 blocks+1 — new"
+        self.assertEqual(perimeter.size_findings(actual, stored, base), [])
+
+    def test_the_tsv_round_trips(self):
+        rows = {self.A: {**row(code=3, blocks=1), "reason": self.OK}}
+        self.assertEqual(perimeter.read_tsv(perimeter.write_tsv(rows)), rows)
+
+    def measure(self, files: dict[str, str]) -> dict[str, dict]:
+        fx = Fixture(files)
+        try:
+            tree = perimeter.Tree(fx.root, fx.files)
+            return perimeter.size_rows(tree, cfg(), [f for f in files if f.endswith((".c", ".h"))])
+        finally:
+            fx.close()
+
+    def test_code_excludes_cfg_test_items_and_counts_kinds_and_macros(self):
+        rows = self.measure({"crates/u/src/lib.rs": U_LIB, self.A: """\
+            macro_rules! m { () => { UNSAFE { 1 } } }
+            pub fn a() -> u8 { m!() + m!() + UNSAFE { 2 } }
+            // a comment line is not code
+            #[cfg(test)]
+            mod tests {
+                fn t() { UNSAFE { } }
+            }
+            """})
+        r = rows[self.A]
+        self.assertEqual((r["code"], r["blocks"], r["macro_unsafe"]), (2, 3, 2))
+
+    def test_F13_a_file_under_src_target_is_counted(self):
+        rows = self.measure({"crates/u/src/lib.rs": "mod target;\n", "crates/u/src/target/mod.rs": "mod x_unsafe;\n",
+                             "crates/u/src/target/x_unsafe.rs": "pub fn f() { UNSAFE { } }\n"})
+        self.assertEqual(rows["crates/u/src/target/x_unsafe.rs"]["blocks"], 1)
+
+    def test_c_code_lines_strip_comments_but_not_strings(self):
+        rows = self.measure({"k.c": '/* a\n b */\nint x; // c\n// only a comment\n\nchar *s = "/*";\nint y;\n/* real */\n'})
+        self.assertEqual(rows["k.c"]["code"], 3)
+
+    def test_F10_a_new_caller_obligation_comment_in_a_safe_fn(self):
+        fx = Fixture({"crates/u/src/lib.rs": U_LIB, self.A: """\
+            pub fn f(p: *const u8) -> u8 {
+                // SAFETY: every caller passes a live pointer.
+                UNSAFE { *p }
+            }
+            pub UNSAFE fn g(p: *const u8) -> u8 {
+                // SAFETY: every caller passes a live pointer (the # Safety contract).
+                UNSAFE { *p }
+            }
+            pub fn h() {
+                // SAFETY: the CALLING thread; no caller memory is read.
+                UNSAFE { }
+            }
+            """})
+        try:
+            sites = perimeter.l8_sites(perimeter.Tree(fx.root, fx.files), cfg())
+        finally:
+            fx.close()
+        self.assertEqual([(f, fn) for f, fn, _ in sites], [(self.A, "f")])
+        got = perimeter.l8_findings(sites, [])
+        self.assertEqual([g.rule for g in got], ["L8"])
+        self.assertEqual(perimeter.l8_findings(sites, [f"{self.A}::f"]), [])
+        self.assertEqual([g.rule for g in perimeter.l8_findings([], [f"{self.A}::f"])], ["L8"])
+
+    def test_F11_a_new_mint_site_and_an_alias(self):
+        c = cfg(mint={"names": ["Nvos46Parameters"]})
+        fx = Fixture({"crates/k/src/lib.rs": """\
+            use abi::Nvos46Parameters as P;
+            pub fn f() -> P { P::default() }
+            #[cfg(test)]
+            mod tests { fn t() -> super::P { todo!() } }
+            """, "crates/u/src/a_unsafe.rs": "pub fn g() -> abi::Nvos46Parameters { todo!() }\n",
+               "crates/abi2/src/lib.rs": "pub struct Nvos46Parameters;\n"})
+        try:
+            sites = perimeter.mint_sites(perimeter.Tree(fx.root, fx.files), c, ["crates/k", "crates/u"])
+        finally:
+            fx.close()
+        self.assertEqual({f: len(v) for f, v in sites.items()}, {"crates/k/src/lib.rs": 4})
+        self.assertEqual([g.rule for g in perimeter.mint_findings(sites, {"crates/k/src/lib.rs": 3})], ["L9"])
+        self.assertEqual([g.rule for g in perimeter.mint_findings(sites, {"crates/k/src/lib.rs": 5})], ["L9"])
+        self.assertEqual(perimeter.mint_findings(sites, {"crates/k/src/lib.rs": 4}), [])
+
+
 class StructureTests(unittest.TestCase):
     """The tokenizer's own edge cases; each is a way a gate could mis-read a file."""
 

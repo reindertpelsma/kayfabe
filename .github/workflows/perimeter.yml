@@ -9,7 +9,7 @@
 #
 # Jobs:
 # - perimeter: the tokenizer (G3: L0-L6, L10), manifests and the resolved graph (G4: M1-M9),
-#   each with its known-positive fixtures run first.
+#   the size ratchet (G6) with L8 and L9, each with its known-positive fixtures run first.
 #
 # ★ No job here sets a compiler-flag variable in an `env:` mapping: the manifest gate (M4)
 # reads this file too, and would fail it.
@@ -49,3 +49,16 @@ jobs:
         run: python3 scripts/ci/perimeter.py metadata
       - name: "G4 kf3's closure: members, features, build scripts (M6)"
         run: python3 scripts/ci/dependencies.py
+      # ★ The base a RISE is judged against (V3_SEC_PERIMETER.md §2): the PR base; on master the
+      # first parent; on any other push the merge-base with origin/master. fetch-depth 0 above.
+      - name: "G6 size ratchet, exact (rule c); L8 caller obligations; L9 mint sites"
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT:-push}" = pull_request ]; then base="$PR_BASE"
+          elif [ "${REF:-}" = refs/heads/master ]; then base=$(git rev-parse HEAD^1)
+          else base=$(git merge-base HEAD origin/master); fi
+          python3 scripts/ci/perimeter.py sizes --base "$base"

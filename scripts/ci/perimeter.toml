@@ -125,3 +125,51 @@ runs = ["--all-targets"]
 [[standalone]]
 path = "crates/kayfabe-abi/gen"
 runs = ["--all-targets"]
+
+# L8: `// SAFETY:` comments stating a CALLER obligation inside a SAFE fn of a perimeter file
+# (rule a: a precondition left to safe callers is unsafe code declared safe). The exact set;
+# it only shrinks. Identity is `<file>::<Type::>fn`, so a fix in one fn cannot be traded for a
+# new site in another. The 7 kf3 sites are LANE:v3-sec-rawaddr (driver_unsafe.rs, ffi_unsafe.rs).
+[l8]
+sites = [
+  "crates/kf-cuda/src/driver_unsafe.rs::Cuda::memcpy_d2d_async",
+  "crates/kf-cuda/src/driver_unsafe.rs::Cuda::memcpy_h2d",
+  "crates/kf-cuda/src/driver_unsafe.rs::Cuda::memcpy_h2d_async",
+  "crates/kf-cuda/src/driver_unsafe.rs::Cuda::memset_d8",
+  "crates/kf-cuda/src/driver_unsafe.rs::view_bytes",
+  "crates/kf-cuda/src/driver_unsafe.rs::zeroed",
+  "crates/kf-qemu/src/ffi_unsafe.rs::write_err",
+  # grader and guest firmware (not linked into kf3; counted all the same)
+  "crates/kayfabe-cuda/src/driver_unsafe.rs::Cuda::memcpy_d2d",
+  "crates/kayfabe-cuda/src/driver_unsafe.rs::Cuda::memcpy_h2d",
+  "crates/kayfabe-cuda/src/driver_unsafe.rs::read_struct",
+  "crates/kayfabe-cuda/src/driver_unsafe.rs::view_bytes",
+  "crates/kayfabe-cuda/src/driver_unsafe.rs::zeroed",
+  "crates/kayfabe-linux-raw/src/spawn_unsafe.rs::SandboxChild::wait",
+  "firmware/kf-gop/src/bin/kf-gop-test/check_unsafe.rs::Screen::blt",
+]
+
+# L9 (V3_SEC_PERIMETER.md §5.3): sites that name a type or function whose values carry an address
+# hardware will dereference, in src/ of kf3-graph crates, outside cfg(test), perimeter files and
+# kf-abi. A file's count is exact and only goes down; a rise is a reviewed edit here with a
+# reason in a comment. Aliases (`use … as X`, `type X = …`) are followed.
+# ⊘ The name list was reconstructed at implementation (2026-10-04) from §5.1's ranked producers;
+# rev 1's list was not in hand. `WindowVa` has no site on master yet (v3-p1p2, P4).
+[mint]
+names = [
+  "Nvos02ParametersWithFd", "Nvos21Parameters", "Nvos33ParametersWithFd", "Nvos34Parameters",
+  "Nvos46Parameters", "Nvos47Parameters", "Nvos54Parameters", "Nvos64Parameters",
+  "Indirect", "WindowVa", "KfArgs", "Desired",
+  "launch_raw", "launch_args", "graph_exec_kernel_set",
+]
+[mint.baseline]
+"crates/kf-cuda/src/abi.rs" = 1
+"crates/kf-cuda/src/display.rs" = 1
+"crates/kf-cuda/src/walk.rs" = 9
+"crates/kf-host/src/lib.rs" = 46
+"crates/kf-linux-raw/src/lib.rs" = 1
+"crates/kf-mem/src/apply.rs" = 5
+"crates/kf-mem/src/batch.rs" = 2
+"crates/kf-mem/src/cpuwin.rs" = 2
+"crates/kf-mem/src/ledger.rs" = 8
+"crates/kf-qemu/src/mem.rs" = 6

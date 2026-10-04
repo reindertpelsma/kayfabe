@@ -489,6 +489,281 @@ def run_lex(root: Path, cfg: Config, files: list[str] | None = None) -> tuple[li
 
 
 # ---------------------------------------------------------------------------------------
+# G6: the size ratchet (rule c), L8 and L9
+# ---------------------------------------------------------------------------------------
+
+SIZE_COLUMNS = ("code", *rslex.KINDS, "macro_unsafe", "exports")
+SIZES_TSV = "scripts/ci/perimeter/sizes.tsv"
+REASON_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}): (.*?)\s*— (.+)$")
+
+
+def code_lines(s: rslex.Structure) -> int:
+    """Lines holding at least one code token, outside items under exactly `#[cfg(test)]`."""
+    tests = s.test_ranges()
+    lines: set[int] = set()
+    for k, t in enumerate(s.code):
+        if not rslex.in_ranges(k, tests):
+            lines.update(range(t.line, t.end_line + 1))
+    return len(lines)
+
+
+def strip_c(src: str) -> str:
+    """C source with comments removed (strings and char literals kept, newlines kept)."""
+    out, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            if j < 0:
+                raise ValueError("unterminated C comment")
+            out.append("\n" * src.count("\n", i, j + 2))
+            i = j + 2
+        elif src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+        elif c in "\"'":
+            j = i + 1
+            while j < n and src[j] != c:
+                j += 2 if src[j] == "\\" else 1
+            out.append(src[i:j + 1])
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def c_code_lines(text: str) -> int:
+    return sum(1 for ln in strip_c(text).splitlines() if ln.strip())
+
+
+def crate_files(tree: Tree, crate: str) -> list[str]:
+    return [f for f in tree.files if crate_of(f, [crate]) == crate]
+
+
+def measure_file(tree: Tree, f: str, crate_structs: list[rslex.Structure]) -> dict[str, int]:
+    s = tree.struct(f)
+    row = {c: 0 for c in SIZE_COLUMNS}
+    row["code"] = code_lines(s)
+    for site in rslex.unsafe_sites(s):
+        if site.kind in rslex.KINDS:
+            row[site.kind] += 1
+        elif site.kind == "unknown":
+            raise rslex.LexError(f"{f}:{site.line}: an `{UNSAFE}` this tokenizer cannot classify")
+    for it in rslex.macro_bodies(s):
+        inner = [x for x in rslex.unsafe_sites(s) if it.body_open < x.k < it.end
+                 and x.kind in rslex.KINDS and x.kind != "asm"]
+        if inner:
+            calls = sum(rslex.macro_invocations(cs, it.name) for cs in crate_structs)
+            row["macro_unsafe"] += len(inner) * calls
+    return row
+
+
+def size_rows(tree: Tree, cfg: Config, c_files: list[str], exports: dict[str, int] | None = None,
+              validates: list[str] = ()) -> dict[str, dict[str, int]]:
+    rows: dict[str, dict[str, int]] = {}
+    structs: dict[str, list[rslex.Structure]] = {}
+    for f in sorted(set(f for f in tree.files if is_perimeter_file(f, cfg)) | set(validates)):
+        cr = crate_of(f, cfg.class_u + cfg.class_p) or ""
+        if cr not in structs:
+            structs[cr] = [tree.struct(x) for x in crate_files(tree, cr) if in_src(x, cr)]
+        rows[f] = measure_file(tree, f, structs[cr])
+        rows[f]["exports"] = (exports or {}).get(f, 0)
+    for f in c_files:
+        row = {c: 0 for c in SIZE_COLUMNS}
+        row["code"] = c_code_lines((tree.root / f).read_text())
+        rows[f] = row
+    return rows
+
+
+def read_tsv(text: str) -> dict[str, dict]:
+    rows: dict[str, dict] = {}
+    lines = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+    if not lines:
+        return rows
+    header = lines[0].split("\t")
+    if header != ["path", *SIZE_COLUMNS, "reason"]:
+        raise ValueError(f"{SIZES_TSV}: header {header} != {['path', *SIZE_COLUMNS, 'reason']}")
+    for ln in lines[1:]:
+        cells = ln.split("\t")
+        if len(cells) != len(header):
+            raise ValueError(f"{SIZES_TSV}: malformed row: {ln!r}")
+        row = {c: int(v) for c, v in zip(SIZE_COLUMNS, cells[1:-1])}
+        row["reason"] = cells[-1]
+        rows[cells[0]] = row
+    return rows
+
+
+def write_tsv(rows: dict[str, dict]) -> str:
+    head = ("# The perimeter size ratchet (docs/design/V3_SEC_PERIMETER.md §2; OWNER_RULINGS §R rule c).\n"
+            "# Every count is EXACT. A decrease needs only the new number (`perimeter.py sizes --update`).\n"
+            "# A rise, or a new row, needs a new reason: `YYYY-MM-DD: <column>+<delta> ... — <why>`.\n")
+    out = [head + "\t".join(["path", *SIZE_COLUMNS, "reason"])]
+    for f in sorted(rows):
+        r = rows[f]
+        out.append("\t".join([f, *(str(r[c]) for c in SIZE_COLUMNS), r.get("reason", "")]))
+    return "\n".join(out) + "\n"
+
+
+def size_findings(actual: dict[str, dict], stored: dict[str, dict], base: dict[str, dict] | None,
+                  judge: bool = True) -> list[Finding]:
+    """SF2/SF3 (exact, every row present, no stale row) and SF1 (a rise carries its reason).
+
+    `base` is the TSV at the comparison base, or None when the base predates the ratchet: then
+    every row must carry a dated `baseline` reason."""
+    out: list[Finding] = []
+    for f in sorted(actual.keys() - stored.keys()):
+        out.append(Finding("SF3", SIZES_TSV, 0, f"no row for perimeter file {f} ({fmt_row(actual[f])})"))
+    for f in sorted(stored.keys() - actual.keys()):
+        out.append(Finding("SF3", SIZES_TSV, 0, f"stale row {f}: no such perimeter file"))
+    for f in sorted(actual.keys() & stored.keys()):
+        diff = [f"{c} {stored[f][c]}->{actual[f][c]}" for c in SIZE_COLUMNS if stored[f][c] != actual[f][c]]
+        if diff:
+            out.append(Finding("SF2", SIZES_TSV, 0, f"{f}: counts changed ({', '.join(diff)}); update the row"))
+    for f in sorted(stored) if judge else []:
+        reason = stored[f]["reason"]
+        if base is None:
+            m = REASON_RE.match(reason)
+            if not m or "baseline" not in m.group(2):
+                out.append(Finding("SF1", SIZES_TSV, 0, f"{f}: the first landing needs "
+                                                       f"`YYYY-MM-DD: baseline — <why>`, got {reason!r}"))
+            continue
+        old = base.get(f)
+        risen = {c: stored[f][c] - (old[c] if old else 0) for c in SIZE_COLUMNS}
+        risen = {c: d for c, d in risen.items() if d > 0}
+        if not risen and old is not None:
+            continue
+        m = REASON_RE.match(reason)
+        tokens = set(m.group(2).split()) if m else set()
+        want = {f"{c}+{d}" for c, d in risen.items()}
+        if old is not None and reason == old["reason"]:
+            out.append(Finding("SF1", SIZES_TSV, 0, f"{f}: {sorted(want)} rose but the reason is unchanged"))
+        elif not m or not want <= tokens:
+            out.append(Finding("SF1", SIZES_TSV, 0, f"{f}: a {'new row' if old is None else 'rise'} needs "
+                                                   f"`YYYY-MM-DD: {' '.join(sorted(want))} — <why>`, got {reason!r}"))
+    return out
+
+
+def fmt_row(r: dict) -> str:
+    return " ".join(f"{c}={r[c]}" for c in SIZE_COLUMNS if r[c])
+
+
+# The phrasing of a precondition handed to callers. "the caller's buffer is borrowed in this
+# expression" or "the CALLING thread" describe the call, not an obligation, and do not match.
+CALLER_OBLIGATION = re.compile(
+    r"\b(?:every|each|all) callers?\b"
+    r"|\bcallers? (?:size|sizes|bound|bounds|must|ensure|ensures|guarantee|guarantees|pass|passes|promise)\b"
+    r"|\bcaller'?s obligation\b|\bthe caller passed\b|\bthe caller \(",
+    re.IGNORECASE)
+
+
+def l8_sites(tree: Tree, cfg: Config) -> list[tuple[str, str, int]]:
+    """L8: `// SAFETY:` comments that state a CALLER obligation inside a safe fn of a perimeter
+    file. Each is a precondition left to safe callers, which rule (a) forbids."""
+    out = []
+    for f in tree.files:
+        if not is_perimeter_file(f, cfg):
+            continue
+        s = tree.struct(f)
+        code_ix = {id(t): k for k, t in enumerate(s.code)}
+        fns = [it for it in s.items if it.kind == "fn" and it.body_open is not None]
+        block: list[rslex.Tok] = []
+        nxt = 0
+
+        def flush():
+            if not block or not re.match(r"^//\s*SAFETY:", block[0].text):
+                return
+            text = " ".join(t.text[2:].strip() for t in block)
+            if not CALLER_OBLIGATION.search(text):
+                return
+            inner = [it for it in fns if it.body_open < nxt <= it.end]
+            if not inner:
+                return
+            fn = max(inner, key=lambda it: it.body_open)
+            if UNSAFE in fn.qualifiers:
+                return
+            owner = f"{fn.parent.name}::" if fn.parent is not None and fn.parent.kind in ("impl", "trait") else ""
+            out.append((f, owner + fn.name, block[0].line))
+
+        for t in s.all:
+            if t.kind == "comment" and t.text.startswith("//"):
+                if block and t.line != block[-1].line + 1:
+                    flush()
+                    block = []
+                block.append(t)
+                continue
+            if t.is_code:
+                if block:
+                    nxt = code_ix[id(t)]
+                    flush()
+                    block = []
+        flush()
+    return sorted(out)
+
+
+def mint_aliases(s: rslex.Structure, names: set[str]) -> set[str]:
+    """Names a file introduces for a mint name: `use … name as Alias` and `type Alias = …name…`."""
+    c = s.code
+    found = set()
+    for k in range(len(c) - 2):
+        if c[k].kind == "ident" and c[k].text in names and c[k + 1].is_ident("as") and c[k + 2].kind == "ident":
+            found.add(c[k + 2].text)
+    for it in s.items:
+        if it.kind == "type" and any(x.kind == "ident" and x.text in names for x in c[it.kw:it.end + 1]):
+            found.add(it.name)
+    return found
+
+
+def mint_sites(tree: Tree, cfg: Config, kf3_crates: list[str]) -> dict[str, list[int]]:
+    """L9: mint-name sites in src/ of kf3-graph crates, outside cfg(test), perimeter files and kf-abi."""
+    names = set(cfg.raw.get("mint", {}).get("names", []))
+    out: dict[str, list[int]] = {}
+    for cr in kf3_crates:
+        if cr.endswith("/kf-abi"):
+            continue
+        files = [f for f in crate_files(tree, cr) if in_src(f, cr) and not is_perimeter_file(f, cfg)]
+        crate_names = set(names)
+        while True:
+            more = set().union(*(mint_aliases(tree.struct(f), crate_names) for f in files)) - crate_names
+            if not more:
+                break
+            crate_names |= more
+        for f in files:
+            s = tree.struct(f)
+            tests = s.test_ranges()
+            hits = [t.line for k, t in enumerate(s.code)
+                    if t.kind == "ident" and not t.raw and t.text in crate_names and not rslex.in_ranges(k, tests)]
+            if hits:
+                out[f] = hits
+    return out
+
+
+def mint_findings(sites: dict[str, list[int]], baseline: dict[str, int]) -> list[Finding]:
+    out = []
+    for f in sorted(set(sites) | set(baseline)):
+        got, want = len(sites.get(f, [])), baseline.get(f, 0)
+        if got > want:
+            out.append(Finding("L9", f, sites[f][0], f"{got} mint-name sites > baseline {want}: build the value in a "
+                                                     "perimeter file, or raise [mint.baseline] with a reason"))
+        elif got < want:
+            out.append(Finding("L9", f, 0, f"{got} mint-name sites < baseline {want}: lower [mint.baseline] "
+                                           "(the count only goes down, and exactly)"))
+    return out
+
+
+def l8_findings(sites: list[tuple[str, str, int]], baseline: list[str]) -> list[Finding]:
+    got = {f"{f}::{fn}": line for f, fn, line in sites}
+    out = []
+    for key in sorted(set(got) - set(baseline)):
+        f = key.split("::", 1)[0]
+        out.append(Finding("L8", f, got[key], f"a caller-obligation SAFETY comment in safe fn `{key.split('::', 1)[1]}`:"
+                                              " check the precondition inside, or make the fn `unsafe fn`"))
+    for key in sorted(set(baseline) - set(got)):
+        out.append(Finding("L8", key.split("::", 1)[0], 0, f"[l8].sites lists `{key}`, which is gone: remove it"))
+    return out
+
+
+# ---------------------------------------------------------------------------------------
 # G4: manifests
 # ---------------------------------------------------------------------------------------
 
@@ -762,6 +1037,60 @@ def run_metadata(root: Path, cfg: Config) -> list[Finding]:
 # ---------------------------------------------------------------------------------------
 
 
+def kf3_member_dirs(root: Path, cfg: Config) -> list[str]:
+    import dependencies  # noqa: PLC0415 (scripts/ci sibling)
+    meta = cargo_metadata(root)
+    pk = {p["id"]: p for p in meta["packages"]}
+    closure = dependencies.kf3_closure(meta, cfg.raw["kf3"]["root"])
+    return sorted(rel_dir(root, pk[i]["manifest_path"]) for i in closure if pk[i]["source"] is None)
+
+
+def tsv_at(root: Path, ref: str) -> dict[str, dict] | None:
+    r = subprocess.run(["git", "show", f"{ref}:{SIZES_TSV}"], cwd=root, capture_output=True, text=True)
+    if r.returncode != 0:
+        if "does not exist" in r.stderr or "exists on disk, but not in" in r.stderr:
+            return None
+        raise SystemExit(f"git show {ref}:{SIZES_TSV} failed: {r.stderr.strip()}")
+    return read_tsv(r.stdout)
+
+
+def run_sizes(root: Path, cfg: Config, base: str | None, update: bool,
+              kf3_crates: list[str] | None = None,
+              exports: dict[str, int] | None = None) -> tuple[list[Finding], dict]:
+    tree = Tree(root, git_ls(root, "*.rs"))
+    c_files = cfg.raw.get("c", {}).get("files", [])
+    actual = size_rows(tree, cfg, c_files, exports)
+    path = root / SIZES_TSV
+    stored = read_tsv(path.read_text()) if path.exists() else {}
+    base_rows = tsv_at(root, base) if base else None
+    findings: list[Finding] = []
+    if update:
+        new = {}
+        for f, r in actual.items():
+            old = stored.get(f)
+            if old is not None and all(r[c] <= old[c] for c in SIZE_COLUMNS):
+                new[f] = {**r, "reason": old["reason"]}
+            elif old is not None:
+                new[f] = old
+                print(f"RISE {f}: {fmt_row(r)} — edit the row by hand with a dated reason")
+            else:
+                print(f"NEW  {f}\t" + "\t".join(str(r[c]) for c in SIZE_COLUMNS) + "\tYYYY-MM-DD: … — <why>")
+        path.write_text(write_tsv(new))
+        stored = new
+    findings += size_findings(actual, stored, base_rows, judge=base is not None)
+    findings += l8_findings(l8_sites(tree, cfg), cfg.raw.get("l8", {}).get("sites", []))
+    if kf3_crates is None:
+        kf3_crates = kf3_member_dirs(root, cfg)
+    findings += mint_findings(mint_sites(tree, cfg, kf3_crates), cfg.raw.get("mint", {}).get("baseline", {}))
+    totals: dict[str, dict[str, int]] = {}
+    for f, r in actual.items():
+        cr = crate_of(f, cfg.class_u + cfg.class_p) or "qemu/hw/misc/kf3"
+        t = totals.setdefault(cr, {c: 0 for c in SIZE_COLUMNS})
+        for c in SIZE_COLUMNS:
+            t[c] += r[c]
+    return sorted(findings), totals
+
+
 def report(name: str, findings: list[Finding], extra: str = "") -> int:
     for f in findings:
         print(f)
@@ -771,7 +1100,9 @@ def report(name: str, findings: list[Finding], extra: str = "") -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=("lex", "manifest", "metadata"))
+    ap.add_argument("cmd", choices=("lex", "manifest", "metadata", "sizes"))
+    ap.add_argument("--base", help="sizes: the git ref whose sizes.tsv a rise is judged against")
+    ap.add_argument("--update", action="store_true", help="sizes: write decreases and drop stale rows")
     args = ap.parse_args(argv)
     cfg = Config.load(ROOT)
     if args.cmd == "lex":
@@ -781,6 +1112,11 @@ def main(argv: list[str] | None = None) -> int:
         return report("manifest", run_manifest(ROOT, cfg))
     if args.cmd == "metadata":
         return report("metadata", run_metadata(ROOT, cfg))
+    if args.cmd == "sizes":
+        findings, totals = run_sizes(ROOT, cfg, args.base, args.update)
+        for cr, t in sorted(totals.items()):
+            print(f"  {cr}: {fmt_row(t)}")
+        return report("sizes", findings, f" base={args.base or '-'}")
     return 2
 
 
