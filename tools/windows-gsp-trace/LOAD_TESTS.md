@@ -206,3 +206,40 @@ Its actual Windows PowerShell 5.1.26100.1591 smoke observed exit codes 0/1/7,
 bounded tree termination after a one-second timeout. This helper belongs to
 the separate installer repository; the recorder driver and collector binaries
 were unchanged by that wrapper fix.
+
+## GSP mode and registry timing before a controlled reboot
+
+A subsequent RTX 4070 capture covered the actual 580.88 NVIDIA installation.
+Its numeric collector exit was 4 and the exported file remained header-only
+(SHA256 `8d3dfb99989ef730a83ea7338a9cf2da0c4cb7d1369e38241ece095d63e49308`).
+Offline JSONL decoding verified the source hash and framing. The driver was
+running, PnP reported Started/Problem 0, and `nvidia-smi -q` succeeded, but
+reported **GSP Firmware Version: N/A**. Both current service and display-class
+`EnableGpuFirmware` values were 1. These registry values alone do not prove
+that the first driver initialization consumed the policy: the class value was
+written only after `setup.exe` had already started the device.
+
+The trusted controller independently downloaded the pinned official 580.88
+installer, verified its existing installer-manifest size/hash, and extracted
+`nvlddmkm.sys`. Its SHA256
+`31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c`
+matches the target's text report. No executable was copied back from the
+rental. Offline inspection provides a concrete registry-path check:
+
+- The UTF-16 `EnableGpuFirmware` string is at RVA `0xd496d0`; its direct
+  code reference at `0xe6531` leads to a value read through helper `0xe5b00`.
+- On Windows version 10/build >=25850, that helper uses the device-aware
+  path. Helper `0xe56d0` calls imported `IoOpenDeviceRegistryKey` with flag 2,
+  which WDK `wdm.h` names `PLUGPLAY_REGKEY_DRIVER`: the device software key.
+- The value, or default `0x12` when unavailable, feeds the firmware-policy
+  function at RVA `0x141360`. Its mode-1 branch requests firmware when the
+  device is considered capable. This is static evidence, not proof of live
+  firmware execution or a promise that all Windows/GPU combinations support it.
+
+The published OGKM `nv-firmware-registry.h` also explicitly identifies the
+key as shared by Windows and Unix. Therefore the next controlled test keeps
+the existing class policy and reloads/reboots with the observer running early;
+there is no evidence yet that a different key name or queue layout is needed.
+The current collector exposes the preexisting ABI's `candidates` counter to
+distinguish no physical self-reference candidates from later validation
+failure. This collector-only change does not alter the kernel binary.
