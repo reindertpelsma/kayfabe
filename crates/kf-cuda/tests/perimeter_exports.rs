@@ -158,8 +158,18 @@ const EXPORTS: &[Row] = &[
     ),
     r(
         "driver_unsafe::raw::Event::query",
-        "mints Drained only on completion",
-        "the_stage_belongs_to_the_gpu_until_a_proof_returns_it",
+        "mints Drained only on completion, naming the flight its record was stamped with",
+        "a_completion_proof_of_an_earlier_flight_is_refused",
+    ),
+    r(
+        "driver_unsafe::raw::Event::record_flight",
+        "the stage's context; stamps the flight (a graph re-stamps it per launch)",
+        "a_completion_proof_of_an_earlier_flight_is_refused",
+    ),
+    r(
+        "driver_unsafe::raw::proof_covers",
+        "V4: a proof covers the flight in progress",
+        "a_completion_proof_of_an_earlier_flight_is_refused",
     ),
     r("driver_unsafe::raw::Event::elapsed_us", "-", "-"),
     // raw — modules, kernels, V3
@@ -196,8 +206,13 @@ const EXPORTS: &[Row] = &[
     r("driver_unsafe::raw::GraphExec::updates", "-", "-"),
     r(
         "driver_unsafe::raw::GraphExec::launch",
-        "V3 per rewritten node, V4",
+        "V3 per rewritten node, V4; re-stamps the flight events",
         "a_launch_is_refused_unless_every_argument_matches_the_pinned_signature",
+    ),
+    r(
+        "driver_unsafe::raw::node_needs_rewrite",
+        "- (a cost filter: which captured nodes a stale launch re-sets)",
+        "-",
     ),
     // raw — the pinned stage, V4
     r(
@@ -233,8 +248,8 @@ const EXPORTS: &[Row] = &[
     ),
     r(
         "driver_unsafe::raw::PinnedStage::end_flight",
-        "V4: a proof of THIS context",
-        "the_stage_belongs_to_the_gpu_until_a_proof_returns_it",
+        "V4: a proof of THIS context and of the flight in progress",
+        "a_completion_proof_of_an_earlier_flight_is_refused",
     ),
     r(
         "driver_unsafe::raw::PinnedStage::poison",
@@ -370,8 +385,13 @@ const EXPORTS: &[Row] = &[
     r("display_gpu_unsafe::ConsoleFrame::span", "- (opaque)", "-"),
     r(
         "display_gpu_unsafe::ConsoleFrame::read",
-        "bounds (MappedRegion::read_into)",
-        "a_read_past_the_end_is_out_of_range_by_that_exact_variant",
+        "bounds before allocating (frame_read_fits), then MappedRegion::read_into; content racy by design",
+        "a_frame_read_is_bounded_before_it_allocates",
+    ),
+    r(
+        "display_gpu_unsafe::frame_read_fits",
+        "off + n inside the frame, overflow first",
+        "a_frame_read_is_bounded_before_it_allocates",
     ),
     r(
         "display_gpu_unsafe::compose_layer_fits",

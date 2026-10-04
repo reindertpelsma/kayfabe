@@ -88,6 +88,33 @@ fn the_walk_verbs_do_not_synchronize() {
     }
 }
 
+/// ★ A window the caller dropped is freed when its last share goes, and a free drains the context
+/// first (F1). So the walker must let go of the PREVIOUS window before it queues the next walk:
+/// released after the enqueue, the drain waited for the walk just queued (review of
+/// `v3-sec-rawaddr`, 2026-10-04: `self.last_window = Some(win)` ran after `cuGraphLaunch`).
+#[test]
+fn the_previous_window_is_released_before_the_walk_is_queued() {
+    let b = code(body_of(WALK_GPU, "pub(crate) fn launch").expect("launch exists"));
+    let release = b
+        .find("self.last_window.replace(")
+        .expect("launch swaps the retained window in one place");
+    for queue in ["g.launch(", "self.enqueue_walk("] {
+        let at = b
+            .find(queue)
+            .unwrap_or_else(|| panic!("launch queues through {queue}"));
+        assert!(
+            release < at,
+            "the previous window is released after `{queue}`: its free would wait on this walk"
+        );
+    }
+    assert_eq!(
+        b.matches("last_window").count(),
+        2,
+        "launch reads the retained window (`Same`) and swaps it, nothing else — an assignment \
+         after the enqueue drops the old window's last share there"
+    );
+}
+
 /// ★ 2026-09-25 (owner design, COMMIT-ON-ACK): `ack` carries one verdict PER RUN and only
 /// STAGES it: the next walk's first graph node commits it. ⇒ `ack` itself makes no driver call.
 #[test]

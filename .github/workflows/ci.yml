@@ -1971,7 +1971,13 @@ jobs:
           #     memslot record) deriving `Debug` over `userspace_addr`, a host address: its `Debug` is
           #     hand-written without it (+10), with the test that pins it (+16).
           #   kf-cuda 4678 -> 4697 (+19): T18's field list adds the driver-handle names and `DevAddr`.
-          PERIMETER="kf-linux-raw:4836 kf-cuda:4697 kf-qemu:658"
+          #   kf-cuda 4697 -> 4864 (+167): a completion proof names the flight it ends (`Drained.flight`,
+          #     `proof_covers`, `StageShared::begin/end`, `Event::record_flight` and its stamp, the
+          #     capture's stamps re-set by `GraphExec::launch`; +65) with T21b (+53); a stale graph
+          #     launch re-sets only the nodes whose block or grid changes (`node_needs_rewrite`, the
+          #     grid recorded after the driver took it; +11) with T25 (+16); `ConsoleFrame::read`
+          #     bounds its range before allocating (`frame_read_fits`) with T26 (+22).
+          PERIMETER="kf-linux-raw:4836 kf-cuda:4864 kf-qemu:658"
           fail=0
           for entry in $PERIMETER; do
             c="crates/${entry%%:*}"; want="${entry##*:}"

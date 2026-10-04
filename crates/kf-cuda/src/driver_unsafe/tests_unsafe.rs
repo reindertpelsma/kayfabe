@@ -10,7 +10,8 @@
 
 use super::raw::{
     ArgDesc, ArgKind, Disposition, Flight, FlightEvent, KERNEL_SIGS, KF_ARGS_BYTES, Region,
-    check_args, ctx_matches, drop_disposition, import_len, stage_layout, sub_range,
+    check_args, ctx_matches, drop_disposition, import_len, node_needs_rewrite, stage_layout,
+    sub_range,
 };
 
 /// ★ T2 — V2: an import maps at least one byte. The descriptor and the length cross only inside
@@ -419,5 +420,25 @@ fn no_handle_derives_a_pointer_printing_debug() {
     assert!(
         derived.iter().any(|h| h.contains("enum Flight")),
         "the scan must SEE a derive it allows, or its silence means nothing: {derived:?}"
+    );
+}
+
+/// ★ T25 — a stale graph launch rewrites only the nodes whose by-value block or grid changes (review
+/// of `v3-sec-rawaddr`, 2026-10-04: every captured node was re-set, `kf_par_scan` included — 5 setters
+/// on VER2 and 6 on VER3 that the pre-perimeter filter never paid). The walk really has such nodes:
+/// a kernel whose first parameter is not the block.
+#[test]
+fn a_stale_graph_rewrites_only_the_nodes_that_change() {
+    assert!(node_needs_rewrite(true, 4, 4), "a node reading the block");
+    assert!(node_needs_rewrite(false, 4, 5), "a regridded node");
+    assert!(
+        !node_needs_rewrite(false, 4, 4),
+        "a scan node: its pointers and grid are fixed at capture"
+    );
+    assert!(
+        KERNEL_SIGS
+            .iter()
+            .any(|(n, sig)| n.contains("kf_par_scan") && sig.first() != Some(&ArgKind::Block)),
+        "the filter has a node to skip"
     );
 }

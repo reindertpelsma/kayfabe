@@ -830,11 +830,13 @@ impl WalkGpu {
             &[Arg::Block(block)],
         )?;
         self.kl(nodes, &self.k.diff_emit, grid, 256, 0, &[Arg::Block(block)])?;
-        self.ev_copied.record(s)?;
+        // ★ V4: both completion events name THIS flight, so a query cannot return the stage on
+        // the strength of an earlier walk's record.
+        self.ev_copied.record_flight(s, &self.stage)?;
         // ⊘ ORDER: the host signal BEFORE `ev_done`. Then `ev_done` complete ⇒ the fd was
         // written, so a collect that saw the event can always drain the signal.
         s.host_signal(&self.done_fd)?;
-        self.ev_done.record(s)
+        self.ev_done.record_flight(s, &self.stage)
     }
 
     /// ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
@@ -1143,6 +1145,12 @@ impl WalkGpu {
                 .ok_or_else(|| refused(what, "no previous window to re-walk".to_string()))?
                 .share(),
         };
+        // ★ The previous window is released HERE, before anything is queued (review of
+        // `v3-sec-rawaddr`, 2026-10-04). The stage is `Idle`, so the walk that read it is proven
+        // complete; when this was the last share (the caller dropped its image), its free drains a
+        // context with none of this walk queued and returns at once. Released after the enqueue,
+        // that drain waited for the walk just queued — a submit that blocked on the GPU.
+        drop(self.last_window.replace(win.share()));
         self.ctx.make_current()?;
         self.stage.write(Region::Lay, 0, &s.layout.encode())?;
         let mut pdb_bytes = Vec::with_capacity(s.pdbs.len() * 8);
@@ -1182,7 +1190,6 @@ impl WalkGpu {
             self.recover_after_failed_enqueue();
             return Err(e);
         }
-        self.last_window = Some(win);
         Ok(())
     }
 

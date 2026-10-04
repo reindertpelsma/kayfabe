@@ -481,8 +481,21 @@ mod raw {
     /// ★ PROOF that every operation queued in context `ctx_id` before it was minted has completed.
     /// Minted only by [`Ctx::drain`] and by [`Event::query`] answering *done*; consumed by
     /// [`PinnedStage::end_flight`], the only way a walk's stage returns to `Idle`.
+    ///
+    /// ⊘ `flight` (review of `v3-sec-rawaddr`, 2026-10-04): `cuEventQuery` also answers *done* for
+    /// an event whose last record belongs to an EARLIER flight (or that was never recorded), so an
+    /// event's proof names the stage generation its record was stamped with, and `end_flight`
+    /// refuses a proof older than the flight in progress. `None` = a whole-context drain, which
+    /// covers every flight.
     pub(in crate::driver_unsafe) struct Drained {
         ctx_id: u64,
+        flight: Option<u64>,
+    }
+
+    /// ★ V4, pure: does a proof stamped `proof` (`None`: a whole-context drain) cover the flight
+    /// `current`? Only a proof of that flight or a later one does.
+    pub(in crate::driver_unsafe) fn proof_covers(proof: Option<u64>, current: u64) -> bool {
+        proof.is_none_or(|g| g >= current)
     }
 
     impl Ctx {
@@ -598,7 +611,10 @@ mod raw {
             self.cu().check("cuCtxSynchronize", unsafe {
                 (self.0.cu.cuCtxSynchronize)()
             })?;
-            Ok(Drained { ctx_id: self.0.id })
+            Ok(Drained {
+                ctx_id: self.0.id,
+                flight: None,
+            })
         }
 
         /// How many `cuCtxSynchronize` this context has made — gate 8's falsifier.
@@ -1161,6 +1177,8 @@ mod raw {
         raw: usize,
         capturing: AtomicBool,
         signals: Mutex<Vec<Arc<OwnedFd>>>,
+        /// The stamps of the flight events recorded during the capture in progress.
+        capture_stamps: Mutex<Vec<Arc<AtomicU64>>>,
     }
 
     impl Stream {
@@ -1177,6 +1195,7 @@ mod raw {
                 raw: h as usize,
                 capturing: AtomicBool::new(false),
                 signals: Mutex::new(Vec::new()),
+                capture_stamps: Mutex::new(Vec::new()),
             })
         }
 
@@ -1292,6 +1311,12 @@ mod raw {
                 nodes,
                 baked: None,
                 updates: 0,
+                stamps: core::mem::take(
+                    &mut *self
+                        .capture_stamps
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                ),
             };
             self.cu().check("cuStreamEndCapture", r)?;
             let mut e: *mut c_void = core::ptr::null_mut();
@@ -1329,6 +1354,10 @@ mod raw {
     pub(in crate::driver_unsafe) struct Event {
         ctx: Ctx,
         raw: usize,
+        /// The stage flight its last [`Event::record_flight`] belongs to (0: none) — what its
+        /// completion proof names. Shared with a graph that replays the record, which re-stamps it
+        /// at every launch.
+        stamp: Arc<AtomicU64>,
     }
 
     impl Event {
@@ -1343,7 +1372,38 @@ mod raw {
             Ok(Event {
                 ctx: ctx.share(),
                 raw: h as usize,
+                stamp: Arc::new(AtomicU64::new(0)),
             })
+        }
+
+        /// ★ V4: record on `stream` as the completion of `stage`'s CURRENT flight — the event's
+        /// proof then names that flight. Under capture the record is a graph node, so the stamp is
+        /// handed to the graph, which sets it to each launch's flight before the launch.
+        pub(in crate::driver_unsafe) fn record_flight(
+            &self,
+            stream: &Stream,
+            stage: &PinnedStage,
+        ) -> Result<(), CudaError> {
+            if stage.shared.ctx_id != self.ctx.id() {
+                return Err(refused(
+                    "cuEventRecord (V4)",
+                    "the stage and the event belong to different CUDA contexts".to_string(),
+                ));
+            }
+            self.record(stream)?;
+            if stream.is_capturing() {
+                stream
+                    .capture_stamps
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(Arc::clone(&self.stamp));
+            } else {
+                self.stamp.store(
+                    stage.shared.generation.load(Ordering::Acquire),
+                    Ordering::Release,
+                );
+            }
+            Ok(())
         }
 
         /// Record on `stream` — under capture as an EXTERNAL record, which becomes a graph node (a
@@ -1386,6 +1446,7 @@ mod raw {
             self.ctx.cu().check("cuEventQuery", r)?;
             Ok(Some(Drained {
                 ctx_id: self.ctx.id(),
+                flight: Some(self.stamp.load(Ordering::Acquire)),
             }))
         }
 
@@ -1993,6 +2054,17 @@ mod raw {
         }
     }
 
+    /// ★ Pure: does a captured node need `cuGraphExecKernelNodeSetParams` on a stale launch? Only
+    /// when its by-value block is rewritten (its first parameter is the `KfArgs`) or its grid
+    /// changes; every other node's parameters are fixed at capture.
+    pub(in crate::driver_unsafe) fn node_needs_rewrite(
+        takes_block: bool,
+        grid_now: u32,
+        grid_new: u32,
+    ) -> bool {
+        takes_block || grid_now != grid_new
+    }
+
     /// ★ An instantiated graph of a captured walk. Keeps every allocation its nodes name and the
     /// block its by-value arguments currently carry, so nothing the graph can replay is freed.
     pub(in crate::driver_unsafe) struct GraphExec {
@@ -2002,6 +2074,9 @@ mod raw {
         nodes: Vec<Captured>,
         baked: Option<ArgBlock>,
         updates: u64,
+        /// The flight events the graph records ([`Event::record_flight`] under capture): each is
+        /// re-stamped with the flight a launch begins, before the launch.
+        stamps: Vec<Arc<AtomicU64>>,
     }
 
     impl GraphExec {
@@ -2061,10 +2136,16 @@ mod raw {
                 for i in 0..self.nodes.len() {
                     let grid = grid_of(&self.nodes[i]);
                     let n = &mut self.nodes[i];
-                    if n.sig.first() == Some(&ArgKind::Block) {
+                    let takes_block = n.sig.first() == Some(&ArgKind::Block);
+                    // ★ Only a node whose by-value block or grid changes is rewritten (review of
+                    // `v3-sec-rawaddr`: re-setting the `kf_par_scan` nodes cost 5-6 setters per
+                    // stale walk that the pre-perimeter `takes_args` filter never paid).
+                    if !node_needs_rewrite(takes_block, n.grid, grid) {
+                        continue;
+                    }
+                    if takes_block {
                         n.params[0] = block.bytes.to_vec();
                     }
-                    n.grid = grid;
                     let mut p: Vec<*mut c_void> = n
                         .params
                         .iter_mut()
@@ -2072,7 +2153,7 @@ mod raw {
                         .collect();
                     let kp = KernelNodeParams {
                         func: n.kernel as *mut c_void,
-                        grid_x: n.grid,
+                        grid_x: grid,
                         grid_y: 1,
                         grid_z: 1,
                         block_x: n.block,
@@ -2098,11 +2179,16 @@ mod raw {
                         )
                     };
                     self.ctx.cu().check("cuGraphExecKernelNodeSetParams", r)?;
+                    // the node's grid is what the driver now holds — recorded only once it took it
+                    n.grid = grid;
                 }
                 self.baked = Some(block.share());
                 self.updates += 1;
             }
-            block.stage.begin()?;
+            let flight = block.stage.begin()?;
+            for s in &self.stamps {
+                s.store(flight, Ordering::Release);
+            }
             // SAFETY: both handles came from this binding and are live; every allocation the graph
             // names is kept alive by `self.nodes` and `self.baked`.
             self.ctx.cu().check("cuGraphLaunch", unsafe {
@@ -2250,6 +2336,9 @@ mod raw {
     struct StageShared {
         ctx_id: u64,
         flight: Mutex<Flight>,
+        /// Flights begun so far: [`StageShared::begin`] increments it, and a completion proof must
+        /// name the current one ([`proof_covers`]).
+        generation: AtomicU64,
     }
 
     impl StageShared {
@@ -2265,8 +2354,34 @@ mod raw {
             Ok(())
         }
 
-        fn begin(&self) -> Result<(), CudaError> {
-            self.apply(FlightEvent::Begin)
+        /// A launch that reads the stage is about to be queued: in flight, and a new generation,
+        /// which it returns (the flight a record of its completion must name).
+        fn begin(&self) -> Result<u64, CudaError> {
+            self.apply(FlightEvent::Begin)?;
+            Ok(self.generation.fetch_add(1, Ordering::AcqRel) + 1)
+        }
+
+        /// ★ V4: a completion proof returns the stage to `Idle` only if it is of this context and
+        /// covers the flight in progress.
+        fn end(&self, d: &Drained) -> Result<(), CudaError> {
+            if d.ctx_id != self.ctx_id {
+                return Err(refused(
+                    "PinnedStage::end_flight (V4)",
+                    "a completion proof from another CUDA context".to_string(),
+                ));
+            }
+            let current = self.generation.load(Ordering::Acquire);
+            if !proof_covers(d.flight, current) {
+                return Err(refused(
+                    "PinnedStage::end_flight (V4)",
+                    format!(
+                        "a completion proof of flight {:?}, older than the flight in progress \
+                         ({current})",
+                        d.flight
+                    ),
+                ));
+            }
+            self.apply(FlightEvent::Drained)
         }
     }
 
@@ -2311,6 +2426,7 @@ mod raw {
                 shared: Arc::new(StageShared {
                     ctx_id: ctx.id(),
                     flight: Mutex::new(Flight::Idle),
+                    generation: AtomicU64::new(0),
                 }),
             };
             for r in Region::ALL {
@@ -2396,15 +2512,10 @@ mod raw {
             Ok(out)
         }
 
-        /// ★ V4: the only way back to `Idle` — a proof of completion from THIS context.
+        /// ★ V4: the only way back to `Idle` — a proof of completion from THIS context, of the
+        /// flight in progress (or a whole-context drain).
         pub(in crate::driver_unsafe) fn end_flight(&self, d: Drained) -> Result<(), CudaError> {
-            if d.ctx_id != self.shared.ctx_id {
-                return Err(refused(
-                    "PinnedStage::end_flight (V4)",
-                    "a completion proof from another CUDA context".to_string(),
-                ));
-            }
-            self.shared.apply(FlightEvent::Drained)
+            self.shared.end(&d)
         }
 
         /// ★ F2: a failed completion query. Final.
@@ -2780,6 +2891,64 @@ mod raw {
 
         /// ★ The completion path WITHOUT a GPU: the exact function the driver calls makes the fd
         /// readable and drains to exactly one signal.
+        /// ★ T21b — V4: a completion proof returns the stage to `Idle` only if it covers the flight
+        /// in progress. An event whose last record belongs to an earlier flight (`cuEventQuery`
+        /// answers *done* for it) is refused, and so is a proof from another context; a
+        /// whole-context drain covers every flight (review of `v3-sec-rawaddr`, 2026-10-04).
+        #[test]
+        fn a_completion_proof_of_an_earlier_flight_is_refused() {
+            assert!(proof_covers(None, 7), "a whole-context drain");
+            assert!(proof_covers(Some(7), 7), "this flight");
+            assert!(!proof_covers(Some(6), 7), "the flight before");
+            let st = StageShared {
+                ctx_id: 3,
+                flight: Mutex::new(Flight::Idle),
+                generation: AtomicU64::new(0),
+            };
+            let first = st.begin().unwrap();
+            assert_eq!(first, 1);
+            st.end(&Drained {
+                ctx_id: 3,
+                flight: Some(first),
+            })
+            .unwrap();
+            let second = st.begin().unwrap();
+            assert!(
+                st.end(&Drained {
+                    ctx_id: 3,
+                    flight: Some(first),
+                })
+                .is_err(),
+                "the first flight's event cannot end the second"
+            );
+            assert_eq!(*st.flight.lock().unwrap(), Flight::InFlight);
+            assert!(
+                st.end(&Drained {
+                    ctx_id: 4,
+                    flight: None,
+                })
+                .is_err(),
+                "another context's drain"
+            );
+            st.end(&Drained {
+                ctx_id: 3,
+                flight: Some(second),
+            })
+            .unwrap();
+            assert_eq!(*st.flight.lock().unwrap(), Flight::Idle);
+            st.begin().unwrap();
+            st.end(&Drained {
+                ctx_id: 3,
+                flight: None,
+            })
+            .unwrap();
+            assert_eq!(
+                *st.flight.lock().unwrap(),
+                Flight::Idle,
+                "a drain ends any flight"
+            );
+        }
+
         #[test]
         fn the_host_function_signals_the_fd_and_drain_consumes_it() {
             let fd = CompletionFd::new().expect("eventfd");

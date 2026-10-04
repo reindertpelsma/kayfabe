@@ -88,12 +88,19 @@ impl ConsoleFrame {
         self.dst.span()
     }
 
-    /// A copy of `n` bytes at `off` — for a diagnostic digest of a frame whose copy COMPLETED.
-    /// Bounds-checked against the frame (`MappedRegion::read_into`).
+    /// A copy of `n` bytes at `off`, for a diagnostic digest (the `KF3_DISPLAY_TRACE` line).
+    ///
+    /// ⊘ **Bounds-only, and the content is racy by design** (review of `v3-sec-rawaddr`,
+    /// 2026-10-04): nothing here proves the GPU's copy into this frame completed, so a read while
+    /// a `cuMemcpyDtoHAsync` is still writing returns torn pixels. That is wrong CONTENT, never a
+    /// memory error — the pages are never unmapped and the range is checked (design §2.6 Res-3) —
+    /// and the one caller reads only after its completion fd fired. The range is checked BEFORE
+    /// anything is allocated, so a wild `n` is a named refusal, not an allocation failure.
     ///
     /// # Errors
     /// Refused by name outside the frame.
     pub fn read(&self, off: usize, n: usize) -> Result<Vec<u8>, CudaError> {
+        frame_read_fits(self.len(), off, n).map_err(|e| refused("ConsoleFrame::read", e))?;
         let mut out = vec![0u8; n];
         if n > 0 {
             self.pages
@@ -109,6 +116,20 @@ impl core::fmt::Debug for ConsoleFrame {
         f.debug_struct("ConsoleFrame")
             .field("len", &self.len())
             .finish_non_exhaustive()
+    }
+}
+
+/// ★ Pure: `[off, off+n)` lies inside a `len`-byte console frame (checked before a byte is
+/// allocated for it).
+///
+/// # Errors
+/// The range, by name.
+pub(crate) fn frame_read_fits(len: usize, off: usize, n: usize) -> Result<(), String> {
+    match off.checked_add(n) {
+        Some(end) if end <= len => Ok(()),
+        _ => Err(format!(
+            "[{off:#x}, +{n:#x}) leaves the {len:#x}-byte console frame"
+        )),
     }
 }
 
@@ -727,6 +748,22 @@ mod tests {
         assert!(
             finish_fits(7, 7, u32::MAX, u32::MAX, usize::MAX).is_err(),
             "no wrap"
+        );
+    }
+
+    /// ★ T26 — a console frame's diagnostic read is bounded before anything is allocated: a wild
+    /// length (the review's `usize::MAX`) or an offset that overflows is a named refusal.
+    #[test]
+    fn a_frame_read_is_bounded_before_it_allocates() {
+        let len = 1920 * 1080 * 4;
+        assert_eq!(frame_read_fits(len, 0, len), Ok(()), "the whole frame");
+        assert_eq!(frame_read_fits(len, len, 0), Ok(()), "nothing, at the end");
+        assert!(frame_read_fits(len, 0, len + 1).is_err(), "one byte past");
+        assert!(frame_read_fits(len, 1, len).is_err(), "shifted one byte");
+        assert!(frame_read_fits(len, 0, usize::MAX).is_err(), "usize::MAX");
+        assert!(
+            frame_read_fits(len, usize::MAX, 2).is_err(),
+            "an offset that wraps"
         );
     }
 
