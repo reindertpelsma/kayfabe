@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One serial run on the owned vdisp2 box. Inspect verdicts, not just EXIT.
 set -euo pipefail
-kind=${1:?refresh|fps30|x1130|async60|broker}
+kind=${1:?refresh|fps30|x1130|async60|broker|refresh_hint}
 tag=${2:?unique tag}
 [[ "$tag" =~ ^[a-zA-Z0-9_-]+$ ]]
 test ! -e "/root/prov/$tag.log"
@@ -45,6 +45,26 @@ case "$kind" in
     broker)
         export BRK_KF3_EXTRA=gop=on,x11-dispsw=on BRK_CURSOR=1 BRK_VNC=1 BRK_DRI3=1 BRK_RESILIENCE=1
         timeout --kill-after=10 1200 bash scripts/bench/display/broker_lane.sh run "$tag"
+        ;;
+    refresh_hint)
+        (
+        export R6_FIFO=/run/${tag}_broker.fifo
+        socket=/run/${tag}_broker.sock
+        test ! -e "$R6_FIFO"
+        test ! -e "$socket"
+        mkfifo "$R6_FIFO"
+        exec 8<>"$R6_FIFO"
+        /opt/nvkvm-broker/nvkvm-display-broker --socket "$socket" --backend test \
+            --present-mode=shm --persist --verbose <&8 > "/root/prov/${tag}_broker.log" 2>&1 &
+        broker_pid=$!
+        trap 'kill "$broker_pid" 2>/dev/null || true' EXIT
+        for _ in $(seq 50); do [ -S "$socket" ] && break; sleep 0.1; done
+        test -S "$socket"
+        export KF3_DEV_EXTRA="display=on,gop=on,display-broker=$socket,display-broker-uid=0,display-broker-vram=off"
+        export POST_CAPTURE_HOOK=/root/refresh_hint_hook.py
+        timeout --kill-after=10 480 bash scripts/bench/boot_capture.sh "$tag" -- -vga none
+        grep -q '^R6_VERDICT PASS ' "/workspace/bench/run_${tag}_probe.log"
+        )
         ;;
     *) exit 2 ;;
 esac
