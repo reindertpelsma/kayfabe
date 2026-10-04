@@ -385,7 +385,29 @@ fn no_handle_derives_a_pointer_printing_debug() {
                 .copied()
                 .collect::<Vec<_>>()
                 .join("\n");
-            for field in ["addr:", "raw:", "host:", "dev:", "base:", "span:", "ptr:"] {
+            // ⊘ Widened 2026-10-04 (review of v3-sec-rawaddr): a driver handle is a pointer into
+            // libcuda's heap — `handle`, `graph`, `exec`, `node`, `kernel`, `func`, `ctx`,
+            // `stream`, `event`, `module` — and `DevAddr` is an address under any field name.
+            for field in [
+                "addr:",
+                "raw:",
+                "host:",
+                "dev:",
+                "base:",
+                "span:",
+                "ptr:",
+                "handle:",
+                "graph:",
+                "exec:",
+                "node:",
+                "kernel:",
+                "func:",
+                "ctx:",
+                "stream:",
+                "event:",
+                "module:",
+                ": DevAddr",
+            ] {
                 assert!(
                     !body.contains(field),
                     "{file}: `{head}` derives Debug over an address-carrying field `{field}`"

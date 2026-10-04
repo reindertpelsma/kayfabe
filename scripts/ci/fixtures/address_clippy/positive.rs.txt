@@ -40,3 +40,12 @@ pub fn all(x: &u8, m: &mut u8, v: &mut Vec<u8>, s: &str, sl: &mut [u8], c: &Cell
     let _uc: Option<core::cell::UnsafeCell<u8>> = None; // G1D
     a + b + n + nm + d + dm + w + e + sr + bx + ar + aa + rr + ra + ci + cp + vp + vm + cl + sp + slp + slm + rn
 }
+
+// the `{:p}` trait by path, after a glob import the lexical gate's line patterns did not read
+pub struct Shown<'a>(pub &'a u8);
+impl core::fmt::Display for Shown<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        use core::fmt::*;
+        <&u8 as Pointer>::fmt(&self.0, f) // G1D
+    }
+}

@@ -36,6 +36,9 @@ disallowed-methods = [
   { path = "str::as_ptr", reason = "an address outside the perimeter (key a census by content: kf-util textkey)" },
   { path = "slice::as_ptr", reason = "an address outside the perimeter" },
   { path = "slice::as_mut_ptr", reason = "an address outside the perimeter" },
+  # the `{:p}` trait called by path — `<&T as Pointer>::fmt` after `use core::fmt::*` passed the
+  # lexical gate's P6 (review of v3-sec-rawaddr, 2026-10-04); its trait method, resolved, cannot
+  { path = "core::fmt::Pointer::fmt", reason = "formats an address outside the perimeter" },
 ]
 disallowed-types = [
   { path = "core::ptr::NonNull", reason = "a pointer outside the perimeter" },

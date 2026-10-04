@@ -112,14 +112,29 @@ const KVM_MEM_READONLY: u32 = 1 << 1;
 
 /// `struct kvm_userspace_memory_region` — `include/uapi/linux/kvm.h`. Field order and
 /// widths are the ABI; the layout is C's.
+///
+/// ⊘ `Debug` is hand-written: `userspace_addr` is a HOST address (this process's mapping of the
+/// guest's RAM), and a derived `Debug` would print it (G1b, widened 2026-10-04 by the review of
+/// `v3-sec-rawaddr`, found this one).
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct UserspaceMemoryRegion {
     slot: u32,
     flags: u32,
     guest_phys_addr: u64,
     memory_size: u64,
     userspace_addr: u64,
+}
+
+impl core::fmt::Debug for UserspaceMemoryRegion {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("UserspaceMemoryRegion")
+            .field("slot", &self.slot)
+            .field("flags", &self.flags)
+            .field("guest_phys_addr", &self.guest_phys_addr)
+            .field("memory_size", &self.memory_size)
+            .finish_non_exhaustive()
+    }
 }
 
 impl UserspaceMemoryRegion {
@@ -876,6 +891,25 @@ mod tests {
         );
         assert_eq!((KVM_REGISTER_COALESCED_MMIO >> 16) & 0x3FFF, 16);
         assert_eq!(KVM_REGISTER_COALESCED_MMIO & 0xFFFF, 0xAE67);
+    }
+
+    /// ★ The memslot record's `Debug` names the guest range and never the host address the slot
+    /// is backed by (G1b, widened 2026-10-04).
+    #[test]
+    fn the_memslot_record_never_prints_its_host_address() {
+        let host = 0x7f12_3456_7000_u64;
+        let text = format!(
+            "{:?}",
+            UserspaceMemoryRegion::install(3, 0x1000_0000, host, 4096, false)
+        );
+        assert!(
+            !text.contains(&format!("{host:x}")) && !text.contains(&host.to_string()),
+            "the host address leaked: {text}"
+        );
+        assert!(
+            text.contains("slot: 3") && text.contains("268435456"),
+            "{text}"
+        );
     }
 
     #[test]

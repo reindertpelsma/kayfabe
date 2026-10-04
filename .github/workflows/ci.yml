@@ -787,8 +787,10 @@ jobs:
       # `&raw const`, `ptr::from_ref`, `.as_ptr() as usize`, `Box::into_raw`, `.addr()`, an
       # `addr: usize` field, `{:p}`, a CUDA device-pointer type. G1 refuses every such shape outside
       # `*_unsafe.rs` in the kf-* crates and firmware/, with a real lexer (comments, char and string
-      # literals and `PhantomData` dropped; `{:p}` looked for INSIDE strings); G1b refuses a derived
-      # `Debug` over a pointer field inside the perimeter; G1c a pointer re-export from it. It runs
+      # literals and `PhantomData` dropped; `{:p}` looked for INSIDE strings, and since 2026-10-04 in
+      # the joined literals of each STATEMENT, with `use` statements read whole); G1b refuses a
+      # derived `Debug` over a pointer, `DevAddr` or a handle-named integer field inside the
+      # perimeter (in kf-cuda, any `…addr`/`…base` integer too); G1c a pointer re-export. It runs
       # its own self-test first (scripts/ci/fixtures/address_gate/: every known positive must be
       # found, every look-alike must not) — a gate that reports zero must first report one.
       - name: "Address gate (G1/G1b/G1c: no raw or disguised address outside *_unsafe.rs)"
@@ -1965,7 +1967,11 @@ jobs:
           #   kf-cuda 4677 -> 4678 (+1): a store import takes only `kf_host::RmExport` (fd and length
           #     from the token, -2 net across the two `import_store`s and their dropped imports), and
           #     the import handle is held in `AllocKind::Import` until after the unmap (+3).
-          PERIMETER="kf-linux-raw:4810 kf-cuda:4678 kf-qemu:658"
+          #   kf-linux-raw 4810 -> 4836 (+26): the widened G1b found `UserspaceMemoryRegion` (KVM's
+          #     memslot record) deriving `Debug` over `userspace_addr`, a host address: its `Debug` is
+          #     hand-written without it (+10), with the test that pins it (+16).
+          #   kf-cuda 4678 -> 4697 (+19): T18's field list adds the driver-handle names and `DevAddr`.
+          PERIMETER="kf-linux-raw:4836 kf-cuda:4697 kf-qemu:658"
           fail=0
           for entry in $PERIMETER; do
             c="crates/${entry%%:*}"; want="${entry##*:}"

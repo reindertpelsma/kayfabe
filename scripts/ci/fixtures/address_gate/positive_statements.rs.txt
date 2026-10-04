@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1 known positives that no single LINE shows (review of v3-sec-rawaddr, 2026-10-04): a format
+// string split across literals and lines, a trait named only after a glob import, an import spread
+// over a brace list. The line each hit is reported at carries the marker the self-test expects.
+fn shapes(r: &u8, f: &mut core::fmt::Formatter<'_>, h: &mut DefaultHasher) {
+    let s = format!(concat!("{:", // HIT
+        "p}"), r);
+    let s = format!(concat!("{:", stringify!(p), "}"), r); // HIT
+    let s = format!(concat!(env!("KF_FMT"), "{}"), r); // HIT
+    <&u8 as Pointer>::fmt(&r, f); // HIT
+    hash(r, h);
+}
+use core::fmt::*; // HIT
+use core::ptr::{hash}; // HIT
+use core::ptr::{ // HIT
+    from_ref,
+};
+use core::{ptr::{null}}; // HIT
+use std::{fmt::{*}}; // HIT

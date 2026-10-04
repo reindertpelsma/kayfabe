@@ -14,10 +14,16 @@ host or device address — not as a pointer type (the old host-pointer gate's jo
         trybuild fixtures (`*/tests/ui/*`) and `target/`. A real lexer drops comments, char and string
         literals (P7 runs on string contents only) and `PhantomData<…>` (a ZST carries no address).
 * G1b — inside the perimeter of kf-linux-raw, kf-cuda and kf-qemu: no derived `Debug` on a type
-        that holds a pointer, or a `usize` named `raw`/`ptr`/`host`/`addr` (`{:?}` would print it).
+        that holds a pointer, `DevAddr`, or an integer named as an address or a driver handle
+        (`raw`/`ptr`/`host`/`userspace_addr`/`handle`/`graph`/`exec`/`node`/`kernel`/…; and in kf-cuda
+        any `…addr`/`…base`) — `{:?}` would print it.
 * G1c — inside the perimeter: no `pub use` re-exporting a pointer function or type (G1 skips those
         files, so a re-export under a harmless name would otherwise walk an address out).
 * G1  also refuses `allow(clippy::disallowed_…)` outside the perimeter: that is G1d's opt-out.
+* G1  reads each STATEMENT as well as each line: the string literals of a statement joined (a
+        `{:p}` split over `concat!` pieces and lines; `stringify!` counts as a literal), a format
+        macro whose `concat!` takes `env!`/`include_str!`, and `use` statements whole (brace and
+        glob imports of `ptr`'s pointer functions or `fmt`'s traits).
 
 Exit status 1 on any hit, after a self-test against known positives and look-alikes
 (`scripts/ci/fixtures/address_gate/`): a gate that reports zero must first report one.
@@ -26,6 +32,7 @@ Exit status 1 on any hit, after a self-test against known positives and look-ali
 from __future__ import annotations
 
 import argparse
+import bisect
 import re
 import sys
 from pathlib import Path
@@ -40,14 +47,31 @@ MIN_KF_CRATES = 18  # the floor scripts/ci/dependencies.py uses
 def lex(src: str) -> tuple[list[str], list[str]]:
     """Code with comments, char literals and string literals blanked (newlines kept, so line
     numbers survive), and per line the concatenated CONTENTS of the string literals on it."""
+    code, lines_strings, _ = _lex(src)
+    return code, lines_strings
+
+
+def _lex(src: str) -> tuple[list[str], list[str], list[tuple[int, int, str]]]:
+    """[`lex`], plus every string literal as `(offset in the joined blanked code, line, contents)`
+    — so a format string split over several literals (`concat!("{:", "p}")`, review of
+    v3-sec-rawaddr) is read whole, statement by statement. `stringify!(…)` counts as a literal
+    whose contents are its tokens: `concat!("{:", stringify!(p), "}")` is the same string."""
     out: list[str] = []
+    olen = 0
+    spans: list[tuple[int, int, str]] = []
     strings: dict[int, list[str]] = {}
     i, n, line = 0, len(src), 0
+
+    def emit(t: str) -> None:
+        nonlocal olen
+        out.append(t)
+        olen += len(t)
+
     while i < n:
         c = src[i]
         nxt = src[i + 1] if i + 1 < n else ""
         if c == "\n":
-            out.append(c)
+            emit(c)
             line += 1
             i += 1
         elif c == "/" and nxt == "/":
@@ -62,7 +86,7 @@ def lex(src: str) -> tuple[list[str], list[str]]:
                     depth, i = depth - 1, i + 2
                 else:
                     if src[i] == "\n":
-                        out.append("\n")
+                        emit("\n")
                         line += 1
                     i += 1
         elif (c == "r" or (c == "b" and nxt == "r")) and re.match(r'b?r(#*)"', src[i:]) and (
@@ -75,11 +99,12 @@ def lex(src: str) -> tuple[list[str], list[str]]:
             end = n if end < 0 else end
             body = src[i:end]
             strings.setdefault(line, []).append(body)
+            spans.append((olen, line, body))
             for ch in body:
                 if ch == "\n":
-                    out.append("\n")
+                    emit("\n")
                     line += 1
-            out.append('""')
+            emit('""')
             i = end + 1 + len(hashes)
         elif c == '"' or (c == "b" and nxt == '"' and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] == "_"))):
             i += 1 if c == '"' else 2
@@ -90,29 +115,47 @@ def lex(src: str) -> tuple[list[str], list[str]]:
                     i += 2
                     continue
                 if src[i] == "\n":
-                    out.append("\n")
+                    emit("\n")
                     line += 1
                 body.append(src[i])
                 i += 1
             strings.setdefault(start_line, []).append("".join(body))
-            out.append('""')
+            spans.append((olen, start_line, "".join(body)))
+            emit('""')
             i += 1
+        elif c == "s" and src.startswith("stringify!", i) and (
+            i == 0 or not (src[i - 1].isalnum() or src[i - 1] == "_")
+        ) and re.match(r"stringify!\s*[(\[{]", src[i:]):
+            m = re.match(r"stringify!\s*([(\[{])", src[i:])
+            close = {"(": ")", "[": "]", "{": "}"}[m.group(1)]
+            k, depth = i + m.end(), 1
+            while k < n and depth:
+                depth += 1 if src[k] == m.group(1) else -1 if src[k] == close else 0
+                k += 1
+            body = src[i + m.end() : k - 1]
+            spans.append((olen, line, " ".join(body.split())))
+            for ch in body:
+                if ch == "\n":
+                    emit("\n")
+                    line += 1
+            emit('""')
+            i = k
         elif c == "'":
             # A char literal ('x', '\n', '\u{..}', '\'') or a lifetime ('a, 'static): a literal
             # closes within a few characters, a lifetime never closes.
             m = re.match(r"'(\\u\{[0-9a-fA-F]+\}|\\.|[^\\'\n])'", src[i:])
             if m:
-                out.append("' '")
+                emit("' '")
                 i += m.end()
             else:
-                out.append(c)
+                emit(c)
                 i += 1
         else:
-            out.append(c)
+            emit(c)
             i += 1
     code = "".join(out).split("\n")
     lines_strings = ["\n".join(strings.get(k, [])) for k in range(len(code))]
-    return code, lines_strings
+    return code, lines_strings, spans
 
 
 def drop_phantom(code: str) -> str:
@@ -150,7 +193,9 @@ CODE_PATTERNS = [
     ("P5", r"\.addr\s*\(\s*\)"),
     ("P5", r"::addr\b(?!\s*(::|\{))"),
     ("P6", r"\b(AtomicPtr|UnsafeCell|SyncUnsafeCell|CUdeviceptr|DevAddr)\b"),
-    ("P6", r"\bfmt::Pointer\b|\bPointer::fmt\b|use[^;]*\bPointer\b"),
+    # the `{:p}` trait by any spelling: `fmt::Pointer`, `Pointer::fmt`, `<&T as Pointer>::fmt` after
+    # a glob import (review of v3-sec-rawaddr) — the token itself, wherever code names it
+    ("P6", r"\bPointer\b"),
     ("P9", r"\b(addr|addrs|ptr|hva|dptr|devptr|dev_ptr|host_addr|host_ptr|dev_addr|base_addr)\s*:\s*\[?\s*"
            r"(usize|AtomicUsize|NonZeroUsize)\b"),
     ("P9", r"\b(ptr|dptr|devptr|dev_ptr|dev_addr)\s*:\s*\[?\s*(u64|AtomicU64|NonZeroU64)\b"),
@@ -161,10 +206,54 @@ STRING_PATTERNS = [("P7", r"\{[^{}]*:[^{}]*p\}")]
 CODE_RES = [(k, re.compile(p)) for k, p in CODE_PATTERNS]
 STRING_RES = [(k, re.compile(p)) for k, p in STRING_PATTERNS]
 
+# ── statement-level shapes (review of v3-sec-rawaddr, 2026-10-04) ──────────────────────────
+# A line is too short a window: a format string split over lines (`concat!("{:",⏎"p}")`) and an
+# import spread over a brace list (`use core::ptr::{⏎hash,⏎};`) each passed G1 line by line.
+P2_NAMES = (r"from_ref|from_mut|null|null_mut|dangling|dangling_mut|without_provenance(_mut)?"
+            r"|with_exposed_provenance(_mut)?|addr_of(_mut)?|slice_from_raw_parts(_mut)?|hash")
+FORMAT_MACRO = re.compile(r"\b(format|format_args|print|println|eprint|eprintln|write|writeln|panic"
+                          r"|assert|assert_eq|assert_ne|debug_assert|debug_assert_eq|debug_assert_ne"
+                          r"|unreachable|todo|unimplemented)!\s*[(\[{]")
+# pieces of a format string the gate cannot read
+UNREADABLE = re.compile(r"\b(env|option_env|include_str)!\s*[(\[{]")
+USE_STMT = re.compile(r"\buse\s+[^;]*;")
+
+
+def statement_hits(code: list[str], spans: list[tuple[int, int, str]]) -> list[tuple[int, str, str]]:
+    """Hits no single line shows: P7 over the JOINED string literals of each statement (a statement
+    ends at `;`, `{` or `}` of the blanked code, so string contents never split one), a format
+    macro whose `concat!` takes a piece the gate cannot read (P7c), and `use` statements read
+    whole — a brace or glob import of a `ptr` pointer function (P2) or of `fmt`'s traits (P6)."""
+    joined = "\n".join(code)
+    bounds = [m.start() for m in re.finditer(r"[;{}]", joined)]
+    groups: dict[int, list[tuple[int, str]]] = {}
+    for off, line, body in spans:
+        groups.setdefault(bisect.bisect(bounds, off), []).append((line, body))
+    hits = []
+    for seg, items in groups.items():
+        text = "".join(b for _, b in items)
+        if len(items) > 1 and STRING_RES[0][1].search(text):
+            hits.append((items[0][0] + 1, "P7", text))
+    for seg in range(len(bounds) + 1):
+        lo = bounds[seg - 1] + 1 if seg else 0
+        hi = bounds[seg] if seg < len(bounds) else len(joined)
+        stmt = joined[lo:hi]
+        if FORMAT_MACRO.search(stmt) and "concat!" in stmt and UNREADABLE.search(stmt):
+            hits.append((joined.count("\n", 0, lo + len(stmt) - len(stmt.lstrip())) + 1, "P7c",
+                         " ".join(stmt.split())))
+    for m in USE_STMT.finditer(joined):
+        stmt = " ".join(m.group(0).split())
+        no = joined.count("\n", 0, m.start()) + 1
+        if re.search(r"\bptr\b", stmt) and (re.search(rf"\b({P2_NAMES})\b", stmt) or "*" in stmt):
+            hits.append((no, "P2", stmt))
+        if re.search(r"\bfmt\b", stmt) and "*" in stmt:
+            hits.append((no, "P6", stmt))
+    return hits
+
 
 def g1_hits(src: str) -> list[tuple[int, str, str]]:
     """(line, pattern, text) per hit; one per (line, pattern)."""
-    code, strings = lex(src)
+    code, strings, spans = _lex(src)
     hits = []
     for no, (c, s) in enumerate(zip(code, strings), start=1):
         c = drop_phantom(c)
@@ -174,12 +263,32 @@ def g1_hits(src: str) -> list[tuple[int, str, str]]:
         for k, r in STRING_RES:
             if s and r.search(s):
                 hits.append((no, k, s.strip()))
-    return hits
+    seen = {(no, k) for no, k, _ in hits}
+    for no, k, t in statement_hits(code, spans):
+        if (no, k) not in seen:
+            seen.add((no, k))
+            hits.append((no, k, t))
+    return sorted(hits)
 
 
 # ── G1b: no pointer-printing Debug inside the perimeter ─────────────────────────────────────
 
-POINTER_FIELD = re.compile(r"NonNull\s*<|\*\s*(mut|const)\b|\b(raw|ptr|host|addr)\s*:\s*usize\b")
+ADDR_INT = r"\[?\s*(usize|u64|AtomicUsize|AtomicU64|NonZeroUsize|NonZeroU64)\b"
+# Every perimeter crate: a pointer type, CUDA's device-address alias, or an integer whose NAME says
+# it is a host address or a driver/library handle (a `CUcontext`, `CUgraphExec`, `CUfunction` or
+# `CUgraphNode` is a pointer into libcuda's heap). Widened 2026-10-04 (review of v3-sec-rawaddr: a
+# derive on `GraphExec { graph: usize, exec: usize }` or `DevRange { addr: DevAddr }` was unseen).
+POINTER_FIELD = re.compile(
+    r"NonNull\s*<|\*\s*(mut|const)\b|\bDevAddr\b"
+    r"|\b(raw|ptr|host|hva|host_addr|host_ptr|userspace_addr|dptr|devptr|dev_ptr|dev_addr|handle|graph"
+    r"|exec|node|kernel|func|ctx|stream|event|module)\s*:\s*" + ADDR_INT
+    + r"|\baddr\s*:\s*\[?\s*(usize|AtomicUsize|NonZeroUsize)\b"
+)
+# kf-cuda's perimeter only: there every integer named like an address IS one — a CUDA virtual
+# address, which under unified addressing can be a host address of this process (S1-05). In the
+# KVM/QEMU crates the same names hold GUEST addresses (`kvm_userspace_memory_region.guest_phys_addr`,
+# a segment base), which may print.
+POINTER_FIELD_CUDA = re.compile(r"\b\w*(addr|base)\s*:\s*" + ADDR_INT)
 
 
 def _item_body(code: list[str], start: int) -> tuple[int, str]:
@@ -208,15 +317,20 @@ def _item_body(code: list[str], start: int) -> tuple[int, str]:
     return i, text[m.start() : k]
 
 
-def g1b_hits(src: str) -> list[tuple[int, str, str]]:
+def g1b_hits(src: str, cuda: bool = False) -> list[tuple[int, str, str]]:
     code, _ = lex(src)
     hits = []
     for no, line in enumerate(code):
         if re.match(r"\s*#\[derive\([^)]*\bDebug\b", line):
             at, body = _item_body(code, no + 1)
-            if body and POINTER_FIELD.search(body):
+            if body and (POINTER_FIELD.search(body) or (cuda and POINTER_FIELD_CUDA.search(body))):
                 hits.append((at + 1, "G1b", code[at].strip() if at < len(code) else ""))
     return hits
+
+
+def g1b_cuda_hits(src: str) -> list[tuple[int, str, str]]:
+    """G1b with kf-cuda's stricter field rule."""
+    return g1b_hits(src, cuda=True)
 
 
 # ── G1c: no pointer re-exports from the perimeter ───────────────────────────────────────────
@@ -267,7 +381,8 @@ def scan() -> list[str]:
         report.append(f"G1b/G1c found only {len(perim)} perimeter files: the scan is blind")
     for p in perim:
         src = p.read_text()
-        for no, k, t in g1b_hits(src) + g1c_hits(src):
+        cuda = p.relative_to(ROOT).parts[1] == "kf-cuda"
+        for no, k, t in g1b_hits(src, cuda) + g1c_hits(src):
             report.append(f"{p.relative_to(ROOT)}:{no}: {k}: {t}")
     return report
 
@@ -282,7 +397,9 @@ def self_test() -> list[str]:
     fails = []
     for fixture, finder in [
         ("positive.rs.txt", g1_hits),
+        ("positive_statements.rs.txt", g1_hits),
         ("perimeter_debug.rs.txt", g1b_hits),
+        ("perimeter_debug_cuda.rs.txt", g1b_cuda_hits),
         ("perimeter_reexport.rs.txt", g1c_hits),
     ]:
         src = (FIXTURES / fixture).read_text()
@@ -300,6 +417,7 @@ def self_test() -> list[str]:
         ("negative.rs.txt", g1_hits),
         ("perimeter_debug_negative.rs.txt", g1b_hits),
         ("perimeter_debug_negative.rs.txt", g1c_hits),
+        ("perimeter_debug_cuda_negative.rs.txt", g1b_cuda_hits),
     ]:
         for no, k, t in finder((FIXTURES / fixture).read_text()):
             fails.append(f"{fixture}:{no}: a look-alike the gate FLAGGED ({k}): {t}")

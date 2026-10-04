@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1b look-alikes under kf-cuda's rule: lengths, offsets, counts and statuses may print.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StructLayout {
+    pub size: usize,
+    pub offsets: &'static [(&'static str, usize)],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CudaError {
+    Refused { what: &'static str, code: CUresult, name: String },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Shape {
+    runs_per_pdb: u32,
+    walk_pool: u32,
+    pool_bytes: u64,
+    key_perm: u32,
+}

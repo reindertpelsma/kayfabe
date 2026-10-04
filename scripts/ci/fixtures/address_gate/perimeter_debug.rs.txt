@@ -21,3 +21,30 @@ enum Hook { // HIT
 pub(crate) struct Handle { // HIT
     raw: usize,
 }
+
+// widened 2026-10-04 (review of v3-sec-rawaddr): driver handles, the device-address alias, and a
+// host address under its ABI name
+#[derive(Debug)]
+struct GraphExec { // HIT
+    graph: usize,
+    exec: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DevRange { // HIT
+    addr: DevAddr,
+    len: u64,
+}
+
+#[derive(Debug)]
+struct ImportHandle { // HIT
+    ctx: Ctx,
+    handle: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct UserspaceMemoryRegion { // HIT
+    slot: u32,
+    guest_phys_addr: u64,
+    userspace_addr: u64,
+}

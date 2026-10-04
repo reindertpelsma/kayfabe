@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+// G1b known positives under kf-cuda's stricter rule: every integer named like an address in its
+// perimeter is a CUDA address (a host address under unified addressing, S1-05).
+#[derive(Debug)]
+struct VaReservation { // HIT
+    ctx: Ctx,
+    addr: u64,
+    len: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Alloc { // HIT
+    base: u64,
+    len: u64,
+}
+
+#[derive(Debug)]
+struct Mapped { // HIT
+    va_addr: usize,
+}
