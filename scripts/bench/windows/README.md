@@ -89,3 +89,15 @@ kfwin/logs/         install.log, <tag>_run.log, per boot: _qemu.log _qmp_events.
 
 **To watch the screen live:** `ssh -N -L 5905:/workspace/winvm/kfwin/run/vnc.sock <gpu-host>`, then
 point a VNC viewer at `localhost:5905`.
+
+## Known limits (first run, 2026-10-04, `docs/design/V3_WINDOWS_DISCOVERY.md`)
+
+- **`nv-install` is slow.** It copies the 2.6 GB `Display.Driver` over QEMU user networking, at about
+  2.4 MB/s (18 minutes). Handing the driver to the guest as an ISO is the planned fix.
+- **A failed NVIDIA driver slows everything down.** With nvlddmkm in Code 43, boot to ssh took about
+  20 minutes, and the guest ignored `shutdown /s` for 5 minutes, so `stop` fell back to QMP `quit`.
+- **The guest changes its own Secure Boot vars.** Windows adds the 2023 CAs to `db` and updates `dbx`. KEK
+  also changed during the first install, which is not yet explained. The vars file is per-VM live state:
+  it is never regenerated, and it is never copied to another VM.
+- **GSP is forced on.** `nv-install` writes `EnableGpuFirmware=1` before nvlddmkm's first start, because
+  kayfabe serves only a GSP client.
