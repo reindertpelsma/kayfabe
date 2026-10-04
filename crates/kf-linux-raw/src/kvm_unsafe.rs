@@ -38,7 +38,7 @@ use crate::error::{RawError, last_syscall_error};
 use crate::host_fd_unsafe::adopt_fd;
 use crate::window_unsafe::GuestWindow;
 use kf_util::{leafwitness, lockwitness};
-use std::os::fd::{AsRawFd, BorrowedFd, OwnedFd, RawFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd};
 use std::sync::Arc;
 
 // --- ioctl numbers -------------------------------------------------------------------
@@ -169,7 +169,7 @@ impl Kvm {
         let fd = adopt_fd(raw, "open(/dev/kvm)")?;
         let kvm = Kvm { fd };
         let version = ioctl_arg(
-            kvm.fd.as_raw_fd(),
+            kvm.fd.as_fd(),
             KVM_GET_API_VERSION,
             0,
             "KVM_GET_API_VERSION",
@@ -184,15 +184,10 @@ impl Kvm {
         Ok(kvm)
     }
 
-    /// The subsystem descriptor, for the sibling module that creates vCPUs.
-    ///
-    /// `pub(crate)` and returning the raw number rather than a `BorrowedFd`: the only
-    /// consumer is `vcpu_unsafe`, which passes it straight to `ioctl`. A `BorrowedFd`
-    /// would be a nicer signature and would also be the one shape §4.2's constructive
-    /// rule cares about — but this is a *descriptor*, not a host address, and the
-    /// crate-private visibility is what keeps it from being an API at all.
-    pub(crate) fn as_raw(&self) -> libc::c_int {
-        self.fd.as_raw_fd()
+    /// The subsystem descriptor, borrowed, for the sibling module that creates vCPUs: what
+    /// [`ioctl_arg`] takes (a3). Crate-private, so it is not an API at all.
+    pub(crate) fn borrow_fd(&self) -> BorrowedFd<'_> {
+        self.fd.as_fd()
     }
 
     /// Create a VM. The returned descriptor owns an address space, and nothing else —
@@ -206,7 +201,7 @@ impl Kvm {
     pub fn create_vm(&self) -> Result<KvmVm, RawError> {
         lockwitness::assert_lock_free("KVM_CREATE_VM");
         leafwitness::assert_leaf_free("KVM_CREATE_VM");
-        let raw = ioctl_arg(self.fd.as_raw_fd(), KVM_CREATE_VM, 0, "KVM_CREATE_VM")?;
+        let raw = ioctl_arg(self.fd.as_fd(), KVM_CREATE_VM, 0, "KVM_CREATE_VM")?;
         Ok(KvmVm {
             fd: adopt_fd(raw, "KVM_CREATE_VM")?,
         })
@@ -236,9 +231,17 @@ impl KvmVm {
     /// did not create. Taking an [`OwnedFd`] rather than a number is what keeps that from
     /// being a second, unowned lifetime: the caller has already proved ownership by
     /// possessing the type.
-    #[must_use]
-    pub fn adopt(fd: OwnedFd) -> Self {
-        KvmVm { fd }
+    ///
+    /// ★ a5 (V3_SEC_PERIMETER.md §4.1): the descriptor is CONFIRMED to be a KVM VM before it
+    /// is adopted, by the same link check discovery uses. Every later ioctl on it is a KVM
+    /// VM request; on any other file they would mean something else.
+    ///
+    /// # Errors
+    /// [`RawError::Unsupported`] when `fd` is not a KVM VM; [`RawError::Syscall`] when its
+    /// `/proc/self/fd` link cannot be read.
+    pub fn adopt(fd: OwnedFd) -> Result<Self, RawError> {
+        Self::confirm_is_a_vm(&fd)?;
+        Ok(KvmVm { fd })
     }
 
     /// Duplicate this VM's descriptor into an independently-owned one.
@@ -407,17 +410,17 @@ impl KvmVm {
         lockwitness::assert_lock_free("KVM_CHECK_EXTENSION");
         leafwitness::assert_leaf_free("KVM_CHECK_EXTENSION");
         ioctl_arg(
-            self.fd.as_raw_fd(),
+            self.fd.as_fd(),
             KVM_CHECK_EXTENSION,
             cap,
             "KVM_CHECK_EXTENSION",
         )
     }
 
-    /// This VM's descriptor, for the sibling module that creates vCPUs (see
-    /// [`Kvm::as_raw`] for why it is crate-private and raw).
-    pub(crate) fn as_raw(&self) -> libc::c_int {
-        self.fd.as_raw_fd()
+    /// This VM's descriptor, borrowed, for the sibling module that creates vCPUs (see
+    /// [`Kvm::borrow_fd`]).
+    pub(crate) fn borrow_fd(&self) -> BorrowedFd<'_> {
+        self.fd.as_fd()
     }
 
     /// How many memslots this VM may hold at once.
@@ -436,7 +439,7 @@ impl KvmVm {
         lockwitness::assert_lock_free("KVM_CHECK_EXTENSION(NR_MEMSLOTS)");
         leafwitness::assert_leaf_free("KVM_CHECK_EXTENSION(NR_MEMSLOTS)");
         let n = ioctl_arg(
-            self.fd.as_raw_fd(),
+            self.fd.as_fd(),
             KVM_CHECK_EXTENSION,
             KVM_CAP_NR_MEMSLOTS,
             "KVM_CHECK_EXTENSION",
@@ -477,7 +480,7 @@ impl KvmVm {
     ///
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5).
-    pub fn set_memslot(
+    fn set_memslot(
         &self,
         slot: u32,
         gpa: u64,
@@ -654,6 +657,16 @@ impl KvmMemslot {
     ///
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5).
+    ///
+    /// ★ a4 (V3_SEC_PERIMETER.md §4.1): this is the only door to a memslot. `set_memslot` is
+    /// private, because a memslot names the window's host address and only this type keeps
+    /// the window alive for the memslot's life (it holds the `Arc`):
+    ///
+    /// ```compile_fail,E0624
+    /// fn install_directly(vm: &kf_linux_raw::KvmVm, w: &kf_linux_raw::GuestWindow) {
+    ///     let _ = vm.set_memslot(0, 0, w, 0, 4096, false);
+    /// }
+    /// ```
     pub fn install(
         vm: Arc<KvmVm>,
         slot: u32,
@@ -734,23 +747,40 @@ impl KvmVm {
 
 /// `ioctl(fd, request, arg)` for the by-value requests, returning the kernel's
 /// non-negative result.
+///
+/// ★ a3 (V3_SEC_PERIMETER.md §4.1): the request must be an `_IO` encoding — no direction
+/// bits and no size — or it is refused before the syscall. That is the property that makes
+/// passing `arg` as a plain integer correct: a request whose bits say "the kernel copies N
+/// bytes" would read or write through `arg` as an address. Checked here, where the syscall
+/// is, rather than trusted from the seven callers.
 pub(crate) fn ioctl_arg(
-    fd: libc::c_int,
+    fd: BorrowedFd<'_>,
     request: libc::c_ulong,
     arg: libc::c_ulong,
     call: &'static str,
 ) -> Result<libc::c_int, RawError> {
-    // SAFETY: all three arguments are integers passed by value; none of these three
-    // requests (`KVM_GET_API_VERSION`, `KVM_CREATE_VM`, `KVM_CHECK_EXTENSION`) interprets
-    // its argument as a pointer — they are `_IO` encodings, i.e. the direction bits say
-    // "no data transfer", which is what makes passing a plain integer here correct rather
-    // than merely conventional. `fd` is borrowed from a live `OwnedFd` by the caller in
-    // the same expression. The result is checked for negativity below.
-    let rc = unsafe { libc::ioctl(fd, request as _, arg) };
+    if !is_plain_io(request) {
+        return Err(RawError::Unsupported {
+            what: "a by-value ioctl",
+            detail: "the request's direction or size bits say the kernel copies through the \
+                     argument; only `_IO` requests may take an integer",
+        });
+    }
+    // SAFETY: all three arguments are integers passed by value, and `request` was checked
+    // above to be an `_IO` encoding (no direction, no size), so the kernel does not treat
+    // `arg` as an address. `fd` is a borrowed, live descriptor for the duration of the call.
+    // The result is checked for negativity below.
+    let rc = unsafe { libc::ioctl(fd.as_raw_fd(), request as _, arg) };
     if rc < 0 {
         return Err(last_syscall_error(call));
     }
     Ok(rc)
+}
+
+/// `_IOC_DIR(request) == _IOC_NONE && _IOC_SIZE(request) == 0`: the direction (bits 30-31) and
+/// size (bits 16-29) fields of the Linux ioctl encoding are both zero.
+fn is_plain_io(request: libc::c_ulong) -> bool {
+    (request >> 30) & 0b11 == 0 && (request >> 16) & 0x3FFF == 0
 }
 
 /// `ioctl(fd, KVM_SET_USER_MEMORY_REGION, &region)`.
@@ -779,6 +809,66 @@ fn ioctl_ptr(fd: libc::c_int, region: &UserspaceMemoryRegion) -> Result<(), RawE
 mod tests {
     use super::*;
     use crate::HostPageSize;
+
+    fn dev_null() -> OwnedFd {
+        std::fs::File::open("/dev/null").expect("/dev/null").into()
+    }
+
+    /// ★ a3: a request whose bits say the kernel copies through the argument is refused before
+    /// any syscall, whatever the descriptor. Needs no `/dev/kvm`. On the code before a3,
+    /// `ioctl_arg` passed it to the kernel with `arg` read as an address.
+    #[test]
+    fn an_ior_encoded_request_is_refused_before_any_syscall() {
+        let fd = dev_null();
+        // `_IOR(0xAE, 0x01, u64)`: direction READ, size 8.
+        let ior: libc::c_ulong = (2 << 30) | (8 << 16) | (0xAE << 8) | 0x01;
+        let r = ioctl_arg(fd.as_fd(), ior, 0x1000, "probe");
+        assert!(
+            matches!(
+                r,
+                Err(RawError::Unsupported {
+                    what: "a by-value ioctl",
+                    ..
+                })
+            ),
+            "{r:?}"
+        );
+        // Direction bits alone are enough to refuse: `_IOW(0xAE, 0x01)` with a zero size field.
+        let iow0: libc::c_ulong = (1 << 30) | (0xAE << 8) | 0x01;
+        let r = ioctl_arg(fd.as_fd(), iow0, 0x1000, "probe");
+        assert!(
+            matches!(
+                r,
+                Err(RawError::Unsupported {
+                    what: "a by-value ioctl",
+                    ..
+                })
+            ),
+            "{r:?}"
+        );
+        // `_IO(0xAE, 0x00)` (KVM_GET_API_VERSION) passes the check and reaches the kernel,
+        // which refuses it on /dev/null as a syscall error, not as this refusal.
+        let r = ioctl_arg(fd.as_fd(), KVM_GET_API_VERSION, 0, "probe");
+        assert!(matches!(r, Err(RawError::Syscall { .. })), "{r:?}");
+    }
+
+    /// ★ a5: adopting a descriptor that is not a KVM VM is refused by name. Needs no
+    /// `/dev/kvm` (no skip guard). On the code before a5 it was adopted, and every later VM
+    /// ioctl went to whatever file it was.
+    #[test]
+    fn adopting_a_descriptor_that_is_not_a_vm_is_refused() {
+        let r = KvmVm::adopt(dev_null());
+        assert!(
+            matches!(
+                r,
+                Err(RawError::Unsupported {
+                    what: "a confirmed KVM VM descriptor",
+                    ..
+                })
+            ),
+            "{r:?}"
+        );
+    }
 
     /// Every test here needs a real `/dev/kvm`. It is present on this project's dev boxes
     /// and on any KVM-capable runner; where it is not, the harness cannot be built and

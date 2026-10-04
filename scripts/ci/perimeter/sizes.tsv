@@ -26,12 +26,12 @@ crates/kf-linux-raw/src/epoll_unsafe.rs	124	3	0	0	0	0	0	0	0	0	0	19	2026-10-04: b
 crates/kf-linux-raw/src/geometry.rs	85	0	0	0	0	0	0	0	0	0	0	0	2026-10-04: baseline — a VALIDATES file (PERIMETER_EXPORTS.md, Validation dependencies); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/host_fd_unsafe.rs	131	9	0	0	0	0	0	0	0	0	0	18	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/ioctl.rs	47	0	0	0	0	0	0	0	0	0	0	0	2026-10-04: baseline — a VALIDATES file (PERIMETER_EXPORTS.md, Validation dependencies); measured by perimeter.py at 789dee9f
-crates/kf-linux-raw/src/kvm_unsafe.rs	378	7	0	0	0	0	0	0	0	0	0	37	2026-10-04: baseline blocks+1 — 383/6 at 789dee9f; a7: set_memslot calls the now-unsafe userspace_addr_at in one block (code 383 -> 378: the call site got shorter)
+crates/kf-linux-raw/src/kvm_unsafe.rs	388	7	0	0	0	0	0	0	0	0	0	36	2026-10-04: baseline blocks+1 — 383/6 at 789dee9f; a7 one block in set_memslot; a3 the `_IO` check in ioctl_arg and borrowed fds (as_raw gone); a4 set_memslot private; a5 adopt confirms (code 383 -> 388)
 crates/kf-linux-raw/src/mapping_unsafe.rs	598	18	0	1	5	0	0	0	0	1	0	63	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/page_size.rs	45	0	0	0	0	0	0	0	0	0	0	0	2026-10-04: baseline — a VALIDATES file (PERIMETER_EXPORTS.md, Validation dependencies); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/signal_unsafe.rs	52	6	0	0	0	0	0	0	0	0	0	9	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/sysconf_unsafe.rs	3	1	0	0	0	0	0	0	0	0	0	1	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
-crates/kf-linux-raw/src/vcpu_unsafe.rs	345	7	0	0	1	0	0	0	0	0	0	19	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
+crates/kf-linux-raw/src/vcpu_unsafe.rs	351	7	0	0	1	0	0	0	0	0	0	19	2026-10-04: baseline code+6 — 345 at 789dee9f, plus a6 (`mmio_exit`, the bounded MMIO length) and a3 (borrowed fds)
 crates/kf-linux-raw/src/view.rs	55	0	0	0	0	0	0	0	0	0	0	0	2026-10-04: baseline — a VALIDATES file (PERIMETER_EXPORTS.md, Validation dependencies); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/window_unsafe.rs	296	15	0	1	2	0	0	0	0	0	0	16	2026-10-04: baseline code+85 blocks+9 unsafe_method+1 — 211/6/0 at 789dee9f, plus a7 (userspace_addr_at an unsafe fn), a8 (the MAP_FIXED split into its own fn, the NOREPLACE re-plug and its munmap, the fault seam and its tests), a9, a10 (one fstat block)
 crates/kf-qemu/src/ffi_unsafe.rs	429	15	13	0	0	0	0	0	25	0	0	44	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f

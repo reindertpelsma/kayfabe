@@ -296,7 +296,7 @@ impl KvmVcpu {
         lockwitness::assert_lock_free("KVM_CREATE_VCPU");
         leafwitness::assert_leaf_free("KVM_CREATE_VCPU");
         let run_size = ioctl_arg(
-            kvm.as_raw(),
+            kvm.borrow_fd(),
             KVM_GET_VCPU_MMAP_SIZE,
             0,
             "KVM_GET_VCPU_MMAP_SIZE",
@@ -310,7 +310,7 @@ impl KvmVcpu {
             });
         }
         let raw = ioctl_arg(
-            vm.as_raw(),
+            vm.borrow_fd(),
             KVM_CREATE_VCPU,
             libc::c_ulong::from(id),
             "KVM_CREATE_VCPU",
@@ -504,12 +504,7 @@ impl KvmVcpu {
             (head.exit_reason, mmio)
         };
         match reason {
-            EXIT_MMIO => VcpuExit::Mmio {
-                gpa: mmio.phys_addr,
-                len: u8::try_from(mmio.len).unwrap_or(0),
-                is_write: mmio.is_write != 0,
-                data: mmio.data,
-            },
+            EXIT_MMIO => mmio_exit(mmio.phys_addr, mmio.len, mmio.is_write, mmio.data),
             EXIT_IO => VcpuExit::PortIo,
             EXIT_HLT => VcpuExit::Halted,
             EXIT_INTR => VcpuExit::Interrupted,
@@ -518,6 +513,23 @@ impl KvmVcpu {
             EXIT_INTERNAL_ERROR => VcpuExit::InternalError,
             other => VcpuExit::Unhandled { reason: other },
         }
+    }
+}
+
+/// ★ a6 (V3_SEC_PERIMETER.md §4.1): an MMIO exit as this layer describes it. The length is
+/// the kernel's `u32`, and the bytes it describes are the 8-byte array beside it; a length the
+/// array cannot hold is not an access this type can represent, so it is a refused exit
+/// ([`VcpuExit::Unhandled`] carrying the MMIO reason), never a `len` a consumer would index
+/// `data` with.
+fn mmio_exit(gpa: u64, len: u32, is_write: u8, data: [u8; 8]) -> VcpuExit {
+    match u8::try_from(len) {
+        Ok(n) if usize::from(n) <= data.len() => VcpuExit::Mmio {
+            gpa,
+            len: n,
+            is_write: is_write != 0,
+            data,
+        },
+        _ => VcpuExit::Unhandled { reason: EXIT_MMIO },
     }
 }
 
@@ -552,7 +564,7 @@ impl KvmVm {
             return Ok(false);
         }
         ioctl_arg(
-            self.as_raw(),
+            self.borrow_fd(),
             KVM_SET_TSS_ADDR,
             TSS_ADDR,
             "KVM_SET_TSS_ADDR",
@@ -603,6 +615,30 @@ fn ioctl_ref_mut<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ a6: an MMIO exit whose length the 8-byte data array cannot hold is a refused exit,
+    /// never a `len` a consumer would index `data` with. Needs no `/dev/kvm`. On the code before
+    /// a6, `len: 9` came through as an `Mmio` exit with `len == 9`.
+    #[test]
+    fn an_mmio_length_beyond_the_data_array_is_a_refused_exit() {
+        let data = [1, 2, 3, 4, 5, 6, 7, 8];
+        assert_eq!(
+            mmio_exit(0x1000, 8, 1, data),
+            VcpuExit::Mmio {
+                gpa: 0x1000,
+                len: 8,
+                is_write: true,
+                data
+            }
+        );
+        for len in [9, 255, 256, u32::MAX] {
+            assert_eq!(
+                mmio_exit(0x1000, len, 0, data),
+                VcpuExit::Unhandled { reason: EXIT_MMIO },
+                "len {len}"
+            );
+        }
+    }
     use crate::{Backing, GuestWindow, HostOffset, HostPageSize, KvmMemslot};
 
     /// The guest image: a 32-bit loop that loads from `probe`, stores what it found

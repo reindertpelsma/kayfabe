@@ -256,7 +256,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `Kvm` | pub | owning handle |  |  | OPEN: 2026-10-04: unreviewed |
 | `Kvm: Send` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `Kvm: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
-| `Kvm::as_raw` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `Kvm::borrow_fd` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: a borrowed descriptor for ioctl_arg (a3), crate-private; not yet mutation-proved |
 | `Kvm::create_vm` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `Kvm::open` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmMemslot` | pub | owning handle |  |  | OPEN: 2026-10-04: unreviewed |
@@ -270,8 +270,8 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `KvmVm` | pub | owning handle |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm: Send` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
-| `KvmVm::adopt` | pub | safe fn |  |  | OPEN: 2026-10-04: adopts any fd as a VM without confirm_is_a_vm (v2 ledger row; a5) |
-| `KvmVm::as_raw` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `KvmVm::adopt` | pub | safe fn |  |  | OPEN: 2026-10-04: confirms the descriptor is a KVM VM before adopting it since a5 (test `adopting_a_descriptor_that_is_not_a_vm_is_refused`); not yet mutation-proved |
+| `KvmVm::borrow_fd` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: a borrowed descriptor for ioctl_arg (a3), crate-private; not yet mutation-proved |
 | `KvmVm::check_extension` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::clear_memslot` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::discover_in_this_process` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
@@ -279,7 +279,6 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `KvmVm::ioeventfd` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::max_memslots` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::register_coalesced_mmio` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `KvmVm::set_memslot` | pub | safe fn |  |  | OPEN: 2026-10-04: an unchecked memslot install reachable from safe code; becomes private (a4) |
 | `KvmVm::try_clone_descriptor` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `UserspaceMemoryRegion: Send` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `UserspaceMemoryRegion: Sync` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
@@ -395,7 +394,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `KvmVcpu::enter_flat_protected_mode` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVcpu::run` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::set_tss_addr_if_supported` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `VcpuExit` | pub | plain data |  |  | OPEN: 2026-10-04: `Mmio.len` is the kernel's value, unbounded by `data.len()` (v2 ledger row; a6) |
+| `VcpuExit` | pub | plain data |  |  | OPEN: 2026-10-04: an MMIO exit longer than its 8-byte data is a refused exit since a6 (`mmio_exit`, test `an_mmio_length_beyond_the_data_array_is_a_refused_exit`); not yet reviewed as a type |
 
 ## crates/kf-linux-raw/src/window_unsafe.rs
 

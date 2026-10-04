@@ -621,6 +621,15 @@ None of them appears in any lane diff. Every test below must fail on today's cod
 - **Counts:** window_unsafe.rs blocks 6 → 15. Five are new in production code: the address computation split from the `MAP_FIXED` block, its `mmap`, the re-plug's `mmap` and `munmap`, and `fstat`, against the one block they replace. Five are in tests. `unsafe_method` +1. kvm_unsafe.rs blocks 6 → 7. The old ratchet in `ci.yml` (`AUDITED`) moves 75 → 86 in the same commit: until C11 retires it, a commit that adds `unsafe` must move it. This is the one `ci.yml` line this branch edits before C11.
 - **Tests**, each failing on the code before C7b: `a_failed_placement_re_plugs_the_filler_and_the_window_stays_readable`, `a_foreign_mapping_planted_in_the_gap_poisons_the_window`, `a_read_only_device_view_is_refused_by_name` and `a_short_memfd_is_refused`. The memslot test (KVM-gated) calls the now-unsafe fn through one closure.
 
+⊘ **As built at C7a and C7c (2026-10-04):**
+- **a1**: `LEGACY_SIZES = [(FIONREAD, 4)]`. A short buffer for a legacy request is `IoctlSizeMismatch { declared: 4, … }`, and any other sizeless request is the new `RawError::SizelessIoctl`.
+- **a3**: `ioctl_arg` takes `BorrowedFd<'_>` and refuses (`Unsupported`, "a by-value ioctl") any request whose direction or size field is non-zero. The two crate-private `as_raw` accessors became `borrow_fd`.
+- **a4's test is a `compile_fail,E0624` doctest** on `KvmMemslot::install`, not a trybuild row. `v3-sec-rawaddr` edits `tests/compile_fail.rs`'s `REQUIRED_ROWS`, and a doctest keeps that file out of this branch. The table row for `set_memslot` is gone, because it is no longer exported.
+- **a5**: `adopt` returns `Result` and runs `confirm_is_a_vm`. Its one caller, `tests/kvm_vm_discovery.rs`, unwraps it.
+- **a6**: `mmio_exit` returns `VcpuExit::Unhandled { reason: EXIT_MMIO }` for a length above 8. The `VcpuExit` type is unchanged.
+- **a11**: the empty banner is deleted. `install_break_handler` stays OPEN.
+- **Mutations (each applied alone; the crate's tests or doctest rerun):** 12, all caught. They were the a1 refusal and its short-buffer arm; a3's whole check and its direction-bit half (caught after one more case, `_IOW` with size 0); a4 public again (the doctest); a5 unconfirmed; a6 unbounded; a8 without re-plug, without poison, and with `Drop` unmapping a poisoned window; a9; a10.
+
 ### 4.2 After `v3-broker` merges: a2 (S1-40, narrowed)
 
 The design is as rev 1: a required `SizeSpec`; the funnel computes, checks and writes the size field; and `Indirect::len()`'s caller contract (`chardev_unsafe.rs:365-377`) is removed.

@@ -155,11 +155,14 @@ fn an_adopted_descriptor_reaches_the_address_space_it_was_duplicated_from() {
     );
     let p = HostPageSize::query();
     let created = Arc::new(kvm().create_vm().expect("KVM_CREATE_VM"));
-    let adopted = Arc::new(KvmVm::adopt(
-        created
-            .try_clone_descriptor()
-            .expect("duplicating the VM descriptor"),
-    ));
+    let adopted = Arc::new(
+        KvmVm::adopt(
+            created
+                .try_clone_descriptor()
+                .expect("duplicating the VM descriptor"),
+        )
+        .expect("a duplicated VM descriptor is a VM (a5)"),
+    );
 
     let w =
         Arc::new(kf_linux_raw::GuestWindow::create(p.bytes(), p).expect("a one-page reservation"));
