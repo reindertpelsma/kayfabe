@@ -1,10 +1,43 @@
 # Native Windows installer and GSP recorder
 
-**STATUS: RESEARCH, 2026-10-04 17:52 UTC. Native Windows cutover and recorder API
+**STATUS: RESEARCH, 2026-10-04 18:37 UTC. Offline command audit complete; no new
+runtime capture or Windows-through-Kayfabe success. Native Windows cutover and recorder API
 tests passed. NVIDIA 580.88 works on both GPUs. RTX4070 GSP firmware 580.65.05
 produced 4,535 validated records, but no target query pair yet.** The owner requested this lane after the candidate
 2 handoff. It does not change the product merge requirements or claim a Windows
 guest works through Kayfabe.
+
+## Command audit, 18:37 UTC
+
+The owner requested checking everything captured against actual command
+support, excluding generic passthrough. The
+[saved report](../../../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/command-audit/README.md)
+and `tools/windows-gsp-trace/audit/` reproduce the result against clean
+`v3-windows` **c50fad9ac485f53d45d4ea77a21cb7206267c65a**. This recorder branch's
+product ancestry lacks that branch's Windows handshake; do not substitute it
+for the Windows implementation when assessing coverage.
+
+- All five observed RPC function IDs are known. Of 129 direct control IDs,
+  22 have display/channel/init handlers, three have conditional authored
+  host-fact queries, two have empirical replies, and **102 have no specific
+  handler**. Of those 102, **92 succeed at least once on native hardware**.
+- Two of the three host-fact query IDs reject every captured Windows request
+  at their existing input gates (0x2080a026 and 0x2080a028); 0x2080a084 matches.
+- All 20 allocation classes have names; 17 have decoders. Deferred API class
+  0x5080 is absent, 0x90e7 has no decoder, and physical I2C class 0x402c is
+  intentionally denied.
+- The deferred wrapper 0x50800101 contains four INITIALIZE_CTX and four
+  PROMOTE_CTX requests; implementing direct promotion does not implement
+  deferred execution. GR_CTXSW_PREEMPTION_BIND and latency-buffer/channel
+  properties are further successful native commands without handlers.
+- Native errors occur for 12 command IDs. Coverage gaps are not all fatal
+  blockers. No GFX_POOL_QUERY_SIZE observation exists, the early prefix is
+  still unknown, and no per-die sizing values have been derived.
+
+The audit checks every retained record with the strict decoder. Independent
+RPC/control/class aggregation matches; eleven decoder tests pass. No product
+code changed and no new borrowed-PC or Vast runtime actions were performed
+during this audit. The previously documented reconnect uncertainty remains.
 
 ## Durable source
 

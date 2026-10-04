@@ -1,5 +1,10 @@
 # First validated Windows GSP observation
 
+The [complete command audit](command-audit/README.md) compares every retained
+RPC/control/allocation ID with the actual `v3-windows` implementation, including
+deferred wrapper contents and known request-shape mismatches. It separates
+command names, specific handlers, authored host facts and generic allowlist rules.
+
 This is a complete text export of a **partial passive capture**, taken on
 2026-10-04 from Windows 11 build 26100 with an RTX 4070 assigned directly by
 VFIO. NVIDIA driver 580.88 was running with GSP firmware **580.65.05** after

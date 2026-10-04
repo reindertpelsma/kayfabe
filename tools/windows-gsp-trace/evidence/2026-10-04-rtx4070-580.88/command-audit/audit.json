@@ -1,0 +1,5211 @@
+{
+  "capture_complete": false,
+  "classes": [
+    {
+      "abi_shape": "Some(ClientRoot)",
+      "capability_permit": "Listed { name: \"NV01_ROOT\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(ClientRoot)",
+      "id": "0x00000000",
+      "incomplete_parameter_heads": {
+        "reply": 30,
+        "request": 30
+      },
+      "names": [
+        "class_ids:NV01_NULL_OBJECT",
+        "class_ids:NV01_ROOT",
+        "class_ids:NV1_NULL_OBJECT",
+        "class_ids:NV1_ROOT"
+      ],
+      "replies": 30,
+      "reply_sizes": {
+        "120": 30
+      },
+      "reply_statuses": {
+        "0x0": 30
+      },
+      "request_sizes": {
+        "120": 30
+      },
+      "requests": 30
+    },
+    {
+      "abi_shape": "Some(NoDeclaredFacts)",
+      "capability_permit": "Listed { name: \"NV01_MEMORY_VIRTUAL\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x00000070",
+      "incomplete_parameter_heads": {
+        "reply": 36,
+        "request": 36
+      },
+      "names": [
+        "class_ids:NV01_MEMORY_SYSTEM_DYNAMIC",
+        "class_ids:NV01_MEMORY_VIRTUAL",
+        "class_ids:NV1_MEMORY_SYSTEM_DYNAMIC"
+      ],
+      "replies": 36,
+      "reply_sizes": {
+        "24": 36
+      },
+      "reply_statuses": {
+        "0x0": 36
+      },
+      "request_sizes": {
+        "24": 36
+      },
+      "requests": 36
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Listed { name: \"NV04_DISPLAY_COMMON\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x00000073",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:NV04_DISPLAY_COMMON"
+      ],
+      "replies": 11,
+      "reply_sizes": {
+        "0": 11
+      },
+      "reply_statuses": {
+        "0x0": 11
+      },
+      "request_sizes": {
+        "0": 11
+      },
+      "requests": 11
+    },
+    {
+      "abi_shape": "Some(NoDeclaredFacts)",
+      "capability_permit": "Listed { name: \"NV01_EVENT_KERNEL_CALLBACK_EX\", origin: Mode2Rpc }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x0000007e",
+      "incomplete_parameter_heads": {
+        "reply": 2,
+        "request": 2
+      },
+      "names": [
+        "class_ids:NV01_EVENT_KERNEL_CALLBACK_EX",
+        "class_ids:NV1_EVENT_KERNEL_CALLBACK_EX"
+      ],
+      "replies": 2,
+      "reply_sizes": {
+        "24": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "24": 2
+      },
+      "requests": 2
+    },
+    {
+      "abi_shape": "Some(Device)",
+      "capability_permit": "Listed { name: \"NV01_DEVICE_0\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(Device)",
+      "id": "0x00000080",
+      "incomplete_parameter_heads": {
+        "reply": 30,
+        "request": 30
+      },
+      "names": [
+        "class_ids:NV01_DEVICE_0"
+      ],
+      "replies": 30,
+      "reply_sizes": {
+        "56": 30
+      },
+      "reply_statuses": {
+        "0x0": 30
+      },
+      "request_sizes": {
+        "56": 30
+      },
+      "requests": 30
+    },
+    {
+      "abi_shape": "Some(NoDeclaredFacts)",
+      "capability_permit": "Listed { name: \"NV20_SUBDEVICE_0\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x00002080",
+      "incomplete_parameter_heads": {
+        "reply": 30,
+        "request": 30
+      },
+      "names": [
+        "class_ids:NV20_SUBDEVICE_0"
+      ],
+      "replies": 30,
+      "reply_sizes": {
+        "4": 30
+      },
+      "reply_statuses": {
+        "0x0": 30
+      },
+      "request_sizes": {
+        "4": 30
+      },
+      "requests": 30
+    },
+    {
+      "abi_shape": "Some(NoDeclaredFacts)",
+      "capability_permit": "Listed { name: \"NV2081_BINAPI\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x00002081",
+      "incomplete_parameter_heads": {
+        "reply": 5,
+        "request": 5
+      },
+      "names": [
+        "class_ids:NV2081_BINAPI"
+      ],
+      "replies": 5,
+      "reply_sizes": {
+        "4": 5
+      },
+      "reply_statuses": {
+        "0x0": 5
+      },
+      "request_sizes": {
+        "4": 5
+      },
+      "requests": 5
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Denied(Refused { name: \"NV40_I2C\", why: NoPhysicalBoardBus })",
+      "category": "denied by capability policy",
+      "channel_shape": "None",
+      "id": "0x0000402c",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:NV40_I2C"
+      ],
+      "replies": 3,
+      "reply_sizes": {
+        "0": 3
+      },
+      "reply_statuses": {
+        "0x0": 3
+      },
+      "request_sizes": {
+        "0": 3
+      },
+      "requests": 3
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Denied(NotOnAllowlist)",
+      "category": "denied by capability policy",
+      "channel_shape": "None",
+      "id": "0x00005080",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:NV50_DEFERRED_API_CLASS"
+      ],
+      "replies": 12,
+      "reply_sizes": {
+        "0": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "0": 12
+      },
+      "requests": 12
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Listed { name: \"FERMI_TWOD_A\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x0000902d",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:FERMI_TWOD_A"
+      ],
+      "replies": 6,
+      "reply_sizes": {
+        "0": 6
+      },
+      "reply_statuses": {
+        "0x0": 6
+      },
+      "request_sizes": {
+        "0": 6
+      },
+      "requests": 6
+    },
+    {
+      "abi_shape": "Some(CtxShare)",
+      "capability_permit": "Listed { name: \"FERMI_CONTEXT_SHARE_A\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(CtxShare)",
+      "id": "0x00009067",
+      "incomplete_parameter_heads": {
+        "reply": 5,
+        "request": 5
+      },
+      "names": [
+        "class_ids:FERMI_CONTEXT_SHARE_A"
+      ],
+      "replies": 5,
+      "reply_sizes": {
+        "12": 5
+      },
+      "reply_statuses": {
+        "0x0": 5
+      },
+      "request_sizes": {
+        "12": 5
+      },
+      "requests": 5
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Listed { name: \"GF100_ZBC_CLEAR\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x00009096",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:GF100_ZBC_CLEAR"
+      ],
+      "replies": 6,
+      "reply_sizes": {
+        "0": 6
+      },
+      "reply_statuses": {
+        "0x0": 6
+      },
+      "request_sizes": {
+        "0": 6
+      },
+      "requests": 6
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Listed { name: \"GF100_SUBDEVICE_INFOROM\", origin: Nvproxy }",
+      "category": "no allocation decoder",
+      "channel_shape": "None",
+      "id": "0x000090e7",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:GF100_SUBDEVICE_INFOROM"
+      ],
+      "replies": 1,
+      "reply_sizes": {
+        "0": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "0": 1
+      },
+      "requests": 1
+    },
+    {
+      "abi_shape": "Some(VaSpace)",
+      "capability_permit": "Listed { name: \"FERMI_VASPACE_A\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(VaSpace)",
+      "id": "0x000090f1",
+      "incomplete_parameter_heads": {
+        "reply": 6,
+        "request": 6
+      },
+      "names": [
+        "class_ids:FERMI_VASPACE_A"
+      ],
+      "replies": 6,
+      "reply_sizes": {
+        "56": 6
+      },
+      "reply_statuses": {
+        "0x0": 6
+      },
+      "request_sizes": {
+        "56": 6
+      },
+      "requests": 6
+    },
+    {
+      "abi_shape": "Some(Tsg)",
+      "capability_permit": "Listed { name: \"KEPLER_CHANNEL_GROUP_A\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(Tsg)",
+      "id": "0x0000a06c",
+      "incomplete_parameter_heads": {
+        "reply": 11,
+        "request": 11
+      },
+      "names": [
+        "class_ids:KEPLER_CHANNEL_GROUP_A"
+      ],
+      "replies": 11,
+      "reply_sizes": {
+        "20": 11
+      },
+      "reply_statuses": {
+        "0x0": 11
+      },
+      "request_sizes": {
+        "20": 11
+      },
+      "requests": 11
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Listed { name: \"KEPLER_INLINE_TO_MEMORY_B\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x0000a140",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:KEPLER_INLINE_TO_MEMORY_B"
+      ],
+      "replies": 6,
+      "reply_sizes": {
+        "0": 6
+      },
+      "reply_statuses": {
+        "0x0": 6
+      },
+      "request_sizes": {
+        "0": 6
+      },
+      "requests": 6
+    },
+    {
+      "abi_shape": "Some(Channel)",
+      "capability_permit": "Listed { name: \"AMPERE_CHANNEL_GPFIFO_A\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(Channel)",
+      "id": "0x0000c56f",
+      "incomplete_parameter_heads": {
+        "reply": 12,
+        "request": 12
+      },
+      "names": [
+        "class_ids:AMPERE_CHANNEL_GPFIFO_A"
+      ],
+      "replies": 12,
+      "reply_sizes": {
+        "368": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "368": 12
+      },
+      "requests": 12
+    },
+    {
+      "abi_shape": "Some(NoDeclaredFacts)",
+      "capability_permit": "Listed { name: \"AMPERE_DMA_COPY_B\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x0000c7b5",
+      "incomplete_parameter_heads": {
+        "reply": 12,
+        "request": 12
+      },
+      "names": [
+        "class_ids:AMPERE_DMA_COPY_B"
+      ],
+      "replies": 12,
+      "reply_sizes": {
+        "8": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "8": 12
+      },
+      "requests": 12
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Listed { name: \"ADA_A\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x0000c997",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:ADA_A"
+      ],
+      "replies": 6,
+      "reply_sizes": {
+        "0": 6
+      },
+      "reply_statuses": {
+        "0x0": 6
+      },
+      "request_sizes": {
+        "0": 6
+      },
+      "requests": 6
+    },
+    {
+      "abi_shape": "None",
+      "capability_permit": "Listed { name: \"ADA_COMPUTE_A\", origin: Nvproxy }",
+      "category": "allocation decoder exists",
+      "channel_shape": "Some(NoDeclaredFacts)",
+      "id": "0x0000c9c0",
+      "incomplete_parameter_heads": {},
+      "names": [
+        "class_ids:ADA_COMPUTE_A"
+      ],
+      "replies": 6,
+      "reply_sizes": {
+        "0": 6
+      },
+      "reply_statuses": {
+        "0x0": 6
+      },
+      "request_sizes": {
+        "0": 6
+      },
+      "requests": 6
+    }
+  ],
+  "controls": [
+    {
+      "id": "0x00730102",
+      "incomplete_parameter_heads": {},
+      "replies": 7,
+      "reply_sizes": {
+        "12": 7
+      },
+      "reply_statuses": {
+        "0x0": 7
+      },
+      "request_rmapi_flags": {
+        "0x0": 7
+      },
+      "request_sizes": {
+        "12": 7
+      },
+      "requests": 7,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "line": 131,
+          "name": "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00730108",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "16": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x1": 2
+      },
+      "request_sizes": {
+        "16": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "line": 392,
+          "name": "NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x0073010a",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "12": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "12": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "line": 516,
+          "name": "NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x0073010c",
+      "incomplete_parameter_heads": {},
+      "replies": 25,
+      "reply_sizes": {
+        "16": 25
+      },
+      "reply_statuses": {
+        "0x0": 25
+      },
+      "request_rmapi_flags": {
+        "0x0": 25
+      },
+      "request_sizes": {
+        "16": 25
+      },
+      "requests": 25,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "line": 646,
+          "name": "NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00730122",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "8": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "8": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00730128",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "20": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "20": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x0073012c",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "12": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "12": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "line": 1290,
+          "name": "NV0073_CTRL_CMD_SYSTEM_VRR_DISPLAY_INFO"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00730250",
+      "incomplete_parameter_heads": {},
+      "replies": 15,
+      "reply_sizes": {
+        "72": 15
+      },
+      "reply_statuses": {
+        "0x0": 15
+      },
+      "request_rmapi_flags": {
+        "0x0": 15
+      },
+      "request_sizes": {
+        "72": 15
+      },
+      "requests": 15,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "line": 392,
+          "name": "NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00730280",
+      "incomplete_parameter_heads": {},
+      "replies": 8,
+      "reply_sizes": {
+        "12": 8
+      },
+      "reply_statuses": {
+        "0x0": 8
+      },
+      "request_rmapi_flags": {
+        "0x0": 8
+      },
+      "request_sizes": {
+        "12": 8
+      },
+      "requests": 8,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00730282",
+      "incomplete_parameter_heads": {},
+      "replies": 4,
+      "reply_sizes": {
+        "2600": 4
+      },
+      "reply_statuses": {
+        "0x56": 4
+      },
+      "request_rmapi_flags": {
+        "0x0": 4
+      },
+      "request_sizes": {
+        "2600": 4
+      },
+      "requests": 4,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x0073028b",
+      "incomplete_parameter_heads": {},
+      "replies": 29,
+      "reply_sizes": {
+        "56": 29
+      },
+      "reply_statuses": {
+        "0x0": 29
+      },
+      "request_rmapi_flags": {
+        "0x0": 29
+      },
+      "request_sizes": {
+        "56": 29
+      },
+      "requests": 29,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "line": 1074,
+          "name": "NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x007302a4",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "16": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "16": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "line": 1579,
+          "name": "NV0073_CTRL_CMD_SPECIFIC_DISPLAY_CHANGE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x007302a5",
+      "incomplete_parameter_heads": {},
+      "replies": 12,
+      "reply_sizes": {
+        "16": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_rmapi_flags": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "16": 12
+      },
+      "requests": 12,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731140",
+      "incomplete_parameter_heads": {},
+      "replies": 8,
+      "reply_sizes": {
+        "16": 8
+      },
+      "reply_statuses": {
+        "0x0": 8
+      },
+      "request_rmapi_flags": {
+        "0x0": 8
+      },
+      "request_sizes": {
+        "16": 8
+      },
+      "requests": 8,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "line": 120,
+          "name": "NV0073_CTRL_CMD_DFP_GET_INFO"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731142",
+      "incomplete_parameter_heads": {},
+      "replies": 7,
+      "reply_sizes": {
+        "16": 7
+      },
+      "reply_statuses": {
+        "0x0": 7
+      },
+      "request_rmapi_flags": {
+        "0x0": 7
+      },
+      "request_sizes": {
+        "16": 7
+      },
+      "requests": 7,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "line": 262,
+          "name": "NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731144",
+      "incomplete_parameter_heads": {},
+      "replies": 17,
+      "reply_sizes": {
+        "120": 17
+      },
+      "reply_statuses": {
+        "0x0": 17
+      },
+      "request_rmapi_flags": {
+        "0x0": 16
+      },
+      "request_sizes": {
+        "120": 16
+      },
+      "requests": 16,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "line": 350,
+          "name": "NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x0073114e",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "24": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "24": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "line": 424,
+          "name": "NV0073_CTRL_CMD_DFP_UPDATE_DYNAMIC_DFP_CACHE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731150",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "12": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "12": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "line": 471,
+          "name": "NV0073_CTRL_CMD_DFP_SET_AUDIO_ENABLE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731152",
+      "incomplete_parameter_heads": {},
+      "replies": 3,
+      "reply_sizes": {
+        "80": 3
+      },
+      "reply_statuses": {
+        "0x0": 3
+      },
+      "request_rmapi_flags": {
+        "0x0": 3
+      },
+      "request_sizes": {
+        "80": 3
+      },
+      "requests": 3,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "line": 596,
+          "name": "NV0073_CTRL_CMD_DFP_ASSIGN_SOR"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731341",
+      "incomplete_parameter_heads": {},
+      "replies": 5,
+      "reply_sizes": {
+        "48": 5
+      },
+      "reply_statuses": {
+        "0x0": 5
+      },
+      "request_rmapi_flags": {
+        "0x1": 5
+      },
+      "request_sizes": {
+        "48": 5
+      },
+      "requests": 5,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "line": 151,
+          "name": "NV0073_CTRL_CMD_DP_AUXCH_CTRL"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731343",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "28": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x1": 1
+      },
+      "request_sizes": {
+        "28": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "line": 441,
+          "name": "NV0073_CTRL_CMD_DP_CTRL"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731359",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "12": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "12": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "line": 1099,
+          "name": "NV0073_CTRL_CMD_DP_SET_AUDIO_MUTESTREAM"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731360",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "24": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "24": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "line": 1326,
+          "name": "NV0073_CTRL_CMD_DP_GET_LINK_CONFIG"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731362",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "84": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "84": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "line": 1480,
+          "name": "NV0073_CTRL_CMD_DP_CONFIG_STREAM"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731368",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "12": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "12": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731378",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "52": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "52": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "line": 2254,
+          "name": "NV0073_CTRL_CMD_DP_SET_STEREO_MSA_PROPERTIES"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00731381",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "80": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "80": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "line": 2712,
+          "name": "NV0073_CTRL_CMD_DP_SET_MSA_PROPERTIES_V2"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00800294",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "4": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "4": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gpu.h",
+          "line": 546,
+          "name": "NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS\", origin: Empirical }",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x0080170e",
+      "incomplete_parameter_heads": {},
+      "replies": 12,
+      "reply_sizes": {
+        "12": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_rmapi_flags": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "12": 12
+      },
+      "requests": 12,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "line": 206,
+          "name": "NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x0080170f",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "16": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "16": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "line": 290,
+          "name": "NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x00801812",
+      "incomplete_parameter_heads": {},
+      "replies": 6,
+      "reply_sizes": {
+        "4": 6
+      },
+      "reply_statuses": {
+        "0x0": 6
+      },
+      "request_rmapi_flags": {
+        "0x0": 6
+      },
+      "request_sizes": {
+        "4": 6
+      },
+      "requests": 6,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800102",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "564": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "564": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 285,
+          "name": "NV2080_CTRL_CMD_GPU_GET_INFO_V2"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_GPU_GET_INFO_V2\", origin: Nvproxy }",
+        "category": "init-table handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "Some(\"NV2080_CTRL_GPU_GET_INFO_V2_PARAMS\")",
+        "wanted_size": "Some(564)",
+        "wanted_table": "Some(GpuInfoV2)"
+      }
+    },
+    {
+      "id": "0x2080012b",
+      "incomplete_parameter_heads": {},
+      "replies": 11,
+      "reply_sizes": {
+        "560": 11
+      },
+      "reply_statuses": {
+        "0x0": 11
+      },
+      "request_rmapi_flags": {
+        "0x0": 11
+      },
+      "request_sizes": {
+        "560": 11
+      },
+      "requests": 11,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 984,
+          "name": "NV2080_CTRL_CMD_GPU_PROMOTE_CTX"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_GPU_PROMOTE_CTX\", origin: Mode2Rpc }",
+        "category": "channel handler",
+        "channel_claims": true,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "Some(PromoteCtx)",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080012f",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1464": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1464": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 1148,
+          "name": "NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS\", origin: Nvproxy }",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080014b",
+      "incomplete_parameter_heads": {},
+      "replies": 5,
+      "reply_sizes": {
+        "5": 5
+      },
+      "reply_statuses": {
+        "0x0": 2,
+        "0x57": 3
+      },
+      "request_rmapi_flags": {
+        "0x0": 5
+      },
+      "request_sizes": {
+        "5": 5
+      },
+      "requests": 5,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 1825,
+          "name": "NV2080_CTRL_CMD_GPU_GET_INFOROM_OBJECT_VERSION"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_GPU_GET_INFOROM_OBJECT_VERSION\", origin: Nvproxy }",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800156",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "16": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "16": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 1964,
+          "name": "NV2080_CTRL_CMD_GPU_GET_INFOROM_IMAGE_VERSION"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_GPU_GET_INFOROM_IMAGE_VERSION\", origin: Nvproxy }",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800157",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "0": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "0": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 1983,
+          "name": "NV2080_CTRL_CMD_GPU_QUERY_INFOROM_ECC_SUPPORT"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_GPU_QUERY_INFOROM_ECC_SUPPORT\", origin: Nvproxy }",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x208001a4",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "16": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "16": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 4282,
+          "name": "NV2080_CTRL_CMD_GPU_GET_CHIP_DETAILS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800a38",
+      "incomplete_parameter_heads": {},
+      "replies": 24,
+      "reply_sizes": {
+        "24": 24
+      },
+      "reply_statuses": {
+        "0x0": 24
+      },
+      "request_rmapi_flags": {
+        "0x0": 24
+      },
+      "request_sizes": {
+        "24": 24
+      },
+      "requests": 24,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "line": 609,
+          "name": "NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800a9a",
+      "incomplete_parameter_heads": {},
+      "replies": 4,
+      "reply_sizes": {
+        "8": 4
+      },
+      "reply_statuses": {
+        "0x0": 4
+      },
+      "request_rmapi_flags": {
+        "0x0": 4
+      },
+      "request_sizes": {
+        "8": 4
+      },
+      "requests": 4,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "line": 1701,
+          "name": "NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800af0",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "0": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "0": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "line": 3526,
+          "name": "NV2080_CTRL_CMD_INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800af1",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "0": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "0": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "line": 3529,
+          "name": "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_MODESET"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800af2",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "0": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "0": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "line": 3532,
+          "name": "NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_MODESET"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20800aff",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "16": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "16": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "line": 4029,
+          "name": "NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080110b",
+      "incomplete_parameter_heads": {},
+      "replies": 4,
+      "reply_sizes": {
+        "536": 4
+      },
+      "reply_statuses": {
+        "0x0": 4
+      },
+      "request_rmapi_flags": {
+        "0x0": 4
+      },
+      "request_sizes": {
+        "536": 4
+      },
+      "requests": 4,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+          "line": 339,
+          "name": "NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS\", origin: Nvproxy }",
+        "category": "channel handler",
+        "channel_claims": true,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801111",
+      "incomplete_parameter_heads": {},
+      "replies": 12,
+      "reply_sizes": {
+        "40": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_rmapi_flags": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "40": 12
+      },
+      "requests": 12,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801208",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "24": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "24": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "line": 599,
+          "name": "NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND\", origin: Nvproxy }",
+        "category": "channel handler",
+        "channel_claims": true,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801211",
+      "incomplete_parameter_heads": {},
+      "replies": 8,
+      "reply_sizes": {
+        "112": 8
+      },
+      "reply_statuses": {
+        "0x0": 8
+      },
+      "request_rmapi_flags": {
+        "0x0": 8
+      },
+      "request_sizes": {
+        "112": 8
+      },
+      "requests": 8,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "line": 906,
+          "name": "NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801303",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1028": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1028": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "line": 459,
+          "name": "NV2080_CTRL_CMD_FB_GET_INFO_V2"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_FB_GET_INFO_V2\", origin: Nvproxy }",
+        "category": "init-table handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "Some(\"NV2080_CTRL_FB_GET_INFO_V2_PARAMS\")",
+        "wanted_size": "Some(1028)",
+        "wanted_table": "Some(FbGetInfoV2)"
+      }
+    },
+    {
+      "id": "0x20801322",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "2056": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "2056": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "line": 1028,
+          "name": "NV2080_CTRL_CMD_FB_GET_OFFLINED_PAGES"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801344",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "6152": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "6152": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "line": 1919,
+          "name": "NV2080_CTRL_CMD_FB_GET_REMAPPED_ROWS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801347",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "20": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "20": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "line": 2359,
+          "name": "NV2080_CTRL_CMD_FB_GET_ROW_REMAPPER_HISTOGRAM"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801357",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "4": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "4": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "line": 2797,
+          "name": "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575\", origin: Nvproxy }",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801813",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "76": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "76": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "line": 851,
+          "name": "NV2080_CTRL_CMD_BUS_GET_PEX_COUNTERS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801819",
+      "incomplete_parameter_heads": {},
+      "replies": 4,
+      "reply_sizes": {
+        "32": 4
+      },
+      "reply_statuses": {
+        "0x0": 4
+      },
+      "request_rmapi_flags": {
+        "0x0": 4
+      },
+      "request_sizes": {
+        "32": 4
+      },
+      "requests": 4,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "line": 1020,
+          "name": "NV2080_CTRL_CMD_BUS_GET_PEX_UTIL_COUNTERS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801823",
+      "incomplete_parameter_heads": {},
+      "replies": 8,
+      "reply_sizes": {
+        "420": 8
+      },
+      "reply_statuses": {
+        "0x0": 8
+      },
+      "request_rmapi_flags": {
+        "0x0": 8
+      },
+      "request_sizes": {
+        "420": 8
+      },
+      "requests": 8,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "line": 588,
+          "name": "NV2080_CTRL_CMD_BUS_GET_INFO_V2"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_BUS_GET_INFO_V2\", origin: Nvproxy }",
+        "category": "init-table handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "Some(\"NV2080_CTRL_BUS_GET_INFO_V2_PARAMS\")",
+        "wanted_size": "Some(420)",
+        "wanted_table": "Some(BusGetInfoV2)"
+      }
+    },
+    {
+      "id": "0x20801829",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "12": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "12": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "line": 1205,
+          "name": "NV2080_CTRL_CMD_BUS_GET_PCIE_REQ_ATOMICS_CAPS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20801830",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "4": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "4": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "line": 1567,
+          "name": "NV2080_CTRL_CMD_BUS_GET_PCIE_CPL_ATOMICS_CAPS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20802a08",
+      "incomplete_parameter_heads": {},
+      "replies": 12,
+      "reply_sizes": {
+        "4": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_rmapi_flags": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "4": 12
+      },
+      "requests": 12,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+          "line": 287,
+          "name": "NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "init-table handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "Some(\"NV2080_CTRL_CE_GET_FAULT_METHOD_BUFFER_SIZE_PARAMS\")",
+        "wanted_size": "Some(4)",
+        "wanted_table": "Some(CeFaultMethodBufferSize)"
+      }
+    },
+    {
+      "id": "0x20803083",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "39": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "39": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080nvlink.h",
+          "line": 3235,
+          "name": "NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(Refused { name: \"NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO\", why: FabricManagement })",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20803400",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "96": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "96": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "line": 37,
+          "name": "NV2080_CTRL_CMD_ECC_GET_CLIENT_EXPOSED_COUNTERS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20803401",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "40": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "40": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "line": 100,
+          "name": "NV2080_CTRL_CMD_ECC_GET_VOLATILE_COUNTS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20803404",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "2": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "2": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "line": 213,
+          "name": "NV2080_CTRL_CMD_ECC_GET_REPAIR_STATUS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20808159",
+      "incomplete_parameter_heads": {},
+      "replies": 10,
+      "reply_sizes": {
+        "332": 10
+      },
+      "reply_statuses": {
+        "0x0": 10
+      },
+      "request_rmapi_flags": {
+        "0x0": 10
+      },
+      "request_sizes": {
+        "332": 10
+      },
+      "requests": 10,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "empirical identity reply",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "Some(332)",
+        "wanted_table": "Some(GssLegacy8159)"
+      }
+    },
+    {
+      "id": "0x2080852a",
+      "incomplete_parameter_heads": {},
+      "replies": 5,
+      "reply_sizes": {
+        "1784": 5
+      },
+      "reply_statuses": {
+        "0x0": 5
+      },
+      "request_rmapi_flags": {
+        "0x0": 5
+      },
+      "request_sizes": {
+        "1784": 5
+      },
+      "requests": 5,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080852b",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "2836": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "2836": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080852c",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "1440": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "1440": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080852e",
+      "incomplete_parameter_heads": {},
+      "replies": 4,
+      "reply_sizes": {
+        "528": 4
+      },
+      "reply_statuses": {
+        "0x0": 4
+      },
+      "request_rmapi_flags": {
+        "0x0": 4
+      },
+      "request_sizes": {
+        "528": 4
+      },
+      "requests": 4,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080852f",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "776": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "776": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20808530",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "912": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "912": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20808536",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1812": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1812": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20808537",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "42424": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "42424": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20808539",
+      "incomplete_parameter_heads": {},
+      "replies": 332,
+      "reply_sizes": {
+        "6824": 332
+      },
+      "reply_statuses": {
+        "0x0": 332
+      },
+      "request_rmapi_flags": {
+        "0x0": 332
+      },
+      "request_sizes": {
+        "6824": 332
+      },
+      "requests": 332,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080853a",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1456": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1456": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20808542",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "504": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "504": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20808546",
+      "incomplete_parameter_heads": {},
+      "replies": 35,
+      "reply_sizes": {
+        "24": 35
+      },
+      "reply_statuses": {
+        "0x0": 11,
+        "0x56": 24
+      },
+      "request_rmapi_flags": {
+        "0x0": 35
+      },
+      "request_sizes": {
+        "24": 35
+      },
+      "requests": 35,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080880f",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "49": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "49": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20809001",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "8": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "8": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "capture-derived constant reply",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "Some(8)",
+        "wanted_table": "Some(CudartInit9001)"
+      }
+    },
+    {
+      "id": "0x20809004",
+      "incomplete_parameter_heads": {},
+      "replies": 24,
+      "reply_sizes": {
+        "1544": 24
+      },
+      "reply_statuses": {
+        "0x0": 24
+      },
+      "request_rmapi_flags": {
+        "0x0": 24
+      },
+      "request_sizes": {
+        "1544": 24
+      },
+      "requests": 24,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20809019",
+      "incomplete_parameter_heads": {},
+      "replies": 3,
+      "reply_sizes": {
+        "10800": 3
+      },
+      "reply_statuses": {
+        "0x0": 3
+      },
+      "request_rmapi_flags": {
+        "0x0": 3
+      },
+      "request_sizes": {
+        "10800": 3
+      },
+      "requests": 3,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080901b",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1980": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1980": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20809029",
+      "incomplete_parameter_heads": {},
+      "replies": 17,
+      "reply_sizes": {
+        "904": 17
+      },
+      "reply_statuses": {
+        "0x0": 17
+      },
+      "request_rmapi_flags": {
+        "0x0": 17
+      },
+      "request_sizes": {
+        "904": 17
+      },
+      "requests": 17,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080902a",
+      "incomplete_parameter_heads": {},
+      "replies": 12,
+      "reply_sizes": {
+        "804": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_rmapi_flags": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "804": 12
+      },
+      "requests": 12,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080902b",
+      "incomplete_parameter_heads": {},
+      "replies": 6,
+      "reply_sizes": {
+        "6160": 6
+      },
+      "reply_statuses": {
+        "0x0": 6
+      },
+      "request_rmapi_flags": {
+        "0x0": 6
+      },
+      "request_sizes": {
+        "6160": 6
+      },
+      "requests": 6,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080902c",
+      "incomplete_parameter_heads": {},
+      "replies": 5,
+      "reply_sizes": {
+        "4116": 5
+      },
+      "reply_statuses": {
+        "0x0": 5
+      },
+      "request_rmapi_flags": {
+        "0x0": 5
+      },
+      "request_sizes": {
+        "4116": 5
+      },
+      "requests": 5,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20809037",
+      "incomplete_parameter_heads": {},
+      "replies": 332,
+      "reply_sizes": {
+        "6024": 332
+      },
+      "reply_statuses": {
+        "0x0": 332
+      },
+      "request_rmapi_flags": {
+        "0x0": 332
+      },
+      "request_sizes": {
+        "6024": 332
+      },
+      "requests": 332,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20809038",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "4": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "4": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20809063",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "520": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "520": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "gss_input_gate": {
+        "does_not_match": 1
+      },
+      "gss_observed_input_variants": [
+        {
+          "count": 1,
+          "inputs": [
+            [
+              0,
+              2048
+            ],
+            [
+              8,
+              268435456
+            ],
+            [
+              16,
+              2
+            ],
+            [
+              20,
+              1
+            ],
+            [
+              24,
+              0
+            ],
+            [
+              28,
+              0
+            ],
+            [
+              32,
+              0
+            ],
+            [
+              36,
+              16
+            ],
+            [
+              40,
+              0
+            ],
+            [
+              44,
+              0
+            ],
+            [
+              48,
+              0
+            ]
+          ]
+        }
+      ],
+      "id": "0x2080a026",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "532": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "532": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "conditional authored host-fact query",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [
+          {
+            "inputs": [
+              [
+                0,
+                1024
+              ],
+              [
+                8,
+                0
+              ],
+              [
+                16,
+                2
+              ],
+              [
+                20,
+                1
+              ],
+              [
+                24,
+                0
+              ],
+              [
+                28,
+                0
+              ],
+              [
+                32,
+                0
+              ],
+              [
+                36,
+                16
+              ],
+              [
+                40,
+                0
+              ],
+              [
+                44,
+                0
+              ],
+              [
+                48,
+                0
+              ]
+            ],
+            "size": 532
+          }
+        ],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "gss_input_gate": {
+        "does_not_match": 10
+      },
+      "gss_observed_input_variants": [
+        {
+          "count": 2,
+          "inputs": [
+            [
+              0,
+              1
+            ],
+            [
+              8,
+              10
+            ],
+            [
+              12,
+              1
+            ],
+            [
+              524,
+              1
+            ]
+          ]
+        },
+        {
+          "count": 2,
+          "inputs": [
+            [
+              0,
+              4
+            ],
+            [
+              8,
+              10
+            ],
+            [
+              12,
+              1
+            ],
+            [
+              524,
+              1
+            ]
+          ]
+        },
+        {
+          "count": 2,
+          "inputs": [
+            [
+              0,
+              8
+            ],
+            [
+              8,
+              10
+            ],
+            [
+              12,
+              1
+            ],
+            [
+              524,
+              1
+            ]
+          ]
+        },
+        {
+          "count": 2,
+          "inputs": [
+            [
+              0,
+              32
+            ],
+            [
+              8,
+              10
+            ],
+            [
+              12,
+              1
+            ],
+            [
+              524,
+              1
+            ]
+          ]
+        },
+        {
+          "count": 2,
+          "inputs": [
+            [
+              0,
+              256
+            ],
+            [
+              8,
+              10
+            ],
+            [
+              12,
+              1
+            ],
+            [
+              524,
+              1
+            ]
+          ]
+        }
+      ],
+      "id": "0x2080a028",
+      "incomplete_parameter_heads": {},
+      "replies": 10,
+      "reply_sizes": {
+        "2192": 10
+      },
+      "reply_statuses": {
+        "0x0": 10
+      },
+      "request_rmapi_flags": {
+        "0x0": 10
+      },
+      "request_sizes": {
+        "2192": 10
+      },
+      "requests": 10,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "conditional authored host-fact query",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [
+          {
+            "inputs": [
+              [
+                0,
+                1
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                12,
+                1048576
+              ],
+              [
+                524,
+                1048576
+              ]
+            ],
+            "size": 2192
+          },
+          {
+            "inputs": [
+              [
+                0,
+                1
+              ],
+              [
+                8,
+                1
+              ],
+              [
+                12,
+                1
+              ],
+              [
+                524,
+                1
+              ]
+            ],
+            "size": 2192
+          }
+        ],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a079",
+      "incomplete_parameter_heads": {
+        "reply": 1,
+        "request": 1
+      },
+      "replies": 1,
+      "reply_sizes": {
+        "83972": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "83972": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a080",
+      "incomplete_parameter_heads": {},
+      "replies": 4,
+      "reply_sizes": {
+        "52": 4
+      },
+      "reply_statuses": {
+        "0x0": 4
+      },
+      "request_rmapi_flags": {
+        "0x0": 4
+      },
+      "request_sizes": {
+        "52": 4
+      },
+      "requests": 4,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a081",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1872": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1872": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "gss_input_gate": {
+        "matches": 1
+      },
+      "gss_observed_input_variants": [
+        {
+          "count": 1,
+          "inputs": [
+            [
+              0,
+              0
+            ]
+          ]
+        }
+      ],
+      "id": "0x2080a084",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "4": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "4": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "conditional authored host-fact query",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [
+          {
+            "inputs": [
+              [
+                0,
+                0
+              ]
+            ],
+            "size": 4
+          }
+        ],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a088",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "12": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "12": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a095",
+      "incomplete_parameter_heads": {
+        "reply": 1,
+        "request": 1
+      },
+      "replies": 1,
+      "reply_sizes": {
+        "94024": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "94024": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0a4",
+      "incomplete_parameter_heads": {
+        "reply": 1,
+        "request": 1
+      },
+      "replies": 1,
+      "reply_sizes": {
+        "67396": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "67396": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0a7",
+      "incomplete_parameter_heads": {},
+      "replies": 4,
+      "reply_sizes": {
+        "14988": 4
+      },
+      "reply_statuses": {
+        "0x0": 4
+      },
+      "request_rmapi_flags": {
+        "0x0": 4
+      },
+      "request_sizes": {
+        "14988": 4
+      },
+      "requests": 4,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0a8",
+      "incomplete_parameter_heads": {},
+      "replies": 331,
+      "reply_sizes": {
+        "19724": 331
+      },
+      "reply_statuses": {
+        "0x0": 331
+      },
+      "request_rmapi_flags": {
+        "0x0": 331
+      },
+      "request_sizes": {
+        "19724": 331
+      },
+      "requests": 331,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0c4",
+      "incomplete_parameter_heads": {},
+      "replies": 3,
+      "reply_sizes": {
+        "332": 3
+      },
+      "reply_statuses": {
+        "0x0": 3
+      },
+      "request_rmapi_flags": {
+        "0x0": 3
+      },
+      "request_sizes": {
+        "332": 3
+      },
+      "requests": 3,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0c5",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1296": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1296": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0c8",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "22924": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "22924": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0cc",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "548": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "548": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0d1",
+      "incomplete_parameter_heads": {},
+      "replies": 331,
+      "reply_sizes": {
+        "2024": 331
+      },
+      "reply_statuses": {
+        "0x0": 331
+      },
+      "request_rmapi_flags": {
+        "0x0": 331
+      },
+      "request_sizes": {
+        "2024": 331
+      },
+      "requests": 331,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a0f2",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "96": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "96": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a612",
+      "incomplete_parameter_heads": {},
+      "replies": 4,
+      "reply_sizes": {
+        "11680": 4
+      },
+      "reply_statuses": {
+        "0x0": 4
+      },
+      "request_rmapi_flags": {
+        "0x0": 4
+      },
+      "request_sizes": {
+        "11680": 4
+      },
+      "requests": 4,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a618",
+      "incomplete_parameter_heads": {},
+      "replies": 5,
+      "reply_sizes": {
+        "8620": 5
+      },
+      "reply_statuses": {
+        "0x0": 5
+      },
+      "request_rmapi_flags": {
+        "0x0": 5
+      },
+      "request_sizes": {
+        "8620": 5
+      },
+      "requests": 5,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a630",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1160": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1160": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a637",
+      "incomplete_parameter_heads": {
+        "reply": 2,
+        "request": 3
+      },
+      "replies": 2,
+      "reply_sizes": {
+        "96024": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 3
+      },
+      "request_sizes": {
+        "96024": 3
+      },
+      "requests": 3,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a63c",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "16": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "16": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080a801",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "1028": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "1028": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080b201",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "2188": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "2188": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080b202",
+      "incomplete_parameter_heads": {},
+      "replies": 11,
+      "reply_sizes": {
+        "3232": 11
+      },
+      "reply_statuses": {
+        "0x0": 11
+      },
+      "request_rmapi_flags": {
+        "0x0": 11
+      },
+      "request_sizes": {
+        "3232": 11
+      },
+      "requests": 11,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080b209",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "524": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "524": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080b210",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "2568": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "2568": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080b216",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "824": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "824": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080d02d",
+      "incomplete_parameter_heads": {},
+      "replies": 2,
+      "reply_sizes": {
+        "4116": 2
+      },
+      "reply_statuses": {
+        "0x0": 2
+      },
+      "request_rmapi_flags": {
+        "0x0": 2
+      },
+      "request_sizes": {
+        "4116": 2
+      },
+      "requests": 2,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2080e0af",
+      "incomplete_parameter_heads": {
+        "reply": 1,
+        "request": 1
+      },
+      "replies": 1,
+      "reply_sizes": {
+        "80904": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "80904": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "GssLegacyRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x20810108",
+      "incomplete_parameter_heads": {},
+      "replies": 3,
+      "reply_sizes": {
+        "992": 3
+      },
+      "reply_statuses": {
+        "0x0": 3
+      },
+      "request_rmapi_flags": {
+        "0x0": 3
+      },
+      "request_sizes": {
+        "992": 3
+      },
+      "requests": 3,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "BinApiRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x2081010d",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "0": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "0": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [],
+      "surface": {
+        "capability_permit": "BinApiRule",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x50800101",
+      "incomplete_parameter_heads": {},
+      "replies": 8,
+      "reply_sizes": {
+        "584": 8
+      },
+      "reply_statuses": {
+        "0x0": 8
+      },
+      "request_rmapi_flags": {
+        "0x0": 8
+      },
+      "request_sizes": {
+        "584": 8
+      },
+      "requests": 8,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+          "line": 87,
+          "name": "NV5080_CTRL_CMD_DEFERRED_API"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x90e70113",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "16": 1
+      },
+      "reply_statuses": {
+        "0x56": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "16": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90e7/ctrl90e7bbx.h",
+          "line": 55,
+          "name": "NV90E7_CTRL_CMD_BBX_GET_LAST_FLUSH_TIME"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0x90f10106",
+      "incomplete_parameter_heads": {},
+      "replies": 10,
+      "reply_sizes": {
+        "184": 10
+      },
+      "reply_statuses": {
+        "0x0": 10
+      },
+      "request_rmapi_flags": {
+        "0x0": 10
+      },
+      "request_sizes": {
+        "184": 10
+      },
+      "requests": 10,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h",
+          "line": 268,
+          "name": "NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES\", origin: Mode2Rpc }",
+        "category": "init-table handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "Some(VaspacePublishedPdes)",
+        "wanted_c_type": "Some(\"NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS\")",
+        "wanted_size": "Some(184)",
+        "wanted_table": "Some(GvaspaceServerReservedPdesClient)"
+      }
+    },
+    {
+      "id": "0xa06c0101",
+      "incomplete_parameter_heads": {},
+      "replies": 10,
+      "reply_sizes": {
+        "3": 10
+      },
+      "reply_statuses": {
+        "0x0": 10
+      },
+      "request_rmapi_flags": {
+        "0x0": 10
+      },
+      "request_sizes": {
+        "3": 10
+      },
+      "requests": 10,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "line": 97,
+          "name": "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NVA06C_CTRL_CMD_GPFIFO_SCHEDULE\", origin: Nvproxy }",
+        "category": "channel handler",
+        "channel_claims": true,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0xa06c0103",
+      "incomplete_parameter_heads": {},
+      "replies": 12,
+      "reply_sizes": {
+        "8": 12
+      },
+      "reply_statuses": {
+        "0x0": 12
+      },
+      "request_rmapi_flags": {
+        "0x0": 12
+      },
+      "request_sizes": {
+        "8": 12
+      },
+      "requests": 12,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "line": 146,
+          "name": "NVA06C_CTRL_CMD_SET_TIMESLICE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NVA06C_CTRL_CMD_SET_TIMESLICE\", origin: Nvproxy }",
+        "category": "channel handler",
+        "channel_claims": true,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0xa06c010a",
+      "incomplete_parameter_heads": {},
+      "replies": 11,
+      "reply_sizes": {
+        "88": 11
+      },
+      "reply_statuses": {
+        "0x0": 11
+      },
+      "request_rmapi_flags": {
+        "0x0": 11
+      },
+      "request_sizes": {
+        "88": 11
+      },
+      "requests": 11,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "line": 354,
+          "name": "NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "init-table handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "Some(\"NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS\")",
+        "wanted_size": "Some(88)",
+        "wanted_table": "Some(PromoteFaultMethodBuffers)"
+      }
+    },
+    {
+      "id": "0xa06f0103",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "3": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "3": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h",
+          "line": 66,
+          "name": "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Listed { name: \"NVA06F_CTRL_CMD_GPFIFO_SCHEDULE\", origin: Nvproxy }",
+        "category": "channel handler",
+        "channel_claims": true,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0xc3700104",
+      "incomplete_parameter_heads": {},
+      "replies": 1,
+      "reply_sizes": {
+        "20": 1
+      },
+      "reply_statuses": {
+        "0x0": 1
+      },
+      "request_rmapi_flags": {
+        "0x0": 1
+      },
+      "request_sizes": {
+        "20": 1
+      },
+      "requests": 1,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc370/ctrlc370chnc.h",
+          "line": 269,
+          "name": "NVC370_CTRL_CMD_GET_CHANNEL_INFO"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    },
+    {
+      "id": "0xc3720101",
+      "incomplete_parameter_heads": {},
+      "replies": 115,
+      "reply_sizes": {
+        "2048": 115
+      },
+      "reply_statuses": {
+        "0x0": 115
+      },
+      "request_rmapi_flags": {
+        "0x0": 115
+      },
+      "request_sizes": {
+        "2048": 115
+      },
+      "requests": 115,
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc372/ctrlc372chnc.h",
+          "line": 40,
+          "name": "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"
+        }
+      ],
+      "surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "display handler",
+        "channel_claims": false,
+        "display_claims": true,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      }
+    }
+  ],
+  "deferred_controls": [
+    {
+      "direct_surface": {
+        "capability_permit": "Listed { name: \"NV2080_CTRL_CMD_GPU_PROMOTE_CTX\", origin: Mode2Rpc }",
+        "category": "channel handler",
+        "channel_claims": true,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "Some(PromoteCtx)",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      },
+      "directions": {
+        "reply": 4,
+        "request": 4
+      },
+      "id": "0x2080012b",
+      "note": "Observed inside 0x50800101; wrapper status does not prove later execution of the deferred operation.",
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 984,
+          "name": "NV2080_CTRL_CMD_GPU_PROMOTE_CTX"
+        }
+      ],
+      "wrapper_supported": false
+    },
+    {
+      "direct_surface": {
+        "capability_permit": "Denied(NotOnAllowlist)",
+        "category": "no specific handler",
+        "channel_claims": false,
+        "display_claims": false,
+        "gss_rows": [],
+        "object_control_shape": "None",
+        "wanted_c_type": "None",
+        "wanted_size": "None",
+        "wanted_table": "None"
+      },
+      "directions": {
+        "reply": 4,
+        "request": 4
+      },
+      "id": "0x2080012d",
+      "note": "Observed inside 0x50800101; wrapper status does not prove later execution of the deferred operation.",
+      "sdk_symbols": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "line": 1076,
+          "name": "NV2080_CTRL_CMD_GPU_INITIALIZE_CTX"
+        }
+      ],
+      "wrapper_supported": false
+    }
+  ],
+  "display_family": "ADA",
+  "guest_abi": "580.65.06",
+  "guest_driver": "580.88",
+  "observed_missing": 1,
+  "records": 4535,
+  "replay_test": false,
+  "rpc_sequences": [
+    0
+  ],
+  "rpcs": [
+    {
+      "directions": {
+        "reply": 23,
+        "request": 23
+      },
+      "id": 10,
+      "name": "FREE",
+      "reply_statuses": {
+        "0x0": 23
+      }
+    },
+    {
+      "directions": {
+        "reply": 7,
+        "request": 7
+      },
+      "id": 71,
+      "name": "CONTINUATION_RECORD",
+      "reply_statuses": {
+        "0x0": 7
+      }
+    },
+    {
+      "directions": {
+        "reply": 1999,
+        "request": 1999
+      },
+      "id": 76,
+      "name": "GSP_RM_CONTROL",
+      "reply_statuses": {
+        "0x0": 1999
+      }
+    },
+    {
+      "directions": {
+        "reply": 236,
+        "request": 236
+      },
+      "id": 103,
+      "name": "GSP_RM_ALLOC",
+      "reply_statuses": {
+        "0x0": 236
+      }
+    },
+    {
+      "directions": {
+        "reply": 5
+      },
+      "id": 4099,
+      "name": "POST_EVENT",
+      "reply_statuses": {
+        "0x0": 5
+      }
+    }
+  ],
+  "schema": "kayfabe-windows-command-audit/1",
+  "sdk": {
+    "directory": "ogkm-580.159.04",
+    "header_count": 201,
+    "headers_sha256": "e29fff31c17faadc63f261fbe0fe53caae2c9180f3a3a71f9c396f661265702a",
+    "method": "Literal numeric NV*CMD* defines in local SDK ctrl headers; absence is not proof that no public name exists elsewhere."
+  },
+  "source_export": {
+    "note": "In a selected export, sequence gaps can include intentionally omitted records; full-source hash is provenance only.",
+    "omitted_records": 0,
+    "selection": "all",
+    "source_bytes": 26509784,
+    "source_hash_verifiable_from_export": true,
+    "source_sha256": "94745becce0c30227e3e7bb6134003a22a4963c05ecb6a8c04e561977a550f40"
+  },
+  "source_revision": "c50fad9ac485f53d45d4ea77a21cb7206267c65a",
+  "surface_helper_sha256": "1110d996cc3f35813aa4d837a2c002bb255b0a7acfaf6f763bda5c294c38dec0",
+  "text_sha256": "9d75e47b8ec5dd837dc64e14847779d62a16f14d92169ede8f9b62681b93de29",
+  "tool_sha256": "c9cf2a3df534c6d51652987a965da515f24ff21e41a41bc6d757b0acfbaf1752",
+  "totals": {
+    "allocation_categories": {
+      "allocation decoder exists": 17,
+      "denied by capability policy": 2,
+      "no allocation decoder": 1
+    },
+    "class_ids": 20,
+    "control_categories": {
+      "capture-derived constant reply": 1,
+      "channel handler": 6,
+      "conditional authored host-fact query": 3,
+      "display handler": 10,
+      "empirical identity reply": 1,
+      "init-table handler": 6,
+      "no specific handler": 102
+    },
+    "control_ids": 129,
+    "control_ids_with_sdk_name": 64,
+    "control_ids_without_sdk_name": 65,
+    "gfx_pool_query_records": 0,
+    "native_control_error_ids": 12,
+    "native_ok_ids_without_handler": 92
+  },
+  "unknown_prefixes": [
+    {
+      "direction": "request",
+      "sequence": 2707
+    },
+    {
+      "direction": "reply",
+      "sequence": 2710
+    }
+  ]
+}
