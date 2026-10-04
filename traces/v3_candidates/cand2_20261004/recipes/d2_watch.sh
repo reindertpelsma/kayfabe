@@ -4,8 +4,7 @@ set -euo pipefail
 tag=${1:?tag}
 bench=/workspace/bench
 out=$bench/brk/$tag/d2_watch
-mkdir -p "$out"
-exec > "$out/result.log" 2>&1
+exec > "/root/prov/${tag}_d2_watch.log" 2>&1
 echo "START $(date -Is)"
 trap 'rc=$?; touch "$bench/brk/$tag/release"; echo "EXIT rc=$rc $(date -Is)"' EXIT
 seen=0
@@ -14,6 +13,7 @@ for _ in $(seq 1000); do
     sleep 1
 done
 test "$seen" = 1
+mkdir -p "$out"
 timeout 40 python3 /root/vnc_watch.py 127.0.0.1:5907 "$out" 0,0,96,96 30 &
 viewer=$!
 sleep 5

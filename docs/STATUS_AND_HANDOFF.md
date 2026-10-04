@@ -14,12 +14,22 @@ fix this file. Entries below the first are dated history.
 **Current work (2026-10-04, candidate 2):** master and v3 were promoted to `9b50d295`
 (candidate 1's verified code plus recovered evidence/docs). Continue on
 `codex/candidate-2-2026-10-04`, local worktree `/data/kayfabe-candidate2-20261004`.
-Broker/maxfps are integrated with ABI **18**; `8775a93e` also fixes the asynchronous
-HMP refresh context. CI and exact-source GPU verification are still required.
-The `cand2a` bar on vmb tests the preceding `3588789e` (2131 tests, 9/9 gates so far).
+Broker/maxfps are integrated with ABI **18**; product revision `9d82f259` includes
+the HMP AioContext fix (`8775a93e`) and asynchronous console cursor update.
+Its CI including the slow suite passes. The preceding `3588789e` passed the full
+`cand2a` bar (2131/0 tests, 9/9 gates, bare and guest 30/30, USER birth census).
+The exact-source `cand2b` bar at `9d82f259` is running on vmb (tests, gates and
+bare metal passed; guest suite next), with apps queued after success. The old
+binary reproducibly hangs on HMP screendump; the positive test is still pending.
 Current run details and recovered scratch recipes:
 `traces/v3_candidates/cand2_20261004/README.md`. Existing box **54049598** survives;
-new display box **54137212** belongs to this session. The old display/Windows boxes
+new display box **54137212** belongs to this session (SSH `vdisp2`, root at
+142.170.96.180:61595). It has driver 580.159.04, the exact product binary, and
+guest kernel 6.8.0-142; desktop/broker preparation is running. Recipes and each
+completed batch are pushed in the candidate evidence directory. Broker dependency
+`nvkvm-pv:codex/broker-refresh-2026-10-04` at `9f2fd00` fixes refresh-only events;
+its CI/local tests pass, but it is not promoted to nvkvm-pv's default branch.
+The old display/Windows boxes
 in the historical table below are gone. Only reproducible display results were
 lost; no code loss is known. Keep saving each completed batch to GitHub.
 
