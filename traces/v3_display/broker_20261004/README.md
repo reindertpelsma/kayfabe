@@ -32,11 +32,23 @@ session `LockedHint=no` at the start.
 | **Hover hot spot, 1:1** | PASS (`brkF1`, `brkF2`; the window 1024x768, the guest 1024x695, unscaled). Against the guest X server's own cursor (XFixes): `left_ptr` hot `3,1` = `3,1`, 254 visible pixels, same bbox; `crosshair` `11,11` = `11,11`, 281; the xterm glyph `4,8` = `4,8`, 86 |
 | **Hover hot spot with the broker's `ceil` rule** | PASS (`brkF2/scaled/`, by hand during the hold). Guest at 800x600 in the 1024x768 window (x1.28; the broker: `keeping the window and rescaling into it`): the host cursor 328x328, `left_ptr` hot `4,2` = `ceil(3*1.28), ceil(1*1.28)`, `crosshair` `15,15` = `ceil(11*1.28)`; the host pointer at window `100,90`, the guest's at `78,70` (`floor(100/1.28), floor(90/1.28)`). Guest at 1280x1024 (x0.75, letterboxed): 192x192, `left_ptr` `3,1` = `ceil(2.25), ceil(0.75)`, `crosshair` `9,9` = `ceil(8.25)`. The relay's SET stays in guest pixels; the broker scales |
 | **XOR / invert cursor** | NOT RUN — no stock guest programs one. The guest X server's xterm core glyph with no theme (`XCURSOR_PATH=/nonexistent xsetroot -cursor_name xterm`) reached the head as an ordinary two-colour ARGB image: the composition word did not change (still `0x072ff`, `MODE_BLEND`), the host's cursor is the guest's exactly (86 pixels, max channel difference 0), and the VNC console's too (`cur_*_xterm.png`). This matches §8.14's source reading (NVKMS writes `MODE_BLEND` only). What did run on the GPU is the XOR blend itself: the compose kernel's bring-up self-test, which has an XOR pixel (alpha 0, factors that would write black), `PASSED` in all three runs |
-| **QEMU's console shows the cursor in hover (VNC)** | PASS (`BRK_VNC=1`, `brkF1`, `brkF2`). An alpha-cursor VNC client (`vnc_cursor.py`) received the crosshair `256x256 hot=11,11 visible_px=281 fnv_rel_hot=0xf6108d49685ef58f` — the host pointer's digest exactly — and the xterm glyph `hot=4,8 visible_px=86`, the digest of both the host's and the guest's; under grab `32x32 hot=0,0 visible_px=0` (QEMU's hidden cursor), so a viewer shows no stale image beside the composed one. In the scaled run the console's cursor stays in guest pixels (256x256, `3,1` and `11,11`; the console is not scaled) |
+| **QEMU's console shows the cursor in hover (VNC)** | PASS as graded then — ⊘ but see the note below the table: the grade was made under kayfabe's own alpha convention, and the code it graded has changed (`17239ad8`); RE-RUN. (`BRK_VNC=1`, `brkF1`, `brkF2`.) An alpha-cursor VNC client (`vnc_cursor.py`) received the crosshair `256x256 hot=11,11 visible_px=281 fnv_rel_hot=0xf6108d49685ef58f` — the host pointer's digest exactly — and the xterm glyph `hot=4,8 visible_px=86`, the digest of both the host's and the guest's; under grab `32x32 hot=0,0 visible_px=0` (QEMU's hidden cursor), so a viewer shows no stale image beside the composed one. In the scaled run the console's cursor stays in guest pixels (256x256, `3,1` and `11,11`; the console is not scaled) |
 | **The cursor's blend register, on a semi-transparent cursor** | LOGGED, and it refutes 2026-10-03's inference. `guest cursor composition 0x072ff = PREMULT_ALPHA (K1 255, cursor factor 2, viewport factor 7, mode 0); its 256x256 pixels: 163 partially transparent, 0 with a colour channel above alpha` (both runs). Per pixel (`cursor_alpha.txt`): every pixel the host shows differently from the guest X server's own cursor is exactly the guest's colour times its alpha (62 of the arrow's 254, 13 of the crosshair's 281; none otherwise), and the VNC console's cursor — kayfabe's same image, never through the broker — is identical to the host's. With this word kayfabe passes the surface colour through unchanged, so the cursor SURFACE holds X's premultiplied pixels multiplied by alpha once more by the guest's DDX, under a premultiplied blend: the guest's own head scans out the same darker edge, and the host shows what the head would. Not a straight blend over premultiplied pixels; kayfabe's mapping stays |
 | **E3** | PASS (`brkF1`). The broker SIGSTOPped 7.25 s: the guest answered (`ALIVE`), `glxgears` ran at 85.4 FPS meanwhile; then `kill -9` and a restart: `the display broker closed the connection … reconnecting in the background` → `connected` → `re-sent geometry and the last frame to the new broker`; the window back (`host_after_restart.png`) |
 | hide, grab (regression) | PASS (`brkF1`, `brkF2`): hidden `visible_px=0` for the guest's 10 s `XFixesHideCursor`, the same image after; CTRL+ALT+G composes (76 changed pixels at the guest pointer, 76 again after a relative move 79,29 → 119,56), host cursor blank, VNC hidden; after it 0 changed pixels |
 | E5 (part) | QEMU held 10 dma-buf descriptors, 5 `/dev/nvidiactl`, 311 `/dev/nvidia<N>`; 8728 / 8730 MiB of VRAM (`brkF1`/`brkF2`) |
+
+> ⊘ **Added 2026-10-04, later (the reviews of the console cursor; V3_DISPLAY.md STATUS ADDENDUM 4):**
+> the VNC row's "digest exactly" compared what `vnc_cursor.py` got AFTER premultiplying it — kf3
+> then sent straight words, and the grader assumed so. The Cursor With Alpha encoding is premultiplied
+> by the protocol (rfbproto.rst; TigerVNC divides by alpha on receipt), so a real viewer brightened
+> the 163 partly transparent pixels; the match showed only that the transport round-trips under
+> kayfabe's convention. Since `17239ad8` kf3 sends the premultiplied words and the grader takes the
+> wire as received (`wire_above_alpha` counts a violation). The grab row's hidden cursor and the
+> "after it 0 changed pixels" also changed underneath: the console's cursor now follows the frame the
+> console shows, so the hide comes with the first composed frame. Re-run `BRK_VNC_HOVER`,
+> `BRK_VNC_XTERM`, `BRK_VNC_GRAB` and the hover/grab regressions with the VNC client attached. The
+> other rows (the host pointer through the broker, the blend register, E3) are unaffected.
 
 ## Findings for whoever is next
 
@@ -52,6 +64,8 @@ session `LockedHint=no` at the start.
    go LINEAR: the line judges by whether any frame slot already holds dma-buf descriptors, and none
    does before the guest's first frame (`crates/kf-broker/src/conn.rs:1852-1862`). Cosmetic and
    misleading; also in `brkA5` (2026-10-03). Not changed here (this commit changes no code).
+   ⊘ Fixed since in `2b7751bc` (2026-10-04, later): the line speaks only when installed slots all
+   lack a dma-buf.
 3. **The darker semi-transparent cursor edge is the guest driver's** (the grade above), so §8.12's
    inference is refuted; folded into V3_DISPLAY.md §8.12/§8.14.
 4. The DRI3 client's first version raised on its udmabuf `ioctl` (`brkF1/dri3.log`): Python's

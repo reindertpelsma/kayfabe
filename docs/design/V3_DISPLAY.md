@@ -1,5 +1,24 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS ADDENDUM 4, 2026-10-04 (later) — the two reviews of the console cursor and the
+> `badf2d7` relay, fixed in code on `v3-broker`, GPU-free-tested locally and in CI; NOT run on a
+> box.** (1) The console cursor (§8.13) now follows the frame the console SHOWS (no image beside a
+> frame that still composes one; no hide before the frame carries it), is paced to one DEFINE per
+> 16 ms, never moves the pointer except in hover under an absolute pointer (GTK warps the HOST
+> pointer otherwise), retries what QEMU did not apply, and hands QEMU PREMULTIPLIED pixels — what
+> VNC's Cursor With Alpha encoding carries (the box's VNC digest match was graded under kayfabe's
+> own straight convention). (2) The relay (§8.15): a dma-buf commit refused by name no longer
+> counts toward the silent-drop detector; the verdict table evicts volunteered rows before the
+> relay's own; a descriptor the check refuses backs its rung off and the frame takes the next one
+> (it used to refuse every frame on that rung); the check runs before anything is spent and once
+> per backing; the HELLO line no longer claims "no /dev/udmabuf" before the first frame; the status
+> line carries `dmabuf_trips`, `carrier_refused`, `carrier_unchecked`, `formats_unasked`, graded
+> by `broker_lane.sh` (`BRK_COUNTER_GRADE`). (3) The composition word's log line is bounded (§8.14).
+> **Box checks to re-run:** `BRK_VNC_HOVER`/`BRK_VNC_XTERM`/`BRK_VNC_GRAB` (§8.13 — the pixels,
+> the grader and the grab hide all changed), the hover/grab/ungrab regressions with a VNC client
+> attached (one cursor at each transition), and one GPU-copy run for `BRK_COUNTER_GRADE` and the
+> rung lines (§8.15). The §8.12 host-pointer path itself is unchanged.
+
 > **STATUS ADDENDUM 3, 2026-10-04 — built in code on `v3-broker`, GPU-free-tested locally and in CI;
 > NOTHING of it has run on a box.** (1) The relay handles the six behaviours of nvkvm-pv's broker
 > at `badf2d7` (wire unchanged; §8.15) — run locally against that REAL broker, including one that
@@ -2735,6 +2754,60 @@ Evidence: `traces/v3_display/broker_20261003/<run>/`; harness `scripts/bench/dis
 
 ### 8.13 The guest cursor on QEMU's console in hover (the coordinator's decision, 2026-10-04)
 
+> ⊘ **CORRECTED 2026-10-04, later (the two reviews of this section's code; fixed on `v3-broker`,
+> GPU-free-tested, NOT run on a box — the STATUS below predates it and its VNC lines must be
+> re-run):**
+> - **The pixels are PREMULTIPLIED now, not straight.** QEMU sends `QEMUCursor.data` to an
+>   alpha-cursor VNC client verbatim (`ui/vnc.c:1001-1010`) as the Cursor With Alpha
+>   pseudo-encoding (-314), whose pixels the protocol defines as premultiplied (`rfbproto.rst`:
+>   "Alpha is pre-multiplied for each colour channel"; TigerVNC's
+>   `CMsgReader::readSetCursorWithAlpha` divides each channel by alpha on receipt — both read
+>   2026-10-04). Straight words came out too bright there and wrapped in an 8-bit channel. One
+>   `QEMUCursor` cannot suit both conventions: SDL (`ui/sdl2.c:763`) and GTK (`ui/gtk.c:480`) read
+>   the words as straight, so they now show a partly transparent edge slightly darker — exactly as
+>   with QEMU's own virtio-gpu, which hands every frontend the guest's premultiplied cursor
+>   (`hw/display/virtio-gpu.c:74`). The decision serves VNC, so VNC is the one made right.
+>   ⚠ The box's "VNC digest = host pointer digest" was graded by `vnc_cursor.py` premultiplying what
+>   it received — a round trip under kayfabe's own convention, not what a viewer draws. The grader
+>   now takes the wire as premultiplied (and counts `wire_above_alpha`, a spec violation).
+> - **The define follows the frame the console SHOWS** (`kf_broker::ShownFrame`; the worker marks
+>   each frame it publishes, the console notes the one it takes). The relay flips the mode the
+>   moment it reads `EV_GRAB`, while the console keeps the last frame until its next refresh (VNC's
+>   backs off to 3 s): the image used to be defined at once beside the cursor still composed into
+>   that frame — two cursors after every ungrab and at every broker connect — and hidden at once
+>   at a grab — none until the next refresh. Now: no cursor of ours while the shown frame carries
+>   one; in hover the image once the console shows a cursor-free frame; while the worker is about
+>   to compose it (grab, an XOR cursor) the image the console holds stays until a frame that
+>   carries it is shown. `kf3_gfx_update` takes its frame FIRST, then asks about the cursor.
+> - **At most one DEFINE per 16 ms** (`DEFINE_MIN_MS`; the newest state at the first poll after).
+>   A broker sets the grab on every packet, so one flipping it per packet made QEMU's main loop
+>   allocate, copy and send a 256x256 cursor to every VNC client per packet, unpaced.
+> - **The pointer (`dpy_mouse_set`) is moved only in hover, for an image the console holds, and
+>   only under an ABSOLUTE pointer** (`qemu_input_is_absolute`); never turned "off" — the hidden
+>   cursor hides it. ⊘ The sentence below that GTK "ignores it under an absolute pointer" was true
+>   and beside the point: a broker grab is exactly what makes input RELATIVE, and GTK's
+>   `gd_mouse_set` then WARPS THE HOST POINTER (`ui/gtk.c:447-467`) — with `-display gtk` and a
+>   tablet not bound to this console, every grab warped it; so could a guest that leaves the
+>   tablet idle. SDL needs one `on` move to show the guest sprite, which hover gives it.
+> - **QEMU reports what it applied** (`kf3_display_cursor_done`, ABI 12's surface): a define it
+>   could not make (`cursor_builtin_hidden`/`cursor_alloc` returning NULL — now checked — or a bound)
+>   or a move it skipped is handed out again, paced; Rust no longer believes the console holds an
+>   image it was never given. `kf3_display_cursor` and `kf3_display_frame` refuse a misaligned
+>   pointer at the boundary (§R).
+> - **The cursor point's "none" collided with a real point**: `u64::MAX` is `(-1, -1)` packed (a
+>   crosshair with hot spot 11,11 at guest pointer 10,10). It is now 31-bit fields and a valid bit
+>   (`kf_broker::CursorPoint`).
+>
+> Tests (each turns red under its bite-mutation, applied and restored 2026-10-04): `console.rs` —
+> the image waits for a cursor-free frame (Grabbed→hover and Off→hover), grab/XOR keep the image
+> until a composed frame is shown, the guest hiding and a broker gone hide at once with no pointer
+> call, pacing with the newest state winning, an update not applied is handed out again, the pixels
+> are the premultiplied words, the point round-trips `(-1, -1)`; `host_cursor.rs` — a broker
+> flipping `F_GRABBED` 1000 times in 1 s gives at most `1000 / 16 + 2` defines (known-positive:
+> flips 16 ms apart each define); kf-qemu `display.rs` — the frame's cursor bit reaches what the
+> console shows. `vnc_cursor.py --selftest` takes premultiplied words as received and flags a
+> straight word.
+
 **STATUS: RUN ON A BOX — 2026-10-04 (box 54032077, runs `brkF1`/`brkF2` with `BRK_VNC=1`, kf3 code
 `34696441`, broker `badf2d7`; `traces/v3_display/broker_20261004/`).** In hover an alpha-cursor VNC
 client received the crosshair as `256x256 hot=11,11`, 281 visible pixels, with the host pointer's
@@ -2763,12 +2836,16 @@ absolute — would suit cursor-capable VNC clients better; it is an owner questi
 
 | relay mode (§8.12) | guest cursor | console |
 |---|---|---|
-| hover | an image | that image, defined once per image or hot spot; moved once per position (the image's top-left on the head, which the worker stores every pass, plus the hot spot) |
-| hover | hidden, or one the frame composes (XOR) | the hidden cursor, pointer off |
-| grab, or no `CAP_CURSOR` broker / broker gone | (composed into the frame) | nothing — or, once the console was ever given a cursor, the hidden one, so a viewer never shows a stale image beside the composed one |
+| hover | an image | that image, defined once per image or hot spot — once the console SHOWS a frame without the cursor composed (⊘ 2026-10-04, later); moved once per position (the image's top-left on the head, which the worker stores every pass, plus the hot spot), under an absolute pointer only |
+| hover | hidden | the hidden cursor (no pointer call) |
+| hover | one the frame composes (XOR) | the image it holds until the console shows a frame with the cursor composed, then the hidden cursor |
+| grab | (composed into the frame) | the same: the image it holds until the shown frame carries the cursor, then the hidden one — never two cursors, never none |
+| no `CAP_CURSOR` broker / broker gone | (composed into the frame) | nothing — or, once the console was ever given a cursor, the hidden one at once (the worker no longer reads the cursor, so what the console holds is stale) |
 
-**Ownership and bounds (QEMU 10.2.4).** `kf3.c`'s `kf3_console_cursor` runs at the top of the
-console's `gfx_update` (a cursor change in hover makes no frame) and after every broker pump (each
+**Ownership and bounds (QEMU 10.2.4).** `kf3.c`'s `kf3_console_cursor` runs in the console's
+`gfx_update` — ⊘ AFTER it takes its frame since the correction above (as first written: "at the top
+of", which defined a cursor against the frame about to be replaced); every refresh, since a cursor
+change in hover makes no frame — and after every broker pump (each
 cursor post is followed by a frame publish, which lands there — VNC's refresh backs off to
 `VNC_REFRESH_INTERVAL_MAX` = `GUI_REFRESH_INTERVAL_IDLE`, 3 s, on a still picture, `ui/vnc.c:61`,
 `include/ui/console.h:48`). `cursor_alloc` and
@@ -2777,9 +2854,10 @@ takes its own (`ui/console.c:961-980`), and kf3.c drops its own right after. The
 own copy of the image (the `CursorShare` post the broker is sent, made by a GPU copy into memory kf
 owns) — never guest memory — copied into the `QEMUCursor`'s data: exactly `width * height` words
 (`kf3_display_cursor_pixels` refuses a null or misaligned pointer, more than 256x256 words, or a
-count that is not the defined image's), each a host-endian `0xAARRGGBB` with STRAIGHT alpha (QEMU's
-SDL frontend reads the words as straight ARGB, `ui/sdl2.c:763-764`; the broker's image is
-premultiplied, so each channel is divided by its alpha).
+count that is not the defined image's), each a host-endian `0xAARRGGBB` — ⊘ PREMULTIPLIED since the
+correction above (as first written: "with STRAIGHT alpha (QEMU's SDL frontend reads the words as
+straight ARGB, `ui/sdl2.c:763-764`; the broker's image is premultiplied, so each channel is divided
+by its alpha)").
 
 **KF3 ABI stays 12**: the broker's surface is unmerged, so `Kf3Cursor`, `kf3_display_cursor` and
 `kf3_display_cursor_pixels` join it; an archive without them fails to LINK with a kf3.c that calls
@@ -2789,7 +2867,10 @@ ratchet of kf-qemu moves 55 → 59, itemised in `ci.yml`.
 **Tests (GPU-free, `kf-broker` `console.rs`, each with a known-positive):** an image defined once
 and moved per position, nothing for the same posts under grab or without a broker; hidden, XOR,
 grab and a broker gone each define the hidden cursor once and turn the pointer off, and the image
-comes back in hover; the copy is straight ARGB of exactly `width * height` words or nothing.
+comes back in hover; the copy is straight ARGB of exactly `width * height` words or nothing. (As
+first written; ⊘ since the correction above the pointer is never turned off, grab and XOR hide only
+once a composed frame is shown, and the copy is the premultiplied words — the tests changed with
+it.)
 Bite-mutations, each applied and restored on 2026-10-04: the hidden cursor defined before any
 hover, an image shown under grab, premultiplied pixels passed through — each turns a test red.
 kf3.c: `-fsyntax-only -Werror` with QEMU 10.2.4's own warning flags (gcc 15), clean.
@@ -2801,7 +2882,8 @@ whose `--selftest` replays QEMU 10.2.4's own bytes (`ui/vnc.c:992-1027`) — and
 guest X server's own through XFixes (`xcursor.py compare`; the straight↔premultiplied round trip may
 cost a channel step of rounding); under grab (`BRK_VNC_GRAB`) it must be the hidden cursor. Also
 not run: GTK and SDL frontends, and `dpy_mouse_set`'s position (only SPICE and D-Bus listeners use
-it; VNC ignores it, GTK and SDL ignore it under an absolute pointer). The composition word line is
+it; VNC ignores it, GTK and SDL ignore it under an absolute pointer — ⊘ and WARP the host pointer
+under a relative one, which a grab makes it: the correction above). The composition word line is
 collected by the hook too (`BRK_CURSOR_COMPOSITION`, §8.14).
 
 ### 8.14 XOR cursors, and the cursor's alpha (`OWNER_RULINGS.md` §O; 2026-10-04)
@@ -2878,7 +2960,11 @@ channel above alpha (consistent with premultiplied pixels)
 
 (`kf_disp::scanout::cursor_composition` — the word as programmed, `clc37d.h:850-861` — and
 `HostCursorSrc::alpha_census`; a pixel with a channel above its alpha is impossible when
-premultiplied.) If the line says a straight blend over premultiplied-consistent pixels, the head
+premultiplied.) ⊘ Bounded since the review of 2026-10-04 (later): "once per change" of a word the
+GUEST programs is a line per frame for a guest alternating two words — gigabytes a day of QEMU's
+stderr — so the line now carries its change number and is logged for the first 8 changes and every
+256th after (`kf_disp::scanout::CompositionLog`, test
+`the_composition_line_is_bounded_however_the_guest_alternates`). If the line says a straight blend over premultiplied-consistent pixels, the head
 itself scans out the darker edge and the host shows what the head would: the mapping stays, and
 the darker edge is the guest driver's.
 
@@ -2893,10 +2979,52 @@ the head itself would scan out the darker edge. The mapping stays
 
 ### 8.15 nvkvm-pv's broker at `badf2d7` — what the relay now handles (2026-10-04)
 
+> ⊘ **CORRECTED 2026-10-04, later (the two reviews of the relay changes; fixed on `v3-broker`,
+> GPU-free-tested, NOT run on a box — a GPU-copy run must be re-run for `BRK_COUNTER_GRADE`):**
+> - **A dma-buf commit the broker refuses BY NAME no longer counts toward the silent-drop
+>   detector** (`Ack::uncount`, when `EV_FORMAT x=0` reclaims a committed frame of its pair). The
+>   first frames of a connection race the relay's own question and are dropped at the format gate;
+>   counted, three of them over a second (with another dma-buf pair committed after them, as the
+>   test does) tripped a back-off whose line blames `/proc/self/fdinfo`. Test
+>   `a_dma_buf_frame_refused_by_name_never_trips_the_detector` (known-positive: the same frames
+>   dropped silently trip it).
+> - **Row 1's eviction order was wrong**: the table dropped its oldest non-"no" FIRST, so sixteen
+>   volunteered "no"s evicted the relay's own recorded YES for the GPU-copy pair — the rung, the
+>   worker's pack and the "CAN show" line then flapped frame by frame. Now: volunteered rows (any
+>   verdict) first, then the relay's own non-"no"s, its own "no"s last. Test
+>   `volunteered_noes_never_push_out_the_relays_own_yes`.
+> - **Row 5's refusal refused the FRAME on the rung `choose` picked** — a GPU-copy descriptor that
+>   failed the check would have been picked again for every frame: a black broker display with
+>   nothing tripping. Now a refused dma-buf rung (GPU copy, or the host dma-bufs) backs off for the
+>   connection like an unacknowledged one, and the same frame takes the next rung; only a refused
+>   `F_SHM` memfd, or a frame no other rung holds (a VRAM-only GPU copy), refuses the frame — by
+>   name. The check runs BEFORE a seq is spent or a rung announced
+>   (a refused frame used to log "frames go as a LINEAR dma-buf"), and once per backing — a
+>   proven descriptor is not re-read from `/proc` per frame (`carrier_checks`). Tests:
+>   `a_descriptor_that_is_neither_memfd_nor_dma_buf_never_reaches_the_broker` (now also the GPU
+>   copy's pipe), `a_proven_descriptor_is_checked_once_per_backing`.
+> - **The HELLO line said "no /dev/udmabuf here"** at every first connection (no slot holds a
+>   descriptor before the guest's first frame; box run `brkF1`). It now speaks only when installed
+>   slots all lack a dma-buf. Test `the_hello_line_claims_shared_memory_only_for_slots_without_a_dma_buf`.
+> - **The status line now carries `dmabuf_trips`, `carrier_refused`, `carrier_unchecked` and
+>   `formats_unasked`**, and `broker_lane.sh` grades a GPU-copy run on them (`BRK_COUNTER_GRADE`:
+>   PASS needs `carrier_refused=0 dmabuf_trips=0`; a status line without them is UNMEASURED, never
+>   zero). Rows 4 and 5's "RUN ON A BOX" had no counter evidence before this.
+>
+> Bite-mutations, each applied and restored 2026-10-04 (later): the uncount removed, the old
+> eviction order, the check cache bypassed, no fall-back to the next rung, a counter dropped from
+> the status line (each of the four), the old HELLO rule, a seq spent and a rung announced before
+> the check — each turns its test red.
+
 **STATUS: RUN ON A BOX — 2026-10-04 (box 54032077, runs `brkF1`/`brkF2`/`brkF3`, kf3 code
 `34696441`, broker `badf2d7` built on the box; `traces/v3_display/broker_20261004/`), except a DRI3
-refusal, which the NVIDIA X server never made.** Rung 0 carried every frame and each came back
-released (`brkF2`: `gpucopy=7262 releases=7262`). After E3's `kill -9` the relay's new connection asked
+refusal, which the NVIDIA X server never made.** The first frame(s) of each connection went LINEAR
+(dropped at the broker's format gate, then reclaimed on its `x=0`) or `F_SHM`; after that every
+frame was a block-linear GPU copy and came back released (`brkF2`: `sent=7263 gpucopy=7262
+releases=7262 reclaims=1`). (⊘ Corrected 2026-10-04, later: this said "Rung 0 carried every frame",
+which the counts do not show; `brkF1`'s second connection logged two LINEAR gate drops and an
+`F_SHM` line against an X11 dma-buf-tier broker that refuses `F_SHM` — the evidence `README.md`
+has it right.) After E3's `kill -9` the relay's new connection asked
 LINEAR and block-linear again (no "no" carried across connections). A DRI3 client
 (`scripts/bench/display/dri3_refusal.py`) had the NVIDIA DDX 580.159.04 import ten malformed
 descriptors of a real block-linear bo — wrong pitch, offset, kind, block height, a udmabuf under the
@@ -2919,7 +3047,7 @@ entry, fixed. Each behaviour, with its relay change and the test that turns red 
 
 | # | the broker (`badf2d7`) | the relay | test |
 |---|---|---|---|
-| 1 | sends unsolicited `EV_FORMAT x=0` whenever an ATTACH is dropped at its format gate — once per pair per connection, possibly a pair the relay never asked about (`nvkvm_broker.c:1735-1749`) | RECORDS it (it used to log "stale" and drop it); an unasked `x=1` is still never an upgrade. The verdict table grows 4 → 16 rows and evicts, in order, a question, a volunteered "no", and only then a "no" for a pair the relay sends | `an_unasked_no_is_recorded_and_its_pair_is_not_sent`, `volunteered_noes_never_push_out_a_no_for_a_pair_the_relay_sends` |
+| 1 | sends unsolicited `EV_FORMAT x=0` whenever an ATTACH is dropped at its format gate — once per pair per connection, possibly a pair the relay never asked about (`nvkvm_broker.c:1735-1749`) | RECORDS it (it used to log "stale" and drop it); an unasked `x=1` is still never an upgrade. The verdict table grows 4 → 16 rows and evicts, in order, a volunteered row (any verdict), one of the relay's own questions or yeses, and only then one of its own "no"s (⊘ as first written: "a question, a volunteered 'no', and only then a 'no' for a pair the relay sends" — which let volunteered "no"s push out the relay's yes, the correction above) | `an_unasked_no_is_recorded_and_its_pair_is_not_sent`, `volunteered_noes_never_push_out_a_no_for_a_pair_the_relay_sends` |
 | 2 | on X11 sends two `x=0` for one refusal — XR24 and AR24, the same modifier (`:781-821`) | both kept; the frames held under the refused pair come back once | `an_x11_refusal_names_both_alpha_twins_and_both_are_kept` |
 | 3 | forgets its refusals at detach, on both backends | carries none across a reconnect: verdicts and both acknowledgement detectors are connection state (`Conn`) | `no_refusal_or_back_off_outlives_its_connection` (an unasked no, the block-linear no, a detector back-off) |
 | 4 | accepts a dma-buf only when `/proc/self/fdinfo` proves it (`exp_name:`), and drops one it cannot prove with NO word on the wire (`:1675-1689`, `:2219-2231`) | the host dma-buf rungs (LINEAR, implicit) get their own acknowledgement detector (the GPU-copy detector, refactored into `Ack`): unacknowledged dma-buf commits back off to `F_SHM` for 5 s, doubling to 60 s, until a RELEASE acknowledges the class; the log names the cause | `unacknowledged_dma_buf_frames_back_off_to_shared_memory_and_retry`; `broker_loopback.rs` `a_broker_that_cannot_prove_a_dma_buf_gets_shared_memory` — the REAL broker in a mount namespace with a tmpfs over `/proc` logs `cannot read /proc/self/fdinfo`, the detector trips, `F_SHM` frames are released |
