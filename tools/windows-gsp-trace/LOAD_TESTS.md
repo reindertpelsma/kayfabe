@@ -148,7 +148,13 @@ and minimal GS probe
 `af315af9f07235aa9ba547a06723d88b3f168ede28c6ed5084b8af7ef21a1293`.
 These native images have TSAWARE clear, omit the compiler-only `.retplne`
 section, and mark the ordinary code/data sections nonpageable. Their target
-load/API results are pending.
+load/API results were then tested separately: the normal observer and MSVC
+user tools passed ordinary SCM installation, signing and load, all API tests
+(zero failures), service restart/status, and stop on the same Windows VM.
+Evidence is `msvc-smoke.stdout` in the controller runtime directory. The final
+service was left demand-start and stopped; no NVIDIA GPU was attached for this
+test. This establishes the MSVC binary's basic Windows operation, not GSP
+queue discovery or cross-GPU compatibility.
 
 ## Revised Linux linker defaults and limits
 
@@ -165,5 +171,5 @@ the revised minimal probe is
 `5233d314242240de6c32f891f69ef08e1bed860cf263b877431d3249cd5c8cc1`.
 The added nonpageable attributes mean these are not byte-identical to the
 successful combined diagnostic probe. Their runtime parity remains untested.
-Use the Microsoft-linker artifact for the next capture rehearsal and record
-its own load/API/unload results before claiming it works.
+Use the separately smoke-tested Microsoft-linker artifact for the next
+capture rehearsal.

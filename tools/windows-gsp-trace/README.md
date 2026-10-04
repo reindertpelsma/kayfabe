@@ -3,8 +3,10 @@
 **STATUS: RESEARCH, 2026-10-04.** A diagnostic observer loaded on Windows 11
 build 26100, passed the Windows API/negative-access tests, and unloaded cleanly
 in a nested VM without an NVIDIA GPU. MSVC and Linux builds pass compilation
-and static PE checks. The revised default binaries still need their own target
-smoke check. Real NVIDIA queue attachment and Windows GSP capture have **not yet
+and static PE checks. The MSVC normal observer and user tools also passed
+installation, API tests, restart/status and stop on that VM. Runtime parity of
+the revised Linux default binary remains untested. Real NVIDIA queue
+attachment and Windows GSP capture have **not yet
 been validated**; see [LOAD_TESTS.md](LOAD_TESTS.md) for exact tested hashes.
 
 The purpose is to collect actual request/reply bytes for controls such as
@@ -166,6 +168,14 @@ python3 tools/windows-gsp-trace/stage-qga.py bundle /tmp/gsp-stage.zip
 # Save the printed SHA256; copy this public build/source bundle to the rental.
 python3 stage-qga.py stage /root/gsp-stage.zip --sha256 PRINTED_SHA256
 ```
+
+To package a trusted downloaded MSVC CI artifact, add
+`--build-directory /path/to/extracted/artifact` to `bundle`. The packer verifies
+the executable hashes against `build-info.json`, includes that provenance and
+the build log, and keeps the build source revision distinct from the bundled
+scripts' revision. It reuses the pinned Microsoft signing tools in local
+`build/signing/` if the CI artifact has none. Never use binaries copied back
+from an untrusted rental as build inputs.
 
 The rental-side command defaults to `/var/lib/vast-windows/qga.sock` and the
 installed `/root/vast-windows/prepare/prepare.py` guest-agent helper. It requires

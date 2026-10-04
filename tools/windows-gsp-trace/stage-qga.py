@@ -27,22 +27,43 @@ def sha256(path):
         return digest.hexdigest()
 
 
-def bundle(output):
+def bundle(output, build_directory=None):
+    build = build_directory or HERE / 'build'
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=HERE, text=True).strip()
     tracked = subprocess.check_output(['git', 'ls-files', '-z', '.'], cwd=HERE).decode().split('\0')
-    files = [HERE / name for name in tracked if name]
-    files += [HERE / 'build' / name for name in ('gsptrace.sys', 'gsptrace.exe', 'windows_api_test.exe')]
-    files += sorted((HERE / 'build' / 'signing').glob('*'))
-    if not (HERE / 'build/signing/signtool.exe').is_file():
+    files = [(HERE / name, name) for name in tracked if name]
+    required = ('gsptrace.sys', 'gsptrace.exe', 'windows_api_test.exe')
+    files += [(build / name, f'build/{name}') for name in required]
+    metadata = None
+    if build_directory is not None and not (build / 'build-info.json').is_file():
+        raise RuntimeError('External build directory requires build-info.json provenance')
+    if (build / 'build-info.json').is_file():
+        metadata = json.loads((build / 'build-info.json').read_text(encoding='utf-8-sig'))
+        if metadata.get('completed') is not True or metadata.get('signing_performed') is not False:
+            raise RuntimeError('Build metadata must describe a completed unsigned build')
+        artifacts = {entry['name']: entry for entry in metadata['artifacts']}
+        for name in required:
+            entry = artifacts.get(name, {})
+            if entry.get('sha256') != sha256(build / name) or entry.get('bytes') != (build / name).stat().st_size:
+                raise RuntimeError(f'Build provenance mismatch: {name}')
+    for name in ('build-info.json', 'build.log', 'driver-pe.json'):
+        if (build / name).is_file():
+            files.append((build / name, f'build/{name}'))
+    signing = build / 'signing'
+    if not (signing / 'signtool.exe').is_file():
+        signing = HERE / 'build' / 'signing'
+    files += [(path, f'build/signing/{path.name}') for path in sorted(signing.glob('*'))]
+    if not (signing / 'signtool.exe').is_file():
         raise RuntimeError('Run build-linux.sh first; signing tools are required')
-    for path in files:
+    for path, _ in files:
         if not path.is_file() or path.is_symlink():
             raise RuntimeError(f'Not a regular build/source file: {path}')
     manifest = dict(schema='kayfabe-gsp-stage/1', source_revision=revision,
-                    files=[dict(path=str(p.relative_to(HERE)).replace('\\', '/'), sha256=sha256(p), bytes=p.stat().st_size) for p in files])
+                    build_source_revision=metadata.get('source_revision') if metadata else None,
+                    files=[dict(path=name.replace('\\', '/'), sha256=sha256(path), bytes=path.stat().st_size) for path, name in files])
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in files:
-            archive.write(path, str(path.relative_to(HERE)))
+        for path, name in files:
+            archive.write(path, name)
         archive.writestr('stage-manifest.json', json.dumps(manifest, indent=2) + '\n')
     print(json.dumps(dict(bundle=str(output), sha256=sha256(output), source_revision=revision, files=len(files))))
 
@@ -134,6 +155,7 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     pack = commands.add_parser('bundle', help='Run on the trusted build controller')
     pack.add_argument('output', type=Path)
+    pack.add_argument('--build-directory', type=Path, help='Trusted CI build directory; validates included build-info.json hashes')
     upload = commands.add_parser('stage', help='Run on Linux rental during the final coldboot hold')
     upload.add_argument('bundle', type=Path)
     upload.add_argument('--sha256', required=True)
@@ -142,7 +164,7 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == 'bundle':
-            bundle(args.output)
+            bundle(args.output, args.build_directory)
         else:
             if len(args.sha256) != 64 or any(c not in '0123456789abcdefABCDEF' for c in args.sha256):
                 raise ValueError('Expected SHA256 must contain 64 hexadecimal characters')
