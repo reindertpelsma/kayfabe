@@ -538,7 +538,7 @@ E3 to E9 and E12 to E14 bind `OK` rows. An `OPEN` or `LANE` row records the viol
 - **E1b leaves out non-exported `macro_rules!`**: rustdoc documents only exported macros.
 - **E13 and E14, mechanically**: an OK safe-trait row carries the check `sealed` or `no-reliance`; an OK static whose type carries an address fails.
 - **The first table: 441 rows, OK 0, OPEN 133, LANE 308** (the x86_64 inventory at `789dee9f`; the CI union over both targets is the authority). No row is OK yet: none has had its mutation run (§3.4 step 2). LANE rows are the files a lane edits (`perimeter.toml` `[exports.lanes]`).
-- **The cargo self-test has 27 cases**: EF1-EF17 as above, plus EF2b (a test that never names the item), a `pub(super)` item visible outside its file, a derived `Clone` as a row, a wrong mechanical kind (E2), an undated OPEN row (E10), a safe trait OK without `sealed` (E13), and an OK static of an address-carrying type (E14).
+- **The cargo self-test has 29 cases**: EF1-EF17 as above, plus EF2b (a test that never names the item), a `pub(super)` item visible outside its file, a derived `Clone` as a row, a wrong mechanical kind (E2), an undated OPEN row (E10), a safe trait OK without `sealed` (E13), an OK static of an address-carrying type (E14), and a `ui:` ref whose `.stderr` lacks its error code (E3e) with its control.
 
 ### 3.4 Initial content
 

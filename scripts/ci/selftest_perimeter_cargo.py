@@ -158,6 +158,18 @@ CASES = [
     ("E1_a_derived_clone_is_a_row", "/// c\n#[derive(Clone, Debug)]\npub struct C2;\n", "",
      [ROW_CHECKED, open_row("C2", kind="plain data")],
      ["add a row under `## crates/u/src/a_unsafe.rs`: | `<C2 as Clone>` | default | trait impl"], {}),
+    ("E3e_a_ui_ref_whose_stderr_lacks_its_error_code", "", "",
+     [ROW_CHECKED.replace("range=t:crates/u/src/a_unsafe.rs::refuses_out_of_range",
+                          "range=ui:crates/u/tests/ui/private.rs#E0603")],
+     ["E3e ", "lacks 'E0603'"],
+     {"files": {"crates/u/tests/ui/private.rs": "fn main() {}\n",
+                "crates/u/tests/ui/private.stderr": "error[E0425]: cannot find value\n"}}),
+    ("E3e_control_a_ui_ref_whose_stderr_names_its_code", "", "",
+     [ROW_CHECKED.replace("range=t:crates/u/src/a_unsafe.rs::refuses_out_of_range",
+                          "range=ui:crates/u/tests/ui/private.rs#E0603")],
+     ["PERIMETER_EXPORTS findings=0"],
+     {"files": {"crates/u/tests/ui/private.rs": "fn main() {}\n",
+                "crates/u/tests/ui/private.stderr": "error[E0603]: function `x` is private\n"}}),
     ("E2_a_wrong_mechanical_kind", "", "", [ROW_CHECKED.replace("| safe fn |", "| unsafe fn |")],
      ["E2 ", "kind 'unsafe fn' != generated 'safe fn'"], {}),
     ("E10_an_undated_open_row", "/// o\npub fn o() {}\n", "",
@@ -212,7 +224,7 @@ def main() -> int:
         tmp = Path(t)
         for name, extra, tests, rows, markers, over in CASES:
             rc, out = run_case(tmp, name, extra, tests, rows, over)
-            want_ok = name == "control"
+            want_ok = name == "control" or "_control_" in name
             ok = (rc == 0) == want_ok and all(m in out for m in markers)
             print(f"{'ok  ' if ok else 'FAIL'} {name}: rc={rc}"
                   + ("" if ok else f" missing={[m for m in markers if m not in out]}"))
