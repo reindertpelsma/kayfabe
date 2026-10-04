@@ -1,0 +1,13 @@
+── version=575.51.03  pristine=/root/ogkm-575.51.03  patch=rpctrace-575.51.03.patch
+── running driver 575.51.03 matches the source tree
+── re-deriving build tree /root/kf-unpriv-instrumented-build from /root/ogkm-575.51.03
+── installing recorder sources
+── applying rpctrace-575.51.03.patch
+patching file kernel-open/nvidia/nv-procfs.c
+patching file kernel-open/nvidia/nvidia-sources.Kbuild
+patching file src/nvidia/src/kernel/gpu/gsp/message_queue_cpu.c
+── hook placement verified: send@508 < encrypt@526 ; decrypt@794 < receive@860
+── building with -j8 for 6.8.0-59-generic (this takes a few minutes)
+9c7ce3fbfd979777a669280561f2dd5a5ab9e61a59f6cf5009f919145862ca33  /root/kf-unpriv-instrumented/nvidia.ko
+── OK: /root/kf-unpriv-instrumented/nvidia.ko  version=575.51.03 vermagic=6.8.0-59-generic
+── next: sudo /root/rpctrace/capture.sh

@@ -1,0 +1,5 @@
+OPEN_TEST smi rc=0
+OPEN_TEST cuda rc=0
+OPEN_TEST vector rc=0
+OPEN_TEST queries rc=0
+CAPTURE_COMPLETE

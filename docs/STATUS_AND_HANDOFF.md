@@ -20,6 +20,15 @@ valuable evidence/source is backed up. See the [Windows lane handoff](handoff/20
 for exact revisions, source interpretations and remaining work. This supersedes
 older Windows-parking/runtime notes, not the verified candidate-2 product state.
 
+**Follow-up:** the bounded native Linux privilege experiment confirms 48 of
+those Windows control IDs as direct ordinary-user GSP sends and eight as
+internal sends during ordinary-user ioctls (55 distinct). The saved Linux
+guest baseline refuses 35/68 previously Linux-observed IDs without preventing
+initialization; feature effects remain separately classified. Reuse v3's local
+ZBC and twin-satisfied golden-context policy; passthrough UMD GPU methods are
+not an emulation backlog. Details and exact evidence links are in the handoff
+above. These are research results, not a new Windows success or product merge.
+
 ### 0.0 ★ RESUME HERE — 2026-10-04 (supersedes every older entry in §0 where they differ)
 
 **Current verified integration (2026-10-04, candidate 2):**

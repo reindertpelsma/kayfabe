@@ -1,0 +1,18 @@
+POSTURE pid=59463 uid=65534 euid=65534 suid=65534 gid=65534 egid=65534 sgid=65534
+CapInh:	0000000000000000
+CapPrm:	0000000000000000
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+CapAmb:	0000000000000000
+NoNewPrivs:	1
+POSTURE_PASS exec
+== stage1 cuInit BEGIN
+== stage1 cuInit END
+== stage2 cuDeviceGetCount BEGIN
+== stage2 cuDeviceGetCount END
+== stage3 cuDeviceGet BEGIN
+== stage3 cuDeviceGet END
+== stage4 cuCtxCreate BEGIN
+== stage4 cuCtxCreate END
+== stage5 cuCtxDestroy BEGIN
+== stage5 cuCtxDestroy END

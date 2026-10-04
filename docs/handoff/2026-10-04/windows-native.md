@@ -1,13 +1,52 @@
 # Native Windows installer and GSP recorder
 
-**STATUS: RESEARCH, 2026-10-04 18:37 UTC. Offline command audit complete; no new
-runtime capture or Windows-through-Kayfabe success. Native Windows cutover and recorder API
+**STATUS: RESEARCH, 2026-10-04. Native Linux ordinary-user capture and Windows
+source-policy/refusal audits complete; no Windows-through-Kayfabe success. Native Windows cutover and recorder API
 tests passed. NVIDIA 580.88 works on both GPUs. RTX4070 GSP firmware 580.65.05
 produced 4,535 validated records, but no target query pair yet.** The owner requested this lane after the candidate
 2 handoff. It does not change the product merge requirements or claim a Windows
 guest works through Kayfabe.
 
-## Source / OS comparison update, 2026-10-04
+## Ordinary-user proof and scope corrections, 2026-10-04
+
+The owner requested positive confirmation of which observed RPCs can originate
+from ordinary-user ioctls. Separate direct user control permission from internal
+RPCs caused by an unprivileged allocation or workload. A NON_PRIVILEGED metadata
+flag or an earlier root-run trace alone is not an observed nonroot GSP result.
+
+The [new evidence and per-ID table](../../../tools/windows-gsp-trace/evidence/2026-10-04-ga106-unprivileged-575.51.03/README.md)
+retains 3,781 native open-575.51.03 GSP records on GA106. Credential/send/ioctl
+correlation proves 48 of the 129 Windows IDs can reach GSP through matching
+ordinary-user controls, and eight through internal work during ordinary-user
+ioctls (55 unique combined). The guard checks UID/GID 65534, no groups, all
+capability sets zero, NoNewPrivs=1. Closed 575 also accepts 37 IDs at its direct
+user-ioctl boundary, but no closed GSP capture exists. Do not conflate these
+boundaries or turn reachability into an unreviewed forwarding allowlist.
+
+Temporary rental **54195016**, label `kf-unpriv-rpc-20261004`, was created for
+this test. Text evidence is now saved on the controller and in this branch;
+its retirement receipt is kept with that evidence. Other lane 54049598 and
+the Windows rental 54159260 remain separate; do not destroy them for this test.
+
+The [scope and existing-policy correction](../../../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/command-catalogue/v3-context-policy.md)
+applies the owner's ZBC/golden-context ruling: local ZBC already exists and
+promotion is satisfied by the real host twin. Eleven direct Windows promotes
+use descriptor arrays; four deferred promotes use a legacy GR VA/size form
+that the current video-only fallback rejects. Do not implement a golden-image
+generator or passthrough UMD method interpreter. Deferred resource/protocol
+handling must respect the actual channel route, not infer it from missing
+allocation parameters. Source-understood behavior takes priority over gathering
+more traces; any compatible OGKM release can supply the implementation contract.
+
+The [refusal-consequence table](../../../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/command-catalogue/linux-refusals/README.md)
+checks the original 68 Linux-observed IDs: 35 were actually refused with 0x56
+in the saved b98bdbec/580.65.06 Linux boot, 15 served, 18 native-only in those
+samples. The refused boot reaches SMI_RC=0 and console handoff; its display
+probe build failed, so do not call it a complete display pass. The separate
+saved CUDA ladder on that build passes. This is not proof of harmlessness for
+every feature or Windows. No new failure injection or product change was made.
+
+## Earlier source / OS comparison update, 2026-10-04
 
 The [complete catalogue](../../../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/command-catalogue/README.md)
 has descriptions/source links for all 129 direct controls, both deferred IDs,
@@ -38,8 +77,9 @@ all-version OGKM rejection or proprietary-CPU-driver-only claim is established.
 
 The borrowed PC timed out; the owner says it was probably handed over. Treat it
 as unavailable and do not retry/reboot it as part of this offline work. Unique
-capture/code is already saved. No rental was started, no product behavior
-changed, and no new Windows-through-Kayfabe success is claimed. The earlier
+capture/code is already saved. That earlier offline comparison started no
+rental; the later Linux test above did. No product behavior changed and no
+Windows-through-Kayfabe success is claimed. The earlier
 runtime state below is historical; do not interpret it as current reachability.
 
 ## Command audit, 18:37 UTC

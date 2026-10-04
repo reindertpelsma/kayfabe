@@ -39,6 +39,14 @@ published names; only 17 have allocation decoders in this branch.
 
 ## Concrete compatibility work found
 
+**Scope correction, 2026-10-04:** these are GSP management observations, not a
+backlog of UMD GPU methods to emulate. v3 already satisfies promotion through
+the host twin and implements ZBC locally. See the [context-policy review](../command-catalogue/v3-context-policy.md)
+for the observed legacy GR/deferred forms; physical golden-buffer generation
+is not required by that policy. The [Linux refusal audit](../command-catalogue/linux-refusals/README.md)
+also shows 35 shared IDs refused without preventing initialization in the
+recorded baseline. Native success alone does not make a missing handler fatal.
+
 1. **Deferred graphics context operations.** The driver successfully allocates
    `NV50_DEFERRED_API_CLASS` (0x5080) twelve times and submits eight
    `NV5080_CTRL_CMD_DEFERRED_API` controls (0x50800101). Four contain

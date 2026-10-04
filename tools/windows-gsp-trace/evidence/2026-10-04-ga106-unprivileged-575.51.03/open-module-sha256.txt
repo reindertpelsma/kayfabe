@@ -1,0 +1,1 @@
+6dc5d9b764e2353d2f6692f43ae1a669002456ffa4a5be7f17fb4eeb3154d1dc  /root/ogkm-575.51.03/kernel-open/nvidia.ko

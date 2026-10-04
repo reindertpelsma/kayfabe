@@ -1,0 +1,772 @@
+{
+  "capture_text_sha256": "9d75e47b8ec5dd837dc64e14847779d62a16f14d92169ede8f9b62681b93de29",
+  "contexts": [
+    {
+      "channel_client": "0xc1d00025",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 0,
+          "initialize": 1,
+          "nonmapped": 0,
+          "phys": "0x2eaad6000",
+          "phys_attr": "0x4",
+          "size": 1167360,
+          "va": "0x2012a000"
+        },
+        {
+          "buffer_id": 2,
+          "initialize": 1,
+          "nonmapped": 0,
+          "phys": "0x2ed57b000",
+          "phys_attr": "0x4",
+          "size": 20480,
+          "va": "0x20247000"
+        },
+        {
+          "buffer_id": 3,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x2024c000"
+        },
+        {
+          "buffer_id": 4,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x202d0000"
+        },
+        {
+          "buffer_id": 5,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x24000000"
+        },
+        {
+          "buffer_id": 6,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x202f0000"
+        },
+        {
+          "buffer_id": 9,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x2011a000"
+        },
+        {
+          "buffer_id": 11,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x20250000"
+        }
+      ],
+      "entry_count": 8,
+      "line": 386,
+      "object": "0xff04000c",
+      "outer": "0x2080012b",
+      "queue_sequence": 2905,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d00028",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 0,
+          "initialize": 1,
+          "nonmapped": 0,
+          "phys": "0x2ea9b9000",
+          "phys_attr": "0x4",
+          "size": 1167360,
+          "va": "0x12011f000"
+        },
+        {
+          "buffer_id": 2,
+          "initialize": 1,
+          "nonmapped": 0,
+          "phys": "0x2ed563000",
+          "phys_attr": "0x4",
+          "size": 20480,
+          "va": "0x12023c000"
+        },
+        {
+          "buffer_id": 9,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x12010f000"
+        },
+        {
+          "buffer_id": 11,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x120250000"
+        }
+      ],
+      "entry_count": 4,
+      "line": 481,
+      "object": "0xff04000d",
+      "outer": "0x2080012b",
+      "queue_sequence": 2946,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d00028",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 3,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x120241000"
+        },
+        {
+          "buffer_id": 4,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1202d0000"
+        },
+        {
+          "buffer_id": 5,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x124000000"
+        },
+        {
+          "buffer_id": 6,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1202f0000"
+        }
+      ],
+      "entry_count": 4,
+      "line": 485,
+      "object": "0xff04000d",
+      "outer": "0x2080012b",
+      "queue_sequence": 2949,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d0002b",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 2,
+          "initialize": 1,
+          "nonmapped": 0,
+          "phys": "0x2ed54d000",
+          "phys_attr": "0x4",
+          "size": 20480,
+          "va": "0x1200df000"
+        },
+        {
+          "buffer_id": 9,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1200cf000"
+        },
+        {
+          "buffer_id": 11,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1200f0000"
+        }
+      ],
+      "entry_count": 3,
+      "line": 697,
+      "object": "0xff04000e",
+      "outer": "0x2080012b",
+      "queue_sequence": 3055,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d0002b",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 3,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1200e4000"
+        },
+        {
+          "buffer_id": 4,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x120170000"
+        },
+        {
+          "buffer_id": 5,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x124000000"
+        },
+        {
+          "buffer_id": 6,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x120190000"
+        }
+      ],
+      "entry_count": 4,
+      "line": 705,
+      "object": "0xff04000e",
+      "outer": "0x2080012b",
+      "queue_sequence": 3058,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d0002b",
+      "chid": 16,
+      "client": "0xc1d00029",
+      "command": "0x2080012d",
+      "engine": 1,
+      "line": 747,
+      "object": "0xff0e0000",
+      "outer": "0x50800101",
+      "phys_attr": "0x0",
+      "physical_address": "0x360a000",
+      "queue_sequence": 3079,
+      "size": 901888,
+      "virtual_memory_handle": "0x0",
+      "wrapper": {
+        "client_va": "0x0",
+        "device_va": "0x0",
+        "flags": "0x0",
+        "handle": "0x40000002"
+      }
+    },
+    {
+      "channel_client": "0xc1d0002b",
+      "chid": 16,
+      "client": "0xc1d00029",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [],
+      "entry_count": 0,
+      "line": 748,
+      "object": "0xff0e0000",
+      "outer": "0x50800101",
+      "queue_sequence": 3080,
+      "size": 901888,
+      "virtual_address": "0x11000",
+      "virtual_memory_handle": "0x0",
+      "wrapper": {
+        "client_va": "0x0",
+        "device_va": "0x0",
+        "flags": "0x0",
+        "handle": "0x40000003"
+      }
+    },
+    {
+      "channel_client": "0xc1d0002f",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 2,
+          "initialize": 1,
+          "nonmapped": 0,
+          "phys": "0x2ed540000",
+          "phys_attr": "0x4",
+          "size": 20480,
+          "va": "0x12282b000"
+        },
+        {
+          "buffer_id": 9,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x12281b000"
+        },
+        {
+          "buffer_id": 11,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x122830000"
+        }
+      ],
+      "entry_count": 3,
+      "line": 849,
+      "object": "0xff040010",
+      "outer": "0x2080012b",
+      "queue_sequence": 3136,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d0002f",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 3,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1200ed000"
+        },
+        {
+          "buffer_id": 4,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1228b0000"
+        },
+        {
+          "buffer_id": 5,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x12c000000"
+        },
+        {
+          "buffer_id": 6,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1228d0000"
+        }
+      ],
+      "entry_count": 4,
+      "line": 852,
+      "object": "0xff040010",
+      "outer": "0x2080012b",
+      "queue_sequence": 3139,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d0002f",
+      "chid": 18,
+      "client": "0xc1d00029",
+      "command": "0x2080012d",
+      "engine": 1,
+      "line": 860,
+      "object": "0xff0e0000",
+      "outer": "0x50800101",
+      "phys_attr": "0x0",
+      "physical_address": "0x5a7b000",
+      "queue_sequence": 3147,
+      "size": 901888,
+      "virtual_memory_handle": "0x0",
+      "wrapper": {
+        "client_va": "0x0",
+        "device_va": "0x0",
+        "flags": "0x0",
+        "handle": "0x40000004"
+      }
+    },
+    {
+      "channel_client": "0xc1d0002f",
+      "chid": 18,
+      "client": "0xc1d00029",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [],
+      "entry_count": 0,
+      "line": 861,
+      "object": "0xff0e0000",
+      "outer": "0x50800101",
+      "queue_sequence": 3148,
+      "size": 901888,
+      "virtual_address": "0xee000",
+      "virtual_memory_handle": "0x0",
+      "wrapper": {
+        "client_va": "0x0",
+        "device_va": "0x0",
+        "flags": "0x0",
+        "handle": "0x40000005"
+      }
+    },
+    {
+      "channel_client": "0xc1d00031",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 2,
+          "initialize": 1,
+          "nonmapped": 0,
+          "phys": "0x2ed538000",
+          "phys_attr": "0x4",
+          "size": 20480,
+          "va": "0x122970000"
+        },
+        {
+          "buffer_id": 9,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x122960000"
+        },
+        {
+          "buffer_id": 11,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x122980000"
+        }
+      ],
+      "entry_count": 3,
+      "line": 1120,
+      "object": "0xff040012",
+      "outer": "0x2080012b",
+      "queue_sequence": 3258,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d00031",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 3,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x122975000"
+        },
+        {
+          "buffer_id": 4,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x122a00000"
+        },
+        {
+          "buffer_id": 5,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x130000000"
+        },
+        {
+          "buffer_id": 6,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x122a20000"
+        }
+      ],
+      "entry_count": 4,
+      "line": 1124,
+      "object": "0xff040012",
+      "outer": "0x2080012b",
+      "queue_sequence": 3262,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d00031",
+      "chid": 20,
+      "client": "0xc1d00029",
+      "command": "0x2080012d",
+      "engine": 1,
+      "line": 1137,
+      "object": "0xff0e0000",
+      "outer": "0x50800101",
+      "phys_attr": "0x0",
+      "physical_address": "0x64a0000",
+      "queue_sequence": 3274,
+      "size": 901888,
+      "virtual_memory_handle": "0x0",
+      "wrapper": {
+        "client_va": "0x0",
+        "device_va": "0x0",
+        "flags": "0x0",
+        "handle": "0x40000006"
+      }
+    },
+    {
+      "channel_client": "0xc1d00031",
+      "chid": 20,
+      "client": "0xc1d00029",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [],
+      "entry_count": 0,
+      "line": 1138,
+      "object": "0xff0e0000",
+      "outer": "0x50800101",
+      "queue_sequence": 3275,
+      "size": 901888,
+      "virtual_address": "0x150a0000",
+      "virtual_memory_handle": "0x0",
+      "wrapper": {
+        "client_va": "0x0",
+        "device_va": "0x0",
+        "flags": "0x0",
+        "handle": "0x40000007"
+      }
+    },
+    {
+      "channel_client": "0xc1d00036",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 2,
+          "initialize": 1,
+          "nonmapped": 0,
+          "phys": "0x2ed523000",
+          "phys_attr": "0x4",
+          "size": 20480,
+          "va": "0x1200df000"
+        },
+        {
+          "buffer_id": 9,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1200cf000"
+        },
+        {
+          "buffer_id": 11,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1200f0000"
+        }
+      ],
+      "entry_count": 3,
+      "line": 1506,
+      "object": "0xff040014",
+      "outer": "0x2080012b",
+      "queue_sequence": 3458,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d00036",
+      "chid": 0,
+      "client": "0x0",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [
+        {
+          "buffer_id": 3,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x1200e4000"
+        },
+        {
+          "buffer_id": 4,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x120170000"
+        },
+        {
+          "buffer_id": 5,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x124000000"
+        },
+        {
+          "buffer_id": 6,
+          "initialize": 0,
+          "nonmapped": 0,
+          "phys": "0x0",
+          "phys_attr": "0x0",
+          "size": 0,
+          "va": "0x120190000"
+        }
+      ],
+      "entry_count": 4,
+      "line": 1513,
+      "object": "0xff040014",
+      "outer": "0x2080012b",
+      "queue_sequence": 3461,
+      "size": 0,
+      "virtual_address": "0x0",
+      "virtual_memory_handle": "0x0"
+    },
+    {
+      "channel_client": "0xc1d00036",
+      "chid": 22,
+      "client": "0xc1d00034",
+      "command": "0x2080012d",
+      "engine": 1,
+      "line": 1529,
+      "object": "0xff0e0000",
+      "outer": "0x50800101",
+      "phys_attr": "0x0",
+      "physical_address": "0x690b000",
+      "queue_sequence": 3469,
+      "size": 901888,
+      "virtual_memory_handle": "0x0",
+      "wrapper": {
+        "client_va": "0x0",
+        "device_va": "0x0",
+        "flags": "0x0",
+        "handle": "0x40000008"
+      }
+    },
+    {
+      "channel_client": "0xc1d00036",
+      "chid": 22,
+      "client": "0xc1d00034",
+      "command": "0x2080012b",
+      "engine": 1,
+      "entries": [],
+      "entry_count": 0,
+      "line": 1530,
+      "object": "0xff0e0000",
+      "outer": "0x50800101",
+      "queue_sequence": 3470,
+      "size": 901888,
+      "virtual_address": "0x11000",
+      "virtual_memory_handle": "0x0",
+      "wrapper": {
+        "client_va": "0x0",
+        "device_va": "0x0",
+        "flags": "0x0",
+        "handle": "0x40000009"
+      }
+    }
+  ],
+  "schema": 1,
+  "source_abi": "OGKM 580.65.06 ctrl2080gpu.h and ctrl5080.h",
+  "summary": {
+    "deferred_initializes": 4,
+    "deferred_promotes": 4,
+    "direct_promotes": 11
+  },
+  "zbc_allocations": {
+    "0": 6,
+    "1": 6
+  },
+  "zbc_control_records": {}
+}

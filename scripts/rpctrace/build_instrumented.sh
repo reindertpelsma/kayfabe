@@ -49,12 +49,12 @@ JOBS="${JOBS:-$(nproc)}"
 # wordings this must survive, both seen on real benches:
 #   580: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04 ...
 #   575: NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 ...
-# So anchor on "Kernel Module", skip anything that is not a digit, and take the
-# first dotted number. Emits nothing when it cannot parse — callers check.
+# Match a whitespace-delimited dotted version after "Kernel Module". The
+# architecture word x86_64 contains digits and is not a driver version. Emits nothing when it cannot parse — callers check.
 #
 detect_running_version() {
   [ -r /proc/driver/nvidia/version ] || return 0
-  sed -n 's/.*Kernel Module[^0-9]*\([0-9][0-9.]*[0-9]\).*/\1/p' /proc/driver/nvidia/version | head -1
+  sed -n 's/^NVRM version:.*Kernel Module.*[[:space:]]\([0-9][0-9]*\.[0-9][0-9.]*[0-9]\)[[:space:]].*/\1/p' /proc/driver/nvidia/version | head -1
 }
 
 WANT_VERSION="${WANT_VERSION:-}"

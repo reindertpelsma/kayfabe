@@ -1,0 +1,28 @@
+/* SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+ * Syscall correlation only. GSP sends/credentials come from credential-stamp.patch.
+ * Linux bpftrace 0.14 does not need module-function probes for these tracepoints.
+ */
+tracepoint:syscalls:sys_enter_ioctl
+/uid == 65534/
+{
+    @seq[tid] = @seq[tid] + 1;
+    @active[tid] = 1;
+    @nr[tid] = args->cmd & 255;
+    @req[tid] = args->cmd;
+    @arg[tid] = args->arg;
+    @ctl[tid] = 0;
+    if ((args->cmd & 65535) == 0x462a) {
+        @ctl[tid] = *(uint32 *)uptr(args->arg + 8);
+    }
+    printf("IOCTL_ENTER ns=%llu pid=%d tid=%d uid=%d seq=%llu req=0x%llx cmd=0x%x\n", nsecs, pid, tid, uid, @seq[tid], args->cmd, @ctl[tid]);
+}
+tracepoint:syscalls:sys_exit_ioctl
+/uid == 65534 && @active[tid]/
+{
+    $st = (uint32)0xffffffff;
+    if ((@req[tid] & 65535) == 0x462a) { $st = *(uint32 *)uptr(@arg[tid] + 28); }
+    printf("IOCTL_EXIT ns=%llu pid=%d tid=%d uid=%d seq=%llu rc=%lld status=0x%x\n", nsecs, pid, tid, uid, @seq[tid], args->ret, $st);
+    delete(@active[tid]); delete(@nr[tid]); delete(@req[tid]); delete(@arg[tid]); delete(@ctl[tid]);
+}
+
+interval:s:1 { printf("TRACE_HEARTBEAT ns=%llu\n", nsecs); }

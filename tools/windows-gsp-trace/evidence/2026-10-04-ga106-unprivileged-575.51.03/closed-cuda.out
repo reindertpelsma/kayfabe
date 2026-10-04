@@ -1,0 +1,6 @@
+cuInit(0) -> 0
+cuDeviceGetCount -> 0, count=1
+cuDeviceGet(0) -> 0, dev=0
+cuCtxCreate(0, 0) -> 0
+cuCtxDestroy -> 0
+PROBE_RC=0

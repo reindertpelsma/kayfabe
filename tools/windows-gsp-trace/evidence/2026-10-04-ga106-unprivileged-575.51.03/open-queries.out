@@ -1,0 +1,12 @@
+ALLOC class=0x41 rc=0 status=0x0 handle=0xc1d00039
+ALLOC class=0x80 rc=0 status=0x0 handle=0xcafe0001
+ALLOC class=0x2080 rc=0 status=0x0 handle=0xcafe0002
+QUERY cmd=0x00800294 size=4 rc=0 status=0x0
+QUERY cmd=0x0080170e size=12 rc=0 status=0x0
+QUERY cmd=0x20801347 size=20 rc=0 status=0x56
+QUERY cmd=0x2080121f size=40 rc=0 status=0x1b
+QUERY cmd=0x20800a38 size=24 rc=0 status=0x56
+ALLOC class=0x73 rc=0 status=0x0 handle=0xcafe0003
+QUERY cmd=0x00730102 size=12 rc=0 status=0x0
+QUERY cmd=0x0073028b size=56 rc=0 status=0x1b
+NEGATIVE_CONTROLS kernel=0x1b internal=0x56 admin=0x1b

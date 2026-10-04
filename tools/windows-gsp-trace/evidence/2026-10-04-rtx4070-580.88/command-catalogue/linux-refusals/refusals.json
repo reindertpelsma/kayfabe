@@ -1,0 +1,1825 @@
+{
+  "controls": [
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Return the number of display heads for a subdevice; flags select the client's usable heads versus all heads. Input: subdevice and flags. Output: numHeads.",
+      "guest_evidence": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1028,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1114,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1743,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 4
+      },
+      "id": "0x00730102",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Detect connected displays using the requested detection flags (including cached/DDC paths). Input/output: display mask; also subdevice and retry time. This is connector discovery, not a GPU work submission.",
+      "guest_evidence": {
+        "count": 5,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1902,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1929,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1948,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 5
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 5
+      },
+      "id": "0x00730108",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Return the active display ID for a selected subdevice/head, with flags controlling client filtering.",
+      "guest_evidence": {
+        "count": 16,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1030,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1032,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1034,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 16
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 16
+      },
+      "id": "0x0073010c",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "VRR notification: TellRMAboutVrrHead logs a warning and continues (OGKM 580.65.06 nvkms-vrr.c:418-423). VRR correctness was not tested.",
+      "description": "Add or remove a display from VRR display information using subdevice, display ID and an addition/removal boolean. This updates display state rather than querying a generic capability mask.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2080,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x0073012c",
+      "refusal_ledger": [
+        {
+          "line": 2083,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Query connector metadata for a display: DDC partners, connector count and per-connector index/type/location, plus platform information. Inputs select subdevice/display and query flags.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1753,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 1
+      },
+      "id": "0x00730250",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Query output-resource information for a display: resource index/type, protocol, dithering/location and connection/boot-state metadata. It describes the display routing hardware.",
+      "guest_evidence": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1003,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1704,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1749,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 4
+      },
+      "id": "0x0073028b",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Notify RM of a display transition using new-device mask, properties and start/end indication, allowing display changes to be coordinated.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2056,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2084,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 2
+      },
+      "id": "0x007302a4",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Query digital flat-panel information and capability flags for a display, including supported UHBR modes.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1755,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 1
+      },
+      "id": "0x00731140",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Query DisplayPort dongle capability/attachment/type flags and maximum TMDS clock for a selected digital display.",
+      "guest_evidence": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1772,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1800,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1944,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 3
+      },
+      "id": "0x00731142",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "ELD audio capabilities: nvkms-hdmi.c:1147-1168 logs the failure and continues audio-power cleanup. Audio setup may be lost; not a tested audio pass.",
+      "description": "Supply ELD audio capability bytes, buffer length and audio/control metadata for a display receiver. This configures display audio; it is not a CUDA channel command.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2076,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x00731144",
+      "refusal_ledger": [
+        {
+          "line": 2079,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Return device brand capability bits (for example Quadro/NVS/Titan categories), not the device's numeric chip identity.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1016,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2098,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x00800294",
+      "refusal_ledger": [
+        {
+          "line": 1019,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Selector-dependent: two served requests and one refusal. Log names UnmeasuredForwardedIndex 35. Other selectors, including Windows requests, need separate treatment.",
+      "description": "Query GPU information through a count and fixed array of index/data pairs. Each index has its own semantics; matching this outer layout does not imply every Windows index is supported.",
+      "guest_evidence": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1014,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2096,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2128,
+            "size": null,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x0": 2,
+          "0x56": 1
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 2,
+        "0x56": 1
+      },
+      "id": "0x20800102",
+      "refusal_ledger": [
+        {
+          "line": 2130,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Golden-image kernel channel in this boot has no twin. Prior v3 refusal audit documents lazy-context fallback for NOT_SUPPORTED; this does not justify refusing user-channel promotion.",
+      "description": "Promote/bind supplied engine-context resources for a selected client/channel using context-buffer descriptors, flags and routing information. This changes context state; it is also nested in four deferred requests here.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 916,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1621,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x2080012b",
+      "refusal_ledger": [
+        {
+          "line": 919,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Query per-unit ECC state: support/enabled/scrub status, correctable and uncorrectable counters, plus aggregate fatal-poison/error indications. Flags and GR routing identify the requested context.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2341,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x2080012f",
+      "refusal_ledger": [
+        {
+          "line": 2344,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read the version of a selected InfoROM object. Input is the object selector; output is its version data. A missing board object can legitimately return OBJECT_NOT_FOUND.",
+      "guest_evidence": {
+        "count": 10,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1038,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1046,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1049,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 10
+        }
+      },
+      "guest_trace_results": {
+        "none": 10
+      },
+      "id": "0x2080014b",
+      "refusal_ledger": [
+        {
+          "line": 1041,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read the InfoROM image version string. This describes board nonvolatile metadata rather than driver or GSP firmware version.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2147,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20800156",
+      "refusal_ledger": [
+        {
+          "line": 2150,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Query whether InfoROM ECC support exists. No parameter block; the return status carries the answer (including NOT_SUPPORTED).",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1042,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2154,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x20800157",
+      "refusal_ledger": [
+        {
+          "line": 1045,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read chip identity details, including PCI device ID, chip SKU and VBIOS chip revision fields.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2136,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x208001a4",
+      "refusal_ledger": [
+        {
+          "line": 2139,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "FECS tracing: fecs_event_list.c:1527-1535 returns from tracing setup on failure. The tracing feature is affected; this boot continues.",
+      "description": "Read whether FECS context-switch hardware tracing is enabled for the selected GR route. The boolean is an output; this is GET, not the neighboring SET operation.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1216,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20800a38",
+      "refusal_ledger": [
+        {
+          "line": 1219,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Shared-data polling: gpu_user_shared_data.c:369-378 propagates the failure and does not update the requested polling mask. This is not a successful no-op; this boot still initializes.",
+      "description": "Set polling of selected RM user-shared-data fields, using a data mask and requested polling interval in milliseconds. It changes telemetry update policy.",
+      "guest_evidence": {
+        "count": 9,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 600,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1067,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1075,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 9
+        }
+      },
+      "guest_trace_results": {
+        "none": 9
+      },
+      "id": "0x20800aff",
+      "refusal_ledger": [
+        {
+          "line": 603,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Bind ZCULL context-switch storage to a client/channel using its GPU virtual address and ZCULL mode.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x20801208",
+      "refusal_ledger": []
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Query framebuffer/memory information via a count and index/data array. Different indices request different facts; the original Windows run exposed an unsupported index despite the known outer command.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x20801303",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read offlined memory pages and associated source/status information. This reports memory retirement, not the ordinary GPU page-table mappings of an application.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2349,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20801322",
+      "refusal_ledger": [
+        {
+          "line": 2352,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read remapped memory-row records and pending/failure flags. These are board reliability/remapping records, not a virtual-memory map operation.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2353,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20801344",
+      "refusal_ledger": [
+        {
+          "line": 2356,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Query InfoROM support/state for DRAM encryption. The returned enum distinguishes supported configurations and absent support; NOT_SUPPORTED is a legitimate result on some boards.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1058,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2169,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x20801357",
+      "refusal_ledger": [
+        {
+          "line": 1061,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read selected PCIe error/event counters, selected by counter mask. Returned telemetry must reflect the applicable link and hardware.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2193,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2197,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x20801813",
+      "refusal_ledger": [
+        {
+          "line": 2196,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read selected PCIe utilization counters, such as transmitted/received traffic and link-state residency, through a selection mask and returned counter fields.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2200,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2204,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x20801819",
+      "refusal_ledger": [
+        {
+          "line": 2203,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Query bus information via a count and index/data array. Index-specific meaning matters; the earlier Windows failure included an unsupported index in this otherwise known command.",
+      "guest_evidence": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2187,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2189,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2191,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 3
+      },
+      "id": "0x20801823",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Query PCIe requester atomic-operation capabilities for a selected capability type and, where relevant, peer PCI address. Returns a capability bitmask.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2207,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20801829",
+      "refusal_ledger": [
+        {
+          "line": 2210,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read PCIe completer atomic-operation capability bits.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2211,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20801830",
+      "refusal_ledger": [
+        {
+          "line": 2214,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Return the required copy-engine fault-method-buffer size in bytes, used when allocating channel fault-handling resources.",
+      "guest_evidence": {
+        "count": 10,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 594,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 783,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 847,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 10
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 10
+      },
+      "id": "0x20802a08",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Query NVLink platform-placement metadata: GUIDs and rack/slot/node/compute placement. This is topology information, not an NVLink transfer submission.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2143,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20803083",
+      "refusal_ledger": [
+        {
+          "line": 2146,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Read client-visible ECC counters for supported memory/hardware units. Which counters are meaningful depends on the device's ECC capabilities.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x20803400",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read volatile SRAM/DRAM error counts, including SRAM parity/SECDED and DRAM correctable/uncorrectable totals. These are telemetry since the relevant reset interval.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2337,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20803401",
+      "refusal_ledger": [
+        {
+          "line": 2340,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. The public meaning does not prove the userspace caller ignores failure.",
+      "description": "Read whether TPC or channel repair is pending, as two boolean status fields.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2345,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20803404",
+      "refusal_ledger": [
+        {
+          "line": 2348,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Public semantic definition unresolved. Kayfabe has an empirical identity-reply rule for a 332-byte request from Linux evidence; an unchanged reply does not establish that the native call has no side effects. [Kayfabe empirical evidence](https://github.com/reindertpelsma/kayfabe/blob/c50fad9ac485f53d45d4ea77a21cb7206267c65a/crates/kf-abi/src/gsslegacy.rs).",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x20808159",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2365,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x2080852a",
+      "refusal_ledger": [
+        {
+          "line": 2368,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x2080852c",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1063,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2216,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x2080852e",
+      "refusal_ledger": [
+        {
+          "line": 1066,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x2080852f",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2374,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20808536",
+      "refusal_ledger": [
+        {
+          "line": 2377,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x2080853a",
+      "refusal_ledger": []
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x20808542",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 18,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2231,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2236,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2240,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 18
+        }
+      },
+      "guest_trace_results": {
+        "none": 18
+      },
+      "id": "0x20808546",
+      "refusal_ledger": [
+        {
+          "line": 2234,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Public semantic definition unresolved. Kayfabe returns a captured 8-byte pair (0x03fc007f, 0); the Windows replies agree in this capture. A matching constant is not a cross-die semantic specification. [Kayfabe empirical evidence](https://github.com/reindertpelsma/kayfabe/blob/c50fad9ac485f53d45d4ea77a21cb7206267c65a/crates/kf-abi/src/cudartinit.rs).",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x20809001",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2400,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2405,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2409,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 4
+        }
+      },
+      "guest_trace_results": {
+        "none": 4
+      },
+      "id": "0x20809004",
+      "refusal_ledger": [
+        {
+          "line": 2403,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x20809019",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2300,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x20809038",
+      "refusal_ledger": [
+        {
+          "line": 2303,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Partially characterized empirical maximum-clock query (532 bytes), without a recovered public structure. Windows selectors differ from the existing Linux-derived input gate, so its cached authored answer cannot be assumed valid. [Kayfabe empirical evidence](https://github.com/reindertpelsma/kayfabe/blob/c50fad9ac485f53d45d4ea77a21cb7206267c65a/crates/kf-abi/src/gssreplay.rs).",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x2080a026",
+      "refusal_ledger": []
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Partially characterized empirical per-domain clock query (2192 bytes), without a recovered public structure. Windows asks for ten domains and varies selectors; the current Linux-derived gate expects one domain. [Kayfabe empirical evidence](https://github.com/reindertpelsma/kayfabe/blob/c50fad9ac485f53d45d4ea77a21cb7206267c65a/crates/kf-abi/src/gssreplay.rs).",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x2080a028",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2226,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x2080a080",
+      "refusal_ledger": [
+        {
+          "line": 2229,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque 4-byte query observed before Linux runtime clock queries. Request/reply zero matches Kayfabe's empirical gate, but its semantic purpose remains unresolved. [Kayfabe empirical evidence](https://github.com/reindertpelsma/kayfabe/blob/c50fad9ac485f53d45d4ea77a21cb7206267c65a/crates/kf-abi/src/gssreplay.rs).",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2418,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 1
+      },
+      "id": "0x2080a084",
+      "refusal_ledger": []
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x2080a0a4",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2421,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x2080a0a7",
+      "refusal_ledger": [
+        {
+          "line": 2424,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x2080a0a8",
+      "refusal_ledger": []
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x2080a0d1",
+      "refusal_ledger": []
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2392,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x2080a0f2",
+      "refusal_ledger": [
+        {
+          "line": 2395,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1088,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2383,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x2080a612",
+      "refusal_ledger": [
+        {
+          "line": 1091,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1083,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2379,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "guest_trace_results": {
+        "none": 2
+      },
+      "id": "0x2080a618",
+      "refusal_ledger": [
+        {
+          "line": 1086,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque GSS-legacy control. No semantic definition recovered in the searched sources; inputs, outputs, units and state effects remain unresolved. The observed length/status and Linux occurrences do not justify inventing a response or treating it as a no-op.",
+      "guest_evidence": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2387,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "guest_trace_results": {
+        "none": 1
+      },
+      "id": "0x2080a63c",
+      "refusal_ledger": [
+        {
+          "line": 2390,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "refused; initialization survived in this boot",
+      "consequence": "Per-call feature loss not isolated; no global GPU-init failure in this boot. Semantics remain unresolved.",
+      "description": "Opaque BinAPI operation. Earlier Linux poison-buffer experiments showed only selected output bytes changed, so it cannot be classified as a no-op. Public field meanings and the state transition remain unresolved. [Kayfabe empirical evidence](https://github.com/reindertpelsma/kayfabe/blob/c50fad9ac485f53d45d4ea77a21cb7206267c65a/crates/kf-abi/src/versions.rs).",
+      "guest_evidence": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1022,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2103,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2179,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 3
+        }
+      },
+      "guest_trace_results": {
+        "none": 3
+      },
+      "id": "0x20810108",
+      "refusal_ledger": [
+        {
+          "line": 1025,
+          "status": "0x56"
+        }
+      ]
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Query the last InfoROM black-box flush timestamp and duration in microseconds. NOT_READY can mean no flush yet; NOT_SUPPORTED can mean the board lacks the feature.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0x90e70113",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Pin/reserve page-directory coverage and mirror client page-table levels in server RM. Inputs describe the subdevice, VA interval, page size and per-level physical address/size/aperture/shift. This publishes address-space state, not a general data copy.",
+      "guest_evidence": {
+        "count": 9,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 769,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 818,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 884,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 9
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 9
+      },
+      "id": "0x90f10106",
+      "refusal_ledger": []
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Schedule or deschedule a channel group (TSG) using bEnable, bSkipSubmit and bSkipEnable. This changes enable/runlist state; it does not contain GPU methods.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0xa06c0101",
+      "refusal_ledger": []
+    },
+    {
+      "category": "native Linux only; guest rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Set a channel group's timeslice in microseconds. Hardware may round the value down; the change is immediate and can force the channel off the GPU.",
+      "guest_evidence": null,
+      "guest_trace_results": {},
+      "id": "0xa06c0103",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Schedule or deschedule a GPFIFO channel using bEnable, bSkipSubmit and bSkipEnable. This changes enable/runlist state; it does not contain the GPU methods fetched from the ring.",
+      "guest_evidence": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 797,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 862,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1502,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 4
+      },
+      "id": "0xa06f0103",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Query display-channel state for a hardware class/instance, including whether methods remain pending. This allows mode validation after methods propagate without itself committing an armed display state.",
+      "guest_evidence": {
+        "count": 14,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1985,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1987,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1989,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 14
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 14
+      },
+      "id": "0xc3700104",
+      "refusal_ledger": []
+    },
+    {
+      "category": "served here; rejection effect untested",
+      "consequence": "No refusal experiment for this call/selector is present in this baseline.",
+      "description": "Validate whether a proposed display mode is possible using the supplied head/window/timing configuration and resource constraints. This asks about display assembly state; it is not a graphics-engine kernel launch.",
+      "guest_evidence": {
+        "count": 30,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1956,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1958,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1960,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 30
+        }
+      },
+      "guest_trace_results": {
+        "0x0": 30
+      },
+      "id": "0xc3720101",
+      "refusal_ledger": []
+    }
+  ],
+  "counts": {
+    "native Linux only; guest rejection effect untested": 18,
+    "refused; initialization survived in this boot": 35,
+    "served here; rejection effect untested": 15
+  },
+  "gpu": "GA106",
+  "guest_driver": "580.65.06",
+  "implementation": "b98bdbec",
+  "input_sha256": {
+    "cuda_ladder.log": "7d583bf49c35668a1f753f7d2c3bcedb7b610adc7279e6a2832a4a96f7963f7c",
+    "display_lane.log": "71c26f433a073bed0439a5654610dc190c748e85a33578e802b60cf2dcaa3e40",
+    "run_lin_b1t_580.65.06_dmesg.log": "b622a0d4cb9a48d5d8434d86eed4cb05ef902b789e89430da02227bb89dad92a",
+    "run_lin_b1t_580.65.06_hostdmesg.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run_lin_b1t_580.65.06_probe.log": "8eec814d8f71bf640c178d9b4472a56bdb6f92ae9bc3945f90089aa2c0170667",
+    "run_lin_b1t_580.65.06_qemu.trimmed.log": "a276420915f85cca03573f62cd504066fcf4f2e396d2299b07c10042512cb756"
+  },
+  "schema": 1,
+  "source_baseline_commit": "c50fad9ac485f53d45d4ea77a21cb7206267c65a"
+}

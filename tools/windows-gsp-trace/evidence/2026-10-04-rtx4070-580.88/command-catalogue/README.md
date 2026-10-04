@@ -3,12 +3,45 @@
 **STATUS: RESEARCH, 2026-10-04. No command in this inventory is established as
 Windows-only.** This extends and corrects the earlier [handler audit](../command-audit/README.md).
 It describes the retained native Windows capture, not successful Windows
-execution through Kayfabe. No new live hardware comparison was performed.
+execution through Kayfabe. The original comparison below used saved evidence;
+the subsequent ordinary-user Linux experiment is linked separately.
 
 [All 129 direct controls, with descriptions](controls.md) ·
 [Machine-readable catalogue](catalogue.json) ·
 [Linux evidence and exact record locations](linux-evidence.json) ·
 [Public source index and revisions](source-index.json)
+
+**Follow-ups:** [confirmed ordinary-user ioctl origins](../../2026-10-04-ga106-unprivileged-575.51.03/privileges.md) ·
+[existing v3 ZBC/context policies and Windows forms](v3-context-policy.md) ·
+[what happened when the Linux guest received refusals](linux-refusals/README.md).
+
+## Scope: GSP management traffic, not passthrough GPU commands
+
+This is an inventory of **CPU kernel driver ↔ GSP messages**. It contains both
+kernel-internal operations and controls the kernel sends on behalf of a UMD or
+other userspace ioctl caller. It is **not** a list restricted to operations
+originated independently by the kernel. The Windows capture alone does not
+identify the originating userspace process or its privilege.
+
+**UMD pushbuffer methods on passthrough channels run on the host twin. They are
+not an implementation TODO in this catalogue.** Allocating/managing a channel
+through GSP and submitting GPU commands on that channel are different paths.
+The capture covers the former; it does not record the latter. Missing channel
+allocation bodies also prevent assigning a kernel/user route to every channel.
+
+Likewise, “no specific handler” is an inventory result, not a requirement to
+implement the physical operation. Classify it as an existing twin-backed or
+local operation, an audited authored host verb, a tolerable refusal for a
+specified workload, or an actual compatibility gap. In particular, v3 already
+has a local ZBC table and a twin-satisfied promote/golden-context policy;
+[the Windows comparison](v3-context-policy.md) narrows the uncovered forms.
+
+**Source behavior takes priority over captured values.** A concrete OGKM
+implementation from any compatible release supplies the behavior to derive;
+check ABI and hardware differences rather than waiting for an identical trace.
+Nouveau/Nova and other public reverse engineering follow. Captures establish
+selected paths and validate implementations or investigate firmware-hidden
+behavior. A command declaration alone supplies less than an implementation.
 
 ## Answer to the OS/version/die question
 
@@ -26,6 +59,14 @@ The evidence has different observation boundaries, which must remain distinct:
   observation gap, not proof of OS exclusivity or even Linux non-use.
 - **Zero** have been established as Windows-only. The table deliberately has
   no inferred Windows-only category.
+
+Of these original 68 IDs, the saved Linux guest baseline actually refuses
+**35** with `0x56` and still initializes, serves `nvidia-smi` and reaches its
+recorded display handoff. **15** are served; **18** occur only in native Linux
+samples and have no guest response in that baseline. The
+[per-ID refusal table](linux-refusals/README.md) records the source-backed
+feature effects and remaining unknowns. This does not prove all refused calls
+are harmless or that Windows tolerates the same response.
 
 This is an ID-level counterexample census. The same ID can have different
 selectors, layouts, optional features or state-dependent behavior. For example,
@@ -253,7 +294,7 @@ status zero. Declared nonzero lengths do not mean those bytes were retained.
 | `0x0000902d` [FERMI_TWOD_A](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/class/cl902d.h) | 6 / 6 | 0 | 2D graphics engine object. Its allocation is visible, but 2D method-stream execution is outside this capture. | allocation decoder exists |
 | `0x00009067` [FERMI_CONTEXT_SHARE_A](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/class/cl9067.h) | 5 / 5 | 12 | Context-sharing resource for channel/group context relationships. Allocation parameters are absent, so the observed sharing policy is unresolved. | allocation decoder exists |
 | `0x00009096` [GF100_ZBC_CLEAR](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/class/cl9096.h) | 6 / 6 | 0 | Zero-bandwidth-clear management resource for graphics clear values/compression state; not an observed framebuffer-clear instruction. | allocation decoder exists |
-| `0x000090e7` [GF100_SUBDEVICE_INFOROM](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/class/cl90e7.h) | 1 / 1 | 0 | InfoROM management resource, including black-box telemetry controls. It has no allocation decoder in the audited Windows branch. | no allocation decoder |
+| `0x000090e7` [GF100_SUBDEVICE_INFOROM](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/class/cl90e7.h) | 1 / 1 | 0 | InfoROM management resource, including black-box telemetry controls. It has no allocation decoder in `v3-windows` at `c50fad9ac485f53d45d4ea77a21cb7206267c65a` (the implementation under audit). | no allocation decoder |
 | `0x000090f1` [FERMI_VASPACE_A](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/class/cl90f1.h) | 6 / 6 | 56 | GPU virtual address-space resource, used by mappings and page-directory publication controls. | allocation decoder exists |
 | `0x0000a06c` [KEPLER_CHANNEL_GROUP_A](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/class/cla06c.h) | 11 / 11 | 20 | Channel group (TSG), grouping channels for shared scheduling/context state. Group allocation does not imply privileged ownership. | allocation decoder exists |
 | `0x0000a140` [KEPLER_INLINE_TO_MEMORY_B](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/class/cla140.h) | 6 / 6 | 0 | Inline-to-memory engine object for writing method-supplied data to GPU-addressable memory. Actual methods/data are not recorded here. | allocation decoder exists |
@@ -294,12 +335,12 @@ RM_CONTROL in this capture; it does not increase the 129-direct-ID count:
 The borrowed PC now times out and the owner says it was probably handed over;
 it is treated as unavailable, with no further reconnect/reboot attempts. The
 capture, installer/recorder source and this analysis are durable on the
-controller and research branch. This offline update neither rents new hardware
-nor claims to have completed the controlled matrix above.
+controller and research branch. The later Linux privilege experiment used its
+own disposable rental; it does not complete the controlled matrix above.
 
 ## Reproduction and checks
 
-From this repository, with the audited Windows branch available separately:
+From the recorder/research branch `codex/windows-native-trace-2026-10-04`, with the implementation branch `v3-windows` at `c50fad9ac485f53d45d4ea77a21cb7206267c65a` available separately:
 
 ```sh
 python3 tools/windows-gsp-trace/audit/catalogue.py \
