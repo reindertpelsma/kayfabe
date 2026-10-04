@@ -556,11 +556,19 @@ impl Device {
         // ★ P1+P2 inc B: the T-space cell — filled once, on the VA thread, at prewarm.
         let tspace = crate::tspace::TSpaceCell::default();
         eprintln!(
-            "kf3: P1+P2 T-space {} (KF3_TSPACE; docs/design/V3_P1P2_TSPACE.md)",
+            "kf3: P1+P2 T-space {} (KF3_TSPACE; docs/design/V3_P1P2_TSPACE.md){}",
             if crate::tspace::enabled() {
                 "ON: built at prewarm"
             } else {
                 "OFF: today's mirrors and windows"
+            },
+            // ★ Review fix 2026-10-04: P0 (`v3-sec-nonpriv`, every host channel born USER) is a
+            // stated precondition of P1's channel-privilege half; this build does not carry its
+            // birth assert, so a T-space run proves window and carve-out reach only.
+            if crate::tspace::enabled() {
+                " — ⚠ without the P0 birth assert (v3-sec-nonpriv) in this build: window and carve-out reach only; the channel-privilege half waits on P0"
+            } else {
+                ""
             }
         );
         let chans: &'static crate::chan::ChanPlane =

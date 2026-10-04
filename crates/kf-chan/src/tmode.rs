@@ -1150,18 +1150,82 @@ pub struct Shadow {
     pub unknown_field: u64,
     /// Of those, a method no table row classifies.
     pub unclassified: u64,
+    /// ★ Review fix 2026-10-04: items that followed an `Ir::Invalidate` in their segment — held
+    /// UNBOUND and bound at the NEXT observed segment, after the default path ran that segment's
+    /// splits (their walks): the rows T-mode would bind them against (§3.5).
+    deferred: Vec<Ir>,
+    /// Of the items bound, those bound late that way.
+    pub bound_after_split: u64,
+    /// `KF3_NEGCTL_SHADOW` — the positive control ([`Shadow::negctl_probe`]).
+    pub negctl: bool,
+}
+
+/// `NVC56F_WFI` (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h`).
+const HOST_WFI: u32 = 0x78;
+
+/// No placement row at all — the positive control's resolver.
+struct NoRows;
+impl Rows for NoRows {
+    fn resolve(&self, va: u64, _: u64) -> Result<Vec<Span>, u64> {
+        Err(va)
+    }
+    fn dma_to_file_range(&self, _: u64, _: u64) -> Option<u64> {
+        None
+    }
 }
 
 impl Shadow {
+    /// A shadow, with its positive control on or off ([`Shadow::negctl_probe`]).
+    #[must_use]
+    pub fn with_negctl(negctl: bool) -> Shadow {
+        Shadow {
+            negctl,
+            ..Shadow::default()
+        }
+    }
+
     /// Observe one segment as T-mode would decode and bind it. Stops at the first refusal of the
     /// segment (T-mode would have stopped the channel there).
+    ///
+    /// ★ Review fix 2026-10-04: T-mode binds the items after a segment's invalidate only AFTER the
+    /// split's walk (§3.5), so the shadow binds the items before the segment's first
+    /// `Ir::Invalidate` now and holds the rest UNBOUND until the next segment is observed — by
+    /// then the default path has run every split of this one (the ring hands out no new segment
+    /// while a split is pending). Binding them at fetch would count correct UVM streams (write the
+    /// PTEs, invalidate, use the new mapping in one push) as resolution misses.
     pub fn observe(&mut self, words: &[u32], is_ce: IsCeClass, rows: &dyn Rows, w: &TWindows) {
+        let late = std::mem::take(&mut self.deferred);
+        if !late.is_empty() {
+            let n = late
+                .iter()
+                .filter(|i| !matches!(i, Ir::Invalidate { .. }))
+                .count();
+            if self.bind_items(&late, rows, w) {
+                self.bound_after_split += n as u64;
+            }
+        }
         self.segments += 1;
-        let items = match decode(words, is_ce, &mut self.st, None) {
+        if self.negctl {
+            self.negctl_probe(is_ce, w);
+        }
+        let mut items = match decode(words, is_ce, &mut self.st, None) {
             Ok(v) => v,
             Err(r) => return self.refused(&r),
         };
-        for it in &items {
+        if let Some(k) = items
+            .iter()
+            .position(|i| matches!(i, Ir::Invalidate { .. }))
+        {
+            self.deferred = items.split_off(k + 1);
+        }
+        if !self.bind_items(&items, rows, w) {
+            self.deferred.clear();
+        }
+    }
+
+    /// Bind `items` in order, counting; `false` at the first refusal (the rest are not bound).
+    fn bind_items(&mut self, items: &[Ir], rows: &dyn Rows, w: &TWindows) -> bool {
+        for it in items {
             let mut sink = Vec::new();
             match bind(it, rows, w, &mut sink) {
                 Ok(p) => {
@@ -1171,7 +1235,48 @@ impl Shadow {
                         self.max_pieces = self.max_pieces.max(p);
                     }
                 }
-                Err(r) => return self.refused(&r),
+                Err(r) => {
+                    self.refused(&r);
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// ★ `KF3_NEGCTL_SHADOW=1` — the shadow counters' POSITIVE CONTROL (review fix 2026-10-04): per
+    /// observed segment, three synthetic writes go through the REAL decode and bind on a copy of
+    /// the channel's decoder state — an unclassified host method, a `WFI` with a bit beyond its
+    /// field, and a host release no placement row covers — so `unclassified`, `unknown_field`,
+    /// `resolve_miss` and `would_refuse` MUST move on any run that observes a segment. Their output
+    /// is discarded like everything the shadow binds; the channel's own state is untouched.
+    pub fn negctl_probe(&mut self, is_ce: IsCeClass, w: &TWindows) {
+        let probes: [&[u32]; 3] = [
+            // An unclassified host method (`0x7C`).
+            &[method_header_inc(0, 0x7C, 1).unwrap_or(0), 0],
+            // WFI with a bit beyond SCOPE (0:0).
+            &[method_header_inc(0, HOST_WFI, 1).unwrap_or(0), 2],
+            // SEM_ADDR_LO..SEM_EXECUTE: a 32-bit RELEASE at a VA no row covers.
+            &[
+                method_header_inc(0, fifo::SEM_ADDR_LO, 5).unwrap_or(0),
+                0x1000,
+                0,
+                1,
+                0,
+                1,
+            ],
+        ];
+        for words in probes {
+            let mut st = self.st;
+            match decode(words, is_ce, &mut st, None) {
+                Err(r) => self.refused(&r),
+                Ok(items) => {
+                    for it in &items {
+                        if let Err(r) = bind(it, &NoRows, w, &mut Vec::new()) {
+                            self.refused(&r);
+                        }
+                    }
+                }
             }
         }
     }
@@ -1199,7 +1304,7 @@ impl Shadow {
             .map(|(k, n)| format!("{k}:{n}"))
             .collect();
         format!(
-            "segments={} items={} launches={} max_pieces={} would_refuse=[{}] resolve_miss={} unknown_field={} unclassified={}",
+            "segments={} items={} launches={} max_pieces={} would_refuse=[{}] resolve_miss={} unknown_field={} unclassified={} bound_after_split={} unbound_at_free={}{}",
             self.segments,
             self.items,
             self.launches,
@@ -1207,7 +1312,10 @@ impl Shadow {
             wr.join(" "),
             self.resolve_miss,
             self.unknown_field,
-            self.unclassified
+            self.unclassified,
+            self.bound_after_split,
+            self.deferred.len(),
+            if self.negctl { " NEGCTL" } else { "" }
         )
     }
 }

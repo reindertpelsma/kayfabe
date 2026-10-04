@@ -784,8 +784,10 @@ impl TranslatedChannel {
     }
 
     /// ★ P1+P2 inc C: run the T-mode shadow against `windows` ([`TranslatedRing::set_shadow`]).
-    pub fn set_shadow(&mut self, windows: Option<crate::tspace_unsafe::TWindows>) {
-        self.ring.set_shadow(windows);
+    /// `negctl`: the shadow counters' positive control (`KF3_NEGCTL_SHADOW`,
+    /// [`crate::tmode::Shadow::negctl_probe`]).
+    pub fn set_shadow(&mut self, windows: Option<crate::tspace_unsafe::TWindows>, negctl: bool) {
+        self.ring.set_shadow(windows, negctl);
     }
 
     /// The shadow's counters, when on — the device dumps them at free.

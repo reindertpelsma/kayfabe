@@ -236,8 +236,8 @@ impl TranslatedRing {
     /// ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): run the T-mode rewriter in SHADOW on every segment
     /// this ring fetches — decode and bind against the memory's placement rows and `windows`, the
     /// output discarded, the verdicts counted ([`crate::tmode::Shadow`]). `None` turns it off.
-    pub fn set_shadow(&mut self, windows: Option<crate::tspace_unsafe::TWindows>) {
-        self.shadow = windows.map(|w| Box::new((crate::tmode::Shadow::default(), w)));
+    pub fn set_shadow(&mut self, windows: Option<crate::tspace_unsafe::TWindows>, negctl: bool) {
+        self.shadow = windows.map(|w| Box::new((crate::tmode::Shadow::with_negctl(negctl), w)));
     }
 
     /// The shadow's counters, when on.

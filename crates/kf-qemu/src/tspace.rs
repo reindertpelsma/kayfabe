@@ -68,6 +68,17 @@ pub const fn carve_cfg(carve: u64, tmode: bool, negctl: bool) -> (u64, bool) {
     if negctl { (0, false) } else { (carve, tmode) }
 }
 
+/// ★ `KF3_NEGCTL_TSPACE_OVERSIZE=1` — the POSITIVE CONTROL of the build's ring-region bound
+/// (review fix 2026-10-04): the bound check sees the guest-RAM window as if it ran to the ring
+/// region, so the build MUST refuse by name ("reaches the ring region"), free what it built, and
+/// every Translated birth is then refused (`tspace_refused=` moves). Destructive by design (the
+/// guest driver cannot load): a dedicated control run only. Default OFF; read once.
+#[must_use]
+pub fn negctl_oversize() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TSPACE_OVERSIZE").is_some_and(|v| v != "0"))
+}
+
 /// The host verbs a T-space build needs — [`HostRm`] in kf3, a recorder in the tests.
 pub trait TSpaceHost {
     /// A VA space with no guest-range reservations ([`HostRm::alloc_vaspace_bare`]).
@@ -182,6 +193,7 @@ impl TSpace {
         store: u32,
         carve: u64,
         ram: (u32, u64),
+        negctl_oversize: bool,
     ) -> Result<TSpace, String> {
         let t0 = std::time::Instant::now();
         if carve == 0 {
@@ -220,7 +232,13 @@ impl TSpace {
                 ));
             }
         };
-        if let Err(e) = windows_below_ring_region((fb_base, carve), (ram_base, ram_len)) {
+        // The positive control checks the RAM window as if it ran to the ring region.
+        let checked_ram = if negctl_oversize {
+            RING_REGION_BASE
+        } else {
+            ram_len
+        };
+        if let Err(e) = windows_below_ring_region((fb_base, carve), (ram_base, checked_ram)) {
             return Err(fail(space, e));
         }
         let windows = match kf_chan::tspace_unsafe::TWindows::new(
@@ -338,7 +356,7 @@ pub fn prewarm(
             return Some(line);
         }
     };
-    let built = TSpace::build(rm, store, carve, ram);
+    let built = TSpace::build(rm, store, carve, ram, negctl_oversize());
     let line = match &built {
         Ok(t) => t.line(),
         Err(e) => format!("tspace: not built ({e})"),
@@ -419,7 +437,7 @@ mod tests {
     fn tspace_builder_never_grows_down() {
         let h = Rec::default();
         h.bases.borrow_mut().extend([0x1_2000_0000, 0x4_0520_0000]);
-        let t = TSpace::build(&h, 0x1, CARVE, RAM).expect("built");
+        let t = TSpace::build(&h, 0x1, CARVE, RAM, false).expect("built");
         assert_eq!(
             *h.ops.borrow(),
             vec![
@@ -441,7 +459,7 @@ mod tests {
         h.bases
             .borrow_mut()
             .extend([0x1_2000_0000, RING_REGION_BASE - (4 << 30)]);
-        let e = TSpace::build(&h, 0x1, CARVE, RAM).expect_err("reaches the ring region");
+        let e = TSpace::build(&h, 0x1, CARVE, RAM, false).expect_err("reaches the ring region");
         assert!(e.contains("reaches the ring region"), "{e}");
         assert!(
             h.ops
@@ -457,8 +475,15 @@ mod tests {
             ..Rec::default()
         };
         h.bases.borrow_mut().push(0x1_2000_0000);
-        let e = TSpace::build(&h, 0x1, CARVE, RAM).expect_err("no RAM window");
+        let e = TSpace::build(&h, 0x1, CARVE, RAM, false).expect_err("no RAM window");
         assert!(e.starts_with("guest-RAM window"), "{e}");
+        assert!(h.ops.borrow().last().is_some_and(|o| o.starts_with("free")));
+        // ★ The positive control (`KF3_NEGCTL_TSPACE_OVERSIZE`): the same good placement, checked
+        // as if the RAM window ran to the ring region — refused by name, the space freed.
+        let h = Rec::default();
+        h.bases.borrow_mut().extend([0x1_2000_0000, 0x4_0520_0000]);
+        let e = TSpace::build(&h, 0x1, CARVE, RAM, true).expect_err("oversize control");
+        assert!(e.contains("reaches the ring region"), "{e}");
         assert!(h.ops.borrow().last().is_some_and(|o| o.starts_with("free")));
     }
 

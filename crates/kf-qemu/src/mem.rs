@@ -1079,6 +1079,10 @@ pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<crate::twin::TwinState> {
 pub struct Spare {
     space: kf_host::VaSpace,
     fb_base: u64,
+    /// ★ Review fix 2026-10-04: the store window's length in this space — the store's on the
+    /// default path, 0 for a T-mode twin (no window) — so a recycled twin's record says what its
+    /// space actually holds.
+    fb_len: u64,
     ram: Option<(u64, u64)>,
     ram_obj: Option<u32>,
     rings: RingSlots,
@@ -1906,46 +1910,174 @@ impl MemPlane {
     }
 }
 
-/// ★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1): whether a new mirror is RECORDED — so births may name
-/// it — given its store window's outcome. In T-mode always: a twin carries no window, so its record
-/// can never hang on one. On the default path only when the store window mapped (today's
-/// behaviour, kept: a refused window there refuses every birth in the space, passthrough included).
-#[must_use]
-pub const fn mirror_recorded(tmode: bool, fb_window_mapped: bool) -> bool {
-    tmode || fb_window_mapped
+/// ★ P1+P2 review fix (2026-10-04) — **the host verbs a T-mode twin path may call**: [`HostRm`] in
+/// kf3, a recorder in the tests, so "no window in any twin" is tested on the paths themselves
+/// (create, prewarm, reuse) rather than on a predicate.
+pub trait TwinHost {
+    /// A store window in `space`, `GROWS_DOWN`, as the default path places one. ⊘ In T-mode ONLY
+    /// the positive control ([`negctl_twin_window`]) calls it.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn map_window(&self, space: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String>;
 }
 
-/// ★ P1+P2 inc D: record a T-mode twin — the host space, its rows and nothing of ours: no window,
-/// no ring region, no VMM range a guest leaf must avoid (`reserved` is empty, so guest leaves at
-/// `[RING_REGION_BASE, 2^40)` are accepted).
-fn record_twin(
-    plane: &MemPlane,
+impl TwinHost for HostRm {
+    fn map_window(&self, space: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String> {
+        HostRm::map_window(self, space, memory, len, true).map_err(|e| format!("{e:?}"))
+    }
+}
+
+/// ★ `KF3_NEGCTL_TWIN_WINDOW=1` — the POSITIVE CONTROL of "no window in any twin" (review fix
+/// 2026-10-04): in T-mode every new twin and every prewarmed spare ALSO gets a store window, recorded
+/// in its record, so its log line names it and the box-log gate's `WINDOWS=NONE` must fail. It
+/// reintroduces exactly the S1-21 defect; never set it outside a control run. Default OFF; read once.
+#[must_use]
+pub fn negctl_twin_window() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TWIN_WINDOW").is_some_and(|v| v != "0"))
+}
+
+/// ★ A T-mode twin's record — its [`Mirror`] and the VMM ranges a guest leaf must avoid — both
+/// derived from what was actually MAPPED in its space, never asserted.
+pub struct TwinRecord {
+    /// The mirror the channel plane sees.
+    pub mirror: Mirror,
+    /// Our placements in the space a guest leaf may not overlap.
+    pub reserved: Vec<(u64, u64)>,
+}
+
+/// ★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1) — **a fresh T-mode twin**: the host space and nothing
+/// of ours — no window, no ring region, so no VMM range a guest leaf must avoid (guest leaves at
+/// `[RING_REGION_BASE, 2^40)` are accepted) — and always recorded: its record never hangs on a
+/// window. `negctl` (the positive control) maps one store window of `store_len` and records it.
+pub fn tmode_twin(
+    host: &dyn TwinHost,
     key: VasKey,
     space: kf_host::VaSpace,
     ram_obj: Option<u32>,
+    store: u32,
+    store_len: u64,
+    negctl: bool,
+) -> TwinRecord {
+    let fb = negctl
+        .then(|| host.map_window(space, store, store_len).ok())
+        .flatten();
+    twin_record(
+        key,
+        space,
+        fb.map(|b| (b, store_len)),
+        ram_obj,
+        RingSlots::default(),
+    )
+}
+
+/// ★ A T-mode prewarmed spare: a plain space (the space and its reservations cost RM calls),
+/// with no window to pay for — `negctl` as for [`tmode_twin`].
+pub fn tmode_spare(
+    host: &dyn TwinHost,
+    space: kf_host::VaSpace,
+    ram_obj: Option<u32>,
+    store: u32,
+    store_len: u64,
+    negctl: bool,
+) -> Spare {
+    let fb = negctl
+        .then(|| host.map_window(space, store, store_len).ok())
+        .flatten();
+    Spare {
+        space,
+        fb_base: fb.unwrap_or(0),
+        fb_len: fb.map_or(0, |_| store_len),
+        ram: None,
+        ram_obj,
+        rings: RingSlots::default(),
+    }
+}
+
+/// ★ A recycled spare as a T-mode twin — no host verb; the record says what the space holds (a
+/// spare from a T-mode twin holds nothing of ours).
+#[must_use]
+pub fn tmode_reuse(key: VasKey, sp: &Spare) -> TwinRecord {
+    twin_record(
+        key,
+        sp.space,
+        (sp.fb_len > 0).then_some((sp.fb_base, sp.fb_len)),
+        sp.ram_obj,
+        sp.rings.clone(),
+    )
+}
+
+fn twin_record(
+    key: VasKey,
+    space: kf_host::VaSpace,
+    fb: Option<(u64, u64)>,
+    ram_obj: Option<u32>,
+    rings: RingSlots,
+) -> TwinRecord {
+    let (fb_base, fb_len) = fb.unwrap_or((0, 0));
+    TwinRecord {
+        mirror: Mirror {
+            space,
+            fb_base,
+            fb_len,
+            ram: None,
+            rows: PlacedRows::default(),
+            ram_obj,
+            live: Default::default(),
+            rings,
+            kernel_vas: kernel_vas_for(key),
+        },
+        // ⊘ Not [`vmm_ranges`]: that one always names the ring region, and a T-mode twin has
+        // none — only a window, when the positive control mapped one, is a VMM range here.
+        reserved: fb
+            .map(|(b, l)| vec![(b, b.saturating_add(l))])
+            .unwrap_or_default(),
+    }
+}
+
+/// ★ The windows a mirror carries, as its log line names them — DERIVED from the record (review
+/// fix 2026-10-04: the T-mode lines printed a literal `windows=none` whatever was mapped).
+#[must_use]
+pub fn windows_text(m: &Mirror) -> String {
+    window_words(m.fb_base, m.fb_len, m.ram)
+}
+
+/// [`windows_text`] for a spare.
+#[must_use]
+pub fn spare_windows_text(sp: &Spare) -> String {
+    window_words(sp.fb_base, sp.fb_len, sp.ram)
+}
+
+fn window_words(fb_base: u64, fb_len: u64, ram: Option<(u64, u64)>) -> String {
+    if fb_len == 0 && ram.is_none() {
+        return "windows=none".into();
+    }
+    format!(
+        "windows fb={fb_base:#x}+{fb_len:#x} ram={}",
+        ram.map_or_else(|| "NONE".to_string(), |(b, l)| format!("{b:#x}+{l:#x}"))
+    )
+}
+
+/// ★ P1+P2 inc D: record a T-mode twin — its [`TwinRecord`] in the channel plane's table and the
+/// walker's, the two sharing its rows and its state word.
+fn record_twin(
+    plane: &MemPlane,
+    key: VasKey,
+    rec: TwinRecord,
     m: &mut Manager,
     rm: &'static HostRm,
     store: u32,
 ) {
-    let rows = PlacedRows::default();
-    let kernel_vas = kernel_vas_for(key);
-    if mirror_recorded(true, false)
-        && let Ok(mut mm) = plane.mirrors.lock()
-    {
-        mm.insert(
-            key,
-            Mirror {
-                space,
-                fb_base: 0,
-                fb_len: 0,
-                ram: None,
-                rows: rows.clone(),
-                ram_obj,
-                live: Default::default(),
-                rings: RingSlots::default(),
-                kernel_vas: kernel_vas.clone(),
-            },
-        );
+    let TwinRecord { mirror, reserved } = rec;
+    let (space, ram_obj, rows, kernel_vas) = (
+        mirror.space,
+        mirror.ram_obj,
+        mirror.rows.clone(),
+        mirror.kernel_vas.clone(),
+    );
+    if let Ok(mut mm) = plane.mirrors.lock() {
+        mm.insert(key, mirror);
     }
     m.table.insert(
         key,
@@ -1957,7 +2089,7 @@ fn record_twin(
                 ram_obj,
             },
             rows,
-            Vec::new(),
+            reserved,
             Some(plane.ram),
             kernel_vas,
         )),
@@ -1998,7 +2130,19 @@ fn create_mirror(
     if crate::tspace::enabled() {
         // ★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1): a twin carries NO window and NO ring — only
         // rows derived from the guest's own page tables — and its record never hangs on a window.
-        record_twin(plane, key, space, ram_obj.map(|(o, _)| o), m, rm, store);
+        // ★ Review fix 2026-10-04: the record is built by [`tmode_twin`] (tested against a host
+        // that counts window maps) and the line is derived from it ([`windows_text`]).
+        let rec = tmode_twin(
+            rm,
+            key,
+            space,
+            ram_obj.map(|(o, _)| o),
+            store,
+            plane.fb_len,
+            negctl_twin_window(),
+        );
+        let windows = windows_text(&rec.mirror);
+        record_twin(plane, key, rec, m, rm, store);
         let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
         plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
         plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
@@ -2007,7 +2151,7 @@ fn create_mirror(
             .mirror_ns_max
             .fetch_max(ns, Ordering::Relaxed);
         eprintln!(
-            "kf3: {key:?} mirror space={:#x}: windows=none rings=none ({} us: vaspace {vas_us} ram_obj {ram_obj_us})",
+            "kf3: {key:?} mirror space={:#x}: {windows} rings=none ({} us: vaspace {vas_us} ram_obj {ram_obj_us})",
             space.space,
             ns / 1000
         );
@@ -2143,19 +2287,23 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
     let vas_us = t1.elapsed().as_micros();
     if crate::tspace::enabled() {
         // ★ P1+P2 inc D (§4.1): spares are plain spaces — still prewarmed (the space and its
-        // reservations cost RM calls), with no window to pay for.
+        // reservations cost RM calls), with no window to pay for. ★ Review fix 2026-10-04: the
+        // line names what the spare's record holds ([`spare_windows_text`]), never a literal.
+        let sp = tmode_spare(
+            rm,
+            space,
+            ram_obj.ok().map(|(o, _)| o),
+            store,
+            plane.fb_len,
+            negctl_twin_window(),
+        );
+        let windows = spare_windows_text(&sp);
         if let Ok(mut v) = plane.spares.lock() {
-            v.push(Spare {
-                space,
-                fb_base: 0,
-                ram: None,
-                ram_obj: ram_obj.ok().map(|(o, _)| o),
-                rings: RingSlots::default(),
-            });
+            v.push(sp);
         }
         plane.counters.prewarmed.fetch_add(1, Ordering::Relaxed);
         return Some(format!(
-            "prewarm: spare host space {:#x} ready before the guest runs — windows=none (vaspace {vas_us} us, ram_obj {ram_obj_us} us, total {} us)",
+            "prewarm: spare host space {:#x} ready before the guest runs — {windows} (vaspace {vas_us} us, ram_obj {ram_obj_us} us, total {} us)",
             space.space,
             t0.elapsed().as_micros()
         ));
@@ -2181,6 +2329,7 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
             let sp = Spare {
                 space,
                 fb_base,
+                fb_len: plane.fb_len,
                 ram: Some(r),
                 ram_obj: ram_obj.ok().map(|(o, _)| o),
                 rings: RingSlots::default(),
@@ -2245,6 +2394,7 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     let spare = mirror.map(|mi| Spare {
         space: mi.space,
         fb_base: mi.fb_base,
+        fb_len: mi.fb_len,
         ram: mi.ram,
         ram_obj: mi.ram_obj,
         rings: mi.rings,
@@ -2399,11 +2549,18 @@ pub fn apply_statement(
                 let reused = plane.spares.lock().ok().and_then(|mut v| v.pop());
                 if let Some(sp) = reused.as_ref().filter(|_| crate::tspace::enabled()) {
                     // ★ P1+P2 inc D: a recycled T-mode spare is a plain space; classified afresh.
-                    record_twin(plane, key, sp.space, sp.ram_obj, m, rm, store);
+                    // ★ Review fix 2026-10-04: recorded with what its space holds and LOGGED.
+                    let rec = tmode_reuse(key, sp);
+                    let windows = windows_text(&rec.mirror);
+                    record_twin(plane, key, rec, m, rm, store);
                     plane
                         .counters
                         .mirrors_reused
                         .fetch_add(1, Ordering::Relaxed);
+                    eprintln!(
+                        "kf3: {key:?} mirror space={:#x}: {windows} rings=none (recycled)",
+                        sp.space.space
+                    );
                 } else if let Some(sp) = reused {
                     // ★ P5c: a retired space — its rows are gone, its windows are where they were.
                     let rows = PlacedRows::default();
@@ -2646,18 +2803,76 @@ mod tests {
         (va < start + len).then(|| (ram, off + (va - start)))
     }
 
-    /// ★ P1+P2 inc D (§7 test 12): in T-mode a mirror is recorded whatever a window would have
-    /// done — it has none — so a passthrough birth in it is never refused for "no mirror"; on the
-    /// default path a refused store window still leaves the space unrecorded (today, named).
+    /// A host that counts every window map and places it where RM placed `GROWS_DOWN` windows.
+    #[derive(Default)]
+    struct CountingHost {
+        maps: std::cell::RefCell<Vec<(u32, u32, u64)>>,
+    }
+    impl TwinHost for CountingHost {
+        fn map_window(&self, s: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String> {
+            self.maps.borrow_mut().push((s.space, memory, len));
+            Ok(0x1_fffe_0000_0000)
+        }
+    }
+    fn space(n: u32) -> kf_host::VaSpace {
+        kf_host::VaSpace {
+            space: n,
+            range: n + 1,
+            guest: Default::default(),
+        }
+    }
+
+    /// ★★ P1+P2 inc D (§7 test 12), review fix 2026-10-04 — **no T-mode twin path maps a window**:
+    /// a created twin, a prewarmed spare and a recycled spare are each driven against a host that
+    /// COUNTS window maps — zero — and each record holds no window, no RAM window, no ring slot
+    /// taken and no VMM range, and is named `windows=none` by a line DERIVED from it. ⊘ The positive
+    /// control (`KF3_NEGCTL_TWIN_WINDOW`) maps one window per new twin and spare, and the record and
+    /// its line NAME it — what the box-log gate's `WINDOWS=NONE` must catch.
     #[test]
-    fn a_tmode_mirror_is_recorded_without_any_window() {
-        assert!(mirror_recorded(true, false));
-        assert!(mirror_recorded(true, true));
-        assert!(mirror_recorded(false, true));
-        assert!(
-            !mirror_recorded(false, false),
-            "the default path, unchanged"
+    fn no_tmode_twin_path_maps_a_window() {
+        const STORE_LEN: u64 = 12 << 30;
+        let key = VasKey((0xc1d0_002b_u64 << 32) | 5);
+        let h = CountingHost::default();
+        let created = tmode_twin(&h, key, space(0x10), Some(0x20), 0x1, STORE_LEN, false);
+        let spare = tmode_spare(&h, space(0x12), Some(0x20), 0x1, STORE_LEN, false);
+        let recycled = tmode_reuse(key, &spare);
+        assert!(h.maps.borrow().is_empty(), "{:?}", h.maps.borrow());
+        assert_eq!(spare_windows_text(&spare), "windows=none");
+        for rec in [&created, &recycled] {
+            let mi = &rec.mirror;
+            assert_eq!((mi.fb_len, mi.ram), (0, None));
+            assert!(
+                rec.reserved.is_empty(),
+                "no VMM range a guest leaf must avoid"
+            );
+            assert!(
+                take_ring_slot(&mi.rings).is_some_and(|at| at == RING_REGION_BASE),
+                "no ring slot taken in the twin"
+            );
+            assert_eq!(windows_text(mi), "windows=none");
+            assert!(
+                !mi.kernel_vas.is_kernel(),
+                "a user client's space starts unclassified"
+            );
+        }
+        // ⊘ The positive control.
+        let h = CountingHost::default();
+        let created = tmode_twin(&h, key, space(0x10), Some(0x20), 0x1, STORE_LEN, true);
+        let spare = tmode_spare(&h, space(0x12), Some(0x20), 0x1, STORE_LEN, true);
+        let recycled = tmode_reuse(key, &spare);
+        assert_eq!(
+            h.maps.borrow().len(),
+            2,
+            "one window per new twin and spare"
         );
+        for rec in [&created, &recycled] {
+            assert!(windows_text(&rec.mirror).starts_with("windows fb=0x1fffe00000000+"));
+            assert_eq!(
+                rec.reserved,
+                vec![(0x1_fffe_0000_0000, 0x1_fffe_0000_0000 + STORE_LEN)]
+            );
+        }
+        assert!(spare_windows_text(&spare).starts_with("windows fb="));
     }
 
     #[test]

@@ -621,6 +621,32 @@ fn negctl_stale_bind() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_STALE_BIND").is_some_and(|v| v != "0"))
 }
 
+/// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_SHADOW=1`**, the shadow counters' POSITIVE CONTROL
+/// (`kf_chan::tmode::Shadow::negctl_probe`): with `KF3_TSHADOW=1`, every observed segment moves
+/// `unclassified`, `unknown_field`, `resolve_miss` and `would_refuse` through the real decode and
+/// bind. Count-only (the shadow emits nothing). Default OFF; read once.
+fn negctl_shadow() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_SHADOW").is_some_and(|v| v != "0"))
+}
+
+/// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_HEAP=1`**, the `heap_out=` counter's POSITIVE CONTROL:
+/// every birth is counted as if its USERD lay outside the usable heap — counted only, NEVER refused
+/// ([`heap_gate`]). Default OFF; read once.
+fn negctl_heap() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_HEAP").is_some_and(|v| v != "0"))
+}
+
+/// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_TWIN=1`** (T-mode), the `twin_refused=` counter's
+/// POSITIVE CONTROL: every passthrough birth is answered as if its space were a guest-KERNEL space
+/// — refused by name, counted. Destructive by design (no guest user channel is born): a dedicated
+/// control run only. Default OFF; read once.
+fn negctl_twin() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TWIN").is_some_and(|v| v != "0"))
+}
+
 /// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TSHADOW=1`**: every
 /// Translated channel runs the T-mode rewriter in shadow on today's path (its output discarded, its
 /// verdicts counted) and dumps one `TSHADOW` line at free. Default OFF; read once.
@@ -997,14 +1023,18 @@ enum HeapGate {
     Count(String),
 }
 
-/// ★ P1+P2 inc A / S1-43 (review fix 2026-10-04): [`heap_bounds`], refusing only when `strict`.
+/// ★ P1+P2 inc A / S1-43 (review fix 2026-10-04): [`heap_bounds`], refusing only when `strict`;
+/// `negctl` (`KF3_NEGCTL_HEAP`, the counter's positive control) counts EVERY birth and refuses none.
 fn heap_gate(
     strict: bool,
+    negctl: bool,
     layout: &kf_chip::bar0::FbLayout,
     userd: Option<kf_arch::UserdMem>,
     notifier: Option<kf_arch::fault::ErrorNotifier>,
 ) -> HeapGate {
     match heap_bounds(layout, userd, notifier) {
+        Err(why) if negctl => HeapGate::Count(format!("{why} (positive control)")),
+        Ok(()) if negctl => HeapGate::Count("KF3_NEGCTL_HEAP positive control".into()),
         Ok(()) => HeapGate::Inside,
         Err(why) if strict => HeapGate::Refuse(why),
         Err(why) => HeapGate::Count(why),
@@ -2884,6 +2914,7 @@ impl ChanPlane {
         // and the birth proceeds exactly as before inc A (box step 1 must show `heap_out=0`).
         match heap_gate(
             crate::tspace::inca_strict(),
+            negctl_heap(),
             &self.layout,
             a.userd,
             a.error_notifier,
@@ -3034,12 +3065,17 @@ impl ChanPlane {
             // ★★ P1+P2 inc D (§4.2): in T-mode a passthrough birth moves the twin to User(n+1), in
             // statement order, and is REFUSED by name in a guest-KERNEL space — never waited on.
             let twin = if crate::tspace::enabled() {
-                if mirror.kernel_vas.try_user().is_err() {
+                if negctl_twin() || mirror.kernel_vas.try_user().is_err() {
                     self.twin_refused.fetch_add(1, Ordering::Relaxed);
                     return refuse(
                         NV_ERR_INVALID_STATE,
                         format!(
-                            "twin state: VA space {key:?} is a guest-KERNEL space — a channel the guest created non-kernel never runs in it (V3_P1P2_TSPACE.md §4.2)"
+                            "twin state: VA space {key:?} is a guest-KERNEL space — a channel the guest created non-kernel never runs in it (V3_P1P2_TSPACE.md §4.2){}",
+                            if negctl_twin() {
+                                " [KF3_NEGCTL_TWIN positive control]"
+                            } else {
+                                ""
+                            }
                         ),
                     );
                 }
@@ -3252,7 +3288,10 @@ impl ChanPlane {
                 if tshadow_on() && ts.is_none() {
                     // ★ P1+P2 inc C: the T-mode shadow binds against windows shaped like the
                     // T-space's (the store window ends at the carve-out); their bases are nominal.
-                    chan.set_shadow(shadow_windows(me.layout.carve(), mirror.ram.map(|(_, l)| l)));
+                    chan.set_shadow(
+                        shadow_windows(me.layout.carve(), mirror.ram.map(|(_, l)| l)),
+                        negctl_shadow(),
+                    );
                 }
                 let alloc = me
                     .caps
@@ -4154,15 +4193,25 @@ mod heap_tests {
             size: 0x200,
         });
         assert!(matches!(
-            heap_gate(true, &l, out, None),
+            heap_gate(true, false, &l, out, None),
             HeapGate::Refuse(_)
         ));
         assert!(matches!(
-            heap_gate(false, &l, out, None),
+            heap_gate(false, false, &l, out, None),
             HeapGate::Count(_)
         ));
-        assert_eq!(heap_gate(true, &l, inside, None), HeapGate::Inside);
-        assert_eq!(heap_gate(false, &l, inside, None), HeapGate::Inside);
+        assert_eq!(heap_gate(true, false, &l, inside, None), HeapGate::Inside);
+        assert_eq!(heap_gate(false, false, &l, inside, None), HeapGate::Inside);
+        // The positive control (`KF3_NEGCTL_HEAP`): every birth counted, none refused — strict
+        // or not, inside the heap or not.
+        for strict in [false, true] {
+            for u in [out, inside] {
+                assert!(matches!(
+                    heap_gate(strict, true, &l, u, None),
+                    HeapGate::Count(_)
+                ));
+            }
+        }
     }
 }
 

@@ -489,7 +489,7 @@ fn the_shadow_observes_every_segment_and_changes_nothing() {
         let mut mem = RowsMem(Mem::default());
         seg(&mut mem.0, 0, PB, &a);
         let mut r = TranslatedRing::new(GPFIFO, 8, 0);
-        r.set_shadow(shadow.then_some(w));
+        r.set_shadow(shadow.then_some(w), false);
         let got = submitted_rows(&mut r, 1, &mut mem);
         match r.shadow() {
             Some(sh) => {

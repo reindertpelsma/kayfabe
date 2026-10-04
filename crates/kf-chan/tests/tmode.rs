@@ -1371,6 +1371,77 @@ fn the_shadow_counts_would_refuse_and_pieces() {
     );
 }
 
+/// ★★ Review fix 2026-10-04 — **the shadow binds a segment's post-invalidate items after the
+/// split, as T-mode does.** UVM writes PTEs, invalidates and uses the new mapping in ONE push:
+/// the item after the invalidate must not be bound at fetch (its row does not exist until the
+/// walk), so the shadow holds it and binds it at the next observed segment — by when the default
+/// path has run the split. ⊘ Negative control: binding it at fetch counts a resolution miss.
+#[test]
+fn the_shadow_binds_after_the_segments_split() {
+    let new_va = 0x6_0000_0000u64;
+    let mut pb = m(SUB, 0, &[0xc7b5]);
+    pb.extend(m(0, 0x28, &[0, 0, 0x0020_1000, 9 << 27])); // TLB invalidate (a split)
+    pb.extend(m(
+        SUB,
+        ce::OFFSET_IN_UPPER,
+        &[(new_va >> 32) as u32, new_va as u32, 0, 0x20_0000],
+    ));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x100]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182 | (1 << 13)]));
+    let before = rows(); // at fetch: the new mapping is not placed yet
+    let after = rows().row(new_va, 0x1000, false, 0x70_0000); // the split's walk placed it
+    let mut sh = Shadow::default();
+    sh.observe(&pb, is_ce, &before, &windows());
+    assert_eq!(
+        (sh.launches, sh.resolve_miss),
+        (0, 0),
+        "held, not bound at fetch"
+    );
+    assert!(sh.line().contains("unbound_at_free=1"), "{}", sh.line());
+    // The next segment arrives only after the split ran: the held launch binds to the new row.
+    sh.observe(&m(0, 0x78, &[0]), is_ce, &after, &windows());
+    assert_eq!(
+        (sh.launches, sh.resolve_miss, sh.bound_after_split),
+        (1, 0, 1),
+        "{}",
+        sh.line()
+    );
+    assert!(sh.line().contains("unbound_at_free=0"));
+    // ⊘ Negative control: the same launch bound at fetch misses.
+    let ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+    let launch = ir.iter().find(|i| matches!(i, Ir::Launch(_))).unwrap();
+    assert!(matches!(
+        bind(launch, &before, &windows(), &mut Vec::new()),
+        Err(Refusal::VirtualUnresolved { .. })
+    ));
+}
+
+/// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_SHADOW`, the shadow counters' positive control**: with
+/// it every observed segment moves `unclassified`, `unknown_field` and `resolve_miss` through the
+/// real decode and bind, and the channel's own decode is unaffected; without it a clean segment
+/// moves none.
+#[test]
+fn the_shadow_positive_control_moves_every_counter() {
+    let clean = m(0, 0x78, &[0]);
+    let mut sh = Shadow::default();
+    sh.observe(&clean, is_ce, &rows(), &windows());
+    assert_eq!(
+        (sh.unclassified, sh.unknown_field, sh.resolve_miss),
+        (0, 0, 0)
+    );
+    let mut sh = Shadow::with_negctl(true);
+    sh.observe(&clean, is_ce, &rows(), &windows());
+    assert_eq!(
+        (sh.unclassified, sh.unknown_field, sh.resolve_miss),
+        (1, 1, 1),
+        "{}",
+        sh.line()
+    );
+    assert_eq!(sh.items, 1, "the real segment still bound");
+    assert!(sh.line().ends_with("NEGCTL"));
+}
+
 /// ★★ §7 test 6, the runner half — **a `Busy` stash re-binds at the next push.** The ring takes
 /// the first piece and refuses the second: the refused items come back UNBOUND, and pushing them
 /// later binds them against the rows as they are THEN. Only the pushed piece's resolutions are
