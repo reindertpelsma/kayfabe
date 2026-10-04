@@ -2094,6 +2094,61 @@ pub const fn gp_entry_decode(entry: u64) -> Option<GpfifoEntry> {
     })
 }
 
+/// `GP_ENTRY1_OPCODE` values of a control entry (`LENGTH == 0`) —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:280-284` (`NOP` … `PB_CRC`, every family)
+/// and `clc86f.h:184-189` (`SET_PB_SEGMENT_EXTENDED_BASE`, Hopper and later).
+pub mod gp_opcode {
+    /// `GP_ENTRY1_OPCODE_NOP` — nothing to fetch (UVM's `set_gpfifo_noop`).
+    pub const NOP: u32 = 0;
+    /// `GP_ENTRY1_OPCODE_ILLEGAL`.
+    pub const ILLEGAL: u32 = 1;
+    /// `GP_ENTRY1_OPCODE_GP_CRC`.
+    pub const GP_CRC: u32 = 2;
+    /// `GP_ENTRY1_OPCODE_PB_CRC`.
+    pub const PB_CRC: u32 = 3;
+    /// `NVC86F_GP_ENTRY1_OPCODE_SET_PB_SEGMENT_EXTENDED_BASE` — address bits 56:40 for every
+    /// later entry of the channel (`ogkm-580: kernel-open/nvidia-uvm/uvm_hopper_host.c:419-425`).
+    pub const SET_PB_SEGMENT_EXTENDED_BASE: u32 = 4;
+}
+
+/// ★ P1+P2 inc A: one GPFIFO entry, classified — a segment, or a CONTROL entry and its opcode.
+///
+/// [`gp_entry_decode`] answers `None` for every control entry, which is right for a reader that
+/// only wants method words but loses the one control entry that changes how LATER entries read:
+/// Hopper's `SET_PB_SEGMENT_EXTENDED_BASE`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpEntryKind {
+    /// An entry that names method words.
+    Segment(GpfifoEntry),
+    /// `LENGTH == 0`: `GP_ENTRY1_OPCODE` (7:0) and `GP_ENTRY0_OPERAND` (31:0).
+    Control {
+        /// The opcode ([`gp_opcode`]).
+        opcode: u32,
+        /// Entry0, whole.
+        operand: u32,
+    },
+}
+
+/// Classify one 8-byte GPFIFO entry ([`GpEntryKind`]).
+#[must_use]
+pub const fn gp_entry_classify(entry: u64) -> GpEntryKind {
+    match gp_entry_decode(entry) {
+        Some(e) => GpEntryKind::Segment(e),
+        None => GpEntryKind::Control {
+            opcode: ((entry >> 32) & 0xFF) as u32,
+            operand: (entry & 0xFFFF_FFFF) as u32,
+        },
+    }
+}
+
+/// `NVC86F_GP_ENTRY0_PB_EXTENDED_BASE_OPERAND` (24:8) of a `SET_PB_SEGMENT_EXTENDED_BASE`
+/// entry, as the address bits it stands for (56:40) —
+/// `ogkm-580: src/common/sdk/nvidia/inc/class/clc86f.h:175`.
+#[must_use]
+pub const fn gp_extended_base(operand: u32) -> u64 {
+    (((operand >> 8) & 0x1_FFFF) as u64) << 40
+}
+
 /// `AMPERE_USERMODE_A` — re-exported from [`crate::generated::classes`].
 ///
 /// ★ It was a hand-written literal here until `#156`. It is generated now, for one
@@ -3906,6 +3961,33 @@ mod tests {
     /// encoding is `tests/tests/pushbuffer_abi_oracle.rs`, which builds the entry with
     /// NVIDIA's own `DRF_NUM` over NVIDIA's own field definitions. This test is here to
     /// catch a *regression* in one half, and that is all it is here for.
+    /// ★ P1+P2 inc A: a control entry is classified with its opcode and operand, and the
+    /// extended-base operand (24:8) stands for address bits 56:40 — UVM's own encoding
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_hopper_host.c:419-425`: `pushbuffer_va >> 40`
+    /// into `PB_EXTENDED_BASE_OPERAND`, opcode 4 into `GP_ENTRY1_OPCODE`).
+    #[test]
+    fn a_control_entry_is_classified_and_the_extended_base_decodes() {
+        let va: u64 = 0x0123_4500_0000_0000; // a 57-bit pushbuffer VA
+        let entry = (((va >> 40) & 0x1_FFFF) << 8)
+            | (u64::from(gp_opcode::SET_PB_SEGMENT_EXTENDED_BASE) << 32);
+        match gp_entry_classify(entry) {
+            GpEntryKind::Control { opcode, operand } => {
+                assert_eq!(opcode, gp_opcode::SET_PB_SEGMENT_EXTENDED_BASE);
+                assert_eq!(gp_extended_base(operand), va & !((1 << 40) - 1));
+            }
+            s @ GpEntryKind::Segment(_) => panic!("{s:?}"),
+        }
+        let seg = gp_entry(0x1000, 8).expect("encodable");
+        assert!(matches!(gp_entry_classify(seg), GpEntryKind::Segment(_)));
+        assert_eq!(
+            gp_entry_classify(0),
+            GpEntryKind::Control {
+                opcode: gp_opcode::NOP,
+                operand: 0
+            }
+        );
+    }
+
     #[test]
     fn gp_entry_round_trips_through_our_own_encoder_only() {
         let e = gp_entry(0x00A5_0000_1230, 0x40).expect("encodable");

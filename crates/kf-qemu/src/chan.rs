@@ -101,6 +101,9 @@ struct PtChan {
     ctx: CtxBind,
     /// ★ P5c: the mirror's live-channel count (released at free).
     live: Arc<AtomicU64>,
+    /// ★ P1+P2 inc D: the twin's state word, when this channel was counted as a user of it
+    /// (T-mode) — released at free.
+    twin: Option<Arc<crate::twin::TwinState>>,
     /// ★ P5c: the guest's error notifier, as the twin's host error context — `None` when the
     /// guest declared none (or it could not be armed, named at birth).
     notifier: Option<PtNotifier>,
@@ -335,6 +338,19 @@ const VIEW_BYTES: u64 = 64 << 10;
 /// Views kept per channel; the oldest is released beyond this (host BAR1 aperture is finite).
 const VIEWS_MAX: usize = 8;
 
+/// The 64 KiB-aligned store slice a CPU view of `at` covers, bounded by `bound` — `Err` when `at`
+/// lies at or past the bound.
+fn view_span(bound: u64, at: u64) -> Result<(u64, u64), String> {
+    let off = at & !(VIEW_BYTES - 1);
+    let len = VIEW_BYTES.min(bound.saturating_sub(off));
+    if len == 0 || at >= bound {
+        return Err(format!(
+            "store offset {at:#x} is past the store ({bound:#x})"
+        ));
+    }
+    Ok((off, len))
+}
+
 impl StoreViews {
     const fn new() -> Self {
         StoreViews {
@@ -351,13 +367,7 @@ impl StoreViews {
         {
             return Ok(i);
         }
-        let off = at & !(VIEW_BYTES - 1);
-        let len = VIEW_BYTES.min(fb_len.saturating_sub(off));
-        if len == 0 {
-            return Err(format!(
-                "store offset {at:#x} is past the store ({fb_len:#x})"
-            ));
-        }
+        let (off, len) = view_span(fb_len, at)?;
         if self.views.len() >= VIEWS_MAX {
             let old = self.views.remove(0);
             let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
@@ -428,9 +438,64 @@ struct Mem<'a> {
     ram: &'a RamMap,
     rm: &'a HostRm,
     store: u32,
+    /// The bound of the CPU store views ([`store_read_bound`]).
+    store_len: u64,
     views: &'a mut StoreViews,
+    /// ★ Review fix 2026-10-04: the VA thread's inbox — whether a walk is pending
+    /// ([`crate::mem::Inbox::walk_busy`]).
+    inbox: &'a crate::mem::Inbox,
 }
+
+/// ★ P1+P2 review fix (HIGH, 2026-10-04) — **the bound on the CPU store views a Translated
+/// channel's reads go through** (its GPFIFO entries and pushbuffer through vidmem rows, the
+/// completion probe's read-backs). ⊘ Never the mirror's store-WINDOW length: a T-mode twin carries
+/// no window and records `fb_len = 0`, so a bound taken from it made every vidmem fetch fail
+/// "past the store (0x0)" — every UVM Translated channel died at its first fetch (UVM's GPFIFO is
+/// vidmem on a dGPU, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:3386-3390`). In T-mode the
+/// bound is the carve-out base — a CPU read never touches kayfabe's firmware region either; on
+/// the default path it is the mirror's `fb_len`, which is the store's length there (today's value).
+const fn store_read_bound(tmode: bool, mirror_fb_len: u64, carve: u64) -> u64 {
+    if tmode { carve } else { mirror_fb_len }
+}
+/// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.4) — the T-mode resolver's view of a
+/// mirror: OUR placement rows (never a copy of the guest's tables), each operand resolved under ONE
+/// read guard, and guest RAM through the vIOMMU seam ([`RamMap::dma_to_file_range`]).
+pub(crate) fn resolve_rows(
+    rows: &crate::mem::PlacedRows,
+    va: u64,
+    len: u64,
+) -> Result<Vec<kf_chan::tmode::Span>, u64> {
+    let r = rows.read().map_err(|_| va)?;
+    kf_chan::tmode::resolve_spans(va, len, |at| {
+        let (&start, &(rlen, off, ram, perm)) = r.range(..=at).next_back()?;
+        let end = start.checked_add(rlen)?;
+        (at < end).then(|| (ram, off + (at - start), end - at, perm))
+    })
+}
+
+impl kf_chan::tmode::Rows for Mem<'_> {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<kf_chan::tmode::Span>, u64> {
+        resolve_rows(&self.mirror.rows, va, len)
+    }
+    fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
+        self.ram.dma_to_file_range(dma, len)
+    }
+    // ★ Review fix 2026-10-04 (§3.5, §7.13): the rows' commit log and the walk-pending signal.
+    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<kf_chan::tmode::Span>, u64>, u64) {
+        crate::mem::resolve_rows_epoch(&self.mirror.rows, &self.mirror.log, va, len)
+    }
+    fn changed_since(&self, epoch: u64, va: u64, len: u64) -> kf_chan::tmode::Changed {
+        self.mirror.log.changed_since(epoch, va, len)
+    }
+    fn walk_pending(&self) -> bool {
+        self.inbox.walk_busy()
+    }
+}
+
 impl GuestMemory for Mem<'_> {
+    fn rows(&self) -> Option<&dyn kf_chan::tmode::Rows> {
+        Some(self)
+    }
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
         let len = out.len() as u64;
         // ★ P5b: piece by piece across OUR rows — a segment may span two adjacent placements.
@@ -446,7 +511,7 @@ impl GuestMemory for Mem<'_> {
                 let dst = &mut out[done as usize..(done + n) as usize];
                 let t0 = crate::prof::on().then(crate::prof::now_ns);
                 self.views
-                    .read(self.rm, self.store, self.mirror.fb_len, off, dst)
+                    .read(self.rm, self.store, self.store_len, off, dst)
                     .map_err(|e| format!("{at_va:#x}: {e}"))?;
                 crate::prof::VIEW_READS.fetch_add(1, Ordering::Relaxed);
                 crate::prof::VIEW_READ_BYTES.fetch_add(n, Ordering::Relaxed);
@@ -528,7 +593,7 @@ impl Window for SlotWindow<'_> {
         match t {
             Target::CoherentSysmem | Target::NonCoherentSysmem => {
                 let (base, rlen) = self.mirror.ram?;
-                let (_, off) = self.ram.file_range(phys, len)?;
+                let off = self.ram.dma_to_file_range(phys, len)?;
                 (off.checked_add(len)? <= rlen).then(|| base + off)
             }
             other => Windows(self.mirror).translate(other, phys, len),
@@ -567,6 +632,80 @@ struct Slot {
     disabled: bool,
     /// ★ v3-initrace: the completion probe's record (empty unless `KF3_COMPLETION_PROBE`).
     probe: ProbeRec,
+    /// ★ P1+P2 inc D: the ring lives in the T-space (its slot goes back to the T-space's pool).
+    tspace_ring: bool,
+    /// ★ P1+P2 inc A: the channel's count-only total already summed into
+    /// [`ChanPlane::inca_counted`].
+    inca_seen: u64,
+}
+
+/// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
+/// CONTROL: every recorded resolution is perturbed, so `stale_binds=` must move on a box run that
+/// retires any T-mode work. Default OFF; read once. Never set in production.
+fn negctl_stale_bind() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_STALE_BIND").is_some_and(|v| v != "0"))
+}
+
+/// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_SHADOW=1`**, the shadow counters' POSITIVE CONTROL
+/// (`kf_chan::tmode::Shadow::negctl_probe`): with `KF3_TSHADOW=1`, every observed segment moves
+/// `unclassified`, `unknown_field`, `resolve_miss` and `would_refuse` through the real decode and
+/// bind. Count-only (the shadow emits nothing). Default OFF; read once.
+fn negctl_shadow() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_SHADOW").is_some_and(|v| v != "0"))
+}
+
+/// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_HEAP=1`**, the `heap_out=` counter's POSITIVE CONTROL:
+/// every birth is counted as if its USERD lay outside the usable heap — counted only, NEVER refused
+/// ([`heap_gate`]). Default OFF; read once.
+fn negctl_heap() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_HEAP").is_some_and(|v| v != "0"))
+}
+
+/// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_TWIN=1`** (T-mode), the `twin_refused=` counter's
+/// POSITIVE CONTROL: every passthrough birth is answered as if its space were a guest-KERNEL space
+/// — refused by name, counted. Destructive by design (no guest user channel is born): a dedicated
+/// control run only. Default OFF; read once.
+fn negctl_twin() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TWIN").is_some_and(|v| v != "0"))
+}
+
+/// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TSHADOW=1`**: every
+/// Translated channel runs the T-mode rewriter in shadow on today's path (its output discarded, its
+/// verdicts counted) and dumps one `TSHADOW` line at free. Default OFF; read once.
+fn tshadow_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_TSHADOW").is_some_and(|v| v != "0"))
+}
+
+/// The shadow's windows: the store window over `[0, carve)` at the base RM chose on GA106/580, the
+/// guest-RAM window after it (`THE_TRANSLATED_PLANE.md` §17.1). Nominal bases — the shadow counts
+/// coverage and refusals, and never emits. `None` without a guest-RAM object.
+fn shadow_windows(carve: u64, ram_len: Option<u64>) -> Option<kf_chan::tspace_unsafe::TWindows> {
+    const FB_BASE: u64 = 0x1_2000_0000;
+    let ram_base = (FB_BASE + carve).next_multiple_of(2 << 20);
+    kf_chan::tspace_unsafe::TWindows::new(
+        (FB_BASE, carve),
+        (ram_base, ram_len?),
+        crate::mem::RING_REGION_BASE,
+    )
+    .ok()
+}
+
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TCENSUS=1`** (or
+/// `KF3_TSHADOW=1`, which runs the census with the shadow): every Translated channel counts what it
+/// fetches and dumps one `TCENSUS` line at free. Default OFF; read once. Count-only: nothing the
+/// rewriter emits changes.
+fn tcensus_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        ["KF3_TCENSUS", "KF3_TSHADOW"]
+            .iter()
+            .any(|k| std::env::var_os(k).is_some_and(|v| v != "0"))
+    })
 }
 
 /// ★★★ v3-initrace — **`KF3_COMPLETION_PROBE=<ms>`** (default OFF; read once; any non-number
@@ -674,7 +813,7 @@ struct ProbeRec {
 fn probe_read(
     ram: &RamMap,
     mirror: &Mirror,
-    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    views: Option<(&mut StoreViews, &HostRm, u32, u64)>,
     r: kf_chan::translated::Release,
 ) -> ReleaseRead {
     match resolve_placed(&mirror.rows, r.va, 4) {
@@ -694,9 +833,9 @@ fn probe_read(
             }
         }
         Some((false, off)) => {
-            let got = views.and_then(|(v, rm, store)| {
+            let got = views.and_then(|(v, rm, store, bound)| {
                 let mut b = [0u8; 4];
-                v.read(rm, store, mirror.fb_len, off, &mut b)
+                v.read(rm, store, bound, off, &mut b)
                     .ok()
                     .map(|()| u32::from_le_bytes(b))
             });
@@ -729,13 +868,11 @@ fn hex16(b: &[u8]) -> String {
 fn probe_side(
     ram: &RamMap,
     mirror: &Mirror,
-    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    views: Option<(&mut StoreViews, &HostRm, u32, u64)>,
     o: kf_chan::translated::Operand,
 ) -> (String, Option<Vec<u8>>) {
     match o {
-        kf_chan::translated::Operand::Physical(t, p, n) => {
-            probe_operand(ram, mirror, views, t, p, n)
-        }
+        kf_chan::translated::Operand::Physical(t, p, n) => probe_operand(ram, views, t, p, n),
         kf_chan::translated::Operand::Virtual(va, n) => {
             let len = n.min(16);
             match resolve_placed(&mirror.rows, va, len) {
@@ -755,7 +892,7 @@ fn probe_side(
                     )
                 }
                 Some((false, off)) => {
-                    let (s, b) = probe_operand(ram, mirror, views, Target::LocalFb, off, n);
+                    let (s, b) = probe_operand(ram, views, Target::LocalFb, off, n);
                     (format!("VA {va:#x} -> {s}"), b)
                 }
             }
@@ -770,8 +907,7 @@ fn probe_side(
 /// landed in a window's scratch, or in a view of another store page, shows as a disagreement.
 fn probe_operand(
     ram: &RamMap,
-    mirror: &Mirror,
-    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    views: Option<(&mut StoreViews, &HostRm, u32, u64)>,
     t: Target,
     phys: u64,
     len: u64,
@@ -779,11 +915,9 @@ fn probe_operand(
     let n = usize::try_from(len.min(16)).unwrap_or(16);
     match t {
         Target::LocalFb => {
-            let host = views.and_then(|(v, rm, store)| {
+            let host = views.and_then(|(v, rm, store, bound)| {
                 let mut b = vec![0u8; n];
-                v.read(rm, store, mirror.fb_len, phys, &mut b)
-                    .ok()
-                    .map(|()| b)
+                v.read(rm, store, bound, phys, &mut b).ok().map(|()| b)
             });
             let guest: Vec<String> = crate::mem::view_index()
                 .map(|ix| ix.guest_views(phys, n))
@@ -811,8 +945,8 @@ fn probe_operand(
         }
         Target::CoherentSysmem | Target::NonCoherentSysmem => {
             let host = ram
-                .file_range(phys, n as u64)
-                .and_then(|(_, off)| ram.at_file_offset(off, n as u64))
+                .dma_to_file_range(phys, n as u64)
+                .and_then(|off| ram.at_file_offset(off, n as u64))
                 .and_then(|(m, at)| {
                     let mut b = vec![0u8; n];
                     m.read_into(at, &mut b).then_some(b)
@@ -869,12 +1003,81 @@ pub struct TokenCount {
     pub last_put: Option<u32>,
 }
 
+/// ★ P1+P2 inc A / audit S1-43: the FB ranges a channel allocation names — its USERD (the
+/// declared size, at least `NV_RAMUSERD_CHAN_SIZE`: the engine's footprint and what
+/// [`kf_chan::host::zero_userd`] may write) and its 16-byte error notifier — each inside ONE usable
+/// heap region of the layout we declared ([`kf_chip::bar0::FbLayout::in_usable_heap`]). ⊘ Never the
+/// firmware carve-out, where kayfabe's own BAR1/BAR2 roots live; before this check host RM bounded
+/// these offsets only by the store object. Sysmem ranges are bounded by the guest-RAM lookup at
+/// their use. ⚠ A preserved console region is reserved in the layout fn 72 produces, which this
+/// plane does not see: a USERD there is guest memory, accepted. Enforced through [`heap_gate`].
+fn heap_bounds(
+    layout: &kf_chip::bar0::FbLayout,
+    userd: Option<kf_arch::UserdMem>,
+    notifier: Option<kf_arch::fault::ErrorNotifier>,
+) -> Result<(), String> {
+    if let Some(kf_arch::UserdMem::Framebuffer { base, size }) = userd {
+        let len = size.max(kf_abi::submit::USERD_SIZE);
+        if !layout.in_usable_heap(base, len) {
+            return Err(format!(
+                "FB USERD {base:#x}+{len:#x} is outside the usable heap (carve-out at {:#x}, store {:#x})",
+                layout.carve(),
+                layout.fb_length
+            ));
+        }
+    }
+    if let Some(kf_arch::fault::ErrorNotifier::Framebuffer { off }) = notifier
+        && !layout.in_usable_heap(off, 16)
+    {
+        return Err(format!(
+            "FB error notifier {off:#x}+0x10 is outside the usable heap (carve-out at {:#x})",
+            layout.carve()
+        ));
+    }
+    Ok(())
+}
+
+/// What [`heap_gate`] decided for one birth.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum HeapGate {
+    /// Every guest-named FB range lies inside the usable heap.
+    Inside,
+    /// Outside, and strict: refused by name before any host call.
+    Refuse(String),
+    /// Outside, count-only (the default path until box step 1): counted, named, born as before
+    /// inc A.
+    Count(String),
+}
+
+/// ★ P1+P2 inc A / S1-43 (review fix 2026-10-04): [`heap_bounds`], refusing only when `strict`;
+/// `negctl` (`KF3_NEGCTL_HEAP`, the counter's positive control) counts EVERY birth and refuses none.
+fn heap_gate(
+    strict: bool,
+    negctl: bool,
+    layout: &kf_chip::bar0::FbLayout,
+    userd: Option<kf_arch::UserdMem>,
+    notifier: Option<kf_arch::fault::ErrorNotifier>,
+) -> HeapGate {
+    match heap_bounds(layout, userd, notifier) {
+        Err(why) if negctl => HeapGate::Count(format!("{why} (positive control)")),
+        Ok(()) if negctl => HeapGate::Count("KF3_NEGCTL_HEAP positive control".into()),
+        Ok(()) => HeapGate::Inside,
+        Err(why) if strict => HeapGate::Refuse(why),
+        Err(why) => HeapGate::Count(why),
+    }
+}
+
 /// ★★★ The channel plane.
 pub struct ChanPlane {
     rm: &'static HostRm,
     plane: &'static Plane<'static>,
     store: u32,
     ram: &'static RamMap,
+    /// ★ P1+P2 / S1-43: the framebuffer layout this device declared — a guest-named FB USERD or
+    /// notifier must lie inside one of its usable heap regions ([`ChanPlane::heap_bounds`]).
+    layout: kf_chip::bar0::FbLayout,
+    /// ★ P1+P2 inc D: the T-space (`KF3_TSPACE=1`), built by the VA thread at prewarm.
+    tspace: crate::tspace::TSpaceCell,
     mirrors: Mirrors,
     /// ★ P6: the VA thread's inbox — a Translated channel's `MEM_OP` split goes through it.
     inbox: std::sync::Arc<crate::mem::Inbox>,
@@ -962,6 +1165,23 @@ pub struct ChanPlane {
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
     pub rc_unarmed: AtomicU64,
+    /// ★ P1+P2 inc A / S1-43: births whose guest-named FB USERD or notifier lay outside the usable
+    /// heap ([`ChanPlane::heap_bounds`]) — refused when strict (`crate::tspace::inca_strict`),
+    /// counted and let through as before inc A otherwise.
+    pub heap_out: AtomicU64,
+    /// ★ P1+P2 inc A, count-only (review fix 2026-10-04): what Translated channels' by-name
+    /// refusals WOULD have refused while not strict (`kf_chan::translated::IncACounts`), summed
+    /// over every channel as it runs.
+    pub inca_counted: AtomicU64,
+    /// ★ P1+P2 inc D (§4.2): births the per-twin state refused — a passthrough channel in a
+    /// guest-KERNEL space, or a Translated one in a space with live user channels. 0 on stock
+    /// drivers (UVM's channels live in UVM's own VA space).
+    pub twin_refused: AtomicU64,
+    /// ★ P1+P2 inc D: Translated births refused because the T-space was not built.
+    pub tspace_refused: AtomicU64,
+    /// ★ Review fix 2026-10-04 (§4.2): Translated births refused in a space whose only user
+    /// channels are being freed (their host free not finished, or refused).
+    pub twin_freeing_refused: AtomicU64,
     /// ★ 2026-09-30: the doorbell fast path (`kf_chan::dbfast`, `V3_DOORBELL_IOEVENTFD.md`): every
     /// born channel — Passthrough AND Translated — registers its guest token; every free removes it
     /// before the twin goes.
@@ -1119,6 +1339,8 @@ impl ChanPlane {
         rm: &'static HostRm,
         plane: &'static Plane<'static>,
         store: u32,
+        layout: kf_chip::bar0::FbLayout,
+        tspace: crate::tspace::TSpaceCell,
         ram: &'static RamMap,
         mirrors: Mirrors,
         inbox: std::sync::Arc<crate::mem::Inbox>,
@@ -1233,6 +1455,8 @@ impl ChanPlane {
             rm,
             plane,
             store,
+            layout,
+            tspace,
             ram,
             mirrors,
             inbox,
@@ -1271,6 +1495,11 @@ impl ChanPlane {
             rc_queue: Mutex::new(Vec::new()),
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
+            heap_out: AtomicU64::new(0),
+            inca_counted: AtomicU64::new(0),
+            twin_refused: AtomicU64::new(0),
+            tspace_refused: AtomicU64::new(0),
+            twin_freeing_refused: AtomicU64::new(0),
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
             dispsw: crate::dispsw::DispSwCounters::default(),
@@ -2772,6 +3001,13 @@ impl ChanPlane {
                     let _ = self.plane.free_channel(&mut c, t.idx);
                 }
             }
+            // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): in statement order the twin's user
+            // moves from live to FREEING; the act ends it only once host RM freed the channel.
+            for (_, t) in &twins {
+                if let Some(tw) = &t.twin {
+                    tw.user_freeing();
+                }
+            }
         }
         for ht in &translated {
             // Stop the pump before the act frees its twin (the slot lock is the worker's).
@@ -2807,6 +3043,20 @@ impl ChanPlane {
                     let fast = me.dbfast.deregister(t.idx);
                     let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
                     t.live.fetch_sub(1, Ordering::AcqRel);
+                    // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): the twin's user ends only if
+                    // host RM really freed the channel. A refused free leaves it counted — the
+                    // space can then never become a guest-KERNEL space, where privileged leaves
+                    // would be mirrored under a channel that may still run.
+                    if let Some(tw) = &t.twin {
+                        if r.is_ok() {
+                            tw.user_released();
+                        } else {
+                            line.push(format!(
+                                "twin {:#x} stays counted (its host free was refused): its space never turns kernel",
+                                t.idx
+                            ));
+                        }
+                    }
                     // The error context goes AFTER its channel (host RM refuses freeing a context
                     // DMA a live channel names as its error context).
                     if let Some(n) = t.notifier {
@@ -2995,6 +3245,30 @@ impl ChanPlane {
                 ),
             );
         }
+        // ★ P1+P2 inc A / S1-43: a guest-named FB USERD or error notifier inside the usable heap,
+        // checked here — before any host call — for both routes. ★ Review fix 2026-10-04: REFUSED
+        // only when strict (`crate::tspace::inca_strict`); on the default path COUNTED and named,
+        // and the birth proceeds exactly as before inc A (box step 1 must show `heap_out=0`).
+        match heap_gate(
+            crate::tspace::inca_strict(),
+            negctl_heap(),
+            &self.layout,
+            a.userd,
+            a.error_notifier,
+        ) {
+            HeapGate::Inside => {}
+            HeapGate::Refuse(why) => {
+                self.heap_out.fetch_add(1, Ordering::Relaxed);
+                return refuse(NV_ERR_INVALID_ARGUMENT, why);
+            }
+            HeapGate::Count(why) => {
+                self.heap_out.fetch_add(1, Ordering::Relaxed);
+                eprintln!(
+                    "kf3: chan {:#x}:{:#x} HEAP-OUT (count-only, inc A): {why}",
+                    a.client, a.handle
+                );
+            }
+        }
         let Some(vas) = a.vaspace else {
             return refuse(
                 NV_ERR_INVALID_STATE,
@@ -3049,9 +3323,10 @@ impl ChanPlane {
                     }
                 }
                 Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
-                    let (Some(ram), Some((_, off))) =
-                        (mirror.ram_obj, self.ram.file_range(base, 0x200))
-                    else {
+                    let (Some(ram), Some((_, off))) = (
+                        mirror.ram_obj,
+                        self.ram.dma_to_file_range(base, 0x200).map(|o| ((), o)),
+                    ) else {
                         return refuse(
                             NV_ERR_NOT_SUPPORTED,
                             format!(
@@ -3072,7 +3347,10 @@ impl ChanPlane {
             // can name — so the twin's RC record is written there by the HOST (its GSP), natively.
             let err_at: Option<(u32, u64, kf_arch::UserdMem)> = match a.error_notifier {
                 Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => {
-                    match (mirror.ram_obj, self.ram.file_range(gpa, 16)) {
+                    match (
+                        mirror.ram_obj,
+                        self.ram.dma_to_file_range(gpa, 16).map(|o| ((), o)),
+                    ) {
                         (Some(ram), Some((_, off))) => Some((
                             ram,
                             off,
@@ -3121,6 +3399,27 @@ impl ChanPlane {
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
             let live = mirror.live.clone();
+            // ★★ P1+P2 inc D (§4.2): in T-mode a passthrough birth moves the twin to User(n+1), in
+            // statement order, and is REFUSED by name in a guest-KERNEL space — never waited on.
+            let twin = if crate::tspace::enabled() {
+                if negctl_twin() || mirror.kernel_vas.try_user().is_err() {
+                    self.twin_refused.fetch_add(1, Ordering::Relaxed);
+                    return refuse(
+                        NV_ERR_INVALID_STATE,
+                        format!(
+                            "twin state: VA space {key:?} is a guest-KERNEL space — a channel the guest created non-kernel never runs in it (V3_P1P2_TSPACE.md §4.2){}",
+                            if negctl_twin() {
+                                " [KF3_NEGCTL_TWIN positive control]"
+                            } else {
+                                ""
+                            }
+                        ),
+                    );
+                }
+                Some(mirror.kernel_vas.clone())
+            } else {
+                None
+            };
             live.fetch_add(1, Ordering::AcqRel);
             return self.defer(
                 "birth passthrough",
@@ -3139,6 +3438,9 @@ impl ChanPlane {
                         }
                         Err(e) => {
                             live.fetch_sub(1, Ordering::AcqRel);
+                            if let Some(t) = &twin {
+                                t.user_done();
+                            }
                             if let Some(n) = notifier {
                                 me.release_notifier(n);
                             }
@@ -3154,6 +3456,9 @@ impl ChanPlane {
                     if let Err(e) = alloc {
                         let _ = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
                         live.fetch_sub(1, Ordering::AcqRel);
+                        if let Some(t) = &twin {
+                            t.user_done();
+                        }
                         if let Some(n) = notifier {
                             me.release_notifier(n);
                         }
@@ -3175,6 +3480,7 @@ impl ChanPlane {
                             dispsw_host_refused: false,
                             ctx: CtxBind::default(),
                             live,
+                            twin,
                             notifier,
                             stopped: false,
                             disabled: false,
@@ -3203,6 +3509,46 @@ impl ChanPlane {
             );
         }
         let entries = a.entries.max(1);
+        // ★★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §2.3, §4.2): in T-mode the channel runs in the T-space
+        // — refused by name if it is not built (never a fallback to mirror windows: that would
+        // reopen S1-21) — and its space moves Unclassified -> Kernel, refused while user channels
+        // live there. Statement order, before the channel can run.
+        let tmode = crate::tspace::enabled();
+        if tmode {
+            match self.tspace.get() {
+                Some(Ok(_)) => {}
+                built => {
+                    self.tspace_refused.fetch_add(1, Ordering::Relaxed);
+                    let why = match built {
+                        Some(Err(e)) => e.clone(),
+                        _ => "prewarm has not run: guest RAM is not registered yet".to_string(),
+                    };
+                    return refuse(NV_ERR_INVALID_STATE, format!("tspace: not built ({why})"));
+                }
+            }
+            match mirror.kernel_vas.try_kernel() {
+                Ok(true) => eprintln!(
+                    "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
+                    a.client, a.handle
+                ),
+                Ok(false) => {}
+                Err(e) => {
+                    // ★ Review fix 2026-10-04: a space whose only user channels are being freed
+                    // (or whose host free was refused) is counted apart.
+                    if matches!(e, crate::twin::TwinRefusal::KernelWhileUsersFree(_)) {
+                        self.twin_freeing_refused.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        self.twin_refused.fetch_add(1, Ordering::Relaxed);
+                    }
+                    return refuse(
+                        NV_ERR_INVALID_STATE,
+                        format!(
+                            "twin state: VA space {key:?} ({e:?}) — a Translated channel never runs in a space a user channel runs in (V3_P1P2_TSPACE.md §4.2)"
+                        ),
+                    );
+                }
+            }
+        }
         mirror.live.fetch_add(1, Ordering::AcqRel);
         // ★★★ v3-roperm: a guest-KERNEL channel lives here (`kernel_channel`: facts guest
         // userspace cannot produce), so this space is the kernel's and mirrors privileged leaves
@@ -3211,7 +3557,7 @@ impl ChanPlane {
         // at the space's next walk (its next invalidate or split), not here. `[measured 5fead67d]`
         // no privileged leaf was ever walked in a space that turned kernel this way (UVM's): they
         // live in RM-internal clients' spaces, which are kernel from creation (`kernel_vas_for`).
-        if !mirror.kernel_vas.swap(true, Ordering::AcqRel) {
+        if !tmode && !mirror.kernel_vas.force_kernel() {
             eprintln!(
                 "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
                 a.client, a.handle
@@ -3245,16 +3591,54 @@ impl ChanPlane {
                 let mut userd = userd;
                 let zeroed = kf_chan::host::zero_userd(&mut userd, declared)
                     .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("USERD initialisation: {e}"))))?;
-                // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
-                // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
-                let at = crate::mem::take_ring_slot(&mirror.rings)
-                    .ok_or_else(|| fail((NV_ERR_INSUFFICIENT_RESOURCES, "host ring: the space's ring region is exhausted".to_string())))?;
-                let host = HostRing::on_engine_at(me.rm, mirror.space, me.host_ce, Some(at))
-                    .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
+                // ★★★ P1+P2 inc D: in T-mode the ring is born in the T-space at a T-space ring slot,
+                // in the T-space layout — the guest's mirror gets nothing of ours.
+                let ts = if tmode {
+                    match me.tspace.get() {
+                        Some(Ok(t)) => Some(t),
+                        _ => return Err(fail((NV_ERR_INVALID_STATE, "tspace: not built".to_string()))),
+                    }
+                } else {
+                    None
+                };
+                let host = match ts {
+                    Some(t) => t.ring(me.rm, me.host_ce).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
+                    None => {
+                        // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
+                        // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
+                        let at = crate::mem::take_ring_slot(&mirror.rings)
+                            .ok_or_else(|| fail((NV_ERR_INSUFFICIENT_RESOURCES, "host ring: the space's ring region is exhausted".to_string())))?;
+                        HostRing::on_engine_at(me.rm, mirror.space, me.host_ce, Some(at))
+                            .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?
+                    }
+                };
                 let ht = host.channel().token;
                 let ring_va = host.va();
-                let mut chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
+                let mut chan = match ts {
+                    Some(t) => {
+                        let mut c = TranslatedChannel::new(TranslatedRing::new_tmode(a.gpfifo_va, entries, 0), host, idx);
+                        c.set_tspace(t.windows(), negctl_stale_bind());
+                        c
+                    }
+                    None => TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx),
+                };
                 chan.set_probe(completion_probe_ms().is_some());
+                chan.set_census(tcensus_on());
+                // ★ P1+P2 inc A (review fix 2026-10-04): count-only on the default path, refusing
+                // when strict; the GP extended base exists from Hopper's `NVC86F` on
+                // (`clc86f.h:184-189`) — kayfabe presents the host family.
+                chan.set_inca(
+                    crate::tspace::inca_strict(),
+                    matches!(me.family, kf_chip::Family::Hopper | kf_chip::Family::Blackwell),
+                );
+                if tshadow_on() && ts.is_none() {
+                    // ★ P1+P2 inc C: the T-mode shadow binds against windows shaped like the
+                    // T-space's (the store window ends at the carve-out); their bases are nominal.
+                    chan.set_shadow(
+                        shadow_windows(me.layout.carve(), mirror.ram.map(|(_, l)| l)),
+                        negctl_shadow(),
+                    );
+                }
                 let alloc = me
                     .caps
                     .lock()
@@ -3264,8 +3648,11 @@ impl ChanPlane {
                     let mut chan = chan;
                     let _ = me.rm.free_channel(chan.host().channel());
                     // ★ v3-appfix J: and the ring's own object, mapping and CPU view.
-                    if chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED")) {
-                        crate::mem::give_ring_slot(&mirror.rings, ring_va);
+                    let released = chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED"));
+                    match ts {
+                        Some(t) => t.give_ring(ring_va, released),
+                        None if released => crate::mem::give_ring_slot(&mirror.rings, ring_va),
+                        None => {}
                     }
                     return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"))));
                 }
@@ -3287,6 +3674,8 @@ impl ChanPlane {
                     stopped: false,
                     disabled: false,
                     probe: ProbeRec::default(),
+                    tspace_ring: ts.is_some(),
+                    inca_seen: 0,
                 };
                 if let Ok(mut s) = me.slots.write() {
                     s.insert(ht, Arc::new(Mutex::new(slot)));
@@ -3487,14 +3876,16 @@ impl ChanPlane {
                 })
             }
             Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
-                let b = self
+                // ★ P1+P2 §2.6, review fix 2026-10-04: through the vIOMMU seam — the guest's DMA
+                // address to a guest-memfd range, then that range's host mapping — never a GPA
+                // lookup of a device address. (Equal to the block lookup it replaces for the one
+                // fd-backed guest RAM kf3 supports.)
+                let (mem, at) = self
                     .ram
-                    .block_for(base, 0x200)
-                    .ok_or_else(|| format!("USERD at guest-physical {base:#x}: no RAM block"))?;
-                Ok(UserdView::Ram {
-                    mem: b.mem,
-                    at: (base - b.gpa) as usize,
-                })
+                    .dma_to_file_range(base, 0x200)
+                    .and_then(|off| self.ram.at_file_offset(off, 0x200))
+                    .ok_or_else(|| format!("USERD at guest DMA address {base:#x}: no guest RAM"))?;
+                Ok(UserdView::Ram { mem, at })
             }
             other => Err(format!(
                 "USERD not declared as a physical descriptor ({other:?})"
@@ -3546,7 +3937,19 @@ impl ChanPlane {
         } else {
             None
         };
-        if ring_line.as_deref().is_some_and(|l| !l.contains("REFUSED")) {
+        let released = ring_line.as_deref().is_some_and(|l| !l.contains("REFUSED"));
+        if g.tspace_ring {
+            // ★ P1+P2 inc D: a T-space ring slot; one whose release did not fully succeed leaks.
+            if let Some(Ok(t)) = self.tspace.get() {
+                t.give_ring(ring_va, released);
+            }
+            eprintln!(
+                "kf3: TSPACE-RETIRE tok={:#x} host={ht:#x} key={:?} ring_va={ring_va:#x} released={released} {}",
+                g.guest_idx,
+                g.key,
+                g.chan.stale_line()
+            );
+        } else if released {
             crate::mem::give_ring_slot(&g.mirror.rings, ring_va);
         }
         if let Some(l) = ring_line.as_deref().filter(|l| l.contains("REFUSED")) {
@@ -3607,8 +4010,27 @@ impl ChanPlane {
                 );
             }
         }
+        if let Some(sh) = g.chan.shadow() {
+            // ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): what T-mode would have done on this channel.
+            eprintln!(
+                "kf3: TSHADOW tok={:#x} host={ht:#x} key={:?} {}",
+                g.guest_idx,
+                g.key,
+                sh.line()
+            );
+        }
+        if let Some(c) = g.chan.census() {
+            // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.6): one census line per Translated channel.
+            eprintln!(
+                "kf3: TCENSUS tok={:#x} host={ht:#x} key={:?} privilege={:?} {}",
+                g.guest_idx,
+                g.key,
+                g.privilege,
+                c.line()
+            );
+        }
         eprintln!(
-            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?}",
+            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?} inca=[{}]",
             g.guest_idx,
             g.chan.counts().0,
             g.chan.counts().1,
@@ -3618,7 +4040,8 @@ impl ChanPlane {
             g.last_put,
             g.chan.last_gp_get(),
             g.privilege,
-            g.dead
+            g.dead,
+            g.chan.inca().line()
         );
     }
 
@@ -3675,12 +4098,18 @@ impl ChanPlane {
         {
             g.probe.put_moved = Some((p, std::time::Instant::now()));
         }
+        // ★ Review fix 2026-10-04 (HIGH): the CPU store views' bound is the STORE's readable
+        // extent, never the mirror's window length (0 on a T-mode twin) — [`store_read_bound`].
+        let store_len =
+            store_read_bound(crate::tspace::enabled(), mirror.fb_len, self.layout.carve());
         let mut mem = Mem {
             mirror: &mirror,
             ram: self.ram,
             rm: self.rm,
             store: self.store,
+            store_len,
             views: &mut g.views,
+            inbox: &self.inbox,
         };
         let win = SlotWindow {
             mirror: &mirror,
@@ -3701,6 +4130,18 @@ impl ChanPlane {
             is_any_ce_class,
             &win,
         );
+        // ★ Review fix 2026-10-04 (§3.5): a stash waiting for a pending walk is rung by the VA
+        // thread once it is idle again.
+        if g.chan.waiting_on_walk() {
+            self.inbox.wait_walk(g.guest_idx);
+        }
+        // ★ P1+P2 inc A: what this pump counted (count-only), summed for the status line.
+        let inca = g.chan.inca().total();
+        if inca > g.inca_seen {
+            self.inca_counted
+                .fetch_add(inca - g.inca_seen, Ordering::Relaxed);
+            g.inca_seen = inca;
+        }
         if probe {
             for f in g.chan.take_completed() {
                 let reads: Vec<ReleaseRead> = f
@@ -3710,7 +4151,7 @@ impl ChanPlane {
                         probe_read(
                             self.ram,
                             &mirror,
-                            Some((&mut g.views, self.rm, self.store)),
+                            Some((&mut g.views, self.rm, self.store, store_len)),
                             *r,
                         )
                     })
@@ -3727,7 +4168,7 @@ impl ChanPlane {
                         Some(o) => probe_side(
                             self.ram,
                             &mirror,
-                            Some((&mut g.views, self.rm, self.store)),
+                            Some((&mut g.views, self.rm, self.store, store_len)),
                             o,
                         ),
                         None => ("-".to_string(), None),
@@ -3736,7 +4177,7 @@ impl ChanPlane {
                         Some(o) => probe_side(
                             self.ram,
                             &mirror,
-                            Some((&mut g.views, self.rm, self.store)),
+                            Some((&mut g.views, self.rm, self.store, store_len)),
                             o,
                         ),
                         None => ("-".to_string(), None),
@@ -3789,6 +4230,8 @@ impl ChanPlane {
                 ChanError::Host(h) => format!("host: {h}"),
                 ChanError::Userd(u) => format!("userd: {u}"),
                 ChanError::Publish(p) => format!("split: {p}"),
+                // ★ P1+P2 inc D: T-mode refused an item at bind, by name.
+                ChanError::Bind(r) => format!("tspace bind: {} {r:x?}", r.reason()),
             };
             eprintln!(
                 "kf3: chan token {:#x} ({:?}) DEAD: {why}",
@@ -4024,6 +4467,7 @@ mod dispsw_tests {
             dispsw_host_refused: false,
             ctx: CtxBind::default(),
             live: Arc::new(AtomicU64::new(0)),
+            twin: None,
             notifier: None,
             stopped: false,
             disabled: false,
@@ -4301,5 +4745,170 @@ mod scope_tests {
         };
         assert!(bare.freed_by((c, ch), c, dev));
         assert!(!bare.freed_by((c, ch), c, tsg));
+    }
+}
+
+#[cfg(test)]
+mod heap_tests {
+    use super::heap_bounds;
+    use kf_arch::UserdMem;
+    use kf_arch::fault::ErrorNotifier;
+
+    /// ★ P1+P2 inc A / S1-43 (`docs/design/V3_P1P2_TSPACE.md` §7 test 17): a birth whose FB USERD
+    /// or FB notifier names the firmware carve-out (kayfabe's root pages), the store's end or 2^40
+    /// is refused before any host call; the USERD bound uses the DECLARED size when it is larger
+    /// than `NV_RAMUSERD_CHAN_SIZE`; sysmem descriptors are not this check's business.
+    #[test]
+    fn userd_and_notifier_bounded_to_the_usable_heap() {
+        let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
+        let carve = l.carve();
+        let fb = |base, size| Some(UserdMem::Framebuffer { base, size });
+        let nfb = |off| Some(ErrorNotifier::Framebuffer { off });
+        assert_eq!(
+            heap_bounds(&l, fb(0x10_0000, 0x200), nfb(0x20_0000)),
+            Ok(())
+        );
+        assert_eq!(heap_bounds(&l, fb(carve - 0x200, 0x200), None), Ok(()));
+        for base in [
+            carve,
+            l.bar1_pde_base,
+            l.bar2_pde_base,
+            l.fb_length - 8,
+            1 << 40,
+        ] {
+            assert!(
+                heap_bounds(&l, fb(base, 0x200), None).is_err(),
+                "USERD {base:#x}"
+            );
+            assert!(
+                heap_bounds(&l, None, nfb(base)).is_err(),
+                "notifier {base:#x}"
+            );
+        }
+        // The declared size counts: 512 bytes fit below the carve-out, 4 KiB do not.
+        assert!(heap_bounds(&l, fb(carve - 0x200, 0x1000), None).is_err());
+        // A declared size smaller than the engine's footprint is bounded at the footprint.
+        assert!(heap_bounds(&l, fb(carve - 0x10, 0x10), None).is_err());
+        // Sysmem: bounded at its guest-RAM lookup, not here.
+        assert_eq!(
+            heap_bounds(
+                &l,
+                Some(UserdMem::Sysmem {
+                    base: 1 << 40,
+                    size: 0x200
+                }),
+                Some(ErrorNotifier::Sysmem { gpa: 1 << 40 })
+            ),
+            Ok(())
+        );
+    }
+
+    /// ★ Review fix 2026-10-04 (`V3_P1P2_TSPACE.md` §8): the S1-43 bound REFUSES only when strict
+    /// (`KF3_INCA_REFUSE=1` / `KF3_TSPACE=1`); on the default path the same birth is COUNTED and
+    /// proceeds as before inc A; a birth inside the heap is neither.
+    #[test]
+    fn the_heap_bound_refuses_only_when_strict() {
+        use super::{HeapGate, heap_gate};
+        let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
+        let out = Some(UserdMem::Framebuffer {
+            base: l.carve(),
+            size: 0x200,
+        });
+        let inside = Some(UserdMem::Framebuffer {
+            base: 0x10_0000,
+            size: 0x200,
+        });
+        assert!(matches!(
+            heap_gate(true, false, &l, out, None),
+            HeapGate::Refuse(_)
+        ));
+        assert!(matches!(
+            heap_gate(false, false, &l, out, None),
+            HeapGate::Count(_)
+        ));
+        assert_eq!(heap_gate(true, false, &l, inside, None), HeapGate::Inside);
+        assert_eq!(heap_gate(false, false, &l, inside, None), HeapGate::Inside);
+        // The positive control (`KF3_NEGCTL_HEAP`): every birth counted, none refused — strict
+        // or not, inside the heap or not.
+        for strict in [false, true] {
+            for u in [out, inside] {
+                assert!(matches!(
+                    heap_gate(strict, true, &l, u, None),
+                    HeapGate::Count(_)
+                ));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod store_bound_tests {
+    use super::{store_read_bound, view_span};
+
+    /// ★ Review fix 2026-10-04 (HIGH): a T-mode twin records NO store window (`fb_len` 0), yet
+    /// its Translated channel's GPFIFO and pushbuffer are read through vidmem rows — the CPU view
+    /// bound is the carve-out base in T-mode (a heap offset reads; the carve-out does not), and the
+    /// mirror's `fb_len` (the store's length) on the default path, as before.
+    #[test]
+    fn a_tmode_twin_reads_vidmem_rows_through_the_store_bound() {
+        let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
+        let carve = l.carve();
+        let twin_fb_len = 0; // what a T-mode twin records: no window
+        let bound = store_read_bound(true, twin_fb_len, carve);
+        assert_eq!(view_span(bound, 0x10_0040), Ok((0x10_0000, 0x1_0000)));
+        assert_eq!(
+            view_span(bound, carve - 4).map(|(o, n)| o + n),
+            Ok(carve),
+            "the last heap page reads, up to the carve-out"
+        );
+        assert!(
+            view_span(bound, carve).is_err(),
+            "the carve-out never reads"
+        );
+        assert!(view_span(bound, l.bar1_pde_base).is_err());
+        // ⊘ The defect: the window length as the bound refuses every vidmem read.
+        assert!(view_span(twin_fb_len, 0x10_0040).is_err());
+        // The default path: the mirror's fb_len (the store's length), unchanged.
+        assert_eq!(store_read_bound(false, l.fb_length, carve), l.fb_length);
+        assert!(view_span(l.fb_length, carve).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod rows_tests {
+    use super::resolve_rows;
+    use kf_host::MapPerm;
+
+    /// ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.4): an operand resolves through OUR placement rows —
+    /// adjacent rows contiguous in VA and backing with one permission merge into one span; a
+    /// change of backing or permission starts a new one; the first uncovered byte is named.
+    #[test]
+    fn an_operand_resolves_through_our_rows_and_names_its_first_hole() {
+        let ro = MapPerm {
+            read_only: true,
+            ..MapPerm::READ_WRITE
+        };
+        let rows = crate::mem::PlacedRows::default();
+        if let Ok(mut r) = rows.write() {
+            r.insert(0x1000, (0x1000, 0x10_0000, false, MapPerm::READ_WRITE));
+            r.insert(0x2000, (0x1000, 0x10_1000, false, MapPerm::READ_WRITE)); // contiguous
+            r.insert(0x3000, (0x1000, 0x10_2000, false, ro)); // same backing run, read-only
+            r.insert(0x4000, (0x1000, 0x50_0000, true, MapPerm::READ_WRITE)); // guest RAM
+        }
+        let spans = resolve_rows(&rows, 0x1800, 0x3000).unwrap();
+        let shape: Vec<(bool, u64, u64, bool)> = spans
+            .iter()
+            .map(|s| (s.ram, s.off, s.len, s.perm.read_only))
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                (false, 0x10_0800, 0x1800, false),
+                (false, 0x10_2000, 0x1000, true),
+                (true, 0x50_0000, 0x800, false)
+            ]
+        );
+        assert_eq!(resolve_rows(&rows, 0x4800, 0x1000), Err(0x5000));
+        assert_eq!(resolve_rows(&rows, 0x800, 0x10), Err(0x800));
     }
 }

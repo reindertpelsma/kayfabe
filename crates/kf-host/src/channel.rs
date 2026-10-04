@@ -315,6 +315,22 @@ impl HostRm {
     /// # Errors
     /// The host's refusal; a half-built space is freed.
     pub fn alloc_vaspace(&self) -> Result<VaSpace, RmError> {
+        self.alloc_vaspace_with(std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none())
+    }
+
+    /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2.1): a fresh host VA space with NONE of the
+    /// [`GUEST_VA_RANGES`] reservations — the Translated space (T-space), where no guest row ever
+    /// lands. Its caller reserves what it needs ([`HostRm::reserve_va`]) and may record one
+    /// reservation in [`VaSpace::guest`] so FIXED maps inside it go through it and
+    /// [`HostRm::free_vaspace`] frees it.
+    ///
+    /// # Errors
+    /// The host's refusal; a half-built space is freed.
+    pub fn alloc_vaspace_bare(&self) -> Result<VaSpace, RmError> {
+        self.alloc_vaspace_with(false)
+    }
+
+    fn alloc_vaspace_with(&self, reserve_guest: bool) -> Result<VaSpace, RmError> {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
         NvVaspaceAllocationParameters::default()
             .encode_into(&mut params)
@@ -357,7 +373,7 @@ impl HostRm {
                 };
                 // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
                 // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
-                if std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none() {
+                if reserve_guest {
                     for (slot, &(lo, hi)) in vas.guest.iter_mut().zip(GUEST_VA_RANGES.iter()) {
                         match self.reserve_va(space, lo, hi - lo) {
                             Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
@@ -520,11 +536,48 @@ impl HostRm {
         len: u64,
         high: bool,
     ) -> Result<u64, RmError> {
+        self.map_window_perm(space, memory, len, high, MapPerm::READ_WRITE)
+    }
+
+    /// ★ P1+P2 inc B: [`HostRm::map_window`] with the mapping's permissions — the T-space maps its
+    /// guest-RAM window GPU-uncached ([`MapPerm::volatile`], `V3_P1P2_TSPACE.md` §13) so a
+    /// CPU-written sysmem semaphore is never served from L2.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn map_window_perm(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        len: u64,
+        high: bool,
+        perm: MapPerm,
+    ) -> Result<u64, RmError> {
+        self.map_window_paged(space, memory, len, high, perm, 0)
+    }
+
+    /// ★ P1+P2 review fix (2026-10-04): [`HostRm::map_window_perm`] with a page-size pin
+    /// (`page_size`: an `NVOS46_FLAGS_PAGE_SIZE_*` value, 0 = RM chooses). The T-space pins its
+    /// store window to 2 MiB pages so RM never rounds the map past its length
+    /// (`kf_abi::bringup::NVOS46_FLAGS_PAGE_SIZE_HUGE`).
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn map_window_paged(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        len: u64,
+        high: bool,
+        perm: MapPerm,
+        page_size: u32,
+    ) -> Result<u64, RmError> {
         let extra = if high {
             NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN
         } else {
             0
-        };
+        } | perm.nvos46_flags()
+            | page_size;
         self.raw_map_dma_slice(space.range, memory, 0, len, None, extra, false, 0)
     }
 

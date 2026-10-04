@@ -23,11 +23,18 @@
 //!    written; `ACCESS_COUNTER_CLR` is served (no access counters exist on our device); anything
 //!    else (Hopper's `MMU_OPERATION`, an unnamed operation) is refused by name — never consumed.
 //!
-//! Everything else — semaphores, virtual operands, host methods — is forwarded unchanged.
+//! Everything else — semaphores, virtual operands, host methods — is forwarded unchanged, except
+//! what is refused by name WHEN [`CeState::strict`]: ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md`
+//! §3.2, §3.7) — the methods of [`REFUSED_METHODS`] on every tier, and every `SubDeviceMask`
+//! header. ⊘ Strict is OFF on the default path until box step 1 (review fix 2026-10-04): there each
+//! is COUNTED ([`IncACounts`]) and handled exactly as before inc A. ⚠ S1-23 stays open until the
+//! T-mode rewriter ([`crate::tmode`]) authors every word (§3): until then a guest-kernel virtual
+//! operand or semaphore reaches the engine as written.
 //!
 //! ⊘ Pure: no GPU, no isolate, no table. The output is NORMALISED to one method per header,
 //! which is what makes insertion before a launch trivial; it is equivalent method-for-method.
 
+use crate::census::{Census, OpKind, SubKind};
 use kf_abi::submit::{MethodForm, ce, method_header_decode, method_header_inc};
 
 /// `NVC56F_MEM_OP_A..D` — `ogkm-580 clc56f.h:133-181`.
@@ -152,6 +159,53 @@ pub struct CeState {
     /// ★ v3-initrace: the data-moving launches since the last take, as the guest wrote them
     /// (before our rewrite) — the completion probe reads their bytes back.
     pub launches: PhysLaunches,
+    /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §8, review fix 2026-10-04): REFUSE what
+    /// inc A refuses by name — a [`REFUSED_METHODS`] write, a `SubDeviceMask` header, a GP control
+    /// entry other than `NOP` and a family's extended base. ⊘ `false` (the default path until box
+    /// step 1 shows the counts at 0 on each measured family): each is COUNTED in [`CeState::inca`]
+    /// and handled exactly as before inc A — forwarded, pushed raw, skipped. The device sets it from
+    /// `KF3_INCA_REFUSE=1` or `KF3_TSPACE=1` (T-mode refuses them in its own decoder regardless).
+    pub strict: bool,
+    /// ★ P1+P2 inc A, the count-only arm: what [`CeState::strict`] would have refused.
+    pub inca: IncACounts,
+}
+
+/// ★ P1+P2 inc A, count-only (`docs/design/V3_P1P2_TSPACE.md` §8): per channel, what the by-name
+/// refusals WOULD have refused while [`CeState::strict`] is off — each one handled exactly as before
+/// inc A. Printed on the channel's `RETIRED` line and summed on the status line (`inca[…]`); box
+/// step 1 must show every field 0 on each measured family before strict becomes the default.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct IncACounts {
+    /// Writes of a [`REFUSED_METHODS`] method — forwarded as written, as before.
+    pub refused_methods: u64,
+    /// `SubDeviceMask` headers — pushed raw, as before.
+    pub subdevice_masks: u64,
+    /// GP control entries other than `NOP` (and, on a family that defines it,
+    /// `SET_PB_SEGMENT_EXTENDED_BASE`) — skipped as a `NOP`, as before.
+    pub control_entries: u64,
+    /// Segment entries a non-zero `SET_PB_SEGMENT_EXTENDED_BASE` would have rebased — read at
+    /// address bits 39:0, as before.
+    pub ext_base_unapplied: u64,
+}
+
+impl IncACounts {
+    /// Every count, summed.
+    #[must_use]
+    pub const fn total(&self) -> u64 {
+        self.refused_methods + self.subdevice_masks + self.control_entries + self.ext_base_unapplied
+    }
+
+    /// `refused_methods=… subdevice_masks=… control_entries=… ext_base_unapplied=…`.
+    #[must_use]
+    pub fn line(&self) -> String {
+        format!(
+            "refused_methods={} subdevice_masks={} control_entries={} ext_base_unapplied={}",
+            self.refused_methods,
+            self.subdevice_masks,
+            self.control_entries,
+            self.ext_base_unapplied
+        )
+    }
 }
 
 /// ★ v3-initrace (diagnostic record only): one side of a launch, as the guest named it.
@@ -423,6 +477,253 @@ pub enum Refusal {
         /// The method.
         method: u32,
     },
+    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.2): a method refused BY NAME on every tier — it
+    /// carries an address no rewriter authors, arms engine state that later writes to one, or
+    /// belongs to a feature kayfabe does not support ([`refused_method`]). No stock CeUtils or UVM
+    /// path emits any of them on a channel kayfabe runs (each row cites its only emitter).
+    RefusedMethod {
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+        /// Its class-header name.
+        name: &'static str,
+    },
+    /// ★ P1+P2 inc A (§3.7): a `SET`/`STORE`/`USE_SUBDEVICE_MASK` header. A single-GPU guest has
+    /// no use for one, and a mask can stop later methods from executing — separating an
+    /// authored address write from the trigger it belongs to. Forwarded raw until 2026-10-04.
+    SubDeviceMask {
+        /// The word index of the header.
+        at: usize,
+    },
+    /// ★ P1+P2 inc C (T-mode, §3.6): a method no row of the tier's table classifies.
+    Unclassified {
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+    },
+    /// ★ T-mode: a copy-engine method before any `SET_OBJECT` bound a CE class.
+    NoCeObject {
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+    },
+    /// ★ T-mode (§3.2): a `LAUNCH_DMA` bit the tier's field table does not name, or a named field
+    /// with a value the table refuses — never silently cleared.
+    LaunchField {
+        /// The word.
+        word: u32,
+        /// What was refused.
+        what: &'static str,
+    },
+    /// ★ T-mode: a host `SEMAPHORED`/`SEM_EXECUTE` word with an unnamed bit or an undefined
+    /// operation.
+    HostSemOp {
+        /// The method.
+        method: u32,
+        /// The word.
+        word: u32,
+    },
+    /// ★ T-mode: an address-free method or register whose word carries bits beyond its fields.
+    FieldValue {
+        /// The method.
+        method: u32,
+        /// The word.
+        word: u32,
+        /// What was refused.
+        what: &'static str,
+    },
+    /// ★ T-mode (§3.4): a BLOCK-LINEAR virtual operand — its footprint is a function of the block
+    /// geometry, which `extents` does not model.
+    BlockLinearVirtual,
+    /// ★ T-mode (§3.4): a virtual operand or semaphore no placement row covers — at `at`.
+    VirtualUnresolved {
+        /// The operand's VA.
+        va: u64,
+        /// The first uncovered byte.
+        at: u64,
+    },
+    /// ★ T-mode (§3.4): a row that resolves outside its window — into the firmware carve-out, or
+    /// past the guest-RAM window.
+    OutsideWindow {
+        /// The VA.
+        va: u64,
+        /// Guest RAM (else the store).
+        ram: bool,
+        /// The backing offset.
+        off: u64,
+    },
+    /// ★ T-mode: a semaphore that does not lie inside one row.
+    SemaphoreSpansRows {
+        /// Its VA.
+        va: u64,
+        /// Its bytes.
+        bytes: u64,
+    },
+    /// ★ T-mode: a write, release or reduction through a row the guest mapped read-only.
+    ReadOnlyRow {
+        /// The VA.
+        va: u64,
+    },
+    /// ★ T-mode: a reduction through a row the guest mapped with atomics disabled.
+    AtomicDisabledRow {
+        /// The VA.
+        va: u64,
+    },
+    /// ★ T-mode (§2.2): a semaphore address a 40-bit form would truncate.
+    Sem40 {
+        /// The address.
+        va: u64,
+    },
+    /// ★ T-mode (§3.4): a multi-line operand not contiguous over its whole pitch footprint.
+    MultiLineDiscontiguous,
+    /// ★ T-mode (§3.4): a row boundary inside one remap element.
+    SplitInsideElement,
+    /// ★ T-mode (§3.4): a launch that would need more than [`crate::tmode::MAX_PIECES`] pieces.
+    TooManyPieces {
+        /// The pieces it would need.
+        pieces: usize,
+    },
+    /// ★ T-mode, the address perimeter (§3.8, review fix 2026-10-04): the access the emitted
+    /// registers describe reaches past the bytes its operand was resolved and validated for.
+    Footprint {
+        /// `"src"`, `"dst"` or `"semaphore"`.
+        side: &'static str,
+        /// Bytes the engine would touch.
+        need: u64,
+        /// Bytes validated.
+        have: u64,
+    },
+    /// ★ T-mode, the address perimeter: an operand set or a field it cannot compute a footprint
+    /// for ([`crate::tspace_unsafe::PerimeterRefusal`]).
+    Perimeter {
+        /// What was refused.
+        what: &'static str,
+    },
+}
+
+impl Refusal {
+    /// The refusal's name, for counters (`TSHADOW would_refuse=[name:n …]`).
+    #[must_use]
+    pub const fn reason(&self) -> &'static str {
+        match self {
+            Refusal::BadHeader { .. } => "bad_header",
+            Refusal::Truncated { .. } => "truncated",
+            Refusal::PeerOperand => "peer_operand",
+            Refusal::Untranslatable { .. } => "untranslatable",
+            Refusal::BlockLinearPhysical => "block_linear_physical",
+            Refusal::ExtentOverflow => "extent_overflow",
+            Refusal::ForeignClass { .. } => "foreign_class",
+            Refusal::MemOp { .. } => "mem_op",
+            Refusal::UnboundSubchannel { .. } => "unbound_subchannel",
+            Refusal::SwMethod { .. } => "sw_method",
+            Refusal::RefusedMethod { .. } => "refused_method",
+            Refusal::SubDeviceMask { .. } => "subdevice_mask",
+            Refusal::Unclassified { .. } => "unclassified",
+            Refusal::NoCeObject { .. } => "no_ce_object",
+            Refusal::LaunchField { .. } => "launch_field",
+            Refusal::HostSemOp { .. } => "host_sem_op",
+            Refusal::FieldValue { .. } => "field_value",
+            Refusal::BlockLinearVirtual => "block_linear_virtual",
+            Refusal::VirtualUnresolved { .. } => "virtual_unresolved",
+            Refusal::OutsideWindow { .. } => "outside_window",
+            Refusal::SemaphoreSpansRows { .. } => "semaphore_spans_rows",
+            Refusal::ReadOnlyRow { .. } => "read_only_row",
+            Refusal::AtomicDisabledRow { .. } => "atomic_disabled_row",
+            Refusal::Sem40 { .. } => "sem40",
+            Refusal::MultiLineDiscontiguous => "multi_line_discontiguous",
+            Refusal::SplitInsideElement => "split_inside_element",
+            Refusal::TooManyPieces { .. } => "too_many_pieces",
+            Refusal::Footprint { .. } => "footprint",
+            Refusal::Perimeter { .. } => "perimeter",
+        }
+    }
+}
+
+/// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.2) — **the methods refused by name on every tier**:
+/// `(first, last, name)`, host methods (below `0x100`) and copy-engine methods alike.
+///
+/// - host `CLEAR_FAULTED` (`0x84`, every host class from `NVC46F`): UVM pushes it only while it
+///   services a non-replayable fault (`ogkm-580: kernel-open/nvidia-uvm/uvm_turing_host.c:73-92`),
+///   and kayfabe delivers none;
+/// - `PM_TRIGGER` / `PM_TRIGGER_END` (`clc7b5.h`: `0x140`, `0x1114`): performance-monitor triggers;
+/// - `SET_MONITORED_FENCE_TYPE` and `_SIGNAL_ADDR_BASE_UPPER/LOWER` (`0x21C`–`0x224`): the fence
+///   type arms a write to the SIGNAL_ADDR state at the next launch — an address no rewriter
+///   authors;
+/// - `SET_RENDER_ENABLE_A/B/C` (`0x254`–`0x25C`): A/B are an address, C selects a conditional mode
+///   against whatever A/B the engine already holds;
+/// - `SET_SECURE_COPY_MODE` (`0x500`) and the confidential-computing address methods
+///   (`0x514`–`0x53C`, `ogkm-580: src/common/sdk/nvidia/inc/class/clc8b5.h`): stock pushes them only
+///   under confidential computing (`ogkm-580: kernel-open/nvidia-uvm/uvm_hopper_ce.c:545`, `:588`),
+///   which kayfabe does not support.
+pub const REFUSED_METHODS: [(u32, u32, &str); 8] = [
+    (HOST_CLEAR_FAULTED, HOST_CLEAR_FAULTED, "CLEAR_FAULTED"),
+    (CE_PM_TRIGGER, CE_PM_TRIGGER, "PM_TRIGGER"),
+    (CE_PM_TRIGGER_END, CE_PM_TRIGGER_END, "PM_TRIGGER_END"),
+    (
+        CE_SET_MONITORED_FENCE_TYPE,
+        CE_SET_MONITORED_FENCE_TYPE,
+        "SET_MONITORED_FENCE_TYPE",
+    ),
+    (
+        CE_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_UPPER,
+        CE_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_LOWER,
+        "SET_MONITORED_FENCE_SIGNAL_ADDR_BASE",
+    ),
+    (
+        CE_SET_RENDER_ENABLE_A,
+        CE_SET_RENDER_ENABLE_C,
+        "SET_RENDER_ENABLE",
+    ),
+    (
+        CE_SET_SECURE_COPY_MODE,
+        CE_SET_SECURE_COPY_MODE,
+        "SET_SECURE_COPY_MODE",
+    ),
+    (
+        CE_CC_ADDR_FIRST,
+        CE_CC_ADDR_LAST,
+        "confidential-computing address method",
+    ),
+];
+
+/// `NVC56F_CLEAR_FAULTED` (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h`).
+const HOST_CLEAR_FAULTED: u32 = 0x84;
+/// `NVC7B5_PM_TRIGGER`.
+const CE_PM_TRIGGER: u32 = 0x140;
+/// `NVC7B5_PM_TRIGGER_END`.
+const CE_PM_TRIGGER_END: u32 = 0x1114;
+/// `NVC7B5_SET_MONITORED_FENCE_TYPE`.
+const CE_SET_MONITORED_FENCE_TYPE: u32 = 0x21C;
+/// `NVC7B5_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_UPPER`.
+const CE_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_UPPER: u32 = 0x220;
+/// `NVC7B5_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_LOWER`.
+const CE_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_LOWER: u32 = 0x224;
+/// `NVC7B5_SET_RENDER_ENABLE_A`.
+const CE_SET_RENDER_ENABLE_A: u32 = 0x254;
+/// `NVC7B5_SET_RENDER_ENABLE_C`.
+const CE_SET_RENDER_ENABLE_C: u32 = 0x25C;
+/// `NVC8B5_SET_SECURE_COPY_MODE`.
+const CE_SET_SECURE_COPY_MODE: u32 = 0x500;
+/// `NVC8B5_SET_DECRYPT_AUTH_TAG_COMPARE_ADDR_UPPER` — the first confidential-computing address.
+const CE_CC_ADDR_FIRST: u32 = 0x514;
+/// `NVC8B5_SET_ENCRYPT_IV_ADDR_LOWER` — the last.
+const CE_CC_ADDR_LAST: u32 = 0x53C;
+
+/// The name a method is refused under ([`REFUSED_METHODS`]), or `None`. Host methods (below
+/// `0x100`) are matched on any subchannel, copy-engine methods on a hardware subchannel only — the
+/// caller passes `ce = false` for a software subchannel, whose own refusal applies.
+#[must_use]
+pub fn refused_method(method: u32, ce: bool) -> Option<&'static str> {
+    if method >= 0x100 && !ce {
+        return None;
+    }
+    REFUSED_METHODS
+        .iter()
+        .find(|&&(lo, hi, _)| (lo..=hi).contains(&method))
+        .map(|&(_, _, name)| name)
 }
 
 /// A CE class id? Supplied by the caller from the chip's class table.
@@ -438,6 +739,22 @@ pub fn rewrite(
     st: &mut CeState,
     w: &dyn Window,
 ) -> Result<Vec<Piece>, Refusal> {
+    rewrite_counted(words, is_ce, st, w, None)
+}
+
+/// [`rewrite`], with every header and method write counted into `census` when one is given
+/// (the count-only instrument of `V3_P1P2_TSPACE.md` §3.6). The census sees a write BEFORE it is
+/// handled, so a refused write is counted too.
+///
+/// # Errors
+/// [`Refusal`], by name.
+pub fn rewrite_counted(
+    words: &[u32],
+    is_ce: IsCeClass,
+    st: &mut CeState,
+    w: &dyn Window,
+    mut census: Option<&mut Census>,
+) -> Result<Vec<Piece>, Refusal> {
     let mut out: Vec<Piece> = Vec::new();
     let mut cur: Vec<u32> = Vec::new();
     let mut i = 0usize;
@@ -446,12 +763,20 @@ pub fn rewrite(
         let Some(h) = method_header_decode(hw) else {
             return Err(Refusal::BadHeader { at: i, word: hw });
         };
+        if let Some(c) = census.as_deref_mut() {
+            c.form(form_tag(h.form));
+        }
         i += 1;
         let (addrs_vals, consumed): (Vec<(u32, u32)>, usize) = match h.form {
             MethodForm::EndPbSegment => break,
             MethodForm::Immediate => (vec![(h.method, h.immd)], 0),
             MethodForm::SubDeviceMask => {
-                // No arguments; carries no state we translate. Forwarded as written.
+                // ★ P1+P2 inc A (§3.7): refused when strict; counted and pushed raw (as before
+                // inc A) on the count-only default path.
+                if st.strict {
+                    return Err(Refusal::SubDeviceMask { at: i - 1 });
+                }
+                st.inca.subdevice_masks += 1;
                 cur.push(hw);
                 continue;
             }
@@ -486,6 +811,9 @@ pub fn rewrite(
         i += consumed;
         let sub = h.subchannel;
         for (m, v) in addrs_vals {
+            if let Some(c) = census.as_deref_mut() {
+                count_write(c, st, sub, m, v);
+            }
             // ★ v3-initrace: bookkeeping only, BEFORE the write is handled (a refused write
             // below records a release that never ran — harmless: the channel is then dead).
             if st.sw_subch & (1u8 << (sub & 7)) == 0 || m < 0x100 {
@@ -498,6 +826,49 @@ pub fn rewrite(
         out.push(Piece::Words(cur));
     }
     Ok(out)
+}
+
+/// The census tag of a header form.
+#[must_use]
+pub const fn form_tag(f: MethodForm) -> &'static str {
+    match f {
+        MethodForm::Incrementing => "inc",
+        MethodForm::NonIncrementing => "non",
+        MethodForm::IncrementOnce => "one",
+        MethodForm::Immediate => "imm",
+        MethodForm::EndPbSegment => "end",
+        MethodForm::Legacy => "legacy",
+        MethodForm::SubDeviceMask => "sdm",
+    }
+}
+
+/// Which part of the channel `(sub, m)` reaches, given the subchannel bindings in `st`.
+#[must_use]
+pub fn sub_kind(st: &CeState, sub: u32, m: u32) -> SubKind {
+    if m < 0x100 {
+        SubKind::Host
+    } else if st.sw_subch & (1u8 << (sub & 7)) != 0 {
+        SubKind::Sw
+    } else if sub > 4 {
+        SubKind::Unbound
+    } else {
+        SubKind::Ce
+    }
+}
+
+fn count_write(c: &mut Census, st: &CeState, sub: u32, m: u32, v: u32) {
+    let kind = sub_kind(st, sub, m);
+    c.method(st.ce_class, kind, m);
+    match (kind, m) {
+        (SubKind::Ce, ce::LAUNCH_DMA) => c.launch(st.ce_class, v),
+        (SubKind::Host, HOST_SEMAPHORE_D) => c.op(OpKind::SemaphoreD, v & HOST_SEMAPHORE_D_OP_MASK),
+        (SubKind::Host, kf_abi::submit::fifo::SEM_EXECUTE) => c.op(
+            OpKind::SemExecute,
+            v & kf_abi::submit::fifo::SEM_EXECUTE_OPERATION_MASK,
+        ),
+        (SubKind::Host, MEM_OP_D) => c.op(OpKind::MemOpD, v >> 27),
+        _ => {}
+    }
 }
 
 fn emit(cur: &mut Vec<u32>, sub: u32, m: u32, v: u32) {
@@ -545,6 +916,19 @@ fn one_write(
         } else {
             Err(Refusal::SwMethod { method: m })
         };
+    }
+    // ★ P1+P2 inc A (§3.2): refused by name on every tier — a host method on any subchannel, a
+    // copy-engine method on a hardware one (an unbound software subchannel refuses below) — when
+    // strict; on the count-only default path counted, then handled exactly as before inc A.
+    if let Some(name) = refused_method(m, sub <= 4) {
+        if st.strict {
+            return Err(Refusal::RefusedMethod {
+                subch: sub,
+                method: m,
+                name,
+            });
+        }
+        st.inca.refused_methods += 1;
     }
     // `MEM_OP_A..C` are operands of the `MEM_OP_D` that follows ("MEM_OP_D MUST be preceded by
     // MEM_OPs A-C", `clc56f.h`): held here, emitted with the D when its operation is forwarded.
@@ -912,6 +1296,45 @@ mod hwref_check {
             1 << class_range("NVC8B5_LAUNCH_DMA_MEMORY_SCRUB_ENABLE").1
         );
         assert_eq!(class_range("NVC7B5_LAUNCH_DMA_VPRMODE"), (23, 22));
+    }
+
+    /// ★ P1+P2 inc A: the refused methods are the class headers' own offsets.
+    #[test]
+    fn the_refused_methods_are_the_class_headers() {
+        for (ours, name) in [
+            (HOST_CLEAR_FAULTED, "NVC56F_CLEAR_FAULTED"),
+            (CE_PM_TRIGGER, "NVC7B5_PM_TRIGGER"),
+            (CE_PM_TRIGGER_END, "NVC7B5_PM_TRIGGER_END"),
+            (
+                CE_SET_MONITORED_FENCE_TYPE,
+                "NVC7B5_SET_MONITORED_FENCE_TYPE",
+            ),
+            (
+                CE_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_UPPER,
+                "NVC7B5_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_UPPER",
+            ),
+            (
+                CE_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_LOWER,
+                "NVC7B5_SET_MONITORED_FENCE_SIGNAL_ADDR_BASE_LOWER",
+            ),
+            (CE_SET_RENDER_ENABLE_A, "NVC7B5_SET_RENDER_ENABLE_A"),
+            (CE_SET_RENDER_ENABLE_C, "NVC7B5_SET_RENDER_ENABLE_C"),
+            (CE_SET_SECURE_COPY_MODE, "NVC8B5_SET_SECURE_COPY_MODE"),
+            (
+                CE_CC_ADDR_FIRST,
+                "NVC8B5_SET_DECRYPT_AUTH_TAG_COMPARE_ADDR_UPPER",
+            ),
+            (CE_CC_ADDR_LAST, "NVC8B5_SET_ENCRYPT_IV_ADDR_LOWER"),
+        ] {
+            assert_eq!(u64::from(ours), class_val(name), "{name}");
+        }
+        // CLEAR_FAULTED is at the same offset in every host class that has one.
+        for h in ["NVC46F", "NVC56F"] {
+            assert_eq!(
+                class_val(&format!("{h}_CLEAR_FAULTED")),
+                u64::from(HOST_CLEAR_FAULTED)
+            );
+        }
     }
 
     #[test]

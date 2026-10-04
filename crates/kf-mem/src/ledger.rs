@@ -312,6 +312,14 @@ pub trait MapTarget {
     fn withholds_privileged(&self) -> bool {
         false
     }
+
+    /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §4.3): this target is a host GPU VA space
+    /// (a twin) — the target whose vidmem leaves §Q bounds by the firmware carve-out
+    /// ([`crate::apply::ApplyCfg::carve`]). ⊘ Default `false`: the guest kernel's own CPU views
+    /// (BAR1/BAR2) keep the store bound and are only counted. A wrapping target must FORWARD this.
+    fn gpu_space(&self) -> bool {
+        false
+    }
 }
 
 /// What a target that cannot batch answers [`MapTarget::map_batch`] / [`MapTarget::unmap_range`].
@@ -402,6 +410,10 @@ impl HostVas<'_> {
 }
 
 impl MapTarget for HostVas<'_> {
+    // ★ P1+P2 inc A: a host GPU VA space — its vidmem leaves are bounded by the carve-out.
+    fn gpu_space(&self) -> bool {
+        true
+    }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let obj = if d.ram {
             self.ram_obj

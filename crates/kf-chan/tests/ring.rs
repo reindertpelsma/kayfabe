@@ -81,6 +81,7 @@ fn a_split_holds_the_rest_of_its_segment_and_retirement_follows_the_last_piece()
             Next::Submit { retires, .. } => format!("S{retires:?}"),
             Next::Walk { pdb, retires } => format!("W{pdb:x?}{retires:?}"),
             Next::Idle => "I".into(),
+            Next::Bind { .. } => "B".into(),
         })
         .collect();
     assert_eq!(
@@ -288,4 +289,331 @@ fn zero_userd_clears_the_channel_size_and_no_further() {
     assert_eq!(zero_userd(&mut p, 0x8e).unwrap(), 0x8c, "whole words only");
     let mut p = Page([0xAA; 4096], Some(0x88));
     assert!(zero_userd(&mut p, 512).unwrap_err().contains("+0x88"));
+}
+
+/// A control entry: `LENGTH == 0`, `GP_ENTRY1_OPCODE` = `opcode`, entry0 = `operand`.
+fn control(opcode: u32, operand: u32) -> u64 {
+    (u64::from(opcode) << 32) | u64::from(operand)
+}
+
+/// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.7, §7 test 15): on a STRICT ring of a family that
+/// defines it (Hopper+), `SET_PB_SEGMENT_EXTENDED_BASE` sets address bits 56:40 of every later
+/// segment. ★ Review fix 2026-10-04: on the count-only DEFAULT path the base is recorded, NOT
+/// applied (the segment is read at 39:0, as before inc A) and the entry it would have rebased is
+/// counted; below Hopper opcode 4 names nothing — refused on a strict ring, counted and skipped on
+/// the default path.
+#[test]
+fn extended_base_applies_to_later_entries() {
+    let base: u64 = 0x1_23 << 40;
+    let launch = |v: u32| {
+        let mut a = m(4, 0, &[CE_CLASS]);
+        a.extend(m(4, ce::LAUNCH_DMA, &[v]));
+        a
+    };
+    // The same low 40 bits hold DIFFERENT words with and without the base, so the read says
+    // which address the ring used.
+    let seg = gp_entry(PB, 4 * launch(0).len() as u64).unwrap();
+    let ext = control(4, u32::try_from((base >> 40) << 8).unwrap());
+    let mem = || {
+        let mut mem = Mem::default();
+        mem.words(PB, &launch(0x111));
+        mem.words(base | PB, &launch(0x222));
+        mem.entry(0, ext);
+        mem.entry(1, seg);
+        mem
+    };
+    let ring = |strict: bool, hopper: bool| {
+        let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        r.set_strict(strict);
+        r.set_extended_base(hopper);
+        r
+    };
+    // Strict, Hopper+: applied.
+    let mut r = ring(true, true);
+    let words = submitted(&mut r, 2, &mut mem());
+    assert_eq!(r.pb_extended_base(), base);
+    assert!(words.contains(&0x222), "read at the 57-bit VA: {words:x?}");
+    assert!(!words.contains(&0x111));
+    assert_eq!(r.inca().total(), 0);
+    // Count-only, Hopper+: recorded, NOT applied — today's read — and counted.
+    let mut r = ring(false, true);
+    let words = submitted(&mut r, 2, &mut mem());
+    assert!(
+        words.contains(&0x111) && !words.contains(&0x222),
+        "{words:x?}"
+    );
+    assert_eq!(r.inca().ext_base_unapplied, 1);
+    assert_eq!(r.inca().control_entries, 0);
+    // Below Hopper, strict: opcode 4 is an unnamed control opcode — refused by name.
+    let mut r = ring(true, false);
+    assert_eq!(
+        r.next(2, &mut mem(), is_ce, &W),
+        Err(RingRefusal::ControlEntry { gp: 0, opcode: 4 })
+    );
+    // Below Hopper, count-only: counted, skipped as a NOP, the segment read at 39:0.
+    let mut r = ring(false, false);
+    let words = submitted(&mut r, 2, &mut mem());
+    assert!(
+        words.contains(&0x111) && !words.contains(&0x222),
+        "{words:x?}"
+    );
+    assert_eq!(
+        (r.inca().control_entries, r.inca().ext_base_unapplied),
+        (1, 0)
+    );
+    // ⊘ Negative control: without the control entry the same segment entry reads bits 39:0.
+    let mut mem2 = Mem::default();
+    mem2.words(PB, &launch(0x111));
+    mem2.entry(0, seg);
+    let mut r2 = ring(true, true);
+    assert!(submitted(&mut r2, 1, &mut mem2).contains(&0x111));
+}
+
+/// Every word the ring submits up to `put`, in order.
+fn submitted(r: &mut TranslatedRing, put: u32, mem: &mut Mem) -> Vec<u32> {
+    let mut out = Vec::new();
+    loop {
+        match r.next(put, mem, is_ce, &W).unwrap() {
+            Next::Idle => return out,
+            Next::Submit { words, .. } => out.extend(words),
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
+/// ★ P1+P2 inc A (§3.7, §7 test 8): `NOP` and `SET_PB_SEGMENT_EXTENDED_BASE` are the only control
+/// entries kept; on a STRICT ring `ILLEGAL`, `GP_CRC`, `PB_CRC` and an unnamed opcode are refused by
+/// name. ★ Review fix 2026-10-04: on the count-only default path each is counted and skipped as a
+/// NOP — it still retires, as before inc A.
+#[test]
+fn control_entries_other_than_nop_and_extended_base_are_refused() {
+    for opcode in [1u32, 2, 3, 5, 0xff] {
+        let mut mem = Mem::default();
+        mem.entry(0, control(opcode, 0));
+        let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        r.set_strict(true);
+        r.set_extended_base(true);
+        assert_eq!(
+            r.next(1, &mut mem, is_ce, &W),
+            Err(RingRefusal::ControlEntry { gp: 0, opcode }),
+            "opcode {opcode}"
+        );
+        let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        r.set_extended_base(true);
+        assert_eq!(
+            r.next(1, &mut mem, is_ce, &W),
+            Ok(Next::Submit {
+                words: Vec::new(),
+                retires: Some(1)
+            }),
+            "count-only opcode {opcode}: skipped, still retires"
+        );
+        assert_eq!(r.inca().control_entries, 1, "opcode {opcode} counted");
+        // A T-mode ring is strict whatever the device asks: T-mode never counts-and-forwards.
+        let mut r = TranslatedRing::new_tmode(GPFIFO, 8, 0);
+        r.set_strict(false);
+        assert_eq!(
+            r.next(1, &mut mem, is_ce, &W),
+            Err(RingRefusal::ControlEntry { gp: 0, opcode }),
+            "T-mode opcode {opcode}"
+        );
+    }
+    let mut mem = Mem::default();
+    mem.entry(0, control(0, 0));
+    let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+    r.set_census(true);
+    assert_eq!(
+        r.next(1, &mut mem, is_ce, &W),
+        Ok(Next::Submit {
+            words: Vec::new(),
+            retires: Some(1)
+        }),
+        "a NOP entry still retires"
+    );
+    assert_eq!(
+        r.census()
+            .map(|c| c.gp_of(kf_chan::census::GpKind::Control(0))),
+        Some(1)
+    );
+}
+
+/// Guest memory that also exposes placement rows (one vidmem row over the pushbuffer).
+struct RowsMem(Mem);
+impl kf_chan::tmode::Rows for RowsMem {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<kf_chan::tmode::Span>, u64> {
+        kf_chan::tmode::resolve_spans(va, len, |at| {
+            (PB..PB + 0x10_0000).contains(&at).then(|| {
+                (
+                    false,
+                    0x40_0000 + (at - PB),
+                    PB + 0x10_0000 - at,
+                    kf_host::MapPerm::READ_WRITE,
+                )
+            })
+        })
+    }
+    fn dma_to_file_range(&self, _: u64, _: u64) -> Option<u64> {
+        None
+    }
+}
+impl GuestMemory for RowsMem {
+    fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
+        self.0.read(va, out)
+    }
+    fn rows(&self) -> Option<&dyn kf_chan::tmode::Rows> {
+        Some(self)
+    }
+}
+
+/// ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): with the shadow on, every fetched segment is ALSO
+/// decoded and bound by T-mode against the memory's rows — counted, never emitted: the words the
+/// ring submits are today's, unchanged. Off (the default), nothing is counted.
+#[test]
+fn the_shadow_observes_every_segment_and_changes_nothing() {
+    let mut a = m(4, 0, &[CE_CLASS]);
+    a.extend(m(
+        4,
+        ce::OFFSET_IN_UPPER,
+        &[0, PB as u32 + 0x800, 0, PB as u32 + 0x900],
+    ));
+    a.extend(m(4, ce::LINE_LENGTH_IN, &[0x40]));
+    a.extend(m(4, ce::LAUNCH_DMA, &[0x182]));
+    let w = kf_chan::tspace_unsafe::TWindows::new(
+        (0x1_2000_0000, 0x2_0000_0000),
+        (0x4_0000_0000, 0x1000_0000),
+        (1 << 40) - (4 << 30),
+    )
+    .unwrap();
+    let mut words = Vec::new();
+    for shadow in [false, true] {
+        let mut mem = RowsMem(Mem::default());
+        seg(&mut mem.0, 0, PB, &a);
+        let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        r.set_shadow(shadow.then_some(w), false);
+        let got = submitted_rows(&mut r, 1, &mut mem);
+        match r.shadow() {
+            Some(sh) => {
+                assert!(shadow);
+                assert_eq!(
+                    (sh.segments, sh.launches, sh.max_pieces),
+                    (1, 1, 1),
+                    "{}",
+                    sh.line()
+                );
+                assert!(sh.would_refuse.is_empty(), "{}", sh.line());
+                assert_eq!(got, words, "the shadow changes nothing the ring submits");
+            }
+            None => {
+                assert!(!shadow);
+                words = got;
+            }
+        }
+    }
+}
+
+fn submitted_rows(r: &mut TranslatedRing, put: u32, mem: &mut RowsMem) -> Vec<u32> {
+    let mut out = Vec::new();
+    loop {
+        match r.next(put, mem, is_ce, &W).unwrap() {
+            Next::Idle => return out,
+            Next::Submit { words, .. } => out.extend(words),
+            other => panic!("{other:?}"),
+        }
+    }
+}
+
+/// ★ P1+P2 inc D (§2.4, §7 test 10) — **the T-space ring layout**: every region whole 64 KiB,
+/// non-overlapping, inside the 1 MiB object; USERD in NO GPU map; pushbuffer and GPFIFO read-only,
+/// the fence read-write; all three maps big-page at a 1 MiB ring slot — and the legacy fence offset
+/// would have forced 4 KiB pages.
+#[test]
+fn the_tspace_ring_layout() {
+    use kf_abi::bringup::nvos46_page_size_flag;
+    use kf_chan::host::{RING_BYTES, RING_VA_LIMIT, TSPACE_LAYOUT};
+    let l = TSPACE_LAYOUT;
+    let maps = l.maps();
+    assert_eq!(maps.len(), 3);
+    let slot = RING_VA_LIMIT - (4 << 30) + 7 * RING_BYTES; // a ring slot of the ring region
+    let mut end = 0;
+    for &(off, len, perm) in &maps {
+        assert!(
+            off.is_multiple_of(0x1_0000) && len.is_multiple_of(0x1_0000),
+            "{off:#x}+{len:#x}"
+        );
+        assert_eq!(off, end, "contiguous and non-overlapping");
+        end = off + len;
+        assert!(slot + end <= RING_VA_LIMIT);
+        assert_eq!(
+            nvos46_page_size_flag(slot + off, off, len),
+            0,
+            "big pages for +{off:#x}"
+        );
+        let writable = off == l.fence_off;
+        assert_eq!(perm.read_only, !writable, "+{off:#x}");
+    }
+    assert_eq!(end, l.userd_off, "USERD is in no GPU map");
+    assert!(l.userd_off + kf_abi::submit::USERD_SIZE <= RING_BYTES);
+    assert!(
+        512 * 8 <= l.fence_off - l.gpfifo_off,
+        "the GPFIFO holds its 512 entries"
+    );
+    assert!(
+        l.pb_bytes / 2 >= kf_chan::tmode::CHUNK_BYTES as u64,
+        "a chunk fits half the pushbuffer"
+    );
+    // ⊘ The legacy fence offset is not 64 KiB-congruent: its map would fall back to 4 KiB pages.
+    assert_ne!(nvos46_page_size_flag(slot + 0xF_8000, 0xF_8000, 0x8000), 0);
+    // Today's layout: one read-write map of the whole object.
+    assert_eq!(
+        kf_chan::host::LEGACY_LAYOUT.maps(),
+        vec![(0, RING_BYTES, kf_host::MapPerm::READ_WRITE)]
+    );
+}
+
+/// ★ P1+P2 inc D: a T-mode ring hands out UNBOUND IR — a run of items as [`Next::Bind`], a split
+/// as [`Next::Walk`] — and retires the entry with the last of them; nothing is rewritten in place.
+#[test]
+fn a_tmode_ring_hands_out_unbound_work_and_splits() {
+    let mut mem = Mem::default();
+    let mut a = m(4, 0, &[CE_CLASS]);
+    a.extend(m(4, ce::LAUNCH_DMA, &[0]));
+    a.extend(m(0, 0x28, &[0, 0, 0x0020_1000, (9 << 27) | 0x2]));
+    a.extend(m(4, ce::LAUNCH_DMA, &[0]));
+    seg(&mut mem, 0, PB, &a);
+    let mut r = TranslatedRing::new_tmode(GPFIFO, 8, 0);
+    let mut shape = Vec::new();
+    loop {
+        match r.next(1, &mut mem, is_ce, &W).unwrap() {
+            Next::Idle => break,
+            Next::Bind { ir, retires } => shape.push(format!("bind{}:{retires:?}", ir.len())),
+            Next::Walk { pdb, retires } => shape.push(format!("walk{pdb:x?}:{retires:?}")),
+            Next::Submit { words, retires } => {
+                shape.push(format!("submit{}:{retires:?}", words.len()))
+            }
+        }
+    }
+    assert_eq!(
+        shape,
+        vec!["bind2:None", "walkSome(200201000):None", "bind1:Some(1)"],
+        "SET_OBJECT + launch, the split, the second launch retiring entry 0"
+    );
+}
+
+/// ★ Review fix 2026-10-04: releasing a T-space ring unmaps EVERY one of its maps even when an
+/// earlier unmap is refused, and reports the first refusal.
+#[test]
+fn a_refused_unmap_does_not_leave_the_other_maps_live() {
+    use kf_chan::host::unmap_every;
+    let mut called = Vec::new();
+    let r = unmap_every(&[0x10, 0x20, 0x30], |m| {
+        called.push(m);
+        if m == 0x10 || m == 0x30 {
+            Err(m)
+        } else {
+            Ok(())
+        }
+    });
+    assert_eq!(called, vec![0x10, 0x20, 0x30], "every map unmapped");
+    assert_eq!(r, Err(0x10), "the first refusal");
+    assert_eq!(unmap_every::<u64>(&[1, 2], |_| Ok(())), Ok(()));
 }

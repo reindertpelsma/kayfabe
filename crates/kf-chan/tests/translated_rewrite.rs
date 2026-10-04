@@ -537,3 +537,116 @@ fn releases_are_recorded_and_the_words_are_unchanged() {
         writes(&out)
     );
 }
+
+/// A strict channel state — inc A's by-name refusals enforced (`KF3_INCA_REFUSE=1`, T-mode).
+fn strict() -> CeState {
+    CeState {
+        strict: true,
+        ..CeState::default()
+    }
+}
+
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.2, §7 test 8): on a STRICT channel every
+/// method on the refused list is refused BY NAME — a host one on any subchannel, a copy-engine one
+/// on a hardware subchannel — and its neighbours are not. ★ Review fix 2026-10-04: on the
+/// count-only DEFAULT path the same write is counted and forwarded exactly as before inc A (a
+/// method below `0x100` or on a CE subchannel goes out as written).
+#[test]
+fn refusals_by_name_every_refused_method() {
+    use kf_chan::translated::REFUSED_METHODS;
+    for &(lo, hi, name) in &REFUSED_METHODS {
+        for mm in [lo, hi] {
+            let subs: &[u32] = if mm < 0x100 { &[0, SUB, 6] } else { &[0, SUB] };
+            for &sub in subs {
+                let mut pb = setup();
+                pb.extend(m(sub, mm, &[0x1234]));
+                let r = rewrite(&pb, is_ce, &mut strict(), &W);
+                assert_eq!(
+                    r,
+                    Err(Refusal::RefusedMethod {
+                        subch: sub,
+                        method: mm,
+                        name
+                    }),
+                    "{name} {mm:#x} on subchannel {sub}"
+                );
+                // The default path: counted, forwarded as written — today's words, unchanged.
+                let mut st = CeState::default();
+                let out = rewrite(&pb, is_ce, &mut st, &W)
+                    .unwrap_or_else(|e| panic!("count-only {name} {mm:#x}: {e:?}"));
+                assert_eq!(
+                    writes(&out),
+                    vec![(0, CE_CLASS), (mm, 0x1234)],
+                    "count-only {name} {mm:#x} on subchannel {sub}"
+                );
+                assert_eq!(st.inca.refused_methods, 1, "{name} {mm:#x} counted");
+                assert_eq!(st.inca.total(), 1);
+            }
+        }
+    }
+    // The neighbours of the refused ranges still pass (state methods today's rewriter keeps).
+    for mm in [ce::SET_SEMAPHORE_PAYLOAD, ce::SET_SRC_PHYS_MODE, 0x700] {
+        let mut pb = setup();
+        pb.extend(m(SUB, mm, &[0]));
+        let mut st = strict();
+        assert!(rewrite(&pb, is_ce, &mut st, &W).is_ok(), "{mm:#x}");
+        assert_eq!(st.inca.total(), 0, "{mm:#x} is not counted");
+    }
+}
+
+/// ★ P1+P2 inc A (§3.7): on a strict channel a SUB-DEVICE-MASK header is refused by name; on the
+/// count-only default path it is counted and pushed RAW, in place, as before inc A.
+#[test]
+fn a_subdevice_mask_header_is_refused() {
+    for tert in 1..=3u32 {
+        let sdm = (tert << 16) | (0x1 << 4); // GRP0_USE_TERT, TERT_OP = SET/STORE/USE
+        let mut pb = setup();
+        pb.push(sdm);
+        pb.extend(m(SUB, ce::LAUNCH_DMA, &[0]));
+        assert_eq!(
+            rewrite(&pb, is_ce, &mut strict(), &W),
+            Err(Refusal::SubDeviceMask { at: 2 }),
+            "tert_op {tert}"
+        );
+        let mut st = CeState::default();
+        let out = rewrite(&pb, is_ce, &mut st, &W).expect("count-only");
+        let words: Vec<u32> = out
+            .iter()
+            .flat_map(|p| match p {
+                Piece::Words(w) => w.clone(),
+                Piece::Invalidate { .. } => Vec::new(),
+            })
+            .collect();
+        let mut want = setup();
+        want.push(sdm);
+        want.extend(m(SUB, ce::LAUNCH_DMA, &[0]));
+        assert_eq!(words, want, "pushed raw, in place, tert_op {tert}");
+        assert_eq!(st.inca.subdevice_masks, 1);
+    }
+}
+
+/// ★ P1+P2 inc A (§3.6): the census counts every write — including one that is then refused —
+/// with its header form, its `LAUNCH_DMA` word and its operation values.
+#[test]
+fn the_census_counts_what_the_channel_pushed() {
+    use kf_chan::census::{Census, OpKind, SubKind};
+    use kf_chan::translated::rewrite_counted;
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182]));
+    pb.extend(m(0, 0x10, &[0x1, 0x2000, 7, 2])); // SEMAPHOREA-D, RELEASE
+    pb.extend(m(0, 0x5c, &[0x3000, 0x1, 9, 0, 1])); // SEM_ADDR_LO..SEM_EXECUTE, RELEASE
+    let mut c = Census::default();
+    rewrite_counted(&pb, is_ce, &mut CeState::default(), &W, Some(&mut c)).unwrap();
+    assert_eq!(c.count(CE_CLASS, SubKind::Ce, ce::LAUNCH_DMA), 1);
+    assert_eq!(c.launches_of(CE_CLASS, 0x182), 1);
+    assert_eq!(c.count(CE_CLASS, SubKind::Host, 0x1c), 1);
+    assert_eq!(c.ops_of(OpKind::SemaphoreD, 2), 1);
+    assert_eq!(c.ops_of(OpKind::SemExecute, 1), 1);
+    assert_eq!(c.forms_of("inc"), 4);
+    // A refused write (a strict channel) is counted before it is refused.
+    let mut pb = setup();
+    pb.extend(m(SUB, 0x220, &[0x1]));
+    let mut c = Census::default();
+    assert!(rewrite_counted(&pb, is_ce, &mut strict(), &W, Some(&mut c)).is_err());
+    assert_eq!(c.count(CE_CLASS, SubKind::Ce, 0x220), 1);
+}

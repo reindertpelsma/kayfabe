@@ -22,3 +22,5 @@ pub mod mem;
 pub mod prof;
 pub mod raw_unsafe;
 pub mod rmfacts;
+pub mod tspace;
+pub mod twin;

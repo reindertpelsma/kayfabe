@@ -98,6 +98,10 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     fn withholds_privileged(&self) -> bool {
         self.inner.withholds_privileged()
     }
+    // ★ P1+P2 inc A: forwarded EXPLICITLY — the trait default would count a twin as a CPU view.
+    fn gpu_space(&self) -> bool {
+        self.inner.gpu_space()
+    }
     // ★ v3-cdp: forwarded EXPLICITLY (the trait default refuses); never a recorded row — a
     // SKED-reflected page is not memory a reader may resolve through.
     fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
@@ -217,6 +221,9 @@ pub fn publish(
             ram_offset,
             usermode: None,
             per_map_kind: true,
+            // The harness publishes into its own spaces with no declared carve-out: no bound.
+            carve: store_bytes,
+            carve_refuse: false,
         },
     );
     let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; r.runs.len()];

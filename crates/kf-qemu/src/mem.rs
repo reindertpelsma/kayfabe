@@ -146,6 +146,20 @@ impl RamMap {
         let first = self.blocks.read().ok()?.iter().find_map(|x| x.fd)?;
         (b.fd == Some(first)).then(|| (first, b.fd_off + (gpa - b.gpa)))
     }
+
+    /// ★★ P1+P2 (`docs/design/V3_P1P2_TSPACE.md` §2.6) — **THE vIOMMU SEAM: the one path from a
+    /// device DMA address to a guest-memfd range.** The walker's sysmem leaves, the Translated
+    /// rewriter's sysmem operands (both the window arithmetic and the T-mode resolver), and sysmem
+    /// USERD and notifiers all go through here. Today a device DMA address IS a guest-physical
+    /// address, so this is [`RamMap::file_range`]'s offset; under a guest vIOMMU it does IOVA→GPA
+    /// per run FIRST, splitting a run where the mapping is discontiguous and refusing — never
+    /// reading through — an unmapped one (`V3_VIOMMU.md` §3). Until that lands kf3 refuses at
+    /// realize behind a vIOMMU. ⚠ The PRAMIN plan's closure (`MemPlane::build`) is routed here when
+    /// `v3-scratch-bound` (which rewrites that construction) has merged.
+    #[must_use]
+    pub fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
+        self.file_range(dma, len).map(|(_, off)| off)
+    }
 }
 
 /// ★ An armed CPU view of a store slice: the node whose `mmap` context RM registered, and the
@@ -565,13 +579,13 @@ impl Target {
 ///
 /// ★ Written INSIDE the apply, before the invalidate's `TRIGGER` is cleared — so a doorbell the
 /// guest rings after its invalidate completed always finds the rows that invalidate published.
-pub type PlacedRows = std::sync::Arc<RwLock<std::collections::BTreeMap<u64, (u64, u64, bool)>>>;
+pub type PlacedRows = std::sync::Arc<RwLock<std::collections::BTreeMap<u64, PlacedRow>>>;
 
 /// Resolve `[va, va+len)` against `rows`: `(ram, offset)` when ONE placement covers it whole.
 #[must_use]
 pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64)> {
     let r = rows.read().ok()?;
-    let (&start, &(rlen, off, ram)) = r.range(..=va).next_back()?;
+    let (&start, &(rlen, off, ram, _)) = r.range(..=va).next_back()?;
     let end = va.checked_add(len)?;
     (end <= start.checked_add(rlen)?).then(|| (ram, off + (va - start)))
 }
@@ -583,9 +597,213 @@ pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64
 #[must_use]
 pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u64)> {
     let r = rows.read().ok()?;
-    let (&start, &(rlen, off, ram)) = r.range(..=va).next_back()?;
+    let (&start, &(rlen, off, ram, _)) = r.range(..=va).next_back()?;
     let end = start.checked_add(rlen)?;
     (va < end).then(|| (ram, off + (va - start), end - va))
+}
+
+/// One placement row: `(len, backing offset, in guest RAM, the guest leaf's permission)` — see
+/// [`PlacedRows`]. ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.4): the permission is what the T-mode
+/// resolver refuses a write, release or reduction through.
+pub type PlacedRow = (u64, u64, bool, kf_host::MapPerm);
+
+/// ★ P1+P2 review fix (2026-10-04, `V3_P1P2_TSPACE.md` §7.13) — **every change the walk commits
+/// to a mirror's placement rows, numbered.** The stale-bind counter asks which change landed while
+/// a bound piece's fence was still incomplete ([`kf_chan::tmode::Rows::changed_since`]). ⊘ Bumped
+/// while the rows' WRITE lock is held and read under their READ guard ([`resolve_rows_epoch`]), so
+/// a resolution and the epoch recorded with it always agree. Bounded: the oldest entries go, and
+/// a question reaching past them is answered `Unknown`.
+#[derive(Debug, Default)]
+pub struct RowsLog {
+    epoch: AtomicU64,
+    log: Mutex<std::collections::VecDeque<(u64, u64, u64, std::time::Instant)>>,
+}
+
+/// Entries a [`RowsLog`] keeps.
+const ROWS_LOG_MAX: usize = 4096;
+
+impl RowsLog {
+    /// A change to the rows over `[lo, hi)` — call with the rows' write lock HELD.
+    pub fn commit(&self, lo: u64, hi: u64) {
+        let e = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        if let Ok(mut l) = self.log.lock() {
+            if l.len() >= ROWS_LOG_MAX {
+                l.pop_front();
+            }
+            l.push_back((e, lo, hi, std::time::Instant::now()));
+        }
+    }
+
+    /// The current epoch (the number of commits).
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch.load(Ordering::Acquire)
+    }
+
+    /// The earliest commit after `epoch` touching `[va, va+len)`, and when it landed.
+    #[must_use]
+    pub fn changed_since(&self, epoch: u64, va: u64, len: u64) -> kf_chan::tmode::Changed {
+        use kf_chan::tmode::Changed;
+        let Ok(l) = self.log.lock() else {
+            return Changed::Unknown;
+        };
+        let reaches = l
+            .front()
+            .map_or(self.epoch() <= epoch, |c| c.0 <= epoch + 1);
+        if !reaches {
+            return Changed::Unknown;
+        }
+        let end = va.saturating_add(len);
+        l.iter()
+            .find(|c| c.0 > epoch && c.1 < end && va < c.2)
+            .map_or(Changed::No, |c| Changed::At(c.3))
+    }
+}
+
+/// ★ [`kf_chan::tmode::Rows::resolve_epoch`] over a mirror: the spans of `[va, va+len)` and the
+/// rows' epoch, both read under ONE read guard (a commit bumps the epoch under the write lock).
+pub fn resolve_rows_epoch(
+    rows: &PlacedRows,
+    log: &RowsLog,
+    va: u64,
+    len: u64,
+) -> (Result<Vec<kf_chan::tmode::Span>, u64>, u64) {
+    let Ok(r) = rows.read() else {
+        return (Err(va), 0);
+    };
+    let epoch = log.epoch();
+    let spans = kf_chan::tmode::resolve_spans(va, len, |at| {
+        let (&start, &(rlen, off, ram, perm)) = r.range(..=at).next_back()?;
+        let end = start.checked_add(rlen)?;
+        (at < end).then(|| (ram, off + (at - start), end - at, perm))
+    });
+    (spans, epoch)
+}
+
+/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.4): what [`cut_rows`] changed, so the record
+/// can be put back exactly when the host refuses the range unmap.
+#[derive(Debug, Default)]
+pub struct RowCut {
+    /// The rows as they were before the cut (removed whole or trimmed).
+    pub original: Vec<(u64, PlacedRow)>,
+    /// The keys of the remnants the cut inserted (a straddling row's outside parts).
+    pub remnants: Vec<u64>,
+}
+
+/// ★ P1+P2 inc A (§3.4) — **remove `[va, end)` from a row record EXACTLY as host RM removes it
+/// from the space.** A row wholly inside goes; a row that straddles an edge keeps its outside
+/// part(s), at their own VA and backing offset — host RM splits a straddling placement and keeps
+/// what lies outside the range ([`kf_host::HostRm::unmap_range`]).
+///
+/// ⊘ Before this the record removed only the rows whose START lay in the range: a row straddling
+/// the start stayed at full length (stale coverage — a reader resolved through a mapping that is
+/// gone), and a row starting inside but ending past the range was dropped whole while host RM kept
+/// its outside part (missing coverage — a false refusal that kills the reading channel). Once the
+/// rows are a translation the engine depends on (the T-space resolver), exactness is a safety
+/// property, not a convenience.
+pub fn cut_rows(
+    rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    end: u64,
+) -> RowCut {
+    let mut cut = RowCut::default();
+    if end <= va {
+        return cut;
+    }
+    let mut keys: Vec<u64> = rows
+        .range(..va)
+        .next_back()
+        .filter(|&(&k, &(len, _, _, _))| k.saturating_add(len) > va)
+        .map(|(&k, _)| k)
+        .into_iter()
+        .collect();
+    keys.extend(rows.range(va..end).map(|(&k, _)| k));
+    for k in keys {
+        let Some(row @ (len, off, ram, perm)) = rows.remove(&k) else {
+            continue;
+        };
+        cut.original.push((k, row));
+        let row_end = k.saturating_add(len);
+        if k < va {
+            rows.insert(k, (va - k, off, ram, perm));
+            cut.remnants.push(k);
+        }
+        if row_end > end {
+            rows.insert(end, (row_end - end, off + (end - k), ram, perm));
+            cut.remnants.push(end);
+        }
+    }
+    cut
+}
+
+/// ★ P1+P2 inc A, count-only (review fix 2026-10-04): range unmaps whose row removal BEFORE inc A
+/// ([`legacy_cut_rows`]) differs from host RM's exact cut ([`cut_rows`]) — a row straddling an
+/// edge. Counted on the default path, which keeps that removal until box step 1 shows `0`
+/// (`inca[… rows_inexact=…]` on the status line).
+pub static ROWS_INEXACT: AtomicU64 = AtomicU64::new(0);
+
+/// The removal before inc A, kept on the count-only default path: only the rows whose START lies
+/// in `[va, end)`, each whole.
+pub fn legacy_cut_rows(
+    rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    end: u64,
+) -> RowCut {
+    let keys: Vec<u64> = rows.range(va..end).map(|(&k, _)| k).collect();
+    RowCut {
+        original: keys
+            .into_iter()
+            .filter_map(|k| rows.remove(&k).map(|v| (k, v)))
+            .collect(),
+        remnants: Vec::new(),
+    }
+}
+
+/// Whether [`legacy_cut_rows`] of `[va, end)` would differ from host RM's exact cut: a row
+/// straddles the start, or a row starting inside ends past the end.
+#[must_use]
+pub fn cut_is_inexact(
+    rows: &std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    end: u64,
+) -> bool {
+    if end <= va {
+        return false;
+    }
+    let straddles_start = rows
+        .range(..va)
+        .next_back()
+        .is_some_and(|(&k, &(len, _, _, _))| k.saturating_add(len) > va);
+    straddles_start
+        || rows
+            .range(va..end)
+            .any(|(&k, &(len, _, _, _))| k.saturating_add(len) > end)
+}
+
+/// ★ P1+P2 inc A (review fix 2026-10-04): the row removal a range unmap makes — EXACT when strict
+/// (`crate::tspace::inca_strict`), else the removal before inc A with a differing cut counted in
+/// [`ROWS_INEXACT`].
+pub fn cut_for(
+    strict: bool,
+    rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    end: u64,
+) -> RowCut {
+    if strict {
+        return cut_rows(rows, va, end);
+    }
+    if cut_is_inexact(rows, va, end) {
+        ROWS_INEXACT.fetch_add(1, Ordering::Relaxed);
+    }
+    legacy_cut_rows(rows, va, end)
+}
+
+/// Undo a [`cut_rows`] (or a [`legacy_cut_rows`]): remove its remnants, put the original rows back.
+pub fn uncut_rows(rows: &mut std::collections::BTreeMap<u64, PlacedRow>, cut: RowCut) {
+    for k in cut.remnants {
+        rows.remove(&k);
+    }
+    rows.extend(cut.original);
 }
 
 /// ★★★ P6b: **where OUR rings live in a mirrored space** — `[RING_REGION_BASE, RING_VA_LIMIT)`,
@@ -651,6 +869,9 @@ pub struct GpuMirror {
     pub vas: HostVas<'static>,
     /// Our placements (see [`PlacedRows`]).
     pub rows: PlacedRows,
+    /// ★ Review fix 2026-10-04: every change committed to `rows`, numbered ([`RowsLog`]) — shared
+    /// with the channel plane's [`Mirror::log`].
+    pub log: std::sync::Arc<RowsLog>,
     /// ★ P6b: OUR VMM placements in this space — the two windows and the ring region.
     pub reserved: Vec<(u64, u64)>,
     /// ★ `V3_BATCHED_MAP.md`: guest RAM as QEMU registered it — the memfd a batch is stitched from
@@ -664,7 +885,7 @@ pub struct GpuMirror {
     /// its client is one of the guest RM's internal clients) — it mirrors privileged leaves. Until
     /// then it is a USER twin and WITHHOLDS them (`MapTarget::withholds_privileged`). Shared with
     /// the channel plane's [`Mirror::kernel_vas`].
-    pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub kernel_vas: std::sync::Arc<crate::twin::TwinState>,
     /// ★★★ v3-cdp: OUR SKED-reflected placements, `va → len` (`MapTarget::map_sked`,
     /// `V3_CDP.md`). ⊘ Kept OUT of [`GpuMirror::rows`]: a SKED page is not memory, so no reader may
     /// resolve a guest VA through it; it is here so an unmap and the retire take it down.
@@ -728,14 +949,15 @@ impl GpuMirror {
     #[must_use]
     pub fn new(
         vas: HostVas<'static>,
-        rows: PlacedRows,
+        (rows, log): (PlacedRows, std::sync::Arc<RowsLog>),
         reserved: Vec<(u64, u64)>,
         ram: Option<&'static RamMap>,
-        kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        kernel_vas: std::sync::Arc<crate::twin::TwinState>,
     ) -> Self {
         GpuMirror {
             vas,
             rows,
+            log,
             reserved,
             ram,
             bv: kf_mem::batch::BatchedVas::new(vas),
@@ -761,7 +983,7 @@ impl GpuMirror {
         let rows: Vec<(u64, u64)> = self
             .rows
             .read()
-            .map(|r| r.iter().map(|(&va, &(len, _, _))| (va, len)).collect())
+            .map(|r| r.iter().map(|(&va, &(len, _, _, _))| (va, len)).collect())
             .unwrap_or_default();
         let before = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
         let mut refused = 0usize;
@@ -814,7 +1036,11 @@ pub fn vmm_ranges(fb: Option<(u64, u64)>, ram: Option<(u64, u64)>) -> Vec<(u64, 
 
 impl MapTarget for GpuMirror {
     fn withholds_privileged(&self) -> bool {
-        !self.kernel_vas.load(Ordering::Acquire)
+        // ★ P1+P2 inc D: ONE atomic load of the per-twin state word (`crate::twin`).
+        !self.kernel_vas.is_kernel()
+    }
+    fn gpu_space(&self) -> bool {
+        true
     }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let t = std::time::Instant::now();
@@ -826,7 +1052,8 @@ impl MapTarget for GpuMirror {
         if m == Mapped::Placed
             && let Ok(mut r) = self.rows.write()
         {
-            r.insert(d.va, (d.len, d.off, d.ram));
+            r.insert(d.va, (d.len, d.off, d.ram, d.perm));
+            self.log.commit(d.va, d.va.saturating_add(d.len));
         }
         Ok(m)
     }
@@ -850,7 +1077,8 @@ impl MapTarget for GpuMirror {
             .fetch_add(rows.len() as u64, Ordering::Relaxed);
         if let Ok(mut r) = self.rows.write() {
             for d in rows {
-                r.insert(d.va, (d.len, d.off, d.ram));
+                r.insert(d.va, (d.len, d.off, d.ram, d.perm));
+                self.log.commit(d.va, d.va.saturating_add(d.len));
             }
         }
         Ok(())
@@ -896,7 +1124,10 @@ impl MapTarget for GpuMirror {
         // vvid vid11]` refused `Other(87)`, leaving the space unsettled): answered with no host call.
         let row = match self.rows.write() {
             Ok(mut r) => match r.remove(&va) {
-                Some(row) => row,
+                Some(row) => {
+                    self.log.commit(va, va.saturating_add(row.0));
+                    row
+                }
                 None => {
                     eprintln!(
                         "kf3: mem unmap {va:#x}: no placement of ours there (host-held or handed to host RM) — no host call"
@@ -927,15 +1158,18 @@ impl MapTarget for GpuMirror {
             ));
         }
         // ⊘ Forget the rows FIRST (as `unmap`); put them back if the host refuses, so the per-run
-        // fallback still knows each run's length.
-        let removed: Vec<(u64, (u64, u64, bool))> = self
+        // fallback still knows each run's length. ★ P1+P2 inc A: cut EXACTLY at both edges, as host
+        // RM does ([`cut_rows`]) — when strict; the default path keeps the removal before inc A and
+        // counts a cut that differs ([`cut_for`]).
+        let cut = self
             .rows
             .write()
             .map(|mut r| {
-                let keys: Vec<u64> = r.range(va..end).map(|(&k, _)| k).collect();
-                keys.into_iter()
-                    .filter_map(|k| r.remove(&k).map(|v| (k, v)))
-                    .collect()
+                let cut = cut_for(crate::tspace::inca_strict(), &mut r, va, end);
+                if !cut.original.is_empty() {
+                    self.log.commit(va, end);
+                }
+                cut
             })
             .unwrap_or_default();
         // ★★★ v3-cdp: the range takes any SKED-reflected placement of ours inside it down too.
@@ -955,7 +1189,10 @@ impl MapTarget for GpuMirror {
         self.calls.ranges.fetch_add(1, Ordering::Relaxed);
         if r.is_err() {
             if let Ok(mut rows) = self.rows.write() {
-                rows.extend(removed);
+                if !cut.original.is_empty() {
+                    self.log.commit(va, end);
+                }
+                uncut_rows(&mut rows, cut);
             }
             if let Ok(mut k) = self.sked.lock() {
                 k.extend(sked_removed);
@@ -1000,16 +1237,19 @@ pub struct Mirror {
     /// ★★★ v3-roperm: the space is the guest KERNEL's — set by the channel plane when it births a
     /// Translated channel here; the memory plane's [`GpuMirror`] reads it to decide whether a
     /// privileged guest leaf may be mirrored.
-    pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub kernel_vas: std::sync::Arc<crate::twin::TwinState>,
+    /// ★ Review fix 2026-10-04: the commit log of `rows` ([`RowsLog`]), shared with the walker's
+    /// [`GpuMirror::log`].
+    pub log: std::sync::Arc<RowsLog>,
 }
 
 /// ★★★ v3-roperm: a mirror's starting classification — KERNEL for one of the guest RM's own
 /// internal clients (a handle range no guest process can hold, `kf_rm::chanlink::is_rm_internal_client`),
 /// USER (withholding privileged leaves) for everything else until a Translated channel is born in it.
 #[must_use]
-pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<crate::twin::TwinState> {
     let client = u32::try_from(key.0 >> 32).unwrap_or(0);
-    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
+    std::sync::Arc::new(crate::twin::TwinState::for_kernel(
         kf_rm::chanlink::is_rm_internal_client(client),
     ))
 }
@@ -1022,6 +1262,10 @@ pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<std::sync::atomic::AtomicBo
 pub struct Spare {
     space: kf_host::VaSpace,
     fb_base: u64,
+    /// ★ Review fix 2026-10-04: the store window's length in this space — the store's on the
+    /// default path, 0 for a T-mode twin (no window) — so a recycled twin's record says what its
+    /// space actually holds.
+    fb_len: u64,
     ram: Option<(u64, u64)>,
     ram_obj: Option<u32>,
     rings: RingSlots,
@@ -1141,6 +1385,14 @@ impl MapTarget for Target {
         match self {
             Target::Window(_) | Target::Bar1(_) => false,
             Target::Gpu(g) => g.withholds_privileged(),
+        }
+    }
+    // ★ P1+P2 inc A: forwarded EXPLICITLY — only a host GPU VA space is bounded by the carve-out;
+    // the CPU windows are the guest kernel's own views (count-only, §4.3).
+    fn gpu_space(&self) -> bool {
+        match self {
+            Target::Window(_) | Target::Bar1(_) => false,
+            Target::Gpu(g) => g.gpu_space(),
         }
     }
 }
@@ -1442,6 +1694,11 @@ pub struct Inbox {
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): how many times the guest's RM gave BAR1 up
     /// (the drainer bumps it; the VA thread re-seeds the boot framebuffer when it moved).
     bar1_physical: AtomicU64,
+    /// ★ P1+P2 review fix (2026-10-04, §3.5): the VA thread has a walk in flight or pending, or an
+    /// armed invalidate — published by it at the end of every loop ([`Inbox::set_walk_busy`]).
+    walk_busy: std::sync::atomic::AtomicBool,
+    /// Guest tokens of Translated channels waiting for a pending walk to land.
+    walk_waiters: Mutex<Vec<u32>>,
 }
 
 impl Inbox {
@@ -1462,7 +1719,44 @@ impl Inbox {
             split_results: Mutex::new(std::collections::HashMap::new()),
             next_ticket: AtomicU64::new(1),
             bar1_physical: AtomicU64::new(0),
+            walk_busy: std::sync::atomic::AtomicBool::new(false),
+            walk_waiters: Mutex::new(Vec::new()),
         })
+    }
+
+    /// ★ Review fix 2026-10-04 (§3.5) — **a walk the guest asked for has not landed yet**: the VA
+    /// thread says so ([`Inbox::set_walk_busy`]), a statement is unsettled, or a split is queued
+    /// or running. A T-mode operand with no row then waits for it instead of being refused.
+    #[must_use]
+    pub fn walk_busy(&self) -> bool {
+        self.walk_busy.load(Ordering::Acquire)
+            || !self.all_settled()
+            || self.splits.lock().is_ok_and(|q| !q.is_empty())
+            || self.split_tokens.lock().is_ok_and(|m| !m.is_empty())
+    }
+
+    /// The VA thread, at the end of every loop: whether it has a walk in flight or pending.
+    pub fn set_walk_busy(&self, busy: bool) {
+        self.walk_busy.store(busy, Ordering::Release);
+    }
+
+    /// A worker: channel `token` waits for the pending walk to land (rung by the VA thread when it
+    /// is idle — at most one loop later, so a registration racing the take is never lost).
+    pub fn wait_walk(&self, token: u32) {
+        if let Ok(mut w) = self.walk_waiters.lock()
+            && !w.contains(&token)
+        {
+            w.push(token);
+        }
+        let _ = self.wake.signal();
+    }
+
+    /// The VA thread, idle: the tokens to ring.
+    pub fn take_walk_waiters(&self) -> Vec<u32> {
+        self.walk_waiters
+            .lock()
+            .map(|mut w| std::mem::take(&mut *w))
+            .unwrap_or_default()
     }
 
     /// ★ 2026-10-03 (B5), the drainer: the guest's RM gave BAR1 up — ask the VA thread to show the
@@ -1679,7 +1973,7 @@ pub struct MemPlane {
     /// Counters.
     pub counters: MemCounters,
     /// Guest RAM as QEMU registered it.
-    ram: &'static RamMap,
+    pub(crate) ram: &'static RamMap,
     /// ★ The guest-RAM host object — an OS descriptor over the WHOLE guest memfd (gate 3's
     /// recipe), created once, on the VA thread, the first time a space needs it: `(handle, len)`.
     ram_obj: std::sync::OnceLock<Result<(u32, u64), String>>,
@@ -1889,6 +2183,194 @@ impl MemPlane {
     }
 }
 
+/// ★ P1+P2 review fix (2026-10-04) — **the host verbs a T-mode twin path may call**: [`HostRm`] in
+/// kf3, a recorder in the tests, so "no window in any twin" is tested on the paths themselves
+/// (create, prewarm, reuse) rather than on a predicate.
+pub trait TwinHost {
+    /// A store window in `space`, `GROWS_DOWN`, as the default path places one. ⊘ In T-mode ONLY
+    /// the positive control ([`negctl_twin_window`]) calls it.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn map_window(&self, space: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String>;
+}
+
+impl TwinHost for HostRm {
+    fn map_window(&self, space: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String> {
+        HostRm::map_window(self, space, memory, len, true).map_err(|e| format!("{e:?}"))
+    }
+}
+
+/// ★ `KF3_NEGCTL_TWIN_WINDOW=1` — the POSITIVE CONTROL of "no window in any twin" (review fix
+/// 2026-10-04): in T-mode every new twin and every prewarmed spare ALSO gets a store window, recorded
+/// in its record, so its log line names it and the box-log gate's `WINDOWS=NONE` must fail. It
+/// reintroduces exactly the S1-21 defect; never set it outside a control run. Default OFF; read once.
+#[must_use]
+pub fn negctl_twin_window() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TWIN_WINDOW").is_some_and(|v| v != "0"))
+}
+
+/// ★ A T-mode twin's record — its [`Mirror`] and the VMM ranges a guest leaf must avoid — both
+/// derived from what was actually MAPPED in its space, never asserted.
+pub struct TwinRecord {
+    /// The mirror the channel plane sees.
+    pub mirror: Mirror,
+    /// Our placements in the space a guest leaf may not overlap.
+    pub reserved: Vec<(u64, u64)>,
+}
+
+/// ★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1) — **a fresh T-mode twin**: the host space and nothing
+/// of ours — no window, no ring region, so no VMM range a guest leaf must avoid (guest leaves at
+/// `[RING_REGION_BASE, 2^40)` are accepted) — and always recorded: its record never hangs on a
+/// window. `negctl` (the positive control) maps one store window of `store_len` and records it.
+pub fn tmode_twin(
+    host: &dyn TwinHost,
+    key: VasKey,
+    space: kf_host::VaSpace,
+    ram_obj: Option<u32>,
+    store: u32,
+    store_len: u64,
+    negctl: bool,
+) -> TwinRecord {
+    let fb = negctl
+        .then(|| host.map_window(space, store, store_len).ok())
+        .flatten();
+    twin_record(
+        key,
+        space,
+        fb.map(|b| (b, store_len)),
+        ram_obj,
+        RingSlots::default(),
+    )
+}
+
+/// ★ A T-mode prewarmed spare: a plain space (the space and its reservations cost RM calls),
+/// with no window to pay for — `negctl` as for [`tmode_twin`].
+pub fn tmode_spare(
+    host: &dyn TwinHost,
+    space: kf_host::VaSpace,
+    ram_obj: Option<u32>,
+    store: u32,
+    store_len: u64,
+    negctl: bool,
+) -> Spare {
+    let fb = negctl
+        .then(|| host.map_window(space, store, store_len).ok())
+        .flatten();
+    Spare {
+        space,
+        fb_base: fb.unwrap_or(0),
+        fb_len: fb.map_or(0, |_| store_len),
+        ram: None,
+        ram_obj,
+        rings: RingSlots::default(),
+    }
+}
+
+/// ★ A recycled spare as a T-mode twin — no host verb; the record says what the space holds (a
+/// spare from a T-mode twin holds nothing of ours).
+#[must_use]
+pub fn tmode_reuse(key: VasKey, sp: &Spare) -> TwinRecord {
+    twin_record(
+        key,
+        sp.space,
+        (sp.fb_len > 0).then_some((sp.fb_base, sp.fb_len)),
+        sp.ram_obj,
+        sp.rings.clone(),
+    )
+}
+
+fn twin_record(
+    key: VasKey,
+    space: kf_host::VaSpace,
+    fb: Option<(u64, u64)>,
+    ram_obj: Option<u32>,
+    rings: RingSlots,
+) -> TwinRecord {
+    let (fb_base, fb_len) = fb.unwrap_or((0, 0));
+    TwinRecord {
+        mirror: Mirror {
+            space,
+            fb_base,
+            fb_len,
+            ram: None,
+            rows: PlacedRows::default(),
+            ram_obj,
+            live: Default::default(),
+            rings,
+            kernel_vas: kernel_vas_for(key),
+            log: std::sync::Arc::default(),
+        },
+        // ⊘ Not [`vmm_ranges`]: that one always names the ring region, and a T-mode twin has
+        // none — only a window, when the positive control mapped one, is a VMM range here.
+        reserved: fb
+            .map(|(b, l)| vec![(b, b.saturating_add(l))])
+            .unwrap_or_default(),
+    }
+}
+
+/// ★ The windows a mirror carries, as its log line names them — DERIVED from the record (review
+/// fix 2026-10-04: the T-mode lines printed a literal `windows=none` whatever was mapped).
+#[must_use]
+pub fn windows_text(m: &Mirror) -> String {
+    window_words(m.fb_base, m.fb_len, m.ram)
+}
+
+/// [`windows_text`] for a spare.
+#[must_use]
+pub fn spare_windows_text(sp: &Spare) -> String {
+    window_words(sp.fb_base, sp.fb_len, sp.ram)
+}
+
+fn window_words(fb_base: u64, fb_len: u64, ram: Option<(u64, u64)>) -> String {
+    if fb_len == 0 && ram.is_none() {
+        return "windows=none".into();
+    }
+    format!(
+        "windows fb={fb_base:#x}+{fb_len:#x} ram={}",
+        ram.map_or_else(|| "NONE".to_string(), |(b, l)| format!("{b:#x}+{l:#x}"))
+    )
+}
+
+/// ★ P1+P2 inc D: record a T-mode twin — its [`TwinRecord`] in the channel plane's table and the
+/// walker's, the two sharing its rows and its state word.
+fn record_twin(
+    plane: &MemPlane,
+    key: VasKey,
+    rec: TwinRecord,
+    m: &mut Manager,
+    rm: &'static HostRm,
+    store: u32,
+) {
+    let TwinRecord { mirror, reserved } = rec;
+    let (space, ram_obj, rows, log, kernel_vas) = (
+        mirror.space,
+        mirror.ram_obj,
+        mirror.rows.clone(),
+        mirror.log.clone(),
+        mirror.kernel_vas.clone(),
+    );
+    if let Ok(mut mm) = plane.mirrors.lock() {
+        mm.insert(key, mirror);
+    }
+    m.table.insert(
+        key,
+        Target::Gpu(GpuMirror::new(
+            HostVas {
+                rm,
+                space,
+                store,
+                ram_obj,
+            },
+            (rows, log),
+            reserved,
+            Some(plane.ram),
+            kernel_vas,
+        )),
+    );
+}
+
 /// ★ Build a fresh mirror for `key`: a host space and its two windows (P5, §12). Returns the log
 /// line on refusal.
 fn create_mirror(
@@ -1920,6 +2402,36 @@ fn create_mirror(
         }
     };
     let ram_obj_us = us(t_step);
+    if crate::tspace::enabled() {
+        // ★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1): a twin carries NO window and NO ring — only
+        // rows derived from the guest's own page tables — and its record never hangs on a window.
+        // ★ Review fix 2026-10-04: the record is built by [`tmode_twin`] (tested against a host
+        // that counts window maps) and the line is derived from it ([`windows_text`]).
+        let rec = tmode_twin(
+            rm,
+            key,
+            space,
+            ram_obj.map(|(o, _)| o),
+            store,
+            plane.fb_len,
+            negctl_twin_window(),
+        );
+        let windows = windows_text(&rec.mirror);
+        record_twin(plane, key, rec, m, rm, store);
+        let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
+        plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
+        plane
+            .counters
+            .mirror_ns_max
+            .fetch_max(ns, Ordering::Relaxed);
+        eprintln!(
+            "kf3: {key:?} mirror space={:#x}: {windows} rings=none ({} us: vaspace {vas_us} ram_obj {ram_obj_us})",
+            space.space,
+            ns / 1000
+        );
+        return Ok(());
+    }
     // ★ P5: the two windows, in EVERY mirrored space (§12) — GROWS_DOWN, away from the guest's
     // bottom-up VAs (§24.2). A space whose windows refuse is still a mirror (its virtual rows
     // work); a Translated channel naming it refuses by name at birth.
@@ -1932,6 +2444,7 @@ fn create_mirror(
     let rows = PlacedRows::default();
     let rings = RingSlots::default();
     let kernel_vas = kernel_vas_for(key);
+    let log = std::sync::Arc::<RowsLog>::default();
     let line = match (&fb_base, &ram_base) {
         (Ok(fb), Some(Ok((rb, rl)))) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
@@ -1947,6 +2460,7 @@ fn create_mirror(
                         live: Default::default(),
                         rings: rings.clone(),
                         kernel_vas: kernel_vas.clone(),
+                        log: log.clone(),
                     },
                 );
             }
@@ -1969,6 +2483,7 @@ fn create_mirror(
                         live: Default::default(),
                         rings: rings.clone(),
                         kernel_vas: kernel_vas.clone(),
+                        log: log.clone(),
                     },
                 );
             }
@@ -2003,7 +2518,7 @@ fn create_mirror(
                 store,
                 ram_obj: ram_obj.map(|(o, _)| o),
             },
-            rows,
+            (rows, log),
             reserved,
             Some(plane.ram),
             kernel_vas,
@@ -2048,6 +2563,29 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
         }
     };
     let vas_us = t1.elapsed().as_micros();
+    if crate::tspace::enabled() {
+        // ★ P1+P2 inc D (§4.1): spares are plain spaces — still prewarmed (the space and its
+        // reservations cost RM calls), with no window to pay for. ★ Review fix 2026-10-04: the
+        // line names what the spare's record holds ([`spare_windows_text`]), never a literal.
+        let sp = tmode_spare(
+            rm,
+            space,
+            ram_obj.ok().map(|(o, _)| o),
+            store,
+            plane.fb_len,
+            negctl_twin_window(),
+        );
+        let windows = spare_windows_text(&sp);
+        if let Ok(mut v) = plane.spares.lock() {
+            v.push(sp);
+        }
+        plane.counters.prewarmed.fetch_add(1, Ordering::Relaxed);
+        return Some(format!(
+            "prewarm: spare host space {:#x} ready before the guest runs — {windows} (vaspace {vas_us} us, ram_obj {ram_obj_us} us, total {} us)",
+            space.space,
+            t0.elapsed().as_micros()
+        ));
+    }
     let t2 = std::time::Instant::now();
     let fb = rm.map_window(space, store, plane.fb_len, true);
     let fb_us = t2.elapsed().as_micros();
@@ -2069,6 +2607,7 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
             let sp = Spare {
                 space,
                 fb_base,
+                fb_len: plane.fb_len,
                 ram: Some(r),
                 ram_obj: ram_obj.ok().map(|(o, _)| o),
                 rings: RingSlots::default(),
@@ -2133,6 +2672,7 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     let spare = mirror.map(|mi| Spare {
         space: mi.space,
         fb_base: mi.fb_base,
+        fb_len: mi.fb_len,
         ram: mi.ram,
         ram_obj: mi.ram_obj,
         rings: mi.rings,
@@ -2285,12 +2825,27 @@ pub fn apply_statement(
             };
             if m.table.target(key).is_none() {
                 let reused = plane.spares.lock().ok().and_then(|mut v| v.pop());
-                if let Some(sp) = reused {
+                if let Some(sp) = reused.as_ref().filter(|_| crate::tspace::enabled()) {
+                    // ★ P1+P2 inc D: a recycled T-mode spare is a plain space; classified afresh.
+                    // ★ Review fix 2026-10-04: recorded with what its space holds and LOGGED.
+                    let rec = tmode_reuse(key, sp);
+                    let windows = windows_text(&rec.mirror);
+                    record_twin(plane, key, rec, m, rm, store);
+                    plane
+                        .counters
+                        .mirrors_reused
+                        .fetch_add(1, Ordering::Relaxed);
+                    eprintln!(
+                        "kf3: {key:?} mirror space={:#x}: {windows} rings=none (recycled)",
+                        sp.space.space
+                    );
+                } else if let Some(sp) = reused {
                     // ★ P5c: a retired space — its rows are gone, its windows are where they were.
                     let rows = PlacedRows::default();
                     let reserved = vmm_ranges(Some((sp.fb_base, plane.fb_len)), sp.ram);
                     // ★ v3-roperm: a recycled host space is classified afresh for its new object.
                     let kernel_vas = kernel_vas_for(key);
+                    let log = std::sync::Arc::<RowsLog>::default();
                     if let Ok(mut mm) = plane.mirrors.lock() {
                         mm.insert(
                             key,
@@ -2304,6 +2859,7 @@ pub fn apply_statement(
                                 live: Default::default(),
                                 rings: sp.rings.clone(),
                                 kernel_vas: kernel_vas.clone(),
+                                log: log.clone(),
                             },
                         );
                     }
@@ -2320,7 +2876,7 @@ pub fn apply_statement(
                                 store,
                                 ram_obj: sp.ram_obj,
                             },
-                            rows,
+                            (rows, log),
                             reserved,
                             Some(plane.ram),
                             kernel_vas,
@@ -2435,6 +2991,230 @@ mod tests {
             Some(RING_REGION_BASE + 2 * kf_chan::host::RING_BYTES),
             "a double give and a foreign VA are not slots"
         );
+    }
+
+    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §7 test 14): a range that cuts a row at its START and
+    /// one that cuts a row at its END both leave exactly host RM's remaining coverage — and a
+    /// refused unmap puts the record back as it was.
+    #[test]
+    fn placed_rows_track_host_unmap_at_both_edges() {
+        use std::collections::BTreeMap;
+        const RW: kf_host::MapPerm = kf_host::MapPerm::READ_WRITE;
+        const RO: kf_host::MapPerm = kf_host::MapPerm {
+            read_only: true,
+            ..kf_host::MapPerm::READ_WRITE
+        };
+        let base: BTreeMap<u64, PlacedRow> = [
+            (0x1000, (0x3000, 0x10_0000, false, RO)), // [0x1000, 0x4000)
+            (0x4000, (0x1000, 0x20_0000, true, RW)),  // [0x4000, 0x5000)
+            (0x8000, (0x4000, 0x30_0000, false, RW)), // [0x8000, 0xC000)
+        ]
+        .into_iter()
+        .collect();
+        // Cut [0x2000, 0x9000): row 1 straddles the start, row 2 is inside, row 3 straddles the end.
+        let mut rows = base.clone();
+        let cut = cut_rows(&mut rows, 0x2000, 0x9000);
+        let want: BTreeMap<u64, PlacedRow> = [
+            (0x1000, (0x1000, 0x10_0000, false, RO)), // the part before, same backing and perm
+            (0x9000, (0x3000, 0x30_1000, false, RW)), // the part after, its backing advanced
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(rows, want);
+        // Nothing the host removed is still resolvable; everything it kept is.
+        assert_eq!(resolve_in(&rows, 0x1800), Some((false, 0x10_0800)));
+        assert_eq!(
+            resolve_in(&rows, 0x2000),
+            None,
+            "stale coverage at the start"
+        );
+        assert_eq!(resolve_in(&rows, 0x4800), None);
+        assert_eq!(resolve_in(&rows, 0x8800), None);
+        assert_eq!(
+            resolve_in(&rows, 0x9800),
+            Some((false, 0x30_1800)),
+            "missing coverage at the end"
+        );
+        uncut_rows(&mut rows, cut);
+        assert_eq!(rows, base, "a refused unmap restores the record");
+        // A range inside one row splits it in two.
+        let mut rows = base.clone();
+        cut_rows(&mut rows, 0x9000, 0xA000);
+        assert_eq!(rows.get(&0x8000), Some(&(0x1000, 0x30_0000, false, RW)));
+        assert_eq!(rows.get(&0xA000), Some(&(0x2000, 0x30_2000, false, RW)));
+        // An empty range changes nothing.
+        let mut rows = base.clone();
+        cut_rows(&mut rows, 0x2000, 0x2000);
+        assert_eq!(rows, base);
+        // ★ Review fix 2026-10-04 — the count-only DEFAULT path keeps the removal before inc A,
+        // byte for byte: only rows STARTING in the range go, each whole — row 1 (straddling the
+        // start) stays at full length, rows 2 and 3 go whole (row 3's outside part included) —
+        // and the difference from host RM's cut is counted.
+        let mut rows = base.clone();
+        assert!(cut_is_inexact(&rows, 0x2000, 0x9000));
+        let before = ROWS_INEXACT.load(Ordering::Relaxed);
+        let cut = cut_for(false, &mut rows, 0x2000, 0x9000);
+        let legacy: BTreeMap<u64, PlacedRow> = [(0x1000, (0x3000, 0x10_0000, false, RO))]
+            .into_iter()
+            .collect();
+        assert_eq!(rows, legacy, "the removal before inc A");
+        assert!(ROWS_INEXACT.load(Ordering::Relaxed) > before, "counted");
+        uncut_rows(&mut rows, cut);
+        assert_eq!(rows, base, "a refused unmap restores the record");
+        // The strict arm is the exact cut.
+        let mut rows = base.clone();
+        cut_for(true, &mut rows, 0x2000, 0x9000);
+        assert_eq!(rows, want);
+        // A range no row straddles is exact either way, and not counted.
+        assert!(!cut_is_inexact(&base, 0x4000, 0x5000));
+        let mut a = base.clone();
+        let mut b = base.clone();
+        cut_for(false, &mut a, 0x4000, 0x5000);
+        cut_rows(&mut b, 0x4000, 0x5000);
+        assert_eq!(a, b);
+    }
+
+    /// `(ram, offset)` of the row covering `va` (the readers' lookup, over a plain map).
+    fn resolve_in(
+        rows: &std::collections::BTreeMap<u64, PlacedRow>,
+        va: u64,
+    ) -> Option<(bool, u64)> {
+        let (&start, &(len, off, ram, _)) = rows.range(..=va).next_back()?;
+        (va < start + len).then(|| (ram, off + (va - start)))
+    }
+
+    /// ★ Review fix 2026-10-04 (§7.13) — **the rows' commit log**: every commit bumps the epoch
+    /// and names the range it changed; `changed_since` finds the FIRST commit after an epoch that
+    /// overlaps a range and when it landed, says `No` when none did, and `Unknown` once the log no
+    /// longer reaches back to the epoch. A resolution reads the epoch under the same guard.
+    #[test]
+    fn the_rows_commit_log_answers_what_changed_since_a_bind() {
+        use kf_chan::tmode::Changed;
+        let log = RowsLog::default();
+        let rows = PlacedRows::default();
+        if let Ok(mut r) = rows.write() {
+            r.insert(
+                0x1000,
+                (0x1000, 0x10_0000, false, kf_host::MapPerm::READ_WRITE),
+            );
+            log.commit(0x1000, 0x2000);
+        }
+        let (spans, epoch) = resolve_rows_epoch(&rows, &log, 0x1800, 0x100);
+        assert_eq!((spans.map(|s| s.len()), epoch), (Ok(1), 1));
+        assert_eq!(log.changed_since(1, 0x1800, 0x100), Changed::No);
+        log.commit(0x9000, 0xA000); // elsewhere
+        assert_eq!(log.changed_since(1, 0x1800, 0x100), Changed::No);
+        log.commit(0x1000, 0x2000); // this row, epoch 3
+        let Changed::At(t) = log.changed_since(1, 0x1800, 0x100) else {
+            panic!("a change after the bind")
+        };
+        assert!(t <= std::time::Instant::now());
+        assert_eq!(log.changed_since(3, 0x1800, 0x100), Changed::No);
+        // Past the bounded log's reach: Unknown, never a guess.
+        let full = RowsLog::default();
+        for k in 0..(ROWS_LOG_MAX as u64 + 10) {
+            full.commit(k << 12, (k + 1) << 12);
+        }
+        assert_eq!(full.changed_since(2, 0, 0x1000), Changed::Unknown);
+        assert_eq!(
+            full.changed_since(full.epoch(), 0, 0x1000),
+            Changed::No,
+            "nothing after the newest epoch"
+        );
+    }
+
+    /// ★ Review fix 2026-10-04 (§3.5): a walk is pending while the VA thread says so or a split is
+    /// queued; a channel waiting for one is rung once, when the VA thread takes the waiters.
+    #[test]
+    fn a_walk_waiter_is_registered_once_and_taken() {
+        let inbox = Inbox::new().expect("inbox");
+        assert!(!inbox.walk_busy());
+        inbox.set_walk_busy(true);
+        assert!(inbox.walk_busy());
+        inbox.set_walk_busy(false);
+        let t = inbox.request_split(7, None);
+        assert!(inbox.walk_busy(), "a queued split is a pending walk");
+        let _ = inbox.take_split_requests();
+        assert!(inbox.walk_busy(), "a running split too");
+        let _ = inbox.finish_split(t, Ok(()));
+        assert!(!inbox.walk_busy());
+        inbox.wait_walk(5);
+        inbox.wait_walk(5);
+        inbox.wait_walk(9);
+        assert_eq!(inbox.take_walk_waiters(), vec![5, 9]);
+        assert!(inbox.take_walk_waiters().is_empty());
+    }
+
+    /// A host that counts every window map and places it where RM placed `GROWS_DOWN` windows.
+    #[derive(Default)]
+    struct CountingHost {
+        maps: std::cell::RefCell<Vec<(u32, u32, u64)>>,
+    }
+    impl TwinHost for CountingHost {
+        fn map_window(&self, s: kf_host::VaSpace, memory: u32, len: u64) -> Result<u64, String> {
+            self.maps.borrow_mut().push((s.space, memory, len));
+            Ok(0x1_fffe_0000_0000)
+        }
+    }
+    fn space(n: u32) -> kf_host::VaSpace {
+        kf_host::VaSpace {
+            space: n,
+            range: n + 1,
+            guest: Default::default(),
+        }
+    }
+
+    /// ★★ P1+P2 inc D (§7 test 12), review fix 2026-10-04 — **no T-mode twin path maps a window**:
+    /// a created twin, a prewarmed spare and a recycled spare are each driven against a host that
+    /// COUNTS window maps — zero — and each record holds no window, no RAM window, no ring slot
+    /// taken and no VMM range, and is named `windows=none` by a line DERIVED from it. ⊘ The positive
+    /// control (`KF3_NEGCTL_TWIN_WINDOW`) maps one window per new twin and spare, and the record and
+    /// its line NAME it — what the box-log gate's `WINDOWS=NONE` must catch.
+    #[test]
+    fn no_tmode_twin_path_maps_a_window() {
+        const STORE_LEN: u64 = 12 << 30;
+        let key = VasKey((0xc1d0_002b_u64 << 32) | 5);
+        let h = CountingHost::default();
+        let created = tmode_twin(&h, key, space(0x10), Some(0x20), 0x1, STORE_LEN, false);
+        let spare = tmode_spare(&h, space(0x12), Some(0x20), 0x1, STORE_LEN, false);
+        let recycled = tmode_reuse(key, &spare);
+        assert!(h.maps.borrow().is_empty(), "{:?}", h.maps.borrow());
+        assert_eq!(spare_windows_text(&spare), "windows=none");
+        for rec in [&created, &recycled] {
+            let mi = &rec.mirror;
+            assert_eq!((mi.fb_len, mi.ram), (0, None));
+            assert!(
+                rec.reserved.is_empty(),
+                "no VMM range a guest leaf must avoid"
+            );
+            assert!(
+                take_ring_slot(&mi.rings).is_some_and(|at| at == RING_REGION_BASE),
+                "no ring slot taken in the twin"
+            );
+            assert_eq!(windows_text(mi), "windows=none");
+            assert!(
+                !mi.kernel_vas.is_kernel(),
+                "a user client's space starts unclassified"
+            );
+        }
+        // ⊘ The positive control.
+        let h = CountingHost::default();
+        let created = tmode_twin(&h, key, space(0x10), Some(0x20), 0x1, STORE_LEN, true);
+        let spare = tmode_spare(&h, space(0x12), Some(0x20), 0x1, STORE_LEN, true);
+        let recycled = tmode_reuse(key, &spare);
+        assert_eq!(
+            h.maps.borrow().len(),
+            2,
+            "one window per new twin and spare"
+        );
+        for rec in [&created, &recycled] {
+            assert!(windows_text(&rec.mirror).starts_with("windows fb=0x1fffe00000000+"));
+            assert_eq!(
+                rec.reserved,
+                vec![(0x1_fffe_0000_0000, 0x1_fffe_0000_0000 + STORE_LEN)]
+            );
+        }
+        assert!(spare_windows_text(&spare).starts_with("windows fb="));
     }
 
     #[test]

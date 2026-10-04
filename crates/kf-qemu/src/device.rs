@@ -238,6 +238,9 @@ pub struct Device {
     drainer_efd: &'static Notifier,
     /// ★ P5: the channel plane (the guest kernel's CE channels, Translated).
     pub chans: &'static crate::chan::ChanPlane,
+    /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2): the T-space, built once at prewarm with
+    /// `KF3_TSPACE=1` ([`crate::tspace`]); empty otherwise.
+    pub tspace: crate::tspace::TSpaceCell,
     /// ★ 2026-09-30: the doorbell fast path (`docs/design/V3_DOORBELL_IOEVENTFD.md`) — a KVM
     /// ioeventfd per live token, serviced by THIS device's register drainer. Off (every doorbell
     /// trapped) until the C device's `doorbell-ioeventfd` property hands it the KVM verb.
@@ -623,11 +626,23 @@ impl Device {
             }
         };
         let mirrors = crate::mem::Mirrors::default();
+        // ★ P1+P2 inc B: the T-space cell — filled once, on the VA thread, at prewarm.
+        let tspace = crate::tspace::TSpaceCell::default();
+        eprintln!(
+            "kf3: P1+P2 T-space {} (KF3_TSPACE; docs/design/V3_P1P2_TSPACE.md); host channel births require USER replies",
+            if crate::tspace::enabled() {
+                "ON: built at prewarm"
+            } else {
+                "OFF: today's mirrors and windows"
+            }
+        );
         let chans: &'static crate::chan::ChanPlane =
             Box::leak(Box::new(crate::chan::ChanPlane::new(
                 rm,
                 plane,
                 store.handle,
+                layout.clone(),
+                tspace.clone(),
                 ram,
                 mirrors.clone(),
                 inbox.clone(),
@@ -863,16 +878,32 @@ impl Device {
             );
         }
         // ★ P6b (b): coverage at the family's smallest GMMU page.
+        let (carve_base, carve_refuse) = crate::tspace::carve_cfg(
+            layout.carve(),
+            crate::tspace::enabled(),
+            crate::tspace::negctl_carve(),
+        );
+        if crate::tspace::negctl_carve() {
+            eprintln!(
+                "kf3: ⚠ POSITIVE CONTROL KF3_NEGCTL_CARVE=1: every vidmem leaf counted as a carve-out leaf, none refused"
+            );
+        }
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
             fb_length,
-            Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
+            // ★ P1+P2 §2.6: through the vIOMMU seam.
+            Box::new(move |gpa, len| ram.dma_to_file_range(gpa, len)),
         )
         .with_page_grain(family.mmu_format().small_page_bytes())
         // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM
         // (`V3_BAR1_DOORBELL.md`). `None` on Turing … Ada: unchanged.
         .with_usermode_mmio(usermode_mmio)
-        .with_per_map_kind(per_map_kind);
+        .with_per_map_kind(per_map_kind)
+        // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §4.3): leaves into the firmware carve-out are
+        // COUNTED (`carve_gpu=` / `carve_kernel=` / `carve_cpu=` on the status line). ★ Review fix
+        // 2026-10-04 (HIGH): REFUSED in twins a guest non-kernel channel runs in when
+        // `KF3_TSPACE=1` (inc A2 under the flag); the default path stays count-only until its A/B.
+        .with_carve(carve_base, carve_refuse);
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -971,6 +1002,7 @@ impl Device {
             vbios,
             worker_efd,
             chans,
+            tspace,
             dbfast,
             worker_stats: kf_chan::worker::WorkerStats::default(),
             intr: kf_trap::cpuintr::CpuIntr::new(family, kf_trap::memmap::VF_USERMODE_PAGE)
@@ -1660,9 +1692,26 @@ impl Device {
         // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
         // object) — never while a statement, a walk or an armed invalidate is waiting on us.
         let mut prewarmed = 0u64;
+        // ★ P1+P2 inc B (`V3_P1P2_TSPACE.md` §2.3): with `KF3_TSPACE=1`, the T-space is the FIRST
+        // thing prewarm builds, on the first tick guest RAM is registered.
+        let carve = kf_chip::bar0::fb_layout(self.mem.fb_len).map_or(0, |l| l.carve());
         let mut va_busy_from = crate::prof::now_ns();
         let mut cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
         while !self.stop.load(Ordering::Acquire) {
+            if crate::tspace::enabled()
+                && let Some(line) = crate::tspace::prewarm(
+                    &self.tspace,
+                    &self.mem,
+                    self.rm,
+                    self.store.handle,
+                    carve,
+                )
+            {
+                eprintln!(
+                    "kf3: mem t={:.3}s {line}",
+                    self.born.elapsed().as_secs_f64()
+                );
+            }
             if prewarmed < crate::mem::PREWARM_SPARES
                 && (prewarmed == 0
                     || (!m.in_flight()
@@ -1858,6 +1907,22 @@ impl Device {
                     );
                 }
                 bar1_phys_lines = bar1_phys_lines.saturating_add(1);
+            }
+            // ★ P1+P2 review fix (2026-10-04, §3.5): publish whether a walk is in flight or
+            // pending; when none is, ring the Translated channels waiting for one to land (a
+            // T-mode operand that had no row yet). Every idle loop, so a late registration is
+            // rung at most one loop later.
+            let walk_busy = m.in_flight()
+                || m.pending() > 0
+                || !self.mem.inbox.all_settled()
+                || self.mem.port.armed_request().is_some();
+            self.mem.inbox.set_walk_busy(walk_busy);
+            if !walk_busy {
+                for tok in self.mem.inbox.take_walk_waiters() {
+                    if self.plane.ring_internal(tok) {
+                        let _ = self.worker_efd.signal();
+                    }
+                }
             }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
                 eprintln!(
@@ -2206,7 +2271,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} pramin_kept={} pramin_kept_now={} window_advice_refused={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -2224,6 +2289,9 @@ impl Device {
             va.priv_mirrored,
             va.sked_placed,
             va.sked_held,
+            va.carve_gpu,
+            va.carve_kernel,
+            va.carve_cpu,
             mc.bar_pdes.load(o),
             mc.roots.load(o),
             mc.root_moves.load(o),
@@ -2292,14 +2360,43 @@ impl Device {
             .collect();
         let (va, vr, vx) = self.rm.view_counts();
         let rc = format!(
-            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} wakes={} seen={} posted={}]",
+            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} wakes={} seen={} posted={}] inca[strict={} counted={} heap_out={} rows_inexact={}]",
             va.saturating_sub(vr),
             self.chans.rc_armed.load(o),
             self.chans.rc_unarmed.load(o),
             self.chans.rc_wakes.load(o),
             self.chans.rc_seen.load(o),
-            self.counters.rc_posted.load(o)
-        );
+            self.counters.rc_posted.load(o),
+            // ★ P1+P2 inc A (review fix 2026-10-04): count-only unless strict — box step 1 gates
+            // on `counted=0 heap_out=0 rows_inexact=0` per measured family.
+            if crate::tspace::inca_strict() {
+                "yes"
+            } else {
+                "no"
+            },
+            self.chans.inca_counted.load(o),
+            self.chans.heap_out.load(o),
+            crate::mem::ROWS_INEXACT.load(o)
+        ) + &if crate::tspace::enabled() {
+            // ★ P1+P2 inc D: the T-mode counters the REGRESSION A/B gates on (0 on stock drivers).
+            format!(
+                " tspace[built={} twin_refused={} tspace_refused={} slots_leaked={} twin_freeing={}]",
+                match self.tspace.get() {
+                    Some(Ok(_)) => "yes",
+                    Some(Err(_)) => "REFUSED",
+                    None => "not-yet",
+                },
+                self.chans.twin_refused.load(o),
+                self.chans.tspace_refused.load(o),
+                self.tspace
+                    .get()
+                    .and_then(|t| t.as_ref().ok())
+                    .map_or(0, |t| t.slots_leaked.load(o)),
+                self.chans.twin_freeing_refused.load(o)
+            )
+        } else {
+            String::new()
+        };
         let chan = format!(
             " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
             self.chans.births.load(o),

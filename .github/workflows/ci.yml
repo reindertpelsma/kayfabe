@@ -1691,17 +1691,31 @@ jobs:
           #     the C device allocated with `cursor_alloc` for exactly that size.
           # Candidate 2 adds the disjoint capability (2) and scratch advice (1)
           # blocks to the broker's audited kf-linux-raw count (94).
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:59 firmware/kf-gop:78"
+          # ★ kf-chan:0 (2026-10-04, P1+P2 inc C, `docs/design/V3_P1P2_TSPACE.md` §3.8). OWNER_RULINGS
+          # §R(b): code that produces an address hardware will dereference is PERIMETER material
+          # even when it compiles as safe Rust, so the Translated plane's address authoring lives in
+          # ONE file named `*_unsafe.rs` — `crates/kf-chan/src/tspace_unsafe.rs`: the T-space
+          # windows' bounds, the `WindowAddr` only that file constructs, the only functions that put
+          # an address word or a LAUNCH_DMA word into a pushbuffer, and the ring's own fence/GP-entry
+          # authoring. It contains ZERO `unsafe` blocks (none is needed), so the relaxation count is
+          # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
+          # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
+          # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:59 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
+          # ★ 2026-10-04 (P1+P2 review fix): an audited crate whose bar is 0 (kf-chan) is NOT
+          # exempt — its perimeter file holds no `unsafe` block, so it must keep inheriting the
+          # workspace lints (and with them `unsafe_code = "forbid"`); listing it in AUDITED only
+          # lets gate B accept its `*_unsafe.rs` file and the ratchet count it.
           missing=""
           for m in crates/*/Cargo.toml; do
             # Historical dependency-free model, not product/grader; all its tests still run.
             [ "$m" = crates/kayfabe-doorbell/Cargo.toml ] && continue
             exempt=0
             for entry in $AUDITED; do
-              case "$m" in "crates/${entry%%:*}/Cargo.toml") exempt=1;; esac
+              case "$m" in "crates/${entry%%:*}/Cargo.toml") [ "${entry##*:}" = 0 ] || exempt=1;; esac
             done
             [ "$exempt" -eq 1 ] && continue
             grep -q '^\[lints\]' "$m" && grep -q '^workspace = true' "$m" || missing="$missing $m"
@@ -2041,8 +2055,10 @@ jobs:
             # could be moved by any amount without a single gate firing, by putting the
             # file in a subdirectory. There is no `-maxdepth` here now, deliberately:
             # the audit surface is "every `*_unsafe.rs` under the crate", at any depth.
+            # grep's no-match status is a valid zero count (kf-chan's perimeter
+            # contains no unsafe Rust). Preserve I/O errors and find failures.
             actual=$(find "$c/src" -name '*_unsafe.rs' \
-                       -exec grep -hoE 'unsafe (\{|fn |impl |trait )|unsafe extern "C" fn [A-Za-z_]' {} + 2>/dev/null \
+                       -exec sh -c 'grep -hoE '\''unsafe (\{|fn |impl |trait )|unsafe extern "C" fn [A-Za-z_]'\'' "$@"; rc=$?; test "$rc" -le 1' grep-count {} + \
                      | wc -l | tr -d ' ')
             echo "$c: $actual relaxation(s) (bar: $want)"
             find "$c/src" -name '*_unsafe.rs' \

@@ -11,8 +11,9 @@
 //! ⊘ `GP_GET` is NOT owned here. It is the runner's to author, and only on COMPLETION: a guest
 //! that sees `GP_GET` advance may reuse the GPFIFO slot and the pushbuffer behind it.
 
-use crate::translated::{CeState, IsCeClass, Piece, Refusal, Release, Window, rewrite};
-use kf_abi::submit::{GP_ENTRY_SIZE, gp_entry_decode};
+use crate::census::{Census, GpKind};
+use crate::translated::{CeState, IsCeClass, Piece, Refusal, Release, Window, rewrite_counted};
+use kf_abi::submit::{GP_ENTRY_SIZE, GpEntryKind, gp_entry_classify, gp_extended_base, gp_opcode};
 use std::collections::VecDeque;
 
 /// Largest pushbuffer segment we read for one GP entry. The hardware limit is 2^21 dwords
@@ -26,6 +27,12 @@ pub trait GuestMemory {
     /// # Errors
     /// A range that is not mapped, or a failed read — refused by name by the caller.
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String>;
+
+    /// ★ P1+P2 inc C: the placement rows behind this memory, for the T-mode resolver and its shadow
+    /// ([`crate::tmode::Rows`]). `None` (the default) when the reader has none.
+    fn rows(&self) -> Option<&dyn crate::tmode::Rows> {
+        None
+    }
 }
 
 /// What the runner must do next.
@@ -50,6 +57,14 @@ pub enum Next {
     },
     /// Nothing to do: the cursor has reached the guest's `GP_PUT`.
     Idle,
+    /// ★ P1+P2 inc D (T-mode, `V3_P1P2_TSPACE.md` §3.5): UNBOUND work — the runner binds each item
+    /// against the placement rows when it pushes it ([`crate::tmode::push_bound`]).
+    Bind {
+        /// The items, in order (no split among them).
+        ir: Vec<crate::tmode::Ir>,
+        /// The guest `GP_GET` they complete, if they end an entry.
+        retires: Option<u32>,
+    },
 }
 
 /// Why the ring stopped. The channel is dead after any of these — refused by name.
@@ -83,6 +98,16 @@ pub enum RingRefusal {
         /// The guest GP index.
         gp: u32,
     },
+    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.7): a control entry that is neither `NOP` nor — on a
+    /// family that defines it (Hopper+) — `SET_PB_SEGMENT_EXTENDED_BASE`: `ILLEGAL`, `GP_CRC`,
+    /// `PB_CRC`, or an opcode the family's class does not name. Refused by name on a strict ring;
+    /// counted and skipped as a NOP (as before 2026-10-04) on the count-only default path.
+    ControlEntry {
+        /// The guest GP index.
+        gp: u32,
+        /// `GP_ENTRY1_OPCODE`.
+        opcode: u32,
+    },
     /// The rewriter refused the segment.
     Rewrite {
         /// The guest GP index.
@@ -102,6 +127,21 @@ pub struct TranslatedRing {
     pending: VecDeque<Piece>,
     pending_retires: Option<u32>,
     entries_fetched: u64,
+    /// ★ P1+P2 inc A (§3.7): address bits 56:40 of every later segment, from the guest's last
+    /// `SET_PB_SEGMENT_EXTENDED_BASE` control entry (Hopper+ UVM writes one before a channel's
+    /// first push, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:2536-2544`). Zero until then.
+    pb_ext_base: u64,
+    /// ★ P1+P2 inc A (§3.7, review fix 2026-10-04): the family defines
+    /// `SET_PB_SEGMENT_EXTENDED_BASE` (Hopper and later, `clc86f.h:184-189`). Below Hopper opcode 4
+    /// names nothing and is handled as every other unnamed control opcode. `false` until the
+    /// device says otherwise ([`TranslatedRing::set_extended_base`]).
+    ext_base_defined: bool,
+    /// ★ P1+P2 inc A (§3.6): the count-only census, when on.
+    census: Option<Box<Census>>,
+    /// ★ P1+P2 inc C (§3.6): the T-mode shadow and the windows it binds against, when on.
+    shadow: Option<Box<(crate::tmode::Shadow, crate::tspace_unsafe::TWindows)>>,
+    /// ★ P1+P2 inc D: `Some` in T-mode — the state the T-mode decoder carries, and its unbound IR.
+    tmode: Option<Box<(crate::tmode::TState, VecDeque<crate::tmode::Ir>)>>,
 }
 
 impl TranslatedRing {
@@ -123,7 +163,105 @@ impl TranslatedRing {
             pending: VecDeque::new(),
             pending_retires: None,
             entries_fetched: 0,
+            pb_ext_base: 0,
+            ext_base_defined: false,
+            census: None,
+            shadow: None,
+            tmode: None,
         }
+    }
+
+    /// ★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §3): the same ring in T-MODE — every segment is decoded
+    /// into unbound IR ([`crate::tmode::decode`]) and handed out as [`Next::Bind`], never rewritten
+    /// in place; nothing the guest wrote is forwarded.
+    ///
+    /// # Panics
+    /// As [`TranslatedRing::new`].
+    #[must_use]
+    pub fn new_tmode(gpfifo_va: u64, entries: u32, start: u32) -> TranslatedRing {
+        let mut r = Self::new(gpfifo_va, entries, start);
+        r.tmode = Some(Box::default());
+        // T-mode refuses by name whatever the default path counts (§3.7).
+        r.st.strict = true;
+        r
+    }
+
+    /// ★ P1+P2 inc A (review fix 2026-10-04): refuse — not only count — what inc A refuses by name
+    /// ([`CeState::strict`]). A T-mode ring is always strict.
+    pub fn set_strict(&mut self, strict: bool) {
+        self.st.strict = strict || self.tmode.is_some();
+    }
+
+    /// ★ P1+P2 inc A (review fix 2026-10-04): the family defines `SET_PB_SEGMENT_EXTENDED_BASE`
+    /// (Hopper and later — `kf_chan::ttables::Tier::has_pb_extended_base` of the host CE class).
+    pub fn set_extended_base(&mut self, defined: bool) {
+        self.ext_base_defined = defined;
+    }
+
+    /// ★ P1+P2 inc A: what the by-name refusals would have refused while not strict.
+    #[must_use]
+    pub fn inca(&self) -> crate::translated::IncACounts {
+        self.st.inca
+    }
+
+    /// The next T-mode step from the unbound IR, if any: a split, or the run of items before one.
+    fn next_t(&mut self) -> Option<Next> {
+        let (_, q) = self.tmode.as_deref_mut()?;
+        let first = q.pop_front()?;
+        if let crate::tmode::Ir::Invalidate { pdb } = first {
+            let retires = if q.is_empty() {
+                self.pending_retires.take()
+            } else {
+                None
+            };
+            return Some(Next::Walk { pdb, retires });
+        }
+        let mut ir = vec![first];
+        while q
+            .front()
+            .is_some_and(|x| !matches!(x, crate::tmode::Ir::Invalidate { .. }))
+        {
+            if let Some(x) = q.pop_front() {
+                ir.push(x);
+            }
+        }
+        let retires = if q.is_empty() {
+            self.pending_retires.take()
+        } else {
+            None
+        };
+        Some(Next::Bind { ir, retires })
+    }
+
+    /// ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): run the T-mode rewriter in SHADOW on every segment
+    /// this ring fetches — decode and bind against the memory's placement rows and `windows`, the
+    /// output discarded, the verdicts counted ([`crate::tmode::Shadow`]). `None` turns it off.
+    pub fn set_shadow(&mut self, windows: Option<crate::tspace_unsafe::TWindows>, negctl: bool) {
+        self.shadow = windows.map(|w| Box::new((crate::tmode::Shadow::with_negctl(negctl), w)));
+    }
+
+    /// The shadow's counters, when on.
+    #[must_use]
+    pub fn shadow(&self) -> Option<&crate::tmode::Shadow> {
+        self.shadow.as_deref().map(|s| &s.0)
+    }
+
+    /// ★ P1+P2 inc A: count every header, method and GP entry this ring fetches
+    /// ([`crate::census`]). Off by default.
+    pub fn set_census(&mut self, on: bool) {
+        self.census = on.then(Box::default);
+    }
+
+    /// The census, when on.
+    #[must_use]
+    pub fn census(&self) -> Option<&Census> {
+        self.census.as_deref()
+    }
+
+    /// The address bits 56:40 the guest's last `SET_PB_SEGMENT_EXTENDED_BASE` set (0 before one).
+    #[must_use]
+    pub fn pb_extended_base(&self) -> u64 {
+        self.pb_ext_base
     }
 
     /// GP entries fetched so far (the per-channel `forwarded=` count).
@@ -161,6 +299,9 @@ impl TranslatedRing {
             });
         }
         loop {
+            if let Some(n) = self.next_t() {
+                return Ok(n);
+            }
             if let Some(p) = self.pending.pop_front() {
                 let retires = if self.pending.is_empty() {
                     self.pending_retires.take()
@@ -190,9 +331,41 @@ impl TranslatedRing {
             mem.read(at, &mut raw)
                 .map_err(|why| RingRefusal::Read { gp, va: at, why })?;
             self.pending_retires = Some(self.cursor);
-            let Some(e) = gp_entry_decode(u64::from_le_bytes(raw)) else {
-                continue; // a control entry (NOP etc.): nothing to run, still retires
+            let mut e = match gp_entry_classify(u64::from_le_bytes(raw)) {
+                GpEntryKind::Segment(e) => {
+                    if let Some(c) = self.census.as_deref_mut() {
+                        c.gp(GpKind::Segment);
+                    }
+                    e
+                }
+                GpEntryKind::Control { opcode, operand } => {
+                    if let Some(c) = self.census.as_deref_mut() {
+                        c.gp(GpKind::Control(opcode));
+                    }
+                    match opcode {
+                        // Nothing to run; still retires.
+                        gp_opcode::NOP => continue,
+                        gp_opcode::SET_PB_SEGMENT_EXTENDED_BASE if self.ext_base_defined => {
+                            self.pb_ext_base = gp_extended_base(operand);
+                            continue;
+                        }
+                        // ★ Count-only (not strict): skipped as a NOP, as before inc A.
+                        _ if !self.st.strict => {
+                            self.st.inca.control_entries += 1;
+                            continue;
+                        }
+                        _ => return Err(RingRefusal::ControlEntry { gp, opcode }),
+                    }
+                }
             };
+            // ★ §3.7: a segment entry carries address bits 39:0; 56:40 are the channel's
+            // extended base (zero before Hopper, and before the guest set one). Applied when
+            // strict; on the count-only default path counted, and read at 39:0 as before inc A.
+            if self.st.strict {
+                e.gpu_va |= self.pb_ext_base;
+            } else if self.pb_ext_base != 0 {
+                self.st.inca.ext_base_unapplied += 1;
+            }
             if e.sync_wait {
                 return Err(RingRefusal::SyncWait { gp });
             }
@@ -213,8 +386,20 @@ impl TranslatedRing {
                 .chunks_exact(4)
                 .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
                 .collect();
-            let pieces = rewrite(&words, is_ce, &mut self.st, w)
-                .map_err(|why| RingRefusal::Rewrite { gp, why })?;
+            if let Some((st, q)) = self.tmode.as_deref_mut() {
+                // ★ T-mode: decoded to unbound IR, bound by the runner at push (§3.5).
+                let ir = crate::tmode::decode(&words, is_ce, st, self.census.as_deref_mut())
+                    .map_err(|why| RingRefusal::Rewrite { gp, why })?;
+                q.extend(ir);
+                continue;
+            }
+            if let (Some(sh), Some(rows)) = (self.shadow.as_deref_mut(), mem.rows()) {
+                // ★ Before today's rewrite, on the same words: what T-mode would do here.
+                sh.0.observe(&words, is_ce, rows, &sh.1);
+            }
+            let pieces =
+                rewrite_counted(&words, is_ce, &mut self.st, w, self.census.as_deref_mut())
+                    .map_err(|why| RingRefusal::Rewrite { gp, why })?;
             self.pending.extend(pieces);
         }
     }
