@@ -19,6 +19,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--revision', required=True)
 parser.add_argument('--name', required=True)
 parser.add_argument('--pool-probe', action='store_true')
+parser.add_argument('--timer-map', action='store_true',
+                    help='enable the experimental read-only host timer mapping')
 parser.add_argument('--base', type=Path, default=Path('/var/lib/kf-windows-20261005'))
 args = parser.parse_args()
 if not re.fullmatch('[0-9a-f]{8,40}', args.revision):
@@ -58,9 +60,12 @@ with open('/tmp/kayfabe-fastguest.lock', 'a') as lock:
  '-device','kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0']
  env = dict(os.environ, KF3_RPC_TRACE='1')
  env.pop('KF3_GFX_POOL_PROBE', None)
+ env.pop('KF3_TIMER_MAP', None)
  if args.pool_probe: env['KF3_GFX_POOL_PROBE'] = '1'
+ if args.timer_map: env['KF3_TIMER_MAP'] = '1'
  (work/'command.json').write_text(json.dumps({
      'revision': args.revision, 'argv': cmd, 'pool_probe': args.pool_probe,
+     'timer_map': args.timer_map,
      'time_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
      'backing_image': str(source), 'vfio': False,
  }, indent=2)+'\n')
