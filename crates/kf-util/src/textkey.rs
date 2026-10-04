@@ -12,39 +12,60 @@
 //! counts both under the FIRST text that claimed the slot. A census that merges two rows is
 //! wrong as a statistic and harmless as anything else — these tables never gate behaviour.
 
-/// FNV-1a, 64-bit.
-fn fnv1a64(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in bytes {
-        h ^= u64::from(*b);
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    h
+/// The 16 bytes at the END of `b` (fewer, zero-padded at the front, when `b` is shorter) as two
+/// little-endian words: two loads, no per-byte loop.
+fn tail_words(b: &[u8]) -> (u64, u64) {
+    let t: [u8; 16] = if let Some(t) = b.last_chunk::<16>() {
+        *t
+    } else {
+        let mut w = [0u8; 16];
+        w[16 - b.len()..].copy_from_slice(b);
+        w
+    };
+    let (lo, hi) = t.split_at(8);
+    (
+        u64::from_le_bytes(lo.try_into().unwrap_or_default()),
+        u64::from_le_bytes(hi.try_into().unwrap_or_default()),
+    )
 }
 
-/// The census key of a `&'static str` reason: its text, hashed. Never `0` (the tables use `0`
-/// for "free").
-#[must_use]
-pub(crate) fn str_key(text: &str) -> usize {
-    // Truncation to a 32-bit `usize` keeps the low half, which is as well mixed as the rest.
-    (fnv1a64(text.as_bytes()) as usize) | 1
+/// A 64-bit multiply mix.
+fn mix(x: u64) -> u64 {
+    (x ^ (x >> 32)).wrapping_mul(0x9e37_79b9_7f4a_7c15)
 }
 
-/// How many trailing bytes of a file name the site key reads. ⊘ Bounded on purpose: the key is
-/// computed on EVERY ranked lock acquisition, including inside MMIO traps, so it must be O(1).
+/// How many leading and trailing bytes of a text the keys read. ⊘ Bounded on purpose (review of
+/// `v3-sec-rawaddr`, 2026-10-04): the keys are computed on EVERY ranked lock acquisition and every
+/// inline mint, including inside MMIO traps, so they read a fixed number of words, never the whole
+/// text byte by byte (the first version ran FNV-1a over all of a reason's bytes).
 pub(crate) const SITE_TAIL_BYTES: usize = 16;
 
+/// The census key of a `&'static str` reason: its length, its first and its last
+/// [`SITE_TAIL_BYTES`] bytes, mixed. Never `0` (the tables use `0` for "free"). O(1).
+///
+/// ⊘ Two reasons collide only when they share their length and both 16-byte ends — then their
+/// census rows merge (module docs).
+#[must_use]
+pub(crate) fn str_key(text: &str) -> usize {
+    let b = text.as_bytes();
+    let (h0, h1) = tail_words(&b[..b.len().min(SITE_TAIL_BYTES)]);
+    let (t0, t1) = tail_words(b);
+    let k = mix(h0 ^ h1.rotate_left(17) ^ t0.rotate_left(31) ^ t1.rotate_left(47) ^ b.len() as u64);
+    // Truncation to a 32-bit `usize` keeps the low half, which is as well mixed as the rest.
+    (k as usize) | 1
+}
+
 /// The census key of a call site: `(line << 40) ^ (column << 24) ^ (file length << 8)` mixed
-/// with an 8-bit hash of the file name's last [`SITE_TAIL_BYTES`] bytes. Never `0`.
+/// with an 8-bit digest of the file name's last [`SITE_TAIL_BYTES`] bytes (two word loads). Never
+/// `0`. O(1).
 ///
 /// ⊘ Two sites collide only when they share line, column, file-name length and that 8-bit tail
-/// hash — then their census rows merge (module docs).
+/// digest — then their census rows merge (module docs).
 #[must_use]
 pub(crate) fn site_key(file: &str, line: u32, column: u32) -> usize {
     let b = file.as_bytes();
-    let tail = &b[b.len().saturating_sub(SITE_TAIL_BYTES)..];
-    let h = fnv1a64(tail);
-    let tail8 = (h ^ (h >> 8) ^ (h >> 16) ^ (h >> 24)) & 0xff;
+    let (lo, hi) = tail_words(b);
+    let tail8 = mix(lo ^ hi.rotate_left(29)) >> 56;
     let key = (u64::from(line) << 40)
         ^ (u64::from(column) << 24)
         ^ ((b.len() as u64 & 0xffff) << 8)
@@ -133,5 +154,32 @@ mod tests {
         // ...and a long name costs no more than a short one: no panic on a non-ASCII boundary.
         let z = format!("{}é{tail}", "x".repeat(1000));
         let _ = site_key(&z, 1, 1);
+        let _ = site_key("é", 1, 1);
+    }
+
+    /// ★ The reason key is O(1) too (review of `v3-sec-rawaddr`, 2026-10-04): it reads the length
+    /// and both 16-byte ends, so two texts of one length that differ only in the middle collide BY
+    /// DESIGN, while a different end or length does not. A key over every byte would make the
+    /// first pair differ — and cost the trap path a loop over the whole text.
+    #[test]
+    fn the_reason_key_reads_a_bounded_number_of_bytes() {
+        let head = "cuCtxSynchronize";
+        let tail = "on a vCPU thread";
+        let a = format!("{head} AAAA {tail}");
+        let b = format!("{head} BBBB {tail}");
+        assert_eq!(str_key(&a), str_key(&b), "only the middle differs");
+        assert_ne!(
+            str_key(&a),
+            str_key(&format!("{head} AAAA {tail}.")),
+            "the end"
+        );
+        assert_ne!(str_key(&a), str_key(&format!("X{}", &a[1..])), "the start");
+        assert_ne!(
+            str_key(&a),
+            str_key(&format!("{head} AAAAA {tail}")),
+            "the length"
+        );
+        assert_ne!(str_key("x"), str_key("y"), "a short text, wholly read");
+        assert_ne!(str_key("é"), 0);
     }
 }
