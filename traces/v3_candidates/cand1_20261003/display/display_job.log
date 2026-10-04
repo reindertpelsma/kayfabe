@@ -1,0 +1,88 @@
+START 2026-10-03T22:42:24+00:00
+APPS_DONE_SEEN EXIT rc=0 2026-10-04T00:46:05+00:00
+PIL_OK 9.0.1
+HEAD 8a682f1b415844801e855ca6b28388f91c244251 dirty=[0]
+KF3_BIN /workspace/bench/kf3-bins/8a682f1b/qemu-system-x86_64 89509312 2026-10-03 22:40:59.785292853 +0000 sha256=01da8ddccfbd6737
+DISPLAY_LANE_PROVISIONED=yes
+phase=all
+date=2026-10-03T23:51:18+00:00
+B0_LANE_RC=0
+DISPLAY_HOST_XID=0 
+DISPLAY_BOOT_VGA dev=0000:00:02.0 boot_vga=1 vgaarb_lines=2 
+DISPLAY_CONNECTED=yes card=/dev/dri/card0
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=61.11
+DISPLAY_LANE_EXIT rc=0 2026-10-04T00:48:47+00:00
+B0_SEED_LINES=0
+B0_CONSOLE_SHOWS=4 B0_BLACK=1
+kf3: display: +50 ms the console shows NOTHING yet (no head has scanned a window) (core channel FREE)
+kf3: display: +63649 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +108342 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: +108593 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+B1_LANE_RC=0
+PNG_DONE 23
+DISPLAY_HOST_XID=0 
+DISPLAY_BOOT_VGA dev=0000:00:02.0 boot_vga=1 vgaarb_lines=2 
+DISPLAY_CONNECTED=yes card=/dev/dri/card1
+DISPLAY_PATTERN_MATCH=yes (pixel-exact 1920x1080)
+DISPLAY_KFDISP_FLIPS=120/120 flip_hz=60.00
+DISPLAY_BOOT_HANDOFF black_frames=0 first_window=[+65033 ms the console shows head 3] lines=3 (expected: black_frames=0)
+DISPLAY_BOOT_HANDOFF_LINE +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+DISPLAY_BOOT_HANDOFF_LINE +65032 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+DISPLAY_BOOT_HANDOFF_LINE +65033 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+DISPLAY_LANE_EXIT rc=0 2026-10-04T00:50:55+00:00
+kf3: boot display ON — option ROM 9728 bytes (10de:2504, KFGP BAR1 +0x0, 1920x1080 pitch 7680, G = 0x7f0000); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+2026-10-04T00:48:58.116473Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on: info: kf3: boot display option ROM registered: 9728 bytes in a 16384-byte ROM BAR
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf-rm: GET_GSP_STATIC_INFO: the guest preserves a firmware console of 0x7f0000 bytes (fn 72 seq 0; boot framebuffer G = 0x7f0000): region 0 = [0, 0x7f0000) reserved, the heap starts at 0x7f0000, 3 regions
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch
+kf3: mem t=58.211s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up
+kf3: mem t=58.244s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf-rm: GET_GSP_STATIC_INFO: the guest preserves a firmware console of 0x7f0000 bytes (fn 72 seq 0; boot framebuffer G = 0x7f0000): region 0 = [0, 0x7f0000) reserved, the heap starts at 0x7f0000, 3 regions
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 2: the guest's RM took BAR1 back after giving it up)
+kf3: display: the guest armed its first head at +65032 ms — the boot layer is retired after 1107 boot frame(s)
+kf3: display: +65032 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +65033 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +108953 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: +109204 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: mem t=112.868s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 3) — the guest's RM gave BAR1 up
+kf3: mem t=112.900s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+B5_LANE_RC=3
+DISPLAY_LANE_START tag=b5c1 rev=8a682f1b 2026-10-04T00:51:05+00:00
+DISPLAY_FLIP_EVENT_TIMEOUTS_AFTER=1
+DISPLAY_HOST_XID=0 
+DISPLAY_B5_JUDGE B5C PASS expected=[changed=yes] observed=[changed=yes]
+DISPLAY_B5_JUDGE B5C2 PASS expected=[a holder, changed=yes] observed=[holder=1788 changed=yes]
+DISPLAY_B5_JUDGE B5C3 PASS expected=[changed=yes] observed=[changed=yes]
+DISPLAY_B5_JUDGE B5A_SESSION PASS expected=[the Wayland session up, no Xorg (no fresh Xorg.0.log)] observed=[up=yes xorg= xorg_log=absent]
+DISPLAY_B5_JUDGE B5A_AFTER_SESSION PASS expected=[changed_from_session=yes (the text console is back)] observed=[changed_from_session=yes]
+DISPLAY_B5_JUDGE B5A_CONSOLE PASS expected=[changed=yes (the console keeps updating after the session)] observed=[changed=yes]
+DISPLAY_B5_JUDGE B5A2_SESSION PASS expected=[up on Xorg with the NVIDIA X driver (a fresh Xorg.0.log)] observed=[up=yes xorg=running xorg_log=fresh nvidia_driver=yes]
+DISPLAY_B5_JUDGE B5A2_AFTER_SESSION FAIL expected=[changed_from_session=yes (the text console is back)] observed=[changed_from_session=no]
+DISPLAY_B5_JUDGE B5A2_CONSOLE FAIL expected=[changed=yes (the console keeps updating after the session)] observed=[changed=no]
+DISPLAY_B5_JUDGE B5A2_PRESERVED FAIL expected=[kf3 kept the console NVKMS restored (the PRESERVED scanout)] observed=[lines=0]
+DISPLAY_B5_JUDGE B5B_FBCON PASS expected=[nvidia-drm fbdev loaded (rc=0, nvidia-drmdrmfb), fbcon text shown (nonblack>0)] observed=[rc=0 fb=[0 nvidia-drmdrmfb ] nonblack=3]
+DISPLAY_B5_JUDGE B5B_AFTER_RMMOD PASS expected=[rmmod rc=0, black (nonblack=0)] observed=[rc=0 nonblack=0]
+DISPLAY_B5_JUDGE B5B_DEVICE PASS expected=[kf3 chose black (the console shows BLACK)] observed=[lines=1]
+DISPLAY_B5_JUDGE B5_TEARDOWNS PASS expected=[each PHYSICAL write followed by BAR1 [0, G) shown again, none refused] observed=[physical_writes=5 restored=5 unrestored_or_refused=0]
+DISPLAY_B5_VERDICT FAIL arms=14 failed=3 B5C=PASS B5C2=PASS B5C3=PASS B5A_SESSION=PASS B5A_AFTER_SESSION=PASS B5A_CONSOLE=PASS B5A2_SESSION=PASS B5A2_AFTER_SESSION=FAIL B5A2_CONSOLE=FAIL B5A2_PRESERVED=FAIL B5B_FBCON=PASS B5B_AFTER_RMMOD=PASS B5B_DEVICE=PASS B
+DISPLAY_BOOT_HANDOFF black_frames=0 first_window=[+152740 ms the console shows head 3] lines=3 (expected: black_frames=0)
+DISPLAY_BOOT_HANDOFF_LINE +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+DISPLAY_BOOT_HANDOFF_LINE +152739 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+DISPLAY_BOOT_HANDOFF_LINE +152740 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+DISPLAY_LANE_GRADED_FAIL DISPLAY_B5_VERDICT FAIL arms=14 failed=3 B5C=PASS B5C2=PASS B5C3=PASS B5A_SESSION=PASS B5A_AFTER_SESSION=PASS B5A_CONSOLE=PASS B5A2_SESSION=PASS B5A2_AFTER_SESSION=FAIL B5A2_CONSOLE=FAIL B5A2_PRESERVED=FAIL B5B_FBCON=PASS B5B_AFTER_RMM
+DISPLAY_LANE_EXIT rc=3 2026-10-04T00:55:24+00:00
+PNG_DONE 16
+DSW_A_RUN_RC=0
+REV 8a682f1b dirty=0
+LANE_RC=0
+EXIT 2026-10-04T01:00:04+00:00
+PNG_DONE 8
+DSW_B_RUN_RC=0
+REV 8a682f1b dirty=0
+LANE_RC=0
+EXIT 2026-10-04T01:05:07+00:00
+PNG_DONE 8
+DISPLAY_DONE
+EXIT rc=0 2026-10-04T01:05:11+00:00

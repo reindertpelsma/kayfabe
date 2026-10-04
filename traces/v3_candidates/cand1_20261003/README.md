@@ -1,7 +1,8 @@
 # Candidate v3-cand-1 on real hardware — merge bar, apps, display (2026-10-03/04)
 
-**STATUS: IN PROGRESS, 2026-10-04 00:55 UTC.** Stage 1 (merge bar) and stage 2 (apps) are done
-and passed. Stage 3 (display) is running on the box; this file is updated after it.
+**STATUS: ANSWERED, 2026-10-04 01:30 UTC.** Stage 1 (merge bar) PASS, stage 2 (apps) PASS,
+stage 3 (display) B0/B1/x11-dispsw PASS and **B5 FAIL** — the B5 failure reproduces with master's
+code on the same box (see *Verdict*).
 
 **Tested commit (every run below):** `8a682f1b415844801e855ca6b28388f91c244251` (branch `v3-cand-1`,
 "merge v3-dispsw-exp"). This directory is evidence only: the commits that add it change no code.
@@ -93,4 +94,104 @@ logged `BINARY kf3-bin-rev:8a682f1b`; device `fb-mb=8192`, 16 GiB guest RAM, 6 v
 
 ## Stage 3 — display (`display/`)
 
-Queued after stage 2: the GOP lane (B0, B1, B5) and the x11-dispsw A/B pair.
+Guest display userspace: `provision_guest_gfx.sh` then `provision_guest_display.sh all` into the
+box's `guest.qcow2` (after the merge bar had built its fast guest from it; `GUEST_GFX_DONE rc=0`,
+`GUEST_DISPLAY_DONE rc=0`, X driver and `nvidia-drm-outputclass.conf` present —
+`apps/provisioning/guest_{gfx,display}.log`). Driver script `display_job.log`: the recipe of
+`traces/v3_display/gop_final_20261003/gopfinal_runs.sh` **without its build step** (lane.sh runs
+`kf3-bins/8a682f1b`, the merge bar's binary; every boot's `run_*_rev.txt` reads
+`kf3-bin-rev:8a682f1b`), then the x11-dispsw pair through `dispsw_run.sh` exactly as
+`traces/v3_display/dispsw_20261003/README.md` runs it. Host kernel lines for the whole stage:
+`host_kernel_journal.log` (journald) — **0 Xid, 0 NVRM**. Every display boot's guest `dmesg` is
+non-empty and carries 25 `NVRM` lines (`*/run_*_dmesg.log`).
+
+### GOP lane — B0, B1 pass; B5 FAILS (2–3 of 14 arms), and master fails it identically on this box
+
+| lane | command | result |
+|---|---|---|
+| **B0** (`b0c1/`) | OVMF, `gop=off` | **PASS**: probe pixel-exact 1920x1080, 120/120 flips at 61.11 Hz, `B0_SEED_LINES=0`; the console shows NOTHING until head 3 (+63649 ms), and the lost scanout goes black after the 250 ms hold at shutdown (the documented `gop=off` behaviour) |
+| **B1** (`b1c1/`) | OVMF, `gop=on`, timed shots | **PASS**: `DISPLAY_BOOT_HANDOFF black_frames=0 first_window=[+65033 ms … head 3]`, lane rc 0; probe pixel-exact, 120/120 flips at 60.00 Hz; B2's lines: *"the guest preserves a firmware console of 0x7f0000 bytes … 3 regions"*, the seed *"retired at the first change: the console is ONE run"*, re-seeds at seed life 2 and 3, `cannot preserve` 0 times, `boot[frames=1107 retired=+65032ms]`. `shots/contact_sheet.png`: placeholder, TianoCore (25–30 s), kernel text (40–50 s), login prompt (52–75 s, across the handoff), the probe's pattern (90 s) — no black shot at the handoff |
+| **B5** (`b5c1/`) | OVMF, `gop=on`, `unload_hook`, `KF3_DISPLAY_TRACE=1` | **FAIL**, lane rc 3: `DISPLAY_B5_VERDICT FAIL arms=14 failed=3` — `B5A2_AFTER_SESSION`, `B5A2_CONSOLE`, `B5A2_PRESERVED`; the other 11 arms (B5C, B5C2, B5C3, the Wayland arm (a), B5B_*, B5_TEARDOWNS `physical_writes=5 restored=5`) pass |
+
+**What fails.** Arm (a2): X11 Cinnamon on the NVIDIA X driver (`modeset=0`), then lightdm stopped.
+NVKMS restores the console (`+170628 ms the console shows head 3 … window 6 iso 0x10088`), and the
+device then logs **`kf3: display: scanout REFUSED context DMA 0x10088 on channel 7: NotBound`**
+before the guest frees the window channels with PRESERVE_HW; at the free head 3 has no window, so
+kf3 shows *"BLACK … (the scanout shown is lost: no head is lit)"* instead of *"the PRESERVED
+scanout"*, and the text console never comes back (`b5c1/hook/b5_device.log`,
+`b5c1/run_b5c1_qemu.log.gz`).
+
+**Candidate or master? — master, on this box** (`b5_repeats/`, driver `b5ab_job.log`, alternating
+runs, same box, same guest image, same recipe):
+
+| run | kf3 binary | B5 verdict | `scanout REFUSED context DMA 0x10088` | PRESERVED line |
+|---|---|---|---|---|
+| `b5c1` (stage 3) | `8a682f1b` (candidate) | FAIL, 3 arms | 1 | 0 |
+| `b5r1` | `8a682f1b` | FAIL, 2 arms (`B5A2_CONSOLE`, `B5A2_PRESERVED`) | 1 | 0 |
+| `b5m1` | **`d4c3767b` = master `789dee9f`'s code** | FAIL, the same 2 arms | 1 | 0 |
+| `b5r2` | `8a682f1b` | FAIL, the same 2 arms | 1 | 0 |
+| `b5m2` | **`d4c3767b`** | FAIL, the same 2 arms | 1 | 0 |
+
+`kf3-bins/d4c3767b` is the binary this box's own merge bar built for `v3-gop-unload` (`mb_gop`,
+2026-10-03 19:59–20:20), and `git diff d4c3767b 789dee9f -- crates qemu firmware` is empty, so it
+runs master's code; the master runs used scripts from a worktree at `789dee9f`. ⇒ **Not a
+regression of this candidate**: master fails B5 the same way, with the same refusal, on vmb. The
+display code on that path is identical in both (`git diff 789dee9f 8a682f1b --
+crates/kf-qemu/src/display.rs crates/kf-disp/src/inst.rs crates/kf-disp/src/scanout.rs` is empty).
+`B5A2_AFTER_SESSION` passed in the four repeats only because the session shot was the fallback
+dialog there (`b5a2_x_1280.png`) and any black frame then counts as "changed"; the after-session
+screen is black in all five runs.
+
+Why B5 passed for `06b307c4` on vast 54032077 (`traces/v3_display/gop_final_20261003/`) and fails
+here — an inference from the code and both logs, not a run: each scanout copy re-resolves every
+window's context DMA (`crates/kf-qemu/src/display.rs:2106`, `io.resolve(so.client, so.handle,
+so.chn)`), and with nobody watching the console a copy is due every 250 ms (`display.rs:1997`). The
+guest unbinds the console's context DMA during the teardown, before it frees the windows. On
+54032077 the restore-to-preserve window was 153 ms (+149459 → +149612 ms, no copy in between); here
+it is 346 ms (`b5r1`: +169046 → +169392 ms) to 2.2 s (`b5c1`), so a copy lands in it, refuses the
+window, and the PRESERVE_HW free finds no window. Hardware keeps scanning a latched surface after
+its context DMA is unbound, so kf3's re-resolution looks like the defect; it is master's, and it is
+timing-dependent.
+
+### X11 desktop — the x11-dispsw A/B pair: as documented
+
+`DISPLAY_X11_BARE=1 dispsw_run.sh dsw_a_off_c1` (A, default = `x11-dispsw` off) and
+`… dsw_b_on_c1 x11-dispsw=on` (B); SeaBIOS, `display=on`, host probe `kfdsw_probe.ko` loaded around
+each (`dsw_*/host_kfdsw_trace.log`). Both lanes rc 0.
+
+| | A: off (`dsw_a_off_c1/`) | B: on (`dsw_b_on_c1/`) | the dispsw README's criteria (runs 9/10) |
+|---|---|---|---|
+| X driver | `(EE) NVIDIA(0): Failed to allocate display software resources.` | absent (`last_EE` = `Failed to get virtual display support info`, the unchanged one) | off: present / on: absent |
+| Cinnamon X11 | segfault in `libnvidia-glcore`, fallback dialog (`desk_1_1280.png`) | **up, 0 crashes**, panel + wallpaper | off: segfault / on: up |
+| X11 vkcube IMMEDIATE / MAILBOX / FIFO; long run | 134 / 1 / 134; 134 | **0 / 1 / 0; 0** (`desk_vkcube_1280.png`: the cube in a Cinnamon window) | off 134/1/134 / on 0/1/0 (MAILBOX unsupported by the NVIDIA X11 WSI either way) |
+| glxgears vsync / no-vsync | 42.2–42.7 / 41.1 FPS | **57.9–59.6 / 2591 FPS** | on: ~60 / 2000–2700 |
+| bare Xorg: glxgears windowed / fullscreen, vkcube FIFO | 44.6–46.3 / **2.0** / RC 134 | **59.8–60.0 / 58.8–59.8 / RC 0** | off: fullscreen ~2 FPS, RC 134 / on: ~60, RC 0 |
+| guest Xid, `waiting for GPU progress`, crashes | 0, 0, 1 (cinnamon) | 0, 0, 0 | 0 |
+| host Xid (journald), host NVRM lines | 0, 0 | 0, 0 | 0 |
+| `dispsw[...]` at the end | — (off) | `twins=80 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0 withdrawn=0 other_sw=0 free_refused=0` | `live=0`, nothing refused |
+| software classID read back = the guest's | — | 80 of 80 twins | every twin |
+| GSP refusals that differ A vs B | `0x20800a5d` refused | answered | the one difference |
+| host CPU-RM display-SW release path (probe) | 0 calls; 1 628 531 GSP event drains | 0 calls; 1 696 779 drains | 0 calls |
+| `0x90720101` (`NOTIFY_ON_VBLANK`) | — | 0 | 0 |
+
+Both lanes also log one `Flip event timeout on head 0` per X server start
+(`DISPLAY_FLIP_EVENT_TIMEOUTS_AFTER=2`), unchanged from the documented runs.
+
+## A host-kernel warning new with this candidate (not a failing check)
+
+`host_pat_warnings.txt` (journald, per run window on this box): the host kernel logs
+`x86/PAT: kf3-vamgr:<pid> freeing invalid memtype [mem 0x10…]` — 42 lines at 22:59:02 at the end of
+the merge bar's `gpga-reserve-probe` arm, 2 in the app runs, 52 in the display stage, 1 in one B5
+repeat. The same windows hold **47** for `v3-scratch-bound`'s own merge bar (`69ccb08c`, 19:13–19:35)
+and **0** for master's code (`d4c3767b`: its merge bar and both `b5m` runs) and for `v3-sec-nonpriv`
+(`1d71f3db`). ⇒ it arrives with the `v3-scratch-bound` lane (a PAT-tracked mapping unmapped in a
+different shape than it was reserved, from the VA-manager thread). No check reads it and no run
+failed with it; not investigated further here.
+
+## Verdict
+
+At `8a682f1b415844801e855ca6b28388f91c244251`: **merge bar PASS, apps PASS (no regression vs the
+61/65 baseline), display: B0, B1 and the x11-dispsw A/B PASS, B5 FAIL.** The B5 failure reproduces
+with master's own code on the same box (2 of 2 runs), so it is a pre-existing master defect exposed
+by this box, not a change this candidate made; by the task's rule (all three stages must pass) the
+run's verdict is still **fail**.

@@ -1,0 +1,16 @@
+KFDISP_DRIVER=nvidia-drm
+KFDISP_COUNTS connectors=1 crtcs=4 encoders=1 fbs=0
+KFDISP_CONNECTOR id=126 type=DVI-D-1 status=connected modes=7 preferred=1920x1080@60
+KFDISP_PLANE id=49 type=primary crtcs=0x1 formats=13
+KFDISP_PLANE id=54 type=cursor crtcs=0x1 formats=1
+KFDISP_PLANE id=61 type=overlay crtcs=0x1 formats=13
+KFDISP_PLANE id=68 type=primary crtcs=0x2 formats=13
+KFDISP_PLANE id=73 type=cursor crtcs=0x2 formats=1
+KFDISP_PLANE id=80 type=overlay crtcs=0x2 formats=13
+KFDISP_PLANE id=87 type=primary crtcs=0x4 formats=13
+KFDISP_PLANE id=92 type=cursor crtcs=0x4 formats=1
+KFDISP_PLANE id=99 type=overlay crtcs=0x4 formats=13
+KFDISP_PLANE id=106 type=primary crtcs=0x8 formats=13
+KFDISP_PLANE id=111 type=cursor crtcs=0x8 formats=1
+KFDISP_PLANE id=118 type=overlay crtcs=0x8 formats=13
+KFDISP_SUMMARY connected=1 primary=4 overlay=4 cursor=4

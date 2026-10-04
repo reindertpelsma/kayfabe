@@ -1,0 +1,16 @@
+# host kernel journal (journald, this box) per run window: x86/PAT "freeing invalid memtype" warnings (all from thread kf3-vamgr) and Xid lines
+merge bar 69ccb08c (v3-scratch-bound head, mb_scratch2) window=[2026-10-03 19:13:00 .. 2026-10-03 19:35:01] freeing_invalid_memtype=47 Xid=10
+merge bar d4c3767b (= master 789dee9f code, mb_gop) window=[2026-10-03 19:59:02 .. 2026-10-03 20:20:44] freeing_invalid_memtype=0 Xid=10
+merge bar 1d71f3db (v3-sec-nonpriv head, secnpmc) window=[2026-10-03 21:18:59 .. 2026-10-03 21:41:32] freeing_invalid_memtype=0 Xid=10
+merge bar 8a682f1b (candidate, cand1mb) window=[2026-10-03 22:38:04 .. 2026-10-03 23:01:02] freeing_invalid_memtype=42 Xid=10
+apps host (bare metal) window=[2026-10-03 23:52:37 .. 2026-10-04 00:11:17] freeing_invalid_memtype=0 Xid=0
+apps guest 8a682f1b window=[2026-10-04 00:11:17 .. 2026-10-04 00:46:05] freeing_invalid_memtype=2 Xid=8
+display lanes 8a682f1b (B0 B1 B5 dsw A/B) window=[2026-10-04 00:46:05 .. 2026-10-04 01:05:11] freeing_invalid_memtype=52 Xid=0
+B5 repeat b5r1 8a682f1b window=[2026-10-04 01:05:33 .. 2026-10-04 01:09:52] freeing_invalid_memtype=1 Xid=0
+B5 repeat b5m1 d4c3767b window=[2026-10-04 01:09:57 .. 2026-10-04 01:13:48] freeing_invalid_memtype=0 Xid=0
+B5 repeat b5r2 8a682f1b window=[2026-10-04 01:13:53 .. 2026-10-04 01:18:19] freeing_invalid_memtype=0 Xid=0
+B5 repeat b5m2 d4c3767b window=[2026-10-04 01:18:24 .. 2026-10-04 01:22:43] freeing_invalid_memtype=0 Xid=0
+# the candidate merge bar's 42 lines all at 22:59:02, the end of the thin-guest arm gpga-reserve-probe (fast_cand1mb_gpga-reserve-probe_qemu.log last written 22:59:02); first three:
+Oct 03 22:59:02 ubuntu kernel: x86/PAT: kf3-vamgr:195193 freeing invalid memtype [mem 0x1000a80000-0x1000beffff]
+Oct 03 22:59:02 ubuntu kernel: x86/PAT: kf3-vamgr:195193 freeing invalid memtype [mem 0x1000bf0000-0x1000deffff]
+Oct 03 22:59:02 ubuntu kernel: x86/PAT: kf3-vamgr:195193 freeing invalid memtype [mem 0x1000df0000-0x1000feffff]
