@@ -142,3 +142,47 @@ run the required exact-revision real-GPU gates and Linux regression bar, and
 add Windows workload and teardown/re-init evidence. Source-derived invariance
 across drivers is stronger than one captured die's numbers, but it must not be
 reported as all-family/all-die runtime validation.
+
+## Integration map (local refs inspected 2026-10-05)
+
+**Neither candidate 2 nor current master fixes S1-21.** Both refs resolve to
+`906a76a4` in this checkout and still map windows in every mirror. The proposed
+fix is the separate `v3-p1p2` branch at `31b64802`; it is behind `KF3_TSPACE=1`,
+default off. Its own design records missing hardware probes and no completed
+real-GPU acceptance. Do not interpret its CI or textual applicability as a
+verified isolation fix.
+
+The product sequence comprises `08dd9c9a` (A), `edca158b` (B), `6c4c11ef` (C),
+`1df654cf` (D), followed by `a8cfccb7`, `0b59f6da`, `b802fd2e`, `d53befca`,
+`49786008`, `5d840021`, and `6e6694a2`. Selecting only D omits dependencies and
+subsequent safety corrections. Take the complete published tip, including
+`7af588db`'s log gate and the associated design/evidence records.
+
+P0 is another necessary dependency: `v3-sec-nonpriv` at `76dba5bd` includes the
+USER-channel implementation (`dc64b22b`) and review fix (`ec53e12a`), plus the
+birth-observer and real-GPU evidence. It is already an ancestor of master and
+candidate 2, but **not** of the audited Windows branch. A root-launched Windows
+experiment that only gains the P1/P2 changes cannot claim the P0 protection.
+
+Read-only `git merge-tree --write-tree` trials found:
+
+| Pair | Textual result |
+|---|---|
+| Windows `b5e511b0` + P1/P2 `31b64802` | Clean, but still missing P0 |
+| Master `906a76a4` + P1/P2 `31b64802` | Conflicts in `.github/workflows/ci.yml` and `kf-qemu/src/device.rs` |
+| Master `906a76a4` + Windows `b5e511b0` | Conflicts in `kf-qemu/src/{device,ffi_unsafe}.rs`, `kf-rm/src/lib.rs`, and `qemu/hw/misc/kf3/kf3.{c,h}` |
+
+The P1/P2 conflicts combine existing audited counts with the new zero-unsafe
+`kf-chan` perimeter entry and combine status-format fields; do not discard
+either side. The Windows conflicts combine signed-GOP configuration with the
+newer display/broker ABI and policy seating. Resolve their types and C/Rust ABI
+together and give the actual resulting binary a new verified revision.
+
+The recommended integration direction is current master plus the complete
+P1/P2 branch, then the Windows work. Keep narrow Windows boot experiments on
+their research branch meanwhile. Before enabling T-space by default, its
+document requires the unprivileged window-reach negative/positive control,
+physical/privileged CE tests, family coverage, regression A/B and teardown.
+The two specialized probes are explicitly marked not yet written at
+`31b64802` (`V3_P1P2_TSPACE.md` steps 4 and 5). No integration or testing was
+performed by these merge-tree trials.
