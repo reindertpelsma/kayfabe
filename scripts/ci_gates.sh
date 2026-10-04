@@ -137,7 +137,7 @@ job = {"steps": steps_in}
 heavy = ("cargo build", "cargo test", "cargo clippy", "cargo fmt", "bash scripts/ci/clippy.sh",
          "bash scripts/ci/compiler_location.sh", "bash scripts/ci/kf3c.sh",
          "python3 scripts/ci/selftest_perimeter_cargo.py", "python3 scripts/ci/perimeter.py exports",
-         "python3 scripts/ci/perimeter.py k4")
+         "python3 scripts/ci/perimeter.py k4", "python3 scripts/ci/selftest_mutants.py")
 # Steps that CONSUME an artifact a heavy step produces. Skipping the producer while
 # running the consumer reports a failure that says nothing about the tree — which is
 # exactly the kind of misleading red this script exists to prevent. Detected by the

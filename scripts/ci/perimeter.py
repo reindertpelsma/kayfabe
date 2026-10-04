@@ -1517,7 +1517,9 @@ def report(name: str, findings: list[Finding], extra: str = "") -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=("lex", "manifest", "metadata", "sizes", "location", "reached", "depinfo",
-                                    "passes", "toolchain", "exports", "k4"))
+                                    "passes", "toolchain", "exports", "k4", "mutants"))
+    ap.add_argument("--outcomes", type=Path, action="append", default=[],
+                    help="mutants: cargo-mutants' mutants.out/outcomes.json (repeatable)")
     ap.add_argument("--json-dir", type=Path, help="exports: pre-generated rustdoc JSON (default: run rustdoc)")
     ap.add_argument("--write", action="store_true", help="exports: merge the inventory into the table")
     ap.add_argument("--date", default=None, help="exports --write: the date new rows carry (default: today)")
@@ -1559,6 +1561,15 @@ def main(argv: list[str] | None = None) -> int:
         date = args.date or datetime.date.today().isoformat()
         findings, n = run_exports(root, cfg, args.json_dir, args.write, date)
         return report("exports", findings, f" rows={n}")
+    if args.cmd == "mutants":
+        import perimeter_exports as px  # noqa: PLC0415
+        table, _, _ = px.parse_table((root / px.TABLE).read_text())
+        outcomes = [o for p in args.outcomes for o in json.loads(p.read_text())["outcomes"]]
+        findings, missed = px.mutant_findings(root, outcomes, table)
+        for (f, item), descs in sorted(missed.items()):
+            print(f"  missed {len(descs):3d}  {f}  {item}")
+        total = sum(1 for o in outcomes if o.get("summary") == "MissedMutant")
+        return report("mutants", findings, f" outcomes={len(outcomes)} missed={total}")
     if args.cmd == "k4":
         return report("k4", run_k4(root, cfg, args.json_dir or rustdoc_dir()))
     if args.log is None:

@@ -884,3 +884,67 @@ def k4_compile(root: Path, protos: list[str], cc: str = "cc") -> tuple[int, str]
     r = subprocess.run([cc, "-std=c11", "-fsyntax-only", "-Werror", "-Wall", "-x", "c", "-"], input=src,
                        capture_output=True, text=True)
     return r.returncode, r.stderr
+
+
+# ---------------------------------------------------------------------------------------
+# E3c: mutation evidence for OK rows (nightly, perimeter-mutants.yml)
+# ---------------------------------------------------------------------------------------
+
+
+def norm_item(item: str) -> str:
+    """`<X as From<RawError>>::from` -> `<X as From>::from`: generic arguments dropped."""
+    prev = None
+    while prev != item:
+        prev, item = item, re.sub(r"(\w)<[^<>]*>", r"\1", item)
+    return item
+
+
+def fn_row_name(s: rslex.Structure, line: int, name: str) -> str | None:
+    """The table identity of the fn `name` declared on `line`."""
+    for it in s.items:
+        if it.kind == "fn" and it.name == name and s.code[it.start].line <= line <= s.code[it.end].line:
+            p = it.parent
+            if p is not None and p.kind == "impl":
+                return f"{p.name}::{name}"
+            if p is not None and p.kind == "trait":
+                return f"{p.name}::{name}"
+            return name
+    return None
+
+
+def mutant_findings(root: Path, outcomes: list[dict], table: dict) -> tuple[list[Finding], dict]:
+    """E3c: an OK fn row has zero MISSED mutants in its body, apart from its `equiv:` entries."""
+    ok_rows = {(f, norm_item(r.item)): r for (f, _), r in table.items() if r.status == "OK"}
+    structs: dict[str, rslex.Structure] = {}
+    missed: dict[tuple[str, str], list[str]] = {}
+    for o in outcomes:
+        m = (o.get("scenario") or {}).get("Mutant") if isinstance(o.get("scenario"), dict) else None
+        if not m or o.get("summary") != "MissedMutant":
+            continue
+        f = m["file"]
+        fn = (m.get("function") or {}).get("function_name")
+        if not fn:
+            continue
+        if f not in structs:
+            p = root / f
+            if not p.exists():
+                continue
+            structs[f] = rslex.Structure(rslex.tokenize_file(p, f), f)
+        # the mutant's own line: the function span starts at its doc comment, not its `fn`
+        name = fn_row_name(structs[f], m["span"]["start"]["line"], fn.split("::")[-1])
+        if name is None:
+            continue
+        desc = m["name"].split(": ", 1)[-1]
+        missed.setdefault((f, norm_item(name)), []).append(desc)
+    out = []
+    for key, descs in sorted(missed.items()):
+        r = ok_rows.get(key)
+        if r is None:
+            continue
+        equiv = {x.split("=", 1)[1][len("equiv:"):].strip() for x in r.tests.split(";")
+                 if "=" in x and x.split("=", 1)[1].strip().startswith("equiv:")}
+        left = [d for d in descs if d not in equiv]
+        if left:
+            out.append(Finding("E3c", TABLE, r.line, f"OK row `{r.item}` has {len(left)} MISSED mutant(s): "
+                                                     + "; ".join(left[:6])))
+    return out, missed

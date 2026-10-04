@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+#
+# E3c (docs/design/V3_SEC_PERIMETER.md §3.3): an `OK` row of docs/design/PERIMETER_EXPORTS.md must
+# have ZERO missed mutants in its body (apart from the row's `equiv:` entries). A row's test that
+# runs but asserts nothing is the gap E3 alone cannot see; a missed mutant is how it shows. The
+# first instrument of audit S1-83 (hostile-input instruments retired at the v3 cutover).
+#
+# Nightly and on dispatch over every perimeter file of the crates the table covers; on a pull
+# request touching a perimeter file, only the mutants in its diff (`--in-diff`).
+
+name: perimeter-mutants
+
+on:
+  schedule:
+    - cron: '41 1 * * *'
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+    paths:
+      - '**/*_unsafe.rs'
+      - 'docs/design/PERIMETER_EXPORTS.md'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  mutants:
+    name: perimeter-mutants — ${{ matrix.crate }} (E3c)
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [kf-linux-raw, kf-qemu, kf-cuda]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml and scripts/ci/perimeter.toml
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: mutants-${{ matrix.crate }}
+      - name: cargo-mutants 27.1.0 (the version the design's scope was measured with)
+        run: cargo install --locked cargo-mutants --version 27.1.0
+      - name: "E3c known positive: a vacuous test leaves missed mutants; a pinning test leaves none"
+        run: python3 scripts/ci/selftest_mutants.py
+      - name: Allow user namespaces for this checkout's test executables (as the stable job)
+        run: python3 scripts/ci/runner_namespaces.py
+      - name: cargo mutants over ${{ matrix.crate }}'s perimeter files
+        env:
+          KAYFABE_NO_KVM: "1"
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          CRATE: ${{ matrix.crate }}
+        run: |
+          set -uo pipefail
+          extra=()
+          if [ "$EVENT" = pull_request ]; then
+            git diff "$PR_BASE"...HEAD > "$RUNNER_TEMP/pr.diff"
+            extra=(--in-diff "$RUNNER_TEMP/pr.diff")
+          fi
+          # cargo-mutants exits nonzero when a mutant is missed; the verdict below decides.
+          cargo mutants -p "$CRATE" --file "crates/$CRATE/src/**/*_unsafe.rs" --jobs 4 --timeout-multiplier 3 \
+            -o "$RUNNER_TEMP/mutants" "${extra[@]}" || echo "cargo mutants rc=$?"
+          test -s "$RUNNER_TEMP/mutants/mutants.out/outcomes.json"
+      - name: "E3c verdict: OK rows have no missed mutants"
+        run: python3 scripts/ci/perimeter.py mutants --outcomes "$RUNNER_TEMP/mutants/mutants.out/outcomes.json"
+      - name: Remove the CI-only namespace profile
+        if: always()
+        run: python3 scripts/ci/runner_namespaces.py --remove
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants-${{ matrix.crate }}
+          path: ${{ runner.temp }}/mutants/mutants.out/outcomes.json
+          if-no-files-found: ignore

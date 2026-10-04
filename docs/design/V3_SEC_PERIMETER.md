@@ -586,6 +586,8 @@ Validation that happens **in another crate's caller** (for example `kf-trap/src/
 
 Also, for the nightly job: a fixture with a vacuous test must yield a missed mutant (E3c).
 
+⊘ **As built at C6b (2026-10-04):** `scripts/ci/selftest_mutants.py` runs cargo-mutants over a one-function fixture twice. With a vacuous test, its OK row fails E3c (4 missed). With a test that pins the behaviour, the row passes. `perimeter.py mutants` maps each MISSED mutant by its own line (a function's span starts at its doc comment) to the fn's row, normalizing generic arguments (`<X as From<E>>::from` ↔ `<X as From>::from`). The nightly matrix covers kf-linux-raw, kf-qemu and kf-cuda; run times are unmeasured.
+
 ---
 
 ## 4. Proposal (a): unchecked preconditions become `unsafe fn`, or are checked inside
