@@ -1,0 +1,4 @@
+{"experiment":"linux-gfx-mode","uid":65534,"index":0,"client":3251634220,"object":3203334148,"channel":3472359424,"original_flags":1,"original_graphics":0,"original_compute":1,"requested_graphics":2,"rc":0,"errno":0,"status":31}
+{"experiment":"linux-gfx-mode","uid":65534,"index":1,"client":3251634220,"object":3203334148,"channel":3472359426,"original_flags":1,"original_graphics":0,"original_compute":1,"requested_graphics":2,"rc":0,"errno":0,"status":31}
+{"experiment":"linux-gfx-mode","uid":65534,"index":2,"client":3251634220,"object":3203334148,"channel":3203203329,"original_flags":1,"original_graphics":0,"original_compute":1,"requested_graphics":2,"rc":0,"errno":0,"status":31}
+{"experiment":"linux-gfx-mode","uid":65534,"index":3,"client":3251634220,"object":3203334148,"channel":3472359427,"original_flags":1,"original_graphics":0,"original_compute":1,"requested_graphics":2,"rc":0,"errno":0,"status":31}

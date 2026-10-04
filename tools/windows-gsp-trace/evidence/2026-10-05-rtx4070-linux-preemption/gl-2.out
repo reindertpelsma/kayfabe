@@ -1,0 +1,3 @@
+METRIC egl_gl_Mtri_s 2.0
+CHECK egl_gl_Mtri_s ok
+EGLOFF_FB_MD5 6ab6ddbcd55aa8bb

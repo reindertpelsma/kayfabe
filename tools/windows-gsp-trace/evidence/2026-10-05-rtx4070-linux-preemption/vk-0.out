@@ -1,0 +1,6 @@
+CHECK|vk_loader|PASS|/usr/lib/x86_64-linux-gnu/libvulkan.so.1
+CHECK|vk_instance|PASS|vkCreateInstance rc=0
+CHECK|vk_physical_device|PASS|1 device(s): NVIDIA GeForce RTX 4070
+CHECK|vk_device_is_nvidia|PASS|NVIDIA GeForce RTX 4070 (vendorID 0x10DE)
+CHECK|vk_import_host_ptr|PASS|imported 2 MiB of host memory (type 2)
+CHECK|vk_compute_dispatch|PASS|4096 elements, data[i]=i*3+7 verified on NVIDIA GeForce RTX 4070 (e.g. data[4095]=12292)

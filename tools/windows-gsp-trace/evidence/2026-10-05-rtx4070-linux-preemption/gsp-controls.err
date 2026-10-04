@@ -1,0 +1,12 @@
+trace.bt:1:1-27: ERROR: No matches for kprobe rpcRmApiControl_GSP.
+kprobe:rpcRmApiControl_GSP /uid == 65534/ {
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+trace.bt:9:1-30: ERROR: No matches for kretprobe rpcRmApiControl_GSP.
+kretprobe:rpcRmApiControl_GSP /@mode[tid]/ {
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+trace.bt:1:1-27: WARNING: rpcRmApiControl_GSP is not traceable (either non-existing, inlined, or marked as "notrace"); attaching to it will likely fail
+kprobe:rpcRmApiControl_GSP /uid == 65534/ {
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+trace.bt:9:1-30: WARNING: rpcRmApiControl_GSP is not traceable (either non-existing, inlined, or marked as "notrace"); attaching to it will likely fail
+kretprobe:rpcRmApiControl_GSP /@mode[tid]/ {
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
