@@ -56,5 +56,19 @@ class TextDecoderTests(unittest.TestCase):
         values[-1]['source_sha256']=hashlib.sha256(damaged).hexdigest()
         with self.assertRaisesRegex(decode.InvalidTrace,'checksum'): self.parse(values)
 
+    def test_selected_export_reports_unverifiable_full_source_hash(self):
+        values=rows(); values[0]['selection']='gfx-pool-query'
+        footer=values[-1]
+        footer.update(exported_sha256=footer['source_sha256'], exported_bytes=footer['source_bytes'],
+                      source_sha256='a'*64, source_bytes=footer['source_bytes']+160,
+                      source_records=3, omitted_records=1, all_source_records_exported=False)
+        trace=self.parse(values)
+        self.assertEqual(trace['text_export']['selection'],'gfx-pool-query')
+        self.assertFalse(trace['text_export']['source_hash_verifiable_from_export'])
+        self.assertEqual(trace['text_export']['omitted_records'],1)
+        self.assertTrue(decode.summarize(trace)['unambiguous_query_pairs'][0]['successful'])
+        footer['source_records']=4
+        with self.assertRaisesRegex(decode.InvalidTrace,'provenance'): self.parse(values)
+
 
 if __name__ == '__main__': unittest.main()
