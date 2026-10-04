@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-09-30.** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
+**STATUS: LIVE, 2026-10-04 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
 evidence and documentation. The single entry point for resuming work without any chat history. Decisions
 live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per-topic detail in the design
@@ -8,6 +8,69 @@ docs named below. ⊘ When this file and a design doc disagree, the design doc's
 fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
+
+### 0.0 ★ RESUME HERE — 2026-10-04 (supersedes every older entry in §0 where they differ)
+
+**Master = `789dee9f` (+ docs).** It has NOT moved since the rulings. Code reaches master only through a
+**candidate branch** tested as a whole on a real GPU (rules below). Branch heads change; always
+`git fetch` and read each lane's own design doc STATUS. Workflow results that lived only in a session
+are committed in `docs/handoff/2026-10-04/` (README there).
+
+**Rules that govern everything (read first):** `docs/OWNER_RULINGS.md`
+- §Q, the address model: passthrough spaces hold only guest PTE/PDB rows; Translated spaces hold
+  guest VRAM and/or guest RAM; a channel the guest made unprivileged never shares a space with a
+  window or kayfabe memory.
+- §R, memory safety: the `_unsafe` file is the audit perimeter, and validation sits at the boundary,
+  never at call sites. The proposals and gates are adopted. The **standing merge approval**: merge
+  without asking iff CI is green, the code is reviewed, and the EXACT commit passed on a real GPU
+  box a real guest boot, the merge bar and the apps.
+- §K: Secure Boot uses a self-signed ROM with a per-install key. The vTPM state is a persistent
+  secret. Bench Windows runs without BitLocker.
+- §M: display-max-fps decisions D1-D5. §N: x11-dispsw. §O: cursor. §P: security audit.
+
+**Lanes (GitHub branches; each is the only source of truth for its work):**
+
+| lane | branch @ last known head | state | next step |
+|---|---|---|---|
+| **Candidate 1** | `v3-cand-1` (merges owner-questions + `v3-sec-nonpriv` P0 + `v3-scratch-bound` + `v3-dispsw-exp`; KF3 ABI 13) | at `8a682f1b` on vmb: merge bar PASS (1936/0, 9/9, bare 30/30, guest 30/30, BIRTH_CENSUS_OK); apps PASS (host 71/71, guest 61/65+6/6 = baseline `2830988f`); display B0, B1 and X11 A/B PASS; **B5 FAIL**, and master's own code fails B5 the same way (latent timing bug: the console ctxdma is unbound before the window free, and an unwatched-console copy lands in the gap) | a fixer is committing the B5 fix on `v3-cand-1`. Then re-run the FULL real-GPU test at the new head (B5 ≥3×). If it passes, fast-forward master and v3 to it (merge any newer docs-only owner-questions commits first). Evidence: `traces/v3_candidates/` |
+| Display: broker | `v3-broker` @ `82f98f42` (KF3 ABI 12) | GPU-copy rung, hover cursor, XOR blend, QEMU console cursor; box-graded (V3_DISPLAY §8.11-§8.15); 16 review fixes NOT yet box-verified | merges into a master that has ABI 13 → renumber to **14** (note at KF3_ABI in kf3.h / ffi_unsafe.rs on cand-1) |
+| Display: max fps | `v3-maxfps` from `v3-broker` (ABI 16) | being built (§M, D1-D5) with a box stage incl. the D4 X11 check and the broker post-review re-verify | then **candidate 2** = cand-1-merged master + broker + maxfps, full HW test |
+| nvkvm-pv broker | nvkvm-pv `broker-cursor-gpucopy` @ `badf2d7` (+ block-linear bound fix in flight) | CMD_CURSOR 7, EV_DEVICE 17, X11 EV_FORMAT x=0; review fixes done | not merged to nvkvm-pv main: needs its own HW test with nvkvm-pv's VMM |
+| x11-dispsw default-on | (not started) | prep plan in `docs/handoff/2026-10-04/dispsw_default_on_prep.json` | **owner question below**; then the forced-release probe + flip |
+| Security S1-21 (critical) | `v3-p1p2` | P1+P2 implemented behind a flag (default off); reviews/fix round in flight | box: A/B with the flag on, T-WINDOW-USER, T-PHYS-CE (S1-20), an app as an UNPRIVILEGED guest user; then default on |
+| Security S1-03/04 | `v3-sec-rawaddr` | raw host/device addresses out of safe code; review fix round in flight | candidate after review |
+| Security §R gates | `v3-sec-perimeter` | S1-01 gates, perimeter ratchet, export table, kf3.c in CI; implementing | candidate after review |
+| Guest IOVA | `v3-viommu` @ `05009d07` (ABI 15) | detection + fail-closed + typed seam; CI green; the translator itself (~16-24 eng-days) not built | the 10 box tests in V3_VIOMMU.md §7.5; OD-1..6 recommendations in that doc |
+| Windows | `v3-windows` (took ABI 12 → renumber at merge) | tooling: `scripts/bench/windows/win_vm.sh` (install once / run with restart loop / ssh on 127.0.0.1), Secure Boot signing, swtpm, virtio-win, RPC trace + Windows-vs-Linux diff; discovery run on box vwin in flight | `docs/design/V3_WINDOWS_DISCOVERY.md` when the run lands; then park until display + S1-21 merge |
+| managed-memory loudness | `v3-loud-uvm` | real work, never box-run | §R5.7 box run, then a candidate |
+| guest UVM fault plane | `v3-uvm-guest` | BLOCKED by owner ruling §E | redesign first |
+
+**KF3 ABI registry:** 11 master (GOP) · 12 v3-broker · 13 v3-dispsw-exp (cand-1) · 14 reserved for
+broker-on-13 · 15 v3-viommu · 16 v3-maxfps · v3-windows also took 12 and is renumbered at its merge.
+Numbers are never reused.
+
+**Open owner questions:**
+1. §N condition 3 for x11-dispsw default-on. Restate it as "no kayfabe mapping is ever kernel-mapped,
+   and no address space running a display-SW object's channel holds kayfabe memory" (true by tests
+   today + after S1-21's fix), and flip the default after `v3-p1p2` merges. The alternative is the
+   literal client split (3-5 days). Recommendation: restate.
+2. vIOMMU OD-1..OD-6 and S1-32 severity (recommendations in `V3_VIOMMU.md`).
+3. §M D2 (non-flip copies at the emulated vblank, send-on-change, none while unwatched) is adopted
+   unless the owner objects.
+
+**Boxes (vast; the account is shared, so destroy only ids you created, by id, and verify):** 54032077
+(display lane, KDE desktop template), 54049598 (merge bar, KVM template), 54071272 (Windows lane, KVM
+template). Find addresses with `vastai show instances --raw`. Destroy any that are idle.
+
+**How to run things:** merge bar = `scripts/bench/box/merge_check.sh` run FROM the box checkout with
+`CARGO_BUILD_JOBS=$(nproc)` and a fresh `CARGO_TARGET_DIR` (README there). Apps = `scripts/apps/`
+(V3_APP_MATRIX.md). Display = `scripts/bench/display/` (GOP lane, unload_hook B5, dispsw_run.sh,
+broker_lane.sh). Candidate procedure = `traces/v3_candidates/cand1_20261003/README.md`. Traps:
+- `pgrep -x qemu-system-x86` (never `_64`); put any pkill in its own ssh call.
+- Detached box jobs write START/EXIT lines; a launcher's exit code says nothing about the job.
+- Host Xids come from journald (the dmesg ring wraps).
+- The dev host's `/` is nearly full: build in `/data`.
+
 
 - ★ **DISPLAY STEP 1 — 2026-10-03 (late): ONE branch, `v3-gop`, supersedes the two below** — both halves
   squashed onto `master` with no compiled binary in any commit, plus the owner's §K (the GOP driver is
