@@ -138,7 +138,8 @@ installed `/root/vast-windows/prepare/prepare.py` guest-agent helper. It require
 `login-test.json` and refuses a released `login-test-complete` marker. The target
 is the installer's English Windows image. It verifies the archive and every
 file in Windows, smoke-tests bundled signtool and collector execution, and sets
-test signing for **the next boot**. It writes `gsp-stage-result.json` on Linux and
+test signing for **the next boot**. It also records Secure Boot and Device Guard
+state without changing memory-integrity/HVCI settings. It writes `gsp-stage-result.json` on Linux and
 `stage-result.json` in the guest. It does not install/start the recorder, start
 NVIDIA, reboot, release the preparation hold, or arm the disk flasher. The native
 boot still needs `install.ps1 -Action Install`, API tests, recorder restart and
@@ -153,7 +154,10 @@ capture before releasing NVIDIA's separate deferred-install hold.
 ```
 
 Create `C:\traces` beforehand. The collector stops the worker, drains the entire
-FIFO and writes `gsp.kgwt.stats.json`. Ctrl+C follows the same drain path. Exit 4
+FIFO and writes `gsp.kgwt.stats.json`. It flushes the C output buffer after each
+read batch and checks trace/statistics write, flush and close failures. A sudden
+process termination or reboot can still leave a partial record; drain and close
+the collector before a research reboot. Ctrl+C follows the same drain path. Exit 4
 means no validated messages were recorded. Restart the service before another
 run. Save the metadata, NVIDIA firmware/driver version (`nvidia-smi -q`), GPU PCI
 ID/revision, driver binary hash, code revision and application/device-start result
@@ -193,6 +197,9 @@ followed by a reboot. The script leaves those host settings for explicit cleanup
   in `scripts/rpctrace/`; its lossless hook semantics do not apply here.
 - [Microsoft MmCopyMemory](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-mmcopymemory)
   defines the safe physical-RAM read API and its limits.
+- [Microsoft test signing](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/the-testsigning-boot-configuration-option)
+  requires a signed test binary even when HVCI is enabled; test signing does not
+  justify preemptively disabling memory integrity.
 - [Microsoft device security](https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/sddl-for-device-objects)
   defines the SYSTEM/Administrators DACL used by `IoCreateDeviceSecure`.
 
