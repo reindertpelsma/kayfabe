@@ -32,3 +32,35 @@ The PC runs host NVIDIA 595.91.07. It must be measured from its exact public OGK
 Kayfabe can realize; never bypass the ABI guard. Windows runs against `kf3-gpu` while Linux
 keeps the physical GPU. The native Windows fixture is copied before use. VFIO success is
 only a native reference, not a Kayfabe result.
+
+## Timer allocation follow-up
+
+The same-binary comparison at `167fe2de` passes the query only with the opt-in
+enabled. Windows then reaches more context/display initialization, but still
+reports Code 43. The next allocation refusals are unknown class `0xb297` and
+`NV01_TIMER` (`0x4`), followed immediately by teardown. Evidence:
+`traces/windows_pool_20261005/{baseline-a,probe-b}/`.
+
+The next experiment admits **only timer object allocation bookkeeping** into the
+existing graph, classified as `Other`, with normal namespace and handle lifetime
+handling. No host object, channel, mapping, alarm, or completion is created by
+this allocation. The graph keeps its existing order-tolerant edge semantics;
+this is not a complete implementation of TimerApi's parent/single-instance
+rules or its controls. Unsupported timer controls still fail. A later timer
+operation must validate its target and implement its actual behavior separately.
+
+This allocation behavior is source-derived across all 30 measured OGKM tags:
+`tmrapiConstruct_IMPL` only returns `NV_OK` and the destructor is empty.
+`resource_list.h` permits unprivileged allocation, has no parameters (`RS_NONE`),
+requires a Subdevice parent, and allows one instance per parent. The explicit
+`ALLOC_RPC_TO_PHYS_RM` flag is present from the measured 555.42.02 tag onward;
+it is absent in the measured 535/545/550 tags. Thus this is not Windows-only.
+`scripts/bench/windows/audit_timer_alloc.py <local-ogkm-clone>` reproduces the
+checks; the table with peeled commit IDs is
+`traces/windows_pool_20261005/timer-source-audit.tsv`.
+
+The existing allocation transport rejects serialized parameters, out-of-message
+declared lengths and the reserved client namespace. Parameter bytes themselves
+are unused, as in the other `NoDeclaredFacts` classes; they cannot become host
+pointers. Admitting this class changes no control allowlist. Unknown `0xb297`
+remains refused. This branch has not met the integration/merge validation bar.

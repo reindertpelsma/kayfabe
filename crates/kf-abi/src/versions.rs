@@ -1583,6 +1583,11 @@ impl DriverAbiTable {
             // unprivileged leaf under a Subdevice that allocates no engine, owns no channel
             // and schedules nothing.
             classes::NV2081_BINAPI => Some(AllocParams::NoDeclaredFacts),
+            // OGKM timer.c: tmrapiConstruct_IMPL returns NV_OK and the destructor
+            // is empty. resource_list.h specifies RS_NONE allocation parameters.
+            // Keep the graph edge and lifetime; no timer alarm or mapping is
+            // authorized by allocation. No params are read or forwarded.
+            crate::submit::NV01_TIMER => Some(AllocParams::NoDeclaredFacts),
             _ => None,
         }
     }
