@@ -91,7 +91,9 @@ pub trait TSpaceHost {
     /// # Errors
     /// The host's refusal, by name.
     fn reserve(&self, space: VaSpace, at: u64, len: u64) -> Result<u32, String>;
-    /// All of `memory` (`len` bytes) mapped at an address the host chooses; `high` = `GROWS_DOWN`.
+    /// `[0, len)` of `memory` mapped at an address the host chooses; `high` = `GROWS_DOWN`;
+    /// `huge` pins 2 MiB pages (`NVOS46_FLAGS_PAGE_SIZE_HUGE`), so RM never rounds the map past
+    /// `len` (a 2 MiB multiple).
     ///
     /// # Errors
     /// The host's refusal, by name.
@@ -101,6 +103,21 @@ pub trait TSpaceHost {
         memory: u32,
         len: u64,
         high: bool,
+        perm: MapPerm,
+        huge: bool,
+    ) -> Result<u64, String>;
+    /// `[offset, offset+len)` of `memory` mapped FIXED at `at` with 4 KiB pages (a store slice:
+    /// `kf_host::MapBacking::SharedSlice`); returns where RM placed it.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn map_fixed_4k(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        offset: u64,
+        len: u64,
+        at: u64,
         perm: MapPerm,
     ) -> Result<u64, String>;
     /// Free the space and every reservation recorded in it.
@@ -122,9 +139,37 @@ impl TSpaceHost for HostRm {
         len: u64,
         high: bool,
         perm: MapPerm,
+        huge: bool,
     ) -> Result<u64, String> {
-        self.map_window_perm(space, memory, len, high, perm)
+        let page = if huge {
+            kf_abi::bringup::NVOS46_FLAGS_PAGE_SIZE_HUGE
+        } else {
+            0
+        };
+        self.map_window_paged(space, memory, len, high, perm, page)
             .map_err(|e| format!("{e:?}"))
+    }
+    fn map_fixed_4k(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        offset: u64,
+        len: u64,
+        at: u64,
+        perm: MapPerm,
+    ) -> Result<u64, String> {
+        self.map_kind(
+            space,
+            memory,
+            kf_host::MapBacking::SharedSlice,
+            offset,
+            len,
+            Some(at),
+            false,
+            0,
+            perm,
+        )
+        .map_err(|e| format!("{e:?}"))
     }
     fn free_space(&self, space: VaSpace) {
         self.free_vaspace(space);
@@ -141,6 +186,9 @@ pub struct TSpace {
     ram_len: u64,
     ram_obj: u32,
     build_us: u128,
+    /// ★ Review fix 2026-10-04: the store window's 2 MiB-page part (`[0, fb_huge)`) — its 4 KiB
+    /// tail is `[fb_huge, fb_len)`.
+    fb_huge: u64,
     /// ★ inc D: the windows, bounded once (`kf_chan::tspace_unsafe::TWindows`).
     windows: kf_chan::tspace_unsafe::TWindows,
     /// ★ inc D (§2.4): the per-VM ring slots — 4096 one-MiB slots for every Translated channel of
@@ -152,6 +200,9 @@ pub struct TSpace {
 
 /// The device's T-space, built once ([`prewarm`]); `Err` is the remembered refusal.
 pub type TSpaceCell = std::sync::Arc<std::sync::OnceLock<Result<TSpace, String>>>;
+
+/// A 2 MiB page (`NVOS46_FLAGS_PAGE_SIZE_HUGE`).
+const HUGE_PAGE: u64 = 2 << 20;
 
 /// The store window's GPU mapping: read-write, the store's own cache attribute.
 const FB_PERM: MapPerm = MapPerm::READ_WRITE;
@@ -218,12 +269,37 @@ impl TSpace {
         };
         // ⊘ `high = false`: GROWS_DOWN would place the windows near 2^49 (`run_b3_qemu.log:2747`),
         // where every 40-bit host semaphore release would be truncated.
-        let fb_base = match host.map_window(space, store, carve, false, FB_PERM) {
+        // ★ Review fix 2026-10-04: RM rounds a map's length UP to its page size
+        // (`virt_mem_allocator_gm107.c:726-727`), and `carve` is 128 KiB-aligned, not 2 MiB-aligned
+        // — a window of `carve` bytes on 2 MiB pages would map up to 2 MiB into the firmware
+        // carve-out. So the window is two maps: `[0, huge)` (`huge` = `carve` rounded DOWN to
+        // 2 MiB) pinned to 2 MiB pages, and the tail `[huge, carve)` FIXED right after it on
+        // 4 KiB pages, its placement read back. Together they are exactly `[0, carve)`.
+        let huge = carve & !(HUGE_PAGE - 1);
+        if huge == 0 {
+            return Err(fail(
+                space,
+                format!("the store holds less than 2 MiB below the carve-out ({carve:#x})"),
+            ));
+        }
+        let fb_base = match host.map_window(space, store, huge, false, FB_PERM, true) {
             Ok(b) => b,
-            Err(e) => return Err(fail(space, format!("store window [0, {carve:#x}): {e}"))),
+            Err(e) => return Err(fail(space, format!("store window [0, {huge:#x}): {e}"))),
         };
+        if carve > huge {
+            let at = fb_base + huge;
+            match host.map_fixed_4k(space, store, huge, carve - huge, at, FB_PERM) {
+                Ok(got) if got == at => {}
+                other => {
+                    return Err(fail(
+                        space,
+                        format!("store window tail [{huge:#x}, {carve:#x}) at {at:#x}: {other:x?}"),
+                    ));
+                }
+            }
+        }
         let (ram_obj, ram_len) = ram;
-        let ram_base = match host.map_window(space, ram_obj, ram_len, false, RAM_PERM) {
+        let ram_base = match host.map_window(space, ram_obj, ram_len, false, RAM_PERM, false) {
             Ok(b) => b,
             Err(e) => {
                 return Err(fail(
@@ -260,6 +336,7 @@ impl TSpace {
             ram_len,
             ram_obj,
             build_us: t0.elapsed().as_micros(),
+            fb_huge: huge,
         })
     }
 
@@ -319,14 +396,16 @@ impl TSpace {
     #[must_use]
     pub fn line(&self) -> String {
         format!(
-            "tspace space={:#x} fb={:#x}+{:#x} ram={:#x}+{:#x} (obj {:#x}) rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x} build_us={}",
+            "tspace space={:#x} fb={:#x}+{:#x} ram={:#x}+{:#x} (obj {:#x}) rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x} build_us={} fb_pages=2M:{:#x}+4K:{:#x}",
             self.space.space,
             self.fb_base,
             self.fb_len,
             self.ram_base,
             self.ram_len,
             self.ram_obj,
-            self.build_us
+            self.build_us,
+            self.fb_huge,
+            self.fb_len - self.fb_huge
         )
     }
 }
@@ -376,6 +455,8 @@ mod tests {
         ops: RefCell<Vec<String>>,
         bases: RefCell<Vec<u64>>,
         refuse_ram: bool,
+        /// Where RM places the 4 KiB tail relative to the address asked (0 = honoured).
+        tail_slip: u64,
     }
     fn space() -> VaSpace {
         VaSpace {
@@ -402,9 +483,10 @@ mod tests {
             len: u64,
             high: bool,
             perm: MapPerm,
+            huge: bool,
         ) -> Result<u64, String> {
             self.ops.borrow_mut().push(format!(
-                "window {memory:#x}+{len:#x} high={high} vol={} ring_reserved={}",
+                "window {memory:#x}+{len:#x} high={high} vol={} huge={huge} ring_reserved={}",
                 perm.volatile,
                 s.guest[0].handle != 0
             ));
@@ -418,6 +500,20 @@ mod tests {
                 self.bases.borrow_mut().remove(0)
             };
             Ok(b)
+        }
+        fn map_fixed_4k(
+            &self,
+            _: VaSpace,
+            memory: u32,
+            offset: u64,
+            len: u64,
+            at: u64,
+            _: MapPerm,
+        ) -> Result<u64, String> {
+            self.ops.borrow_mut().push(format!(
+                "fixed4k {memory:#x}[{offset:#x}+{len:#x}] at {at:#x}"
+            ));
+            Ok(at + self.tail_slip)
         }
         fn free_space(&self, s: VaSpace) {
             self.ops.borrow_mut().push(format!(
@@ -438,14 +534,30 @@ mod tests {
         let h = Rec::default();
         h.bases.borrow_mut().extend([0x1_2000_0000, 0x4_0520_0000]);
         let t = TSpace::build(&h, 0x1, CARVE, RAM, false).expect("built");
+        // ★ Review fix 2026-10-04: `[0, carve)` as a 2 MiB-page part rounded DOWN and a 4 KiB
+        // tail FIXED right after it — never a map RM would round up into the carve-out.
+        let huge = CARVE & !((2 << 20) - 1);
+        assert!(huge < CARVE && CARVE - huge < 2 << 20);
         assert_eq!(
             *h.ops.borrow(),
             vec![
                 "alloc_bare".to_string(),
                 format!("reserve {RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}"),
-                format!("window 0x1+{CARVE:#x} high=false vol=false ring_reserved=true"),
-                "window 0x2+0x200000000 high=false vol=true ring_reserved=true".to_string(),
+                format!("window 0x1+{huge:#x} high=false vol=false huge=true ring_reserved=true"),
+                format!(
+                    "fixed4k 0x1[{huge:#x}+{:#x}] at {:#x}",
+                    CARVE - huge,
+                    0x1_2000_0000 + huge
+                ),
+                "window 0x2+0x200000000 high=false vol=true huge=false ring_reserved=true"
+                    .to_string(),
             ]
+        );
+        assert!(
+            t.line()
+                .ends_with(&format!("fb_pages=2M:{huge:#x}+4K:{:#x}", CARVE - huge)),
+            "{}",
+            t.line()
         );
         assert_eq!(
             t.fb(),
@@ -477,6 +589,15 @@ mod tests {
         h.bases.borrow_mut().push(0x1_2000_0000);
         let e = TSpace::build(&h, 0x1, CARVE, RAM, false).expect_err("no RAM window");
         assert!(e.starts_with("guest-RAM window"), "{e}");
+        assert!(h.ops.borrow().last().is_some_and(|o| o.starts_with("free")));
+        // A tail RM placed anywhere but right after the 2 MiB part: refused by name, freed.
+        let h = Rec {
+            tail_slip: 0x1000,
+            ..Rec::default()
+        };
+        h.bases.borrow_mut().push(0x1_2000_0000);
+        let e = TSpace::build(&h, 0x1, CARVE, RAM, false).expect_err("tail misplaced");
+        assert!(e.starts_with("store window tail"), "{e}");
         assert!(h.ops.borrow().last().is_some_and(|o| o.starts_with("free")));
         // ★ The positive control (`KF3_NEGCTL_TSPACE_OVERSIZE`): the same good placement, checked
         // as if the RAM window ran to the ring region — refused by name, the space freed.

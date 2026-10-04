@@ -414,11 +414,31 @@ impl HostRm {
         high: bool,
         perm: MapPerm,
     ) -> Result<u64, RmError> {
+        self.map_window_paged(space, memory, len, high, perm, 0)
+    }
+
+    /// ★ P1+P2 review fix (2026-10-04): [`HostRm::map_window_perm`] with a page-size pin
+    /// (`page_size`: an `NVOS46_FLAGS_PAGE_SIZE_*` value, 0 = RM chooses). The T-space pins its
+    /// store window to 2 MiB pages so RM never rounds the map past its length
+    /// (`kf_abi::bringup::NVOS46_FLAGS_PAGE_SIZE_HUGE`).
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn map_window_paged(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        len: u64,
+        high: bool,
+        perm: MapPerm,
+        page_size: u32,
+    ) -> Result<u64, RmError> {
         let extra = if high {
             NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN
         } else {
             0
-        } | perm.nvos46_flags();
+        } | perm.nvos46_flags()
+            | page_size;
         self.raw_map_dma_slice(space.range, memory, 0, len, None, extra, false, 0)
     }
 

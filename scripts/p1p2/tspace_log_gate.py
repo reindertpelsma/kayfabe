@@ -53,7 +53,8 @@ SPARE_RE = re.compile(r"prewarm: spare host space 0x[0-9a-f]+ ready before the g
 BORN_T_RE = re.compile(r"BORN Translated: token (0x[0-9a-f]+)")
 BORN_P_RE = re.compile(r"BORN Passthrough: token (0x[0-9a-f]+).*privilege=(\S+)")
 BORN_ANY_RE = re.compile(r"BORN (Translated|Passthrough)")
-COUNTERS_RE = re.compile(r"tspace\[built=(\S+) twin_refused=(\d+) tspace_refused=(\d+) slots_leaked=(\d+)\]")
+COUNTERS_RE = re.compile(r"tspace\[built=(\S+) twin_refused=(\d+) tspace_refused=(\d+) slots_leaked=(\d+)"
+                         r"(?: twin_freeing=(\d+))?\]")
 STATUS_RE = re.compile(r"mem\[inval=")
 CARVE_RE = re.compile(r"carve_gpu=(\d+) carve_kernel=(\d+) carve_cpu=(\d+)")
 INCA_RE = re.compile(r"inca\[strict=(\S+) counted=(\d+) heap_out=(\d+) rows_inexact=(\d+)\]")
@@ -190,7 +191,7 @@ def gate(lines: list[str], windows: bool = False, negctl: str | None = None, use
     if c is None or carve is None or inca is None:
         out.append(("COUNTERS", False, "missing tspace[...], carve_gpu= or inca[...] on the status line"))
     else:
-        ok = (c.group(1) == "yes" and all(int(c.group(k)) == 0 for k in (2, 3, 4))
+        ok = (c.group(1) == "yes" and all(int(c.group(k) or 0) == 0 for k in (2, 3, 4, 5))
               and int(carve.group(1)) == 0 and int(inca.group(3)) == 0)
         out.append(("COUNTERS", ok, f"{c.group(0)} {carve.group(0)} {inca.group(0)}"))
     n, stale, checked = retire_counts(lines)

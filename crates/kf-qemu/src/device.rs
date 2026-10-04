@@ -2260,7 +2260,7 @@ impl Device {
         ) + &if crate::tspace::enabled() {
             // ★ P1+P2 inc D: the T-mode counters the REGRESSION A/B gates on (0 on stock drivers).
             format!(
-                " tspace[built={} twin_refused={} tspace_refused={} slots_leaked={}]",
+                " tspace[built={} twin_refused={} tspace_refused={} slots_leaked={} twin_freeing={}]",
                 match self.tspace.get() {
                     Some(Ok(_)) => "yes",
                     Some(Err(_)) => "REFUSED",
@@ -2271,7 +2271,8 @@ impl Device {
                 self.tspace
                     .get()
                     .and_then(|t| t.as_ref().ok())
-                    .map_or(0, |t| t.slots_leaked.load(o))
+                    .map_or(0, |t| t.slots_leaked.load(o)),
+                self.chans.twin_freeing_refused.load(o)
             )
         } else {
             String::new()

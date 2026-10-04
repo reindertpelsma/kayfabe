@@ -1533,13 +1533,17 @@ jobs:
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
+          # ★ 2026-10-04 (P1+P2 review fix): an audited crate whose bar is 0 (kf-chan) is NOT
+          # exempt — its perimeter file holds no `unsafe` block, so it must keep inheriting the
+          # workspace lints (and with them `unsafe_code = "forbid"`); listing it in AUDITED only
+          # lets gate B accept its `*_unsafe.rs` file and the ratchet count it.
           missing=""
           for m in crates/*/Cargo.toml; do
             # Historical dependency-free model, not product/grader; all its tests still run.
             [ "$m" = crates/kayfabe-doorbell/Cargo.toml ] && continue
             exempt=0
             for entry in $AUDITED; do
-              case "$m" in "crates/${entry%%:*}/Cargo.toml") exempt=1;; esac
+              case "$m" in "crates/${entry%%:*}/Cargo.toml") [ "${entry##*:}" = 0 ] || exempt=1;; esac
             done
             [ "$exempt" -eq 1 ] && continue
             grep -q '^\[lints\]' "$m" && grep -q '^workspace = true' "$m" || missing="$missing $m"

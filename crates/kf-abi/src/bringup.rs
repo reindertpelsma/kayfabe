@@ -739,6 +739,13 @@ pub const NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE: u32 = 1;
 /// same page table and the second cannot be the one that instantiates it.
 pub const NVOS46_FLAGS_PAGE_SIZE_4KB: u32 = 1 << 8;
 
+/// ★ `NVOS46_FLAGS_PAGE_SIZE_HUGE` — field `11:8`, value 4 (2 MiB pages)
+/// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2041`). P1+P2 review fix (2026-10-04): the T-space
+/// store window is pinned to it so RM never rounds the map past its 2 MiB-aligned length into the
+/// firmware carve-out (`virt_mem_allocator_gm107.c:726-727`: `mapLength = RM_ALIGN_UP(pageOffset +
+/// size, pageSize)`); with a smaller physical granularity RM uses that instead (`:676-694`).
+pub const NVOS46_FLAGS_PAGE_SIZE_HUGE: u32 = 4 << 8;
+
 /// `NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN` — field `14:14`, value 1 (`ogkm-580: nvos.h:2066-2068`).
 /// With no FIXED address, RM places the mapping from the TOP of the space down — where a guest
 /// kernel's bottom-up allocations are least likely to land (`THE_TRANSLATED_PLANE.md` §24.2).

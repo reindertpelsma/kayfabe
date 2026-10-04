@@ -17,7 +17,7 @@ spec.loader.exec_module(gate_mod)
 
 STATUS = ("kf3: status mem[inval=3 walks=2/2 carve_gpu=0 carve_kernel=0 carve_cpu=0 fn70=1] "
           "rc[armed=1] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] "
-          "tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0]")
+          "tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0]")
 CLEAN = [
     "kf3: P1+P2 T-space ON: built at prewarm (KF3_TSPACE; docs/design/V3_P1P2_TSPACE.md)",
     "kf3: mem t=0.412s tspace space=0x10 fb=0x120000000+0x2efbe0000 ram=0x410000000+0x200000000 "
@@ -69,7 +69,8 @@ class TspaceLogGate(unittest.TestCase):
         self.assertIn("BORN-TRANSLATED", failed([ln for ln in CLEAN if "BORN Translated" not in ln]))
 
     def test_a_refusal_a_leak_a_carve_leaf_or_a_heap_leaf_is_caught(self):
-        for field in ("twin_refused=0", "tspace_refused=0", "slots_leaked=0", "carve_gpu=0", "heap_out=0"):
+        for field in ("twin_refused=0", "tspace_refused=0", "slots_leaked=0", "twin_freeing=0", "carve_gpu=0",
+                      "heap_out=0"):
             self.assertIn("COUNTERS", failed(subst(field, field[:-1] + "3")), field)
         self.assertIn("COUNTERS", failed(subst(" carve_gpu=0 carve_kernel=0 carve_cpu=0", "")))
 
@@ -130,7 +131,7 @@ class TspaceLogGate(unittest.TestCase):
         default = [
             "kf3: P1+P2 T-space OFF: today's mirrors and windows",
             STATUS.replace("strict=yes", "strict=no").replace(
-                " tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0]", ""),
+                " tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0]", ""),
         ]
         self.assertEqual(failed(default, default=True), set())
         self.assertIn("INCA-COUNTERS", failed(subst("counted=0", "counted=7", default), default=True))

@@ -1166,6 +1166,9 @@ pub struct ChanPlane {
     pub twin_refused: AtomicU64,
     /// ★ P1+P2 inc D: Translated births refused because the T-space was not built.
     pub tspace_refused: AtomicU64,
+    /// ★ Review fix 2026-10-04 (§4.2): Translated births refused in a space whose only user
+    /// channels are being freed (their host free not finished, or refused).
+    pub twin_freeing_refused: AtomicU64,
     /// ★ 2026-09-30: the doorbell fast path (`kf_chan::dbfast`, `V3_DOORBELL_IOEVENTFD.md`): every
     /// born channel — Passthrough AND Translated — registers its guest token; every free removes it
     /// before the twin goes.
@@ -1349,6 +1352,7 @@ impl ChanPlane {
             inca_counted: AtomicU64::new(0),
             twin_refused: AtomicU64::new(0),
             tspace_refused: AtomicU64::new(0),
+            twin_freeing_refused: AtomicU64::new(0),
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
             dbfast,
@@ -2701,6 +2705,13 @@ impl ChanPlane {
                     let _ = self.plane.free_channel(&mut c, t.idx);
                 }
             }
+            // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): in statement order the twin's user
+            // moves from live to FREEING; the act ends it only once host RM freed the channel.
+            for (_, t) in &twins {
+                if let Some(tw) = &t.twin {
+                    tw.user_freeing();
+                }
+            }
         }
         for ht in &translated {
             // Stop the pump before the act frees its twin (the slot lock is the worker's).
@@ -2736,8 +2747,19 @@ impl ChanPlane {
                     let fast = me.dbfast.deregister(t.idx);
                     let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
                     t.live.fetch_sub(1, Ordering::AcqRel);
+                    // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): the twin's user ends only if
+                    // host RM really freed the channel. A refused free leaves it counted — the
+                    // space can then never become a guest-KERNEL space, where privileged leaves
+                    // would be mirrored under a channel that may still run.
                     if let Some(tw) = &t.twin {
-                        tw.user_done(); // ★ P1+P2 inc D: User(n) -> User(n-1)
+                        if r.is_ok() {
+                            tw.user_released();
+                        } else {
+                            line.push(format!(
+                                "twin {:#x} stays counted (its host free was refused): its space never turns kernel",
+                                t.idx
+                            ));
+                        }
                     }
                     // The error context goes AFTER its channel (host RM refuses freeing a context
                     // DMA a live channel names as its error context).
@@ -3206,7 +3228,13 @@ impl ChanPlane {
                 ),
                 Ok(false) => {}
                 Err(e) => {
-                    self.twin_refused.fetch_add(1, Ordering::Relaxed);
+                    // ★ Review fix 2026-10-04: a space whose only user channels are being freed
+                    // (or whose host free was refused) is counted apart.
+                    if matches!(e, crate::twin::TwinRefusal::KernelWhileUsersFree(_)) {
+                        self.twin_freeing_refused.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        self.twin_refused.fetch_add(1, Ordering::Relaxed);
+                    }
                     return refuse(
                         NV_ERR_INVALID_STATE,
                         format!(
@@ -3543,14 +3571,16 @@ impl ChanPlane {
                 })
             }
             Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
-                let b = self
+                // ★ P1+P2 §2.6, review fix 2026-10-04: through the vIOMMU seam — the guest's DMA
+                // address to a guest-memfd range, then that range's host mapping — never a GPA
+                // lookup of a device address. (Equal to the block lookup it replaces for the one
+                // fd-backed guest RAM kf3 supports.)
+                let (mem, at) = self
                     .ram
-                    .block_for(base, 0x200)
-                    .ok_or_else(|| format!("USERD at guest-physical {base:#x}: no RAM block"))?;
-                Ok(UserdView::Ram {
-                    mem: b.mem,
-                    at: (base - b.gpa) as usize,
-                })
+                    .dma_to_file_range(base, 0x200)
+                    .and_then(|off| self.ram.at_file_offset(off, 0x200))
+                    .ok_or_else(|| format!("USERD at guest DMA address {base:#x}: no guest RAM"))?;
+                Ok(UserdView::Ram { mem, at })
             }
             other => Err(format!(
                 "USERD not declared as a physical descriptor ({other:?})"

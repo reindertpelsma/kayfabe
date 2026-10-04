@@ -598,3 +598,22 @@ fn a_tmode_ring_hands_out_unbound_work_and_splits() {
         "SET_OBJECT + launch, the split, the second launch retiring entry 0"
     );
 }
+
+/// ★ Review fix 2026-10-04: releasing a T-space ring unmaps EVERY one of its maps even when an
+/// earlier unmap is refused, and reports the first refusal.
+#[test]
+fn a_refused_unmap_does_not_leave_the_other_maps_live() {
+    use kf_chan::host::unmap_every;
+    let mut called = Vec::new();
+    let r = unmap_every(&[0x10, 0x20, 0x30], |m| {
+        called.push(m);
+        if m == 0x10 || m == 0x30 {
+            Err(m)
+        } else {
+            Ok(())
+        }
+    });
+    assert_eq!(called, vec![0x10, 0x20, 0x30], "every map unmapped");
+    assert_eq!(r, Err(0x10), "the first refusal");
+    assert_eq!(unmap_every::<u64>(&[1, 2], |_| Ok(())), Ok(()));
+}

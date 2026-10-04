@@ -90,6 +90,23 @@ impl RingLayout {
         }
     }
 }
+/// ★ Unmap every map in `maps` — all of them, whatever any one answers — and report the first
+/// refusal (review fix 2026-10-04: a short-circuit left the later maps live).
+///
+/// # Errors
+/// The first refusal.
+pub fn unmap_every<E>(maps: &[u64], mut unmap: impl FnMut(u64) -> Result<(), E>) -> Result<(), E> {
+    let mut first = Ok(());
+    for &m in maps {
+        if let Err(e) = unmap(m)
+            && first.is_ok()
+        {
+            first = Err(e);
+        }
+    }
+    first
+}
+
 /// Room every ordinary push leaves for one completion tail ([`fence_words`] is 8 words).
 const TAIL_BYTES: u64 = 64;
 /// GP entries we allow in flight — below the ring size, so a put never laps an unfinished get.
@@ -381,12 +398,10 @@ impl HostRing {
             h_memory: o.mem,
             p_linear_address: o.cookie,
         });
-        let unmap = o
-            .maps
-            .iter()
-            .map(|&m| rm.unmap(o.space, m, false))
-            .find(Result::is_err)
-            .unwrap_or(Ok(()));
+        // ★ Review fix 2026-10-04: EVERY map is unmapped (the T-space layout has three); the first
+        // refusal is reported — a refused pushbuffer unmap must not leave the GPFIFO and fence
+        // maps live.
+        let unmap = unmap_every(&o.maps, |m| rm.unmap(o.space, m, false));
         let free = rm.free(o.mem);
         Some(format!(
             "ring {:#x} released: cpu unmapped, view {} unmap {} free {}",

@@ -8,11 +8,16 @@
 //! statement, the deferred passthrough birth and a walk could interleave into a live USER channel
 //! in a space holding privileged guest leaves.
 //!
-//! Transitions are compare-and-swaps made on the STATEMENT path, in statement order:
+//! Transitions are compare-and-swaps made on the STATEMENT path, in statement order — and a free
+//! is FINISHED only when host RM has really freed the channel (review fix 2026-10-04):
 //! - a passthrough birth: `Unclassified | User(n)` → `User(n+1)`; REFUSED by name in `Kernel`;
-//! - a Translated birth: `Unclassified` → `Kernel` (and `Kernel` stays); REFUSED by name in
-//!   `User(n > 0)`;
-//! - a passthrough free: `User(n)` → `User(n-1)` (`User(0)` is `Unclassified`);
+//! - a Translated birth: `Unclassified` → `Kernel` (and `Kernel` stays); REFUSED by name while any
+//!   user channel is live OR still being freed — the two are told apart ([`TwinRefusal`]);
+//! - a passthrough free STATEMENT moves one user from live to FREEING ([`TwinState::user_freeing`]);
+//!   the deferred host free then ends it ([`TwinState::user_released`]) — but only when host RM
+//!   freed the channel: a refused free leaves it counted for the life of the space, so a space
+//!   whose user channel may still run can never become `Kernel`;
+//! - a birth whose deferred host birth failed gives its count back ([`TwinState::user_done`]);
 //! - `Kernel` is sticky until the space retires; a recycled space is classified afresh.
 //!
 //! The walker reads the word with ONE atomic load when it commits a privileged leaf and places it
@@ -25,8 +30,14 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// The `Kernel` bit; the low bits count live user channels.
+/// The `Kernel` bit.
 const KERNEL: u64 = 1 << 63;
+/// Live user channels: bits 31:0.
+const LIVE: u64 = 0xFFFF_FFFF;
+/// One user channel being freed (its free statement seen, host RM not done): bits 62:32.
+const FREEING_ONE: u64 = 1 << 32;
+/// The freeing count's field.
+const FREEING: u64 = !KERNEL & !LIVE;
 
 /// ★ The per-twin state word. See the module docs.
 #[derive(Debug, Default)]
@@ -39,6 +50,9 @@ pub enum TwinRefusal {
     UserInKernelSpace,
     /// A Translated birth in a space with this many live user channels.
     KernelInUserSpace(u64),
+    /// ★ A Translated birth in a space with no live user channel but this many whose host free
+    /// has not finished (or was refused) — still channels host RM may run.
+    KernelWhileUsersFree(u64),
 }
 
 impl TwinState {
@@ -59,7 +73,13 @@ impl TwinState {
     /// Live user channels counted.
     #[must_use]
     pub fn users(&self) -> u64 {
-        self.0.load(Ordering::Acquire) & !KERNEL
+        self.0.load(Ordering::Acquire) & LIVE
+    }
+
+    /// User channels whose free statement was seen and whose host free has not finished.
+    #[must_use]
+    pub fn freeing(&self) -> u64 {
+        (self.0.load(Ordering::Acquire) & FREEING) >> 32
     }
 
     /// ★ A passthrough birth (T-mode): `User(n)` → `User(n+1)`.
@@ -69,16 +89,33 @@ impl TwinState {
     pub fn try_user(&self) -> Result<(), TwinRefusal> {
         self.0
             .try_update(Ordering::AcqRel, Ordering::Acquire, |s| {
-                (s & KERNEL == 0).then_some(s + 1)
+                (s & KERNEL == 0 && s & LIVE < LIVE).then_some(s + 1)
             })
             .map(|_| ())
             .map_err(|_| TwinRefusal::UserInKernelSpace)
     }
 
-    /// A passthrough channel counted by [`TwinState::try_user`] is gone.
+    /// A passthrough channel counted by [`TwinState::try_user`] was never born (its deferred host
+    /// birth failed): the count is given back.
     pub fn user_done(&self) {
         let _ = self.0.try_update(Ordering::AcqRel, Ordering::Acquire, |s| {
-            (s & !KERNEL > 0).then(|| s - 1)
+            (s & LIVE > 0).then(|| s - 1)
+        });
+    }
+
+    /// ★ The FREE STATEMENT of a passthrough channel (statement order): one user moves from live
+    /// to freeing.
+    pub fn user_freeing(&self) {
+        let _ = self.0.try_update(Ordering::AcqRel, Ordering::Acquire, |s| {
+            (s & LIVE > 0 && s & FREEING < FREEING).then(|| s - 1 + FREEING_ONE)
+        });
+    }
+
+    /// ★ Host RM FREED a channel [`TwinState::user_freeing`] counted: it is gone. ⊘ Never called
+    /// for a refused free — that channel stays counted, and the space never becomes `Kernel`.
+    pub fn user_released(&self) {
+        let _ = self.0.try_update(Ordering::AcqRel, Ordering::Acquire, |s| {
+            (s & FREEING != 0).then(|| s - FREEING_ONE)
         });
     }
 
@@ -86,14 +123,21 @@ impl TwinState {
     /// this birth made the space kernel.
     ///
     /// # Errors
-    /// [`TwinRefusal::KernelInUserSpace`] while any user channel is live.
+    /// [`TwinRefusal::KernelInUserSpace`] while any user channel is live,
+    /// [`TwinRefusal::KernelWhileUsersFree`] while one is still being freed.
     pub fn try_kernel(&self) -> Result<bool, TwinRefusal> {
         let prev = self
             .0
             .try_update(Ordering::AcqRel, Ordering::Acquire, |s| {
                 (s & !KERNEL == 0).then_some(KERNEL)
             })
-            .map_err(|s| TwinRefusal::KernelInUserSpace(s & !KERNEL))?;
+            .map_err(|s| {
+                if s & LIVE > 0 {
+                    TwinRefusal::KernelInUserSpace(s & LIVE)
+                } else {
+                    TwinRefusal::KernelWhileUsersFree((s & FREEING) >> 32)
+                }
+            })?;
         Ok(prev & KERNEL == 0)
     }
 
@@ -115,8 +159,12 @@ mod tests {
         UserStatement,
         /// Its deferred birth fails: the count is given back.
         UserBirthFails,
-        /// A passthrough channel is freed.
+        /// A passthrough free statement (live -> freeing).
         UserFree,
+        /// Its deferred host free succeeds (freeing -> gone).
+        HostFreed,
+        /// Its deferred host free is refused (stays freeing).
+        HostFreeRefused,
         /// A Translated statement.
         KernelStatement,
         /// A walk that commits a privileged leaf (placed only if the state says `Kernel`).
@@ -133,6 +181,8 @@ mod tests {
             Op::UserStatement,
             Op::UserBirthFails,
             Op::UserFree,
+            Op::HostFreed,
+            Op::HostFreeRefused,
             Op::KernelStatement,
             Op::Walk,
         ];
@@ -151,6 +201,8 @@ mod tests {
             for s in &seqs {
                 let st = TwinState::default();
                 let mut users = 0u64; // live user channels, per the model
+                let mut freeing = 0u64; // freed at the statement, host free not finished
+                let mut refused = 0u64; // host free refused: the channel may still run
                 let mut privileged = false; // a privileged leaf is placed
                 for &o in s {
                     match o {
@@ -160,10 +212,29 @@ mod tests {
                                 users += 1;
                             }
                         }
-                        Op::UserBirthFails | Op::UserFree => {
+                        Op::UserBirthFails => {
                             if users > 0 {
                                 users -= 1;
                                 st.user_done();
+                            }
+                        }
+                        Op::UserFree => {
+                            if users > 0 {
+                                users -= 1;
+                                freeing += 1;
+                                st.user_freeing();
+                            }
+                        }
+                        Op::HostFreed => {
+                            if freeing > 0 {
+                                freeing -= 1;
+                                st.user_released();
+                            }
+                        }
+                        Op::HostFreeRefused => {
+                            if freeing > 0 {
+                                freeing -= 1;
+                                refused += 1; // never released
                             }
                         }
                         Op::KernelStatement => {
@@ -176,9 +247,10 @@ mod tests {
                         }
                     }
                     assert_eq!(st.users(), users, "{s:?}");
+                    assert_eq!(st.freeing(), freeing + refused, "{s:?}");
                     assert!(
-                        !(privileged && users > 0),
-                        "{s:?}: a live user channel in a space holding a privileged leaf"
+                        !(privileged && users + freeing + refused > 0),
+                        "{s:?}: a user channel host RM may still run, in a space holding a privileged leaf"
                     );
                     checked += 1;
                 }
@@ -204,8 +276,22 @@ mod tests {
             recycled.try_kernel(),
             Err(TwinRefusal::KernelInUserSpace(1))
         );
-        recycled.user_done();
+        // ★ A free is FINISHED only when host RM freed the channel (review fix 2026-10-04).
+        recycled.user_freeing();
+        assert_eq!(
+            recycled.try_kernel(),
+            Err(TwinRefusal::KernelWhileUsersFree(1)),
+            "the statement alone does not end the channel"
+        );
+        recycled.user_released();
         assert_eq!(recycled.try_kernel(), Ok(true));
+        let refused = TwinState::default();
+        assert_eq!(refused.try_user(), Ok(()));
+        refused.user_freeing(); // the host free is then refused: never released
+        assert_eq!(
+            refused.try_kernel(),
+            Err(TwinRefusal::KernelWhileUsersFree(1))
+        );
         assert!(TwinState::for_kernel(true).is_kernel());
         // The default path's flip.
         let legacy = TwinState::default();
