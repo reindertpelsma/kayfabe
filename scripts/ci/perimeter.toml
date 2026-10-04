@@ -1,0 +1,127 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+#
+# The memory-safety perimeter: the ONE list every perimeter gate reads
+# (docs/design/V3_SEC_PERIMETER.md §0; docs/OWNER_RULINGS.md §R).
+#
+# - Class U crates may contain `unsafe`, and only in `<crate>/src/**/*_unsafe.rs`.
+# - Class P crates are compiled with `-F unsafe_code`; their `src/**/*_unsafe.rs` files are
+#   perimeter by rule (b) (address producers). None today.
+# - Every other crate in the repository is compiled with `-F unsafe_code`.
+#
+# Adding a crate here is a design decision reviewed like a new `unsafe` block, never a manifest
+# edit. Changing any table below is a reviewed change too; the gates compare against it exactly.
+format = 1
+# Must equal rust-toolchain.toml. The location wrapper runs only this rustc.
+toolchain = "1.99.0"
+# The rustdoc JSON `format_version` the export generator understands (rustdoc 1.99.0).
+rustdoc_format = 61
+
+crates = [
+  { path = "crates/kf-linux-raw",      class = "U", kf3 = true },
+  { path = "crates/kf-qemu",           class = "U", kf3 = true },
+  { path = "crates/kf-cuda",           class = "U", kf3 = true },
+  { path = "crates/kayfabe-linux-raw", class = "U", role = "grader" },
+  { path = "crates/kayfabe-cuda",      class = "U", role = "grader" },
+  { path = "firmware/kf-gop",          class = "U", role = "guest-firmware" },
+]
+
+# Build scripts run nested cargo builds with a scrubbed environment, so the location wrapper
+# never sees what they compile (those packages are compiled again under the wrapper). Their
+# source is pinned here: any edit is a reviewed change to this table.
+[build_scripts]
+"crates/kf-gop-image/build.rs" = "81653679895bdbd504990cf8483fc504c404af151ab44f8b28f0e7d20fe8f10a"
+"crates/kf-gop-image/build/support.rs" = "5167391c8c928a671e8f349778f024a1a69a464d444230f927a3105f50e17d50"
+"crates/kayfabe-isolate-host/build.rs" = "a43d7f29e1ed6117ca9474ae2a35b57dd7f73023c8fcd57d9ad32ad3484d0aa3"
+"firmware/kf-gop/build.rs" = "305b5721e8e84930648fcdd7672cd6ec60ea4586488631cc75a06f6ca88e727e"
+
+# The C half of the perimeter (rule d).
+[c]
+files = ["qemu/hw/misc/kf3/kf3.c", "qemu/hw/misc/kf3/kf3.h", "qemu/hw/misc/kf3/kf3_gop.h"]
+
+# M3: the exact `[lints]` table of every class U manifest and every standalone package. Deleting
+# a line (for example `undocumented_unsafe_blocks`) fails the manifest gate.
+[manifest_lints."crates/kf-linux-raw"]
+rust = { unsafe_code = "allow", missing_docs = "warn" }
+clippy = { undocumented_unsafe_blocks = "deny" }
+[manifest_lints."crates/kf-qemu"]
+rust = { unsafe_code = "allow", missing_docs = "warn" }
+clippy = { undocumented_unsafe_blocks = "deny" }
+[manifest_lints."crates/kf-cuda"]
+rust = { unsafe_code = "allow", missing_docs = "warn" }
+clippy = { undocumented_unsafe_blocks = "deny" }
+[manifest_lints."crates/kayfabe-linux-raw"]
+rust = { unsafe_code = "allow", missing_docs = "warn" }
+clippy = { undocumented_unsafe_blocks = "deny" }
+[manifest_lints."crates/kayfabe-cuda"]
+rust = { unsafe_code = "allow", missing_docs = "warn" }
+clippy = { undocumented_unsafe_blocks = "deny" }
+[manifest_lints."firmware/kf-gop"]
+rust = { unsafe_op_in_unsafe_fn = "deny", missing_docs = "warn" }
+clippy = { undocumented_unsafe_blocks = "deny" }
+[manifest_lints."crates/kf-abi/gen"]
+rust = { unsafe_code = "forbid" }
+[manifest_lints."crates/kayfabe-abi/gen"]
+rust = { unsafe_code = "forbid" }
+
+# M6 (scripts/ci/dependencies.py): kf-qemu's normal+build closure. Every package in it is a
+# root-workspace member at crates/kf-*/Cargo.toml, or one of `external`.
+[kf3]
+root = "kf-qemu"
+# package -> exact enabled feature set
+external = { libc = ["default", "std"] }
+# Any other closure member has no enabled feature. `force-host-page-size` on kf-linux-raw must
+# never be enabled for kf3.
+member_features = { "kf-oprom" = ["alloc", "default"] }
+custom_build = ["kf-gop-image", "libc"]
+
+# M7: the whole lock, every dependency kind. A new external crate, a new edge from a member to
+# one, or a newly reachable proc-macro is a reviewed change here.
+[external]
+packages = [
+  "equivalent", "glob", "hashbrown", "indexmap", "itoa", "libc", "memchr", "proc-macro2",
+  "quote", "serde", "serde_core", "serde_derive", "serde_json", "serde_spanned", "syn",
+  "target-triple", "termcolor", "toml", "toml_datetime", "toml_parser", "toml_writer",
+  "trybuild", "unicode-ident", "winapi-util", "windows-link", "windows-sys", "winnow", "zmij",
+]
+edges = [
+  "kayfabe-device -> trybuild (dev)",
+  "kayfabe-isolate -> trybuild (dev)",
+  "kayfabe-isolate-host -> trybuild (dev)",
+  "kayfabe-linux-raw -> libc (normal)",
+  "kayfabe-linux-raw -> trybuild (dev)",
+  "kf-linux-raw -> libc (normal)",
+  "kf-linux-raw -> trybuild (dev)",
+]
+# Today reachable only through trybuild (a dev-dependency).
+proc_macros_reachable = ["serde_derive"]
+
+# E1c: predicates permitted on items in perimeter files (the export generator's matrix axes).
+[cfg]
+allowed = ['test', 'target_arch = "x86_64"', 'target_arch = "aarch64"', 'target_os = "linux"']
+
+# E3d: macros whose test does not run in CI (KVM is forced absent there).
+[skip_guards]
+macros = ["require_kvm"]
+
+# The frozen v2 model outside kf3 (scripts/ci/dependencies.py keeps it out of every kf crate).
+# Its source is hash-bound by `debt.py frozen`, which must pass in the same job.
+[[exempt]]
+path = "crates/kayfabe-doorbell"
+bound = "debt.py frozen"
+reason = "frozen v2 model outside kf3; 1 unsafe fn + 3 blocks, hash-bound"
+
+# Tracked packages that are not root-workspace members, and how the compiler location gate
+# compiles them (each entry of `runs` is one `cargo check` argument set).
+[[standalone]]
+path = "firmware/kf-gop"
+runs = [
+  "--lib --tests --target x86_64-unknown-linux-gnu",
+  "--bins --target x86_64-unknown-uefi",
+  "--bins --target x86_64-unknown-uefi --features debugcon",
+]
+[[standalone]]
+path = "crates/kf-abi/gen"
+runs = ["--all-targets"]
+[[standalone]]
+path = "crates/kayfabe-abi/gen"
+runs = ["--all-targets"]

@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+#
+# The memory-safety perimeter (docs/OWNER_RULINGS.md §R; docs/design/V3_SEC_PERIMETER.md).
+#
+# A file named `*_unsafe.rs` is the audit perimeter, and the one list of crates that may hold
+# `unsafe` is scripts/ci/perimeter.toml. This workflow is separate from ci.yml on purpose: the
+# lanes that edit ci.yml's regions see no conflict, and each job here can be made a required
+# check on its own.
+#
+# Jobs:
+# - perimeter: the tokenizer (G3: L0-L6, L10), manifests and the resolved graph (G4: M1-M9),
+#   each with its known-positive fixtures run first.
+#
+# ★ No job here sets a compiler-flag variable in an `env:` mapping: the manifest gate (M4)
+# reads this file too, and would fail it.
+
+name: perimeter
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  perimeter:
+    name: perimeter — tokenizer, manifests, metadata (OWNER_RULINGS §R)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml and scripts/ci/perimeter.toml
+      # ★ Known positives FIRST: a gate below that reports zero is evidence only because each of
+      # its rules fired on a fixture built to violate it, in this same job (audit S1-12).
+      - name: Gate self-tests (every rule fires on its fixture)
+        working-directory: scripts/ci
+        run: python3 -m unittest -v test_unsafe_gates test_dependencies
+      - name: "G3 tokenizer: unsafe only in class U *_unsafe.rs (L0-L6, L10)"
+        run: python3 scripts/ci/perimeter.py lex
+      - name: "G4 manifests: forbid inheritance, pinned lint tables, no flag injection (M1-M5)"
+        run: python3 scripts/ci/perimeter.py manifest
+      - name: "G4 resolved graph: exact external set, path packages, own sources (M7-M9)"
+        run: python3 scripts/ci/perimeter.py metadata
+      - name: "G4 kf3's closure: members, features, build scripts (M6)"
+        run: python3 scripts/ci/dependencies.py

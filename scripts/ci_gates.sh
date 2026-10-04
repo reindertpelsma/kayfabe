@@ -125,8 +125,18 @@ deferred_note=$(mktemp)
 steps_raw=$(python3 - "$want_all" 2>"$deferred_note" <<'PY'
 import sys, yaml, json
 want_all = sys.argv[1] == "1"
-job = yaml.safe_load(open(".github/workflows/ci.yml"))["jobs"]["stable"]
-heavy = ("cargo build", "cargo test", "cargo clippy", "cargo fmt", "bash scripts/ci/clippy.sh")
+import os
+# ★ 2026-10-04 (docs/design/V3_SEC_PERIMETER.md §0): the perimeter gates live in their own
+# workflow so the lanes that edit ci.yml see no conflict. Their jobs are extracted too, after
+# `stable`, so a local run covers them; a missing perimeter.yml is simply absent, not an error.
+steps_in = list(yaml.safe_load(open(".github/workflows/ci.yml"))["jobs"]["stable"].get("steps", []))
+if os.path.exists(".github/workflows/perimeter.yml"):
+    for pjob in yaml.safe_load(open(".github/workflows/perimeter.yml"))["jobs"].values():
+        steps_in.extend(pjob.get("steps", []))
+job = {"steps": steps_in}
+heavy = ("cargo build", "cargo test", "cargo clippy", "cargo fmt", "bash scripts/ci/clippy.sh",
+         "bash scripts/ci/compiler_location.sh", "bash scripts/ci/kf3c.sh",
+         "python3 scripts/ci/selftest_perimeter_cargo.py")
 # Steps that CONSUME an artifact a heavy step produces. Skipping the producer while
 # running the consumer reports a failure that says nothing about the tree — which is
 # exactly the kind of misleading red this script exists to prevent. Detected by the

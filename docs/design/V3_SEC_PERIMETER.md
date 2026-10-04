@@ -303,6 +303,7 @@ It fails closed on an unterminated literal or comment. It scans **`git ls-files 
 - **L2.** `*_unsafe.rs` files exist only under a class U or P crate's `src/`, at any depth.
 - **L3.** The identifier `unsafe_code` appears in code only as `#![forbid(unsafe_code)]` or `#![deny(unsafe_code)]` in a crate root, or as `#![allow(unsafe_code)]` as the first tokens of a `*_unsafe.rs` in a class U crate. Today there is one use: `firmware/kf-gop/src/lib.rs:15`.
 - **L4.** In class U and P crates' `src/`: no `#[path`, no `include!(` and no `#[macro_use]` on a module declaration. Each `*_unsafe.rs` is declared by exactly one out-of-line `mod <stem>;` in its parent, and contains no out-of-line `mod`. `include_bytes!` and `include_str!` are allowed. Today: 0 hits. The `#[path]` uses at `kf-gop-image/src/lib.rs:42` and in `kf-rm/tests/` are in forbid crates.
+  - ⊘ **Corrected at C1 (2026-10-04): 2 hits, not 0.** `firmware/kf-gop/src/bin/kf-gop-test/main.rs:24` and `:26` declare `mod efi_unsafe;` and `mod port_unsafe;` with `#[path]` naming `src/efi_unsafe.rs` and `src/port_unsafe.rs`: the test application reuses the driver's perimeter modules. L4 permits exactly that shape and nothing wider: a `#[path]` on an out-of-line `mod x_unsafe;` whose target is a perimeter file of the same crate with the stem `x_unsafe`. The module is still that perimeter file, and the compiler attributes its diagnostics to it, so G1's verdict is unchanged. Fixture: `test_F4_a_perimeter_file_reused_under_its_own_stem_is_allowed_and_a_rename_is_not`.
 - **L5.** No `#[macro_export]` macro in any class U crate has `unsafe` in its body, including macros defined by macros. Today the only class U export is `require_kvm!` (`kvm_gate.rs:111`, a safe file).
 - **L6.** No `safe` qualifier inside an extern block.
 - **L7.** Counts per kind feed §2.
@@ -350,6 +351,7 @@ New file `scripts/ci/perimeter.py` with subcommands `manifest` and `metadata`. M
 - **M7.** The set of external packages in the resolved graph (all dependency kinds) equals `[external].packages`. The member→external edges equal `[external].edges`. The proc-macros reachable from any member equal `proc_macros_reachable`. No `git` sources. This closes proc-macros reached through a re-export, and new crates with exported macros.
 - **M8.** Every package with `source == null` is a root member or listed in `standalone`. This closes non-member path packages (R1).
 - **M9.** Every target's `src_path` realpath lies under its own package directory (R4).
+- **M0** (added at C1, 2026-10-04). The toolchain pin agrees everywhere: `perimeter.toml` `toolchain`, `rust-toolchain.toml` `channel`, and every `toolchain:` line in `.github/workflows/*.yml`. The location wrapper execs only the pinned rustc, and the rustdoc JSON format is pinned to it, so a bump that misses one of them fails by name.
 - Also: every tracked `Cargo.toml` outside `archive/` and `third_party/` is a member or `standalone`; `build_scripts` hashes match.
 
 **Fixtures:**
