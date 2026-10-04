@@ -597,6 +597,93 @@ struct Held {
     dark: Dark,
 }
 
+impl Held {
+    /// ★ B5: a channel freed with `PRESERVE_HW` keeps `last` — the last armed composition a copy
+    /// composed whole ([`ScanState::last_plan`]) — on the monitor until a head is armed again. The
+    /// first preserving free that finds one decides; the others change nothing.
+    fn channel_freed(&mut self, preserve: bool, last: Option<&(Vec<LayerPlan>, (u32, u32))>) {
+        if preserve
+            && self.preserved.is_none()
+            && let Some(plan) = last
+        {
+            self.preserved = Some(plan.clone());
+        }
+    }
+}
+
+/// Window channels any family has (`chan_of`: channel numbers 1..=32).
+const MAX_WINDOWS: usize = 32;
+
+/// ★★ 2026-10-04 (B5 on box vmb, `V3_DISPLAY.md` §4.11.13): the ISO context DMA each window's ARMED
+/// state was resolved to — kept until that window latches again, because the display engine scans
+/// the surface its ARMED state latched, not whatever the instance-memory hash says on a later frame.
+///
+/// NVKMS depends on that: tearing down after X it restores the console, then frees the console
+/// surface — `FreeSurfaceEvoRm` → `nvCtxDmaFree`, and RM clears the context DMA's hash entry and
+/// object from display instance memory (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/context_dma.c:356-357`,
+/// `src/nvidia/src/kernel/gpu/disp/inst_mem/disp_inst_mem.c:861-930`) — with the window still armed
+/// on it (`skipUpdate`: no UPDATE), and only THEN frees the window and core channels with
+/// `PRESERVE_HW` *"to avoid shutting down the heads we just enabled"* (`nvFreeDevEvo`,
+/// `src/nvidia-modeset/src/nvkms-evo.c:9101-9112`; `nvkms-rm.c:2990-3017`). Resolved per copy, a
+/// refresh copy landing between that unbind and the frees (`[measured vmb, 8a682f1b and d4c3767b]`
+/// 346 ms to 2.2 s, a copy every 250 ms) refused the window — *"scanout REFUSED context DMA 0x10088
+/// on channel 7: NotBound"* — the copy was no longer whole, the preserving free found no plan, and
+/// the console went black for good.
+///
+/// ⊘ What is still refused: a window that LATCHES (any UPDATE, even one that keeps the handle)
+/// with a context DMA that does not resolve, and a handle its armed state never resolved. The first
+/// copy after a latch resolves afresh, and the flip's completions and GET wait for that copy
+/// (`ScanState::barrier`), so a guest that waits for its channel to idle before freeing the surface
+/// — NVKMS does (`nvEvoClearSurfaceUsage` → `nvRMSyncEvoChannel`, `nvkms-flip.c:1229-1263`) — is
+/// resolved before it unbinds, whatever the timing. Only the store is ever read through a kept
+/// resolution (`kf_disp::scanout::plan` refuses system memory), bounded again by the compose kernel.
+#[derive(Debug, Default)]
+struct LatchedDmas {
+    /// Per window: the armed state's `(client, handle, chn)` and what it resolved to.
+    by_window: [Option<(DmaKey, CtxDma)>; MAX_WINDOWS],
+}
+
+/// A window's context-DMA hash key as its ARMED state names it: `(client, handle, chn)`.
+type DmaKey = (u32, u32, u32);
+
+impl LatchedDmas {
+    /// Window `w`'s ARMED state changed (an UPDATE latched it) or its channel was allocated or
+    /// freed: its next copy resolves the context DMA again.
+    fn forget(&mut self, w: u32) {
+        if let Some(e) = self.by_window.get_mut(w as usize) {
+            *e = None;
+        }
+    }
+
+    /// The context DMA window `so` scans: the one its armed state resolved to since it last
+    /// latched, else `fresh()` — kept when it resolves. A refusal is never kept.
+    fn resolve(
+        &mut self,
+        so: &kf_disp::engine::Scanout,
+        fresh: impl FnOnce() -> Result<CtxDma, String>,
+    ) -> Result<CtxDma, String> {
+        let key = (so.client, so.handle, so.chn);
+        let slot = self.by_window.get_mut(so.window as usize);
+        if let Some(Some((k, dma))) = slot.as_deref()
+            && *k == key
+        {
+            return Ok(*dma);
+        }
+        let dma = fresh()?;
+        if let Some(s) = slot {
+            *s = Some((key, dma));
+        }
+        Ok(dma)
+    }
+}
+
+/// ★ The layers one scanout copy composes, and the windows it refused (by name).
+#[derive(Debug, Default)]
+struct Planned {
+    layers: Vec<LayerPlan>,
+    refused: Vec<String>,
+}
+
 /// ★ Whether a lit head scans a window — and, when none does, whether the monitor is black yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum Dark {
@@ -1314,6 +1401,8 @@ impl Device {
                 match s {
                     Statement::InstMem(im) => {
                         io.inst = Some(im);
+                        // a new instance memory voids every resolution made from the old one
+                        scan.latched = LatchedDmas::default();
                         // ⊘ The guest never zeroes instance memory (`disp_inst_mem.c:170-201`): a stale
                         // hash entry from an earlier driver life would resolve. Zeroed by the GPU.
                         if im.addr_space == 2
@@ -1345,6 +1434,9 @@ impl Device {
                         if pb.is_some_and(|p| p.addr_space != 1 && p.addr_space != 2) {
                             io.refuse(&format!("{kind:?} {instance}: pushbuffer address space is neither sysmem nor vidmem"));
                         }
+                        if kind == ChannelKind::Window {
+                            scan.latched.forget(instance);
+                        }
                         if let Some(chn) = engine.alloc(kind, instance, client, life, loc, offset) {
                             let base = dp.map.user_base(kind, instance);
                             store(base + dp.map.put, offset);
@@ -1365,11 +1457,9 @@ impl Device {
                         preserve,
                     } => {
                         // ★ B5: a preserving free keeps the last armed scanout on the monitor.
-                        if preserve
-                            && held.preserved.is_none()
-                            && let Some(plan) = scan.last_plan.clone()
-                        {
-                            held.preserved = Some(plan);
+                        held.channel_freed(preserve, scan.last_plan.as_ref());
+                        if kind == ChannelKind::Window {
+                            scan.latched.forget(instance);
                         }
                         engine.free(kind, instance);
                         self.display_chan_status(kind, instance, None);
@@ -1543,12 +1633,15 @@ impl Device {
                 Some(Shown::Armed(_) | Shown::Boot(..) | Shown::Preserved(..))
             );
             for e in effects {
-                if let Effect::Latched { window } = &e
-                    && let Some(Shown::Armed(c)) = &shown
-                    && c.layers.iter().any(|l| l.window == *window)
-                {
-                    scan.barrier = scan.started + 1;
-                    scan.want = true;
+                if let Effect::Latched { window } = &e {
+                    // ★ the window's ARMED state changed: its next copy resolves it afresh
+                    scan.latched.forget(*window);
+                    if let Some(Shown::Armed(c)) = &shown
+                        && c.layers.iter().any(|l| l.window == *window)
+                    {
+                        scan.barrier = scan.started + 1;
+                        scan.want = true;
+                    }
                 }
                 queue.push_back(Queued {
                     need: scan.barrier,
@@ -1872,7 +1965,13 @@ struct ScanState {
     bl_ok: Option<Result<(), String>>,
     /// ★ B5: the planned layers of the last ARMED composition copied whole (no window refused) —
     /// what a `PRESERVE_HW` free keeps on the monitor ([`Shown::Preserved`]).
+    /// ⊘ CORRECTED 2026-10-04 (B5 on vmb): a window whose context DMA the guest unbound while it
+    /// stayed armed was refused by the next refresh copy, and that copy set this to `None` — so the
+    /// preserving free that follows the unbind in NVKMS's teardown kept nothing. Windows now
+    /// resolve through [`LatchedDmas`]: such a copy is whole and this keeps the console.
     last_plan: Option<(Vec<LayerPlan>, (u32, u32))>,
+    /// ★ 2026-10-04: each window's context DMA as its ARMED state resolved it ([`LatchedDmas`]).
+    latched: LatchedDmas,
 }
 
 /// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, then a
@@ -2085,58 +2184,13 @@ impl ScanState {
             return;
         }
         // plan every window (each bounded by its own context DMA) before the GPU sees one
-        let mut layers = Vec::new();
-        let windows: &[kf_disp::engine::Scanout] = match shown {
-            Shown::Armed(comp) => &comp.layers,
-            Shown::Boot(layer, _) => {
-                layers.push(*layer);
-                &[]
-            }
-            // ⊘ planned (and bounded) when they were armed; the compose kernel bounds each read
-            // again against the store (`DisplayGpu::compose_layer`)
-            Shown::Preserved(kept, _) => {
-                layers.extend_from_slice(kept);
-                &[]
-            }
-            // no layer: `compose_begin` clears the frame to black
-            Shown::Blank(_) => &[],
-        };
-        let mut whole = true;
-        for so in windows {
-            let planned = io.resolve(so.client, so.handle, so.chn).and_then(|dma| {
-                kf_disp::scanout::plan_layer(so, &dma, &dp.formats, w, h).map_err(|r| r.0)
-            });
-            match planned {
-                Ok(Some(l)) => {
-                    if self.trace && (n <= 8 || n.is_multiple_of(50)) {
-                        eprintln!(
-                            "kf3: display: TRACE scanout copy {n}: window {} depth {} iso {:#x} -> src {:#x} {} pitch {} {}x{} at ({}, {}) flags {:#x} blend ({},{})/({},{})",
-                            so.window,
-                            so.depth,
-                            so.handle,
-                            l.src,
-                            if l.block_linear { "BL" } else { "pitch" },
-                            l.pitch,
-                            l.width,
-                            l.rows,
-                            l.ox,
-                            l.oy,
-                            l.flags,
-                            l.a_s,
-                            l.b_s,
-                            l.a_d,
-                            l.b_d
-                        );
-                    }
-                    layers.push(l);
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    whole = false;
-                    self.refuse(dp, &e);
-                }
-            }
+        let planned = self.plan(shown, &dp.formats, (w, h), n, |so| {
+            io.resolve(so.client, so.handle, so.chn)
+        });
+        for e in &planned.refused {
+            self.refuse(dp, e);
         }
+        let layers = &planned.layers;
         let slot = dp.console.free_slot();
         let need = w as usize * h as usize * 4;
         let Some(gpu) = io.gpu.as_mut() else {
@@ -2184,15 +2238,87 @@ impl ScanState {
                 if matches!(shown, Shown::Boot(..)) {
                     dp.counters.boot_frames.fetch_add(1, Ordering::Relaxed);
                 }
-                if matches!(shown, Shown::Armed(_)) {
-                    self.last_plan = whole.then(|| (layers.clone(), (w, h)));
-                }
+                self.copied(shown, &planned, (w, h));
                 self.inflight = Some((n, slot, (w, h), Instant::now()));
             }
             Err(e) => {
                 self.refuse(dp, &e);
                 self.done = n;
             }
+        }
+    }
+
+    /// ★ Plan the layers copy `n` composes for `shown`: the boot layer, the preserved layers, or
+    /// every window of an armed composition planned against the context DMA its ARMED state resolved
+    /// to ([`LatchedDmas`]; `resolve` reads the guest's instance memory). A window that cannot be
+    /// composed is refused by name and left out.
+    fn plan(
+        &mut self,
+        shown: &Shown,
+        formats: &ScanFormats,
+        (w, h): (u32, u32),
+        n: u64,
+        mut resolve: impl FnMut(&kf_disp::engine::Scanout) -> Result<CtxDma, String>,
+    ) -> Planned {
+        let mut p = Planned::default();
+        let windows: &[kf_disp::engine::Scanout] = match shown {
+            Shown::Armed(comp) => &comp.layers,
+            Shown::Boot(layer, _) => {
+                p.layers.push(*layer);
+                &[]
+            }
+            // ⊘ planned (and bounded) when they were armed; the compose kernel bounds each read
+            // again against the store (`DisplayGpu::compose_layer`)
+            Shown::Preserved(kept, _) => {
+                p.layers.extend_from_slice(kept);
+                &[]
+            }
+            // no layer: `compose_begin` clears the frame to black
+            Shown::Blank(_) => &[],
+        };
+        for so in windows {
+            let planned = self.latched.resolve(so, || resolve(so)).and_then(|dma| {
+                kf_disp::scanout::plan_layer(so, &dma, formats, w, h).map_err(|r| r.0)
+            });
+            match planned {
+                Ok(Some(l)) => {
+                    if self.trace && (n <= 8 || n.is_multiple_of(50)) {
+                        eprintln!(
+                            "kf3: display: TRACE scanout copy {n}: window {} depth {} iso {:#x} -> src {:#x} {} pitch {} {}x{} at ({}, {}) flags {:#x} blend ({},{})/({},{})",
+                            so.window,
+                            so.depth,
+                            so.handle,
+                            l.src,
+                            if l.block_linear { "BL" } else { "pitch" },
+                            l.pitch,
+                            l.width,
+                            l.rows,
+                            l.ox,
+                            l.oy,
+                            l.flags,
+                            l.a_s,
+                            l.b_s,
+                            l.a_d,
+                            l.b_d
+                        );
+                    }
+                    p.layers.push(l);
+                }
+                Ok(None) => {}
+                Err(e) => p.refused.push(e),
+            }
+        }
+        p
+    }
+
+    /// A copy of `shown` was queued: an armed composition composed whole is what a `PRESERVE_HW`
+    /// free keeps ([`Self::last_plan`]); one that refused a window keeps nothing.
+    fn copied(&mut self, shown: &Shown, planned: &Planned, size: (u32, u32)) {
+        if matches!(shown, Shown::Armed(_)) {
+            self.last_plan = planned
+                .refused
+                .is_empty()
+                .then(|| (planned.layers.clone(), size));
         }
     }
 }
@@ -2445,6 +2571,116 @@ mod tests {
                 "gop=off before any window ({dark:?})"
             );
         }
+    }
+
+    /// ★★ 2026-10-04 — B5 arm (a2) on box vmb, failed 5 of 5 runs with the candidate's and
+    /// master's code (`traces/v3_candidates/cand1_20261003/display/`). NVKMS's teardown after X
+    /// restores the console (window 6 latches context DMA `0x10088`), frees the console surface —
+    /// RM clears `0x10088` from display instance memory while window 6 stays armed on it — and only
+    /// then frees the window and core channels with `PRESERVE_HW` (`nvFreeDevEvo`,
+    /// `ogkm-580: src/nvidia-modeset/src/nvkms-evo.c:9101-9112`). A refresh copy in that gap (a copy
+    /// every 250 ms; the gap was 346 ms to 2.2 s on vmb, 153 ms on 54032077 where B5 passed) logged
+    /// *"scanout REFUSED context DMA 0x10088 on channel 7: NotBound"*, and the free then showed
+    /// *"BLACK … no head is lit"* instead of *"the PRESERVED scanout"*. The ordering, replayed:
+    /// latch → copy → unbind → copy → the preserving frees.
+    #[test]
+    fn a_context_dma_unbound_before_the_preserving_free_keeps_the_console() {
+        let formats =
+            ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xC67E);
+        let so = scanout_6();
+        let armed = Shown::Armed(Composition {
+            head: 3,
+            width: 1920,
+            height: 1080,
+            layers: vec![so],
+        });
+        // the console surface: store [0, 8 MiB), pitch
+        let console = CtxDma {
+            target: Target::Vidmem,
+            base: 0,
+            limit: 0x7F_FFFF,
+            block_linear: false,
+            writable: true,
+        };
+        let bound = |_: &kf_disp::engine::Scanout| Ok(console);
+        let unbound = |s: &kf_disp::engine::Scanout| {
+            Err(format!(
+                "context DMA {:#x} on channel {}: NotBound",
+                s.handle, s.chn
+            ))
+        };
+        let size = (1920, 1080);
+        let mut scan = ScanState::default();
+        let mut held = Held::default();
+        // 1. the restore: window 6 latches 0x10088, and the copy behind the flip resolves it
+        scan.latched.forget(so.window);
+        let latched = scan.plan(&armed, &formats, size, 1, bound);
+        assert!(latched.refused.is_empty(), "{:?}", latched.refused);
+        assert_eq!(latched.layers.len(), 1);
+        scan.copied(&armed, &latched, size);
+        held.scanned = Some(size);
+        // 2. NVKMS frees the console surface: 0x10088 leaves the hash table, window 6 stays armed
+        // 3. a refresh copy lands in the gap
+        let gap = scan.plan(&armed, &formats, size, 2, unbound);
+        assert!(
+            gap.refused.is_empty(),
+            "the ARMED window keeps scanning the surface it latched: {:?}",
+            gap.refused
+        );
+        assert_eq!(gap.layers, latched.layers);
+        scan.copied(&armed, &gap, size);
+        // 4. the frees with PRESERVE_HW — windows 0..=7, then the core
+        for _ in 0..9 {
+            held.channel_freed(true, scan.last_plan.as_ref());
+        }
+        held.dark = Dark::Unlit;
+        let boot = boot_scan();
+        assert_eq!(
+            choose_shown(None, Some(&boot), true, &held),
+            Some(Shown::Preserved(latched.layers.clone(), size)),
+            "the restored console stays on the monitor, as on bare metal"
+        );
+        // ⊘ the refusal stands for a window that LATCHES on a context DMA that does not resolve
+        scan.latched.forget(so.window);
+        let relatched = scan.plan(&armed, &formats, size, 3, unbound);
+        assert!(relatched.layers.is_empty());
+        assert_eq!(relatched.refused.len(), 1);
+        assert!(relatched.refused[0].contains("NotBound"));
+        scan.copied(&armed, &relatched, size);
+        assert_eq!(
+            scan.last_plan, None,
+            "a copy that refused a window is not kept"
+        );
+        // ... and is never kept: the next copy asks again, and resolves once the handle is bound
+        assert_eq!(
+            scan.plan(&armed, &formats, size, 4, unbound).refused.len(),
+            1
+        );
+        assert!(
+            scan.plan(&armed, &formats, size, 5, bound)
+                .refused
+                .is_empty()
+        );
+        // ... and for a handle the armed state never resolved (a window on another context DMA)
+        let other = Shown::Armed(Composition {
+            head: 3,
+            width: 1920,
+            height: 1080,
+            layers: vec![kf_disp::engine::Scanout {
+                handle: 0x1_0093,
+                ..so
+            }],
+        });
+        assert_eq!(
+            scan.plan(&other, &formats, size, 6, unbound).refused.len(),
+            1
+        );
+        // a channel's new life starts unresolved
+        scan.latched.forget(so.window);
+        assert_eq!(
+            scan.plan(&armed, &formats, size, 7, unbound).refused.len(),
+            1
+        );
     }
 
     /// ⊘ The review of `v3-gop-unload` (2026-10-03): a page flip (a new context DMA or offset in

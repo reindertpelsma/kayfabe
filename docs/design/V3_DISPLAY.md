@@ -858,6 +858,10 @@ must report IDLE when GET == PUT; the cursor `Free` register must read non-zero.
   (`0x20800a49`, `ctrl2080internal.h:872-895`). kayfabe resolves a handle by reading those entries (bounded
   to the declared instance-memory size) and maps the result — FB offset or guest physical address, base and
   limit, kind (pitch/block-linear) — onto the store or guest RAM, refusing anything outside them.
+  ⊘ *2026-10-04 (`v3-cand-1`, §4.11.13's ⊘⊘ block):* a window's ISO context DMA is resolved for its ARMED
+  state and kept until the window latches again — as the hardware scans what it latched — so a guest
+  that unbinds a context DMA while a window still scans it (NVKMS's teardown does) keeps its picture.
+  Notifiers and semaphores still resolve at the moment they are written.
 - Completion notifiers and semaphores are written by the worker into the same spans. A write is only ever
   made **after** the thing it reports has happened (§4.5).
 
@@ -1654,6 +1658,45 @@ and the Windows arm in the bench scripts (B10); SPDX headers on the existing kf3
 
 #### 4.11.13 B5 — when RM, NVKMS or nvidia-drm lets go (measured 2026-10-03, branch `v3-gop-unload`)
 
+⊘⊘ **CORRECTED 2026-10-04 (`v3-cand-1`) — the (a2) PASS below was TIMING, not design.** On box vmb (vast
+54049598) arm (a2) failed 5 of 5 runs, with the candidate's kf3 (`8a682f1b`) and with master's
+(`d4c3767b` = `789dee9f`'s code) alike (`traces/v3_candidates/cand1_20261003/display/`, `b5c1/` and
+`b5_repeats/`): kf3 logged *"scanout REFUSED context DMA 0x10088 on channel 7: NotBound"*, then at the
+`PRESERVE_HW` frees *"BLACK … (the scanout shown is lost: no head is lit)"* where 54032077 logged *"the
+PRESERVED scanout"*, and the text console stayed black.
+- **The guest's order — the same in the passing and the failing runs** (the run_h/b5h and b5c1 QEMU
+  logs from the restore to the core free: the same display events in the same order; b5c1 adds five GSP
+  `Free` RPCs before the refusal, and the refusal): NVKMS restores the console (window 6
+  latches context DMA `0x10088`), sends window 6 a flip to NULL with **no UPDATE** (*"chn 7 PUT 0xfa4: 0
+  effects"*), frees the console surface — RM clears `0x10088`'s hash entry and object from display
+  instance memory while window 6 stays armed on it — and only then frees the window and core channels
+  with `PRESERVE_HW`. That is `nvFreeDevEvo`'s order (`ogkm-580: src/nvidia-modeset/src/nvkms-evo.c:9101-9112`:
+  `nvEvoRestoreConsole`, `nvEvoUnregisterSurface(…, skipUpdate = TRUE, …)`, `nvFreeLutSurfacesEvo`,
+  `nvFreeCoreChannelEvo`; the surface's context DMA goes through `FreeSurfaceEvoRm` → `nvCtxDmaFree`,
+  `nvkms-surface.c:115-154`, `nvkms-evo3.c:8042-8048`, and RM's `_ctxdmaDestruct` →
+  `dispchnUnbindCtxFromAllChannels`, `src/nvidia/src/kernel/gpu/mem_mgr/context_dma.c:356-357`,
+  `src/nvidia/src/kernel/gpu/disp/inst_mem/disp_inst_mem.c:861-930`; the channels keep their heads,
+  *"to avoid shutting down the heads we just enabled"*, `nvkms-rm.c:2990-3017`).
+- **What a real display engine shows in that gap: the console.** NVKMS frees the surface's context DMA
+  first and preserves the heads after, and the restored console stays on bare metal (the table below,
+  arm (a2)) — the engine scans the surface its ARMED state latched, not a fresh hash lookup per frame.
+- **What kf3 did:** every scanout copy re-resolved each window's context DMA, and with nobody watching
+  the console a refresh copy runs every 250 ms. On 54032077 the restore-to-free gap was 153 ms (+149459 →
+  +149612 ms), no copy fell inside it; on vmb it was 346–383 ms (four repeats) and 2.2 s (b5c1), so one
+  did, refused window 6, and — no longer whole — cleared `ScanState::last_plan`, which is what item 3's
+  preserving free keeps. With nothing to keep, the core free went black.
+- **The fix** (`crates/kf-qemu/src/display.rs`, `LatchedDmas`): a window's context DMA is resolved for its
+  ARMED state and kept until that window latches again (any UPDATE, its channel's alloc or free, or new
+  instance memory). The first copy after a latch resolves afresh, and the flip's completions and GET wait
+  for that copy (§4.5's barrier), so a guest that idles its channel before freeing the surface — NVKMS
+  does (`nvEvoClearSurfaceUsage` → `nvRMSyncEvoChannel`, `nvkms-flip.c:1229-1263`) — is always resolved
+  before it unbinds. Refusals that stand: a window that LATCHES on a context DMA that does not resolve
+  (refused at every copy, never kept), and a handle its armed state never resolved. Test (GPU-free,
+  replays latch → copy → unbind → copy → frees):
+  `display::tests::a_context_dma_unbound_before_the_preserving_free_keeps_the_console`; with per-copy
+  resolution restored it fails, the free showing `Blank` instead of `Preserved`.
+- ⚠ Not yet re-run on a box at the time of writing: the candidate's hardware re-test is the evidence.
+
 **STATUS: REVIEWED AND RE-RUN, 2026-10-03 (late) — kf3 `06b307c4`, `traces/v3_display/gop_final_20261003/`.**
 The review's findings are folded below as ⊘ notes above what they correct. At `06b307c4` (box 54032077):
 B5 `DISPLAY_B5_VERDICT PASS arms=14 failed=0` — (c), (c2), (c3) new text shown; (a) Cinnamon Wayland with no
@@ -1706,7 +1749,11 @@ diagnosis at `e2c6e1d5` (instruments only), B5, B1 and B0 at `4a4b95f7`. CI gree
    freeze the last frame (the bare-metal answer: a monitor with no scanout shows black).
 3. **`PRESERVE_HW`** (`Shown::Preserved`): kf-disp claims `NV5070_CTRL_CMD_SET_RMFREE_FLAGS` (its layout
    derived by `tools/derive_display_layouts.sh`) and on a preserving free keeps the last armed
-   composition's planned layers on the monitor until a head is armed again. ⊘ *CORRECTED 2026-10-03
+   composition's planned layers on the monitor until a head is armed again. ⊘ *CORRECTED 2026-10-04
+   (`v3-cand-1`, the ⊘⊘ block at the top of this section):* "the last armed composition" was the last
+   copy that composed every window whole, and a refresh copy between NVKMS's unbind of the console's
+   context DMA and these frees refused the window and left nothing to keep; windows now keep the context
+   DMA their ARMED state latched (`LatchedDmas`). ⊘ *CORRECTED 2026-10-03
    (late, the review of `v3-gop-unload`):* it *"marks the channels of the next free"* with ONE model-wide
    flag cleared after every `GSP_RM_FREE` — so another client's flag marked this client's free, and a
    child's free (the guest's RM sends one RPC per object, children first) spent it before the channel's.
