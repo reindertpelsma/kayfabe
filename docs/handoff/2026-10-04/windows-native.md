@@ -1,8 +1,8 @@
 # Native Windows installer and GSP recorder
 
-**STATUS: RESEARCH, 2026-10-04 17:42 UTC. Native Windows cutover and recorder API
-tests passed. NVIDIA 580.88 works on the VFIO RTX 4070, but GSP reports N/A and
-no Windows GSP query has been captured.** The owner requested this lane after the candidate
+**STATUS: RESEARCH, 2026-10-04 17:52 UTC. Native Windows cutover and recorder API
+tests passed. NVIDIA 580.88 works on both GPUs. RTX4070 GSP firmware 580.65.05
+produced 4,535 validated records, but no target query pair yet.** The owner requested this lane after the candidate
 2 handoff. It does not change the product merge requirements or claim a Windows
 guest works through Kayfabe.
 
@@ -42,7 +42,9 @@ with the previously pinned Windows host key. It reports Windows 11 Enterprise
 LTSC Evaluation build 26100 and 105,636,900 KiB visible RAM. NVIDIA PCI functions
 10de:2504/228e are present. The Basic Display Adapter's pre-install problem 43
 does not describe NVIDIA driver operation. Root started the collector before
-resuming the first NVIDIA installation at 17:40 UTC; automatic reboots are held.
+resuming the first NVIDIA installation at 17:40 UTC; NVIDIA 580.88 completed at
+17:47:53 with zero installer failures and a healthy started GPU. The corrected
+helper requested a held reboot after setting the active GSP class key.
 Earlier nested installation
 completed, both cold boots passed all 25 checks, and an actual controller SSH
 login passed with pinned Windows host keys. The recorder bundle was staged and
@@ -65,11 +67,16 @@ The 6,242,498,048-byte image SHA256 is
 `1fe10630f73d36f01387b51ed73db86833a13f7a4fd867e854d83c6c6580aac7`.
 The cutover evidence is in `traces/windows_gsp/20261004-cutover`; full private
 controller manifests/keys are in `/data/vast-cutover-54159260-20261004`.
-No Windows GSP traffic has been captured. The selected MSVC recorder also passed
-its API/process smoke after native Windows boot. Its collector is now active in
-`C:\ProgramData\KayfabeGsp\captures\rtx3060-first-install`; the live run must be
-drained before any reboot. `/tmp/vw-native-ssh.py` with the controller's
-`capture-status.ps1` reads progress without competing for the exclusive device.
+The selected MSVC recorder passed its API/process smoke after native Windows
+boot. Its first pre-reboot capture in
+`C:\ProgramData\KayfabeGsp\captures\rtx3060-first-install` drained and exported
+at 17:49:53: zero records/tables, exit4, FIFO0. Native setup was deferred again.
+Root armed a new system-start/AtStartup capture in `rtx3060-gsp-policy-boot`
+using the same tested driver and issued the GSP-policy reboot at 17:51 UTC.
+The first empty export is still on the Windows disk; its controller SFTP copy
+timed out before connection and remains pending. The controller does retain its
+export hash/stats and successful drain transcript. Do not substitute Linux SSH
+commands or repeat the reboot blindly.
 
 Live failures were repaired and pushed: the unattended seed now uses USB optical
 media, `icacls` grants and ownership are separate calls, QGA uses delimited sync
@@ -86,8 +93,8 @@ was released. No private client key went to the rental. The harness's automatic
 checks leave `actual_authorized_key_login=false`; the actual controller login
 evidence is recorded separately.
 
-The native GPU task was deferred through boot and recorder staging, then resumed
-with the recorder active; automatic research reboots remain held.
+The native GPU task was resumed only with the recorder active. It is now deferred
+again after successful driver installation; research reboots remain held.
 The verified recorder is in `C:\ProgramData\KayfabeGsp`; the bundle SHA256 is
 `cfaa75950c2cd7ad226a01060cc91e8db816437e4bd9e178aef612eb198daaf0`.
 Its 46 files were verified after native boot (scripts bfa9263b, build 351d5b7f).
@@ -136,10 +143,10 @@ recovery refuses to rebind a live VFIO guest.
 Pinned-key SSH and the MSVC recorder install/API/restart/stop tests passed with
 the GPU assigned; a guest reboot activated test signing. NVIDIA 580.88 is now
 installed, nvlddmkm is running, PnP reports Started/problem 0 and nvidia-smi
-succeeds. Its full report nevertheless says **GSP Firmware Version: N/A**.
-Service and active display-class EnableGpuFirmware values are both 1, but the
-class value was written after setup auto-started the GPU. Their presence alone
-does not establish firmware activation.
+succeeds. Its first full report said **GSP Firmware Version: N/A** because the
+active display-class setting was written after setup auto-started the GPU.
+After a controlled Windows reboot, the same driver reports **580.65.05** and the
+observer attaches to a real GSP table. This verifies the policy timing fix.
 
 Two captures exported and independently decoded correctly but contain zero
 records/tables. The first attempt stopped before NVIDIA setup due to a lost
@@ -149,10 +156,19 @@ pinned-version verification. Actual Windows tests reject wrong driver pins and
 unrelated exit50, and cover exits 0/1/7/3010, fast children, timeout and concurrent
 stdout/stderr draining. CUDA has not been validated.
 
-The `windows_prepare` worker exclusively owns the running VFIO guest. It is
-preparing a controlled guest reboot with the tested observer set to system-start
-and a protected SYSTEM AtStartup collector, native installation deferred and
-reboots held. Collector `0797f6ae` adds the existing candidate count to stats;
+The controlled boot capture drained successfully at 17:45:47: **4,535 records**,
+one table, zero recorder FIFO drops, one observed sequence gap, zero remaining
+FIFO bytes. Full text export hash/checksum/framing validation passed. The first
+retained request/reply sequences are 2707/2710 with unknown prefixes; the missing
+early traffic prevents any claim that the target query was absent. No
+0x2080121f observations are in this capture. Complete compressed text data and
+provenance are in `tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/`.
+
+The observer was stopped, restored to demand-start, and its one-shot startup
+task disabled after export. The `windows_prepare` worker again exclusively owns
+the running VFIO guest for a bounded capture around a trusted NVIDIA-only D3D11
+probe being built by the recorder worker. Native installation remains deferred
+and reboots held; no new PnP restart is underway. Collector `0797f6ae` adds the existing candidate count to stats;
 it does not change the kernel driver or ABI. Its trusted MSVC executable SHA256
 is `9f1a69942dc52e9e8fded62069b1078a59db06fd2c522e1b1e90596d6fc97bb9`.
 Root exclusively owns the native RTX3060 lane; do not race either owner.
@@ -177,11 +193,11 @@ and dirty original workspace were preserved. Root free space increased to about
 1. Recorder kernel/API smoke passed. Use the verified MSVC build for capture;
    the revised Linux linker build has static validation but its exact runtime
    parity remains untested. Restart the observer before capture.
-2. Complete the controlled RTX4070 Windows reboot and check actual GSP firmware
-   mode before diagnosing queue discovery. Startup ordering is not guaranteed;
-   the observer remains passive and never claims a complete capture.
-3. On the native RTX3060, the corrected helper and candidate-stat collector
-   hashes were verified; first installation and collection are running. Monitor
+2. Capture explicit NVIDIA graphics initialization on the RTX4070 and look for
+   the target query. Its boot trace has an unknown early prefix, so a later
+   controlled device initialization may still be needed.
+3. Reconnect after the native RTX3060's GSP-policy reboot and inspect actual
+   firmware mode/boot capture. Save both exports before further work. Monitor
    the actual task/state before retrying anything. The collector owns the
    observer device exclusively; a competing --status open is expected to fail.
 4. Drain and save each trace
