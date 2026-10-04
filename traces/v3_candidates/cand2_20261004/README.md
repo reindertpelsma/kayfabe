@@ -195,3 +195,11 @@ The follow-up broker recipe also extends the stopped-broker rendering test to
 25 seconds, checking real FPS output while the exact broker PID stays stopped.
 The earlier six-second sample remains ungraded, rather than being counted as
 rendering progress merely because guest SSH responded.
+
+`refresh_hints/`: R6 completed at 12:10:36 UTC. Constant 1920x1080 receives
+30/50/60 Hz hints through broker `9f2fd00` and actual guest reads 29.938/49.990/60
+Hz preferred EDIDs with three distinct hashes. Three duplicate hints cause no
+additional relay event. `modetest -c` refreshes the connector cache before sysfs
+is read. **Scope:** authored EDID on userspace reprobe is verified; the collected
+udev monitor contains no DRM event, so automatic desktop mode switching is not
+claimed by this test. Input hints are synthetic, not a physical host rate change.

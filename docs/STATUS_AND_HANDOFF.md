@@ -24,8 +24,8 @@ async-60 checks are queued after apps on vmb. The 30 FPS cap is measured in
 X11 GLX and actual Vulkan FIFO present calls (29.976857 FPS); Wayland/KMS,
 cursor parity, reconnect and idle-copy checks pass. Known Xorg-start flip
 warnings match candidate 1. Broker-stop rendering needs a longer sample, and
-refresh-only R6 needs investigation: kayfabe authors the new EDID/posts hotplug,
-but the first sysfs-only probe sees cached bytes. See all results and limitations
+refresh-only R6 passes for 30/50/60 Hz on userspace connector reprobe. A sysfs-only
+read was stale; no automatic DRM uevent/desktop mode switch is claimed. See all results and limitations
 in `traces/v3_candidates/cand2_20261004/README.md`; no promotion verdict yet.
 New display box **54137212** belongs to this session (SSH `vdisp2`, root at
 142.170.96.180:61595). Driver 580.159.04, exact product binary, guest kernel

@@ -411,11 +411,14 @@ citation: ask whether its reason still holds before relying on it.
 - One device property (working name `display-max-fps`), defaulting to the virtual monitor's refresh.
   - **KMS flips** (Wayland, fullscreen X, nvidia-drm) are paced by kf-disp's own vblank timer, so the
     bound is exact there. The EDID's preferred mode follows the same rate.
-  - **X11 display-SW paths** (windowed GLX, X11 Vulkan FIFO): host RM owns the release timing, so the
-    bound needs a kayfabe lever. If clients use `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK` (`0x90720101`), it
-    reaches kayfabe and kf-disp services it at the configured rate. If they use software methods,
-    kayfabe paces only the channels that own a display-SW object, through the trapped-doorbell path.
-    That bound is per submission, not per frame, and is not promised until a box run shows it holds.
+  - **X11 display-SW paths** (windowed GLX, X11 Vulkan FIFO): ⊘ corrected after the required
+    D4 hardware run, 2026-10-04. On candidate 2 `9d82f259`, NVIDIA 580.159.04 on GA106,
+    these clients follow the guest driver's consumption of kayfabe's emulated vblank. Cap 30
+    gives GLX about 30 FPS (also with a forced 60 Hz raster) and actual Vulkan FIFO presents
+    at 29.976857 FPS; the IMMEDIATE control reaches 1557.8 FPS. Thus the clamp bounds the
+    measured vsync paths. The earlier proposal for extra notify/submission pacing levers is
+    superseded for these paths; this is not a promise to throttle non-vsync rendering.
+    Evidence: `traces/v3_candidates/cand2_20261004/{x1130,present_timing}/`.
   - The status line reports the achieved rate per path, so a bound that does not hold is visible.
 
 - **Design decisions (2026-10-04).** The design is reviewed and kept outside the repo until the
@@ -436,10 +439,9 @@ citation: ask whether its reason still holds before relying on it.
     - Nothing is copied while nobody watches. A `screendump` asks for a fresh copy on demand.
   - **D3 (adopted):** values above 75 Hz are refused. The virtual monitor is single-link DVI
     (165 MHz), so 1080p tops out near 71 Hz.
-  - **D4 (adopted, pending one box run):** on hardware no display-SW release was ever requested.
-    X11 vsync clients are paced by the guest's driver off kayfabe's own tick, so the clamp should
-    bound X11 too, replacing the two X11 levers above. The correction is folded into the text above
-    only after a run with `display-max-fps=30` and `x11-dispsw=on` shows it holds.
+  - **D4 (adopted, verified 2026-10-04):** the required `display-max-fps=30`, `x11-dispsw=on`
+    run supports pacing through the guest's vblank consumer. The correction is folded above;
+    §N's separate conditions for enabling x11-dispsw by default remain outstanding.
   - **D5 (adopted):** unset means a cap of 75 Hz, and the EDID stays byte-identical to today.
 
 ## N. X11 desktops: GF100_DISP_SW option A is the design (2026-10-03)

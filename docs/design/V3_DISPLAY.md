@@ -1,8 +1,11 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
 **STATUS: LIVE, 2026-10-04 — candidate 2 integration in progress:** master candidate 1 plus broker/maxfps,
-KF3 ABI 18. This union has not yet passed CI or hardware verification; the branch-specific
-results below do not establish that it has.
+KF3 ABI 18, product `9d82f259`. CI (including slow tests), the full GPU merge bar and
+71/71 host apps pass. Guest apps and the remaining display checks are in progress;
+this is not a promotion verdict. Current evidence and limitations are in
+`traces/v3_candidates/cand2_20261004/README.md`. The dated verification update in
+§8.16 supersedes its original unrun list.
 
 > **STATUS: VERIFIED, 2026-10-04 — candidate 1 at `0ac157b2`.** The B5 context-DMA
 > latch fix (`c1ca7945`) passed four full unload runs (14/14 arms each) on GA106
@@ -3580,7 +3583,35 @@ mode may be offered); `kfdisp_probe show <card> <hold> <flips> async [gap_ms]` f
 `DISPLAY_ASYNC=1` — 240 async flips back to back, then 60 with 50 ms between them. Both are compiled
 here only (`gcc -Wall -Werror`, the DRM and the `KFDISP_NO_DRM` builds); neither has run in a guest.
 
-**What has not run (all of it needs box `vdisp`, serially, each run with its revision):**
+**Candidate 2 verification update, 2026-10-04 (`9d82f259`, GA106, 580.159.04):**
+R0 confirms the unchanged unset EDID hash/cap. R1 gives 29.938 Hz EDID, pixel-exact
+KMS at 29.94 Hz, Wayland FIFO/IMMEDIATE/MAILBOX completion and zero cap overruns.
+R1b's forced 60 Hz raster is clamped to 33333333 ns with GLX about 30 FPS.
+D2 gives zero checks/copies while unwatched, fresh on-demand red/blue screenshots,
+and idle VNC + broker at 59.9 unchanged checks/s with zero copies. HMP's previously
+hung nested wait is fixed by completing refresh on QEMU's main AioContext; HMP/QMP
+both return fresh full frames. Broker GPU-copy and host/VNC cursor parity pass.
+
+**D4 is supported:** actual Vulkan FIFO returns measure **29.976857 FPS**, all 480
+calls observed with zero errors; IMMEDIATE is 1557.8 FPS. The original 15.5–17.5 s
+whole-process expectation below is superseded: variable loader/startup time made
+it unsuitable for measuring presentation rate. Windowed/fullscreen/Cinnamon GLX
+also hold about 30 FPS. X11 MAILBOX is unsupported on this stack; Wayland MAILBOX
+works. Three Xorg-start flip-event warnings match candidate 1's existing handoff
+limitation; the KMS flip workload has none. §M's correction is now folded in.
+
+R4 remains pending. R6 passes at 30/50/60 Hz with constant 1920x1080 through
+broker `9f2fd00` (refresh-only/reconnect fix), the real relay and actual guest.
+Three duplicate hints are suppressed. A userspace connector reprobe (`modetest -c`)
+refreshes the cached EDID; sysfs alone returned old bytes. The recorded udev monitor
+has no DRM event, so this does not claim automatic desktop switching or a physical
+host monitor transition; test-backend hints were used. Stopped-broker guest responsiveness/reconnect is verified,
+but its first short GLX sample did not grade rendering progress. Actual NVIDIA
+DDX import refusal was not provoked; six unsafe descriptors are now rejected
+before X and real GPU-copy passes. Evidence, failed probes and full caveats:
+`traces/v3_candidates/cand2_20261004/README.md`.
+
+**Historical unrun plan (superseded above where verified; remaining rows stay open):**
 - R0 default: run 10's recipe unchanged; the realize line's `EDID fnv1a64=c9dcbb394c28b1c7`;
   `fps[cap=75(unset) … clamped=0 … over=0]`.
 - R1 cap 30, KMS: `preferred=1920x1080@30`, the log's `period 33401904 ns`, `kfdisp_probe` flips at
