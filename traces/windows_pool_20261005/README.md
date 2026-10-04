@@ -32,3 +32,19 @@ through a controller tunnel. SSH private keys remain on the controller.
 See [the design and limits](../../docs/design/V3_WINDOWS_POOL_EXPERIMENT.md) and the native
 Linux preemption evidence on research branch `codex/windows-native-trace-2026-10-04`,
 commit `82fa680e`. Native mode-1 acceptance is a possible host route, not Windows support.
+
+## Baseline A: query experiment disabled
+
+At product revision `167fe2deaa06fd61f591bc6d2a7c43bd84da0caf`, the exact-driver guard
+passes and Windows boots. NVIDIA 580.88 with both firmware registry settings equal to 1
+reports Code 43; nvidia-smi exits 9. Kayfabe services 143 RPCs, refuses the pool query,
+then observes the teardown and `UnloadingGuestDriver`. No GPU channels are born.
+The guest shuts down cleanly and QEMU exits 0 (not a GPU success). Files are in `baseline-a/`.
+
+The host still refuses several GSS legacy controls whose wire layouts have not been
+measured on 595.91.07; these guards remain enabled in both experiment arms. A registry
+listing emitted an access-denied diagnostic for the class's protected `Properties` key;
+the actual NVIDIA class setting and device status were read successfully.
+
+Validation before this run: 1112 ABI/RM tests passed, zero failures. All 124091 compared
+cells for the 29 previous matrix tags were unchanged by remeasurement.
