@@ -574,7 +574,69 @@ pub fn cut_rows(
     cut
 }
 
-/// Undo a [`cut_rows`]: remove its remnants, put the original rows back.
+/// ★ P1+P2 inc A, count-only (review fix 2026-10-04): range unmaps whose row removal BEFORE inc A
+/// ([`legacy_cut_rows`]) differs from host RM's exact cut ([`cut_rows`]) — a row straddling an
+/// edge. Counted on the default path, which keeps that removal until box step 1 shows `0`
+/// (`inca[… rows_inexact=…]` on the status line).
+pub static ROWS_INEXACT: AtomicU64 = AtomicU64::new(0);
+
+/// The removal before inc A, kept on the count-only default path: only the rows whose START lies
+/// in `[va, end)`, each whole.
+pub fn legacy_cut_rows(
+    rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    end: u64,
+) -> RowCut {
+    let keys: Vec<u64> = rows.range(va..end).map(|(&k, _)| k).collect();
+    RowCut {
+        original: keys
+            .into_iter()
+            .filter_map(|k| rows.remove(&k).map(|v| (k, v)))
+            .collect(),
+        remnants: Vec::new(),
+    }
+}
+
+/// Whether [`legacy_cut_rows`] of `[va, end)` would differ from host RM's exact cut: a row
+/// straddles the start, or a row starting inside ends past the end.
+#[must_use]
+pub fn cut_is_inexact(
+    rows: &std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    end: u64,
+) -> bool {
+    if end <= va {
+        return false;
+    }
+    let straddles_start = rows
+        .range(..va)
+        .next_back()
+        .is_some_and(|(&k, &(len, _, _, _))| k.saturating_add(len) > va);
+    straddles_start
+        || rows
+            .range(va..end)
+            .any(|(&k, &(len, _, _, _))| k.saturating_add(len) > end)
+}
+
+/// ★ P1+P2 inc A (review fix 2026-10-04): the row removal a range unmap makes — EXACT when strict
+/// (`crate::tspace::inca_strict`), else the removal before inc A with a differing cut counted in
+/// [`ROWS_INEXACT`].
+pub fn cut_for(
+    strict: bool,
+    rows: &mut std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    end: u64,
+) -> RowCut {
+    if strict {
+        return cut_rows(rows, va, end);
+    }
+    if cut_is_inexact(rows, va, end) {
+        ROWS_INEXACT.fetch_add(1, Ordering::Relaxed);
+    }
+    legacy_cut_rows(rows, va, end)
+}
+
+/// Undo a [`cut_rows`] (or a [`legacy_cut_rows`]): remove its remnants, put the original rows back.
 pub fn uncut_rows(rows: &mut std::collections::BTreeMap<u64, PlacedRow>, cut: RowCut) {
     for k in cut.remnants {
         rows.remove(&k);
@@ -926,11 +988,12 @@ impl MapTarget for GpuMirror {
         }
         // ⊘ Forget the rows FIRST (as `unmap`); put them back if the host refuses, so the per-run
         // fallback still knows each run's length. ★ P1+P2 inc A: cut EXACTLY at both edges, as host
-        // RM does ([`cut_rows`]).
+        // RM does ([`cut_rows`]) — when strict; the default path keeps the removal before inc A and
+        // counts a cut that differs ([`cut_for`]).
         let cut = self
             .rows
             .write()
-            .map(|mut r| cut_rows(&mut r, va, end))
+            .map(|mut r| cut_for(crate::tspace::inca_strict(), &mut r, va, end))
             .unwrap_or_default();
         // ★★★ v3-cdp: the range takes any SKED-reflected placement of ours inside it down too.
         let sked_removed: Vec<(u64, u64)> = self
@@ -2546,6 +2609,32 @@ mod tests {
         let mut rows = base.clone();
         cut_rows(&mut rows, 0x2000, 0x2000);
         assert_eq!(rows, base);
+        // ★ Review fix 2026-10-04 — the count-only DEFAULT path keeps the removal before inc A,
+        // byte for byte: only rows STARTING in the range go, each whole — row 1 (straddling the
+        // start) stays at full length, rows 2 and 3 go whole (row 3's outside part included) —
+        // and the difference from host RM's cut is counted.
+        let mut rows = base.clone();
+        assert!(cut_is_inexact(&rows, 0x2000, 0x9000));
+        let before = ROWS_INEXACT.load(Ordering::Relaxed);
+        let cut = cut_for(false, &mut rows, 0x2000, 0x9000);
+        let legacy: BTreeMap<u64, PlacedRow> = [(0x1000, (0x3000, 0x10_0000, false, RO))]
+            .into_iter()
+            .collect();
+        assert_eq!(rows, legacy, "the removal before inc A");
+        assert!(ROWS_INEXACT.load(Ordering::Relaxed) > before, "counted");
+        uncut_rows(&mut rows, cut);
+        assert_eq!(rows, base, "a refused unmap restores the record");
+        // The strict arm is the exact cut.
+        let mut rows = base.clone();
+        cut_for(true, &mut rows, 0x2000, 0x9000);
+        assert_eq!(rows, want);
+        // A range no row straddles is exact either way, and not counted.
+        assert!(!cut_is_inexact(&base, 0x4000, 0x5000));
+        let mut a = base.clone();
+        let mut b = base.clone();
+        cut_for(false, &mut a, 0x4000, 0x5000);
+        cut_rows(&mut b, 0x4000, 0x5000);
+        assert_eq!(a, b);
     }
 
     /// `(ram, offset)` of the row covering `va` (the readers' lookup, over a plain map).

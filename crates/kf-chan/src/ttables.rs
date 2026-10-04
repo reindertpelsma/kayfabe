@@ -80,6 +80,15 @@ impl Tier {
     pub const fn has_fast_scrub(self) -> bool {
         matches!(self, Tier::C8b5 | Tier::C9b5 | Tier::Cab5)
     }
+
+    /// The family's host class defines the GP control opcode `SET_PB_SEGMENT_EXTENDED_BASE` (4):
+    /// Hopper's `NVC86F` and later (`ogkm-580: src/common/sdk/nvidia/inc/class/clc86f.h:184-189`;
+    /// `clc56f.h:280-284` names opcodes 0-3 only). Keyed on the CE class of the same family: kayfabe
+    /// presents the host family, so the host CE class and the host channel class move together.
+    #[must_use]
+    pub const fn has_pb_extended_base(self) -> bool {
+        matches!(self, Tier::C8b5 | Tier::C9b5 | Tier::Cab5)
+    }
 }
 
 /// A copy-engine method's disposition (subchannels 0-4, methods at or above `0x100`).

@@ -768,6 +768,21 @@ impl TranslatedChannel {
         self.ring.set_census(on);
     }
 
+    /// ★ P1+P2 inc A (review fix 2026-10-04): refuse — not only count — what inc A refuses by name
+    /// ([`crate::translated::CeState::strict`]); `extended_base`: the family defines
+    /// `SET_PB_SEGMENT_EXTENDED_BASE` (Hopper+). See [`TranslatedRing::set_strict`] and
+    /// [`TranslatedRing::set_extended_base`].
+    pub fn set_inca(&mut self, strict: bool, extended_base: bool) {
+        self.ring.set_strict(strict);
+        self.ring.set_extended_base(extended_base);
+    }
+
+    /// ★ P1+P2 inc A: what the by-name refusals would have refused while not strict.
+    #[must_use]
+    pub fn inca(&self) -> crate::translated::IncACounts {
+        self.ring.inca()
+    }
+
     /// ★ P1+P2 inc C: run the T-mode shadow against `windows` ([`TranslatedRing::set_shadow`]).
     pub fn set_shadow(&mut self, windows: Option<crate::tspace_unsafe::TWindows>) {
         self.ring.set_shadow(windows);

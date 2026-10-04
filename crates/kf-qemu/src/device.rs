@@ -2204,14 +2204,23 @@ impl Device {
             .collect();
         let (va, vr, vx) = self.rm.view_counts();
         let rc = format!(
-            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} wakes={} seen={} posted={}] heap_refused={}",
+            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} wakes={} seen={} posted={}] inca[strict={} counted={} heap_out={} rows_inexact={}]",
             va.saturating_sub(vr),
             self.chans.rc_armed.load(o),
             self.chans.rc_unarmed.load(o),
             self.chans.rc_wakes.load(o),
             self.chans.rc_seen.load(o),
             self.counters.rc_posted.load(o),
-            self.chans.heap_refused.load(o)
+            // ★ P1+P2 inc A (review fix 2026-10-04): count-only unless strict — box step 1 gates
+            // on `counted=0 heap_out=0 rows_inexact=0` per measured family.
+            if crate::tspace::inca_strict() {
+                "yes"
+            } else {
+                "no"
+            },
+            self.chans.inca_counted.load(o),
+            self.chans.heap_out.load(o),
+            crate::mem::ROWS_INEXACT.load(o)
         ) + &if crate::tspace::enabled() {
             // ★ P1+P2 inc D: the T-mode counters the REGRESSION A/B gates on (0 on stock drivers).
             format!(

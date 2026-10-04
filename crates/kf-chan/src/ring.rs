@@ -98,9 +98,10 @@ pub enum RingRefusal {
         /// The guest GP index.
         gp: u32,
     },
-    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.7): a control entry that is neither `NOP` nor
-    /// `SET_PB_SEGMENT_EXTENDED_BASE` — `ILLEGAL`, `GP_CRC`, `PB_CRC`, or an opcode no class names.
-    /// Refused by name; until 2026-10-04 every control entry was skipped as a NOP.
+    /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.7): a control entry that is neither `NOP` nor — on a
+    /// family that defines it (Hopper+) — `SET_PB_SEGMENT_EXTENDED_BASE`: `ILLEGAL`, `GP_CRC`,
+    /// `PB_CRC`, or an opcode the family's class does not name. Refused by name on a strict ring;
+    /// counted and skipped as a NOP (as before 2026-10-04) on the count-only default path.
     ControlEntry {
         /// The guest GP index.
         gp: u32,
@@ -130,6 +131,11 @@ pub struct TranslatedRing {
     /// `SET_PB_SEGMENT_EXTENDED_BASE` control entry (Hopper+ UVM writes one before a channel's
     /// first push, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:2536-2544`). Zero until then.
     pb_ext_base: u64,
+    /// ★ P1+P2 inc A (§3.7, review fix 2026-10-04): the family defines
+    /// `SET_PB_SEGMENT_EXTENDED_BASE` (Hopper and later, `clc86f.h:184-189`). Below Hopper opcode 4
+    /// names nothing and is handled as every other unnamed control opcode. `false` until the
+    /// device says otherwise ([`TranslatedRing::set_extended_base`]).
+    ext_base_defined: bool,
     /// ★ P1+P2 inc A (§3.6): the count-only census, when on.
     census: Option<Box<Census>>,
     /// ★ P1+P2 inc C (§3.6): the T-mode shadow and the windows it binds against, when on.
@@ -158,6 +164,7 @@ impl TranslatedRing {
             pending_retires: None,
             entries_fetched: 0,
             pb_ext_base: 0,
+            ext_base_defined: false,
             census: None,
             shadow: None,
             tmode: None,
@@ -174,7 +181,27 @@ impl TranslatedRing {
     pub fn new_tmode(gpfifo_va: u64, entries: u32, start: u32) -> TranslatedRing {
         let mut r = Self::new(gpfifo_va, entries, start);
         r.tmode = Some(Box::default());
+        // T-mode refuses by name whatever the default path counts (§3.7).
+        r.st.strict = true;
         r
+    }
+
+    /// ★ P1+P2 inc A (review fix 2026-10-04): refuse — not only count — what inc A refuses by name
+    /// ([`CeState::strict`]). A T-mode ring is always strict.
+    pub fn set_strict(&mut self, strict: bool) {
+        self.st.strict = strict || self.tmode.is_some();
+    }
+
+    /// ★ P1+P2 inc A (review fix 2026-10-04): the family defines `SET_PB_SEGMENT_EXTENDED_BASE`
+    /// (Hopper and later — `kf_chan::ttables::Tier::has_pb_extended_base` of the host CE class).
+    pub fn set_extended_base(&mut self, defined: bool) {
+        self.ext_base_defined = defined;
+    }
+
+    /// ★ P1+P2 inc A: what the by-name refusals would have refused while not strict.
+    #[must_use]
+    pub fn inca(&self) -> crate::translated::IncACounts {
+        self.st.inca
     }
 
     /// The next T-mode step from the unbound IR, if any: a split, or the run of items before one.
@@ -318,8 +345,13 @@ impl TranslatedRing {
                     match opcode {
                         // Nothing to run; still retires.
                         gp_opcode::NOP => continue,
-                        gp_opcode::SET_PB_SEGMENT_EXTENDED_BASE => {
+                        gp_opcode::SET_PB_SEGMENT_EXTENDED_BASE if self.ext_base_defined => {
                             self.pb_ext_base = gp_extended_base(operand);
+                            continue;
+                        }
+                        // ★ Count-only (not strict): skipped as a NOP, as before inc A.
+                        _ if !self.st.strict => {
+                            self.st.inca.control_entries += 1;
                             continue;
                         }
                         _ => return Err(RingRefusal::ControlEntry { gp, opcode }),
@@ -327,8 +359,13 @@ impl TranslatedRing {
                 }
             };
             // ★ §3.7: a segment entry carries address bits 39:0; 56:40 are the channel's
-            // extended base (zero before Hopper, and before the guest set one).
-            e.gpu_va |= self.pb_ext_base;
+            // extended base (zero before Hopper, and before the guest set one). Applied when
+            // strict; on the count-only default path counted, and read at 39:0 as before inc A.
+            if self.st.strict {
+                e.gpu_va |= self.pb_ext_base;
+            } else if self.pb_ext_base != 0 {
+                self.st.inca.ext_base_unapplied += 1;
+            }
             if e.sync_wait {
                 return Err(RingRefusal::SyncWait { gp });
             }

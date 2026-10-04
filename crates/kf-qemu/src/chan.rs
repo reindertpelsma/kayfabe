@@ -587,6 +587,9 @@ struct Slot {
     probe: ProbeRec,
     /// ★ P1+P2 inc D: the ring lives in the T-space (its slot goes back to the T-space's pool).
     tspace_ring: bool,
+    /// ★ P1+P2 inc A: the channel's count-only total already summed into
+    /// [`ChanPlane::inca_counted`].
+    inca_seen: u64,
 }
 
 /// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
@@ -932,9 +935,14 @@ pub struct TokenCount {
     pub last_put: Option<u32>,
 }
 
-/// ★ P1+P2 inc A / audit S1-43 — see [`ChanPlane::heap_bounds`]: the guest-named FB USERD (its
-/// declared size, at least `NV_RAMUSERD_CHAN_SIZE`) and FB error notifier (16 bytes) each inside
-/// one usable heap region of `layout`; sysmem ranges are bounded at their guest-RAM lookup.
+/// ★ P1+P2 inc A / audit S1-43: the FB ranges a channel allocation names — its USERD (the
+/// declared size, at least `NV_RAMUSERD_CHAN_SIZE`: the engine's footprint and what
+/// [`kf_chan::host::zero_userd`] may write) and its 16-byte error notifier — each inside ONE usable
+/// heap region of the layout we declared ([`kf_chip::bar0::FbLayout::in_usable_heap`]). ⊘ Never the
+/// firmware carve-out, where kayfabe's own BAR1/BAR2 roots live; before this check host RM bounded
+/// these offsets only by the store object. Sysmem ranges are bounded by the guest-RAM lookup at
+/// their use. ⚠ A preserved console region is reserved in the layout fn 72 produces, which this
+/// plane does not see: a USERD there is guest memory, accepted. Enforced through [`heap_gate`].
 fn heap_bounds(
     layout: &kf_chip::bar0::FbLayout,
     userd: Option<kf_arch::UserdMem>,
@@ -959,6 +967,32 @@ fn heap_bounds(
         ));
     }
     Ok(())
+}
+
+/// What [`heap_gate`] decided for one birth.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum HeapGate {
+    /// Every guest-named FB range lies inside the usable heap.
+    Inside,
+    /// Outside, and strict: refused by name before any host call.
+    Refuse(String),
+    /// Outside, count-only (the default path until box step 1): counted, named, born as before
+    /// inc A.
+    Count(String),
+}
+
+/// ★ P1+P2 inc A / S1-43 (review fix 2026-10-04): [`heap_bounds`], refusing only when `strict`.
+fn heap_gate(
+    strict: bool,
+    layout: &kf_chip::bar0::FbLayout,
+    userd: Option<kf_arch::UserdMem>,
+    notifier: Option<kf_arch::fault::ErrorNotifier>,
+) -> HeapGate {
+    match heap_bounds(layout, userd, notifier) {
+        Ok(()) => HeapGate::Inside,
+        Err(why) if strict => HeapGate::Refuse(why),
+        Err(why) => HeapGate::Count(why),
+    }
 }
 
 /// ★★★ The channel plane.
@@ -1059,9 +1093,14 @@ pub struct ChanPlane {
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
     pub rc_unarmed: AtomicU64,
-    /// ★ P1+P2 inc A / S1-43: births refused because a guest-named FB USERD or notifier lay
-    /// outside the usable heap ([`ChanPlane::heap_bounds`]).
-    pub heap_refused: AtomicU64,
+    /// ★ P1+P2 inc A / S1-43: births whose guest-named FB USERD or notifier lay outside the usable
+    /// heap ([`ChanPlane::heap_bounds`]) — refused when strict (`crate::tspace::inca_strict`),
+    /// counted and let through as before inc A otherwise.
+    pub heap_out: AtomicU64,
+    /// ★ P1+P2 inc A, count-only (review fix 2026-10-04): what Translated channels' by-name
+    /// refusals WOULD have refused while not strict (`kf_chan::translated::IncACounts`), summed
+    /// over every channel as it runs.
+    pub inca_counted: AtomicU64,
     /// ★ P1+P2 inc D (§4.2): births the per-twin state refused — a passthrough channel in a
     /// guest-KERNEL space, or a Translated one in a space with live user channels. 0 on stock
     /// drivers (UVM's channels live in UVM's own VA space).
@@ -1247,7 +1286,8 @@ impl ChanPlane {
             rc_queue: Mutex::new(Vec::new()),
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
-            heap_refused: AtomicU64::new(0),
+            heap_out: AtomicU64::new(0),
+            inca_counted: AtomicU64::new(0),
             twin_refused: AtomicU64::new(0),
             tspace_refused: AtomicU64::new(0),
             rc_seen: AtomicU64::new(0),
@@ -2823,10 +2863,27 @@ impl ChanPlane {
             );
         }
         // ★ P1+P2 inc A / S1-43: a guest-named FB USERD or error notifier inside the usable heap,
-        // checked here — before any host call — for both routes.
-        if let Err(why) = self.heap_bounds(&a) {
-            self.heap_refused.fetch_add(1, Ordering::Relaxed);
-            return refuse(NV_ERR_INVALID_ARGUMENT, why);
+        // checked here — before any host call — for both routes. ★ Review fix 2026-10-04: REFUSED
+        // only when strict (`crate::tspace::inca_strict`); on the default path COUNTED and named,
+        // and the birth proceeds exactly as before inc A (box step 1 must show `heap_out=0`).
+        match heap_gate(
+            crate::tspace::inca_strict(),
+            &self.layout,
+            a.userd,
+            a.error_notifier,
+        ) {
+            HeapGate::Inside => {}
+            HeapGate::Refuse(why) => {
+                self.heap_out.fetch_add(1, Ordering::Relaxed);
+                return refuse(NV_ERR_INVALID_ARGUMENT, why);
+            }
+            HeapGate::Count(why) => {
+                self.heap_out.fetch_add(1, Ordering::Relaxed);
+                eprintln!(
+                    "kf3: chan {:#x}:{:#x} HEAP-OUT (count-only, inc A): {why}",
+                    a.client, a.handle
+                );
+            }
         }
         let Some(vas) = a.vaspace else {
             return refuse(
@@ -3169,6 +3226,13 @@ impl ChanPlane {
                 };
                 chan.set_probe(completion_probe_ms().is_some());
                 chan.set_census(tcensus_on());
+                // ★ P1+P2 inc A (review fix 2026-10-04): count-only on the default path, refusing
+                // when strict; the GP extended base exists from Hopper's `NVC86F` on
+                // (`clc86f.h:184-189`) — kayfabe presents the host family.
+                chan.set_inca(
+                    crate::tspace::inca_strict(),
+                    matches!(me.family, kf_chip::Family::Hopper | kf_chip::Family::Blackwell),
+                );
                 if tshadow_on() && ts.is_none() {
                     // ★ P1+P2 inc C: the T-mode shadow binds against windows shaped like the
                     // T-space's (the store window ends at the carve-out); their bases are nominal.
@@ -3210,6 +3274,7 @@ impl ChanPlane {
                     disabled: false,
                     probe: ProbeRec::default(),
                     tspace_ring: ts.is_some(),
+                    inca_seen: 0,
                 };
                 if let Ok(mut s) = me.slots.write() {
                     s.insert(ht, Arc::new(Mutex::new(slot)));
@@ -3235,18 +3300,6 @@ impl ChanPlane {
                 ))
             }),
         )
-    }
-
-    /// ★ P1+P2 inc A / audit S1-43: the FB ranges a channel allocation names — its USERD (the
-    /// declared size, at least `NV_RAMUSERD_CHAN_SIZE`: the engine's footprint and what
-    /// [`kf_chan::host::zero_userd`] may write) and its 16-byte error notifier — each inside ONE
-    /// usable heap region of the layout we declared ([`kf_chip::bar0::FbLayout::in_usable_heap`]).
-    /// ⊘ Never the firmware carve-out, where kayfabe's own BAR1/BAR2 roots live; before this check
-    /// host RM bounded these offsets only by the store object. Sysmem ranges are bounded by the
-    /// guest-RAM lookup at their use. ⚠ A preserved console region is reserved in the layout fn 72
-    /// produces, which this plane does not see: a USERD there is guest memory, accepted.
-    fn heap_bounds(&self, a: &ChannelAlloc) -> Result<(), String> {
-        heap_bounds(&self.layout, a.userd, a.error_notifier)
     }
 
     /// ★ P5c (act thread): the twin's host error context over the guest's notifier record, its
@@ -3573,7 +3626,7 @@ impl ChanPlane {
             );
         }
         eprintln!(
-            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?}",
+            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?} inca=[{}]",
             g.guest_idx,
             g.chan.counts().0,
             g.chan.counts().1,
@@ -3583,7 +3636,8 @@ impl ChanPlane {
             g.last_put,
             g.chan.last_gp_get(),
             g.privilege,
-            g.dead
+            g.dead,
+            g.chan.inca().line()
         );
     }
 
@@ -3666,6 +3720,13 @@ impl ChanPlane {
             is_any_ce_class,
             &win,
         );
+        // ★ P1+P2 inc A: what this pump counted (count-only), summed for the status line.
+        let inca = g.chan.inca().total();
+        if inca > g.inca_seen {
+            self.inca_counted
+                .fetch_add(inca - g.inca_seen, Ordering::Relaxed);
+            g.inca_seen = inca;
+        }
         if probe {
             for f in g.chan.take_completed() {
                 let reads: Vec<ReleaseRead> = f
@@ -4054,6 +4115,33 @@ mod heap_tests {
             ),
             Ok(())
         );
+    }
+
+    /// ★ Review fix 2026-10-04 (`V3_P1P2_TSPACE.md` §8): the S1-43 bound REFUSES only when strict
+    /// (`KF3_INCA_REFUSE=1` / `KF3_TSPACE=1`); on the default path the same birth is COUNTED and
+    /// proceeds as before inc A; a birth inside the heap is neither.
+    #[test]
+    fn the_heap_bound_refuses_only_when_strict() {
+        use super::{HeapGate, heap_gate};
+        let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
+        let out = Some(UserdMem::Framebuffer {
+            base: l.carve(),
+            size: 0x200,
+        });
+        let inside = Some(UserdMem::Framebuffer {
+            base: 0x10_0000,
+            size: 0x200,
+        });
+        assert!(matches!(
+            heap_gate(true, &l, out, None),
+            HeapGate::Refuse(_)
+        ));
+        assert!(matches!(
+            heap_gate(false, &l, out, None),
+            HeapGate::Count(_)
+        ));
+        assert_eq!(heap_gate(true, &l, inside, None), HeapGate::Inside);
+        assert_eq!(heap_gate(false, &l, inside, None), HeapGate::Inside);
     }
 }
 

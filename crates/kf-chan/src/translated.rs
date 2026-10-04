@@ -24,10 +24,12 @@
 //!    else (Hopper's `MMU_OPERATION`, an unnamed operation) is refused by name — never consumed.
 //!
 //! Everything else — semaphores, virtual operands, host methods — is forwarded unchanged, except
-//! what is refused by name: ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.2, §3.7) — the
-//! methods of [`REFUSED_METHODS`] on every tier, and every `SubDeviceMask` header (pushed raw until
-//! 2026-10-04). ⚠ S1-23 stays open until the T-mode rewriter authors every word (§3): until then a
-//! guest-kernel virtual operand or semaphore reaches the engine as written.
+//! what is refused by name WHEN [`CeState::strict`]: ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md`
+//! §3.2, §3.7) — the methods of [`REFUSED_METHODS`] on every tier, and every `SubDeviceMask`
+//! header. ⊘ Strict is OFF on the default path until box step 1 (review fix 2026-10-04): there each
+//! is COUNTED ([`IncACounts`]) and handled exactly as before inc A. ⚠ S1-23 stays open until the
+//! T-mode rewriter ([`crate::tmode`]) authors every word (§3): until then a guest-kernel virtual
+//! operand or semaphore reaches the engine as written.
 //!
 //! ⊘ Pure: no GPU, no isolate, no table. The output is NORMALISED to one method per header,
 //! which is what makes insertion before a launch trivial; it is equivalent method-for-method.
@@ -157,6 +159,53 @@ pub struct CeState {
     /// ★ v3-initrace: the data-moving launches since the last take, as the guest wrote them
     /// (before our rewrite) — the completion probe reads their bytes back.
     pub launches: PhysLaunches,
+    /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §8, review fix 2026-10-04): REFUSE what
+    /// inc A refuses by name — a [`REFUSED_METHODS`] write, a `SubDeviceMask` header, a GP control
+    /// entry other than `NOP` and a family's extended base. ⊘ `false` (the default path until box
+    /// step 1 shows the counts at 0 on each measured family): each is COUNTED in [`CeState::inca`]
+    /// and handled exactly as before inc A — forwarded, pushed raw, skipped. The device sets it from
+    /// `KF3_INCA_REFUSE=1` or `KF3_TSPACE=1` (T-mode refuses them in its own decoder regardless).
+    pub strict: bool,
+    /// ★ P1+P2 inc A, the count-only arm: what [`CeState::strict`] would have refused.
+    pub inca: IncACounts,
+}
+
+/// ★ P1+P2 inc A, count-only (`docs/design/V3_P1P2_TSPACE.md` §8): per channel, what the by-name
+/// refusals WOULD have refused while [`CeState::strict`] is off — each one handled exactly as before
+/// inc A. Printed on the channel's `RETIRED` line and summed on the status line (`inca[…]`); box
+/// step 1 must show every field 0 on each measured family before strict becomes the default.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct IncACounts {
+    /// Writes of a [`REFUSED_METHODS`] method — forwarded as written, as before.
+    pub refused_methods: u64,
+    /// `SubDeviceMask` headers — pushed raw, as before.
+    pub subdevice_masks: u64,
+    /// GP control entries other than `NOP` (and, on a family that defines it,
+    /// `SET_PB_SEGMENT_EXTENDED_BASE`) — skipped as a `NOP`, as before.
+    pub control_entries: u64,
+    /// Segment entries a non-zero `SET_PB_SEGMENT_EXTENDED_BASE` would have rebased — read at
+    /// address bits 39:0, as before.
+    pub ext_base_unapplied: u64,
+}
+
+impl IncACounts {
+    /// Every count, summed.
+    #[must_use]
+    pub const fn total(&self) -> u64 {
+        self.refused_methods + self.subdevice_masks + self.control_entries + self.ext_base_unapplied
+    }
+
+    /// `refused_methods=… subdevice_masks=… control_entries=… ext_base_unapplied=…`.
+    #[must_use]
+    pub fn line(&self) -> String {
+        format!(
+            "refused_methods={} subdevice_masks={} control_entries={} ext_base_unapplied={}",
+            self.refused_methods,
+            self.subdevice_masks,
+            self.control_entries,
+            self.ext_base_unapplied
+        )
+    }
 }
 
 /// ★ v3-initrace (diagnostic record only): one side of a launch, as the guest named it.
@@ -704,8 +753,14 @@ pub fn rewrite_counted(
             MethodForm::EndPbSegment => break,
             MethodForm::Immediate => (vec![(h.method, h.immd)], 0),
             MethodForm::SubDeviceMask => {
-                // ★ P1+P2 inc A (§3.7): refused, never forwarded raw.
-                return Err(Refusal::SubDeviceMask { at: i - 1 });
+                // ★ P1+P2 inc A (§3.7): refused when strict; counted and pushed raw (as before
+                // inc A) on the count-only default path.
+                if st.strict {
+                    return Err(Refusal::SubDeviceMask { at: i - 1 });
+                }
+                st.inca.subdevice_masks += 1;
+                cur.push(hw);
+                continue;
             }
             MethodForm::Incrementing | MethodForm::Legacy => {
                 let n = h.arg_words;
@@ -845,13 +900,17 @@ fn one_write(
         };
     }
     // ★ P1+P2 inc A (§3.2): refused by name on every tier — a host method on any subchannel, a
-    // copy-engine method on a hardware one (an unbound software subchannel refuses below).
+    // copy-engine method on a hardware one (an unbound software subchannel refuses below) — when
+    // strict; on the count-only default path counted, then handled exactly as before inc A.
     if let Some(name) = refused_method(m, sub <= 4) {
-        return Err(Refusal::RefusedMethod {
-            subch: sub,
-            method: m,
-            name,
-        });
+        if st.strict {
+            return Err(Refusal::RefusedMethod {
+                subch: sub,
+                method: m,
+                name,
+            });
+        }
+        st.inca.refused_methods += 1;
     }
     // `MEM_OP_A..C` are operands of the `MEM_OP_D` that follows ("MEM_OP_D MUST be preceded by
     // MEM_OPs A-C", `clc56f.h`): held here, emitted with the D when its operation is forwarded.

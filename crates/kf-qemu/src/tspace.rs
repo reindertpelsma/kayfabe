@@ -36,6 +36,19 @@ pub fn enabled() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_TSPACE").is_some_and(|v| v != "0"))
 }
 
+/// ★ P1+P2 inc A (review fix 2026-10-04, `V3_P1P2_TSPACE.md` §8) — **refuse what inc A refuses by
+/// name**: a `REFUSED_METHODS` write, a `SubDeviceMask` header, an unnamed GP control entry, a
+/// guest FB USERD/notifier outside the usable heap; and cut the placement rows exactly at both
+/// edges of a range unmap. ON with `KF3_INCA_REFUSE=1`, and always with `KF3_TSPACE=1`. ⊘ OFF (the
+/// default) each is COUNTED and handled exactly as before inc A, so the default path stays
+/// byte-for-byte today's until box step 1 shows the counts at 0 on each measured family (an owner
+/// decision then flips the default). Read once.
+#[must_use]
+pub fn inca_strict() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| enabled() || std::env::var_os("KF3_INCA_REFUSE").is_some_and(|v| v != "0"))
+}
+
 /// The host verbs a T-space build needs — [`HostRm`] in kf3, a recorder in the tests.
 pub trait TSpaceHost {
     /// A VA space with no guest-range reservations ([`HostRm::alloc_vaspace_bare`]).

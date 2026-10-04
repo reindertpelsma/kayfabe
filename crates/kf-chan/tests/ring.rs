@@ -296,12 +296,15 @@ fn control(opcode: u32, operand: u32) -> u64 {
     (u64::from(opcode) << 32) | u64::from(operand)
 }
 
-/// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.7, §7 test 15): Hopper's
-/// `SET_PB_SEGMENT_EXTENDED_BASE` sets address bits 56:40 of every LATER segment entry.
+/// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.7, §7 test 15): on a STRICT ring of a family that
+/// defines it (Hopper+), `SET_PB_SEGMENT_EXTENDED_BASE` sets address bits 56:40 of every later
+/// segment. ★ Review fix 2026-10-04: on the count-only DEFAULT path the base is recorded, NOT
+/// applied (the segment is read at 39:0, as before inc A) and the entry it would have rebased is
+/// counted; below Hopper opcode 4 names nothing — refused on a strict ring, counted and skipped on
+/// the default path.
 #[test]
 fn extended_base_applies_to_later_entries() {
     let base: u64 = 0x1_23 << 40;
-    let mut mem = Mem::default();
     let launch = |v: u32| {
         let mut a = m(4, 0, &[CE_CLASS]);
         a.extend(m(4, ce::LAUNCH_DMA, &[v]));
@@ -309,21 +312,60 @@ fn extended_base_applies_to_later_entries() {
     };
     // The same low 40 bits hold DIFFERENT words with and without the base, so the read says
     // which address the ring used.
-    mem.words(PB, &launch(0x111));
-    mem.words(base | PB, &launch(0x222));
     let seg = gp_entry(PB, 4 * launch(0).len() as u64).unwrap();
-    mem.entry(0, control(4, u32::try_from((base >> 40) << 8).unwrap()));
-    mem.entry(1, seg);
-    let mut r = TranslatedRing::new(GPFIFO, 8, 0);
-    let words = submitted(&mut r, 2, &mut mem);
+    let ext = control(4, u32::try_from((base >> 40) << 8).unwrap());
+    let mem = || {
+        let mut mem = Mem::default();
+        mem.words(PB, &launch(0x111));
+        mem.words(base | PB, &launch(0x222));
+        mem.entry(0, ext);
+        mem.entry(1, seg);
+        mem
+    };
+    let ring = |strict: bool, hopper: bool| {
+        let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        r.set_strict(strict);
+        r.set_extended_base(hopper);
+        r
+    };
+    // Strict, Hopper+: applied.
+    let mut r = ring(true, true);
+    let words = submitted(&mut r, 2, &mut mem());
     assert_eq!(r.pb_extended_base(), base);
     assert!(words.contains(&0x222), "read at the 57-bit VA: {words:x?}");
     assert!(!words.contains(&0x111));
+    assert_eq!(r.inca().total(), 0);
+    // Count-only, Hopper+: recorded, NOT applied — today's read — and counted.
+    let mut r = ring(false, true);
+    let words = submitted(&mut r, 2, &mut mem());
+    assert!(
+        words.contains(&0x111) && !words.contains(&0x222),
+        "{words:x?}"
+    );
+    assert_eq!(r.inca().ext_base_unapplied, 1);
+    assert_eq!(r.inca().control_entries, 0);
+    // Below Hopper, strict: opcode 4 is an unnamed control opcode — refused by name.
+    let mut r = ring(true, false);
+    assert_eq!(
+        r.next(2, &mut mem(), is_ce, &W),
+        Err(RingRefusal::ControlEntry { gp: 0, opcode: 4 })
+    );
+    // Below Hopper, count-only: counted, skipped as a NOP, the segment read at 39:0.
+    let mut r = ring(false, false);
+    let words = submitted(&mut r, 2, &mut mem());
+    assert!(
+        words.contains(&0x111) && !words.contains(&0x222),
+        "{words:x?}"
+    );
+    assert_eq!(
+        (r.inca().control_entries, r.inca().ext_base_unapplied),
+        (1, 0)
+    );
     // ⊘ Negative control: without the control entry the same segment entry reads bits 39:0.
     let mut mem2 = Mem::default();
     mem2.words(PB, &launch(0x111));
     mem2.entry(0, seg);
-    let mut r2 = TranslatedRing::new(GPFIFO, 8, 0);
+    let mut r2 = ring(true, true);
     assert!(submitted(&mut r2, 1, &mut mem2).contains(&0x111));
 }
 
@@ -340,17 +382,40 @@ fn submitted(r: &mut TranslatedRing, put: u32, mem: &mut Mem) -> Vec<u32> {
 }
 
 /// ★ P1+P2 inc A (§3.7, §7 test 8): `NOP` and `SET_PB_SEGMENT_EXTENDED_BASE` are the only control
-/// entries kept; `ILLEGAL`, `GP_CRC`, `PB_CRC` and an unnamed opcode are refused by name.
+/// entries kept; on a STRICT ring `ILLEGAL`, `GP_CRC`, `PB_CRC` and an unnamed opcode are refused by
+/// name. ★ Review fix 2026-10-04: on the count-only default path each is counted and skipped as a
+/// NOP — it still retires, as before inc A.
 #[test]
 fn control_entries_other_than_nop_and_extended_base_are_refused() {
     for opcode in [1u32, 2, 3, 5, 0xff] {
         let mut mem = Mem::default();
         mem.entry(0, control(opcode, 0));
         let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        r.set_strict(true);
+        r.set_extended_base(true);
         assert_eq!(
             r.next(1, &mut mem, is_ce, &W),
             Err(RingRefusal::ControlEntry { gp: 0, opcode }),
             "opcode {opcode}"
+        );
+        let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        r.set_extended_base(true);
+        assert_eq!(
+            r.next(1, &mut mem, is_ce, &W),
+            Ok(Next::Submit {
+                words: Vec::new(),
+                retires: Some(1)
+            }),
+            "count-only opcode {opcode}: skipped, still retires"
+        );
+        assert_eq!(r.inca().control_entries, 1, "opcode {opcode} counted");
+        // A T-mode ring is strict whatever the device asks: T-mode never counts-and-forwards.
+        let mut r = TranslatedRing::new_tmode(GPFIFO, 8, 0);
+        r.set_strict(false);
+        assert_eq!(
+            r.next(1, &mut mem, is_ce, &W),
+            Err(RingRefusal::ControlEntry { gp: 0, opcode }),
+            "T-mode opcode {opcode}"
         );
     }
     let mut mem = Mem::default();
