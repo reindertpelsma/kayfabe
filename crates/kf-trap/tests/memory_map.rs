@@ -15,6 +15,59 @@ fn map_for(f: Family) -> MemoryMap {
 }
 
 #[test]
+fn native_timer_is_distinct_readonly_and_cannot_overlap_other_backings() {
+    for family in FAMILIES {
+        let original = map_for(family);
+        // Chosen test addresses are unrelated to the host's runtime reply.
+        for base in [0x5000, 0x9000, 0xa000] {
+            let map = original.clone().with_timer(base).unwrap();
+            map.tiles().unwrap();
+            assert_eq!(map.read_exit_pages(), original.read_exit_pages());
+            assert_eq!(
+                map.disposition_at(Bar(0), base),
+                Some(Disposition::HostTimer)
+            );
+            assert!(Disposition::HostTimer.write_exits());
+            assert!(!Disposition::HostTimer.read_exits());
+            assert!(map.with_timer(base).is_err());
+        }
+        for base in [
+            0,
+            1,
+            u64::MAX,
+            original.bar0_bytes,
+            PRAMIN_BASE,
+            VF_USERMODE_PAGE,
+        ] {
+            assert!(
+                original.clone().with_timer(base).is_err(),
+                "accepted {base:#x}"
+            );
+        }
+    }
+}
+
+#[test]
+fn every_timer_page_store_is_dropped_including_partial_and_wide_edges() {
+    let base = 0x9000;
+    for width in [1, 2, 4, 8] {
+        for off in base..base + PAGE {
+            assert!(timer_write_is_ignored(base, off, width));
+        }
+        assert!(!timer_write_is_ignored(base, base + PAGE, width));
+        assert!(!timer_write_is_ignored(
+            base,
+            base - u64::from(width),
+            width
+        ));
+        for off in base - u64::from(width) + 1..base {
+            assert!(timer_write_is_ignored(base, off, width));
+        }
+    }
+    assert!(!timer_write_is_ignored(base, u64::MAX, 8));
+}
+
+#[test]
 fn the_map_tiles_every_bar_because_a_gap_is_an_accidental_read_exit() {
     // ★★★ THE structural property. An uncovered span is not a harmless omission — KVM turns it
     // into an MMIO exit, i.e. a read trap nobody decided to have. Tiling is what lets a VMM
@@ -301,7 +354,9 @@ fn the_seam_is_complete_enough_to_install_the_whole_map() {
                 .unwrap();
             match r.how {
                 Disposition::PlainRam => assert!(!ro, "PRAMIN/BAR1/BAR2 must be r/w: {r:?}"),
-                Disposition::ShadowWriteTrapped | Disposition::HostPassthrough => {
+                Disposition::ShadowWriteTrapped
+                | Disposition::HostPassthrough
+                | Disposition::HostTimer => {
                     assert!(ro, "reads-from-DRAM/writes-exit must be READ-ONLY: {r:?}")
                 }
                 Disposition::Hole { .. } => unreachable!("a hole must not be installed"),

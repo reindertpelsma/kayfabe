@@ -38,7 +38,9 @@
  * The realize tail is gop, x11_dispsw, display_broker, display_max_fps. */
 /* 19 (2026-10-05, Windows/P1/P2 integration): append gop_efi after
  * display_max_fps, retaining every ABI-18 display/broker entry point. */
-#define KF3_ABI 19
+/* 20 (2026-10-05): ABI 19 plus HostTimer disposition and kf3_timer_view.
+ * The narrow Windows timer branch used 13; it cannot name this combined surface. */
+#define KF3_ABI 20
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -53,7 +55,7 @@ typedef struct Kf3Identity {
 } Kf3Identity;
 
 typedef struct Kf3Region {
-    uint8_t bar, how, pad[6];   /* how: 0 plain RAM, 1 shadow+write trap, 2 host passthrough, 3 hole */
+    uint8_t bar, how, pad[6];   /* how: 0 RAM, 1 shadow, 2 usermode, 3 hole, 4 timer */
     uint64_t base, len;
 } Kf3Region;
 
@@ -115,6 +117,7 @@ int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
 int32_t kf3_config_word(void *h, uint32_t idx, uint16_t *off, uint32_t *val);
 int32_t kf3_usermode_view(void *h, void **ptr, uint64_t *len);
+int32_t kf3_timer_view(void *h, void **ptr, uint64_t *len);
 int64_t kf3_memory_map(void *h, uint64_t bar1, uint64_t bar2, Kf3Region *out, size_t cap);
 int32_t kf3_shadow_attach(void *h, uint64_t base, uint8_t *mem, uint64_t len);
 void kf3_shadow_seal(void *h);

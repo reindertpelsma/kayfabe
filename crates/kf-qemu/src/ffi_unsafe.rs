@@ -43,7 +43,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// (with another argument order); neither 14, 16 nor 17 can name this interface.
 /// 19 (2026-10-05, Windows/P1/P2 integration): append the signed-GOP path
 /// after display_max_fps, retaining every ABI-18 display/broker entry point.
-pub const KF3_ABI: u32 = 19;
+/// 20 (2026-10-05): the optional read-only host timer mapping adds HostTimer and
+/// [`kf3_timer_view`] to ABI 19; the old Windows branch called its narrower surface 13.
+pub const KF3_ABI: u32 = 20;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -302,6 +304,7 @@ pub unsafe extern "C" fn kf3_memory_map(
                 kf_trap::memmap::Disposition::PlainRam => 0,
                 kf_trap::memmap::Disposition::ShadowWriteTrapped => 1,
                 kf_trap::memmap::Disposition::HostPassthrough => 2,
+                kf_trap::memmap::Disposition::HostTimer => 4,
                 kf_trap::memmap::Disposition::Hole { .. } => 3,
             },
             pad: [0; 6],
@@ -456,6 +459,29 @@ pub unsafe extern "C" fn kf3_usermode_view(
     }
     // SAFETY: the caller promised both are writable; the span becomes a ROM device's backing for
     // the device's life (the use `HostSpan::as_ptr` requires).
+    unsafe {
+        *ptr = span.as_ptr().cast::<c_void>();
+        *len = span.len() as u64;
+    }
+    0
+}
+
+/// The optional native timer backing, which may only be installed read-only in the guest.
+/// # Safety
+/// `ptr` and `len` must be aligned and writable; the returned mapping must not outlive the device.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_timer_view(
+    h: *mut c_void,
+    ptr: *mut *mut c_void,
+    len: *mut u64,
+) -> i32 {
+    let Some(d) = dev(h) else { return -1 };
+    let Some(timer) = &d.timer else { return -1 };
+    if ptr.is_null() || len.is_null() || !ptr.is_aligned() || !len.is_aligned() {
+        return -1;
+    }
+    let span = timer.view();
+    // SAFETY: caller's writable outputs; backing is valid for the device's lifetime.
     unsafe {
         *ptr = span.as_ptr().cast::<c_void>();
         *len = span.len() as u64;

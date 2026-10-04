@@ -502,6 +502,11 @@ macro_rules! hc {
 /// `every_host_control_id_is_the_measured_one` pins each id to the matrix at every tag.
 pub static HOST_CONTROLS: &[HostControl] = &[
     hc!(
+        "NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET",
+        0x2080_0404,
+        NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS
+    ),
+    hc!(
         "NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2",
         0x0000_0205,
         NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS

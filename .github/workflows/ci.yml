@@ -1689,6 +1689,12 @@ jobs:
           # defined image's width * height.
           #   ⊘ No new power: VMM-owned pixels (kayfabe's copy of the cursor) copied into a buffer
           #     the C device allocated with `cursor_alloc` for exactly that size.
+          # kf-qemu 59 -> 61 (2026-10-05, optional native timer; KF3 ABI 20):
+          # ffi_unsafe.rs (+2): kf3_timer_view's unsafe extern function and its one output-write
+          # block. The C caller owns two writable output slots; the boundary rejects null or
+          # unaligned pointers and a missing device/timer. It returns only the prevalidated,
+          # read-only timer mapping, whose process-lifetime device outlives the QEMU RAMBlock.
+          # No guest pointer reaches it; C installs only a read-only ROM region over that view.
           # Candidate 2 adds the disjoint capability (2) and scratch advice (1)
           # blocks to the broker's audited kf-linux-raw count (94).
           # ★ kf-chan:0 (2026-10-04, P1+P2 inc C, `docs/design/V3_P1P2_TSPACE.md` §3.8). OWNER_RULINGS
@@ -1701,7 +1707,7 @@ jobs:
           # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
           # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
           # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:59 firmware/kf-gop:78 kf-chan:0"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:61 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

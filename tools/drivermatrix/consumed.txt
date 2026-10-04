@@ -45,6 +45,9 @@ libos_consts:*
 gsp_fw_meta_consts:*
 #
 # ── both axes: served / issued RM controls, their params and command ids ──
+Nv01TimerMap.*
+NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS.*
+ctrl_cmds:NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET
 NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS.*
 NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS.*
 NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS.*

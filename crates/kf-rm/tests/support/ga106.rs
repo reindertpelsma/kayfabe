@@ -449,6 +449,7 @@ pub fn host_facts() -> HostFacts {
             chip_sub_rev: 0,
             is_cmp_sku: false,
             reg_bases: REG_BASES,
+            timer_reg_base: None,
         },
         user_register_access_map: RegisterAccessMapRow::NOT_PUBLISHED,
         constructed_falcons: FalconInventoryRow::NONE,
