@@ -1,18 +1,18 @@
 error[E0061]: this method takes 1 argument but 2 arguments were supplied
-   --> tests/ui/import_takes_an_rm_export.rs:10:7
-    |
- 10 |     k.import_store(f.as_fd(), 1 << 40).unwrap();
-    |       ^^^^^^^^^^^^ ---------  ------- unexpected argument #2 of type `{integer}`
-    |                    |
-    |                    expected `&RmExport`, found `BorrowedFd<'_>`
-    |
+  --> tests/ui/import_takes_an_rm_export.rs:10:7
+   |
+10 |     k.import_store(f.as_fd(), 1 << 40).unwrap();
+   |       ^^^^^^^^^^^^ ---------  ------- unexpected argument #2 of type `{integer}`
+   |                    |
+   |                    expected `&RmExport`, found `BorrowedFd<'_>`
+   |
 note: method defined here
-   --> src/walk.rs
-    |
-    |     pub fn import_store(&mut self, store: &kf_host::RmExport) -> Result<(), CudaError> {
-    |            ^^^^^^^^^^^^
+  --> src/walk.rs
+   |
+   |     pub fn import_store(&mut self, store: &kf_host::RmExport) -> Result<(), CudaError> {
+   |            ^^^^^^^^^^^^
 help: remove the extra argument
-    |
- 10 -     k.import_store(f.as_fd(), 1 << 40).unwrap();
- 10 +     k.import_store(/* &kf_host::RmExport */).unwrap();
-    |
+   |
+10 -     k.import_store(f.as_fd(), 1 << 40).unwrap();
+10 +     k.import_store(/* &RmExport */).unwrap();
+   |
