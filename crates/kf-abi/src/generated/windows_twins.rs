@@ -254,4 +254,12 @@ pub static WINDOWS_TWINS: &[WindowsTwin] = &[
         win_cl: 38888698,
         win_branch: "r616_69-12",
     },
+    WindowsTwin {
+        linux_tag: "595.91.07",
+        linux_cl: 38609955,
+        linux_branch: "rel/gpu_drv/r595/r596_84-338",
+        win_name: "596.86",
+        win_cl: 38483486,
+        win_branch: "r596_84-2",
+    },
 ];

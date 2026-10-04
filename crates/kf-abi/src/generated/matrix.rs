@@ -27,7 +27,7 @@ const fn r<T>(first: DriverVersion, last: DriverVersion, value: Option<T>) -> Ru
     Run { first, last, value }
 }
 
-/// Every ogkm tag the committed sweep measured, ascending (29 tags).
+/// Every ogkm tag the committed sweep measured, ascending (30 tags).
 pub const MEASURED: &[DriverVersion] = &[
     v(535, 309, 1), // 535.309.01
     v(545, 23, 8),  // 545.23.08
@@ -55,6 +55,7 @@ pub const MEASURED: &[DriverVersion] = &[
     v(580, 178, 4), // 580.178.04
     v(590, 48, 1),  // 590.48.01
     v(595, 84, 0),  // 595.84
+    v(595, 91, 7),  // 595.91.07
     v(610, 43, 2),  // 610.43.02
     v(610, 57, 4),  // 610.57.04
     v(615, 71, 9),  // 615.71.09
@@ -267,7 +268,7 @@ pub const GSP_ARGUMENTS_CACHED: StructRuns = StructRuns {
             Some(&GSP_ARGUMENTS_CACHED_L2),
         ), // 570.86.15 … 570.148.08
         r(v(575, 51, 2), v(590, 48, 1), Some(&GSP_ARGUMENTS_CACHED_L3)), // 575.51.02 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(&GSP_ARGUMENTS_CACHED_L4)), // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(&GSP_ARGUMENTS_CACHED_L4)), // 595.84 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(&GSP_ARGUMENTS_CACHED_L5)), // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(&GSP_ARGUMENTS_CACHED_L6)), // 615.71.09 … 615.71.09
     ],
@@ -363,9 +364,9 @@ pub const GSP_MSG_QUEUE_ELEMENT: StructRuns = StructRuns {
         ), // 535.309.01 … 590.48.01
         r(
             v(595, 84, 0),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&GSP_MSG_QUEUE_ELEMENT_L1),
-        ), // 595.84 … 595.84
+        ), // 595.84 … 595.91.07
         r(
             v(610, 43, 2),
             v(610, 57, 4),
@@ -2015,7 +2016,7 @@ pub const GSPSTATICCONFIGINFO: StructRuns = StructRuns {
         r(v(570, 86, 15), v(575, 64, 5), Some(&GSPSTATICCONFIGINFO_L6)), // 570.86.15 … 575.64.05
         r(v(580, 65, 6), v(580, 178, 4), Some(&GSPSTATICCONFIGINFO_L7)), // 580.65.06 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(&GSPSTATICCONFIGINFO_L8)), // 590.48.01 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(&GSPSTATICCONFIGINFO_L9)), // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(&GSPSTATICCONFIGINFO_L9)), // 595.84 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(&GSPSTATICCONFIGINFO_L10)), // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(&GSPSTATICCONFIGINFO_L11)), // 615.71.09 … 615.71.09
     ],
@@ -5285,7 +5286,7 @@ pub const GSPSYSTEMINFO: StructRuns = StructRuns {
         r(v(580, 94, 2), v(580, 95, 5), Some(&GSPSYSTEMINFO_L13)),  // 580.94.02 … 580.95.05
         r(v(580, 105, 8), v(580, 178, 4), Some(&GSPSYSTEMINFO_L14)), // 580.105.08 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(&GSPSYSTEMINFO_L15)),  // 590.48.01 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(&GSPSYSTEMINFO_L16)),  // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(&GSPSYSTEMINFO_L16)),  // 595.84 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(&GSPSYSTEMINFO_L17)),  // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(&GSPSYSTEMINFO_L18)),  // 615.71.09 … 615.71.09
     ],
@@ -5574,9 +5575,9 @@ pub const NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2: StructRuns = StructRuns {
     runs: &[
         r(
             v(535, 309, 1),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2_L0),
-        ), // 535.309.01 … 595.84
+        ), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None), // 610.43.02 … 615.71.09
     ],
 };
@@ -5713,9 +5714,9 @@ pub const NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS: StructRuns = StructRuns {
         ), // 580.94.02 … 580.178.04
         r(
             v(590, 48, 1),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS_L2),
-        ), // 590.48.01 … 595.84
+        ), // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),  // 610.43.02 … 615.71.09
     ],
 };
@@ -5728,7 +5729,7 @@ const NV0080_CTRL_NVDEC_GET_CAPS_PARAMS_V2_L0: Layout = Layout {
 pub const NV0080_CTRL_NVDEC_GET_CAPS_PARAMS_V2: StructRuns = StructRuns {
     name: "NV0080_CTRL_NVDEC_GET_CAPS_PARAMS_V2",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -5745,7 +5746,7 @@ const NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS_L0: Layout = Layout {
 pub const NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS: StructRuns = StructRuns {
     name: "NV0080_CTRL_NVENC_GET_CAPS_V2_PARAMS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -6043,9 +6044,9 @@ pub const NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS: StructRuns = StructRuns {
         ), // 535.309.01 … 570.148.08
         r(
             v(575, 51, 2),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS_L1),
-        ), // 575.51.02 … 595.84
+        ), // 575.51.02 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -6515,9 +6516,9 @@ pub const NV2080_CTRL_GPU_GET_INFO_V2_PARAMS: StructRuns = StructRuns {
         ), // 575.51.02 … 575.64.05
         r(
             v(580, 65, 6),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV2080_CTRL_GPU_GET_INFO_V2_PARAMS_L3),
-        ), // 580.65.06 … 595.84
+        ), // 580.65.06 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -7135,9 +7136,9 @@ pub const NV2080_CTRL_GR_GET_INFO_V2_PARAMS: StructRuns = StructRuns {
         ), // 570.86.15 … 580.178.04
         r(
             v(590, 48, 1),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L3),
-        ), // 590.48.01 … 595.84
+        ), // 590.48.01 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -7650,9 +7651,9 @@ pub const NV2080_CTRL_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP_PARAMS: StructRu
     runs: &[
         r(
             v(535, 309, 1),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV2080_CTRL_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP_PARAMS_L0),
-        ), // 535.309.01 … 595.84
+        ), // 535.309.01 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -7969,9 +7970,9 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS_PARAMS: Struct
         ), // 580.65.06 … 590.48.01
         r(
             v(595, 84, 0),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS_PARAMS_L2),
-        ), // 595.84 … 595.84
+        ), // 595.84 … 595.91.07
         r(
             v(610, 43, 2),
             v(610, 57, 4),
@@ -8097,9 +8098,9 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS: StructRuns
         ), // 575.51.02 … 575.64.05
         r(
             v(580, 65, 6),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS_L2),
-        ), // 580.65.06 … 595.84
+        ), // 580.65.06 … 595.91.07
         r(
             v(610, 43, 2),
             v(610, 57, 4),
@@ -8189,9 +8190,9 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_INFO_PARAMS: StructRuns = StructRu
         ), // 570.86.15 … 580.178.04
         r(
             v(590, 48, 1),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_INFO_PARAMS_L3),
-        ), // 590.48.01 … 595.84
+        ), // 590.48.01 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -8268,9 +8269,9 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_PPC_MASKS_PARAMS: StructRuns = Str
         ), // 580.65.06 … 590.48.01
         r(
             v(595, 84, 0),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_PPC_MASKS_PARAMS_L2),
-        ), // 595.84 … 595.84
+        ), // 595.84 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -9663,9 +9664,9 @@ pub const NV_BSP_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
     runs: &[
         r(
             v(535, 309, 1),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV_BSP_ALLOCATION_PARAMETERS_L0),
-        ), // 535.309.01 … 595.84
+        ), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None), // 610.43.02 … 615.71.09
     ],
 };
@@ -9849,9 +9850,9 @@ pub const NV_CHANNEL_ALLOC_PARAMS: StructRuns = StructRuns {
         ), // 535.309.01 … 565.57.01
         r(
             v(570, 86, 15),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV_CHANNEL_ALLOC_PARAMS_L1),
-        ), // 570.86.15 … 595.84
+        ), // 570.86.15 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -10068,9 +10069,9 @@ pub const NV_MSENC_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
     runs: &[
         r(
             v(535, 309, 1),
-            v(595, 84, 0),
+            v(595, 91, 7),
             Some(&NV_MSENC_ALLOCATION_PARAMETERS_L0),
-        ), // 535.309.01 … 595.84
+        ), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None), // 610.43.02 … 615.71.09
     ],
 };
@@ -10087,7 +10088,7 @@ const NV_NVDEC_ALLOCATION_PARAMETERS_L0: Layout = Layout {
 pub const NV_NVDEC_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
     name: "NV_NVDEC_ALLOCATION_PARAMETERS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -10108,7 +10109,7 @@ const NV_NVENC_ALLOCATION_PARAMETERS_L0: Layout = Layout {
 pub const NV_NVENC_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
     name: "NV_NVENC_ALLOCATION_PARAMETERS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -12418,7 +12419,7 @@ pub const CLASS_IDS_NVC7FA_VIDEO_OFA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVC870_DISPLAY: ValueRuns = ValueRuns {
     name: "class_ids:NVC870_DISPLAY",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc870)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12427,7 +12428,7 @@ pub const CLASS_IDS_NVC870_DISPLAY: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVC871_DISP_SF_USER: ValueRuns = ValueRuns {
     name: "class_ids:NVC871_DISP_SF_USER",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc871)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12436,7 +12437,7 @@ pub const CLASS_IDS_NVC871_DISP_SF_USER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVC873_DISP_CAPABILITIES: ValueRuns = ValueRuns {
     name: "class_ids:NVC873_DISP_CAPABILITIES",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc873)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12445,7 +12446,7 @@ pub const CLASS_IDS_NVC873_DISP_CAPABILITIES: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVC87A_CURSOR_IMM_CHANNEL_PIO: ValueRuns = ValueRuns {
     name: "class_ids:NVC87A_CURSOR_IMM_CHANNEL_PIO",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc87a)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12454,7 +12455,7 @@ pub const CLASS_IDS_NVC87A_CURSOR_IMM_CHANNEL_PIO: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVC87B_WINDOW_IMM_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVC87B_WINDOW_IMM_CHANNEL_DMA",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc87b)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12463,7 +12464,7 @@ pub const CLASS_IDS_NVC87B_WINDOW_IMM_CHANNEL_DMA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVC87D_CORE_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVC87D_CORE_CHANNEL_DMA",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc87d)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12472,7 +12473,7 @@ pub const CLASS_IDS_NVC87D_CORE_CHANNEL_DMA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVC87E_WINDOW_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVC87E_WINDOW_CHANNEL_DMA",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc87e)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12891,7 +12892,7 @@ pub const CLASS_IDS_NVD1FA_VIDEO_OFA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVD2B0_VIDEO_DECODER: ValueRuns = ValueRuns {
     name: "class_ids:NVD2B0_VIDEO_DECODER",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xd2b0)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12900,7 +12901,7 @@ pub const CLASS_IDS_NVD2B0_VIDEO_DECODER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVD2D1_VIDEO_NVJPG: ValueRuns = ValueRuns {
     name: "class_ids:NVD2D1_VIDEO_NVJPG",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xd2d1)), // 610.43.02 … 615.71.09
     ],
 };
@@ -12909,7 +12910,7 @@ pub const CLASS_IDS_NVD2D1_VIDEO_NVJPG: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVD2FA_VIDEO_OFA: ValueRuns = ValueRuns {
     name: "class_ids:NVD2FA_VIDEO_OFA",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xd2fa)), // 610.43.02 … 615.71.09
     ],
 };
@@ -13070,7 +13071,7 @@ pub const CLASS_IDS_PASCAL_DMA_COPY_A: ValueRuns = ValueRuns {
 pub const CLASS_IDS_PROFILER_CONTEXT_EVENT: ValueRuns = ValueRuns {
     name: "class_ids:PROFILER_CONTEXT_EVENT",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xb0ce)), // 610.43.02 … 615.71.09
     ],
 };
@@ -13079,7 +13080,7 @@ pub const CLASS_IDS_PROFILER_CONTEXT_EVENT: ValueRuns = ValueRuns {
 pub const CLASS_IDS_PROFILER_DEVICE_EVENT: ValueRuns = ValueRuns {
     name: "class_ids:PROFILER_DEVICE_EVENT",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xb0cd)), // 610.43.02 … 615.71.09
     ],
 };
@@ -13096,7 +13097,7 @@ pub const CLASS_IDS_RM_USER_SHARED_DATA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_TRACE_DEVICE_EVENT: ValueRuns = ValueRuns {
     name: "class_ids:TRACE_DEVICE_EVENT",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xcdcd)), // 610.43.02 … 615.71.09
     ],
 };
@@ -13259,7 +13260,7 @@ pub const CTRL_CMDS_NV0080_CTRL_CMD_MSENC_GET_CAPS_V2: ValueRuns = ValueRuns {
 pub const CTRL_CMDS_NV0080_CTRL_CMD_NVDEC_GET_CAPS_V2: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV0080_CTRL_CMD_NVDEC_GET_CAPS_V2",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x801c02)), // 610.43.02 … 615.71.09
     ],
 };
@@ -13268,7 +13269,7 @@ pub const CTRL_CMDS_NV0080_CTRL_CMD_NVDEC_GET_CAPS_V2: ValueRuns = ValueRuns {
 pub const CTRL_CMDS_NV0080_CTRL_CMD_NVENC_GET_CAPS_V2: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV0080_CTRL_CMD_NVENC_GET_CAPS_V2",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x801b02)), // 610.43.02 … 615.71.09
     ],
 };
@@ -14072,7 +14073,7 @@ pub const CTRL_LIMITS_NV0000_CTRL_CMD_GPUACCT_GET_PROC_ACCOUNTING_INFO: ValueRun
 pub const CTRL_LIMITS_NV0000_CTRL_CMD_GPUACCT_GET_PROC_ACCOUNTING_INFO_V2: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV0000_CTRL_CMD_GPUACCT_GET_PROC_ACCOUNTING_INFO_V2",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xb06)), // 610.43.02 … 615.71.09
     ],
 };
@@ -14411,7 +14412,7 @@ pub const CTRL_LIMITS_NV0000_CTRL_GPUACCT_GET_PROC_ACCOUNTING_INFO_V2_PARAMS_MES
     ValueRuns {
         name: "ctrl_limits:NV0000_CTRL_GPUACCT_GET_PROC_ACCOUNTING_INFO_V2_PARAMS_MESSAGE_ID",
         runs: &[
-            r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+            r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x6)), // 610.43.02 … 615.71.09
         ],
     };
@@ -14962,7 +14963,7 @@ pub const CTRL_LIMITS_NV0000_CTRL_SYSTEM_SET_MEMORY_SIZE_PARAMS_MESSAGE_ID: Valu
 pub const CTRL_LIMITS_NV0000_CTRL_SYSTEM_SOC_PERF_MAX_LIMITS: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV0000_CTRL_SYSTEM_SOC_PERF_MAX_LIMITS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x10)), // 610.43.02 … 615.71.09
     ],
 };
@@ -15355,7 +15356,7 @@ pub const CTRL_LIMITS_NV0080_CTRL_GR_INFO_INDEX_BUFFER_ALIGNMENT: ValueRuns = Va
 pub const CTRL_LIMITS_NV0080_CTRL_GR_INFO_INDEX_DUMMY: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV0080_CTRL_GR_INFO_INDEX_DUMMY",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x33)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x33)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -15660,7 +15661,7 @@ pub const CTRL_LIMITS_NV0080_CTRL_GR_INFO_INDEX_MAX: ValueRuns = ValueRuns {
         r(v(535, 309, 1), v(535, 309, 1), Some(0x34)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(565, 57, 1), Some(0x37)),   // 545.23.08 … 565.57.01
         r(v(570, 86, 15), v(580, 178, 4), Some(0x39)), // 570.86.15 … 580.178.04
-        r(v(590, 48, 1), v(595, 84, 0), Some(0x3a)),   // 590.48.01 … 595.84
+        r(v(590, 48, 1), v(595, 91, 7), Some(0x3a)),   // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3e)),   // 610.43.02 … 615.71.09
     ],
 };
@@ -15753,7 +15754,7 @@ pub const CTRL_LIMITS_NV0080_CTRL_GR_INFO_INDEX_MIN_ATTRS_BUG_261894: ValueRuns 
 pub const CTRL_LIMITS_NV0080_CTRL_GR_INFO_INDEX_RESERVED: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV0080_CTRL_GR_INFO_INDEX_RESERVED",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x33)), // 610.43.02 … 615.71.09
     ],
 };
@@ -15762,7 +15763,7 @@ pub const CTRL_LIMITS_NV0080_CTRL_GR_INFO_INDEX_RESERVED: ValueRuns = ValueRuns 
 pub const CTRL_LIMITS_NV0080_CTRL_GR_INFO_INDEX_RESERVED1: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV0080_CTRL_GR_INFO_INDEX_RESERVED1",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3e)), // 610.43.02 … 615.71.09
     ],
 };
@@ -15871,7 +15872,7 @@ pub const CTRL_LIMITS_NV0080_CTRL_GR_INFO_MAX_SIZE: ValueRuns = ValueRuns {
         r(v(535, 309, 1), v(535, 309, 1), Some(0x35)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(565, 57, 1), Some(0x38)),   // 545.23.08 … 565.57.01
         r(v(570, 86, 15), v(580, 178, 4), Some(0x3a)), // 570.86.15 … 580.178.04
-        r(v(590, 48, 1), v(595, 84, 0), Some(0x3b)),   // 590.48.01 … 595.84
+        r(v(590, 48, 1), v(595, 91, 7), Some(0x3b)),   // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3f)),   // 610.43.02 … 615.71.09
     ],
 };
@@ -15916,7 +15917,7 @@ pub const CTRL_LIMITS_NV0080_CTRL_MSENC_CAPS_TBL_SIZE: ValueRuns = ValueRuns {
 pub const CTRL_LIMITS_NV0080_CTRL_NVDEC_CAPS_TBL_SIZE: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV0080_CTRL_NVDEC_CAPS_TBL_SIZE",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x8)), // 610.43.02 … 615.71.09
     ],
 };
@@ -15925,7 +15926,7 @@ pub const CTRL_LIMITS_NV0080_CTRL_NVDEC_CAPS_TBL_SIZE: ValueRuns = ValueRuns {
 pub const CTRL_LIMITS_NV0080_CTRL_NVENC_CAPS_TBL_SIZE: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV0080_CTRL_NVENC_CAPS_TBL_SIZE",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x6)), // 610.43.02 … 615.71.09
     ],
 };
@@ -17064,7 +17065,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_CE_MAX_HSHUBS: ValueRuns = ValueRuns {
 pub const CTRL_LIMITS_NV2080_CTRL_CLK_PMUMON_CLK_DOMAINS_SAMPLE_COUNT: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_CLK_PMUMON_CLK_DOMAINS_SAMPLE_COUNT",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xfa)), // 610.43.02 … 615.71.09
     ],
 };
@@ -17241,7 +17242,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_CMD_FB_STATS_MAX_OWNER: ValueRuns = ValueRuns 
     name: "ctrl_limits:NV2080_CTRL_CMD_FB_STATS_MAX_OWNER",
     runs: &[
         r(v(535, 309, 1), v(535, 309, 1), None), // 535.309.01 … 535.309.01
-        r(v(545, 23, 8), v(595, 84, 0), Some(0xc8)), // 545.23.08 … 595.84
+        r(v(545, 23, 8), v(595, 91, 7), Some(0xc8)), // 545.23.08 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc9)), // 610.43.02 … 615.71.09
     ],
 };
@@ -17361,7 +17362,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_CMD_GR_GFX_POOL_QUERY_SIZE: ValueRuns = ValueR
 pub const CTRL_LIMITS_NV2080_CTRL_CMD_GSP_CRYPTO_CONTROL_NONCE_SIZE: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_CMD_GSP_CRYPTO_CONTROL_NONCE_SIZE",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x30)), // 610.43.02 … 615.71.09
     ],
 };
@@ -17370,7 +17371,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_CMD_GSP_CRYPTO_CONTROL_NONCE_SIZE: ValueRuns =
 pub const CTRL_LIMITS_NV2080_CTRL_CMD_GSP_CRYPTO_CONTROL_RSA_EXPONENT_SIZE: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_CMD_GSP_CRYPTO_CONTROL_RSA_EXPONENT_SIZE",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x4)), // 610.43.02 … 615.71.09
     ],
 };
@@ -17444,7 +17445,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_CMD_INTERNAL_MAX_MSENCS: ValueRuns = ValueRuns
 pub const CTRL_LIMITS_NV2080_CTRL_CMD_INTERNAL_MAX_NVDECS: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_CMD_INTERNAL_MAX_NVDECS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x8)), // 610.43.02 … 615.71.09
     ],
 };
@@ -17453,7 +17454,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_CMD_INTERNAL_MAX_NVDECS: ValueRuns = ValueRuns
 pub const CTRL_LIMITS_NV2080_CTRL_CMD_INTERNAL_MAX_NVENCS: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_CMD_INTERNAL_MAX_NVENCS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x8)), // 610.43.02 … 615.71.09
     ],
 };
@@ -17572,7 +17573,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_CMD_NVLINK_GET_LP_COUNTERS: ValueRuns = ValueR
 pub const CTRL_LIMITS_NV2080_CTRL_CMD_NVLINK_GET_NVLE_PKT_COUNTERS: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_CMD_NVLINK_GET_NVLE_PKT_COUNTERS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x2080309f)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18017,7 +18018,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_HEAP_RECLAIMABLE: ValueRuns = Va
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_HEAP_RECLAIMABLE",
     runs: &[
         r(v(535, 309, 1), v(590, 48, 1), None), // 535.309.01 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(0x3c)), // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(0x3c)), // 595.84 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), None),  // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(0x44)), // 615.71.09 … 615.71.09
     ],
@@ -18120,7 +18121,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_1: ValueRuns = ValueRun
 pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_2: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_2",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3e)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18129,7 +18130,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_2: ValueRuns = ValueRun
 pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_3: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_3",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3f)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18138,7 +18139,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_3: ValueRuns = ValueRun
 pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_4: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_4",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x40)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18147,7 +18148,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_4: ValueRuns = ValueRun
 pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_5: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_5",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x41)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18156,7 +18157,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_5: ValueRuns = ValueRun
 pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_6: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_6",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x42)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18165,7 +18166,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_6: ValueRuns = ValueRun
 pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_7: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_LTC_MASK_7",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x43)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18195,7 +18196,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_MAX: ValueRuns = ValueRuns {
         r(v(560, 28, 3), v(575, 64, 5), Some(0x38)),   // 560.28.03 … 575.64.05
         r(v(580, 65, 6), v(580, 65, 6), Some(0x39)),   // 580.65.06 … 580.65.06
         r(v(580, 82, 7), v(590, 48, 1), Some(0x3b)),   // 580.82.07 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(0x3c)),   // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(0x3c)),   // 595.84 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(0x43)),   // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(0x44)),   // 615.71.09 … 615.71.09
     ],
@@ -18289,7 +18290,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_PARTITION_MASK_1: ValueRuns = Va
 pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_PARTITION_MASK_2: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_PARTITION_MASK_2",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3c)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18298,7 +18299,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_PARTITION_MASK_2: ValueRuns = Va
 pub const CTRL_LIMITS_NV2080_CTRL_FB_INFO_INDEX_PARTITION_MASK_3: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_FB_INFO_INDEX_PARTITION_MASK_3",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3d)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18791,7 +18792,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_FAULT_PACKET_SIZE: ValueRuns = ValueRuns {
 pub const CTRL_LIMITS_NV2080_CTRL_GPU_GET_DIELET_INFO_MAX_SIZE: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GPU_GET_DIELET_INFO_MAX_SIZE",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x100)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18958,7 +18959,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_CPU_COHERENT_CACHING_GPU_MEMORY
     ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_CPU_COHERENT_CACHING_GPU_MEMORY_CAPABILITY",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x46)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18968,7 +18969,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_CPU_COHERENT_CACHING_GPU_MEMORY
     ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_CPU_COHERENT_CACHING_GPU_MEMORY_CAPABILITY_NO",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x0)), // 610.43.02 … 615.71.09
     ],
 };
@@ -18978,7 +18979,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_CPU_COHERENT_CACHING_GPU_MEMORY
     ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_CPU_COHERENT_CACHING_GPU_MEMORY_CAPABILITY_YES",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x1)), // 610.43.02 … 615.71.09
     ],
 };
@@ -19122,7 +19123,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_GPU_COHERENT_CACHING_CPU_MEMORY
     ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_GPU_COHERENT_CACHING_CPU_MEMORY_CAPABILITY",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x47)), // 610.43.02 … 615.71.09
     ],
 };
@@ -19132,7 +19133,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_GPU_COHERENT_CACHING_CPU_MEMORY
     ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_GPU_COHERENT_CACHING_CPU_MEMORY_CAPABILITY_NO",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x0)), // 610.43.02 … 615.71.09
     ],
 };
@@ -19142,7 +19143,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_GPU_COHERENT_CACHING_CPU_MEMORY
     ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_GPU_COHERENT_CACHING_CPU_MEMORY_CAPABILITY_YES",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x1)), // 610.43.02 … 615.71.09
     ],
 };
@@ -19201,7 +19202,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_GPU_FLA_CAPABILITY_YES: ValueRu
 pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_GPU_FLA_SYSMEM_CAPABILITY: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_GPU_FLA_SYSMEM_CAPABILITY",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x43)), // 610.43.02 … 615.71.09
     ],
 };
@@ -19211,7 +19212,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_GPU_FLA_SYSMEM_CAPABILITY_NO: V
     ValueRuns {
         name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_GPU_FLA_SYSMEM_CAPABILITY_NO",
         runs: &[
-            r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+            r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x0)), // 610.43.02 … 615.71.09
         ],
     };
@@ -19221,7 +19222,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_INDEX_GPU_FLA_SYSMEM_CAPABILITY_YES: 
     ValueRuns {
         name: "ctrl_limits:NV2080_CTRL_GPU_INFO_INDEX_GPU_FLA_SYSMEM_CAPABILITY_YES",
         runs: &[
-            r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+            r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x1)), // 610.43.02 … 615.71.09
         ],
     };
@@ -19581,7 +19582,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_INFO_MAX_LIST_SIZE: ValueRuns = ValueRuns 
         r(v(535, 309, 1), v(535, 309, 1), Some(0x40)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(570, 148, 8), Some(0x41)),  // 545.23.08 … 570.148.08
         r(v(575, 51, 2), v(575, 64, 5), Some(0x42)),   // 575.51.02 … 575.64.05
-        r(v(580, 65, 6), v(595, 84, 0), Some(0x46)),   // 580.65.06 … 595.84
+        r(v(580, 65, 6), v(595, 91, 7), Some(0x46)),   // 580.65.06 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x48)),   // 610.43.02 … 615.71.09
     ],
 };
@@ -19627,7 +19628,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_MAX_GPC_PER_SMC: ValueRuns = ValueRuns {
     runs: &[
         r(v(535, 309, 1), v(575, 64, 5), Some(0xc)), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(590, 48, 1), Some(0x10)), // 580.65.06 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(0x20)), // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(0x20)), // 595.84 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x40)), // 610.43.02 … 615.71.09
     ],
 };
@@ -19962,7 +19963,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GPU_SKYLINE_INFO_MAX_NON_SINGLETON_VGPCS: Valu
     runs: &[
         r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(580, 178, 4), Some(0xc)), // 580.65.06 … 580.178.04
-        r(v(590, 48, 1), v(595, 84, 0), Some(0x20)), // 590.48.01 … 595.84
+        r(v(590, 48, 1), v(595, 91, 7), Some(0x20)), // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x40)), // 610.43.02 … 615.71.09
     ],
 };
@@ -20080,7 +20081,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GR_GET_SM_TO_GPC_TPC_MAPPINGS_MAX_SM_COUNT: Va
         name: "ctrl_limits:NV2080_CTRL_GR_GET_SM_TO_GPC_TPC_MAPPINGS_MAX_SM_COUNT",
         runs: &[
             r(v(535, 309, 1), v(555, 42, 2), Some(0x90)), // 535.309.01 … 555.42.02
-            r(v(560, 28, 3), v(595, 84, 0), Some(0xf0)),  // 560.28.03 … 595.84
+            r(v(560, 28, 3), v(595, 91, 7), Some(0xf0)),  // 560.28.03 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x200)), // 610.43.02 … 615.71.09
         ],
     };
@@ -20113,7 +20114,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GR_INFO_INDEX_BUFFER_ALIGNMENT: ValueRuns = Va
 pub const CTRL_LIMITS_NV2080_CTRL_GR_INFO_INDEX_DUMMY: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GR_INFO_INDEX_DUMMY",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x33)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x33)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -20418,7 +20419,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GR_INFO_INDEX_MAX: ValueRuns = ValueRuns {
         r(v(535, 309, 1), v(535, 309, 1), Some(0x34)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(565, 57, 1), Some(0x37)),   // 545.23.08 … 565.57.01
         r(v(570, 86, 15), v(580, 178, 4), Some(0x39)), // 570.86.15 … 580.178.04
-        r(v(590, 48, 1), v(595, 84, 0), Some(0x3a)),   // 590.48.01 … 595.84
+        r(v(590, 48, 1), v(595, 91, 7), Some(0x3a)),   // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3e)),   // 610.43.02 … 615.71.09
     ],
 };
@@ -20511,7 +20512,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GR_INFO_INDEX_MIN_ATTRS_BUG_261894: ValueRuns 
 pub const CTRL_LIMITS_NV2080_CTRL_GR_INFO_INDEX_RESERVED: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GR_INFO_INDEX_RESERVED",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x33)), // 610.43.02 … 615.71.09
     ],
 };
@@ -20520,7 +20521,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GR_INFO_INDEX_RESERVED: ValueRuns = ValueRuns 
 pub const CTRL_LIMITS_NV2080_CTRL_GR_INFO_INDEX_RESERVED1: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GR_INFO_INDEX_RESERVED1",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3e)), // 610.43.02 … 615.71.09
     ],
 };
@@ -20629,7 +20630,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GR_INFO_MAX_SIZE: ValueRuns = ValueRuns {
         r(v(535, 309, 1), v(535, 309, 1), Some(0x35)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(565, 57, 1), Some(0x38)),   // 545.23.08 … 565.57.01
         r(v(570, 86, 15), v(580, 178, 4), Some(0x3a)), // 570.86.15 … 580.178.04
-        r(v(590, 48, 1), v(595, 84, 0), Some(0x3b)),   // 590.48.01 … 595.84
+        r(v(590, 48, 1), v(595, 91, 7), Some(0x3b)),   // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x3f)),   // 610.43.02 … 615.71.09
     ],
 };
@@ -20681,7 +20682,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GR_SM_ISSUE_THROTTLE_CTRL_MAX_LIST_SIZE: Value
 pub const CTRL_LIMITS_NV2080_CTRL_GSP_CORE_TEST_ITERS_MAX: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GSP_CORE_TEST_ITERS_MAX",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x2710)), // 610.43.02 … 615.71.09
     ],
 };
@@ -20690,7 +20691,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_GSP_CORE_TEST_ITERS_MAX: ValueRuns = ValueRuns
 pub const CTRL_LIMITS_NV2080_CTRL_GSP_CORE_TEST_SIZE_MAX: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_GSP_CORE_TEST_SIZE_MAX",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x400000)), // 610.43.02 … 615.71.09
     ],
 };
@@ -20847,7 +20848,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_INTERNAL_GPU_USER_REGISTER_ACCESS_MAP_MAX_COMP
     ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_INTERNAL_GPU_USER_REGISTER_ACCESS_MAP_MAX_COMPRESSED_SIZE",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x1000)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x1000)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x4000)),  // 610.43.02 … 615.71.09
     ],
 };
@@ -20878,7 +20879,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_INTERNAL_GRMGR_SKYLINE_INFO_MAX_NON_SINGLETON_
         runs: &[
             r(v(535, 309, 1), v(535, 309, 1), Some(0x8)), // 535.309.01 … 535.309.01
             r(v(545, 23, 8), v(580, 178, 4), Some(0xc)),  // 545.23.08 … 580.178.04
-            r(v(590, 48, 1), v(595, 84, 0), Some(0x20)),  // 590.48.01 … 595.84
+            r(v(590, 48, 1), v(595, 91, 7), Some(0x20)),  // 590.48.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x40)),  // 610.43.02 … 615.71.09
         ],
     };
@@ -20906,7 +20907,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_INTERNAL_GR_MAX_GPC: ValueRuns = ValueRuns {
     runs: &[
         r(v(535, 309, 1), v(575, 64, 5), Some(0xc)), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(590, 48, 1), Some(0x10)), // 580.65.06 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(0x20)), // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(0x20)), // 595.84 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x40)), // 610.43.02 … 615.71.09
     ],
 };
@@ -20915,7 +20916,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_INTERNAL_GR_MAX_GPC: ValueRuns = ValueRuns {
 pub const CTRL_LIMITS_NV2080_CTRL_INTERNAL_GR_MAX_SM: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_INTERNAL_GR_MAX_SM",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0xf0)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0xf0)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x200)), // 610.43.02 … 615.71.09
     ],
 };
@@ -21058,7 +21059,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_INTERNAL_UCODE_INSTRUMENTATION_MAX_DATA_SIZE: 
     ValueRuns {
         name: "ctrl_limits:NV2080_CTRL_INTERNAL_UCODE_INSTRUMENTATION_MAX_DATA_SIZE",
         runs: &[
-            r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+            r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x10000)), // 610.43.02 … 615.71.09
         ],
     };
@@ -21144,7 +21145,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_MAX_NVU32_TO_CONVERTED_STR_LEN: ValueRuns = Va
 pub const CTRL_LIMITS_NV2080_CTRL_MAX_PCES: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_MAX_PCES",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x20)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x20)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x40)),  // 610.43.02 … 615.71.09
     ],
 };
@@ -21281,7 +21282,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_COUNTERS_MAX: ValueRuns = ValueRuns {
     runs: &[
         r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
         r(v(560, 28, 3), v(580, 178, 4), Some(0x6b)), // 560.28.03 … 580.178.04
-        r(v(590, 48, 1), v(595, 84, 0), Some(0x6d)), // 590.48.01 … 595.84
+        r(v(590, 48, 1), v(595, 91, 7), Some(0x6d)), // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(0x72)), // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(0x91)), // 615.71.09 … 615.71.09
     ],
@@ -21879,7 +21880,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_COUNTER_INVALID: ValueRuns = ValueRuns 
 pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ACTIVE: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ACTIVE",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x71)), // 610.43.02 … 615.71.09
     ],
 };
@@ -21889,7 +21890,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ACTIVE_DUE_TO_L1_REQ
     ValueRuns {
         name: "ctrl_limits:NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ACTIVE_DUE_TO_L1_REQ",
         runs: &[
-            r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+            r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x70)), // 610.43.02 … 615.71.09
         ],
     };
@@ -21898,7 +21899,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ACTIVE_DUE_TO_L1_REQ
 pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ENTRY: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ENTRY",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x6d)), // 610.43.02 … 615.71.09
     ],
 };
@@ -21908,7 +21909,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ENTRY_DUE_TO_L1: Val
     ValueRuns {
         name: "ctrl_limits:NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_ENTRY_DUE_TO_L1",
         runs: &[
-            r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+            r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x6e)), // 610.43.02 … 615.71.09
         ],
     };
@@ -21918,7 +21919,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_REQ_NOT_YET_ACTIVE: 
     ValueRuns {
         name: "ctrl_limits:NV2080_CTRL_NVLINK_COUNTER_L0_TX_IDLE_REQ_NOT_YET_ACTIVE",
         runs: &[
-            r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+            r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x6f)), // 610.43.02 … 615.71.09
         ],
     };
@@ -23100,7 +23101,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_GET_NVLE_PKT_COUNTERS_PARAMS_MESSAGE_ID
     ValueRuns {
         name: "ctrl_limits:NV2080_CTRL_NVLINK_GET_NVLE_PKT_COUNTERS_PARAMS_MESSAGE_ID",
         runs: &[
-            r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+            r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
             r(v(610, 43, 2), v(615, 71, 9), Some(0x9f)), // 610.43.02 … 615.71.09
         ],
     };
@@ -23154,7 +23155,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_LP_COUNTERS_DL: ValueRuns = ValueRuns {
 pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_MAX_ALID_CLID_TABLE_ENTRIES: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_NVLINK_MAX_ALID_CLID_TABLE_ENTRIES",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x80)), // 610.43.02 … 615.71.09
     ],
 };
@@ -23232,7 +23233,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_MAX_REMAP_TABLE_ENTRIES: ValueRuns = Va
 pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_MAX_REMAP_TABLE_ENTRIES_V2: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_NVLINK_MAX_REMAP_TABLE_ENTRIES_V2",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x1000)), // 610.43.02 … 615.71.09
     ],
 };
@@ -23259,7 +23260,7 @@ pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_MAX_SEED_NUM: ValueRuns = ValueRuns {
 pub const CTRL_LIMITS_NV2080_CTRL_NVLINK_NVLE_AES_256_GCM_KEY_SIZE_BYTES: ValueRuns = ValueRuns {
     name: "ctrl_limits:NV2080_CTRL_NVLINK_NVLE_AES_256_GCM_KEY_SIZE_BYTES",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x20)), // 610.43.02 … 615.71.09
     ],
 };
@@ -24125,6 +24126,150 @@ pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_VAL_INVALID: V
         ],
     };
 
+/// `intr_consts:NV2080_INTR_INVALID_SUBTREE`
+pub const INTR_CONSTS_NV2080_INTR_INVALID_SUBTREE: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_INVALID_SUBTREE",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xff)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_ACCESS_CNTR`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_ACCESS_CNTR: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_ACCESS_CNTR",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x6)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_CPU_DOORBELL`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_CPU_DOORBELL: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_CPU_DOORBELL",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x8)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_GR0_FECS_LOG`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_GR0_FECS_LOG: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_GR0_FECS_LOG",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x9)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_GR1_FECS_LOG`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_GR1_FECS_LOG: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_GR1_FECS_LOG",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xa)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_GR2_FECS_LOG`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_GR2_FECS_LOG: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_GR2_FECS_LOG",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xb)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_GR3_FECS_LOG`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_GR3_FECS_LOG: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_GR3_FECS_LOG",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xc)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_GR4_FECS_LOG`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_GR4_FECS_LOG: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_GR4_FECS_LOG",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xd)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_GR5_FECS_LOG`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_GR5_FECS_LOG: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_GR5_FECS_LOG",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xe)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_GR6_FECS_LOG`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_GR6_FECS_LOG: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_GR6_FECS_LOG",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xf)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_GR7_FECS_LOG`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_GR7_FECS_LOG: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_GR7_FECS_LOG",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x10)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_INFO_FAULT`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_INFO_FAULT: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_INFO_FAULT",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x3)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_NON_REPLAYABLE_FAULT`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_NON_REPLAYABLE_FAULT: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_NON_REPLAYABLE_FAULT",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x1)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_NON_REPLAYABLE_FAULT_ERROR`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_NON_REPLAYABLE_FAULT_ERROR: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_NON_REPLAYABLE_FAULT_ERROR",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x2)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_NULL`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_NULL: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_NULL",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_REPLAYABLE_FAULT`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_REPLAYABLE_FAULT: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_REPLAYABLE_FAULT",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x4)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_REPLAYABLE_FAULT_ERROR`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_REPLAYABLE_FAULT_ERROR: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_REPLAYABLE_FAULT_ERROR",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x5)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `intr_consts:NV2080_INTR_TYPE_TMR`
+pub const INTR_CONSTS_NV2080_INTR_TYPE_TMR: ValueRuns = ValueRuns {
+    name: "intr_consts:NV2080_INTR_TYPE_TMR",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x7)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `libos_consts:LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX`
 pub const LIBOS_CONSTS_LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX: ValueRuns = ValueRuns {
     name: "libos_consts:LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX",
@@ -24822,7 +24967,7 @@ pub const MC_ENGINE_IDX_MC_ENGINE_IDX_ISOHUB: ValueRuns = ValueRuns {
 pub const MC_ENGINE_IDX_MC_ENGINE_IDX_LPSEC: ValueRuns = ValueRuns {
     name: "mc_engine_idx:MC_ENGINE_IDX_LPSEC",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xb4)), // 610.43.02 … 615.71.09
     ],
 };
@@ -24855,7 +25000,7 @@ pub const MC_ENGINE_IDX_MC_ENGINE_IDX_MAX: ValueRuns = ValueRuns {
         r(v(555, 42, 2), v(565, 57, 1), Some(0xaf)),   // 555.42.02 … 565.57.01
         r(v(570, 86, 15), v(570, 148, 8), Some(0xb1)), // 570.86.15 … 570.148.08
         r(v(575, 51, 2), v(580, 178, 4), Some(0xb3)),  // 575.51.02 … 580.178.04
-        r(v(590, 48, 1), v(595, 84, 0), Some(0xb4)),   // 590.48.01 … 595.84
+        r(v(590, 48, 1), v(595, 91, 7), Some(0xb4)),   // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xb5)),   // 610.43.02 … 615.71.09
     ],
 };
@@ -27436,7 +27581,7 @@ pub const NV2080_NOTIFIERS_NV2080_NOTIFIERS_INBAND_RESPONSE: ValueRuns = ValueRu
 pub const NV2080_NOTIFIERS_NV2080_NOTIFIERS_INFOROM_BRL_OBJECT_UPDATED: ValueRuns = ValueRuns {
     name: "nv2080_notifiers:NV2080_NOTIFIERS_INFOROM_BRL_OBJECT_UPDATED",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xc7)), // 610.43.02 … 615.71.09
     ],
 };
@@ -27484,7 +27629,7 @@ pub const NV2080_NOTIFIERS_NV2080_NOTIFIERS_MAXCOUNT: ValueRuns = ValueRuns {
         r(v(565, 57, 1), v(565, 57, 1), Some(0xc3)),   // 565.57.01 … 565.57.01
         r(v(570, 86, 15), v(570, 148, 8), Some(0xc5)), // 570.86.15 … 570.148.08
         r(v(575, 51, 2), v(580, 178, 4), Some(0xc6)),  // 575.51.02 … 580.178.04
-        r(v(590, 48, 1), v(595, 84, 0), Some(0xc7)),   // 590.48.01 … 595.84
+        r(v(590, 48, 1), v(595, 91, 7), Some(0xc7)),   // 590.48.01 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(0xc8)),   // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(0xca)),   // 615.71.09 … 615.71.09
     ],
@@ -28220,7 +28365,7 @@ pub const NV2080_NOTIFIERS_NV2080_NOTIFIERS_VLD: ValueRuns = ValueRuns {
 pub const NV2080_NOTIFIERS_NV2080_NOTIFIERS_VRR_SET_TIMEOUT: ValueRuns = ValueRuns {
     name: "nv2080_notifiers:NV2080_NOTIFIERS_VRR_SET_TIMEOUT",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0xb3)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0xb3)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -29992,7 +30137,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_GPU_QUERY_ECC_STATUS: ValueRun
 pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_GPU_SET_MIGRATION_BLOCK: ValueRuns = ValueRuns {
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_GPU_SET_MIGRATION_BLOCK",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0xe5)), // 610.43.02 … 615.71.09
     ],
 };
@@ -30758,7 +30903,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_NUM_FUNCTIONS: ValueRuns = ValueRun
         r(v(580, 65, 6), v(580, 126, 9), Some(0xe4)), // 580.65.06 … 580.126.09
         r(v(580, 159, 4), v(580, 178, 4), Some(0xe5)), // 580.159.04 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(0xe4)),  // 590.48.01 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(0xe5)),  // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(0xe5)),  // 595.84 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(0xe6)),  // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(0xe8)),  // 615.71.09 … 615.71.09
     ],
@@ -31258,7 +31403,7 @@ pub const UVM_IOCTLS_UVM_ALLOC_SEMAPHORE_POOL: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_ALLOW_MIGRATION_RANGE_GROUPS: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_ALLOW_MIGRATION_RANGE_GROUPS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x29)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x29)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -31405,7 +31550,7 @@ pub const UVM_IOCTLS_UVM_CREATE_EXTERNAL_RANGE: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_CREATE_RANGE_GROUP: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_CREATE_RANGE_GROUP",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x17)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x17)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -31441,7 +31586,7 @@ pub const UVM_IOCTLS_UVM_DEBUG_V1: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_DESTROY_RANGE_GROUP: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_DESTROY_RANGE_GROUP",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x18)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x18)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -31712,7 +31857,7 @@ pub const UVM_IOCTLS_UVM_INIT_FLAGS_DISABLE_HMM: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_INIT_FLAGS_DISABLE_PAGEABLE_ACCESS: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_INIT_FLAGS_DISABLE_PAGEABLE_ACCESS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x4)), // 610.43.02 … 615.71.09
     ],
 };
@@ -31721,7 +31866,7 @@ pub const UVM_IOCTLS_UVM_INIT_FLAGS_DISABLE_PAGEABLE_ACCESS: ValueRuns = ValueRu
 pub const UVM_IOCTLS_UVM_INIT_FLAGS_DISABLE_PAGEABLE_MIGRATIONS: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_INIT_FLAGS_DISABLE_PAGEABLE_MIGRATIONS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x1)), // 610.43.02 … 615.71.09
     ],
 };
@@ -31730,7 +31875,7 @@ pub const UVM_IOCTLS_UVM_INIT_FLAGS_DISABLE_PAGEABLE_MIGRATIONS: ValueRuns = Val
 pub const UVM_IOCTLS_UVM_INIT_FLAGS_MASK: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_INIT_FLAGS_MASK",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x3)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x3)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x7)),  // 610.43.02 … 615.71.09
     ],
 };
@@ -31877,7 +32022,7 @@ pub const UVM_IOCTLS_UVM_MAX_PROCESSORS_V2: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_MAX_RANGE_GROUPS_PER_IOCTL_CALL: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_MAX_RANGE_GROUPS_PER_IOCTL_CALL",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x20)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x20)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -31950,7 +32095,7 @@ pub const UVM_IOCTLS_UVM_MIGRATE_FLAG_SKIP_CPU_MAP: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_MIGRATE_RANGE_GROUP: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_MIGRATE_RANGE_GROUP",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x35)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x35)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -32133,7 +32278,7 @@ pub const UVM_IOCTLS_UVM_POPULATE_PAGEABLE_FLAG_SKIP_PROT_CHECK: ValueRuns = Val
 pub const UVM_IOCTLS_UVM_PREVENT_MIGRATION_RANGE_GROUPS: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PREVENT_MIGRATION_RANGE_GROUPS",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x28)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x28)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -32151,7 +32296,7 @@ pub const UVM_IOCTLS_UVM_PROCESSOR_MASK_SIZE: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_QUERY_RESIDENCY: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_QUERY_RESIDENCY",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), None), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), None), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), Some(0x51)), // 610.43.02 … 615.71.09
     ],
 };
@@ -32292,7 +32437,7 @@ pub const UVM_IOCTLS_UVM_SET_PREFERRED_LOCATION: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_SET_RANGE_GROUP: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_SET_RANGE_GROUP",
     runs: &[
-        r(v(535, 309, 1), v(595, 84, 0), Some(0x1f)), // 535.309.01 … 595.84
+        r(v(535, 309, 1), v(595, 91, 7), Some(0x1f)), // 535.309.01 … 595.91.07
         r(v(610, 43, 2), v(615, 71, 9), None),        // 610.43.02 … 615.71.09
     ],
 };
@@ -32514,7 +32659,7 @@ pub const VGX_VERSION_VGX_MAJOR_VERSION_NUMBER: ValueRuns = ValueRuns {
         r(v(575, 51, 2), v(575, 64, 5), Some(0x2a)),   // 575.51.02 … 575.64.05
         r(v(580, 65, 6), v(580, 178, 4), Some(0x2b)),  // 580.65.06 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(0x2c)),   // 590.48.01 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(0x2d)),   // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(0x2d)),   // 595.84 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(0x2e)),   // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(0x2f)),   // 615.71.09 … 615.71.09
     ],
@@ -32537,7 +32682,7 @@ pub const VGX_VERSION_VGX_MINOR_VERSION_NUMBER: ValueRuns = ValueRuns {
         r(v(575, 51, 2), v(575, 64, 5), Some(0x9)),   // 575.51.02 … 575.64.05
         r(v(580, 65, 6), v(580, 178, 4), Some(0x13)), // 580.65.06 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(0x7)),   // 590.48.01 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(0x3)),   // 595.84 … 595.84
+        r(v(595, 84, 0), v(595, 91, 7), Some(0x3)),   // 595.84 … 595.91.07
         r(v(610, 43, 2), v(610, 57, 4), Some(0xd)),   // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(0x6)),   // 615.71.09 … 615.71.09
     ],
@@ -34247,6 +34392,24 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR,
     &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_U8,
     &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_VAL_INVALID,
+    &INTR_CONSTS_NV2080_INTR_INVALID_SUBTREE,
+    &INTR_CONSTS_NV2080_INTR_TYPE_ACCESS_CNTR,
+    &INTR_CONSTS_NV2080_INTR_TYPE_CPU_DOORBELL,
+    &INTR_CONSTS_NV2080_INTR_TYPE_GR0_FECS_LOG,
+    &INTR_CONSTS_NV2080_INTR_TYPE_GR1_FECS_LOG,
+    &INTR_CONSTS_NV2080_INTR_TYPE_GR2_FECS_LOG,
+    &INTR_CONSTS_NV2080_INTR_TYPE_GR3_FECS_LOG,
+    &INTR_CONSTS_NV2080_INTR_TYPE_GR4_FECS_LOG,
+    &INTR_CONSTS_NV2080_INTR_TYPE_GR5_FECS_LOG,
+    &INTR_CONSTS_NV2080_INTR_TYPE_GR6_FECS_LOG,
+    &INTR_CONSTS_NV2080_INTR_TYPE_GR7_FECS_LOG,
+    &INTR_CONSTS_NV2080_INTR_TYPE_INFO_FAULT,
+    &INTR_CONSTS_NV2080_INTR_TYPE_NON_REPLAYABLE_FAULT,
+    &INTR_CONSTS_NV2080_INTR_TYPE_NON_REPLAYABLE_FAULT_ERROR,
+    &INTR_CONSTS_NV2080_INTR_TYPE_NULL,
+    &INTR_CONSTS_NV2080_INTR_TYPE_REPLAYABLE_FAULT,
+    &INTR_CONSTS_NV2080_INTR_TYPE_REPLAYABLE_FAULT_ERROR,
+    &INTR_CONSTS_NV2080_INTR_TYPE_TMR,
     &LIBOS_CONSTS_LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX,
     &LIBOS_CONSTS_LIBOS_MEMORY_REGION_RADIX_PAGE_LOG2,
     &LIBOS_CONSTS_LIBOS_MEMORY_REGION_RADIX_PAGE_SIZE,
