@@ -64,6 +64,7 @@
 #include "system/kvm.h"
 #include "qemu/event_notifier.h"
 #include "qemu/main-loop.h"
+#include "block/aio.h"
 #include "qemu/thread.h"
 #include "ui/console.h"
 #include "ui/input.h"
@@ -1464,8 +1465,14 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         /* ★ ABI 16: the on-demand refresh's answer and its backstop */
         s->refresh_fd = kf3_display_refresh_fd(s->h);
         if (s->refresh_fd >= 0) {
-            s->refresh_timer = timer_new_ms(QEMU_CLOCK_REALTIME, kf3_refresh_backstop, s);
-            qemu_set_fd_handler(s->refresh_fd, kf3_refresh_ready, NULL, s);
+            /* HMP waits for screendump's coroutine with aio_poll on this context.
+             * qemu_set_fd_handler uses the separate iohandler context, and ordinary
+             * timers also need the outer main loop: neither can end that wait.
+             * Keep both completion and backstop on the context the waiter polls. */
+            s->refresh_timer = aio_timer_new(qemu_get_aio_context(), QEMU_CLOCK_REALTIME,
+                                             SCALE_MS, kf3_refresh_backstop, s);
+            aio_set_fd_handler(qemu_get_aio_context(), s->refresh_fd,
+                               kf3_refresh_ready, NULL, NULL, NULL, s);
         }
     }
 
@@ -1504,7 +1511,8 @@ static void kf3_dev_exit(PCIDevice *pci)
         kf3_broker_exit(s);
         /* ★ ABI 16: no refresh answer arrives after this; a screendump still waiting ends now */
         if (s->refresh_fd >= 0) {
-            qemu_set_fd_handler(s->refresh_fd, NULL, NULL, NULL);
+            aio_set_fd_handler(qemu_get_aio_context(), s->refresh_fd,
+                               NULL, NULL, NULL, NULL, NULL);
             s->refresh_fd = -1;
         }
         if (s->refresh_timer) {
