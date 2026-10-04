@@ -31,7 +31,10 @@ frequency and VF timers. Registers carry ordinary read semantics; alarm acknowle
 **write**, not a read-to-clear operation. Nouveau's `nvkm/subdev/timer/nv04.c` reads high-low-high
 until stable and acknowledges interrupts with `nvkm_wr32`; it corroborates the lack of a read
 latch. The stronger permission oracle is OGKM explicitly permitting unprivileged reads of the
-whole page, including SDK-reserved words. This does not authorize writes, or claim every physical
+whole page, including SDK-reserved words. The textual source census in
+`traces/windows_timer_20261005/source-map-audit.tsv` checks this at all 30 measured tags; their
+eight non-NVSwitch timer-header macro inventories are identical. This textual census is not a
+compiler proof of C reachability. This does not authorize writes, or claim every physical
 GPU has been tested. No proprietary captured register values define product behavior.
 
 ## Serving and lifetime
@@ -59,7 +62,14 @@ map/read/drop cycles.
 
 - Frozen pre-v3 `kayfabe-rm-ladder --timer` correctly refused host 595.91.07 because its codec is
   580-only; no version guard was bypassed (`traces/windows_timer_20261005/native-unprivileged.txt`).
-- Native v3 probe and final GPU-free results are pending; see the evidence directory for the
-  completed revision-stamped results. The broad test run initially found an unrelated-looking
-  trybuild/toolchain failure: every intentionally invalid raw-layer sample was reported as
-  compiling; that remains under investigation and must not be called green.
+- Native v3 probe at **831f6bd755be7abd2e6b219fd377a692e5f78126** passed three read-only
+  alloc/map/read/drop cycles on AD104 / 595.91.07, with uid/gid 65534, no groups or capabilities,
+  and no-new-privileges. Timer/user-mode readings agree within 2944 ns. Full log:
+  `traces/windows_timer_20261005/native-v3-unprivileged.txt`. This is one die/driver pair.
+- At the same product revision, **1380 tests passed, zero failed**, in 78 suites across
+  `kf-abi`, `kf-host`, `kf-linux-raw`, `kf-rm`, `kf-trap` and `kf-qemu`;
+  `traces/windows_timer_20261005/tests.log`. Includes all nine compile-fail samples.
+- The initial trybuild failure was diagnosed: controller `/dev/null` had become a regular
+  file. Its contents became rustc stdin and poisoned Cargo target-discovery cache. Restoring
+  character device 1:3 (mode 666) and clearing only this target's poisoned `.rustc_info.json`
+  restored the unchanged tests. No snapshot was weakened or re-blessed.
