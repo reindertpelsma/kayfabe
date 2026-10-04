@@ -11,7 +11,9 @@ fix this file. Entries below the first are dated history.
 
 **Windows research update, 2026-10-04:** the owner subsequently requested the
 native Vast Windows installer and GSP recorder. The public installer is backed
-up separately, and the current owned rental is installing Windows. See the
+up separately. The owned rental passed Windows cold boots and actual public-key
+SSH login; recorder kernel loading and native cutover remain under test. A
+borrowed RTX 4070 machine is also installing a fresh Windows fixture. See the
 [Windows lane handoff](handoff/2026-10-04/windows-native.md) for source branches,
 instance ownership, verification limits and remaining steps. This supersedes
 the statement below that Windows is parked; it does not change candidate 2's
