@@ -1,0 +1,6 @@
+{
+    "time":  "2026-10-04T20:55:07.7333233Z",
+    "action":  "shutdown Windows fixture; supervisor restores Linux PCI ownership",
+    "probe_exit":  0,
+    "observer":  "Stopped"
+}

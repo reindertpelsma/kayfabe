@@ -7,6 +7,37 @@ produced 4,535 validated records, but no target query pair yet.** The owner requ
 2 handoff. It does not change the product merge requirements or claim a Windows
 guest works through Kayfabe.
 
+## PC returned; native D3D11 reference, 20:55 UTC
+
+**This supersedes the later historical unavailable-PC notes.** The owner
+reported the PC back online. SSH recovered after the initial timeout. A fresh
+independent clone of the preserved Windows working disk passed disk check and
+comparison, then booted through the pinned VFIO helper. Native NVIDIA 580.88 /
+GSP 580.65.05 was healthy. The probe from `572411c1` passed four GPU
+clear/copy/readbacks and device-health checks. [Evidence and reproduction](../../../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-d3d11/README.md)
+retain 1,074 validated records and zero pool-query records. This is still a
+partial passive reference recording, not Windows running through Kayfabe.
+
+The capture drained and the observer was stopped/demand-start. Windows shut
+down normally and the supervisor restored Linux NVIDIA/audio/display services
+at 20:55:26 UTC, with zero recovery errors. New regeneratable session image:
+`/var/lib/kf4070-resume-20261004/staging.qcow2`; original session image remains
+unchanged. Resume source is `tools/windows-gsp-trace/tests/resume-native4070.py`
+at `219b4ee7`. The controller holds all useful evidence; nothing unique relies
+on the borrowed PC staying online. No new rental was needed.
+
+The owner's stub question prompted a [more concrete pool-source review](../../../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/command-catalogue/gfx-pool-source.md):
+OGKM publishes control-block offsets as well as the exact query/lifecycle APIs,
+and Linux firmware-client context promotion includes the pool/control block.
+A bounded local-pool experiment need not wait for another capture. Exact
+hardware sizing and Windows compatibility remain unproven; no product stub
+was added in this research update. Preserve the host-twin policy and real
+preemption/completion requirements.
+
+Repository root instructions now live in `AGENTS.md`; `CLAUDE.md` and
+`GEMINI.md` are relative symlinks, committed as `bb07d20a` and also applied in
+the original `/workspace/kayfabe` checkout without touching its CI edits.
+
 ## Ordinary-user proof and scope corrections, 2026-10-04
 
 The owner requested positive confirmation of which observed RPCs can originate
@@ -76,8 +107,9 @@ exported-method dispatch. The catalogue now links all three and distinguishes
 OGKM interface availability from proprietary firmware implementation. No
 all-version OGKM rejection or proprietary-CPU-driver-only claim is established.
 
-The borrowed PC timed out; the owner says it was probably handed over. Treat it
-as unavailable and do not retry/reboot it as part of this offline work. Unique
+**Historical, superseded by the PC-return section above:** the borrowed PC
+timed out and the owner said it was probably handed over. That offline pass
+treated it as unavailable and made no further reconnect/reboot attempts. Unique
 capture/code is already saved. That earlier offline comparison started no
 rental; the later Linux test above did. No product behavior changed and no
 Windows-through-Kayfabe success is claimed. The earlier

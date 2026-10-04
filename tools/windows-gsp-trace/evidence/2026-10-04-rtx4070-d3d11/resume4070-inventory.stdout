@@ -1,0 +1,508 @@
+{
+    "time":  "2026-10-04T20:52:02.1457995Z",
+    "os":  {
+               "Caption":  "Microsoft Windows 11 Enterprise LTSC Evaluation",
+               "Version":  "10.0.26100",
+               "LastBootUpTime":  "\/Date(1791147102500)\/"
+           },
+    "gpu":  [
+                {
+                    "Status":  "Error",
+                    "Class":  "Display",
+                    "FriendlyName":  "Microsoft Basic Display Adapter",
+                    "InstanceId":  "PCI\\VEN_1234\u0026DEV_1111\u0026SUBSYS_11001AF4\u0026REV_02\\3\u0026267A616A\u00260\u002648",
+                    "Problem":  10
+                },
+                {
+                    "Status":  "OK",
+                    "Class":  "Display",
+                    "FriendlyName":  "NVIDIA GeForce RTX 4070",
+                    "InstanceId":  "PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267A616A\u00260\u002630",
+                    "Problem":  0
+                }
+            ],
+    "observer":  "Stopped",
+    "observer_start":  3,
+    "tasks":  [
+                  {
+                      "TaskName":  "KayfabeGspCapture4070",
+                      "State":  3
+                  },
+                  {
+                      "TaskName":  "KayfabeGspCapture4070Boot",
+                      "State":  1
+                  },
+                  {
+                      "TaskName":  "KayfabeGspCapture4070Retry",
+                      "State":  3
+                  },
+                  {
+                      "TaskName":  "KayfabeNativeGpu4070",
+                      "State":  3
+                  },
+                  {
+                      "TaskName":  "KayfabeNativeGpu4070Retry",
+                      "State":  3
+                  },
+                  {
+                      "TaskName":  "VastWindowsNativeGpu",
+                      "State":  3
+                  },
+                  {
+                      "TaskName":  "VastWindowsNetwork",
+                      "State":  3
+                  }
+              ],
+    "deferred":  true,
+    "reboots_held":  true,
+    "artifacts":  [
+                      {
+                          "Name":  "build-info.json",
+                          "Length":  1700
+                      },
+                      {
+                          "Name":  "build.log",
+                          "Length":  6346
+                      },
+                      {
+                          "Name":  "gsptrace-candidates-0797f6ae.exe",
+                          "Length":  161280
+                      },
+                      {
+                          "Name":  "gsptrace.exe",
+                          "Length":  161280
+                      },
+                      {
+                          "Name":  "gsptrace.sys",
+                          "Length":  26624
+                      },
+                      {
+                          "Name":  "windows_api_test.exe",
+                          "Length":  144384
+                      }
+                  ],
+    "captures":  [
+                     {
+                         "name":  "rtx4070-first-driver-init",
+                         "files":  [
+                                       {
+                                           "Name":  "before.json",
+                                           "Length":  825
+                                       },
+                                       {
+                                           "Name":  "collect-task.ps1",
+                                           "Length":  2745
+                                       },
+                                       {
+                                           "Name":  "collector-exit.json",
+                                           "Length":  55
+                                       },
+                                       {
+                                           "Name":  "collector.stderr",
+                                           "Length":  115
+                                       },
+                                       {
+                                           "Name":  "collector.stdout",
+                                           "Length":  246
+                                       },
+                                       {
+                                           "Name":  "drain-result.json",
+                                           "Length":  2787
+                                       },
+                                       {
+                                           "Name":  "gsp.jsonl",
+                                           "Length":  911
+                                       },
+                                       {
+                                           "Name":  "gsp.kgwt",
+                                           "Length":  64
+                                       },
+                                       {
+                                           "Name":  "gsp.kgwt.stats.json",
+                                           "Length":  246
+                                       },
+                                       {
+                                           "Name":  "stop.flag",
+                                           "Length":  0
+                                       }
+                                   ]
+                     },
+                     {
+                         "name":  "rtx4070-first-install",
+                         "files":  [
+                                       {
+                                           "Name":  "after.json",
+                                           "Length":  825
+                                       },
+                                       {
+                                           "Name":  "before.json",
+                                           "Length":  825
+                                       },
+                                       {
+                                           "Name":  "collect-task.ps1",
+                                           "Length":  1423
+                                       },
+                                       {
+                                           "Name":  "collector-exit.json",
+                                           "Length":  58
+                                       },
+                                       {
+                                           "Name":  "collector.stderr",
+                                           "Length":  115
+                                       },
+                                       {
+                                           "Name":  "collector.stdout",
+                                           "Length":  246
+                                       },
+                                       {
+                                           "Name":  "drain-result.json",
+                                           "Length":  2829
+                                       },
+                                       {
+                                           "Name":  "gsp.jsonl",
+                                           "Length":  910
+                                       },
+                                       {
+                                           "Name":  "gsp.kgwt",
+                                           "Length":  64
+                                       },
+                                       {
+                                           "Name":  "gsp.kgwt.stats.json",
+                                           "Length":  246
+                                       },
+                                       {
+                                           "Name":  "stop.flag",
+                                           "Length":  0
+                                       }
+                                   ]
+                     },
+                     {
+                         "name":  "rtx4070-gsp-policy-boot",
+                         "files":  [
+                                       {
+                                           "Name":  "boot-arm-journal.json",
+                                           "Length":  480
+                                       },
+                                       {
+                                           "Name":  "boot-observer-initial.json",
+                                           "Length":  276
+                                       },
+                                       {
+                                           "Name":  "collect-task.ps1",
+                                           "Length":  3936
+                                       },
+                                       {
+                                           "Name":  "collector-exit.json",
+                                           "Length":  55
+                                       },
+                                       {
+                                           "Name":  "collector.stderr",
+                                           "Length":  102
+                                       },
+                                       {
+                                           "Name":  "collector.stdout",
+                                           "Length":  273
+                                       },
+                                       {
+                                           "Name":  "gfx-pool-query.jsonl",
+                                           "Length":  959
+                                       },
+                                       {
+                                           "Name":  "gsp.jsonl",
+                                           "Length":  53749282
+                                       },
+                                       {
+                                           "Name":  "gsp.kgwt",
+                                           "Length":  26509784
+                                       },
+                                       {
+                                           "Name":  "gsp.kgwt.stats.json",
+                                           "Length":  273
+                                       },
+                                       {
+                                           "Name":  "native-state-before-reconcile.json",
+                                           "Length":  1295
+                                       },
+                                       {
+                                           "Name":  "restored.json",
+                                           "Length":  2745
+                                       },
+                                       {
+                                           "Name":  "startup-task.xml",
+                                           "Length":  1301
+                                       },
+                                       {
+                                           "Name":  "startup.json",
+                                           "Length":  116
+                                       },
+                                       {
+                                           "Name":  "stop.flag",
+                                           "Length":  0
+                                       }
+                                   ]
+                     }
+                 ]
+}
+
+==============NVSMI LOG==============
+
+Timestamp                                 : Sun Oct  4 20:52:04 2026
+Driver Version                            : 580.88
+CUDA Version                              : 13.0
+
+Attached GPUs                             : 1
+GPU 00000000:00:06.0
+    Product Name                          : NVIDIA GeForce RTX 4070
+    Product Brand                         : GeForce
+    Product Architecture                  : Ada Lovelace
+    Display Mode                          : Requested functionality has been deprecated
+    Display Attached                      : Yes
+    Display Active                        : Enabled
+    Persistence Mode                      : N/A
+    Addressing Mode                       : N/A
+    MIG Mode
+        Current                           : N/A
+        Pending                           : N/A
+    Accounting Mode                       : Disabled
+    Accounting Mode Buffer Size           : 4000
+    Driver Model
+        Current                           : WDDM
+        Pending                           : WDDM
+    Serial Number                         : N/A
+    GPU UUID                              : GPU-66e52545-2112-d450-dc8e-cb07d6f31d6c
+    GPU PDI                               : 0x3e7fae96a4a0fcc2
+    Minor Number                          : N/A
+    VBIOS Version                         : 95.04.3e.08.be
+    MultiGPU Board                        : No
+    Board ID                              : 0x6
+    Board Part Number                     : N/A
+    GPU Part Number                       : 2786-251-A1
+    FRU Part Number                       : N/A
+    Platform Info
+        Chassis Serial Number             : N/A
+        Slot Number                       : N/A
+        Tray Index                        : N/A
+        Host ID                           : N/A
+        Peer Type                         : N/A
+        Module Id                         : 1
+        GPU Fabric GUID                   : N/A
+    Inforom Version
+        Image Version                     : G002.0000.00.03
+        OEM Object                        : 2.0
+        ECC Object                        : N/A
+        Power Management Object           : N/A
+    Inforom BBX Object Flush
+        Latest Timestamp                  : N/A
+        Latest Duration                   : N/A
+    GPU Operation Mode
+        Current                           : N/A
+        Pending                           : N/A
+    GPU C2C Mode                          : N/A
+    GPU Virtualization Mode
+        Virtualization Mode               : Pass-Through
+        Host VGPU Mode                    : N/A
+        vGPU Heterogeneous Mode           : N/A
+    GPU Recovery Action                   : None
+    GSP Firmware Version                  : 580.65.05
+    IBMNPU
+        Relaxed Ordering Mode             : N/A
+    PCI
+        Bus                               : 0x00
+        Device                            : 0x06
+        Domain                            : 0x0000
+        Device Id                         : 0x278610DE
+        Bus Id                            : 00000000:00:06.0
+        Sub System Id                     : 0x40EE1458
+        GPU Link Info
+            PCIe Generation
+                Max                       : 4
+                Current                   : 1
+                Device Current            : 1
+                Device Max                : 4
+                Host Max                  : N/A
+            Link Width
+                Max                       : 16x
+                Current                   : 16x
+        Bridge Chip
+            Type                          : N/A
+            Firmware                      : N/A
+        Replays Since Reset               : 0
+        Replay Number Rollovers           : 0
+        Tx Throughput                     : 450 KB/s
+        Rx Throughput                     : 350 KB/s
+        Atomic Caps Outbound              : N/A
+        Atomic Caps Inbound               : N/A
+    Fan Speed                             : 0 %
+    Performance State                     : P8
+    Clocks Event Reasons
+        Idle                              : Active
+        Applications Clocks Setting       : Not Active
+        SW Power Cap                      : Not Active
+        HW Slowdown                       : Not Active
+            HW Thermal Slowdown           : Not Active
+            HW Power Brake Slowdown       : Not Active
+        Sync Boost                        : Not Active
+        SW Thermal Slowdown               : Not Active
+        Display Clock Setting             : Not Active
+    Clocks Event Reasons Counters
+        SW Power Capping                  : 0 us
+        Sync Boost                        : 0 us
+        SW Thermal Slowdown               : 0 us
+        HW Thermal Slowdown               : 0 us
+        HW Power Braking                  : 0 us
+    Sparse Operation Mode                 : N/A
+    FB Memory Usage
+        Total                             : 12282 MiB
+        Reserved                          : 520 MiB
+        Used                              : 163 MiB
+        Free                              : 11600 MiB
+    BAR1 Memory Usage
+        Total                             : 16384 MiB
+        Used                              : 16356 MiB
+        Free                              : 28 MiB
+    Conf Compute Protected Memory Usage
+        Total                             : N/A
+        Used                              : N/A
+        Free                              : N/A
+    Compute Mode                          : Default
+    Utilization
+        GPU                               : 0 %
+        Memory                            : 32 %
+        Encoder                           : 0 %
+        Decoder                           : 0 %
+        JPEG                              : 0 %
+        OFA                               : 0 %
+    Encoder Stats
+        Active Sessions                   : 0
+        Average FPS                       : 0
+        Average Latency                   : 0
+    FBC Stats
+        Active Sessions                   : 0
+        Average FPS                       : 0
+        Average Latency                   : 0
+    DRAM Encryption Mode
+        Current                           : N/A
+        Pending                           : N/A
+    ECC Mode
+        Current                           : N/A
+        Pending                           : N/A
+    ECC Errors
+        Volatile
+            SRAM Correctable              : N/A
+            SRAM Uncorrectable Parity     : N/A
+            SRAM Uncorrectable SEC-DED    : N/A
+            DRAM Correctable              : N/A
+            DRAM Uncorrectable            : N/A
+        Aggregate
+            SRAM Correctable              : N/A
+            SRAM Uncorrectable Parity     : N/A
+            SRAM Uncorrectable SEC-DED    : N/A
+            DRAM Correctable              : N/A
+            DRAM Uncorrectable            : N/A
+            SRAM Threshold Exceeded       : N/A
+        Aggregate Uncorrectable SRAM Sources
+            SRAM L2                       : N/A
+            SRAM SM                       : N/A
+            SRAM Microcontroller          : N/A
+            SRAM PCIE                     : N/A
+            SRAM Other                    : N/A
+        Channel Repair Pending            : No
+        TPC Repair Pending                : No
+    Retired Pages
+        Single Bit ECC                    : N/A
+        Double Bit ECC                    : N/A
+        Pending Page Blacklist            : N/A
+    Remapped Rows
+        Correctable Error                 : 0
+        Uncorrectable Error               : 0
+        Pending                           : No
+        Remapping Failure Occurred        : No
+        Bank Remap Availability Histogram
+            Max                           : 96 bank(s)
+            High                          : 0 bank(s)
+            Partial                       : 0 bank(s)
+            Low                           : 0 bank(s)
+            None                          : 0 bank(s)
+    Temperature
+        GPU Current Temp                  : 35 C
+        GPU T.Limit Temp                  : 49 C
+        GPU Shutdown T.Limit Temp         : -7 C
+        GPU Slowdown T.Limit Temp         : -2 C
+        GPU Max Operating T.Limit Temp    : 0 C
+        GPU Target Temperature            : 84 C
+        Memory Current Temp               : N/A
+        Memory Max Operating T.Limit Temp : N/A
+    GPU Power Readings
+        Average Power Draw                : 8.53 W
+        Instantaneous Power Draw          : 8.53 W
+        Current Power Limit               : 200.00 W
+        Requested Power Limit             : 200.00 W
+        Default Power Limit               : 200.00 W
+        Min Power Limit                   : 100.00 W
+        Max Power Limit                   : 216.00 W
+    GPU Memory Power Readings 
+        Average Power Draw                : N/A
+        Instantaneous Power Draw          : N/A
+    Module Power Readings
+        Average Power Draw                : N/A
+        Instantaneous Power Draw          : N/A
+        Current Power Limit               : N/A
+        Requested Power Limit             : N/A
+        Default Power Limit               : N/A
+        Min Power Limit                   : N/A
+        Max Power Limit                   : N/A
+    Power Smoothing                       : N/A
+    Workload Power Profiles
+        Requested Profiles                : N/A
+        Enforced Profiles                 : N/A
+    Clocks
+        Graphics                          : 210 MHz
+        SM                                : 210 MHz
+        Memory                            : 405 MHz
+        Video                             : 1185 MHz
+    Applications Clocks
+        Graphics                          : N/A
+        Memory                            : N/A
+    Default Applications Clocks
+        Graphics                          : N/A
+        Memory                            : N/A
+    Deferred Clocks
+        Memory                            : N/A
+    Max Clocks
+        Graphics                          : 3120 MHz
+        SM                                : 3120 MHz
+        Memory                            : 10501 MHz
+        Video                             : 2415 MHz
+    Max Customer Boost Clocks
+        Graphics                          : N/A
+    Clock Policy
+        Auto Boost                        : N/A
+        Auto Boost Default                : N/A
+    Fabric
+        State                             : N/A
+        Status                            : N/A
+        CliqueId                          : N/A
+        ClusterUUID                       : N/A
+        Health
+            Summary                       : N/A
+            Bandwidth                     : N/A
+            Route Recovery in progress    : N/A
+            Route Unhealthy               : N/A
+            Access Timeout Recovery       : N/A
+            Incorrect Configuration       : N/A
+    Processes
+        GPU instance ID                   : N/A
+        Compute instance ID               : N/A
+        Process ID                        : 1340
+            Type                          : C+G
+            Name                          : C:\Windows\System32\LogonUI.exe
+            Used GPU Memory               : Not available in WDDM driver model
+        GPU instance ID                   : N/A
+        Compute instance ID               : N/A
+        Process ID                        : 1348
+            Type                          : C+G
+            Name                          : C:\Windows\System32\dwm.exe
+            Used GPU Memory               : Not available in WDDM driver model
+    Capabilities
+        EGM                               : disabled
+

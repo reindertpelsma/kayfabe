@@ -1,0 +1,8 @@
+﻿{
+    "time":  "2026-10-04T20:53:55.4483939Z",
+    "capture_bytes":  6671680,
+    "collector_task":  "Running",
+    "observer":  "Running",
+    "parallel_status_unavailable":  "exclusive collector handle",
+    "validation":  "strict decode after drain"
+}

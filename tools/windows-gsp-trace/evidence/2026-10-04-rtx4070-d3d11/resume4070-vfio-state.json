@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "before": {
+    "devices": {
+      "0000:01:00.0": {
+        "bdf": "0000:01:00.0",
+        "vendor": "0x10de",
+        "device": "0x2786",
+        "class": "0x030000",
+        "subsystem_vendor": "0x1458",
+        "subsystem_device": "0x40ee",
+        "driver": "nvidia",
+        "override": "",
+        "group": "11",
+        "group_members": [
+          "0000:01:00.0",
+          "0000:01:00.1"
+        ]
+      },
+      "0000:01:00.1": {
+        "bdf": "0000:01:00.1",
+        "vendor": "0x10de",
+        "device": "0x22bc",
+        "class": "0x040300",
+        "subsystem_vendor": "0x1458",
+        "subsystem_device": "0x40ee",
+        "driver": "snd_hda_intel",
+        "override": "",
+        "group": "11",
+        "group_members": [
+          "0000:01:00.0",
+          "0000:01:00.1"
+        ]
+      }
+    },
+    "amd": {
+      "bdf": "0000:0f:00.0",
+      "vendor": "0x1002",
+      "device": "0x164e",
+      "class": "0x030000",
+      "subsystem_vendor": "0x1462",
+      "subsystem_device": "0x7e26",
+      "driver": "amdgpu",
+      "override": "",
+      "group": "24",
+      "group_members": [
+        "0000:0f:00.0"
+      ]
+    },
+    "framebuffers": [
+      {
+        "name": "fb0",
+        "owner": "0000:01:00.0",
+        "description": "nvidia-drmdrmfb"
+      }
+    ],
+    "vtconsoles": [
+      {
+        "path": "/sys/class/vtconsole/vtcon0/bind",
+        "name": "(S) dummy device",
+        "bind": "1"
+      }
+    ],
+    "display_connectors": [
+      {
+        "name": "card0-DP-4",
+        "status": "disconnected",
+        "owner": "0000:0f:00.0"
+      },
+      {
+        "name": "card0-DP-5",
+        "status": "disconnected",
+        "owner": "0000:0f:00.0"
+      },
+      {
+        "name": "card0-DP-6",
+        "status": "disconnected",
+        "owner": "0000:0f:00.0"
+      },
+      {
+        "name": "card0-HDMI-A-2",
+        "status": "disconnected",
+        "owner": "0000:0f:00.0"
+      },
+      {
+        "name": "card0-Writeback-1",
+        "status": "unknown",
+        "owner": "0000:0f:00.0"
+      },
+      {
+        "name": "card1-DP-1",
+        "status": "connected",
+        "owner": "0000:01:00.0"
+      },
+      {
+        "name": "card1-DP-2",
+        "status": "disconnected",
+        "owner": "0000:01:00.0"
+      },
+      {
+        "name": "card1-DP-3",
+        "status": "disconnected",
+        "owner": "0000:01:00.0"
+      },
+      {
+        "name": "card1-HDMI-A-1",
+        "status": "disconnected",
+        "owner": "0000:01:00.0"
+      }
+    ],
+    "services": {
+      "gdm.service": true,
+      "nvidia-persistenced.service": true,
+      "nvidia-powerd.service": false
+    },
+    "aux_modules": {
+      "nvidia_drm": true,
+      "nvidia_modeset": true,
+      "nvidia_uvm": true
+    },
+    "nvidia_drm_parameters": {
+      "modeset": "Y",
+      "fbdev": "Y"
+    },
+    "device_nodes": [
+      "/dev/dri/card1",
+      "/dev/dri/renderD128",
+      "/dev/nvidia-modeset",
+      "/dev/nvidia-uvm",
+      "/dev/nvidia-uvm-tools",
+      "/dev/nvidia0",
+      "/dev/nvidiactl",
+      "/dev/snd/controlC0",
+      "/dev/snd/hwC0D0",
+      "/dev/snd/pcmC0D3p",
+      "/dev/snd/pcmC0D7p",
+      "/dev/snd/pcmC0D8p",
+      "/dev/snd/pcmC0D9p"
+    ],
+    "clients": [
+      {
+        "pid": 1,
+        "comm": "systemd",
+        "nodes": [
+          "/dev/dri/card1"
+        ]
+      },
+      {
+        "pid": 2104,
+        "comm": "systemd-logind",
+        "nodes": [
+          "/dev/dri/card1"
+        ]
+      },
+      {
+        "pid": 2575,
+        "comm": "wireplumber",
+        "nodes": [
+          "/dev/snd/controlC0"
+        ]
+      },
+      {
+        "pid": 2884,
+        "comm": "gnome-shell",
+        "nodes": [
+          "/dev/dri/card1",
+          "/dev/dri/renderD128",
+          "/dev/nvidia-modeset",
+          "/dev/nvidia0",
+          "/dev/nvidiactl"
+        ]
+      }
+    ],
+    "gpu_resources": [
+      "0x00000000fb000000 0x00000000fbffffff 0x0000000000040200",
+      "0x000000f800000000 0x000000fbffffffff 0x000000000014220c",
+      "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+      "0x000000fc00000000 0x000000fc01ffffff 0x000000000014220c",
+      "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+      "0x000000000000f000 0x000000000000f07f 0x0000000000040101",
+      "0x00000000fc000000 0x00000000fc07ffff 0x0000000000046200",
+      "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+      "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+      "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+      "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+      "0x0000000000000000 0x0000000000000000 0x0000000000000000",
+      "0x0000000000000000 0x0000000000000000 0x0000000000000000"
+    ]
+  },
+  "source_image": "/var/lib/vast-windows-4070-session/staging.qcow2",
+  "source_sha256": "572a12f2b0630f1e96dd24a152b4782cbcf00fe635432e248b8a74cbc649de0c",
+  "source_virtual_vars_sha256": "d7f72a0d3182aec78efb8c3503396f12034ea31ee4facd4122682d26ece34c5b",
+  "recipe_sha256": "b2e512560d6794c7361fcc2b48a50338ac9d0bd724151fa650f5191cda9e8d7b",
+  "qemu_command": [
+    "qemu-system-x86_64",
+    "-name",
+    "vast-windows-prepare",
+    "-nodefaults",
+    "-machine",
+    "pc,accel=kvm,smm=on",
+    "-m",
+    "8192",
+    "-smp",
+    "8",
+    "-cpu",
+    "host,-vmx",
+    "-drive",
+    "if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd",
+    "-drive",
+    "if=pflash,format=raw,unit=1,file=/var/lib/kf4070-resume-20261004/vfio-OVMF_VARS.fd",
+    "-rtc",
+    "base=utc,driftfix=slew",
+    "-global",
+    "kvm-pit.lost_tick_policy=discard",
+    "-device",
+    "VGA,addr=0x9",
+    "-display",
+    "none",
+    "-vnc",
+    "unix:/var/lib/kf4070-resume-20261004/vnc.sock",
+    "-qmp",
+    "unix:/var/lib/kf4070-resume-20261004/qmp.sock,server=on,wait=off",
+    "-serial",
+    "file:/var/lib/kf4070-resume-20261004/serial.log",
+    "-monitor",
+    "none",
+    "-no-shutdown",
+    "-netdev",
+    "user,id=n0,restrict=off,net=10.0.2.0/24,host=10.0.2.2,dns=10.0.2.3,dhcpstart=10.0.2.15,hostfwd=tcp:127.0.0.1:22225-10.0.2.15:22",
+    "-device",
+    "virtio-net-pci,netdev=n0,mac=52:54:00:56:77:20,addr=0xa,disable-modern=on",
+    "-device",
+    "virtio-serial-pci,id=serial0,addr=0x3,disable-modern=on",
+    "-chardev",
+    "socket,id=qga0,path=/var/lib/kf4070-resume-20261004/qga.sock,server=on,wait=off",
+    "-device",
+    "virtserialport,bus=serial0.0,chardev=qga0,name=org.qemu.guest_agent.0",
+    "-drive",
+    "file=/var/lib/kf4070-resume-20261004/staging.qcow2,if=none,id=disk0,format=qcow2,discard=unmap",
+    "-device",
+    "virtio-blk-pci,drive=disk0,addr=0x4,disable-modern=on,bootindex=1",
+    "-no-user-config",
+    "-global",
+    "i440FX-pcihost.pci-hole64-size=32G",
+    "-device",
+    "vfio-pci,host=0000:01:00.0,bus=pci.0,addr=0x6.0,multifunction=on",
+    "-device",
+    "vfio-pci,host=0000:01:00.1,bus=pci.0,addr=0x6.1"
+  ],
+  "phase": "windows_running",
+  "updated_utc": "2026-10-04T20:51:37Z",
+  "qemu_pid": 8859,
+  "qemu_start_token": "58897"
+}

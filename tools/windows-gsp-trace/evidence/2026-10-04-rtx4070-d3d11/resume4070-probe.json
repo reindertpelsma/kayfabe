@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-04T20:53:57.656587+00:00",
+  "script": "resume4070-recipes/run-d3d11-probe4070.ps1",
+  "script_sha256": "c1428b7dd5fcde6207e18c9068a6de3eebb704125bcc903d01bbbbbfa4a783f5",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

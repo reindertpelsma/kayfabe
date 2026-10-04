@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-04T20:55:09.339133+00:00",
+  "script": "resume4070-shutdown.ps1",
+  "script_sha256": "f01f1902bccc3c2b46c6e9ddf22ee135bbc7e2a34243b2f310dce4807c75a434",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

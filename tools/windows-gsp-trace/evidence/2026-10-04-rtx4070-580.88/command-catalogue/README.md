@@ -187,6 +187,12 @@ less useful than recording exactly which semantics are still missing.
 
 ## Correction: GR_GFX_POOL_QUERY_SIZE is not proved Linux-inaccessible
 
+**Later source follow-up:** [public pool internals and the stub boundary](gfx-pool-source.md)
+also identifies published control-block offsets and the Linux firmware-client
+pool/control-block promotion path. These justify a bounded emulation
+experiment without waiting for another native capture; they do not supply a
+complete hardware sizing formula or validate an unconditional success reply.
+
 The earlier report said Linux “compiles that control out” and therefore cannot
 answer it. **That conclusion was wrong.** The generated CPU function pointer
 can be absent because the exported method routes to the physical/GSP side.
@@ -332,8 +338,13 @@ RM_CONTROL in this capture; it does not increase the 129-direct-ID count:
    stronger interface/source contract establishes exclusivity. Separately test
    the Kayfabe implementation; native VFIO success is only the reference.
 
-The borrowed PC now times out and the owner says it was probably handed over;
-it is treated as unavailable, with no further reconnect/reboot attempts. The
+**Later correction:** the owner returned the PC, and the [native D3D11 follow-up](../../2026-10-04-rtx4070-d3d11/README.md)
+passed, retaining another 1,074 validated records without the target query.
+The PC's Linux GPU/display state was restored afterward. The original 129-ID
+census above remains tied to its original capture.
+
+**Historical:** the PC had timed out and was treated as unavailable during the
+offline comparison, with no further reconnect/reboot attempts then. The
 capture, installer/recorder source and this analysis are durable on the
 controller and research branch. The later Linux privilege experiment used its
 own disposable rental; it does not complete the controlled matrix above.

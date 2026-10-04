@@ -15,8 +15,11 @@ The new [source and Linux comparison](../tools/windows-gsp-trace/evidence/2026-1
 finds Linux occurrences for 68/129 direct control IDs across explicitly
 separated boundaries. No command is established as Windows-only, no successful
 GFX_POOL_QUERY_SIZE reply is retained, and Windows-through-Kayfabe remains
-unvalidated. The borrowed PC now times out and is treated as unavailable;
-valuable evidence/source is backed up. See the [Windows lane handoff](handoff/2026-10-04/windows-native.md)
+unvalidated. **Later on October 4 the owner returned the borrowed PC:** the
+preserved fixture resumed, native RTX 4070 D3D11 passed four GPU readbacks, and
+1,074 further GSP records validated, still without the pool query. Windows was
+shut down and Linux GPU/display ownership restored; source and evidence are
+backed up. See the [Windows lane handoff](handoff/2026-10-04/windows-native.md)
 for exact revisions, source interpretations and remaining work. This supersedes
 older Windows-parking/runtime notes, not the verified candidate-2 product state.
 

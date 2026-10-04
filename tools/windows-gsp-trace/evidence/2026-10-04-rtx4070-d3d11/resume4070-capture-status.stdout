@@ -1,0 +1,47 @@
+[
+    {
+        "Name":  "capture-journal.json",
+        "Length":  562
+    },
+    {
+        "Name":  "capture-task.xml",
+        "Length":  1216
+    },
+    {
+        "Name":  "collect-task.ps1",
+        "Length":  3889
+    },
+    {
+        "Name":  "collector.stderr",
+        "Length":  0
+    },
+    {
+        "Name":  "collector.stdout",
+        "Length":  0
+    },
+    {
+        "Name":  "gsp.kgwt",
+        "Length":  2855392
+    },
+    {
+        "Name":  "manual-observer-initial.json",
+        "Length":  269
+    },
+    {
+        "Name":  "startup.json",
+        "Length":  117
+    }
+]
+FILE: startup.json
+{"time":"2026-10-04T20:52:26.9100685Z","boot_tick_ms":44625,"observer_system_start":false,"history_complete":false}
+
+FILE: collector.stdout
+FILE: collector.stderr
+{
+    "Name":  "KayfabeGspTrace",
+    "Status":  4
+}
+{
+    "TaskName":  "KayfabeGspCapture4070D3D11",
+    "State":  4
+}

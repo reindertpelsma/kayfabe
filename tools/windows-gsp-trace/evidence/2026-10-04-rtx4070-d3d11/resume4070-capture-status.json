@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-04T20:53:04.096059+00:00",
+  "script": "resume4070-capture-status.ps1",
+  "script_sha256": "bb39afd7ec4f2e541bf137c8fe8d644571f6b379637baac48eafbcac2f5b2331",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

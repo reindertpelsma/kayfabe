@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-04T20:52:31.354961+00:00",
+  "script": "resume4070-recipes/start-d3d11-capture4070.ps1",
+  "script_sha256": "7714371f8551b8ecbf3a814a24f22502d27d1c0089ccdccf2fd3d482102950a0",
+  "exitcode": 1,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

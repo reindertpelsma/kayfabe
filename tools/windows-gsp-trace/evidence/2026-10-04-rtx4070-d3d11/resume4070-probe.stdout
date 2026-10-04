@@ -1,0 +1,36 @@
+{
+    "start_time":  "2026-10-04T20:53:55.4971888Z",
+    "end_time":  "2026-10-04T20:53:56.0861534Z",
+    "exit_code":  0,
+    "timed_out":  false,
+    "error":  null,
+    "probe_sha256":  "c41e1479cd216bc9c76c0f65eada43ffeed9e49894fa9923a589b91ac9c1cea2"
+}
+
+{"step":"factory","hresult":"0x00000000"}
+{"step":"enumerate_adapter","hresult":"0x00000000"}
+{"step":"adapter_description","hresult":"0x00000000"}
+{"adapter_index":0,"vendor":"0x10de","device":"0x2786","subsystem":"0x40ee1458","revision":161,"flags":0,"luid_high":0,"luid_low":22858}
+{"step":"enumerate_adapter","hresult":"0x00000000"}
+{"step":"adapter_description","hresult":"0x00000000"}
+{"adapter_index":1,"vendor":"0x1414","device":"0x008c","subsystem":"0x00000000","revision":0,"flags":2,"luid_high":0,"luid_low":25696}
+{"step":"create_nvidia_device_and_context","hresult":"0x00000000"}
+{"feature_level":"0xb100"}
+{"step":"create_gpu_texture","hresult":"0x00000000"}
+{"step":"create_render_target","hresult":"0x00000000"}
+{"step":"create_readback_texture","hresult":"0x00000000"}
+{"step":"create_completion_query","hresult":"0x00000000"}
+{"step":"gpu_event_complete","hresult":"0x00000000"}
+{"step":"map_completed_readback","hresult":"0x00000000"}
+{"round":0,"pixel_rgba":[64,127,191,255],"verified":true}
+{"step":"gpu_event_complete","hresult":"0x00000000"}
+{"step":"map_completed_readback","hresult":"0x00000000"}
+{"round":1,"pixel_rgba":[64,127,191,255],"verified":true}
+{"step":"gpu_event_complete","hresult":"0x00000000"}
+{"step":"map_completed_readback","hresult":"0x00000000"}
+{"round":2,"pixel_rgba":[64,127,191,255],"verified":true}
+{"step":"gpu_event_complete","hresult":"0x00000000"}
+{"step":"map_completed_readback","hresult":"0x00000000"}
+{"round":3,"pixel_rgba":[64,127,191,255],"verified":true}
+{"step":"device_removed_reason","hresult":"0x00000000"}
+

@@ -1,0 +1,7 @@
+{
+  "source_revision": "572411c10001383e7c46e219c4596194c1f8e5ee",
+  "source_sha256": "bd6dfeae2c96fde43e000613eaf2747192ae8cfc88702d70248da8d645424dae",
+  "compiler": "x86_64-w64-mingw32-gcc (GCC) 13-win32",
+  "exe_sha256": "c41e1479cd216bc9c76c0f65eada43ffeed9e49894fa9923a589b91ac9c1cea2",
+  "runtime_tested": false
+}

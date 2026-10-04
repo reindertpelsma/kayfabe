@@ -1,0 +1,175 @@
+[
+    {
+        "Name":  "capture-journal.json",
+        "Length":  562
+    },
+    {
+        "Name":  "capture-task.xml",
+        "Length":  1216
+    },
+    {
+        "Name":  "collect-task.ps1",
+        "Length":  3889
+    },
+    {
+        "Name":  "collector-exit.json",
+        "Length":  55
+    },
+    {
+        "Name":  "collector.stderr",
+        "Length":  41
+    },
+    {
+        "Name":  "collector.stdout",
+        "Length":  271
+    },
+    {
+        "Name":  "gsp.kgwt",
+        "Length":  7521456
+    },
+    {
+        "Name":  "gsp.kgwt.stats.json",
+        "Length":  271
+    },
+    {
+        "Name":  "manual-observer-initial.json",
+        "Length":  269
+    },
+    {
+        "Name":  "probe-immediate-after-readiness.json",
+        "Length":  115
+    },
+    {
+        "Name":  "probe-immediate-before-readiness.json",
+        "Length":  266
+    },
+    {
+        "Name":  "probe-result.json",
+        "Length":  269
+    },
+    {
+        "Name":  "probe-start.json",
+        "Length":  429
+    },
+    {
+        "Name":  "probe.stderr",
+        "Length":  0
+    },
+    {
+        "Name":  "probe.stdout",
+        "Length":  1598
+    },
+    {
+        "Name":  "startup.json",
+        "Length":  117
+    },
+    {
+        "Name":  "stop.flag",
+        "Length":  0
+    }
+]
+{"text_log":"C:\\ProgramData\\KayfabeGsp\\captures\\rtx4070-d3d11-resume-02\\gsp.jsonl","selection":"all","records":1074,"omitted_records":0,"source_bytes":7521456,"source_sha256":"6aedd98419a06c5169b6996a865865ca36a634bcb6f8db51bf5a7b4e4a2d9c1b","exported_bytes":7521456,"exported_sha256":"6aedd98419a06c5169b6996a865865ca36a634bcb6f8db51bf5a7b4e4a2d9c1b","capture_complete":false}
+{"text_log":"C:\\ProgramData\\KayfabeGsp\\captures\\rtx4070-d3d11-resume-02\\gfx-pool-query.jsonl","selection":"gfx-pool-query","records":0,"omitted_records":1074,"source_bytes":7521456,"source_sha256":"6aedd98419a06c5169b6996a865865ca36a634bcb6f8db51bf5a7b4e4a2d9c1b","exported_bytes":64,"exported_sha256":"d9110771c55709a6689753311f0b89fcabfef6b3f691cb37e45e9d4f6b0e1d09","capture_complete":false}
+{
+    "time":  "2026-10-04T20:54:08.7326420Z",
+    "collector_exit":  0,
+    "stats":  {
+                  "schema":  "kayfabe-gsp-observer/1",
+                  "complete":  false,
+                  "scanned_bytes":  199409659904,
+                  "scan_passes":  23,
+                  "candidates":  94,
+                  "attached_tables":  1,
+                  "read_failures":  0,
+                  "unstable_snapshots":  76,
+                  "invalid_elements":  13260531,
+                  "recorded":  1074,
+                  "dropped":  0,
+                  "sequence_gaps":  0,
+                  "buffered_bytes":  0
+              },
+    "task_state":  "Disabled",
+    "observer_start":  3,
+    "observer_status":  "Stopped",
+    "native_deferred":  true,
+    "reboots_held":  true,
+    "files":  [
+                  {
+                      "name":  "capture-journal.json",
+                      "length":  562
+                  },
+                  {
+                      "name":  "capture-task.xml",
+                      "length":  1216
+                  },
+                  {
+                      "name":  "collect-task.ps1",
+                      "length":  3889
+                  },
+                  {
+                      "name":  "collector-exit.json",
+                      "length":  55
+                  },
+                  {
+                      "name":  "collector.stderr",
+                      "length":  41
+                  },
+                  {
+                      "name":  "collector.stdout",
+                      "length":  271
+                  },
+                  {
+                      "name":  "gfx-pool-query.jsonl",
+                      "length":  957
+                  },
+                  {
+                      "name":  "gsp.jsonl",
+                      "length":  15216675
+                  },
+                  {
+                      "name":  "gsp.kgwt",
+                      "length":  7521456
+                  },
+                  {
+                      "name":  "gsp.kgwt.stats.json",
+                      "length":  271
+                  },
+                  {
+                      "name":  "manual-observer-initial.json",
+                      "length":  269
+                  },
+                  {
+                      "name":  "probe-immediate-after-readiness.json",
+                      "length":  115
+                  },
+                  {
+                      "name":  "probe-immediate-before-readiness.json",
+                      "length":  266
+                  },
+                  {
+                      "name":  "probe-result.json",
+                      "length":  269
+                  },
+                  {
+                      "name":  "probe-start.json",
+                      "length":  429
+                  },
+                  {
+                      "name":  "probe.stderr",
+                      "length":  0
+                  },
+                  {
+                      "name":  "probe.stdout",
+                      "length":  1598
+                  },
+                  {
+                      "name":  "startup.json",
+                      "length":  117
+                  },
+                  {
+                      "name":  "stop.flag",
+                      "length":  0
+                  }
+              ]
+}
+

@@ -1,0 +1,77 @@
+{
+  "directions": {
+    "request": 535,
+    "reply": 539
+  },
+  "rpc_functions": {
+    "76:request": 467,
+    "76:reply": 467,
+    "103:request": 34,
+    "103:reply": 34,
+    "4099:reply": 4,
+    "10:request": 34,
+    "10:reply": 34
+  },
+  "controls": {
+    "0x2080a0d1:request:0x0": 106,
+    "0x20808539:request:0x0": 105,
+    "0x20809037:request:0x0": 105,
+    "0x2080a0a8:request:0x0": 105,
+    "0x2080a0d1:reply:0x0": 106,
+    "0x20808539:reply:0x0": 105,
+    "0x20809037:reply:0x0": 105,
+    "0x2080a0a8:reply:0x0": 105,
+    "0x20809004:request:0x0": 7,
+    "0x2080b202:request:0x0": 4,
+    "0x20809004:reply:0x0": 7,
+    "0x2080b202:reply:0x0": 4,
+    "0x7302a5:request:0x0": 1,
+    "0x90f10106:request:0x0": 2,
+    "0x7302a5:reply:0x0": 1,
+    "0x90f10106:reply:0x0": 2,
+    "0x801812:request:0x0": 1,
+    "0x801812:reply:0x0": 1,
+    "0x809908:request:0x0": 2,
+    "0x809908:reply:0x0": 2,
+    "0x80170e:request:0x0": 2,
+    "0x80170e:reply:0x0": 2,
+    "0x20802a08:request:0x0": 2,
+    "0x20802a08:reply:0x0": 2,
+    "0xa06c010a:request:0x0": 2,
+    "0xa06c010a:reply:0x0": 2,
+    "0x20800a38:request:0x0": 4,
+    "0x2080012b:request:0x0": 2,
+    "0x20800a38:reply:0x0": 4,
+    "0x2080012b:reply:0x0": 2,
+    "0xa06c0103:request:0x0": 2,
+    "0xa06c0101:request:0x0": 2,
+    "0xa06c0103:reply:0x0": 2,
+    "0xa06c0101:reply:0x0": 2,
+    "0x50800101:request:0x0": 3,
+    "0x20801211:request:0x0": 3,
+    "0x50800101:reply:0x0": 3,
+    "0x20801211:reply:0x0": 3,
+    "0x20801208:request:0x0": 2,
+    "0x20801208:reply:0x0": 2,
+    "0x20801111:request:0x0": 4,
+    "0x20801111:reply:0x0": 4,
+    "0x20800a9a:request:0x0": 1,
+    "0x20800a9a:reply:0x0": 1
+  },
+  "distinct_direct_controls": 22,
+  "new_controls_vs_first_capture": [
+    "0x00809908"
+  ],
+  "new_rpc_functions_vs_first_capture": [],
+  "prefix_unknown": [
+    {
+      "direction": "request",
+      "queue_sequence": 3758
+    },
+    {
+      "direction": "reply",
+      "queue_sequence": 3766
+    }
+  ],
+  "missing": 0
+}

@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-04T20:54:11.075852+00:00",
+  "script": "resume4070-recipes/stop-export-d3d11-capture4070.ps1",
+  "script_sha256": "aef8baa7566936b5cf436d8e97fbbbdbc8a73958be66c61bc78c5c60cd95ac00",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}
