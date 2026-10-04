@@ -3,6 +3,7 @@
 """Decode passive GSP observations; never label them complete boot traces."""
 import argparse
 import collections
+import hashlib
 import json
 from pathlib import Path
 import struct
@@ -15,6 +16,54 @@ QUERY = 0x2080121f
 
 class InvalidTrace(ValueError):
     pass
+
+
+def parse_jsonl(path, max_bytes=64 * 1024 * 1024):
+    """Verify a bounded text-data export, then reuse all binary ABI checks."""
+    blob = bytearray()
+    footer = None
+    count = 0
+    fields = ('magic', 'header_bytes', 'payload_bytes', 'direction', 'qpc', 'table_pa',
+              'queue_sequence', 'rpc_sequence', 'rpc_function', 'rpc_result', 'flags',
+              'missing_before', 'rpc_version', 'reserved')
+    try:
+        with path.open(encoding='utf-8-sig') as stream:
+            line_number = 0
+            while line := stream.readline(140001):
+                line_number += 1
+                if len(line) > 140000:
+                    raise InvalidTrace('text record exceeds 140000 characters')
+                row = json.loads(line)
+                if not isinstance(row, dict) or footer is not None:
+                    raise InvalidTrace('invalid row or data after export footer')
+                if line_number == 1:
+                    if row.get('schema') != 'kayfabe-gsp-text/1' or row.get('kind') != 'header' or row.get('capture_complete') is not False:
+                        raise InvalidTrace('unsupported text export header')
+                    values = [row[k] for k in ('magic', 'version', 'header_bytes', 'record_header_bytes', 'qpc_frequency', 'started_qpc', 'flags', 'reserved')]
+                    values += row['reserved2']
+                    if any(type(value) is not int for value in values):
+                        raise InvalidTrace('header fields must be integers')
+                    blob += FILE.pack(*values)
+                elif row.get('kind') == 'record':
+                    values = [row[k] for k in fields]
+                    encoded = row['payload_hex']
+                    if any(type(value) is not int for value in values) or not isinstance(encoded, str) or len(encoded) != row['payload_bytes'] * 2 or len(encoded) > 131072 or any(c not in '0123456789abcdef' for c in encoded):
+                        raise InvalidTrace('invalid text record fields or payload hex')
+                    if len(blob) + RECORD.size + len(encoded) // 2 > max_bytes:
+                        raise InvalidTrace('text capture exceeds decoded byte limit')
+                    blob += RECORD.pack(*values) + bytes.fromhex(encoded)
+                    count += 1
+                elif row.get('kind') == 'footer':
+                    footer = row
+                else:
+                    raise InvalidTrace('unknown text record kind')
+        if footer is None or footer.get('file_export_complete') is not True or footer.get('capture_complete') is not False or footer.get('records') != count or footer.get('source_bytes') != len(blob) or footer.get('source_sha256') != hashlib.sha256(blob).hexdigest():
+            raise InvalidTrace('missing or inconsistent export footer/hash')
+        trace = parse(blob)
+        trace['export_stats'] = footer.get('driver_stats')
+        return trace
+    except (KeyError, TypeError, struct.error) as error:
+        raise InvalidTrace(f'invalid text export structure: {error}') from error
 
 
 def parse(blob):
@@ -117,11 +166,13 @@ def main():
     ap.add_argument('trace', type=Path)
     ap.add_argument('--all-records', action='store_true')
     ap.add_argument('--require-query-pair', action='store_true', help='exit 4 unless an unambiguous successful query request/reply exists')
+    ap.add_argument('--jsonl', action='store_true', help='read text export (also automatic for .jsonl paths)')
+    ap.add_argument('--max-input-mib', type=int, choices=range(1, 1025), default=64, metavar='1..1024', help='maximum decoded text-export bytes, default 64 MiB')
     args = ap.parse_args()
     try:
-        trace = parse(args.trace.read_bytes())
+        trace = parse_jsonl(args.trace, args.max_input_mib * 1048576) if args.jsonl or args.trace.suffix.lower() == '.jsonl' else parse(args.trace.read_bytes())
         sidecar = Path(str(args.trace) + '.stats.json')
-        stats = json.loads(sidecar.read_text()) if sidecar.exists() else None
+        stats = json.loads(sidecar.read_text()) if sidecar.exists() else trace.get('export_stats')
         output = summarize(trace, stats)
         if args.all_records:
             output['observations'] = trace['records']
