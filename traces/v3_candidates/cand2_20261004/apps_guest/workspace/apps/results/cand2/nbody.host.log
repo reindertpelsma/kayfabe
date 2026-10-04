@@ -1,0 +1,4 @@
+=== nbody side=host start=2026-10-04T11:36:26+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/nbody
+METRIC nbody_GFLOPs 4471.4
+CHECK ok
+=== end rc=0 secs=2 2026-10-04T11:36:28+00:00

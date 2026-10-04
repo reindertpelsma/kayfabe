@@ -1,0 +1,30 @@
+=== UnifiedMemoryStreams side=guest start=2026-10-04T11:54:49+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/UnifiedMemoryStreams
+CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_STATUS_EXECUTION_FAILED) "cublasDgemv(handle[tid + 1], CUBLAS_OP_N, t.size, t.size, &one, t.data, t.size, t.vector, 1, &zero, t.result, 1)" 
+CUDA error at UnifiedMemoryStreams.cu:202 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream[0])" 
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Executing tasks on host / device
+Task [0], thread [0] executing on host (80)
+Task [4], thread [0] executing on device (694)
+Task [1], thread [1] executing on device (981)
+Task [2], thread [2] executing on device (539)
+Task [3], thread [3] executing on device (575)
+Task [5], thread [1] executing on device (610)
+Task [6], thread [3] executing on device (800)
+Task [7], thread [1] executing on device (247)
+Task [8], thread [0] executing on device (909)
+Task [9], thread [2] executing on device (729)
+Task [10], thread [3] executing on device (873)
+Task [11], thread [3] executing on device (121)
+Task [12], thread [2] executing on device (238)
+Task [13], thread [3] executing on device (253)
+Task [14], thread [0] executing on device (435)
+Task [15], thread [0] executing on device (440)
+Task [16], thread [3] executing on device (716)
+Task [17], thread [0] executing on host (64)
+Task [18], thread [3] executing on device (470)
+Task [19], thread [3] executing on device (735)
+Task [20], thread [3] executing on device (499)
+Task [21], thread [3] executing on device (377)
+timeout: the monitored command dumped core
+=== end rc=139 secs=6 2026-10-04T11:54:55+00:00

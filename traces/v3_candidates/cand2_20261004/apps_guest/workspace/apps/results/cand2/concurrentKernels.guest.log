@@ -1,0 +1,10 @@
+=== concurrentKernels side=guest start=2026-10-04T11:54:34+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/concurrentKernels
+[/opt/apps/bundle/samples/concurrentKernels] - Starting...
+GPU Device 0: "Ampere" with compute capability 8.6
+
+> Detected Compute SM 8.6 hardware with 28 multi-processors
+Expected time for serial execution of 8 kernels = 0.080s
+Expected time for concurrent execution of 8 kernels = 0.010s
+Measured time for sample = 0.011s
+Test passed
+=== end rc=0 secs=2 2026-10-04T11:54:36+00:00

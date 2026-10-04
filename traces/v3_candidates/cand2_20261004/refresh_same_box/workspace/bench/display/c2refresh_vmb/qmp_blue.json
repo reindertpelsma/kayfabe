@@ -1,0 +1,1 @@
+{"interface": "qmp", "socket": "/workspace/bench/run_c2refresh_vmb.qmp", "ok": true, "width": 1920, "height": 1080, "sha256": "682bf291df01f9bbbafe61fe0de10cd1890575283871defdce6ae225ef32dbae", "dominant": [["006fb8", 2058224], ["010101", 15360], ["cccccc", 16]], "elapsed_ms": 783}

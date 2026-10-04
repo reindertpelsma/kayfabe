@@ -1,11 +1,14 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
-**STATUS: LIVE, 2026-10-04 — candidate 2 integration in progress:** master candidate 1 plus broker/maxfps,
-KF3 ABI 18, product `9d82f259`. CI (including slow tests), the full GPU merge bar and
-71/71 host apps pass. Guest apps and the remaining display checks are in progress;
-this is not a promotion verdict. Current evidence and limitations are in
-`traces/v3_candidates/cand2_20261004/README.md`. The dated verification update in
-§8.16 supersedes its original unrun list.
+**STATUS: VERIFIED, 2026-10-04 — candidate 2 product `9d82f259`, KF3 ABI 18:**
+master candidate 1 plus broker/maxfps, HMP AioContext fix and asynchronous console
+cursor update. Exact-source GPU merge bar passes; host apps 71/71 and guest
+61/65 + 6/6 probes match candidate 1, including the four known failures rerun
+alone. Display verification, including D4's actual present cadence, is complete
+with the explicit limitations in §8.16 and
+`traces/v3_candidates/cand2_20261004/README.md`. Product CI and full slow dispatch
+pass; final docs/evidence-head CI is required before promotion. `x11-dispsw`
+remains off by default under §N. Historical branch statuses below are superseded.
 
 > **STATUS: VERIFIED, 2026-10-04 — candidate 1 at `0ac157b2`.** The B5 context-DMA
 > latch fix (`c1ca7945`) passed four full unload runs (14/14 arms each) on GA106

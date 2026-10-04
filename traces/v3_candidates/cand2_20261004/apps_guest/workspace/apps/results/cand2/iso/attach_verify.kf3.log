@@ -1,0 +1,1147 @@
+kf3: family=Ampere phase=Halted trapped=3970 applied=2318 refused=4 serviced=344 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=220 walks=230/230 cleared=220 superseded=0 named_missed=2 unreconciled=0 mapped=286 unmapped=286 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 sked=0/0held fn70=4 roots=8 root_moves=0 stmts=26/26 refused=0 pramin_repoints=42 pramin_miss=0 last_miss=0x0 pramin_worst_us=4101 (map 716 mmap 3973) pramin_maps=42 pramin_mmaps=42 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=41 cache_ops=0 sysmembars=6 root_unsets=0] mirrors=0 reused=8 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=109 arrive->clear_avg_us=3347 max_us=230714 walks=115 walk_avg_us=316 gpu_avg_us=121 plan_avg_us=0 apply_avg_us=2899 leaves=57 host_calls=242] chan[births=4 pt_births=0 acts=8/0refused worst_act_us=7800 nsi=[GR0:230/0raised CE2:4/0raised] served=12 parks=2997 host_rings=4 contended=0 poisoned=0 tokens=[]] views[armed=171 released=169 refused=0 held=2] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=984 raised=2 held=0 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800a4b,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38] gsp_refusals[total=58 distinct=30 [fn76/0x20800a87=0x56x2 fn76/0x20800a4b=0x56x2 fn76/0x20800afe=0x56x4 fn76/0x20800aff=0x56x4 fn76/0x20800a80=0x56x4 fn76/0x20802a0f=0x56x2 fn76/0x2080017e=0x56x2 fn76/0x20800a30=0x56x2 fn76/0x20800a2e=0x56x2 fn76/0x20800b03=0x56x2 fn76/0x20800b05=0x56x2 fn76/0x20800a3f=0x56x2 fn76/0x2080012b=0x56x2 fn76/0x2080013f=0x56x2 fn103/0x0000c36f=0x56x2 fn103/0x0000402c=0x56x2 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852e=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a618=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x2080a097=0x56x1 fn103/0x0000208f=0x56x1 fn76/0x20800a38=0x56x2]]
+kf3: GSP command service REFUSED: QueueNotBound
+kf3: GSP command service REFUSED: QueueNotBound
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0x1ffe00000 → served WPR2_ADDR_LO=Some(Ok("0x1ffe000"))
+kayfabe: GSP-PUBLISH gpa=0x12ea00000 gpa_same=false seq_last=Some(1) cmd_seq=156 ⇒ same_instance=false
+kf3: GSP rpc GspSetSystemInfo seq=0
+kf3: GSP rpc SetRegistry seq=0
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP rpc SetGuestSystemInfo seq=0
+kf3: GSP phase Booted -> Running
+kf3: GSP rpc GetGspStaticInfo seq=1
+kf3: GSP rpc InitGspTraceCrashBuffer seq=2
+kf3: GSP rpc RmControl seq=3
+kf3: GSP rpc RmControl seq=4
+kf3: GSP rpc RmControl seq=5
+kf3: GSP rpc RmControl seq=6
+kf3: GSP rpc RmControl seq=7
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 7 }
+kf3: GSP rpc RmControl seq=8
+kf3: GSP rpc RmControl seq=9
+kf3: GSP rpc RmControl seq=10
+kf3: GSP rpc RmControl seq=11
+kf3: GSP rpc RmControl seq=12
+kf3: GSP rpc RmControl seq=13
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 13 }
+kf3: GSP rpc RmControl seq=14
+kf3: GSP rpc RmControl seq=15
+kf3: GSP rpc RmControl seq=16
+kf3: GSP rpc RmControl seq=17
+kf3: GSP rpc RmControl seq=18
+kf3: GSP rpc RmControl seq=19
+kf3: GSP rpc RmControl seq=20
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 20 }
+kf3: GSP rpc RmControl seq=21
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 21 }
+kf-rm: chanlink: client 0xc1e00018 root: kernel=true internal=true
+kf3: GSP rpc RmAlloc seq=22
+kf3: GSP rpc RmAlloc seq=23
+kf3: GSP rpc RmAlloc seq=24
+kf3: GSP rpc RmAlloc seq=25
+kf3: GSP rpc RmControl seq=26
+kf3: GSP rpc RmControl seq=27
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc UpdateBarPde seq=28
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=29
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=30
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=31
+kf3: GSP rpc RmControl seq=32
+kf3: GSP rpc RmControl seq=33
+kf3: GSP rpc RmControl seq=34
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 34 }
+kf3: GSP rpc RmControl seq=35
+kf-rm: chanlink: client 0xc1e00019 root: kernel=true internal=true
+kf3: GSP rpc RmAlloc seq=36
+kf3: GSP rpc RmAlloc seq=37
+kf3: GSP rpc RmAlloc seq=38
+kf3: GSP rpc RmControl seq=39
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 39 }
+kf3: GSP rpc RmControl seq=40
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 40 }
+kf3: GSP rpc RmControl seq=41
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 41 }
+kf3: GSP rpc RmControl seq=42
+kf3: GSP rpc RmControl seq=43
+kf-rm: chanlink: client 0xc1e0001a root: kernel=true internal=true
+kf3: GSP rpc RmAlloc seq=44
+kf3: GSP rpc RmAlloc seq=45
+kf3: GSP rpc RmAlloc seq=46
+kf3: GSP rpc RmControl seq=47
+kf3: GSP rpc RmControl seq=48
+kf3: GSP rpc RmControl seq=49
+kf3: GSP rpc RmControl seq=50
+kf3: GSP rpc RmControl seq=51
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 51 }
+kf3: GSP rpc RmControl seq=52
+kf3: GSP rpc RmControl seq=53
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 53 }
+kf3: GSP rpc RmControl seq=54
+kf3: GSP rpc RmControl seq=55
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 55 }
+kf3: GSP rpc RmControl seq=56
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 56 }
+kf3: GSP rpc RmControl seq=57
+kf3: GSP rpc RmControl seq=58
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 58 }
+kf3: GSP rpc RmControl seq=59
+kf3: GSP rpc RmControl seq=60
+kf3: GSP rpc Free seq=61
+kf3: GSP rpc Free seq=62
+kf3: GSP rpc Free seq=63
+kf-rm: chanlink: client 0xc1e0001b root: kernel=true internal=true
+kf3: GSP rpc RmAlloc seq=64
+kf3: GSP rpc RmAlloc seq=65
+kf3: GSP rpc RmAlloc seq=66
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e0001b:0xc under 0xa (device default for it: 0xc)
+kf3: GSP rpc RmAlloc seq=67
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=68
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=69
+kf3: GSP rpc RmControl seq=70
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=71
+kf-host: channel birth h=0xcafe0033 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1e0001b:0x2 BORN Translated: token 0x801 -> host 0x10018 in VasKey(13970166160067395596) gpfifo=0x120064000x4096 userd=Some(Framebuffer { base: 8254128128, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (5003 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=72
+kf3: chan 0xc1e0001b:0x2 GPFIFO_SCHEDULE enable=true (token 0x801, host 0x10018)
+kf3: GSP rpc RmControl seq=73
+kf3: GSP rpc RmAlloc seq=74
+kf3: GSP rpc RmControl seq=75
+kf-rm: chanlink: client 0xc1e0001c root: kernel=true internal=true
+kf3: GSP rpc RmAlloc seq=76
+kf3: GSP rpc RmAlloc seq=77
+kf3: GSP rpc RmAlloc seq=78
+kf3: chan token 0x801: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e0001c:0xa under 0xb (device default for it: 0xa)
+kf3: GSP rpc RmAlloc seq=79
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=80
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: family=Ampere phase=Running trapped=5115 applied=3267 refused=6 serviced=427 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb830b0 mem[inval=274 walks=285/286 cleared=273 superseded=0 named_missed=3 unreconciled=0 mapped=334 unmapped=287 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 sked=0/0held fn70=5 roots=10 root_moves=0 stmts=31/31 refused=0 pramin_repoints=58 pramin_miss=0 last_miss=0x0 pramin_worst_us=4101 (map 716 mmap 3973) pramin_maps=58 pramin_mmaps=58 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=57 cache_ops=0 sysmembars=8 root_unsets=0] mirrors=0 reused=10 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=52 arrive->clear_avg_us=591 max_us=230714 walks=55 walk_avg_us=321 gpu_avg_us=122 plan_avg_us=0 apply_avg_us=170 leaves=1 host_calls=97] chan[births=5 pt_births=0 acts=9/0refused worst_act_us=7800 nsi=[GR0:286/0raised CE2:4/0raised] served=13 parks=3138 host_rings=4 contended=0 poisoned=0 tokens=[0x801:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None]] views[armed=235 released=186 refused=0 held=49] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=1016 raised=2 held=0 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800a4b,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38] gsp_refusals[total=71 distinct=30 [fn76/0x20800a87=0x56x3 fn76/0x20800a4b=0x56x3 fn76/0x20800afe=0x56x5 fn76/0x20800aff=0x56x5 fn76/0x20800a80=0x56x6 fn76/0x20802a0f=0x56x3 fn76/0x2080017e=0x56x3 fn76/0x20800a30=0x56x3 fn76/0x20800a2e=0x56x3 fn76/0x20800b03=0x56x3 fn76/0x20800b05=0x56x3 fn76/0x20800a3f=0x56x3 fn76/0x2080012b=0x56x2 fn76/0x2080013f=0x56x2 fn103/0x0000c36f=0x56x2 fn103/0x0000402c=0x56x2 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852e=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a618=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x2080a097=0x56x1 fn103/0x0000208f=0x56x1 fn76/0x20800a38=0x56x2]]
+kf-host: map_scattered 2 pieces 0x6d000 bytes: stitch 43 us, descriptor 170 us, hand view to reaper 49 us, map 168 us
+kf3: GSP rpc RmControl seq=81
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=82
+kf-host: channel birth h=0xcafe0038 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1e0001c:0x2 BORN Translated: token 0x802 -> host 0x10019 in VasKey(13970166164362362890) gpfifo=0x320064000x4096 userd=Some(Framebuffer { base: 8254193664, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(2), Some(2)) zeroed=512B fast=off (4994 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=83
+kf3: chan 0xc1e0001c:0x2 BIND engine=0xb (host 0x10019)
+kf3: GSP rpc RmControl seq=84
+kf3: chan 0xc1e0001c:0x2 GPFIFO_SCHEDULE enable=true (token 0x802, host 0x10019)
+kf3: GSP rpc RmControl seq=85
+kf3: GSP rpc RmAlloc seq=86
+kf3: GSP rpc RmControl seq=87
+kf3: chan token 0x802: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf-rm: chanlink: client 0xc1e0001d root: kernel=true internal=true
+kf3: GSP rpc RmAlloc seq=88
+kf3: GSP rpc RmAlloc seq=89
+kf3: GSP rpc RmAlloc seq=90
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e0001d:0xbaba0042 under 0xcaf00000 (device default for it: 0xbaba0042)
+kf3: GSP rpc RmAlloc seq=91
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=92
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=93
+kf3: chan 0xc1e0001d:0xbaba0045 class=0xc56f engine=0x1 kernel=true vaspace=Some(baba0042) chid=Some(3) — a KERNEL non-CE channel: not born (kernel GR is P7)
+kf3: GSP rpc RmAlloc seq=94
+kf3: VasKey(13970166171790082114) root 0x1efa54000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166171790082114) root 0x1efa54000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166171790082114) root 0x1efa54000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166171790082114) root 0x1efa54000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166171790082114) root 0x1efa54000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166171790082114) root 0x1efa54000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1e0001d:0xcaf00001 params=560 rpc_flags=0x0
+kf3: chan 0xc1e0001d:0xbaba0045 GPU_PROMOTE_CTX: no passthrough twin — not ours (entries=9)
+kf3: GSP rpc RmControl seq=95
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 95 }
+kf3: GSP rpc Free seq=96
+kf3: GSP rpc Free seq=97
+kf3: GSP rpc Free seq=98
+kf3: GSP rpc Free seq=99
+kf3: GSP rpc Free seq=100
+kf3: GSP rpc RmControl seq=101
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 101 }
+kf-rm: chanlink: client 0xc1d0001e root: kernel=true internal=false
+kf3: GSP rpc RmAlloc seq=102
+kf3: GSP rpc RmAlloc seq=103
+kf3: GSP rpc RmAlloc seq=104
+kf3: GSP rpc RmAlloc seq=105
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0001e:0xcaf00000 under 0x31415903 (device default for it: 0xcaf00000)
+kf3: GSP rpc RmAlloc seq=106
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=107
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=108
+kf3: GSP rpc RmControl seq=109
+kf-rm: RPC-REFUSED #6 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: GSP rpc RmAlloc seq=110
+kf3: GSP rpc Free seq=111
+kf3: GSP rpc Free seq=112
+kf3: GSP rpc Free seq=113
+kf3: GSP rpc Free seq=114
+kf-rm: chanlink: client 0xc1d0001f root: kernel=true internal=false
+kf3: GSP rpc RmAlloc seq=115
+kf3: GSP rpc RmAlloc seq=116
+kf3: GSP rpc RmAlloc seq=117
+kf-rm: RPC-REFUSED #7 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: GSP rpc RmAlloc seq=118
+kf-rm: chanlink: client 0xc1d00017 root: kernel=false internal=false
+kf3: GSP rpc RmAlloc seq=119
+kf3: GSP rpc RmAlloc seq=120
+kf3: GSP rpc RmAlloc seq=121
+kf3: GSP rpc RmAlloc seq=122
+kf3: GSP rpc RmControl seq=123
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 123 }
+kf3: GSP rpc RmControl seq=124
+kf3: GSP rpc RmControl seq=125
+kf3: GSP rpc RmControl seq=126
+kf3: GSP rpc RmControl seq=127
+kf3: GSP rpc RmControl seq=128
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 128 }
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=128 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=129
+kf3: GSP rpc RmControl seq=130
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 130 }
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=130 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=131
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 131 }
+kf3: GSP rpc RmControl seq=132
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 132 }
+kf3: GSP rpc RmControl seq=133
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 133 }
+kf3: GSP rpc RmControl seq=134
+kf3: GSP rpc RmControl seq=135
+kf3: GSP rpc RmControl seq=136
+kf3: GSP rpc RmControl seq=137
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00017:0x5c000007 under 0x5c000002 (device default for it: 0x5c000007)
+kf3: GSP rpc RmAlloc seq=138
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00017:0x5c000008 under 0x5c000002 (device default for it: 0x5c000007)
+kf3: GSP rpc RmAlloc seq=139
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=140
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=141
+kf3: GSP rpc RmControl seq=142
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 142 }
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=142 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=143
+kf3: GSP rpc RmControl seq=144
+kf-rm: chanlink: client 0xc1d00020 root: kernel=true internal=false
+kf3: GSP rpc RmAlloc seq=145
+kf3: GSP rpc RmAlloc seq=146
+kf3: GSP rpc RmAlloc seq=147
+kf3: GSP rpc Free seq=148
+kf3: GSP rpc Free seq=149
+kf3: GSP rpc Free seq=150
+kf-rm: chanlink: client 0xc1d0000a root: kernel=true internal=false
+kf3: GSP rpc RmAlloc seq=151
+kf3: GSP rpc RmAlloc seq=152
+kf3: GSP rpc RmAlloc seq=153
+kf3: GSP rpc RmControl seq=154
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 154 }
+kf3: GSP rpc RmControl seq=155
+kf3: GSP rpc RmControl seq=156
+kf3: GSP rpc RmControl seq=157
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000a:0xcaf00005 under 0xcaf00000 (device default for it: 0xcaf00005)
+kf3: GSP rpc RmAlloc seq=158
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=159
+kf3: VasKey(13965662490830307333) mirror space=0xcafe003a: windows fb=0x1fffe00000000+0x200000000 ram=0x1fffa00000000+0x400000000 rings=0xff00000000+0x100000000 (559008 us: vaspace 1953 ram_obj 0 fb_window 1425 ram_window 555580)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=160
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 160 }
+kf3: GSP rpc RmControl seq=161
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 161 }
+kf3: GSP rpc RmControl seq=162
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 162 }
+kf3: GSP rpc RmControl seq=163
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 163 }
+kf3: GSP rpc RmControl seq=164
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 164 }
+kf3: GSP rpc RmControl seq=165
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 165 }
+kf3: GSP rpc RmControl seq=166
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 166 }
+kf3: GSP rpc RmControl seq=167
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 167 }
+kf3: GSP rpc RmControl seq=168
+kf3: GSP rpc RmControl seq=169
+kf3: GSP rpc RmControl seq=170
+kf3: GSP rpc RmControl seq=171
+kf3: GSP rpc RmControl seq=172
+kf3: GSP rpc RmControl seq=173
+kf3: GSP rpc RmControl seq=174
+kf3: GSP rpc RmControl seq=175
+kf3: GSP rpc RmControl seq=176
+kf3: GSP rpc RmAlloc seq=177
+kf3: GSP rpc RmControl seq=178
+kf3: VasKey(13965662490830307333) is a guest-KERNEL space (Translated chan 0xc1d0000a:0xcaf00012): privileged leaves are mirrored here
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=179
+kf-host: channel birth h=0xcafe0040 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1d0000a:0xcaf00012 BORN Translated: token 0x803 -> host 0x1001a in VasKey(13965662490830307333) gpfifo=0x121010000x1024 userd=Some(Framebuffer { base: 196608, size: 512 }) engine=0xb tsg=Some(caf00008) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00000000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (6012 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=180
+kf3: GSP rpc RmAlloc seq=181
+kf3: chan 0xc1d0000a:0xcaf00012 GPFIFO_SCHEDULE enable=true (token 0x803, host 0x1001a)
+kf3: GSP rpc RmControl seq=182
+kf3: chan token 0x803: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=183
+kf-host: channel birth h=0xcafe0044 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1d0000a:0xcaf0001d BORN Translated: token 0x804 -> host 0x1001b in VasKey(13965662490830307333) gpfifo=0x121040000x1024 userd=Some(Framebuffer { base: 393216, size: 512 }) engine=0xb tsg=Some(caf00008) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00100000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (5304 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=184
+kf3: GSP rpc RmAlloc seq=185
+kf3: chan 0xc1d0000a:0xcaf0001d GPFIFO_SCHEDULE enable=true (token 0x804, host 0x1001b)
+kf3: GSP rpc RmControl seq=186
+kf3: chan token 0x804: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kf3: GSP rpc RmControl seq=187
+kf3: GSP rpc RmAlloc seq=188
+kf3: GSP rpc RmControl seq=189
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=190
+kf-host: channel birth h=0xcafe0048 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1d0000a:0xcaf00028 BORN Translated: token 0x1005 -> host 0x1001c in VasKey(13965662490830307333) gpfifo=0x121070000x1024 userd=Some(Framebuffer { base: 589824, size: 512 }) engine=0xc tsg=Some(caf00020) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00200000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (5205 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=191
+kf3: GSP rpc RmAlloc seq=192
+kf3: chan 0xc1d0000a:0xcaf00028 GPFIFO_SCHEDULE enable=true (token 0x1005, host 0x1001c)
+kf3: GSP rpc RmControl seq=193
+kf3: chan token 0x1005: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=194
+kf-host: channel birth h=0xcafe004c engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth translated: chan 0xc1d0000a:0xcaf00033 BORN Translated: token 0x1006 -> host 0x1001d in VasKey(13965662490830307333) gpfifo=0x1210a0000x1024 userd=Some(Framebuffer { base: 786432, size: 512 }) engine=0xc tsg=Some(caf00020) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00300000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B fast=off (4974 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=195
+kf3: GSP rpc RmAlloc seq=196
+kf3: chan 0xc1d0000a:0xcaf00033 GPFIFO_SCHEDULE enable=true (token 0x1006, host 0x1001d)
+kf3: GSP rpc RmControl seq=197
+kf3: chan token 0x1006: GP_PUT=0 at USERD+0x0+0x8c; non-zero words in its page: []
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=198
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=199
+kf3: family=Ampere phase=Running trapped=7212 applied=3389 refused=6 serviced=546 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=364 walks=379/379 cleared=364 superseded=0 named_missed=4 unreconciled=0 mapped=400 unmapped=305 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 sked=0/0held fn70=5 roots=15 root_moves=1 stmts=38/38 refused=0 pramin_repoints=58 pramin_miss=0 last_miss=0x0 pramin_worst_us=4101 (map 716 mmap 3973) pramin_maps=58 pramin_mmaps=58 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=57 cache_ops=0 sysmembars=8 root_unsets=0] mirrors=1 reused=13 prewarmed=3 mirror_avg_us=559008 mirror_max_us=559008 vat[invals=90 arrive->clear_avg_us=2678 max_us=230714 walks=94 walk_avg_us=357 gpu_avg_us=122 plan_avg_us=0 apply_avg_us=2146 leaves=1 host_calls=156] chan[births=10 pt_births=0 acts=14/0refused worst_act_us=7800 nsi=[GR0:379/0raised CE2:11/0raised] served=29 parks=3328 host_rings=8 contended=0 poisoned=0 tokens=[0x801:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x802:fwd=2,subs=2,serves=6,put=Some(2),gp_get=Some(2) 0x803:fwd=2,subs=2,serves=4,put=Some(2),gp_get=Some(2) 0x804:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x1005:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x1006:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1)]] views[armed=287 released=195 refused=0 held=92] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=2713 raised=3 held=0 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800a4b,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38,0x2080012f,0x20802a12,0x20800ab8] gsp_refusals[total=91 distinct=33 [fn76/0x20800a87=0x56x3 fn76/0x20800a4b=0x56x3 fn76/0x20800afe=0x56x5 fn76/0x20800aff=0x56x5 fn76/0x20800a80=0x56x6 fn76/0x20802a0f=0x56x3 fn76/0x2080017e=0x56x3 fn76/0x20800a30=0x56x3 fn76/0x20800a2e=0x56x3 fn76/0x20800b03=0x56x3 fn76/0x20800b05=0x56x3 fn76/0x20800a3f=0x56x3 fn76/0x2080012b=0x56x3 fn76/0x2080013f=0x56x3 fn103/0x0000c36f=0x56x3 fn103/0x0000402c=0x56x3 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x2 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852e=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a618=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x2080a097=0x56x1 fn103/0x0000208f=0x56x1 fn76/0x20800a38=0x56x2 fn76/0x2080012f=0x56x2 fn76/0x20802a12=0x56x12 fn76/0x20800ab8=0x56x1]]
+kf3: GSP rpc RmControl seq=200
+kf3: GSP rpc RmControl seq=201
+W343GSSCENSUS cmd=0x2080a084 params_size=4 params_at=40 payload_len=44
+kf3: GSS 0x2080a084 answered from the host's realize-time reply
+kf3: GSP rpc RmControl seq=202
+W343GSSCENSUS cmd=0x2080a026 params_size=532 params_at=40 payload_len=572
+kf3: GSS 0x2080a026 answered from the host's realize-time reply
+kf3: GSP rpc RmControl seq=203
+kf3: GSP rpc RmControl seq=204
+kf3: GSP rpc RmControl seq=205
+kf3: GSP rpc RmControl seq=206
+W343GSSCENSUS cmd=0x2080a084 params_size=4 params_at=40 payload_len=44
+kf3: GSS 0x2080a084 answered from the host's realize-time reply
+kf3: GSP rpc RmControl seq=207
+W343GSSCENSUS cmd=0x2080a026 params_size=532 params_at=40 payload_len=572
+kf3: GSS 0x2080a026 answered from the host's realize-time reply
+kf3: GSP rpc RmControl seq=208
+kf3: GSP rpc RmControl seq=209
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 209 }
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=209 — the guest read a non-OK status
+kf3: GSP rpc DupObject seq=210
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=211
+kf3: VasKey(13965662544803659783) mirror space=0xcafe004e: windows fb=0x1fffe00000000+0x200000000 ram=0x1fffa00000000+0x400000000 rings=0xff00000000+0x100000000 (590594 us: vaspace 1973 ram_obj 0 fb_window 1309 ram_window 587292)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=212
+kf3: GSP rpc RmAlloc seq=213
+kf3: GSP rpc RmControl seq=214
+kf3: GSP rpc RmAlloc seq=215
+kf-host: map_scattered 114 pieces 0x3000000 bytes: stitch 1233 us, descriptor 19634 us, hand view to reaper 24 us, map 3680 us
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=216
+kf-host: channel birth h=0xcafe0056 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000019 BORN Passthrough: token 0x7 -> host 0x1e in VasKey(13965662544803659783) gpfifo=0x200200000x1024 userd=Store { store: 3405643781, off: 16785408 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed fast=off (3479 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d00017:0x5c000003 params=560 rpc_flags=0x0
+kf3: chan 0xc1d00017:0x5c000019 GPU_PROMOTE_CTX (initialize) SATISFIED BY TWIN host 0x1e: entries=6 init_ids=0xe07 host_objects=0 — not forwarded, no guest byte touched
+kf3: GSP rpc RmControl seq=217
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=218
+kf3: act engine object: 0xc1d00017:0x5c00001a class 0xc7c0 (Compute) on twin host 0x1e -> host object 0xcafe0057 (1891 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=219
+kf3: act engine object: 0xc1d00017:0x5c00001b class 0xc7b5 (DmaCopy) on twin host 0x1e -> host object 0xcafe0058 (391 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-host: map_scattered 23 pieces 0x200000 bytes: stitch 625 us, descriptor 962 us, hand view to reaper 19 us, map 355 us
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=220
+kf-host: channel birth h=0xcafe005c engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c00001f BORN Passthrough: token 0x8 -> host 0x1f in VasKey(13965662544803659783) gpfifo=0x200203000x1024 userd=Store { store: 3405643781, off: 16797696 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed fast=off (1838 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=221
+kf3: act engine object: 0xc1d00017:0x5c000020 class 0xc7c0 (Compute) on twin host 0x1f -> host object 0xcafe005d (763 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=222
+kf3: act engine object: 0xc1d00017:0x5c000021 class 0xc7b5 (DmaCopy) on twin host 0x1f -> host object 0xcafe005e (384 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=223
+kf-host: channel birth h=0xcafe0061 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000023 BORN Passthrough: token 0x9 -> host 0x20 in VasKey(13965662544803659783) gpfifo=0x200206000x1024 userd=Store { store: 3405643781, off: 16809984 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed fast=off (1534 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=224
+kf3: act engine object: 0xc1d00017:0x5c000024 class 0xc7c0 (Compute) on twin host 0x20 -> host object 0xcafe0062 (719 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=225
+kf3: act engine object: 0xc1d00017:0x5c000025 class 0xc7b5 (DmaCopy) on twin host 0x20 -> host object 0xcafe0063 (471 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=226
+kf-host: channel birth h=0xcafe0066 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000027 BORN Passthrough: token 0xa -> host 0x21 in VasKey(13965662544803659783) gpfifo=0x200209000x1024 userd=Store { store: 3405643781, off: 16822272 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed fast=off (1607 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=227
+kf3: act engine object: 0xc1d00017:0x5c000028 class 0xc7c0 (Compute) on twin host 0x21 -> host object 0xcafe0067 (742 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=228
+kf3: act engine object: 0xc1d00017:0x5c000029 class 0xc7b5 (DmaCopy) on twin host 0x21 -> host object 0xcafe0068 (410 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=229
+kf-host: channel birth h=0xcafe006b engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c00002b BORN Passthrough: token 0xb -> host 0x22 in VasKey(13965662544803659783) gpfifo=0x20020c000x1024 userd=Store { store: 3405643781, off: 16834560 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed fast=off (1633 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=230
+kf3: act engine object: 0xc1d00017:0x5c00002c class 0xc7c0 (Compute) on twin host 0x22 -> host object 0xcafe006c (763 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=231
+kf3: act engine object: 0xc1d00017:0x5c00002d class 0xc7b5 (DmaCopy) on twin host 0x22 -> host object 0xcafe006d (431 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=232
+kf-host: channel birth h=0xcafe0070 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c00002f BORN Passthrough: token 0xc -> host 0x23 in VasKey(13965662544803659783) gpfifo=0x20020f000x1024 userd=Store { store: 3405643781, off: 16846848 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed fast=off (1584 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=233
+kf3: act engine object: 0xc1d00017:0x5c000030 class 0xc7c0 (Compute) on twin host 0x23 -> host object 0xcafe0071 (824 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=234
+kf3: act engine object: 0xc1d00017:0x5c000031 class 0xc7b5 (DmaCopy) on twin host 0x23 -> host object 0xcafe0072 (411 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=235
+kf-host: channel birth h=0xcafe0075 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000033 BORN Passthrough: token 0xd -> host 0x24 in VasKey(13965662544803659783) gpfifo=0x200212000x1024 userd=Store { store: 3405643781, off: 16859136 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed fast=off (1451 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=236
+kf3: act engine object: 0xc1d00017:0x5c000034 class 0xc7c0 (Compute) on twin host 0x24 -> host object 0xcafe0076 (755 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=237
+kf3: act engine object: 0xc1d00017:0x5c000035 class 0xc7b5 (DmaCopy) on twin host 0x24 -> host object 0xcafe0077 (415 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=238
+kf-host: channel birth h=0xcafe007a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000037 BORN Passthrough: token 0xe -> host 0x25 in VasKey(13965662544803659783) gpfifo=0x200215000x1024 userd=Store { store: 3405643781, off: 16871424 } engine=0x1 declared_kernel_pid=false privilege=1 rc=armed fast=off (1517 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=239
+kf3: act engine object: 0xc1d00017:0x5c000038 class 0xc7c0 (Compute) on twin host 0x25 -> host object 0xcafe007b (748 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=240
+kf3: act engine object: 0xc1d00017:0x5c000039 class 0xc7b5 (DmaCopy) on twin host 0x25 -> host object 0xcafe007c (421 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=241
+kf3: GSP rpc DupObject seq=242
+kf3: GSP rpc RmAlloc seq=243
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0000a:0xcaf00001 params=560 rpc_flags=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=244
+kf3: act promote ctx: chan 0xc1d00017:0x5c000019 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x1e (host GR object(s) [cafe0057]): entries=10 init_ids=0x0 va_ids=0xe7f bound=true — not forwarded, no guest byte touched (12 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=245
+kf3: GSP rpc DupObject seq=246
+kf3: GSP rpc RmAlloc seq=247
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0000a:0xcaf00001 params=560 rpc_flags=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=248
+kf3: act promote ctx: chan 0xc1d00017:0x5c00001f GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x1f (host GR object(s) [cafe005d]): entries=10 init_ids=0x0 va_ids=0xe7f bound=true — not forwarded, no guest byte touched (6 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=249
+kf3: GSP rpc DupObject seq=250
+kf3: GSP rpc RmAlloc seq=251
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0000a:0xcaf00001 params=560 rpc_flags=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=252
+kf3: act promote ctx: chan 0xc1d00017:0x5c000023 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x20 (host GR object(s) [cafe0062]): entries=10 init_ids=0x0 va_ids=0xe7f bound=true — not forwarded, no guest byte touched (7 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=253
+kf3: GSP rpc DupObject seq=254
+kf3: GSP rpc RmAlloc seq=255
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0000a:0xcaf00001 params=560 rpc_flags=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=256
+kf3: act promote ctx: chan 0xc1d00017:0x5c000027 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x21 (host GR object(s) [cafe0067]): entries=10 init_ids=0x0 va_ids=0xe7f bound=true — not forwarded, no guest byte touched (7 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=257
+kf3: GSP rpc DupObject seq=258
+kf3: GSP rpc RmAlloc seq=259
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0000a:0xcaf00001 params=560 rpc_flags=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=260
+kf3: act promote ctx: chan 0xc1d00017:0x5c00002b GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x22 (host GR object(s) [cafe006c]): entries=10 init_ids=0x0 va_ids=0xe7f bound=true — not forwarded, no guest byte touched (7 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=261
+kf3: GSP rpc DupObject seq=262
+kf3: GSP rpc RmAlloc seq=263
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0000a:0xcaf00001 params=560 rpc_flags=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=264
+kf3: act promote ctx: chan 0xc1d00017:0x5c00002f GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x23 (host GR object(s) [cafe0071]): entries=10 init_ids=0x0 va_ids=0xe7f bound=true — not forwarded, no guest byte touched (8 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=265
+kf3: GSP rpc DupObject seq=266
+kf3: GSP rpc RmAlloc seq=267
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0000a:0xcaf00001 params=560 rpc_flags=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=268
+kf3: act promote ctx: chan 0xc1d00017:0x5c000033 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x24 (host GR object(s) [cafe0076]): entries=10 init_ids=0x0 va_ids=0xe7f bound=true — not forwarded, no guest byte touched (5 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=269
+kf3: GSP rpc DupObject seq=270
+kf3: GSP rpc RmAlloc seq=271
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1d0000a:0xcaf00001 params=560 rpc_flags=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=272
+kf3: act promote ctx: chan 0xc1d00017:0x5c000037 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x25 (host GR object(s) [cafe007b]): entries=10 init_ids=0x0 va_ids=0xe7f bound=true — not forwarded, no guest byte touched (6 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=273
+kf3: act schedule: 0xc1d00017:0x5c000012 GPFIFO_SCHEDULE enable=true on 8 twin(s) (0 restarted after STOP) (700 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=274
+kf3: GSP rpc RmControl seq=275
+kf3: GSP rpc RmAlloc seq=276
+kf3: GSP rpc RmControl seq=277
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=278
+kf-host: channel birth h=0xcafe0080 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c00003d BORN Passthrough: token 0x80f -> host 0x10026 in VasKey(13965662544803659783) gpfifo=0x200218000x1024 userd=Store { store: 3405643781, off: 16883712 } engine=0xb declared_kernel_pid=false privilege=1 rc=armed fast=off (3415 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=279
+kf3: act engine object: 0xc1d00017:0x5c00003e class 0xc7b5 (DmaCopy) on twin host 0x10026 -> host object 0xcafe0081 (365 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=280
+kf-host: channel birth h=0xcafe0084 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000040 BORN Passthrough: token 0x810 -> host 0x10027 in VasKey(13965662544803659783) gpfifo=0x20021b000x1024 userd=Store { store: 3405643781, off: 16896000 } engine=0xb declared_kernel_pid=false privilege=1 rc=armed fast=off (1562 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=281
+kf3: act engine object: 0xc1d00017:0x5c000041 class 0xc7b5 (DmaCopy) on twin host 0x10027 -> host object 0xcafe0085 (369 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=282
+kf-host: channel birth h=0xcafe0088 engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000043 BORN Passthrough: token 0x811 -> host 0x10028 in VasKey(13965662544803659783) gpfifo=0x20021e000x1024 userd=Store { store: 3405643781, off: 16908288 } engine=0xb declared_kernel_pid=false privilege=1 rc=armed fast=off (1559 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=283
+kf3: act engine object: 0xc1d00017:0x5c000044 class 0xc7b5 (DmaCopy) on twin host 0x10028 -> host object 0xcafe0089 (360 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=284
+kf-host: channel birth h=0xcafe008c engine=0xb reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000046 BORN Passthrough: token 0x812 -> host 0x10029 in VasKey(13965662544803659783) gpfifo=0x200221000x1024 userd=Store { store: 3405643781, off: 16920576 } engine=0xb declared_kernel_pid=false privilege=1 rc=armed fast=off (1456 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=285
+kf3: act engine object: 0xc1d00017:0x5c000047 class 0xc7b5 (DmaCopy) on twin host 0x10029 -> host object 0xcafe008d (357 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=286
+kf3: GSP rpc RmAlloc seq=287
+kf3: GSP rpc DupObject seq=288
+kf3: GSP rpc RmAlloc seq=289
+kf3: GSP rpc DupObject seq=290
+kf3: GSP rpc RmAlloc seq=291
+kf3: GSP rpc DupObject seq=292
+kf3: GSP rpc RmAlloc seq=293
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=294
+kf3: act schedule: 0xc1d00017:0x5c00003b GPFIFO_SCHEDULE enable=true on 4 twin(s) (0 restarted after STOP) (639 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=295
+kf3: GSP rpc RmControl seq=296
+kf3: GSP rpc RmAlloc seq=297
+kf3: GSP rpc RmControl seq=298
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=299
+kf-host: channel birth h=0xcafe0091 engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c00004b BORN Passthrough: token 0x1013 -> host 0x2002a in VasKey(13965662544803659783) gpfifo=0x200224000x1024 userd=Store { store: 3405643781, off: 16932864 } engine=0xc declared_kernel_pid=false privilege=1 rc=armed fast=off (3424 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=300
+kf3: act engine object: 0xc1d00017:0x5c00004c class 0xc7b5 (DmaCopy) on twin host 0x2002a -> host object 0xcafe0092 (379 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=301
+kf-host: channel birth h=0xcafe0095 engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c00004e BORN Passthrough: token 0x1014 -> host 0x2002b in VasKey(13965662544803659783) gpfifo=0x200227000x1024 userd=Store { store: 3405643781, off: 16945152 } engine=0xc declared_kernel_pid=false privilege=1 rc=armed fast=off (1531 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=302
+kf3: act engine object: 0xc1d00017:0x5c00004f class 0xc7b5 (DmaCopy) on twin host 0x2002b -> host object 0xcafe0096 (349 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=303
+kf-host: channel birth h=0xcafe0099 engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000051 BORN Passthrough: token 0x1015 -> host 0x2002c in VasKey(13965662544803659783) gpfifo=0x20022a000x1024 userd=Store { store: 3405643781, off: 16957440 } engine=0xc declared_kernel_pid=false privilege=1 rc=armed fast=off (1529 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=304
+kf3: act engine object: 0xc1d00017:0x5c000052 class 0xc7b5 (DmaCopy) on twin host 0x2002c -> host object 0xcafe009a (396 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=305
+kf-host: channel birth h=0xcafe009d engine=0xc reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+kf3: act birth passthrough: chan 0xc1d00017:0x5c000054 BORN Passthrough: token 0x1016 -> host 0x2002d in VasKey(13965662544803659783) gpfifo=0x20022d000x1024 userd=Store { store: 3405643781, off: 16969728 } engine=0xc declared_kernel_pid=false privilege=1 rc=armed fast=off (1526 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=306
+kf3: act engine object: 0xc1d00017:0x5c000055 class 0xc7b5 (DmaCopy) on twin host 0x2002d -> host object 0xcafe009e (443 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc DupObject seq=307
+kf3: GSP rpc RmAlloc seq=308
+kf3: GSP rpc DupObject seq=309
+kf3: GSP rpc RmAlloc seq=310
+kf3: GSP rpc DupObject seq=311
+kf3: GSP rpc RmAlloc seq=312
+kf3: GSP rpc DupObject seq=313
+kf3: GSP rpc RmAlloc seq=314
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=315
+kf3: act schedule: 0xc1d00017:0x5c000049 GPFIFO_SCHEDULE enable=true on 4 twin(s) (0 restarted after STOP) (551 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=316
+kf-host: map_scattered 2 pieces 0x200000 bytes: stitch 171 us, descriptor 1008 us, hand view to reaper 21 us, map 320 us
+kf-host: map_scattered 2 pieces 0x200000 bytes: stitch 164 us, descriptor 1134 us, hand view to reaper 22 us, map 333 us
+kf-mem: SKED-REFLECTED leaf 0x72eeb4c00000+0x1000 (ap=0 at=0x0) placed as a message-kind host mapping — device-side launches through it reach the host scheduler
+kf-host: map_scattered 2 pieces 0x200000 bytes: stitch 179 us, descriptor 1064 us, hand view to reaper 31 us, map 338 us
+kf-rm: chanlink: client 0xc1e00021 root: kernel=true internal=true
+kf3: GSP rpc RmAlloc seq=317
+kf3: GSP rpc RmAlloc seq=318
+kf3: GSP rpc RmAlloc seq=319
+kayfabe: HELD-REPLY fn=RmAlloc depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmAlloc seq=320
+kf3: act debugger: 0xc1d00017:0x5c000072 GT200_DEBUGGER over 0x5c00001a -> host session 0xcafe00a2 (host GR object 0xcafe0057) (1656 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-host: map_scattered 2 pieces 0x533000 bytes: stitch 166 us, descriptor 2524 us, hand view to reaper 23 us, map 555 us
+kf3: GSP rpc RmAlloc seq=321
+kf3: GSP rpc RmAlloc seq=322
+kf3: GSP rpc RmAlloc seq=323
+kf3: GSP rpc RmAlloc seq=324
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=325
+kf3: act debugger exception mask: 0xc1d00017:0x5c000072 SET_EXCEPTION_MASK 0x3a on host session 0xcafe00a2 (434 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=326
+kf3: act ctxsw preemption: 0xc1d00017:0x5c000012 SET_CTXSW_PREEMPTION_MODE flags=0x1 gfxp=0 cilp=2 on 1 host group(s) (496 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=327
+kf3: act timeslice: 0xc1d00017:0x5c000012 SET_TIMESLICE 2048 us on 8 twin group(s) (2454 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=328
+kf3: act cuda limit: 0xc1d00017:0x5c000002 CUDA limit true -> host device limit true (464 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: family=Ampere phase=Running trapped=10477 applied=3518 refused=6 serviced=675 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xbb0090 mem[inval=383 walks=480/480 cleared=383 superseded=0 named_missed=4 unreconciled=0 mapped=593 unmapped=305 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 sked=1/0held fn70=5 roots=16 root_moves=1 stmts=39/39 refused=0 pramin_repoints=58 pramin_miss=0 last_miss=0x0 pramin_worst_us=4101 (map 716 mmap 3973) pramin_maps=58 pramin_mmaps=58 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=57 cache_ops=0 sysmembars=8 root_unsets=0] mirrors=2 reused=13 prewarmed=3 mirror_avg_us=574801 mirror_max_us=590594 vat[invals=19 arrive->clear_avg_us=802 max_us=230714 walks=101 walk_avg_us=297 gpu_avg_us=127 plan_avg_us=0 apply_avg_us=553 leaves=1 host_calls=110] chan[births=10 pt_births=16 acts=70/0refused worst_act_us=7800 nsi=[GR0:480/63raised CE2:158/65raised] served=417 parks=4097 host_rings=237 contended=0 poisoned=0 tokens=[0x801:fwd=0,subs=0,serves=1,put=Some(0),gp_get=None 0x802:fwd=2,subs=2,serves=6,put=Some(2),gp_get=Some(2) 0x803:fwd=110,subs=191,serves=392,put=Some(110),gp_get=Some(110) 0x804:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x1005:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1) 0x1006:fwd=1,subs=1,serves=2,put=Some(1),gp_get=Some(1)]] views[armed=305 released=195 refused=0 held=110] rc[armed=16 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=5465 raised=131 held=0 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800a4b,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38,0x2080012f,0x20802a12,0x20800ab8,0x20800a9a] gsp_refusals[total=92 distinct=34 [fn76/0x20800a87=0x56x3 fn76/0x20800a4b=0x56x3 fn76/0x20800afe=0x56x5 fn76/0x20800aff=0x56x5 fn76/0x20800a80=0x56x6 fn76/0x20802a0f=0x56x3 fn76/0x2080017e=0x56x3 fn76/0x20800a30=0x56x3 fn76/0x20800a2e=0x56x3 fn76/0x20800b03=0x56x3 fn76/0x20800b05=0x56x3 fn76/0x20800a3f=0x56x3 fn76/0x2080012b=0x56x3 fn76/0x2080013f=0x56x3 fn103/0x0000c36f=0x56x3 fn103/0x0000402c=0x56x3 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x2 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852e=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a618=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x2080a097=0x56x1 fn103/0x0000208f=0x56x1 fn76/0x20800a38=0x56x2 fn76/0x2080012f=0x56x2 fn76/0x20802a12=0x56x12 fn76/0x20800ab8=0x56x1 fn76/0x20800a9a=0x56x1]]
+kf3: GSP rpc RmControl seq=329
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 329 }
+kf3: GSP REFUSED fn76/0x83de030c=0x56 (GSP_RM_CONTROL) first_seq=329 — the guest read a non-OK status
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC_TRIGGERED posted: guest chid 0x8 engine 0x1 except_type 0x1f (host 0x1f)
+kf3: RC_TRIGGERED posted: guest chid 0x9 engine 0x1 except_type 0x1f (host 0x20)
+kf3: RC_TRIGGERED posted: guest chid 0xb engine 0x1 except_type 0x1f (host 0x22)
+kf3: RC_TRIGGERED posted: guest chid 0xa engine 0x1 except_type 0x1f (host 0x21)
+kf3: RC_TRIGGERED posted: guest chid 0xe engine 0x1 except_type 0x1f (host 0x25)
+kf3: RC_TRIGGERED posted: guest chid 0x7 engine 0x1 except_type 0x1f (host 0x1e)
+kf3: RC_TRIGGERED posted: guest chid 0xd engine 0x1 except_type 0x1f (host 0x24)
+kf3: RC_TRIGGERED posted: guest chid 0xc engine 0x1 except_type 0x1f (host 0x23)
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=330
+kf3: act stop: 0xc1d00017:0x5c000054 STOP_CHANNEL(bImmediate=false): twin host 0x2002d disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (2987 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=331
+kf3: act stop: 0xc1d00017:0x5c000051 STOP_CHANNEL(bImmediate=false): twin host 0x2002c disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (621 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=332
+kf3: act stop: 0xc1d00017:0x5c00004e STOP_CHANNEL(bImmediate=false): twin host 0x2002b disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (563 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=333
+kf3: act stop: 0xc1d00017:0x5c00004b STOP_CHANNEL(bImmediate=false): twin host 0x2002a disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (619 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=334
+kf3: act stop: 0xc1d00017:0x5c000046 STOP_CHANNEL(bImmediate=false): twin host 0x10029 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (609 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=335
+kf3: act stop: 0xc1d00017:0x5c000043 STOP_CHANNEL(bImmediate=false): twin host 0x10028 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (575 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=336
+kf3: act stop: 0xc1d00017:0x5c000040 STOP_CHANNEL(bImmediate=false): twin host 0x10027 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (588 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=337
+kf3: act stop: 0xc1d00017:0x5c00003d STOP_CHANNEL(bImmediate=false): twin host 0x10026 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (609 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=338
+kf3: act stop: 0xc1d00017:0x5c000037 STOP_CHANNEL(bImmediate=false): twin host 0x25 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (599 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=339
+kf3: act evict ctx: chan 0xc1d00017:0x5c000037 GPU_EVICT_CTX: twin host 0x25 off the runlist, context UNBOUND (Some(CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 })) (315 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=340
+kf3: act stop: 0xc1d00017:0x5c000033 STOP_CHANNEL(bImmediate=false): twin host 0x24 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (589 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=341
+kf3: act evict ctx: chan 0xc1d00017:0x5c000033 GPU_EVICT_CTX: twin host 0x24 off the runlist, context UNBOUND (Some(CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 })) (304 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=342
+kf3: act stop: 0xc1d00017:0x5c00002f STOP_CHANNEL(bImmediate=false): twin host 0x23 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (570 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=343
+kf3: act evict ctx: chan 0xc1d00017:0x5c00002f GPU_EVICT_CTX: twin host 0x23 off the runlist, context UNBOUND (Some(CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 })) (307 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=344
+kf3: act stop: 0xc1d00017:0x5c00002b STOP_CHANNEL(bImmediate=false): twin host 0x22 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (677 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=345
+kf3: act evict ctx: chan 0xc1d00017:0x5c00002b GPU_EVICT_CTX: twin host 0x22 off the runlist, context UNBOUND (Some(CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 })) (335 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=346
+kf3: act stop: 0xc1d00017:0x5c000027 STOP_CHANNEL(bImmediate=false): twin host 0x21 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (596 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=347
+kf3: act evict ctx: chan 0xc1d00017:0x5c000027 GPU_EVICT_CTX: twin host 0x21 off the runlist, context UNBOUND (Some(CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 })) (305 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=348
+kf3: act stop: 0xc1d00017:0x5c000023 STOP_CHANNEL(bImmediate=false): twin host 0x20 disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (616 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=349
+kf3: act evict ctx: chan 0xc1d00017:0x5c000023 GPU_EVICT_CTX: twin host 0x20 off the runlist, context UNBOUND (Some(CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 })) (312 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=350
+kf3: act stop: 0xc1d00017:0x5c00001f STOP_CHANNEL(bImmediate=false): twin host 0x1f disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (578 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=351
+kf3: act evict ctx: chan 0xc1d00017:0x5c00001f GPU_EVICT_CTX: twin host 0x1f off the runlist, context UNBOUND (Some(CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 })) (304 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=352
+kf3: act stop: 0xc1d00017:0x5c000019 STOP_CHANNEL(bImmediate=false): twin host 0x1e disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false) (611 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=353
+kf3: act evict ctx: chan 0xc1d00017:0x5c000019 GPU_EVICT_CTX: twin host 0x1e off the runlist, context UNBOUND (Some(CtxBind { initialized: 3591, va_bound: 0, bound: false, promotes: 2, evicts: 1 })) (345 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=354
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=355
+kf3: GSP rpc Free seq=356
+kf3: GSP rpc Free seq=357
+kf3: GSP rpc Free seq=358
+kf3: GSP rpc Free seq=359
+kf3: GSP rpc Free seq=360
+kf3: GSP rpc Free seq=361
+kf3: GSP rpc Free seq=362
+kf3: GSP rpc Free seq=363
+kf3: GSP rpc Free seq=364
+kf3: GSP rpc Free seq=365
+kf3: GSP rpc Free seq=366
+kf3: GSP rpc Free seq=367
+kf3: GSP rpc Free seq=368
+kf3: GSP rpc Free seq=369
+kf3: GSP rpc Free seq=370
+kf3: GSP rpc Free seq=371
+kf3: GSP rpc Free seq=372
+kf3: GSP rpc Free seq=373
+kf3: GSP rpc Free seq=374
+kf3: GSP rpc Free seq=375
+kf3: GSP rpc Free seq=376
+kf3: GSP rpc Free seq=377
+kf3: GSP rpc Free seq=378
+kf3: GSP rpc Free seq=379
+kf3: GSP rpc Free seq=380
+kf3: GSP rpc Free seq=381
+kf3: GSP rpc Free seq=382
+kf3: GSP rpc Free seq=383
+kf3: GSP rpc Free seq=384
+kf3: GSP rpc Free seq=385
+kf3: GSP rpc Free seq=386
+kf3: GSP rpc Free seq=387
+kf3: GSP rpc Free seq=388
+kf3: GSP rpc Free seq=389
+kf3: GSP rpc Free seq=390
+kf3: GSP rpc Free seq=391
+kf3: GSP rpc Free seq=392
+kf3: GSP rpc Free seq=393
+kf3: GSP rpc Free seq=394
+kf3: GSP rpc Free seq=395
+kf3: GSP rpc Free seq=396
+kf3: GSP rpc Free seq=397
+kf3: DOORBELL-LEDGER tok=0x00001006 route=translated emulated=0 forwarded=1 host=0x1001d fast=0
+kf3: chan token 0x1006 (host 0x1001d) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=2 last_put=Some(1) gp_get=Some(1) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: true }) dead=None
+kf3: act free: 0xc1d0000a:0xcaf00033: translated host 0x1001d (2852 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=398
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=399
+kf3: GSP rpc Free seq=400
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=401
+kf3: DOORBELL-LEDGER tok=0x00001005 route=translated emulated=0 forwarded=49 host=0x1001c fast=0
+kf3: chan token 0x1005 (host 0x1001c) RETIRED, forwarded=49 submissions=49 splits=0/0 serves=239 last_put=Some(49) gp_get=Some(49) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: true }) dead=None
+kf3: act free: 0xc1d0000a:0xcaf00028: translated host 0x1001c (2865 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=402
+kf3: GSP rpc Free seq=403
+kf3: GSP rpc Free seq=404
+kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=1 host=0x1001b fast=0
+kf3: chan token 0x804 (host 0x1001b) RETIRED, forwarded=1 submissions=1 splits=0/0 serves=2 last_put=Some(1) gp_get=Some(1) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: true }) dead=None
+kf3: act free: 0xc1d0000a:0xcaf0001d: translated host 0x1001b (2906 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=405
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=406
+kf3: GSP rpc Free seq=407
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=408
+kf3: DOORBELL-LEDGER tok=0x00000803 route=translated emulated=0 forwarded=265 host=0x1001a fast=0
+kf3: chan token 0x803 (host 0x1001a) RETIRED, forwarded=265 submissions=513 splits=266/266 serves=1105 last_put=Some(265) gp_get=Some(265) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: true }) dead=None
+kf3: act free: 0xc1d0000a:0xcaf00012: translated host 0x1001a (2824 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=409
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=410
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=411
+kf3: GSP rpc RmControl seq=412
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 412 }
+kf3: GSP REFUSED fn76/0x20800a9e=0x56 (GSP_RM_CONTROL) first_seq=412 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=413
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 413 }
+kf3: GSP REFUSED fn76/0x20800a9c=0x56 (GSP_RM_CONTROL) first_seq=413 — the guest read a non-OK status
+kf3: GSP rpc RmControl seq=414
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 414 }
+kf3: GSP REFUSED fn76/0x20800a1e=0x56 (GSP_RM_CONTROL) first_seq=414 — the guest read a non-OK status
+kf3: GSP rpc Free seq=415
+kf3: GSP rpc Free seq=416
+kf3: GSP rpc Free seq=417
+kf3: act free: 0xc1d00017:0x5c000039: engine object host 0xcafe007c freed (562 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=418
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=419
+kf3: act free: 0xc1d00017:0x5c000038: engine object host 0xcafe007b freed (488 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=1 emulated=0 forwarded=1 host=0x25 trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c000037: passthrough 0xc1d00017:0x5c000037 token 0xe host 0x25 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 } freed (869 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=420
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=421
+kf3: act free: 0xc1d00017:0x5c000035: engine object host 0xcafe0077 freed (377 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000034: engine object host 0xcafe0076 freed (400 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=422
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=423
+kf3: DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1 emulated=0 forwarded=1 host=0x24 trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c000033: passthrough 0xc1d00017:0x5c000033 token 0xd host 0x24 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 } freed (774 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000031: engine object host 0xcafe0072 freed (391 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=424
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=425
+kf3: act free: 0xc1d00017:0x5c000030: engine object host 0xcafe0071 freed (405 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=1 emulated=0 forwarded=1 host=0x23 trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c00002f: passthrough 0xc1d00017:0x5c00002f token 0xc host 0x23 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 } freed (703 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=426
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=427
+kf3: act free: 0xc1d00017:0x5c00002d: engine object host 0xcafe006d freed (365 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c00002c: engine object host 0xcafe006c freed (411 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=428
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=429
+kf3: DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=3 emulated=0 forwarded=3 host=0x22 trap=3 fast=0
+kf3: act free: 0xc1d00017:0x5c00002b: passthrough 0xc1d00017:0x5c00002b token 0xb host 0x22 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 } freed (810 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000029: engine object host 0xcafe0068 freed (357 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=430
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=431
+kf3: act free: 0xc1d00017:0x5c000028: engine object host 0xcafe0067 freed (417 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: DOORBELL-LEDGER tok=0x0000000a route=passthrough rung=3 emulated=0 forwarded=3 host=0x21 trap=3 fast=0
+kf3: act free: 0xc1d00017:0x5c000027: passthrough 0xc1d00017:0x5c000027 token 0xa host 0x21 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 } freed (634 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=432
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=433
+kf3: act free: 0xc1d00017:0x5c000025: engine object host 0xcafe0063 freed (372 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000024: engine object host 0xcafe0062 freed (401 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=434
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=435
+kf3: DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=3 emulated=0 forwarded=3 host=0x20 trap=3 fast=0
+kf3: act free: 0xc1d00017:0x5c000023: passthrough 0xc1d00017:0x5c000023 token 0x9 host 0x20 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 } freed (689 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000021: engine object host 0xcafe005e freed (379 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=436
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=437
+kf3: act free: 0xc1d00017:0x5c000020: engine object host 0xcafe005d freed (431 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=3 emulated=0 forwarded=3 host=0x1f trap=3 fast=0
+kf3: act free: 0xc1d00017:0x5c00001f: passthrough 0xc1d00017:0x5c00001f token 0x8 host 0x1f objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 1, evicts: 1 } freed (684 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=438
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=439
+kf3: act free: 0xc1d00017:0x5c00001b: engine object host 0xcafe0058 freed (350 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=440
+kf3: GSP rpc Free seq=441
+kf3: GSP rpc Free seq=442
+kf3: GSP rpc Free seq=443
+kf3: GSP rpc Free seq=444
+kf3: GSP rpc Free seq=445
+kf3: GSP rpc Free seq=446
+kf3: act free: 0xc1d00017:0x5c00001a: debugger session host 0xcafe00a2 freed; engine object host 0xcafe0057 freed (1766 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=447
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=448
+kf3: DOORBELL-LEDGER tok=0x00000007 route=passthrough rung=114 emulated=0 forwarded=114 host=0x1e trap=114 fast=0
+kf3: act free: 0xc1d00017:0x5c000019: passthrough 0xc1d00017:0x5c000019 token 0x7 host 0x1e objects=0 ctx=CtxBind { initialized: 3591, va_bound: 0, bound: false, promotes: 2, evicts: 1 } freed (1832 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=449
+kf3: GSP rpc Free seq=450
+kf3: act free: 0xc1d00017:0x5c000047: engine object host 0xcafe008d freed (558 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=451
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=452
+kf3: DOORBELL-LEDGER tok=0x00000812 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10029 trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c000046: passthrough 0xc1d00017:0x5c000046 token 0x812 host 0x10029 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (918 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000044: engine object host 0xcafe0089 freed (431 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=453
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=454
+kf3: DOORBELL-LEDGER tok=0x00000811 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10028 trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c000043: passthrough 0xc1d00017:0x5c000043 token 0x811 host 0x10028 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (847 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000041: engine object host 0xcafe0085 freed (421 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=455
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=456
+kf3: DOORBELL-LEDGER tok=0x00000810 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10027 trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c000040: passthrough 0xc1d00017:0x5c000040 token 0x810 host 0x10027 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (727 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c00003e: engine object host 0xcafe0081 freed (386 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=457
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=458
+kf3: DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=96 emulated=0 forwarded=96 host=0x10026 trap=96 fast=0
+kf3: act free: 0xc1d00017:0x5c00003d: passthrough 0xc1d00017:0x5c00003d token 0x80f host 0x10026 objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1513 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=459
+kf3: act free: 0xc1d00017:0x5c000055: engine object host 0xcafe009e freed (436 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=460
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=461
+kf3: DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002d trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c000054: passthrough 0xc1d00017:0x5c000054 token 0x1016 host 0x2002d objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (814 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000052: engine object host 0xcafe009a freed (414 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=462
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=463
+kf3: DOORBELL-LEDGER tok=0x00001015 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002c trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c000051: passthrough 0xc1d00017:0x5c000051 token 0x1015 host 0x2002c objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (729 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c00004f: engine object host 0xcafe0096 freed (432 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=464
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=465
+kf3: DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002b trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c00004e: passthrough 0xc1d00017:0x5c00004e token 0x1014 host 0x2002b objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (742 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c00004c: engine object host 0xcafe0092 freed (391 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=466
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=467
+kf3: DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2002a trap=1 fast=0
+kf3: act free: 0xc1d00017:0x5c00004b: passthrough 0xc1d00017:0x5c00004b token 0x1013 host 0x2002a objects=0 ctx=CtxBind { initialized: 0, va_bound: 0, bound: false, promotes: 0, evicts: 0 } freed (1530 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=468
+kf3: GSP rpc Free seq=469
+kf3: GSP rpc Free seq=470
+kf3: GSP rpc Free seq=471
+kf3: GSP rpc Free seq=472
+kf3: GSP rpc Free seq=473
+kf3: GSP rpc Free seq=474
+kf3: GSP rpc Free seq=475
+kf3: GSP rpc Free seq=476
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=477
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: L2 cache op FlushDirty served by host FB_FLUSH_GPU_CACHE in 256 us (first of this op)
+kf3: L2 cache op SysmemInvalidate served by host FB_FLUSH_GPU_CACHE in 235 us (first of this op)
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=478
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: act free: 0xc1d00017:0x5c000002: host CUDA limit off (ok) (392 us, off the GSP lock)
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=479
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=480
+kf3: GSP rpc Free seq=481
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=482
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10019 fast=0
+kf3: chan token 0x802 (host 0x10019) RETIRED, forwarded=2 submissions=2 splits=0/0 serves=6 last_put=Some(2) gp_get=Some(2) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None
+kf3: act free: 0xc1e0001c:0x2: translated host 0x10019 (3542 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=483
+kf3: GSP rpc Free seq=484
+kf3: GSP rpc Free seq=485
+kf3: GSP rpc Free seq=486
+kf3: GSP rpc Free seq=487
+kf3: GSP rpc Free seq=488
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=489
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=56 host=0x10018 fast=0
+kf3: chan token 0x801 (host 0x10018) RETIRED, forwarded=56 submissions=56 splits=0/0 serves=86 last_put=Some(56) gp_get=Some(56) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None
+kf3: act free: 0xc1e0001b:0x2: translated host 0x10018 (3630 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=490
+kf3: GSP rpc Free seq=491
+kf3: GSP rpc Free seq=492
+kf3: GSP rpc Free seq=493
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=494
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmControl seq=495
+kf3: mem t=74.950s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP rpc Free seq=496
+kf3: GSP rpc Free seq=497
+kf3: GSP rpc Free seq=498
+kf3: GSP rpc Free seq=499
+kf3: GSP rpc Free seq=500
+kf3: GSP rpc Free seq=501
+kf3: GSP rpc RmControl seq=502
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 502 }
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc UpdateBarPde seq=503
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=504
+kf3: GSP rpc Free seq=505
+kf3: GSP rpc Free seq=506
+kf3: GSP rpc Free seq=507
+kf3: GSP rpc RmControl seq=508
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 508 }
+kf3: GSP rpc UnloadingGuestDriver seq=509
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=509: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: family=Ampere phase=Halted trapped=12694 applied=3827 refused=6 serviced=856 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=435 walks=643/643 cleared=435 superseded=0 named_missed=7 unreconciled=0 mapped=641 unmapped=476 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=18 sked=1/0held fn70=6 roots=16 root_moves=1 stmts=49/49 refused=0 pramin_repoints=62 pramin_miss=0 last_miss=0x0 pramin_worst_us=4101 (map 716 mmap 3973) pramin_maps=62 pramin_mmaps=62 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=61 cache_ops=2 sysmembars=10 root_unsets=2] mirrors=2 reused=13 prewarmed=3 mirror_avg_us=574801 mirror_max_us=590594 vat[invals=49 arrive->clear_avg_us=2156 max_us=230714 walks=163 walk_avg_us=280 gpu_avg_us=134 plan_avg_us=0 apply_avg_us=768 leaves=81 host_calls=324] chan[births=10 pt_births=16 acts=141/0refused worst_act_us=7800 nsi=[GR0:643/210raised CE2:523/415raised] served=1452 parks=5621 host_rings=956 contended=0 poisoned=0 tokens=[]] views[armed=309 released=307 refused=0 held=2] rc[armed=16 unarmed=0 wakes=1 seen=8 posted=8] irq[writes=6946 raised=622 held=7 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800a4b,0x20800afe,0x20800aff,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x00800294,0x20810108,0x20810110,0x2080014b,0x20800157,0x20801357,0x2080852e,0x20808513,0x20802068,0x2080a618,0x2080a612,0x2080a097,0x20800a38,0x2080012f,0x20802a12,0x20800ab8,0x20800a9a,0x83de030c,0x20800a9e,0x20800a9c,0x20800a1e] gsp_refusals[total=98 distinct=38 [fn76/0x20800a87=0x56x3 fn76/0x20800a4b=0x56x3 fn76/0x20800afe=0x56x6 fn76/0x20800aff=0x56x5 fn76/0x20800a80=0x56x6 fn76/0x20802a0f=0x56x3 fn76/0x2080017e=0x56x3 fn76/0x20800a30=0x56x3 fn76/0x20800a2e=0x56x3 fn76/0x20800b03=0x56x3 fn76/0x20800b05=0x56x3 fn76/0x20800a3f=0x56x3 fn76/0x2080012b=0x56x3 fn76/0x2080013f=0x56x3 fn103/0x0000c36f=0x56x3 fn103/0x0000402c=0x56x3 fn76/0x00800294=0x56x1 fn76/0x20810108=0x56x2 fn76/0x20810110=0x56x2 fn76/0x2080014b=0x56x5 fn76/0x20800157=0x56x1 fn76/0x20801357=0x56x1 fn76/0x2080852e=0x56x1 fn76/0x20808513=0x56x1 fn76/0x20802068=0x56x1 fn76/0x2080a618=0x56x1 fn76/0x2080a612=0x56x1 fn76/0x2080a097=0x56x1 fn103/0x0000208f=0x56x1 fn76/0x20800a38=0x56x3 fn76/0x2080012f=0x56x2 fn76/0x20802a12=0x56x12 fn76/0x20800ab8=0x56x1 fn76/0x20800a9a=0x56x1 fn76/0x83de030c=0x56x1 fn76/0x20800a9e=0x56x1 fn76/0x20800a9c=0x56x1 fn76/0x20800a1e=0x56x1]]

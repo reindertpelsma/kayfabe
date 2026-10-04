@@ -1,0 +1,9 @@
+=== clinfo side=host start=2026-10-04T11:47:33+00:00 host=ubuntu cmd: clinfo -l; clinfo | grep -m3 -E 'Platform Name|Device Name'
+Platform #0: NVIDIA CUDA
+ `-- Device #0: NVIDIA GeForce RTX 3060
+Platform #1: Portable Computing Language
+ `-- Device #0: pthread-Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
+  Platform Name                                   NVIDIA CUDA
+  Platform Name                                   Portable Computing Language
+  Platform Name                                   NVIDIA CUDA
+=== end rc=0 secs=5 2026-10-04T11:47:38+00:00

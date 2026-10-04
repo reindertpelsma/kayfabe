@@ -1,0 +1,6 @@
+=== simpleCUBLAS side=host start=2026-10-04T11:35:30+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleCUBLAS
+GPU Device 0: "Ampere" with compute capability 8.6
+
+simpleCUBLAS test running..
+simpleCUBLAS test passed.
+=== end rc=0 secs=3 2026-10-04T11:35:33+00:00

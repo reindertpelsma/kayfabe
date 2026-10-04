@@ -1,6 +1,42 @@
 # Candidate 2 — broker and capped display
 
-**STATUS: LIVE, 2026-10-04 — verification in progress, not a promotion verdict.**
+**STATUS: VERIFIED, 2026-10-04 — product `9d82f259` (KF3 ABI 18), GA106 / NVIDIA 580.159.04.**
+
+Candidate 2 combines the promoted candidate 1 with broker/maxfps. Code review,
+exact-source GPU merge bar, real guest apps and the display checks are complete.
+Product CI passed both the per-push run **37196732900** and full dispatch including
+slow tests **37197093941**. Commits after `9d82f259` contain only docs, saved text
+and evidence recipes; the final head must also pass CI before master/v3 promotion
+under `OWNER_RULINGS.md` §R. nvkvm-pv's tested broker dependency is `9f2fd00` on
+`codex/broker-refresh-2026-10-04`; its separate default branch was not promoted.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Exact-source merge bar | 2131/0 tests; 9/9 gates; bare + guest 30/30 each; USER census | `cand2b/` |
+| Apps and baseline comparison | Host 71/71; guest 61/65 apps + 6/6 probes; same four failures alone; all three digests equal | `apps_guest/comparison.txt` |
+| HMP/QMP refresh | Old binary hangs; fresh correct frames after fix, including same-box control | `refresh_before/`, `refresh_after/`, `refresh_same_box/` |
+| Cap 30 | KMS 29.94 Hz; GLX about 30; actual Vulkan FIFO 29.976857 FPS; IMMEDIATE 1557.8 FPS | `fps30/`, `x1130/`, `present_timing/` |
+| Async cap 60 | 240/240 at 60.01 Hz; slow control not continually held; no overruns/timeouts | `async60/` |
+| D2 | Unwatched checks/copies zero; watched idle 59.9 checks/s, zero copies | `fps30/`, `broker/`, `broker_progress/` |
+| Broker / cursor | GPU-copy grade PASS; host and VNC cursor equal; grab/hide/reconnect work | `broker/` |
+| Broker stopped | Guest alive; GLX 58–60 FPS through 27.214 s SIGSTOP | `broker_progress/` |
+| Refresh-only hints | Actual guest EDID follows 30/50/60 Hz on connector reprobe; duplicates suppressed | `refresh_hints/` |
+
+Known limits are retained: four unsupported managed-memory cases (eight host Xid
+31 records in the full matrix), including conjugateGradientUM's incorrect
+success exit; baseline Xorg-start flip warnings; no claim of automatic desktop
+switching or a physical host-monitor transition in R6; no actual DDX import
+refusal provoked. X11 MAILBOX is unsupported on this stack (Wayland MAILBOX works).
+`x11-dispsw` remains **off by default**, pending §N's separate security conditions.
+This is GA106 coverage, not Windows or every GPU family.
+
+Owned display box **54137212** was destroyed after logs were pushed; absence was
+verified on 2026-10-04. Existing **54049598** remains, with these jobs complete. All cited
+artifacts are text (compressed where large), with `SHA256SUMS` and source manifests.
+
+**Chronological record:** pending statements below describe their dated stage;
+the results above and later corrections supersede them.
+
 
 Candidate 1 was promoted to master and v3 at `9b50d295`; its product/test sources
 are identical to the verified `0ac157b2`. This candidate merges `v3-maxfps`
@@ -235,3 +271,19 @@ were pushed (`3f2d325f`); the account list confirms it is absent. Existing box
 CI run 37201307103 caught one missing evidence attribution in this README's R6
 scope paragraph. The paragraph now cites its exact product/run; no gate or
 baseline was weakened. The failure and local fixed-gate output are retained.
+
+`apps_guest/`: complete host/guest/isolated matrix finished 12:24:15 UTC.
+`comparison.txt` and the committed `recipes/compare_apps.py` compare every
+identity/verdict against candidate 1 `0ac157b2`: host 71/71, guest 61/65 ordinary
+apps + 6/6 probes; the same four fail in both the batch and their own fresh boots.
+All three output digests match host and candidate 1. The four failures remain
+UnifiedMemoryPerf, UnifiedMemoryStreams, attach_verify and conjugateGradientUM;
+the latter still prints a success exit with Error amount 1.000000, which the
+matrix correctly grades FAIL. Journald records eight host Xid 31 events for
+those managed-memory failures (four batched, four isolated), as candidate 1 did;
+no new application verdict regression is hidden by a global exit status.
+
+`refresh_same_box/`: positive on existing vmb **54049598**, source/binary
+`9d82f259`, finished 12:26:06 UTC. HMP/QMP returned three fresh full-size red,
+blue and green fbcon frames; host Xids zero. This closes the same-box comparison
+with the reproducibly hung `3588789e` negative control in `refresh_before/`.

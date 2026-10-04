@@ -1,0 +1,7 @@
+=== simpleAtomicIntrinsics side=guest start=2026-10-04T11:54:05+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/simpleAtomicIntrinsics
+simpleAtomicIntrinsics starting...
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Processing time: 13.915000 (ms)
+simpleAtomicIntrinsics completed, returned OK
+=== end rc=0 secs=3 2026-10-04T11:54:08+00:00

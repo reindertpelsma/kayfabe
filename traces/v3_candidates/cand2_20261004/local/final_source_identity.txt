@@ -1,0 +1,4 @@
+Product/build/test sources are identical to 9d82f2598d267732c87476da27f501aaabe2c4af.
+Verified by git diff 9d82f259 --name-only -- . :!docs :!traces (empty).
+Later changes are documentation, saved evidence, and diagnostic recipes under traces.
+Original /workspace/kayfabe dirty workspace is separate and preserved.

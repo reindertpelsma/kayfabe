@@ -1,0 +1,1 @@
+[62976.174869] NVRM: Xid (PCI:0000:00:08): 31, pid=384883, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x72ee_aa000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ

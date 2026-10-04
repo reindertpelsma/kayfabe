@@ -1,0 +1,94 @@
+START 2026-10-04T11:33:29+00:00
+SOURCE 9d82f2598d267732c87476da27f501aaabe2c4af
+40a850b793cac425bd946a3d09bce61ed5de1567b2b77a4fd79f52c8e82b525f  /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64
+fb64de820389b448712ef325f7553d55d24dee8e736d2052cb7d0804b7ffdca1  /opt/apps/bundle.tgz
+HOST_RC=0 2026-10-04T11:51:41+00:00
+[apps_matrix 2026-10-04T11:51:41+00:00] HOST_DONE 71 pass / 74 rows
+GUEST_RC=0 2026-10-04T12:24:15+00:00
+[apps_matrix 2026-10-04T11:51:41+00:00] kf3 binary: /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64
+[apps_matrix 2026-10-04T12:17:20+00:00] boot ap_cand2_b1 rc=0 apps=[nvidia_smi deviceQuery vectorAdd vectorAddDrv matrixMul matrixMulDrv bandwidthTest simpleStreams asyncAPI simpleAtomicIntrinsics simpleCallback simpleOccupancy simpleZeroCo
+[apps_matrix 2026-10-04T12:19:07+00:00] boot ap_cand2_i_UnifiedMemoryPerf rc=0 apps=[UnifiedMemoryPerf] :: /workspace/bench/run_ap_cand2_i_UnifiedMemoryPerf_probe.log:APPS_HOOK tag=ap_cand2_i_UnifiedMemoryPerf apps=[UnifiedMemoryPerf] guest
+[apps_matrix 2026-10-04T12:20:49+00:00] boot ap_cand2_i_UnifiedMemoryStreams rc=0 apps=[UnifiedMemoryStreams] :: /workspace/bench/run_ap_cand2_i_UnifiedMemoryStreams_probe.log:APPS_HOOK tag=ap_cand2_i_UnifiedMemoryStreams apps=[UnifiedMemor
+[apps_matrix 2026-10-04T12:22:27+00:00] boot ap_cand2_i_attach_verify rc=0 apps=[attach_verify] :: /workspace/bench/run_ap_cand2_i_attach_verify_probe.log:APPS_HOOK tag=ap_cand2_i_attach_verify apps=[attach_verify] guest=NVIDIA GeForce RTX 
+[apps_matrix 2026-10-04T12:24:15+00:00] boot ap_cand2_i_conjugateGradientUM rc=0 apps=[conjugateGradientUM] :: /workspace/bench/run_ap_cand2_i_conjugateGradientUM_probe.log:APPS_HOOK tag=ap_cand2_i_conjugateGradientUM apps=[conjugateGradien
+[apps_matrix 2026-10-04T12:24:15+00:00] GUEST_DONE batched: 67 pass / 71;  isolated re-runs: 0
+
+### /workspace/apps/results/cand2
+
+| app | host | guest (batched) | guest (alone) | guest detail |
+|---|---|---|---|---|
+| nvidia_smi | PASS | PASS | - |  |
+| deviceQuery | PASS | PASS | - |  |
+| vectorAdd | PASS | PASS | - |  |
+| vectorAddDrv | PASS | PASS | - |  |
+| matrixMul | PASS | PASS | - |  |
+| matrixMulDrv | PASS | PASS | - |  |
+| bandwidthTest | PASS | PASS | - |  |
+| simpleStreams | PASS | PASS | - |  |
+| asyncAPI | PASS | PASS | - |  |
+| simpleAtomicIntrinsics | PASS | PASS | - |  |
+| simpleCallback | PASS | PASS | - |  |
+| simpleOccupancy | PASS | PASS | - |  |
+| simpleZeroCopy | PASS | PASS | - |  |
+| simpleCooperativeGroups | PASS | PASS | - |  |
+| concurrentKernels | PASS | PASS | - |  |
+| simpleIPC | PASS | PASS | - |  |
+| UnifiedMemoryStreams | PASS | FAIL | FAIL | rc=139 10s quiet=0 xid=0 kf3_refusals=12 — CUDA error at UnifiedMemoryStreams.cu:214 |
+| UnifiedMemoryPerf | PASS | FAIL | FAIL | rc=1 6s quiet=1 xid=0 kf3_refusals=12 — Running ...CUDA error at matrixMultiplyPerf.cu:435 |
+| conjugateGradientUM | PASS | FAIL | FAIL | rc=0 10s quiet=1 xid=0 kf3_refusals=12 — Test Summary: Error amount = 1.000000, result = SUCCESS |
+| cudaTensorCoreGemm | PASS | PASS | - |  |
+| bf16TensorCoreGemm | PASS | PASS | - |  |
+| globalToShmemAsyncCopy | PASS | PASS | - |  |
+| cdpSimpleQuicksort | PASS | PASS | - |  |
+| graphMemoryNodes | PASS | PASS | - |  |
+| simpleCudaGraphs | PASS | PASS | - |  |
+| simpleCUBLAS | PASS | PASS | - |  |
+| simpleCUFFT | PASS | PASS | - |  |
+| conjugateGradient | PASS | PASS | - |  |
+| MersenneTwisterGP11213 | PASS | PASS | - |  |
+| reduction | PASS | PASS | - |  |
+| sortingNetworks | PASS | PASS | - |  |
+| scan | PASS | PASS | - |  |
+| histogram | PASS | PASS | - |  |
+| BlackScholes | PASS | PASS | - |  |
+| fastWalshTransform | PASS | PASS | - |  |
+| transpose | PASS | PASS | - |  |
+| stream_triad | PASS | PASS | - |  |
+| reduce | PASS | PASS | - |  |
+| nbody | PASS | PASS | - |  |
+| blackscholes | PASS | PASS | - |  |
+| mandelbrot | PASS | PASS | - |  |
+| conv2d | PASS | PASS | - |  |
+| sgemm_cublas | PASS | PASS | - |  |
+| fft_cufft | PASS | PASS | - |  |
+| sha256 | PASS | PASS | - |  |
+| memcpy2d | PASS | PASS | - |  |
+| attach_verify | PASS | FAIL | FAIL | rc=1 6s quiet=1 xid=0 kf3_refusals=12 — FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure) |
+| stream_default | PASS | PASS | - |  |
+| stream_created | PASS | PASS | - |  |
+| stream_nonblocking | PASS | PASS | - |  |
+| stream_perthread | PASS | PASS | - |  |
+| stream_two | PASS | PASS | - |  |
+| stream_created2nd | PASS | PASS | - |  |
+| gpu_burn | PASS | PASS | - |  |
+| torch_correct | PASS | PASS | - | cnn_train_step digest == host |
+| torch_ai_bench | PASS | PASS | - |  |
+| hf_generate | PASS | PASS | - | hf_generate digest == host |
+| cupy | PASS | PASS | - |  |
+| llama_cpp_gen | PASS | PASS | - | llama_cpp digest == host |
+| llama_bench | PASS | PASS | - |  |
+| vulkaninfo | PASS | PASS | - |  |
+| vkpeak | PASS | PASS | - |  |
+| egl_offscreen | PASS | PASS | - |  |
+| clinfo | PASS | PASS | - |  |
+| clpeak | PASS | PASS | - |  |
+| nvenc_h264 | PASS | PASS | - |  |
+| nvenc_hevc | PASS | PASS | - |  |
+| nvdec_h264 | PASS | PASS | - |  |
+| hashcat | PASS | PASS | - |  |
+| blender_cycles | PASS | PASS | - |  |
+| geekbench_gpu | PASS | PASS | - |  |
+
+host PASS / guest FAIL: 4, host PASS / guest PASS: 67
+APPS_DONE (inspect the results; EXIT alone is not a grade)
+EXIT rc=0 2026-10-04T12:24:15+00:00

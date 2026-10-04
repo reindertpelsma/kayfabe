@@ -11,33 +11,43 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-04 (supersedes every older entry in §0 where they differ)
 
-**Current work (2026-10-04, candidate 2):** master and v3 were promoted to `9b50d295`
-(candidate 1's verified code plus recovered evidence/docs). Continue on
-`codex/candidate-2-2026-10-04`, local worktree `/data/kayfabe-candidate2-20261004`.
-Broker/maxfps are integrated with ABI **18**; product revision `9d82f259` includes
-the HMP AioContext fix (`8775a93e`) and asynchronous console cursor update.
-Its CI including the slow suite passes. Exact-source `cand2b` passed the full
-bar: 2131/0 tests, gates 9/9, bare and guest 30/30, USER birth census. Host apps
-71/71 passed; the main guest batch matches candidate 1 exactly (61/65 apps +
-6/6 probes, four known managed-memory failures). Individual failure reruns are
-running on existing box **54049598** (vmb).
-HMP/QMP refresh passes on the replacement display box; same-box positive is
-queued after apps on vmb. Async-60 passes on vdisp2 (240/240 at 60.01 Hz; slow control is not continually held). The 30 FPS cap is measured in
-X11 GLX and actual Vulkan FIFO present calls (29.976857 FPS); Wayland/KMS,
-cursor parity, reconnect and idle-copy checks pass. Known Xorg-start flip
-warnings match candidate 1. Broker-stop rendering passes (27 seconds stopped,
-guest alive, GLX 58–60 FPS); refresh-only R6 passes for 30/50/60 Hz on userspace connector reprobe. A sysfs-only
-read was stale; no automatic DRM uevent/desktop mode switch is claimed. See all results and limitations
-in `traces/v3_candidates/cand2_20261004/README.md`; no promotion verdict yet.
-Owned display box **54137212** finished its tests and was destroyed after evidence
-was pushed; its absence was verified. Only existing **54049598** remains in use.
-Recipes and every completed batch are pushed in the candidate evidence directory.
-Broker dependency `nvkvm-pv:codex/broker-refresh-2026-10-04` at `9f2fd00` fixes
-refresh-only events; its CI/local tests pass, but it is not promoted to
-nvkvm-pv's default branch.
-The old display/Windows boxes
-in the historical table below are gone. Only reproducible display results were
-lost; no code loss is known. Keep saving each completed batch to GitHub.
+**Current verified integration (2026-10-04, candidate 2):**
+`codex/candidate-2-2026-10-04`, local worktree `/data/kayfabe-candidate2-20261004`,
+combines promoted candidate 1 with broker/maxfps, **KF3 ABI 18**. Product revision
+`9d82f259` includes the HMP AioContext fix and asynchronous console cursor update.
+All later commits are docs/evidence/recipes, with no product/build/test-source delta.
+
+- Exact-source `cand2b`: **2131/0 tests, gates 9/9, bare and guest 30/30**, USER
+  birth census. Product CI, including the full slow dispatch, passes.
+- Apps: **host 71/71; guest 61/65 ordinary apps + 6/6 probes**, zero verdict
+  changes from candidate 1, including four failures rerun alone. All three
+  output digests match host and candidate 1. The same managed-memory limits
+  remain (eight host Xid 31 records; conjugateGradientUM's wrong-answer success
+  exit is correctly graded FAIL by the matrix).
+- HMP/QMP fresh-frame checks pass, including the box where the old binary hung.
+  At `9d82f259`, cap-30 KMS/Wayland/X11, forced-60-raster clamp, measured Vulkan FIFO 29.976857
+  FPS, async-60 pacing, D2 idle/unwatched behavior, broker GPU-copy, cursor parity,
+  reconnect and rendering with a stopped broker all have committed evidence.
+- Refresh-only hints reach actual guest EDID at 30/50/60 Hz on userspace
+  connector reprobe. No automatic DRM uevent/desktop mode switch or physical
+  monitor transition is claimed. Baseline Xorg-start warnings and darker guest
+  cursor edges remain documented; actual DDX import refusal was not provoked.
+  `x11-dispsw` stays **off by default** pending §N's security conditions.
+
+Evidence and full limitations: `traces/v3_candidates/cand2_20261004/README.md`.
+Under §R, promote master/v3 only after CI passes on the final docs/evidence head;
+check the remote refs for the exact promotion commit. The earlier candidate 1
+promotion was `9b50d295`. Next integration work remains the P1/P2 and security
+lanes in the table below; Windows is parked behind those priorities.
+
+Owned display box **54137212** was destroyed after all its evidence was pushed,
+and absence was verified. Existing **54049598** (vmb) remains; its candidate-2
+jobs are finished. Do not destroy another session's box. nvkvm-pv dependency
+`codex/broker-refresh-2026-10-04` at `9f2fd00` passes its own broker tests/CI but
+was **not** promoted to that project's default branch or VMM hardware bar.
+No code loss is known. The lost old-box display results were regenerated and
+saved after each batch; retain that practice. The original dirty workspace on
+`codex/ci-repair-2026-09-29` was preserved separately throughout.
 
 **Candidate 1 recovery record (completed):**
 
@@ -66,10 +76,10 @@ are committed in `docs/handoff/2026-10-04/` (README there).
 
 | lane | branch @ last known head | state | next step |
 |---|---|---|---|
-| **Candidate 1** | `v3-cand-1` tested at `0ac157b2`; recovery `codex/resume-2026-10-04` adds master docs + evidence (KF3 ABI 13) | B5 fixed at `c1ca7945`; full hardware bar passed on unchanged retry: 1937/0, 9/9, bare 30/30, guest 30/30, USER births. Apps host 71/71, guest 61/65+6/6 = baseline; B0/B1, B5 **4×14/14**, X11 A/B pass. First-attempt churn-test failure and its fake-token collision diagnosis retained. | after recovery CI, promote under §R if this branch is not already in master/v3; then candidate 2. Evidence: `traces/v3_candidates/cand1_20261004/` |
-| Display: broker | `v3-broker` @ `82f98f42` (KF3 ABI 12) | GPU-copy rung, hover cursor, XOR blend, QEMU console cursor; box-graded (V3_DISPLAY §8.11-§8.15); 16 review fixes NOT yet box-verified | merges into a master that has ABI 13 → renumber to **14** (note at KF3_ABI in kf3.h / ffi_unsafe.rs on cand-1) |
-| Display: max fps | `v3-maxfps` from `v3-broker` (ABI 16) | being built (§M, D1-D5) with a box stage incl. the D4 X11 check and the broker post-review re-verify | then **candidate 2** = cand-1-merged master + broker + maxfps, full HW test |
-| nvkvm-pv broker | nvkvm-pv `broker-cursor-gpucopy` @ `badf2d7` (+ block-linear bound fix in flight) | CMD_CURSOR 7, EV_DEVICE 17, X11 EV_FORMAT x=0; review fixes done | not merged to nvkvm-pv main: needs its own HW test with nvkvm-pv's VMM |
+| **Candidate 1** | `v3-cand-1` tested at `0ac157b2`; recovery `codex/resume-2026-10-04` adds master docs + evidence (KF3 ABI 13) | B5 fixed at `c1ca7945`; full hardware bar passed on unchanged retry: 1937/0, 9/9, bare 30/30, guest 30/30, USER births. Apps host 71/71, guest 61/65+6/6 = baseline; B0/B1, B5 **4×14/14**, X11 A/B pass. First-attempt churn-test failure and its fake-token collision diagnosis retained. | Promoted at `9b50d295`; candidate 2 now incorporates it. Evidence: `traces/v3_candidates/cand1_20261004/` |
+| Display: broker | integrated in candidate 2 at `9d82f259` (ABI 18) | Post-review union passes GPU-copy/cursor/reconnect/stopped-broker checks; evidence in candidate 2 | Promote the candidate as a whole after final-head CI; companion nvkvm-pv default stays separate |
+| Display: max fps | integrated in candidate 2 at `9d82f259` (ABI 18) | Hardware checks complete, including actual X11 FIFO present cadence and D4 correction folded into §M | Keep x11-dispsw default off until §N security conditions hold |
+| nvkvm-pv broker | `codex/broker-refresh-2026-10-04` @ `9f2fd00`, based on block-linear extent fix `c386fec` | Broker CI/tests pass; GPU-copy/cursor/reconnect/hint checks pass with kayfabe candidate 2 | Not merged to nvkvm-pv main: needs its own HW test with nvkvm-pv's VMM |
 | x11-dispsw default-on | (not started) | prep plan in `docs/handoff/2026-10-04/dispsw_default_on_prep.json` | **owner question below**; then the forced-release probe + flip |
 | Security S1-21 (critical) | `v3-p1p2` @ `31b64802` | P1+P2 implemented behind `KF3_TSPACE` (default off; inc A count-only on the default path); two reviews + fix round done, CI green; design + box plan in the branch's docs; probe tools `tests/p1p2/window_reach_probe` and `kmod_tring` NOT yet written; owner decisions 8-12 (in the branch docs and `docs/handoff/2026-10-04/p1p2_result.json`) | box: A/B with the flag on, T-WINDOW-USER, T-PHYS-CE (S1-20), an app as an UNPRIVILEGED guest user; then default on |
 | Security S1-03/04 | `v3-sec-rawaddr` @ `20a38e96` | done, CI green: addresses behind opaque handles, kf-cuda unsafe 75→64, gates G1/G1b/G1c/G1d + PERIMETER line ratchet (`docs/design/V3_RAWADDR_PERIMETER.md`, §9 = what v3-broker must convert) | HW rows H1-H4 in a security candidate after the display candidates |
@@ -79,9 +89,9 @@ are committed in `docs/handoff/2026-10-04/` (README there).
 | managed-memory loudness | `v3-loud-uvm` | real work, never box-run | §R5.7 box run, then a candidate |
 | guest UVM fault plane | `v3-uvm-guest` | BLOCKED by owner ruling §E | redesign first |
 
-**KF3 ABI registry:** 11 master (GOP) · 12 v3-broker · 13 v3-dispsw-exp (cand-1) · 14 reserved for
+**KF3 ABI registry:** 11 historical GOP master · 12 v3-broker · 13 v3-dispsw-exp (cand-1) · 14 reserved for
 broker-on-13 · 15 v3-viommu · 16 v3-maxfps · v3-windows also took 12 and is renumbered at its merge.
-Numbers are never reused.
+Candidate 2 uses **18** (17 was a discarded scratch ordering and is not reused). Numbers are never reused.
 
 **Open owner questions:**
 1. §N condition 3 for x11-dispsw default-on. Restate it as "no kayfabe mapping is ever kernel-mapped,

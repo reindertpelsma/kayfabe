@@ -1,0 +1,4 @@
+=== stream_triad side=host start=2026-10-04T11:36:19+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/stream_triad
+METRIC stream_triad_GBs 336.3
+CHECK ok
+=== end rc=0 secs=3 2026-10-04T11:36:22+00:00

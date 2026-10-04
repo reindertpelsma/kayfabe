@@ -1,0 +1,5 @@
+=== egl_offscreen side=host start=2026-10-04T11:47:07+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/egl_offscreen
+[egl] renderer: NVIDIA GeForce RTX 3060/PCIe/SSE2
+METRIC egl_gl_Mtri_s 1.7
+CHECK egl_gl_Mtri_s ok
+=== end rc=0 secs=26 2026-10-04T11:47:33+00:00
