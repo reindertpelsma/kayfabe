@@ -38,6 +38,20 @@ class DecoderTest(unittest.TestCase):
             self.assertEqual(decode.summarize(decode.parse(header() + records))['unambiguous_query_pairs'], [])
         self.assertFalse(decode.summarize(decode.parse(header() + record() + record(1, status=0x56)))['unambiguous_query_pairs'][0]['successful'])
 
+    def test_large_control_continuation_is_preserved(self):
+        blob = bytearray(header() + record())
+        struct.pack_into('<I', blob, 128 + 88, 0x20800a32)
+        struct.pack_into('<I', blob, 128 + 96, 100000)
+        struct.pack_into('<I', blob, 128 + 32, 0)
+        check = 0
+        for (value,) in struct.iter_unpack('<I', blob[128:]):
+            check ^= value
+        struct.pack_into('<I', blob, 128 + 32, check)
+        control = decode.parse(blob)['records'][0]['control']
+        self.assertFalse(control['params_complete'])
+        self.assertEqual(control['params_bytes_observed'], 40)
+        self.assertEqual(control['params_bytes_declared'], 100000)
+
     def test_every_truncation_refused(self):
         blob = header() + record()
         for at in range(len(blob)):

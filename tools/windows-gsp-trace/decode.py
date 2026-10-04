@@ -72,13 +72,17 @@ def parse(blob):
             if length < 72:
                 raise InvalidTrace('short RM_CONTROL envelope')
             client, obj, command, status, params_size = struct.unpack_from('<5I', payload, 80)
-            if params_size > length - 72:
-                raise InvalidTrace('RM_CONTROL declared params exceed payload')
+            observed_size = min(params_size, length - 72)
             item['control'] = dict(client=hex(client), object=hex(obj), command=hex(command),
-                                   status=hex(status), params_hex=payload[120:120 + params_size].hex())
+                                   status=hex(status), params_bytes_declared=params_size,
+                                   params_bytes_observed=observed_size, params_complete=observed_size == params_size,
+                                   params_hex=payload[120:120 + observed_size].hex())
             if command == QUERY:
                 if params_size != 40:
                     raise InvalidTrace('GFX_POOL_QUERY_SIZE layout differs from the 40-byte known ABI')
+                if observed_size != params_size:
+                    records.append(item)
+                    continue  # retain a fragment, never read or fabricate absent bytes
                 fields = struct.unpack_from('<II4Q', payload, 120)
                 item['gfx_pool'] = dict(zip(('maxSlots', 'slotStride', 'ctrlStructSize', 'ctrlStructAlign',
                                              'poolSize', 'poolAlign'), fields))
