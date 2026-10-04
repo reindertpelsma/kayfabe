@@ -1,0 +1,11 @@
+{
+  "requested_utc": "2026-10-04T17:07:02.147118+00:00",
+  "instance_id": 54159260,
+  "target": "/dev/vda",
+  "expected_disk_guid": "60fb1614-b612-4fd4-8d6a-836edbac1c0a",
+  "action": "systemctl reboot after guarded one-shot/identity checks",
+  "ssh_exit": 0,
+  "stdout": "",
+  "stderr": "",
+  "returned_utc": "2026-10-04T17:07:03.797211+00:00"
+}

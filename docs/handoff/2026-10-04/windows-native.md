@@ -29,7 +29,9 @@ instance **54049598** belongs to another ongoing lane; do not overwrite or
 destroy it. Three failed/pending rentals from this lane were already destroyed
 and their absence verified: 54157671, 54158787, 54160009.
 
-The current Linux disk has **not** been armed or overwritten. Installation
+The original Linux disk was armed and rebooted at **17:07:02 UTC**. Provider
+serial output confirms the RAM flasher unmounted it and began writing Windows;
+final verification/native SSH are still pending. Installation
 completed, both cold boots passed all 25 checks, and an actual controller SSH
 login passed with pinned Windows host keys. The recorder bundle was staged and
 verified; Windows test signing was enabled and activated by a Windows reboot.
@@ -46,7 +48,11 @@ is `c32adf94bde55c19caa493b9ccc460bd39926900acfc4ca93297a6787bb1c3ca`.
 Text evidence and build provenance are in `traces/windows_gsp/20261004-loader`.
 The service is demand-start and stopped. The final post-recorder Windows
 readiness check passed all 25 checks, the controller released the hold, and
-Windows shut down cleanly at 16:50:17 UTC. Image compaction/sealing is in progress.
+Windows shut down cleanly at 16:50:17 UTC. Image sealing completed at 17:01:28 UTC, with check/identical comparison/exit 0.
+The 6,242,498,048-byte image SHA256 is
+`1fe10630f73d36f01387b51ed73db86833a13f7a4fd867e854d83c6c6580aac7`.
+The cutover evidence is in `traces/windows_gsp/20261004-cutover`; full private
+controller manifests/keys are in `/data/vast-cutover-54159260-20261004`.
 No Windows GSP traffic has been captured. Inspect:
 
 ```sh
@@ -115,8 +121,13 @@ Pinned-key SSH and the MSVC recorder install/API/restart/stop tests passed with
 the GPU assigned. A guest reboot activated test signing. Both NVIDIA PCI functions
 then reported PnP OK, but NVIDIA's own driver is not installed yet; this is not
 GPU workload success. The `windows_prepare` worker owns the running VFIO guest
-and is beginning the first collector-before-NVIDIA installation attempt with
-native reboots held. It must drain and export before a manual reboot. Root owns
+and is retrying the collector-before-NVIDIA installation attempt with native
+reboots held. The first attempt stopped after extraction and before NVIDIA
+installation because Start-Process lost the exit code. Its empty trace exported
+and independently decoded correctly. The process helper and both controller
+launchers now own the native process handle; actual Windows 5.1 tests cover
+0/1/7/3010, 20 fast children, error/timeout refusal and two concurrently drained
+128 KiB output pipes. Public installer fix is `a9ecdfa`. It must drain and export before a manual reboot. Root owns
 the Vast native-cutover lane; do not race either owner. Borrowed-host evidence,
 including the recorder transcript and recovery journal, has been copied to the
 controller. No Windows GSP query pair has been captured yet.
@@ -138,12 +149,14 @@ and dirty original workspace were preserved. Root free space increased to about
 1. Recorder kernel/API smoke passed. Use the verified MSVC build for capture;
    the revised Linux linker build has static validation but its exact runtime
    parity remains untested. Restart the observer before capture.
-2. The hold is released and clean shutdown passed. Require exact-size/hash sealing,
-   preserve the public host keys and useful text evidence off the rental.
-3. Arm only this owned instance, then perform the Linux-to-RAM and RAM-to-native
-   Windows reboots. The flasher was rehearsed under KVM/UEFI, including full
-   readback and a 512-byte oversized-image prewrite refusal; actual rental GRUB
-   and firmware boot remain to be exercised.
+2. Sealing, arming and the Linux-to-RAM reboot passed. Watch provider serial
+   output for full readback verification/reboot; root polls pinned Windows SSH.
+   Do not restart or interfere with the instance during the disk write.
+3. Before native GPU setup on the Vast Windows image, stage public installer
+   `a9ecdfa` native-gpu.ps1 (SHA256
+   `04c09449c358707fcc36775c8f359f144f83f48efe3ac098743ed9eace8233c6`).
+   It fixes lost process exit status observed on the first 4070 attempt. The
+   sealed image predates this fix but native setup remains deferred.
 4. Reconnect to Windows as `vast`, start the recorder and detached collector,
    then resume NVIDIA/CUDA setup with `-HoldReboots`. Drain and save the trace
    before manually performing a requested reboot. Validate a real

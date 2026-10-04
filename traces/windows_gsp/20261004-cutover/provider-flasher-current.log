@@ -1,0 +1,5 @@
+VAST-FLASH: RAM init started
+VAST-FLASH: discovering target (attempt 1)
+VAST-FLASH: target=/dev/vda root=/dev/vda1 bytes=161061273600 identity verified
+VAST-FLASH: copying 6242498048 bytes of self-contained QCOW2 to RAM
+VAST-FLASH: SOURCE_UNMOUNTED; all target mounts absent; beginning irreversible write

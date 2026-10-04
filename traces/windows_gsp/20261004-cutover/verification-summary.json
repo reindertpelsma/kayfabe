@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "kernel_sha256": "83e65926d2372894688b118fc04ae0cb279aa7f5a616a76c26254e2d032c28d4",
+  "initrd_sha256": "0b9a7a5a6e0d2f5247246daf9e3f2d22fbbabd86c400d4772af0057d047f9da7",
+  "init_sha256": "5b0e9e034262c86258677e0812a6b474c2a3dff984810571cceaab5d87ce3ca2",
+  "grub_environment": [
+    "next_entry=vast-windows-flash"
+  ],
+  "verified_tools": 8,
+  "verified_libraries": 45,
+  "initrd_entries": 332,
+  "controller_binary_archive_removed": true,
+  "reboot_issued": false
+}

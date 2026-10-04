@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "commit": "ERASE:60fb1614-b612-4fd4-8d6a-836edbac1c0a",
+  "target": {
+    "disk_guid": "60fb1614-b612-4fd4-8d6a-836edbac1c0a",
+    "size_bytes": 161061273600,
+    "root_partuuid": "85c80741-2a2a-4df8-94fc-8525e0031367",
+    "root_fs_uuid": "f589feb5-05f2-40b4-903a-c8a1ec61b750",
+    "root_fstype": "ext4"
+  },
+  "image": {
+    "path": "/var/lib/vast-windows/windows.qcow2",
+    "sha256": "1fe10630f73d36f01387b51ed73db86833a13f7a4fd867e854d83c6c6580aac7",
+    "virtual_size_bytes": 161061273600
+  },
+  "failure_action": "reboot"
+}

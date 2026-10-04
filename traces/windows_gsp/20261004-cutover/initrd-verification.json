@@ -1,0 +1,2062 @@
+{
+  "ok": true,
+  "manifest": {
+    "schema_version": 1,
+    "commit": "ERASE:60fb1614-b612-4fd4-8d6a-836edbac1c0a",
+    "target": {
+      "disk_guid": "60fb1614-b612-4fd4-8d6a-836edbac1c0a",
+      "size_bytes": 161061273600,
+      "root_partuuid": "85c80741-2a2a-4df8-94fc-8525e0031367",
+      "root_fs_uuid": "f589feb5-05f2-40b4-903a-c8a1ec61b750",
+      "root_fstype": "ext4"
+    },
+    "image": {
+      "path": "/var/lib/vast-windows/windows.qcow2",
+      "sha256": "1fe10630f73d36f01387b51ed73db86833a13f7a4fd867e854d83c6c6580aac7",
+      "virtual_size_bytes": 161061273600
+    },
+    "failure_action": "reboot"
+  },
+  "kernel_sha256": "83e65926d2372894688b118fc04ae0cb279aa7f5a616a76c26254e2d032c28d4",
+  "initrd_sha256": "0b9a7a5a6e0d2f5247246daf9e3f2d22fbbabd86c400d4772af0057d047f9da7",
+  "init_sha256": "5b0e9e034262c86258677e0812a6b474c2a3dff984810571cceaab5d87ce3ca2",
+  "verified_tools": [
+    "busybox",
+    "qemu-img",
+    "jq",
+    "blkid",
+    "blockdev",
+    "kmod",
+    "systemd-detect-virt",
+    "e2fsck"
+  ],
+  "verified_libraries": [
+    "lib/systemd/libsystemd-shared-249.so",
+    "lib/x86_64-linux-gnu/libacl.so.1",
+    "lib/x86_64-linux-gnu/libaio.so.1",
+    "lib/x86_64-linux-gnu/libaudit.so.1",
+    "lib/x86_64-linux-gnu/libblkid.so.1",
+    "lib/x86_64-linux-gnu/libc.so.6",
+    "lib/x86_64-linux-gnu/libcap-ng.so.0",
+    "lib/x86_64-linux-gnu/libcap.so.2",
+    "lib/x86_64-linux-gnu/libcom_err.so.2",
+    "lib/x86_64-linux-gnu/libcrypt.so.1",
+    "lib/x86_64-linux-gnu/libcrypto.so.3",
+    "lib/x86_64-linux-gnu/libe2p.so.2",
+    "lib/x86_64-linux-gnu/libext2fs.so.2",
+    "lib/x86_64-linux-gnu/libffi.so.8",
+    "lib/x86_64-linux-gnu/libgcrypt.so.20",
+    "lib/x86_64-linux-gnu/libglib-2.0.so.0",
+    "lib/x86_64-linux-gnu/libgmodule-2.0.so.0",
+    "lib/x86_64-linux-gnu/libgmp.so.10",
+    "lib/x86_64-linux-gnu/libgnutls.so.30",
+    "lib/x86_64-linux-gnu/libgpg-error.so.0",
+    "lib/x86_64-linux-gnu/libhogweed.so.6",
+    "lib/x86_64-linux-gnu/libidn2.so.0",
+    "lib/x86_64-linux-gnu/libip4tc.so.2",
+    "lib/x86_64-linux-gnu/libjq.so.1",
+    "lib/x86_64-linux-gnu/libkmod.so.2",
+    "lib/x86_64-linux-gnu/liblz4.so.1",
+    "lib/x86_64-linux-gnu/liblzma.so.5",
+    "lib/x86_64-linux-gnu/libm.so.6",
+    "lib/x86_64-linux-gnu/libmount.so.1",
+    "lib/x86_64-linux-gnu/libnettle.so.8",
+    "lib/x86_64-linux-gnu/libonig.so.5",
+    "lib/x86_64-linux-gnu/libp11-kit.so.0",
+    "lib/x86_64-linux-gnu/libpam.so.0",
+    "lib/x86_64-linux-gnu/libpcre.so.3",
+    "lib/x86_64-linux-gnu/libpcre2-8.so.0",
+    "lib/x86_64-linux-gnu/libresolv.so.2",
+    "lib/x86_64-linux-gnu/libseccomp.so.2",
+    "lib/x86_64-linux-gnu/libselinux.so.1",
+    "lib/x86_64-linux-gnu/libtasn1.so.6",
+    "lib/x86_64-linux-gnu/libunistring.so.2",
+    "lib/x86_64-linux-gnu/liburing.so.2",
+    "lib/x86_64-linux-gnu/libuuid.so.1",
+    "lib/x86_64-linux-gnu/libz.so.1",
+    "lib/x86_64-linux-gnu/libzstd.so.1",
+    "lib64/ld-linux-x86-64.so.2"
+  ],
+  "grub_environment": [
+    "next_entry=vast-windows-flash"
+  ],
+  "entry": "menuentry 'Vast Windows RAM flasher (erases boot disk)' --id vast-windows-flash {\n    insmod part_gpt\n    insmod ext2\n    search --no-floppy --fs-uuid --set=root f589feb5-05f2-40b4-903a-c8a1ec61b750\n    linux /boot/vast-windows/vmlinuz console=tty0 console=ttyS0,115200n8 panic=0\n    initrd /boot/vast-windows/initrd.img\n}\n",
+  "initrd_entries": [
+    {
+      "name": ".",
+      "mode": "0o40700",
+      "bytes": 0
+    },
+    {
+      "name": "bin",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "bin/[",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/[[",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/acpid",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/adjtimex",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ar",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/arch",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/arp",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/arping",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ash",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/awk",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/basename",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/bc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/blkdiscard",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/blkid",
+      "mode": "0o100755",
+      "bytes": 51624,
+      "sha256": "9082b7134797c7995f7b40494d3072344070e1f264f4faa7a7090cde1da84608"
+    },
+    {
+      "name": "bin/blockdev",
+      "mode": "0o100755",
+      "bytes": 31104,
+      "sha256": "555f8e0da75626efd8dc3f7c704c2064527e0c4afc74ff77cd0cecf1611c4560"
+    },
+    {
+      "name": "bin/brctl",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/bunzip2",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/busybox",
+      "mode": "0o100755",
+      "bytes": 719728,
+      "sha256": "bcab3cad4f5ed8cc695c52da2f6a164e21eca5917c4da02486f9bbcbd4f179ac"
+    },
+    {
+      "name": "bin/bzcat",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/bzip2",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/cal",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/cat",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/chgrp",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/chmod",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/chown",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/chpasswd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/chroot",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/chvt",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/clear",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/cmp",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/cp",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/cpio",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/cttyhack",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/cut",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/date",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/dc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/dd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/deallocvt",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/depmod",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/devmem",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/df",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/diff",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/dirname",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/dmesg",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/dnsdomainname",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/dos2unix",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/du",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/dumpkmap",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/dumpleases",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/e2fsck",
+      "mode": "0o100755",
+      "bytes": 360280,
+      "sha256": "321c62ebfb0faa8274189cb735e3e189c81817508b0ad2ead84bdd62f47c72b5"
+    },
+    {
+      "name": "bin/echo",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/egrep",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/env",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/expand",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/expr",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/factor",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/fallocate",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/false",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/fatattr",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/fgrep",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/find",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/fold",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/free",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/freeramdisk",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/fsfreeze",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/fstrim",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ftpget",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ftpput",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/getopt",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/getty",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/grep",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/groups",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/gunzip",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/gzip",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/halt",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/head",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/hexdump",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/hostid",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/hostname",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/httpd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/hwclock",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/i2cdetect",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/i2cdump",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/i2cget",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/i2cset",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/id",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ifconfig",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ifdown",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ifup",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/init",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/insmod",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ionice",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ip",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ipcalc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ipneigh",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/jq",
+      "mode": "0o100755",
+      "bytes": 30872,
+      "sha256": "858a84f22b39317f13a57b4b91e535925c1b4f819d9bb2864361df4ad6acb00f"
+    },
+    {
+      "name": "bin/kill",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/killall",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/klogd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/kmod",
+      "mode": "0o100755",
+      "bytes": 170352,
+      "sha256": "7afde713c2a5e160e36219cee11e18e922e154c59ef0b4a8d05df4193256f28d"
+    },
+    {
+      "name": "bin/last",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/less",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/link",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/linux32",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/linux64",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/linuxrc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ln",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/loadfont",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/loadkmap",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/logger",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/login",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/logname",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/logread",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/losetup",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ls",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/lsmod",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/lsscsi",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/lzcat",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/lzma",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/lzop",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/md5sum",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mdev",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/microcom",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mkdir",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mkdosfs",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mke2fs",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mkfifo",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mknod",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mkpasswd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mkswap",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mktemp",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/modinfo",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/modprobe",
+      "mode": "0o120777",
+      "bytes": 4,
+      "symlink": "kmod"
+    },
+    {
+      "name": "bin/more",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mount",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mt",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/mv",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/nameif",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/nc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/netstat",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/nl",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/nologin",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/nproc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/nsenter",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/nslookup",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/nuke",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/od",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/openvt",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/partprobe",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/paste",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/patch",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/pidof",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ping",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ping6",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/pivot_root",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/poweroff",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/printf",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ps",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/pwd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/qemu-img",
+      "mode": "0o100755",
+      "bytes": 2336808,
+      "sha256": "52ab4a89383885ac4bf11812d69f5ecc77b238b8f9e708ad75f1cae821819bc0"
+    },
+    {
+      "name": "bin/rdate",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/readlink",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/realpath",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/reboot",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/renice",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/reset",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/resume",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/rev",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/rm",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/rmdir",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/rmmod",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/route",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/rpm",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/rpm2cpio",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/run-init",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/run-parts",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sed",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/seq",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/setkeycodes",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/setpriv",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/setsid",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sh",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sha1sum",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sha256sum",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sha512sum",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/shred",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/shuf",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sleep",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sort",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ssl_client",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/start-stop-daemon",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/stat",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/strings",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/stty",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/svc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/svok",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/swapoff",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/swapon",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/switch_root",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sync",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/sysctl",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/syslogd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/systemd-detect-virt",
+      "mode": "0o100755",
+      "bytes": 18808,
+      "sha256": "b363af3335be26d4e26dd82fc522afaf422c30ac9ef56ea9f06cd3b65d41beee"
+    },
+    {
+      "name": "bin/tac",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/tail",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/tar",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/taskset",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/tee",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/telnet",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/test",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/tftp",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/time",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/timeout",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/top",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/touch",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/tr",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/traceroute",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/traceroute6",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/true",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/truncate",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/tty",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/ubirename",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/udhcpc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/udhcpd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/uevent",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/umount",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/uname",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/uncompress",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/unexpand",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/uniq",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/unix2dos",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/unlink",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/unlzma",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/unshare",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/unxz",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/unzip",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/uptime",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/usleep",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/uudecode",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/uuencode",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/vconfig",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/vi",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/w",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/watch",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/watchdog",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/wc",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/wget",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/which",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/who",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/whoami",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/xargs",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/xxd",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/xz",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/xzcat",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/yes",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "bin/zcat",
+      "mode": "0o120777",
+      "bytes": 7,
+      "symlink": "busybox"
+    },
+    {
+      "name": "dev",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "etc",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "etc/flasher.json",
+      "mode": "0o100600",
+      "bytes": 507,
+      "sha256": "25633a373b7d99f936ea670896026013984e59407927415e6c74a5821de6aa5a"
+    },
+    {
+      "name": "init",
+      "mode": "0o100755",
+      "bytes": 7334,
+      "sha256": "5b0e9e034262c86258677e0812a6b474c2a3dff984810571cceaab5d87ce3ca2"
+    },
+    {
+      "name": "lib",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "lib/modules",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.alias",
+      "mode": "0o100644",
+      "bytes": 45,
+      "sha256": "a29f59569ef743ade2eada4d545211be2c5ba409842cb442c0548ecb51ec33bb"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.alias.bin",
+      "mode": "0o100644",
+      "bytes": 12,
+      "sha256": "87b6e280f77dbc7f4d6708f6d83aa23dac73185bc345bd7c98e5f619fc78ec37"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.builtin",
+      "mode": "0o100644",
+      "bytes": 9714,
+      "sha256": "508ae45959f569e45b1e6f1888b254cdc02da5c4bb8b3edc043539b6dd2d735d"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.builtin.alias.bin",
+      "mode": "0o100644",
+      "bytes": 29103,
+      "sha256": "0fefc9340a1ce3c52be5107aa8e07da6cf79fb91cafda01ae88c069323b86ad6"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.builtin.bin",
+      "mode": "0o100644",
+      "bytes": 11907,
+      "sha256": "cc4afe25cf47d43565ef5452955789974c7f3ad92710a18fcca0015796a9634d"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.builtin.modinfo",
+      "mode": "0o100644",
+      "bytes": 87768,
+      "sha256": "2974ed367bcce1dd887c2dbf8d04cdbea8a61548823f3b649ea16273dc5ad98e"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.dep",
+      "mode": "0o100644",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.dep.bin",
+      "mode": "0o100644",
+      "bytes": 12,
+      "sha256": "87b6e280f77dbc7f4d6708f6d83aa23dac73185bc345bd7c98e5f619fc78ec37"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.devname",
+      "mode": "0o100644",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.order",
+      "mode": "0o100644",
+      "bytes": 262915,
+      "sha256": "0fc9de9088450af894d6720d34b513e8eb86b11645c31767949c44b3df4f3b61"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.softdep",
+      "mode": "0o100644",
+      "bytes": 55,
+      "sha256": "ac2de753255c506934be29e69261f1485f51ee9cf9c2bf467bcc0c4cf95f8713"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.symbols",
+      "mode": "0o100644",
+      "bytes": 49,
+      "sha256": "e1d07394350b0dc9be149c69080c47fb1faf4d88fabb900387b6016e6fff3976"
+    },
+    {
+      "name": "lib/modules/6.8.0-59-generic/modules.symbols.bin",
+      "mode": "0o100644",
+      "bytes": 12,
+      "sha256": "87b6e280f77dbc7f4d6708f6d83aa23dac73185bc345bd7c98e5f619fc78ec37"
+    },
+    {
+      "name": "lib/systemd",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "lib/systemd/libsystemd-shared-249.so",
+      "mode": "0o100644",
+      "bytes": 2840280,
+      "sha256": "210b052c90286a95ce91287c382d9e2454da9d2f0e3effaf6f947dd72bd5f05c"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libacl.so.1",
+      "mode": "0o100644",
+      "bytes": 34888,
+      "sha256": "b35d4bbf00844a585e02502b8a1db17b740a0127e2fb9a4428a83eaa0f23be65"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libaio.so.1",
+      "mode": "0o100644",
+      "bytes": 14456,
+      "sha256": "9230aa3b63b95b47171d8771b1cdd93f4abab2a86bbb7904c24d5784cdba2c05"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libaudit.so.1",
+      "mode": "0o100644",
+      "bytes": 133200,
+      "sha256": "a62e2fcbf8925054a5d569bd242b196de569586a372f82a2794649f9bebe0032"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libblkid.so.1",
+      "mode": "0o100644",
+      "bytes": 220208,
+      "sha256": "16beebd82fee33310c355a040128b5f2fa78a73f2619919c34550732acc4ff42"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libc.so.6",
+      "mode": "0o100755",
+      "bytes": 2220400,
+      "sha256": "c662f0eb3e4b8da67692edd53934263e9e4807105d4228b0c12c3d93dca49fd3"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libcap-ng.so.0",
+      "mode": "0o100644",
+      "bytes": 27072,
+      "sha256": "881e0e171e84d9c0370475cd36bd998e6095180929cb79545620c6b180d9aa2e"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libcap.so.2",
+      "mode": "0o100644",
+      "bytes": 39024,
+      "sha256": "a87681f705c09fc97f23db4dccc0c9a0fd34cf73698251361d8c6ccbf26efe75"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libcom_err.so.2",
+      "mode": "0o100644",
+      "bytes": 18504,
+      "sha256": "f196091d8ec9790b4cd203ecdb0eab3b242d35ae8625ead7962d0a944a8fdfa5"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libcrypt.so.1",
+      "mode": "0o100644",
+      "bytes": 198664,
+      "sha256": "d8b34ade1d95c6243a48e90f2873d65399dfb0cd3fa4ee2af45afc9e6cb8642b"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libcrypto.so.3",
+      "mode": "0o100644",
+      "bytes": 4455728,
+      "sha256": "ee446395c3d3f453e0e7c9eeb7caaae7fe7d558649cb6342fbe8e849c99349b2"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libe2p.so.2",
+      "mode": "0o100644",
+      "bytes": 45136,
+      "sha256": "cd4a27f5e14b8ae62d7957b389e8e07dea1552237527adb53835d9e7546c96b2"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libext2fs.so.2",
+      "mode": "0o100644",
+      "bytes": 430440,
+      "sha256": "abdb5e85ab9d8752930a5dd57e5dbe7257a61cceece3e986673b4ff045722ff6"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libffi.so.8",
+      "mode": "0o100644",
+      "bytes": 47688,
+      "sha256": "247da4d5d34a91cadcdd6282be4c4644fcb8af001334d2b8a82ecda435418cbf"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libgcrypt.so.20",
+      "mode": "0o100644",
+      "bytes": 1296312,
+      "sha256": "7ff6ae38b83fd19beb283fa784d845d0614a0ee92917dab950846bdb14cce4f3"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libglib-2.0.so.0",
+      "mode": "0o100644",
+      "bytes": 1277712,
+      "sha256": "1dda97b00701620f832b4741645671ff8bdeee08b4930ec006355520ec724177"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libgmodule-2.0.so.0",
+      "mode": "0o100644",
+      "bytes": 22736,
+      "sha256": "d6c388cc532a1148b75d7895186c9f915260a32c05cf6c9eb2e6ed856569c430"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libgmp.so.10",
+      "mode": "0o100644",
+      "bytes": 526896,
+      "sha256": "4dc20a901c6951e678e216e959da2534bcef7053e6efdf1492509baf142282b0"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libgnutls.so.30",
+      "mode": "0o100644",
+      "bytes": 2000320,
+      "sha256": "029add8e2de30b6219484c69e2b4d9223592590f8095ad4f8d023de7ea8ecb91"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libgpg-error.so.0",
+      "mode": "0o100644",
+      "bytes": 149760,
+      "sha256": "ed682e103b671d628ef11f19f8a5b772b8d2501ba26e4b80c055331a4c4d8dfc"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libhogweed.so.6",
+      "mode": "0o100644",
+      "bytes": 289800,
+      "sha256": "47d56894948545036bd49aed718393bf6edb93fce222874dad30b59f085ad9ee"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libidn2.so.0",
+      "mode": "0o100644",
+      "bytes": 129096,
+      "sha256": "1420c60a18189fb2e7bb4b8da1409564b0c1c46c59df5bbb0c23339bb961403a"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libip4tc.so.2",
+      "mode": "0o100644",
+      "bytes": 35440,
+      "sha256": "d2a6bb4e22905ff6ed279013752bb87714fc64fa643da00d91012fec29eed6fa"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libjq.so.1",
+      "mode": "0o100644",
+      "bytes": 313576,
+      "sha256": "86700a02a3f90626e73ed2c59e4072e185dfbefe0a00eb78b27766b4fecfa5f8"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libkmod.so.2",
+      "mode": "0o100644",
+      "bytes": 108760,
+      "sha256": "3ab4e0f281bb924900c20f6fbfda6f88bcaedb60de36b4c4d341bf2b9b505159"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/liblz4.so.1",
+      "mode": "0o100644",
+      "bytes": 125152,
+      "sha256": "65f47a3dc2cec5f938379b7b625f0621657bf1254551895d22462c6a204cbad8"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/liblzma.so.5",
+      "mode": "0o100644",
+      "bytes": 170456,
+      "sha256": "493cb401ab4aa3bba611ca464d12996afb3b327940d29476f535f999e167439b"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libm.so.6",
+      "mode": "0o100644",
+      "bytes": 940560,
+      "sha256": "2877e828e386ca225c14ec01cb2d7f07e61dbc025ffb15e524c100a1e9ab3070"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libmount.so.1",
+      "mode": "0o100644",
+      "bytes": 273064,
+      "sha256": "e80992b7e08db8c1bbe9da22715946f40ae1027dbc3d9740087d2c66edcab173"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libnettle.so.8",
+      "mode": "0o100644",
+      "bytes": 281000,
+      "sha256": "2d3bda6cfa2d477cd91b8178843d19e081b911a124f04b4be06b6e32c9fabc73"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libonig.so.5",
+      "mode": "0o100644",
+      "bytes": 597344,
+      "sha256": "11ec269a41c4765c2827941aa477fac9009cc884ded2c85e6028e25fb30ae0be"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libp11-kit.so.0",
+      "mode": "0o100644",
+      "bytes": 1285888,
+      "sha256": "d2b01eaad185e95ef312940a3bdd4b6694f992b022a2dddb9dd494286e5a1d2c"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libpam.so.0",
+      "mode": "0o100644",
+      "bytes": 67736,
+      "sha256": "37265406e0f8bb10599a62f87fe6d6a7612bf80e6cd191fcfe73606dc7543704"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libpcre.so.3",
+      "mode": "0o100644",
+      "bytes": 477296,
+      "sha256": "baae995e98223eee1afe6c640f21bdbba91b9c170584ce766418b59810d98a93"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libpcre2-8.so.0",
+      "mode": "0o100644",
+      "bytes": 613064,
+      "sha256": "f887eed7d0df7073f3d8bdc9e60d35082453b10165cf45359b5019e33ba2b9ec"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libresolv.so.2",
+      "mode": "0o100644",
+      "bytes": 68552,
+      "sha256": "90c691daa929dbd3d05a34ead2cf64f5cd5d5351ef330dfc8fe023ea34c865a5"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libseccomp.so.2",
+      "mode": "0o100644",
+      "bytes": 125360,
+      "sha256": "0a10b36f83b58889352ef9de563fddeb80ba649d6a7108f32f31cfb08693e2a3"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libselinux.so.1",
+      "mode": "0o100644",
+      "bytes": 166280,
+      "sha256": "624eb1e6a7510e0983e9caa1bbf3e1966acb64fd6d3ad4db94528addbe1e7224"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libtasn1.so.6",
+      "mode": "0o100644",
+      "bytes": 92312,
+      "sha256": "5982aae4da76969d6ca4c2acae79bce72eafd479493879ed821e9c3461760390"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libunistring.so.2",
+      "mode": "0o100644",
+      "bytes": 1743016,
+      "sha256": "9c28d59500f186fc28bf7e77e9b1a71129f66731c52ac1e974b9acd1a760911a"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/liburing.so.2",
+      "mode": "0o100644",
+      "bytes": 22528,
+      "sha256": "22b5ca2610e5e657c07806d0efd6e5a0bbe936a2b838995a70f1880ab3a519d8"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libuuid.so.1",
+      "mode": "0o100644",
+      "bytes": 30936,
+      "sha256": "1c523104f3263664457638d6595b8054c788f348f60555b2bde142aee8f6c84c"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libz.so.1",
+      "mode": "0o100644",
+      "bytes": 108936,
+      "sha256": "64c206f0146cc58bbddc4f22054436f4ff278f5a554aa3ce6921ddf7e9133370"
+    },
+    {
+      "name": "lib/x86_64-linux-gnu/libzstd.so.1",
+      "mode": "0o100644",
+      "bytes": 841808,
+      "sha256": "5df4f4df42d76270bb6981fabc7c1fdccd8ad28a23d84d67f73203fb3f537667"
+    },
+    {
+      "name": "lib64",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "lib64/ld-linux-x86-64.so.2",
+      "mode": "0o100755",
+      "bytes": 240936,
+      "sha256": "8c7e2990d2847ca210d6f716d4b9aa62997c2fd2acfcda587c1ec398ed364618"
+    },
+    {
+      "name": "mnt",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "mnt/source",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "proc",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "run",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "sys",
+      "mode": "0o40755",
+      "bytes": 0
+    },
+    {
+      "name": "tmp",
+      "mode": "0o40755",
+      "bytes": 0
+    }
+  ]
+}
