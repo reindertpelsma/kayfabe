@@ -128,6 +128,19 @@ pub enum RawError {
     /// alternative is a `SIGSEGV` — and a read-only isolate mapping (§11 item 3) is
     /// precisely a place a caller can get this wrong.
     NotWritable,
+    /// ★ An ioctl request number that declares no argument size (`_IOC_SIZE == 0`) and is not
+    /// a known legacy request (`chardev_unsafe.rs`, `LEGACY_SIZES`). The kernel's own handler
+    /// decides how many bytes such a request writes through the argument, so with any buffer
+    /// it is an overrun this layer cannot rule out (V3_SEC_PERIMETER.md §4.1, a1).
+    SizelessIoctl {
+        /// The request number.
+        request: u64,
+    },
+    /// ★ A [`crate::GuestWindow`] whose range could not be made whole again after a failed
+    /// placement: the filler could not be re-plugged without overwriting a mapping that is not
+    /// the window's. Every accessor refuses from then on, and `Drop` leaves the range mapped
+    /// rather than unmap what may not be ours (V3_SEC_PERIMETER.md §4.1, a8).
+    WindowPoisoned,
     /// A syscall failed. `errno` is captured through `std::io::Error::last_os_error`, so
     /// no additional relaxation is needed to read it.
     Syscall {
@@ -283,6 +296,14 @@ impl fmt::Display for RawError {
                  MAP_FIXED hardware registers into a guest's physical address space"
             ),
             RawError::NotWritable => write!(f, "the region is mapped read-only"),
+            RawError::SizelessIoctl { request } => write!(
+                f,
+                "ioctl request {request:#x} declares no argument size and is not a known legacy request"
+            ),
+            RawError::WindowPoisoned => write!(
+                f,
+                "the guest window could not be restored after a failed placement and is unusable"
+            ),
             RawError::Syscall { call, errno } => match errno {
                 Some(e) => write!(f, "{call} failed (errno {e})"),
                 None => write!(f, "{call} failed"),

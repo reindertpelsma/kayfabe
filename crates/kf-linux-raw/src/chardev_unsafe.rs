@@ -57,6 +57,11 @@ use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
 
 use crate::host_fd_unsafe::adopt_fd;
 
+/// Request numbers that predate the `_IOC` encoding, with the bytes the kernel's handler writes
+/// through the argument and the name. They declare no size, so [`CharDevice::ioctl`] bounds them
+/// by this table; any other request that declares none is refused ([`RawError::SizelessIoctl`]).
+const LEGACY_SIZES: &[(u64, usize, &str)] = &[(0x541B, 4, "FIONREAD")];
+
 /// Width of the pointer field an [`Indirect`] patches. The NVIDIA ABI's `NvP64` is
 /// **always** 8 bytes, on 32- and 64-bit hosts alike — that is the entire reason the type
 /// exists in their headers — so this is a constant of the wire format, not of the host.
@@ -608,6 +613,24 @@ impl CharDevice {
         // nothing; `declared < arg.len()` is a buffer larger than the driver will touch, which
         // is wasteful and safe. Only `declared > arg.len()` is the overrun.
         let declared = crate::ioctl::declared_size(request);
+        // ★★ A request that declares NO size is bounded by the legacy table or refused (a1,
+        // V3_SEC_PERIMETER.md §4.1). `declared == 0` used to pass with any non-empty buffer —
+        // but the number then says nothing, and the kernel's own handler decides how much it
+        // writes (Linux `fs/ioctl.c`: the generic handlers write fixed sizes). Every kf3 caller
+        // builds a sized request with `ioctl::readwrite(…, arg.len())`; FIONREAD is the one
+        // legacy number in use, and it writes an `int`.
+        if declared == 0 {
+            match LEGACY_SIZES.iter().find(|(r, _, _)| *r == request) {
+                Some(&(_, need, _)) if arg.len() < need => {
+                    return Err(RawError::IoctlSizeMismatch {
+                        declared: need as u64,
+                        buffer: arg.len() as u64,
+                    });
+                }
+                Some(_) => {}
+                None => return Err(RawError::SizelessIoctl { request }),
+            }
+        }
         if declared > arg.len() {
             return Err(RawError::IoctlSizeMismatch {
                 declared: declared as u64,
@@ -1193,6 +1216,40 @@ mod tests {
             !matches!(r, Err(RawError::IoctlSizeMismatch { .. })),
             "★ a legacy request must reach the kernel — refusing it is the too-strict failure: \
              {r:?}"
+        );
+    }
+
+    /// ★★ a1 (V3_SEC_PERIMETER.md §4.1): a request that declares NO size and is not in the
+    /// legacy table is refused by name, before any syscall. On the code before a1 it reached the
+    /// kernel with whatever buffer it came with, and the handler wrote its own fixed size.
+    #[test]
+    fn a_sizeless_request_outside_the_legacy_table_is_refused() {
+        // `_IO('F', 0x2A)`: an `_IOC` number with no size field.
+        let request = 0x462A_u64;
+        assert_eq!(ioctl::declared_size(request), 0);
+        let dev = dev_null();
+        let mut arg = [0u8; 2];
+        let r = dev.ioctl(request, &mut arg, &mut []);
+        assert_eq!(r, Err(RawError::SizelessIoctl { request }));
+        // And a non-`_IOC` magic constant that is not FIONREAD (TIOCGWINSZ writes 8 bytes).
+        let r = dev.ioctl(0x5413, &mut arg, &mut []);
+        assert_eq!(r, Err(RawError::SizelessIoctl { request: 0x5413 }));
+    }
+
+    /// ★★ a1: the one legacy request in use is bounded by the table: FIONREAD writes an `int`,
+    /// so a 2-byte buffer is refused by name before the kernel can write 4 bytes into it.
+    #[test]
+    fn a_legacy_request_with_a_short_buffer_is_refused() {
+        const FIONREAD: u64 = 0x541B;
+        let dev = dev_null();
+        let mut short = [0u8; 2];
+        let r = dev.ioctl(FIONREAD, &mut short, &mut []);
+        assert_eq!(
+            r,
+            Err(RawError::IoctlSizeMismatch {
+                declared: 4,
+                buffer: 2
+            })
         );
     }
 

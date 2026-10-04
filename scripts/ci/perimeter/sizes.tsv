@@ -21,7 +21,7 @@ crates/kf-cuda/src/driver_unsafe.rs	1063	73	0	0	2	0	1	7	0	0	85	142	2026-10-04: b
 crates/kf-linux-raw/src/affinity_unsafe.rs	33	6	0	0	0	0	0	0	0	0	0	2	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/bounds.rs	47	0	0	0	0	0	0	0	0	0	0	0	2026-10-04: baseline — a VALIDATES file (PERIMETER_EXPORTS.md, Validation dependencies); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/cache.rs	38	0	0	0	0	0	0	0	0	0	0	0	2026-10-04: baseline — a VALIDATES file (PERIMETER_EXPORTS.md, Validation dependencies); measured by perimeter.py at 789dee9f
-crates/kf-linux-raw/src/chardev_unsafe.rs	331	4	0	0	0	0	0	0	0	0	0	30	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
+crates/kf-linux-raw/src/chardev_unsafe.rs	344	4	0	0	0	0	0	0	0	0	0	30	2026-10-04: baseline code+13 — 331 at 789dee9f, plus a1 (LEGACY_SIZES; a sizeless request outside it is refused)
 crates/kf-linux-raw/src/epoll_unsafe.rs	124	3	0	0	0	0	0	0	0	0	0	19	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/geometry.rs	85	0	0	0	0	0	0	0	0	0	0	0	2026-10-04: baseline — a VALIDATES file (PERIMETER_EXPORTS.md, Validation dependencies); measured by perimeter.py at 789dee9f
 crates/kf-linux-raw/src/host_fd_unsafe.rs	131	9	0	0	0	0	0	0	0	0	0	18	2026-10-04: baseline — rule (c) first landing (V3_SEC_PERIMETER.md §2); measured by perimeter.py at 789dee9f
