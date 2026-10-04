@@ -1,0 +1,3 @@
+{"powershell":"5.1.26100.1591","observed_exit_codes":[0,1,7,3010],"fast_child_passes":20,"nonzero_refused":true,"timeout_refused":true,"timeout_seconds":1.3605486}
+Windows API tests: 0 failure(s). Recorder stopped; restart service before capture.
+NATIVE_RECORDER_AND_PROCESS_SMOKE_PASS

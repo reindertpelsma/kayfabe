@@ -1,0 +1,11 @@
+VAST-FLASH: RAM init started
+VAST-FLASH: discovering target (attempt 1)
+VAST-FLASH: target=/dev/vda root=/dev/vda1 bytes=161061273600 identity verified
+VAST-FLASH: copying 6242498048 bytes of self-contained QCOW2 to RAM
+VAST-FLASH: SOURCE_UNMOUNTED; all target mounts absent; beginning irreversible write
+Images are identical.
+VAST-FLASH: VERIFIED: complete raw disk matches RAM image; rebooting
+[  654.823378] reboot: Restarting system
+[  654.823995] reboot: machine restart
+BdsDxe: loading Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x4,0x0)
+BdsDxe: starting Boot0001 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x4,0x0)

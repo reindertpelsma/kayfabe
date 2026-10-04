@@ -5,12 +5,14 @@ $trace="$root\captures\rtx3060-first-install"
 if (Test-Path $trace) { throw 'Capture directory already exists; inspect the prior run' }
 if (-not (Test-Path 'C:\ProgramData\VastWindows\defer-native-gpu.flag')) { throw 'Native install is not deferred' }
 if (-not (Test-Path 'C:\ProgramData\VastWindows\hold-native-reboots.flag')) { throw 'Native reboots are not held' }
+if ((Get-FileHash 'C:\ProgramData\VastWindows\native-gpu.ps1').Hash -ne 'beab25e243b596440fdae7d79bd161ad573835dfcbee8eb5abd5a570cef718fc') { throw 'Native helper SHA256 mismatch' }
+if ((Get-FileHash "$root\build\gsptrace-candidates.exe").Hash -ne '9f1a69942dc52e9e8fded62069b1078a59db06fd2c522e1b1e90596d6fc97bb9') { throw 'Collector SHA256 mismatch' }
 $gpu=@(Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'PCI\VEN_10DE&*' -and $_.Class -eq 'Display' })
 if (-not $gpu.Count) { throw 'No NVIDIA display PCI device is present' }
 New-Item -ItemType Directory -Path $trace | Out-Null
 & "$root\metadata.ps1" -OutputPath "$trace\before.json"
 Start-Service KayfabeGspTrace
-& "$root\build\gsptrace.exe" --status
+& "$root\build\gsptrace-candidates.exe" --status
 if ($LASTEXITCODE -ne 0) { throw 'Recorder initial status failed' }
 $body=@'
 $ErrorActionPreference='Stop'
@@ -25,7 +27,7 @@ function Complete-CollectorStreams {
 try {
   $arguments='"'+$trace+'\gsp.kgwt" 7200 --stop-file "'+$trace+'\stop.flag"'
   $process=[Diagnostics.Process]::new()
-  $process.StartInfo.FileName="$root\build\gsptrace.exe"
+  $process.StartInfo.FileName="$root\build\gsptrace-candidates.exe"
   $process.StartInfo.Arguments=$arguments
   $process.StartInfo.UseShellExecute=$false
   $process.StartInfo.CreateNoWindow=$true

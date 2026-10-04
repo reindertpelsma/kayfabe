@@ -1,7 +1,8 @@
 # Native Windows installer and GSP recorder
 
-**STATUS: RESEARCH, 2026-10-04. Work in progress; no native Windows GPU success or
-Windows GSP query capture yet.** The owner requested this lane after the candidate
+**STATUS: RESEARCH, 2026-10-04 17:42 UTC. Native Windows cutover and recorder API
+tests passed. NVIDIA 580.88 works on the VFIO RTX 4070, but GSP reports N/A and
+no Windows GSP query has been captured.** The owner requested this lane after the candidate
 2 handoff. It does not change the product merge requirements or claim a Windows
 guest works through Kayfabe.
 
@@ -13,8 +14,9 @@ guest works through Kayfabe.
   native NVIDIA/CUDA startup automation and an optional browser desktop helper.
 - Recorder: this repository's `codex/windows-native-trace-2026-10-04` branch,
   `tools/windows-gsp-trace/`, local `/data/kayfabe-windows-native-20261004`.
-  Source through `4663d332` is pushed; the runtime evidence below follows that revision. The unsigned driver and
-  collector were built locally from pinned official SDK/WDK inputs and copied
+  The selected MSVC driver is built from `351d5b7f`; candidate-stat collector
+  source is `0797f6ae` (integrated as `4cddb27a`). Artifacts were built by the
+  repository's Windows CI from pinned official SDK/WDK inputs and copied
   outward to the rental; no rental executables were copied back.
 - Linux captured-payload replay and bounded queue/parser tests passed. Passive
   sampling can miss startup traffic; a valid request/reply pair is required
@@ -23,15 +25,25 @@ guest works through Kayfabe.
 
 ## Active rental and current stage
 
-Owned instance **54159260**, local SSH alias **`vw-native`**, RTX 3060, about
+Owned instance **54159260**, RTX 3060, about
 98 GiB RAM and a 150 GiB whole boot disk. This session owns cleanup. Existing
 instance **54049598** belongs to another ongoing lane; do not overwrite or
 destroy it. Three failed/pending rentals from this lane were already destroyed
 and their absence verified: 54157671, 54158787, 54160009.
 
 The original Linux disk was armed and rebooted at **17:07:02 UTC**. Provider
-serial output confirms the RAM flasher unmounted it and began writing Windows;
-final verification/native SSH are still pending. Installation
+serial output confirms the RAM flasher unmounted it, wrote the image and fully
+compared the result (`Images are identical`). It rebooted at kernel uptime
+654.823 seconds. Windows booted at **17:18:17.500 UTC** and pinned public-key SSH
+succeeded at **17:18:41.349 UTC** through the original public endpoint.
+The former Linux root is gone; do not use the old `vw-native` root alias or
+Linux commands. Controller wrapper `/tmp/vw-native-ssh.py` connects as `vast`
+with the previously pinned Windows host key. It reports Windows 11 Enterprise
+LTSC Evaluation build 26100 and 105,636,900 KiB visible RAM. NVIDIA PCI functions
+10de:2504/228e are present. The Basic Display Adapter's pre-install problem 43
+does not describe NVIDIA driver operation. Root started the collector before
+resuming the first NVIDIA installation at 17:40 UTC; automatic reboots are held.
+Earlier nested installation
 completed, both cold boots passed all 25 checks, and an actual controller SSH
 login passed with pinned Windows host keys. The recorder bundle was staged and
 verified; Windows test signing was enabled and activated by a Windows reboot.
@@ -53,12 +65,11 @@ The 6,242,498,048-byte image SHA256 is
 `1fe10630f73d36f01387b51ed73db86833a13f7a4fd867e854d83c6c6580aac7`.
 The cutover evidence is in `traces/windows_gsp/20261004-cutover`; full private
 controller manifests/keys are in `/data/vast-cutover-54159260-20261004`.
-No Windows GSP traffic has been captured. Inspect:
-
-```sh
-ssh vw-native 'tail -30 /root/vw-resume-3.log'
-ssh vw-native 'ls -lh /var/lib/vast-windows/staging.qcow2'
-```
+No Windows GSP traffic has been captured. The selected MSVC recorder also passed
+its API/process smoke after native Windows boot. Its collector is now active in
+`C:\ProgramData\KayfabeGsp\captures\rtx3060-first-install`; the live run must be
+drained before any reboot. `/tmp/vw-native-ssh.py` with the controller's
+`capture-status.ps1` reads progress without competing for the exclusive device.
 
 Live failures were repaired and pushed: the unattended seed now uses USB optical
 media, `icacls` grants and ownership are separate calls, QGA uses delimited sync
@@ -68,18 +79,23 @@ The existing firstboot was continued from its exact failure point, with source
 hashes and clean shutdown evidence saved. Public installer evidence records the
 two later cold boots and the actual authorized-key login.
 
-The 900-second optional hold expired during extra recorder research, so the
-harness refused to seal. At 15:52:53 UTC a resume run started from the same image
-with `--login-test-hold 3600`: after two cold boots it writes
-`/var/lib/vast-windows/login-test.json`, then waits for `login-test-complete`.
-The controller must pin those public Windows host keys and perform an actual
-authorized-key SSH login through the outer Linux SSH connection. No private
-client key goes to the rental. The automatic checks honestly leave
-`actual_authorized_key_login=false`; controller evidence is recorded separately.
+The earlier optional login-test hold expired during recorder research; the
+harness correctly refused to seal. The resumed preparation then passed another
+pair of cold boots and a real controller authorized-key login before its hold
+was released. No private client key went to the rental. The harness's automatic
+checks leave `actual_authorized_key_login=false`; the actual controller login
+evidence is recorded separately.
 
-The native GPU task remains deferred and automatic research reboots are held.
+The native GPU task was deferred through boot and recorder staging, then resumed
+with the recorder active; automatic research reboots remain held.
 The verified recorder is in `C:\ProgramData\KayfabeGsp`; the bundle SHA256 is
-`a93003d85480e5dc6e9b1c16038be2e337531d11ac04643263695900de573726`.
+`cfaa75950c2cd7ad226a01060cc91e8db816437e4bd9e178aef612eb198daaf0`.
+Its 46 files were verified after native boot (scripts bfa9263b, build 351d5b7f).
+Public installer `4ed6a8f` native-gpu.ps1 is staged and verified with SHA256
+`beab25e243b596440fdae7d79bd161ad573835dfcbee8eb5abd5a570cef718fc`.
+It fixes native process exit handling, verifies an already-started pinned
+NVIDIA driver before skipping redundant enable, and requests one held research
+reboot after writing the active display-class GSP policy.
 Controller evidence and pinned host keys are under
 `/data/vast-windows-runtime/54159260`. QGA large file writes timed out; staging
 completed through pinned SSH/SFTP instead, without copying a private key outward.
@@ -118,19 +134,31 @@ journal: normal Windows shutdown restores the host's original bindings/services;
 recovery refuses to rebind a live VFIO guest.
 
 Pinned-key SSH and the MSVC recorder install/API/restart/stop tests passed with
-the GPU assigned. A guest reboot activated test signing. Both NVIDIA PCI functions
-then reported PnP OK, but NVIDIA's own driver is not installed yet; this is not
-GPU workload success. The `windows_prepare` worker owns the running VFIO guest
-and is retrying the collector-before-NVIDIA installation attempt with native
-reboots held. The first attempt stopped after extraction and before NVIDIA
-installation because Start-Process lost the exit code. Its empty trace exported
-and independently decoded correctly. The process helper and both controller
-launchers now own the native process handle; actual Windows 5.1 tests cover
-0/1/7/3010, 20 fast children, error/timeout refusal and two concurrently drained
-128 KiB output pipes. Public installer fix is `a9ecdfa`. It must drain and export before a manual reboot. Root owns
-the Vast native-cutover lane; do not race either owner. Borrowed-host evidence,
-including the recorder transcript and recovery journal, has been copied to the
-controller. No Windows GSP query pair has been captured yet.
+the GPU assigned; a guest reboot activated test signing. NVIDIA 580.88 is now
+installed, nvlddmkm is running, PnP reports Started/problem 0 and nvidia-smi
+succeeds. Its full report nevertheless says **GSP Firmware Version: N/A**.
+Service and active display-class EnableGpuFirmware values are both 1, but the
+class value was written after setup auto-started the GPU. Their presence alone
+does not establish firmware activation.
+
+Two captures exported and independently decoded correctly but contain zero
+records/tables. The first attempt stopped before NVIDIA setup due to a lost
+process exit code. The second installed NVIDIA but redundant pnputil enable
+returned 50; public `4ed6a8f` now skips that operation only after live PnP and
+pinned-version verification. Actual Windows tests reject wrong driver pins and
+unrelated exit50, and cover exits 0/1/7/3010, fast children, timeout and concurrent
+stdout/stderr draining. CUDA has not been validated.
+
+The `windows_prepare` worker exclusively owns the running VFIO guest. It is
+preparing a controlled guest reboot with the tested observer set to system-start
+and a protected SYSTEM AtStartup collector, native installation deferred and
+reboots held. Collector `0797f6ae` adds the existing candidate count to stats;
+it does not change the kernel driver or ABI. Its trusted MSVC executable SHA256
+is `9f1a69942dc52e9e8fded62069b1078a59db06fd2c522e1b1e90596d6fc97bb9`.
+Root exclusively owns the native RTX3060 lane; do not race either owner.
+Borrowed-host text evidence, including the recorder transcript, empty exports,
+NVIDIA mode report and recovery journal, is preserved on the controller under
+`/data/vast-windows-runtime/claude-20261004`. No query pair is captured yet.
 
 On the controller, `uwgsocks-server.service` was stopped and disabled as explicitly
 requested. `wg-quick@wg0` is enabled and active; direct SSH works. The borrowed
@@ -149,16 +177,14 @@ and dirty original workspace were preserved. Root free space increased to about
 1. Recorder kernel/API smoke passed. Use the verified MSVC build for capture;
    the revised Linux linker build has static validation but its exact runtime
    parity remains untested. Restart the observer before capture.
-2. Sealing, arming and the Linux-to-RAM reboot passed. Watch provider serial
-   output for full readback verification/reboot; root polls pinned Windows SSH.
-   Do not restart or interfere with the instance during the disk write.
-3. Before native GPU setup on the Vast Windows image, stage public installer
-   `a9ecdfa` native-gpu.ps1 (SHA256
-   `04c09449c358707fcc36775c8f359f144f83f48efe3ac098743ed9eace8233c6`).
-   It fixes lost process exit status observed on the first 4070 attempt. The
-   sealed image predates this fix but native setup remains deferred.
-4. Reconnect to Windows as `vast`, start the recorder and detached collector,
-   then resume NVIDIA/CUDA setup with `-HoldReboots`. Drain and save the trace
+2. Complete the controlled RTX4070 Windows reboot and check actual GSP firmware
+   mode before diagnosing queue discovery. Startup ordering is not guaranteed;
+   the observer remains passive and never claims a complete capture.
+3. On the native RTX3060, the corrected helper and candidate-stat collector
+   hashes were verified; first installation and collection are running. Monitor
+   the actual task/state before retrying anything. The collector owns the
+   observer device exclusively; a competing --status open is expected to fail.
+4. Drain and save each trace
    before manually performing a requested reboot. Validate a real
    CUDA kernel result and decode captured query traffic. Absence of a sample is
    not evidence that Windows omitted the query.

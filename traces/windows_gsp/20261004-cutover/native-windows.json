@@ -1,0 +1,46 @@
+{
+  "ssh": {
+    "time": "2026-10-04T17:18:41.349109+00:00",
+    "exit_code": 0,
+    "result": {
+      "os": "Windows_NT",
+      "time": "2026-10-04T17:18:41.6467189Z",
+      "deferred": true
+    },
+    "host_key_pinned_before_cutover": true,
+    "client_private_key_stayed_on_controller": true
+  },
+  "windows": {
+    "time": "2026-10-04T17:20:23.6619974Z",
+    "boot": "2026-10-04T17:18:17.5000000Z",
+    "windows": "Microsoft Windows 11 Enterprise LTSC Evaluation",
+    "build": "26100",
+    "memory_kib": 105636900
+  },
+  "gpu": [
+    {
+      "Class": "System",
+      "Status": "OK",
+      "FriendlyName": "High Definition Audio Controller",
+      "Problem": 0,
+      "pci_id": "10de:228e"
+    },
+    {
+      "Class": "Display",
+      "Status": "Error",
+      "FriendlyName": "Microsoft Basic Display Adapter",
+      "Problem": 43,
+      "pci_id": "10de:2504"
+    }
+  ],
+  "native_gpu": {
+    "status": "deferred",
+    "runs": 0,
+    "failures": 0,
+    "reboots": 0,
+    "driver_installed": false,
+    "toolkit_installed": false
+  },
+  "recorder_status": "Stopped",
+  "native_reboots_held": true
+}
