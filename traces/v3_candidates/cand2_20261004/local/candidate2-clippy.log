@@ -1,0 +1,59 @@
+    Checking kf-util v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-util)
+    Checking kayfabe-util v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-util)
+    Checking libc v0.2.189
+    Checking serde_core v1.0.229
+    Checking kf-arch v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-arch)
+    Checking kayfabe-arch v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-arch)
+    Checking kayfabe-abi v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-abi)
+    Checking kf-abi v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-abi)
+    Checking kayfabe-vmm v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-vmm)
+    Checking kayfabe-isolate v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-isolate)
+    Checking kayfabe-mmu v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-mmu)
+    Checking kayfabe-completion v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-completion)
+    Checking winnow v1.0.4
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking kayfabe-trace v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-trace)
+    Checking zmij v1.0.23
+    Checking serde_spanned v1.1.1
+    Checking toml_datetime v1.1.1+spec-1.1.0
+    Checking memchr v2.8.3
+    Checking toml_writer v1.1.2+spec-1.1.0
+    Checking kayfabe-gsp v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-gsp)
+    Checking itoa v1.0.18
+    Checking toml v1.1.3+spec-1.1.0
+    Checking serde_json v1.0.151
+    Checking target-triple v1.0.1
+    Checking serde v1.0.229
+    Checking termcolor v1.4.1
+    Checking glob v0.3.4
+    Checking kf-linux-raw v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-linux-raw)
+    Checking kf-trace v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-trace)
+    Checking trybuild v1.0.118
+    Checking kayfabe-device v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-device)
+    Checking kayfabe-doorbell v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-doorbell)
+    Checking kf-cuda v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-cuda)
+    Checking kayfabe-mocks v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-mocks)
+    Checking kayfabe-linux-raw v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-linux-raw)
+   Compiling kayfabe-isolate-host v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-isolate-host)
+    Checking kayfabe-chips v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-chips)
+    Checking kf-oprom v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-oprom)
+    Checking kf-gsp v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-gsp)
+    Checking kf-host v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-host)
+    Checking kf-chip v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-chip)
+    Checking kf-broker v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-broker)
+    Checking kf-disp v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-disp)
+    Checking kf-trap v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-trap)
+   Compiling kf-gop-image v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-gop-image)
+    Checking kf-core v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-core)
+    Checking kf-chan v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-chan)
+    Checking kf-mem v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-mem)
+    Checking kf-rm v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-rm)
+    Checking kf-harness v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-harness)
+    Checking kayfabe-cuda v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-cuda)
+    Checking kf-crec v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-crec)
+warning: kf-gop-image@0.1.0: embedded boot-display GOP driver: 9216 bytes, x86_64-unknown-uefi
+    Checking kf-qemu v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kf-qemu)
+warning: kayfabe-isolate-host@0.1.0: embedded isolate image: 914472 bytes, x86_64-unknown-linux-musl
+    Checking kayfabe-rm-ladder v0.1.0 (/data/kayfabe-candidate2-20261004/crates/kayfabe-rm-ladder)
+    Finished `dev` profile [unoptimized] target(s) in 41.39s
+clippy: existing-debt=416 new=0 resolved=6

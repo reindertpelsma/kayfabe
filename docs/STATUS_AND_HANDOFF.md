@@ -11,6 +11,20 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-04 (supersedes every older entry in §0 where they differ)
 
+**Current work (2026-10-04, candidate 2):** master and v3 were promoted to `9b50d295`
+(candidate 1's verified code plus recovered evidence/docs). Continue on
+`codex/candidate-2-2026-10-04`, local worktree `/data/kayfabe-candidate2-20261004`.
+Broker/maxfps are integrated with ABI **18**; `8775a93e` also fixes the asynchronous
+HMP refresh context. CI and exact-source GPU verification are still required.
+The `cand2a` bar on vmb tests the preceding `3588789e` (2131 tests, 9/9 gates so far).
+Current run details and recovered scratch recipes:
+`traces/v3_candidates/cand2_20261004/README.md`. Existing box **54049598** survives;
+new display box **54137212** belongs to this session. The old display/Windows boxes
+in the historical table below are gone. Only reproducible display results were
+lost; no code loss is known. Keep saving each completed batch to GitHub.
+
+**Candidate 1 recovery record (completed):**
+
 **Verified integration = `0ac157b2` (+ docs/evidence).** Candidate 1's post-B5-fix hardware jobs
 finished after the earlier handoff; their results were recovered on 2026-10-04 in
 `traces/v3_candidates/cand1_20261004/`. Master was `529de32c` at recovery start.
