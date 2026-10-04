@@ -25,7 +25,8 @@ boundaries or turn reachability into an unreviewed forwarding allowlist.
 
 Temporary rental **54195016**, label `kf-unpriv-rpc-20261004`, was created for
 this test. Text evidence is now saved on the controller and in this branch;
-its retirement receipt is kept with that evidence. Other lane 54049598 and
+it was destroyed after evidence commit `089559c1` was pushed, and provider
+absence was verified at 20:36 UTC ([receipt](../../../tools/windows-gsp-trace/evidence/2026-10-04-ga106-unprivileged-575.51.03/retirement.json)). Other lane 54049598 and
 the Windows rental 54159260 remain separate; do not destroy them for this test.
 
 The [scope and existing-policy correction](../../../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/command-catalogue/v3-context-policy.md)

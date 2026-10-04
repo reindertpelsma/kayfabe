@@ -78,8 +78,9 @@ Only text data returned from the disposable rental (compressed JSONL contains
 hex-encoded capture bytes). The analyzer reconstructs those bytes in memory,
 checks SHA-256 and invokes the existing strict decoder. It never executes
 rental-produced binaries. Input source and instrumented module hashes are
-retained. Rental **54195016** belongs to this lane; its retirement receipt is
-recorded separately after backup. Other lanes' rentals are not part of this test.
+retained. Rental **54195016** was destroyed after evidence commit `089559c1`
+was pushed; its absence was verified ([receipt](retirement.json)). Other lanes'
+rentals were not touched.
 
 ## Reproduce
 
