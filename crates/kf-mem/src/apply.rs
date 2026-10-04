@@ -64,9 +64,10 @@ pub struct ApplyCfg<'a> {
     /// ([`Applied::carve_gpu`], [`Applied::carve_cpu`]) and, on a GPU target with
     /// [`ApplyCfg::carve_refuse`], refused. `store_bytes` (the default) disables both.
     pub carve: u64,
-    /// ★ P1+P2 inc A2: refuse — not only count — a GPU-target leaf into the carve-out. Off until
-    /// a count-only A/B on each measured family shows the counter at 0 (§4.3: a false refusal here
-    /// fails `RmInitAdapter`).
+    /// ★ P1+P2 inc A2: refuse — not only count — a leaf into the carve-out on a GPU target a guest
+    /// non-kernel channel may run in ([`carve_reached`]). ON with `KF3_TSPACE=1` (review fix
+    /// 2026-10-04); OFF on the default path until a count-only A/B on each measured family shows
+    /// the counter at 0 (§4.3).
     pub carve_refuse: bool,
 }
 
@@ -137,8 +138,12 @@ pub struct Applied {
     /// The first such fallback's reason.
     pub first_batch_fallback: Option<String>,
     /// ★ P1+P2 inc A (§4.3): vidmem/SKED map runs into the firmware carve-out on a GPU target
-    /// ([`MapTarget::gpu_space`]) — counted, and refused only with [`ApplyCfg::carve_refuse`].
+    /// ([`MapTarget::gpu_space`]) a guest non-kernel channel may run in (it withholds privileged
+    /// leaves) — counted, and refused only with [`ApplyCfg::carve_refuse`].
     pub carve_gpu: usize,
+    /// ★ Review fix 2026-10-04: the same on a guest-KERNEL GPU space — counted only, never refused
+    /// ([`carve_reached`]).
+    pub carve_kernel: usize,
     /// ★ P1+P2 inc A (§4.3): the same on a CPU view (the guest kernel's BAR1/BAR2) — count-only.
     pub carve_cpu: usize,
 }
@@ -311,7 +316,16 @@ impl PermPolicy {
 
 /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §4.3): does a vidmem/SKED leaf naming store
 /// `[off, off+len)` reach the firmware carve-out (`[cfg.carve, ..)`)? Counted per target kind;
-/// `true` (refuse) only for a GPU target under [`ApplyCfg::carve_refuse`].
+/// `true` (refuse) only under [`ApplyCfg::carve_refuse`] and only on a host GPU space a guest
+/// channel created non-kernel may run in — a twin that withholds privileged leaves
+/// ([`MapTarget::withholds_privileged`]: `User(n)` or `Unclassified`).
+///
+/// ★ Review fix 2026-10-04 (HIGH): with `KF3_TSPACE=1` the device turns refusal ON, so a twin an
+/// unprivileged guest channel runs in never maps kayfabe's declared firmware region. A guest-KERNEL
+/// space is only counted ([`Applied::carve_kernel`]): under T-mode no channel runs in one
+/// (passthrough births are refused there, Translated work runs in the T-space) and CeUtils'
+/// `VIRTUAL_MODE` FB alias lives in one — refusing it there could fail `RmInitAdapter` for no
+/// isolation gain (§4.3, UNVERIFIED whether the alias reaches the carve-out).
 fn carve_reached(
     target: &dyn MapTarget,
     off: u64,
@@ -322,11 +336,14 @@ fn carve_reached(
     if off.saturating_add(len) <= cfg.carve {
         return false;
     }
-    if target.gpu_space() {
+    if !target.gpu_space() {
+        out.carve_cpu += 1;
+        false
+    } else if target.withholds_privileged() {
         out.carve_gpu += 1;
         cfg.carve_refuse
     } else {
-        out.carve_cpu += 1;
+        out.carve_kernel += 1;
         false
     }
 }
@@ -1794,22 +1811,22 @@ mod tests {
                 } else {
                     m(0x2_0000_0000, at, 0x1000)
                 };
-                // GPU target, count-only (inc A): mapped, counted.
-                let t = Rec {
+                // A twin a guest non-kernel channel may run in (it withholds privileged leaves).
+                let twin = || Rec {
                     gpu: true,
+                    withhold_priv: true,
                     ..Rec::default()
                 };
+                // GPU target, count-only (inc A): mapped, counted.
+                let t = twin();
                 let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(false));
                 assert_eq!(
                     (a.codes[0], a.carve_gpu, a.carve_cpu),
                     (KFWR_ACK_APPLIED, 1, 0),
                     "count-only {at:#x} sked={sked}"
                 );
-                // GPU target, refusal (inc A2): refused by name, never placed.
-                let t = Rec {
-                    gpu: true,
-                    ..Rec::default()
-                };
+                // GPU target, refusal (inc A2; ON under KF3_TSPACE=1): refused by name, never placed.
+                let t = twin();
                 let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
                 assert_eq!(
                     (a.codes[0], a.carve_gpu, a.refused),
@@ -1833,9 +1850,23 @@ mod tests {
                 let t = Rec::default();
                 let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
                 assert_eq!(
-                    (a.carve_gpu, a.carve_cpu),
-                    (0, 1),
+                    (a.carve_gpu, a.carve_cpu, a.carve_kernel),
+                    (0, 1, 0),
                     "cpu view {at:#x} sked={sked}"
+                );
+                // ★ A guest-KERNEL GPU space (it mirrors privileged leaves): counted apart, mapped
+                // even in refusal mode — no guest non-kernel channel runs there (review fix
+                // 2026-10-04, `carve_reached`).
+                let t = Rec {
+                    gpu: true,
+                    withhold_priv: false,
+                    ..Rec::default()
+                };
+                let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
+                assert_eq!(
+                    (a.codes[0], a.carve_gpu, a.carve_kernel, a.refused),
+                    (KFWR_ACK_APPLIED, 0, 1, 0),
+                    "kernel space {at:#x} sked={sked}"
                 );
             }
         }
@@ -1843,6 +1874,7 @@ mod tests {
         for gpu in [false, true] {
             let t = Rec {
                 gpu,
+                withhold_priv: gpu,
                 ..Rec::default()
             };
             let a = apply_entry(
@@ -1858,6 +1890,7 @@ mod tests {
         // A guest-RAM leaf at the same numeric offset is not store memory: never counted.
         let t = Rec {
             gpu: true,
+            withhold_priv: true,
             ..Rec::default()
         };
         let ram = DiffRun {

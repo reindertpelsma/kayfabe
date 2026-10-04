@@ -49,6 +49,25 @@ pub fn inca_strict() -> bool {
     *ON.get_or_init(|| enabled() || std::env::var_os("KF3_INCA_REFUSE").is_some_and(|v| v != "0"))
 }
 
+/// ★ `KF3_NEGCTL_CARVE=1` — the carve-out counters' POSITIVE CONTROL: the bound drops to 0, so
+/// every vidmem leaf is counted (`carve_gpu=` / `carve_kernel=` / `carve_cpu=` must move on any
+/// boot), and refusal is forced OFF (a control may never refuse). Default OFF; read once.
+#[must_use]
+pub fn negctl_carve() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_CARVE").is_some_and(|v| v != "0"))
+}
+
+/// ★ P1+P2 inc A2 (review fix 2026-10-04, HIGH): the walker's carve-out bound `(base, refuse)` for
+/// `kf_mem::vasmgr::VaManager::with_carve`. Refusal is ON in T-mode, so no twin a guest non-kernel
+/// channel runs in maps kayfabe's declared firmware region (§Q; `kf_mem::apply::carve_reached`
+/// keeps a guest-KERNEL space count-only); count-only on the default path until its A/B. The
+/// positive control (`negctl`) counts every vidmem leaf and refuses none.
+#[must_use]
+pub const fn carve_cfg(carve: u64, tmode: bool, negctl: bool) -> (u64, bool) {
+    if negctl { (0, false) } else { (carve, tmode) }
+}
+
 /// The host verbs a T-space build needs — [`HostRm`] in kf3, a recorder in the tests.
 pub trait TSpaceHost {
     /// A VA space with no guest-range reservations ([`HostRm::alloc_vaspace_bare`]).
@@ -441,6 +460,16 @@ mod tests {
         let e = TSpace::build(&h, 0x1, CARVE, RAM).expect_err("no RAM window");
         assert!(e.starts_with("guest-RAM window"), "{e}");
         assert!(h.ops.borrow().last().is_some_and(|o| o.starts_with("free")));
+    }
+
+    /// ★ Review fix 2026-10-04 (HIGH): T-mode refuses carve-out leaves in twins; the default path
+    /// counts them; the positive control counts every vidmem leaf and never refuses.
+    #[test]
+    fn the_carve_bound_refuses_in_tmode_only() {
+        assert_eq!(carve_cfg(CARVE, true, false), (CARVE, true));
+        assert_eq!(carve_cfg(CARVE, false, false), (CARVE, false));
+        assert_eq!(carve_cfg(CARVE, true, true), (0, false));
+        assert_eq!(carve_cfg(CARVE, false, true), (0, false));
     }
 
     #[test]

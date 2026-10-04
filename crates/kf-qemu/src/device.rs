@@ -756,6 +756,16 @@ impl Device {
             );
         }
         // ★ P6b (b): coverage at the family's smallest GMMU page.
+        let (carve_base, carve_refuse) = crate::tspace::carve_cfg(
+            layout.carve(),
+            crate::tspace::enabled(),
+            crate::tspace::negctl_carve(),
+        );
+        if crate::tspace::negctl_carve() {
+            eprintln!(
+                "kf3: ⚠ POSITIVE CONTROL KF3_NEGCTL_CARVE=1: every vidmem leaf counted as a carve-out leaf, none refused"
+            );
+        }
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
             fb_length,
@@ -768,9 +778,10 @@ impl Device {
         .with_usermode_mmio(usermode_mmio)
         .with_per_map_kind(per_map_kind)
         // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §4.3): leaves into the firmware carve-out are
-        // COUNTED (`carve_gpu=` / `carve_cpu=` on the status line); refusal on twins is inc A2,
-        // after a count-only A/B on each measured family.
-        .with_carve(layout.carve(), false);
+        // COUNTED (`carve_gpu=` / `carve_kernel=` / `carve_cpu=` on the status line). ★ Review fix
+        // 2026-10-04 (HIGH): REFUSED in twins a guest non-kernel channel runs in when
+        // `KF3_TSPACE=1` (inc A2 under the flag); the default path stays count-only until its A/B.
+        .with_carve(carve_base, carve_refuse);
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -2119,7 +2130,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_cpu={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} priv_withheld={} priv_withheld_bytes={:#x} priv_mirrored={} sked={}/{}held carve_gpu={} carve_kernel={} carve_cpu={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -2138,6 +2149,7 @@ impl Device {
             va.sked_placed,
             va.sked_held,
             va.carve_gpu,
+            va.carve_kernel,
             va.carve_cpu,
             mc.bar_pdes.load(o),
             mc.roots.load(o),

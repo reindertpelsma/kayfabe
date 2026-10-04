@@ -325,6 +325,19 @@ const VIEW_BYTES: u64 = 64 << 10;
 /// Views kept per channel; the oldest is released beyond this (host BAR1 aperture is finite).
 const VIEWS_MAX: usize = 8;
 
+/// The 64 KiB-aligned store slice a CPU view of `at` covers, bounded by `bound` — `Err` when `at`
+/// lies at or past the bound.
+fn view_span(bound: u64, at: u64) -> Result<(u64, u64), String> {
+    let off = at & !(VIEW_BYTES - 1);
+    let len = VIEW_BYTES.min(bound.saturating_sub(off));
+    if len == 0 || at >= bound {
+        return Err(format!(
+            "store offset {at:#x} is past the store ({bound:#x})"
+        ));
+    }
+    Ok((off, len))
+}
+
 impl StoreViews {
     const fn new() -> Self {
         StoreViews {
@@ -341,13 +354,7 @@ impl StoreViews {
         {
             return Ok(i);
         }
-        let off = at & !(VIEW_BYTES - 1);
-        let len = VIEW_BYTES.min(fb_len.saturating_sub(off));
-        if len == 0 {
-            return Err(format!(
-                "store offset {at:#x} is past the store ({fb_len:#x})"
-            ));
-        }
+        let (off, len) = view_span(fb_len, at)?;
         if self.views.len() >= VIEWS_MAX {
             let old = self.views.remove(0);
             let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
@@ -418,7 +425,21 @@ struct Mem<'a> {
     ram: &'a RamMap,
     rm: &'a HostRm,
     store: u32,
+    /// The bound of the CPU store views ([`store_read_bound`]).
+    store_len: u64,
     views: &'a mut StoreViews,
+}
+
+/// ★ P1+P2 review fix (HIGH, 2026-10-04) — **the bound on the CPU store views a Translated
+/// channel's reads go through** (its GPFIFO entries and pushbuffer through vidmem rows, the
+/// completion probe's read-backs). ⊘ Never the mirror's store-WINDOW length: a T-mode twin carries
+/// no window and records `fb_len = 0`, so a bound taken from it made every vidmem fetch fail
+/// "past the store (0x0)" — every UVM Translated channel died at its first fetch (UVM's GPFIFO is
+/// vidmem on a dGPU, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:3386-3390`). In T-mode the
+/// bound is the carve-out base — a CPU read never touches kayfabe's firmware region either; on
+/// the default path it is the mirror's `fb_len`, which is the store's length there (today's value).
+const fn store_read_bound(tmode: bool, mirror_fb_len: u64, carve: u64) -> u64 {
+    if tmode { carve } else { mirror_fb_len }
 }
 /// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.4) — the T-mode resolver's view of a
 /// mirror: OUR placement rows (never a copy of the guest's tables), each operand resolved under ONE
@@ -464,7 +485,7 @@ impl GuestMemory for Mem<'_> {
                 let dst = &mut out[done as usize..(done + n) as usize];
                 let t0 = crate::prof::on().then(crate::prof::now_ns);
                 self.views
-                    .read(self.rm, self.store, self.mirror.fb_len, off, dst)
+                    .read(self.rm, self.store, self.store_len, off, dst)
                     .map_err(|e| format!("{at_va:#x}: {e}"))?;
                 crate::prof::VIEW_READS.fetch_add(1, Ordering::Relaxed);
                 crate::prof::VIEW_READ_BYTES.fetch_add(n, Ordering::Relaxed);
@@ -740,7 +761,7 @@ struct ProbeRec {
 fn probe_read(
     ram: &RamMap,
     mirror: &Mirror,
-    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    views: Option<(&mut StoreViews, &HostRm, u32, u64)>,
     r: kf_chan::translated::Release,
 ) -> ReleaseRead {
     match resolve_placed(&mirror.rows, r.va, 4) {
@@ -760,9 +781,9 @@ fn probe_read(
             }
         }
         Some((false, off)) => {
-            let got = views.and_then(|(v, rm, store)| {
+            let got = views.and_then(|(v, rm, store, bound)| {
                 let mut b = [0u8; 4];
-                v.read(rm, store, mirror.fb_len, off, &mut b)
+                v.read(rm, store, bound, off, &mut b)
                     .ok()
                     .map(|()| u32::from_le_bytes(b))
             });
@@ -795,13 +816,11 @@ fn hex16(b: &[u8]) -> String {
 fn probe_side(
     ram: &RamMap,
     mirror: &Mirror,
-    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    views: Option<(&mut StoreViews, &HostRm, u32, u64)>,
     o: kf_chan::translated::Operand,
 ) -> (String, Option<Vec<u8>>) {
     match o {
-        kf_chan::translated::Operand::Physical(t, p, n) => {
-            probe_operand(ram, mirror, views, t, p, n)
-        }
+        kf_chan::translated::Operand::Physical(t, p, n) => probe_operand(ram, views, t, p, n),
         kf_chan::translated::Operand::Virtual(va, n) => {
             let len = n.min(16);
             match resolve_placed(&mirror.rows, va, len) {
@@ -821,7 +840,7 @@ fn probe_side(
                     )
                 }
                 Some((false, off)) => {
-                    let (s, b) = probe_operand(ram, mirror, views, Target::LocalFb, off, n);
+                    let (s, b) = probe_operand(ram, views, Target::LocalFb, off, n);
                     (format!("VA {va:#x} -> {s}"), b)
                 }
             }
@@ -836,8 +855,7 @@ fn probe_side(
 /// landed in a window's scratch, or in a view of another store page, shows as a disagreement.
 fn probe_operand(
     ram: &RamMap,
-    mirror: &Mirror,
-    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    views: Option<(&mut StoreViews, &HostRm, u32, u64)>,
     t: Target,
     phys: u64,
     len: u64,
@@ -845,11 +863,9 @@ fn probe_operand(
     let n = usize::try_from(len.min(16)).unwrap_or(16);
     match t {
         Target::LocalFb => {
-            let host = views.and_then(|(v, rm, store)| {
+            let host = views.and_then(|(v, rm, store, bound)| {
                 let mut b = vec![0u8; n];
-                v.read(rm, store, mirror.fb_len, phys, &mut b)
-                    .ok()
-                    .map(|()| b)
+                v.read(rm, store, bound, phys, &mut b).ok().map(|()| b)
             });
             let guest: Vec<String> = crate::mem::view_index()
                 .map(|ix| ix.guest_views(phys, n))
@@ -3694,11 +3710,16 @@ impl ChanPlane {
         {
             g.probe.put_moved = Some((p, std::time::Instant::now()));
         }
+        // ★ Review fix 2026-10-04 (HIGH): the CPU store views' bound is the STORE's readable
+        // extent, never the mirror's window length (0 on a T-mode twin) — [`store_read_bound`].
+        let store_len =
+            store_read_bound(crate::tspace::enabled(), mirror.fb_len, self.layout.carve());
         let mut mem = Mem {
             mirror: &mirror,
             ram: self.ram,
             rm: self.rm,
             store: self.store,
+            store_len,
             views: &mut g.views,
         };
         let win = SlotWindow {
@@ -3736,7 +3757,7 @@ impl ChanPlane {
                         probe_read(
                             self.ram,
                             &mirror,
-                            Some((&mut g.views, self.rm, self.store)),
+                            Some((&mut g.views, self.rm, self.store, store_len)),
                             *r,
                         )
                     })
@@ -3753,7 +3774,7 @@ impl ChanPlane {
                         Some(o) => probe_side(
                             self.ram,
                             &mirror,
-                            Some((&mut g.views, self.rm, self.store)),
+                            Some((&mut g.views, self.rm, self.store, store_len)),
                             o,
                         ),
                         None => ("-".to_string(), None),
@@ -3762,7 +3783,7 @@ impl ChanPlane {
                         Some(o) => probe_side(
                             self.ram,
                             &mirror,
-                            Some((&mut g.views, self.rm, self.store)),
+                            Some((&mut g.views, self.rm, self.store, store_len)),
                             o,
                         ),
                         None => ("-".to_string(), None),
@@ -4142,6 +4163,39 @@ mod heap_tests {
         ));
         assert_eq!(heap_gate(true, &l, inside, None), HeapGate::Inside);
         assert_eq!(heap_gate(false, &l, inside, None), HeapGate::Inside);
+    }
+}
+
+#[cfg(test)]
+mod store_bound_tests {
+    use super::{store_read_bound, view_span};
+
+    /// ★ Review fix 2026-10-04 (HIGH): a T-mode twin records NO store window (`fb_len` 0), yet
+    /// its Translated channel's GPFIFO and pushbuffer are read through vidmem rows — the CPU view
+    /// bound is the carve-out base in T-mode (a heap offset reads; the carve-out does not), and the
+    /// mirror's `fb_len` (the store's length) on the default path, as before.
+    #[test]
+    fn a_tmode_twin_reads_vidmem_rows_through_the_store_bound() {
+        let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
+        let carve = l.carve();
+        let twin_fb_len = 0; // what a T-mode twin records: no window
+        let bound = store_read_bound(true, twin_fb_len, carve);
+        assert_eq!(view_span(bound, 0x10_0040), Ok((0x10_0000, 0x1_0000)));
+        assert_eq!(
+            view_span(bound, carve - 4).map(|(o, n)| o + n),
+            Ok(carve),
+            "the last heap page reads, up to the carve-out"
+        );
+        assert!(
+            view_span(bound, carve).is_err(),
+            "the carve-out never reads"
+        );
+        assert!(view_span(bound, l.bar1_pde_base).is_err());
+        // ⊘ The defect: the window length as the bound refuses every vidmem read.
+        assert!(view_span(twin_fb_len, 0x10_0040).is_err());
+        // The default path: the mirror's fb_len (the store's length), unchanged.
+        assert_eq!(store_read_bound(false, l.fb_length, carve), l.fb_length);
+        assert!(view_span(l.fb_length, carve).is_ok());
     }
 }
 
