@@ -114,6 +114,7 @@ pub mod fifochannels;
 pub mod fmbpromote;
 pub mod fmbsize;
 pub mod generated;
+pub mod gfxpool;
 pub mod gmmustatic;
 pub mod gpuatomics;
 pub mod gpuinfo;

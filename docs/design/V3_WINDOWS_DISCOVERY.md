@@ -2,6 +2,15 @@
 
 **STATUS: LIVE, 2026-10-04.** Windows 11 boots on kf3 under Secure Boot with a TPM and the signed boot-display ROM. The NVIDIA 580.88 driver, forced into GSP mode, boots kf3's emulated GSP. It gets 141 commands into RM init, then stops at an unserved Windows-only control (`GR_GFX_POOL_QUERY_SIZE`) and shows Code 43 (§4). The harness that does all of this is `scripts/bench/windows/win_vm.sh`.
 
+**Correction, 2026-10-05:** “Windows-only” below means absent from the particular Linux
+comparison capture, not exclusive to Windows. No listed command is established as Windows-only.
+The §4 claim that export flag `0x40` compiles the pool query out is wrong: it is
+`ROUTE_TO_PHYSICAL`; OGKM exposes this kernel-only control and routes it to physical RM/GSP.
+An unprivileged Linux rejection does not test that kernel path. Public query and control-block
+layouts do not, by themselves, establish the physical pool sizing formula. The original RTX 3060
+run establishes only the refusal immediately before teardown; the causal test is still required.
+See [the new bounded experiment](V3_WINDOWS_POOL_EXPERIMENT.md).
+
 Owner, 2026-10-04, verbatim, in order: *"In qemu we can just enable 'secure boot' for a windows vm and
 self sign the rom, I mean windows vms just work normally without complaint"* · *"For swtpm a secure
 seed must be provided probably?"* · *"Yes but tpm should persist reboot though. And a hash of non secret
@@ -355,13 +364,13 @@ the state machine's default refusal (`0x56`) went to the guest.
 
 1. **`NV2080_CTRL_CMD_GR_GFX_POOL_QUERY_SIZE` is unserved.** It is the last command before the guest
    frees everything and unloads.
-   - The export table has it as flag `0x40`, compiled out of the Linux builds
+   - **Superseded by the correction above:** the original claim was flag `0x40`, compiled out of the Linux builds
      (`ogkm-580.159.04 src/nvidia/generated/g_subdevice_nvoc.c:5500-5512`). The header says
      *"queries size parameters for a request maximum graphics preemption pool size. It is only
      available to kernel callers"* (`ctrl2080gr.h:1298-1333`).
    - This is the WDDM KMD sizing the GfxP (graphics preemption) pool. On real hardware the Windows GSP
      firmware answers it.
-   - ⚠ **Neither kf3 nor the Linux host RM has an answer.** The host build compiles the control out, so
+   - **Superseded by the correction above:** the original claim was **neither kf3 nor the Linux host RM has an answer.** The host build compiles the control out, so
      "ask the host" is not available. Serving it means **authoring** `ctrlStructSize`/`poolSize`/
      `slotStride` from the GR's preemption buffer sizes. That needs a source of truth (the Windows GSP
      firmware's behaviour, or a real Windows box's answer); it is not a one-line fix.

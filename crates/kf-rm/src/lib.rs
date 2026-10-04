@@ -19,6 +19,7 @@ pub mod census;
 pub mod chanlink;
 pub mod display;
 pub mod faultbuffer;
+mod gfxpool_probe;
 pub mod guestsysinfo;
 pub mod hostfacts;
 pub mod hostquery;
@@ -452,6 +453,12 @@ pub fn served_chain(
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
+    if std::env::var("KF3_GFX_POOL_PROBE").as_deref() == Ok("1") {
+        eprintln!(
+            "kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented"
+        );
+        chain.push(Box::new(gfxpool_probe::GfxPoolProbe { driver }));
+    }
     // ★ v3-display: the display link claims only its own controls, so its place is a matter of
     // which link answers first; it goes first so no other link's refusal can shadow it.
     // Lifecycle observation belongs to the object seat AFTER acceptance, not to this front link:
