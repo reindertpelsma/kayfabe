@@ -13,6 +13,9 @@
 #   each with its known-positive fixtures run first.
 # - compiler-location (G1): every repository unit compiled with `unsafe_code` forced on, and
 #   every diagnostic located inside the unit's own class U crate's perimeter.
+# - kf3-c (G7, rule d): kf3.c compiled against a signature-checked QEMU 10.2.4 with -Werror,
+#   clang's analyzer, the link closure and the depfile; known positives K1-K3 every run.
+#   Tier 2 (the whole kf3 QEMU binary) is kf3-link.yml, nightly.
 #
 # ★ No job here sets a compiler-flag variable in an `env:` mapping: the manifest gate (M4)
 # reads this file too, and would fail it.
@@ -106,3 +109,29 @@ jobs:
         run: bash scripts/ci/compiler_location.sh --selftest
       - name: "G1 compiler location gate (x86_64 all features, aarch64, standalone packages)"
         run: bash scripts/ci/compiler_location.sh
+
+  kf3-c:
+    name: kf3-c — kf3.c against pinned QEMU 10.2.4, -Werror, analyzer, link closure (G7)
+    runs-on: ubuntu-latest
+    # ★ The compilers are part of the check: the flags kf3.c is held to were measured with gcc 15.2.0
+    # and clang 21.1.8, Ubuntu 26.04's. The image is pinned by digest (the 26.04 index, 2026-10-04).
+    container: ubuntu:26.04@sha256:3595d7fc4286a33fad0fd853a4063e654287a9c3787437d7937c94ca3f7a804e
+    steps:
+      - name: The image's compilers and QEMU's configure prerequisites
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            ca-certificates curl xz-utils git python3 python3-venv ninja-build pkg-config \
+            libglib2.0-dev libpixman-1-dev flex bison gcc libc6-dev binutils clang
+          gcc --version | head -1
+          clang --version | head -1
+      - uses: actions/checkout@v4
+      # The tarball only (pinned by hash; the tree is never cached: build_kf3.sh patches trees).
+      - uses: actions/cache@v4
+        with:
+          path: qemu-dl
+          key: qemu-tarball-${{ hashFiles('scripts/ci/qemu-10.2.4.tar.xz.sha256') }}
+      - name: "G7 kf3.c (gcc -Werror -Wextra, clang, analyzer, link closure, K1-K5)"
+        run: |
+          mkdir -p qemu-dl
+          KF3C_TARBALL="$PWD/qemu-dl/qemu-10.2.4.tar.xz" bash scripts/ci/kf3c.sh

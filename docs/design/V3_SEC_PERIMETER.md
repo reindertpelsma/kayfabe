@@ -790,6 +790,14 @@ C5 deletes it and replaces it (⊘ done at C5, 2026-10-04: the v2 ledger's `sand
 
 **Estimated cold run:** 2 to 3 minutes (container plus apt), unmeasured on a runner.
 
+⊘ **As built at C6 (2026-10-04):**
+- **The tarball:** sha256 `821b545b…0746`, 141 137 724 bytes. The same bytes were verified against `qemu-10.2.4.tar.xz.sig`: a good signature from Michael Roth, primary key fingerprint `CEAC C9E1 5534 EBAB B82D 3FA0 3353 C9CE F108 B584`, recorded in `scripts/ci/qemu-10.2.4.tar.xz.sha256`.
+- **The container:** `ubuntu:26.04@sha256:3595d7fc…804e`, the 26.04 image index on 2026-10-04.
+- **`--disable-download`** is accepted by 10.2.4's configure (`configure:756`).
+- **Two more known positives run every time:** **K0**, a planted unused variable must fail the strict build, which proves `-Werror` is in force; and a foreign `kf3.h` path planted in the depfile list must fail K5.
+- **Measured locally** against an existing 10.2.4 build directory with pixman forced on (gcc 15.2.0, clang 21.1.8): kf3.c is clean under gcc `-Werror -Wextra`, clang `-Werror` and the analyzer, and the closure is 25 = 25. Mutations: dropping `-Werror`, a closure that always passes, and a K5 that always passes are each caught by K0, K3 and K5. Disabling K2 is not caught: K2 is itself the positive control that the preprocessed unit is kf3.c's.
+- **Tier 2** (`kf3-link.yml`) runs `build_kf3.sh` unmodified into a fresh, hash-checked tree, then checks `-device help` for `"kf3-gpu"` through a file, never through a pipe into `grep -q`.
+
 **Lanes this job will compile:** `v3-broker` (+444 lines of `kf3.c`), `v3-dispsw-exp` (+11), `v3-viommu` (realize). Tell them before the owner makes the job required (B7, D2, V1).
 
 ### 8.2 Tier 2: `.github/workflows/kf3-link.yml`

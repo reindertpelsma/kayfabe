@@ -1,0 +1,7 @@
+# qemu-10.2.4.tar.xz from https://download.qemu.org/ (141137724 bytes), hashed 2026-10-04.
+# The bytes hashed are the bytes gpg verified against https://download.qemu.org/qemu-10.2.4.tar.xz.sig:
+#   Good signature from "Michael Roth <michael.roth@amd.com>", signature made 2026-06-27,
+#   primary key fingerprint CEAC C9E1 5534 EBAB B82D  3FA0 3353 C9CE F108 B584
+#   (the key was fetched by that fingerprint from keyserver.ubuntu.com; its trust is not established
+#   beyond the fingerprint, which is the QEMU release signer's published one).
+821b545b92f165e57dddccac5077d76d4d436a226595b8813ad59306bbfd0746  qemu-10.2.4.tar.xz

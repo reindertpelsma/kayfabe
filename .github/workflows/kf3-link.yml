@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+#
+# G7 tier 2 (docs/design/V3_SEC_PERIMETER.md §8.2): the whole kf3 QEMU — libkf_qemu.a linked into a
+# pristine, signature-checked QEMU 10.2.4 by the bench's own scripts/bench/build_kf3.sh — and the
+# device is registered. Slow (a full QEMU build), so nightly, on dispatch, and on pushes that touch
+# the device; the per-push check of kf3.c is perimeter.yml's `kf3-c` job.
+
+name: kf3-link
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'qemu/**'
+      - 'crates/kf-qemu/**'
+      - 'scripts/bench/build_kf3.sh'
+      - '.github/workflows/kf3-link.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  kf3-link:
+    name: kf3-link — build_kf3.sh into pristine QEMU 10.2.4; kf3-gpu registered
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml and scripts/ci/perimeter.toml
+          targets: x86_64-unknown-uefi   # kf-gop-image's build script builds the GOP driver
+      - uses: Swatinem/rust-cache@v2
+      - name: QEMU's build prerequisites
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build pkg-config libglib2.0-dev libpixman-1-dev flex bison python3-venv
+      # ★ Never cached: build_kf3.sh patches the tree it is given (hw/misc/meson.build, Kconfig).
+      - name: A fresh, signature-checked QEMU 10.2.4 tree
+        run: |
+          set -euo pipefail
+          want=$(grep -v '^#' scripts/ci/qemu-10.2.4.tar.xz.sha256 | awk 'NF{print $1; exit}')
+          curl -fsSL -o "$RUNNER_TEMP/qemu.tar.xz" https://download.qemu.org/qemu-10.2.4.tar.xz
+          echo "$want  $RUNNER_TEMP/qemu.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/qemu.tar.xz" -C "$RUNNER_TEMP" --exclude='qemu-10.2.4/roms'
+      - name: bash scripts/bench/build_kf3.sh (the bench's own build, unmodified)
+        run: bash scripts/bench/build_kf3.sh "$RUNNER_TEMP/qemu-10.2.4" "$RUNNER_TEMP/qemu-build-kf3"
+      # ★ Captured to a file, then grepped: never a pipe into `grep -q` (an early exit there is a
+      # SIGPIPE upstream, a failure the check manufactures; nvkvm-pv release.yml:218-219).
+      - name: The kf3-gpu device is registered
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/qemu-build-kf3/qemu-system-x86_64" -device help > device-help.txt
+          if grep -q '"kf3-gpu"' device-help.txt; then
+            grep '"kf3-gpu"' device-help.txt
+          else
+            echo "★ kf3-gpu is not among the registered devices"; exit 1
+          fi
