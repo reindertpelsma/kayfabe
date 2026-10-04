@@ -77,3 +77,27 @@ The source oracle for `NV01_TIMER` is OGKM 580.65.06:
 Mapping and alarm controls have separate behavior; the empty constructor does
 not justify accepting those operations without implementing them. The guest
 shut down cleanly and QEMU exited 0. Raw text evidence is in `probe-b/`.
+
+## Probe C: timer object allocation
+
+Product revision `60d36db5ac69d756efb898940e54ecdab00b7da2`, again on a fresh
+overlay with the pool experiment enabled, accepts the `NV01_TIMER` allocation.
+Windows still tears down immediately afterward and reports Code 43; nvidia-smi
+exits 9. One additional FREE is observed, consistent with the additional object.
+There is no extra successful initialization stage or channel birth. Thus timer
+allocation alone does not resolve the remaining failure. QEMU exits 0 after a
+clean guest shutdown; files are in `probe-c/`.
+
+The timer change passed 1185 ABI/RM/chip tests, including a complete comparison
+with the prior capability table: exactly the timer allocation row was added at
+each boundary; control decisions are unchanged. The original baseline fixture
+is preserved. The source audit spans all 30 measured tags (535 through 615);
+the 615 encrypted-queue transport remains intentionally unsupported.
+
+A source-derived next hypothesis is the register mapping: Kayfabe currently
+advertises `regBases[NV_REG_BASE_TIMER]=0xffffffff`. OGKM's
+`gpuGetRegBaseOffset_FWCLIENT` returns `NV_ERR_NOT_SUPPORTED` for that sentinel;
+`tmrapiGetRegBaseOffsetAndSize_IMPL` propagates it. This can fail after a successful
+allocation without another GSP RPC. No Windows stack trace yet confirms that
+this is where probe C fails. Do not advertise the timer range until its reads
+are actually served through an audited mapping.
