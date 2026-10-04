@@ -659,6 +659,96 @@ class SizeTests(unittest.TestCase):
         self.assertEqual(perimeter.mint_findings(sites, {"crates/k/src/lib.rs": 4}), [])
 
 
+def diag(file, line, message="usage of an `unsafe` block", callsites=(), code="unsafe_code"):
+    return {"code": code, "level": "warning", "message": message, "file": file, "line": line, "col": 5,
+            "callsites": [list(c) for c in callsites]}
+
+
+def unit(manifest_dir, diags=(), klass="U", src=None, test=False, pass_="x86_64"):
+    return {"unit": {"pass": pass_, "manifest_dir": manifest_dir, "class": klass, "crate_name": "c",
+                     "src": src or f"{manifest_dir}/src/lib.rs", "test": test, "rc": 0},
+            "diags": list(diags)}
+
+
+class LocationTests(unittest.TestCase):
+    """G1's verdict over a synthetic wrapper log (the cargo-driven W cases are in
+    selftest_compiler_location.py)."""
+
+    def verdict(self, recs, frozen=True):
+        return perimeter.location_findings(recs, cfg(), frozen)
+
+    def test_a_perimeter_file_of_the_units_own_class_u_crate_passes(self):
+        got, st = self.verdict([unit("crates/u", [diag("crates/u/src/a_unsafe.rs", 3)])])
+        self.assertEqual((got, st["outside"]), ([], 0))
+
+    def test_a_safe_file_fails(self):
+        got, _ = self.verdict([unit("crates/u", [diag("crates/u/src/lib.rs", 3)])])
+        self.assertEqual([(g.rule, g.path, g.line) for g in got], [("G1", "crates/u/src/lib.rs", 3)])
+
+    def test_another_packages_perimeter_file_fails(self):
+        got, _ = self.verdict([unit("crates/b", [diag("crates/u/src/a_unsafe.rs", 3)], klass="F")])
+        self.assertEqual(len(got), 1)
+
+    def test_a_safe_call_site_of_a_perimeter_macro_fails(self):
+        got, _ = self.verdict([unit("crates/u", [diag("crates/u/src/a_unsafe.rs", 1,
+                                                       callsites=[("crates/u/src/lib.rs", 9, 1, "m!")])])])
+        self.assertIn("via crates/u/src/lib.rs:9", got[0].msg)
+
+    def test_E0453_always_fails(self):
+        got, _ = self.verdict([unit("crates/s", [diag("crates/s/src/lib.rs", 1, "allow(unsafe_code) incompatible",
+                                                      code="E0453")], klass="F")])
+        self.assertIn("E0453", got[0].msg)
+
+    def test_the_exempt_path_needs_the_frozen_binding(self):
+        recs = [unit("crates/frozen", [diag("crates/frozen/src/lib.rs", 2)], klass="exempt")]
+        self.assertEqual(self.verdict(recs, frozen=True)[1]["exempt"], 1)
+        self.assertEqual(len(self.verdict(recs, frozen=False)[0]), 1)
+
+    def test_SF4_a_compiler_count_above_the_tokenizers(self):
+        recs = [unit("crates/u", [diag("crates/u/src/a_unsafe.rs", 3), diag("crates/u/src/a_unsafe.rs", 7),
+                                  diag("crates/u/src/a_unsafe.rs", 7)])]
+        counts = perimeter.compiler_counts(recs)
+        self.assertEqual(len(counts["crates/u/src/a_unsafe.rs"]["blocks"]), 2)  # deduplicated
+        actual = {"crates/u/src/a_unsafe.rs": row(blocks=1)}
+        self.assertEqual([g.rule for g in perimeter.cross_check(actual, counts)], ["SF4"])
+        actual = {"crates/u/src/a_unsafe.rs": row(blocks=2)}
+        self.assertEqual(perimeter.cross_check(actual, counts), [])
+
+    def test_SF4_macro_expansions_count_against_macro_unsafe(self):
+        recs = [unit("crates/u", [diag("crates/u/src/a_unsafe.rs", 1, callsites=[("crates/u/src/a_unsafe.rs", 9, c, "m!")])
+                                  for c in (1, 20, 40)])]
+        counts = perimeter.compiler_counts(recs)
+        self.assertEqual([g.rule for g in perimeter.cross_check({"crates/u/src/a_unsafe.rs": row(blocks=1, macro_unsafe=2)},
+                                                                counts)], ["SF4"])
+        self.assertEqual(perimeter.cross_check({"crates/u/src/a_unsafe.rs": row(blocks=1, macro_unsafe=3)}, counts), [])
+
+    def test_every_compiler_message_maps_to_a_kind(self):
+        for msg, kind in [("usage of an `unsafe` block", "blocks"),
+                          ("declaration of an `unsafe` function", "unsafe_fn"),
+                          ("implementation of an `unsafe` method", "unsafe_method"),
+                          ("declaration of an `unsafe` method", "unsafe_method"),
+                          ("implementation of an `unsafe` trait", "unsafe_impl"),
+                          ("declaration of an `unsafe` trait", "unsafe_trait"),
+                          ("usage of an `unsafe extern` block", "extern_blocks"),
+                          ("usage of the unsafe `no_mangle` attribute", "unsafe_attrs"),
+                          ("usage of `core::arch::global_asm`", "asm")]:
+            self.assertEqual(perimeter.diag_kind(msg), kind)
+
+    def test_reached_names_a_unit_that_never_ran(self):
+        meta = {"workspace_members": ["u-id"], "packages": [{"id": "u-id", "name": "u", "features": {}, "targets": [
+            {"kind": ["lib"], "name": "u", "src_path": "/r/crates/u/src/lib.rs", "test": True},
+            {"kind": ["test"], "name": "t", "src_path": "/r/crates/u/tests/t.rs", "test": True},
+            {"kind": ["bin"], "name": "x", "src_path": "/r/crates/u/src/bin/x.rs", "test": True,
+             "required-features": ["extra"]}]}]}
+        args = "--workspace --all-targets".split()
+        recs = [unit("crates/u", src="crates/u/src/lib.rs"), unit("crates/u", src="crates/u/src/lib.rs", test=True)]
+        got, total = perimeter.reached_findings(recs, {"x86_64": (meta, args)}, Path("/r"))
+        self.assertEqual([g.path for g in got], ["crates/u/tests/t.rs"])
+        recs.append(unit("crates/u", src="crates/u/tests/t.rs", test=True))
+        got, total = perimeter.reached_findings(recs, {"x86_64": (meta, args)}, Path("/r"))
+        self.assertEqual((got, total), ([], 3))
+
+
 class StructureTests(unittest.TestCase):
     """The tokenizer's own edge cases; each is a way a gate could mis-read a file."""
 

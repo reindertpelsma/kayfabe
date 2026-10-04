@@ -10,6 +10,8 @@
 # Jobs:
 # - perimeter: the tokenizer (G3: L0-L6, L10), manifests and the resolved graph (G4: M1-M9),
 #   the size ratchet (G6) with L8 and L9, each with its known-positive fixtures run first.
+# - compiler-location (G1): every repository unit compiled with `unsafe_code` forced on, and
+#   every diagnostic located inside the unit's own class U crate's perimeter.
 #
 # ★ No job here sets a compiler-flag variable in an `env:` mapping: the manifest gate (M4)
 # reads this file too, and would fail it.
@@ -62,3 +64,24 @@ jobs:
           elif [ "${REF:-}" = refs/heads/master ]; then base=$(git rev-parse HEAD^1)
           else base=$(git merge-base HEAD origin/master); fi
           python3 scripts/ci/perimeter.py sizes --base "$base"
+
+  compiler-location:
+    name: compiler-location — every unsafe_code diagnostic inside its own crate's perimeter (G1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml and scripts/ci/perimeter.toml
+          # musl and x86_64 UEFI: the two nested builds (the embedded isolate image and the GOP
+          # driver); aarch64: the second pass and its UEFI driver build.
+          targets: x86_64-unknown-linux-musl, x86_64-unknown-uefi, aarch64-unknown-linux-gnu, aarch64-unknown-uefi
+      # ★ Registry only. A cached target dir is a warm one, and a warm target dir compiles nothing:
+      # the wrapper would see no unit and the verdict would judge nothing (W6).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+      - name: "G1 known positives W1-W15 (each violation fails for its own reason)"
+        run: bash scripts/ci/compiler_location.sh --selftest
+      - name: "G1 compiler location gate (x86_64 all features, aarch64, standalone packages)"
+        run: bash scripts/ci/compiler_location.sh

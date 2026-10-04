@@ -40,6 +40,10 @@ EXCLUDED_TOPS = ("archive/", "third_party/")
 # ---------------------------------------------------------------------------------------
 
 
+# The only variables a location pass may set (the aarch64 pass's image stub, as ci.yml does).
+PASS_ENV_ALLOWED = frozenset({"KAYFABE_ISOLATE_IMAGE_STUB"})
+
+
 @dataclass
 class Config:
     raw: dict
@@ -66,6 +70,21 @@ class Config:
     @property
     def standalone(self) -> list[dict]:
         return list(self.raw.get("standalone", []))
+
+    def location_passes(self) -> list[dict]:
+        """G1's cargo invocations: the `[[location.pass]]` rows, then each standalone package's runs."""
+        out = []
+        for p in self.raw.get("location", {}).get("pass", []):
+            env = dict(p.get("env", {}))
+            bad = sorted(k for k in env if k not in PASS_ENV_ALLOWED)
+            if bad:
+                raise SystemExit(f"[[location.pass]] {p['name']}: env {bad} is not in {sorted(PASS_ENV_ALLOWED)}")
+            out.append({"name": p["name"], "manifest": "Cargo.toml", "args": p["args"].split(), "env": env})
+        for sa in self.standalone:
+            for i, r in enumerate(sa.get("runs", [])):
+                out.append({"name": f"{sa['path']}#{i}", "manifest": f"{sa['path']}/Cargo.toml",
+                            "args": r.split(), "env": {}})
+        return out
 
     def kf3_crates(self) -> list[str]:
         return [c["path"] for c in self.raw.get("crates", []) if c.get("kf3")]
@@ -1033,6 +1052,245 @@ def run_metadata(root: Path, cfg: Config) -> list[Finding]:
 
 
 # ---------------------------------------------------------------------------------------
+# G1: the compiler location gate's verdicts (the log is written by rustc_location_wrapper.py)
+# ---------------------------------------------------------------------------------------
+
+DIAG_KINDS = [
+    ("usage of an `unsafe` block", "blocks"),
+    ("declaration of an `unsafe` function", "unsafe_fn"),
+    ("implementation of an `unsafe` method", "unsafe_method"),
+    ("declaration of an `unsafe` method", "unsafe_method"),
+    ("implementation of an `unsafe` trait", "unsafe_impl"),
+    ("declaration of an `unsafe` trait", "unsafe_trait"),
+    ("usage of an `unsafe extern` block", "extern_blocks"),
+    ("usage of the unsafe `", "unsafe_attrs"),
+    ("usage of `core::arch::global_asm`", "asm"),
+    ("usage of `core::arch::naked_asm`", "asm"),
+]
+
+
+def diag_kind(message: str) -> str:
+    for prefix, kind in DIAG_KINDS:
+        if message.startswith(prefix):
+            return kind
+    return "unknown"
+
+
+def read_log(logdir: Path) -> list[dict]:
+    recs = []
+    for p in sorted(logdir.glob("*.json")):
+        recs.append(json.loads(p.read_text()))
+    return recs
+
+
+def location_findings(recs: list[dict], cfg: Config, frozen_ok: bool) -> tuple[list[Finding], dict[str, int]]:
+    """A diagnostic passes iff its primary file AND every macro call-site file are `*_unsafe.rs`
+    under `<P>/src/`, P being the unit's OWN class U package; or it lies wholly under an exempt
+    path and `debt.py frozen` passed. E0453 (an `allow` under forbid) never passes."""
+    out: list[Finding] = []
+    stats = {"units": len(recs), "diagnostics": 0, "outside": 0, "exempt": 0}
+    for r in recs:
+        u = r["unit"]
+        own = u["manifest_dir"]
+        own_u = own in cfg.class_u
+        for d in r["diags"]:
+            stats["diagnostics"] += 1
+            files = [d["file"], *(c[0] for c in d["callsites"])]
+            where = f"{d['file']}:{d['line']}"
+            if d["code"] == "E0453":
+                out.append(Finding("G1", d["file"] or own, d["line"] or 0,
+                                   f"E0453: an `allow(unsafe_code)` in a forbid unit ({u['crate_name']})"))
+                stats["outside"] += 1
+                continue
+            if d["file"] is None:
+                out.append(Finding("G1", own, 0, f"an unlocated `unsafe_code` diagnostic: {d['message']}"))
+                stats["outside"] += 1
+                continue
+            if frozen_ok and all(f and any(under(f, e) for e in cfg.exempt) for f in files):
+                stats["exempt"] += 1
+                continue
+            ok = own_u and all(f and f.endswith("_unsafe.rs") and under(f, f"{own}/src") for f in files)
+            if not ok:
+                stats["outside"] += 1
+                via = "" if not d["callsites"] else " via " + ", ".join(f"{c[0]}:{c[1]}" for c in d["callsites"])
+                out.append(Finding("G1", d["file"], d["line"],
+                                   f"{diag_kind(d['message'])} outside the perimeter of unit "
+                                   f"{own} ({u['crate_name']}, class {u['class']}){via} [{where}]"))
+    return sorted(set(out)), stats
+
+
+def compiler_counts(recs: list[dict]) -> dict[str, dict[str, set]]:
+    """Per file: direct diagnostics per kind, deduplicated by (line, col); macro-expanded ones by
+    (line, col, call-site chain) under the pseudo-kind `macro_unsafe`."""
+    out: dict[str, dict[str, set]] = {}
+    for r in recs:
+        for d in r["diags"]:
+            if d["code"] != "unsafe_code" or d["file"] is None:
+                continue
+            per = out.setdefault(d["file"], {})
+            if d["callsites"]:
+                key = (d["line"], d["col"], tuple(tuple(c[:3]) for c in d["callsites"]))
+                per.setdefault("macro_unsafe", set()).add(key)
+            else:
+                per.setdefault(diag_kind(d["message"]), set()).add((d["line"], d["col"]))
+    return out
+
+
+def cross_check(actual: dict[str, dict], counts: dict[str, dict[str, set]]) -> list[Finding]:
+    """SF4: for each perimeter file and kind, the compiler's count is at most the lexer's (the
+    lexer is cfg-blind, so it can only be higher). Higher is a lexer bug, named."""
+    out = []
+    for f, per in sorted(counts.items()):
+        if f not in actual:
+            continue
+        for kind, keys in sorted(per.items()):
+            lex = actual[f].get(kind)
+            if lex is None or len(keys) > lex:
+                out.append(Finding("SF4", f, 0, f"compiler counts {len(keys)} `{kind}` sites, the tokenizer "
+                                                f"{lex}: a tokenizer bug (it is cfg-blind, so it may only be higher)"))
+    return out
+
+
+def expected_units(meta: dict, pass_args: list[str], root: Path) -> tuple[set, list[str]]:
+    """The (src, mode) units a `cargo check <pass_args>` must compile, and the targets it skips by
+    `required-features`. mode: 'any', 'test', 'plain'."""
+    sel = set(a for a in pass_args if a.startswith("--") and a in
+              ("--all-targets", "--lib", "--bins", "--tests", "--examples", "--benches"))
+    if "--all-targets" in sel:
+        sel |= {"--lib", "--bins", "--tests", "--examples", "--benches"}
+    feats: set[str] = set()
+    all_features = "--all-features" in pass_args
+    for i, a in enumerate(pass_args):
+        if a == "--features" and i + 1 < len(pass_args):
+            feats |= set(re.split(r"[,\s]+", pass_args[i + 1]))
+        elif a.startswith("--features="):
+            feats |= set(re.split(r"[,\s]+", a.split("=", 1)[1]))
+    members = set(meta["workspace_members"])
+    want: set = set()
+    skipped: list[str] = []
+    for p in meta["packages"]:
+        if p["id"] not in members:
+            continue
+        enabled = set(feats)
+        if "--no-default-features" not in pass_args:
+            stack = ["default"]
+            while stack:
+                f = stack.pop()
+                if f in enabled and f != "default":
+                    continue
+                enabled.add(f)
+                stack.extend(x for x in p["features"].get(f, []) if ":" not in x and "/" not in x)
+        for t in p["targets"]:
+            kinds = set(t["kind"])
+            src = os.path.relpath(os.path.realpath(t["src_path"]), os.path.realpath(root))
+            req = set(t.get("required-features") or [])
+            if req and not all_features and not req <= enabled:
+                skipped.append(f"{p['name']}:{t['name']} (required-features {sorted(req)})")
+                continue
+            if "custom-build" in kinds:
+                want.add((src, "plain"))
+                continue
+            if kinds & {"lib", "rlib", "staticlib", "cdylib", "dylib", "proc-macro"}:
+                if "--lib" in sel:
+                    want.add((src, "plain"))
+                if "--tests" in sel and t.get("test", True):
+                    want.add((src, "test"))
+            elif "bin" in kinds:
+                if "--bins" in sel:
+                    want.add((src, "plain"))
+                if "--tests" in sel and t.get("test", True):
+                    want.add((src, "test"))
+            elif "test" in kinds:
+                if "--tests" in sel:
+                    want.add((src, "any"))
+            elif "example" in kinds:
+                if "--examples" in sel:
+                    want.add((src, "plain"))
+            elif "bench" in kinds:
+                if "--benches" in sel:
+                    want.add((src, "any"))
+    return want, skipped
+
+
+def reached_findings(recs: list[dict], passes: dict[str, tuple[dict, list[str]]], root: Path) -> tuple[list[Finding], int]:
+    out = []
+    total = 0
+    for name, (meta, args) in sorted(passes.items()):
+        units = [r["unit"] for r in recs if r["unit"]["pass"] == name]
+        total += len(units)
+        seen = {(u["src"], u["test"]) for u in units}
+        want, skipped = expected_units(meta, args, root)
+        for src, mode in sorted(want):
+            ok = ((src, True) in seen if mode == "test" else (src, False) in seen if mode == "plain"
+                  else (src, True) in seen or (src, False) in seen)
+            if not ok:
+                out.append(Finding("G1", src, 0, f"pass {name}: unit ({mode}) never reached the location wrapper "
+                                                 "(a reused target dir, or a unit outside the wrapper)"))
+        for sk in skipped:
+            print(f"  pass {name}: skipped by required-features, covered by the tokenizer only: {sk}")
+        if not units:
+            out.append(Finding("G1", "-", 0, f"pass {name}: ZERO units reached the wrapper"))
+    return out, total
+
+
+def toolchain_roots() -> list[str]:
+    """Where a unit may legitimately read `.rs` outside the checkout: the toolchain's sysroot (std)
+    and cargo's registry and git checkouts."""
+    roots = []
+    r = subprocess.run(["rustc", "--print", "sysroot"], capture_output=True, text=True)
+    if r.returncode == 0 and r.stdout.strip():
+        roots.append(os.path.realpath(r.stdout.strip()))
+    home = os.environ.get("CARGO_HOME") or os.path.expanduser("~/.cargo")
+    roots += [os.path.realpath(os.path.join(home, "registry")), os.path.realpath(os.path.join(home, "git"))]
+    return roots
+
+
+def depinfo_findings(recs: list[dict], root: Path, cfg: Config, tracked: set[str],
+                     external_roots: list[str] | None = None) -> list[Finding]:
+    """L0: every in-checkout `.rs` a wrapped unit's dep-info names is a tracked file; a class U unit
+    reads no `.rs` from outside the checkout's tracked set (OUT_DIR included); every class U
+    `*_unsafe.rs` is read by at least one unit."""
+    out = []
+    rroot = os.path.realpath(root)
+    external_roots = toolchain_roots() if external_roots is None else external_roots
+    read: set[str] = set()
+    for r in recs:
+        u = r["unit"]
+        if not u.get("out_dir") or not u.get("crate_name"):
+            continue
+        d = Path(u["out_dir"]) / f"{u['crate_name']}{u.get('extra_filename', '')}.d"
+        if not d.is_absolute():
+            d = Path(u["cwd"]) / d
+        if not d.exists():
+            if u["rc"] == 0:
+                out.append(Finding("L0", u["manifest_dir"], 0, f"no dep-info {d} for unit {u['crate_name']}"))
+            continue
+        text = d.read_text().replace("\\ ", "\0")
+        for line in text.splitlines():
+            _, sep, deps = line.partition(": ")
+            if not sep:
+                continue
+            for dep in deps.split():
+                dep = dep.replace("\0", " ")
+                if not dep.endswith(".rs"):
+                    continue
+                pth = os.path.realpath(dep if os.path.isabs(dep) else os.path.join(u["cwd"], dep))
+                if under(pth, rroot):
+                    relp = os.path.relpath(pth, rroot)
+                    read.add(relp)
+                    if relp not in tracked:
+                        out.append(Finding("L0", relp, 0, f"unit {u['crate_name']} compiled an untracked file"))
+                elif u["class"] == "U" and not any(under(pth, x) for x in external_roots):
+                    out.append(Finding("L0", pth, 0, f"class U unit {u['crate_name']} reads a .rs outside the "
+                                                     "checkout's tracked files (OUT_DIR or elsewhere)"))
+    for f in sorted(tracked):
+        cr = crate_of(f, cfg.class_u)
+        if cr and f.endswith("_unsafe.rs") and in_src(f, cr) and f not in read:
+            out.append(Finding("L0", f, 0, "a class U perimeter file no compiled unit read (unreached)"))
+    return sorted(set(out))
+
+
+# ---------------------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------------------
 
@@ -1100,23 +1358,59 @@ def report(name: str, findings: list[Finding], extra: str = "") -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=("lex", "manifest", "metadata", "sizes"))
+    ap.add_argument("cmd", choices=("lex", "manifest", "metadata", "sizes", "location", "reached", "depinfo",
+                                    "passes", "toolchain"))
+    ap.add_argument("--root", type=Path, default=ROOT, help="the checkout to judge (default: this script's)")
+    ap.add_argument("--config", type=Path, help="perimeter.toml to use (default: <root>/scripts/ci/perimeter.toml)")
+    ap.add_argument("--log", type=Path, help="location/reached/depinfo/sizes: the G1 wrapper log directory")
+    ap.add_argument("--frozen-ok", action="store_true", help="location: `debt.py frozen` passed in this job")
     ap.add_argument("--base", help="sizes: the git ref whose sizes.tsv a rise is judged against")
     ap.add_argument("--update", action="store_true", help="sizes: write decreases and drop stale rows")
     args = ap.parse_args(argv)
-    cfg = Config.load(ROOT)
+    root = args.root.resolve()
+    cfg = Config(tomllib.loads(args.config.read_text())) if args.config else Config.load(root)
+    if args.cmd == "toolchain":
+        print(cfg.raw["toolchain"])
+        return 0
+    if args.cmd == "passes":
+        for p in cfg.location_passes():
+            env = ",".join(f"{k}={v}" for k, v in sorted(p["env"].items()))
+            print("\t".join([p["name"], p["manifest"], env or "-", " ".join(p["args"])]))
+        return 0
     if args.cmd == "lex":
-        findings, tree = run_lex(ROOT, cfg)
+        findings, tree = run_lex(root, cfg)
         return report("lex", findings, f" files={len(tree.files)}")
     if args.cmd == "manifest":
-        return report("manifest", run_manifest(ROOT, cfg))
+        return report("manifest", run_manifest(root, cfg))
     if args.cmd == "metadata":
-        return report("metadata", run_metadata(ROOT, cfg))
+        return report("metadata", run_metadata(root, cfg))
     if args.cmd == "sizes":
-        findings, totals = run_sizes(ROOT, cfg, args.base, args.update)
+        findings, totals = run_sizes(root, cfg, args.base, args.update)
+        if args.log is not None:
+            tree = Tree(root, git_ls(root, "*.rs"))
+            actual = size_rows(tree, cfg, cfg.raw.get("c", {}).get("files", []))
+            findings = sorted(findings + cross_check(actual, compiler_counts(read_log(args.log))))
         for cr, t in sorted(totals.items()):
             print(f"  {cr}: {fmt_row(t)}")
-        return report("sizes", findings, f" base={args.base or '-'}")
+        return report("sizes", findings, f" base={args.base or '-'} cross_check={'yes' if args.log else 'no'}")
+    if args.log is None:
+        ap.error(f"{args.cmd} requires --log")
+    recs = read_log(args.log)
+    if args.cmd == "location":
+        findings, st = location_findings(recs, cfg, args.frozen_ok)
+        return report("location", findings, f" units={st['units']} diagnostics={st['diagnostics']} "
+                                            f"outside={st['outside']} exempt={st['exempt']}")
+    if args.cmd == "reached":
+        passes = {}
+        for p in cfg.location_passes():
+            meta = cargo_metadata(root, p["manifest"] if p["manifest"] != "Cargo.toml" else None)
+            passes[p["name"]] = (meta, p["args"])
+        findings, total = reached_findings(recs, passes, root)
+        return report("reached", findings, f" units={total} passes={len(passes)}")
+    if args.cmd == "depinfo":
+        tracked = {f for f in subprocess.run(["git", "ls-files", "-z", "--", "*.rs"], cwd=root, capture_output=True,
+                                             check=True).stdout.decode().split("\0") if f}
+        return report("depinfo", depinfo_findings(recs, root, cfg, tracked))
     return 2
 
 

@@ -225,6 +225,13 @@ Every other diagnostic fails with `file:line kind`. Requiring the primary file t
 11. Require `git status --porcelain` to be empty. A build step that changed the checkout fails by name.
 12. Print `UNITS= DIAGNOSTICS= OUTSIDE=0 EXEMPT=5`.
 
+⊘ **As built at C3 (2026-10-04)**, four details the text above leaves open, each with a known positive:
+- The passes are data: `perimeter.toml` `[[location.pass]]` (x86_64 with `--all-features`, aarch64 with the image stub) plus each `standalone` row's `runs`. Every pass adds `--locked --keep-going`, so one refused unit does not hide the rest.
+- Each pass runs from its package's own directory. Cargo reads `.cargo/config.toml` by the current directory, not by `--manifest-path`; run from elsewhere, a committed config is invisible and W5/W11 pass for the wrong reason (mutation `cargo run outside the package dir`, killed).
+- The wrapper keeps cargo's jobserver descriptors open for rustc (`close_fds=False`).
+- Step 11 compares `git status --porcelain` before and after the build (identical to "empty" on a fresh CI checkout, and usable on a developer's tree).
+- Beyond W1-W12: **W13** an `allow(unsafe_code)` in a crate with no workspace lints fails with E0453 only because of the wrapper's own `-F`; **W14** a unit compiling an untracked file (L0); **W15** a class U perimeter file no unit compiles (L0, unreached).
+
 In the job, `Swatinem/rust-cache` runs with `cache-targets: false`. Targets `x86_64-unknown-linux-musl`, `x86_64-unknown-uefi`, `aarch64-unknown-linux-gnu` and `aarch64-unknown-uefi` are installed, as in the existing jobs (`ci.yml:63`, `:1899`).
 
 **Why it holds (measured 2026-10-04, see the facts list):**

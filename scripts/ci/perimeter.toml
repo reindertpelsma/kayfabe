@@ -173,3 +173,14 @@ names = [
 "crates/kf-mem/src/cpuwin.rs" = 2
 "crates/kf-mem/src/ledger.rs" = 8
 "crates/kf-qemu/src/mem.rs" = 6
+
+# G1's root-workspace passes (scripts/ci/compiler_location.sh). Each standalone package's `runs`
+# follow. Every pass also gets `--locked --keep-going` and a fresh target directory. Only
+# KAYFABE_ISOLATE_IMAGE_STUB may be set (perimeter.py PASS_ENV_ALLOWED), as ci.yml's aarch64 job.
+[[location.pass]]
+name = "x86_64"
+args = "--workspace --all-targets --all-features --target x86_64-unknown-linux-gnu"
+[[location.pass]]
+name = "aarch64"
+args = "--workspace --all-targets --target aarch64-unknown-linux-gnu"
+env = { KAYFABE_ISOLATE_IMAGE_STUB = "1" }
