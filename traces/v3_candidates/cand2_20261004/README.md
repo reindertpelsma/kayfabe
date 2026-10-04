@@ -93,3 +93,10 @@ Replacement display box preparation finished `EXIT rc=0` at 11:22:07 UTC.
 build and graphics/desktop/broker preparation. Host NVIDIA Xorg 580.159.04, DRI3
 and Present are active; nvidia-drm modeset was reloaded to Y before any guest
 test started. Broker is `9f2fd00`, host session user 1000.
+
+Refresh positive: `refresh_after/`, binary `9d82f259`, vdisp2, 11:23:51 UTC.
+`REFRESH_VERDICT PASS`: HMP red 797 ms, QMP blue 802 ms, HMP green 782 ms,
+three distinct full 1920x1080 frames with the correct dominant colours. Host
+Xid count zero. These times include parsing and the full pixel census. The
+negative control above ran on vmb; a same-box positive is still planned after
+the app matrix. The X11 cap-30 run `c2x1130` is now running on vdisp2.
