@@ -3,7 +3,7 @@
 //! emitted word authored, every emitted address inside a window, every emitted method allowlisted.
 use kf_abi::submit::{ce, method_header_decode, method_header_inc};
 use kf_chan::tmode::{
-    CHUNK_BYTES, Ir, MAX_PIECES, Rows, Shadow, Span, bind, chunk, decode, resolve_spans,
+    CHUNK_BYTES, Ir, MAX_PIECES, Operand, Rows, Shadow, Span, bind, chunk, decode, resolve_spans,
 };
 use kf_chan::translated::{CeState, Refusal, Target, Window, rewrite};
 use kf_chan::tspace_unsafe::TWindows;
@@ -84,9 +84,15 @@ fn writes(words: &[u32]) -> Vec<(u32, u32, u32)> {
 const ALLOWED_HOST: [u32; 15] = [
     0x00, 0x18, 0x1C, 0x20, 0x24, 0x28, 0x2C, 0x30, 0x34, 0x50, 0x64, 0x68, 0x6C, 0x78, 0x80,
 ];
-const ALLOWED_CE: [u32; 12] = [
-    0x248, 0x24C, 0x300, 0x410, 0x414, 0x418, 0x41C, 0x700, 0x704, 0x708, 0x754, 0x100,
+/// The CE methods every tier may emit (`clc5b5.h` … `clc7b5.h`; `C8B5`+ inherit them).
+const ALLOWED_CE: [u32; 10] = [
+    0x248, 0x300, 0x410, 0x414, 0x418, 0x41C, 0x700, 0x704, 0x708, 0x100,
 ];
+/// ★ Per tier (review fix 2026-10-04): `SET_SEMAPHORE_PAYLOAD_UPPER` (`0x24C`) exists from `C7B5`
+/// (`clc7b5.h:53-54`), `REQ_ATTR` (`0x754`) only on `CAB5` (`clcab5.h:29-41`).
+fn allowed_ce(class: u32, mm: u32) -> bool {
+    ALLOWED_CE.contains(&mm) || (mm == 0x24C && class >= 0xc7b5) || (mm == 0x754 && class == 0xcab5)
+}
 /// The authored ADDRESS registers, as `(first, second)` pairs the perimeter always emits together.
 const ADDRESS_PAIRS: [(u32, u32, bool); 5] = [
     (0x400, 0x404, false), // OFFSET_IN_UPPER, _LOWER (CE)
@@ -96,13 +102,159 @@ const ADDRESS_PAIRS: [(u32, u32, bool); 5] = [
     (0x5C, 0x60, true),    // SEM_ADDR_LO, SEM_ADDR_HI (LO first)
 ];
 
-/// ★ (a) every address pair decodes inside a window; (b) every other pair is allowlisted.
+/// ★ (a) every address pair decodes inside a window; (b) every other pair is allowlisted (for the
+/// C7B5 tier). The bare form — the negative controls feed it a forwarder's output.
 fn check(words: &[u32], w: &TWindows) -> Result<(), String> {
+    check_full(words, w, 0xc7b5, None).map(|_| ())
+}
+
+/// What one bound item's operands were, as the GUEST named them (the decoded IR): a virtual side's
+/// footprint must lie inside the placement rows it resolved through.
+#[derive(Clone, Copy, Default)]
+struct Kinds {
+    src_virtual: bool,
+    dst_virtual: bool,
+}
+
+impl Kinds {
+    fn of(ir: &Ir) -> Kinds {
+        match ir {
+            Ir::Launch(l) => Kinds {
+                src_virtual: matches!(l.src, Some((Operand::Virtual(_), _))),
+                dst_virtual: matches!(l.dst, Some((Operand::Virtual(_), _))),
+            },
+            _ => Kinds::default(),
+        }
+    }
+}
+
+/// The register state the checker tracks from the EMITTED words — the values the engine runs with.
+#[derive(Default)]
+struct Regs {
+    line_len: u32,
+    line_count: u32,
+    pitch_in: u32,
+    pitch_out: u32,
+    remap: u32,
+    off_in: Option<u64>,
+    off_out: Option<u64>,
+    sema: Option<u64>,
+}
+
+/// Bytes each side of an emitted `LAUNCH_DMA` touches — derived HERE from the class header's field
+/// layout (`clc7b5.h`: `LAUNCH_DMA` 1:0 transfer, 4:3 semaphore type, 9 multi-line, 10 remap, 27
+/// payload size; `SET_REMAP_COMPONENTS` 2:0/6:4/10:8/14:12 DST_X..W, 17:16 component size, 21:20
+/// source components, 25:24 destination components), independently of the code under test.
+fn launch_footprint(r: &Regs, launch: u32) -> (Option<u64>, Option<u64>, Option<u64>) {
+    let moves = launch & 3 != 0;
+    let remap = launch & (1 << 10) != 0;
+    let multi = launch & (1 << 9) != 0;
+    let comp = u64::from((r.remap >> 16) & 3) + 1;
+    let n_src = u64::from((r.remap >> 20) & 3) + 1;
+    let n_dst = (r.remap >> 24) & 3;
+    let reads = !remap || (0..=n_dst).any(|c| (r.remap >> (4 * c)) & 7 <= 3);
+    let (se, de) = if remap {
+        (comp * n_src, comp * (u64::from(n_dst) + 1))
+    } else {
+        (1, 1)
+    };
+    let lines = if multi { u64::from(r.line_count) } else { 1 };
+    let ext = |elem: u64, pitch: u32| {
+        let line = u64::from(r.line_len) * elem;
+        if lines <= 1 {
+            line
+        } else {
+            u64::from(pitch) * (lines - 1) + line
+        }
+    };
+    let sema = match (launch >> 3) & 3 {
+        0 => None,
+        2 => Some(16),
+        _ if launch & (1 << 27) != 0 => Some(8),
+        _ => Some(4),
+    };
+    (
+        (moves && reads).then(|| ext(se, r.pitch_in)),
+        moves.then(|| ext(de, r.pitch_out)),
+        sema,
+    )
+}
+
+/// The bytes a host semaphore word touches (`clc56f.h:83-107`, `:214-244`), derived here.
+fn host_sem_bytes(method: u32, word: u32) -> u64 {
+    if method == 0x1C {
+        if word & 0x1F == 2 && word & (1 << 24) == 0 {
+            16
+        } else {
+            4
+        }
+    } else if word & 7 == 1 && word & (1 << 25) != 0 {
+        16
+    } else if word & (1 << 24) != 0 {
+        8
+    } else {
+        4
+    }
+}
+
+/// The window address `a`'s backing: `(guest RAM, offset)`.
+fn backing(a: u64) -> (bool, u64) {
+    if a >= RAM.0 {
+        (true, a - RAM.0)
+    } else {
+        (false, a - FB.0)
+    }
+}
+
+/// `[a, a+n)` (a window address) lies inside the placement rows: ONE resolved span — a run of
+/// rows contiguous in both VA and backing — covers its backing whole.
+fn inside_rows(rows: &MockRows, a: u64, n: u64) -> bool {
+    let (ram, off) = backing(a);
+    let Some((&va, &(_, _, roff, _))) = rows
+        .0
+        .iter()
+        .find(|&(_, &(len, r, o, _))| r == ram && off >= o && off < o + len)
+    else {
+        return false;
+    };
+    let va = va + (off - roff);
+    matches!(rows.resolve(va, n.max(1)).as_deref(), Ok([s]) if s.ram == ram && s.off == off)
+}
+
+/// ★ The full checker (review fix 2026-10-04): (a) every address pair inside a window WITH THE
+/// ENGINE'S WHOLE FOOTPRINT, computed from the emitted footprint registers and trigger word — not
+/// its first 4 bytes; (a') with `rows`, a virtual side's or a semaphore's footprint inside ONE span
+/// of the rows it resolved through (so a mis-sized extent that would run past a row is caught);
+/// (b) every other pair allowlisted for the bound `class`. Returns the launches checked.
+fn check_full(
+    words: &[u32],
+    w: &TWindows,
+    class: u32,
+    ir: Option<(&Ir, &MockRows)>,
+) -> Result<usize, String> {
     let wr = writes(words);
+    let kinds = ir.map(|(i, _)| Kinds::of(i)).unwrap_or_default();
+    let mut r = Regs::default();
+    let mut launches = 0;
+    let mut host_addr: Option<u64> = None;
     let mut i = 0;
+    let place = |what: &str, a: u64, n: u64, virt: bool| -> Result<(), String> {
+        if !w.contains(a, n.max(1)) {
+            return Err(format!("{what} {a:#x}+{n:#x} reaches outside both windows"));
+        }
+        if virt
+            && let Some((_, rows)) = ir
+            && !inside_rows(rows, a, n)
+        {
+            return Err(format!(
+                "{what} {a:#x}+{n:#x} runs past the placement row it resolved through"
+            ));
+        }
+        Ok(())
+    };
     while i < wr.len() {
         let (sub, mm, v) = wr[i];
-        if let Some(&(a, b, _)) = ADDRESS_PAIRS.iter().find(|p| p.0 == mm) {
+        if let Some(&(a, b, host)) = ADDRESS_PAIRS.iter().find(|p| p.0 == mm) {
             let Some(&(s2, m2, v2)) = wr.get(i + 1) else {
                 return Err(format!("address register {mm:#x} without its partner"));
             };
@@ -117,6 +269,12 @@ fn check(words: &[u32], w: &TWindows) -> Result<(), String> {
             if !w.contains(va, 4) {
                 return Err(format!("address {va:#x} ({mm:#x}) is outside both windows"));
             }
+            match (host, a) {
+                (true, _) => host_addr = Some(va),
+                (false, 0x400) => r.off_in = Some(va),
+                (false, 0x408) => r.off_out = Some(va),
+                _ => r.sema = Some(va),
+            }
             i += 2;
             continue;
         }
@@ -126,16 +284,47 @@ fn check(words: &[u32], w: &TWindows) -> Result<(), String> {
         let ok = if mm < 0x100 {
             ALLOWED_HOST.contains(&mm)
         } else {
-            sub <= 4 && ALLOWED_CE.contains(&mm)
+            sub <= 4 && allowed_ce(class, mm)
         };
         if !ok {
             return Err(format!(
                 "({sub}, {mm:#x}) is neither allowlisted nor an authored address"
             ));
         }
+        match mm {
+            0x418 => r.line_len = v,
+            0x41C => r.line_count = v,
+            0x410 => r.pitch_in = v,
+            0x414 => r.pitch_out = v,
+            0x708 => r.remap = v,
+            0x1C | 0x6C => {
+                let a = host_addr
+                    .take()
+                    .ok_or(format!("host semaphore trigger {mm:#x} with no address"))?;
+                place("host semaphore", a, host_sem_bytes(mm, v), true)?;
+            }
+            0x300 => {
+                launches += 1;
+                let (src, dst, sema) = launch_footprint(&r, v);
+                for (what, need, at, virt) in [
+                    ("source", src, r.off_in.take(), kinds.src_virtual),
+                    ("destination", dst, r.off_out.take(), kinds.dst_virtual),
+                    ("CE semaphore", sema, r.sema.take(), true),
+                ] {
+                    match (need, at) {
+                        (Some(n), Some(a)) => place(what, a, n, virt)?,
+                        (Some(_), None) => {
+                            return Err(format!("a launch touches its {what} with no address"));
+                        }
+                        (None, _) => {}
+                    }
+                }
+            }
+            _ => {}
+        }
         i += 1;
     }
-    Ok(())
+    Ok(launches)
 }
 
 /// A deterministic PRNG (xorshift) — the streams are random but reproducible.
@@ -170,8 +359,11 @@ fn random_write(r: &mut Rng) -> (u32, u32, u32) {
     let cem = [
         0x240, 0x244, 0x248, 0x24C, 0x260, 0x264, 0x300, 0x400, 0x404, 0x408, 0x40C, 0x410, 0x414,
         0x418, 0x41C, 0x700, 0x704, 0x708, 0x21C, 0x220, 0x224, 0x254, 0x258, 0x25C, 0x140, 0x500,
-        0x514, 0x6FC, 0x70C, 0x750, 0x7FC,
+        0x514, 0x6FC, 0x70C, 0x750, 0x7FC, 0x754,
     ];
+    // ★ Review fix 2026-10-04: footprint-bearing values too — remap words with two destination
+    // components, multi-line / remap / four-word-release / two-word-payload launches, 16-byte and
+    // 64-bit host semaphore words, and addresses near a row's end.
     let vals = [
         0,
         1,
@@ -188,6 +380,17 @@ fn random_write(r: &mut Rng) -> (u32, u32, u32) {
         0x40_0000,
         0xFFFF_FFFE,
         0x0100_0004,
+        0x0103_0054,
+        0x582,
+        0x382,
+        0x192,
+        0x0800_018A,
+        0x0200_0001,
+        0x0100_0001,
+        0x0100_0002,
+        0xFF0,
+        0xF_FFF0,
+        0x100,
     ];
     let bad = [
         0x84u32, 0x04, 0x7C, 0x21C, 0x220, 0x224, 0x254, 0x258, 0x25C, 0x140, 0x500, 0x514, 0x7FC,
@@ -236,8 +439,13 @@ fn every_emitted_pair_is_allowlisted_or_an_authored_address() {
     let rows = rows();
     let mut r = Rng(0x9E37_79B9_7F4A_7C15);
     let (mut emitted, mut refused) = (0usize, 0usize);
+    let mut per_tier = std::collections::BTreeMap::<u32, (usize, usize)>::new();
     for _ in 0..20_000 {
-        let mut ws: Vec<(u32, u32, u32)> = vec![(SUB, 0, 0xc7b5)];
+        // ★ Review fix 2026-10-04: the bound class is drawn from all six tiers, so the rows that
+        // differ by tier (`0x24C` from C7B5, `0x6FC` from C8B5, `0x754` on CAB5, the 25-bit
+        // upper masks, the 57-bit `SEM_ADDR_HI`) are all exercised.
+        let class = r.pick(&TIERS);
+        let mut ws: Vec<(u32, u32, u32)> = vec![(SUB, 0, class)];
         for _ in 0..(r.next() % 12 + 1) {
             ws.push(random_write(&mut r));
         }
@@ -254,7 +462,11 @@ fn every_emitted_pair_is_allowlisted_or_an_authored_address() {
             match bind(it, &rows, &w, &mut out) {
                 Ok(_) => {
                     emitted += out.len();
-                    check(&out, &w).unwrap_or_else(|e| panic!("{e}: {it:x?} from {ws:x?}"));
+                    let n = check_full(&out, &w, class, Some((it, &rows)))
+                        .unwrap_or_else(|e| panic!("{e}: {it:x?} from {ws:x?}"));
+                    let t = per_tier.entry(class).or_default();
+                    t.0 += out.len();
+                    t.1 += n;
                 }
                 Err(_) => {
                     refused += 1;
@@ -267,7 +479,17 @@ fn every_emitted_pair_is_allowlisted_or_an_authored_address() {
         emitted > 3_000 && refused > 100,
         "the streams exercised both arms: {emitted} {refused}"
     );
+    for class in TIERS {
+        let (words, launches) = per_tier.get(&class).copied().unwrap_or_default();
+        assert!(
+            words > 100 && launches > 0,
+            "tier {class:#x} emitted {words} words, {launches} launches"
+        );
+    }
 }
+
+/// The six CE classes T-mode binds (`Tier`).
+const TIERS: [u32; 6] = [0xc5b5, 0xc6b5, 0xc7b5, 0xc8b5, 0xc9b5, 0xcab5];
 
 /// ★ §7 test 1's NEGATIVE CONTROLS — the checker can SEE both defect classes: (a) a guest VA
 /// forwarded as written by today's rewriter, (b) a method a forwarder passes through.
@@ -301,6 +523,53 @@ fn the_property_checker_catches_a_forwarder() {
     }
     // …and a raw SUB-DEVICE-MASK header in the output is not a method pair at all.
     assert!(std::panic::catch_unwind(|| check(&[(1 << 16) | (1 << 4), 0], &windows())).is_err());
+    // ★ (a') review fix 2026-10-04: the checker sees a FOOTPRINT past the row an operand resolved
+    // through — an emitter that sized a 16-byte release, or a two-component remap, as if it were
+    // its first 4 bytes. Words a perimeter bypass would emit, checked against the rows.
+    let rows = MockRows::default()
+        .row(VA_FB, 0x1000, false, 0x40_0000)
+        .row(VA_FB + 0x1000, 0x1000, false, 0x90_0000);
+    let host_ir = decode(
+        &m(0, 0x10, &[2, 0xFF8, 7, 2]),
+        is_ce,
+        &mut Default::default(),
+        None,
+    )
+    .unwrap()
+    .remove(0);
+    let at = FB.0 + 0x40_0FF8; // the row's last 8 bytes
+    let mut bad = m(0, 0x10, &[(at >> 32) as u32]);
+    bad.extend(m(0, 0x14, &[at as u32]));
+    bad.extend(m(0, 0x18, &[7]));
+    bad.extend(m(0, 0x1C, &[2])); // RELEASE, 16 bytes
+    let e = check_full(&bad, &windows(), 0xc7b5, Some((&host_ir, &rows))).unwrap_err();
+    assert!(e.contains("runs past the placement row"), "{e}");
+    let mut fill = m(SUB, 0, &[0xc7b5]);
+    fill.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[2, 0xFC0]));
+    fill.extend(m(
+        SUB,
+        ce::LAUNCH_DMA,
+        &[2 | (1 << 7) | (1 << 8) | (1 << 10)],
+    ));
+    let fill_ir = decode(&fill, is_ce, &mut Default::default(), None)
+        .unwrap()
+        .remove(1);
+    let at = FB.0 + 0x40_0FC0;
+    let mut bad = m(SUB, ce::LINE_LENGTH_IN, &[0x10]);
+    bad.extend(m(
+        SUB,
+        ce::SET_REMAP_COMPONENTS,
+        &[4 | (5 << 4) | (3 << 16) | (1 << 24)],
+    ));
+    bad.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[(at >> 32) as u32]));
+    bad.extend(m(SUB, ce::OFFSET_OUT_UPPER + 4, &[at as u32]));
+    bad.extend(m(
+        SUB,
+        ce::LAUNCH_DMA,
+        &[2 | (1 << 7) | (1 << 8) | (1 << 10)],
+    ));
+    let e = check_full(&bad, &windows(), 0xc7b5, Some((&fill_ir, &rows))).unwrap_err();
+    assert!(e.contains("runs past the placement row"), "{e}");
 }
 
 /// ★★ §7 test 2 — **`a_guest_address_value_is_never_emitted`**, both cases: with no covering row the
@@ -364,6 +633,19 @@ fn no_guest_word_is_copied() {
     let wr = writes(&launch_with((1 << 26) | (1 << 25) | (1 << 2)).unwrap());
     let l = wr.iter().find(|w| w.1 == ce::LAUNCH_DMA).unwrap().2;
     assert_eq!(l, (1 << 26) | (1 << 25) | (1 << 2));
+    // SET_REMAP_COMPONENTS: an unnamed bit (bit 31; 3, 7, 11, 15, 18-19, 22-23, 26-31 are unnamed
+    // in `clc7b5.h:181-228`) is refused, never re-emitted (review fix 2026-10-04).
+    for bit in [3, 15, 19, 23, 31] {
+        let mut pb = m(SUB, 0, &[0xc7b5]);
+        pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[4 | (1 << bit)]));
+        assert!(
+            matches!(
+                run(&pb, &MockRows::default()),
+                Err(Refusal::FieldValue { .. })
+            ),
+            "remap bit {bit}"
+        );
+    }
     // SET_OBJECT: the class alone; upper bits refused.
     let wr = writes(&run(&m(SUB, 0, &[0xc7b5]), &MockRows::default()).unwrap());
     assert_eq!(wr, vec![(SUB, 0, 0xc7b5)]);
@@ -457,8 +739,13 @@ fn ceutils_shape_rewrites_both_completions() {
         wr.iter().find(|w| w.1 == 0x1C).unwrap().2,
         2 | (1 << 20) | (1 << 24)
     );
-    // Hopper: SET_MEMORY_SCRUB_PARAMETERS accepted; the fast scrub becomes a zero fill.
+    // Hopper: SET_MEMORY_SCRUB_PARAMETERS accepted; CeUtils' fast scrub — its pattern in
+    // CONST_A/CONST_B, one-byte components (`channelFillPbFastScrub`, `channel_utils.c:617-628`) —
+    // becomes a remap fill of the same bytes with the same pattern.
     let mut pb = m(SUB, 0, &[0xc8b5]);
+    pb.extend(m(SUB, ce::SET_REMAP_CONST_A, &[0]));
+    pb.extend(m(SUB, 0x704, &[0]));
+    pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[4 | 5]));
     pb.extend(m(SUB, 0x6FC, &[0]));
     pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
     pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0, 0x20_0000]));
@@ -468,11 +755,233 @@ fn ceutils_shape_rewrites_both_completions() {
         ce::LAUNCH_DMA,
         &[2 | (1 << 7) | (1 << 8) | (1 << 12) | (1 << 13) | (1 << 23) | (1 << 26)],
     ));
-    let wr = writes(&run(&pb, &rows).unwrap());
+    let out = run(&pb, &rows).unwrap();
+    check_full(&out, &windows(), 0xc8b5, None).unwrap();
+    let wr = writes(&out);
     let l = wr.iter().find(|w| w.1 == ce::LAUNCH_DMA).unwrap().2;
     assert_eq!(l & (1 << 23), 0, "no fast scrub reaches the engine");
     assert_ne!(l & (1 << 10), 0, "a remap fill");
     assert!(wr.contains(&(SUB, ce::SET_REMAP_CONST_A, 0)));
+    assert!(
+        wr.contains(&(SUB, ce::LINE_LENGTH_IN, 0x1000)),
+        "one-byte elements"
+    );
+}
+
+/// Decode and bind `pb` on a channel bound to `class`, checking every bound item's output with
+/// the full footprint checker against `rows`.
+fn run_checked(pb: &[u32], rows: &MockRows, class: u32) -> Result<Vec<u32>, Refusal> {
+    let ir = decode(pb, is_ce, &mut Default::default(), None)?;
+    let mut all = Vec::new();
+    for it in &ir {
+        let mut out = Vec::new();
+        bind(it, rows, &windows(), &mut out)?;
+        check_full(&out, &windows(), class, Some((it, rows)))
+            .unwrap_or_else(|e| panic!("{e}: {it:x?}"));
+        all.extend(out);
+    }
+    Ok(all)
+}
+
+/// ★★ Review fix 2026-10-04 (`V3_P1P2_TSPACE.md` §3.4, §3.8): **a Hopper+ fast scrub keeps the
+/// guest's pattern.** UVM's `memset_8` puts a 64-bit value in `CONST_A`/`CONST_B` with
+/// `DST_X = CONST_A`, `DST_Y = CONST_B`, four-byte components ×2, and scrubs `LINE_LENGTH_IN`
+/// BYTES (`uvm_hopper_ce.c:232-258`, `:298-310`); T-mode authors a remap fill of the same bytes
+/// with the same pattern — never a zero fill — counting the line in 8-byte elements. A scrub whose
+/// remap reads a source, or whose bytes are not whole elements, is refused by name.
+#[test]
+fn a_hopper_scrub_keeps_the_guests_pattern() {
+    let value: u64 = 0x0123_4567_89AB_CDEF;
+    let remap8 = 4 | (5 << 4) | (3 << 16) | (1 << 24);
+    let scrub = |remap: u32, bytes: u32| {
+        let mut pb = m(SUB, 0, &[0xc8b5]);
+        pb.extend(m(
+            SUB,
+            ce::SET_REMAP_CONST_A,
+            &[value as u32, (value >> 32) as u32, remap],
+        ));
+        pb.extend(m(SUB, 0x6FC, &[0]));
+        pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+        pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0, 0x20_0000]));
+        pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[bytes]));
+        // NON_PIPELINED | both PITCH | DST PHYSICAL | MEMORY_SCRUB | DISABLE_PLC (UVM's word).
+        pb.extend(m(
+            SUB,
+            ce::LAUNCH_DMA,
+            &[2 | (1 << 7) | (1 << 8) | (1 << 13) | (1 << 23) | (1 << 26)],
+        ));
+        run_checked(&pb, &MockRows::default(), 0xc8b5)
+    };
+    let wr = writes(&scrub(remap8, 0x1000).unwrap());
+    assert!(
+        wr.contains(&(SUB, ce::SET_REMAP_CONST_A, 0x89AB_CDEF)),
+        "{wr:x?}"
+    );
+    assert!(
+        wr.contains(&(SUB, 0x704, 0x0123_4567)),
+        "CONST_B: the pattern's high word"
+    );
+    assert!(wr.contains(&(SUB, ce::SET_REMAP_COMPONENTS, remap8)));
+    assert!(
+        wr.contains(&(SUB, ce::LINE_LENGTH_IN, 0x200)),
+        "0x1000 bytes = 0x200 eight-byte elements"
+    );
+    let l = wr.iter().find(|w| w.1 == ce::LAUNCH_DMA).unwrap().2;
+    assert_eq!(
+        l & ((1 << 23) | (3 << 12)),
+        0,
+        "no scrub, no physical operand"
+    );
+    assert_ne!(l & (1 << 10), 0, "a remap fill");
+    // A remap that reads a source is no pattern; bytes not whole elements are refused.
+    assert!(matches!(
+        scrub(0, 0x1000),
+        Err(Refusal::FieldValue { what, .. }) if what.contains("reads a source")
+    ));
+    assert!(matches!(
+        scrub(remap8, 0x1004),
+        Err(Refusal::FieldValue { what, .. }) if what.contains("whole pattern elements")
+    ));
+}
+
+/// ★★★ Review fix 2026-10-04 — **the engine's whole footprint stays inside the row it resolved
+/// through**, for the three shapes the old 4-byte check could not see: a 16-byte release ending at
+/// a row's edge (host `SEMAPHORED`, CE four-word, `SEM_EXECUTE` timestamped), a remap with two
+/// destination components across a page seam, and a multi-line operand whose `PITCH` exceeds its
+/// `LINE_LENGTH`. Each case is bound, then checked by the full checker (footprint computed from
+/// the EMITTED registers); one byte further is refused by name.
+#[test]
+fn the_whole_footprint_stays_inside_its_row() {
+    // VA_FB: one 4 KiB row; the next page is a DISCONTIGUOUS row (another backing).
+    let rows = MockRows::default()
+        .row(VA_FB, 0x1000, false, 0x40_0000)
+        .row(VA_FB + 0x1000, 0x1000, false, 0x90_0000)
+        .row(VA_RAM, 0x1000, true, 0x10_0000)
+        .row(VA_RAM + 0x1000, 0x1000, true, 0x30_0000)
+        .row(0x3_0000_0000, 0x10_0000, false, 0x60_0000);
+    let edge = VA_FB + 0xFF0;
+    // Host SEMAPHORED RELEASE, 16 bytes (payload + timestamp).
+    let host = |va: u64| m(0, 0x10, &[(va >> 32) as u32, va as u32, 7, 2]);
+    run_checked(&host(edge), &rows, 0xc7b5).expect("16 bytes at the row's end");
+    assert_eq!(
+        run_checked(&host(edge + 8), &rows, 0xc7b5),
+        Err(Refusal::SemaphoreSpansRows {
+            va: edge + 8,
+            bytes: 16
+        })
+    );
+    // SEM_EXECUTE RELEASE with RELEASE_TIMESTAMP: 16 bytes.
+    let sx = |va: u64| {
+        m(
+            0,
+            0x5C,
+            &[va as u32, (va >> 32) as u32, 7, 0, 1 | (1 << 25)],
+        )
+    };
+    run_checked(&sx(edge), &rows, 0xc7b5).expect("timestamped at the row's end");
+    assert!(run_checked(&sx(edge + 8), &rows, 0xc7b5).is_err());
+    // CE SEMAPHORE_TYPE 2 (four-word release): 16 bytes.
+    let ce4 = |va: u64| {
+        let mut pb = m(SUB, 0, &[0xc7b5]);
+        pb.extend(m(
+            SUB,
+            ce::SET_SEMAPHORE_A,
+            &[(va >> 32) as u32, va as u32, 9],
+        ));
+        pb.extend(m(SUB, ce::LAUNCH_DMA, &[2 << 3]));
+        pb
+    };
+    run_checked(&ce4(edge), &rows, 0xc7b5).expect("four-word release at the row's end");
+    assert!(run_checked(&ce4(edge + 8), &rows, 0xc7b5).is_err());
+    // Remap, 4-byte components x2 (8-byte elements), a virtual destination 0x40 bytes before a
+    // page seam: 0x10 elements = 0x80 bytes — split at the seam, 8 elements each side.
+    let fill = |va: u64| {
+        let mut pb = m(SUB, 0, &[0xc7b5]);
+        pb.extend(m(
+            SUB,
+            ce::SET_REMAP_CONST_A,
+            &[
+                0x1111_1111,
+                0x2222_2222,
+                4 | (5 << 4) | (3 << 16) | (1 << 24),
+            ],
+        ));
+        pb.extend(m(
+            SUB,
+            ce::OFFSET_OUT_UPPER,
+            &[(va >> 32) as u32, va as u32],
+        ));
+        pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x10]));
+        pb.extend(m(
+            SUB,
+            ce::LAUNCH_DMA,
+            &[2 | (1 << 7) | (1 << 8) | (1 << 10)],
+        ));
+        pb
+    };
+    let wr = writes(&run_checked(&fill(VA_RAM + 0xFC0), &rows, 0xc7b5).expect("split at the seam"));
+    let lens: Vec<u32> = wr
+        .iter()
+        .filter(|w| w.1 == ce::LINE_LENGTH_IN)
+        .map(|w| w.2)
+        .collect();
+    assert_eq!(
+        lens,
+        vec![8, 8],
+        "8 eight-byte elements on each side of the seam"
+    );
+    // Multi-line: 4 lines of 0x40 bytes at PITCH_OUT 0x100 = 0x340 bytes, inside one row.
+    let ml = |va: u64| {
+        let mut pb = m(SUB, 0, &[0xc7b5]);
+        pb.extend(m(
+            SUB,
+            ce::OFFSET_IN_UPPER,
+            &[
+                (va >> 32) as u32,
+                va as u32 + 0x8_0000,
+                (va >> 32) as u32,
+                va as u32,
+            ],
+        ));
+        pb.extend(m(SUB, 0x410, &[0x40, 0x100, 0x40, 4]));
+        pb.extend(m(
+            SUB,
+            ce::LAUNCH_DMA,
+            &[2 | (1 << 7) | (1 << 8) | (1 << 9)],
+        ));
+        pb
+    };
+    let base = 0x3_0000_0000u64;
+    run_checked(&ml(base), &rows, 0xc7b5).expect("a wide-pitch multi-line copy inside its row");
+    // The same copy 0x300 bytes before the row's end reaches past it.
+    assert!(run_checked(&ml(base + 0x10_0000 - 0x300), &rows, 0xc7b5).is_err());
+}
+
+/// ★ Review fix 2026-10-04: a Hopper+ host `SEM_EXECUTE` whose `SEM_ADDR_HI` is wider than 8
+/// bits (UVM's high kernel VAs) is RESOLVED on a wide tier — and the address emitted is a window
+/// address below 2^40; on a pre-Hopper tier the same word is refused (the field is 8 bits there).
+#[test]
+fn a_wide_sem_addr_hi_is_resolved_on_hopper_and_refused_before() {
+    let sem = VA_RAM + 0x10;
+    let pb = |class: u32| {
+        let mut pb = m(SUB, 0, &[class]);
+        pb.extend(m(0, 0x5C, &[sem as u32, (sem >> 32) as u32, 7, 0, 1]));
+        pb
+    };
+    for class in [0xc8b5, 0xc9b5, 0xcab5] {
+        let wr = writes(&run_checked(&pb(class), &rows(), class).expect("wide tier"));
+        let lo = wr.iter().find(|w| w.1 == 0x5C).unwrap().2;
+        let hi = wr.iter().find(|w| w.1 == 0x60).unwrap().2;
+        let at = (u64::from(hi) << 32) | u64::from(lo);
+        assert_eq!(at, RAM.0 + 0x10_0010, "window(resolve(va)) on {class:#x}");
+        assert!(hi <= 0xFF);
+    }
+    for class in [0xc5b5, 0xc6b5, 0xc7b5] {
+        assert!(
+            matches!(run(&pb(class), &rows()), Err(Refusal::FieldValue { .. })),
+            "{class:#x}"
+        );
+    }
 }
 
 /// ★★ §7 test 5 — **`uvm_pte_write_inline_source_splits_at_a_page_seam`.** A virtual source over two

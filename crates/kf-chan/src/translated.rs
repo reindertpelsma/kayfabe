@@ -586,6 +586,22 @@ pub enum Refusal {
         /// The pieces it would need.
         pieces: usize,
     },
+    /// ★ T-mode, the address perimeter (§3.8, review fix 2026-10-04): the access the emitted
+    /// registers describe reaches past the bytes its operand was resolved and validated for.
+    Footprint {
+        /// `"src"`, `"dst"` or `"semaphore"`.
+        side: &'static str,
+        /// Bytes the engine would touch.
+        need: u64,
+        /// Bytes validated.
+        have: u64,
+    },
+    /// ★ T-mode, the address perimeter: an operand set or a field it cannot compute a footprint
+    /// for ([`crate::tspace_unsafe::PerimeterRefusal`]).
+    Perimeter {
+        /// What was refused.
+        what: &'static str,
+    },
 }
 
 impl Refusal {
@@ -620,6 +636,8 @@ impl Refusal {
             Refusal::MultiLineDiscontiguous => "multi_line_discontiguous",
             Refusal::SplitInsideElement => "split_inside_element",
             Refusal::TooManyPieces { .. } => "too_many_pieces",
+            Refusal::Footprint { .. } => "footprint",
+            Refusal::Perimeter { .. } => "perimeter",
         }
     }
 }

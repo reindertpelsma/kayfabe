@@ -26,12 +26,12 @@
 use crate::census::{Census, SubKind};
 use crate::translated::{GP100_UVM_SW, IsCeClass, Refusal, Target, form_tag};
 use crate::tspace_unsafe::{
-    CeSide, TWindows, WindowAddr, put_ce_offset, put_ce_semaphore, put_host_sem_addr,
-    put_host_semaphore, put_launch,
+    LaunchPiece, PerimeterRefusal, PieceRegs, PieceSema, TWindows, WindowAddr,
+    put_host_sem_execute, put_host_semaphore, put_launch_piece,
 };
 use crate::ttables::{
-    CeMethod, HostMethod, Launch, SemExecute, SemaphoreD, Tier, ce_method, decode_launch,
-    host_method,
+    CeMethod, HostMethod, Launch, REMAP_NAMED, SemExecute, SemaphoreD, Tier, ce_method,
+    decode_launch, host_method,
 };
 use kf_abi::submit::{MethodForm, ce, fifo, method_header_decode, method_header_inc};
 use kf_host::MapPerm;
@@ -419,7 +419,18 @@ fn one(
         CeMethod::LineCount => st.regs.line_count = v,
         CeMethod::RemapConstA => st.regs.const_a = v,
         CeMethod::RemapConstB => st.regs.const_b = v,
-        CeMethod::RemapComponents => st.regs.remap = v,
+        CeMethod::RemapComponents => {
+            // ★ Every field named (`clc7b5.h:181-228`: DST_X..W, COMPONENT_SIZE, NUM_SRC/DST);
+            // an unnamed bit is refused, never re-emitted (review fix 2026-10-04).
+            if v & !REMAP_NAMED != 0 {
+                return Err(Refusal::FieldValue {
+                    method: m,
+                    word: v,
+                    what: "SET_REMAP_COMPONENTS beyond its named fields",
+                });
+            }
+            st.regs.remap = v;
+        }
         CeMethod::ReqAttr => {
             if v & !0x3 != 0 {
                 return Err(Refusal::FieldValue {
@@ -646,24 +657,49 @@ fn ce_launch(st: &TState, tier: Tier, sub: u32, l: Launch) -> Result<CeLaunch, R
         let (s, d, r) = remap_elems(st.regs.remap);
         (src_elem, dst_elem, reads_src) = (s, d, moves && r);
     }
-    // A Hopper+ fast scrub on a physical destination is a zero-fill of the same bytes (§3.2, as
-    // `translated::launch_scrub_translated` today): remap ON, `DST_X = CONST_A = 0`, one-byte
-    // components; with remap disabled a scrub's element is one byte.
+    // ★★ A Hopper+ fast scrub on a physical destination becomes a VIRTUAL remap fill of the same
+    // bytes with the SAME pattern (review fix 2026-10-04). The scrub writes the pattern the remap
+    // registers hold over `LINE_LENGTH_IN` BYTES (remap disabled: one-byte elements): UVM's
+    // `memset_8` sends an arbitrary 64-bit value through the scrubber as `CONST_A`/`CONST_B` with
+    // `DST_X = CONST_A`, `DST_Y = CONST_B`, four-byte components ×2
+    // (`ogkm-580: kernel-open/nvidia-uvm/uvm_hopper_ce.c:298-310`, `:232-258`; `memset_1/4` widen
+    // their value to it, `:313-320`), and CeUtils sets its pattern the same way
+    // (`src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c:617-628`). ⊘ Before this fix T-mode
+    // authored a ZERO fill (`CONST_A = 0`, one-byte `DST_X`), dropping the guest's pattern —
+    // UVM's non-zero PDE `clear_bits` included (`uvm_mmu.c:475-498`). So the fill keeps the
+    // guest's `CONST_A`/`CONST_B`/`SET_REMAP_COMPONENTS` and counts `LINE_LENGTH_IN` in pattern
+    // elements. A remap that reads a source, or a byte count that is not whole elements, is
+    // refused by name. UNVERIFIED on hardware: the scrubber's own semantics are closed firmware;
+    // the source above is what fixes them here.
     let mut l = l;
     let mut regs = st.regs;
     if l.scrub {
-        if !l.dst_phys || !tier.has_fast_scrub() {
+        let what = if !l.dst_phys || !tier.has_fast_scrub() {
+            Some("MEMORY_SCRUB on a virtual destination")
+        } else {
+            None
+        };
+        let (_, d, reads) = remap_elems(st.regs.remap);
+        let what = what.or_else(|| {
+            if reads {
+                Some("MEMORY_SCRUB with a remap that reads a source (no pattern)")
+            } else if !u64::from(st.regs.line_len).is_multiple_of(d) {
+                Some("MEMORY_SCRUB over bytes that are not whole pattern elements")
+            } else {
+                None
+            }
+        });
+        if let Some(what) = what {
             return Err(Refusal::FieldValue {
                 method: ce::LAUNCH_DMA,
                 word: crate::ttables::encode_launch(&l),
-                what: "MEMORY_SCRUB on a virtual destination",
+                what,
             });
         }
-        (src_elem, dst_elem, reads_src) = (1, 1, false);
+        (src_elem, dst_elem, reads_src) = (1, d, false);
         l.scrub = false;
         l.remap = true;
-        regs.remap = ce::REMAP_DST_SEL_CONST_A;
-        regs.const_a = 0;
+        regs.line_len = u32::try_from(u64::from(st.regs.line_len) / d).unwrap_or(u32::MAX);
     }
     if (reads_src && !l.src_pitch) || (moves && !l.dst_pitch) {
         return Err(if l.src_phys || l.dst_phys {
@@ -838,6 +874,17 @@ fn emit(out: &mut Vec<u32>, sub: u32, m: u32, v: u32) {
     }
 }
 
+/// A perimeter refusal, as the rewriter names it.
+const fn perimeter(r: PerimeterRefusal) -> Refusal {
+    match r {
+        PerimeterRefusal::Sem40 { va } => Refusal::Sem40 { va },
+        PerimeterRefusal::Footprint { side, need, have } => Refusal::Footprint { side, need, have },
+        PerimeterRefusal::Operands { what } | PerimeterRefusal::Field { what } => {
+            Refusal::Perimeter { what }
+        }
+    }
+}
+
 /// ★ **Bind one IR item** against `rows` as they are NOW, emitting only authored words and window
 /// addresses. A launch is split at the union of its sides' row boundaries (§3.4); the returned
 /// count is the number of launches it became (the shadow's maximum).
@@ -903,9 +950,7 @@ fn bind_host_sem(
     match h.form {
         HostSemForm::Legacy { payload, op } => {
             let a = sema_addr(h.va, op.bytes(), op.writes(), op.op == 0x10, rows, w)?;
-            put_host_semaphore(&mut words, h.sub, a).map_err(|va| Refusal::Sem40 { va })?;
-            emit(&mut words, h.sub, HOST_SEMAPHORE_C, payload);
-            emit(&mut words, h.sub, HOST_SEMAPHORE_D, op.encode());
+            put_host_semaphore(&mut words, h.sub, a, payload, &op).map_err(perimeter)?;
         }
         HostSemForm::Execute {
             payload_lo,
@@ -914,24 +959,13 @@ fn bind_host_sem(
             wide,
         } => {
             let a = sema_addr(h.va, op.bytes(), op.writes(), op.op == 6, rows, w)?;
-            put_host_sem_addr(&mut words, h.sub, a, wide).map_err(|va| Refusal::Sem40 { va })?;
-            emit(&mut words, h.sub, fifo::SEM_PAYLOAD_LO, payload_lo);
-            emit(&mut words, h.sub, fifo::SEM_PAYLOAD_HI, payload_hi);
-            emit(&mut words, h.sub, fifo::SEM_EXECUTE, op.encode());
+            put_host_sem_execute(&mut words, h.sub, a, (payload_lo, payload_hi), &op, wide)
+                .map_err(perimeter)?;
         }
     }
     out.extend(words);
     Ok(())
 }
-
-/// `NV906F_SEMAPHOREC` / `_D`.
-const HOST_SEMAPHORE_C: u32 = 0x18;
-const HOST_SEMAPHORE_D: u32 = 0x1C;
-/// `NVC7B5_PITCH_IN` / `_OUT`, `NVC7B5_SET_REMAP_CONST_B`, `NVCAB5_REQ_ATTR`.
-const PITCH_IN: u32 = 0x410;
-const PITCH_OUT: u32 = 0x414;
-const SET_REMAP_CONST_B: u32 = 0x704;
-const REQ_ATTR: u32 = 0x754;
 
 #[allow(clippy::too_many_lines)]
 fn bind_launch(
@@ -958,7 +992,7 @@ fn bind_launch(
         return Err(Refusal::ReadOnlyRow { va });
     }
     let sema = match l.sema {
-        Some(s) => Some(sema_addr(s.va, s.bytes, true, s.reduction, rows, w)?),
+        Some(s) => Some((s, sema_addr(s.va, s.bytes, true, s.reduction, rows, w)?)),
         None => None,
     };
     let multi = l.launch.multi_line;
@@ -1016,51 +1050,49 @@ fn bind_launch(
             }
         }
         let line_len = u32::try_from(e1 - e0).map_err(|_| Refusal::ExtentOverflow)?;
-        // Footprint registers, re-emitted at every piece: the engine runs with exactly the values
-        // the bound was computed from.
-        emit(
-            &mut words,
-            l.sub,
-            ce::LINE_LENGTH_IN,
-            if n_pieces > 1 {
-                line_len
-            } else {
-                l.regs.line_len
-            },
-        );
-        if multi {
-            emit(&mut words, l.sub, ce::LINE_COUNT, l.regs.line_count);
-            emit(&mut words, l.sub, PITCH_IN, l.regs.pitch_in);
-            emit(&mut words, l.sub, PITCH_OUT, l.regs.pitch_out);
-        }
-        if f.remap {
-            emit(&mut words, l.sub, ce::SET_REMAP_CONST_A, l.regs.const_a);
-            emit(&mut words, l.sub, SET_REMAP_CONST_B, l.regs.const_b);
-            emit(&mut words, l.sub, ce::SET_REMAP_COMPONENTS, l.regs.remap);
-        }
-        if let Some(r) = l.req_attr {
-            emit(&mut words, l.sub, REQ_ATTR, r);
-        }
-        if let (Some(s), Some(a)) = (&l.sema, sema)
-            && f.sema != 0
-        {
-            put_ce_semaphore(&mut words, l.sub, l.tier, a);
-            emit(&mut words, l.sub, ce::SET_SEMAPHORE_PAYLOAD, s.payload);
-            if let Some(u) = s.payload_upper {
-                emit(&mut words, l.sub, ce::SET_SEMAPHORE_PAYLOAD_UPPER, u);
-            }
-        }
-        for (side, elem, which) in [(&src, se, CeSide::In), (&dst, de, CeSide::Out)] {
-            let Some((s, n)) = side else { continue };
-            let (pos, len) = if n_pieces > 1 {
-                (e0 * elem, (e1 - e0) * elem)
-            } else {
-                (0, *n)
+        // Each side's validated bytes for THIS piece; the perimeter recomputes the engine's
+        // footprint from the registers it emits and refuses the piece unless it fits them.
+        let side_addr =
+            |side: &Option<(Side, u64)>, elem: u64| -> Result<Option<WindowAddr>, Refusal> {
+                let Some((s, n)) = side else {
+                    return Ok(None);
+                };
+                let (pos, len) = if n_pieces > 1 {
+                    (e0 * elem, (e1 - e0) * elem)
+                } else {
+                    (0, *n)
+                };
+                piece_addr(s, pos, len, w)
+                    .map(Some)
+                    .ok_or(Refusal::ExtentOverflow)
             };
-            let a = piece_addr(s, pos, len, w).ok_or(Refusal::ExtentOverflow)?;
-            put_ce_offset(&mut words, l.sub, l.tier, which, a);
-        }
-        put_launch(&mut words, l.sub, &f);
+        let piece = LaunchPiece {
+            sub: l.sub,
+            tier: l.tier,
+            launch: f,
+            regs: PieceRegs {
+                line_len: if n_pieces > 1 {
+                    line_len
+                } else {
+                    l.regs.line_len
+                },
+                line_count: l.regs.line_count,
+                pitch_in: l.regs.pitch_in,
+                pitch_out: l.regs.pitch_out,
+                remap: l.regs.remap,
+                const_a: l.regs.const_a,
+                const_b: l.regs.const_b,
+                req_attr: l.req_attr,
+            },
+            src: side_addr(&src, se)?,
+            dst: side_addr(&dst, de)?,
+            sema: sema.filter(|_| f.sema != 0).map(|(s, at)| PieceSema {
+                at,
+                payload: s.payload,
+                upper: s.payload_upper.filter(|_| f.payload_two_word),
+            }),
+        };
+        put_launch_piece(&mut words, &piece).map_err(perimeter)?;
     }
     out.extend(words);
     Ok(n_pieces)

@@ -263,6 +263,12 @@ pub fn host_method(m: u32) -> Option<HostMethod> {
     })
 }
 
+/// `SET_REMAP_COMPONENTS`'s named fields (`ogkm-580: src/common/sdk/nvidia/inc/class/clc7b5.h:181-228`):
+/// `DST_X/Y/Z/W` 2:0, 6:4, 10:8, 14:12; `COMPONENT_SIZE` 17:16; `NUM_SRC_COMPONENTS` 21:20;
+/// `NUM_DST_COMPONENTS` 25:24. A word with any other bit set is refused, never re-emitted.
+pub const REMAP_NAMED: u32 =
+    0x7 | (0x7 << 4) | (0x7 << 8) | (0x7 << 12) | (0x3 << 16) | (0x3 << 20) | (0x3 << 24);
+
 /// ★ A `LAUNCH_DMA` word, decoded and checked against the tier's field table (§3.2). Every field
 /// stock sets is named; a non-zero field the table does not name is REFUSED, never cleared.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -655,6 +661,25 @@ mod hwref_check {
         assert_eq!(class_range("NVC56F_SEM_ADDR_HI_OFFSET"), (7, 0));
         assert_eq!(class_range("NVC86F_SEM_ADDR_HI_OFFSET"), (24, 0));
         assert!(!Tier::C7b5.wide_sem_addr() && Tier::C8b5.wide_sem_addr());
+    }
+
+    /// ★ Review fix 2026-10-04: `REMAP_NAMED` is exactly the union of `SET_REMAP_COMPONENTS`'s
+    /// fields in the class header.
+    #[test]
+    fn the_remap_fields_are_the_class_header() {
+        let want = [
+            "DST_X",
+            "DST_Y",
+            "DST_Z",
+            "DST_W",
+            "COMPONENT_SIZE",
+            "NUM_SRC_COMPONENTS",
+            "NUM_DST_COMPONENTS",
+        ]
+        .iter()
+        .map(|f| range_bits(&format!("NVC7B5_SET_REMAP_COMPONENTS_{f}")))
+        .fold(0, |a, b| a | b);
+        assert_eq!(REMAP_NAMED, want);
     }
 
     /// ★ Every `LAUNCH_DMA` field the table names is the header's own range, on the class that
