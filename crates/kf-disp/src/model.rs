@@ -143,6 +143,11 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     // (commit `9adb26a8`; no m3c trace is committed). Refused
     // (`[m3b, 2026-09-30, GA106 / 580.159.04]`), X logs "Failed to allocate display software
     // resources" and GL runs vsync-locked at 60 FPS.
+    // ★ EXPERIMENT `x11-dispsw` (2026-10-03, default off — `docs/OWNER_QUESTIONS_2026-10-03.md` item 2,
+    // option A, ANSWERED by `docs/OWNER_RULINGS.md` §N): with [`DisplayModel::offer_display_sw`]
+    // the query is ANSWERED (the lit displays and the heads, m3c's answer) because the device then
+    // twins every guest display-SW object on its channel's host twin, or refuses its alloc by name
+    // (`kf_rm::chanlink`, `ChanStatement::DisplaySw`). Off, the refusal above is unchanged.
     (
         "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
         "no_display_sw",
@@ -404,6 +409,10 @@ pub struct DisplayModel {
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
     pub hotplug: Vec<HotplugRegistration>,
+    /// ★ EXPERIMENT `x11-dispsw` (default `false`): answer the display-SW object's constructor
+    /// query instead of refusing it (see `NAMED_CONTROLS`). Set only by a link that also twins the
+    /// object on the host ([`Self::offer_display_sw`]).
+    display_sw_offered: bool,
     /// ★ `NV5070_CTRL_CMD_SET_RMFREE_FLAGS` PRESERVE_HW marks, by the display object the control
     /// named — `(client, DispObject handle)`, at most [`MAX_RMFREE_MARKS`].
     /// ⊘ CORRECTED 2026-10-03 (the review of `v3-gop-unload`): this was ONE flag for the whole model,
@@ -480,6 +489,7 @@ impl DisplayModel {
             waker: None,
             pending_plug: 0,
             hotplug: Vec::new(),
+            display_sw_offered: false,
             rmfree_marks: BTreeSet::new(),
             rmfree_spent: BTreeSet::new(),
         }
@@ -539,6 +549,20 @@ impl DisplayModel {
     #[must_use]
     pub fn hotplug_target(&self) -> Option<HotplugRegistration> {
         self.hotplug.last().copied()
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw`: offer the `GF100_DISP_SW` object — answer its constructor's
+    /// `GET_ACTIVE_DISPLAY_DEVICES` query (the lit displays, the heads) instead of refusing it.
+    /// ⊘ Only for a device that twins every such object on the host or refuses its alloc by name:
+    /// an object offered WITHOUT a host twin is run m3c (186 host Xid 32, 1.3 FPS GL).
+    pub fn offer_display_sw(&mut self, on: bool) {
+        self.display_sw_offered = on;
+    }
+
+    /// Whether the display-SW object is offered ([`Self::offer_display_sw`]).
+    #[must_use]
+    pub fn display_sw_offered(&self) -> bool {
+        self.display_sw_offered
     }
 
     /// ★ Attach the display plane: it drains [`Self::statements`] itself and is woken through `wake`.
@@ -981,8 +1005,24 @@ impl DisplayModel {
                 p.set("channelState", state);
                 Ok(p.buf)
             }
-            // see NAMED_CONTROLS: the display-SW object is not offered
-            "no_display_sw" => Err(NV_ERR_NOT_SUPPORTED),
+            // see NAMED_CONTROLS: the display-SW object is not offered…
+            "no_display_sw" if !self.display_sw_offered => Err(NV_ERR_NOT_SUPPORTED),
+            // …unless the x11-dispsw experiment twins it: the displays the ARMED state lights (the
+            // worker publishes them) and the heads — the guest's own constructor then checks its
+            // `logicalHeadId` / `displayMask` against these (`disp_sw.c:83-98`)
+            "no_display_sw" => {
+                let mut p = self.view(
+                    "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS",
+                    params,
+                )?;
+                let lit = (0..self.heads as usize)
+                    .filter_map(|h| self.ports.lit_sor(h))
+                    .filter_map(|sor| self.connectors.iter().find(|c| c.or_index == sor))
+                    .fold(0u32, |m, c| m | c.display_id);
+                p.set("displayMask", u64::from(lit));
+                p.set("numHeads", u64::from(self.heads));
+                Ok(p.buf)
+            }
             "pre_console" => {
                 let mut p = self.view(
                     "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_UNIX_CONSOLE_PARAMS",
@@ -1297,6 +1337,40 @@ mod tests {
         );
         assert!(m.claims(c));
         let s = "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS";
+        assert_eq!(
+            m.control(c, &vec![0; size(&m, s)]),
+            Some(Err(NV_ERR_NOT_SUPPORTED))
+        );
+        assert!(!m.display_sw_offered(), "refused by default");
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw`: offered, the display-SW constructor's query is answered with the
+    /// displays the ARMED state lights and the head count (m3c's answer); withdrawn, it is refused
+    /// again — the switch changes this one control and nothing else the model claims.
+    #[test]
+    fn x11_dispsw_answers_the_display_sw_query_and_off_refuses_it() {
+        let mut m = model();
+        let claimed = m.claimed();
+        let c = cmd(
+            &m,
+            "NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES",
+        );
+        let s = "NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS";
+        let devices = |m: &mut DisplayModel| {
+            let r = m.control(c, &vec![0; size(m, s)]).unwrap().unwrap();
+            (get(m, s, &r, "displayMask"), get(m, s, &r, "numHeads"))
+        };
+        m.offer_display_sw(true);
+        assert_eq!(m.claimed(), claimed, "the claim set does not move");
+        assert_eq!(devices(&mut m), (0, 4), "nothing lit");
+        m.ports.set_lit_sor(3, Some(0));
+        assert_eq!(devices(&mut m), (0x100, 4), "DFP-0 on head 3");
+        // a short body is refused, never decoded
+        assert_eq!(
+            m.control(c, &vec![0; size(&m, s) - 1]),
+            Some(Err(NV_ERR_INVALID_ARGUMENT))
+        );
+        m.offer_display_sw(false);
         assert_eq!(
             m.control(c, &vec![0; size(&m, s)]),
             Some(Err(NV_ERR_NOT_SUPPORTED))

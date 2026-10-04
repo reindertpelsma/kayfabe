@@ -800,6 +800,22 @@ pub const NVOS46_FLAGS_GPU_CACHEABLE_NO: u32 = 2 << 17;
 /// forces coherence hides the defect, so a green run elsewhere never proved the bit unneeded.
 pub const NVOS46_FLAGS_CACHE_SNOOP_ENABLE: u32 = 1 << 4;
 
+/// ★ x11-dispsw (2026-10-03): `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` — field `5:5`, value 1
+/// (`ogkm-580: nvos.h:1997-2001`, *"ENABLE: Map CPU address"*), i.e. `0x20`. **No kayfabe map can
+/// carry it**: `kf-host`'s one `NVOS46` flags builder (`nvos46_map_flags`) clears it whatever its
+/// callers pass — pinned by `the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets`, and
+/// `only_the_one_builder_can_name_the_kernel_mapping_bit` keeps that builder the only way in. It is
+/// what gives a DMA mapping a host KERNEL CPU mapping (`CLI_DMA_MAPPING_INFO::KernelVAddr`: a
+/// `vmap` for system memory, `virtual_mem.c:1440-1451`; host BAR1 plus an `ioremap` for video
+/// memory, `:1024-1128`), and that is the ONLY address through which host CPU-RM writes a
+/// display-SW semaphore or notifier: with it NULL the writers log and write nothing
+/// (`method_notification.c:624-627`, `:349-351`). So host CPU-RM writes no memory for a display-SW
+/// object kayfabe twins. `[box vast 54044296, 2026-10-03, traces/v3_display/dispsw_20261003/]` its
+/// release path (`dispswReleaseSemaphoreAndNotifierFill` and the two fills) was entered 0 times in
+/// every run — a count of host CPU-RM entries only: the class's methods are serviced by GSP
+/// firmware (CPU-RM has none for it, `g_dispsw_nvoc.h:450-452`), which the probe cannot see.
+pub const NVOS46_FLAGS_KERNEL_MAPPING_ENABLE: u32 = 1 << 5;
+
 /// ★★★ **THE BIG-PAGE SIZE THIS ARCHITECTURE FAMILY USES — 64 KiB.**
 ///
 /// ⊘ **Not a per-die constant, and constraint 12 is the reason the distinction is written

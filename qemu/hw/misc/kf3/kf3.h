@@ -33,12 +33,15 @@
  *   14 reserved: broker-on-13 (v3-cand-1);
  *   15 v3-viommu;
  *   16 v3-maxfps (this), cut from v3-broker 82f98f42 — a merge with 13, 14 or 15 takes a new one. */
-#define KF3_ABI 16
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
 #define KF3_BROKER_VRAM_OFF 2u
 #define KF3_BROKER_VRAM_SHIFT 1
+/* ⊘ 17 — SCRATCH, BOX-ONLY (2026-10-04, the v3-maxfps box stage, D4): v3-maxfps e7a82046 merged with
+ * v3-dispsw-exp 86b4fa10 locally, never pushed; kf3_realize takes display_broker, display_max_fps,
+ * then x11_dispsw. */
+#define KF3_ABI 17
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -98,10 +101,11 @@ uint32_t kf3_abi_version(void);
  * display-broker-vram (§8.11).
  * ★ ABI 16: `display_max_fps` — the cap on every head's emulated vblank tick, whole Hz, 24..75;
  * 0 = unset (cap 75, today's EDID). Rust refuses any other value, and a non-zero one without
- * display=1, by name (§8.16). */
+ * display=1, by name (§8.16).
+ * ★ ABI 13 (scratch 17 here): `x11_dispsw` (0/1) — EXPERIMENT: twin the guest's GF100_DISP_SW objects. */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t display_broker,
-                    uint32_t display_max_fps, void **out,
+                    uint32_t display_max_fps, uint32_t x11_dispsw, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

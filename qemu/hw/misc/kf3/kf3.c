@@ -21,6 +21,9 @@
  *    docs/design/V3_DOORBELL_IOEVENTFD.md): Rust registers one KVM ioeventfd (DATAMATCH = the
  *    guest's token) per live channel at every place the doorbell register is mapped, through
  *    kf3_ioeventfd below; its register drainer services the eventfds. Unmatched values still trap.
+ *  - ★ 2026-10-03, EXPERIMENT x11-dispsw (property x11-dispsw, default off; option A, OWNER_RULINGS.md §N;
+ *    docs/design/V3_DISPLAY.md, the x11-dispsw note): handed to Rust at realize (needs display=on).
+ *    Everything it changes is Rust's: the guest's GF100_DISP_SW objects are twinned on the host.
  *  - MSI-X lives in its own BAR. Interrupts (P5, V3_P5_PORT_MAP.md §2.7): Rust owns one eventfd
  *    per vector (kf3_irq_fd); this device registers each as a KVM irqfd on the vector's MSI route
  *    when the guest unmasks it (msix vector notifiers, virtio-pci's pattern). A raise is then one
@@ -144,6 +147,9 @@ struct Kf3State {
     /* ★ ABI 11 (docs/design/V3_DISPLAY.md §4.11): the boot display — the option ROM here, the BAR1
      * seed, the boot layer and fn 65's console region in Rust. Needs display=on. Off = today. */
     bool gop;
+    /* ★ EXPERIMENT x11-dispsw (2026-10-03, default off; option A, OWNER_RULINGS.md §N; V3_DISPLAY.md): twin
+     * the guest's GF100_DISP_SW objects on the host with authored params, or refuse them by name. Rust's. */
+    bool x11_dispsw;
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -1280,7 +1286,8 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     }
     s->refresh_fd = -1;
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    s->gop ? 1 : 0, broker_word, s->display_max_fps, &s->h, err, sizeof(err)) != 0) {
+                    s->gop ? 1 : 0, broker_word, s->display_max_fps, s->x11_dispsw ? 1 : 0, &s->h, err,
+                    sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }
@@ -1483,6 +1490,9 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_BOOL("display", Kf3State, display, false),
     /* ★ 2026-10-03: the boot display (docs/design/V3_DISPLAY.md §4.11). OFF = today's device. */
     DEFINE_PROP_BOOL("gop", Kf3State, gop, false),
+    /* ★ 2026-10-03: EXPERIMENT (V3_DISPLAY.md, the x11-dispsw note). OFF until OWNER_RULINGS §N's default-on
+     * conditions hold; needs display=on. */
+    DEFINE_PROP_BOOL("x11-dispsw", Kf3State, x11_dispsw, false),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),

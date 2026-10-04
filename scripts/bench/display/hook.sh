@@ -41,6 +41,12 @@ gq 'sudo modprobe nvidia-drm modeset=1 fbdev=1; echo rc=$?' 90 > "$OUT/modprobe.
 sleep 3
 gq "sudo dmesg | tail -n +$((d0 + 1))" > "$OUT/drm_dmesg.log"
 say "DRM_MODPROBE $(tr '\n' ' ' < "$OUT/modprobe.log")"
+# ★ B0a (V3_DISPLAY.md §4.11.9, 2026-10-03): which device the guest kernel calls the boot VGA device,
+# and what the VGA arbiter and the firmware-framebuffer drivers said. Xorg picks its primary device
+# from boot_vga, so this decides whether the lane needs the xorg.conf BusID pin at all.
+gq 'd=$(lspci -D -d 10de: | awk "NR==1{print \$1}"); echo dev=$d boot_vga=$(cat /sys/bus/pci/devices/$d/boot_vga 2>/dev/null)' > "$OUT/boot_vga.log"
+gq 'sudo dmesg | grep -i -E "vgaarb|bootfb|efifb|simpledrm"' > "$OUT/vgaarb.log"
+say "BOOT_VGA $(tr '\n' ' ' < "$OUT/boot_vga.log")vgaarb_lines=$(grep -c . "$OUT/vgaarb.log") $(grep -m1 -i 'boot VGA device' "$OUT/vgaarb.log" | cut -c1-160)"
 say "DRM_NODES $(gq 'ls /dev/dri 2>&1 | tr "\n" " "')"
 say "DRM_DMESG_LINES=$(wc -l < "$OUT/drm_dmesg.log") displayless=$(grep -c -i 'displayless\|No display hardware\|Cannot find any crtc' "$OUT/drm_dmesg.log")"
 
@@ -127,7 +133,17 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     sed "s/@BUSID@/$busid/" "$HERE/desktop/xorg.conf.in" > "$DESK/xorg.conf"
     sed "s/@SESSION@/$session/g" "$HERE/desktop/50-kf-autologin.conf.in" > "$DESK/50-kf-autologin.conf"
     tar -C "$DESK" -cf - xorg.conf 50-kf-autologin.conf xsessionrc | $G 'rm -rf ~/desk && mkdir -p ~/desk && tar -xf - -C ~/desk'
-    gq 'sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && cp ~/desk/xsessionrc ~/.xsessionrc && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
+    # ★ B0a: DISPLAY_XORG_PIN=0 installs NO xorg.conf, so Xorg autoconfigures and picks its primary device
+    # from boot_vga, the way a stock guest does. ★ The DEFAULT since 2026-10-03 (B0a run 3, box 54032077,
+    # traces/v3_display/b0a_20261003/): kf3 is boot_vga and Xorg's primary, and the stock OutputClass file
+    # loads the NVIDIA X driver. DISPLAY_XORG_PIN=1 restores the old M3 BusID pin for comparison.
+    if [ "${DISPLAY_XORG_PIN:-0}" = 0 ]; then XCONF='sudo rm -f /etc/X11/xorg.conf'; else XCONF='sudo cp ~/desk/xorg.conf /etc/X11/xorg.conf'; fi
+    # ⊘ 2026-10-03 (x11-dispsw review, LOW): the guest disk persists across boots, and Xorg rotates
+    # the PREVIOUS log to `.old` — so `.old` was the last BOOT's server (run 8's `last_EE` named run
+    # 7's error). Every Xorg log is removed before this boot's first server starts: from here a
+    # `.old` can only be a server THIS boot restarted (lightdm's crash loop), which is what it is
+    # read for.
+    gq "$XCONF"' && sudo rm -f /var/log/Xorg.0.log /var/log/Xorg.0.log.old /var/log/Xorg.9.log /var/log/Xorg.9.log.old && sudo mkdir -p /etc/lightdm/lightdm.conf.d && sudo cp ~/desk/50-kf-autologin.conf /etc/lightdm/lightdm.conf.d/ && cp ~/desk/xsessionrc ~/.xsessionrc && echo DESK_CONF_OK' > "$OUT/desk_conf.log"
     say "DESKTOP_CONF busid=$busid session=$session env=[${DISPLAY_SESSION_ENV:-}] $(tr '\n' ' ' < "$OUT/desk_conf.log")"
     gq 'sudo systemctl start lightdm; echo rc=$?' 60 > "$OUT/lightdm_start.log"
     # the session: Xorg up, then a Cinnamon process of the autologin user (≤ 90 s)
@@ -140,6 +156,17 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
         sleep 2
     done
     say "DESKTOP_SESSION=$up ($(tr '\n' ' ' < "$OUT/lightdm_start.log") xorg_starts=$(gq 'sudo grep -c "X.Org X Server" /var/log/Xorg.0.log.old /var/log/Xorg.0.log 2>/dev/null | tr "\n" " "'))"
+    # ★ B0a: what Xorg chose, in its own words — the primary-device marker `PCI:*`, any (EE), and the
+    # whole log kept beside the shots
+    gq 'sudo cat /var/log/Xorg.0.log' 60 > "$OUT/Xorg.0.log"
+    # a crash-looping X leaves the last COMPLETE attempt in .old; lightdm's own logs say why it exits
+    gq 'sudo cat /var/log/Xorg.0.log.old' 60 > "$OUT/Xorg.0.log.old"
+    gq 'sudo tail -80 /var/log/lightdm/lightdm.log; echo ===X0; sudo tail -60 /var/log/lightdm/x-0.log' 60 > "$OUT/lightdm_logs.log"
+    gq 'ls -la /usr/share/X11/xorg.conf.d/ /etc/X11/xorg.conf.d/ 2>&1; ls -la /etc/X11/xorg.conf 2>&1' 60 > "$OUT/xorg_confd.log"
+    # `last_EE` = this boot's current server; `last_EE_old` = a server this boot restarted (empty
+    # when it never restarted — the logs of earlier boots were removed above).
+    say "XORG_CONFD $(grep -c . "$OUT/xorg_confd.log") lines, nvidia_outputclass=$(grep -c -i 'nvidia' "$OUT/xorg_confd.log") last_EE=$(grep '(EE)' "$OUT/Xorg.0.log" | grep -v 'warning, (EE)' | tail -1 | cut -c1-160) last_EE_old=$(grep '(EE)' "$OUT/Xorg.0.log.old" 2>/dev/null | grep -v 'warning, (EE)' | tail -1 | cut -c1-160)"
+    say "XORG_PRIMARY pin=${DISPLAY_XORG_PIN:-0} $(grep -m2 -E 'PCI:\*|Primary Device is' "$OUT/Xorg.0.log" | tr '\n' ' ' | cut -c1-240) EE=$(grep -c '(EE)' "$OUT/Xorg.0.log") no_screens=$(grep -c 'no screens found' "$OUT/Xorg.0.log")"
     sleep 20   # let the session paint (panel, wallpaper) before the first shot
     shot "$OUT/desk_1.ppm"
     gq "$XENV glxinfo -B 2>&1 | head -40" 60 > "$OUT/glxinfo.log"
@@ -178,6 +205,85 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     gq 'sudo dmesg | grep -i "segfault\|traps:\|general protection" | tail -20; coredumpctl --no-pager list 2>/dev/null | tail -10' 60 > "$OUT/crashes.log"
     say "DESKTOP_CRASHES $(grep -c 'segfault\|traps:' "$OUT/crashes.log") $(grep -m1 -o '[a-z-]*\[[0-9]*\]: segfault.* in [^ ]*' "$OUT/crashes.log" | head -c 160)"
     gq 'sudo systemctl stop lightdm; echo rc=$?' 60 > "$OUT/lightdm_stop.log"
+fi
+
+# 4a. ★ x11-dispsw (DISPLAY_X11_BARE=1, docs/design/V3_DISPLAY.md): X11 with NO compositor — the
+#     NVIDIA X driver alone, a bare Xorg on :0 (`-ac`: no auth, the guest is the bench's own) — where
+#     a vsync'd windowed GL swap and an X11 Vulkan FIFO present are the X driver's to pace, not a
+#     compositor's: the paths most likely to ask the display-SW object for a vblank release.
+#     glxgears windowed and fullscreen (vsync on), X11 vkcube FIFO; host screendumps; FPS recorded.
+if [ "${DISPLAY_X11_BARE:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
+    gq 'sudo systemctl stop lightdm 2>/dev/null; sleep 2; sudo pkill -x Xorg 2>/dev/null; sleep 2; echo ok' 60 > /dev/null
+    # ⊘ the guest's dmesg is the whole boot's: count only what THIS step adds (the Cinnamon step's
+    # crash, if any, is already in DESKTOP_CRASHES)
+    x0=$(gq 'sudo dmesg | wc -l'); x0=${x0:-0}
+    gq "sudo sh -c 'nohup Xorg :0 -nolisten tcp -noreset -ac -logfile /var/log/Xorg.9.log > /tmp/xbare.log 2>&1 &' && echo started" 30 > "$OUT/xbare_start.log"
+    BX='sudo -u ubuntu env DISPLAY=:0'
+    up=no
+    for i in $(seq 1 30); do
+        if gq "$BX xset q >/dev/null 2>&1 && echo UP" | grep -q UP; then up=yes; break; fi
+        sleep 2
+    done
+    say "X11_BARE up=$up $(tr '\n' ' ' < "$OUT/xbare_start.log")"
+    gq "$BX timeout 12 glxgears 2>&1 | tail -3" 30 > "$OUT/xbare_glxgears.log"
+    say "X11_BARE_GLXGEARS $(grep 'frames in' "$OUT/xbare_glxgears.log" | tail -2 | tr '\n' ' ')"
+    ( gq "$BX timeout 12 glxgears -fullscreen 2>&1 | tail -3" 30 > "$OUT/xbare_glxgears_fs.log" ) &
+    VP=$!; sleep 7; shot "$OUT/xbare_glxgears_fs.ppm"; wait $VP
+    say "X11_BARE_GLXGEARS_FULLSCREEN $(grep 'frames in' "$OUT/xbare_glxgears_fs.log" | tail -2 | tr '\n' ' ')"
+    ( gq "$BX timeout 12 vkcube --c 480 --present_mode 2 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/xbare_vkcube.log" ) &
+    VP=$!; sleep 6; shot "$OUT/xbare_vkcube.ppm"; wait $VP
+    say "X11_BARE_VKCUBE_FIFO $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/xbare_vkcube.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/xbare_vkcube.log")"
+    gq 'sudo cat /var/log/Xorg.9.log' 30 > "$OUT/xbare_Xorg.log"
+    say "X11_BARE_XORG EE=$(grep '(EE)' "$OUT/xbare_Xorg.log" | grep -vc 'warning, (EE)') $(grep -m1 'display software' "$OUT/xbare_Xorg.log" | cut -c1-120)"
+    gq "sudo dmesg | tail -n +$((x0 + 1)) | grep -i 'segfault\|traps:' | tail -10" 60 > "$OUT/xbare_crashes.log"
+    say "X11_BARE_CRASHES $(grep -c 'segfault\|traps:' "$OUT/xbare_crashes.log")"
+    for f in xbare_glxgears_fs xbare_vkcube; do
+        [ -s "$OUT/$f.ppm" ] && say "SHOT $f md5=$(md5sum < "$OUT/$f.ppm" | cut -c1-12)" || say "SHOT $f absent"
+    done
+    gq 'sudo pkill -x Xorg; echo ok' 30 > /dev/null
+fi
+
+# 4c. ★ x11-dispsw classID probe (DISPLAY_X11_ENGSW=1; docs/design/V3_DISPLAY.md, the x11-dispsw
+#     "review fixes" block): the same bare Xorg + vsync glxgears + X11 vkcube FIFO as 4a, every
+#     process under `engsw_shim` (a bench-only LD_PRELOAD built HERE, in the guest, from
+#     engsw_shim/engsw_shim.c; the .so never leaves the guest). Before each GF100_DISP_SW alloc the
+#     shim allocates a GF100_TIMED_SEMAPHORE_SW under the same channel: the guest's RM numbers it,
+#     kayfabe refuses it, so every display-SW object's guest number is one past a naive twin's. With
+#     the fix the twin is repaid to the guest's number (kf3 log: `took the guest's software classID`,
+#     `= the guest's (the twin was at`); without it the twin carries the naive number.
+if [ "${DISPLAY_X11_ENGSW:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; then
+    gq 'sudo systemctl stop lightdm 2>/dev/null; sleep 2; sudo pkill -x Xorg 2>/dev/null; sleep 2; echo ok' 60 > /dev/null
+    e0=$(gq 'sudo dmesg | wc -l'); e0=${e0:-0}
+    timeout 30 "$G" 'cat > /tmp/engsw_shim.c' < "$HERE/engsw_shim/engsw_shim.c"
+    gq 'gcc -shared -fPIC -O2 -o /tmp/engsw_shim.so /tmp/engsw_shim.c -ldl && echo BUILT' 90 > "$OUT/engsw_build.log"
+    say "X11_ENGSW_BUILD $(tr '\n' ' ' < "$OUT/engsw_build.log" | head -c 200)"
+    # ENGSW_MODE: `9074` (default — a refused ENG_SW class first, case (b)) or `badhead` (a
+    # display-SW constructor that fails after numbering, case (a)); see engsw_shim.c.
+    SH="LD_PRELOAD=/tmp/engsw_shim.so ENGSW_MODE=${DISPLAY_X11_ENGSW_MODE:-9074}"
+    say "X11_ENGSW_MODE ${DISPLAY_X11_ENGSW_MODE:-9074}"
+    gq "sudo sh -c '$SH nohup Xorg :0 -nolisten tcp -noreset -ac -logfile /var/log/Xorg.8.log > /tmp/xengsw.log 2>&1 &' && echo started" 30 > "$OUT/engsw_start.log"
+    BX='sudo -u ubuntu env DISPLAY=:0'
+    up=no
+    for i in $(seq 1 30); do
+        if gq "$BX xset q >/dev/null 2>&1 && echo UP" | grep -q UP; then up=yes; break; fi
+        sleep 2
+    done
+    say "X11_ENGSW up=$up $(tr '\n' ' ' < "$OUT/engsw_start.log")"
+    gq "$BX $SH timeout 12 glxgears 2>&1 | grep -E 'ENGSW_SHIM|frames in'" 30 > "$OUT/engsw_glxgears.log"
+    say "X11_ENGSW_GLXGEARS $(grep 'frames in' "$OUT/engsw_glxgears.log" | tail -2 | tr '\n' ' ')"
+    ( gq "$BX $SH timeout 12 vkcube --c 480 --present_mode 2 2>&1 | grep -E 'ENGSW_SHIM|Selected|Assertion'; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/engsw_vkcube.log" ) &
+    VP=$!; sleep 6; shot "$OUT/engsw_vkcube.ppm"; wait $VP
+    say "X11_ENGSW_VKCUBE_FIFO $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/engsw_vkcube.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/engsw_vkcube.log")"
+    gq 'cat /tmp/xengsw.log' 30 > "$OUT/engsw_xorg_stderr.log"
+    gq 'sudo cat /var/log/Xorg.8.log' 30 > "$OUT/engsw_Xorg.log"
+    for f in engsw_xorg_stderr engsw_glxgears engsw_vkcube; do
+        say "X11_ENGSW_SHIM $f pre=$(grep -c 'ENGSW_SHIM pre ' "$OUT/$f.log") pre_ok=$(grep 'ENGSW_SHIM pre ' "$OUT/$f.log" | grep -c 'status=0$') disp_sw=$(grep -c 'ENGSW_SHIM 0x9072' "$OUT/$f.log") disp_sw_ok=$(grep 'ENGSW_SHIM 0x9072' "$OUT/$f.log" | grep -c 'status=0$')"
+    done
+    say "X11_ENGSW_XORG EE=$(grep '(EE)' "$OUT/engsw_Xorg.log" | grep -vc 'warning, (EE)') $(grep -m1 'display software' "$OUT/engsw_Xorg.log" | cut -c1-120)"
+    gq "sudo dmesg | tail -n +$((e0 + 1)) | grep -i 'xid\|segfault\|traps:\|waiting for GPU' | tail -10" 60 > "$OUT/engsw_dmesg.log"
+    say "X11_ENGSW_GUEST_FAULTS $(grep -c . "$OUT/engsw_dmesg.log")"
+    [ -s "$OUT/engsw_vkcube.ppm" ] && say "SHOT engsw_vkcube md5=$(md5sum < "$OUT/engsw_vkcube.ppm" | cut -c1-12)" || say "SHOT engsw_vkcube absent"
+    gq 'sudo pkill -x Xorg; echo ok' 30 > /dev/null
 fi
 
 # 4b. ★ M3 Cinnamon on Wayland (DISPLAY_CINNAMON_WAYLAND=1): the Mint desktop's own compositor

@@ -154,7 +154,10 @@
 >   from `uefiScanoutSurfaceSizeInMB` (`bSmoothTransitionEnabled = (uefiScanoutSurfaceSizeInMB != 0) &&
 >   RMCFG_FEATURE_PLATFORM_WINDOWS`, `kern_bus_gm107.c:889`, found 2026-09-20) — the fake GSP's answer for it
 >   must agree with what the option ROM set up.
-> - X11 desktops need `GF100_DISP_SW` (owner choice A/B, `STATUS_AND_HANDOFF.md` §0).
+> - X11 desktops need `GF100_DISP_SW` (owner choice A/B, `STATUS_AND_HANDOFF.md` §0). ⊘ *2026-10-03
+>   (later): option A exists as the default-off experiment `x11-dispsw` — the note below the release-focus
+>   block.* ★ *2026-10-03 (box): with it on, Cinnamon X11 and X11 vkcube work on the RTX 3060
+>   (`traces/v3_display/dispsw_20261003/`); the owner's ruling is still open.*
 > - The lightdm autologin is a bench convenience, not a display requirement.
 > - Leftovers for daily use: cursor plane, scaled windows, 16-bit/YUV surfaces, mode lists and
 >   resize (hotplug with a new EDID when the broker's window changes size).
@@ -237,7 +240,273 @@
 >   3. the broker;
 >   4. the unload tests.
 >
+>   ⊘ *Corrected 2026-10-03 (later): the recommendation is now **A, guarded**, with B as the fallback
+>   (`docs/OWNER_QUESTIONS_2026-10-03.md` item 2), and A is built as a default-off experiment so the owner
+>   can rule on box data — the `x11-dispsw` note directly below. The sentence it corrects:*
 >   X11 still waits on the `GF100_DISP_SW` choice (A/B; recommendation B).
+
+> **★ 2026-10-03 (review fixes, box re-run) — THE TWIN NOW CARRIES THE GUEST'S SOFTWARE CLASSID OR IS
+> REFUSED BY NAME; LIVE TWINS ARE CAPPED; THE NO-KERNEL-MAPPING BOUND IS PINNED WHERE IT IS ENFORCED**
+> (branch `v3-dispsw-exp` at `d84086df`; the A/B pair re-run on vast 54044296, runs 9-10 of
+> `traces/v3_display/dispsw_20261003/`: the outcome holds, every twin's number read back equal to the
+> guest's, caps not hit; probe runs 11-13 show the classID fix on hardware, with the pre-fix binary as
+> its negative control). It qualifies the box block directly below; where they differ, this one
+> stands. Still default-off, still the owner's call.
+> - **The FIFO software classID** (review MEDIUM). The guest's CPU-RM numbers every `ENG_SW` child of
+>   a channel from that channel's own 16-bit counter BEFORE it RPCs the alloc (`kchannelRegisterChild`,
+>   `ogkm-580: kernel_channel.c:3408-3453`; never rolled back), its client reads the number from that
+>   same CPU-RM (`NV906F_CTRL_GET_CLASS_ENGINEID`, `kernel_channel.c:2950-2970`) and writes it into
+>   `SET_OBJECT` (`kernel_channel_gm107.c:72-82`) — on a channel that runs as a HOST twin, whose RM
+>   numbers its own children. The alloc RPC carries no number (`rpc.c:11140-11230`). So the twin served
+>   the guest's `SET_OBJECT` only while every guest `ENG_SW` registration on the channel had exactly one
+>   host counterpart, which nothing checked (runs 1-8 never read a number back). Now
+>   (`crates/kf-qemu/src/dispsw.rs`): the plane mirrors the guest's numbering — every display-SW alloc
+>   and every other `ENG_SW` channel class the guest sends (`0x9074`, `0x5080`, `0x007d`, `0xc076`,
+>   observed by `kf_rm::chanlink` as `SoftwareObject`), accepted or refused — reads the host's number
+>   back after each twin alloc (`HostRm::disp_sw_class_id`), and keeps the object, repays a gap with
+>   throwaway host objects (at most 16 per act, `repaid=`), or refuses the alloc `NOT_SUPPORTED` by
+>   name (`id_refused=`; a twin AHEAD of the guest, an unreadable number, a gap of more than 16 — repaid
+>   16 at a time across the guest's next allocs). Tests: `kf-qemu` `dispsw::tests`,
+>   `kf-rm` `chanlink::tests::other_software_classes_are_observed_with_x11_dispsw_and_otherwise_untouched`.
+> - ⊘ **The one slip no physical RM can see — a known limit of option A.** A display-SW constructor that
+>   fails AFTER its channel numbered it (`logicalHeadId` past the heads, a `displayMask` outside the
+>   lit mask, a refused query: `disp_sw.c:74-98`) never sends the alloc, and its query names no channel;
+>   that channel's guest numbering then runs one past ours. `kf-rm`'s display link counts it
+>   (`DispSwPairing`; log `kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not
+>   followed by its alloc`). Its effect is confined to that guest channel: its later display-SW
+>   `SET_OBJECT`s name a number its own twin lacks (host Xid 32 on its own twin, the m3c signature;
+>   run 13 below forces it: 26 Xid 32 on the forcing client's channels, `unpaired=112` counted). A
+>   real GSP-RM is sent the same RPC with no number, so it is inferred — not shown — to share the limit.
+> - ⊘ **2026-10-03 (later, third review LOW) — the readback is HOST CPU-RM's number, and the host-side
+>   twin of the slip above.** Every "= the guest's" in this block and in runs 9-13 is the number host
+>   **CPU-RM** gave: `NV906F_CTRL_GET_CLASS_ENGINEID` has flags `0x10008` (no `ROUTE_TO_PHYSICAL`,
+>   `ogkm-580: g_kernel_channel_nvoc.c:251-258`) and CPU-RM answers it from its own `pObject->classID`
+>   (`kernel_channel.c:2966`, `kernel_channel_gm107.c:72-82`). The guest's `SET_OBJECT` on the twin is
+>   serviced by host **GSP**, which numbers the twin's `ENG_SW` children from its own counter (the alloc
+>   RPC carries no number). The two agree while every host display-SW alloc succeeds — `host_refused=0`
+>   in every run, so GSP's number is inferred equal, not read. A host alloc that fails AFTER CPU-RM
+>   registered the object (`dispswConstruct`'s query RPC, `disp_sw.c:73-80`, or the alloc RPC to GSP,
+>   `alloc_free.c:916-927`) moves CPU-RM's counter and not GSP's, and the next twin's readback would then
+>   say "equal" while GSP holds the number before. ⇒ Now (`crates/kf-qemu/src/dispsw.rs`,
+>   `twin_watched`): after ANY refused host display-SW alloc on a twin — the first try, a repayment's
+>   throwaway, or the realloc after repaying — the plane marks that twin, and every later display-SW
+>   alloc on it is refused `NOT_SUPPORTED` by name with no host call (`after_host_refused=`), for the
+>   twin's life. Tests: `kf-qemu` `dispsw::tests::the_readback_alone_keeps_a_twin_whose_gsp_number_is_one_behind`
+>   (the known-positive: a model host whose CPU-RM and GSP number separately; without the mark the
+>   twin is kept with GSP one behind), `a_refused_host_alloc_marks_the_twin`,
+>   `a_marked_twin_is_refused_with_no_host_call`, and
+>   `chan::dispsw_tests::the_host_refusal_mark_lands_on_its_own_twin_only`. Not run on hardware: it
+>   needs a transient host GSP failure.
+> - **Caps** (review MEDIUM): at most **16 live display-SW twins per channel and 1024 per VM**; past
+>   either the alloc is refused `NV_ERR_INSUFFICIENT_RESOURCES` by name with no host call (`capped=`).
+>   Chosen from runs 2-8: at most 4 live per channel (one per head of the 4-head virtual display) and 20
+>   per VM (60-84 created per boot) — 4× and ~50×, while bounding one guest's host RM objects and host
+>   RM's per-alloc child scan (`kernel_channel.c:3435-3446`). A cap refusal takes a guest number and no
+>   host one; the next twin on that channel repays it. ⊘ *2026-10-03 (later, third review LOW): the
+>   counts the caps compare had no test (a body of zeros kept CI green); they are now one function
+>   over the plane's channel map (`chan.rs` `dispsw_live`), tested with two clients, three channels and
+>   one channel freed, and fed into the cap
+>   (`chan::dispsw_tests::the_live_count_sums_every_client_and_drops_a_freed_channel`).*
+> - **The undo** (review LOW, the duplicate pre-check saw only twinned handles): `kf_gsp::Deferred` takes
+>   an undo (`on_orphaned`), run once by `release_held` when an act succeeded and another link refused
+>   the reply. A display-SW alloc whose handle names a NON-twinned guest object is refused by the object
+>   seat after the act; the undo withdraws exactly the twin that act kept (`withdrawn=`). ⊘ *2026-10-03
+>   (later): its body and its wiring are now functions with tests
+>   (`chan::dispsw_tests::the_undo_withdraws_the_kept_twin_and_frees_it_once`,
+>   `an_orphaned_display_sw_act_queues_exactly_one_withdraw`), as is the other-`ENG_SW` mirror step
+>   (`another_eng_sw_object_advances_only_its_own_channels_mirror`). Still not covered by a test: the
+>   one-line call sites inside `ChanPlane` (building a plane needs a host RM session).*
+> - **The no-kernel-mapping bound, pinned where it is enforced** (review LOW): `kf-host`'s one NVOS46
+>   flags builder, `nvos46_map_flags`, CLEARS `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` whatever its callers
+>   pass (`the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets` feeds every bit), and a source
+>   gate keeps it the only NVOS46 literal in `crates/kf-*` and the only code naming the bit
+>   (`only_the_one_builder_can_name_the_kernel_mapping_bit`). The old test only tried today's callers'
+>   bits; it is gone.
+> - **Status line:** `dispsw[twins= live= host_refused= no_twin= capped= id_refused= repaid= withdrawn=
+>   other_sw= free_refused=]`. `live=` is now the plane's maps' own count, so it cannot drift from them.
+>   ⊘ *2026-10-03 (later): `after_host_refused=` is appended at the end (the readback bullet above).*
+> - **Wording corrected in the block below** (review LOW): (a) the probe counts entries into HOST
+>   CPU-RM only. CPU-RM has no software methods for this class (`dispswGetSwMethods` is the
+>   `NOT_SUPPORTED` stub, `g_dispsw_nvoc.h:450-452`), so the guest's display-SW methods are serviced by
+>   GSP firmware, and m3c shows the guest does method the object (186 host Xid 32 with no twin). What
+>   runs 1-8 show is that host CPU-RM's release path ran 0 times and no `SEMAPHORE_SCHEDULE_CALLBACK`
+>   resolved a client — not that no client asked for a release; runs 1-5 had no drain positive control
+>   at all. (b) "vsync is paced by the virtual display's flips" is an inference from 59.8-60.0 FPS with
+>   0 release-path entries, not a measurement of what paces it. (c) The kernel-mapping candidate
+>   (`73532bce`/`a5d31d5b`) was **tried and dropped**, not "the fix": it was never shown to fix anything
+>   (no run had a release), it had no budget (33 868 KiB was one workload's peak, not a limit — its
+>   bound was whatever guest RAM a guest maps into a display-SW space), and it was incomplete by design
+>   (rows placed before the display-SW alloc were never kernel-mapped, so an early semaphore page would
+>   still have been dropped).
+> - **The re-run** (`d84086df`; `DISPLAY_X11_BARE=1`, `scripts/bench/display/dispsw_run.sh`; runs 9-10,
+>   the trace README's dated section). Off (9): the X driver's `Failed to allocate display software
+>   resources`, the Cinnamon segfault, X11 vkcube `RC=134`, bare-X fullscreen GL 2.5-2.7 FPS. On (10):
+>   Cinnamon up with 0 crashes, X11 vkcube `RC=0` (IMMEDIATE, FIFO, long run), vsync glxgears 59.2-59.8
+>   FPS (no-vsync 2 716), bare X 59.5 / 58.5-59.8 FPS and vkcube FIFO `RC=0`, host Xid 0, an empty
+>   host-dmesg delta, `dispsw[twins=84 live=0 host_refused=0 no_twin=0 capped=0 id_refused=0 repaid=0
+>   withdrawn=0 other_sw=0 free_refused=0]`. All 84 twins read back equal to the guest's number (21
+>   channels, 1-4 each). Peaks: 4 live per channel, 20 in the VM.
+> - **The classID fix on hardware** (`DISPLAY_X11_ENGSW=1`, `hook.sh` step 4c: a bench-only guest
+>   shim allocates, before each display-SW object, a refused `GF100_TIMED_SEMAPHORE_SW` — case (b) —
+>   or a display-SW object with an impossible head — case (a); runs 11-13). Case (b) on the fixed
+>   binary (11): 20 twins read back one behind, repaid, kept at the guest's number — vsync glxgears
+>   59.6 FPS, X11 vkcube FIFO `RC=0`, 0 host Xid. Case (b) on the pre-fix binary `c1cc4482` (12, the
+>   negative control): **26 host Xid 32** on the shimmed clients' channels, glxgears 1.2 FPS, vkcube
+>   FIFO `RC=134`. Case (a) on the fixed binary (13): the same failure as 12, as this block's known
+>   limit says, with kf-rm's pairing counting `unpaired=112` — exactly the 112 constructors the shim
+>   failed. ⇒ The guest DOES method its display-SW objects by the number its own RM gave, a wrong
+>   number on the twin is an Xid 32 on that client's own channel, and with the right number the
+>   methods are serviced (by GSP firmware: host CPU-RM's release path was still entered 0 times).
+
+> **★ 2026-10-03 (box) — WITH `x11-dispsw=on` THE X11 DESKTOP WORKS ON HARDWARE, AND NO DISPLAY-SW
+> RELEASE EVER REACHES HOST RM** (vast 54044296, RTX 3060 GA106, host + guest 580.159.04; the A/B pair
+> at the branch's final code `c1cc4482`, runs 7-8 of `traces/v3_display/dispsw_20261003/`, with six
+> runs before it at `e130cea3`, `a5d31d5b`, `6082f264` agreeing; still default-off, still the
+> owner's call). It supersedes the "no box has run it" sentence and answers open items (a)-(d) below.
+> - **Off (A):** the X driver logs `Failed to allocate display software resources`, Cinnamon X11
+>   segfaults in `libnvidia-glcore` (fallback dialog), X11 vkcube aborts (`RC=134`), glxgears ~40 FPS,
+>   and on a bare Xorg with no compositor fullscreen GL runs at 1.7 FPS and vkcube FIFO aborts.
+>   **On (B):** Cinnamon X11 up with 0 crashes (panel and wallpaper in the host screendump), X11 vkcube
+>   `RC=0` in IMMEDIATE and FIFO and in a Cinnamon window, vsync glxgears 59.8 FPS (no-vsync 2 493),
+>   and on the bare Xorg glxgears 59.8 windowed / 60.0 fullscreen and vkcube FIFO `RC=0`. MAILBOX is
+>   unsupported by the NVIDIA X11 WSI on and off. Host Xid 0, guest Xid 0, 0 `waiting for GPU progress`,
+>   an empty host-dmesg delta, `dispsw[twins=80 live=0 host_refused=0 no_twin=0]`.
+> - ⊘ *Corrected 2026-10-03 (review fixes block above): (a) counts HOST CPU-RM entries only — the
+>   class's methods are serviced by GSP firmware — and "no release was asked" goes beyond it; (b) is an
+>   inference.* **Answers:** (a) never exercised — host RM was asked for **no** release:
+>   `dispswReleaseSemaphoreAndNotifierFill` / `semaphoreFillGPUVATimestamp` /
+>   `notifyFillNotifierGPUVATimestamp` ran 0 times in all eight runs (`kfdsw_probe`, kretprobes inside
+>   host RM; the same probe on the GSP event drain counted ~1.7 million entries per run, so it is not
+>   blind; inside those drains 0 client/device lookups, so no release event died early either — that
+>   half has no known-positive, see the trace README). (b) Not unthrottled: vsync is paced at the
+>   virtual display's 60 Hz by its flips, not by display-SW releases. (c) No other cause: both failures
+>   are gone with the object. (d) `0x90720101` was never sent (0 occurrences); no twin verb is built.
+> - ⊘ **The review's HIGH prediction did not occur, and its mechanism is real.** Host RM writes a
+>   display-SW semaphore/notifier only through the DMA mapping's kernel CPU mapping
+>   (`method_notification.c:624-627`, `:349-351`), which exists only for a map made with
+>   `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE`; kayfabe never sets it (`kf-host`
+>   `no_map_asks_host_rm_for_a_kernel_cpu_mapping` pins that ⊘ *— SUPERSEDED 2026-10-03 by `d84086df`:
+>   that test is removed; the pins are `the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets` and
+>   `only_the_one_builder_can_name_the_kernel_mapping_bit`*). No client measured asked for a release,
+>   so nothing was dropped. ⊘ *Corrected 2026-10-03 (review fixes block above): the pin is now the
+>   builder itself (`nvos46_map_flags` clears the bit) plus a source gate — the old test tried only
+>   today's callers' bits; and the runs show host CPU-RM's release path entered 0 times, not that no
+>   client asked. The candidate below was tried and dropped, never shown to be a fix.* A candidate that
+>   kernel-mapped every guest-RAM row of a display-SW space
+>   (run 4, `a5d31d5b`) placed 5 986 rows, peaked at 33 868 KiB of host kernel `vmap`, refused none and
+>   changed nothing observable; it is not shipped (`6082f264`). A vidmem row would have needed host BAR1
+>   (256 MiB on this GPU). A client that DOES ask would have its release logged by host RM
+>   (`KernelVAddr==NULL`) and dropped, and would wait on its own semaphore; the probe shows it as
+>   `dsw_calls > 0` with `map_kva_null > 0`.
+> - **The true security bound** (replacing *"releases only into addresses the TWIN client has mapped
+>   … cannot flip, set a mode or touch host display state"* below):
+>   1. kayfabe opens ONE host client for the whole VM (`crates/kf-qemu/src/device.rs`, `HostRm::open`,
+>      leaked once), and every guest process's twin VA space lives in it. `CliGetDmaMappingInfo`
+>      checks `(client, device, hVASpace)` (`mapping_list.c:391-447`), and `hVASpace` comes from GSP
+>      firmware in the `SEMAPHORE_SCHEDULE_CALLBACK` event (`kernel_gsp.c:1128-1134`, closed source). So
+>      the address check is CLIENT-WIDE, not per guest process; it is per VA space only if GSP names
+>      the channel's own VA space, which nothing here can verify.
+>   2. That check never matters for a write: with no kernel mapping on any kayfabe map, host RM has
+>      no CPU address to release through, so a display-SW object makes host RM write NO memory on
+>      the guest's behalf. ⊘ *Scoped 2026-10-03 (review fixes block above): host CPU-RM — the writer
+>      `method_notification.c` is. What GSP firmware does with the class's methods is item 3.*
+>   3. What stays exposed: the host object itself (one per guest object: 60-84 per boot here, all
+>      freed), its head-0 vblank callbacks (on a host that drives a monitor the guest learns that
+>      monitor's vblank timing, a side channel; on a headless host they run at once), and whatever GSP
+>      firmware does with the class's methods. ogkm-580 defines no `NV9072` method
+>      (`class/cl9072.h` has only the alloc params), so *"it cannot flip or set a mode"* is a
+>      hypothesis, not a reading.
+>
+> **⊘ 2026-10-03 (later) — `GF100_DISP_SW` OPTION A IS BUILT AS A DEFAULT-OFF EXPERIMENT, PENDING THE
+> OWNER'S RULING** (branch `v3-dispsw-exp`, cut from `v3-b0a`; device property **`x11-dispsw`**, default
+> off; `OWNER_QUESTIONS_2026-10-03.md` item 2). ⊘ *Superseded the same day by the box block directly
+> above:* **No box has run it: nothing in this note is a box
+> result.** It qualifies the M3 block below (*"`kf-rm`'s rule stands: NOT twinned"*) for a device
+> realized with `x11-dispsw=on` only. With the property off, every path is the path it was and that
+> block stands as written (tests pin it: `crates/kf-rm/tests/display_seat.rs`
+> `x11_dispsw_off_refuses_the_query_and_carries_no_alloc`, `x11_dispsw_changes_one_claimed_control_and_no_other`;
+> the status line gains nothing, `kf-qemu` `chan.rs::dispsw_tests`).
+> - **What `display=on,x11-dispsw=on` does.** `x11-dispsw=on` without `display=on` refuses to realize by
+>   name (`Config::check`): the guest's own CPU-RM refuses the object first on a displayless device
+>   (`disp_sw.c:67-71`), so the switch could do nothing.
+>   1. kf-disp ANSWERS the display-SW constructor's `INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES` (the lit
+>      displays and the heads — m3c's answer) instead of `no_display_sw` (`DisplayModel::offer_display_sw`).
+>      The guest's own CPU-RM then checks the guest's `logicalHeadId`/`displayMask` against it
+>      (`disp_sw.c:83-98`) and RPCs the alloc (`RS_FLAGS_ALLOC_RPC_TO_ALL`, after the constructor:
+>      `alloc_free.c:860` constructs, `:916` RPCs).
+>   2. The channel link carries that alloc as `ChanStatement::DisplaySw {client, channel, handle}` —
+>      it has no params field, so the guest's `NV9072_ALLOCATION_PARAMETERS` cannot reach the host.
+>   3. The channel plane allocates `GF100_DISP_SW` under that channel's **passthrough twin** with
+>      AUTHORED params `{logicalHeadId 0, displayMask 0, caps 0}` (`kf_host::HostRm::alloc_disp_sw`,
+>      `DISP_SW_AUTHORED_PARAMS`). Host RM's constructor needs a display engine (`disp_sw.c:69`) and
+>      head 0 < its heads (`:83`); `displayMask 0` skips its active-display check (`:92`). The class is
+>      `RS_FLAGS_ALLOC_NON_PRIVILEGED` (`resource_list.h:1502-1511`).
+>   4. **Refused `NOT_SUPPORTED` by name** — the status the X driver meets today — when the host
+>      refuses the alloc (a host GPU without a display engine), when no passthrough twin holds the
+>      channel, or when the device has no channel plane. ⊘ The link never leaves a display-SW object
+>      without a host object: that is m3c (186 host Xid 32, 1.3 FPS GL, 2026-09-30).
+>   5. **Freed** with the guest's own free; with its channel's twin (a free of the channel, its group,
+>      its device or its client — host RM frees the object with its channel, and `HostRm::free` forgets
+>      the subtree); hence at a guest driver unload / GSP re-init, which reaches the plane as the
+>      guest's own frees, exactly as every channel twin does; at device teardown with the host client.
+>   6. **Status line:** `dispsw[twins=N live=N host_refused=N no_twin=N]` after `disp[...]`, printed only
+>      with the property on. ⊘ *2026-10-03 (review fixes block): six more fields, and `live=` is counted
+>      from the maps.*
+> - **The rule it changes (the owner's call).** *"NOT twinned: host RM's dispsw acts on HOST display
+>   heads"* becomes *"twinned with an authored head; host RM releases only into addresses the TWIN
+>   client has mapped"* — `dispswReleaseSemaphoreAndNotifierFill` validates against the calling client's
+>   own DMA mappings (`CliGetDmaMappingInfo`, `disp_sw.c:146`), and on a GSP host that call arrives as
+>   the `SEMAPHORE_SCHEDULE_CALLBACK` event for OUR client (`kernel_gsp.c:1110-1135`). The guest learns
+>   the host's vblank timing (a minor side channel). It cannot flip, set a mode or touch host display
+>   state. ⊘ *Corrected 2026-10-03 (box block above): "the TWIN client" is kayfabe's ONE host client,
+>   so the check is client-wide; host RM writes nothing at all here (no kernel mapping); and the
+>   no-flip sentence is a hypothesis.*
+> - **Open — only a box answers** (⊘ *answered 2026-10-03, the box block above*): (a) whether host RM finds the guest's semaphore/notifier VA among the
+>   twin client's mappings (kayfabe maps the twin's VA space with RM `MAP_MEMORY_DMA` calls, so it
+>   should; if it does not, host RM refuses the release, `NV_ERR_INVALID_ADDRESS`, `disp_sw.c:152-153`,
+>   and what the guest's client does then is for the box to show);
+>   (b) the pacing: a headless host runs each vblank callback at once (`vblank.c:87, 209-243`), so X11
+>   should run UNTHROTTLED (glxgears well above 60 FPS); a host that drives a monitor paces the guest at
+>   that monitor's refresh; (c) whether Cinnamon's X11 crash in `libnvidia-glcore` and X11 vkcube's abort
+>   (rc 134, `traces/v3_display/b0a_20261003/`) have no other cause; (d) whether any guest client sends
+>   the object's one control, `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK` (`0x90720101`, "an out-of-band version
+>   of the … NOTIFY_ON_VBLANK method", `ctrl9072.h:52-84`). It is `ROUTE_TO_PHYSICAL | NON_PRIVILEGED`
+>   (flags `0x48`, `g_dispsw_nvoc.c:176-190`), so it would reach us, and NOTHING here serves it: it
+>   meets the unserviced ledger and is refused `NOT_SUPPORTED`. If the box shows it, it needs a twin
+>   verb on the host object (unprivileged there too); it is not built because nothing has shown a
+>   client sending it.
+> - Carried with it: the driver matrix gains `NV9072_ALLOCATION_PARAMETERS` (the sweep of 2026-10-03 at
+>   all 29 tags: one 12-byte layout, `traces/driver_matrix/ranges.tsv`), and `kf3_realize` takes
+>   `x11_dispsw` — **KF3 ABI 13** (11 and 12 are taken by `v3-gop` and `v3-broker` for other signatures).
+> - **The box test** (one GPU box with a display engine, e.g. the RTX 3060 of `b0a_20261003`; strictly
+>   serial; the lane runs the per-revision binary, so build at this branch's head first):
+>   ```
+>   bash scripts/bench/build_kf3.sh <qemu-10.2.4-source-tree>
+>   # A — control, the property off (today's behaviour; b0a run 3 is the reference):
+>   DISPLAY_DESKTOP=1 KF_DEVICE=kf3 bash scripts/bench/display/lane.sh dsw_off
+>   # B — the experiment:
+>   DISPLAY_DESKTOP=1 KF_DEVICE=kf3 DISPLAY_KF3_EXTRA=x11-dispsw=on bash scripts/bench/display/lane.sh dsw_on
+>   ```
+>   ⊘ *2026-10-03 (box): the runs used `scripts/bench/display/dispsw_run.sh` (this lane plus the host
+>   probe, START/EXIT lines) with `DISPLAY_X11_BARE=1` (a bare Xorg with no compositor); grade also on
+>   observables a release would gate — vsync `DISPLAY_GLXGEARS` frames ≈ 60/s, `DISPLAY_X11_BARE_*`
+>   (glxgears windowed/fullscreen, vkcube FIFO `RC=0`), `DISPLAY_HOST_XID=0` with an empty
+>   `run_*_hostdmesg.log` — and on the probe's `DSW_TRACE_TOTALS` (`dsw_calls`, `map_kva_null`).
+>   `DISPLAY_DESKTOP_SESSION=yes` alone is not a pass: run A reads `yes` over a crashed Cinnamon.*
+>   ⊘ *2026-10-03 (review fixes): grade the status line's `capped=0 id_refused=0 free_refused=0` too,
+>   and `software classID N = the guest's` on every `act display-SW twin` line; `hook.sh` step 4c
+>   (`DISPLAY_X11_ENGSW=1`, mode `9074`) is the classID fix's own test — `0` host Xid and ~60 FPS there,
+>   where the pre-fix code gives Xid 32 and 1.2 FPS (runs 11-12).*
+>   **Pass (B):** `DISPLAY_DESKTOP_SESSION=yes`; `DISPLAY_DESKTOP_CRASHES 0`; `DISPLAY_VKCUBE … VKCUBE_RC=0`
+>   (and the `DISPLAY_VKCUBE_PM0/1/2` lines' `RC=`); `DISPLAY_HOST_XID=0`; in `run_dsw_on_qemu.log` the
+>   realize line `EXPERIMENT x11-dispsw ON` and a status line with `dispsw[twins=` > 0, `host_refused=0`,
+>   `no_twin=0`; and neither its `unserviced=[…]` nor a `kf3: GSP REFUSED` line names `0x90720101`
+>   (open item (d)). **Record, do not grade:** `DISPLAY_GLXGEARS` and `DISPLAY_GLXGEARS_NOVSYNC` (expected
+>   unthrottled on a headless host), the `desk_1`/`desk_vkcube` screendumps, and the same lines from A for
+>   the comparison. ⊘ A chip with no display engine on bare metal (GA100, GH100, GB10x) cannot take this
+>   test at all — `display=on` refuses to realize there (§2.2). The B-fallback path (`host_refused` > 0,
+>   the guest then exactly as in A) is reachable only on a host whose RM has no display engine on a
+>   display-capable chip (a board with its display disabled); no such box has been named.
 
 > **STATUS: M3 MET FOR THE WAYLAND DESKTOP; X11 DESKTOP PARTIAL — 2026-09-30 (branch `v3-display2`;
 > display stays default-off).** RTX 3060 (GA106), host + guest 580.159.04, vast 53505783.
@@ -262,7 +531,9 @@
 >   displayMask 0) would make a headless host run each vblank callback immediately
 >   (`vblank.c:87, 209-243`, *"call it now"* when the head's vblank interrupt is unavailable) — i.e. X11
 >   would work unthrottled by dispsw — but it lets a guest's software methods act on the host's
->   display object, which the rule forbids.
+>   display object, which the rule forbids. ⊘ *2026-10-03 (box): measured as the default-off
+>   `x11-dispsw` — both failures gone, vsync paced at 60 Hz (not unthrottled), no release ever reaching
+>   host RM; the x11-dispsw note above.*
 > - **The console composes the head** (`m3h`): every enabled window back to front by `DEPTH`, placed
 >   by its window-immediate `POINT_OUT`, blended per `SET_COMPOSITION_FACTOR_SELECT`, pitch or
 >   block-linear, by one hand-written PTX kernel (`cuda/display/kf_scanout.ptx`, bring-up

@@ -47,7 +47,7 @@ use kf_mem::vasmgr::VasKey;
 use kf_rm::chanlink::{ChanAnswer, ChanStatement, ChannelAlloc};
 use kf_trap::Route;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 /// `NV_ERR_INVALID_STATE`.
@@ -83,6 +83,19 @@ struct PtChan {
     engine: u32,
     /// Engine objects on the twin: guest handle → (host handle, its class kind).
     objects: HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    /// ★ EXPERIMENT `x11-dispsw`: the guest's `GF100_DISP_SW` objects on this channel, twinned on
+    /// the twin: guest handle → host handle. Always empty with the switch off. Host RM frees them
+    /// with the twin's channel (`HostRm::free` forgets the subtree), so they go with the twin.
+    disp_sw: HashMap<u32, u32>,
+    /// ★ EXPERIMENT `x11-dispsw` (review 2026-10-03, MEDIUM): the guest's FIFO software-classID
+    /// numbering on this channel, mirrored ([`crate::dispsw::SwClassIds`]) — what each display-SW
+    /// twin must carry so the guest's `SET_OBJECT` names it. Never advanced with the switch off.
+    sw_ids: crate::dispsw::SwClassIds,
+    /// ★ EXPERIMENT `x11-dispsw` (review 2026-10-03, LOW): a host display-SW alloc on this twin was
+    /// refused, so host CPU-RM's numbering (what the readback asks) may be ahead of host GSP's (what
+    /// the guest's `SET_OBJECT` meets) — every later display-SW alloc here is refused by name
+    /// ([`crate::dispsw::twin_watched`]). Set once, never cleared: it goes with the twin.
+    dispsw_host_refused: bool,
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
     /// satisfied by the twin (never forwarded).
     ctx: CtxBind,
@@ -960,6 +973,140 @@ pub struct ChanPlane {
     pub rc_seen: AtomicU64,
     /// Wakes of the RC fd.
     pub rc_wakes: AtomicU64,
+    /// ★ EXPERIMENT `x11-dispsw`: the display-SW twins' counters (all zero with the switch off).
+    pub dispsw: crate::dispsw::DispSwCounters,
+}
+
+/// ★ **What a guest free of `object` takes from a twin that still lives — pure** (review
+/// 2026-10-03, MEDIUM): its engine object (`false`) or, x11-dispsw only, its display-SW twin
+/// (`true`), with the host handle to free; `None` if the twin holds neither.
+fn take_twin_object(
+    objects: &mut HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    disp_sw: &mut HashMap<u32, u32>,
+    object: u32,
+) -> Option<(u32, bool)> {
+    objects
+        .remove(&object)
+        .map(|o| (o.0, false))
+        .or_else(|| disp_sw.remove(&object).map(|h| (h, true)))
+}
+
+/// The plane's passthrough twins, by `(client, channel handle)` ([`ChanPlane`]'s `pt`).
+type PtMap = HashMap<(u32, u32), PtChan>;
+
+/// The plane's object index, `(client, object handle) → (client, channel handle)` ([`ChanPlane`]'s
+/// `pt_objs`).
+type ObjIndex = HashMap<(u32, u32), (u32, u32)>;
+
+/// ★ x11-dispsw: what the act checks before a display-SW twin ([`crate::dispsw::twin_one`]), read
+/// from the plane's channel map on the act thread, where every display-SW alloc and free runs in
+/// order (review 2026-10-03, LOW: this had no test, and a body of zeros kept CI green while the
+/// caps never fired). `chan`: the twins on channel `key`'s twin. `vm`: the twins in the VM — the
+/// map holds every twinned channel of every guest client, and a channel, group, device or client
+/// free takes its twin out at statement time, so a freed channel's twins stop counting at once.
+/// `host_refused_before`: the twin's mark ([`dispsw_mark_host_refused`]). A poisoned map counts as
+/// full (`usize::MAX`), so the caps refuse.
+fn dispsw_live(pt: &Mutex<PtMap>, key: (u32, u32)) -> crate::dispsw::Live {
+    pt.lock().map_or(
+        crate::dispsw::Live {
+            chan: usize::MAX,
+            vm: usize::MAX,
+            host_refused_before: false,
+        },
+        |m| crate::dispsw::Live {
+            chan: m.get(&key).map_or(0, |v| v.disp_sw.len()),
+            vm: m.values().map(|v| v.disp_sw.len()).sum(),
+            host_refused_before: m.get(&key).is_some_and(|v| v.dispsw_host_refused),
+        },
+    )
+}
+
+/// ★ x11-dispsw (review 2026-10-03, LOW): a host display-SW alloc on channel `key`'s twin was
+/// refused ([`crate::dispsw::twin_watched`]) — mark the twin, so every later display-SW alloc on it
+/// is refused by name. Only while the map still holds THAT twin (`chan`); `true` when marked.
+fn dispsw_mark_host_refused(pt: &Mutex<PtMap>, key: (u32, u32), chan: kf_host::Channel) -> bool {
+    pt.lock().is_ok_and(|mut m| match m.get_mut(&key) {
+        Some(v) if v.chan == chan => {
+            v.dispsw_host_refused = true;
+            true
+        }
+        _ => false,
+    })
+}
+
+/// ★ x11-dispsw (review 2026-10-03, MEDIUM; its test, LOW): the guest numbered another `ENG_SW`
+/// object under channel `key` ([`ChanPlane::software_object`]) — that twin's mirror advances, and
+/// no other channel's. `None`: no twin holds the channel; `Some(None)`: the mirror lost the count.
+fn register_other_sw(pt: &Mutex<PtMap>, key: (u32, u32)) -> Option<Option<u16>> {
+    pt.lock()
+        .ok()
+        .and_then(|mut m| m.get_mut(&key).map(|v| v.sw_ids.register()))
+}
+
+/// The act-queue label of the display-SW undo ([`attach_dispsw_withdraw`]).
+const DISPSW_WITHDRAW: &str = "display-SW withdraw";
+
+/// ★ x11-dispsw: the undo's wiring (review 2026-10-03, LOW). When the display-SW act resolved OK
+/// and another link then refused the alloc, `d`'s owner runs this once
+/// ([`kf_gsp::Deferred::on_orphaned`]); it queues the withdraw ([`withdraw_kept`]) on the act FIFO
+/// `tx`, so it runs after the act that set `kept` (the host object the act kept; 0: none).
+fn attach_dispsw_withdraw(
+    d: &kf_gsp::Deferred,
+    tx: std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>,
+    kept: Arc<AtomicU32>,
+    key: (u32, u32),
+    handle: u32,
+) {
+    d.on_orphaned(move || {
+        let undo: Act = Box::new(move |me: &ChanPlane| {
+            let h = kept.load(Ordering::Acquire);
+            Ok(withdraw_kept(
+                me.rm,
+                &me.pt,
+                &me.pt_objs,
+                key,
+                handle,
+                h,
+                &me.dispsw,
+            ))
+        });
+        // Nobody waits on this cell: the guest already has the refusal.
+        let _ = tx.send((undo, kf_gsp::Deferred::new(), DISPSW_WITHDRAW));
+    });
+}
+
+/// ★ x11-dispsw: the undo's body ([`attach_dispsw_withdraw`]) — take the display-SW twin the act
+/// kept (`h`; 0: it kept none) out of channel `key`'s twin and the object index, only while they
+/// still name it ([`crate::dispsw::withdraw_disp_sw`]), and free it on the host. The log line.
+fn withdraw_kept<H: crate::dispsw::DispSwHost>(
+    host: &H,
+    pt: &Mutex<PtMap>,
+    pt_objs: &Mutex<ObjIndex>,
+    key: (u32, u32),
+    handle: u32,
+    h: u32,
+    c: &crate::dispsw::DispSwCounters,
+) -> String {
+    let client = key.0;
+    let taken = h != 0
+        && match (pt.lock(), pt_objs.lock()) {
+            (Ok(mut pt), Ok(mut objs)) => crate::dispsw::withdraw_disp_sw(
+                pt.get_mut(&key).map(|v| &mut v.disp_sw),
+                &mut objs,
+                key,
+                handle,
+                h,
+            ),
+            _ => false,
+        };
+    if !taken {
+        return format!("{client:#x}:{handle:#x}: nothing of this act's left to withdraw");
+    }
+    c.withdrawn.fetch_add(1, Ordering::Relaxed);
+    let freed = crate::dispsw::release_one(host, h, c);
+    format!(
+        "{client:#x}:{handle:#x} GF100_DISP_SW: another link refused the alloc after the act — its twin, host object {h:#x}, withdrawn and {freed}"
+    )
 }
 
 impl ChanPlane {
@@ -1126,6 +1273,7 @@ impl ChanPlane {
             rc_unarmed: AtomicU64::new(0),
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
+            dispsw: crate::dispsw::DispSwCounters::default(),
             dbfast,
             token_fmt,
         })
@@ -1481,6 +1629,16 @@ impl ChanPlane {
                 app_client,
                 obj3d,
             } => self.debugger(client, parent, handle, app_client, obj3d),
+            ChanStatement::DisplaySw {
+                client,
+                parent,
+                handle,
+            } => self.display_sw(client, parent, handle),
+            ChanStatement::SoftwareObject {
+                client,
+                parent,
+                class,
+            } => self.software_object(client, parent, class),
             ChanStatement::DebuggerExceptionMask {
                 client,
                 object,
@@ -2256,6 +2414,140 @@ impl ChanPlane {
         )
     }
 
+    /// ★ EXPERIMENT `x11-dispsw` (default off; carried only when the device property is on,
+    /// `kf_rm::chanlink::ChannelPolicy::with_display_sw_twins`): the guest's `GF100_DISP_SW` object
+    /// under its channel, twinned under that channel's PASSTHROUGH twin with params WE author
+    /// (`kf_host::HostRm::alloc_disp_sw`: head 0, displayMask 0, caps 0 — the guest's own params
+    /// never reach this plane), carrying the guest's own FIFO software classID — or refused by name.
+    /// Every decision is `crate::dispsw`'s; this wires it to the maps and the host session:
+    /// 1. Statement time ([`crate::dispsw::admit`], no host call): the channel's mirrored numbering
+    ///    advances (the guest numbered the object whatever we answer); no twin, a handle already
+    ///    twinned, or a lost mirror is refused here.
+    /// 2. The act ([`dispsw_live`], then [`crate::dispsw::twin_watched`]): a twin marked by an
+    ///    earlier host refusal is refused, then the caps, the host alloc, its number read back and
+    ///    made the guest's or refused; a host alloc refused here marks the twin
+    ///    ([`dispsw_mark_host_refused`]); then [`crate::dispsw::keep_disp_sw`] /
+    ///    [`crate::dispsw::settle_keep`].
+    /// 3. The undo ([`attach_dispsw_withdraw`]): when the act kept a twin and the object seat then
+    ///    refused the alloc (a handle the guest already uses for a non-twinned object), an act
+    ///    queued behind it withdraws exactly that twin ([`withdraw_kept`]).
+    fn display_sw(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
+        let key = (client, parent);
+        let admitted = match (self.pt.lock(), self.pt_objs.lock()) {
+            (Ok(mut pt), Ok(objs)) => {
+                let v = pt.get_mut(&key);
+                let chan = v.as_ref().map(|v| v.chan);
+                crate::dispsw::admit(
+                    v.map(|v| &mut v.sw_ids),
+                    &objs,
+                    client,
+                    handle,
+                    &self.dispsw,
+                )
+                .map(|n| (chan, n))
+            }
+            _ => Err((NV_ERR_INVALID_STATE, "plane maps poisoned".into())),
+        };
+        // Lock order here and in the act: `pt`, then `pt_objs` (no site holds `pt_objs` while it
+        // takes `pt`). `admit` refuses a channel with no twin, so `chan` is `Some` with every `Ok`.
+        let (chan, expect) = match admitted {
+            Ok((Some(chan), n)) => (chan, n),
+            Ok((None, _)) => {
+                return ChanAnswer::Refused {
+                    status: crate::dispsw::NV_ERR_NOT_SUPPORTED,
+                    why: format!(
+                        "GF100_DISP_SW {client:#x}:{handle:#x} under {parent:#x}: no twin"
+                    ),
+                };
+            }
+            Err((status, why)) => {
+                return ChanAnswer::Refused {
+                    status,
+                    why: format!("GF100_DISP_SW {client:#x}:{handle:#x} under {parent:#x}: {why}"),
+                };
+            }
+        };
+        // The host object the act kept (0: none) — read by the undo, which runs after the act.
+        let kept = Arc::new(AtomicU32::new(0));
+        let kept_by_act = kept.clone();
+        let answer = self.defer(
+            "display-SW twin",
+            Box::new(move |me: &ChanPlane| {
+                let live = dispsw_live(&me.pt, key);
+                let (twinned, host_refused) =
+                    crate::dispsw::twin_watched(me.rm, chan, expect, live, &me.dispsw);
+                let marked = host_refused
+                    && !live.host_refused_before
+                    && dispsw_mark_host_refused(&me.pt, key, chan);
+                let (h, how) = twinned.map_err(|(st, why)| {
+                    let mark = if marked {
+                        "; this twin now takes no more display-SW objects (its host numbering is no longer known)"
+                    } else {
+                        ""
+                    };
+                    (st, format!("GF100_DISP_SW {client:#x}:{handle:#x} on twin host {:#x}: {why}{mark}", chan.token))
+                })?;
+                let keep = match (me.pt.lock(), me.pt_objs.lock()) {
+                    (Ok(mut pt), Ok(mut objs)) => crate::dispsw::keep_disp_sw(
+                        pt.get_mut(&key).map(|v| &mut v.disp_sw),
+                        &mut objs,
+                        key,
+                        handle,
+                        h,
+                    ),
+                    _ => crate::dispsw::DispSwKeep::ChannelGone,
+                };
+                if keep == crate::dispsw::DispSwKeep::Kept {
+                    kept_by_act.store(h, Ordering::Release);
+                }
+                let what = crate::dispsw::settle_keep(me.rm, keep, h, &me.dispsw)
+                    .map_err(|(st, why)| (st, format!("GF100_DISP_SW {client:#x}:{handle:#x}: {why}")))?;
+                Ok(format!(
+                    "{client:#x}:{handle:#x} GF100_DISP_SW on twin host {:#x} -> host object {h:#x} (authored: head 0, displayMask 0, caps 0; {how}) [{what}]",
+                    chan.token
+                ))
+            }),
+        );
+        if let ChanAnswer::Deferred(d) = &answer
+            && let Some(tx) = self.acts.lock().ok().and_then(|a| a.clone())
+        {
+            attach_dispsw_withdraw(d, tx, kept, key, handle);
+        }
+        answer
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw` (review 2026-10-03, MEDIUM): the guest allocated another `ENG_SW`
+    /// object under a channel (`kf_rm::chanlink::OTHER_ENG_SW_CHANNEL_CLASSES`). Never twinned — but
+    /// the guest numbered it, so the twin's mirror advances and the channel's next display-SW twin
+    /// is repaid up to the guest's number. Observed only: the link ignores the answer.
+    fn software_object(&self, client: u32, parent: u32, class: u32) -> ChanAnswer {
+        if let Some(n) = register_other_sw(&self.pt, (client, parent)) {
+            self.dispsw.other_sw.fetch_add(1, Ordering::Relaxed);
+            eprintln!(
+                "kf3: chan {client:#x}:{parent:#x}: class {class:#x} took the guest's software classID {} on this channel (no host twin takes one; its next display-SW twin is repaid to match)",
+                n.map_or_else(
+                    || "(past 65535: the mirror lost it)".to_string(),
+                    |n| n.to_string()
+                )
+            );
+        }
+        ChanAnswer::NotOurs
+    }
+
+    /// ★ x11-dispsw: the status line's `dispsw[...]` (`""` with the switch off) — `live=` is the
+    /// maps' own count, so it cannot drift from them.
+    #[must_use]
+    pub fn dispsw_status(&self, on: bool) -> String {
+        if !on {
+            return String::new();
+        }
+        let live = self
+            .pt
+            .lock()
+            .map_or(0, |m| m.values().map(|v| v.disp_sw.len()).sum());
+        self.dispsw.status(true, live)
+    }
+
     /// ★ A free the plane may own: a Translated channel, a passthrough twin (by channel, its group,
     /// its device, or its client), or an engine object on one. Tokens stop routing to a twin NOW
     /// (atomics, no host call); the host frees run as ONE act whose outcome the reply waits for.
@@ -2436,7 +2728,8 @@ impl ChanPlane {
             }
             .freed_by(*k, client, object)
         });
-        // Engine objects freed on their own (their twin still lives).
+        // Engine objects freed on their own (their twin still lives) — and, x11-dispsw only, a
+        // display-SW twin (`true`).
         let obj = if twins.is_empty() {
             self.pt_objs
                 .lock()
@@ -2445,12 +2738,15 @@ impl ChanPlane {
                 .and_then(|key| {
                     self.pt.lock().ok().and_then(|mut m| {
                         m.get_mut(&key)
-                            .and_then(|v| v.objects.remove(&object).map(|o| o.0))
+                            .and_then(|v| take_twin_object(&mut v.objects, &mut v.disp_sw, object))
                     })
                 })
         } else {
             None
         };
+        // ★ x11-dispsw: display-SW twins that go WITH their channel's twin (host RM frees them with
+        // it) leave the maps with it, so `live=` drops at once; a refused channel free is counted
+        // as leaving them behind on the host (`free_refused`, `crate::dispsw::released_with_channel`).
         let sessions = client == object
             && self
                 .enc_sessions
@@ -2532,11 +2828,17 @@ impl ChanPlane {
                         t.chan.token,
                         Self::fast_fields(fast)
                     );
-                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                    crate::dispsw::released_with_channel(r.is_ok(), t.disp_sw.len(), &me.dispsw);
+                    let disp_sw = if t.disp_sw.is_empty() { String::new() } else { format!(" disp_sw={}", t.disp_sw.len()) };
+                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={}{disp_sw} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
                 }
-                if let Some(h) = obj {
-                    let r = me.rm.free(h);
-                    line.push(format!("engine object host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                if let Some((h, disp_sw)) = obj {
+                    if disp_sw {
+                        line.push(format!("display-SW object host {h:#x} {}", crate::dispsw::release_one(me.rm, h, &me.dispsw)));
+                    } else {
+                        let r = me.rm.free(h);
+                        line.push(format!("engine object host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                    }
                 }
                 // ⊘ A host free that refuses leaks a host object; the guest's object is gone
                 // either way, so the guest is answered OK and the leak is named here.
@@ -2868,6 +3170,9 @@ impl ChanPlane {
                             device: a.device,
                             engine,
                             objects: HashMap::new(),
+                            disp_sw: HashMap::new(),
+                            sw_ids: crate::dispsw::SwClassIds::default(),
+                            dispsw_host_refused: false,
                             ctx: CtxBind::default(),
                             live,
                             notifier,
@@ -3676,6 +3981,276 @@ impl ChanPlane {
     /// Stop serving (device teardown).
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
+    }
+}
+
+#[cfg(test)]
+mod dispsw_tests {
+    use super::{
+        CtxBind, DISPSW_WITHDRAW, PtChan, PtMap, attach_dispsw_withdraw, dispsw_live,
+        dispsw_mark_host_refused, register_other_sw, take_twin_object, withdraw_kept,
+    };
+    use crate::dispsw::{
+        DispSwCounters, DispSwHost, Live, NV_ERR_INSUFFICIENT_RESOURCES, PER_CHANNEL_CAP, twin_one,
+    };
+    use kf_chip::classes::Kind;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    const A: u32 = 0xc1d0_0001;
+    const B: u32 = 0xc1d0_0002;
+    const CH1: u32 = 0x5c00_0010;
+    const CH2: u32 = 0x5c00_0011;
+
+    /// A twin as the plane holds it, with `disp_sw` (guest handle → host object) on it.
+    fn twin(token: u32, disp_sw: &[(u32, u32)]) -> PtChan {
+        PtChan {
+            chan: kf_host::Channel {
+                tsg: token,
+                chan: token,
+                token,
+            },
+            idx: token,
+            tsg: None,
+            ctx_share: 0,
+            parent: 0,
+            device: 0,
+            engine: 0,
+            objects: HashMap::new(),
+            disp_sw: disp_sw.iter().copied().collect(),
+            sw_ids: crate::dispsw::SwClassIds::default(),
+            dispsw_host_refused: false,
+            ctx: CtxBind::default(),
+            live: Arc::new(AtomicU64::new(0)),
+            notifier: None,
+            stopped: false,
+            disabled: false,
+            space: kf_host::VaSpace {
+                space: 0,
+                range: 0,
+                guest: [kf_host::channel::GuestVaRange::default(); 2],
+            },
+            rows: crate::mem::PlacedRows::default(),
+            falcon_ctx: None,
+        }
+    }
+
+    /// Two clients, three twinned channels — client A's `CH1` and `CH2`, and client B's `CH1` (the
+    /// same handle in another client): 3 + 1 + 2 display-SW twins.
+    fn plane_map() -> Mutex<PtMap> {
+        let mut m = PtMap::new();
+        m.insert(
+            (A, CH1),
+            twin(1, &[(0x70, 0xa0), (0x71, 0xa1), (0x72, 0xa2)]),
+        );
+        m.insert((A, CH2), twin(2, &[(0x73, 0xa3)]));
+        m.insert((B, CH1), twin(3, &[(0x70, 0xb0), (0x71, 0xb1)]));
+        Mutex::new(m)
+    }
+
+    fn live(chan: usize, vm: usize) -> Live {
+        Live {
+            chan,
+            vm,
+            host_refused_before: false,
+        }
+    }
+
+    /// A host that frees (recorded) and must never be asked to allocate or read back.
+    #[derive(Default)]
+    struct FreesOnly {
+        frees: RefCell<Vec<u32>>,
+    }
+
+    impl DispSwHost for FreesOnly {
+        type Chan = ();
+        fn alloc(&self, (): ()) -> Result<u32, String> {
+            panic!("no host alloc expected")
+        }
+        fn class_id(&self, (): (), _: u32) -> Result<u16, String> {
+            panic!("no host readback expected")
+        }
+        fn free(&self, object: u32) -> Result<(), String> {
+            self.frees.borrow_mut().push(object);
+            Ok(())
+        }
+    }
+
+    /// ★ The caps' input (review 2026-10-03, LOW: a body of zeros kept CI green and the caps never
+    /// fired). Per channel, keyed by client AND handle (B's `CH1` is not A's); the VM sums every
+    /// client's channels; a freed channel's twins stop counting at once (its free takes the twin out
+    /// of the map at statement time); a channel no twin holds counts 0 on itself and still sees the
+    /// VM; a poisoned map is full. Then the count drives the cap: a channel holding
+    /// [`PER_CHANNEL_CAP`] is refused with no host call.
+    #[test]
+    fn the_live_count_sums_every_client_and_drops_a_freed_channel() {
+        let pt = plane_map();
+        assert_eq!(dispsw_live(&pt, (A, CH1)), live(3, 6));
+        assert_eq!(dispsw_live(&pt, (A, CH2)), live(1, 6));
+        assert_eq!(dispsw_live(&pt, (B, CH1)), live(2, 6));
+        assert_eq!(dispsw_live(&pt, (B, CH2)), live(0, 6), "no twin there");
+        // The twin's host-refusal mark is handed to the act with the counts — its own only.
+        if let Some(v) = pt.lock().expect("map").get_mut(&(A, CH2)) {
+            v.dispsw_host_refused = true;
+        }
+        assert!(dispsw_live(&pt, (A, CH2)).host_refused_before);
+        assert!(!dispsw_live(&pt, (A, CH1)).host_refused_before);
+        assert!(!dispsw_live(&pt, (B, CH1)).host_refused_before);
+        let freed = pt.lock().expect("map").remove(&(A, CH1));
+        assert!(freed.is_some());
+        assert_eq!(dispsw_live(&pt, (A, CH1)), live(0, 3));
+        assert_eq!(dispsw_live(&pt, (B, CH1)), live(2, 3));
+        // Full channel: the count it reads is what refuses the next alloc, before any host call.
+        let full: Vec<(u32, u32)> = (0..PER_CHANNEL_CAP as u32)
+            .map(|i| (0x100 + i, 0xc00 + i))
+            .collect();
+        pt.lock().expect("map").insert((A, CH1), twin(4, &full));
+        let at_cap = dispsw_live(&pt, (A, CH1));
+        assert_eq!(at_cap, live(PER_CHANNEL_CAP, PER_CHANNEL_CAP + 3));
+        let c = DispSwCounters::default();
+        let e = twin_one(&FreesOnly::default(), (), 1, at_cap, &c).expect_err("capped");
+        assert_eq!(e.0, NV_ERR_INSUFFICIENT_RESOURCES, "{}", e.1);
+        assert_eq!(c.capped.load(Ordering::Relaxed), 1);
+        // Poisoned: counted full, so the caps refuse.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _held = pt.lock().expect("map");
+            panic!("poison the map (expected in this test)");
+        }));
+        assert!(pt.is_poisoned());
+        assert_eq!(dispsw_live(&pt, (B, CH1)), live(usize::MAX, usize::MAX));
+    }
+
+    /// ★ The host-refusal mark (review 2026-10-03, LOW) lands on its own twin only — never on
+    /// another client's same handle, never on a twin re-created under the key (another host
+    /// channel), never on a gone one.
+    #[test]
+    fn the_host_refusal_mark_lands_on_its_own_twin_only() {
+        let pt = plane_map();
+        let marked = |key: (u32, u32)| {
+            pt.lock()
+                .expect("map")
+                .get(&key)
+                .is_some_and(|v| v.dispsw_host_refused)
+        };
+        let ch = pt.lock().expect("map")[&(A, CH1)].chan;
+        assert!(dispsw_mark_host_refused(&pt, (A, CH1), ch));
+        assert!(marked((A, CH1)));
+        assert!(!marked((B, CH1)) && !marked((A, CH2)));
+        let other = pt.lock().expect("map")[&(A, CH2)].chan;
+        assert!(
+            !dispsw_mark_host_refused(&pt, (B, CH1), other),
+            "a different host channel under the key"
+        );
+        assert!(!marked((B, CH1)));
+        assert!(!dispsw_mark_host_refused(&pt, (B, CH2), ch), "no twin");
+    }
+
+    /// ★ Another `ENG_SW` object (review 2026-10-03, MEDIUM; its test, LOW): the guest numbered it on
+    /// ONE channel, so that twin's mirror advances and no other's — the next display-SW twin there
+    /// must carry the number after it.
+    #[test]
+    fn another_eng_sw_object_advances_only_its_own_channels_mirror() {
+        let pt = plane_map();
+        assert_eq!(register_other_sw(&pt, (A, CH1)), Some(Some(1)));
+        assert_eq!(register_other_sw(&pt, (A, CH1)), Some(Some(2)));
+        assert_eq!(
+            register_other_sw(&pt, (B, CH1)),
+            Some(Some(1)),
+            "B's own count"
+        );
+        assert_eq!(register_other_sw(&pt, (B, CH2)), None, "no twin");
+        let mut m = pt.lock().expect("map");
+        assert_eq!(
+            m.get_mut(&(A, CH1)).map(|v| v.sw_ids.register()),
+            Some(Some(3))
+        );
+        assert_eq!(
+            m.get_mut(&(A, CH2)).map(|v| v.sw_ids.register()),
+            Some(Some(1))
+        );
+    }
+
+    /// ★ The undo's body (review 2026-10-03, LOW): it takes the kept twin out of the twin's map and
+    /// the object index, frees it once and counts it; a second run, an act that kept nothing
+    /// (`0`), or a later twin under the same handle is left alone.
+    #[test]
+    fn the_undo_withdraws_the_kept_twin_and_frees_it_once() {
+        let pt = plane_map();
+        let objs = Mutex::new(HashMap::from([
+            ((A, 0x70), (A, CH1)),
+            ((B, 0x70), (B, CH1)),
+        ]));
+        let host = FreesOnly::default();
+        let c = DispSwCounters::default();
+        let line = withdraw_kept(&host, &pt, &objs, (A, CH1), 0x70, 0xa0, &c);
+        assert!(line.contains("withdrawn and freed"), "{line}");
+        assert_eq!(*host.frees.borrow(), vec![0xa0]);
+        assert_eq!(c.withdrawn.load(Ordering::Relaxed), 1);
+        assert!(
+            !pt.lock().expect("map")[&(A, CH1)]
+                .disp_sw
+                .contains_key(&0x70)
+        );
+        assert!(!objs.lock().expect("objs").contains_key(&(A, 0x70)));
+        assert!(
+            objs.lock().expect("objs").contains_key(&(B, 0x70)),
+            "B's is B's"
+        );
+        for (h, why) in [(0xa0, "twice"), (0, "kept nothing")] {
+            let line = withdraw_kept(&host, &pt, &objs, (A, CH1), 0x70, h, &c);
+            assert!(line.contains("nothing of this act's"), "{why}: {line}");
+        }
+        // A later twin under the same handle is not this act's.
+        if let Some(v) = pt.lock().expect("map").get_mut(&(A, CH1)) {
+            v.disp_sw.insert(0x70, 0xa9);
+        }
+        let line = withdraw_kept(&host, &pt, &objs, (A, CH1), 0x70, 0xa0, &c);
+        assert!(line.contains("nothing of this act's"), "{line}");
+        assert_eq!(*host.frees.borrow(), vec![0xa0]);
+        assert_eq!(c.withdrawn.load(Ordering::Relaxed), 1);
+    }
+
+    /// ★ The undo's wiring (review 2026-10-03, LOW): attached to the act's cell, it queues NOTHING
+    /// until the cell's owner runs it (an act that succeeded under a refused reply,
+    /// `kf_gsp`'s `settle_deferred`), then exactly one withdraw on the act queue, and never twice.
+    #[test]
+    fn an_orphaned_display_sw_act_queues_exactly_one_withdraw() {
+        let d = kf_gsp::Deferred::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+        attach_dispsw_withdraw(&d, tx, Arc::new(AtomicU32::new(0xa0)), (A, CH1), 0x70);
+        assert!(rx.try_recv().is_err(), "nothing until orphaned");
+        d.resolve(0);
+        assert!(d.run_orphan_undo());
+        let (_act, _cell, what) = rx.try_recv().expect("the withdraw is queued");
+        assert_eq!(what, DISPSW_WITHDRAW);
+        assert!(!d.run_orphan_undo(), "once");
+        assert!(rx.try_recv().is_err());
+    }
+
+    /// ★ A guest free of a display-SW object on a LIVE twin is ours (`Some(_, true)`), so the plane
+    /// frees its host object — without the `disp_sw` lookup the free answered NotOurs and the
+    /// host object lived until its channel went. An engine object is found first and stays
+    /// `false`; a handle the twin does not hold is `None`. (The rest of the display-SW decisions
+    /// and their tests are `crate::dispsw`'s.)
+    #[test]
+    fn a_guest_free_takes_the_display_sw_twin_from_a_live_channel() {
+        let mut objects: HashMap<u32, (u32, Kind)> = HashMap::new();
+        let mut ds: HashMap<u32, u32> = HashMap::new();
+        objects.insert(0x10, (0xa1, Kind::ThreeD));
+        ds.insert(0x20, 0xb2);
+        assert_eq!(
+            take_twin_object(&mut objects, &mut ds, 0x20),
+            Some((0xb2, true))
+        );
+        assert!(ds.is_empty(), "taken, so a second free finds nothing");
+        assert_eq!(take_twin_object(&mut objects, &mut ds, 0x20), None);
+        assert_eq!(
+            take_twin_object(&mut objects, &mut ds, 0x10),
+            Some((0xa1, false))
+        );
+        assert_eq!(take_twin_object(&mut objects, &mut ds, 0x30), None);
     }
 }
 

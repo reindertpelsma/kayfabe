@@ -220,6 +220,55 @@ pub struct DisplayPolicy {
     /// ★ The controls this link claims — the model's [`DisplayModel::claimed`] (or the M0 set),
     /// fixed at construction, so asking needs no lock.
     claimed: BTreeSet<u32>,
+    /// ★ EXPERIMENT `x11-dispsw`: each display-SW constructor's query paired with its alloc
+    /// ([`DispSwPairing`]); `None` with the switch off (nothing is looked at).
+    dispsw_pairing: Option<DispSwPairing>,
+}
+
+/// `NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES` (`ogkm-580:
+/// ctrl2080internal.h:1537`) — sent by exactly one caller in the guest's CPU-RM, the
+/// `GF100_DISP_SW` constructor (`disp_sw.c:74`).
+pub const GET_ACTIVE_DISPLAY_DEVICES: u32 = 0x2080_0a5d;
+/// `GF100_DISP_SW` (`ogkm-580: class/cl9072.h:35`).
+const GF100_DISP_SW: u32 = 0x9072;
+
+/// ★★ EXPERIMENT `x11-dispsw` (review 2026-10-03, MEDIUM) — **the one numbering slip NO physical RM
+/// can see, counted.** The guest's CPU-RM gives a display-SW object its channel's next software
+/// classID (`chandesConstruct` → `kchannelRegisterChild`, `ogkm-580: channel_descendant.c:254`)
+/// BEFORE `dispswConstruct` asks this query (`disp_sw.c:74`) and checks `logicalHeadId` /
+/// `displayMask` against it (`:83-98`); only a constructor that passes sends the alloc
+/// (`alloc_free.c:860-916`), and the alloc carries no classID (`rpc.c:11140-11230`). So a
+/// constructor that fails AFTER the query leaves that channel's guest numbering one past every
+/// physical RM's — ours included — and names no channel we could repair or refuse.
+///
+/// What IS visible: both the query and the alloc RPC are sent under the same GPU lock
+/// (`RS_FLAGS_ACQUIRE_GPU_GROUP_LOCK`, `resource_list.h:1509-1510`; `rpc.c:11167-11174`), so a
+/// stock guest sends them as a pair, query then alloc. A query that arrives while the previous one
+/// is still unpaired is such a failed constructor, and is counted and named.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct DispSwPairing {
+    /// A query was answered and its alloc has not arrived yet.
+    open: bool,
+    /// Queries seen.
+    pub queries: u64,
+    /// Queries whose alloc never came (seen at the next query).
+    pub unpaired: u64,
+}
+
+impl DispSwPairing {
+    /// A constructor's query: `true` when the PREVIOUS query's alloc never came.
+    pub fn query(&mut self) -> bool {
+        let lost = self.open;
+        self.unpaired += u64::from(lost);
+        self.queries += 1;
+        self.open = true;
+        lost
+    }
+
+    /// A `GF100_DISP_SW` alloc: it pairs the open query, if any.
+    pub fn alloc(&mut self) {
+        self.open = false;
+    }
 }
 
 impl DisplayPolicy {
@@ -309,7 +358,28 @@ impl DisplayPolicy {
             inst_mem: None,
             seen: Vec::new(),
             claimed,
+            dispsw_pairing: None,
         }
+    }
+
+    /// ★ EXPERIMENT `x11-dispsw` (default off): offer the `GF100_DISP_SW` object — the model answers
+    /// its constructor's `GET_ACTIVE_DISPLAY_DEVICES` query instead of refusing it
+    /// ([`DisplayModel::offer_display_sw`]). `false` touches nothing (no lock is taken), so a
+    /// default-off link is the link it was. ⊘ Only [`crate::served_chain`] calls this, and only
+    /// together with the channel link's [`crate::chanlink::ChannelPolicy::with_display_sw_twins`]:
+    /// offered without a host twin, the object's software methods trap on the host GPU (run m3c).
+    /// With no derived layouts (the M0 link) the query is not claimed and stays refused.
+    #[must_use]
+    pub fn offering_display_sw(mut self, on: bool) -> DisplayPolicy {
+        if on && let Some(m) = &self.model {
+            lock(m).offer_display_sw(true);
+            self.dispsw_pairing = Some(DispSwPairing::default());
+            eprintln!(
+                "kf-rm: display: EXPERIMENT x11-dispsw — GF100_DISP_SW is OFFERED (its constructor's query \
+                 is answered; every alloc is twinned on the host or refused by name)"
+            );
+        }
+        self
     }
 
     /// The separate lifecycle observer. It is seated inside the object policy, not in
@@ -685,8 +755,52 @@ fn put(p: &mut [u8], off: usize, v: u32) {
     p[off..off + 4].copy_from_slice(&v.to_le_bytes());
 }
 
+impl DisplayPolicy {
+    /// ★ x11-dispsw: the pairing so far (`None` with the switch off).
+    #[must_use]
+    pub fn dispsw_pairing(&self) -> Option<DispSwPairing> {
+        self.dispsw_pairing
+    }
+
+    /// ★ x11-dispsw: note a display-SW constructor's query or alloc ([`DispSwPairing`]) — looks,
+    /// never answers; a no-op with the switch off.
+    fn note_dispsw(&mut self, cmd: &RpcCommand) {
+        let Some(p) = &mut self.dispsw_pairing else {
+            return;
+        };
+        match cmd.function {
+            RpcFunction::RmControl
+                if self
+                    .driver
+                    .decode_rpc_control(&cmd.payload)
+                    .is_ok_and(|r| r.cmd == GET_ACTIVE_DISPLAY_DEVICES) =>
+            {
+                if p.query() {
+                    eprintln!(
+                        "kf-rm: display: x11-dispsw: a GF100_DISP_SW constructor's query was not followed by its alloc \
+                         (unpaired={} of {} queries) — that constructor failed after its channel numbered it, so the \
+                         channel's later display-SW objects are numbered one past their twins' (no channel is named: \
+                         the query carries none)",
+                        p.unpaired, p.queries
+                    );
+                }
+            }
+            RpcFunction::RmAlloc
+                if self
+                    .driver
+                    .decode_rpc_alloc(cmd.wire_body())
+                    .is_ok_and(|h| h.class == GF100_DISP_SW) =>
+            {
+                p.alloc();
+            }
+            _ => {}
+        }
+    }
+}
+
 impl CommandPolicy for DisplayPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        self.note_dispsw(cmd);
         match cmd.function {
             RpcFunction::RmControl => self.on_control(cmd),
             // ★ 3c: fn 1 starts every GSP boot — a re-init (a driver reload) makes every hotplug
@@ -812,6 +926,49 @@ mod tests {
         });
         p[0..4].copy_from_slice(&inst.to_le_bytes());
         p
+    }
+
+    /// ★ x11-dispsw (review 2026-10-03, MEDIUM): with the switch on, a display-SW constructor's
+    /// query that is not followed by its alloc before the NEXT query is counted unpaired — the
+    /// constructor failed after its channel numbered it. Query → alloc pairs; a trailing open
+    /// query is not (yet) counted; other allocs pair nothing. Off: nothing is looked at.
+    #[test]
+    fn a_display_sw_query_without_its_alloc_is_counted_unpaired() {
+        let q = || {
+            control(
+                super::GET_ACTIVE_DISPLAY_DEVICES,
+                0,
+                &zeroed("NV2080_CTRL_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES_PARAMS"),
+            )
+        };
+        let dsw = |h: u32| alloc(0xc1d0_0021, 0xcafe_0013, h, super::GF100_DISP_SW, &[0; 12]);
+        let mut off = policy();
+        let _ = off.respond(&q());
+        let _ = off.respond(&q());
+        assert_eq!(off.dispsw_pairing(), None, "off: nothing looked at");
+        let mut on = policy().offering_display_sw(true);
+        for cmd in [q(), dsw(1), q(), dsw(2)] {
+            let _ = on.respond(&cmd);
+        }
+        assert_eq!(
+            on.dispsw_pairing().map(|p| (p.queries, p.unpaired)),
+            Some((2, 0)),
+            "two constructors, two allocs"
+        );
+        let _ = on.respond(&q()); // this constructor fails after its query: no alloc
+        let _ = on.respond(&alloc(0xc1d0_0021, 0xcafe_0013, 3, 0xc797, &[])); // not display-SW
+        assert_eq!(
+            on.dispsw_pairing().map(|p| p.unpaired),
+            Some(0),
+            "not seen yet"
+        );
+        let _ = on.respond(&q());
+        let _ = on.respond(&dsw(4));
+        assert_eq!(
+            on.dispsw_pairing().map(|p| (p.queries, p.unpaired)),
+            Some((4, 1)),
+            "the third query's alloc never came"
+        );
     }
 
     /// ★ GA10x: the IP version a real GA106 reports, and a static info with four heads, eight

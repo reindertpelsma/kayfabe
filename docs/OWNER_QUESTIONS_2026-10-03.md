@@ -1,15 +1,17 @@
 # Decisions waiting on the owner — 2026-10-03
 
-**STATUS: LIVE, 2026-10-03.** Four decisions, each with the facts behind it and a recommendation.
-When the owner answers one, the answer goes into `docs/OWNER_RULINGS.md` and the item here is marked
-ANSWERED with a pointer. Nothing below is decided yet.
+**STATUS: LIVE, 2026-10-03.** Decisions, each with the facts behind it and a recommendation. When
+the owner answers one, the answer goes into `docs/OWNER_RULINGS.md` and the item here is marked
+ANSWERED with a pointer. ⊘ *Updated 2026-10-03 evening: items 2 and 4 are answered; item 6 (three
+security decisions) was added.*
 
 | # | decision | blocks | recommendation |
 |---|---|---|---|
 | 1 | the sweep and install plan: go-ahead, and Q2–Q8 | the installable binary and every support claim | approve; answers below |
-| 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | option A, guarded, with B as the fallback |
+| 2 | `GF100_DISP_SW` for X11 desktops | the stock Mint desktop (its default session is X11) | ⊘ ANSWERED: option A (§N) — box data and review fixes on `v3-dispsw-exp` below |
 | 3 | the archived traces that contain a full VBIOS | nothing technical; a legal liability | scrub the PROM values forward in both public repos |
-| 4 | renting a GPU box for display work | every display test, every merge bar | a standing weekly budget, one box at a time |
+| 4 | renting a GPU box for display work | every display test, every merge bar | ⊘ ANSWERED: rent as needed |
+| 6 | three security decisions (§6 below) | merging `v3-scratch-bound`, `v3-sec-nonpriv`, and building P2 | approve each as recommended |
 
 ## 1. The sweep and install plan (`design/V3_SWEEP_AND_INSTALL.md`)
 
@@ -98,7 +100,62 @@ it dies with it.
 ## 2. `GF100_DISP_SW` (X11 desktops)
 
 ⊘ **ANSWERED 2026-10-03 by the owner — option A is the design** (`OWNER_RULINGS.md` §N, with §M for
-pacing). The text below is kept as it was written.
+pacing). The box data and review fixes from `v3-dispsw-exp` follow; the text after them is kept as
+it was written.
+
+★ **Review fixes and re-run, 2026-10-03 (later) — read before the box result below; where they
+differ, this stands.** Branch `v3-dispsw-exp` at `d84086df` (`design/V3_DISPLAY.md`, the x11-dispsw
+note's "review fixes" block; runs 9-13 of `traces/v3_display/dispsw_20261003/`): the A/B result
+holds at the fixed code (desktop, X11 vkcube, ~60 FPS vsync on; the same failures off; host Xid 0),
+every twin's number read back equal to the guest's, and the caps were not hit (peaks 4 and 20).
+- **Each twin now carries the guest's own software classID, or the alloc is refused by name.** The
+  number a guest client puts in `SET_OBJECT` comes from the guest's own RM, numbered per channel; the
+  twin's comes from the host's. kayfabe now mirrors the guest's numbering, reads the host's back, and
+  repays a gap with throwaway objects or refuses. One case stays invisible to any physical RM (a guest
+  constructor that fails after numbering, which names no channel): it is counted, and its effect stays
+  on that guest's own channel. On the box, a test client that forces the repairable case ran at
+  ~60 FPS with 0 host Xid; the same client on the pre-fix code, or forcing the unrepairable case,
+  raised 26 host Xid 32 on its own channels and dropped to 1.2 FPS (runs 11-13).
+- **Caps:** 16 live display-SW twins per channel, 1024 per VM, refused by name past either (the runs
+  peaked at 4 and 20).
+- **Corrections to the box result below.** "No release ever reached host RM" is narrower than it
+  reads: the probe counts entries into the host's CPU-side RM, which ran its release path 0 times;
+  the class's methods are serviced by GSP firmware, which the probe cannot see. "A unit test pins it"
+  is now the map-flag builder itself clearing the kernel-mapping bit, plus a gate that keeps it the
+  only builder. Kernel-mapping guest RAM was tried and dropped — it was never shown to fix anything,
+  had no budget, and was incomplete by design — so it is not a ready fallback.
+
+★ **Box result, 2026-10-03 — option A works on hardware; still the owner's call.** vast 54044296,
+RTX 3060 (GA106), host + guest 580.159.04, the default-off experiment `x11-dispsw` on branch
+`v3-dispsw-exp`, A/B pair at its final code `c1cc4482` (`traces/v3_display/dispsw_20261003/`, eight
+runs in all; `design/V3_DISPLAY.md`, the x11-dispsw note's box block):
+
+- **Off:** `(EE) NVIDIA(0): Failed to allocate display software resources.`, Cinnamon X11 segfaults
+  into the fallback dialog, X11 vkcube aborts (`RC=134`); on a bare Xorg with no compositor,
+  fullscreen GL runs at 1.7 FPS. **On:** Cinnamon X11 is up with 0 crashes, X11 vkcube exits 0
+  (IMMEDIATE and FIFO, in a Cinnamon window and on bare X), vsync glxgears 59.8 FPS (60.0 fullscreen
+  on bare X), no-vsync ~2 500 FPS. Host Xid 0, an empty host-dmesg delta, every display-SW twin freed
+  (`dispsw[twins=80 live=0 host_refused=0 no_twin=0]`). The object's one control,
+  `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK`, was never sent.
+- **No release ever reached host RM** (a host-side kretprobe module, `scripts/bench/display/kfdsw_probe/`:
+  0 calls of the release functions in every run). ⊘ *Narrowed (review fixes above): host CPU-RM's
+  release path ran 0 times; GSP firmware services the class's methods and is not seen.* So the 2026-10-03 review's worry — host RM writes
+  these releases only through a host kernel mapping kayfabe never creates, so they would be dropped
+  silently — did not bite: nothing asked. Kernel-mapping the display-SW spaces' guest RAM was tried
+  (5 986 rows, 33 868 KiB of host kernel address space at peak) and changed nothing; it is not shipped.
+- **The true security bound,** replacing the third bullet of the "new facts" below: kayfabe has ONE
+  host client per VM, so host RM's address check is client-wide (per guest VA space only if GSP
+  firmware names the channel's VA space, which is closed); and since kayfabe never asks host RM for a
+  kernel mapping (⊘ *now: the one map-flag builder clears the bit, and a gate keeps it the only
+  builder — review fixes above*), host RM has no address to write a display-SW release through
+  at all — the object makes host RM write no memory for the guest. What remains: the host object's
+  existence, host vblank timing as a side channel when the host drives a monitor (this box is
+  headless), and whatever GSP firmware does with the class's methods (ogkm-580 defines none, so
+  "cannot flip or set a mode" is a hypothesis). If a future client does ask for a release, it is
+  dropped and that client waits on its own semaphore; the probe shows it.
+- ⊘ *ANSWERED 2026-10-03 by `OWNER_RULINGS.md` §N: default-on once its four conditions hold.*
+  **What the owner is asked:** turn `x11-dispsw` on by default for display-capable hosts (it refuses
+  by name where the host cannot), or keep it opt-in.
 
 **The problem.** X11 compositors and X11 Vulkan presentation allocate a display-software object
 (class `0x9072`) on their 3D channel. Its methods ask for a semaphore release at the next vblank.
@@ -125,7 +182,9 @@ without one logged 186 host Xid 32 and 1.3 FPS GL. So kayfabe refuses it today (
 - The host object is only a vblank timer. Its methods release a semaphore or notifier at an address
   that RM checks against the calling client's own mappings (`CliGetDmaMappingInfo`, `:146`). The
   twin's client is the guest's own, so a guest can write only into its own memory, at host vblank
-  times. It cannot flip, set a mode or change host display state.
+  times. It cannot flip, set a mode or change host display state. ⊘ *Corrected 2026-10-03 (box
+  result above): the client is kayfabe's one host client, so the check is client-wide; host RM writes
+  nothing (no kernel mapping); "cannot flip" is a hypothesis.*
 - The host allocation needs a display engine (`:69`) and a valid head (`:83`). On GPUs without one,
   such as data-centre parts, it fails, so B stays the fallback there.
 - On a host GPU with no monitor, RM runs each vblank callback immediately (`V3_DISPLAY.md` cites
@@ -145,6 +204,12 @@ HOST display heads"* (`crates/kf-rm/src/chanlink.rs`, `alloc_shape`) becomes "tw
 authored head; it writes only into the twin's own address space". That is a rule change, hence the
 owner's call. The box test: the Cinnamon X11 session starts, X11 `vkcube` presents, there are zero
 host Xid 32, and frame rates are recorded.
+
+★ *2026-10-03 (later): option A is built as a default-off experiment so this can be decided on box
+data — branch `v3-dispsw-exp`, device property `x11-dispsw` (default off; with it off nothing changes).
+What it does, the rule change it embodies, and the exact A/B box test are in `design/V3_DISPLAY.md`, the
+`x11-dispsw` note. No box has run it yet; this item stays open.* ⊘ *Superseded the same day: the box
+result at the top of this item. The item stays open for the owner's ruling.*
 
 ## 3. The archived traces that contain a full VBIOS
 
@@ -190,6 +255,9 @@ clone. Optionally add a CI gate that refuses a committed trace holding a `55 aa`
 the gate against the old file first, so it can be seen to fire.
 
 ## 4. Renting a GPU box for display work
+
+⊘ **ANSWERED 2026-10-03 by the owner:** *"feel free to rent vast boxes, I added some credits ... use
+the vast kvm desktop template + vms_enable=true"*. Boxes are rented per lane and destroyed when idle.
 
 **What needs a box.** kf3 needs a host NVIDIA GPU to realize, so these cannot run locally:
 
@@ -257,4 +325,44 @@ states the new default (`design/V3_DISPLAY.md` §8.5).
   primary** (the reviewer read the bench's serial and Xorg logs). The Xorg BusID pin may simply be
   unnecessary. The first box test of the display work checks that with no build at all. The GOP ROM
   is still needed for Windows and for any picture before nvidia-drm loads.
+
+## 6. Three security decisions (added 2026-10-03 evening)
+
+These come from the audit the owner asked for (`design/V3_SECURITY_AUDIT_PLAN.md`). Each one is
+security policy, so none merges without the owner (§F).
+
+**6a. Merge `v3-scratch-bound`.** It fixes the DoS the owner pointed at (*"The memfd is only scratch,
+isn't that a DoS target?"*): the host RAM behind the unmapped parts of BAR1, BAR2 and PRAMIN is now
+one small tile per window, mapped repeatedly, so it is bounded per device instead of growing with
+what the guest touches. Merge bar passed (1777/0, gates 9/9, 30/30). **The policy part:** kf3 now
+refuses to start in the same QEMU as a device that pins guest RAM, and such a device refuses to
+start after kf3: VFIO passthrough (legacy, iommufd, vfio-user), the userspace NVMe driver
+(`nvme://`), and libblkio drives that may pin memory. QEMU 10.2.4 maps every RAM-device region for
+those devices and has no per-region opt-out (one arrives in QEMU 11.1), so they would pin kf3's
+window pages and keep stale IOMMU mappings of them. Side effects: SEV/SEV-ES guests, vhost-vdpa and
+incoming COLO are refused too. **Recommendation: approve.** None of these are in the release
+scope; revisit with QEMU 11.1's opt-out.
+
+**6b. P0 fix, `v3-sec-nonpriv`.** When QEMU runs as root, every host channel kf3 created was an
+ADMIN channel. As the owner said, this is fixed by clearing a bit and not by refusing: the thread
+that creates a channel drops `CAP_SYS_ADMIN` from its effective set for that one call, and each
+channel's reply is checked to be a user channel (`NV01_ROOT_NON_PRIV` cannot do it on Linux; the
+driver rewrites it to an ordinary root client). Merge bar passed. A review asked for tests that fail
+when the wiring is removed, a gate on the merge bar's channel census, and the same bit cleared for
+the CUDA contexts kf3 runs itself; that work is in progress. **Recommendation: approve once that
+lands.**
+
+**6c. P2: guest RAM in the Translated address space.** The owner's ruling: Translated work gets its
+own host VA space, *"with for kernel/phys channels atmost the single store guest vram mapped"*. The
+design (`P1+P2`, 2026-10-03) agrees, with one exception it cannot avoid. The guest kernel's
+Translated producers, the driver's CeUtils and UVM, address system memory by guest-physical address
+(page-table writes, migrations, completions in guest RAM). Mapping guest RAM per operation would
+cost hundreds of host map calls per 2 MiB migration. So the Translated space would hold the store
+window **and one guest-RAM window**, built once per VM. Nothing else goes in it: kayfabe's rings are
+mapped read-only except the fence, and every address the engine uses is computed by kayfabe and
+checked to fall in a window. Guest user twins lose both windows (P1), which closes the in-guest
+isolation gap the audit found. **Recommendation: allow the guest-RAM window in the Translated space
+only.** The alternative, guest-RAM pages mapped per operation, is possible but slow, and not needed
+for isolation: Translated channels run only the guest kernel's work, which can already reach all
+guest RAM.
 

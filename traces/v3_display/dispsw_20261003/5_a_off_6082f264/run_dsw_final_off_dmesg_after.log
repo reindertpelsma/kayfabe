@@ -1,0 +1,159 @@
+[   27.971136] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   27.987037] nvidia 0000:00:02.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   27.991735] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   31.480206] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   31.480372] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   31.518346] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.523845] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   31.525330] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   31.525340] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   31.835485] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   31.836749] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   31.840350] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   31.840356] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   31.840359] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   31.840361] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   31.846162] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   31.846170] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   31.863426] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00009; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   31.863433] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   31.863439] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   31.867225] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   31.873368] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   32.719108] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   32.722153] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   32.766651] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   32.890104] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   32.913355] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   38.234761] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[   38.246315] [drm] [nvidia-drm] [GPU ID 0x00000002] Loading driver
+[   38.984772] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   38.985124] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   39.006751] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   39.012761] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   39.014603] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   39.014612] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   39.333983] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   39.335118] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   39.339044] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   39.339051] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   39.339053] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   39.339056] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   39.345524] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   39.345531] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   39.364966] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00015; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   39.364973] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   39.365039] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   39.369045] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   39.374979] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00016; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   39.410515] nvidia-modeset: WARNING: GPU:0: Failed to register display hotplug handler: 0x56
+
+[   39.412532] nvidia-modeset: WARNING: GPU:0: Failed to register DisplayPort interrupt handler: 0x56
+
+[   39.414545] nvidia-modeset: WARNING: GPU:0: Failed to enable HDMI FRL retrain notifications (subdevice: 0) (error: 0x56)
+[   39.837289] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:02.0 on minor 0
+[   39.837428] nvidia 0000:00:02.0: vgaarb: deactivate vga console
+[   39.837752] Console: switching to colour dummy device 80x25
+[   39.877552] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[   40.002240] Console: switching to colour frame buffer device 240x67
+[   40.033574] nvidia 0000:00:02.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
+[   48.988902] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00018; hParent=0xa55a0030; hObject=0xa55a0060; hClass=0x000090e7; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   48.990211] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00018; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   49.000880] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   49.014965] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   49.054065] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   49.062101] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   49.073965] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   84.569228] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   84.569243] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataRequestDataPoll(pData, pAllocParams->polledDataMask) @ gpu_user_shared_data.c:95
+[   87.905153] [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000002] Flip event timeout on head 0
+[   88.393647] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   90.130865] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   95.161296] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   95.162693] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   95.163871] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   95.164907] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   95.412327] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   95.413372] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   95.414356] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   95.415436] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[   98.476908] show_signal_msg: 111 callbacks suppressed
+[   98.476965] cinnamon[2954]: segfault at 0 ip 00007109e8757f19 sp 00007ffd0b81e770 error 6 in libnvidia-glcore.so.580.159.04[7109e8000000+c00000] likely on CPU 2 (core 2, socket 0)
+[   98.477069] Code: e8 0c ee f8 ff 41 89 c0 48 8b 83 40 12 00 00 f6 40 0c 01 74 09 45 85 ff 0f 85 e3 00 00 00 45 31 c9 48 8b 83 80 00 00 00 89 ea <c7> 00 04 c0 04 20 49 03 55 00 48 c1 ea 20 89 50 04 41 03 6d 00 89
+[  119.655219] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  119.658050] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  119.659534] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  119.660542] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  119.972271] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  119.973842] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  119.974909] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  119.975897] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  121.614472] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  121.615919] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  121.617214] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  121.618490] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  121.869699] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  121.870745] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  121.871757] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  121.872845] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  137.276171] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  137.277321] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  137.278547] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  137.279632] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  137.571345] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  137.572465] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  137.573552] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  137.574670] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  151.044289] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  151.045409] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  151.046579] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  151.047700] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  151.340145] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  151.341260] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  151.342364] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  151.343624] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  156.666665] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  156.667888] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  156.668957] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  156.669955] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  156.932661] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  156.933753] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  156.934776] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  156.935847] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  159.497609] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  159.498660] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  159.499715] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  159.500730] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  159.772051] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  159.773059] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  159.774021] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  159.774987] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  191.570582] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[  191.570598] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataRequestDataPoll(pData, pAllocParams->polledDataMask) @ gpu_user_shared_data.c:95
+[  194.657164] [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000002] Flip event timeout on head 0
+[  195.160386] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  196.703198] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  196.704245] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  196.705305] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  196.706355] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  196.959920] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  196.960963] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  196.961933] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  196.962929] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  209.395639] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  209.397250] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  209.398308] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  209.399358] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  209.657483] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  209.658594] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  209.659708] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  209.660847] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  223.506217] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  223.507274] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  223.508256] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  223.509342] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  223.752280] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  223.753374] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  223.754448] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads
+[  223.755518] NVRM: dispswConstruct_IMPL: RPC error, can't get the displaymask and number of heads

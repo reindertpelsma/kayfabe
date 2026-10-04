@@ -37,7 +37,14 @@ use std::os::unix::ffi::OsStrExt as _;
 /// `v3-broker` (and `v3-windows`, renumbered at its merge), 13 `v3-dispsw-exp`, 14 reserved
 /// (broker-on-13, `v3-cand-1`), 15 `v3-viommu`, 16 this branch — cut from `v3-broker` `82f98f42`,
 /// so a merge with 13, 14 or 15 takes a new number.
-pub const KF3_ABI: u32 = 16;
+/// ★ 13 (2026-10-03, `v3-dispsw-exp`, on top of 11): [`kf3_realize`] also takes `x11_dispsw`,
+/// after `gop` (the EXPERIMENT property, default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03
+/// note). ⊘ 13, not 12: 12 is `v3-broker`'s (`display_broker`), a DIFFERENT `kf3_realize`
+/// signature, so its archive must fail this check.
+/// ⊘ 17 — SCRATCH, BOX-ONLY (2026-10-04, the v3-maxfps box stage, D4): a local merge of `v3-maxfps`
+/// `e7a82046` and `v3-dispsw-exp` `86b4fa10`, never pushed: `kf3_realize` takes `display_broker`,
+/// `display_max_fps`, then `x11_dispsw`. A new number because it is a new shape that reached a binary.
+pub const KF3_ABI: u32 = 17;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -117,6 +124,7 @@ pub unsafe extern "C" fn kf3_realize(
     gop: u32,
     display_broker: u32,
     display_max_fps: u32,
+    x11_dispsw: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -150,6 +158,7 @@ pub unsafe extern "C" fn kf3_realize(
         display_broker: vram.is_some(),
         display_broker_vram: vram.unwrap_or_default(),
         display_max_fps,
+        x11_dispsw: x11_dispsw != 0,
     };
     match Device::realize(&cfg) {
         Ok(d) => {

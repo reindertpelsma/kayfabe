@@ -18,6 +18,7 @@ fn config(display: bool, display_max_fps: u32) -> Config {
         display_broker_vram: kf_broker::gpucopy::VramMode::default(),
         gop: false,
         display_max_fps,
+        x11_dispsw: false,
     }
 }
 

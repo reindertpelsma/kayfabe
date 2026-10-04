@@ -13,6 +13,7 @@ pub mod cardbudget;
 pub mod chan;
 pub mod device;
 pub mod display;
+pub mod dispsw;
 pub mod ffi_unsafe;
 pub mod gop;
 pub mod gpucopy;

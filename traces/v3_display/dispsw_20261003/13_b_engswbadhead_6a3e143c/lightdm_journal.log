@@ -1,0 +1,3 @@
+Oct 03 20:33:04 ubuntu systemd[1]: Starting lightdm.service - Light Display Manager...
+Oct 03 20:33:05 ubuntu systemd[1]: Started lightdm.service - Light Display Manager.
+Oct 03 20:33:15 ubuntu lightdm[2723]: pam_unix(lightdm-autologin:session): session opened for user ubuntu(uid=1000) by (uid=0)

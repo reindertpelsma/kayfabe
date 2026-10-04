@@ -1,0 +1,27 @@
+Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0100 handle 0xc0de9000: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0100 handle 0xbeeb4900: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0100 handle 0xc0de9001: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0100 handle 0xbeeb4901: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0100 handle 0xc0de9002: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0100 handle 0xbeeb4902: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0100 handle 0xc0de9003: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0100 handle 0xbeeb4903: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0101 handle 0xc0de9004: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0101 handle 0xbeeb4904: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0101 handle 0xc0de9005: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0101 handle 0xbeeb4905: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0101 handle 0xc0de9006: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0101 handle 0xbeeb4906: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0101 handle 0xc0de9007: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0101 handle 0xbeeb4907: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0102 handle 0xc0de9008: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0102 handle 0xbeeb4908: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0102 handle 0xc0de9009: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0102 handle 0xbeeb4909: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0102 handle 0xc0de900a: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0102 handle 0xbeeb490a: ioctl=0 status=0
+ENGSW_SHIM pre 0x9072-badhead under 0xbeeb0102 handle 0xc0de900b: ioctl=0 status=0x1a
+ENGSW_SHIM 0x9072 under 0xbeeb0102 handle 0xbeeb490b: ioctl=0 status=0
+vkcube: ./cube/cube.c:711: demo_flush_init_cmd: Assertion `!err' failed.
+RC=134

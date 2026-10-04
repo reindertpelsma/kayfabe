@@ -371,8 +371,22 @@ struct HeldReply {
 ///
 /// ⊘ The guest cannot race it: a GSP client's RPCs are synchronous, so nothing the guest sends
 /// about this object can arrive before the reply does.
-#[derive(Debug, Clone)]
-pub struct Deferred(std::sync::Arc<core::sync::atomic::AtomicU64>);
+///
+/// ★ x11-dispsw review (2026-10-03, LOW): the act runs while the links BEHIND its link are still
+/// deciding the same command — the object seat can refuse the alloc (a handle the guest already
+/// uses for another object) after the act built a host object for it. The act's owner may attach
+/// an UNDO ([`Self::on_orphaned`]); [`GspFsm::release_held`] runs it, once, exactly when the act
+/// succeeded and the reply posted is a refusal — the case it used to only log as orphaned.
+#[derive(Clone)]
+pub struct Deferred {
+    outcome: std::sync::Arc<core::sync::atomic::AtomicU64>,
+    undo: std::sync::Arc<std::sync::Mutex<Option<OrphanUndo>>>,
+}
+
+/// What undoes a deferred act whose command another link refused ([`Deferred::on_orphaned`]).
+/// Runs on the register drainer under the GSP lock, so it must not block: hand the work to the
+/// act's own thread.
+pub type OrphanUndo = Box<dyn FnOnce() + Send>;
 
 impl Deferred {
     const PENDING: u64 = u64::MAX;
@@ -380,14 +394,15 @@ impl Deferred {
     /// A pending outcome.
     #[must_use]
     pub fn new() -> Deferred {
-        Deferred(std::sync::Arc::new(core::sync::atomic::AtomicU64::new(
-            Self::PENDING,
-        )))
+        Deferred {
+            outcome: std::sync::Arc::new(core::sync::atomic::AtomicU64::new(Self::PENDING)),
+            undo: std::sync::Arc::new(std::sync::Mutex::new(None)),
+        }
     }
 
     /// Resolve with an `NV_STATUS` (`0` = the act succeeded). The first resolution wins.
     pub fn resolve(&self, status: u32) {
-        let _ = self.0.compare_exchange(
+        let _ = self.outcome.compare_exchange(
             Self::PENDING,
             u64::from(status),
             core::sync::atomic::Ordering::AcqRel,
@@ -398,10 +413,36 @@ impl Deferred {
     /// The outcome, once resolved.
     #[must_use]
     pub fn outcome(&self) -> Option<u32> {
-        match self.0.load(core::sync::atomic::Ordering::Acquire) {
+        match self.outcome.load(core::sync::atomic::Ordering::Acquire) {
             Self::PENDING => None,
             s => Some(s as u32),
         }
+    }
+
+    /// Attach the act's undo: run once if the act succeeds and the command's reply is a refusal
+    /// another link made ([`GspFsm::release_held`]). A second call replaces the first.
+    pub fn on_orphaned(&self, undo: impl FnOnce() + Send + 'static) {
+        if let Ok(mut u) = self.undo.lock() {
+            *u = Some(Box::new(undo));
+        }
+    }
+
+    /// Run the attached undo, if any; `true` when one ran. At most once per cell (clones share it).
+    pub fn run_orphan_undo(&self) -> bool {
+        let undo = self.undo.lock().ok().and_then(|mut u| u.take());
+        undo.map(|f| f()).is_some()
+    }
+}
+
+impl core::fmt::Debug for Deferred {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Deferred")
+            .field("outcome", &self.outcome())
+            .field(
+                "undo",
+                &self.undo.lock().map(|u| u.is_some()).unwrap_or(false),
+            )
+            .finish()
     }
 }
 
@@ -413,10 +454,45 @@ impl Default for Deferred {
 
 impl PartialEq for Deferred {
     fn eq(&self, other: &Self) -> bool {
-        std::sync::Arc::ptr_eq(&self.0, &other.0)
+        std::sync::Arc::ptr_eq(&self.outcome, &other.outcome)
     }
 }
 impl Eq for Deferred {}
+
+/// ★ What [`GspFsm::release_held`] does with a held reply's deferred act: `false` = still pending
+/// (the reply stays held); `true` = the reply may be posted as `rpc` now reads. A failed act's
+/// status becomes the reply's (and an alloc's params `status`); a SUCCEEDED act under a reply
+/// another link refused runs its undo ([`Deferred::on_orphaned`]) — or, with none attached, is
+/// named orphaned. Idempotent across a post that fails and is retried: the undo runs once.
+fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
+    match d.outcome() {
+        None => false,
+        Some(0) if rpc.rpc_result != 0 => {
+            let undone = d.run_orphan_undo();
+            eprintln!(
+                "kayfabe: HELD-REPLY fn={:#x} seq={}: its deferred act SUCCEEDED but the reply is a refusal ({:#x}) — {}",
+                rpc.function,
+                rpc.sequence,
+                rpc.rpc_result,
+                if undone {
+                    "its owner's undo was queued"
+                } else {
+                    "the act's object is orphaned"
+                }
+            );
+            true
+        }
+        Some(0) => true,
+        Some(status) => {
+            rpc.rpc_result = status;
+            rpc.rpc_result_private = status;
+            if alloc {
+                stamp_alloc_status(rpc, status);
+            }
+            true
+        }
+    }
+}
 
 /// `rpc_gsp_rm_alloc_v03_00.status` — the `[OUT]` field a GSP client reads as the alloc's
 /// result when the transport status is not `NV_OK` (`ogkm-580: g_rpc-structures.h:1491-1502`,
@@ -2437,27 +2513,13 @@ impl GspFsm {
             let mut rpc = h.rpc.clone();
             // ★ P5b: a reply whose status waits on a host act stays held — and so does every
             // reply behind it (the order posted is the order asked).
-            if let Some(d) = &h.deferred {
-                match d.outcome() {
-                    None => break,
-                    Some(0) if rpc.rpc_result != 0 => {
-                        // ⊘ The act succeeded for a command another link refused: the guest sees
-                        // the refusal, and whatever the act built is orphaned until its owner is
-                        // freed. Named, never silent.
-                        eprintln!(
-                            "kayfabe: HELD-REPLY fn={:#x} seq={}: its deferred act SUCCEEDED but the reply is a refusal ({:#x}) — the act's object is orphaned",
-                            rpc.function, rpc.sequence, rpc.rpc_result
-                        );
-                    }
-                    Some(0) => {}
-                    Some(status) => {
-                        rpc.rpc_result = status;
-                        rpc.rpc_result_private = status;
-                        if h.alloc {
-                            stamp_alloc_status(&mut rpc, status);
-                        }
-                    }
-                }
+            // ⊘ An act that succeeded for a command another link refused: the guest sees the
+            // refusal, and what the act built is undone by its owner (or, with no undo attached,
+            // orphaned until its owner is freed). Named, never silent (`settle_deferred`).
+            if let Some(d) = &h.deferred
+                && !settle_deferred(&mut rpc, d, h.alloc)
+            {
+                break;
             }
             let detail = h.detail;
             self.post(ram, &rpc)?;
@@ -2870,6 +2932,80 @@ mod a_reply_whose_status_is_a_host_act {
             Some(0x56),
             "a clone sees the act's outcome, and a second resolve cannot rewrite it"
         );
+    }
+
+    fn held(rpc_result: u32) -> OutgoingRpc {
+        OutgoingRpc {
+            function: 103,
+            sequence: 9,
+            rpc_result,
+            rpc_result_private: rpc_result,
+            payload: vec![0u8; 40],
+        }
+    }
+
+    /// ★ x11-dispsw review (2026-10-03, LOW): an act that SUCCEEDED for a command another link
+    /// refused (the object seat: a handle the guest already uses) runs its owner's undo — once,
+    /// however often the post is retried — and an act that failed or a reply that succeeded never
+    /// does. Without the call in `settle_deferred` the host object the act built stays until its
+    /// channel goes (the review's orphan).
+    #[test]
+    fn a_succeeded_act_under_a_refused_reply_runs_its_undo_once() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let ran = std::sync::Arc::new(AtomicU32::new(0));
+        let hook = |d: &Deferred| {
+            let r = ran.clone();
+            d.on_orphaned(move || {
+                r.fetch_add(1, Ordering::Relaxed);
+            });
+        };
+        // Pending: the reply waits, nothing runs.
+        let d = Deferred::new();
+        hook(&d);
+        let mut rpc = held(0x19);
+        assert!(!settle_deferred(&mut rpc, &d, true));
+        // Act OK, reply refused by another link: the undo runs, the refusal stands.
+        d.resolve(0);
+        assert!(settle_deferred(&mut rpc, &d, true));
+        assert_eq!(ran.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            rpc.rpc_result, 0x19,
+            "the guest still reads the seat's refusal"
+        );
+        // A retried post (the first failed) settles again — the undo does not run twice.
+        assert!(settle_deferred(&mut rpc, &d, true));
+        assert_eq!(ran.load(Ordering::Relaxed), 1);
+        // Act OK, reply OK: nothing to undo.
+        let ok = Deferred::new();
+        hook(&ok);
+        ok.resolve(0);
+        let mut fine = held(0);
+        assert!(settle_deferred(&mut fine, &ok, true));
+        assert_eq!(ran.load(Ordering::Relaxed), 1);
+        assert!(
+            ok.run_orphan_undo(),
+            "still attached: it was never an orphan"
+        );
+        assert_eq!(ran.load(Ordering::Relaxed), 2, "run by hand above, once");
+        // Act refused: its status is the reply's (and the alloc params'), and no undo runs.
+        let bad = Deferred::new();
+        hook(&bad);
+        bad.resolve(0x56);
+        let mut r = held(0);
+        assert!(settle_deferred(&mut r, &bad, true));
+        assert_eq!((r.rpc_result, r.rpc_result_private), (0x56, 0x56));
+        assert_eq!(
+            &r.payload[RM_ALLOC_PARAMS_STATUS_AT..RM_ALLOC_PARAMS_STATUS_AT + 4],
+            &0x56u32.to_le_bytes()
+        );
+        assert_eq!(ran.load(Ordering::Relaxed), 2);
+        // No undo attached: named orphaned, nothing runs, and a clone shares the cell.
+        let bare = Deferred::new();
+        let twin = bare.clone();
+        bare.resolve(0);
+        let mut refused = held(0x19);
+        assert!(settle_deferred(&mut refused, &twin, true));
+        assert!(!bare.run_orphan_undo());
     }
 
     /// ⊘ The default defers nothing, and a chain reports the one link that deferred wherever it
