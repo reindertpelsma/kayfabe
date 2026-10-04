@@ -1,0 +1,1 @@
+EDID_FILE /sys/class/drm/card1-DVI-D-1/edid bytes=128 status=connected sha256=c589c657cf0b1f3058a6e7de20484d3b71975241cf36c8adf228da78b089a3e3

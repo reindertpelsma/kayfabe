@@ -135,3 +135,10 @@ probe (`vk_present_timing.c`, `present_timing_hook.sh`) observes actual
 `vkQueuePresentKHR` returns in the unmodified vkcube, skips the first sixteen
 presents, checks all 480 calls and return codes, and uses IMMEDIATE mode as
 a control. No product behavior or Vulkan return value is modified.
+
+`fps30/` completed at 11:44:56 UTC on `9d82f259`: preferred EDID 1920x1080
+29.938 Hz, maximum 30 Hz, period 33401904 ns; KMS 120/120 flips at 29.94 Hz
+and pixel-exact pattern A. Wayland FIFO 400 frames completed in 18.360s
+(includes startup); Wayland IMMEDIATE/MAILBOX also completed. No cap overrun.
+While unwatched and fbcon changed, checks/copies remained zero; on-demand
+red/blue snapshots returned fresh, distinct full frames in 809/779 ms.

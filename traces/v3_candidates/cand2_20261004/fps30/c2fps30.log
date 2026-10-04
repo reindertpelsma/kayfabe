@@ -1,0 +1,61 @@
+START kind=fps30 tag=c2fps30 2026-10-04T11:41:43+00:00
+[boot_capture:c2fps30] BINARY kf3-bin-rev:9d82f259  (/workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:c2fps30] host dmesg watermark: 809 lines
+[boot_capture:c2fps30] booting (extra args: -vga none -vnc 127.0.0.1:0 -qmp unix:/workspace/bench/run_c2fps30.qmp,server=on,wait=off)
+== kf3 binary: /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64 (rev 9d82f259)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on,display-max-fps=30
+== firmware: OVMF /usr/share/OVMF/OVMF_CODE_4M.fd (vars copy /workspace/bench/run_c2fps30_ovmf_vars.fd)
+[boot_capture:c2fps30] guest is up after 47s
+[boot_capture:c2fps30] module unloaded and ring buffer cleared; loading cold
+[boot_capture:c2fps30] opening the device (this is what runs RmInitAdapter)
+[boot_capture:c2fps30] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_c2fps30_dmesg.log
+[boot_capture:c2fps30] --- the verdict lines ---
+[boot_capture:c2fps30] running POST_CAPTURE_HOOK: /root/kayfabe/scripts/bench/display/max_fps_hook.sh
+[boot_capture:c2fps30] hook finished: rc=0
+[boot_capture:c2fps30] guest dmesg after workload: 86 lines (67 NVRM), delta 58 → /workspace/bench/run_c2fps30_dmesg_after.log
+[boot_capture:c2fps30] host dmesg delta: 6 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_c2fps30_hostdmesg.log
+[boot_capture:c2fps30] pre-poweroff guest command: sudo systemctl stop lightdm 2>/dev/null; sudo sync; echo s | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1; echo u | sudo tee /proc/sysrq-trigger >/dev/null; sleep 1
+[boot_capture:c2fps30] pre-poweroff rc=0
+[boot_capture:c2fps30] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:c2fps30] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=140704 applied=4787 refused=4 serviced=2677 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=1889 walks=1899/1899 cleared=1889 superseded=0 named_missed=6 unreconciled=0 mapped=2773 unmapped=2455 clipped=0x0 held=0 vmm_overlaps=0 pri
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10046 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10045 fast=0
+    DOORBELL-LEDGER tok=0x0000100c route=passthrough rung=1 emulated=0 forwarded=1 host=0x20050 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=6 emulated=0 forwarded=6 host=0x52 trap=6 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=1613 emulated=0 forwarded=1613 host=0x51 trap=1613 fast=0
+    DOORBELL-LEDGER tok=0x0000080a route=passthrough rung=7 emulated=0 forwarded=7 host=0x1004e trap=7 fast=0
+    DOORBELL-LEDGER tok=0x0000100b route=passthrough rung=11 emulated=0 forwarded=11 host=0x2004f trap=11 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=12 emulated=0 forwarded=12 host=0x4d trap=12 fast=0
+    DOORBELL-LEDGER tok=0x00000807 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1004b trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004c trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000006 route=passthrough rung=4 emulated=0 forwarded=4 host=0x4a trap=4 fast=0
+    DOORBELL-LEDGER tok=0x0000100c route=passthrough rung=1 emulated=0 forwarded=1 host=0x20050 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=5 emulated=0 forwarded=5 host=0x52 trap=5 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=12011 emulated=0 forwarded=12011 host=0x51 trap=12011 fast=0
+    DOORBELL-LEDGER tok=0x0000080a route=passthrough rung=10 emulated=0 forwarded=10 host=0x1004e trap=10 fast=0
+    DOORBELL-LEDGER tok=0x0000100b route=passthrough rung=4 emulated=0 forwarded=4 host=0x2004f trap=4 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=9 emulated=0 forwarded=9 host=0x4d trap=9 fast=0
+    DOORBELL-LEDGER tok=0x00000807 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1004b trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004c trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000006 route=passthrough rung=4 emulated=0 forwarded=4 host=0x4a trap=4 fast=0
+    DOORBELL-LEDGER tok=0x0000100c route=passthrough rung=1 emulated=0 forwarded=1 host=0x20050 trap=1 fast=0
+    DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=5 emulated=0 forwarded=5 host=0x52 trap=5 fast=0
+    DOORBELL-LEDGER tok=0x0000000d route=passthrough rung=12011 emulated=0 forwarded=12011 host=0x51 trap=12011 fast=0
+    DOORBELL-LEDGER tok=0x0000080a route=passthrough rung=10 emulated=0 forwarded=10 host=0x1004e trap=10 fast=0
+    DOORBELL-LEDGER tok=0x0000100b route=passthrough rung=4 emulated=0 forwarded=4 host=0x2004f trap=4 fast=0
+    DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=9 emulated=0 forwarded=9 host=0x4d trap=9 fast=0
+    DOORBELL-LEDGER tok=0x00000807 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1004b trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001008 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004c trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000006 route=passthrough rung=4 emulated=0 forwarded=4 host=0x4a trap=4 fast=0
+    DOORBELL-LEDGER tok=0x00000804 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10048 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00001005 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20049 trap=0 fast=0
+    DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=128 emulated=0 forwarded=128 host=0x47 trap=128 fast=0
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10046 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=430 host=0x10045 fast=0
+[boot_capture:c2fps30] evidence carried into the repo: /root/kayfabe/traces/guest_boots/run_c2fps30_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:c2fps30] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:c2fps30]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:c2fps30] done. serial=/workspace/bench/run_c2fps30_serial.log qemu=/workspace/bench/run_c2fps30_qemu.log dmesg=/workspace/bench/run_c2fps30_dmesg.log dmesg_after=/workspace/bench/run_c2fps30_dmesg_after.log probe=/workspace/bench/run_c2fps30_probe.log hostdmesg=/workspace/bench/run_c2fps30_hostdmesg.log
+EXIT rc=0 2026-10-04T11:44:56+00:00
