@@ -1013,6 +1013,13 @@ C4 of rev 1 is gone: its content is P2-G2.
 | lane hunk positions | `git diff $(git merge-base origin/master origin/<lane>) origin/<lane>` on 2026-10-04 |
 | G1's rev 1 trap measurements, kf3.c recipe and its 25 = 25, a1 and a8 probes | gates, hwaddr and exports lenses (rev 1, 2026-10-04) |
 
+⊘ **Measured since, on GitHub runners (2026-10-04, branch `v3-sec-perimeter`):**
+- **`--all-features` builds the workspace.** The x86_64 location pass uses it, and the whole gate passed in run 37168007181: 625 units, 2303 `unsafe_code` diagnostics, 0 outside the perimeter, 10 exempt (doorbell's 5 in each root pass).
+- **The aarch64 pass closes the one-block gap.** SF4 prints no difference for `kf-linux-raw/src/mapping_unsafe.rs` blocks in that run. The differences it does print are expected: kf-cuda's 3 macro-body blocks (their 85 expansions count against `macro_unsafe`), extern items, and inline `asm!`, none of which the lint reports.
+- **`--disable-download` is accepted by 10.2.4's configure.** The `kf3-c` job passed once `bzip2` was installed.
+- **Runner timings:** `perimeter` about 1 min, `compiler-location` about 2 min, `kf3-c` about 1.2 min, `kf3-link` 3 min 47 s.
+- **Not chosen:** a8 does not use mremap at all (§4.1, as built), so the first item below is moot for this branch.
+
 **Not verified:**
 - whether NVIDIA device mappings survive `mremap` (a8);
 - runner timings for every job, and E3c's run time;
