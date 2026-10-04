@@ -1,0 +1,68 @@
+=== boot_capture tag=c2present2 at 2026-10-04T11:56:28+00:00 ===
+=== source revision: 9d82f259 ===
+=== qemu binary: -rwxr-xr-x 1 root root 90002544 Oct  4 11:08 /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sun Oct  4 11:56:36 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:02.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  4 11:56 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  4 11:56 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  4 11:56 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  4 11:56 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  4 11:56 .
+drwxr-xr-x 19 root root   4040 Oct  4 11:56 ..
+cr--------  1 root root 240, 1 Oct  4 11:56 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  4 11:56 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/present_timing_hook.sh at 2026-10-04T11:56:38+00:00 ===
+f5419f0aeb07bb6636ea488da98b9f490dd8733a6ca2983f791ce8b6d6dd8a36  /tmp/vk_present_timing.c
+VK_PRESENT_OBSERVER_BIND loader=/lib/x86_64-linux-gnu/libvulkan.so.1
+Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu
+VK_PRESENT_TIMING {"count":480,"skip":16,"seconds":15.478607294,"fps":29.976857,"errors":0}
+VK_PRESENT_OBSERVER_BIND loader=/lib/x86_64-linux-gnu/libvulkan.so.1
+Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu
+VK_PRESENT_TIMING {"count":480,"skip":16,"seconds":0.297854899,"fps":1557.805500,"errors":0}
+PRESENT_TIMING_VERDICT PASS {"2": {"count": 480, "skip": 16, "seconds": 15.478607294, "fps": 29.976857, "errors": 0}, "0": {"count": 480, "skip": 16, "seconds": 0.297854899, "fps": 1557.8055, "errors": 0}}
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=64
+GUEST_DMESG_AFTER_NVRM=46
+GUEST_DMESG_WORKLOAD_DELTA=36
+=== HOST dmesg delta for this boot (watermark 819 → 819) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

@@ -153,3 +153,33 @@ capabilities, and `readelf -Ws /usr/bin/vkcube` imports `dlsym@GLIBC_2.34` rathe
 than Vulkan symbols. It loads Vulkan on an explicit library handle. The revised
 observer wraps those loader entry points too, checking their owning library
 with `dladdr`; ICD and unrelated symbols are forwarded unchanged.
+
+`present_timing/`: the corrected observer passes on the actual guest executable,
+11:57:34 UTC, product `9d82f259`. FIFO: 480 calls, last 464 returns in
+15.478607s = **29.976857 FPS**, zero errors. IMMEDIATE control: 480 calls,
+**1557.8055 FPS**, zero errors. D4's cap premise is supported by presentation
+measurements; the earlier total-process-time prediction included variable
+startup and is superseded. `local/observer_loader_check.log` independently
+proves explicit-handle routing, exact counts and unchanged error returns.
+
+`broker/`: completed 11:54:16 UTC, broker `9f2fd00`, product `9d82f259`. GPU-copy
+grade PASS: 482 GPU copies, zero carrier refusals, unchecked carriers, unasked
+formats or dma-buf trips. Hover/hidden/grab/movement/reconnect checks complete;
+VNC's received premultiplied cursor equals the host pointer byte-for-byte
+(relative to the hot spot), with no channel above alpha. Guest XFixes vs the
+head's image retains the already documented darker translucent edge (maximum
+channel delta 52; §8.12), while the opaque xterm glyph matches exactly.
+The stopped/restarted broker does not prevent guest SSH; reconnect replays the
+frame. Its short glxgears-while-stopped sample produced no FPS line, so that
+line alone does not grade rendering progress under SIGSTOP.
+
+Idle VNC + broker: 960 additional unchanged checks, 59.9 checks/s and zero
+copies/s, no cap overrun. The DRI3 negative descriptor run rejects six unsafe
+layouts in the broker before X sees them; valid descriptors import and the
+subsequent real GPU-copy run passes. As on the previous DDX, no actual import
+refusal / unsolicited EV_FORMAT=0 was provoked; do not claim that wire event
+as hardware-observed. Its protocol and reconnect behavior remain covered by
+the existing broker/relay tests.
+
+`apps_host/`: all **71/71** applications pass on vmb (11:51:41 UTC). Guest
+applications are still running at `9d82f259`; no promotion verdict yet.
