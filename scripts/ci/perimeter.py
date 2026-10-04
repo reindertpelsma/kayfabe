@@ -1148,6 +1148,14 @@ def cross_check(actual: dict[str, dict], counts: dict[str, dict[str, set]]) -> l
             if lex is None or len(keys) > lex:
                 out.append(Finding("SF4", f, 0, f"compiler counts {len(keys)} `{kind}` sites, the tokenizer "
                                                 f"{lex}: a tokenizer bug (it is cfg-blind, so it may only be higher)"))
+    # Informational: where the tokenizer counts more than any pass compiled (cfg arms no pass
+    # builds, or a macro defined but never expanded). Equal everywhere else.
+    for f in sorted(actual):
+        per = counts.get(f, {})
+        for kind in (*rslex.KINDS, "macro_unsafe"):
+            lex, comp = actual[f].get(kind, 0), len(per.get(kind, ()))
+            if lex and comp < lex:
+                print(f"  SF4 note: {f} {kind}: compiler {comp} < tokenizer {lex}")
     return out
 
 
