@@ -2,6 +2,9 @@
 # break CI on every commit: trybuild snapshots changed wording and clippy grew new lints. Bump this
 # deliberately, in one commit that also regenerates `crates/*/tests/ui/*.stderr` and re-records
 # `scripts/ci/clippy-debt.json` — and update the three `toolchain:` lines in .github/workflows/ci.yml.
+# Also scripts/ci/perimeter.toml: `toolchain` (the compiler location gate runs only that rustc) and
+# `rustdoc_format` (the export generator refuses any other rustdoc JSON format). M0 fails the bump
+# until every workflow `toolchain:` line and perimeter.toml agree with `channel` below.
 [toolchain]
 channel = "1.99.0"
 components = ["rustfmt", "clippy"]

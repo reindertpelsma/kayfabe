@@ -19,13 +19,37 @@ on:
     paths:
       - '**/*_unsafe.rs'
       - 'docs/design/PERIMETER_EXPORTS.md'
+  # A push that changes the instrument itself runs its known positive (the `selftest` job) only.
+  push:
+    paths:
+      - '.github/workflows/perimeter-mutants.yml'
+      - 'scripts/ci/selftest_mutants.py'
+      - 'scripts/ci/perimeter_exports.py'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  selftest:
+    name: perimeter-mutants — E3c known positive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0   # pinned with rust-toolchain.toml and scripts/ci/perimeter.toml
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: mutants-selftest
+      - name: cargo-mutants 27.1.0 (the version the design's scope was measured with)
+        run: cargo install --locked cargo-mutants --version 27.1.0
+      - name: "E3c known positive: a vacuous test leaves missed mutants; a pinning test leaves none"
+        run: python3 scripts/ci/selftest_mutants.py
+
   mutants:
     name: perimeter-mutants — ${{ matrix.crate }} (E3c)
+    needs: selftest
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 330
     strategy:
@@ -45,8 +69,6 @@ jobs:
           key: mutants-${{ matrix.crate }}
       - name: cargo-mutants 27.1.0 (the version the design's scope was measured with)
         run: cargo install --locked cargo-mutants --version 27.1.0
-      - name: "E3c known positive: a vacuous test leaves missed mutants; a pinning test leaves none"
-        run: python3 scripts/ci/selftest_mutants.py
       - name: Allow user namespaces for this checkout's test executables (as the stable job)
         run: python3 scripts/ci/runner_namespaces.py
       - name: cargo mutants over ${{ matrix.crate }}'s perimeter files
