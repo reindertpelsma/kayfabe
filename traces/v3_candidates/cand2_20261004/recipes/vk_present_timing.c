@@ -16,6 +16,7 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static PFN_vkQueuePresentKHR present_next;
 static PFN_vkGetInstanceProcAddr instance_next;
 static PFN_vkGetDeviceProcAddr device_next;
+static void *loader_handle = RTLD_NEXT;
 static unsigned long long count, errors;
 static double first, last;
 
@@ -43,6 +44,9 @@ void *dlsym(void *handle, const char *name)
         !strstr(identity.dli_fname, "libvulkan.so")) {
         return found;
     }
+    if (handle != RTLD_DEFAULT && handle != RTLD_NEXT) {
+        loader_handle = handle;
+    }
     if (strcmp(name, "vkGetInstanceProcAddr") == 0) {
         instance_next = (PFN_vkGetInstanceProcAddr)found;
         fprintf(stderr, "VK_PRESENT_OBSERVER_BIND loader=%s\n", identity.dli_fname);
@@ -62,7 +66,7 @@ void *dlsym(void *handle, const char *name)
 static void resolve_present(void)
 {
     if (!present_next) {
-        present_next = (PFN_vkQueuePresentKHR)lookup(RTLD_NEXT, "vkQueuePresentKHR");
+        present_next = (PFN_vkQueuePresentKHR)lookup(loader_handle, "vkQueuePresentKHR");
     }
     if (!present_next) {
         fprintf(stderr, "VK_PRESENT_OBSERVER_ERROR no loader export\n");
@@ -95,11 +99,13 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetDeviceProcAddr(VkDevice device,
                                                            const char *name)
 {
     if (!device_next) {
-        device_next = (PFN_vkGetDeviceProcAddr)lookup(RTLD_NEXT, "vkGetDeviceProcAddr");
+        device_next = (PFN_vkGetDeviceProcAddr)lookup(loader_handle, "vkGetDeviceProcAddr");
     }
     PFN_vkVoidFunction found = device_next(device, name);
     if (found && strcmp(name, "vkQueuePresentKHR") == 0) {
-        present_next = (PFN_vkQueuePresentKHR)found;
+        if (found != (PFN_vkVoidFunction)vkQueuePresentKHR) {
+            present_next = (PFN_vkQueuePresentKHR)found;
+        }
         return (PFN_vkVoidFunction)vkQueuePresentKHR;
     }
     return found;
@@ -109,15 +115,19 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instan
                                                              const char *name)
 {
     if (!instance_next) {
-        instance_next = (PFN_vkGetInstanceProcAddr)lookup(RTLD_NEXT, "vkGetInstanceProcAddr");
+        instance_next = (PFN_vkGetInstanceProcAddr)lookup(loader_handle, "vkGetInstanceProcAddr");
     }
     PFN_vkVoidFunction found = instance_next(instance, name);
     if (found && strcmp(name, "vkQueuePresentKHR") == 0) {
-        present_next = (PFN_vkQueuePresentKHR)found;
+        if (found != (PFN_vkVoidFunction)vkQueuePresentKHR) {
+            present_next = (PFN_vkQueuePresentKHR)found;
+        }
         return (PFN_vkVoidFunction)vkQueuePresentKHR;
     }
     if (found && strcmp(name, "vkGetDeviceProcAddr") == 0) {
-        device_next = (PFN_vkGetDeviceProcAddr)found;
+        if (found != (PFN_vkVoidFunction)vkGetDeviceProcAddr) {
+            device_next = (PFN_vkGetDeviceProcAddr)found;
+        }
         return (PFN_vkVoidFunction)vkGetDeviceProcAddr;
     }
     if (found && strcmp(name, "vkGetInstanceProcAddr") == 0) {
