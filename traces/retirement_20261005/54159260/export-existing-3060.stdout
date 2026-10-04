@@ -1,0 +1,105 @@
+{"schema":"kayfabe-gsp-observer/1","complete":false,"scanned_bytes":29753411846144,"scan_passes":275,"candidates":1,"attached_tables":1,"read_failures":0,"unstable_snapshots":21000,"invalid_elements":2147143623,"recorded":3819,"dropped":146851,"sequence_gaps":0,"buffered_bytes":33554376}
+
+{"schema":"kayfabe-gsp-observer/1","complete":false,"scanned_bytes":29754726760448,"scan_passes":275,"candidates":1,"attached_tables":1,"read_failures":0,"unstable_snapshots":21004,"invalid_elements":2147238849,"recorded":3827,"dropped":146851,"sequence_gaps":0,"buffered_bytes":0}
+
+{"text_log":"C:\\ProgramData\\KayfabeGsp\\captures\\rtx3060-gsp-policy-boot\\gsp.jsonl","selection":"all","records":1840,"omitted_records":0,"source_bytes":6887488,"source_sha256":"9884a94fbd2483b31a1a687e2a8644246254d09b0f023e70cba8c458d89eebc0","exported_bytes":6887488,"exported_sha256":"9884a94fbd2483b31a1a687e2a8644246254d09b0f023e70cba8c458d89eebc0","capture_complete":false}
+{"text_log":"C:\\ProgramData\\KayfabeGsp\\captures\\rtx3060-gsp-policy-boot\\retirement-drain.jsonl","selection":"all","records":3827,"omitted_records":0,"source_bytes":33625112,"source_sha256":"97d44be080f634e9971299ef49b915809f84e9a7c03f6a6d7b673d0723fe4bba","exported_bytes":33625112,"exported_sha256":"97d44be080f634e9971299ef49b915809f84e9a7c03f6a6d7b673d0723fe4bba","capture_complete":false}
+{
+    "time":  "2026-10-04T23:21:21.7437876Z",
+    "drain_exit_unavailable":  true,
+    "original_collector_exit_missing":  true,
+    "observer_status":  "Stopped",
+    "files":  [
+                  {
+                      "name":  "boot-arm-journal.json",
+                      "length":  481,
+                      "sha256":  "ec3ac68c78bc2c7ae4dccaa53ac44870cec048eb2528288ad1b984931543f33c"
+                  },
+                  {
+                      "name":  "boot-observer-initial.json",
+                      "length":  278,
+                      "sha256":  "2f6f57f2136a902310ad2723871b490796c644887154c1b6110c9cebb07ee702"
+                  },
+                  {
+                      "name":  "collect-task.ps1",
+                      "length":  3918,
+                      "sha256":  "b43b97f5444f0a0114c58895f8e96ad326da2dc9a4a4f739a381cbfe365dd572"
+                  },
+                  {
+                      "name":  "collector.stderr",
+                      "length":  61,
+                      "sha256":  "c9eff96307d695933e1b3a1125bc415a35af774b54cd963a122b87dd9d966239"
+                  },
+                  {
+                      "name":  "collector.stdout",
+                      "length":  270,
+                      "sha256":  "d4f1751a228cfb5e0660446078f650ec486960e8c66305aef8fc944976d402f4"
+                  },
+                  {
+                      "name":  "gsp.jsonl",
+                      "length":  14068647,
+                      "sha256":  "bb730d9a97a17a0dbc6cb5e48dec8482bfc75f801a8e0037098fc407cef45897"
+                  },
+                  {
+                      "name":  "gsp.kgwt",
+                      "length":  6887488,
+                      "sha256":  "9884a94fbd2483b31a1a687e2a8644246254d09b0f023e70cba8c458d89eebc0"
+                  },
+                  {
+                      "name":  "gsp.kgwt.stats.json",
+                      "length":  270,
+                      "sha256":  "d4f1751a228cfb5e0660446078f650ec486960e8c66305aef8fc944976d402f4"
+                  },
+                  {
+                      "name":  "native-state-before-reboot.json",
+                      "length":  1470,
+                      "sha256":  "7d8049d0418c817a832ef179182bdb9f518ca2dd99eb08e44b872f80473fd183"
+                  },
+                  {
+                      "name":  "retirement-before.json",
+                      "length":  293,
+                      "sha256":  "0b3c6a9ad918c4c49346fe2c727d7762742d844d59941270d5af9dc4b34ff73d"
+                  },
+                  {
+                      "name":  "retirement-drain.jsonl",
+                      "length":  67864613,
+                      "sha256":  "350e0b9943239195ad275bd46349a97e63fae5d153a36b52cf79e6ae2ed79ab5"
+                  },
+                  {
+                      "name":  "retirement-drain.kgwt",
+                      "length":  33625112,
+                      "sha256":  "97d44be080f634e9971299ef49b915809f84e9a7c03f6a6d7b673d0723fe4bba"
+                  },
+                  {
+                      "name":  "retirement-drain.kgwt.stats.json",
+                      "length":  283,
+                      "sha256":  "d970684c0d07c26f7e94c62a498cb7a1702b28eda0b547520f57f4b6121172dc"
+                  },
+                  {
+                      "name":  "retirement-drain.stderr",
+                      "length":  0,
+                      "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  {
+                      "name":  "retirement-drain.stdout",
+                      "length":  286,
+                      "sha256":  "2653b8af53916094fdeba854cadecfb9985e664070d37554c94bbcd2369ea3c4"
+                  },
+                  {
+                      "name":  "retirement-gpu.txt",
+                      "length":  48,
+                      "sha256":  "a09cce7a9347b04342440cf1cc311d7e40664cb6ead224a5e27d1c89934ae740"
+                  },
+                  {
+                      "name":  "startup-task.xml",
+                      "length":  1301,
+                      "sha256":  "314abcdcb65fd06a06ff00850bdb5384d11b5b16a01ed9d9a4288e8d5c603c4d"
+                  },
+                  {
+                      "name":  "startup.json",
+                      "length":  117,
+                      "sha256":  "e8475b2290170905af99fc9c19a722331a0ebec8fadc58633190a873aaecd717"
+                  }
+              ]
+}
+

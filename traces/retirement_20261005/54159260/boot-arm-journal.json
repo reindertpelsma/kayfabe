@@ -1,0 +1,11 @@
+﻿{
+    "time":  "2026-10-04T17:50:41.5509464Z",
+    "original_service_start":  3,
+    "requested_start":  1,
+    "task_name":  "KayfabeGspCapture3060Boot",
+    "collector_sha256":  "9f1a69942dc52e9e8fded62069b1078a59db06fd2c522e1b1e90596d6fc97bb9",
+    "driver_signed_sha256":  "37b7a7a95fe2e2b67e3c3e494e6fc51a344f6c99f543cd8c99e13edb86b657bb",
+    "helper_commit":  "4ed6a8f",
+    "driver_state_reconciled_from_live_checks":  false,
+    "history_complete":  false
+}

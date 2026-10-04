@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-04T23:21:21.364361+00:00",
+  "script": "/tmp/vast-side-20261005/export-existing-3060.ps1",
+  "script_sha256": "bbf87878505ca25a086ccf52218919e71a4f51ce8c612e724bd702116393ead6",
+  "exitcode": 0,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}

@@ -1,0 +1,32 @@
+﻿{
+    "schema_version":  1,
+    "status":  "deferred",
+    "runs":  1,
+    "failures":  0,
+    "reboots":  1,
+    "driver_installed":  true,
+    "toolkit_installed":  false,
+    "driver_search_backup":  [
+                                 {
+                                     "existed":  false,
+                                     "path":  "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+                                     "name":  "ExcludeWUDriversInQualityUpdate",
+                                     "value":  0
+                                 },
+                                 {
+                                     "existed":  true,
+                                     "path":  "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DriverSearching",
+                                     "name":  "SearchOrderConfig",
+                                     "value":  1
+                                 }
+                             ],
+    "error":  null,
+    "updated":  "2026-10-04T17:49:53.6014475Z",
+    "gpu_instance_ids":  [
+                             "PCI\\VEN_10DE\u0026DEV_2504\u0026SUBSYS_36563842\u0026REV_A1\\3\u0026267A616A\u00260\u002638"
+                         ],
+    "phase":  "driver_install",
+    "gsp_policy":  "forced_on_research",
+    "message":  "Research GSP class policy requires fresh driver initialization (includes any installer-requested restart)",
+    "reboot_held":  true
+}

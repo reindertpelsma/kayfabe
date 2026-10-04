@@ -1,0 +1,10 @@
+{
+  "time_utc": "2026-10-04T23:19:59.289862+00:00",
+  "script": "/tmp/vast-side-20261005/drain-export-3060.ps1",
+  "script_sha256": "65aac9dd03a2f6d6c465da800c98964c2febfabb48a4093d47ace27560d49630",
+  "exitcode": 1,
+  "pinned_host_key": true,
+  "publickey_only": true,
+  "agent_forwarding": false,
+  "private_key_stayed_on_controller": true
+}
