@@ -1184,6 +1184,16 @@ not collide here (guest VAs at 64 GiB+); in the product that collision is refuse
 **STATUS: DESIGN being implemented behind `KF3_TSPACE` (default OFF); full text and the
 implementation record in `V3_P1P2_TSPACE.md`.** No box has run it.
 
+⊘ **CORRECTED 2026-10-04 (implementation review):** the third bullet below stated more than holds
+today. (1) "At user privilege" holds only once P0 (`v3-sec-nonpriv`, every host channel born USER)
+merges; until then a T-space run proves window and carve-out reach only (the box-log gate's
+`--p0-pending` arm says so). (2) "Bounded below the carve-out": with `KF3_TSPACE=1` a carve-out
+leaf is REFUSED in every twin a guest non-kernel channel may run in (it withholds privileged
+leaves); a guest-KERNEL space only counts it (`carve_kernel=`), since no channel runs there under
+T-mode. On the default path every such leaf is only counted (`carve_gpu=` / `carve_kernel=` /
+`carve_cpu=`) until its A/B (inc A2). (3) The store window is `[0, carve)` as a 2 MiB-page part and
+a 4 KiB tail, so no page of it reaches the carve-out.
+
 - **One per VM.** A bare `FERMI_VASPACE_A` (no guest-range reservations) with: the ring region
   `[RING_REGION_BASE, 2^40)` reserved first; the store window over guest VRAM `[0, carve)` — never the
   firmware carve-out that holds kayfabe's roots; the guest-RAM window, GPU-uncached. Both windows

@@ -3,6 +3,9 @@
 **STATUS (2026-10-04): LIVE — DESIGN, being implemented on `v3-p1p2` behind `KF3_TSPACE` (default
 OFF). No box has run any increment.** The implementation record is the table directly below; the
 design text after it is the 2026-10-04 revision (security review + feasibility review folded, §14).
+★ **Later on 2026-10-04: two implementation reviews of incs A–D folded (row R below, §14).** The
+default path is byte-for-byte today's again: inc A's refusals are COUNT-ONLY there
+(`KF3_INCA_REFUSE=1` or `KF3_TSPACE=1` makes them refuse).
 Audit findings: `docs/audits/2026-10-03-v3-stage1.md` S1-20, S1-21, S1-23, S1-43. Owner rulings:
 `docs/OWNER_RULINGS.md` §Q (the address model and the privilege rule) and §R (the memory-safety
 perimeter). It supersedes `THE_TRANSLATED_PLANE.md` §12's "every host VAS we create" (the
@@ -12,11 +15,12 @@ supersession is recorded in §12's own text).
 
 | inc | state on `v3-p1p2` | what landed | box step owed |
 |---|---|---|---|
-| A | landed, CI | §3.2 refusals by name (`kf_chan::translated::REFUSED_METHODS`); `SubDeviceMask` refused; GP control entries: `SET_PB_SEGMENT_EXTENDED_BASE` decoded into the ring, `NOP` kept, every other opcode refused (`RingRefusal::ControlEntry`); the count-only census (`kf_chan::census`, `KF3_TCENSUS=1`, one `TCENSUS` line per Translated channel at free); USERD/notifier bounded to the usable heap before any host call (`heap_refused=` on the status line, S1-43); `PlacedRows` cut exactly at both edges (`kf_qemu::mem::cut_rows`); count-only carve-out counters (`carve_gpu=` / `carve_cpu=` on the status line) | CENSUS (§8) |
-| A2 | built, OFF | the GPU-target refusal exists (`ApplyCfg::carve_refuse`, tested) and is wired OFF (`VaManager::with_carve(carve, false)`) | flip after A's box run shows `carve_gpu=0` on each measured family |
+| A | landed, CI | §3.2 refusals by name (`kf_chan::translated::REFUSED_METHODS`); `SubDeviceMask` refused; GP control entries: `SET_PB_SEGMENT_EXTENDED_BASE` decoded into the ring, `NOP` kept, every other opcode refused (`RingRefusal::ControlEntry`); the count-only census (`kf_chan::census`, `KF3_TCENSUS=1`, one `TCENSUS` line per Translated channel at free); USERD/notifier bounded to the usable heap before any host call (S1-43; ⊘ count-only on the default path since row R: `inca[… heap_out=…]`); `PlacedRows` cut exactly at both edges (`kf_qemu::mem::cut_rows`); count-only carve-out counters (`carve_gpu=` / `carve_cpu=` on the status line) | CENSUS (§8) |
+| A2 | built; ON under `KF3_TSPACE=1`, OFF on the default path | the GPU-target refusal exists (`ApplyCfg::carve_refuse`, tested). ⊘ Corrected by review (row R): with `KF3_TSPACE=1` it refuses in every twin a guest non-kernel channel may run in (`kf_qemu::tspace::carve_cfg`; a guest-KERNEL space is counted, `carve_kernel=`); the default path counts only | flip the default after A's box run shows `carve_gpu=0` on each measured family |
 | B | landed, CI | `kf_host::HostRm::alloc_vaspace_bare` and `map_window_perm`; `kf_qemu::tspace::TSpace` built on the VA thread as the first prewarm step with `KF3_TSPACE=1` (ring region reserved first, store window `[0, carve)`, RAM window GPU-uncached, both bottom-up, both ends refused past the ring region), logged as `tspace space=… fb=…+… ram=…+… rings=… build_us=…`; unused. ⚠ Built only with the flag: the default path stays byte-for-byte today's (the task's rollout rule), so T-TSPACE-BUILD runs with `KF3_TSPACE=1`. `TSpace` lives in its own module (`tspace.rs`) to keep out of `mem.rs` ahead of `v3-scratch-bound` | T-TSPACE-BUILD (§8) |
 | C | landed, CI | `kf_chan::ttables` (the hand-written per-tier tables: CE methods per tier with inheritance, host methods, the `LAUNCH_DMA` / `SEMAPHORED` / `SEM_EXECUTE` field tables — each row held to the class header that states it, `hwref_check`); `kf_chan::tmode` (decode → unbound IR, `bind` against the placement rows at the call, launch splitting at row boundaries with the piece rules, chunking, the `Shadow`); `kf_chan::tspace_unsafe` (the perimeter, gate-3 table in §3.8; `kf-chan:0` added to the CI unsafe-containment list — zero `unsafe` blocks); `PlacedRow` carries the guest leaf's `MapPerm`; `RamMap::dma_to_file_range` (the §2.6 seam) routed through the walker's closure, `SlotWindow`, the T-mode resolver and sysmem USERD/notifiers (the PRAMIN closure waits for `v3-scratch-bound`); the shadow on today's path behind `KF3_TSHADOW=1` (one `TSHADOW` line per Translated channel at free). Deviation: host `NOP` payloads are consumed, not re-emitted — the engine reads UVM's inline data from the guest's own pushbuffer through the window, never from our ring | CENSUS (§8), with `KF3_TSHADOW=1` |
 | D | landed, CI | `KF3_TSPACE=1` (default OFF; read once): Translated births go to the T-space — refused by name when it is not built (`tspace: not built (…)`, never a fallback) — on a T-space ring slot in `kf_chan::host::TSPACE_LAYOUT` (one object, one CPU view, three FIXED maps: pushbuffer and GPFIFO read-only, the fence read-write, USERD unmapped), bound at push (`tmode::push_bound`; a `Busy` piece is stashed UNBOUND); mirrors, prewarmed spares and recycled spares carry no window and no ring (`windows=none`, `reserved` empty) and are always recorded; the per-twin state word (`kf_qemu::twin::TwinState`) replaces the `kernel_vas` flip — passthrough births count `User(n)` and are refused in `Kernel`, Translated births refused in `User(n>0)`; the stale-bind counter (`TSPACE-RETIRE … stale_binds=stale/checked`, positive control `KF3_NEGCTL_STALE_BIND=1`); counters `tspace[built= twin_refused= tspace_refused= slots_leaked=]` on the status line. The box-log gate every T-mode box step runs is `scripts/p1p2/tspace_log_gate.py` (T-TSPACE-BUILD ordering and bounds, `windows=none` on every mirror and spare, the counters, the stale-bind counter and its positive control, unprivileged births present; `--windows` is the `KF3_TSPACE=0` known-positive arm), self-tested in CI by `scripts/ci/test_tspace_log_gate.py` with one planted defect per check. ⚠ Not done: the walker-context test (§7.12 second half — it needs a CUDA context, so it is a box step: a `windows=none` boot whose walks complete) | T-TSPACE-BUILD, T-WINDOW-USER, T-RING-TRANSLATED, T-PHYS-CE, REGRESSION A/B, PERF A/B (§8) |
+| R | landed, CI (review fixes, 2026-10-04) | ★ Two implementation reviews of A–D folded, every finding with a test that can fail and its mutation (table below). **Default path:** inc A's refusals are COUNT-ONLY unless strict (`kf_qemu::tspace::inca_strict`: `KF3_INCA_REFUSE=1` or `KF3_TSPACE=1`) — `REFUSED_METHODS` writes forwarded as written, `SubDeviceMask` pushed raw, unnamed GP control entries skipped, the extended base recorded but not applied, the S1-43 heap bound counted (`heap_out=`), the pre-inc-A row removal kept (`rows_inexact=`), all summed on the status line as `inca[strict= counted= heap_out= rows_inexact=]`; opcode 4 is named only on Hopper/Blackwell. **T-mode:** the CPU store-view bound is the carve-out base, never a twin's window length (it is 0: every vidmem fetch failed); carve-out leaves refused in twins (A2 under the flag); the perimeter emits each launch piece's footprint registers and trigger and recomputes the footprint from them (`put_launch_piece`, `put_host_semaphore`, `put_host_sem_execute`; `WindowAddr` carries its validated bytes); a Hopper+ scrub keeps the guest's pattern; `SET_REMAP_COMPONENTS` unnamed bits refused; the stale-bind counter reads the rows' commit log (`kf_qemu::mem::RowsLog`) and counts only changes made while the fence was seen incomplete; an operand with no row yet WAITS for a pending walk (`Inbox::walk_busy`, rung by the VA thread) or an unfinished acquire, else is refused; the shadow binds post-invalidate items after the split; twin frees end on host success (`TwinState::user_freeing`/`user_released`); every ring map unmapped on release; the store window is a 2 MiB-page part and a 4 KiB tail (`fb_pages=` on the `tspace` line). **Instruments:** the twin paths are tested against a host that counts window maps, and their lines derived from the records; the box-log gate gained `--default`, `--census`, `--user`, `--p0-pending`, `--negctl NAME` and the BORN-TRANSLATED / retire / any-DEAD / P0-EVIDENCE checks; positive controls `KF3_NEGCTL_{SHADOW,HEAP,CARVE,TWIN,TSPACE_OVERSIZE,TWIN_WINDOW}`; ci.yml Gate A keeps `kf-chan` inheriting `unsafe_code = forbid` | box step 1 now gates the default path; every T-mode step as before |
 
 ★ **Mutations run on 2026-10-04** (each applied to the source, the named test run, the source restored and re-dated so cargo rebuilds it — `scratchpad` runner `mut.py`; an earlier pass whose restores left the files OLDER than the mutant artefacts was discarded and every batch re-run). One mutation survived its first test (`D-busy-loses-the-refused-chunk`: the test never refused a push inside the chunk loop); the test was strengthened to exercise both `Busy` arms and the mutation re-run red.
 
@@ -65,25 +69,125 @@ supersession is recorded in §12's own text).
 | `D-busy-final-arm-loses-chunk` | RED | a_busy_stash_is_unbound_and_rebinds_at_the_next_push |
 | `D-words-item-unbounded` | RED | a_long_run_of_address_free_methods_is_still_chunked |
 
-★ **Box steps owed, in order (none run; each records the source revision, kf3 `euid`/`CapEff` and
-bit 5 of every birth reply):**
-1. **Default-path regression at the inc-A head** (`KF3_TSPACE` unset): inc A changes today's path
-   (refusals by name, the GP control entries, the S1-43 heap bound, exact rows). 30-arm suite + app
-   matrix + `cup3`/`cup8`; pass = today's verdicts, `heap_refused=0`, no new `DEAD:`; record
-   `carve_gpu=`/`carve_cpu=` per family (the A2 input).
-2. **CENSUS** per measured family (TU116, GA106, AD106, GB203): `KF3_TSHADOW=1` on the same runs;
-   commit every `TCENSUS`/`TSHADOW` line; pass = §8's CENSUS criteria.
-3. **T-TSPACE-BUILD** (`KF3_TSPACE=1`, one boot per family): `scripts/p1p2/tspace_log_gate.py LOG`.
-4. **REGRESSION A/B + T-WINDOW-USER** (`KF3_TSPACE=0` vs `1`, at least one unprivileged guest user):
-   the gate on the `1` arm, `--windows` on the `0` arm (the known positive), plus the §8 user-process
-   CE probe; then once with `KF3_NEGCTL_STALE_BIND=1` and `--negctl-stale`.
-5. **T-RING-TRANSLATED** and **T-PHYS-CE** (guest kernel module; both privilege arms, after P0).
-6. **PERF A/B**. Then inc A2 (flip `with_carve(…, true)`) and inc E (default-on, delete the window
-   code) are owner decisions on that evidence.
+★ **Review-fix mutations, 2026-10-04 (row R)** — same runner discipline (each applied, the named tests
+run, the source restored and re-dated; local runs, scratchpad `p1p2fix/mut.py`, gate-script ones by
+`pymut.py`). One gate survivor (`G4-negctl-shadow-any-line`: the test had no TSHADOW line whose
+counters stood still) was fixed by strengthening the test and re-run red. The reviewers' three
+extent mutations are `F3-M1`, `F3-M2` and `F3-M3`.
+
+| mutation | result | test that turned red |
+|---|---|---|
+| `F1-countonly-method-refuses` | RED | refusals_by_name_every_refused_method |
+| `F1-countonly-method-dropped` | RED | refusals_by_name_every_refused_method |
+| `F1-countonly-sdm-dropped` | RED | a_subdevice_mask_header_is_refused |
+| `F1-strict-sdm-pushed-raw` | RED | a_subdevice_mask_header_is_refused |
+| `F1-countonly-control-refuses` | RED | control_entries_other_than_nop_and_extended_base_are_refused |
+| `F1-extbase-applied-countonly` | RED | extended_base_applies_to_later_entries |
+| `F1-opcode4-below-hopper` | RED | extended_base_applies_to_later_entries |
+| `F1-tmode-ring-not-strict` | RED | control_entries_other_than_nop_and_extended_base_are_refused |
+| `F1-heap-countonly-refuses` | RED | the_heap_bound_refuses_only_when_strict |
+| `F1-legacy-cut-is-exact` | RED | placed_rows_track_host_unmap_at_both_edges |
+| `F2-store-bound-is-window-length` | RED | a_tmode_twin_reads_vidmem_rows_through_the_store_bound |
+| `F2-carve-tmode-not-refused` | RED | the_carve_bound_refuses_in_tmode_only |
+| `F2-carve-negctl-refuses` | RED | the_carve_bound_refuses_in_tmode_only |
+| `F2-carve-kernel-space-refused` | RED | carve_out_is_excluded |
+| `F2-carve-twin-not-refused` | RED | carve_out_is_excluded |
+| `F3-M1-remap-dst-elem-ignores-num-dst` | RED | a_hopper_scrub_keeps_the_guests_pattern, the_whole_footprint_stays_inside_its_row |
+| `F3-M2-semaphored-16-counted-as-4` | RED | the_whole_footprint_stays_inside_its_row |
+| `F3-M3-multiline-extent-ignores-pitch` | RED | the_whole_footprint_stays_inside_its_row |
+| `F3-perimeter-fits-always` | RED | a_launch_piece_footprint_must_fit_its_validated_bytes, a_semaphore_footprint_must_fit_its_validated_bytes |
+| `F3-perimeter-semaphored-size-4` | RED | a_semaphore_footprint_must_fit_its_validated_bytes |
+| `F3-perimeter-multiline-ignores-pitch` | RED | a_launch_piece_footprint_must_fit_its_validated_bytes |
+| `F3-scrub-zero-fill` | RED | a_hopper_scrub_keeps_the_guests_pattern |
+| `F3-remap-unnamed-bit-accepted` | RED | no_guest_word_is_copied |
+| `F3-wide-tier-not-wide` | RED | a_wide_sem_addr_hi_is_resolved_on_hopper_and_refused_before |
+| `F3-checker-sees-4-bytes-only` | RED | the_property_checker_catches_a_forwarder |
+| `F4-tmode-twin-maps-a-window` | RED | no_tmode_twin_path_maps_a_window |
+| `F4-tmode-spare-maps-a-window` | RED | no_tmode_twin_path_maps_a_window |
+| `F4-reuse-forgets-the-spares-window` | RED | no_tmode_twin_path_maps_a_window |
+| `F4-windows-text-is-a-literal` | RED | no_tmode_twin_path_maps_a_window |
+| `F4-heap-negctl-refuses` | RED | the_heap_bound_refuses_only_when_strict |
+| `F4-oversize-negctl-ignored` | RED | tspace_builder_never_grows_down |
+| `F4-shadow-binds-at-fetch` | RED | the_shadow_binds_after_the_segments_split |
+| `F4-shadow-negctl-ignored` | RED | the_shadow_positive_control_moves_every_counter |
+| `G4-counters-ignore-carve` | RED | test_a_refusal_a_leak_a_carve_leaf_or_a_heap_leaf_is_caught |
+| `G4-counters-ignore-heap` | RED | test_a_refusal_a_leak_a_carve_leaf_or_a_heap_leaf_is_caught |
+| `G4-dead-only-tspace-bind` | RED | test_any_dead_translated_channel_is_caught |
+| `G4-stale-passes-with-no-retire` | RED | test_a_stale_bind_or_no_retire_is_caught |
+| `G4-p0-scoped-without-flag` | RED | test_p0_evidence_is_required_or_the_pass_is_scoped |
+| `G4-no-born-translated-check` | RED | test_a_run_with_no_translated_birth_is_caught |
+| `G4-census-accepts-user-only` | RED | test_the_default_and_census_arms |
+| `G4-negctl-shadow-any-line` | GREEN(SURVIVED) | — |
+| `G4-negctl-shadow-any-line` | RED | test_every_positive_control_must_move_its_counter |
+| `F5-stale-counts-every-change` | RED | the_stale_bind_counter_and_its_positive_control |
+| `F5-incomplete-reading-not-advanced` | RED | the_stale_bind_counter_and_its_positive_control |
+| `F5-epoch-not-recorded-at-bind` | RED | the_stale_bind_counter_and_its_positive_control |
+| `F5-unresolved-refused-at-push` | RED | an_unresolved_operand_is_handed_back_unbound |
+| `F5-wait-on-ignores-walk` | RED | an_unresolved_operand_is_handed_back_unbound |
+| `F5-rows-log-never-unknown` | RED | the_rows_commit_log_answers_what_changed_since_a_bind |
+| `F5-walk-busy-ignores-splits` | RED | a_walk_waiter_is_registered_once_and_taken |
+| `F5-resolve-epoch-wrong` | RED | the_rows_commit_log_answers_what_changed_since_a_bind |
+| `F6-gateA-zero-bar-exempt` | RED | the extracted ci.yml Gate A run on a `kf-chan` manifest without `[lints]` (the old gate passed it) |
+| `F6-free-statement-ends-the-user` | RED | twin_state_cas, kernel_is_sticky_and_a_recycled_space_is_reclassified |
+| `F6-kernel-birth-ignores-freeing` | RED | kernel_is_sticky_and_a_recycled_space_is_reclassified, twin_state_cas |
+| `F6-unmap-every-short-circuits` | RED | a_refused_unmap_does_not_leave_the_other_maps_live |
+| `F6-store-window-not-rounded` | RED | tspace_builder_never_grows_down |
+| `F6-tail-placement-not-read-back` | RED | tspace_builder_never_grows_down |
+
+★ **Box steps owed, in order (none run).** Rewritten 2026-10-04 (review: the plan could not be run as
+written, and parts of it would have passed with no evidence). Every run records the source revision,
+kf3 `euid`/`CapEff`, and — once P0 merges — bit 5 of every birth reply (P0's `kf-host: channel birth
+… PRIVILEGED_CHANNEL=0` line). ⚠ **Every step ends by UNLOADING the guest driver** (`rmmod nvidia_uvm
+nvidia_drm nvidia_modeset nvidia`, or a clean guest shutdown) **before the log is taken**:
+`TSPACE-RETIRE`, `TCENSUS` and `TSHADOW` lines print when a Translated channel is FREED, and CeUtils'
+channels live until the adapter is torn down. The gate is `scripts/p1p2/tspace_log_gate.py LOG …`
+(self-tested in CI by `scripts/ci/test_tspace_log_gate.py`, one planted defect per check).
+1. **Default-path regression** (`KF3_TSPACE` unset; inc A count-only): 30-arm suite + app matrix +
+   `cup3`/`cup8` on GA106 at least, plus one Hopper or Blackwell run (the extended base). Gate:
+   `--default` — `inca[strict=no counted=0 heap_out=0 rows_inexact=0]`, no T-space line; verdicts as
+   master; record `carve_gpu=`/`carve_kernel=`/`carve_cpu=` per family (the A2 input). Then the owner
+   decides whether inc A's refusals become the default.
+2. **CENSUS** per measured family (TU116, GA106, AD106, GB203): `KF3_TSHADOW=1` on the same runs.
+   Gate: `--census` — at least one `TCENSUS` line from an RM-internal channel (CeUtils), every `TSHADOW`
+   line with `would_refuse=[]`, `resolve_miss=0`, `unknown_field=0`, `unclassified=0`,
+   `max_pieces≤3`; commit every `TCENSUS`/`TSHADOW` line. Positive control, one run:
+   `KF3_TSHADOW=1 KF3_NEGCTL_SHADOW=1`, gate `--negctl shadow`.
+3. **T-TSPACE-BUILD** (`KF3_TSPACE=1`, one boot per family, driver load + unload). Gate (no `--user`;
+   `--p0-pending` until P0 merges): the `tspace` line before the first `BORN Translated`, both windows
+   below the ring region, `fb_pages=2M:…+4K:…` recorded, `BORN-TRANSLATED`, `TSPACE-RETIRE` with
+   `checked>0` and `stale_binds=0/…`, no `DEAD:` on a Translated token, `COUNTERS` (incl.
+   `carve_gpu=0`, `heap_out=0`). UNVERIFIED until this run: the 2 MiB-page pin and the 4 KiB tail
+   placed FIXED; the three ring maps at big-page size; PBDMA fetching from the read-only maps.
+   Positive controls, one dedicated run each (each is destructive or count-only as named):
+   `KF3_NEGCTL_TSPACE_OVERSIZE=1` (`--negctl oversize`: the build refuses by name, every Translated
+   birth is refused, the driver does not load), `KF3_NEGCTL_CARVE=1` (`--negctl carve`, count-only),
+   `KF3_NEGCTL_HEAP=1` (`--negctl heap`, count-only), `KF3_NEGCTL_STALE_BIND=1` (`--negctl stale`),
+   `KF3_NEGCTL_TWIN_WINDOW=1` (`--negctl window`: the S1-21 defect reintroduced; the plain gate's
+   `WINDOWS=NONE` must FAIL on the same log).
+4. **REGRESSION A/B + T-WINDOW-USER** (`KF3_TSPACE=0` vs `1`, at least one app as an unprivileged
+   guest user). Gate: the `1` arm with `--user` (and `--p0-pending` until P0), the `0` arm with
+   `--windows` (the known positive). `KF3_NEGCTL_TWIN=1` once (`--negctl twin`: every passthrough
+   birth refused — destructive). ⊘ **The T-WINDOW-USER probe is NOT WRITTEN yet** (named here:
+   `tests/p1p2/window_reach_probe`, a guest-user CUDA program issuing virtual CE reads at the old
+   window bases and at a store page holding a guest page table; pass = MMU fault on that twin only
+   with `KF3_TSPACE=1`, success with `0`). Blocked on writing it.
+5. **T-RING-TRANSLATED** and **T-PHYS-CE**. ⊘ **The guest kernel module is NOT WRITTEN yet** (named
+   here: `tests/p1p2/kmod_tring`; it also exercises inc A's counted methods — the `inca` counters'
+   only box positive control — and the CPU-written sysmem semaphore acquired by a T channel, the §13
+   cache-attribute check). T-PHYS-CE and every bit-5 criterion are **blocked until P0
+   (`v3-sec-nonpriv`) merges**: this build logs no birth-reply bit 5, so the gate's P0-EVIDENCE check
+   can only pass SCOPED.
+6. **PERF A/B**, as §8. Then the owner decides inc A2's default (refusal on the default path) and inc E
+   (default-on, delete the window code) on that evidence.
 
 ⚠ Deviation from §8's inc A row, recorded here: the PRAMIN-plan carve-out counter is **not** in
 inc A. §10 keeps inc A out of the PRAMIN plan until `v3-scratch-bound` merges (it rewrites that
 code); the GPU-target and CPU-view counters in `kf-mem` `apply.rs` are in.
+
+⚠ Deviation, review fix (2026-10-04): the Translated route's sysmem USERD view now goes through the
+vIOMMU seam (`dma_to_file_range` + `at_file_offset`), but has no unit test — a `RamMap` holds process
+memory adopted only through the unsafe FFI. It equals the block lookup it replaced for the one
+fd-backed guest RAM kf3 supports; T-TSPACE-BUILD exercises it (CeUtils/UVM sysmem USERD).
 
 ⚠ Deviation, S1-43: the channel plane bounds a guest FB USERD/notifier by the layout it declared at
 realize. A preserved console region is part of the fn-72 layout, which the channel plane does not
@@ -312,7 +416,15 @@ authored from decoded, validated fields.
     NON_BLOCKING with a callback); `REMAP_ENABLE`; `MULTI_LINE_ENABLE`; the memory layouts.
   - Refused by name: `SEMAPHORE_TYPE == 3`; `INTERRUPT_TYPE == BLOCKING` (no stock emitter found);
     `VPRMODE ≠ 0` on C7B5; `COPY_TYPE ≠ DEFAULT` on C8B5+.
-  - The Hopper+ fast scrub is converted to a virtual remap fill, as today.
+  - The Hopper+ fast scrub is converted to a virtual remap fill. ⊘ **Corrected 2026-10-04
+    (review):** the fill keeps the guest's pattern — its `CONST_A`/`CONST_B`/`SET_REMAP_COMPONENTS`
+    — and counts `LINE_LENGTH_IN` in pattern elements (UVM's `memset_8` sends an arbitrary 64-bit
+    value through the scrubber, `uvm_hopper_ce.c:298-310`); "as today" was a zero fill that dropped
+    the pattern. A scrub whose remap reads a source, or whose bytes are not whole elements, is
+    refused by name. The scrubber's own semantics are closed firmware (UNVERIFIED). ⚠ The default
+    path still zero-fills (pre-existing; §11 decision 10).
+  - `SET_REMAP_COMPONENTS` is authored from its named fields; a word with any other bit is refused
+    (`ttables::REMAP_NAMED`, held to `clc7b5.h` by a test).
   - A non-zero field the table does not name is counted by the shadow (§3.6), then refused per tier.
     It is **never silently cleared**, because a dropped field changes behaviour without a refusal.
 - **`MEM_OP`:** `TLB_INVALIDATE` stays a split. MEMBAR and L2 operations are authored from the
@@ -386,9 +498,25 @@ checks them, and emits the authored address registers, the footprint registers a
 - **Not guaranteed:** translation at execution time across channels. A piece pushed behind a host
   acquire is bound before another channel's walk could complete. Stock producers appear safe: UVM
   waits on its kernel-mapping PTE writes on the CPU, and CeUtils' `pbGpuVA` is fixed. This is
-  **UNVERIFIED**. A stale-bind counter (§7.13) re-resolves each bound piece when its fence retires and
-  counts mismatches. If it is ever non-zero, a host acquire becomes a bind barrier. Reach stays within
-  guest memory either way.
+  **UNVERIFIED**. A stale-bind counter (§7.13) checks each bound piece when its fence retires. If it
+  is ever non-zero, a host acquire becomes a bind barrier. Reach stays within guest memory either way.
+- ⊘ **Corrected 2026-10-04 (review) — what the counter counts.** Re-resolving at retire counted any
+  difference, including the benign case: the guest sees its own release inside the work before
+  kayfabe's `RELEASE_WFI` fence is read, and UVM routinely unmaps and remaps then. Now every commit
+  the walk makes to a mirror's rows is numbered and timed (`kf_qemu::mem::RowsLog`, bumped under the
+  rows' write lock); each bound resolution records the epoch it was read at (under the same read
+  guard); at retire the first later commit overlapping the operand is **stale** (gated) only if it
+  landed before the last time the runner read the fence and found it INCOMPLETE — before the work
+  completed, so (within the microseconds a `RELEASE_WFI` fence trails the guest's release) before the
+  guest saw it complete — else **late** (benign or indeterminate, reported, never gated), and
+  **indeterminate** past the bounded log. `TSPACE-RETIRE … stale_binds=s/c late= indeterminate=`.
+- ⊘ **Corrected 2026-10-04 (review) — an operand with no row yet.** It no longer kills the channel:
+  `push_bound` pushes what was bound before it and hands it back UNBOUND (`Pushed::Unresolved`); the
+  runner WAITS while a walk is pending on the space (`Inbox::walk_busy`: a statement unsettled, a
+  split queued or running, or the VA thread busy; the VA thread rings waiting channels every idle
+  loop) or while a host acquire ahead of it is unfinished (our own fence wakes us), and binds it
+  again; with nothing to wait on it is unmapped and refused by name. Each wait and refusal is
+  counted (`unresolved[walk= acquire= refused=]`) — the measurement §11 decision 6 asked for.
 
 ### 3.6 Classification tables, the census, and the shadow
 
@@ -408,6 +536,12 @@ checks them, and emits the authored address registers, the footprint registers a
   today's path behind `KF3_TSHADOW=1`. They compute what T-mode would emit and discard it, counting
   `would_refuse` by reason, resolution misses, pieces per launch (maximum), unknown fields, and
   unclassified pairs. Precedent: the live walk shadow (`compared=65 disagreements=0`).
+  ⊘ **Corrected 2026-10-04 (review):** the shadow binds a segment's items AFTER its first
+  invalidate only at the next observed segment — by then the default path has run that segment's
+  splits — as T-mode binds them after the walk (`bound_after_split=`, `unbound_at_free=`); binding at
+  fetch counted correct UVM streams as misses. Its positive control is `KF3_NEGCTL_SHADOW=1`: three
+  synthetic writes per segment through the real decode and bind move `unclassified`,
+  `unknown_field` and `resolve_miss`.
 - **Hardware coverage is uneven.** The families run on hardware are TU116, GA106/GA104, AD106/AD104
   and GB203/GB205 (`docs/STATUS_DETAIL.md`). Hopper, GA100 and GB10x are source-only.
 - **S1-21 is not gated on the census** (§8). Window removal depends only on the T-space and the
@@ -442,13 +576,12 @@ validating its own inputs (§R: no precondition is left to a caller):
 | export | checks it performs | the test that shows each check (all `kf-chan`) |
 |---|---|---|
 | `TWindows::new(fb, ram, limit)` | each window non-empty, no overflow, ends at or below `limit`; `limit` ≤ 2^40 | `tspace_unsafe::tests::windows_are_bounded_at_construction` |
-| `TWindows::fb(off, len)` / `ram(off, len)` | `len > 0`, no overflow, `off+len` ≤ the window's length (the store window's length IS `carve`) | `a_window_address_is_only_ever_inside_its_window`; `tests/tmode.rs::carve_out_is_excluded` |
+| `TWindows::fb(off, len)` / `ram(off, len)` | `len > 0`, no overflow, `off+len` ≤ the window's length (the store window's length IS `carve`); the `WindowAddr` carries `len` as its validated bytes | `a_window_address_is_only_ever_inside_its_window`; `tests/tmode.rs::carve_out_is_excluded` |
 | `TWindows::contains` | a predicate (the property tests' oracle) | `a_window_address_is_only_ever_inside_its_window` |
 | `WindowAddr` | constructible only inside this file, only by `fb`/`ram` | (by type: the field is private) |
-| `put_ce_offset` / `put_ce_semaphore` | take a `WindowAddr`, never a `u64`; upper bits masked to the tier's field | `tests/tmode.rs::every_emitted_pair_is_allowlisted_or_an_authored_address` |
-| `put_host_semaphore` | below 2^40 and 4-byte aligned, else refused with nothing emitted | `the_forty_bit_forms_refuse_what_they_would_truncate` |
-| `put_host_sem_addr` | below 2^40 (2^57 on a wide tier), aligned | `the_forty_bit_forms_refuse_what_they_would_truncate` |
-| `put_launch` | the word built from a validated `Launch`: both types VIRTUAL, every unnamed bit zero | `tests/tmode.rs::no_guest_word_is_copied`; `ttables::hwref_check::the_launch_field_table_is_the_class_headers` |
+| `put_launch_piece` (review fix 2026-10-04; replaces `put_ce_offset`/`put_ce_semaphore`/`put_launch`) | emits a piece's footprint registers, its addresses and `LAUNCH_DMA` itself; RECOMPUTES the footprint from the registers it emits — source `LINE_LENGTH_IN` × (remap `COMPONENT_SIZE` × `NUM_SRC`, else 1), destination × `NUM_DST`, `PITCH` × (`LINE_COUNT` − 1) when multi-line, the release 16/8/4 bytes from `SEMAPHORE_TYPE`/`PAYLOAD_SIZE` — and refuses unless each fits its operand's validated bytes; operands must match what the launch touches; block-linear sides, unnamed `SET_REMAP_COMPONENTS`/`REQ_ATTR` bits and overflowing extents refused; upper address bits masked to the tier's field; the launch word both types VIRTUAL, every unnamed bit zero | `tspace_unsafe::tests::a_launch_piece_footprint_must_fit_its_validated_bytes`; `tests/tmode.rs::the_whole_footprint_stays_inside_its_row`, `every_emitted_pair_is_allowlisted_or_an_authored_address` (whole footprints, six tiers), `no_guest_word_is_copied`; `ttables::hwref_check::the_launch_field_table_is_the_class_headers`, `the_remap_fields_are_the_class_header` |
+| `put_host_semaphore` (review fix: takes the payload and `SEMAPHORED`) | below 2^40 and 4-byte aligned; the bytes the operation touches (16 for a non-4BYTE release, else 4) derived from the word it emits must fit the validated bytes — else refused with nothing emitted | `the_forty_bit_forms_refuse_what_they_would_truncate`, `a_semaphore_footprint_must_fit_its_validated_bytes` |
+| `put_host_sem_execute` (review fix; replaces `put_host_sem_addr`) | below 2^40 (2^57 on a wide tier), aligned; 16 bytes for a timestamped release, 8 for a 64-bit payload, else 4, from the word it emits, must fit | `the_forty_bit_forms_refuse_what_they_would_truncate`, `a_semaphore_footprint_must_fit_its_validated_bytes` |
 | `fence_words` | the fence VA below 2^40 and aligned | `the_forty_bit_forms_refuse_what_they_would_truncate` |
 | `ring_gp_entry` | the range inside the pushbuffer; the VA below 2^40 | `the_ring_gp_entry_stays_in_the_pushbuffer` |
 
@@ -473,6 +606,11 @@ statement path in statement order:
 
 - A passthrough birth moves `Unclassified` or `User(n)` to `User(n+1)`. It is **refused by name**
   (never waited on) while the state is `Kernel`.
+- ⊘ **Corrected 2026-10-04 (review):** a passthrough FREE statement moves one user from live to
+  *freeing*; the deferred host free ends it only if host RM freed the channel — a refused free
+  leaves it counted for the life of the space, so the space can never become `Kernel` under a
+  channel host RM may still run. A Translated birth refused only by freeing users is counted apart
+  (`twin_freeing=`).
 - A Translated birth moves `Unclassified` to `Kernel`. It is **refused by name** while the state is
   `User(n > 0)`.
 - `Kernel` is sticky until retire. A recycled space is re-derived afresh, as `kernel_vas_for(key)`
@@ -496,6 +634,12 @@ statement path in statement order:
   whether that range includes the carve-out is **UNVERIFIED**. A false refusal here fails
   `RmInitAdapter`. So the GPU-target bound lands **count-only** for one A/B run per measured family,
   then refuses (inc A2).
+- ⊘ **Corrected 2026-10-04 (review, HIGH):** with `KF3_TSPACE=1` the refusal is already ON, in every
+  GPU space a guest non-kernel channel may run in — a twin that withholds privileged leaves
+  (`User(n)` or `Unclassified`); a guest-KERNEL space is counted apart (`carve_kernel=`) and mapped,
+  since under T-mode no channel runs in one and CeUtils' `VIRTUAL_MODE` alias lives in one. The
+  default path stays count-only. Positive control: `KF3_NEGCTL_CARVE=1` (every vidmem leaf counted,
+  none refused).
 
 ### 4.4 Stated precondition: the walker never reads through a mirror window
 
@@ -585,6 +729,20 @@ All tests are in `kf-chan` unless noted. ✔ = landed, with its mutation run red
     `fb_len−8` or at `2^40`: refused before any host call; the USERD footprint is at least
     `NV_RAMUSERD_CHAN_SIZE`.
 
+★ **Added by the 2026-10-04 review fixes** (each ✔ with its mutation run red, table above):
+`the_whole_footprint_stays_inside_its_row` and the footprint-aware checker (`check_full`: whole
+footprints, the rows a virtual side resolved through, all six tiers), `a_hopper_scrub_keeps_the_guests_pattern`,
+`a_wide_sem_addr_hi_is_resolved_on_hopper_and_refused_before`, the perimeter's
+`a_launch_piece_footprint_must_fit_its_validated_bytes` / `a_semaphore_footprint_must_fit_its_validated_bytes`,
+`the_shadow_binds_after_the_segments_split`, `the_shadow_positive_control_moves_every_counter`,
+`an_unresolved_operand_is_handed_back_unbound`, the rewritten `the_stale_bind_counter_and_its_positive_control`,
+`a_refused_unmap_does_not_leave_the_other_maps_live` (`kf-chan`); `no_tmode_twin_path_maps_a_window`
+(replaces the predicate test of §7.12's first half), `a_tmode_twin_reads_vidmem_rows_through_the_store_bound`,
+`the_heap_bound_refuses_only_when_strict`, `the_carve_bound_refuses_in_tmode_only`,
+`the_rows_commit_log_answers_what_changed_since_a_bind`, `a_walk_waiter_is_registered_once_and_taken`,
+the freeing arms of `twin_state_cas` (`kf-qemu`); the strict and count-only arms of every inc-A
+refusal test; `the_remap_fields_are_the_class_header`.
+
 ## 8. Rollout and increments
 
 Each increment is pushed to `v3-p1p2` with CI green. Before master, each needs the merge bar on a real
@@ -592,7 +750,7 @@ GPU at the exact commit, plus its own box test (§R). Box runs are **specified h
 
 | inc | what lands | why it lands green |
 |---|---|---|
-| **A** | on today's tree: the §3.2 refusals by name; `SubDeviceMask` refused; GP extended-base decode with other control opcodes refused; USERD and notifier bounded to the usable heap (S1-43); `PlacedRows` exact at both edges; the census table; count-only counters for GPU-target and CPU-view leaves in `[carve, fb_len)` | refusals of methods stock never emits; one fix that makes coverage exact; counters |
+| **A** | on today's tree: the §3.2 refusals by name; `SubDeviceMask` refused; GP extended-base decode with other control opcodes refused; USERD and notifier bounded to the usable heap (S1-43); `PlacedRows` exact at both edges; the census table; count-only counters for GPU-target and CPU-view leaves in `[carve, fb_len)`. ⊘ **Corrected 2026-10-04 (review):** every one of these that changes behaviour is COUNT-ONLY on the default path (`inca[…]` on the status line) and refuses / cuts exactly only when strict (`KF3_INCA_REFUSE=1` or `KF3_TSPACE=1`) — the default path stays byte-for-byte today's until box step 1 | counters on the default path; the strict arm is unit-tested |
 | **A2** | GPU-target leaf bound = `carve`, refused | after A's box run shows the counter at 0 on each measured family |
 | **B** | T-space built at prewarm and unused; logs `tspace space=… fb=…+… ram=…+… rings=… build_us=…` | nothing uses it |
 | **C** | the T-mode rewriter, resolver, IR, bind-at-submit and chunking (pure); the per-tier tables; `tspace_unsafe.rs`; the **shadow** wired on today's path (`KF3_TSHADOW`) | behaviour unchanged. **CENSUS** box runs (one per measured family) produce the census and the shadow counters. |
@@ -607,7 +765,7 @@ GPU at the exact commit, plus its own box test (§R). Box runs are **specified h
   app matrix and the CUDA ladder run with `KF3_TSHADOW=1`. Pass: the census is dumped and committed;
   `would_refuse = 0`, `resolve_miss = 0` and `unknown_field = 0` on stock drivers; pieces per launch
   ≤ 3; each counter is exercised once by an injected `KF3_NEGCTL_*` control. Inc A's part is
-  available now: `KF3_TCENSUS=1` dumps the `TCENSUS` lines; `heap_refused=`, `carve_gpu=` and
+  available now: `KF3_TCENSUS=1` dumps the `TCENSUS` lines; `inca[… heap_out=…]`, `carve_gpu=` and
   `carve_cpu=` are on every status line.
 - **T-WINDOW-USER (S1-21).** A guest **user** process places virtual CE reads at the old window bases
   and at a store page that holds a guest page table, plus a guest leaf aimed at a carve-out root page.
@@ -688,6 +846,24 @@ GPU at the exact commit, plus its own box test (§R). Box runs are **specified h
    becomes a bind barrier.
 7. **The guest-RAM window's reach in the T-space** (§Q/6c: allowed). All guest RAM, never VMM memory,
    narrowable only with the vIOMMU (§2.6). **Recommendation: keep.**
+8. ★ (2026-10-04 review) **Inc A on the default path.** It is count-only now. After box step 1 shows
+   `counted=0 heap_out=0 rows_inexact=0` on each measured family (and a Hopper or Blackwell run for
+   the extended base), make strict the default? **Recommendation: yes** — the refusals name methods
+   stock never emits; the heap bound protects kayfabe's roots (S1-43); exact rows are what the
+   T-space resolver relies on.
+9. ★ **Carve-out leaves in a guest-KERNEL space under T-mode** are counted, not refused (no channel
+   runs there; CeUtils' alias lives there). **Recommendation: confirm**; revisit if `carve_kernel=`
+   is ever non-zero on a stock driver.
+10. ★ **The default path's Hopper+ scrub** zero-fills where the guest asked for a pattern (pre-existing,
+    `translated.rs`); T-mode now keeps the pattern. Fixing the default path changes its words.
+    **Recommendation:** fix it with inc A's flip (decision 8), after a Hopper/Blackwell box run.
+11. ★ **The four destructive positive controls** (`KF3_NEGCTL_TWIN`, `_TSPACE_OVERSIZE`,
+    `_TWIN_WINDOW`, `_STALE_BIND`) refuse or reintroduce the defect by design, so each needs a run of
+    its own. **Recommendation: accept** — a counter that has only ever reported zero has not shown it
+    can report one.
+12. ★ **P0 scoping.** Until `v3-sec-nonpriv` merges, a T-space run's gate verdict reads "PASS, SCOPED
+    (window and carve-out reach only)". **Recommendation:** merge P0 first, or accept scoped passes for
+    inc D's A/B and re-run the A/B after P0.
 
 ## 12. Doc corrections (each folded above the text it corrects, dated)
 
@@ -745,6 +921,19 @@ GPU at the exact commit, plus its own box test (§R). Box runs are **specified h
 - **Its unaccepted second pass, folded where it held:** the GPU-target `carve` bound, now count-first;
   the `SubDeviceMask` classifier route; ring page size (the re-layout replaces it); reset-on-recycle;
   the walker precondition; the `clcab5.h` method count.
+- **2026-10-04, later — two implementation reviews of incs A–D (folded as row R; every finding fixed
+  with a test that can fail and a mutation run red, none rejected):** HIGH — the T-mode CPU store
+  bound taken from a twin's window length (0); the carve-out refusal OFF under the flag; inc A
+  changing the default path (both reviewers). MEDIUM — the perimeter not holding the footprint and
+  the checker seeing 4 bytes (both); the twin paths tested on a predicate and logged by literal; the
+  P0 precondition ungated; the box plan not runnable (retire lines at free only, missing positive
+  controls, `USER-BIRTHS` always required, unnamed probes); the stale-bind counter's false positives
+  and the unresolved-operand death; the shadow binding past an invalidate; the Hopper+ scrub dropping
+  the pattern. LOW — the release-twin result ignored and the free's statement order; the sysmem
+  USERD seam; `HostRing::release` short-circuiting; the store window's page rounding; Gate A
+  exempting `kf-chan`; opcode 4 accepted below Hopper; the property test on one tier; the docs
+  stating more than holds (§28, §58, R2.3). The slow suite is dispatched on `v3-p1p2` by hand
+  (it runs nightly otherwise).
 - **2026-10-04 feasibility review (this revision):** the 40-bit host-semaphore limit applies to
   **every** family through CeUtils' legacy `SEMAPHOREA`; S1-21 decoupled from the census;
   shadow-first staging; `LAUNCH_DMA` field completeness; output chunking against the half-pushbuffer
