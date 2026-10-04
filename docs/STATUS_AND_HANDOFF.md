@@ -19,12 +19,12 @@ the HMP AioContext fix (`8775a93e`) and asynchronous console cursor update.
 Its CI including the slow suite passes. Exact-source `cand2b` passed the full
 bar: 2131/0 tests, gates 9/9, bare and guest 30/30, USER birth census. Host apps
 71/71 passed; guest apps are running on existing box **54049598** (vmb).
-HMP/QMP refresh passes on the replacement display box; same-box positive and
-async-60 checks are queued after apps on vmb. The 30 FPS cap is measured in
+HMP/QMP refresh passes on the replacement display box; same-box positive is
+queued after apps on vmb. Async-60 is running on vdisp2. The 30 FPS cap is measured in
 X11 GLX and actual Vulkan FIFO present calls (29.976857 FPS); Wayland/KMS,
 cursor parity, reconnect and idle-copy checks pass. Known Xorg-start flip
-warnings match candidate 1. Broker-stop rendering needs a longer sample, and
-refresh-only R6 passes for 30/50/60 Hz on userspace connector reprobe. A sysfs-only
+warnings match candidate 1. Broker-stop rendering passes (27 seconds stopped,
+guest alive, GLX 58–60 FPS); refresh-only R6 passes for 30/50/60 Hz on userspace connector reprobe. A sysfs-only
 read was stale; no automatic DRM uevent/desktop mode switch is claimed. See all results and limitations
 in `traces/v3_candidates/cand2_20261004/README.md`; no promotion verdict yet.
 New display box **54137212** belongs to this session (SSH `vdisp2`, root at

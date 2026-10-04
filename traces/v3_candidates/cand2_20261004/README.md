@@ -203,3 +203,12 @@ additional relay event. `modetest -c` refreshes the connector cache before sysfs
 is read. **Scope:** authored EDID on userspace reprobe is verified; the collected
 udev monitor contains no DRM event, so automatic desktop mode switching is not
 claimed by this test. Input hints are synthetic, not a physical host rate change.
+
+`broker_progress/`: E3 follow-up completed 12:14:40 UTC. The exact broker PID
+remained SIGSTOPped for 27.214 s; guest SSH responded and the stock GLX client
+reported 58.118, 59.767, 59.950 and 59.740 FPS. Exit 124 is its intentional
+25-second `timeout`, not a rendering failure. The broker is resumed in `finally`.
+This closes the earlier empty six-second sample. The preceding repeated D2 idle
+check again gives 59.9 checks/s, zero copies/s, unchanged-count delta 840.
+R4 async-60 now runs on vdisp2; only the same-box refresh positive remains queued
+after the app matrix on vmb.

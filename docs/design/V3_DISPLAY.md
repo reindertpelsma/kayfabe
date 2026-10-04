@@ -3605,8 +3605,9 @@ broker `9f2fd00` (refresh-only/reconnect fix), the real relay and actual guest.
 Three duplicate hints are suppressed. A userspace connector reprobe (`modetest -c`)
 refreshes the cached EDID; sysfs alone returned old bytes. The recorded udev monitor
 has no DRM event, so this does not claim automatic desktop switching or a physical
-host monitor transition; test-backend hints were used. Stopped-broker guest responsiveness/reconnect is verified,
-but its first short GLX sample did not grade rendering progress. Actual NVIDIA
+host monitor transition; test-backend hints were used. Stopped-broker rendering now passes too: the broker stayed SIGSTOPped for 27.214 s,
+while guest SSH answered and GLX reported 58.118–59.950 FPS. The empty first
+six-second sample is superseded by this longer, PID-checked observation. Actual NVIDIA
 DDX import refusal was not provoked; six unsafe descriptors are now rejected
 before X and real GPU-copy passes. Evidence, failed probes and full caveats:
 `traces/v3_candidates/cand2_20261004/README.md`.
