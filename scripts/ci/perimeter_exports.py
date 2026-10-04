@@ -33,7 +33,10 @@ VD_SEP = "|---|---|---|"
 TYPE_KINDS = ("owning handle", "borrowed view", "FFI struct", "plain data")
 MECH_KINDS = ("safe fn", "unsafe fn", "safe extern fn", "unsafe extern fn", "trait", "unsafe trait",
               "trait impl", "unsafe trait impl", "type alias", "static", "const", "macro", "auto trait")
-EXCLUDED_DERIVES = {"Debug", "PartialEq", "Eq", "PartialOrd", "Ord", "Hash", "StructuralPartialEq"}
+# Derived impls that are not rows. `TrivialClone` is the std-internal marker rustc 1.99's
+# `derive(Clone)` emits beside `Clone` (doc(hidden) in core, so it appears only with
+# --document-hidden-items: measured in CI run 37165994390, 2026-10-04, 24 such impls).
+EXCLUDED_DERIVES = {"Debug", "PartialEq", "Eq", "PartialOrd", "Ord", "Hash", "StructuralPartialEq", "TrivialClone"}
 DATE = r"\d{4}-\d{2}-\d{2}"
 STATUS_RE = re.compile(rf"^(OK|OPEN: {DATE}: .+|LANE:[\w.-]+: {DATE}: .+)$")
 REF_RE = re.compile(r"^(t|ui|box|equiv):(.+)$")
