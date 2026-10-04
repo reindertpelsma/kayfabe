@@ -616,6 +616,14 @@ mod raw {
         (n >= 1 && end <= len).then_some(off)
     }
 
+    /// ★ V2, pure: an import maps at least one byte, and no more than the address space holds.
+    pub(in crate::driver_unsafe) fn import_len(len: u64) -> Result<usize, String> {
+        if len == 0 {
+            return Err("a zero-length import".to_string());
+        }
+        usize::try_from(len).map_err(|_| format!("{len:#x} bytes"))
+    }
+
     /// ★ V1b, pure: every range of an async operation belongs to the stream's context.
     pub(in crate::driver_unsafe) fn ctx_matches(stream_ctx: u64, ranges: &[u64]) -> bool {
         ranges.iter().all(|r| *r == stream_ctx)
@@ -903,10 +911,7 @@ mod raw {
             len: u64,
         ) -> Result<DevMem, CudaError> {
             let what = "cuMemImportFromShareableHandle + cuMemMap";
-            if len == 0 {
-                return Err(refused(what, "a zero-length import".to_string()));
-            }
-            let n = usize::try_from(len).map_err(|_| refused(what, format!("{len:#x} bytes")))?;
+            let n = import_len(len).map_err(|e| refused(what, e))?;
             let cu = ctx.cu();
             let import = need(
                 cu.cuMemImportFromShareableHandle,

@@ -408,6 +408,25 @@ pub(crate) fn validate_move(
 
 // ═══ The handles ════════════════════════════════════════════════════════════════════════════
 
+/// ★ V8, pure: a walk-pool read-back `[off, off+cap)` stays inside the pool.
+fn walk_region_fits(walk_pool: u32, off: u32, cap: u32) -> Result<(), String> {
+    if u64::from(off) + u64::from(cap) > u64::from(walk_pool) {
+        return Err(format!(
+            "[{off}+{cap}) leaves the {walk_pool}-run walk pool"
+        ));
+    }
+    Ok(())
+}
+
+/// ★ V8, pure: the report's counts, clamped to the capacities this perimeter allocated (a
+/// truncated report legitimately declares more than it carries, invariant I3).
+fn report_counts(shape: &Shape, header: &KfReportHeader) -> (usize, usize) {
+    (
+        header.pdb_count.min(shape.pdb_capacity) as usize,
+        header.run_count.min(shape.run_capacity) as usize,
+    )
+}
+
 /// ★ A host image uploaded to device memory — the walker's window for a test or the self-test.
 ///
 /// Opaque: its address never leaves the perimeter. Freed when dropped (after its context drained;
@@ -1253,8 +1272,7 @@ impl WalkGpu {
     ) -> Result<(KfReportHeader, Vec<KfPdbEntry>, Vec<KfMapRun>), CudaError> {
         let header =
             KfReportHeader::decode(&self.stage.read(Region::Hdr, 0, KfReportHeader::BYTES)?);
-        let npdb = header.pdb_count.min(self.shape.pdb_capacity) as usize;
-        let nrun = header.run_count.min(self.shape.run_capacity) as usize;
+        let (npdb, nrun) = report_counts(&self.shape, &header);
         let pdbs =
             KfPdbEntry::decode_all(&self.stage.read(Region::Rpdb, 0, npdb * KfPdbEntry::BYTES)?);
         let runs =
@@ -1295,15 +1313,8 @@ impl WalkGpu {
                 "a walk is in flight".to_string(),
             ));
         }
-        if u64::from(off) + u64::from(cap) > u64::from(self.shape.walk_pool) {
-            return Err(refused(
-                "WalkGpu::read_walk_region (V8)",
-                format!(
-                    "[{off}+{cap}) leaves the {}-run walk pool",
-                    self.shape.walk_pool
-                ),
-            ));
-        }
+        walk_region_fits(self.shape.walk_pool, off, cap)
+            .map_err(|e| refused("WalkGpu::read_walk_region (V8)", e))?;
         let mut buf = vec![0u8; cap as usize * KfMapRun::BYTES];
         self.walk.read(u64::from(off) * KF_RUN_BYTES, &mut buf)?;
         Ok(KfMapRun::decode_all(&buf))
@@ -1391,6 +1402,37 @@ mod tests {
             ack: None,
             resets: &[],
         }
+    }
+
+    /// ★ T9 — V8: a read-back past the walk pool is refused (an exact fit accepted), and a
+    /// report's counts are clamped to the capacities allocated here.
+    #[test]
+    fn a_read_back_stays_inside_what_was_allocated() {
+        let s = shape();
+        let p = s.walk_pool;
+        assert_eq!(walk_region_fits(p, 0, p), Ok(()), "the exact fit");
+        assert_eq!(walk_region_fits(p, p - 1, 1), Ok(()), "the last run");
+        assert!(walk_region_fits(p, p, 1).is_err(), "one past the end");
+        assert!(walk_region_fits(p, 1, p).is_err(), "one run too long");
+        assert!(walk_region_fits(p, u32::MAX, u32::MAX).is_err(), "no wrap");
+        let cap = (s.pdb_capacity as usize, s.run_capacity as usize);
+        for (pdbs, runs) in [
+            (s.pdb_capacity + 1, s.run_capacity + 1),
+            (u32::MAX, u32::MAX),
+        ] {
+            let h = KfReportHeader {
+                pdb_count: pdbs,
+                run_count: runs,
+                ..KfReportHeader::default()
+            };
+            assert_eq!(report_counts(&s, &h), cap, "clamped to what was allocated");
+        }
+        let h = KfReportHeader {
+            pdb_count: 3,
+            run_count: 7,
+            ..KfReportHeader::default()
+        };
+        assert_eq!(report_counts(&s, &h), (3, 7), "a count inside is kept");
     }
 
     /// ★ T20 — V5's format check: the `.cu`'s grid, each arm refused; VER2 and VER3 accepted.

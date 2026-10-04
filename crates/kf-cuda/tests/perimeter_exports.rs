@@ -63,6 +63,11 @@ const EXPORTS: &[Row] = &[
         "V1b",
         "an_async_operation_stays_in_one_context",
     ),
+    r(
+        "driver_unsafe::raw::import_len",
+        "V2",
+        "an_import_maps_at_least_one_byte",
+    ),
     r("driver_unsafe::raw::DevRange::len", "-", "-"),
     r(
         "driver_unsafe::raw::DevRange::sub",
@@ -336,8 +341,8 @@ const EXPORTS: &[Row] = &[
     r("walk_gpu_unsafe::WalkGpu::gpu_done_now", "-", "-"),
     r(
         "walk_gpu_unsafe::WalkGpu::read_report",
-        "V4, V8 clamps",
-        "the_stage_belongs_to_the_gpu_until_a_proof_returns_it",
+        "V4 (Flight::step), V8 clamps",
+        "a_read_back_stays_inside_what_was_allocated",
     ),
     r(
         "walk_gpu_unsafe::WalkGpu::move_slot",
@@ -347,7 +352,7 @@ const EXPORTS: &[Row] = &[
     r(
         "walk_gpu_unsafe::WalkGpu::read_walk_region",
         "V8, Idle, V1",
-        "a_range_is_inside_its_allocation_or_refused",
+        "a_read_back_stays_inside_what_was_allocated",
     ),
     r(
         "walk_gpu_unsafe::WalkGpu::probe_oversized_block",
@@ -433,8 +438,8 @@ const EXPORTS: &[Row] = &[
     ),
     r(
         "display_gpu_unsafe::Composer::finish",
-        "V11",
-        "finish_needs_a_console_frame (tests/ui)",
+        "V11 (the frame type: tests/ui finish_needs_a_console_frame)",
+        "a_composition_finishes_only_into_a_frame_that_holds_it",
     ),
 ];
 

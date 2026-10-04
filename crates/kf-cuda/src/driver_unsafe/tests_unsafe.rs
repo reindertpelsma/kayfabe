@@ -2,15 +2,25 @@
 //! ★ The perimeter's PURE validation sites, tested without a GPU (`v3-sec-rawaddr`, design §8).
 //!
 //! Every runtime check of the raw tier is a pure function over numbers or states — `sub_range`,
-//! `ctx_matches`, `check_args`, `stage_layout`, `Flight::step`, `drop_disposition` — called first
-//! by the handle method it guards. Each test below refuses a violating input and accepts the exact
-//! fit; each was paired with the mutation that turns it red (recorded in the commit message).
+//! `ctx_matches`, `import_len`, `check_args`, `stage_layout`, `Flight::step`, `drop_disposition` —
+//! called first by the handle method it guards. Each test below refuses a violating input and
+//! accepts the exact fit; each was paired with the mutation that turns it red (recorded in the
+//! commit message).
 //! No `unsafe` and no address here: a child module cannot see the raw tier's fields.
 
 use super::raw::{
     ArgDesc, ArgKind, Disposition, Flight, FlightEvent, KERNEL_SIGS, KF_ARGS_BYTES, Region,
-    check_args, ctx_matches, drop_disposition, stage_layout, sub_range,
+    check_args, ctx_matches, drop_disposition, import_len, stage_layout, sub_range,
 };
+
+/// ★ T2 — V2: an import maps at least one byte (a negative fd cannot be expressed: the descriptor
+/// crosses as `BorrowedFd`, trybuild row `import_takes_a_borrowed_fd`).
+#[test]
+fn an_import_maps_at_least_one_byte() {
+    assert!(import_len(0).is_err(), "a zero-length import");
+    assert_eq!(import_len(1), Ok(1), "one byte");
+    assert_eq!(import_len(2 << 20), Ok(2 << 20), "a 2 MiB object");
+}
 
 /// ★ T1 — V1: a range inside a `len`-byte allocation; overflow checked before the bound.
 #[test]

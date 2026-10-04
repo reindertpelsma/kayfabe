@@ -1946,15 +1946,17 @@ jobs:
           #     the recorded `BackingKind`, hand-written `Debug` for HostSpan/StaticSpan/Mapping/
           #     GuestWindow/RunMapping (no address in `{:?}`), their tests, and the G1d opt-out
           #     attribute in each of the ten perimeter files.
-          #   kf-cuda 1084 -> 4428 (+3344): §R(b) moved the walker's and the display plane's launch
+          #   kf-cuda 1084 -> 4493 (+3409): §R(b) moved the walker's and the display plane's launch
           #     assembly and their validators INTO the perimeter (`driver_unsafe/walk_gpu_unsafe.rs`,
           #     `display_gpu_unsafe.rs`: V5-V12, ~1500 code lines out of walk.rs/display.rs), the raw
           #     tier gained the handle types and V1-V4 (`KERNEL_SIGS` is one line per argument), and the
           #     GPU-free tests of every validation site live beside it (`tests_unsafe.rs` and the
-          #     children's test modules, ~1100 lines: T1-T12, T17-T23).
+          #     children's test modules, ~1100 lines: T1-T13, T17-T23). Of the +3409, +65 is the
+          #     follow-up that made V2/V8/V11 pure functions (`import_len`, `walk_region_fits`,
+          #     `report_counts`, `finish_fits`) with their tests T2/T9/T13.
           #   kf-qemu 571 -> 658 (+87): V13 `check_frame`/`check_frame_geometry`, `Kf3Frame.len`,
           #     hand-written `Debug` for RawRegion/OverlayHook/IoeventfdHook, the G1d opt-out.
-          PERIMETER="kf-linux-raw:4810 kf-cuda:4428 kf-qemu:658"
+          PERIMETER="kf-linux-raw:4810 kf-cuda:4493 kf-qemu:658"
           fail=0
           for entry in $PERIMETER; do
             c="crates/${entry%%:*}"; want="${entry##*:}"

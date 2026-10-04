@@ -113,6 +113,24 @@ impl core::fmt::Debug for ConsoleFrame {
     }
 }
 
+/// ★ V11, pure: the frame belongs to the composer's context and holds the composition's
+/// `4·w·h` bytes.
+fn finish_fits(frame_ctx: u64, ctx: u64, w: u32, h: u32, frame_len: usize) -> Result<(), String> {
+    if frame_ctx != ctx {
+        return Err("the frame is registered with another CUDA context".into());
+    }
+    let n = u64::from(w)
+        .checked_mul(u64::from(h))
+        .and_then(|p| p.checked_mul(4))
+        .ok_or_else(|| format!("{w}x{h} overflows"))?;
+    if n > frame_len as u64 {
+        return Err(format!(
+            "{n:#x} bytes do not fit a {frame_len:#x}-byte frame"
+        ));
+    }
+    Ok(())
+}
+
 /// ★★★ **V10 — a layer fits its composition**: a composable rectangle (`1 ≤ rows, width ≤
 /// 16384`), inside the `fw × fh` composition, and every byte the compose kernel's address function
 /// can form for it inside `[src, src + extent)` — pitch: `(rows-1)·pitch + 4·width`; block-linear:
@@ -426,19 +444,14 @@ impl Composer<'_> {
     /// # Errors
     /// The failed check, or the CUDA error.
     pub fn finish(self, frame: &ConsoleFrame) -> Result<(), CudaError> {
-        if frame.dst.ctx_id() != self.gpu.ctx.id() {
-            return Err(refused(
-                "Composer::finish (V11)",
-                "the frame is registered with another CUDA context".into(),
-            ));
-        }
-        let n = u64::from(self.w) * u64::from(self.h) * 4;
-        if n > frame.len() as u64 {
-            return Err(refused(
-                "Composer::finish (V11)",
-                format!("{n:#x} bytes do not fit a {:#x}-byte frame", frame.len()),
-            ));
-        }
+        finish_fits(
+            frame.dst.ctx_id(),
+            self.gpu.ctx.id(),
+            self.w,
+            self.h,
+            frame.len(),
+        )
+        .map_err(|e| refused("Composer::finish (V11)", e))?;
         self.staging()?
             .copy_to_console(&self.gpu.stream, &frame.dst)?;
         self.gpu.stream.host_signal(&self.gpu.done)
@@ -602,6 +615,21 @@ mod tests {
         assert!(composition_bytes(1, 16385).is_err());
         assert!(composition_bytes(0, 1).is_err());
         assert!(composition_bytes(1, 0).is_err());
+    }
+
+    /// ★ T13 — V11: a frame one byte short of the composition, or of another context, is refused;
+    /// the exact fit is accepted.
+    #[test]
+    fn a_composition_finishes_only_into_a_frame_that_holds_it() {
+        let (w, h) = (1920u32, 1080u32);
+        let need = 4 * w as usize * h as usize;
+        assert_eq!(finish_fits(7, 7, w, h, need), Ok(()), "the exact fit");
+        assert!(finish_fits(7, 7, w, h, need - 1).is_err(), "4wh - 1");
+        assert!(finish_fits(8, 7, w, h, need).is_err(), "another context");
+        assert!(
+            finish_fits(7, 7, u32::MAX, u32::MAX, usize::MAX).is_err(),
+            "no wrap"
+        );
     }
 
     /// ★ T23 — V12 / F3: the leak budget.
