@@ -147,3 +147,9 @@ red/blue snapshots returned fresh, distinct full frames in 809/779 ms.
 processes completed but the preload reported zero observed presents, so the
 harness refused to grade them. Investigate loader/process behavior before
 using this observer; zero observed calls is not a successful frame-rate test.
+
+The observer's missing calls are explained by the guest executable: no file
+capabilities, and `readelf -Ws /usr/bin/vkcube` imports `dlsym@GLIBC_2.34` rather
+than Vulkan symbols. It loads Vulkan on an explicit library handle. The revised
+observer wraps those loader entry points too, checking their owning library
+with `dladdr`; ICD and unrelated symbols are forwarded unchanged.
