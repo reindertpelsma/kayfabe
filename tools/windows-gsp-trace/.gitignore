@@ -1,0 +1,11 @@
+/build/
+/packages/
+*.obj
+*.sys
+*.exe
+*.kgwt
+*.kgwt.stats.json
+*.pdb
+*.cer
+*.pfx
+__pycache__/
