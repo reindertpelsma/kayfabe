@@ -12,8 +12,8 @@ static int stats(HANDLE h,KFGT_STATS *s) {
     return DeviceIoControl(h,KFGT_IOCTL_STATS,NULL,0,s,sizeof(*s),&n,NULL) && n==sizeof(*s) && s->version==KFGT_ABI && s->bytes==sizeof(*s);
 }
 static int print_stats(FILE *f,const KFGT_STATS *s) {
-    int written=fprintf(f,"{\"schema\":\"kayfabe-gsp-observer/1\",\"complete\":false,\"scanned_bytes\":%llu,\"scan_passes\":%llu,\"attached_tables\":%llu,\"read_failures\":%llu,\"unstable_snapshots\":%llu,\"invalid_elements\":%llu,\"recorded\":%llu,\"dropped\":%llu,\"sequence_gaps\":%llu,\"buffered_bytes\":%llu}\n",
-      (unsigned long long)s->scanned_bytes,(unsigned long long)s->scan_passes,(unsigned long long)s->attached_tables,
+    int written=fprintf(f,"{\"schema\":\"kayfabe-gsp-observer/1\",\"complete\":false,\"scanned_bytes\":%llu,\"scan_passes\":%llu,\"candidates\":%llu,\"attached_tables\":%llu,\"read_failures\":%llu,\"unstable_snapshots\":%llu,\"invalid_elements\":%llu,\"recorded\":%llu,\"dropped\":%llu,\"sequence_gaps\":%llu,\"buffered_bytes\":%llu}\n",
+      (unsigned long long)s->scanned_bytes,(unsigned long long)s->scan_passes,(unsigned long long)s->candidates,(unsigned long long)s->attached_tables,
       (unsigned long long)s->read_failures,(unsigned long long)s->unstable_snapshots,(unsigned long long)s->invalid_elements,
       (unsigned long long)s->recorded,(unsigned long long)s->dropped,(unsigned long long)s->observed_sequence_gaps,(unsigned long long)s->buffered_bytes);
     if(written<0 || fflush(f)) { perror("write capture statistics");return 0; }
