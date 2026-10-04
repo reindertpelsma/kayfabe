@@ -826,6 +826,9 @@ static void kf3_refresh_done(Kf3State *s)
     }
     if (s->h) {
         kf3_console_frame(s);
+        /* The asynchronous answer can change whether the shown frame composes
+         * the cursor. Apply that frame's cursor policy before waking captures. */
+        kf3_console_cursor(s);
     }
     graphic_hw_update_done(s->con);
 }
