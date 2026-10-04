@@ -35,7 +35,14 @@ login passed with pinned Windows host keys. The recorder bundle was staged and
 verified; Windows test signing was enabled and activated by a Windows reboot.
 The first driver smoke attempt stopped before execution because the temporary
 SSH wrapper omitted PowerShell's `-ExecutionPolicy Bypass`; that wrapper is now
-fixed. No driver-load result is claimed yet. Inspect:
+fixed. Actual load testing then exposed an absent TrustedPublisher store.
+Installer source `0e627c48` fixes that through X509Store.Open(ReadWrite), and
+signing/verification now pass. Kernel loading remains blocked with exact NTSTATUS
+`0xC0000018` (conflicting addresses). An instrumented build (`069ae0d7` source)
+left no DriverEntry marker; changing only `.retplne` section read permission did
+not help. The `windows_gsp_driver` worker is investigating linker/WDK metadata.
+The service exists, is demand-start and stopped; do not replay Install blindly.
+No Windows GSP traffic has been captured. Inspect:
 
 ```sh
 ssh vw-native 'tail -30 /root/vw-resume-3.log'
@@ -89,7 +96,17 @@ KVM preflight only as a controlled fixture, not as a claimed supported bare-meta
 install. A plain OVMF compatibility failure was fixed by rendering the Windows
 setup Secure Boot eligibility bypass only when the requested target state is
 already disabled. The fresh installation then passed that check and reached OOBE.
-No VFIO operation or physical boot-disk replacement has occurred.
+Both formal cold boots subsequently passed all 26 checks at public main
+`214dce2`, and the controller's pinned-key SSH login passed. Its final research
+hold began at 16:05:32 UTC for 3600 seconds. Native setup is deferred, reboots are
+held, and no GPU is assigned. The controller tunnel listens on 127.0.0.1:22224,
+with socket `/tmp/vast-windows-claude-forward.sock` and known-hosts file
+`/data/vast-windows-runtime/claude-20261004/windows-known_hosts-22224`.
+The root agent now owns runtime changes. The preparation worker is writing a
+reviewable VFIO helper without executing it. The 4070 currently owns the connected
+monitor/gnome-shell and has a 16 GiB BAR; transient VFIO needs a display stop and
+adequate guest PCI64 aperture. No VFIO operation or physical boot-disk replacement
+has occurred. Fresh-install evidence is public in installer commit `d5c7a81`.
 
 On the controller, `uwgsocks-server.service` was stopped and disabled as explicitly
 requested. `wg-quick@wg0` is enabled and active; direct SSH works. The borrowed
@@ -105,7 +122,7 @@ and dirty original workspace were preserved. Root free space increased to about
 
 ## Next checks
 
-1. Finish the resumed cold checks; run the staged recorder's Windows kernel/API
+1. Resolve the recorder loader failure, then run its Windows kernel/API
    smoke with execution-policy bypass. Save exact errors and CodeIntegrity events
    if it fails. The test stops its worker; restart before any valuable capture.
 2. Release the final hold, require clean shutdown and exact-size/hash sealing,
