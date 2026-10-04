@@ -1,5 +1,37 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+**BRANCH RESUMPTION, 2026-10-05:** this checkout is the Windows boot experiment
+`codex/windows-pool-2026-10-05`, based on `v3-windows`/`c50fad9a`, not current
+master. The older master status below is historical for this checkout.
+
+- Windows 580.88 on the borrowed RTX 4070 PC (Linux host 595.91.07) still reports
+  Code 43 through Kayfabe. Fresh A/B/C runs are saved in
+  `traces/windows_pool_20261005/`: answering the pool query advances initialization;
+  accepting timer allocation alone does not. No Windows GPU workload has passed.
+- `535e7df9` removes the one-driver query gate in favor of exact compiled layout
+  checks. All 29 admitted control envelopes are tested (30 measured tags; the
+  encrypted 615 queue remains refused). 1,187 ABI/RM/chip tests pass. Invented
+  virtual pool dimensions remain an opt-in experiment, not pooled preemption.
+- Next hypothesis: the guest fails its timer CPU mapping because CHIP_INFO names
+  no TIMER range. `codex/windows-timer-map-2026-10-05` is preparing genuine
+  read-only host backing and an unprivileged native probe. Never publish a timer
+  range over a stopped shadow page. The runner now has independent `--timer-map`
+  and `--pool-probe` flags; use a fresh overlay and an exact immutable binary.
+- Read `docs/design/V3_WINDOWS_POOL_AUDIT_20261005.md` before integration. The
+  old Windows base inherits S1-21 and lacks master's USER-channel correction.
+  `codex/p1p2-integration-2026-10-05` combines current master with the full private
+  Translated-space branch and is integrating Windows separately. P1/P2 remains
+  opt-in until its exact-revision hardware/isolation probes pass. No master merge
+  or whole-branch security claim is authorized by the boot experiments.
+- Code and text evidence are pushed. The PC (`172.22.1.20`) is disposable and
+  shared by serial GPU jobs only. Vast rentals 54049598 and 54159260 were retired
+  after saving evidence on `codex/vast-retirement-2026-10-05` (`67ca8133`). Only
+  54213526 remains for the untouched fresh Windows-template test; verify native
+  Windows and CUDA from PowerShell, preserve text evidence, then retire it.
+- `vast-windows` main is frozen at `6d8e66f`. Installer improvements are on
+  `codex/template-followups-2026-10-05`; do not replace the ongoing fresh test or
+  promote those changes before the requested later test.
+
 **STATUS: LIVE, 2026-09-30.** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
 evidence and documentation. The single entry point for resuming work without any chat history. Decisions
