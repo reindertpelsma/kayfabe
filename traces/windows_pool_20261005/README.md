@@ -48,3 +48,32 @@ the actual NVIDIA class setting and device status were read successfully.
 
 Validation before this run: 1112 ABI/RM tests passed, zero failures. All 124091 compared
 cells for the 29 previous matrix tags were unchanged by remeasurement.
+
+## Probe B: query experiment enabled
+
+The same product revision `167fe2deaa06fd61f591bc6d2a7c43bd84da0caf`, on a fresh
+overlay, accepts the 40-byte query with `maxSlots=4`. Windows advances past the query
+to six context-property controls (`0x00801707`) and further display initialization.
+Kayfabe services 209 RPCs, versus 143 in baseline A. Both logs have the query at
+index 118 in the RPC trace; the two additional serviced messages are outside that
+trace's coverage. No pool-initialize/add request or GPU channel birth is observed.
+
+Windows still reports Code 43 and nvidia-smi exits 9. Immediately before the FREE
+burst it tries class `0xb297`, refused with `0x56`, then `NV01_TIMER` (`0x0004`),
+also refused with `0x56`. The order motivates a timer-allocation experiment; it
+does **not** establish either allocation as the remaining fatal condition.
+`0xb297` was not found in the public OGKM 580.65.06 tree and remains unidentified.
+
+The source oracle for `NV01_TIMER` is OGKM 580.65.06:
+
+- `src/nvidia/src/kernel/rmapi/resource_list.h:790-799`: `TimerApi`, one instance
+  per Subdevice, no allocation parameters, unprivileged allocation allowed,
+  allocation RPC routed to physical RM, no required access rights.
+- `src/nvidia/src/kernel/gpu/timer/timer.c:1693-1709`: constructor returns
+  `NV_OK`, destructor is empty. Allocation itself schedules no GPU work.
+- `timer.c:1712-1735` and `src/common/sdk/nvidia/inc/class/cl0004.h`: register
+  mapping uses the GPU's timer base and `sizeof(Nv01TimerMap)` (`0x414`).
+
+Mapping and alarm controls have separate behavior; the empty constructor does
+not justify accepting those operations without implementing them. The guest
+shut down cleanly and QEMU exited 0. Raw text evidence is in `probe-b/`.
