@@ -130,8 +130,14 @@ import os
 # workflow so the lanes that edit ci.yml see no conflict. Their jobs are extracted too, after
 # `stable`, so a local run covers them; a missing perimeter.yml is simply absent, not an error.
 steps_in = list(yaml.safe_load(open(".github/workflows/ci.yml"))["jobs"]["stable"].get("steps", []))
+whole_jobs_skipped = []
 if os.path.exists(".github/workflows/perimeter.yml"):
-    for pjob in yaml.safe_load(open(".github/workflows/perimeter.yml"))["jobs"].values():
+    for jname, pjob in yaml.safe_load(open(".github/workflows/perimeter.yml"))["jobs"].items():
+        # A job that runs in a container or installs packages is never run on a developer's box:
+        # its steps would apt-get as root and build QEMU here. Named below as not run.
+        if "container" in pjob or any("apt-get" in (st.get("run") or "") for st in pjob.get("steps", [])):
+            whole_jobs_skipped.append(f"perimeter.yml job {jname} (container/apt; CI only)")
+            continue
         steps_in.extend(pjob.get("steps", []))
 job = {"steps": steps_in}
 heavy = ("cargo build", "cargo test", "cargo clippy", "cargo fmt", "bash scripts/ci/clippy.sh",
@@ -181,7 +187,7 @@ for step in job.get("steps", []):
     }))
 for name in deferred:
     print(f"__DEFERRED__{name}", file=sys.stderr)
-for name in skipped_heavy:
+for name in skipped_heavy + whole_jobs_skipped:
     print(f"__SKIPPED__{name}", file=sys.stderr)
 print("\n".join(out))
 PY

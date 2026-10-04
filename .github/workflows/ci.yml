@@ -1519,7 +1519,9 @@ jobs:
           # `Ctx::planes` keeps its one block, which now forms only the RAM shadow's slice — the BAR is
           # never a slice again, so `blt` cannot reach it with `copy_from_slice`/`fill`. ⊘ No new power:
           # the same bytes of the same BAR the old slice covered, now one aligned word at a time.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:46 firmware/kf-gop:78"
+          # ★ `kf-linux-raw` 75 -> 86, 2026-10-04 (`v3-sec-perimeter` C7b, V3_SEC_PERIMETER.md §4.1 a7-a10;
+          # every row itemised in scripts/ci/perimeter/sizes.tsv, which retires this list at C11).
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:86 kf-cuda:75 kf-qemu:46 firmware/kf-gop:78"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

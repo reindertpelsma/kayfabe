@@ -488,13 +488,13 @@ impl KvmVm {
     ) -> Result<(), RawError> {
         lockwitness::assert_lock_free("KVM_SET_USER_MEMORY_REGION (installing a memslot)");
         leafwitness::assert_leaf_free("KVM_SET_USER_MEMORY_REGION (installing a memslot)");
-        let region = UserspaceMemoryRegion::install(
-            slot,
-            gpa,
-            window.userspace_addr_at(window_offset, len)?,
-            len,
-            guest_readonly,
-        );
+        // SAFETY: `userspace_addr_at`'s contract (a7): the address goes straight into the
+        // kernel's memslot struct below and is never stored or dereferenced here. The window
+        // outlives the memslot only when the caller keeps it alive: `KvmMemslot::install` holds
+        // an `Arc` of it for the memslot's life; a direct safe caller of this `pub` fn can break
+        // that, which is why this fn becomes private (a4, its row is OPEN until then).
+        let addr = unsafe { window.userspace_addr_at(window_offset, len)? };
+        let region = UserspaceMemoryRegion::install(slot, gpa, addr, len, guest_readonly);
         ioctl_ptr(self.fd.as_raw_fd(), &region)
     }
 

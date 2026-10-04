@@ -410,12 +410,12 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `GuestWindow::host_span` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `GuestWindow::len_bytes` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `GuestWindow::page_size` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `GuestWindow::place` | pub | safe fn |  |  | OPEN: 2026-10-04: a failed MAP_FIXED placement leaves a hole that faults safe readers (a8); a SharedFile past EOF is not refused (a10) |
-| `GuestWindow::place_device_view` | pub | safe fn |  |  | OPEN: 2026-10-04: same hole as place (a8); a read-only device view is accepted (a9) |
+| `GuestWindow::place` | pub | safe fn |  |  | OPEN: 2026-10-04: a8 re-plugs or poisons after a failed placement and a10 refuses a placement past end-of-file (tests in this file); OPEN residuals: a file truncated after placement (needs F_SEAL_SHRINK), and a foreign anonymous mapping merged into the filler is indistinguishable from it; not yet mutation-proved |
+| `GuestWindow::place_device_view` | pub | safe fn |  |  | OPEN: 2026-10-04: a9 refuses a read-only view and a8 re-plugs or poisons after a failed placement; whether NVIDIA device mappings survive mremap is unmeasured (box bar), so device views keep the single MAP_FIXED; not yet mutation-proved |
 | `GuestWindow::read_into` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `GuestWindow::restore` | pub | safe fn |  |  | OPEN: 2026-10-04: same hole as place (a8) |
+| `GuestWindow::restore` | pub | safe fn |  |  | OPEN: 2026-10-04: a8 re-plugs or poisons after a failed MAP_FIXED; not yet mutation-proved |
 | `GuestWindow::store_u32` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `GuestWindow::userspace_addr_at` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: returns a host address for any offset; becomes `unsafe fn` (a7) |
+| `GuestWindow::userspace_addr_at` | pub(crate) | unsafe fn |  |  | OPEN: 2026-10-04: an `unsafe fn` since a7, its `# Safety` stating the lifetime contract; its only test is KVM-gated (E3d), so CI holds no evidence for it |
 | `GuestWindow::write_from` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 
 ## crates/kf-qemu/src/ffi_unsafe.rs

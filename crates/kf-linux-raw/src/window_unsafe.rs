@@ -54,6 +54,20 @@
 //!   required to survive) and the API offers no way to re-read the source, which excludes
 //!   the double fetch structurally. The same ruling, the same reason, one layer out.
 //!
+//! ## ★ A placement that fails leaves no hole — or the window refuses everything (a8)
+//!
+//! `mmap(MAP_FIXED)` over a live range is not atomic on failure: for a file-backed placement
+//! (a memfd, a device node) the kernel clears the old pages before it calls the file's `mmap`
+//! handler, and a handler that refuses leaves a gap. A gap is the one thing this type promises
+//! never to have, and a `read_into` into it is a `SIGSEGV` from safe code. So a failed
+//! placement re-plugs the anonymous filler with `MAP_FIXED_NOREPLACE` — which maps only where
+//! nothing is mapped, so it can never overwrite a mapping another thread placed in the gap in
+//! the meantime. If the re-plug cannot succeed, the window is **poisoned**: every accessor
+//! returns [`RawError::WindowPoisoned`], and `Drop` leaves the range mapped rather than
+//! unmap what may not be ours (V3_SEC_PERIMETER.md §4.1, a8). The success path is unchanged:
+//! one `mmap`, which the PRAMIN move needs on the vCPU (OWNER_RULINGS: one host map + one
+//! `mmap`).
+//!
 //! ## Read/write are `&self` and take **no lock**
 //!
 //! This is the load-bearing difference from the mock harness's shape. `Vmm::gpa_read` is
@@ -69,6 +83,7 @@ use crate::geometry;
 use crate::mapping_unsafe::Backing;
 use crate::page_size::HostPageSize;
 use core::ptr::NonNull;
+use core::sync::atomic::{AtomicBool, Ordering};
 use kf_util::lockwitness;
 use std::os::fd::{AsRawFd, BorrowedFd};
 
@@ -82,18 +97,22 @@ pub struct GuestWindow {
     /// object's whole life. Established by the single `mmap` in [`GuestWindow::create`],
     /// never written again, and released by exactly one `munmap` in `Drop`.
     base: NonNull<u8>,
+    /// Set when a failed placement could not be undone (a8): from then on every accessor
+    /// refuses with [`RawError::WindowPoisoned`] and `Drop` leaks the range.
+    poisoned: AtomicBool,
     len: usize,
     page: HostPageSize,
 }
 
 // SAFETY: `GuestWindow` owns a process-wide mapping, not a thread-affine resource: the
-// three fields are a pointer to that mapping, its length and the page size, all
-// established by `create` and never mutated afterwards. `munmap` from a different thread
+// fields are a pointer to that mapping, its length and the page size, all established by
+// `create` and never mutated afterwards, and the `poisoned` flag, an `AtomicBool`. `munmap` from a different thread
 // than `mmap` is valid, so moving the owner between threads is sound.
 unsafe impl Send for GuestWindow {}
 
 // SAFETY: every method takes `&self`. `base`, `len` and `page` are immutable for the
-// object's life, so there is no field a concurrent pair of `&self` methods can tear. The
+// object's life, and `poisoned` is an atomic, so there is no field a concurrent pair of
+// `&self` methods can tear. The
 // two methods that change what the address range *contains* (`place`, `restore`) do so by
 // `mmap(MAP_FIXED)`, which the kernel applies to the range atomically under its own
 // `mmap_lock` — the range is never transiently unmapped, so a concurrent `read_into`
@@ -158,9 +177,19 @@ impl GuestWindow {
         })?;
         Ok(GuestWindow {
             base,
+            poisoned: AtomicBool::new(false),
             len: len_host,
             page,
         })
+    }
+
+    /// `Err(WindowPoisoned)` once a failed placement could not be undone (a8).
+    fn live(&self) -> Result<(), RawError> {
+        if self.poisoned.load(Ordering::Acquire) {
+            Err(RawError::WindowPoisoned)
+        } else {
+            Ok(())
+        }
     }
 
     /// The window's length in bytes.
@@ -175,6 +204,7 @@ impl GuestWindow {
     /// from construction until `Drop`; only `unsafe` code can open the span.
     #[must_use]
     pub fn host_span(&self, off: usize, len: usize) -> Option<crate::HostSpan> {
+        self.live().ok()?;
         crate::HostSpan::within(self.base, self.len, off, len)
     }
 
@@ -213,6 +243,21 @@ impl GuestWindow {
                 geometry::require_aligned(offset, self.page, "file offset")?;
                 let off = libc::off_t::try_from(offset)
                     .map_err(|_| RawError::TooLargeForHost { value: offset })?;
+                // ★ a10: every page of the placement must exist in the file NOW. A page past
+                // end-of-file is mapped without complaint and then raises SIGBUS on the first
+                // access, which `read_into` would make from safe code. (A file truncated AFTER
+                // placement is the residual, OPEN: it needs `F_SEAL_SHRINK` on the backing.)
+                let size = file_size(fd)?;
+                let end = offset
+                    .checked_add(len)
+                    .ok_or(RawError::LengthOverflow { offset, len })?;
+                if end > size {
+                    return Err(RawError::OutOfRange {
+                        offset,
+                        len,
+                        object_len: size,
+                    });
+                }
                 (fd.as_raw_fd(), off, libc::MAP_SHARED)
             }
             // ★★★ Refused by variant, at the door. See `RawError::DeviceBackingNotPlaceable`:
@@ -293,17 +338,22 @@ impl GuestWindow {
         writable: bool,
     ) -> Result<(), RawError> {
         lockwitness::assert_lock_free("mmap MAP_FIXED (placing an armed device node)");
+        // ★ a9: refused by name. A read-only range inside a window that `write_from` and
+        // `store_u32` write through is a SIGSEGV from safe code; the only caller asks for a
+        // writable view (kf-qemu `mem.rs`, `place_view`).
+        if !writable {
+            return Err(RawError::Unsupported {
+                what: "a read-only device view inside a guest window",
+                detail: "the window's write doors would fault on it; place a writable view",
+            });
+        }
         self.fixed_map(
             offset,
             len,
             fd.as_raw_fd(),
             0,
             libc::MAP_SHARED,
-            if writable {
-                libc::PROT_READ | libc::PROT_WRITE
-            } else {
-                libc::PROT_READ
-            },
+            libc::PROT_READ | libc::PROT_WRITE,
             "device view",
         )
     }
@@ -349,6 +399,7 @@ impl GuestWindow {
         prot: libc::c_int,
         what: &'static str,
     ) -> Result<(), RawError> {
+        self.live()?;
         if len == 0 {
             return Err(RawError::ZeroLength { what });
         }
@@ -373,21 +424,51 @@ impl GuestWindow {
         //      borrows at all — `read_into`/`write_from` copy and return.
         // The result is compared against the requested address below, so a kernel that
         // honoured the request elsewhere cannot be mistaken for success.
+        let target = unsafe { self.base.as_ptr().add(start).cast::<libc::c_void>() };
+        let ret = map_fixed(target, len_host, prot, share_flags, fd, file_offset);
+        if ret == libc::MAP_FAILED {
+            let err = last_syscall_error("mmap");
+            self.replug(target, len_host);
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    /// ★ a8: after a failed `MAP_FIXED`, put the anonymous filler back where the kernel may
+    /// have left a gap — with `MAP_FIXED_NOREPLACE`, which maps only where nothing is mapped,
+    /// so it cannot overwrite a mapping another thread placed in the gap. If anything is
+    /// mapped there (`EEXIST`: the old placement, which a failed anonymous `MAP_FIXED` keeps,
+    /// or somebody else's), or the kernel ignores the flag, the range cannot be proved whole:
+    /// the window is poisoned. ⚠ OPEN: a foreign anonymous mapping that merged into the
+    /// filler's VMA is indistinguishable from the filler (V3_SEC_PERIMETER.md §4.1, a8).
+    fn replug(&self, target: *mut libc::c_void, len_host: usize) {
+        // SAFETY: `MAP_FIXED_NOREPLACE` creates a mapping only if NO page of the range is
+        // mapped, and fails with `EEXIST` otherwise, so this call can displace nothing — not
+        // ours, not another thread's. `target`/`len_host` are the in-bounds, page-aligned pair
+        // `fixed_map` checked; the flags and protections are constants.
         let ret = unsafe {
-            let target = self.base.as_ptr().add(start).cast::<libc::c_void>();
             libc::mmap(
                 target,
                 len_host,
-                prot,
-                share_flags | libc::MAP_FIXED,
-                fd,
-                file_offset,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE
+                    | libc::MAP_ANONYMOUS
+                    | libc::MAP_NORESERVE
+                    | libc::MAP_FIXED_NOREPLACE,
+                -1,
+                0,
             )
         };
-        if ret == libc::MAP_FAILED {
-            return Err(last_syscall_error("mmap"));
+        if ret == target {
+            return;
         }
-        Ok(())
+        if ret != libc::MAP_FAILED {
+            // A kernel without MAP_FIXED_NOREPLACE treats it as a hint and maps elsewhere.
+            // SAFETY: `ret` is the `len_host`-byte mapping this call just created, recorded
+            // nowhere; unmapping it releases exactly that.
+            unsafe { libc::munmap(ret, len_host) };
+        }
+        self.poisoned.store(true, Ordering::Release);
     }
 
     /// Copy `dst.len()` bytes out of the window, starting at `offset`.
@@ -399,6 +480,7 @@ impl GuestWindow {
     /// [`RawError::ZeroLength`], [`RawError::OutOfRange`], [`RawError::LengthOverflow`],
     /// [`RawError::TooLargeForHost`].
     pub fn read_into(&self, offset: HostOffset, dst: &mut [u8]) -> Result<(), RawError> {
+        self.live()?;
         let (start, len) =
             bounds::checked_span(self.len_bytes(), offset, dst.len() as u64, "read length")?;
 
@@ -423,6 +505,7 @@ impl GuestWindow {
     /// # Errors
     /// As [`GuestWindow::read_into`].
     pub fn write_from(&self, offset: HostOffset, src: &[u8]) -> Result<(), RawError> {
+        self.live()?;
         let (start, len) =
             bounds::checked_span(self.len_bytes(), offset, src.len() as u64, "write length")?;
 
@@ -464,6 +547,7 @@ impl GuestWindow {
     /// [`RawError::OutOfRange`] / [`RawError::LengthOverflow`] as [`GuestWindow::write_from`],
     /// and [`RawError::Unsupported`] for an offset that is not 4-byte aligned.
     pub fn store_u32(&self, offset: HostOffset, value: u32) -> Result<(), RawError> {
+        self.live()?;
         let (start, _len) = bounds::checked_span(self.len_bytes(), offset, 4, "register store")?;
         if start % 4 != 0 {
             return Err(RawError::Unsupported {
@@ -501,7 +585,15 @@ impl GuestWindow {
     /// and a memslot whose length ran off the end of its window is precisely the
     /// "semantically unbounded bounded object" the crate docs name as the un-mechanisable
     /// refusal, made mechanisable for this one case.
-    pub(crate) fn userspace_addr_at(&self, offset: u64, len: u64) -> Result<u64, RawError> {
+    ///
+    /// # Safety
+    ///
+    /// The returned integer is a host address of this window's mapping (a7, V3_SEC_PERIMETER.md
+    /// §4.1). The caller must hand it only to the kernel as the backing of a memslot whose
+    /// lifetime this `GuestWindow` outlives, and never turn it into a pointer: the bounds are
+    /// checked here, the lifetime cannot be.
+    pub(crate) unsafe fn userspace_addr_at(&self, offset: u64, len: u64) -> Result<u64, RawError> {
+        self.live()?;
         geometry::require_aligned(offset, self.page, "memslot offset")?;
         geometry::require_aligned(len, self.page, "memslot length")?;
         let (start, _) = bounds::checked_span(
@@ -516,8 +608,111 @@ impl GuestWindow {
     }
 }
 
+/// The size of the file behind `fd`, by `fstat` (a10).
+fn file_size(fd: BorrowedFd<'_>) -> Result<u64, RawError> {
+    let mut st = core::mem::MaybeUninit::<libc::stat>::uninit();
+    // SAFETY: `fd` is a live borrowed descriptor for the call, and `st` is a writable
+    // `struct stat`-sized local that `fstat` fills on success; it is read (`assume_init`)
+    // only when the return value says it was filled.
+    let size = unsafe {
+        if libc::fstat(fd.as_raw_fd(), st.as_mut_ptr()) != 0 {
+            None
+        } else {
+            Some(st.assume_init().st_size)
+        }
+    };
+    let size = size.ok_or_else(|| last_syscall_error("fstat"))?;
+    u64::try_from(size).map_err(|_| RawError::Syscall {
+        call: "fstat",
+        errno: None,
+    })
+}
+
+/// The one `mmap(MAP_FIXED)` of [`GuestWindow::fixed_map`]. Its caller established that
+/// `target..target + len` lies inside the window's own mapping.
+fn map_fixed(
+    target: *mut libc::c_void,
+    len: usize,
+    prot: libc::c_int,
+    share_flags: libc::c_int,
+    fd: libc::c_int,
+    file_offset: libc::off_t,
+) -> *mut libc::c_void {
+    #[cfg(test)]
+    if let Some(ret) = seam::fail_fixed(target, len) {
+        return ret;
+    }
+    // SAFETY: `fixed_map`'s argument, verbatim: the range is in bounds of the window's live
+    // mapping (`checked_span`), page-aligned, and no borrow into it is outstanding, so
+    // `MAP_FIXED` replaces only the window's own pages.
+    unsafe {
+        libc::mmap(
+            target,
+            len,
+            prot,
+            share_flags | libc::MAP_FIXED,
+            fd,
+            file_offset,
+        )
+    }
+}
+
+/// ★ The a8 fault seam (tests only): make the next `MAP_FIXED` fail the way a refusing
+/// file `mmap` handler does — the old pages gone, the call failed — and, optionally, let
+/// "another thread" map something into the gap before the re-plug runs.
+#[cfg(test)]
+mod seam {
+    use core::cell::Cell;
+
+    thread_local! {
+        static FAIL: Cell<bool> = const { Cell::new(false) };
+        static PLANT: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn arm(plant_foreign: bool) {
+        FAIL.with(|c| c.set(true));
+        PLANT.with(|c| c.set(plant_foreign));
+    }
+
+    pub(super) fn fail_fixed(target: *mut libc::c_void, len: usize) -> Option<*mut libc::c_void> {
+        if !FAIL.with(|c| c.replace(false)) {
+            return None;
+        }
+        // SAFETY: test-only; `target..target + len` is a range of a window this test owns.
+        // Unmapping it is the kernel's own failure mode being reproduced: the gap.
+        unsafe { libc::munmap(target, len) };
+        if PLANT.with(|c| c.replace(false)) {
+            // SAFETY: test-only; a fresh anonymous mapping exactly in the gap, standing in for
+            // a mapping another thread made there (`MAP_FIXED_NOREPLACE` cannot displace), and
+            // its first byte written only once the mapping is known to be at `target`.
+            let planted = unsafe {
+                let foreign = libc::mmap(
+                    target,
+                    len,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED_NOREPLACE,
+                    -1,
+                    0,
+                );
+                if foreign == target {
+                    target.cast::<u8>().write(0x5A);
+                }
+                foreign == target
+            };
+            assert!(planted, "the fault seam could not plant its mapping");
+        }
+        Some(libc::MAP_FAILED)
+    }
+}
+
 impl Drop for GuestWindow {
     fn drop(&mut self) {
+        // ★ a8: a poisoned window's range may hold a mapping that is not ours, which an
+        // `munmap` of the whole range would destroy. Leaking the address space is the
+        // memory-safe failure.
+        if *self.poisoned.get_mut() {
+            return;
+        }
         // SAFETY: the type invariant says `base` is a live mapping of exactly `len` bytes,
         // and this is its unique owner — `GuestWindow` is not `Clone`/`Copy`, nothing else
         // constructs one, and no accessor yields the pointer, so no second `munmap` of
@@ -836,20 +1031,21 @@ mod tests {
         crate::require_kvm!("a_sub_range_memslot_address_advances_by_exactly_its_offset");
         let p = page();
         let w = GuestWindow::create(4 * p.bytes(), p).expect("window");
-        let base = w
-            .userspace_addr_at(0, p.bytes())
-            .expect("the window's own base");
+        let at = |off: u64, len: u64| {
+            // SAFETY: the addresses are compared as integers and never handed to the kernel or
+            // turned into pointers.
+            unsafe { w.userspace_addr_at(off, len) }
+        };
+        let base = at(0, p.bytes()).expect("the window's own base");
         for k in 1..4u64 {
             assert_eq!(
-                w.userspace_addr_at(k * p.bytes(), p.bytes())
-                    .expect("a sub-range inside the window")
-                    - base,
+                at(k * p.bytes(), p.bytes()).expect("a sub-range inside the window") - base,
                 k * p.bytes(),
                 "a memslot over the k-th page must name the k-th page"
             );
         }
         assert_eq!(
-            w.userspace_addr_at(3 * p.bytes(), 2 * p.bytes()),
+            at(3 * p.bytes(), 2 * p.bytes()),
             Err(RawError::OutOfRange {
                 offset: 3 * p.bytes(),
                 len: 2 * p.bytes(),
@@ -860,7 +1056,7 @@ mod tests {
              object that owns the range is"
         );
         assert_eq!(
-            w.userspace_addr_at(8, p.bytes()),
+            at(8, p.bytes()),
             Err(RawError::Misaligned {
                 what: "memslot offset",
                 value: 8,
@@ -958,5 +1154,137 @@ mod tests {
             w.store_u32(HostOffset::new(u64::MAX - 1), 7).is_err(),
             "an offset that overflows when 4 is added was accepted"
         );
+    }
+
+    /// ★ a8: a placement whose `MAP_FIXED` fails the way a refusing file handler does (the old
+    /// pages already gone) leaves the window READABLE: the filler is re-plugged. On the code
+    /// before a8 the gap stayed, and the `read_into` below was a SIGSEGV from safe code.
+    #[test]
+    fn a_failed_placement_re_plugs_the_filler_and_the_window_stays_readable() {
+        let p = page();
+        let w = GuestWindow::create(4 * p.bytes(), p).expect("window");
+        w.write_from(HostOffset::new(p.bytes()), &[7u8; 8])
+            .expect("seed");
+        seam::arm(false);
+        let r = w.restore(HostOffset::new(p.bytes()), p.bytes());
+        assert!(
+            matches!(r, Err(RawError::Syscall { call: "mmap", .. })),
+            "{r:?}"
+        );
+        let mut got = [0xFFu8; 8];
+        w.read_into(HostOffset::new(p.bytes()), &mut got)
+            .expect("the re-plugged range reads");
+        assert_eq!(got, [0u8; 8], "the filler is back: anonymous zeroes");
+        w.restore(HostOffset::new(p.bytes()), p.bytes())
+            .expect("and the window still places");
+    }
+
+    /// ★ a8: if something else got into the gap before the re-plug, the window cannot be made
+    /// whole without overwriting it: it is POISONED. Every accessor refuses by name, and Drop
+    /// leaves the range mapped (the planted page is still readable after the window is gone).
+    #[test]
+    fn a_foreign_mapping_planted_in_the_gap_poisons_the_window() {
+        let p = page();
+        let w = GuestWindow::create(4 * p.bytes(), p).expect("window");
+        seam::arm(true);
+        let at = HostOffset::new(2 * p.bytes());
+        assert!(w.restore(at, p.bytes()).is_err());
+        let mut b = [0u8; 4];
+        assert_eq!(w.read_into(at, &mut b), Err(RawError::WindowPoisoned));
+        assert_eq!(w.write_from(at, &b), Err(RawError::WindowPoisoned));
+        assert_eq!(w.store_u32(at, 1), Err(RawError::WindowPoisoned));
+        assert_eq!(w.restore(at, p.bytes()), Err(RawError::WindowPoisoned));
+        assert!(w.host_span(0, 8).is_none());
+        // SAFETY: test-only; the address is only compared, never dereferenced.
+        let addr = unsafe { w.userspace_addr_at(0, p.bytes()) };
+        assert_eq!(addr, Err(RawError::WindowPoisoned));
+        let base = w.base.as_ptr();
+        let len = w.len;
+        drop(w);
+        // SAFETY: test-only; Drop left the range mapped, so the planted page (whose first byte
+        // the seam wrote) is still readable; then the range Drop deliberately leaked is freed.
+        let planted = unsafe {
+            let b = base.add(2 * p.bytes() as usize).read();
+            libc::munmap(base.cast(), len);
+            b
+        };
+        assert_eq!(
+            planted, 0x5A,
+            "Drop must not unmap a mapping that is not the window's"
+        );
+    }
+
+    /// ★ a9: a read-only device view is refused by name, before any `mmap`: the window's write
+    /// doors would fault on it.
+    #[test]
+    fn a_read_only_device_view_is_refused_by_name() {
+        let p = page();
+        let w = GuestWindow::create(2 * p.bytes(), p).expect("window");
+        let f = std::fs::File::open("/dev/zero").expect("/dev/zero");
+        use std::os::fd::AsFd;
+        let r = w.place_device_view(HostOffset::new(0), p.bytes(), f.as_fd(), false);
+        assert!(
+            matches!(r, Err(RawError::Unsupported { what, .. }) if what.contains("read-only device view")),
+            "{r:?}"
+        );
+    }
+
+    /// ★ a10: a shared-file placement past the file's end is refused by name. On the code
+    /// before a10 it mapped, and the first read of the missing page raised SIGBUS.
+    #[test]
+    fn a_short_memfd_is_refused() {
+        let p = page();
+        let w = GuestWindow::create(4 * p.bytes(), p).expect("window");
+        let one_page = memfd_of(p.bytes());
+        use std::os::fd::AsFd;
+        let r = w.place(
+            HostOffset::new(0),
+            2 * p.bytes(),
+            Backing::SharedFile {
+                fd: one_page.as_fd(),
+                offset: 0,
+            },
+        );
+        assert_eq!(
+            r,
+            Err(RawError::OutOfRange {
+                offset: 0,
+                len: 2 * p.bytes(),
+                object_len: p.bytes(),
+            })
+        );
+        let r = w.place(
+            HostOffset::new(0),
+            p.bytes(),
+            Backing::SharedFile {
+                fd: one_page.as_fd(),
+                offset: p.bytes(),
+            },
+        );
+        assert!(matches!(r, Err(RawError::OutOfRange { .. })), "{r:?}");
+        w.place(
+            HostOffset::new(0),
+            p.bytes(),
+            Backing::SharedFile {
+                fd: one_page.as_fd(),
+                offset: 0,
+            },
+        )
+        .expect("the page the file does have places");
+    }
+
+    /// A file of exactly `len` bytes (unlinked at once; the descriptor keeps it).
+    fn memfd_of(len: u64) -> std::fs::File {
+        let path = std::env::temp_dir().join(format!("kf-window-a10-{}", std::process::id()));
+        let f = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .expect("a temporary file");
+        std::fs::remove_file(&path).expect("unlink");
+        f.set_len(len).expect("size it");
+        f
     }
 }
