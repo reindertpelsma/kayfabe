@@ -351,6 +351,43 @@ citation: ask whether its reason still holds before relying on it.
     unaligned access faults. The likely fix is the one-flag host patch in nvidia.ko's mmap path,
     since a host patch is already required for UVM (`design/V3_COOPERATIVE_TIERS.md`).
 
+- **Secure Boot (owner, 2026-10-04, verbatim):** *"In qemu we can just enable 'secure boot' for a
+  windows vm and self sign the rom, I mean windows vms just work normally without complaint"*.
+  - The ROM's EFI driver is signed with a kayfabe key, and the VM's OVMF variables enroll
+    Microsoft's standard keys plus that certificate in `db`. Windows' boot manager and the ROM then
+    both verify, and the guest runs with Secure Boot on.
+  - The private key is never committed (the repo is public). It is generated per installation or
+    per build on the user's machine, and that installation's variables file enrolls its
+    certificate.
+  - A guest that seals BitLocker to TPM measurements may ask for its recovery key once after the
+    ROM changes, because the measurement of the option ROM changes.
+- **The vTPM (swtpm), from the owner's question the same day** (*"For swtpm a secure seed must be
+  provided probably?"*):
+  - ⊘ *Corrected the same day; the first wording ("no seed is supplied") was too loose.* Owner,
+    verbatim: *"Yes but tpm should persist reboot though. And a hash of non secret values isn't
+    secure. So some secure seed must be stored right."* Right.
+  - **A secret seed is stored: the state file is the secret.** `swtpm_setup --tpm2` manufactures the
+    TPM once per VM. The primary seeds (endorsement, storage, platform) are random secrets from the
+    host's CSPRNG, never derived from non-secret values such as the VM's name or UUID. swtpm keeps
+    them in its state file. Everything the guest seals to the TPM, BitLocker and Windows Hello
+    included, depends on them.
+  - **It persists.** The same state is reused on every guest boot, every QEMU restart (kayfabe
+    restarts QEMU on each guest reboot) and every kayfabe update. Manufacture happens once, and the
+    tooling refuses to re-run it on an existing state. Losing or regenerating the state is like
+    replacing the TPM: BitLocker asks for its recovery key. The VM's OVMF variables file is per-VM
+    persistent state too.
+  - **It is protected like a key:** one state per VM; owner-only permissions; kept with the VM and
+    backed up with its disk, as a secret; never copied into an image, a template or another VM
+    (a copy duplicates the seeds and the endorsement key); never committed. If it is encrypted at
+    rest (`--key`/`--pwdfile`), that key is a random host-held secret.
+  - A self-signed EK certificate is enough for Windows 11 and BitLocker.
+- **Bench Windows guests run without BitLocker** (owner, 2026-10-04, verbatim: *"Also disable bitlocker
+  in the windows guest, its useless for our vm."*). The unattended install prevents BitLocker and
+  Windows' automatic device encryption from the first boot, and the lane checks the volume is fully
+  decrypted with protection off, after install and again after the NVIDIA driver install. This is a
+  bench setting: a user's own Windows guest may still use BitLocker, so the TPM-persistence rules
+  above still apply to it.
+
 ## L. Broker frames: a GPU copy into kayfabe's own frames, never guest memory (2026-10-03)
 
 - **Owner:** *"exact zero copy isn't needed though, what we do need is that we can avoid a GPU-CPU copy.
@@ -380,6 +417,30 @@ citation: ask whether its reason still holds before relying on it.
     kayfabe paces only the channels that own a display-SW object, through the trapped-doorbell path.
     That bound is per submission, not per frame, and is not promised until a box run shows it holds.
   - The status line reports the achieved rate per path, so a bound that does not hold is visible.
+
+- **Design decisions (2026-10-04).** The design is reviewed and kept outside the repo until the
+  `v3-maxfps` branch carries it. Owner, verbatim: *"Why copying when not flipping. Yes a tearing copy
+  seems not great though. The rest seems good to md"*.
+  - **Mechanism:** the limit clamps kf-disp's own emulated vblank tick (the display thread's
+    deadline). Nothing blocks a vCPU, and no lock is held while waiting.
+  - **D1, tearing flips are gated (adopted).** An async/tearing flip that arrives sooner than the
+    limit allows waits for the next tick. In kayfabe a flip copies a finished buffer, so the gate is
+    about rate, not image tearing.
+  - **D2, copies made without a flip (proposed by Claude in answer to the owner's question; adopted
+    unless the owner objects).** These exist for front-buffer rendering: the boot console, X11
+    without a compositor, front-buffer applications. kayfabe has no physical scanout, so without a
+    copy the host never sees those writes.
+    - Instead of a fixed 30 Hz timer, a copy is made at the head's emulated (clamped) vblank. That is
+      real scanout's cadence and phase, so tearing is no worse than bare metal.
+    - A copy is sent only when a GPU-side checksum of the surface changed.
+    - Nothing is copied while nobody watches. A `screendump` asks for a fresh copy on demand.
+  - **D3 (adopted):** values above 75 Hz are refused. The virtual monitor is single-link DVI
+    (165 MHz), so 1080p tops out near 71 Hz.
+  - **D4 (adopted, pending one box run):** on hardware no display-SW release was ever requested.
+    X11 vsync clients are paced by the guest's driver off kayfabe's own tick, so the clamp should
+    bound X11 too, replacing the two X11 levers above. The correction is folded into the text above
+    only after a run with `display-max-fps=30` and `x11-dispsw=on` shows it holds.
+  - **D5 (adopted):** unset means a cap of 75 Hz, and the EDID stays byte-identical to today.
 
 ## N. X11 desktops: GF100_DISP_SW option A is the design (2026-10-03)
 
