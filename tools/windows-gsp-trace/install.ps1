@@ -37,8 +37,19 @@ Copy-Item -LiteralPath $DriverPath -Destination $destination -Force
 $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Kayfabe disposable GSP observer test' -CertStoreLocation Cert:\LocalMachine\My -HashAlgorithm SHA256
 $publicCertificate = Join-Path $env:TEMP 'kayfabe-gsptrace-test.cer'
 Export-Certificate -Cert $cert -FilePath $publicCertificate -Force | Out-Null
-Import-Certificate -FilePath $publicCertificate -CertStoreLocation Cert:\LocalMachine\Root | Out-Null
-Import-Certificate -FilePath $publicCertificate -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
+$public = [Security.Cryptography.X509Certificates.X509Certificate2]::new($publicCertificate)
+try {
+    foreach ($name in @('Root','TrustedPublisher')) {
+        $store = [Security.Cryptography.X509Certificates.X509Store]::new($name, [Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine)
+        try {
+            # Open(ReadWrite) creates an absent store. Import-Certificate can
+            # report E_ACCESSDENIED for TrustedPublisher on a fresh Windows VM.
+            $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+            $store.Add($public)
+            if (-not $store.Certificates.Find([Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint, $cert.Thumbprint, $false).Count) { throw "Test certificate missing from LocalMachine\$name" }
+        } finally { $store.Close() }
+    }
+} finally { $public.Dispose() }
 & $SignToolPath sign /fd SHA256 /sha1 $cert.Thumbprint /sm /s My $destination
 if ($LASTEXITCODE) { throw 'Driver signing failed.' }
 & $SignToolPath verify /pa /v $destination
