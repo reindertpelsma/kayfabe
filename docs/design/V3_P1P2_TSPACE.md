@@ -18,9 +18,13 @@ four tests exercise zero, empty, nested, and broken-input cases. This correction
 does not grant `kf-chan` permission to contain unsafe Rust.
 
 The same integration also takes Windows source `c1d4e415`, with the signed-GOP
-realize argument combined with the broker/max-fps surface as **KF3 ABI 19**.
-Windows-specific experiments remain opt-in. Neither this merge nor the earlier
-Windows boot comparisons establish T-space correctness on hardware.
+realize argument combined with the broker/max-fps surface at `6e52aebd`, then
+the real read-only timer mapping at `e71e4a8b` as **KF3 ABI 20**. The mapping's
+new FFI entry point and output-write block move the reviewed QEMU unsafe count
+59 to 61; no Translated-plane unsafe power is added. Windows-specific
+experiments remain opt-in. Neither this merge nor the earlier Windows boot
+comparisons establish T-space correctness on hardware. See
+`traces/windows_p1p2_integration_20261005/README.md` for exact local test scopes.
 
 Historical branch implementation status follows; its hardware limits remain.
 

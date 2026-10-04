@@ -14,22 +14,26 @@ fix this file. Entries below the first are dated history.
 **Experimental integration, not promoted:** `codex/p1p2-integration-2026-10-05`,
 worktree `/tmp/kayfabe-p1p2-integration-20261005`, combines master `906a76a4`,
 the complete P1/P2 branch `31b64802` (merge `a5a350a8`), and Windows branch
-`c1d4e415`. **KF3 ABI 19** retains all ABI-18 display/broker fields and appends
-the signed-GOP path to `kf3_realize`. P0's USER-channel birth guard is included.
-`KF3_TSPACE` and `KF3_GFX_POOL_PROBE` both stay off by default. No hardware or
+`c1d4e415` (merge `6e52aebd`), followed by the timer mapping from `831f6bd7`
+(integrated product **`e71e4a8b`**). **KF3 ABI 20** retains all ABI-18
+display/broker fields, ABI-19's signed-GOP path, and the new timer FFI view.
+P0's USER-channel birth guard is included. `KF3_TSPACE`, `KF3_GFX_POOL_PROBE`
+and `KF3_TIMER_MAP` all stay off by default. No hardware or
 Windows success is claimed for this integration; master remains the verified
 candidate-2 source described below.
 
-Before Windows was added, the integrated P1/P2 source passed 919 GPU-free tests
-(ABI/chip/host/mem/chan/qemu/harness), 18 Python instrument tests, and the full
-unsafe-containment gate. The combined driver matrix was compared with the full
-30-tag compiler sweep: 129,240 cells, zero differences, including 595.91.07 and
-the display-SW allocation structure. These are source/logic checks, not a GPU
-bar. Final combined validation is recorded in
+GPU-free results: P1/P2 merge `a5a350a8` passed 919 tests; Windows union
+`6e52aebd` passed 1,681; the timer delta at `e71e4a8b` passed 1,516 across its
+affected crates, including the raw-layer negative compilation checks. The
+35 Python CI tests and full unsafe-containment gate pass. The combined driver
+matrix was compared with compiler output at all 30 tags: **129,480 cells, zero
+differences**, including 595.91.07, the timer and display-SW structures. These
+overlapping suites must not be added together as independent coverage. They
+are source/logic checks, not a GPU bar. Final combined validation is recorded in
 `traces/windows_p1p2_integration_20261005/README.md`.
 
-Next: incorporate the separately audited real timer mapping, rebuild the C and
-Rust device together against QEMU 10.2.4, then run exact-revision GPU gates and
+Next: rebuild the C and Rust device together against QEMU 10.2.4, then run
+exact-revision GPU gates and
 Linux regression lanes serially. P1/P2 additionally needs the window-reach
 positive/negative control and Translated-ring/physical-CE probes (still unwritten
 at `31b64802`), family coverage, unload/re-init, and A/B application checks before
@@ -41,6 +45,10 @@ QUERY_SIZE success moved startup beyond the old barrier; timer allocation alone
 did not clear Code 43. Those results do not validate this newer integration.
 The borrowed PC and Vast rentals remain controlled by the root agent; this
 integration task runs no hardware jobs and creates no rentals.
+The Windows runner at `8e29da95` adds `--private-translated-space`, independent
+of `--pool-probe` and `--timer-map`; it clears inherited values of all three
+switches and records the chosen state in `command.json`. Its `--revision`
+must name the actual immutable binary build, not the runner's newer docs head.
 
 **Current verified integration (2026-10-04, candidate 2):**
 `codex/candidate-2-2026-10-04`, local worktree `/data/kayfabe-candidate2-20261004`,

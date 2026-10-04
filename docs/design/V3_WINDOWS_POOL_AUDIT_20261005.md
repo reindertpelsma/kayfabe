@@ -5,6 +5,18 @@
 `codex/windows-pool-2026-10-05`. This is not a security certification, merge
 approval, or a hardware result. No GPU or rental was used by this review.
 
+**Integration correction, 2026-10-05 (`e71e4a8b`):** this branch now combines
+master `906a76a4`, full P1/P2 `31b64802`, and the Windows experiment through
+`c1d4e415`, followed by the optional native timer mapping `831f6bd7`. P0's USER
+birth guard is included; S1-21's isolation path is included but remains opt-in
+and unverified on this integrated source. The default path still carries the
+known windows. Therefore the blocker below is not cleared for default use or
+for a hostile-guest security claim. `V3_WINDOWS_TIMER_MAPPING.md` describes the
+separately reviewed real backing; allocation alone is still not evidence of a
+working timer. Pool geometry/lifecycle and the general audit backlog remain
+unfinished. Exact checks and remaining hardware work are in
+`traces/windows_p1p2_integration_20261005/README.md`.
+
 **Corrections applied at `535e7df9`, 2026-10-05:** exact measured query layouts
 replace the one-version gate; the timer class ID comes from the compiled matrix;
 policy tests exercise both 24-byte and 40-byte control envelopes across all 29

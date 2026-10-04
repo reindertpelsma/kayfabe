@@ -1,0 +1,6 @@
+QEMU_HEADER_VERSION=11.1.1
+/tmp/kayfabe-p1p2-integration-20261005/qemu/hw/misc/kf3/kf3.c:54:10: fatal error: hw/qdev-properties.h: No such file or directory
+   54 | #include "hw/qdev-properties.h"
+      |          ^~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+EXIT=1
