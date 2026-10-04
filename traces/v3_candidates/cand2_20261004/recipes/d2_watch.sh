@@ -38,3 +38,39 @@ assert val(b,'copies')<5 and val(b,'checks')>10, b
 assert val(b,'over')==0, b
 print(f'D2_WATCH_VERDICT PASS same_delta={delta} copies_hz={val(b,"copies")} checks_hz={val(b,"checks")}')
 PY
+
+if [ "${E3_PROGRESS:-0}" = 1 ]; then
+    python3 - "$out" <<'PY_E3'
+from pathlib import Path
+import json,os,re,signal,subprocess,sys,time
+out=Path(sys.argv[1])
+pids=[]
+for proc in Path('/proc').iterdir():
+    if not proc.name.isdigit(): continue
+    try: args=(proc/'cmdline').read_bytes().split(b'\0')
+    except OSError: continue
+    if args and Path(os.fsdecode(args[0])).name=='nvkvm-display-broker' and b'/run/user/1000/nvkvm/display.sock' in args:
+        pids.append(int(proc.name))
+assert len(pids)==1,pids
+pid=pids[0]
+start=time.monotonic()
+os.kill(pid,signal.SIGSTOP)
+try:
+    state=Path(f'/proc/{pid}/status').read_text()
+    assert re.search(r'^State:\s+T',state,re.M),state
+    gssh='/root/kayfabe/scripts/bench/gssh_nv'
+    alive=subprocess.check_output([gssh,'echo ALIVE'],text=True,timeout=15).strip()
+    assert alive=='ALIVE',alive
+    command='sudo -u ubuntu env DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority timeout 25 stdbuf -oL glxgears 2>&1'
+    result=subprocess.run([gssh,command],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=45)
+    (out/'stopped_glxgears.txt').write_text(result.stdout)
+    rates=[float(x) for x in re.findall(r'=\s*([0-9.]+) FPS',result.stdout)]
+    assert rates and min(rates)>1,(result.returncode,result.stdout)
+    assert re.search(r'^State:\s+T',Path(f'/proc/{pid}/status').read_text(),re.M)
+    report=dict(broker_pid=pid,guest=alive,stopped_seconds=time.monotonic()-start,fps=rates,command_rc=result.returncode)
+    (out/'stopped_progress.json').write_text(json.dumps(report,indent=2)+'\n')
+    print('E3_PROGRESS_VERDICT PASS '+json.dumps(report),flush=True)
+finally:
+    os.kill(pid,signal.SIGCONT)
+PY_E3
+fi

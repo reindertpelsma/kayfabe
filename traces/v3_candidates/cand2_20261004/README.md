@@ -183,3 +183,15 @@ the existing broker/relay tests.
 
 `apps_host/`: all **71/71** applications pass on vmb (11:51:41 UTC). Guest
 applications are still running at `9d82f259`; no promotion verdict yet.
+
+`refresh_hint_initial/` retains the failed R6 attempt (12:01:28 UTC). The real
+broker and relay delivered the 30,000 mHz event; kayfabe authored 29.938 Hz EDID
+and posted hotplug. Reading sysfs EDID alone still returned the cached 60 Hz
+blob. The follow-up enumerates DRM connector modes before reading the cache,
+as a userspace display consumer does, and records DRM uevents. No product
+change is made on this diagnostic hypothesis; automatic refresh is not claimed.
+
+The follow-up broker recipe also extends the stopped-broker rendering test to
+25 seconds, checking real FPS output while the exact broker PID stays stopped.
+The earlier six-second sample remains ungraded, rather than being counted as
+rendering progress merely because guest SSH responded.

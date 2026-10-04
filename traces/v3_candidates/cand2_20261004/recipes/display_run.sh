@@ -54,9 +54,12 @@ case "$kind" in
         export DISPLAY_KF3_EXTRA=gop=on,display-max-fps=60 FPS_BOUND=60 DISPLAY_ASYNC=1
         timeout --kill-after=10 600 bash scripts/bench/display/lane.sh "$tag"
         ;;
-    broker)
+    broker|broker_progress)
         export BRK_KF3_EXTRA=gop=on,x11-dispsw=on BRK_CURSOR=1 BRK_VNC=1 BRK_DRI3=1 BRK_RESILIENCE=1
         export BRK_HOLD=40
+        if [ "$kind" = broker_progress ]; then
+            export BRK_DRI3=0 BRK_RESILIENCE=0 BRK_HOLD=100 E3_PROGRESS=1
+        fi
         bash /root/d2_watch.sh "$tag" &
         watcher=$!
         timeout --kill-after=10 1200 bash scripts/bench/display/broker_lane.sh run "$tag"

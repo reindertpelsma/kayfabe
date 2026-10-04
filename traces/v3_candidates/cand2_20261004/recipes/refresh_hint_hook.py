@@ -24,6 +24,10 @@ def guest(command):
 
 
 def edid():
+    # A sysfs EDID read returns cached bytes. Enumerate connector modes as a
+    # userspace hotplug consumer would, then inspect the refreshed cache.
+    modes = guest('sudo modetest -M nvidia-drm -c')
+    (out / 'modetest_latest.txt').write_text(modes+'\n')
     raw = guest('for e in /sys/class/drm/card*-*/edid; do '
                 'if [ "$(wc -c < "$e")" -gt 0 ]; then xxd -p "$e"; break; fi; done')
     data = bytes.fromhex(raw)
@@ -42,10 +46,12 @@ def send(rate):
 
 
 guest('sudo systemctl stop lightdm 2>/dev/null; sudo modprobe nvidia-drm modeset=1 fbdev=1; sudo chvt 1')
+guest('sudo sh -c \"nohup timeout 150 udevadm monitor --kernel --property --subsystem-match=drm > /tmp/r6_udev.log 2>&1 < /dev/null &\"')
 time.sleep(5)
 reports = []
 for rate in [30, 50, 60]:
     send(rate)
+    time.sleep(2)
     deadline = time.monotonic() + 25
     while True:
         data, row = edid()
@@ -62,6 +68,8 @@ for rate in [30, 50, 60]:
     row['requested_hz'] = rate
     reports.append(row)
     (out / f'edid_{rate}.hex').write_text(data.hex()+'\n')
+    (out / f'modetest_{rate}.txt').write_text((out / 'modetest_latest.txt').read_text())
+    (out / 'udev.txt').write_text(guest('cat /tmp/r6_udev.log')+'\n')
     print('R6_EDID '+json.dumps(row), flush=True)
 assert len({r['sha256'] for r in reports}) == 3, reports
 (out/'refresh_hints.json').write_text(json.dumps(reports, indent=2)+'\n')

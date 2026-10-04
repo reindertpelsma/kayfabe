@@ -16,19 +16,25 @@ fix this file. Entries below the first are dated history.
 `codex/candidate-2-2026-10-04`, local worktree `/data/kayfabe-candidate2-20261004`.
 Broker/maxfps are integrated with ABI **18**; product revision `9d82f259` includes
 the HMP AioContext fix (`8775a93e`) and asynchronous console cursor update.
-Its CI including the slow suite passes. The preceding `3588789e` passed the full
-`cand2a` bar (2131/0 tests, 9/9 gates, bare and guest 30/30, USER birth census).
-The exact-source `cand2b` bar at `9d82f259` is running on vmb (tests, gates and
-bare metal passed; guest suite next), with apps queued after success. The old
-binary reproducibly hangs on HMP screendump; the positive test is still pending.
-Current run details and recovered scratch recipes:
-`traces/v3_candidates/cand2_20261004/README.md`. Existing box **54049598** survives;
-new display box **54137212** belongs to this session (SSH `vdisp2`, root at
-142.170.96.180:61595). It has driver 580.159.04, the exact product binary, and
-guest kernel 6.8.0-142; desktop/broker preparation is running. Recipes and each
-completed batch are pushed in the candidate evidence directory. Broker dependency
-`nvkvm-pv:codex/broker-refresh-2026-10-04` at `9f2fd00` fixes refresh-only events;
-its CI/local tests pass, but it is not promoted to nvkvm-pv's default branch.
+Its CI including the slow suite passes. Exact-source `cand2b` passed the full
+bar: 2131/0 tests, gates 9/9, bare and guest 30/30, USER birth census. Host apps
+71/71 passed; guest apps are running on existing box **54049598** (vmb).
+HMP/QMP refresh passes on the replacement display box; same-box positive and
+async-60 checks are queued after apps on vmb. The 30 FPS cap is measured in
+X11 GLX and actual Vulkan FIFO present calls (29.976857 FPS); Wayland/KMS,
+cursor parity, reconnect and idle-copy checks pass. Known Xorg-start flip
+warnings match candidate 1. Broker-stop rendering needs a longer sample, and
+refresh-only R6 needs investigation: kayfabe authors the new EDID/posts hotplug,
+but the first sysfs-only probe sees cached bytes. See all results and limitations
+in `traces/v3_candidates/cand2_20261004/README.md`; no promotion verdict yet.
+New display box **54137212** belongs to this session (SSH `vdisp2`, root at
+142.170.96.180:61595). Driver 580.159.04, exact product binary, guest kernel
+6.8.0-142 and desktop/broker preparation are complete. Keep it only through
+the remaining display checks, then save logs and destroy by this ID.
+Recipes and every completed batch are pushed in the candidate evidence directory.
+Broker dependency `nvkvm-pv:codex/broker-refresh-2026-10-04` at `9f2fd00` fixes
+refresh-only events; its CI/local tests pass, but it is not promoted to
+nvkvm-pv's default branch.
 The old display/Windows boxes
 in the historical table below are gone. Only reproducible display results were
 lost; no code loss is known. Keep saving each completed batch to GitHub.
