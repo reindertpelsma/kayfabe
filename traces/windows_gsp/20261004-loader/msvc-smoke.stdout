@@ -1,0 +1,45 @@
+[SC] ControlService FAILED 1062:
+
+The service has not been started.
+
+[SC] DeleteService SUCCESS
+Driver service removed. The test certificate and test-signing boot setting remain for explicit cleanup.
+Done Adding Additional Store
+Successfully signed: C:\Windows\System32\drivers\kayfabe-gsptrace.sys
+
+Verifying: C:\Windows\System32\drivers\kayfabe-gsptrace.sys
+
+Signature Index: 0 (Primary Signature)
+Hash of file (sha256): 95066AB4F14A7F45C770E38534857CD7631E3541C4F0CC7A931C1FDC1B6EFA67
+
+Signing Certificate Chain:
+    Issued to: Kayfabe disposable GSP observer test
+    Issued by: Kayfabe disposable GSP observer test
+    Expires:   Mon Oct 04 16:58:18 2027
+    SHA1 hash: 3B3A0C9B835FF4B7662C1F8F3E7D072E0C55F57F
+
+File is not timestamped.
+
+
+Successfully verified: C:\Windows\System32\drivers\kayfabe-gsptrace.sys
+
+Number of files successfully Verified: 1
+Number of warnings: 0
+Number of errors: 0
+[SC] CreateService SUCCESS
+
+SERVICE_NAME: KayfabeGspTrace 
+        TYPE               : 1  KERNEL_DRIVER  
+        STATE              : 4  RUNNING 
+                                (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+        PID                : 0
+        FLAGS              : 
+Recorder is scanning. Test certificate thumbprint: 3B3A0C9B835FF4B7662C1F8F3E7D072E0C55F57F
+Start gsptrace.exe OUTPUT.kgwt SECONDS in another elevated terminal, then enable/install NVIDIA with GSP enabled.
+Windows API tests: 0 failure(s). Recorder stopped; restart service before capture.
+{"schema":"kayfabe-gsp-observer/1","complete":false,"scanned_bytes":834326528,"scan_passes":0,"attached_tables":0,"read_failures":0,"unstable_snapshots":0,"invalid_elements":0,"recorded":0,"dropped":0,"sequence_gaps":0,"buffered_bytes":0}
+MSVC_RECORDER_KERNEL_API_PASS

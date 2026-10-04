@@ -13,7 +13,7 @@ guest works through Kayfabe.
   native NVIDIA/CUDA startup automation and an optional browser desktop helper.
 - Recorder: this repository's `codex/windows-native-trace-2026-10-04` branch,
   `tools/windows-gsp-trace/`, local `/data/kayfabe-windows-native-20261004`.
-  Source through `da7d9e8a` is pushed. The unsigned driver and
+  Source through `4663d332` is pushed; the runtime evidence below follows that revision. The unsigned driver and
   collector were built locally from pinned official SDK/WDK inputs and copied
   outward to the rental; no rental executables were copied back.
 - Linux captured-payload replay and bounded queue/parser tests passed. Passive
@@ -37,11 +37,16 @@ The first driver smoke attempt stopped before execution because the temporary
 SSH wrapper omitted PowerShell's `-ExecutionPolicy Bypass`; that wrapper is now
 fixed. Actual load testing then exposed an absent TrustedPublisher store.
 Installer source `0e627c48` fixes that through X509Store.Open(ReadWrite), and
-signing/verification now pass. Kernel loading remains blocked with exact NTSTATUS
-`0xC0000018` (conflicting addresses). An instrumented build (`069ae0d7` source)
-left no DriverEntry marker; changing only `.retplne` section read permission did
-not help. The `windows_gsp_driver` worker is investigating linker/WDK metadata.
-The service exists, is demand-start and stopped; do not replay Install blindly.
+signing/verification now pass. The loader failure is resolved: the combined
+`/tsaware:no /section:.retplne,R` full diagnostic loaded, passed the Windows API
+suite and unloaded cleanly. An independent MSVC build from source `351d5b7f`
+then passed SCM install/load, API tests (zero failures), restart/status and stop.
+That MSVC normal observer is the selected capture artifact; its unsigned SHA256
+is `c32adf94bde55c19caa493b9ccc460bd39926900acfc4ca93297a6787bb1c3ca`.
+Text evidence and build provenance are in `traces/windows_gsp/20261004-loader`.
+The service is demand-start and stopped. The final post-recorder Windows
+readiness check passed all 25 checks, the controller released the hold, and
+Windows shut down cleanly at 16:50:17 UTC. Image compaction/sealing is in progress.
 No Windows GSP traffic has been captured. Inspect:
 
 ```sh
@@ -122,10 +127,10 @@ and dirty original workspace were preserved. Root free space increased to about
 
 ## Next checks
 
-1. Resolve the recorder loader failure, then run its Windows kernel/API
-   smoke with execution-policy bypass. Save exact errors and CodeIntegrity events
-   if it fails. The test stops its worker; restart before any valuable capture.
-2. Release the final hold, require clean shutdown and exact-size/hash sealing,
+1. Recorder kernel/API smoke passed. Use the verified MSVC build for capture;
+   the revised Linux linker build has static validation but its exact runtime
+   parity remains untested. Restart the observer before capture.
+2. The hold is released and clean shutdown passed. Require exact-size/hash sealing,
    preserve the public host keys and useful text evidence off the rental.
 3. Arm only this owned instance, then perform the Linux-to-RAM and RAM-to-native
    Windows reboots. The flasher was rehearsed under KVM/UEFI, including full

@@ -1,0 +1,3 @@
+{"schema":"kayfabe-gsp-observer/1","complete":false,"scanned_bytes":928124899328,"scan_passes":108,"attached_tables":0,"read_failures":0,"unstable_snapshots":0,"invalid_elements":0,"recorded":0,"dropped":0,"sequence_gaps":0,"buffered_bytes":0}
+Windows API tests: 0 failure(s). Recorder stopped; restart service before capture.
+RECORDER_API_PASS

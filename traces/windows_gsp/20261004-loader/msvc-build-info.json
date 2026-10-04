@@ -1,0 +1,44 @@
+{
+  "schema": "kayfabe-gsp-msvc-build/1",
+  "source_revision": "351d5b7f425c7515404f058b0fa1f33602905e17",
+  "timestamp_utc": "2026-10-04T16:41:27.0432035Z",
+  "compiler": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+  "linker": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\link.exe",
+  "compiler_version": "19.44.35229.0",
+  "linker_version": "14.44.35229.0",
+  "runner_image": "win22",
+  "runner_image_version": "20260927.320.1",
+  "sdk_nuget_version": "10.0.28000.2526",
+  "wdk_nuget_version": "10.0.28000.2526",
+  "sdk_sha256": "be1b419491607eae6f7c57844ebab39face9643c51e2af1d9176a3ba0d0b23fc",
+  "wdk_sha256": "63c939fb5a79295bf40e941db592681272219b04edff095fe2f3d123e5579a90",
+  "signing_performed": false,
+  "completed": true,
+  "artifacts": [
+    {
+      "name": "gsptrace-diag.sys",
+      "bytes": 27136,
+      "sha256": "751f87043dcc167dc132fc0707a312fce3b3d7a24167adc9c2a4f2d2e695176e"
+    },
+    {
+      "name": "gsptrace.exe",
+      "bytes": 161280,
+      "sha256": "c5bc3eb9b4604a384d1f6da5d76b8408da40cc1147b2c774d13d23656f868793"
+    },
+    {
+      "name": "gsptrace.sys",
+      "bytes": 26624,
+      "sha256": "c32adf94bde55c19caa493b9ccc460bd39926900acfc4ca93297a6787bb1c3ca"
+    },
+    {
+      "name": "load-probe.sys",
+      "bytes": 5120,
+      "sha256": "af315af9f07235aa9ba547a06723d88b3f168ede28c6ed5084b8af7ef21a1293"
+    },
+    {
+      "name": "windows_api_test.exe",
+      "bytes": 144384,
+      "sha256": "f10688f02d59c9b5243585111cf905878c1d8a5b3bd52f981d885cd9cabc46bb"
+    }
+  ]
+}

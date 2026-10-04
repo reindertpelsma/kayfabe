@@ -1,0 +1,12 @@
+Done Adding Additional Store
+Successfully signed: C:\Windows\System32\drivers\kayfabe-gsptrace.sys
+File: C:\Windows\System32\drivers\kayfabe-gsptrace.sys
+Index  Algorithm  Timestamp    
+========================================
+0      sha256     None         
+
+Successfully verified: C:\Windows\System32\drivers\kayfabe-gsptrace.sys
+IDENTITY VASTWIN\vast
+NTLOADDRIVER_NTSTATUS=0x00000000
+INIT_DIAGNOSTIC_STAGE=5
+INIT_DIAGNOSTIC_NTSTATUS=0x00000000
