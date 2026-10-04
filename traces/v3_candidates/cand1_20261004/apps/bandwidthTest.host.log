@@ -1,0 +1,26 @@
+=== bandwidthTest side=host start=2026-10-04T02:44:26+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/bandwidthTest
+[CUDA Bandwidth Test] - Starting...
+Running on...
+
+ Device 0: NVIDIA GeForce RTX 3060
+ Quick Mode
+
+ Host to Device Bandwidth, 1 Device(s)
+ PINNED Memory Transfers
+   Transfer Size (Bytes)	Bandwidth(GB/s)
+   32000000			9.2
+
+ Device to Host Bandwidth, 1 Device(s)
+ PINNED Memory Transfers
+   Transfer Size (Bytes)	Bandwidth(GB/s)
+   32000000			9.4
+
+ Device to Device Bandwidth, 1 Device(s)
+ PINNED Memory Transfers
+   Transfer Size (Bytes)	Bandwidth(GB/s)
+   32000000			327.0
+
+Result = PASS
+
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+=== end rc=0 secs=4 2026-10-04T02:44:30+00:00

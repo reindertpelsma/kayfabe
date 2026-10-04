@@ -1,0 +1,20 @@
+#!/bin/bash
+# cand1b_mb.sh — the merge bar at 0ac157b2 (v3-cand-1 after the B5 fix c1ca7945), on vmb.
+# merge_check.sh from the checkout, CARGO_BUILD_JOBS=$(nproc), a FRESH target dir of its own; the
+# revision is pinned by passing the full SHA (merge_check fetches it: FETCH_HEAD = exactly this commit).
+L=/root/prov/cand1b_mbjob.log
+exec >>"$L" 2>&1
+echo "START $(date -Is)"
+trap 'rc=$?; echo "EXIT rc=$rc $(date -Is)"' EXIT
+W=0ac157b2fff15294073b95acbe7377a6133ae5aa
+while pgrep -x qemu-system-x86 >/dev/null; do sleep 10; done
+cd /root/kayfabe || exit 90
+[ "$(git rev-parse HEAD)" = $W ] || { echo "wrong HEAD $(git rev-parse HEAD)"; exit 91; }
+echo "SOURCE_REV $(git rev-parse HEAD) dirty=$(git status --porcelain --untracked-files=no | wc -l)"
+T=/workspace/bench/kf-target-cand1b
+[ ! -e $T ] || { echo "target dir $T exists — not fresh"; exit 92; }
+echo "NPROC $(nproc) TARGET $T (fresh)"
+CARGO_BUILD_JOBS=$(nproc) CARGO_TARGET_DIR=$T bash /root/kayfabe/scripts/bench/box/merge_check.sh $W cand1bmb
+echo "MB_RC=$?"
+grep -a '^START\|^HEAD=\|^TESTS\|^GATES_RC\|^V3_GATES\|^KF3_RC\|^BARE\|^FG_RC\|^SUITE_RC\|^FAST_SUITE\|^BIRTH\|^EXIT\|census' /root/prov/cand1bmb.log | cut -c1-240
+echo "MB_JOB_DONE"

@@ -1,0 +1,8 @@
+=== memcpy2d side=guest start=2026-10-04T03:11:25+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/memcpy2d
+[m2d] cudaMallocPitch 1280x720
+[m2d] pitch=1536
+[m2d] first HtoD 2D...
+[m2d] first HtoD 2D done
+METRIC memcpy2d_GBs 1.05
+CHECK memcpy2d_GBs ok
+=== end rc=0 secs=12 2026-10-04T03:11:37+00:00

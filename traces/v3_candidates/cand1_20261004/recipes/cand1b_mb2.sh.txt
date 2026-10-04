@@ -1,0 +1,43 @@
+#!/bin/bash
+# cand1b_mb2.sh — merge bar attempts 2 (and 3) at 0ac157b2: attempt 1 (cand1bmb) stopped at the crate tests on
+# kf-chan dbfast_kvm churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin (fast_late=574),
+# a test measured flaky on this box at master's code too (5/30). Each attempt: merge_check.sh from the
+# checkout, CARGO_BUILD_JOBS=$(nproc), a FRESH target dir of its own, the revision pinned by full SHA.
+# A third attempt runs only when the second stops at that same single test. Terminator: JOBEND.
+L=/root/prov/cand1b_mb2job.log
+exec >>"$L" 2>&1
+echo "JOBSTART $(date -Is)"
+trap 'rc=$?; echo "JOBEND rc=$rc $(date -Is)"' EXIT
+W=0ac157b2fff15294073b95acbe7377a6133ae5aa
+while pgrep -x qemu-system-x86 >/dev/null; do sleep 10; done
+cd /root/kayfabe || exit 90
+[ "$(git rev-parse HEAD)" = $W ] || { echo "wrong HEAD $(git rev-parse HEAD)"; exit 91; }
+echo "SOURCE_REV $(git rev-parse HEAD) dirty=$(git status --porcelain --untracked-files=no | wc -l)"
+final=1
+for a in 2 3; do
+  T=/workspace/bench/kf-target-cand1b$a; TAG=cand1bmb$a
+  [ ! -e $T ] || { echo "target dir $T exists — not fresh"; exit 92; }
+  echo "ATTEMPT $a tag=$TAG target=$T (fresh) nproc=$(nproc) $(date -Is)"
+  CARGO_BUILD_JOBS=$(nproc) CARGO_TARGET_DIR=$T bash /root/kayfabe/scripts/bench/box/merge_check.sh $W $TAG
+  rc=$?
+  echo "ATTEMPT $a MB_RC=$rc"
+  grep -a '^START\|^HEAD=\|^TESTS\|^GATES_RC\|^V3_GATES\|^KF3_RC\|^BARE\|^FG_RC\|^SUITE_RC\|^FAST_SUITE\|^BIRTH\|^EXIT\|census' /root/prov/$TAG.log | cut -c1-240 | sed 's/^/  | /'
+  grep -a -- '--- FAILED\|^error: test failed\|left: ' /root/prov/${TAG}_tests.log | sed 's/^/  | /'
+  if [ $rc -eq 0 ]; then final=0; break; fi
+  # retry only when the attempt stopped at exactly the known flaky test and nothing else
+  nf=$(grep -ac -- '--- FAILED' /root/prov/${TAG}_tests.log)
+  if [ "$nf" = 1 ] && grep -aq 'churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin --- FAILED' /root/prov/${TAG}_tests.log; then
+    echo "ATTEMPT $a stopped at the known flaky test only"; continue
+  fi
+  echo "ATTEMPT $a failed elsewhere — no retry"; break
+done
+KB=/workspace/bench/kf3-bins/0ac157b2/qemu-system-x86_64
+if [ ! -x $KB ]; then
+  # no attempt reached the kf3 build: build kf3 from the last attempt's checkout (merge_check's own command)
+  C=$(grep -a '^HEAD=' /root/prov/$TAG.log | sed 's/.*CHECKOUT=//')
+  echo "KF3_STANDALONE from $C"
+  (cd "$C" && export PATH=$PATH:$HOME/.cargo/bin CARGO_TARGET_DIR=$T CARGO_BUILD_JOBS=$(nproc) && bash scripts/bench/build_kf3.sh /workspace/bench/qemu-10.2.4 /workspace/bench/qemu-build-kf3 > /root/prov/cand1b_kf3_standalone.log 2>&1; echo "KF3_STANDALONE_RC=$?")
+fi
+[ -x $KB ] && echo "KF3_BIN $KB $(stat -c '%s %y' $KB) sha256=$(sha256sum $KB | cut -c1-16)"
+echo "MB_FINAL=$final"
+exit $final

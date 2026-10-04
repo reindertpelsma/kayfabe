@@ -1,0 +1,123 @@
+BIRTH_CENSUS arm=timer births=2 user=2 refused=0 cuda_threads=3
+    timer kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    timer kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    timer kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=engines births=14 user=14 refused=0 cuda_threads=3
+    engines kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    engines kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    engines kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=doorbell-census births=20 user=20 refused=0 cuda_threads=3
+    doorbell-census kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    doorbell-census kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    doorbell-census kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=gpu-info-sweep births=2 user=2 refused=0 cuda_threads=3
+    gpu-info-sweep kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    gpu-info-sweep kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    gpu-info-sweep kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=bus-info-sweep births=2 user=2 refused=0 cuda_threads=3
+    bus-info-sweep kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    bus-info-sweep kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    bus-info-sweep kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=concurrency births=6 user=6 refused=0 cuda_threads=3
+    concurrency kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    concurrency kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    concurrency kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=defer-liveness births=11 user=11 refused=0 cuda_threads=3
+    defer-liveness kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    defer-liveness kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    defer-liveness kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=blockage-coverage births=4 user=4 refused=0 cuda_threads=3
+    blockage-coverage kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    blockage-coverage kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    blockage-coverage kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=alias-two-vas births=3 user=3 refused=0 cuda_threads=3
+    alias-two-vas kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    alias-two-vas kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    alias-two-vas kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=alias-unmap-observe births=3 user=3 refused=0 cuda_threads=3
+    alias-unmap-observe kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    alias-unmap-observe kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    alias-unmap-observe kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=map-propagation births=2 user=2 refused=0 cuda_threads=3
+    map-propagation kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    map-propagation kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    map-propagation kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=late-map-race births=4 user=4 refused=0 cuda_threads=3
+    late-map-race kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    late-map-race kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    late-map-race kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=missing-page-fault births=4 user=4 refused=0 cuda_threads=3
+    missing-page-fault kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    missing-page-fault kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    missing-page-fault kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=uvm-invalidate births=6 user=6 refused=0 cuda_threads=3
+    uvm-invalidate kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    uvm-invalidate kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    uvm-invalidate kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=uvm-mean births=13 user=13 refused=0 cuda_threads=3
+    uvm-mean kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    uvm-mean kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    uvm-mean kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=executor-vas births=3 user=3 refused=0 cuda_threads=3
+    executor-vas kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    executor-vas kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    executor-vas kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=guest-ring-channel births=4 user=4 refused=0 cuda_threads=3
+    guest-ring-channel kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    guest-ring-channel kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    guest-ring-channel kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=dictated-ring births=3 user=3 refused=0 cuda_threads=3
+    dictated-ring kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    dictated-ring kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    dictated-ring kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=dictated-ring-negative births=2 user=2 refused=0 cuda_threads=3
+    dictated-ring-negative kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    dictated-ring-negative kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    dictated-ring-negative kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=ce-client births=3 user=3 refused=0 cuda_threads=3
+    ce-client kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    ce-client kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    ce-client kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=ce-client-guest-ram births=3 user=3 refused=0 cuda_threads=3
+    ce-client-guest-ram kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    ce-client-guest-ram kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    ce-client-guest-ram kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=guest-ram-pin births=2 user=2 refused=0 cuda_threads=3
+    guest-ram-pin kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    guest-ram-pin kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    guest-ram-pin kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=bar1-crossing births=2 user=2 refused=0 cuda_threads=3
+    bar1-crossing kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    bar1-crossing kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    bar1-crossing kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=atomics-probe births=2 user=2 refused=0 cuda_threads=3
+    atomics-probe kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    atomics-probe kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    atomics-probe kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=pce-mask-probe births=2 user=2 refused=0 cuda_threads=3
+    pce-mask-probe kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    pce-mask-probe kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    pce-mask-probe kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=gpga-reserve-probe births=2 user=2 refused=0 cuda_threads=3
+    gpga-reserve-probe kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    gpga-reserve-probe kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    gpga-reserve-probe kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=map-stress births=3 user=3 refused=0 cuda_threads=3
+    map-stress kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    map-stress kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    map-stress kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=concurrent-fuzz births=27 user=27 refused=0 cuda_threads=3
+    concurrent-fuzz kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    concurrent-fuzz kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    concurrent-fuzz kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=cross-client-leak births=4 user=4 refused=0 cuda_threads=3
+    cross-client-leak kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    cross-client-leak kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    cross-client-leak kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS arm=rpc-mixed-allocs births=3 user=3 refused=0 cuda_threads=3
+    rpc-mixed-allocs kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    rpc-mixed-allocs kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+    rpc-mixed-allocs kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+BIRTH_CENSUS_SUITE arms=30 births=161 user=161 cuda_threads=90
+BIRTH_CENSUS_GATES births=11 user=11 refused=0
+BIRTH_CENSUS_OK arms=30 suite_births=161 gate_births=11 all PRIVILEGED_CHANNEL=0 privilege=USER

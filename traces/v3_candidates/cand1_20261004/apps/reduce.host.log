@@ -1,0 +1,4 @@
+=== reduce side=host start=2026-10-04T02:46:50+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/reduce
+METRIC reduce_GBs 121.3
+CHECK ok
+=== end rc=0 secs=4 2026-10-04T02:46:54+00:00

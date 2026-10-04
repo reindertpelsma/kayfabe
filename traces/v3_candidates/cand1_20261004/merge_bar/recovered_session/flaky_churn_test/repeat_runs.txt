@@ -1,0 +1,46 @@
+# kf-chan tests/dbfast_kvm.rs churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin, run alone,
+# repeatedly, on vmb (vast 54049598, 19 vCPUs, /dev/kvm), 2026-10-04 02:15-02:19 UTC, nothing else running.
+# Each run: <test binary> --exact churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin --nocapture
+# P = passed; F(left: n) = panicked at dbfast_kvm.rs:285 "no eventfd delivery may ring a freed twin", fast_late = n.
+# Transcribed from the session's command output (the commands printed to the terminal, not to a file).
+
+## 0ac157b2 (the tested commit) — binary kf-target-cand1b/debug/deps/dbfast_kvm-042abfaa2d4078a3 (attempt 1's own build)
+## a passing run prints `CHURN rounds=<n>`; a failing run panics before that line
+run  1 P rounds=4047
+run  2 P rounds=4011
+run  3 F(left: 29)
+run  4 P rounds=3942
+run  5 P rounds=3450
+run  6 P rounds=4091
+run  7 P rounds=3487
+run  8 P rounds=4016
+run  9 P rounds=3339
+run 10 F(left: 119)
+run 11 P rounds=3821
+run 12 F(left: 783)
+run 13 P rounds=3805
+run 14 P rounds=3920
+run 15 P rounds=4027
+run 16 P rounds=3943
+run 17 P rounds=3838
+run 18 P rounds=3863
+run 19 F(left: 1044)
+run 20 F(left: 302)
+0ac157b2 failed=5/20   (every pass: rounds <= 4091)
+
+## 8a682f1b (the first candidate, kf-chan identical) — binary kf-target-cand1/debug/deps/dbfast_kvm-042abfaa2d4078a3
+F(left: 9) P F(left: 361) P P P P F(left: 46) P P P P F(left: 101) P P F(left: 304) F(left: 23) P F(left: 374) P
+CAND1_8a682f1b failed=7/20
+
+## master's code 789dee9f (= origin/master cb33a3da's crates; kf-chan identical to 0ac157b2) — built for this
+## measurement in the box's worktree verify-worktrees/b5ab_master789 (CARGO_TARGET_DIR=kf-target-m789flake)
+P P P P P P P F(left: 613) P P P P P P P P F(left: 270) P P P P P F(left: 56) P P F(left: 194) F(left: 336) P P P
+MASTER_789dee9f failed=5/30
+
+## The cause, measured (experiment_narrow_vs_wide.log; the .sh.txt is the exact script, run in a throwaway
+## worktree at 0ac157b2 that was removed afterwards — nothing of it is in any commit): the test prints
+## `rounds` and fast_late before the assertion (narrow = the test as committed), and with CHURN_WIDE set
+## the two tokens' host twins get disjoint numbers (0xA0000+gen / 0xB0000+gen instead of 0xA000+gen /
+## 0xB000+gen). 30 runs each, pinned to cores 0-3:
+narrow: failed 16/30 — every failure has rounds > 4096 (min 4109), every pass has rounds <= 4096 (max 3989); fast_late up to 2247
+wide:   failed  0/30 — including 12 runs with rounds > 4096 (max 4763); fast_late 0 in every run

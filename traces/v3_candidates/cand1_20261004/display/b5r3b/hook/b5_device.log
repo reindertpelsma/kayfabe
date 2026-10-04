@@ -1,0 +1,60 @@
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch
+kf3: mem t=57.173s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #1: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=58.672s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #6: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=58.672s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=58.673s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=213: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=58.709s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 2: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=72.493s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #7: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=88.955s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #12: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=88.955s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=88.956s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 3) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=165: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=88.991s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 3: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=114.146s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #13: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=131.806s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #18: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=131.807s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=131.807s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 4) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=180: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=131.858s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 4: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=132.902s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #19: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: mem t=221.943s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #24: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=221.944s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=221.944s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 5) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=180: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=221.996s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 5: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=241.957s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #25: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634232, pb: Some(Pushbuffer { addr_space: 1, phys: 4331536384, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: the guest armed its first head at +243689 ms — the boot layer is retired after 1450 boot frame(s)
+kf3: display: +243689 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +243690 ms the console shows head 3 1920x1080: [window 6 iso 0x1008f+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +261390 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: +261432 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +261833 ms the console shows the PRESERVED scanout 1920x1080 [window 6 store 0x0] (freed with PRESERVE_HW) (core channel allocated)
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: true }
+kf3: mem t=262.008s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #84: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=262.009s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=262.009s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 6) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=874: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=262.058s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: the console is ONE run, VA 0 -> store 0, 0x7f0000 bytes; 0x0 bytes re-pointed to scratch (seed life 6: the guest's RM took BAR1 back after giving it up)
+kf3: mem t=309.420s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #85: guest views [(0, 7f0000, Some(0))]; 0x0 bytes show SCRATCH
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634232, pb: Some(Pushbuffer { addr_space: 1, phys: 5615865856, limit: 4095, size_enum: 0 }), life: 3 }
+kf3: mem t=310.181s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #103: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: mem t=310.214s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #104: guest views [(0, 7f0000, Some(a00000))]; 0x0 bytes show SCRATCH
+kf3: display: +310245 ms the console shows head 3 1920x1080: [window 6 iso 0x10088+0x0 1920x1080 pitch 120 fmt 0xe6] (core channel allocated)
+kf3: display: +322536 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: display: +322786 ms the console shows BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold) (core channel allocated)
+kf3: mem t=325.613s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #105: guest views []; 0x7f0000 bytes show SCRATCH
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634232, pb: Some(Pushbuffer { addr_space: 1, phys: 5615865856, limit: 4095, size_enum: 0 }), life: 5 }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: mem t=326.492s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=326.492s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 7) — the guest's RM gave BAR1 up
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=605: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: mem t=326.523s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)

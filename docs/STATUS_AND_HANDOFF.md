@@ -11,8 +11,12 @@ fix this file. Entries below the first are dated history.
 
 ### 0.0 ★ RESUME HERE — 2026-10-04 (supersedes every older entry in §0 where they differ)
 
-**Master = `789dee9f` (+ docs).** It has NOT moved since the rulings. Code reaches master only through a
-**candidate branch** tested as a whole on a real GPU (rules below). Branch heads change; always
+**Verified integration = `0ac157b2` (+ docs/evidence).** Candidate 1's post-B5-fix hardware jobs
+finished after the earlier handoff; their results were recovered on 2026-10-04 in
+`traces/v3_candidates/cand1_20261004/`. Master was `529de32c` at recovery start.
+This branch combines the tested candidate with those newer master docs; no product or test code
+changed during recovery. Code reaches master only through a **candidate branch** tested as a
+whole on a real GPU (rules below). Branch heads change; always
 `git fetch` and read each lane's own design doc STATUS. Workflow results that lived only in a session
 are committed in `docs/handoff/2026-10-04/` (README there).
 
@@ -32,7 +36,7 @@ are committed in `docs/handoff/2026-10-04/` (README there).
 
 | lane | branch @ last known head | state | next step |
 |---|---|---|---|
-| **Candidate 1** | `v3-cand-1` (merges owner-questions + `v3-sec-nonpriv` P0 + `v3-scratch-bound` + `v3-dispsw-exp`; KF3 ABI 13) | at `8a682f1b` on vmb: merge bar PASS (1936/0, 9/9, bare 30/30, guest 30/30, BIRTH_CENSUS_OK); apps PASS (host 71/71, guest 61/65+6/6 = baseline `2830988f`); display B0, B1 and X11 A/B PASS; **B5 FAIL**, and master's own code fails B5 the same way (latent timing bug: the console ctxdma is unbound before the window free, and an unwatched-console copy lands in the gap) | a fixer is committing the B5 fix on `v3-cand-1`. Then re-run the FULL real-GPU test at the new head (B5 ≥3×). If it passes, fast-forward master and v3 to it (merge any newer docs-only owner-questions commits first). Evidence: `traces/v3_candidates/` |
+| **Candidate 1** | `v3-cand-1` tested at `0ac157b2`; recovery `codex/resume-2026-10-04` adds master docs + evidence (KF3 ABI 13) | B5 fixed at `c1ca7945`; full hardware bar passed on unchanged retry: 1937/0, 9/9, bare 30/30, guest 30/30, USER births. Apps host 71/71, guest 61/65+6/6 = baseline; B0/B1, B5 **4×14/14**, X11 A/B pass. First-attempt churn-test failure and its fake-token collision diagnosis retained. | recovery CI, then promotion under §R; next is candidate 2. Evidence: `traces/v3_candidates/cand1_20261004/` |
 | Display: broker | `v3-broker` @ `82f98f42` (KF3 ABI 12) | GPU-copy rung, hover cursor, XOR blend, QEMU console cursor; box-graded (V3_DISPLAY §8.11-§8.15); 16 review fixes NOT yet box-verified | merges into a master that has ABI 13 → renumber to **14** (note at KF3_ABI in kf3.h / ffi_unsafe.rs on cand-1) |
 | Display: max fps | `v3-maxfps` from `v3-broker` (ABI 16) | being built (§M, D1-D5) with a box stage incl. the D4 X11 check and the broker post-review re-verify | then **candidate 2** = cand-1-merged master + broker + maxfps, full HW test |
 | nvkvm-pv broker | nvkvm-pv `broker-cursor-gpucopy` @ `badf2d7` (+ block-linear bound fix in flight) | CMD_CURSOR 7, EV_DEVICE 17, X11 EV_FORMAT x=0; review fixes done | not merged to nvkvm-pv main: needs its own HW test with nvkvm-pv's VMM |

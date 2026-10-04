@@ -1,0 +1,38 @@
+=== BlackScholes side=guest start=2026-10-04T03:09:08+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/BlackScholes
+[/opt/apps/bundle/samples/BlackScholes] - Starting...
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Initializing data...
+...allocating CPU memory for options.
+...allocating GPU memory for options.
+...generating input data in CPU mem.
+...copying input data to GPU mem.
+Data init done.
+
+Executing Black-Scholes GPU kernel (512 iterations)...
+Options count             : 8000000     
+BlackScholesGPU() time    : 0.243578 msec
+Effective memory bandwidth: 328.436724 GB/s
+Gigaoptions per second    : 32.843672     
+
+BlackScholes, Throughput = 32.8437 GOptions/s, Time = 0.00024 s, Size = 8000000 options, NumDevsUsed = 1, Workgroup = 128
+
+Reading back GPU results...
+Checking the results...
+...running CPU calculations.
+
+Comparing the results...
+L1 norm: 1.741792E-07
+Max absolute error: 1.192093E-05
+
+Shutting down...
+...releasing GPU memory.
+...releasing CPU memory.
+Shutdown done.
+
+[BlackScholes] - Test Summary
+
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+
+Test passed
+=== end rc=0 secs=4 2026-10-04T03:09:12+00:00

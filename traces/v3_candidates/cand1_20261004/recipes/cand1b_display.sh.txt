@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# cand1b_display.sh — the display lanes at 0ac157b2 with the merge bar's kf3 binary (kf3-bins/0ac157b2;
+# NO rebuild), the recipe of cand1_display.sh: GOP B0 (OVMF, gop=off), B1 (OVMF, gop=on, timed shots),
+# B5 (OVMF, gop=on, unload_hook, KF3_DISPLAY_TRACE=1) FOUR times (b5c1b + repeats b5r1b..b5r3b), then the
+# x11-dispsw A/B through dispsw_run.sh. Shots -> PNG here (PIL). Orchestration only.
+set -uo pipefail
+L=/root/prov/cand1b_display2.log
+exec >>"$L" 2>&1
+echo "JOBSTART $(date -Is)"
+trap 'rc=$?; echo "JOBEND rc=$rc $(date -Is)"' EXIT
+until grep -aq '^JOBEND rc=' /root/prov/cand1b_apps2.log 2>/dev/null; do sleep 30; done
+echo "APPS_DONE_SEEN [$(grep -a '^JOBEND rc=' /root/prov/cand1b_apps2.log)]"
+while pgrep -x qemu-system-x86 >/dev/null; do sleep 10; done
+export PATH=$HOME/.cargo/bin:$PATH
+python3 -c "import PIL; print(\"PIL_OK\", PIL.__version__)"
+B=/workspace/bench; SFX=c1b
+cd /root/kayfabe || exit 90
+echo "HEAD $(git rev-parse HEAD) dirty=[$(git status --porcelain --untracked-files=no | wc -l)]"
+[ "$(git rev-parse HEAD)" = 0ac157b2fff15294073b95acbe7377a6133ae5aa ] || { echo "wrong HEAD"; exit 91; }
+KB=$B/kf3-bins/0ac157b2/qemu-system-x86_64
+[ -x "$KB" ] || { echo "no $KB"; exit 92; }
+echo "KF3_BIN $KB $(stat -c '%s %y' $KB) sha256=$(sha256sum $KB | cut -c1-16)"
+cat $B/display_lane.receipt 2>/dev/null | head -3
+STAGE_T0=$(date '+%Y-%m-%d %H:%M:%S')
+shot() { python3 - "$1" "$2" <<PY
+import socket,sys,time
+s=socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); time.sleep(0.2); s.recv(65536)
+s.sendall(("screendump %s kf0\n" % sys.argv[2]).encode()); time.sleep(1.0); print(s.recv(65536).decode(errors="replace").strip()[-120:])
+PY
+}
+topng() { # topng <dir> [width]: every .ppm -> .png beside it (PIL, optionally scaled), + a contact sheet of t*.png
+python3 - "$1" "${2:-0}" <<'PY'
+import sys, os, glob
+from PIL import Image, ImageDraw
+d = sys.argv[1]; W = int(sys.argv[2])
+for p in sorted(glob.glob(os.path.join(d, "*.ppm"))):
+    try:
+        im = Image.open(p)
+        if W and im.width > W:
+            im = im.resize((W, im.height * W // im.width))
+            im.save(p[:-4] + "_%d.png" % W, optimize=True)
+        else:
+            im.save(p[:-4] + ".png", optimize=True)
+    except Exception as e:
+        print("PNG_FAIL", p, e)
+ts = sorted(glob.glob(os.path.join(d, "t*.png")))
+if ts:
+    w, h = 384, 216
+    cols = 5
+    rows = (len(ts) + cols - 1) // cols
+    sheet = Image.new("RGB", (cols * w, rows * (h + 18)), "white")
+    dr = ImageDraw.Draw(sheet)
+    for i, p in enumerate(ts):
+        im = Image.open(p).convert("RGB").resize((w, h))
+        x, y = (i % cols) * w, (i // cols) * (h + 18)
+        sheet.paste(im, (x, y + 18))
+        dr.text((x + 4, y + 2), os.path.basename(p)[:-4] + " s", fill="black")
+    sheet.save(os.path.join(d, "contact_sheet.png"), optimize=True)
+print("PNG_DONE", len(glob.glob(os.path.join(d, "*.png"))))
+PY
+}
+idle() { sleep 5; while pgrep -x qemu-system-x86 >/dev/null; do sleep 5; done; }
+jx() { journalctl -k --since "$1" --no-pager | grep -ac 'Xid'; }
+# --- B0: OVMF, gop=off
+t0=$(date '+%Y-%m-%d %H:%M:%S')
+KF_FIRMWARE=ovmf DISPLAY_HOLD_S=20 KF_DEVICE=kf3 bash scripts/bench/display/lane.sh b0$SFX > $B/cand1b_b0$SFX.log 2>&1
+echo "B0_LANE_RC=$? bin=$(cat $B/run_b0${SFX}_rev.txt) window=[$t0 .. $(date '+%Y-%m-%d %H:%M:%S')] host_xid_journal=$(jx "$t0")"
+grep -a -E "DISPLAY_(BOOT_VGA|PATTERN_MATCH|KFDISP_FLIPS|CONNECTED|LANE_EXIT|HOST_XID|BOOT_HANDOFF)|FAILED" $B/cand1b_b0$SFX.log | cut -c1-220
+echo "B0_SEED_LINES=$(grep -ac "boot display seed\|physical view\|BAR1 boot framebuffer" $B/run_b0${SFX}_qemu.log)"
+echo "B0_CONSOLE_SHOWS=$(grep -ac 'the console shows' $B/run_b0${SFX}_qemu.log) B0_BLACK=$(grep -ac 'the console shows BLACK' $B/run_b0${SFX}_qemu.log)"
+grep -a 'the console shows' $B/run_b0${SFX}_qemu.log | cut -c1-200 | head -12
+idle
+# --- B1: OVMF, gop=on, timed shots from the moment the monitor socket appears
+S=$B/display/b1${SFX}shots; mkdir -p $S; rm -f $S/*.ppm $S/*.png
+t0=$(date '+%Y-%m-%d %H:%M:%S')
+KF_FIRMWARE=ovmf DISPLAY_KF3_EXTRA=gop=on DISPLAY_HOLD_S=20 KF_DEVICE=kf3 bash scripts/bench/display/lane.sh b1$SFX > $B/cand1b_b1$SFX.log 2>&1 &
+LP=$!
+for _ in $(seq 1 120); do [ -S $B/run_b1$SFX.mon ] && break; sleep 0.5; done
+ts0=$(date +%s.%N)
+for t in 1 2 4 6 9 12 16 20 25 30 40 45 48 50 52 54 56 58 60 65 75 90; do
+  while [ "$(echo "$(date +%s.%N) - $ts0 < $t" | bc)" = 1 ]; do sleep 0.2; done
+  [ -S $B/run_b1$SFX.mon ] && shot "$B/run_b1$SFX.mon" "$S/t$(printf %03d "$t").ppm" > /dev/null 2>&1
+done
+wait $LP; echo "B1_LANE_RC=$? bin=$(cat $B/run_b1${SFX}_rev.txt) window=[$t0 .. $(date '+%Y-%m-%d %H:%M:%S')] host_xid_journal=$(jx "$t0")"
+topng $S
+grep -a -E "DISPLAY_(BOOT_VGA|PATTERN_MATCH|KFDISP_FLIPS|CONNECTED|LANE_EXIT|HOST_XID|BOOT_HANDOFF)|FAILED" $B/cand1b_b1$SFX.log | cut -c1-220
+grep -a -E "boot display ON|option ROM registered|display: boot layer|GET_GSP_STATIC_INFO|boot display seed|armed its first head|cannot preserve|physical view|the console shows|lines logged" $B/run_b1${SFX}_qemu.log | cut -c1-240 | head -40
+echo "B1_CANNOT_PRESERVE=$(grep -ac 'cannot preserve' $B/run_b1${SFX}_qemu.log)"
+idle
+# --- B5: OVMF, gop=on, the unload arms — four runs
+b5() { # b5 <tag>
+  local tag=$1 t0 rc
+  t0=$(date '+%Y-%m-%d %H:%M:%S')
+  KF3_DISPLAY_TRACE=1 KF_FIRMWARE=ovmf DISPLAY_KF3_EXTRA=gop=on DISPLAY_HOOK=unload_hook KF_DEVICE=kf3 bash scripts/bench/display/lane.sh $tag > $B/cand1b_$tag.log 2>&1
+  rc=$?
+  echo "RUN $tag lane_rc=$rc bin=$(cat $B/run_${tag}_rev.txt 2>/dev/null) window=[$t0 .. $(date '+%Y-%m-%d %H:%M:%S')] host_xid_journal=$(jx "$t0")"
+  grep -a -E "^DISPLAY_(B5_JUDGE|B5_VERDICT|BOOT_HANDOFF|LANE|HOST_XID|FLIP)" $B/cand1b_$tag.log | cut -c1-300
+  echo "  QEMU ctxdma_refused=$(grep -ac 'scanout REFUSED context DMA' $B/run_${tag}_qemu.log) preserved=$(grep -ac 'the console shows the PRESERVED scanout' $B/run_${tag}_qemu.log) black_no_head=$(grep -ac 'BLACK 1920x1080 (the scanout shown is lost: no head is lit)' $B/run_${tag}_qemu.log)"
+  grep -a 'the console shows\|scanout REFUSED\|kind: Core, instance: 0, preserve' $B/run_${tag}_qemu.log | sed -n '/+1[0-9][0-9][0-9][0-9][0-9] ms/,$p' | head -16 | cut -c1-200 | sed 's/^/  /'
+  topng $B/display/$tag
+  idle
+}
+b5 b5$SFX
+b5 b5r1b
+b5 b5r2b
+b5 b5r3b
+# --- x11-dispsw A/B (SeaBIOS, display=on, DISPLAY_DESKTOP=1 + the bare-X11 step), host probe around each
+t0=$(date '+%Y-%m-%d %H:%M:%S')
+DISPLAY_X11_BARE=1 bash scripts/bench/display/dispsw_run.sh dsw_a_off_$SFX
+echo "DSW_A_RUN_RC=$? window=[$t0 .. $(date '+%Y-%m-%d %H:%M:%S')] host_xid_journal=$(jx "$t0")"; grep -a '^LANE_RC\|^EXIT\|^REV' /root/dsw/dsw_a_off_$SFX.log
+topng $B/display/dsw_a_off_$SFX 1280
+idle
+t0=$(date '+%Y-%m-%d %H:%M:%S')
+DISPLAY_X11_BARE=1 bash scripts/bench/display/dispsw_run.sh dsw_b_on_$SFX x11-dispsw=on
+echo "DSW_B_RUN_RC=$? window=[$t0 .. $(date '+%Y-%m-%d %H:%M:%S')] host_xid_journal=$(jx "$t0")"; grep -a '^LANE_RC\|^EXIT\|^REV' /root/dsw/dsw_b_on_$SFX.log
+topng $B/display/dsw_b_on_$SFX 1280
+journalctl -k --since "$STAGE_T0" --no-pager > /root/prov/cand1b_display_hostkernel.log
+echo "STAGE_HOST_KERNEL lines=$(wc -l < /root/prov/cand1b_display_hostkernel.log) xid=$(grep -ac Xid /root/prov/cand1b_display_hostkernel.log) nvrm=$(grep -ac NVRM /root/prov/cand1b_display_hostkernel.log)"
+echo "DISPLAY_DONE"

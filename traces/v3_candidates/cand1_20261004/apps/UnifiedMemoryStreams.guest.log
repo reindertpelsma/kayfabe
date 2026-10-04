@@ -1,0 +1,40 @@
+=== UnifiedMemoryStreams side=guest start=2026-10-04T03:05:37+00:00 host=ubuntu cmd: /opt/apps/bundle/samples/UnifiedMemoryStreams
+CUDA error at UnifiedMemoryStreams.cu:202 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream[0])" 
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Executing tasks on host / device
+Task [2], thread [0] executing on device (542)
+Task [3], thread [3] executing on device (787)
+Task [1], thread [2] executing on device (545)
+Task [0], thread [1] executing on device (365)
+Task [4], thread [1] executing on device (203)
+Task [5], thread [2] executing on device (840)
+Task [6], thread [0] executing on device (934)
+Task [7], thread [3] executing on device (390)
+Task [8], thread [1] executing on device (374)
+Task [9], thread [0] executing on device (954)
+Task [10], thread [2] executing on device (661)
+Task [11], thread [3] executing on device (502)
+Task [12], thread [0] executing on device (781)
+Task [13], thread [1] executing on device (121)
+Task [14], thread [3] executing on device (396)
+Task [15], thread [0] executing on device (647)
+Task [16], thread [1] executing on device (781)
+Task [17], thread [3] executing on device (737)
+Task [18], thread [1] executing on device (467)
+Task [19], thread [3] executing on device (276)
+Task [20], thread [1] executing on device (513)
+Task [21], thread [1] executing on device (381)
+Task [22], thread [3] executing on device (122)
+Task [23], thread [1] executing on device (323)
+Task [24], thread [3] executing on device (989)
+Task [25], thread [1] executing on device (734)
+Task [26], thread [3] executing on device (586)
+Task [27], thread [1] executing on device (149)
+Task [28], thread [3] executing on device (275)
+Task [29], thread [3] executing on device (908)
+Task [30], thread [3] executing on device (696)
+Task [31], thread [3] executing on device (112)
+Task [32], thread [3] executing on host (64)
+timeout: the monitored command dumped core
+=== end rc=139 secs=6 2026-10-04T03:05:43+00:00

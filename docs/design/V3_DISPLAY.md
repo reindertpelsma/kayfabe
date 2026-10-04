@@ -1,5 +1,14 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS: VERIFIED, 2026-10-04 — candidate 1 at `0ac157b2`.** The B5 context-DMA
+> latch fix (`c1ca7945`) passed four full unload runs (14/14 arms each) on GA106
+> box 54049598, with B0/B1, X11 A/B, the merge bar and the existing app baseline
+> also passing. Evidence recovered after the earlier handoff:
+> `traces/v3_candidates/cand1_20261004/`. §4.11.13's pending hardware re-test is
+> superseded. Broker/max-fps work remains on its own branches.
+> The statuses below are dated history where they differ.
+
+
 > **STATUS 2026-10-03 (late) — display step 1 (the boot display): BUILT on branch `v3-gop` (both halves
 > plus the owner's §K ruling), nothing run on a GPU box.** `v3-gop` carries `v3-gop-rom` and `v3-gop-kf3`
 > squashed onto `master` with every finding of their review fixed (§4.11.12's ⊘ block): **no compiled
@@ -1695,7 +1704,11 @@ PRESERVED scanout"*, and the text console stayed black.
   replays latch → copy → unbind → copy → frees):
   `display::tests::a_context_dma_unbound_before_the_preserving_free_keeps_the_console`; with per-copy
   resolution restored it fails, the free showing `Blank` instead of `Preserved`.
-- ⚠ Not yet re-run on a box at the time of writing: the candidate's hardware re-test is the evidence.
+- **Re-run on hardware at `0ac157b2`, 2026-10-04:** four B5 runs, each 14/14,
+  with no context-DMA refusal and the console preserved and updating. The full merge bar,
+  app baseline, B0/B1 and X11 A/B also pass (`traces/v3_candidates/cand1_20261004/`).
+  The earlier pending-run statement is superseded; see that record for the unrelated
+  first-attempt churn-test failure and unchanged passing retry.
 
 **STATUS: REVIEWED AND RE-RUN, 2026-10-03 (late) — kf3 `06b307c4`, `traces/v3_display/gop_final_20261003/`.**
 The review's findings are folded below as ⊘ notes above what they correct. At `06b307c4` (box 54032077):

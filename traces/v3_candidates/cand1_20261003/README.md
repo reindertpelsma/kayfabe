@@ -1,5 +1,11 @@
 # Candidate v3-cand-1 on real hardware — merge bar, apps, display (2026-10-03/04)
 
+**SUPERSEDED FOR RESUMPTION, 2026-10-04:** the B5 fix and the full candidate were
+subsequently tested at `0ac157b2`: B5 4×14/14, full merge bar and the app baseline
+passed. See `../cand1_20261004/README.md`, recovered after this handoff. This
+directory remains the evidence of the earlier failure at `8a682f1b`.
+
+
 ⊘ **2026-10-04 (later): the B5 failure below is root-caused and fixed at `c1ca7945` (see *Candidate or
 master?*); this directory still records `8a682f1b` only, and the fix needs its own hardware run.**
 

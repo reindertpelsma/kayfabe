@@ -1,0 +1,4 @@
+=== stream_default side=host start=2026-10-04T02:47:20+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/stream_probe default
+CHECK default ok
+STREAM_PROBE_DONE default rc=0
+=== end rc=0 secs=3 2026-10-04T02:47:23+00:00

@@ -1,0 +1,10 @@
+=== llama_bench side=guest start=2026-10-04T03:16:55+00:00 host=ubuntu cmd: /opt/apps/bundle/llama/llama-bench -m /opt/apps/data/qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 7871 MiB):
+  Device 0: NVIDIA GeForce RTX 3060, compute capability 8.6, VMM: yes, VRAM: 7871 MiB
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |  99 |           pp512 |    6871.53 ± 1384.79 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |  99 |            tg64 |        176.30 ± 3.03 |
+
+build: 4b1a27fa0 (11191)
+=== end rc=0 secs=6 2026-10-04T03:17:01+00:00

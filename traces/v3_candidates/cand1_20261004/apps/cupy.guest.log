@@ -1,0 +1,8 @@
+=== cupy side=guest start=2026-10-04T03:16:35+00:00 host=ubuntu cmd: CUDA_PATH=/opt/apps/bundle/cuda /opt/apps/venv/bin/python /opt/apps/bundle/share/cupy_check.py
+CHECK cupy_matmul ok
+CHECK cupy_reduce ok
+CHECK cupy_nvrtc_kernel ok
+CHECK cupy_fft ok
+CHECK cupy_random ok
+CUPY_DONE
+=== end rc=0 secs=5 2026-10-04T03:16:40+00:00
