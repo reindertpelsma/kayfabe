@@ -1,0 +1,5 @@
+FIFO_WARMUP {"frames": 120, "seconds": 11.507474582, "rc": 0, "output": "Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu\n"}
+FIFO_TIMING {"frames": 1, "seconds": 7.031454, "rc": 0, "output": "Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu\n"}
+FIFO_TIMING {"frames": 480, "seconds": 22.50988, "rc": 0, "output": "Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu\n"}
+FIFO_TIMING {"frames": 960, "seconds": 34.416581, "rc": 0, "output": "Selected GPU 0: NVIDIA GeForce RTX 3060, type: DiscreteGpu\n"}
+FIFO_SLOPE hz=40.3134 startup_seconds=10.6032

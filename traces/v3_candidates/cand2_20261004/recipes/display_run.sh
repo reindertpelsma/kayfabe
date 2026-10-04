@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One serial run on the owned vdisp2 box. Inspect verdicts, not just EXIT.
 set -euo pipefail
-kind=${1:?refresh|fps30|x1130|async60|broker|refresh_hint|fifo_timing}
+kind=${1:?refresh|fps30|x1130|async60|broker|refresh_hint|fifo_timing|present_timing}
 tag=${2:?unique tag}
 [[ "$tag" =~ ^[a-zA-Z0-9_-]+$ ]]
 test ! -e "/root/prov/$tag.log"
@@ -38,6 +38,12 @@ case "$kind" in
         export POST_CAPTURE_HOOK=/root/fifo_timing_hook.sh
         timeout --kill-after=10 480 bash scripts/bench/boot_capture.sh "$tag" -- -vga none
         grep -q '^FIFO_TIMING_VERDICT PASS ' "/workspace/bench/run_${tag}_probe.log"
+        ;;
+    present_timing)
+        export KF3_DEV_EXTRA=display=on,gop=on,x11-dispsw=on,display-max-fps=30
+        export POST_CAPTURE_HOOK=/root/present_timing_hook.sh
+        timeout --kill-after=10 480 bash scripts/bench/boot_capture.sh "$tag" -- -vga none
+        grep -q '^PRESENT_TIMING_VERDICT PASS ' "/workspace/bench/run_${tag}_probe.log"
         ;;
     x1130)
         export DISPLAY_KF3_EXTRA=gop=on,x11-dispsw=on,display-max-fps=30 FPS_BOUND=30

@@ -126,3 +126,12 @@ This is an existing limitation, not a new clean-runtime claim.
 intercept. Its extra startup-consistency assertion failed because the first
 one-frame sample was cold. Retain that failure; rerun after an explicit
 120-frame warm-up before every timed sample set.
+
+`fifo_warm/` retains the second process-wall-time experiment: 1/480/960 frames
+in 7.031/22.510/34.417s after warm-up. Subtraction implies an implausible
+40.31 FPS slope, and the harness correctly fails; startup varies between
+processes, so this method cannot establish presentation cadence. The next
+probe (`vk_present_timing.c`, `present_timing_hook.sh`) observes actual
+`vkQueuePresentKHR` returns in the unmodified vkcube, skips the first sixteen
+presents, checks all 480 calls and return codes, and uses IMMEDIATE mode as
+a control. No product behavior or Vulkan return value is modified.
