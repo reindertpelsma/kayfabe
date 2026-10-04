@@ -35,6 +35,25 @@ typedef char header_size_must_be_64[(sizeof(KFGT_FILE_HEADER)==64)?1:-1];
 DRIVER_INITIALIZE DriverEntry;
 DRIVER_UNLOAD Unload;
 DRIVER_DISPATCH Dispatch;
+#ifdef KFGT_INIT_DIAGNOSTICS
+/* Diagnostic builds only: record entry progress in this driver's service key.
+ * Stage 0=entered, 1=device, 2=allocations, 3=thread, 4=link, 5=ready.
+ * The REG_BINARY pair is {ULONG stage, NTSTATUS status}, little endian.
+ * Failure to write diagnostics never affects driver initialization.
+ */
+static void init_diagnostic(PUNICODE_STRING path,ULONG stage,NTSTATUS status) {
+    OBJECT_ATTRIBUTES attrs; HANDLE key;
+    UNICODE_STRING name=RTL_CONSTANT_STRING(L"InitDiagnostic");
+    ULONG value[2]={stage,(ULONG)status};
+    InitializeObjectAttributes(&attrs,path,OBJ_KERNEL_HANDLE|OBJ_CASE_INSENSITIVE,NULL,NULL);
+    if(NT_SUCCESS(ZwOpenKey(&key,KEY_SET_VALUE,&attrs))) {
+        (void)ZwSetValueKey(key,&name,0,REG_BINARY,value,sizeof(value));ZwClose(key);
+    }
+}
+#define INIT_DIAGNOSTIC(stage,status) init_diagnostic(registry_path,stage,status)
+#else
+#define INIT_DIAGNOSTIC(stage,status) ((void)0)
+#endif
 static int stopping(STATE *s) { return KeReadStateEvent(&s->stop)!=0; }
 static int ram(STATE *s,uint64_t pa,SIZE_T n) {
     ULONG i;
@@ -206,10 +225,12 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT driver,PUNICODE_STRING registry_path) {
     PDEVICE_OBJECT device=NULL; NTSTATUS status; STATE *s; LARGE_INTEGER frequency; ULONG i;
     OBJECT_ATTRIBUTES attrs;
     UNREFERENCED_PARAMETER(registry_path);
+    INIT_DIAGNOSTIC(0,STATUS_SUCCESS);
     status=IoCreateDeviceSecure(driver,0,&name,FILE_DEVICE_UNKNOWN,FILE_DEVICE_SECURE_OPEN,TRUE,&sddl,&device_class,&device);
+    INIT_DIAGNOSTIC(1,status);
     if(!NT_SUCCESS(status)) return status;
     s=ExAllocatePool2(POOL_FLAG_NON_PAGED,sizeof(*s),TAG);
-    if(!s) { IoDeleteDevice(device);return STATUS_INSUFFICIENT_RESOURCES; }
+    if(!s) { INIT_DIAGNOSTIC(2,STATUS_INSUFFICIENT_RESOURCES);IoDeleteDevice(device);return STATUS_INSUFFICIENT_RESOURCES; }
     ExInitializeFastMutex(&s->lock);KeInitializeEvent(&s->stop,NotificationEvent,FALSE);
     s->ranges=MmGetPhysicalMemoryRanges();
     if(s->ranges) for(i=0;i<MAX_RANGES && s->ranges[i].NumberOfBytes.QuadPart;i++) s->range_count++;
@@ -220,8 +241,10 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT driver,PUNICODE_STRING registry_path) {
     s->scratch=ExAllocatePool2(POOL_FLAG_NON_PAGED,KFGT_MAX_MESSAGE,TAG);
     s->table_copy=ExAllocatePool2(POOL_FLAG_NON_PAGED,KFGT_PAGE,TAG);
     if(!s->ranges || !s->range_count || s->range_count==MAX_RANGES || !s->fifo || !s->scan || !s->copy_a || !s->copy_b || !s->scratch || !s->table_copy) {
+        INIT_DIAGNOSTIC(2,STATUS_INSUFFICIENT_RESOURCES);
         release_state(s);IoDeleteDevice(device);return STATUS_INSUFFICIENT_RESOURCES;
     }
+    INIT_DIAGNOSTIC(2,STATUS_SUCCESS);
     s->stats.version=KFGT_ABI;s->stats.bytes=sizeof(s->stats);
     s->stats.started_qpc=(uint64_t)KeQueryPerformanceCounter(&frequency).QuadPart;s->stats.qpc_frequency=(uint64_t)frequency.QuadPart;
     state=s;
@@ -229,8 +252,10 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT driver,PUNICODE_STRING registry_path) {
     driver->DriverUnload=Unload;
     InitializeObjectAttributes(&attrs,NULL,OBJ_KERNEL_HANDLE,NULL,NULL);
     status=PsCreateSystemThread(&s->thread,THREAD_ALL_ACCESS,&attrs,NULL,NULL,worker,s);
-    if(NT_SUCCESS(status)) status=IoCreateSymbolicLink(&link_name,&name);
+    INIT_DIAGNOSTIC(3,status);
+    if(NT_SUCCESS(status)) { status=IoCreateSymbolicLink(&link_name,&name);INIT_DIAGNOSTIC(4,status); }
     if(!NT_SUCCESS(status)) { release_state(s);state=NULL;IoDeleteDevice(device);return status; }
     device->Flags&=~DO_DEVICE_INITIALIZING;
+    INIT_DIAGNOSTIC(5,STATUS_SUCCESS);
     return STATUS_SUCCESS;
 }

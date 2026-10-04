@@ -121,6 +121,23 @@ existence of this executable is not a passing result.
 
 ## Optional staging through the Vast Windows preparation VM
 
+For a driver load failure, retain the exact `NtLoadDriver` status as well as
+the Win32 service error. An optional diagnostic build separates loader failure
+from `DriverEntry` failure:
+
+```sh
+KFGT_INIT_DIAGNOSTICS=1 KFGT_OUTPUT=/tmp/gsp-load-diag ./build-linux.sh
+```
+
+This variant writes an eight-byte `InitDiagnostic` value in its own service
+registry key: a little-endian stage DWORD and NTSTATUS DWORD. Stages are
+0 (entered), 1 (device creation), 2 (allocations), 3 (worker creation),
+4 (symbolic link), and 5 (ready). Clear the previous value before a controlled
+load attempt; an absent value is useful evidence only if the service key is
+writable. Normal builds contain no diagnostic registry writes. Sign the
+diagnostic driver on the target before loading it, and retain its file hash
+with the result.
+
 `stage-qga.py` copies trusted controller-built files into
 `C:\ProgramData\KayfabeGsp` during the installer's final cold-boot SSH rehearsal
 hold. It requires the native GPU setup task to exist and remain deferred. Build

@@ -38,6 +38,7 @@ args=(/nologo /c /kernel /W4 /WX /O2 /GS /D_AMD64_ /DAMD64 /D_WIN64
       /D_WIN32_WINNT=0x0A00 /DNTDDI_VERSION=0x0A000008 /D_KERNEL_MODE
       "/imsvc$cache/wdk/c/Include/$kit/km" "/imsvc$cache/wdk/c/Include/$kit/km/crt"
       "/imsvc$cache/sdk/c/Include/$kit/shared" "/imsvc$cache/sdk/c/Include/$kit/ucrt")
+if [[ ${KFGT_INIT_DIAGNOSTICS:-0} == 1 ]]; then args+=(/DKFGT_INIT_DIAGNOSTICS); fi
 for source in gsptrace queue; do
     "$compiler" "${args[@]}" "/Fo$output/$source.obj" "$source.c"
 done
