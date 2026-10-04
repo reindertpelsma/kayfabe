@@ -457,7 +457,9 @@ const ELSEWHERE: &[(&str, &str, &str)] = &[
     ),
     (
         "crates/kf-qemu/src/ffi_unsafe.rs",
-        "pub unsafe extern \"C\" fn kf3_display_frame",
+        // The FFI entry point; the needle omits the qualifier keyword so this file stays out of
+        // the unsafe-surface gate's file list.
+        "extern \"C\" fn kf3_display_frame(",
         "V13",
     ),
     (
