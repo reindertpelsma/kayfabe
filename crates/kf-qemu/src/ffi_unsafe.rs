@@ -16,7 +16,7 @@ use std::ffi::CStr;
 /// [`kf3_realize`] takes `gop`, and [`kf3_option_rom`] hands the C device the ROM to register.
 /// ★ 12 (2026-10-04, `v3-windows`, `docs/OWNER_RULINGS.md` §K): [`kf3_realize`] takes `gop_efi`, the
 /// path of a signed copy of the embedded GOP driver (`crate::gop::SignedGop`), or null.
-pub const KF3_ABI: u32 = 12;
+pub const KF3_ABI: u32 = 13;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -261,6 +261,7 @@ pub unsafe extern "C" fn kf3_memory_map(
                 kf_trap::memmap::Disposition::PlainRam => 0,
                 kf_trap::memmap::Disposition::ShadowWriteTrapped => 1,
                 kf_trap::memmap::Disposition::HostPassthrough => 2,
+                kf_trap::memmap::Disposition::HostTimer => 4,
                 kf_trap::memmap::Disposition::Hole { .. } => 3,
             },
             pad: [0; 6],
@@ -415,6 +416,29 @@ pub unsafe extern "C" fn kf3_usermode_view(
     }
     // SAFETY: the caller promised both are writable; the span becomes a ROM device's backing for
     // the device's life (the use `HostSpan::as_ptr` requires).
+    unsafe {
+        *ptr = span.as_ptr().cast::<c_void>();
+        *len = span.len() as u64;
+    }
+    0
+}
+
+/// The optional native timer backing, which may only be installed read-only in the guest.
+/// # Safety
+/// `ptr` and `len` must be writable; the returned mapping must not outlive the device.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_timer_view(
+    h: *mut c_void,
+    ptr: *mut *mut c_void,
+    len: *mut u64,
+) -> i32 {
+    let Some(d) = dev(h) else { return -1 };
+    let Some(timer) = &d.timer else { return -1 };
+    if ptr.is_null() || len.is_null() {
+        return -1;
+    }
+    let span = timer.view();
+    // SAFETY: caller's writable outputs; backing is valid for the device's lifetime.
     unsafe {
         *ptr = span.as_ptr().cast::<c_void>();
         *len = span.len() as u64;

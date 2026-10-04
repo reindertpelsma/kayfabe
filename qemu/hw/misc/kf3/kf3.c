@@ -180,15 +180,16 @@ static void kf3_host_rom_free(MemoryRegion *mr)
 }
 
 static bool kf3_host_rom_ops(Kf3State *s, Kf3Piece *p, const char *name, uint64_t len,
-                             const MemoryRegionOps *ops, void *opaque, Error **errp)
+                             const MemoryRegionOps *ops, void *opaque, bool timer, Error **errp)
 {
     void *host = NULL;
     uint64_t have = 0;
     Error *err = NULL;
 
-    if (kf3_usermode_view(s->h, &host, &have) != 0 || !host || have < len) {
-        error_setg(errp, "kf3: no host usermode window for the %" PRIu64 "-byte passthrough page",
-                   len);
+    int rc = timer ? kf3_timer_view(s->h, &host, &have) : kf3_usermode_view(s->h, &host, &have);
+    if (rc != 0 || !host || have < len) {
+        error_setg(errp, "kf3: no host %s window for the %" PRIu64 "-byte passthrough page",
+                   timer ? "timer" : "usermode", len);
         return false;
     }
     memory_region_init(&p->mr, OBJECT(s), name, len);
@@ -205,9 +206,9 @@ static bool kf3_host_rom_ops(Kf3State *s, Kf3Piece *p, const char *name, uint64_
     return true;
 }
 
-static bool kf3_host_rom(Kf3State *s, Kf3Piece *p, const char *name, uint64_t len, Error **errp)
+static bool kf3_host_rom(Kf3State *s, Kf3Piece *p, const char *name, uint64_t len, bool timer, Error **errp)
 {
-    return kf3_host_rom_ops(s, p, name, len, &kf3_piece_ops, p, errp);
+    return kf3_host_rom_ops(s, p, name, len, &kf3_piece_ops, p, timer, errp);
 }
 
 static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
@@ -241,14 +242,16 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
         if (r->how == 3) {
             /* HOLE: a read that must exit (Hopper+ FSP EMEM). Trapping IO both ways. */
             memory_region_init_io(&p->mr, OBJECT(s), &kf3_piece_ops, p, name, r->len);
-        } else if (r->how == 2) {
+        } else if (r->how == 2 || r->how == 4) {
             /* HOST PASSTHROUGH (§53.1 C): a ROM device whose RAM IS the host's usermode window —
              * reads hit the live microsecond counter with no exit, writes (the doorbell) trap.
              * ⊘ A static shadow here froze the timer and every RM timeout spun forever. */
-            if (!kf3_host_rom(s, p, name, r->len, errp)) {
+            if (!kf3_host_rom(s, p, name, r->len, r->how == 4, errp)) {
                 return false;
             }
-            s->um_mr = &p->mr;
+            if (r->how == 2) {
+                s->um_mr = &p->mr;
+            }
         } else if (r->how == 0) {
             /* PLAIN RAM (§53.1 A) — PRAMIN: Rust's window, re-pointed inside the trapped
              * window-base write. ram_device: KVM maps it, and kf3_is_guest_ram skips it. */
@@ -507,7 +510,7 @@ static bool kf3_bar1_views_build(Kf3State *s, Error **errp)
     }
     s->bar1_um_len = 0x10000;
     s->bar1_um.s = s;
-    if (!kf3_host_rom_ops(s, &s->bar1_um, "kf3-bar1-usermode", s->bar1_um_len, &kf3_bar1_um_ops, s, errp)) {
+    if (!kf3_host_rom_ops(s, &s->bar1_um, "kf3-bar1-usermode", s->bar1_um_len, &kf3_bar1_um_ops, s, false, errp)) {
         return false;
     }
     memory_region_enable_lockless_io(&s->bar1_um.mr);

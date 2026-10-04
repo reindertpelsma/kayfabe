@@ -1,0 +1,5 @@
+Nv01TimerMap	.	0	1044	Nv01TimerMap
+Nv01TimerMap	Reserved00	0	1024	array/4
+Nv01TimerMap	PTimerTime0	1024	4	NvU32
+Nv01TimerMap	Reserved01	1028	12	array/4
+Nv01TimerMap	PTimerTime1	1040	4	NvU32

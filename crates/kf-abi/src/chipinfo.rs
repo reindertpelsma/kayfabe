@@ -236,6 +236,9 @@ pub struct ChipInfoRow {
     /// The register groups this chip names. See [`RegBaseRow`] — an omission is a
     /// refusal, not a gap.
     pub reg_bases: &'static [RegBaseRow],
+    /// Optional live host mapping, supplied only after the composition root has verified its
+    /// backing, guest layout and BAR bounds. Not a captured per-die register address.
+    pub timer_reg_base: Option<u32>,
 }
 
 /// The device's PCI identity, in the packing this reply uses.
@@ -403,7 +406,12 @@ pub fn encode_chip_info(
 
     let mut claimed: [Option<&'static str>; CHIP_INFO_REG_BASE_MAX] =
         [None; CHIP_INFO_REG_BASE_MAX];
-    for b in row.reg_bases {
+    let timer = row.timer_reg_base.map(|offset| RegBaseRow {
+        index: reg_base::TIMER,
+        offset,
+        name: "NV01_TIMER (live read-only host mapping)",
+    });
+    for b in row.reg_bases.iter().chain(timer.iter()) {
         if b.index >= CHIP_INFO_REG_BASE_MAX {
             return Err(ChipInfoError::RegBaseIndexOutOfRange {
                 name: b.name,
