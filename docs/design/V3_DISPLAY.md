@@ -3231,7 +3231,11 @@ about — `kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID f
 (display-max-fps 0)` unset — and every 3c re-author logs the new EDID's FNV too. `hook.sh` takes
 `FPS_BOUND` (the run's cap, default 60): the deadlines of the fixed-frame vkcube runs scale by
 `60 / FPS_BOUND` (a correctly paced vkcube under cap 30 must not read as `RC=124`), and each prints
-`WALL_MS`. `kfdisp_probe` has no async-flip or `max_vrefresh` mode yet (R4 needs one).
+`WALL_MS`. `kfdisp_probe list` prints each connector's `max_vrefresh` (below a 60 Hz cap no 60 Hz
+mode may be offered); `kfdisp_probe show <card> <hold> <flips> async [gap_ms]` flips with
+`DRM_MODE_PAGE_FLIP_ASYNC` (and prints `cap_async_page_flip`), and `hook.sh` runs it for R4 with
+`DISPLAY_ASYNC=1` — 240 async flips back to back, then 60 with 50 ms between them. Both are compiled
+here only (`gcc -Wall -Werror`, the DRM and the `KFDISP_NO_DRM` builds); neither has run in a guest.
 
 **What has not run (all of it needs box `vdisp`, serially, each run with its revision):**
 - R0 default: run 10's recipe unchanged; the realize line's `EDID fnv1a64=c9dcbb394c28b1c7`;
@@ -3241,7 +3245,8 @@ about — `kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID f
   scale by the cap first).
 - R1b the clamp's falsifier: bare X with `AllowNonEdidModes, NoVertRefreshCheck` and a CEA 1080p60
   mode under cap 30 — `clamped=1`, glxgears ≤ 30.5.
-- R4 async flips at cap 60: ≤ 61 Hz with `tear≈60` and `held>0`.
+- R4 async flips at cap 60 (`DISPLAY_ASYNC=1`): `ASYNC … flip_hz` ≤ 61 with `tear≈60` and
+  `held>0`; `ASYNC_GAP50` ≈ 20 Hz with `held` unchanged.
 - D2 on hardware: an idle KDE desktop with a VNC client shows `same` growing and `copies` near 0;
   nothing checked with the console and broker both idle; `screendump` pixel-exact (`hook.sh`'s
   pattern A) with nobody watching.

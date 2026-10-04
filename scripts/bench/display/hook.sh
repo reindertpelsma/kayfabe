@@ -97,6 +97,15 @@ else
 fi
 wait $SP
 grep '^KFDISP_' "$OUT/show.log" | sed 's/^/DISPLAY_/'
+# 3b. ★ `display-max-fps` (V3_DISPLAY.md §8.16, run R4; DISPLAY_ASYNC=1): ASYNC (tearing) flips —
+#     the D1 gate holds the second in a tick period for the next tick, so flip_hz stays at the tick
+#     rate (`fps[... tear=… held>0]`); a client flipping every 50 ms is never held (≈ 20 Hz)
+if [ "${DISPLAY_ASYNC:-0}" = 1 ]; then
+    gq "sudo ~/display/kfdisp_probe show $card 0 240 async" "$(fs 60)" > "$OUT/show_async.log"
+    say "ASYNC $(grep -h '^KFDISP_FLIP_MODE\|^KFDISP_FLIPS\|^KFDISP_FAIL' "$OUT/show_async.log" | tr '\n' ' ')"
+    gq "sudo ~/display/kfdisp_probe show $card 0 60 async 50" 60 > "$OUT/show_async_gap.log"
+    say "ASYNC_GAP50 $(grep -h '^KFDISP_FLIPS\|^KFDISP_FAIL' "$OUT/show_async_gap.log" | tr '\n' ' ')"
+fi
 # ★ after the probe exited (its restore + close are inside that exit): nvidia-drm's own complaints.
 # A missing flip event is a timeout here; an event nobody expected is a WARN (`cut here`).
 say "FLIP_EVENT_TIMEOUTS=$(gq 'sudo dmesg | grep -c "Flip event timeout"') DRM_WARNS=$(gq 'sudo dmesg | grep -c "cut here"')"
