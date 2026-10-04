@@ -144,14 +144,20 @@ mod tests {
         assert_eq!(linux_twin("999.99", "x", 0), Err(TwinRefusal::NoTwin));
     }
 
-    /// Every row names a tag kf-abi has tables for, and a twin is never two tags.
+    /// Every row names a tag of the driver matrix (`generated::matrix::MEASURED`, which is
+    /// `tags.txt`; a tag there may still be refused by `versions::table_for`, e.g. 615.71.09), and a
+    /// Windows build name is never two tags' twin.
     #[test]
     fn every_row_is_a_matrix_tag_and_twin_names_are_unique() {
+        assert_eq!(
+            WINDOWS_TWINS.len(),
+            crate::generated::matrix::MEASURED.len()
+        );
         for t in WINDOWS_TWINS {
             let v = DriverVersion::parse(t.linux_tag).expect("a tag parses");
             assert!(
-                crate::versions::table_for(v).is_ok(),
-                "{} has tables",
+                crate::generated::matrix::MEASURED.contains(&v),
+                "{} is a matrix tag",
                 t.linux_tag
             );
             assert_eq!(
