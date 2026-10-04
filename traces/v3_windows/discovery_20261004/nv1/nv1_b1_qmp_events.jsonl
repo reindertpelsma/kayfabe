@@ -1,0 +1,5 @@
+{"event": "KF_LOGGER_ATTACHED", "timestamp": {"seconds": 1791075735}}
+{"timestamp": {"seconds": 1791075748, "microseconds": 811800}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791075755, "microseconds": 360184}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791075881, "microseconds": 344197}, "event": "NIC_RX_FILTER_CHANGED", "data": {"path": "/machine/peripheral-anon/device[1]/virtio-backend"}}
+{"timestamp": {"seconds": 1791078787, "microseconds": 709679}, "event": "SHUTDOWN", "data": {"guest": true, "reason": "guest-shutdown"}}

@@ -1,0 +1,1022 @@
+# filtered from nv2_b1_qemu.full.log: 932 of 966 status-heartbeat lines dropped (every 30th and the last kept); every other line kept verbatim
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf3: host GPU minor=0 bdf=0000:00:08.0 gpuId=0x8 rm_device_instance=0 cuda_device="NVIDIA GeForce RTX 3060" store=8192 MiB
+kf3: guest driver 580.65.06 (guest-driver=); measured ABI: static-info Pre610, element Pre610, init-args FourField, rm-control params@40, vgx Some((43, 19))
+kf3: channel plane: Translated rings on host COPY2 (engine 0xb); completions on FIFO_EVENT_MTHD + CE2
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE1->Some(0) CE2->Some(1) CE3->Some(2) NVENC0->Some(4) NVDEC0->Some(3) OFA->Some(5)]
+kf3: display plane ON — virtual NVDisplay for GA102 GA103 GA104 GA106 GA107 (IP 0x04010000, display class 0xc670, 4 heads)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:08.0
+kf3: boot display ON — option ROM 11776 bytes (10de:2504, KFGP BAR1 +0x0, 1920x1080 pitch 7680, G = 0x7f0000); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU; kf-gop SIGNED (cert table 2008 bytes at +0x2400, WIN_CERTIFICATE 2008 bytes; /workspace/winvm/secureboot/kf-gop.f429b2be.signed.efi)
+kf3: P4 memory plane: store 8192 MiB (imported into the walker), walker pools 236 MiB of host GPU memory (walk pool 1048576 runs, slot pool 2097152 runs (2097152 free), max per space 1048576, slots held 0, grows 0, retries 0, ceilings 0, largest slot 0, largest walk 0), roots bar1=0x1f1cac000 bar2=0x1f3392000, PRAMIN one map+mmap per move, trigger @0xb830b0
+2026-10-04T01:54:25.720847Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.f429b2be.signed.efi,id=kf0,guest-driver=580.65.06: info: kf3: boot display option ROM registered: 11776 bytes in a 16384-byte ROM BAR
+2026-10-04T01:54:25.722951Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.f429b2be.signed.efi,id=kf0,guest-driver=580.65.06: info: kf3: display console registered (head 0 of kf0)
+2026-10-04T01:54:25.723072Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.f429b2be.signed.efi,id=kf0,guest-driver=580.65.06: info: kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 ca (BAR0 pieces=5)
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: guest-RAM object 0xcafe0010 over 0x200000000 bytes of the guest memfd
+kf3: mem t=3.666s [1/3] prewarm: spare host space 0xcafe0011 ready before the guest runs — vaspace 2510 us, ram_obj 3437077 us (0xcafe0010+0x200000000), fb_window 639 us, ram_window 174661 us (total 3615241 us)
+kf3: mem t=3.894s [2/3] prewarm: spare host space 0xcafe0015 ready before the guest runs — vaspace 1540 us, ram_obj 0 us (0xcafe0010+0x200000000), fb_window 502 us, ram_window 175474 us (total 177527 us)
+kf3: mem t=4.131s [3/3] prewarm: spare host space 0xcafe0019 ready before the guest runs — vaspace 1617 us, ram_obj 0 us (0xcafe0010+0x200000000), fb_window 635 us, ram_window 184856 us (total 187115 us)
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[CE3:328/0raised] served=0 parks=2514 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=2 released=0 refused=0 held=2] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=0 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=328 scanout_refused=0 scanout_avg_us=1283 scanout_max_us=18850] boot[frames=328 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []]
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[CE3:672/0raised] served=0 parks=4980 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=2 released=0 refused=0 held=2] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=0 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=672 scanout_refused=0 scanout_avg_us=1206 scanout_max_us=18850] boot[frames=672 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []]
+kf3: family=Ampere phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[CE3:1014/0raised] served=0 parks=7451 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=2 released=0 refused=0 held=2] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=0 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=1014 scanout_refused=0 scanout_avg_us=1187 scanout_max_us=18850] boot[frames=1014 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []]
+kf3: w#0 bar0 @0x100c40 = 0x0 phase=Cold
+kf3: w#1 bar0 @0x100c10 = 0x2799b10 phase=Cold
+kf3: w#2 bar0 @0x088080 = 0x10 phase=Cold
+kf3: w#3 bar0 @0x088080 = 0x10 phase=Cold
+kf3: w#4 bar0 @0x110c00 = 0x0 phase=Cold
+kf3: w#5 bar0 @0x110c00 = 0x0 phase=Cold
+kf3: w#6 bar0 @0x1103c0 = 0x1 phase=Cold
+kf3: w#7 bar0 @0x1103c0 = 0x0 phase=Cold
+kf3: w#8 bar0 @0x110084 = 0x176000a1 phase=Cold
+kf3: w#9 bar0 @0x110624 = 0x80 phase=Cold
+kf3: w#10 bar0 @0x11010c = 0x0 phase=Cold
+kf3: w#11 bar0 @0x110600 = 0x5 phase=Cold
+kf3: w#12 bar0 @0x110110 = 0x2799ac0 phase=Cold
+kf3: w#13 bar0 @0x110128 = 0x0 phase=Cold
+kf3: w#14 bar0 @0x110114 = 0x0 phase=Cold
+kf3: w#15 bar0 @0x11011c = 0x0 phase=Cold
+kf3: w#16 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#17 bar0 @0x110114 = 0x100 phase=Cold
+kf3: w#18 bar0 @0x11011c = 0x100 phase=Cold
+kf3: w#19 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#20 bar0 @0x110114 = 0x200 phase=Cold
+kf3: w#21 bar0 @0x11011c = 0x200 phase=Cold
+kf3: w#22 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#23 bar0 @0x110114 = 0x300 phase=Cold
+kf3: w#24 bar0 @0x11011c = 0x300 phase=Cold
+kf3: w#25 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#26 bar0 @0x110114 = 0x400 phase=Cold
+kf3: w#27 bar0 @0x11011c = 0x400 phase=Cold
+kf3: w#28 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#29 bar0 @0x110114 = 0x500 phase=Cold
+kf3: w#30 bar0 @0x11011c = 0x500 phase=Cold
+kf3: w#31 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#32 bar0 @0x110114 = 0x600 phase=Cold
+kf3: w#33 bar0 @0x11011c = 0x600 phase=Cold
+kf3: w#34 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#35 bar0 @0x110114 = 0x700 phase=Cold
+kf3: w#36 bar0 @0x11011c = 0x700 phase=Cold
+kf3: w#37 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#38 bar0 @0x110114 = 0x800 phase=Cold
+kf3: w#39 bar0 @0x11011c = 0x800 phase=Cold
+kf3: w#40 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#41 bar0 @0x110114 = 0x900 phase=Cold
+kf3: w#42 bar0 @0x11011c = 0x900 phase=Cold
+kf3: w#43 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#44 bar0 @0x110114 = 0xa00 phase=Cold
+kf3: w#45 bar0 @0x11011c = 0xa00 phase=Cold
+kf3: w#46 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#47 bar0 @0x110114 = 0xb00 phase=Cold
+kf3: w#48 bar0 @0x11011c = 0xb00 phase=Cold
+kf3: w#49 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#50 bar0 @0x110114 = 0xc00 phase=Cold
+kf3: w#51 bar0 @0x11011c = 0xc00 phase=Cold
+kf3: w#52 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#53 bar0 @0x110114 = 0xd00 phase=Cold
+kf3: w#54 bar0 @0x11011c = 0xd00 phase=Cold
+kf3: w#55 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#56 bar0 @0x110114 = 0xe00 phase=Cold
+kf3: w#57 bar0 @0x11011c = 0xe00 phase=Cold
+kf3: w#58 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#59 bar0 @0x110114 = 0xf00 phase=Cold
+kf3: w#60 bar0 @0x11011c = 0xf00 phase=Cold
+kf3: w#61 bar0 @0x110118 = 0x614 phase=Cold
+kf3: w#62 bar0 @0x110110 = 0x2799ad0 phase=Cold
+kf3: w#63 bar0 @0x110128 = 0x0 phase=Cold
+kf3: w#64 bar0 @0x110114 = 0x0 phase=Cold
+kf3: w#65 bar0 @0x11011c = 0x0 phase=Cold
+kf3: w#66 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#67 bar0 @0x110114 = 0x100 phase=Cold
+kf3: w#68 bar0 @0x11011c = 0x100 phase=Cold
+kf3: w#69 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#70 bar0 @0x110114 = 0x200 phase=Cold
+kf3: w#71 bar0 @0x11011c = 0x200 phase=Cold
+kf3: w#72 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#73 bar0 @0x110114 = 0x300 phase=Cold
+kf3: w#74 bar0 @0x11011c = 0x300 phase=Cold
+kf3: w#75 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#76 bar0 @0x110114 = 0x400 phase=Cold
+kf3: w#77 bar0 @0x11011c = 0x400 phase=Cold
+kf3: w#78 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#79 bar0 @0x110114 = 0x500 phase=Cold
+kf3: w#80 bar0 @0x11011c = 0x500 phase=Cold
+kf3: w#81 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#82 bar0 @0x110114 = 0x600 phase=Cold
+kf3: w#83 bar0 @0x11011c = 0x600 phase=Cold
+kf3: w#84 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#85 bar0 @0x110114 = 0x700 phase=Cold
+kf3: w#86 bar0 @0x11011c = 0x700 phase=Cold
+kf3: w#87 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#88 bar0 @0x110114 = 0x800 phase=Cold
+kf3: w#89 bar0 @0x11011c = 0x800 phase=Cold
+kf3: w#90 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#91 bar0 @0x110114 = 0x900 phase=Cold
+kf3: w#92 bar0 @0x11011c = 0x900 phase=Cold
+kf3: w#93 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#94 bar0 @0x110114 = 0xa00 phase=Cold
+kf3: w#95 bar0 @0x11011c = 0xa00 phase=Cold
+kf3: w#96 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#97 bar0 @0x110114 = 0xb00 phase=Cold
+kf3: w#98 bar0 @0x11011c = 0xb00 phase=Cold
+kf3: w#99 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#100 bar0 @0x110114 = 0xc00 phase=Cold
+kf3: w#101 bar0 @0x11011c = 0xc00 phase=Cold
+kf3: w#102 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#103 bar0 @0x110114 = 0xd00 phase=Cold
+kf3: w#104 bar0 @0x11011c = 0xd00 phase=Cold
+kf3: w#105 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#106 bar0 @0x110114 = 0xe00 phase=Cold
+kf3: w#107 bar0 @0x11011c = 0xe00 phase=Cold
+kf3: w#108 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#109 bar0 @0x110114 = 0xf00 phase=Cold
+kf3: w#110 bar0 @0x11011c = 0xf00 phase=Cold
+kf3: w#111 bar0 @0x110118 = 0x600 phase=Cold
+kf3: w#112 bar0 @0x111210 = 0x800 phase=Cold
+kf3: w#113 bar0 @0x11119c = 0x1 phase=Cold
+kf3: w#114 bar0 @0x111198 = 0x1 phase=Cold
+kf3: w#115 bar0 @0x111180 = 0x1 phase=Cold
+kf3: w#116 bar0 @0x110104 = 0x0 phase=Cold
+kf3: w#117 bar0 @0x110100 = 0x2 phase=Cold
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset=0x1ffe00000 → served WPR2_ADDR_LO=Some(Ok("0x1ffe000"))
+kf3: w#118 bar0 @0x1103c0 = 0x1 phase=ProtectedRegionUp
+kf3: w#119 bar0 @0x1103c0 = 0x0 phase=ProtectedRegionUp
+kf3: w#120 bar0 @0x111668 = 0x111 phase=ProtectedRegionUp
+kf3: w#121 bar0 @0x110040 = 0x799af000 phase=ProtectedRegionUp
+kf3: w#122 bar0 @0x110044 = 0x2 phase=ProtectedRegionUp
+kayfabe: GSP-PUBLISH gpa=0x123a83000 gpa_same=false seq_last=Some(1) cmd_seq=0 ⇒ same_instance=false
+kf-gsp: fn 72 GSP_SET_SYSTEM_INFO seq=0 936 bytes: bGspNocatEnabled=1 at +929 (driver 580.65.06's layout; 1 = a Windows-built RM, THE_WINDOWS_AXIS §7)
+kf3: GSP rpc GspSetSystemInfo seq=0
+kf3: GSP rpc SetRegistry seq=0
+kf3: w#123 bar0 @0x8403c0 = 0x1 phase=ProtectedRegionUp
+kf3: w#124 bar0 @0x8403c0 = 0x0 phase=ProtectedRegionUp
+kf3: w#125 bar0 @0x840084 = 0x176000a1 phase=ProtectedRegionUp
+kf3: w#126 bar0 @0x840624 = 0x80 phase=ProtectedRegionUp
+kf3: w#127 bar0 @0x84010c = 0x0 phase=ProtectedRegionUp
+kf3: w#128 bar0 @0x840600 = 0x5 phase=ProtectedRegionUp
+kf3: w#129 bar0 @0x840110 = 0x27999d0 phase=ProtectedRegionUp
+kf3: w#130 bar0 @0x840128 = 0x0 phase=ProtectedRegionUp
+kf3: w#131 bar0 @0x840114 = 0x0 phase=ProtectedRegionUp
+kf3: w#132 bar0 @0x84011c = 0x100 phase=ProtectedRegionUp
+kf3: w#133 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#134 bar0 @0x840114 = 0x100 phase=ProtectedRegionUp
+kf3: w#135 bar0 @0x84011c = 0x200 phase=ProtectedRegionUp
+kf3: w#136 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#137 bar0 @0x840114 = 0x200 phase=ProtectedRegionUp
+kf3: w#138 bar0 @0x84011c = 0x300 phase=ProtectedRegionUp
+kf3: w#139 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#140 bar0 @0x840114 = 0x300 phase=ProtectedRegionUp
+kf3: w#141 bar0 @0x84011c = 0x400 phase=ProtectedRegionUp
+kf3: w#142 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#143 bar0 @0x840114 = 0x400 phase=ProtectedRegionUp
+kf3: w#144 bar0 @0x84011c = 0x500 phase=ProtectedRegionUp
+kf3: w#145 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#146 bar0 @0x840114 = 0x500 phase=ProtectedRegionUp
+kf3: w#147 bar0 @0x84011c = 0x600 phase=ProtectedRegionUp
+kf3: w#148 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#149 bar0 @0x840114 = 0x600 phase=ProtectedRegionUp
+kf3: w#150 bar0 @0x84011c = 0x700 phase=ProtectedRegionUp
+kf3: w#151 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#152 bar0 @0x840114 = 0x700 phase=ProtectedRegionUp
+kf3: w#153 bar0 @0x84011c = 0x800 phase=ProtectedRegionUp
+kf3: w#154 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#155 bar0 @0x840114 = 0x800 phase=ProtectedRegionUp
+kf3: w#156 bar0 @0x84011c = 0x900 phase=ProtectedRegionUp
+kf3: w#157 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#158 bar0 @0x840114 = 0x900 phase=ProtectedRegionUp
+kf3: w#159 bar0 @0x84011c = 0xa00 phase=ProtectedRegionUp
+kf3: w#160 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#161 bar0 @0x840114 = 0xa00 phase=ProtectedRegionUp
+kf3: w#162 bar0 @0x84011c = 0xb00 phase=ProtectedRegionUp
+kf3: w#163 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#164 bar0 @0x840114 = 0xb00 phase=ProtectedRegionUp
+kf3: w#165 bar0 @0x84011c = 0xc00 phase=ProtectedRegionUp
+kf3: w#166 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#167 bar0 @0x840114 = 0xc00 phase=ProtectedRegionUp
+kf3: w#168 bar0 @0x84011c = 0xd00 phase=ProtectedRegionUp
+kf3: w#169 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#170 bar0 @0x840114 = 0xd00 phase=ProtectedRegionUp
+kf3: w#171 bar0 @0x84011c = 0xe00 phase=ProtectedRegionUp
+kf3: w#172 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#173 bar0 @0x840114 = 0xe00 phase=ProtectedRegionUp
+kf3: w#174 bar0 @0x84011c = 0xf00 phase=ProtectedRegionUp
+kf3: w#175 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#176 bar0 @0x840114 = 0xf00 phase=ProtectedRegionUp
+kf3: w#177 bar0 @0x84011c = 0x1000 phase=ProtectedRegionUp
+kf3: w#178 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#179 bar0 @0x840114 = 0x1000 phase=ProtectedRegionUp
+kf3: w#180 bar0 @0x84011c = 0x1100 phase=ProtectedRegionUp
+kf3: w#181 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#182 bar0 @0x840114 = 0x1100 phase=ProtectedRegionUp
+kf3: w#183 bar0 @0x84011c = 0x1200 phase=ProtectedRegionUp
+kf3: w#184 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#185 bar0 @0x840114 = 0x1200 phase=ProtectedRegionUp
+kf3: w#186 bar0 @0x84011c = 0x1300 phase=ProtectedRegionUp
+kf3: w#187 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#188 bar0 @0x840114 = 0x1300 phase=ProtectedRegionUp
+kf3: w#189 bar0 @0x84011c = 0x1400 phase=ProtectedRegionUp
+kf3: w#190 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#191 bar0 @0x840114 = 0x1400 phase=ProtectedRegionUp
+kf3: w#192 bar0 @0x84011c = 0x1500 phase=ProtectedRegionUp
+kf3: w#193 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#194 bar0 @0x840114 = 0x1500 phase=ProtectedRegionUp
+kf3: w#195 bar0 @0x84011c = 0x1600 phase=ProtectedRegionUp
+kf3: w#196 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#197 bar0 @0x840114 = 0x1600 phase=ProtectedRegionUp
+kf3: w#198 bar0 @0x84011c = 0x1700 phase=ProtectedRegionUp
+kf3: w#199 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#200 bar0 @0x840114 = 0x1700 phase=ProtectedRegionUp
+kf3: w#201 bar0 @0x84011c = 0x1800 phase=ProtectedRegionUp
+kf3: w#202 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#203 bar0 @0x840114 = 0x1800 phase=ProtectedRegionUp
+kf3: w#204 bar0 @0x84011c = 0x1900 phase=ProtectedRegionUp
+kf3: w#205 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#206 bar0 @0x840114 = 0x1900 phase=ProtectedRegionUp
+kf3: w#207 bar0 @0x84011c = 0x1a00 phase=ProtectedRegionUp
+kf3: w#208 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#209 bar0 @0x840114 = 0x1a00 phase=ProtectedRegionUp
+kf3: w#210 bar0 @0x84011c = 0x1b00 phase=ProtectedRegionUp
+kf3: w#211 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#212 bar0 @0x840114 = 0x1b00 phase=ProtectedRegionUp
+kf3: w#213 bar0 @0x84011c = 0x1c00 phase=ProtectedRegionUp
+kf3: w#214 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#215 bar0 @0x840114 = 0x1c00 phase=ProtectedRegionUp
+kf3: w#216 bar0 @0x84011c = 0x1d00 phase=ProtectedRegionUp
+kf3: w#217 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#218 bar0 @0x840114 = 0x1d00 phase=ProtectedRegionUp
+kf3: w#219 bar0 @0x84011c = 0x1e00 phase=ProtectedRegionUp
+kf3: w#220 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#221 bar0 @0x840114 = 0x1e00 phase=ProtectedRegionUp
+kf3: w#222 bar0 @0x84011c = 0x1f00 phase=ProtectedRegionUp
+kf3: w#223 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#224 bar0 @0x840114 = 0x1f00 phase=ProtectedRegionUp
+kf3: w#225 bar0 @0x84011c = 0x2000 phase=ProtectedRegionUp
+kf3: w#226 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#227 bar0 @0x840114 = 0x2000 phase=ProtectedRegionUp
+kf3: w#228 bar0 @0x84011c = 0x2100 phase=ProtectedRegionUp
+kf3: w#229 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#230 bar0 @0x840114 = 0x2100 phase=ProtectedRegionUp
+kf3: w#231 bar0 @0x84011c = 0x2200 phase=ProtectedRegionUp
+kf3: w#232 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#233 bar0 @0x840114 = 0x2200 phase=ProtectedRegionUp
+kf3: w#234 bar0 @0x84011c = 0x2300 phase=ProtectedRegionUp
+kf3: w#235 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#236 bar0 @0x840114 = 0x2300 phase=ProtectedRegionUp
+kf3: w#237 bar0 @0x84011c = 0x2400 phase=ProtectedRegionUp
+kf3: w#238 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#239 bar0 @0x840114 = 0x2400 phase=ProtectedRegionUp
+kf3: w#240 bar0 @0x84011c = 0x2500 phase=ProtectedRegionUp
+kf3: w#241 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#242 bar0 @0x840114 = 0x2500 phase=ProtectedRegionUp
+kf3: w#243 bar0 @0x84011c = 0x2600 phase=ProtectedRegionUp
+kf3: w#244 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#245 bar0 @0x840114 = 0x2600 phase=ProtectedRegionUp
+kf3: w#246 bar0 @0x84011c = 0x2700 phase=ProtectedRegionUp
+kf3: w#247 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#248 bar0 @0x840114 = 0x2700 phase=ProtectedRegionUp
+kf3: w#249 bar0 @0x84011c = 0x2800 phase=ProtectedRegionUp
+kf3: w#250 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#251 bar0 @0x840114 = 0x2800 phase=ProtectedRegionUp
+kf3: w#252 bar0 @0x84011c = 0x2900 phase=ProtectedRegionUp
+kf3: w#253 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#254 bar0 @0x840114 = 0x2900 phase=ProtectedRegionUp
+kf3: w#255 bar0 @0x84011c = 0x2a00 phase=ProtectedRegionUp
+kf3: w#256 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#257 bar0 @0x840114 = 0x2a00 phase=ProtectedRegionUp
+kf3: w#258 bar0 @0x84011c = 0x2b00 phase=ProtectedRegionUp
+kf3: w#259 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#260 bar0 @0x840114 = 0x2b00 phase=ProtectedRegionUp
+kf3: w#261 bar0 @0x84011c = 0x2c00 phase=ProtectedRegionUp
+kf3: w#262 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#263 bar0 @0x840114 = 0x2c00 phase=ProtectedRegionUp
+kf3: w#264 bar0 @0x84011c = 0x2d00 phase=ProtectedRegionUp
+kf3: w#265 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#266 bar0 @0x840114 = 0x2d00 phase=ProtectedRegionUp
+kf3: w#267 bar0 @0x84011c = 0x2e00 phase=ProtectedRegionUp
+kf3: w#268 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#269 bar0 @0x840114 = 0x2e00 phase=ProtectedRegionUp
+kf3: w#270 bar0 @0x84011c = 0x2f00 phase=ProtectedRegionUp
+kf3: w#271 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#272 bar0 @0x840114 = 0x2f00 phase=ProtectedRegionUp
+kf3: w#273 bar0 @0x84011c = 0x3000 phase=ProtectedRegionUp
+kf3: w#274 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#275 bar0 @0x840114 = 0x3000 phase=ProtectedRegionUp
+kf3: w#276 bar0 @0x84011c = 0x3100 phase=ProtectedRegionUp
+kf3: w#277 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#278 bar0 @0x840114 = 0x3100 phase=ProtectedRegionUp
+kf3: w#279 bar0 @0x84011c = 0x3200 phase=ProtectedRegionUp
+kf3: w#280 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#281 bar0 @0x840114 = 0x3200 phase=ProtectedRegionUp
+kf3: w#282 bar0 @0x84011c = 0x3300 phase=ProtectedRegionUp
+kf3: w#283 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#284 bar0 @0x840114 = 0x3300 phase=ProtectedRegionUp
+kf3: w#285 bar0 @0x84011c = 0x3400 phase=ProtectedRegionUp
+kf3: w#286 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#287 bar0 @0x840114 = 0x3400 phase=ProtectedRegionUp
+kf3: w#288 bar0 @0x84011c = 0x3500 phase=ProtectedRegionUp
+kf3: w#289 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#290 bar0 @0x840114 = 0x3500 phase=ProtectedRegionUp
+kf3: w#291 bar0 @0x84011c = 0x3600 phase=ProtectedRegionUp
+kf3: w#292 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#293 bar0 @0x840114 = 0x3600 phase=ProtectedRegionUp
+kf3: w#294 bar0 @0x84011c = 0x3700 phase=ProtectedRegionUp
+kf3: w#295 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#296 bar0 @0x840114 = 0x3700 phase=ProtectedRegionUp
+kf3: w#297 bar0 @0x84011c = 0x3800 phase=ProtectedRegionUp
+kf3: w#298 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#299 bar0 @0x840114 = 0x3800 phase=ProtectedRegionUp
+kf3: w#300 bar0 @0x84011c = 0x3900 phase=ProtectedRegionUp
+kf3: w#301 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#302 bar0 @0x840114 = 0x3900 phase=ProtectedRegionUp
+kf3: w#303 bar0 @0x84011c = 0x3a00 phase=ProtectedRegionUp
+kf3: w#304 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#305 bar0 @0x840114 = 0x3a00 phase=ProtectedRegionUp
+kf3: w#306 bar0 @0x84011c = 0x3b00 phase=ProtectedRegionUp
+kf3: w#307 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#308 bar0 @0x840114 = 0x3b00 phase=ProtectedRegionUp
+kf3: w#309 bar0 @0x84011c = 0x3c00 phase=ProtectedRegionUp
+kf3: w#310 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#311 bar0 @0x840114 = 0x3c00 phase=ProtectedRegionUp
+kf3: w#312 bar0 @0x84011c = 0x3d00 phase=ProtectedRegionUp
+kf3: w#313 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#314 bar0 @0x840114 = 0x3d00 phase=ProtectedRegionUp
+kf3: w#315 bar0 @0x84011c = 0x3e00 phase=ProtectedRegionUp
+kf3: w#316 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#317 bar0 @0x840114 = 0x3e00 phase=ProtectedRegionUp
+kf3: w#318 bar0 @0x84011c = 0x3f00 phase=ProtectedRegionUp
+kf3: w#319 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#320 bar0 @0x840114 = 0x3f00 phase=ProtectedRegionUp
+kf3: w#321 bar0 @0x84011c = 0x4000 phase=ProtectedRegionUp
+kf3: w#322 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#323 bar0 @0x840114 = 0x4000 phase=ProtectedRegionUp
+kf3: w#324 bar0 @0x84011c = 0x4100 phase=ProtectedRegionUp
+kf3: w#325 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#326 bar0 @0x840114 = 0x4100 phase=ProtectedRegionUp
+kf3: w#327 bar0 @0x84011c = 0x4200 phase=ProtectedRegionUp
+kf3: w#328 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#329 bar0 @0x840114 = 0x4200 phase=ProtectedRegionUp
+kf3: w#330 bar0 @0x84011c = 0x4300 phase=ProtectedRegionUp
+kf3: w#331 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#332 bar0 @0x840114 = 0x4300 phase=ProtectedRegionUp
+kf3: w#333 bar0 @0x84011c = 0x4400 phase=ProtectedRegionUp
+kf3: w#334 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#335 bar0 @0x840114 = 0x4400 phase=ProtectedRegionUp
+kf3: w#336 bar0 @0x84011c = 0x4500 phase=ProtectedRegionUp
+kf3: w#337 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#338 bar0 @0x840114 = 0x4500 phase=ProtectedRegionUp
+kf3: w#339 bar0 @0x84011c = 0x4600 phase=ProtectedRegionUp
+kf3: w#340 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#341 bar0 @0x840114 = 0x4600 phase=ProtectedRegionUp
+kf3: w#342 bar0 @0x84011c = 0x4700 phase=ProtectedRegionUp
+kf3: w#343 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#344 bar0 @0x840114 = 0x4700 phase=ProtectedRegionUp
+kf3: w#345 bar0 @0x84011c = 0x4800 phase=ProtectedRegionUp
+kf3: w#346 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#347 bar0 @0x840114 = 0x4800 phase=ProtectedRegionUp
+kf3: w#348 bar0 @0x84011c = 0x4900 phase=ProtectedRegionUp
+kf3: w#349 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#350 bar0 @0x840114 = 0x4900 phase=ProtectedRegionUp
+kf3: w#351 bar0 @0x84011c = 0x4a00 phase=ProtectedRegionUp
+kf3: w#352 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#353 bar0 @0x840114 = 0x4a00 phase=ProtectedRegionUp
+kf3: w#354 bar0 @0x84011c = 0x4b00 phase=ProtectedRegionUp
+kf3: w#355 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#356 bar0 @0x840114 = 0x4b00 phase=ProtectedRegionUp
+kf3: w#357 bar0 @0x84011c = 0x4c00 phase=ProtectedRegionUp
+kf3: w#358 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#359 bar0 @0x840114 = 0x4c00 phase=ProtectedRegionUp
+kf3: w#360 bar0 @0x84011c = 0x4d00 phase=ProtectedRegionUp
+kf3: w#361 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#362 bar0 @0x840114 = 0x4d00 phase=ProtectedRegionUp
+kf3: w#363 bar0 @0x84011c = 0x4e00 phase=ProtectedRegionUp
+kf3: w#364 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#365 bar0 @0x840114 = 0x4e00 phase=ProtectedRegionUp
+kf3: w#366 bar0 @0x84011c = 0x4f00 phase=ProtectedRegionUp
+kf3: w#367 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#368 bar0 @0x840114 = 0x4f00 phase=ProtectedRegionUp
+kf3: w#369 bar0 @0x84011c = 0x5000 phase=ProtectedRegionUp
+kf3: w#370 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#371 bar0 @0x840114 = 0x5000 phase=ProtectedRegionUp
+kf3: w#372 bar0 @0x84011c = 0x5100 phase=ProtectedRegionUp
+kf3: w#373 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#374 bar0 @0x840114 = 0x5100 phase=ProtectedRegionUp
+kf3: w#375 bar0 @0x84011c = 0x5200 phase=ProtectedRegionUp
+kf3: w#376 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#377 bar0 @0x840114 = 0x5200 phase=ProtectedRegionUp
+kf3: w#378 bar0 @0x84011c = 0x5300 phase=ProtectedRegionUp
+kf3: w#379 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#380 bar0 @0x840114 = 0x5300 phase=ProtectedRegionUp
+kf3: w#381 bar0 @0x84011c = 0x5400 phase=ProtectedRegionUp
+kf3: w#382 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#383 bar0 @0x840114 = 0x5400 phase=ProtectedRegionUp
+kf3: w#384 bar0 @0x84011c = 0x5500 phase=ProtectedRegionUp
+kf3: w#385 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#386 bar0 @0x840114 = 0x5500 phase=ProtectedRegionUp
+kf3: w#387 bar0 @0x84011c = 0x5600 phase=ProtectedRegionUp
+kf3: w#388 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#389 bar0 @0x840114 = 0x5600 phase=ProtectedRegionUp
+kf3: w#390 bar0 @0x84011c = 0x5700 phase=ProtectedRegionUp
+kf3: w#391 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#392 bar0 @0x840114 = 0x5700 phase=ProtectedRegionUp
+kf3: w#393 bar0 @0x84011c = 0x5800 phase=ProtectedRegionUp
+kf3: w#394 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#395 bar0 @0x840114 = 0x5800 phase=ProtectedRegionUp
+kf3: w#396 bar0 @0x84011c = 0x5900 phase=ProtectedRegionUp
+kf3: w#397 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#398 bar0 @0x840114 = 0x5900 phase=ProtectedRegionUp
+kf3: w#399 bar0 @0x84011c = 0x5a00 phase=ProtectedRegionUp
+kf3: w#400 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#401 bar0 @0x840114 = 0x5a00 phase=ProtectedRegionUp
+kf3: w#402 bar0 @0x84011c = 0x5b00 phase=ProtectedRegionUp
+kf3: w#403 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#404 bar0 @0x840114 = 0x5b00 phase=ProtectedRegionUp
+kf3: w#405 bar0 @0x84011c = 0x5c00 phase=ProtectedRegionUp
+kf3: w#406 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#407 bar0 @0x840114 = 0x5c00 phase=ProtectedRegionUp
+kf3: w#408 bar0 @0x84011c = 0x5d00 phase=ProtectedRegionUp
+kf3: w#409 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#410 bar0 @0x840114 = 0x5d00 phase=ProtectedRegionUp
+kf3: w#411 bar0 @0x84011c = 0x5e00 phase=ProtectedRegionUp
+kf3: w#412 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#413 bar0 @0x840114 = 0x5e00 phase=ProtectedRegionUp
+kf3: w#414 bar0 @0x84011c = 0x5f00 phase=ProtectedRegionUp
+kf3: w#415 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#416 bar0 @0x840114 = 0x5f00 phase=ProtectedRegionUp
+kf3: w#417 bar0 @0x84011c = 0x6000 phase=ProtectedRegionUp
+kf3: w#418 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#419 bar0 @0x840114 = 0x6000 phase=ProtectedRegionUp
+kf3: w#420 bar0 @0x84011c = 0x6100 phase=ProtectedRegionUp
+kf3: w#421 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#422 bar0 @0x840114 = 0x6100 phase=ProtectedRegionUp
+kf3: w#423 bar0 @0x84011c = 0x6200 phase=ProtectedRegionUp
+kf3: w#424 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#425 bar0 @0x840114 = 0x6200 phase=ProtectedRegionUp
+kf3: w#426 bar0 @0x84011c = 0x6300 phase=ProtectedRegionUp
+kf3: w#427 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#428 bar0 @0x840114 = 0x6300 phase=ProtectedRegionUp
+kf3: w#429 bar0 @0x84011c = 0x6400 phase=ProtectedRegionUp
+kf3: w#430 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#431 bar0 @0x840114 = 0x6400 phase=ProtectedRegionUp
+kf3: w#432 bar0 @0x84011c = 0x6500 phase=ProtectedRegionUp
+kf3: w#433 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#434 bar0 @0x840114 = 0x6500 phase=ProtectedRegionUp
+kf3: w#435 bar0 @0x84011c = 0x6600 phase=ProtectedRegionUp
+kf3: w#436 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#437 bar0 @0x840114 = 0x6600 phase=ProtectedRegionUp
+kf3: w#438 bar0 @0x84011c = 0x6700 phase=ProtectedRegionUp
+kf3: w#439 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#440 bar0 @0x840114 = 0x6700 phase=ProtectedRegionUp
+kf3: w#441 bar0 @0x84011c = 0x6800 phase=ProtectedRegionUp
+kf3: w#442 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#443 bar0 @0x840114 = 0x6800 phase=ProtectedRegionUp
+kf3: w#444 bar0 @0x84011c = 0x6900 phase=ProtectedRegionUp
+kf3: w#445 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#446 bar0 @0x840114 = 0x6900 phase=ProtectedRegionUp
+kf3: w#447 bar0 @0x84011c = 0x6a00 phase=ProtectedRegionUp
+kf3: w#448 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#449 bar0 @0x840114 = 0x6a00 phase=ProtectedRegionUp
+kf3: w#450 bar0 @0x84011c = 0x6b00 phase=ProtectedRegionUp
+kf3: w#451 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#452 bar0 @0x840114 = 0x6b00 phase=ProtectedRegionUp
+kf3: w#453 bar0 @0x84011c = 0x6c00 phase=ProtectedRegionUp
+kf3: w#454 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#455 bar0 @0x840114 = 0x6c00 phase=ProtectedRegionUp
+kf3: w#456 bar0 @0x84011c = 0x6d00 phase=ProtectedRegionUp
+kf3: w#457 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#458 bar0 @0x840114 = 0x6d00 phase=ProtectedRegionUp
+kf3: w#459 bar0 @0x84011c = 0x6e00 phase=ProtectedRegionUp
+kf3: w#460 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#461 bar0 @0x840114 = 0x6e00 phase=ProtectedRegionUp
+kf3: w#462 bar0 @0x84011c = 0x6f00 phase=ProtectedRegionUp
+kf3: w#463 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#464 bar0 @0x840114 = 0x6f00 phase=ProtectedRegionUp
+kf3: w#465 bar0 @0x84011c = 0x7000 phase=ProtectedRegionUp
+kf3: w#466 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#467 bar0 @0x840114 = 0x7000 phase=ProtectedRegionUp
+kf3: w#468 bar0 @0x84011c = 0x7100 phase=ProtectedRegionUp
+kf3: w#469 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#470 bar0 @0x840114 = 0x7100 phase=ProtectedRegionUp
+kf3: w#471 bar0 @0x84011c = 0x7200 phase=ProtectedRegionUp
+kf3: w#472 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#473 bar0 @0x840114 = 0x7200 phase=ProtectedRegionUp
+kf3: w#474 bar0 @0x84011c = 0x7300 phase=ProtectedRegionUp
+kf3: w#475 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#476 bar0 @0x840114 = 0x7300 phase=ProtectedRegionUp
+kf3: w#477 bar0 @0x84011c = 0x7400 phase=ProtectedRegionUp
+kf3: w#478 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#479 bar0 @0x840114 = 0x7400 phase=ProtectedRegionUp
+kf3: w#480 bar0 @0x84011c = 0x7500 phase=ProtectedRegionUp
+kf3: w#481 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#482 bar0 @0x840114 = 0x7500 phase=ProtectedRegionUp
+kf3: w#483 bar0 @0x84011c = 0x7600 phase=ProtectedRegionUp
+kf3: w#484 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#485 bar0 @0x840114 = 0x7600 phase=ProtectedRegionUp
+kf3: w#486 bar0 @0x84011c = 0x7700 phase=ProtectedRegionUp
+kf3: w#487 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#488 bar0 @0x840114 = 0x7700 phase=ProtectedRegionUp
+kf3: w#489 bar0 @0x84011c = 0x7800 phase=ProtectedRegionUp
+kf3: w#490 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#491 bar0 @0x840114 = 0x7800 phase=ProtectedRegionUp
+kf3: w#492 bar0 @0x84011c = 0x7900 phase=ProtectedRegionUp
+kf3: w#493 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#494 bar0 @0x840114 = 0x7900 phase=ProtectedRegionUp
+kf3: w#495 bar0 @0x84011c = 0x7a00 phase=ProtectedRegionUp
+kf3: w#496 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#497 bar0 @0x840114 = 0x7a00 phase=ProtectedRegionUp
+kf3: w#498 bar0 @0x84011c = 0x7b00 phase=ProtectedRegionUp
+kf3: w#499 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#500 bar0 @0x840114 = 0x7b00 phase=ProtectedRegionUp
+kf3: w#501 bar0 @0x84011c = 0x7c00 phase=ProtectedRegionUp
+kf3: w#502 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#503 bar0 @0x840114 = 0x7c00 phase=ProtectedRegionUp
+kf3: w#504 bar0 @0x84011c = 0x7d00 phase=ProtectedRegionUp
+kf3: w#505 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#506 bar0 @0x840114 = 0x7d00 phase=ProtectedRegionUp
+kf3: w#507 bar0 @0x84011c = 0x7e00 phase=ProtectedRegionUp
+kf3: w#508 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: w#509 bar0 @0x840114 = 0x7e00 phase=ProtectedRegionUp
+kf3: w#510 bar0 @0x84011c = 0x7f00 phase=ProtectedRegionUp
+kf3: w#511 bar0 @0x840118 = 0x614 phase=ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf-rm: the guest is Windows 580.88 (r580_78-7), the Windows build of Linux 580.65.06 (one changelist, 36308443): keyed as 580.65.06
+kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says guestDriverVersion="580.88" guestVersion="r580_78-7" guestTitle="DVSReal r580_78 580.88 DVS-Applications" guestClNum=0 vgx=0x2b.0x13; this device answers as driver 580.65.06
+kf-rm: rpc-trace fn=1 SetGuestSystemInfo seq=0  result=0x0
+kf3: GSP rpc SetGuestSystemInfo seq=0
+kf3: GSP phase Booted -> Running
+kf-rm: rpc-trace fn=65 GetGspStaticInfo seq=0  result=0x0
+kf3: GSP rpc GetGspStaticInfo seq=0
+kf-rm: chanlink: client 0xc1d00002 root: kernel=false internal=false
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1d00002 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1d00002 parent=0xc1d00002 handle=0xff010000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1d00002 parent=0xff010000 handle=0xff030000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2081 client=0xc1d00002 parent=0xff030000 handle=0xff0d0000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a36 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a41 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001b0 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x208001b0 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a87 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a40 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801112 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a5c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a1c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801803 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4b client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e00003 root: kernel=false internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00003 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00003 parent=0xc1e00003 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00003 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0073 client=0xc1e00003 parent=0xcaf00000 handle=0xcaf00002 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800af3 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aac client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aff client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: chanlink: client 0xc1e00004 root: kernel=false internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00004 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00004 parent=0xc1e00004 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00004 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x007e client=0xc1e00004 parent=0xcaf00001 handle=0xcaf00003 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800301 client=0xc1e00004 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a59 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800aaf client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc UpdateBarPde seq=0
+kf3: mem t=219.979s fn70 Bar2 entry=0x1efbc302 shift=47 -> our root @0x1f3392000, walk scheduled
+kf3: mem t=219.980s walk reconciled [0xffffffff00000002:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=219.983s sysmembar #1: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 387 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=219.984s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(0, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=219.985s sysmembar #2: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 283 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=219.986s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(1, Cleared)] unreconciled=[]
+kf3: mem t=219.987s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(2, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a01 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ac6 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800adf client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a49 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: display: InstMem(InstMem { phys: 8316977152, size: 65536, addr_space: 2 })
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00800292 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a80 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a61 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: chanlink: client 0xc1e00005 root: kernel=false internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00005 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00005 parent=0xc1e00005 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00005 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a80 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: mem t=220.035s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(3, Cleared)] unreconciled=[]
+kf3: mem t=220.036s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(4, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e00003 object=0xcaf00002 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a0f client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=220.042s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(5, Cleared)] unreconciled=[]
+kf3: mem t=220.043s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(6, Cleared)] unreconciled=[]
+kf3: mem t=220.045s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(7, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080017e client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800af3 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=220.061s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(8, Cleared)] unreconciled=[]
+kf3: mem t=220.073s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(9, Cleared)] unreconciled=[]
+kf3: mem t=220.074s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(10, Cleared)] unreconciled=[]
+kf3: mem t=220.075s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(11, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a9f client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=220.078s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(12, Cleared)] unreconciled=[]
+kf3: mem t=220.079s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(13, Cleared)] unreconciled=[]
+kf3: mem t=220.080s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(14, Cleared)] unreconciled=[]
+kf3: mem t=220.081s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(15, Cleared)] unreconciled=[]
+kf3: mem t=220.082s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(16, Cleared)] unreconciled=[]
+kf3: mem t=220.082s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(17, Cleared)] unreconciled=[]
+kf-rm: chanlink: client 0xc1e00006 root: kernel=false internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00006 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00006 parent=0xc1e00006 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00006 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a1f client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2a client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a26 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a22 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a30 client=0xc1e00006 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2c client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a2e client=0xc1e00006 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a34 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800b03 client=0xc1e00006 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800b05 client=0xc1e00006 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3d client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a3f client=0xc1e00006 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a48 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a32 client=0xc1e00006 object=0xcaf00001 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=220.094s walk reconciled [0xffffffff00000001:+0-0r0] completed=[(18, Cleared)] unreconciled=[]
+kf3: mem t=220.095s walk reconciled [0xffffffff00000002:+0-0r0] completed=[(19, Cleared)] unreconciled=[]
+kf3: boot display seed [0x0, +0x7f0000) retired at the first change: no placement inside it (no console adopted); 0x7f0000 bytes re-pointed to scratch
+kf3: mem t=220.097s walk reconciled [0xffffffff00000001:+1-0r0] completed=[(20, Cleared)] unreconciled=[]
+kf3: mem t=220.097s BAR1 boot framebuffer [0x0, +0x7f0000) after BAR1 change #1: guest views []; 0x7f0000 bytes show SCRATCH
+kf-rm: chanlink: client 0xc1e00007 root: kernel=false internal=true
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0000 client=0xc1e00007 parent=0x0 handle=0x0 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x0080 client=0xc1e00007 parent=0xc1e00007 handle=0xcaf00000 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x2080 client=0xc1e00007 parent=0xcaf00000 handle=0xcaf00001 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1e00007:0xbaba0042 under 0xcaf00000 (device default for it: 0xbaba0042)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0x90f1 client=0xc1e00007 parent=0xcaf00000 handle=0xbaba0042 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: mem t=220.100s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(21, Cleared)] unreconciled=[]
+kf3: mem t=220.101s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(22, Cleared)] unreconciled=[]
+kf3: mem t=220.102s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(23, Cleared)] unreconciled=[]
+kf3: mem t=220.103s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(24, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x90f10106 client=0xc1e00007 object=0xbaba0042 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=220.104s pagedir VasKey(13970166077300801602) root=0x1efba4000 First
+kf3: mem t=220.104s walk reconciled [0xc1e00007baba0042:+0-0r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: mem t=220.145s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(25, Cleared)] unreconciled=[]
+kf3: mem t=220.146s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(26, Cleared)] unreconciled=[]
+kf3: mem t=220.147s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(27, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a08 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=220.151s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(28, Cleared)] unreconciled=[]
+kf3: chan 0xc1e00007:0xbaba0045 class=0xc56f engine=0x1 kernel=true vaspace=Some(baba0042) chid=Some(1) — a KERNEL non-CE channel: not born (kernel GR is P7)
+kf-rm: rpc-trace fn=103 RmAlloc seq=0 class=0xc56f client=0xc1e00007 parent=0xcaf00000 handle=0xbaba0045 result=0x0
+kf3: GSP rpc RmAlloc seq=0
+kf3: VasKey(13970166077300801602) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=220.153s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(29, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=220.154s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(30, Cleared)] unreconciled=[]
+kf3: mem t=220.155s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(31, Cleared)] unreconciled=[]
+kf3: mem t=220.156s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(32, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=220.157s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(33, Cleared)] unreconciled=[]
+kf3: mem t=220.157s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(34, Cleared)] unreconciled=[]
+kf3: mem t=220.158s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(35, Cleared)] unreconciled=[]
+kf3: mem t=220.159s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(36, Cleared)] unreconciled=[]
+kf3: mem t=220.160s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(37, Cleared)] unreconciled=[]
+kf3: mem t=220.161s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(38, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=220.162s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(39, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=220.163s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(40, Cleared)] unreconciled=[]
+kf3: mem t=220.164s walk reconciled [0xffffffff00000002:+1-0r0] completed=[(41, Cleared)] unreconciled=[]
+kf3: VasKey(13970166077300801602) root 0x1efba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: mem t=220.165s walk reconciled [0xc1e00007baba0042:+1-0r0] completed=[(42, Cleared)] unreconciled=[]
+kf-rm: chanlink: GPU_PROMOTE_CTX on 0xc1e00007:0xcaf00001 params=560 rpc_flags=0x0
+kf3: chan 0xc1e00007:0xbaba0045 GPU_PROMOTE_CTX: no passthrough twin — not ours (entries=9)
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012b client=0xc1e00007 object=0xcaf00001 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080012b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=220.166s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(43, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=220.168s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(44, Cleared)] unreconciled=[]
+kf3: mem t=220.169s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(45, Cleared)] unreconciled=[]
+kf3: mem t=220.170s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(46, Cleared)] unreconciled=[]
+kf3: mem t=220.172s walk reconciled [0xc1e00007baba0042:+0-0r0] completed=[(47, Cleared)] unreconciled=[]
+kf3: mem t=220.173s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(48, Cleared)] unreconciled=[]
+kf3: mem t=220.174s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(49, Cleared)] unreconciled=[]
+kf3: mem t=220.175s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(50, Cleared)] unreconciled=[]
+kf3: mem t=220.175s walk reconciled [0xc1e00007baba0042:+0-1r0] completed=[(51, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: mem t=220.176s retire VasKey(13970166077300801602): 0 row(s) unmapped (0 refused) in 3 us, 0 host call(s), host space 0xcafe0019 kept as a spare — host RM over its life: 8 map call(s) (8 per-run, 0 batch(es) x2 carrying 0 runs, 0 batch(es) refused) in 1 ms; 8 unmap call(s) (0 range(s)) + 0 free(s) in 0 ms
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080013f client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a4c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809009 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809064 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809001 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20809004 client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+W349REFUSE cmd=0x20801303 why=encoder UnmeasuredIndex { index: 1 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801303 client=0xc1d00002 object=0xff030000 result=0x56
+kf3: GSP rpc RmControl seq=0
+kf3: GSP REFUSED fn76/0x20801303=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801306 client=0xc1d00002 object=0xff010000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20810108 client=0xc1d00002 object=0xff0d0000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801823 client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+W349REFUSE cmd=0x20801823 why=encoder UnmeasuredIndex { index: 24 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801823 client=0x0 object=0x0 result=0x56
+kf3: GSP rpc RmControl seq=0
+kf3: GSP REFUSED fn76/0x20801823=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ab8 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800173 client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801315 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802a12 client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800102 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801c02 client=0xc1d00002 object=0xff010000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801b02 client=0xc1d00002 object=0xff010000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20803601 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20808159 client=0xc1d00002 object=0xff030000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800160 client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20802801 client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00801707 client=0xc1d00002 object=0xff010000 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080012f client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x2080121f client=0xc1d00002 object=0xff030000 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x2080121f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf3: mem t=220.241s walk reconciled [0xffffffff00000001:+0-1r0] completed=[(52, Cleared)] unreconciled=[]
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a70 client=0x0 object=0x0 result=0x0
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=220.243s sysmembar #3: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in 346 us
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf3: mem t=220.244s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: mem t=220.245s BAR1 back to its physical view: [0x0, +0x7f0000) shows store [0x0, +0x7f0000) again (seed life 2) — the guest's RM gave BAR1 up
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e00003 object=0xcaf00002 result=0x0
+kf3: GSP rpc RmControl seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf3: GSP REFUSED fn76/0x20800a38=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc UpdateBarPde seq=0
+kf3: mem t=220.280s fn70 Bar2 entry=0x0 shift=47 -> our root @0x1f3392000, walk scheduled
+kf3: mem t=220.287s walk reconciled [0xffffffff00000002:+0-30r0] completed=[] unreconciled=[]
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=10 Free seq=0  result=0x0
+kf3: GSP rpc Free seq=0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+kf3: GSP rpc RmControl seq=0
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0
+kf3: GSP rpc UnloadingGuestDriver seq=0
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: mem t=220.291s BAR1 [0x0, +0x7f0000) already shows its physical view (the seed is placed)
+kf3: GSP phase Suspending -> Halted
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:1351/0raised] served=0 parks=10019 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=1351 scanout_refused=0 scanout_avg_us=1170 scanout_max_us=18850] boot[frames=1351 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:1688/0raised] served=0 parks=12521 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=1688 scanout_refused=0 scanout_avg_us=1157 scanout_max_us=18850] boot[frames=1688 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:2023/0raised] served=0 parks=15077 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=2023 scanout_refused=0 scanout_avg_us=1151 scanout_max_us=18850] boot[frames=2023 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:2360/0raised] served=0 parks=17573 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=2360 scanout_refused=0 scanout_avg_us=1149 scanout_max_us=18850] boot[frames=2360 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:2699/0raised] served=0 parks=20146 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=2699 scanout_refused=0 scanout_avg_us=1144 scanout_max_us=18850] boot[frames=2699 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:3035/0raised] served=0 parks=22673 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=3035 scanout_refused=0 scanout_avg_us=1137 scanout_max_us=18850] boot[frames=3035 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:3374/0raised] served=0 parks=25245 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=3374 scanout_refused=0 scanout_avg_us=1135 scanout_max_us=18850] boot[frames=3374 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:3711/0raised] served=0 parks=27744 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=3711 scanout_refused=0 scanout_avg_us=1131 scanout_max_us=18850] boot[frames=3711 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:4048/0raised] served=0 parks=30228 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=4048 scanout_refused=0 scanout_avg_us=1129 scanout_max_us=18850] boot[frames=4048 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:4385/0raised] served=0 parks=32703 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=4385 scanout_refused=0 scanout_avg_us=1126 scanout_max_us=18850] boot[frames=4385 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:4727/0raised] served=0 parks=35165 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=4727 scanout_refused=0 scanout_avg_us=1125 scanout_max_us=18850] boot[frames=4727 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:5069/0raised] served=0 parks=37680 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=5069 scanout_refused=0 scanout_avg_us=1127 scanout_max_us=18850] boot[frames=5069 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:5412/0raised] served=0 parks=40165 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=5412 scanout_refused=0 scanout_avg_us=1129 scanout_max_us=18850] boot[frames=5412 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:5754/0raised] served=0 parks=42694 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=5754 scanout_refused=0 scanout_avg_us=1130 scanout_max_us=18850] boot[frames=5754 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:6096/0raised] served=0 parks=45245 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=6096 scanout_refused=0 scanout_avg_us=1128 scanout_max_us=18850] boot[frames=6096 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:6439/0raised] served=0 parks=47795 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=6439 scanout_refused=0 scanout_avg_us=1129 scanout_max_us=18850] boot[frames=6439 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:6781/0raised] served=0 parks=50290 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=6781 scanout_refused=0 scanout_avg_us=1130 scanout_max_us=18850] boot[frames=6781 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:7124/0raised] served=0 parks=52769 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=7124 scanout_refused=0 scanout_avg_us=1132 scanout_max_us=18850] boot[frames=7124 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:7467/0raised] served=0 parks=55259 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=7467 scanout_refused=0 scanout_avg_us=1135 scanout_max_us=18850] boot[frames=7467 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:7808/0raised] served=0 parks=57795 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=7808 scanout_refused=0 scanout_avg_us=1134 scanout_max_us=18850] boot[frames=7808 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:8150/0raised] served=0 parks=60266 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=8150 scanout_refused=0 scanout_avg_us=1135 scanout_max_us=18850] boot[frames=8150 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:8492/0raised] served=0 parks=62789 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=8492 scanout_refused=0 scanout_avg_us=1134 scanout_max_us=18850] boot[frames=8492 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:8833/0raised] served=0 parks=65302 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=8833 scanout_refused=0 scanout_avg_us=1136 scanout_max_us=18850] boot[frames=8833 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:9175/0raised] served=0 parks=67824 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=9175 scanout_refused=0 scanout_avg_us=1136 scanout_max_us=18850] boot[frames=9175 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:9519/0raised] served=0 parks=70364 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=9519 scanout_refused=0 scanout_avg_us=1134 scanout_max_us=18850] boot[frames=9519 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:9860/0raised] served=0 parks=72820 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=9860 scanout_refused=0 scanout_avg_us=1133 scanout_max_us=18850] boot[frames=9860 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:10201/0raised] served=0 parks=75321 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=10201 scanout_refused=0 scanout_avg_us=1131 scanout_max_us=18850] boot[frames=10201 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:10543/0raised] served=0 parks=77835 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=10543 scanout_refused=0 scanout_avg_us=1130 scanout_max_us=18850] boot[frames=10543 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:10886/0raised] served=0 parks=80381 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=10886 scanout_refused=0 scanout_avg_us=1129 scanout_max_us=18850] boot[frames=10886 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]
+kf3: family=Ampere phase=Halted trapped=1661 applied=1132 refused=2 serviced=143 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110100 mem[inval=53 walks=56/56 cleared=53 superseded=0 named_missed=0 unreconciled=0 mapped=39 unmapped=39 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held fn70=2 roots=1 root_moves=0 stmts=7/7 refused=0 pramin_repoints=22 pramin_miss=0 last_miss=0x0 pramin_worst_us=676 (map 168 mmap 571) pramin_maps=22 pramin_mmaps=22 inline_opens=0 reaped=21 cache_ops=0 sysmembars=3 root_unsets=0] mirrors=0 reused=1 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=11441 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=30 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused worst_act_us=0 nsi=[GR0:56/0raised CE3:10977/0raised] served=0 parks=80819 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=56 released=53 refused=0 held=3] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] irq[writes=368 raised=0 held=0 oor=0] disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=10977 scanout_refused=0 scanout_avg_us=1129 scanout_max_us=18850] boot[frames=10977 retired=no] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[0x20800a87,0x20800afe,0x20800aff,0x20800aaf,0x00800292,0x20800a80,0x20802a0f,0x2080017e,0x20800a30,0x20800a2e,0x20800b03,0x20800b05,0x20800a3f,0x2080012b,0x2080013f,0x20809004,0x00801306,0x20810108,0x20800ab8,0x20800173,0x20802a12,0x20800160,0x20802801,0x2080012f,0x2080121f,0x20800a38] gsp_refusals[total=33 distinct=28 [fn76/0x20800a87=0x56x1 fn76/0x20800afe=0x56x2 fn76/0x20800aff=0x56x1 fn76/0x20800aaf=0x56x1 fn76/0x00800292=0x56x1 fn76/0x20800a80=0x56x2 fn76/0x20802a0f=0x56x1 fn76/0x2080017e=0x56x1 fn76/0x20800a30=0x56x1 fn76/0x20800a2e=0x56x1 fn76/0x20800b03=0x56x1 fn76/0x20800b05=0x56x1 fn76/0x20800a3f=0x56x1 fn76/0x2080012b=0x56x1 fn76/0x2080013f=0x56x1 fn76/0x20809004=0x56x1 fn76/0x20801303=0x56x1 fn76/0x00801306=0x56x1 fn76/0x20810108=0x56x1 fn76/0x20801823=0x56x1 fn76/0x20800ab8=0x56x1 fn76/0x20800173=0x56x1 fn76/0x20802a12=0x56x4 fn76/0x20800160=0x56x1 fn76/0x20802801=0x56x1 fn76/0x2080012f=0x56x1 fn76/0x2080121f=0x56x1 fn76/0x20800a38=0x56x1]]

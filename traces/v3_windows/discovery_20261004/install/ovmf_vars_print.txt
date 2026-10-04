@@ -1,0 +1,67 @@
+name=Attempt 1 guid=guid:EfiIScsiInitiatorNameProtocol size=1049
+name=Attempt 2 guid=guid:EfiIScsiInitiatorNameProtocol size=1049
+name=Attempt 3 guid=guid:EfiIScsiInitiatorNameProtocol size=1049
+name=Attempt 4 guid=guid:EfiIScsiInitiatorNameProtocol size=1049
+name=Attempt 5 guid=guid:EfiIScsiInitiatorNameProtocol size=1049
+name=Attempt 6 guid=guid:EfiIScsiInitiatorNameProtocol size=1049
+name=Attempt 7 guid=guid:EfiIScsiInitiatorNameProtocol size=1049
+name=Attempt 8 guid=guid:EfiIScsiInitiatorNameProtocol size=1049
+name=Boot0000 guid=guid:EfiGlobalVariable size=62
+name=Boot0001 guid=guid:EfiGlobalVariable size=108
+name=Boot0002 guid=guid:EfiGlobalVariable size=78
+name=Boot0003 guid=guid:EfiGlobalVariable size=88
+name=BootDebugPolicyApplied guid=guid:MicrosoftVendor size=1
+name=BootOrder guid=guid:EfiGlobalVariable size=8
+name=BootingDeviceTypeInfo guid=guid:MicrosoftVendor size=4
+name=ConIn guid=guid:EfiGlobalVariable size=122
+name=ConOut guid=guid:EfiGlobalVariable size=103
+name=ConfigCIPolicyIndiv guid=guid:MicrosoftVendor size=48
+name=CurrentActivePolicy guid=guid:MicrosoftVendor size=1
+name=CurrentPolicy guid=guid:MicrosoftVendor size=1 time=2016-09-14 16:51:44
+name=CustomMode guid=guid:EfiCustomModeEnable size=1
+name=ErrOut guid=guid:EfiGlobalVariable size=73
+name=FirmwareSecvarUpdaterVersion guid=a2f5da32-9e4c-4f6b-b3a1-7c8d5e6f0a1b size=4
+name=InitialAttemptOrder guid=guid:IScsiConfig size=8
+name=KEK guid=guid:EfiGlobalVariable size=3849 time=2026-10-03 23:34:59
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=kayfabe VM kfwin PK/KEK
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Corporation KEK CA 2011
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Corporation KEK 2K CA 2023
+name=Key0000 guid=guid:EfiGlobalVariable size=14
+name=Key0001 guid=guid:EfiGlobalVariable size=14
+name=Lang guid=guid:EfiGlobalVariable size=4
+name=MTC guid=guid:MtcVendor size=4
+name=MemoryTypeInformation guid=guid:EfiMemoryTypeInformation size=48
+name=PK guid=guid:EfiGlobalVariable size=783 time=2026-10-03 23:34:59
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=kayfabe VM kfwin PK/KEK
+name=PlatformLang guid=guid:EfiGlobalVariable size=3
+name=RevocationList guid=guid:MicrosoftVendor size=932
+name=SecureBootEnable guid=guid:EfiSecureBootEnableDisable size=1
+name=TCG2_CONFIGURATION guid=6339d487-26ba-424b-9a5d-687e25d740bc size=1
+name=TCG2_DEVICE_DETECTION guid=6339d487-26ba-424b-9a5d-687e25d740bc size=1
+name=TCG2_VERSION guid=6339d487-26ba-424b-9a5d-687e25d740bc size=16
+name=Timeout guid=guid:EfiGlobalVariable size=2
+name=UnlockID guid=eaec226f-c9a3-477a-a826-ddc716cdc0e3 size=32
+name=UnlockIDCopy guid=eaec226f-c9a3-477a-a826-ddc716cdc0e3 size=32
+name=VarErrorFlag guid=04b37fe8-f6ae-480b-bdd5-37d98c5e89aa size=1
+name=VendorKeysNv guid=9073e4e0-60ec-4b6e-9903-4c223c260f3c size=1
+name=WindowsBootChainSvn guid=guid:MicrosoftVendor size=4
+name=certdb guid=guid:EfiCertDb size=90
+name=db guid=guid:EfiImageSecurityDatabase size=8775 time=2026-10-03 23:34:58
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Windows Production PCA 2011
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Corporation UEFI CA 2011
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=kayfabe GOP db key (ubuntu 2026-10-03)
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Windows UEFI CA 2023
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft UEFI CA 2023
+  siglist type=guid:EfiCertX509 count=1
+    subject CN=Microsoft Option ROM UEFI CA 2023
+name=dbx guid=guid:EfiImageSecurityDatabase size=76 time=2010-01-01 00:00:00
+  siglist type=guid:EfiCertSha256 count=1
