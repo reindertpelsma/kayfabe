@@ -1219,6 +1219,94 @@ mod tests {
         );
     }
 
+    /// ★ The bounds at their EDGES (E3c: cargo-mutants 2026-10-04 left `>` -> `>=` and `>` ->
+    /// `==` alive at each of these, because the existing tests sat far inside or far outside).
+    /// `MAX_IOCTL_SIZE` itself passes the host bound, one more byte does not.
+    #[test]
+    fn the_argument_size_bound_is_exact_at_its_edge() {
+        let d = dev_null();
+        let req = ioctl::readwrite(b'F', 0x2A, MAX_IOCTL_SIZE).expect("the largest legal size");
+        let mut at_max = vec![0u8; MAX_IOCTL_SIZE];
+        let r = d.ioctl(req, &mut at_max, &mut []);
+        assert!(
+            !matches!(r, Err(RawError::TooLargeForHost { .. })),
+            "exactly MAX_IOCTL_SIZE must pass the host bound: {r:?}"
+        );
+        let mut over = vec![0u8; MAX_IOCTL_SIZE + 1];
+        assert_eq!(
+            d.ioctl(req, &mut over, &mut []),
+            Err(RawError::TooLargeForHost {
+                value: MAX_IOCTL_SIZE as u64 + 1
+            })
+        );
+    }
+
+    /// ★ A pointer field that ends EXACTLY at the argument's end fits; one byte further does not.
+    #[test]
+    fn a_pointer_field_ending_exactly_at_the_end_fits() {
+        let d = dev_null();
+        let mut params = vec![0u8; 8];
+        let mut arg = [0u8; 32];
+        let req = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("32 fits");
+        let r = d.ioctl(req, &mut arg, &mut [Indirect::new(24, &mut params)]);
+        assert!(
+            !matches!(r, Err(RawError::OutOfRange { .. })),
+            "a field at 24..32 of a 32-byte argument fits: {r:?}"
+        );
+        assert_eq!(
+            d.ioctl(req, &mut arg, &mut [Indirect::new(25, &mut params)]),
+            Err(RawError::OutOfRange {
+                offset: 25,
+                len: 8,
+                object_len: 32,
+            })
+        );
+    }
+
+    /// ★ Two fields that only TOUCH do not overlap, in either order, and fields far apart do
+    /// not either; one shared byte does.
+    #[test]
+    fn adjacent_and_distant_pointer_fields_are_not_an_overlap() {
+        let d = dev_null();
+        let req = ioctl::readwrite(b'F', 0x2A, 32).expect("32 fits");
+        for (first, second) in [(0, 8), (8, 0), (3, 12), (12, 3)] {
+            let mut a = vec![0u8; 8];
+            let mut b = vec![0u8; 8];
+            let mut arg = [0u8; 32];
+            let r = d.ioctl(
+                req,
+                &mut arg,
+                &mut [Indirect::new(first, &mut a), Indirect::new(second, &mut b)],
+            );
+            assert!(
+                !matches!(r, Err(RawError::OverlappingPlacement { .. })),
+                "fields at {first} and {second} do not share a byte: {r:?}"
+            );
+        }
+        let mut a = vec![0u8; 8];
+        let mut b = vec![0u8; 8];
+        let mut arg = [0u8; 32];
+        assert!(matches!(
+            d.ioctl(
+                req,
+                &mut arg,
+                &mut [Indirect::new(0, &mut a), Indirect::new(7, &mut b)]
+            ),
+            Err(RawError::OverlappingPlacement { .. })
+        ));
+    }
+
+    /// ★ The driver's 0 is success, not an error: FIONREAD on an empty pipe returns 0 and writes
+    /// 0 bytes queued. Only a negative return is an error.
+    #[test]
+    fn a_zero_return_from_the_driver_is_success() {
+        let (reader, _writer) = std::io::pipe().expect("a pipe");
+        let d = CharDevice::adopt(OwnedFd::from(reader));
+        let mut queued = [0xFFu8; 4];
+        assert_eq!(d.ioctl(0x541B, &mut queued, &mut []), Ok(0));
+        assert_eq!(queued, [0u8; 4], "nothing is queued in a fresh pipe");
+    }
+
     /// ★★ a1 (V3_SEC_PERIMETER.md §4.1): a request that declares NO size and is not in the
     /// legacy table is refused by name, before any syscall. On the code before a1 it reached the
     /// kernel with whatever buffer it came with, and the handler wrote its own fixed size.

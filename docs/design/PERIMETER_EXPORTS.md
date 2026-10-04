@@ -158,8 +158,8 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 
 | item | vis | kind | checks | tests | status |
 |---|---|---|---|---|---|
-| `current_cores` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `pin_current_thread` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `current_cores` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 7 missed |
+| `pin_current_thread` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 6 missed |
 
 ## crates/kf-linux-raw/src/chardev_unsafe.rs
 
@@ -173,26 +173,26 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `CharDevice: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `CharDevice::adopt` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `CharDevice::as_fd` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `CharDevice::fd_number` | pub | safe fn |  |  | OPEN: 2026-10-04: returns the descriptor as an i32 (S1-10); `BorrowedFd` at P2, after v3-sec-nonpriv, v3-broker and v3-dispsw-exp (13 callers, §4.3) |
-| `CharDevice::ioctl` | pub | safe fn |  |  | OPEN: 2026-10-04: request-agnostic; argument bytes may carry kernel-dereferenced address fields no Indirect patched (finding ii); closes with the typed RM layer (V3_SEC_PERIMETER.md §5.2); `declared == 0` refused outside LEGACY_SIZES at a1 |
+| `CharDevice::fd_number` | pub | safe fn |  |  | OPEN: 2026-10-04: returns the descriptor as an i32 (S1-10); `BorrowedFd` at P2, after v3-sec-nonpriv, v3-broker and v3-dispsw-exp (13 callers, §4.3); cargo-mutants 27.1.0 (2026-10-04, lib tests): 2 missed |
+| `CharDevice::ioctl` | pub | safe fn |  |  | OPEN: 2026-10-04: request-agnostic; argument bytes may carry kernel-dereferenced address fields no Indirect patched (finding ii); closes with the typed RM layer (V3_SEC_PERIMETER.md §5.2); `declared == 0` refused outside LEGACY_SIZES at a1; cargo-mutants 27.1.0 (2026-10-04, lib tests): 5 missed after the edge tests, none in the memory-safety argument (the nested re-check, unreachable because Indirect::nested refuses first; three census/trace `-1` placeholders) |
 | `CharDevice::openat` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `CharDevice::openat_mode` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `CharDevice::openat_mode` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 1 missed |
 | `CharDevice::surrender` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `DevAccess` | pub | plain data |  |  | OPEN: 2026-10-04: unreviewed |
 | `DevDir` | pub | owning handle |  |  | OPEN: 2026-10-04: unreviewed |
 | `DevDir: Send` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `DevDir: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `DevDir::as_fd` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `DevDir::can_reach` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `DevDir::can_reach` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 2 missed |
 | `DevDir::from_fd` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `DevDir::open` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `DevDir::open` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 4 missed |
 | `DevDir::try_clone` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `Indirect` | pub | borrowed view |  |  | OPEN: 2026-10-04: unreviewed |
 | `Indirect::at` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `Indirect::describing` | pub | safe fn | zero-len; range-in-region | zero-len=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_past_the_region_is_refused_at_construction; range-in-region=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_past_the_region_is_refused_at_construction | OK |
-| `Indirect::is_empty` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `Indirect::is_empty` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 1 missed |
 | `Indirect::len` | pub | safe fn |  |  | OPEN: 2026-10-04: carries a caller contract (`chardev_unsafe.rs:365-377`, S1-40); removed by P2-a2 |
-| `Indirect::nested` | pub | safe fn |  |  | OPEN: 2026-10-04: the nested size field is caller-declared like Indirect::new's (S1-40) |
+| `Indirect::nested` | pub | safe fn |  |  | OPEN: 2026-10-04: the nested size field is caller-declared like Indirect::new's (S1-40); cargo-mutants 27.1.0 (2026-10-04, lib tests): 1 missed |
 | `Indirect::new` | pub | safe fn |  |  | OPEN: 2026-10-04: the size field's value and location are caller-declared (S1-40); the value half closes with P2-a2 after v3-broker, the location half with §5.2 |
 | `POINTER_FIELD_WIDTH` | pub | const |  |  | OPEN: 2026-10-04: unreviewed |
 
@@ -212,12 +212,12 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `Poller: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `Poller::create` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `Poller::unwatch` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `Poller::wait` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `Poller::wait` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 3 missed (the EINTR arm) |
 | `Poller::watch` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `ReadyTokens` | pub | plain data |  |  | OPEN: 2026-10-04: unreviewed |
-| `ReadyTokens::is_empty` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `ReadyTokens::is_empty` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 1 missed |
 | `ReadyTokens::iter` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `ReadyTokens::len` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `ReadyTokens::len` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 2 missed |
 | `ReadyTokens::new` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 
 ## crates/kf-linux-raw/src/host_fd_unsafe.rs
