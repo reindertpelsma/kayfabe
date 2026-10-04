@@ -351,11 +351,13 @@ impl Device {
                 store_neighbours >> 20
             )
         })?;
+        // ★ The export carries the length this session allocated (`fb_length`, recorded by
+        // `reserve_gpga`): the import maps exactly that, never a length passed alongside it.
         let export = rm
-            .export_to_new_fd(store.handle)
+            .export_store(&store)
             .map_err(|e| format!("store export: {e:?}"))?;
         kernel
-            .import_store(export.as_fd(), fb_length)
+            .import_store(&export)
             .map_err(|e| format!("store import into the walker: {e}"))?;
         // The export node stays open for the process (CUDA holds the import).
         std::mem::forget(export);
@@ -606,16 +608,10 @@ impl Device {
         let display_plane: Option<&'static crate::display::DisplayPlane> = match display_row {
             Some(row) => {
                 let export = rm
-                    .export_to_new_fd(store.handle)
+                    .export_store(&store)
                     .map_err(|e| format!("display=on: store export: {e:?}"))?;
-                let plane = crate::display::DisplayPlane::build(
-                    row,
-                    table,
-                    &bdf,
-                    export.as_fd(),
-                    fb_length,
-                )?
-                .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
+                let plane = crate::display::DisplayPlane::build(row, table, &bdf, &export)?
+                    .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
                 // the export node stays open for the process (CUDA holds the import)
                 std::mem::forget(export);
                 eprintln!(

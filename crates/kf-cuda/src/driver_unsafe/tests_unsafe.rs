@@ -13,8 +13,10 @@ use super::raw::{
     check_args, ctx_matches, drop_disposition, import_len, stage_layout, sub_range,
 };
 
-/// ★ T2 — V2: an import maps at least one byte (a negative fd cannot be expressed: the descriptor
-/// crosses as `BorrowedFd`, trybuild row `import_takes_a_borrowed_fd`).
+/// ★ T2 — V2: an import maps at least one byte. The descriptor and the length cross only inside
+/// the `kf_host::RmExport` token (trybuild rows `import_takes_an_rm_export` and
+/// `rm_export_is_minted_only_by_kf_host`; the session record behind it is kf-host's
+/// `an_export_length_comes_only_from_the_sessions_record`).
 #[test]
 fn an_import_maps_at_least_one_byte() {
     assert!(import_len(0).is_err(), "a zero-length import");

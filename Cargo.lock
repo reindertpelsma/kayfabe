@@ -259,6 +259,7 @@ name = "kf-cuda"
 version = "0.1.0"
 dependencies = [
  "kf-disp",
+ "kf-host",
  "kf-linux-raw",
  "trybuild",
 ]

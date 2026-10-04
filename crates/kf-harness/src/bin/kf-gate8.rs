@@ -34,7 +34,7 @@ use kf_cuda::walk::{WalkCfg, WalkEntry, WalkKernel};
 use kf_harness::publish::Recorded;
 use kf_harness::tables::{Tree, Tree3};
 use kf_harness::{CeRig, Ledger as Checks};
-use kf_host::HostRm;
+use kf_host::{HostRm, Reservation};
 use kf_linux_raw::{DevDir, Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey, WalkDone, Walker};
@@ -337,8 +337,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
             res.contiguous_aligned
         ),
     );
-    phase(l, &rm, res.handle, "ver2", kf_format_ver2(), false)?;
-    phase(l, &rm, res.handle, "ver3", kf_format_ver3(), true)?;
+    phase(l, &rm, &res, "ver2", kf_format_ver2(), false)?;
+    phase(l, &rm, &res, "ver3", kf_format_ver3(), true)?;
     Ok(())
 }
 
@@ -346,13 +346,14 @@ fn run(l: &mut Checks) -> Result<(), String> {
 fn phase(
     l: &mut Checks,
     rm: &HostRm,
-    store: u32,
+    res: &Reservation,
     tag: &str,
     fmt: KfFormat,
     v3: bool,
 ) -> Result<(), String> {
+    let store = res.handle;
     let fd = rm
-        .export_to_new_fd(store)
+        .export_store(res)
         .map_err(|e| format!("{tag} export: {e:?}"))?;
     let mut kernel = WalkKernel::bring_up_on(
         WalkCfg::default(),
@@ -361,7 +362,7 @@ fn phase(
     )
     .map_err(|e| format!("{tag}: {e}"))?;
     kernel
-        .import_store(fd.as_fd(), STORE_BYTES)
+        .import_store(&fd)
         .map_err(|e| format!("{tag}: {e}"))?;
     let sync0 = kernel.ctx_sync_calls();
 

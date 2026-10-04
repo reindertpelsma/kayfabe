@@ -10,6 +10,11 @@ license.workspace = true
 # leaves this crate only as the opaque `kf_linux_raw::StaticSpan` (THE_CONSTRAINTS.md §13). Allowed:
 # kf-cuda is not a PURE crate (scripts/ci/dependencies.py).
 kf-linux-raw.workspace = true
+# ★ v3-sec-rawaddr review (2026-10-04): a store import takes only `kf_host::RmExport`, the token
+# `HostRm::export_store` mints with the length the session allocated — so the length a CUDA import
+# maps is never a caller's `u64` (design §2.6 Res-1). The type must live where that length is
+# known, and no other crate can construct it. Allowed: kf-cuda is not a PURE crate.
+kf-host.workspace = true
 
 [dev-dependencies]
 # T12 drives the compose kernel's address model with the display plane's own `bl_offset`.

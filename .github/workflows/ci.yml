@@ -1962,7 +1962,10 @@ jobs:
           #     T11 gains one refusal row per arm (+76); T12 models the PTX's own wrapping address
           #     arithmetic, cross-checks it against kf-disp's `bl_offset`, and adds a 100 000-layer
           #     tail at the top of every type plus the review's overflowing layer (+99).
-          PERIMETER="kf-linux-raw:4810 kf-cuda:4677 kf-qemu:658"
+          #   kf-cuda 4677 -> 4678 (+1): a store import takes only `kf_host::RmExport` (fd and length
+          #     from the token, -2 net across the two `import_store`s and their dropped imports), and
+          #     the import handle is held in `AllocKind::Import` until after the unmap (+3).
+          PERIMETER="kf-linux-raw:4810 kf-cuda:4678 kf-qemu:658"
           fail=0
           for entry in $PERIMETER; do
             c="crates/${entry%%:*}"; want="${entry##*:}"

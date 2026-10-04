@@ -792,9 +792,13 @@ mod raw {
     enum AllocKind {
         /// `cuMemAlloc`.
         Alloc,
-        /// An RM export imported and mapped (`cuMemImportFromShareableHandle` + `cuMemMap`).
+        /// An RM export imported and mapped (`cuMemImportFromShareableHandle` + `cuMemMap`). The
+        /// import handle is held for as long as the mapping (released after the unmap), as the
+        /// pre-perimeter code held it for the process: releasing it right after `cuMemMap` is the
+        /// documented VMM pattern for `cuMemCreate` memory, but it was never run on an RM export.
         Import {
             map: Option<VaMapping>,
+            handle: Option<ImportHandle>,
             res: Option<VaReservation>,
         },
     }
@@ -834,16 +838,18 @@ mod raw {
                     // queued operation can still touch it.
                     unsafe { (self.ctx.cu().cuMemFree)(self.addr) };
                 }
-                (Disposition::Release, AllocKind::Import { map, res }) => {
-                    // The guards release in order: unmap, then the address range.
+                (Disposition::Release, AllocKind::Import { map, handle, res }) => {
+                    // The guards release in order: unmap, the import handle, the address range.
                     drop(map.take());
+                    drop(handle.take());
                     drop(res.take());
                 }
                 (Disposition::Leak, AllocKind::Alloc) => {
                     LEAKS.fetch_add(1, Ordering::Relaxed);
                 }
-                (Disposition::Leak, AllocKind::Import { map, res }) => {
+                (Disposition::Leak, AllocKind::Import { map, handle, res }) => {
                     core::mem::forget(map.take());
+                    core::mem::forget(handle.take());
                     core::mem::forget(res.take());
                     LEAKS.fetch_add(1, Ordering::Relaxed);
                 }
@@ -896,21 +902,23 @@ mod raw {
             Ok(m)
         }
 
-        /// ★★ **V2 — import an RM-exported object** (`fd`, borrowed for the call) and map `len`
-        /// bytes of it, read-write for this context's device. `len ≥ 1`; a negative fd cannot be
-        /// expressed (`BorrowedFd`). Every step that fails releases the steps before it (the
-        /// guards drop in reverse), and no error text names an address.
+        /// ★★ **V2 — import an RM-exported store** and map all of it, read-write for this
+        /// context's device. The descriptor (borrowed for the call; a negative fd cannot be
+        /// expressed) and the length both come from the [`kf_host::RmExport`] token, which only
+        /// `kf_host::HostRm::export_store` mints from the session's own record of what it asked RM
+        /// to allocate — no caller supplies a length (review of `v3-sec-rawaddr`: a caller's `u64`
+        /// here was a precondition delegated to call sites). `len ≥ 1`. Every step that fails
+        /// releases the steps before it (the guards drop in reverse), and no error text names an
+        /// address.
         ///
-        /// ⚠ CUDA cannot report the size of an imported RM object: that `len` is no larger than
-        /// the object is enforced by `cuMemMap`, which refuses an `offset + size` past the
-        /// allocation — UNVERIFIED on the target drivers (design §2.6 Res-1, hardware row H1, a
-        /// merge blocker). Callers pass RM's own allocation length.
+        /// ⚠ Defence in depth, not the boundary: whether `cuMemMap` itself refuses an
+        /// `offset + size` past the object is still UNMEASURED (design §2.6 Res-1, hardware row H1).
         pub(in crate::driver_unsafe) fn import(
             ctx: &Ctx,
-            fd: BorrowedFd<'_>,
-            len: u64,
+            export: &kf_host::RmExport,
         ) -> Result<DevMem, CudaError> {
             let what = "cuMemImportFromShareableHandle + cuMemMap";
+            let (fd, len) = (export.as_fd(), export.bytes());
             let n = import_len(len).map_err(|e| refused(what, e))?;
             let cu = ctx.cu();
             let import = need(
@@ -951,7 +959,8 @@ mod raw {
                 len: n,
             };
             // SAFETY: `addr` is a reservation of exactly `n` bytes made above and `handle` a live
-            // imported handle; the driver refuses a size past the imported object (Res-1).
+            // imported handle; `n` is the length the session allocated for the object (the
+            // `RmExport` token, Res-1), so the mapping lies inside it.
             cu.check("cuMemMap", unsafe { map(addr, n, 0, handle.handle, 0) })?;
             let mapping = VaMapping {
                 ctx: ctx.share(),
@@ -967,8 +976,6 @@ mod raw {
             cu.check("cuMemSetAccess", unsafe {
                 set_access(addr, n, (&raw const desc).cast::<c_void>(), 1)
             })?;
-            // The mapping keeps the memory; the import handle is released now (its guard drops).
-            drop(handle);
             Ok(DevMem {
                 a: Arc::new(Alloc {
                     ctx: ctx.share(),
@@ -976,6 +983,7 @@ mod raw {
                     len,
                     kind: AllocKind::Import {
                         map: Some(mapping),
+                        handle: Some(handle),
                         res: Some(res),
                     },
                 }),
@@ -1090,7 +1098,7 @@ mod raw {
         }
     }
 
-    /// The imported RM object's handle; released (`cuMemRelease`) when the import is done with it.
+    /// The imported RM object's handle; released (`cuMemRelease`) after its mapping is unmapped.
     struct ImportHandle {
         ctx: Ctx,
         handle: u64,
@@ -1100,8 +1108,9 @@ mod raw {
         fn drop(&mut self) {
             if let Some(f) = self.ctx.cu().cuMemRelease {
                 // SAFETY: `handle` came from `cuMemImportFromShareableHandle` in this context and is
-                // released exactly once (this guard is its only owner and is not `Clone`). A live
-                // mapping of it keeps the memory, as the VMM API specifies.
+                // released exactly once (this guard is its only owner and is not `Clone`). Its
+                // mapping was unmapped first (`Alloc::drop`), or on an import that failed part-way
+                // never made; either way no mapping depends on it any more.
                 unsafe { f(self.handle) };
             }
         }

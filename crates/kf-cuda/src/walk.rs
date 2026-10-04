@@ -963,11 +963,11 @@ impl WalkKernel {
         self.gpu.upload(bytes)
     }
 
-    /// ★★★ **Import an RM-exported object into THIS kernel's context** and map it whole.
+    /// ★★★ **Import an RM-exported store into THIS kernel's context** and map it whole.
     ///
-    /// `fd` is the `/dev/nvidiactl` descriptor RM exported the object to (`w755i`), borrowed for
-    /// the call (a negative or closed fd cannot be expressed). `bytes` is RM's own length of the
-    /// object (§2.6 Res-1).
+    /// `store` is the one token `kf_host::HostRm::export_store` mints: the `/dev/nvidiactl`
+    /// descriptor RM exported the object to (`w755i`) and the length the session allocated for it
+    /// (§2.6 Res-1). Neither is a caller's value — no caller can pass a length of its own.
     ///
     /// ★ §13: the device address stays INSIDE the perimeter. Every later access to the store is
     /// [`WalkKernel::write_store`] / [`WalkKernel::read_store`], bounded by its length, and every
@@ -975,12 +975,8 @@ impl WalkKernel {
     ///
     /// # Errors
     /// [`CudaError::Refused`] naming the import step that failed, or a second import.
-    pub fn import_store(
-        &mut self,
-        fd: std::os::fd::BorrowedFd<'_>,
-        bytes: u64,
-    ) -> Result<(), CudaError> {
-        self.gpu.import_store(fd, bytes)
+    pub fn import_store(&mut self, store: &kf_host::RmExport) -> Result<(), CudaError> {
+        self.gpu.import_store(store)
     }
 
     /// The imported store's length, if one was imported.

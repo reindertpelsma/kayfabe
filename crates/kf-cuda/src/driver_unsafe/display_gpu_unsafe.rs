@@ -24,7 +24,6 @@ use super::raw::{
 use super::{CompletionFd, CudaError, refused};
 use crate::display::{COMPOSE_ENTRY, ComposeLayer};
 use kf_linux_raw::{HostOffset, HostPageSize, MappedRegion, StaticSpan};
-use std::os::fd::BorrowedFd;
 
 /// ★ F3: console frames one [`DisplayGpu`] may mint (they are leaked for the process).
 pub(crate) const MAX_CONSOLE_FRAMES: u32 = 16;
@@ -258,19 +257,20 @@ impl DisplayGpu {
         &self.done
     }
 
-    /// ★★ V2 — import the RM-exported store (`fd` on `/dev/nvidiactl`, borrowed for the call;
-    /// `bytes` RM's own length). A second import is refused.
+    /// ★★ V2 — import the RM-exported store: the token `kf_host::HostRm::export_store` mints,
+    /// carrying the descriptor and the length the session allocated (no caller's length). A
+    /// second import is refused.
     ///
     /// # Errors
     /// [`CudaError`], naming the import step that refused.
-    pub fn import_store(&mut self, fd: BorrowedFd<'_>, bytes: u64) -> Result<(), CudaError> {
+    pub fn import_store(&mut self, store: &kf_host::RmExport) -> Result<(), CudaError> {
         if self.store.is_some() {
             return Err(refused(
                 "DisplayGpu::import_store",
                 "a store is already imported".into(),
             ));
         }
-        self.store = Some(DevMem::import(&self.ctx, fd, bytes)?);
+        self.store = Some(DevMem::import(&self.ctx, store)?);
         Ok(())
     }
 

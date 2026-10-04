@@ -224,7 +224,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         .map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;
     let fd = rm
-        .export_to_new_fd(store)
+        .export_store(&res)
         .map_err(|e| format!("export: {e:?}"))?;
     let mut walk = WalkKernel::bring_up_on(
         WalkCfg::default(),
@@ -232,8 +232,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf()),
     )
     .map_err(|e| e.to_string())?;
-    walk.import_store(fd.as_fd(), STORE_BYTES)
-        .map_err(|e| e.to_string())?;
+    walk.import_store(&fd).map_err(|e| e.to_string())?;
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
     let t0 = std::time::Instant::now();
     let base = rm

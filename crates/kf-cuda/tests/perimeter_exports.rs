@@ -102,8 +102,8 @@ const EXPORTS: &[Row] = &[
     ),
     r(
         "driver_unsafe::raw::DevMem::import",
-        "V2: len >= 1, BorrowedFd, guards unwind",
-        "import_takes_a_borrowed_fd (tests/ui)",
+        "V2: the RmExport token's own fd and length (no caller's), len >= 1, guards unwind",
+        "import_takes_an_rm_export (tests/ui)",
     ),
     r("driver_unsafe::raw::DevMem::len", "-", "-"),
     r("driver_unsafe::raw::DevMem::ctx_id", "-", "-"),
@@ -299,8 +299,8 @@ const EXPORTS: &[Row] = &[
     r("walk_gpu_unsafe::WalkGpu::make_current", "-", "-"),
     r(
         "walk_gpu_unsafe::WalkGpu::import_store",
-        "V2; a second import refused",
-        "import_takes_a_borrowed_fd (tests/ui)",
+        "V2 (an RmExport only); a second import refused",
+        "import_takes_an_rm_export (tests/ui)",
     ),
     r("walk_gpu_unsafe::WalkGpu::store_len", "-", "-"),
     r(
@@ -393,8 +393,8 @@ const EXPORTS: &[Row] = &[
     r("display_gpu_unsafe::DisplayGpu::completion_fd", "-", "-"),
     r(
         "display_gpu_unsafe::DisplayGpu::import_store",
-        "V2; a second import refused",
-        "import_takes_a_borrowed_fd (tests/ui)",
+        "V2 (an RmExport only); a second import refused",
+        "import_takes_an_rm_export (tests/ui)",
     ),
     r(
         "display_gpu_unsafe::DisplayGpu::read_store",

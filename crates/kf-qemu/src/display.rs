@@ -892,7 +892,8 @@ impl std::fmt::Debug for DisplayPlane {
 impl DisplayPlane {
     /// ★ Build the plane for a chip's display row and the guest driver `table`: the derived
     /// vocabulary, the caps page, the shared model, and the plane's GPU context with the store
-    /// imported (`store_fd` exported from the host RM for this context).
+    /// imported (`store`, the `kf_host::RmExport` the session minted for this context: its fd and
+    /// the length RM allocated).
     ///
     /// # Errors
     /// By name — `display=on` never starts on a guessed display.
@@ -900,8 +901,7 @@ impl DisplayPlane {
         row: &'static kf_chip::display::DisplayRow,
         table: &kf_abi::versions::DriverAbiTable,
         bdf: &str,
-        store_fd: std::os::fd::BorrowedFd<'_>,
-        store_bytes: u64,
+        store: &kf_host::RmExport,
     ) -> Result<DisplayPlane, String> {
         let version = table.driver_version().to_string();
         let regs = Regs::for_ip(&version, row.ip_version).ok_or_else(|| {
@@ -943,7 +943,7 @@ impl DisplayPlane {
         }
         let mut gpu = DisplayGpu::bring_up_on(bdf)
             .map_err(|e| format!("display=on: the display plane's GPU context on {bdf}: {e}"))?;
-        gpu.import_store(store_fd, store_bytes)
+        gpu.import_store(store)
             .map_err(|e| format!("display=on: store import into the display context: {e}"))?;
         let engine = Engine::new(vocab, row.heads, row.windows);
         let scan = ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core);

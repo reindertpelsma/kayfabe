@@ -92,6 +92,10 @@ pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
 /// reason is printed once per refusal (`kf-host: HOST-ABI REFUSED …`) — the status is only the class.
 pub const HOST_ABI_REFUSED: u32 = 0x4B72;
 /// The store reservation and which form RM granted.
+///
+/// ⊘ It carries no length: the length RM allocated is this session's own record, keyed by
+/// `handle` and read by [`HostRm::export_store`], so no copy of a `Reservation` (it is `Copy`, its
+/// fields public) can pair a handle with a length RM did not allocate for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reservation {
     /// The `NV01_MEMORY_LOCAL_USER` handle.
@@ -343,6 +347,80 @@ struct UsermodeWindow {
 struct Objects {
     next: u32,
     parents: BTreeMap<u32, u32>,
+    /// ★ Store reservations this session allocated, and the length it asked RM for (RM grants at
+    /// least that or refuses) — what [`HostRm::export_store`] puts in an [`RmExport`].
+    stores: BTreeMap<u32, u64>,
+}
+
+impl Objects {
+    /// Record `handle` as a store reservation of `bytes`.
+    fn record_store(&mut self, handle: u32, bytes: u64) {
+        self.stores.insert(handle, bytes);
+    }
+
+    /// The length allocated for store `handle`, or `None` for any handle this session did not
+    /// reserve as a store (or has freed).
+    fn store_bytes(&self, handle: u32) -> Option<u64> {
+        self.stores.get(&handle).copied()
+    }
+
+    /// Drop `object` AND every descendant — from the parent map and from the store record — since
+    /// RM's `NV_ESC_RM_FREE` frees the subtree.
+    fn forget_subtree(&mut self, object: u32) {
+        let mut doomed = vec![object];
+        let mut i = 0;
+        while i < doomed.len() {
+            let p = doomed[i];
+            doomed.extend(
+                self.parents
+                    .iter()
+                    .filter(|&(_, &par)| par == p)
+                    .map(|(&c, _)| c),
+            );
+            i += 1;
+        }
+        for h in doomed {
+            self.parents.remove(&h);
+            self.stores.remove(&h);
+        }
+    }
+}
+
+/// ★★ **An RM store exported to a fresh control fd, with the length RM allocated for it** — the
+/// only thing a CUDA import accepts (`kf_cuda`'s `WalkKernel::import_store` and
+/// `DisplayGpu::import_store`; `V3_RAWADDR_PERIMETER.md` §2.6 Res-1).
+///
+/// CUDA cannot ask RM how large an imported object is, so the import maps exactly
+/// [`RmExport::bytes`]. That length is never a caller's: it is minted only by
+/// [`HostRm::export_store`] from this session's own record of the reservation, and its fields are
+/// private, so no code outside this crate can build one or change the pair. Not `Clone`; the
+/// descriptor closes when it drops (the import holds its own reference to the object).
+pub struct RmExport {
+    fd: std::os::fd::OwnedFd,
+    bytes: u64,
+}
+
+impl RmExport {
+    /// The control-node descriptor RM exported the object to, borrowed.
+    #[must_use]
+    pub fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
+        std::os::fd::AsFd::as_fd(&self.fd)
+    }
+
+    /// The bytes this session asked RM to allocate for the object (RM grants at least that, or
+    /// refuses the allocation).
+    #[must_use]
+    pub fn bytes(&self) -> u64 {
+        self.bytes
+    }
+}
+
+impl std::fmt::Debug for RmExport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RmExport")
+            .field("bytes", &self.bytes)
+            .finish_non_exhaustive()
+    }
 }
 
 /// `NV2080_CTRL_CMD_MC_GET_ARCH_INFO` — NON_PRIVILEGED (`ogkm-580: ctrl2080mc.h:61`).
@@ -488,6 +566,7 @@ impl HostRm {
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
+                stores: BTreeMap::new(),
             }),
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
             views: Default::default(),
@@ -1723,6 +1802,7 @@ impl HostRm {
             &mut params,
         ) {
             self.remember(h, self.device);
+            self.record_store(h, len);
             return Ok(Reservation {
                 handle: h,
                 contiguous_aligned: true,
@@ -1751,10 +1831,19 @@ impl HostRm {
             &mut params,
         )?;
         self.remember(h, self.device);
+        self.record_store(h, len);
         Ok(Reservation {
             handle: h,
             contiguous_aligned: false,
         })
+    }
+
+    fn record_store(&self, handle: u32, bytes: u64) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .record_store(handle, bytes);
     }
 
     /// A device-local memory object of `len` bytes.
@@ -1875,15 +1964,40 @@ impl HostRm {
         Ok(out.h_object_new)
     }
 
-    /// Export `object` to a FRESH control-node fd (owned by the returned device) — how the store
-    /// is handed to the CUDA walk context (`WalkKernel::import_store`).
+    /// Export `object` to a FRESH control-node fd (owned by the returned device).
     ///
     /// # Errors
     /// The open, or the host's refusal.
-    pub fn export_to_new_fd(&self, object: u32) -> Result<CharDevice, RmError> {
+    fn export_to_new_fd(&self, object: u32) -> Result<CharDevice, RmError> {
         let ctl = CharDevice::openat(&self.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?;
         self.export_object_to_fd(object, ctl.fd_number())?;
         Ok(ctl)
+    }
+
+    /// ★★ **Export the store reservation `store` for a CUDA import**: a fresh control-node fd and
+    /// the length this session asked RM to allocate for it, as one [`RmExport`] — how the store is
+    /// handed to the walker's and the display plane's CUDA contexts. The length is read from this
+    /// session's record keyed by the handle, never taken from a caller (review of
+    /// `v3-sec-rawaddr`, 2026-10-04: a caller-supplied length was a precondition the import's
+    /// boundary left to its callers).
+    ///
+    /// # Errors
+    /// [`NOT_IN_THIS_OBJECT`] for a handle this session did not reserve as a store (or freed);
+    /// the open, or the host's refusal.
+    pub fn export_store(&self, store: &Reservation) -> Result<RmExport, RmError> {
+        let bytes = {
+            let _leaf = leafwitness::Held::enter();
+            self.objects
+                .lock()
+                .expect("objects")
+                .store_bytes(store.handle)
+        }
+        .ok_or(RmError::Other(NOT_IN_THIS_OBJECT))?;
+        let ctl = self.export_to_new_fd(store.handle)?;
+        Ok(RmExport {
+            fd: ctl.surrender(),
+            bytes,
+        })
     }
 
     /// This family's CE object class id.
@@ -1934,22 +2048,7 @@ impl HostRm {
     /// #6: CE and event objects outliving `free_channel`).
     fn forget(&self, object: u32) {
         let _leaf = leafwitness::Held::enter();
-        let mut o = self.objects.lock().expect("objects");
-        let mut doomed = vec![object];
-        let mut i = 0;
-        while i < doomed.len() {
-            let p = doomed[i];
-            doomed.extend(
-                o.parents
-                    .iter()
-                    .filter(|&(_, &par)| par == p)
-                    .map(|(&c, _)| c),
-            );
-            i += 1;
-        }
-        for h in doomed {
-            o.parents.remove(&h);
-        }
+        self.objects.lock().expect("objects").forget_subtree(object);
     }
 
     /// `NV_ESC_RM_FREE` of an object this session allocated.
@@ -1978,5 +2077,36 @@ impl HostRm {
         status_check(out.status)?;
         self.forget(object);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod store_record_tests {
+    use super::Objects;
+
+    /// ★ The length an [`super::RmExport`] carries is the session's record of the reservation, and
+    /// a freed store (or anything never reserved as one) has none — so an export of it is refused
+    /// rather than paired with a stale or invented length.
+    #[test]
+    fn an_export_length_comes_only_from_the_sessions_record() {
+        let mut o = Objects::default();
+        let (device, store) = (0xCAFE_0002, 0xCAFE_0010);
+        o.parents.insert(store, device);
+        o.record_store(store, 256 << 20);
+        assert_eq!(o.store_bytes(store), Some(256 << 20));
+        assert_eq!(
+            o.store_bytes(device),
+            None,
+            "a handle never reserved as a store"
+        );
+        assert_eq!(o.store_bytes(0xCAFE_0011), None, "a handle never allocated");
+        o.forget_subtree(store);
+        assert_eq!(o.store_bytes(store), None, "a freed store");
+        // freeing the parent frees the store with it (RM frees the subtree)
+        o.parents.insert(store, device);
+        o.record_store(store, 4096);
+        o.forget_subtree(device);
+        assert_eq!(o.store_bytes(store), None, "a store freed with its device");
+        assert!(o.parents.is_empty());
     }
 }

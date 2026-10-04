@@ -5,7 +5,9 @@
 //! Each file under `tests/ui/` is a use of kf-cuda that must NOT compile: the raw binding and the
 //! device-address type unreachable, the launch structs unbuildable, a console frame with no address
 //! accessor and the only destination of a GPU copy, memory-owning handles neither `Copy`, `Clone`
-//! nor `Hash`, a composition holding its staging buffer, and an import that takes a borrowed fd.
+//! nor `Hash`, a composition holding its staging buffer, and an import that takes only the
+//! `kf_host::RmExport` token (no caller's fd number, no caller's length), which no code outside
+//! kf-host can build.
 //!
 //! ⊘ What trybuild cannot express, and what covers it instead: that the perimeter's CHILD modules
 //! cannot forge a raw range is crate-internal privacy (the fields are private to `driver_unsafe`'s
@@ -25,10 +27,11 @@ const REQUIRED_ROWS: &[&str] = &[
     "image_is_not_clone.rs",
     "image_is_not_copy.rs",
     "image_is_not_hash.rs",
-    "import_takes_a_borrowed_fd.rs",
+    "import_takes_an_rm_export.rs",
     "no_device_address_type.rs",
     "no_launch_args_type.rs",
     "raw_binding_unreachable.rs",
+    "rm_export_is_minted_only_by_kf_host.rs",
 ];
 
 #[test]

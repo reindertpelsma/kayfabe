@@ -30,7 +30,6 @@ use crate::abi::{
     KfPdbEntry, KfReportHeader, KfSlot,
 };
 use crate::capacity::Region as PoolRegion;
-use std::os::fd::BorrowedFd;
 
 /// The mangled entry points of the committed PTX (`kf_walk.cu` is C++). Each is in
 /// `raw::KERNEL_SIGS`, which pins its parameters to the PTX's own declaration.
@@ -1019,18 +1018,19 @@ impl WalkGpu {
         self.ctx.make_current()
     }
 
-    /// ★★ V2 — import the RM-exported store. A second import is refused.
+    /// ★★ V2 — import the RM-exported store (its length is the export's own). A second import is
+    /// refused.
     ///
     /// # Errors
     /// The refusing step, by name.
-    pub(crate) fn import_store(&mut self, fd: BorrowedFd<'_>, bytes: u64) -> Result<(), CudaError> {
+    pub(crate) fn import_store(&mut self, store: &kf_host::RmExport) -> Result<(), CudaError> {
         if self.store.is_some() {
             return Err(refused(
                 "import_store",
                 "a store is already imported".to_string(),
             ));
         }
-        self.store = Some(DevMem::import(&self.ctx, fd, bytes)?);
+        self.store = Some(DevMem::import(&self.ctx, store)?);
         Ok(())
     }
 
