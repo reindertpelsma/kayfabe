@@ -92,26 +92,34 @@ the only copy of valuable work. Measured hardware: Ryzen 9 7900, about 32 GiB RA
 IOMMU group 11. An AMD integrated GPU is also present. Host NVIDIA driver is
 595.91.07, and `/dev/kvm` is available.
 
-The `windows_prepare` worker owns a direct-QEMU fixture there, preserving Linux
-and the host GPU binding: `/root/vast-windows-test`, work directory
-`/var/lib/vast-windows-test`, log `/root/vw-test-prepare.log`. Its source matches
-public installer `5b368c9`; a fresh 150 GiB image, 8 GiB RAM, eight vCPUs, loopback
-SSH port 22222 and research GPU deferral are used. This bypasses the top-level
-KVM preflight only as a controlled fixture, not as a claimed supported bare-metal
-install. A plain OVMF compatibility failure was fixed by rendering the Windows
-setup Secure Boot eligibility bypass only when the requested target state is
-already disabled. The fresh installation then passed that check and reached OOBE.
-Both formal cold boots subsequently passed all 26 checks at public main
-`214dce2`, and the controller's pinned-key SSH login passed. Its final research
-hold began at 16:05:32 UTC for 3600 seconds. Native setup is deferred, reboots are
-held, and no GPU is assigned. The controller tunnel listens on 127.0.0.1:22224,
-with socket `/tmp/vast-windows-claude-forward.sock` and known-hosts file
-`/data/vast-windows-runtime/claude-20261004/windows-known_hosts-22224`.
-The root agent now owns runtime changes. The preparation worker is writing a
-reviewable VFIO helper without executing it. The 4070 currently owns the connected
-monitor/gnome-shell and has a 16 GiB BAR; transient VFIO needs a display stop and
-adequate guest PCI64 aperture. No VFIO operation or physical boot-disk replacement
-has occurred. Fresh-install evidence is public in installer commit `d5c7a81`.
+A direct-QEMU preparation fixture preserved Linux and initially kept the host
+GPU binding: `/root/vast-windows-test`, work directory
+`/var/lib/vast-windows-test`, log `/root/vw-test-prepare.log`. This is a controlled
+fixture, not a claimed supported top-level bare-metal install. The fresh
+installation passed both 26-check cold boots and a real pinned-key SSH login.
+It sealed at 16:49:27 UTC with exit 0 and identical source/final comparison:
+`windows.qcow2`, 6,940,128,768 bytes, 150 GiB virtual, mode 0400, SHA256
+`4bce7fcd14724e4f3cf0c7f425b5800811161e1fd64376eac8e4c917edd07447`.
+Controller evidence is `/data/vast-windows-runtime/claude-20261004/`.
+
+The reviewed public installer `537d96e` helper then cloned that sealed image,
+stopped the desktop/persistence services, drained the GPU/audio clients and
+assigned both RTX 4070 functions through temporary VFIO binding. Its journal
+is `/var/lib/vast-windows-4070-session/vfio-state.json`; Windows SSH is forwarded
+only on host loopback 22225. The AMD GPU remains with amdgpu. No physical firmware,
+boot disk or persistent binding changes were made. Preserve the supervisor and
+journal: normal Windows shutdown restores the host's original bindings/services;
+recovery refuses to rebind a live VFIO guest.
+
+Pinned-key SSH and the MSVC recorder install/API/restart/stop tests passed with
+the GPU assigned. A guest reboot activated test signing. Both NVIDIA PCI functions
+then reported PnP OK, but NVIDIA's own driver is not installed yet; this is not
+GPU workload success. The `windows_prepare` worker owns the running VFIO guest
+and is beginning the first collector-before-NVIDIA installation attempt with
+native reboots held. It must drain and export before a manual reboot. Root owns
+the Vast native-cutover lane; do not race either owner. Borrowed-host evidence,
+including the recorder transcript and recovery journal, has been copied to the
+controller. No Windows GSP query pair has been captured yet.
 
 On the controller, `uwgsocks-server.service` was stopped and disabled as explicitly
 requested. `wg-quick@wg0` is enabled and active; direct SSH works. The borrowed
