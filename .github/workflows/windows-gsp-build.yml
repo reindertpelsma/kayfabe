@@ -1,0 +1,35 @@
+name: Windows GSP recorder MSVC build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - tools/windows-gsp-trace/**
+      - .github/workflows/windows-gsp-build.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build unsigned research drivers with pinned SDK and WDK
+        shell: pwsh
+        run: ./tools/windows-gsp-trace/build-msvc-ci.ps1
+      - name: Preserve binaries and build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-gsp-msvc-${{ github.sha }}
+          path: |
+            tools/windows-gsp-trace/build-msvc/*.sys
+            tools/windows-gsp-trace/build-msvc/*.exe
+            tools/windows-gsp-trace/build-msvc/*.json
+            tools/windows-gsp-trace/build-msvc/*.log
+          if-no-files-found: error
+          retention-days: 14
