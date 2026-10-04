@@ -1,0 +1,284 @@
+{
+  "windows_source": "gsp.jsonl.gz",
+  "windows_records": [
+    {
+      "direction": 0,
+      "queue_sequence": 3085,
+      "params_bytes": 112,
+      "flags": 2,
+      "gfxp_mode": 2,
+      "compute_mode": 0,
+      "control_status": 0,
+      "params_hex": "020000002b00d0c100000eff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f260100000000800e200100000000f089838296ffff0000000000000000020000000000000000000000000000000000000000000000"
+    },
+    {
+      "direction": 0,
+      "queue_sequence": 3087,
+      "params_bytes": 112,
+      "flags": 1,
+      "gfxp_mode": 0,
+      "compute_mode": 1,
+      "control_status": 0,
+      "params_hex": "010000002b00d0c100000eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+    },
+    {
+      "direction": 1,
+      "queue_sequence": 3089,
+      "params_bytes": 112,
+      "flags": 2,
+      "gfxp_mode": 2,
+      "compute_mode": 0,
+      "control_status": 0,
+      "params_hex": "020000002b00d0c100000eff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f260100000000800e200100000000f089838296ffff0000000000000000020000000000000000000000000000000000000000000000"
+    },
+    {
+      "direction": 1,
+      "queue_sequence": 3091,
+      "params_bytes": 112,
+      "flags": 1,
+      "gfxp_mode": 0,
+      "compute_mode": 1,
+      "control_status": 0,
+      "params_hex": "010000002b00d0c100000eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+    },
+    {
+      "direction": 0,
+      "queue_sequence": 3149,
+      "params_bytes": 112,
+      "flags": 2,
+      "gfxp_mode": 2,
+      "compute_mode": 0,
+      "control_status": 0,
+      "params_hex": "020000002f00d0c100000eff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f260100000000800e200100000000f089838296ffff0000000000000000020000000000000000000000000000000000000000000000"
+    },
+    {
+      "direction": 0,
+      "queue_sequence": 3150,
+      "params_bytes": 112,
+      "flags": 1,
+      "gfxp_mode": 0,
+      "compute_mode": 1,
+      "control_status": 0,
+      "params_hex": "010000002f00d0c100000eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+    },
+    {
+      "direction": 1,
+      "queue_sequence": 3153,
+      "params_bytes": 112,
+      "flags": 2,
+      "gfxp_mode": 2,
+      "compute_mode": 0,
+      "control_status": 0,
+      "params_hex": "020000002f00d0c100000eff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f260100000000800e200100000000f089838296ffff0000000000000000020000000000000000000000000000000000000000000000"
+    },
+    {
+      "direction": 1,
+      "queue_sequence": 3154,
+      "params_bytes": 112,
+      "flags": 1,
+      "gfxp_mode": 0,
+      "compute_mode": 1,
+      "control_status": 0,
+      "params_hex": "010000002f00d0c100000eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+    },
+    {
+      "direction": 0,
+      "queue_sequence": 3277,
+      "params_bytes": 112,
+      "flags": 2,
+      "gfxp_mode": 2,
+      "compute_mode": 0,
+      "control_status": 0,
+      "params_hex": "020000003100d0c100000eff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f260100000000800e200100000000f089838296ffff0000000000000000020000000000000000000000000000000000000000000000"
+    },
+    {
+      "direction": 0,
+      "queue_sequence": 3279,
+      "params_bytes": 112,
+      "flags": 1,
+      "gfxp_mode": 0,
+      "compute_mode": 1,
+      "control_status": 0,
+      "params_hex": "010000003100d0c100000eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+    },
+    {
+      "direction": 1,
+      "queue_sequence": 3282,
+      "params_bytes": 112,
+      "flags": 2,
+      "gfxp_mode": 2,
+      "compute_mode": 0,
+      "control_status": 0,
+      "params_hex": "020000003100d0c100000eff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f260100000000800e200100000000f089838296ffff0000000000000000020000000000000000000000000000000000000000000000"
+    },
+    {
+      "direction": 1,
+      "queue_sequence": 3284,
+      "params_bytes": 112,
+      "flags": 1,
+      "gfxp_mode": 0,
+      "compute_mode": 1,
+      "control_status": 0,
+      "params_hex": "010000003100d0c100000eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+    },
+    {
+      "direction": 0,
+      "queue_sequence": 3471,
+      "params_bytes": 112,
+      "flags": 2,
+      "gfxp_mode": 2,
+      "compute_mode": 0,
+      "control_status": 0,
+      "params_hex": "020000003600d0c100000eff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f260100000000800e200100000000f089838296ffff0000000000000000020000000000000000000000000000000000000000000000"
+    },
+    {
+      "direction": 0,
+      "queue_sequence": 3473,
+      "params_bytes": 112,
+      "flags": 1,
+      "gfxp_mode": 0,
+      "compute_mode": 1,
+      "control_status": 0,
+      "params_hex": "010000003600d0c100000eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+    },
+    {
+      "direction": 1,
+      "queue_sequence": 3478,
+      "params_bytes": 112,
+      "flags": 2,
+      "gfxp_mode": 2,
+      "compute_mode": 0,
+      "control_status": 0,
+      "params_hex": "020000003600d0c100000eff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005f260100000000800e200100000000f089838296ffff0000000000000000020000000000000000000000000000000000000000000000"
+    },
+    {
+      "direction": 1,
+      "queue_sequence": 3480,
+      "params_bytes": 112,
+      "flags": 1,
+      "gfxp_mode": 0,
+      "compute_mode": 1,
+      "control_status": 0,
+      "params_hex": "010000003600d0c100000eff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000"
+    }
+  ],
+  "linux_ioctl_sources": [
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+      "sha256": "fb045717fa82c7d14fa50214c0789e2b9ab745299ebf7591d1c3ad0b8fbb67f4",
+      "modes": [
+        {
+          "command": "0x20801210",
+          "flags": 1,
+          "gfxp_mode": 0,
+          "compute_mode": 1,
+          "status": 0,
+          "count": 5
+        }
+      ]
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/ff_placebo.host_nvdiff.jsonl.zst",
+      "sha256": "b0996e316aa1b6ff184405b3de5579407b4528298a40fea314d5b0f8fb9b2abd",
+      "modes": [
+        {
+          "command": "0x20801210",
+          "flags": 1,
+          "gfxp_mode": 0,
+          "compute_mode": 1,
+          "status": 0,
+          "count": 32
+        }
+      ]
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/ff_vulkan.host_nvdiff.jsonl.zst",
+      "sha256": "1d307614daf52c3a54ae80092bd61436e246f79c384e755bfa655ccfbae86e24",
+      "modes": [
+        {
+          "command": "0x20801210",
+          "flags": 1,
+          "gfxp_mode": 0,
+          "compute_mode": 1,
+          "status": 0,
+          "count": 144
+        }
+      ]
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/ff_vulkan_init.host_nvdiff.jsonl.zst",
+      "sha256": "00b71670336a0f94630e385a0bf7c36adb6fe3d520b44a5aa1e6229a12002708",
+      "modes": [
+        {
+          "command": "0x20801210",
+          "flags": 1,
+          "gfxp_mode": 0,
+          "compute_mode": 1,
+          "status": 0,
+          "count": 16
+        }
+      ]
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/pv_validate_vk.host_nvdiff.jsonl.zst",
+      "sha256": "5af5a5e0dc7f7e8b8a25d58cf48124a15a5ab0cb9ab18742bb801afe2516a2a7",
+      "modes": [
+        {
+          "command": "0x20801210",
+          "flags": 1,
+          "gfxp_mode": 0,
+          "compute_mode": 1,
+          "status": 0,
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/vk_compute.host_nvdiff.jsonl.zst",
+      "sha256": "63fd4d9118916daf0f02fe76432cbb799c48f37e0b37d93f9d06842dcf9ca0c2",
+      "modes": [
+        {
+          "command": "0x20801210",
+          "flags": 1,
+          "gfxp_mode": 0,
+          "compute_mode": 1,
+          "status": 0,
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/vk_ofa.host_nvdiff.jsonl.zst",
+      "sha256": "0d19b7f558f7b872f735eefdee8a4fba3264e9d413f8459e016be70d04d6ac9f",
+      "modes": [
+        {
+          "command": "0x20801210",
+          "flags": 1,
+          "gfxp_mode": 0,
+          "compute_mode": 1,
+          "status": 0,
+          "count": 4
+        }
+      ]
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/vk_render.host_nvdiff.jsonl.zst",
+      "sha256": "f3dbe0cb1ebb8c80570e2fb67f1a50ebc5d13cd8b361c00ebd8e12dcc4dfa624",
+      "modes": [
+        {
+          "command": "0x20801210",
+          "flags": 1,
+          "gfxp_mode": 0,
+          "compute_mode": 1,
+          "status": 0,
+          "count": 4
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Linux samples are userspace-ioctl boundary, not a complete GSP census.",
+    "Flags determine whether each mode field is meaningful.",
+    "This is not a matched GPU/driver/workload comparison; no OS-exclusive policy conclusion."
+  ]
+}

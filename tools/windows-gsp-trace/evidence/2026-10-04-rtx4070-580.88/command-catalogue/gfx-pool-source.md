@@ -32,6 +32,41 @@ become the physical host twin's preemption storage. Query success is a resource
 description, not a GPU completion. Waiting for another native capture is not a
 prerequisite to testing that hypothesis.
 
+**Further call-path and mode check, October 4:** a concrete non-pooled Unix
+preemption path exists in OGKM. `_rpcAllocObjectPrologue` has a
+`RMCFG_FEATURE_PLATFORM_UNIX`/3D/Pascal-or-newer guard. Its
+[`_allocateGfxpBuffer`](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/src/kernel/vgpu/rpc.c#L3553)
+allocates/maps the five separate preempt/spill/pagepool/beta/RTV buffers from
+the context-size table, then sends `GR_CTXSW_PREEMPTION_BIND` with
+`GFX_GFXP` (1), not `GFX_GFXP_POOL` (2). Thus GfxP does not inherently require
+the explicit pool query. **Scope matters:** the
+[`NV_RM_RPC_ALLOC_OBJECT` macro](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/inc/kernel/vgpu/rpc.h#L271)
+bypasses that allocation prologue for firmware clients, using physical RMAPI
+allocation instead. This proves a Unix non-GSP virtual-driver path, not the
+actual route taken by the native Linux GSP test. The GSP physical implementation
+is not supplied by these public CPU sources.
+
+The [mode extraction](preemption-modes.json) also strengthens the Windows
+observation: the original capture contains four 112-byte bind requests with
+flags=2 (graphics mode meaningful), gfxp=2 (pooled), and four matching-shape
+successful replies. Four further requests/replies set compute CTA with flags=1;
+their graphics field is ignored. There is now positive evidence that this
+native Windows configuration selected pooled GfxP, rather than merely queried
+it. In contrast, the eight saved Linux graphics host-ioctl fixtures contain
+213 successful mode-setting calls, all flags=1/compute=1. Their gfxp=0 field
+does **not** prove WFI: its flag is clear. These user-ioctl traces do not expose
+every internal GSP action or establish the default graphics mode. The two
+observations are not a matched OS/die/driver/workload comparison.
+
+For the Linux GSP path, `kgraphicsInitializeDeferredStaticData` queries
+`INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO`, while context creation and
+physical controls can cross the GSP RMAPI boundary. Kayfabe's saved Linux boot
+answers the static-info query successfully and does not issue the pool query.
+That explains the observed interface coverage, not whether it exercises the
+same graphics-preemption mode as Windows. Do not claim a proven identical
+mode, universal Linux use of non-pooled buffers, or that publishing pool IDs
+in the context-size table proves the pool was allocated and active.
+
 However, the published offsets alone do not establish the exact size/alignment
 formula, and one must not turn the last known field offset into a claimed full
 structure size. Nor does the promotion ruling prove that Windows never reads
