@@ -37,6 +37,28 @@ SHA256 values identify the trusted **unsigned** build inputs.
 | Baseline plus `/section:.retplne,R` | `849c2df70ac4ad684f3c0fe2a0890e119d3831b01756e3550ec60a0065a2b591` | `C0000018`, entry marker absent |
 | Same objects/flags, WDK 26100.1 libraries | `64a7eb7803ff6123850ae43024eb1d05da5f6b97d9c013c426b8fad5b5957fe6` | `C0000018`, entry marker absent |
 | Baseline plus `/version:10.0` | `a9e2bc36e977211b92113da39830cb2910f3e8346e9d91b7a5825c4120c71481` | `C0000018`, entry marker absent |
+| Minimal GS entry/unload probe | `1e66716d84bc975b70f210fb74396c4f1510dd5197573022a78e7006fe043171` | `C0000018`, entry marker absent |
+| Baseline plus `/tsaware:no` | `9c34736e1767fbdbfc0e5add5d9f1592eaf86ac2fddead93bda91630e3d3d80f` | Bugcheck `1A/101B`, entry marker absent; recovered by automatic reboot |
+| Baseline plus `/tsaware:no /section:.retplne,R` | `9191f961588bc0b17c70dc3cb8cce03ab75dba5fcc796fda8c4748c9287dc021` | Load success, entry stage 5, API tests pass, unload success |
+
+The `/tsaware:no` attempt passed the previous immediate rejection but caused
+`MEMORY_MANAGEMENT` with arguments `101b`, `fffff8045fd18000`,
+`9f8b484aff500400`, `ffffffffc0000005`. The `.retplne` section is at RVA
+`0x8000` and has no memory permissions in that image. A fault on that section
+is a working hypothesis, not yet established: the image base/stack has not
+been recovered from the target dump. The earlier readable-section attempt
+still had TSAWARE set, so its immediate rejection does not rule out a second
+independent section-permissions problem. The combined variant subsequently
+loaded with `NtLoadDriver=0` and entry stage 5/status 0. Its API tests passed
+with zero failures, covering buffer/IOCTL validation, exclusive opening,
+restricted-token denial and worker stop. `NtUnloadDriver` returned zero.
+Stats before the test showed 928,124,899,328 scanned bytes across 108 passes,
+zero read failures and no attached tables on this GPU-less VM. Do not use the
+TSAWARE-only image for capture.
+
+Actual kernel `SystemCodeIntegrityInformation` reports options `0x00080207`,
+including the active test-signing bit `0x2`; this is stronger evidence than
+the BCD setting alone.
 
 The image has DIR64 relocations; all recorded target addresses lie inside its
 sections. Characteristics `0x22` (no DLL bit) and preferred base `0x140000000`
@@ -95,4 +117,53 @@ It keeps `/GS`, `GsDriverEntry`, NX, ASLR and the same WDK 28000
 with `tests/build-load-probe.sh` after populating the standard cache. Initial
 unsigned SHA256 is
 `1e66716d84bc975b70f210fb74396c4f1510dd5197573022a78e7006fe043171`;
-target result is pending. Never use this image for capture.
+the target returned the same `C0000018` without the entry marker. This narrows
+the failure to the image/toolchain/runtime rather than observer logic, HAL or
+the secure-device library. Never use this image for capture.
+
+## Independent Microsoft compiler/linker comparison
+
+`.github/workflows/windows-gsp-build.yml` runs `build-msvc-ci.ps1` on an
+official Windows runner with its installed Visual C++ toolchain and the same
+SHA256-pinned Microsoft SDK/WDK NuGet archives as the Linux build. It publishes
+unsigned normal/diagnostic observers and the minimal GS probe, plus tool
+versions, exact commands, source revision and artifact hashes. It does not
+sign or load a driver, and a passing CI build is not a Windows runtime result.
+
+Run [37217644450](https://github.com/reindertpelsma/kayfabe/actions/runs/37217644450)
+successfully built source `351d5b7f` with MSVC compiler `19.44.35229.0` and
+linker `14.44.35229.0`, keeping `/W4 /WX`. The initial attempt exposed two
+MSVC compatibility issues: `/kernel` reserves/defines `_KERNEL_MODE` itself,
+and the WDK kernel CRT lacks `stdint.h`. The shared protocol header now uses
+the compiler's fixed-width integers in kernel translation units instead of
+mixing the user-mode CRT headers into them. Linux build output stayed
+byte-for-byte identical after that source change; the portable parser and
+11 Python tests passed.
+
+The successful MSVC diagnostic observer SHA256 is
+`751f87043dcc167dc132fc0707a312fce3b3d7a24167adc9c2a4f2d2e695176e`,
+normal observer
+`c32adf94bde55c19caa493b9ccc460bd39926900acfc4ca93297a6787bb1c3ca`,
+and minimal GS probe
+`af315af9f07235aa9ba547a06723d88b3f168ede28c6ed5084b8af7ef21a1293`.
+These native images have TSAWARE clear, omit the compiler-only `.retplne`
+section, and mark the ordinary code/data sections nonpageable. Their target
+load/API results are pending.
+
+## Revised Linux linker defaults and limits
+
+The revised scripts set `/tsaware:no`, `.retplne` read/nonpageable attributes,
+and explicit nonpageable `.text`, `.rdata`, `.data`, and `.pdata` attributes to
+match the corresponding Microsoft linker behavior. NX, ASLR, GS and integrity
+checks remain enabled. `tests/check_driver_pe.py` checks these image properties
+plus entry/relocation bounds and the GS cookie before a successful build is
+reported. It rejects the original image and accepts the three MSVC CI images.
+
+The revised normal Linux observer SHA256 is
+`89a04d6bba83db0fe077d90df121826f7b3eb66d213278c4a5381c6f73b4edad`;
+the revised minimal probe is
+`5233d314242240de6c32f891f69ef08e1bed860cf263b877431d3249cd5c8cc1`.
+The added nonpageable attributes mean these are not byte-identical to the
+successful combined diagnostic probe. Their runtime parity remains untested.
+Use the Microsoft-linker artifact for the next capture rehearsal and record
+its own load/API/unload results before claiming it works.

@@ -44,8 +44,11 @@ for source in gsptrace queue; do
 done
 "$linker" /driver /subsystem:native,10.0 /osversion:10.0 /entry:GsDriverEntry /machine:x64 \
     /nodefaultlib /dynamicbase /nxcompat /integritycheck /release /Brepro \
+    /tsaware:no /section:.retplne,RP /section:.text,ERP /section:.rdata,RP \
+    /section:.data,RWP /section:.pdata,RP \
     "/out:$output/gsptrace.sys" "$output/gsptrace.obj" "$output/queue.obj" \
     "/libpath:$cache/wdk/c/Lib/$kit/km/x64" ntoskrnl.lib hal.lib wdmsec.lib BufferOverflowK.lib
+python3 tests/check_driver_pe.py "$output/gsptrace.sys" > "$output/driver-pe.json"
 x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror collect.c -ladvapi32 -Wl,--no-insert-timestamp -o "$output/gsptrace.exe"
 x86_64-w64-mingw32-gcc -std=c11 -O2 -Wall -Wextra -Werror tests/windows_api_test.c -ladvapi32 -Wl,--no-insert-timestamp -o "$output/windows_api_test.exe"
 mkdir -p "$output/signing"
