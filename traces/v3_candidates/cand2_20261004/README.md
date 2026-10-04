@@ -142,3 +142,8 @@ and pixel-exact pattern A. Wayland FIFO 400 frames completed in 18.360s
 (includes startup); Wayland IMMEDIATE/MAILBOX also completed. No cap overrun.
 While unwatched and fbcon changed, checks/copies remained zero; on-demand
 red/blue snapshots returned fresh, distinct full frames in 809/779 ms.
+
+`present_observer_initial/` preserves an instrumentation failure: both Vulkan
+processes completed but the preload reported zero observed presents, so the
+harness refused to grade them. Investigate loader/process behavior before
+using this observer; zero observed calls is not a successful frame-rate test.
