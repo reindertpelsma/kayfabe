@@ -200,7 +200,7 @@ rendering progress merely because guest SSH responded.
 30/50/60 Hz hints through broker `9f2fd00` and actual guest reads 29.938/49.990/60
 Hz preferred EDIDs with three distinct hashes. Three duplicate hints cause no
 additional relay event. `modetest -c` refreshes the connector cache before sysfs
-is read. **Scope:** authored EDID on userspace reprobe is verified; the collected
+is read. **Scope (`9d82f259`, run `c2surface2`):** authored EDID on userspace reprobe is verified; the collected
 udev monitor contains no DRM event, so automatic desktop mode switching is not
 claimed by this test. Input hints are synthetic, not a physical host rate change.
 
@@ -228,3 +228,10 @@ All 71 application/probe identities are present: 67 pass, four managed-memory
 failures, with **zero verdict differences** from candidate 1 `0ac157b2`.
 This is 61/65 ordinary apps + 6/6 probes. Individual failing-app boots are still
 running; the completed batch and all its per-app logs are saved immediately.
+
+Owned display box **54137212** was destroyed after all its tests and evidence
+were pushed (`3f2d325f`); the account list confirms it is absent. Existing box
+**54049598** remains running for the isolated app reruns and same-box refresh.
+CI run 37201307103 caught one missing evidence attribution in this README's R6
+scope paragraph. The paragraph now cites its exact product/run; no gate or
+baseline was weakened. The failure and local fixed-gate output are retained.

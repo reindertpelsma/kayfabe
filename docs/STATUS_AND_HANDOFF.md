@@ -29,10 +29,8 @@ warnings match candidate 1. Broker-stop rendering passes (27 seconds stopped,
 guest alive, GLX 58–60 FPS); refresh-only R6 passes for 30/50/60 Hz on userspace connector reprobe. A sysfs-only
 read was stale; no automatic DRM uevent/desktop mode switch is claimed. See all results and limitations
 in `traces/v3_candidates/cand2_20261004/README.md`; no promotion verdict yet.
-New display box **54137212** belongs to this session (SSH `vdisp2`, root at
-142.170.96.180:61595). Driver 580.159.04, exact product binary, guest kernel
-6.8.0-142 and desktop/broker preparation are complete. Keep it only through
-the remaining display checks, then save logs and destroy by this ID.
+Owned display box **54137212** finished its tests and was destroyed after evidence
+was pushed; its absence was verified. Only existing **54049598** remains in use.
 Recipes and every completed batch are pushed in the candidate evidence directory.
 Broker dependency `nvkvm-pv:codex/broker-refresh-2026-10-04` at `9f2fd00` fixes
 refresh-only events; its CI/local tests pass, but it is not promoted to
