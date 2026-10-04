@@ -197,6 +197,31 @@ capture before releasing NVIDIA's separate deferred-install hold.
 # While the collector runs, install/enable NVIDIA with GSP enabled in another shell.
 ```
 
+For a rental that permits returning text logs only, stop/drain the collector,
+then export structured JSONL on Windows without installing Python:
+
+```powershell
+.\export-trace.ps1 -Path C:\traces\gsp.kgwt -OutputPath C:\traces\gsp.jsonl
+```
+
+Return only `gsp.jsonl`, metadata JSON and ordinary logs to the controller;
+keep the binary capture and any crash dump on the rental. The exporter writes
+bounded record metadata and payload hex, hashes the complete original capture,
+includes the statistics sidecar when present, and atomically publishes a new
+UTF-8 text file. It refuses live writers, malformed/truncated framing,
+existing output paths and bounds violations. Defaults are 64 MiB of input and
+100,000 records; explicit `-MaxInputMiB`/`-MaxRecords` may raise those bounds.
+The footer describes a complete **file export**, never a complete GSP capture.
+
+```sh
+python3 tools/windows-gsp-trace/decode.py gsp.jsonl --require-query-pair
+```
+
+The decoder verifies the footer/hash, rebuilds bounded records in memory and
+applies the same checksum, ABI, sequence and request/reply validation as for a
+local binary capture. No executable or memory dump is returned or run. Its
+decoded-input limit defaults to 64 MiB (`--max-input-mib` to change explicitly).
+
 Create `C:\traces` beforehand. The collector stops the worker, drains the entire
 FIFO and writes `gsp.kgwt.stats.json`. It flushes the C output buffer after each
 read batch and checks trace/statistics write, flush and close failures. A sudden
