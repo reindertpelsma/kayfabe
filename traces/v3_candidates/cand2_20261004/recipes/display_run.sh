@@ -44,7 +44,11 @@ case "$kind" in
         ;;
     broker)
         export BRK_KF3_EXTRA=gop=on,x11-dispsw=on BRK_CURSOR=1 BRK_VNC=1 BRK_DRI3=1 BRK_RESILIENCE=1
+        export BRK_HOLD=40
+        bash /root/d2_watch.sh "$tag" &
+        watcher=$!
         timeout --kill-after=10 1200 bash scripts/bench/display/broker_lane.sh run "$tag"
+        wait "$watcher"
         ;;
     refresh_hint)
         (
