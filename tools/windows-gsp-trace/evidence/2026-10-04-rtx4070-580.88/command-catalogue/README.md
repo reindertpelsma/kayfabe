@@ -42,6 +42,46 @@ closed-module application tests are not substitutes for a comparable GSP census.
 OGKM is the preferred public semantic source, not evidence of all closed-module
 behavior.
 
+## What source can prove about OGKM callability
+
+**Follow-up, 2026-10-04:** an operation accepted by the proprietary Windows
+driver but rejected by every relevant path in specified unmodified OGKM
+releases can be classified as **accepted on Windows, unavailable through those
+OGKM interfaces**. That is stronger than absence from a Linux trace. It still
+does not distinguish Windows from the proprietary Linux kernel module, and
+“all versions” requires an enumerated release range rather than extrapolation
+from the sampled trees. No all-version uncallability claim has been established
+for this inventory.
+
+Distinguish five questions: is a command declared; does stock OGKM contain a
+caller; can an authorized caller reach a dispatcher; will the selected firmware
+accept it; and does the normal workload actually use it? Each needs different
+evidence. Missing declarations, missing callers and missing CPU function bodies
+are individually insufficient proofs of uncallability.
+
+The 580.65.06 source makes the distinction concrete:
+
+- [Ordinary resource lookup](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/src/libraries/resserv/src/rs_resource.c#L117)
+  returns NOT_SUPPORTED when the exported method is absent. This can support a
+  rejection proof for that resource/interface once overrides, inherited entries
+  and alternate routes have been checked.
+- [Legacy-GSS selection](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/interface/deprecated/rmapi_deprecated_control.c#L92)
+  recognizes a command bit and GSP/vGPU state, rather than requiring a separate
+  export per ID. Its [handler](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/interface/deprecated/rmapi_gss_legacy_control.c#L32)
+  applies caller/object checks and forwards to physical RM/GSP.
+- [BinAPI control](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/src/kernel/rmapi/binary_api.c#L62)
+  also forwards opaque controls on a firmware-client GPU. A missing symbolic
+  command definition is not evidence that this path rejects its numeric ID.
+- The pool-query route described below is exported with a GSP-routing flag.
+  [Privilege validation](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/nvidia/src/kernel/rmapi/control.c#L701)
+  defaults such controls to kernel callers. Rejection from userspace would not
+  prove rejection from that authorized context.
+
+OGKM itself uses proprietary GSP firmware. “No open implementation of the
+firmware operation” and “requires the proprietary CPU kernel driver” are
+therefore separate claims. Source proves the routing and rejection conditions;
+it does not disclose firmware behavior that is absent from the public tree.
+
 ## Capture and comparison matrix
 
 | Label | OS / driver | GPU / die | What this evidence establishes | Principal limit / provenance |

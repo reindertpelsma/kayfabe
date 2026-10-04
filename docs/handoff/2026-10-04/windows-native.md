@@ -29,6 +29,13 @@ unresolved. Whole-tree OGKM searches include 580.65.06, 580.159.04, 595.84 and
   parameter bytes that are absent. Channel privilege/ownership is not decoded.
   GSP channel lifecycle calls are captured, GPU pushbuffers/doorbells are not.
 
+Callability follow-up: source can prove rejection for an enumerated release,
+resource and authorized caller context, but missing callers/CPU bodies do not.
+580.65.06 has generic GSS and BinAPI forwarding paths as well as ordinary
+exported-method dispatch. The catalogue now links all three and distinguishes
+OGKM interface availability from proprietary firmware implementation. No
+all-version OGKM rejection or proprietary-CPU-driver-only claim is established.
+
 The borrowed PC timed out; the owner says it was probably handed over. Treat it
 as unavailable and do not retry/reboot it as part of this offline work. Unique
 capture/code is already saved. No rental was started, no product behavior
