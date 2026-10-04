@@ -190,6 +190,25 @@ and dirty original workspace were preserved. Root free space increased to about
 
 ## Next checks
 
+Latest operational note, **17:58 UTC**: the requested RTX3060 reboot was accepted
+by shutdown.exe, but at 17:54 its boot time still matched 17:18 and the boot
+capture task had not run. Subsequent SSH banner/reconnect probes timed out.
+Its observer was stopped/system-start and the fresh boot trace path contained
+only its arm journal/task; do not claim a completed GSP boot or blindly repeat
+the restart. Check actual boot/task state when SSH returns. The borrowed host's
+new direct SSH connections also timed out, despite an active controller WG
+interface. No cause is established yet.
+
+The owner reiterated that the borrowed PC is opportunistic and may become
+unavailable, while its SSD remains intact. Code, selected trusted build inputs,
+the complete first useful trace and completed test evidence are already on the
+controller/GitHub. Do not depend on access to its rebuildable Windows images.
+The D3D11 probe source is committed (`572411c1`, integrated `7067f79d`) but its
+runtime test has not completed. Both helper agents hit an account usage limit;
+root now owns any further runtime actions until ownership is explicitly handed
+off again. Their last completed 4070 runtime action left the observer stopped,
+demand-start restored, boot task disabled, and native setup deferred/held.
+
 1. Recorder kernel/API smoke passed. Use the verified MSVC build for capture;
    the revised Linux linker build has static validation but its exact runtime
    parity remains untested. Restart the observer before capture.
