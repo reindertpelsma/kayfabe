@@ -9,6 +9,14 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Windows research update, 2026-10-04:** the owner subsequently requested the
+native Vast Windows installer and GSP recorder. The public installer is backed
+up separately, and the current owned rental is installing Windows. See the
+[Windows lane handoff](handoff/2026-10-04/windows-native.md) for source branches,
+instance ownership, verification limits and remaining steps. This supersedes
+the statement below that Windows is parked; it does not change candidate 2's
+verified product state or merge requirements.
+
 ### 0.0 ★ RESUME HERE — 2026-10-04 (supersedes every older entry in §0 where they differ)
 
 **Current verified integration (2026-10-04, candidate 2):**
