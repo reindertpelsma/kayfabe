@@ -1,0 +1,3400 @@
+{
+  "by_id": {
+    "0x00730102": {
+      "ga102_native_ioctls": {
+        "count": 13,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 45,
+            "rc": 0,
+            "record_i": 44,
+            "size": 12,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 82,
+            "rc": 0,
+            "record_i": 81,
+            "size": 12,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 143,
+            "rc": 0,
+            "record_i": 44,
+            "size": 12,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 13
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1028,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1114,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1743,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      }
+    },
+    "0x00730108": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 142,
+            "rc": 0,
+            "record_i": 43,
+            "size": 16,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 5,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1902,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1929,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1948,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 5
+        }
+      }
+    },
+    "0x0073010c": {
+      "ga102_native_ioctls": {
+        "count": 52,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 46,
+            "rc": 0,
+            "record_i": 45,
+            "size": 16,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 47,
+            "rc": 0,
+            "record_i": 46,
+            "size": 16,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 48,
+            "rc": 0,
+            "record_i": 47,
+            "size": 16,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 52
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 16,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1030,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1032,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1034,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 16
+        }
+      }
+    },
+    "0x0073012c": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2080,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x00730250": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1753,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x0073028b": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1003,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1704,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1749,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      },
+      "ga106_native_gsp": {
+        "count": 6,
+        "examples": [
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 76,
+            "size": 56,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 77,
+            "size": 56,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 79,
+            "size": 56,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 6
+        }
+      }
+    },
+    "0x007302a4": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2056,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2084,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      }
+    },
+    "0x00731140": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1755,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x00731142": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1772,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1800,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1944,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      }
+    },
+    "0x00731144": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2076,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x00800294": {
+      "ga102_native_ioctls": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 344,
+            "rc": 0,
+            "record_i": 34,
+            "size": 4,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 41,
+            "rc": 0,
+            "record_i": 40,
+            "size": 4,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 134,
+            "rc": 0,
+            "record_i": 35,
+            "size": 4,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1016,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2098,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      }
+    },
+    "0x20800102": {
+      "ga102_native_ioctls": {
+        "count": 76,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 44,
+            "rc": 0,
+            "record_i": 43,
+            "size": 564,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/blocksync.jsonl.zst",
+            "line": 44,
+            "rc": 0,
+            "record_i": 43,
+            "size": 564,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/clpeak.jsonl.zst",
+            "line": 44,
+            "rc": 0,
+            "record_i": 43,
+            "size": 564,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 76
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 91,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 49,
+            "rc": 0,
+            "record_i": 48,
+            "size": 564,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 67,
+            "rc": 0,
+            "record_i": 66,
+            "size": 564,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 106,
+            "rc": 0,
+            "record_i": 105,
+            "size": 564,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 91
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1014,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2096,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2128,
+            "size": null,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x0": 2,
+          "0x56": 1
+        }
+      },
+      "ga106_native_ioctl": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 42,
+            "size": 564,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "gb203_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 44,
+            "rc": 0,
+            "record_i": 43,
+            "size": 564,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x2080012b": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 916,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1621,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      },
+      "ga106_native_gsp": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 68,
+            "size": 560,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 72,
+            "size": 560,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      }
+    },
+    "0x2080012f": {
+      "ga102_native_ioctls": {
+        "count": 29,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 51,
+            "rc": 0,
+            "record_i": 50,
+            "size": 1464,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/blocksync.jsonl.zst",
+            "line": 51,
+            "rc": 0,
+            "record_i": 50,
+            "size": 1464,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/clpeak.jsonl.zst",
+            "line": 51,
+            "rc": 0,
+            "record_i": 50,
+            "size": 1464,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 29
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 37,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 69,
+            "rc": 0,
+            "record_i": 68,
+            "size": 1464,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 128,
+            "rc": 0,
+            "record_i": 127,
+            "size": 1464,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 718,
+            "rc": 0,
+            "record_i": 717,
+            "size": 1464,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 37
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2341,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "ga106_native_ioctl": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 49,
+            "size": 1464,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 1
+        }
+      },
+      "gb203_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 51,
+            "rc": 0,
+            "record_i": 50,
+            "size": 1464,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 1
+        }
+      }
+    },
+    "0x2080014b": {
+      "ga102_native_ioctls": {
+        "count": 15,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 50,
+            "rc": 0,
+            "record_i": 49,
+            "size": 5,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 52,
+            "rc": 0,
+            "record_i": 51,
+            "size": 5,
+            "status": "0x57"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 53,
+            "rc": 0,
+            "record_i": 52,
+            "size": 5,
+            "status": "0x57"
+          }
+        ],
+        "statuses": {
+          "0x0": 3,
+          "0x57": 12
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 10,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1038,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1046,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1049,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 10
+        }
+      }
+    },
+    "0x20800156": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 164,
+            "rc": 0,
+            "record_i": 65,
+            "size": 16,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2147,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20800157": {
+      "ga102_native_ioctls": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 51,
+            "rc": 0,
+            "record_i": 50,
+            "size": 0,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 166,
+            "rc": 0,
+            "record_i": 67,
+            "size": 0,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 338,
+            "rc": 0,
+            "record_i": 67,
+            "size": 0,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 3
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1042,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2154,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      }
+    },
+    "0x208001a4": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 161,
+            "rc": 0,
+            "record_i": 62,
+            "size": 16,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2136,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20800a38": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1216,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      },
+      "ga106_native_gsp": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 87,
+            "size": 24,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x20800aff": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 9,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 600,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1067,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1075,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 9
+        }
+      },
+      "ga106_native_gsp": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 20,
+            "size": 16,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x20801208": {
+      "ga102_native_ioctls": {
+        "count": 30,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/egl_offscreen.jsonl.zst",
+            "line": 306,
+            "rc": 0,
+            "record_i": 305,
+            "size": 24,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/vkpeak.jsonl.zst",
+            "line": 306,
+            "rc": 0,
+            "record_i": 305,
+            "size": 24,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/vkpeak.jsonl.zst",
+            "line": 692,
+            "rc": 0,
+            "record_i": 691,
+            "size": 24,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 30
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 148,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 316,
+            "rc": 0,
+            "record_i": 315,
+            "size": 24,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 965,
+            "rc": 0,
+            "record_i": 964,
+            "size": 24,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 1345,
+            "rc": 0,
+            "record_i": 1344,
+            "size": 24,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 148
+        }
+      }
+    },
+    "0x20801303": {
+      "ga102_native_ioctls": {
+        "count": 122,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 38,
+            "rc": 0,
+            "record_i": 37,
+            "size": 1028,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 39,
+            "rc": 0,
+            "record_i": 38,
+            "size": 1028,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 43,
+            "rc": 0,
+            "record_i": 42,
+            "size": 1028,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 122
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 5,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/vk_ofa.host_nvdiff.jsonl.zst",
+            "line": 563,
+            "rc": 0,
+            "record_i": 562,
+            "size": 1028,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/vk_ofa.host_nvdiff.jsonl.zst",
+            "line": 564,
+            "rc": 0,
+            "record_i": 563,
+            "size": 1028,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/vk_ofa.host_nvdiff.jsonl.zst",
+            "line": 568,
+            "rc": 0,
+            "record_i": 567,
+            "size": 1028,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 5
+        }
+      },
+      "ga106_native_ioctl": {
+        "count": 5,
+        "examples": [
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 36,
+            "size": 1028,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 37,
+            "size": 1028,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 41,
+            "size": 1028,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 5
+        }
+      },
+      "gb203_native_ioctls": {
+        "count": 5,
+        "examples": [
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 38,
+            "rc": 0,
+            "record_i": 37,
+            "size": 1028,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 39,
+            "rc": 0,
+            "record_i": 38,
+            "size": 1028,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 43,
+            "rc": 0,
+            "record_i": 42,
+            "size": 1028,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 5
+        }
+      }
+    },
+    "0x20801322": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 235,
+            "rc": 0,
+            "record_i": 136,
+            "size": 2056,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2349,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20801344": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 236,
+            "rc": 0,
+            "record_i": 137,
+            "size": 6152,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2353,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20801357": {
+      "ga102_native_ioctls": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 56,
+            "rc": 0,
+            "record_i": 55,
+            "size": 4,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 171,
+            "rc": 0,
+            "record_i": 72,
+            "size": 4,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 343,
+            "rc": 0,
+            "record_i": 72,
+            "size": 4,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 3
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1058,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2169,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      }
+    },
+    "0x20801813": {
+      "ga102_native_ioctls": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 186,
+            "rc": 0,
+            "record_i": 87,
+            "size": 76,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 187,
+            "rc": 0,
+            "record_i": 88,
+            "size": 76,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2193,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2197,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      }
+    },
+    "0x20801819": {
+      "ga102_native_ioctls": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 188,
+            "rc": 0,
+            "record_i": 89,
+            "size": 32,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 189,
+            "rc": 0,
+            "record_i": 90,
+            "size": 32,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 190,
+            "rc": 0,
+            "record_i": 91,
+            "size": 32,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2200,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2204,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      }
+    },
+    "0x20801823": {
+      "ga102_native_ioctls": {
+        "count": 48,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 46,
+            "rc": 0,
+            "record_i": 45,
+            "size": 420,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 48,
+            "rc": 0,
+            "record_i": 47,
+            "size": 420,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/blocksync.jsonl.zst",
+            "line": 46,
+            "rc": 0,
+            "record_i": 45,
+            "size": 420,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 48
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 56,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 61,
+            "rc": 0,
+            "record_i": 60,
+            "size": 420,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 120,
+            "rc": 0,
+            "record_i": 119,
+            "size": 420,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 507,
+            "rc": 0,
+            "record_i": 506,
+            "size": 420,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 56
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2187,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2189,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2191,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      },
+      "ga106_native_ioctl": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 44,
+            "size": 420,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 46,
+            "size": 420,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      },
+      "gb203_native_ioctls": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 46,
+            "rc": 0,
+            "record_i": 45,
+            "size": 420,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 48,
+            "rc": 0,
+            "record_i": 47,
+            "size": 420,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      }
+    },
+    "0x20801829": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 192,
+            "rc": 0,
+            "record_i": 93,
+            "size": 12,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2207,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20801830": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 193,
+            "rc": 0,
+            "record_i": 94,
+            "size": 4,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2211,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20802a08": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 10,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 594,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 783,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 847,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 10
+        }
+      },
+      "ga106_native_gsp": {
+        "count": 5,
+        "examples": [
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 18,
+            "size": 4,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 58,
+            "size": 4,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 62,
+            "size": 4,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 5
+        }
+      }
+    },
+    "0x20803083": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 163,
+            "rc": 0,
+            "record_i": 64,
+            "size": 39,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2143,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20803400": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 232,
+            "rc": 0,
+            "record_i": 133,
+            "size": 96,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x20803401": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 231,
+            "rc": 0,
+            "record_i": 132,
+            "size": 40,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2337,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20803404": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 234,
+            "rc": 0,
+            "record_i": 135,
+            "size": 2,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2345,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20808159": {
+      "ga102_native_ioctls": {
+        "count": 23,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 86,
+            "rc": 0,
+            "record_i": 85,
+            "size": 332,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/blocksync.jsonl.zst",
+            "line": 86,
+            "rc": 0,
+            "record_i": 85,
+            "size": 332,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/clpeak.jsonl.zst",
+            "line": 86,
+            "rc": 0,
+            "record_i": 85,
+            "size": 332,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 23
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 19,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 134,
+            "rc": 0,
+            "record_i": 133,
+            "size": 332,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 783,
+            "rc": 0,
+            "record_i": 782,
+            "size": 332,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/ff_placebo.host_nvdiff.jsonl.zst",
+            "line": 134,
+            "rc": 0,
+            "record_i": 133,
+            "size": 332,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 19
+        }
+      },
+      "ga106_native_ioctl": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 80,
+            "size": 332,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "gb203_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 92,
+            "rc": 0,
+            "record_i": 91,
+            "size": 332,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x2080852a": {
+      "ga102_native_ioctls": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 410,
+            "rc": 0,
+            "record_i": 61,
+            "size": 1784,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 238,
+            "rc": 0,
+            "record_i": 139,
+            "size": 1784,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2365,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x2080852c": {
+      "ga102_native_ioctls": {
+        "count": 8,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 455,
+            "rc": 0,
+            "record_i": 80,
+            "size": 1440,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 458,
+            "rc": 0,
+            "record_i": 81,
+            "size": 1440,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 585,
+            "rc": 0,
+            "record_i": 85,
+            "size": 1440,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 8
+        }
+      }
+    },
+    "0x2080852e": {
+      "ga102_native_ioctls": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 57,
+            "rc": 0,
+            "record_i": 56,
+            "size": 528,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 194,
+            "rc": 0,
+            "record_i": 95,
+            "size": 528,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 344,
+            "rc": 0,
+            "record_i": 73,
+            "size": 528,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1063,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2216,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      }
+    },
+    "0x2080852f": {
+      "ga102_native_ioctls": {
+        "count": 7,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 58,
+            "rc": 0,
+            "record_i": 57,
+            "size": 776,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 195,
+            "rc": 0,
+            "record_i": 96,
+            "size": 776,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 345,
+            "rc": 0,
+            "record_i": 74,
+            "size": 776,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 7
+        }
+      }
+    },
+    "0x20808536": {
+      "ga102_native_ioctls": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 459,
+            "rc": 0,
+            "record_i": 82,
+            "size": 1812,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 242,
+            "rc": 0,
+            "record_i": 143,
+            "size": 1812,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2374,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x2080853a": {
+      "ga102_native_ioctls": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 460,
+            "rc": 0,
+            "record_i": 83,
+            "size": 1456,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 243,
+            "rc": 0,
+            "record_i": 144,
+            "size": 1456,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      }
+    },
+    "0x20808542": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 216,
+            "rc": 0,
+            "record_i": 117,
+            "size": 504,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x20808546": {
+      "ga102_native_ioctls": {
+        "count": 38,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 411,
+            "rc": 0,
+            "record_i": 62,
+            "size": 24,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 414,
+            "rc": 0,
+            "record_i": 63,
+            "size": 24,
+            "status": "0x56"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+            "line": 417,
+            "rc": 0,
+            "record_i": 64,
+            "size": 24,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x0": 14,
+          "0x56": 24
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 18,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2231,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2236,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2240,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 18
+        }
+      }
+    },
+    "0x20809001": {
+      "ga102_native_ioctls": {
+        "count": 143,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 102,
+            "rc": 0,
+            "record_i": 101,
+            "size": 8,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 107,
+            "rc": 0,
+            "record_i": 106,
+            "size": 8,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 112,
+            "rc": 0,
+            "record_i": 111,
+            "size": 8,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 143
+        }
+      }
+    },
+    "0x20809004": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2400,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2405,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2409,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 4
+        }
+      }
+    },
+    "0x20809019": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 253,
+            "rc": 0,
+            "record_i": 154,
+            "size": 10800,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x20809038": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 217,
+            "rc": 0,
+            "record_i": 118,
+            "size": 4,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2300,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x2080a026": {
+      "ga102_native_ioctls": {
+        "count": 139,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 104,
+            "rc": 0,
+            "record_i": 103,
+            "size": 532,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 109,
+            "rc": 0,
+            "record_i": 108,
+            "size": 532,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 114,
+            "rc": 0,
+            "record_i": 113,
+            "size": 532,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 139
+        }
+      }
+    },
+    "0x2080a028": {
+      "ga102_native_ioctls": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvdec_h264.jsonl.zst",
+            "line": 428,
+            "rc": 0,
+            "record_i": 427,
+            "size": 2192,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvdec_h264.jsonl.zst",
+            "line": 503,
+            "rc": 0,
+            "record_i": 502,
+            "size": 2192,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvenc_h264.jsonl.zst",
+            "line": 429,
+            "rc": 0,
+            "record_i": 428,
+            "size": 2192,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      }
+    },
+    "0x2080a080": {
+      "ga102_native_ioctls": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 197,
+            "rc": 0,
+            "record_i": 98,
+            "size": 52,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 198,
+            "rc": 0,
+            "record_i": 99,
+            "size": 52,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 2
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2226,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x2080a084": {
+      "ga102_native_ioctls": {
+        "count": 140,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 103,
+            "rc": 0,
+            "record_i": 102,
+            "size": 4,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 108,
+            "rc": 0,
+            "record_i": 107,
+            "size": 4,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 113,
+            "rc": 0,
+            "record_i": 112,
+            "size": 4,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 140
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2418,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x2080a0a4": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 258,
+            "rc": 0,
+            "record_i": 159,
+            "size": 67396,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x2080a0a7": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 251,
+            "rc": 0,
+            "record_i": 152,
+            "size": 14988,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2421,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x2080a0a8": {
+      "ga102_native_ioctls": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 254,
+            "rc": 0,
+            "record_i": 155,
+            "size": 19724,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 255,
+            "rc": 0,
+            "record_i": 156,
+            "size": 19724,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 256,
+            "rc": 0,
+            "record_i": 157,
+            "size": 19724,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      }
+    },
+    "0x2080a0d1": {
+      "ga102_native_ioctls": {
+        "count": 323,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/vkpeak.jsonl.zst",
+            "line": 880,
+            "rc": 0,
+            "record_i": 879,
+            "size": 2024,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/vkpeak.jsonl.zst",
+            "line": 5287,
+            "rc": 0,
+            "record_i": 5286,
+            "size": 2024,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/vkpeak.jsonl.zst",
+            "line": 5414,
+            "rc": 0,
+            "record_i": 5413,
+            "size": 2024,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 323
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 18,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 1550,
+            "rc": 0,
+            "record_i": 1549,
+            "size": 2024,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/ff_placebo.host_nvdiff.jsonl.zst",
+            "line": 886,
+            "rc": 0,
+            "record_i": 884,
+            "size": 2024,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/ff_placebo.host_nvdiff.jsonl.zst",
+            "line": 5119,
+            "rc": 0,
+            "record_i": 883,
+            "size": 2024,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 18
+        }
+      }
+    },
+    "0x2080a0f2": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 248,
+            "rc": 0,
+            "record_i": 149,
+            "size": 96,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2392,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x2080a612": {
+      "ga102_native_ioctls": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 65,
+            "rc": 0,
+            "record_i": 64,
+            "size": 11680,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 245,
+            "rc": 0,
+            "record_i": 146,
+            "size": 11680,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 352,
+            "rc": 0,
+            "record_i": 81,
+            "size": 11680,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1088,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2383,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      }
+    },
+    "0x2080a618": {
+      "ga102_native_ioctls": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 64,
+            "rc": 0,
+            "record_i": 63,
+            "size": 8620,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 244,
+            "rc": 0,
+            "record_i": 145,
+            "size": 8620,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 351,
+            "rc": 0,
+            "record_i": 80,
+            "size": 8620,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 2,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1083,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2379,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 2
+        }
+      }
+    },
+    "0x2080a63c": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 247,
+            "rc": 0,
+            "record_i": 148,
+            "size": 28,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2387,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 1
+        }
+      }
+    },
+    "0x20810108": {
+      "ga102_native_ioctls": {
+        "count": 25,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 42,
+            "rc": 0,
+            "record_i": 41,
+            "size": 992,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/blocksync.jsonl.zst",
+            "line": 42,
+            "rc": 0,
+            "record_i": 41,
+            "size": 992,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/clpeak.jsonl.zst",
+            "line": 42,
+            "rc": 0,
+            "record_i": 41,
+            "size": 992,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 25
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/vk_ofa.host_nvdiff.jsonl.zst",
+            "line": 567,
+            "rc": 0,
+            "record_i": 566,
+            "size": 992,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1022,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2103,
+            "size": null,
+            "status": "none"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 2179,
+            "size": null,
+            "status": "none"
+          }
+        ],
+        "statuses": {
+          "none": 3
+        }
+      },
+      "ga106_native_ioctl": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+            "line": 40,
+            "size": 992,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      },
+      "gb203_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 42,
+            "rc": 0,
+            "record_i": 41,
+            "size": 992,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0x90e70113": {
+      "ga102_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+            "line": 175,
+            "rc": 0,
+            "record_i": 76,
+            "size": 16,
+            "status": "0x56"
+          }
+        ],
+        "statuses": {
+          "0x56": 1
+        }
+      }
+    },
+    "0x90f10106": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 9,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 769,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 818,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 884,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 9
+        }
+      },
+      "ga106_native_gsp": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 57,
+            "size": 184,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 61,
+            "size": 184,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 66,
+            "size": 184,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      }
+    },
+    "0xa06c0101": {
+      "ga102_native_ioctls": {
+        "count": 60,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 245,
+            "rc": 0,
+            "record_i": 244,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 286,
+            "rc": 0,
+            "record_i": 285,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 327,
+            "rc": 0,
+            "record_i": 326,
+            "size": 3,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 60
+        }
+      },
+      "gb203_native_ioctls": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 226,
+            "rc": 0,
+            "record_i": 225,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 267,
+            "rc": 0,
+            "record_i": 266,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 308,
+            "rc": 0,
+            "record_i": 307,
+            "size": 3,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      }
+    },
+    "0xa06c0103": {
+      "ga102_native_ioctls": {
+        "count": 20,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+            "line": 413,
+            "rc": 0,
+            "record_i": 412,
+            "size": 8,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/blocksync.jsonl.zst",
+            "line": 408,
+            "rc": 0,
+            "record_i": 407,
+            "size": 8,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/clpeak.jsonl.zst",
+            "line": 390,
+            "rc": 0,
+            "record_i": 389,
+            "size": 8,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 20
+        }
+      },
+      "gb203_native_ioctls": {
+        "count": 1,
+        "examples": [
+          {
+            "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+            "line": 400,
+            "rc": 0,
+            "record_i": 399,
+            "size": 8,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 1
+        }
+      }
+    },
+    "0xa06f0103": {
+      "ga102_native_ioctls": {
+        "count": 74,
+        "examples": [
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/egl_offscreen.jsonl.zst",
+            "line": 219,
+            "rc": 0,
+            "record_i": 218,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/egl_offscreen.jsonl.zst",
+            "line": 233,
+            "rc": 0,
+            "record_i": 232,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_refusal_audit/ga102_vrf/host/egl_offscreen.jsonl.zst",
+            "line": 238,
+            "rc": 0,
+            "record_i": 237,
+            "size": 3,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 74
+        }
+      },
+      "ga104_native_gfx_ioctls": {
+        "count": 420,
+        "examples": [
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 226,
+            "rc": 0,
+            "record_i": 225,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 241,
+            "rc": 0,
+            "record_i": 240,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+            "line": 247,
+            "rc": 0,
+            "record_i": 246,
+            "size": 3,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 420
+        }
+      },
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 4,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 797,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 862,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1502,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 4
+        }
+      },
+      "ga106_native_gsp": {
+        "count": 3,
+        "examples": [
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 59,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 64,
+            "size": 3,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+            "line": 73,
+            "size": 3,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 3
+        }
+      }
+    },
+    "0xc3700104": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 14,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1985,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1987,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1989,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 14
+        }
+      }
+    },
+    "0xc3720101": {
+      "ga106_linux5806506_to_kayfabe": {
+        "count": 30,
+        "examples": [
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1956,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1958,
+            "size": null,
+            "status": "0x0"
+          },
+          {
+            "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+            "line": 1960,
+            "size": null,
+            "status": "0x0"
+          }
+        ],
+        "statuses": {
+          "0x0": 30
+        }
+      }
+    }
+  },
+  "sources": [
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/asyncAPI.jsonl.zst",
+      "matching_records": 30,
+      "records": 438,
+      "series": "ga102_native_ioctls",
+      "sha256": "92034f90cde5153ce38011220cf00674189db68a6482e813d72a0a2741f214d4"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/blocksync.jsonl.zst",
+      "matching_records": 21,
+      "records": 416,
+      "series": "ga102_native_ioctls",
+      "sha256": "4a6e3291e933532c067eef76ef99e0e366a4f8fac71b8adad97aa835f29c04c6"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/clpeak.jsonl.zst",
+      "matching_records": 18,
+      "records": 640,
+      "series": "ga102_native_ioctls",
+      "sha256": "0d8c64c19fd65c653d7e0b66fd4b6e6797d2288742d3772351bb893c3f43beb3"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/cup2.jsonl.zst",
+      "matching_records": 15,
+      "records": 404,
+      "series": "ga102_native_ioctls",
+      "sha256": "f5454961fa449792c8f191c0c0d84ddd0b34e0d5a944789e92d34a1f70c9d8f6"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/cup3.jsonl.zst",
+      "matching_records": 15,
+      "records": 403,
+      "series": "ga102_native_ioctls",
+      "sha256": "19c018b8b107e0d711009f54402c78f2d15622e0e6e11f6870d23d835f3f26a4"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/cup8.jsonl.zst",
+      "matching_records": 15,
+      "records": 409,
+      "series": "ga102_native_ioctls",
+      "sha256": "3ed17575f8c56048bc405b5db45aeb8a83668a4fd8e17b57e52bba4613a5f5e2"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/deviceQuery.jsonl.zst",
+      "matching_records": 27,
+      "records": 423,
+      "series": "ga102_native_ioctls",
+      "sha256": "faa3c3cc291e5d088808f74f59a12e83b8bd87f62f17ccf37972534d67dde5dd"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/egl_offscreen.jsonl.zst",
+      "matching_records": 14,
+      "records": 672,
+      "series": "ga102_native_ioctls",
+      "sha256": "53b099543b47eb209e88071e0f10838f5e7ed223c03d607e34b2154b6796db38"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/gpu_burn.jsonl.zst",
+      "matching_records": 70,
+      "records": 625,
+      "series": "ga102_native_ioctls",
+      "sha256": "4072c7185f66e69b43d35146c372b186bbf9e6fccfe31e8d0937fbf91339d886"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/graphMemoryNodes.jsonl.zst",
+      "matching_records": 24,
+      "records": 469,
+      "series": "ga102_native_ioctls",
+      "sha256": "e25cd247f7a12e9797f679a59e17316c03230039206eb7dbfc1252b63bf3755b"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/llama_gen.jsonl.zst",
+      "matching_records": 183,
+      "records": 749,
+      "series": "ga102_native_ioctls",
+      "sha256": "d737f2bb75940ddfe878ad206534131b8792099ae2c71e09fb14515a2c69fb34"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/nvdec_h264.jsonl.zst",
+      "matching_records": 24,
+      "records": 1285,
+      "series": "ga102_native_ioctls",
+      "sha256": "76167d1b0f57c0215f738e2a8a56d2e0973666382855f6800061481ea24e06bc"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/nvenc_h264.jsonl.zst",
+      "matching_records": 21,
+      "records": 1672,
+      "series": "ga102_native_ioctls",
+      "sha256": "3f0d5032c698d945df4225a28bd90c32a55970d65c32508445559c9190557f55"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/nvenc_hevc.jsonl.zst",
+      "matching_records": 21,
+      "records": 1547,
+      "series": "ga102_native_ioctls",
+      "sha256": "25b543b47628e67fc71854fc5ba3b861d6e975f41867b70cf10d4b46c51aea8f"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/nvidia_smi.jsonl.zst",
+      "matching_records": 210,
+      "records": 501,
+      "series": "ga102_native_ioctls",
+      "sha256": "9e9a7428e4d8223f5ae2ee51d0adc5e953355fba3c03b252f72e0d61a97460fe"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/simpleCallback.jsonl.zst",
+      "matching_records": 27,
+      "records": 459,
+      "series": "ga102_native_ioctls",
+      "sha256": "e3158ff5117d1bbe8abd15619e5ccbc627f4926708455583b968c8d2e3a8b44c"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/simpleCudaGraphs.jsonl.zst",
+      "matching_records": 24,
+      "records": 465,
+      "series": "ga102_native_ioctls",
+      "sha256": "06b0417eba2aa4767fc64dcb8fe02b7683914fa8c9362a336e3819a33d22e1d5"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/simpleIPC.jsonl.zst",
+      "matching_records": 54,
+      "records": 865,
+      "series": "ga102_native_ioctls",
+      "sha256": "e19768fd81d21c92e00ca4fb2f75313cc81ef390cbf4cee24f8b0f12dbfdf28f"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/simpleStreams.jsonl.zst",
+      "matching_records": 30,
+      "records": 451,
+      "series": "ga102_native_ioctls",
+      "sha256": "184087a229762259e0f371bbe439235890aa65ae500ab0fb8dab073b124d0212"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/torch_correct.jsonl.zst",
+      "matching_records": 81,
+      "records": 840,
+      "series": "ga102_native_ioctls",
+      "sha256": "82ec18596f76c59d4a8e8cda640d0e846fc811538fd2b5be0aa9189f540e04e6"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/torch_train.jsonl.zst",
+      "matching_records": 81,
+      "records": 799,
+      "series": "ga102_native_ioctls",
+      "sha256": "9b725f58f8e9af7f34435c39f1d3cd6cb638444b5c8eb652571bf0300fb5a191"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/vkpeak.jsonl.zst",
+      "matching_records": 416,
+      "records": 10778,
+      "series": "ga102_native_ioctls",
+      "sha256": "0268cba98f6a02b71fba383489a578c26b2349b9ca9b2b313d06f399ba1ebb8f"
+    },
+    {
+      "file": "traces/v3_refusal_audit/ga102_vrf/host/vulkaninfo.jsonl.zst",
+      "matching_records": 24,
+      "records": 1428,
+      "series": "ga102_native_ioctls",
+      "sha256": "1f2437efe882426d68b7a9fd9c56d4c86b58d9c418080ca75b3513822bc8834f"
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/blender_eevee_vulkan.host_nvdiff.jsonl.zst",
+      "matching_records": 39,
+      "records": 2266,
+      "series": "ga104_native_gfx_ioctls",
+      "sha256": "fb045717fa82c7d14fa50214c0789e2b9ab745299ebf7591d1c3ad0b8fbb67f4"
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/ff_placebo.host_nvdiff.jsonl.zst",
+      "matching_records": 108,
+      "records": 8420,
+      "series": "ga104_native_gfx_ioctls",
+      "sha256": "b0996e316aa1b6ff184405b3de5579407b4528298a40fea314d5b0f8fb9b2abd"
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/ff_vulkan.host_nvdiff.jsonl.zst",
+      "matching_records": 487,
+      "records": 51894,
+      "series": "ga104_native_gfx_ioctls",
+      "sha256": "1d307614daf52c3a54ae80092bd61436e246f79c384e755bfa655ccfbae86e24"
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/ff_vulkan_init.host_nvdiff.jsonl.zst",
+      "matching_records": 54,
+      "records": 4039,
+      "series": "ga104_native_gfx_ioctls",
+      "sha256": "00b71670336a0f94630e385a0bf7c36adb6fe3d520b44a5aa1e6229a12002708"
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/pv_validate_vk.host_nvdiff.jsonl.zst",
+      "matching_records": 24,
+      "records": 1115,
+      "series": "ga104_native_gfx_ioctls",
+      "sha256": "5af5a5e0dc7f7e8b8a25d58cf48124a15a5ab0cb9ab18742bb801afe2516a2a7"
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/vk_compute.host_nvdiff.jsonl.zst",
+      "matching_records": 24,
+      "records": 1299,
+      "series": "ga104_native_gfx_ioctls",
+      "sha256": "63fd4d9118916daf0f02fe76432cbb799c48f37e0b37d93f9d06842dcf9ca0c2"
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/vk_ofa.host_nvdiff.jsonl.zst",
+      "matching_records": 35,
+      "records": 1711,
+      "series": "ga104_native_gfx_ioctls",
+      "sha256": "0d19b7f558f7b872f735eefdee8a4fba3264e9d413f8459e016be70d04d6ac9f"
+    },
+    {
+      "file": "traces/v3_gfxset/diag2/nvdiff/vk_render.host_nvdiff.jsonl.zst",
+      "matching_records": 24,
+      "records": 1329,
+      "series": "ga104_native_gfx_ioctls",
+      "sha256": "f3dbe0cb1ebb8c80570e2fb67f1a50ebc5d13cd8b361c00ebd8e12dcc4dfa624"
+    },
+    {
+      "file": "traces/v3_blackwell/t0_nvdiff_ce_bare_gb203.jsonl.zst",
+      "matching_records": 15,
+      "records": 587,
+      "series": "gb203_native_ioctls",
+      "sha256": "5721f1ab1cf2e8cd92418759a59424123d2b749985f813a318254966a7d8ce73"
+    },
+    {
+      "file": "traces/real_ga106/rpc_transcript_real_ga106.txt",
+      "matching_records": 22,
+      "records": 88,
+      "series": "ga106_native_gsp",
+      "sha256": "2e47d5f11f105864220bb8b0b3225493131d4ba461e0c512037229f564f338b0"
+    },
+    {
+      "file": "traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt",
+      "matching_records": 11,
+      "records": 89,
+      "series": "ga106_native_ioctl",
+      "sha256": "dfe8b525d4c796c44784b94c869173a29373a961661ce5703c038d075ba698e6"
+    },
+    {
+      "file": "traces/v3_windows/discovery_20261004/linux_baseline/run_lin_b1t_580.65.06_qemu.trimmed.log",
+      "matching_records": 192,
+      "records": 2438,
+      "series": "ga106_linux5806506_to_kayfabe",
+      "sha256": "a276420915f85cca03573f62cd504066fcf4f2e396d2299b07c10042512cb756"
+    }
+  ]
+}

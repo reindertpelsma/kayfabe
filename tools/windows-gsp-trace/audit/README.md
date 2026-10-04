@@ -56,3 +56,13 @@ capture, review the complete policy chain, ABI/family selection and any new
 wrappers before extending these pins. A numeric SDK name only identifies the
 command; it does not verify a layout or establish full semantics. SDK header
 hashes and matching name locations are recorded in the JSON.
+
+## Source and Linux comparison
+
+`catalogue.py` extends the handler audit with the [complete command catalogue](../evidence/2026-10-04-rtx4070-580.88/command-catalogue/README.md).
+It preserves the distinction between native Linux ioctls, native GSP traffic and
+Linux guest GSP requests answered by Kayfabe. Public descriptions and SDK layout
+measurements are pinned separately from empirical observations. Absence from a
+sample is never classified as Windows-only. The catalogue also corrects the
+earlier inference that a routed GSP method's missing CPU handler proves Linux
+cannot answer it. See its README for reproduction and remaining hardware work.

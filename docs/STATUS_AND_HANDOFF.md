@@ -9,15 +9,16 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**Windows research update, 2026-10-04:** the owner subsequently requested the
-native Vast Windows installer and GSP recorder. The public installer is backed
-up separately. The owned rental passed Windows cold boots and actual public-key
-SSH login; recorder kernel loading and native cutover remain under test. A
-borrowed RTX 4070 machine is also installing a fresh Windows fixture. See the
-[Windows lane handoff](handoff/2026-10-04/windows-native.md) for source branches,
-instance ownership, verification limits and remaining steps. This supersedes
-the statement below that Windows is parked; it does not change candidate 2's
-verified product state or merge requirements.
+**Windows research update, 2026-10-04:** native Windows cutover and NVIDIA
+580.88 installation succeeded; the RTX 4070 reference retained 4,535 GSP records.
+The new [source and Linux comparison](../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/command-catalogue/README.md)
+finds Linux occurrences for 68/129 direct control IDs across explicitly
+separated boundaries. No command is established as Windows-only, no successful
+GFX_POOL_QUERY_SIZE reply is retained, and Windows-through-Kayfabe remains
+unvalidated. The borrowed PC now times out and is treated as unavailable;
+valuable evidence/source is backed up. See the [Windows lane handoff](handoff/2026-10-04/windows-native.md)
+for exact revisions, source interpretations and remaining work. This supersedes
+older Windows-parking/runtime notes, not the verified candidate-2 product state.
 
 ### 0.0 ★ RESUME HERE — 2026-10-04 (supersedes every older entry in §0 where they differ)
 

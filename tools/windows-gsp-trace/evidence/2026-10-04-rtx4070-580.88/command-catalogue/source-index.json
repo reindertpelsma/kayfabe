@@ -1,0 +1,4509 @@
+{
+  "selected": {
+    "0x00730102": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073system.h",
+        "sizeof": 12,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS"
+      },
+      "line": 131,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h#L131"
+    },
+    "0x00730108": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073system.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_SYSTEM_GET_CONNECT_STATE_PARAMS"
+      },
+      "line": 392,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h#L392"
+    },
+    "0x0073010a": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073system.h",
+        "sizeof": 12,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_PARAMS"
+      },
+      "line": 516,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h#L516"
+    },
+    "0x0073010c": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073system.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS"
+      },
+      "line": 646,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h#L646"
+    },
+    "0x00730122": {
+      "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+      "layout": null,
+      "line": 187,
+      "source": "nouveau",
+      "symbol": "NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE",
+      "url": "https://github.com/torvalds/linux/blob/156fa7417fac89fd9dcf3a4ee88785ff90ab6411/drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h#L187"
+    },
+    "0x0073012c": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073system.h",
+        "sizeof": 12,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_SYSTEM_VRR_DISPLAY_INFO_PARAMS"
+      },
+      "line": 1290,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_SYSTEM_VRR_DISPLAY_INFO",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h#L1290"
+    },
+    "0x00730250": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073specific.h",
+        "sizeof": 72,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_SPECIFIC_GET_CONNECTOR_DATA_PARAMS"
+      },
+      "line": 392,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h#L392"
+    },
+    "0x00730280": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073specific.h",
+        "sizeof": 12,
+        "source": "ogkm595_84",
+        "type": "NV0073_CTRL_SPECIFIC_GET_HDCP_STATE_PARAMS"
+      },
+      "line": 787,
+      "source": "ogkm595_84",
+      "symbol": "NV0073_CTRL_CMD_SPECIFIC_GET_HDCP_STATE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/595.84/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h#L787"
+    },
+    "0x00730282": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073specific.h",
+        "sizeof": 2608,
+        "source": "ogkm595_84",
+        "type": "NV0073_CTRL_SPECIFIC_HDCP_CTRL_PARAMS"
+      },
+      "line": 1228,
+      "source": "ogkm595_84",
+      "symbol": "NV0073_CTRL_CMD_SPECIFIC_HDCP_CTRL",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/595.84/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h#L1228"
+    },
+    "0x0073028b": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073specific.h",
+        "sizeof": 56,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_SPECIFIC_OR_GET_INFO_PARAMS"
+      },
+      "line": 1074,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h#L1074"
+    },
+    "0x007302a4": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073specific.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_SPECIFIC_DISPLAY_CHANGE_PARAMS"
+      },
+      "line": 1539,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_SPECIFIC_DISPLAY_CHANGE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h#L1539"
+    },
+    "0x00731140": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dfp.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DFP_GET_INFO_PARAMS"
+      },
+      "line": 120,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DFP_GET_INFO",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h#L120"
+    },
+    "0x00731142": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dfp.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DFP_GET_DISPLAYPORT_DONGLE_INFO_PARAMS"
+      },
+      "line": 262,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h#L262"
+    },
+    "0x00731144": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dfp.h",
+        "sizeof": 120,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DFP_SET_ELD_AUDIO_CAP_PARAMS"
+      },
+      "line": 350,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h#L350"
+    },
+    "0x0073114e": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dfp.h",
+        "sizeof": 24,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DFP_UPDATE_DYNAMIC_DFP_CACHE_PARAMS"
+      },
+      "line": 424,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DFP_UPDATE_DYNAMIC_DFP_CACHE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h#L424"
+    },
+    "0x00731150": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dfp.h",
+        "sizeof": 12,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DFP_SET_AUDIO_ENABLE_PARAMS"
+      },
+      "line": 471,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DFP_SET_AUDIO_ENABLE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h#L471"
+    },
+    "0x00731152": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dfp.h",
+        "sizeof": 80,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS"
+      },
+      "line": 596,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DFP_ASSIGN_SOR",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h#L596"
+    },
+    "0x00731341": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dp.h",
+        "sizeof": 48,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DP_AUXCH_CTRL_PARAMS"
+      },
+      "line": 151,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DP_AUXCH_CTRL",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h#L151"
+    },
+    "0x00731343": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dp.h",
+        "sizeof": 28,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DP_CTRL_PARAMS"
+      },
+      "line": 441,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DP_CTRL",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h#L441"
+    },
+    "0x00731359": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dp.h",
+        "sizeof": 12,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DP_SET_AUDIO_MUTESTREAM_PARAMS"
+      },
+      "line": 1099,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DP_SET_AUDIO_MUTESTREAM",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h#L1099"
+    },
+    "0x00731360": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dp.h",
+        "sizeof": 24,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_DP_GET_LINK_CONFIG_PARAMS"
+      },
+      "line": 1326,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DP_GET_LINK_CONFIG",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h#L1326"
+    },
+    "0x00731362": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dp.h",
+        "sizeof": 84,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_CMD_DP_CONFIG_STREAM_PARAMS"
+      },
+      "line": 1480,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DP_CONFIG_STREAM",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h#L1480"
+    },
+    "0x00731378": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dp.h",
+        "sizeof": 52,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_CMD_DP_SET_STEREO_MSA_PROPERTIES_PARAMS"
+      },
+      "line": 2254,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DP_SET_STEREO_MSA_PROPERTIES",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h#L2254"
+    },
+    "0x00731381": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+      "layout": {
+        "header": "ctrl/ctrl0073/ctrl0073dp.h",
+        "sizeof": 80,
+        "source": "ogkm580_65_06",
+        "type": "NV0073_CTRL_CMD_DP_SET_MSA_PROPERTIES_V2_PARAMS"
+      },
+      "line": 2712,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0073_CTRL_CMD_DP_SET_MSA_PROPERTIES_V2",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h#L2712"
+    },
+    "0x00800294": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl0080/ctrl0080gpu.h",
+        "sizeof": 4,
+        "source": "ogkm580_65_06",
+        "type": "NV0080_CTRL_GPU_GET_BRAND_CAPS_PARAMS"
+      },
+      "line": 546,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gpu.h#L546"
+    },
+    "0x0080170e": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+      "layout": {
+        "header": "ctrl/ctrl0080/ctrl0080fifo.h",
+        "sizeof": 12,
+        "source": "ogkm580_65_06",
+        "type": "NV0080_CTRL_FIFO_GET_LATENCY_BUFFER_SIZE_PARAMS"
+      },
+      "line": 206,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h#L206"
+    },
+    "0x0080170f": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+      "layout": {
+        "header": "ctrl/ctrl0080/ctrl0080fifo.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV0080_CTRL_FIFO_SET_CHANNEL_PROPERTIES_PARAMS"
+      },
+      "line": 290,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0080_CTRL_CMD_FIFO_SET_CHANNEL_PROPERTIES",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h#L290"
+    },
+    "0x00801812": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h",
+      "layout": {
+        "header": "ctrl/ctrl0080/ctrl0080dma.h",
+        "sizeof": 4,
+        "source": "ogkm580_65_06",
+        "type": "NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS"
+      },
+      "line": 772,
+      "source": "ogkm580_65_06",
+      "symbol": "NV0080_CTRL_DMA_SET_DEFAULT_VASPACE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h#L772"
+    },
+    "0x20800102": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gpu.h",
+        "sizeof": 564,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GPU_GET_INFO_V2_PARAMS"
+      },
+      "line": 285,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GPU_GET_INFO_V2",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h#L285"
+    },
+    "0x2080012b": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gpu.h",
+        "sizeof": 560,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS"
+      },
+      "line": 984,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GPU_PROMOTE_CTX",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h#L984"
+    },
+    "0x2080012d": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gpu.h",
+        "sizeof": 56,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS"
+      },
+      "line": 1076,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GPU_INITIALIZE_CTX",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h#L1076"
+    },
+    "0x2080012f": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gpu.h",
+        "sizeof": 1464,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GPU_QUERY_ECC_STATUS_PARAMS"
+      },
+      "line": 1148,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h#L1148"
+    },
+    "0x2080014b": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gpu.h",
+        "sizeof": 5,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GPU_GET_INFOROM_OBJECT_VERSION_PARAMS"
+      },
+      "line": 1825,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GPU_GET_INFOROM_OBJECT_VERSION",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h#L1825"
+    },
+    "0x20800156": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gpu.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GPU_GET_INFOROM_IMAGE_VERSION_PARAMS"
+      },
+      "line": 1964,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GPU_GET_INFOROM_IMAGE_VERSION",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h#L1964"
+    },
+    "0x20800157": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gpu.h",
+        "sizeof": 0,
+        "source": "ogkm580_65_06",
+        "type": null
+      },
+      "line": 1983,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GPU_QUERY_INFOROM_ECC_SUPPORT",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h#L1983"
+    },
+    "0x208001a4": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gpu.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GPU_GET_CHIP_DETAILS_PARAMS"
+      },
+      "line": 4274,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GPU_GET_CHIP_DETAILS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h#L4274"
+    },
+    "0x20800a38": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080internal.h",
+        "sizeof": 24,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE_PARAMS"
+      },
+      "line": 609,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h#L609"
+    },
+    "0x20800a9a": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080internal.h",
+        "sizeof": 8,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_INTERNAL_PERF_BOOST_SET_PARAMS_2X"
+      },
+      "line": 1701,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h#L1701"
+    },
+    "0x20800af0": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080internal.h",
+        "sizeof": 0,
+        "source": "ogkm580_65_06",
+        "type": null
+      },
+      "line": 3526,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h#L3526"
+    },
+    "0x20800af1": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080internal.h",
+        "sizeof": 0,
+        "source": "ogkm580_65_06",
+        "type": null
+      },
+      "line": 3529,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_INTERNAL_DISPLAY_PRE_MODESET",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h#L3529"
+    },
+    "0x20800af2": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080internal.h",
+        "sizeof": 0,
+        "source": "ogkm580_65_06",
+        "type": null
+      },
+      "line": 3532,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_INTERNAL_DISPLAY_POST_MODESET",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h#L3532"
+    },
+    "0x20800aff": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080internal.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL_PARAMS"
+      },
+      "line": 4029,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h#L4029"
+    },
+    "0x2080110b": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080fifo.h",
+        "sizeof": 536,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_FIFO_DISABLE_CHANNELS_PARAMS"
+      },
+      "line": 339,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h#L339"
+    },
+    "0x20801208": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gr.h",
+        "sizeof": 24,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS"
+      },
+      "line": 599,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h#L599"
+    },
+    "0x20801211": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gr.h",
+        "sizeof": 112,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GR_CTXSW_PREEMPTION_BIND_PARAMS"
+      },
+      "line": 906,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h#L906"
+    },
+    "0x2080121f": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080gr.h",
+        "sizeof": 40,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS"
+      },
+      "line": 1322,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_GR_GFX_POOL_QUERY_SIZE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h#L1322"
+    },
+    "0x20801303": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080fb.h",
+        "sizeof": 1028,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_FB_GET_INFO_V2_PARAMS"
+      },
+      "line": 458,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_FB_GET_INFO_V2",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h#L458"
+    },
+    "0x20801322": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080fb.h",
+        "sizeof": 2056,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_FB_GET_OFFLINED_PAGES_PARAMS"
+      },
+      "line": 1027,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_FB_GET_OFFLINED_PAGES",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h#L1027"
+    },
+    "0x20801344": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080fb.h",
+        "sizeof": 6152,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_FB_GET_REMAPPED_ROWS_PARAMS"
+      },
+      "line": 1915,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_FB_GET_REMAPPED_ROWS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h#L1915"
+    },
+    "0x20801347": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080fb.h",
+        "sizeof": 20,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_FB_GET_ROW_REMAPPER_HISTOGRAM_PARAMS"
+      },
+      "line": 2355,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_FB_GET_ROW_REMAPPER_HISTOGRAM",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h#L2355"
+    },
+    "0x20801357": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080fb.h",
+        "sizeof": 4,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_FB_DRAM_ENCRYPTION_INFOROM_SUPPORT_PARAMS"
+      },
+      "line": 2793,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h#L2793"
+    },
+    "0x20801813": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080bus.h",
+        "sizeof": 76,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_BUS_GET_PEX_COUNTERS_PARAMS"
+      },
+      "line": 851,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_BUS_GET_PEX_COUNTERS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h#L851"
+    },
+    "0x20801819": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080bus.h",
+        "sizeof": 32,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_BUS_GET_PEX_UTIL_COUNTERS_PARAMS"
+      },
+      "line": 1020,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_BUS_GET_PEX_UTIL_COUNTERS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h#L1020"
+    },
+    "0x20801823": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080bus.h",
+        "sizeof": 420,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_BUS_GET_INFO_V2_PARAMS"
+      },
+      "line": 588,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_BUS_GET_INFO_V2",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h#L588"
+    },
+    "0x20801829": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080bus.h",
+        "sizeof": 12,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_CMD_BUS_GET_PCIE_REQ_ATOMICS_CAPS_PARAMS"
+      },
+      "line": 1205,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_BUS_GET_PCIE_REQ_ATOMICS_CAPS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h#L1205"
+    },
+    "0x20801830": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080bus.h",
+        "sizeof": 4,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_CMD_BUS_GET_PCIE_CPL_ATOMICS_CAPS_PARAMS"
+      },
+      "line": 1567,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_BUS_GET_PCIE_CPL_ATOMICS_CAPS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h#L1567"
+    },
+    "0x20802a08": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080ce.h",
+        "sizeof": 4,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_CE_GET_FAULT_METHOD_BUFFER_SIZE_PARAMS"
+      },
+      "line": 287,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h#L287"
+    },
+    "0x20803083": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080nvlink.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080nvlink.h",
+        "sizeof": 39,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_NVLINK_GET_PLATFORM_INFO_PARAMS"
+      },
+      "line": 3235,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080nvlink.h#L3235"
+    },
+    "0x20803400": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080ecc.h",
+        "sizeof": 96,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_ECC_GET_CLIENT_EXPOSED_COUNTERS_PARAMS"
+      },
+      "line": 37,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_ECC_GET_CLIENT_EXPOSED_COUNTERS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h#L37"
+    },
+    "0x20803401": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080ecc.h",
+        "sizeof": 40,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_ECC_GET_VOLATILE_COUNTS_PARAMS"
+      },
+      "line": 100,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_ECC_GET_VOLATILE_COUNTS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h#L100"
+    },
+    "0x20803404": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+      "layout": {
+        "header": "ctrl/ctrl2080/ctrl2080ecc.h",
+        "sizeof": 2,
+        "source": "ogkm580_65_06",
+        "type": "NV2080_CTRL_ECC_GET_REPAIR_STATUS_PARAMS"
+      },
+      "line": 212,
+      "source": "ogkm580_65_06",
+      "symbol": "NV2080_CTRL_CMD_ECC_GET_REPAIR_STATUS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h#L212"
+    },
+    "0x50800101": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+      "layout": {
+        "header": "ctrl/ctrl5080.h",
+        "sizeof": 584,
+        "source": "ogkm580_65_06",
+        "type": "NV5080_CTRL_DEFERRED_API_PARAMS"
+      },
+      "line": 87,
+      "source": "ogkm580_65_06",
+      "symbol": "NV5080_CTRL_CMD_DEFERRED_API",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl5080.h#L87"
+    },
+    "0x90e70113": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90e7/ctrl90e7bbx.h",
+      "layout": {
+        "header": "ctrl/ctrl90e7/ctrl90e7bbx.h",
+        "sizeof": 16,
+        "source": "ogkm580_65_06",
+        "type": "NV90E7_CTRL_BBX_GET_LAST_FLUSH_TIME_PARAMS"
+      },
+      "line": 55,
+      "source": "ogkm580_65_06",
+      "symbol": "NV90E7_CTRL_CMD_BBX_GET_LAST_FLUSH_TIME",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl90e7/ctrl90e7bbx.h#L55"
+    },
+    "0x90f10106": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h",
+      "layout": {
+        "header": "ctrl/ctrl90f1.h",
+        "sizeof": 184,
+        "source": "ogkm580_65_06",
+        "type": "NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS"
+      },
+      "line": 268,
+      "source": "ogkm580_65_06",
+      "symbol": "NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h#L268"
+    },
+    "0xa06c0101": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+      "layout": {
+        "header": "ctrl/ctrla06c.h",
+        "sizeof": 3,
+        "source": "ogkm580_65_06",
+        "type": "NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS"
+      },
+      "line": 97,
+      "source": "ogkm580_65_06",
+      "symbol": "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrla06c.h#L97"
+    },
+    "0xa06c0103": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+      "layout": {
+        "header": "ctrl/ctrla06c.h",
+        "sizeof": 8,
+        "source": "ogkm580_65_06",
+        "type": "NVA06C_CTRL_TIMESLICE_PARAMS"
+      },
+      "line": 146,
+      "source": "ogkm580_65_06",
+      "symbol": "NVA06C_CTRL_CMD_SET_TIMESLICE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrla06c.h#L146"
+    },
+    "0xa06c010a": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+      "layout": {
+        "header": "ctrl/ctrla06c.h",
+        "sizeof": 88,
+        "source": "ogkm580_65_06",
+        "type": "NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS"
+      },
+      "line": 354,
+      "source": "ogkm580_65_06",
+      "symbol": "NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrla06c.h#L354"
+    },
+    "0xa06f0103": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h",
+      "layout": {
+        "header": "ctrl/ctrla06f/ctrla06fgpfifo.h",
+        "sizeof": 3,
+        "source": "ogkm580_65_06",
+        "type": "NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS"
+      },
+      "line": 66,
+      "source": "ogkm580_65_06",
+      "symbol": "NVA06F_CTRL_CMD_GPFIFO_SCHEDULE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h#L66"
+    },
+    "0xc3700104": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc370/ctrlc370chnc.h",
+      "layout": {
+        "header": "ctrl/ctrlc370/ctrlc370chnc.h",
+        "sizeof": 20,
+        "source": "ogkm580_65_06",
+        "type": "NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS"
+      },
+      "line": 269,
+      "source": "ogkm580_65_06",
+      "symbol": "NVC370_CTRL_CMD_GET_CHANNEL_INFO",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrlc370/ctrlc370chnc.h#L269"
+    },
+    "0xc3720101": {
+      "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc372/ctrlc372chnc.h",
+      "layout": {
+        "header": "ctrl/ctrlc372/ctrlc372chnc.h",
+        "sizeof": 2048,
+        "source": "ogkm580_65_06",
+        "type": "NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS"
+      },
+      "line": 40,
+      "source": "ogkm580_65_06",
+      "symbol": "NVC372_CTRL_CMD_IS_MODE_POSSIBLE",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/307159f2623d3bf45feb9177bd2da52ffbc5ddf9/src/common/sdk/nvidia/inc/ctrl/ctrlc372/ctrlc372chnc.h#L40"
+    }
+  },
+  "sources": {
+    "envytools": {
+      "literal_hits": [
+        {
+          "file": "demmt/nvrm_mthd.h",
+          "id": "0xa06f0103",
+          "line": 429
+        }
+      ],
+      "revision": "f102b82381f3f11cee113d16374c87091db039d9",
+      "scope": ".",
+      "url": "https://github.com/envytools/envytools"
+    },
+    "gvisor": {
+      "literal_hits": [
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20801823",
+          "line": 575
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20801813",
+          "line": 578
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20801819",
+          "line": 579
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20801829",
+          "line": 580
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20801830",
+          "line": 581
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20803404",
+          "line": 607
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20801303",
+          "line": 613
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20801322",
+          "line": 621
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x2080110b",
+          "line": 629
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20800102",
+          "line": 655
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x2080012f",
+          "line": 660
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x2080014b",
+          "line": 669
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20800156",
+          "line": 670
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20800157",
+          "line": 671
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x208001a4",
+          "line": 682
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20801208",
+          "line": 691
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x20803083",
+          "line": 785
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0x90e70113",
+          "line": 918
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0xa06c0101",
+          "line": 923
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0xa06c0103",
+          "line": 924
+        },
+        {
+          "file": "pkg/abi/nvgpu/ctrl.go",
+          "id": "0xa06f0103",
+          "line": 931
+        },
+        {
+          "file": "tools/ioctl_sniffer/README.md",
+          "id": "0x2080014b",
+          "line": 40
+        }
+      ],
+      "revision": "bc2e4d8a69cb7703793876690c8e670b98e13699",
+      "scope": ".",
+      "url": "https://github.com/google/gvisor"
+    },
+    "nouveau": {
+      "literal_hits": [
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r570/nvrm/disp.h",
+          "id": "0x00730250",
+          "line": 34
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r570/nvrm/disp.h",
+          "id": "0x00730108",
+          "line": 117
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r570/nvrm/disp.h",
+          "id": "0x00731140",
+          "line": 125
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r570/nvrm/disp.h",
+          "id": "0x0073010c",
+          "line": 213
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r570/nvrm/disp.h",
+          "id": "0x00731343",
+          "line": 248
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r570/nvrm/disp.h",
+          "id": "0x00731362",
+          "line": 259
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r570/nvrm/disp.h",
+          "id": "0x00731359",
+          "line": 293
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/vmm.h",
+          "id": "0x90f10106",
+          "line": 33
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00730102",
+          "line": 49
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00730250",
+          "line": 71
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x0073028b",
+          "line": 86
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00730122",
+          "line": 187
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00731140",
+          "line": 195
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00731152",
+          "line": 288
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00731144",
+          "line": 320
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00731341",
+          "line": 450
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00731343",
+          "line": 489
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00731362",
+          "line": 642
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00731150",
+          "line": 688
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/disp.h",
+          "id": "0x00731359",
+          "line": 695
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/fifo.h",
+          "id": "0x20802a08",
+          "line": 126
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/fifo.h",
+          "id": "0xa06f0103",
+          "line": 309
+        },
+        {
+          "file": "drivers/gpu/drm/nouveau/nvkm/subdev/gsp/rm/r535/nvrm/fifo.h",
+          "id": "0x2080012b",
+          "line": 327
+        }
+      ],
+      "revision": "156fa7417fac89fd9dcf3a4ee88785ff90ab6411",
+      "scope": "drivers/gpu/drm/nouveau",
+      "url": "https://github.com/torvalds/linux"
+    },
+    "nova": {
+      "literal_hits": [],
+      "revision": "6f3ed7fec72fc8979b2a8c7219c0a9fcfc8d07b5",
+      "scope": "drivers/gpu/drm/nova",
+      "url": "https://github.com/torvalds/linux"
+    },
+    "ogkm580_159_04": {
+      "literal_hits": [
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00800294",
+          "line": 365
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170e",
+          "line": 650
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170f",
+          "line": 665
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00801812",
+          "line": 875
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170e",
+          "line": 1403
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00800294",
+          "line": 1434
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.h",
+          "id": "0x0080170e",
+          "line": 121
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.h",
+          "id": "0x00800294",
+          "line": 124
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800102",
+          "line": 153
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012b",
+          "line": 318
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012d",
+          "line": 348
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012f",
+          "line": 363
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080014b",
+          "line": 588
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800156",
+          "line": 678
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800157",
+          "line": 693
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x208001a4",
+          "line": 1323
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800a38",
+          "line": 2283
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800a9a",
+          "line": 3588
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af0",
+          "line": 4638
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af1",
+          "line": 4653
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af2",
+          "line": 4668
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800aff",
+          "line": 4773
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080110b",
+          "line": 4923
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801208",
+          "line": 5268
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801211",
+          "line": 5358
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080121f",
+          "line": 5508
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801303",
+          "line": 5853
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801322",
+          "line": 5958
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801344",
+          "line": 6138
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801347",
+          "line": 6168
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801357",
+          "line": 6303
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801813",
+          "line": 6558
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801819",
+          "line": 6648
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801823",
+          "line": 6708
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801829",
+          "line": 6798
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801830",
+          "line": 6903
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20802a08",
+          "line": 7668
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803083",
+          "line": 8883
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803400",
+          "line": 9303
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803401",
+          "line": 9318
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803404",
+          "line": 9363
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801829",
+          "line": 10291
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801830",
+          "line": 10311
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801322",
+          "line": 10451
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012f",
+          "line": 10601
+        },
+        {
+          "file": "src/nvidia/generated/g_vaspace_api_nvoc.c",
+          "id": "0x90f10106",
+          "line": 200
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h",
+          "id": "0xa06f0103",
+          "line": 66
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc370/ctrlc370chnc.h",
+          "id": "0xc3700104",
+          "line": 269
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+          "id": "0x50800101",
+          "line": 87
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90e7/ctrl90e7bbx.h",
+          "id": "0x90e70113",
+          "line": 55
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0101",
+          "line": 97
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0103",
+          "line": 146
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c010a",
+          "line": 354
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc372/ctrlc372chnc.h",
+          "id": "0xc3720101",
+          "line": 40
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h",
+          "id": "0x90f10106",
+          "line": 268
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801823",
+          "line": 588
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801813",
+          "line": 851
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801819",
+          "line": 1020
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801829",
+          "line": 1205
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801830",
+          "line": 1567
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803400",
+          "line": 37
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803401",
+          "line": 100
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803404",
+          "line": 213
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080nvlink.h",
+          "id": "0x20803083",
+          "line": 3235
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800102",
+          "line": 285
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012b",
+          "line": 984
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012d",
+          "line": 1076
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012f",
+          "line": 1148
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080014b",
+          "line": 1825
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800156",
+          "line": 1964
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800157",
+          "line": 1983
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x208001a4",
+          "line": 4282
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a38",
+          "line": 609
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a9a",
+          "line": 1701
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af0",
+          "line": 3526
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af1",
+          "line": 3529
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af2",
+          "line": 3532
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800aff",
+          "line": 4029
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+          "id": "0x2080110b",
+          "line": 339
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801303",
+          "line": 459
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801322",
+          "line": 1028
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801344",
+          "line": 1919
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801347",
+          "line": 2359
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801357",
+          "line": 2797
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+          "id": "0x20802a08",
+          "line": 287
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801208",
+          "line": 599
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801211",
+          "line": 906
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x2080121f",
+          "line": 1322
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h",
+          "id": "0x00801812",
+          "line": 772
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gpu.h",
+          "id": "0x00800294",
+          "line": 546
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170e",
+          "line": 206
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170f",
+          "line": 290
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731140",
+          "line": 120
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731142",
+          "line": 262
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731144",
+          "line": 350
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x0073114e",
+          "line": 424
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731150",
+          "line": 471
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731152",
+          "line": 596
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731341",
+          "line": 151
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731343",
+          "line": 441
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731359",
+          "line": 1099
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731360",
+          "line": 1326
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731362",
+          "line": 1480
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731378",
+          "line": 2254
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731381",
+          "line": 2712
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730102",
+          "line": 131
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730108",
+          "line": 392
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010a",
+          "line": 516
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010c",
+          "line": 646
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073012c",
+          "line": 1290
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730250",
+          "line": 392
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x0073028b",
+          "line": 1074
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x007302a4",
+          "line": 1579
+        },
+        {
+          "file": "src/nvidia/generated/g_generic_engine_nvoc.c",
+          "id": "0x90e70113",
+          "line": 170
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c0101",
+          "line": 215
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c0103",
+          "line": 245
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c010a",
+          "line": 335
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_nvoc.c",
+          "id": "0xa06f0103",
+          "line": 318
+        },
+        {
+          "file": "src/nvidia/generated/g_deferred_api_nvoc.c",
+          "id": "0x50800101",
+          "line": 185
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801829",
+          "line": 162
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801830",
+          "line": 164
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801322",
+          "line": 178
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x2080012f",
+          "line": 193
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0xc3700104",
+          "line": 1593
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0xc3720101",
+          "line": 2259
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730102",
+          "line": 2893
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730108",
+          "line": 2968
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073010a",
+          "line": 2998
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073010c",
+          "line": 3028
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073012c",
+          "line": 3133
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730250",
+          "line": 3463
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073028b",
+          "line": 3613
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x007302a4",
+          "line": 3763
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731140",
+          "line": 3988
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731142",
+          "line": 4003
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731144",
+          "line": 4018
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073114e",
+          "line": 4048
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731150",
+          "line": 4063
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731152",
+          "line": 4078
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731341",
+          "line": 4363
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731343",
+          "line": 4378
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731359",
+          "line": 4498
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731360",
+          "line": 4558
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731362",
+          "line": 4588
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731378",
+          "line": 4798
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731381",
+          "line": 4918
+        }
+      ],
+      "revision": "b81d58ee0224d1d290bef1c080592b619e184042",
+      "scope": ".",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules"
+    },
+    "ogkm580_65_06": {
+      "literal_hits": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc370/ctrlc370chnc.h",
+          "id": "0xc3700104",
+          "line": 269
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90e7/ctrl90e7bbx.h",
+          "id": "0x90e70113",
+          "line": 55
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0101",
+          "line": 97
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0103",
+          "line": 146
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c010a",
+          "line": 354
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170e",
+          "line": 206
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170f",
+          "line": 290
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gpu.h",
+          "id": "0x00800294",
+          "line": 546
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h",
+          "id": "0x00801812",
+          "line": 772
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h",
+          "id": "0xa06f0103",
+          "line": 66
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h",
+          "id": "0x90f10106",
+          "line": 268
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800102",
+          "line": 285
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012b",
+          "line": 984
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012d",
+          "line": 1076
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012f",
+          "line": 1148
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080014b",
+          "line": 1825
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800156",
+          "line": 1964
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800157",
+          "line": 1983
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x208001a4",
+          "line": 4274
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803400",
+          "line": 37
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803401",
+          "line": 100
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803404",
+          "line": 212
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a38",
+          "line": 609
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a9a",
+          "line": 1701
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af0",
+          "line": 3526
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af1",
+          "line": 3529
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af2",
+          "line": 3532
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800aff",
+          "line": 4029
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801303",
+          "line": 458
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801322",
+          "line": 1027
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801344",
+          "line": 1915
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801347",
+          "line": 2355
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801357",
+          "line": 2793
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+          "id": "0x2080110b",
+          "line": 339
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801208",
+          "line": 599
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801211",
+          "line": 906
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x2080121f",
+          "line": 1322
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080nvlink.h",
+          "id": "0x20803083",
+          "line": 3235
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+          "id": "0x20802a08",
+          "line": 287
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801823",
+          "line": 588
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801813",
+          "line": 851
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801819",
+          "line": 1020
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801829",
+          "line": 1205
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801830",
+          "line": 1567
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731140",
+          "line": 120
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731142",
+          "line": 262
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731144",
+          "line": 350
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x0073114e",
+          "line": 424
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731150",
+          "line": 471
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731152",
+          "line": 596
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731341",
+          "line": 151
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731343",
+          "line": 441
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731359",
+          "line": 1099
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731360",
+          "line": 1326
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731362",
+          "line": 1480
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731378",
+          "line": 2254
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731381",
+          "line": 2712
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730102",
+          "line": 131
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730108",
+          "line": 392
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010a",
+          "line": 516
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010c",
+          "line": 646
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073012c",
+          "line": 1290
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730250",
+          "line": 392
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x0073028b",
+          "line": 1074
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x007302a4",
+          "line": 1539
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc372/ctrlc372chnc.h",
+          "id": "0xc3720101",
+          "line": 40
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+          "id": "0x50800101",
+          "line": 87
+        },
+        {
+          "file": "src/nvidia/generated/g_vaspace_api_nvoc.c",
+          "id": "0x90f10106",
+          "line": 200
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.h",
+          "id": "0x0080170e",
+          "line": 121
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.h",
+          "id": "0x00800294",
+          "line": 124
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_nvoc.c",
+          "id": "0xa06f0103",
+          "line": 318
+        },
+        {
+          "file": "src/nvidia/generated/g_generic_engine_nvoc.c",
+          "id": "0x90e70113",
+          "line": 170
+        },
+        {
+          "file": "src/nvidia/generated/g_deferred_api_nvoc.c",
+          "id": "0x50800101",
+          "line": 185
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c0101",
+          "line": 215
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c0103",
+          "line": 245
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c010a",
+          "line": 335
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801829",
+          "line": 162
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801830",
+          "line": 164
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801322",
+          "line": 178
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x2080012f",
+          "line": 192
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00800294",
+          "line": 365
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170e",
+          "line": 650
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170f",
+          "line": 665
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00801812",
+          "line": 890
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170e",
+          "line": 1418
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00800294",
+          "line": 1449
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0xc3700104",
+          "line": 1593
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0xc3720101",
+          "line": 2259
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730102",
+          "line": 2893
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730108",
+          "line": 2968
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073010a",
+          "line": 2998
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073010c",
+          "line": 3028
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073012c",
+          "line": 3133
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730250",
+          "line": 3463
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073028b",
+          "line": 3613
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x007302a4",
+          "line": 3748
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731140",
+          "line": 3973
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731142",
+          "line": 3988
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731144",
+          "line": 4003
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073114e",
+          "line": 4033
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731150",
+          "line": 4048
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731152",
+          "line": 4063
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731341",
+          "line": 4333
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731343",
+          "line": 4348
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731359",
+          "line": 4468
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731360",
+          "line": 4528
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731362",
+          "line": 4558
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731378",
+          "line": 4768
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731381",
+          "line": 4888
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800102",
+          "line": 153
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012b",
+          "line": 318
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012d",
+          "line": 348
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012f",
+          "line": 363
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080014b",
+          "line": 588
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800156",
+          "line": 678
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800157",
+          "line": 693
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x208001a4",
+          "line": 1323
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800a38",
+          "line": 2268
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800a9a",
+          "line": 3573
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af0",
+          "line": 4623
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af1",
+          "line": 4638
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af2",
+          "line": 4653
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800aff",
+          "line": 4758
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080110b",
+          "line": 4893
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801208",
+          "line": 5223
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801211",
+          "line": 5313
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080121f",
+          "line": 5463
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801303",
+          "line": 5808
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801322",
+          "line": 5913
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801344",
+          "line": 6093
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801347",
+          "line": 6123
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801357",
+          "line": 6258
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801813",
+          "line": 6483
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801819",
+          "line": 6573
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801823",
+          "line": 6633
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801829",
+          "line": 6723
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801830",
+          "line": 6828
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20802a08",
+          "line": 7593
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803083",
+          "line": 8808
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803400",
+          "line": 9198
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803401",
+          "line": 9213
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803404",
+          "line": 9258
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801829",
+          "line": 10156
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801830",
+          "line": 10176
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801322",
+          "line": 10316
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012f",
+          "line": 10456
+        }
+      ],
+      "revision": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+      "scope": ".",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules"
+    },
+    "ogkm595_84": {
+      "archive_sha256": "750163b631cac7676ebd8927b54a6e17fc3f6c87174f206a5b202731ebc324eb",
+      "literal_hits": [
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.h",
+          "id": "0x0080170e",
+          "line": 116
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.h",
+          "id": "0x00800294",
+          "line": 119
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800102",
+          "line": 152
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012b",
+          "line": 302
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012d",
+          "line": 332
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012f",
+          "line": 347
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080014b",
+          "line": 572
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800156",
+          "line": 662
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800157",
+          "line": 677
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x208001a4",
+          "line": 1307
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800a38",
+          "line": 2357
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800a9a",
+          "line": 3662
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af0",
+          "line": 4697
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af1",
+          "line": 4712
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af2",
+          "line": 4727
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800aff",
+          "line": 4832
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080110b",
+          "line": 4967
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801208",
+          "line": 5327
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801211",
+          "line": 5417
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080121f",
+          "line": 5552
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801303",
+          "line": 5912
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801322",
+          "line": 6017
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801344",
+          "line": 6197
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801347",
+          "line": 6227
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801357",
+          "line": 6362
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801813",
+          "line": 6647
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801819",
+          "line": 6737
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801823",
+          "line": 6767
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801829",
+          "line": 6857
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801830",
+          "line": 6962
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20802a08",
+          "line": 7772
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803083",
+          "line": 8477
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803400",
+          "line": 8882
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803401",
+          "line": 8897
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803404",
+          "line": 8942
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801829",
+          "line": 9908
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801830",
+          "line": 9928
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801322",
+          "line": 10078
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012f",
+          "line": 10259
+        },
+        {
+          "file": "src/nvidia/generated/g_vaspace_api_nvoc.c",
+          "id": "0x90f10106",
+          "line": 199
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00800294",
+          "line": 349
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170e",
+          "line": 634
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170f",
+          "line": 649
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00801812",
+          "line": 844
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170e",
+          "line": 1385
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00800294",
+          "line": 1416
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c0101",
+          "line": 214
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c0103",
+          "line": 244
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c010a",
+          "line": 334
+        },
+        {
+          "file": "src/nvidia/generated/g_generic_engine_nvoc.c",
+          "id": "0x90e70113",
+          "line": 184
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_nvoc.c",
+          "id": "0xa06f0103",
+          "line": 317
+        },
+        {
+          "file": "src/nvidia/generated/g_deferred_api_nvoc.c",
+          "id": "0x50800101",
+          "line": 184
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801829",
+          "line": 142
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801830",
+          "line": 144
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801322",
+          "line": 159
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x2080012f",
+          "line": 177
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0xc3700104",
+          "line": 1619
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0xc3720101",
+          "line": 2310
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730102",
+          "line": 2969
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730108",
+          "line": 3044
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073010a",
+          "line": 3074
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073010c",
+          "line": 3104
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073012c",
+          "line": 3269
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730250",
+          "line": 3614
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730280",
+          "line": 3689
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730282",
+          "line": 3719
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073028b",
+          "line": 3824
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x007302a4",
+          "line": 4004
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731140",
+          "line": 4229
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731142",
+          "line": 4244
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731144",
+          "line": 4259
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073114e",
+          "line": 4289
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731150",
+          "line": 4304
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731152",
+          "line": 4319
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731341",
+          "line": 4604
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731343",
+          "line": 4619
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731359",
+          "line": 4739
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731360",
+          "line": 4799
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731362",
+          "line": 4829
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731378",
+          "line": 5039
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731381",
+          "line": 5159
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h",
+          "id": "0xa06f0103",
+          "line": 66
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc370/ctrlc370chnc.h",
+          "id": "0xc3700104",
+          "line": 269
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+          "id": "0x50800101",
+          "line": 87
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90e7/ctrl90e7bbx.h",
+          "id": "0x90e70113",
+          "line": 55
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801823",
+          "line": 588
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801813",
+          "line": 851
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801819",
+          "line": 1020
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801829",
+          "line": 1155
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801830",
+          "line": 1519
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803400",
+          "line": 37
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803401",
+          "line": 100
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803404",
+          "line": 213
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080nvlink.h",
+          "id": "0x20803083",
+          "line": 2665
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800102",
+          "line": 281
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012b",
+          "line": 938
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012d",
+          "line": 1030
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012f",
+          "line": 1102
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080014b",
+          "line": 1786
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800156",
+          "line": 1925
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800157",
+          "line": 1944
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x208001a4",
+          "line": 4245
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a38",
+          "line": 609
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a9a",
+          "line": 1701
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af0",
+          "line": 3515
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af1",
+          "line": 3518
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af2",
+          "line": 3521
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800aff",
+          "line": 4018
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+          "id": "0x2080110b",
+          "line": 255
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801303",
+          "line": 460
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801322",
+          "line": 1027
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801344",
+          "line": 1918
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801347",
+          "line": 2358
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801357",
+          "line": 2796
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0101",
+          "line": 97
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0103",
+          "line": 146
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c010a",
+          "line": 354
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+          "id": "0x20802a08",
+          "line": 295
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801208",
+          "line": 603
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801211",
+          "line": 910
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x2080121f",
+          "line": 1283
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc372/ctrlc372chnc.h",
+          "id": "0xc3720101",
+          "line": 40
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h",
+          "id": "0x90f10106",
+          "line": 268
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h",
+          "id": "0x00801812",
+          "line": 742
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gpu.h",
+          "id": "0x00800294",
+          "line": 546
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170e",
+          "line": 206
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170f",
+          "line": 290
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731140",
+          "line": 120
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731142",
+          "line": 262
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731144",
+          "line": 350
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x0073114e",
+          "line": 424
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731150",
+          "line": 471
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731152",
+          "line": 596
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731341",
+          "line": 151
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731343",
+          "line": 441
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731359",
+          "line": 1092
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731360",
+          "line": 1319
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731362",
+          "line": 1473
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731378",
+          "line": 2247
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731381",
+          "line": 2705
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730102",
+          "line": 132
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730108",
+          "line": 393
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010a",
+          "line": 517
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010c",
+          "line": 647
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073012c",
+          "line": 1460
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730250",
+          "line": 392
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730280",
+          "line": 787
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730282",
+          "line": 1228
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x0073028b",
+          "line": 2035
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x007302a4",
+          "line": 2606
+        }
+      ],
+      "revision": "595.84",
+      "scope": ".",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules"
+    },
+    "ogkm610_57_04": {
+      "literal_hits": [
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h",
+          "id": "0xa06f0103",
+          "line": 66
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc370/ctrlc370chnc.h",
+          "id": "0xc3700104",
+          "line": 269
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801823",
+          "line": 588
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801813",
+          "line": 851
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801819",
+          "line": 1020
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801829",
+          "line": 1155
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801830",
+          "line": 1521
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+          "id": "0x50800101",
+          "line": 87
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803400",
+          "line": 37
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803401",
+          "line": 100
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803404",
+          "line": 213
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90e7/ctrl90e7bbx.h",
+          "id": "0x90e70113",
+          "line": 55
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080nvlink.h",
+          "id": "0x20803083",
+          "line": 2672
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800102",
+          "line": 298
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012b",
+          "line": 955
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012d",
+          "line": 1047
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012f",
+          "line": 1119
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080014b",
+          "line": 1803
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800156",
+          "line": 1942
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800157",
+          "line": 1961
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x208001a4",
+          "line": 4273
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a38",
+          "line": 612
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a9a",
+          "line": 1704
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af0",
+          "line": 3531
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af1",
+          "line": 3534
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af2",
+          "line": 3537
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800aff",
+          "line": 4034
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+          "id": "0x2080110b",
+          "line": 255
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801303",
+          "line": 489
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801322",
+          "line": 1067
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801344",
+          "line": 1958
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801347",
+          "line": 2398
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801357",
+          "line": 2849
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+          "id": "0x20802a08",
+          "line": 295
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801208",
+          "line": 612
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801211",
+          "line": 919
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x2080121f",
+          "line": 1292
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h",
+          "id": "0x00801812",
+          "line": 742
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gpu.h",
+          "id": "0x00800294",
+          "line": 546
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170e",
+          "line": 207
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170f",
+          "line": 274
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0101",
+          "line": 97
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0103",
+          "line": 146
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c010a",
+          "line": 354
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731140",
+          "line": 120
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731142",
+          "line": 262
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731144",
+          "line": 350
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x0073114e",
+          "line": 424
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731150",
+          "line": 471
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731152",
+          "line": 596
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc372/ctrlc372chnc.h",
+          "id": "0xc3720101",
+          "line": 40
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731341",
+          "line": 151
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731343",
+          "line": 441
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731359",
+          "line": 1092
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731360",
+          "line": 1319
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731362",
+          "line": 1473
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731378",
+          "line": 2252
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731381",
+          "line": 2710
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h",
+          "id": "0x90f10106",
+          "line": 268
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730102",
+          "line": 132
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730108",
+          "line": 393
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010a",
+          "line": 517
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010c",
+          "line": 647
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073012c",
+          "line": 1460
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730250",
+          "line": 392
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730280",
+          "line": 787
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730282",
+          "line": 1228
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x0073028b",
+          "line": 2035
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x007302a4",
+          "line": 2606
+        }
+      ],
+      "revision": "e4a5faa2567f28c8eabe0ebb6422b6d0abcf37eb",
+      "scope": ".",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules"
+    },
+    "ogkm_other": {
+      "literal_hits": [
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.h",
+          "id": "0x0080170e",
+          "line": 116
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.h",
+          "id": "0x00800294",
+          "line": 119
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00800294",
+          "line": 710
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170e",
+          "line": 995
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170f",
+          "line": 1010
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00801812",
+          "line": 1205
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x0080170e",
+          "line": 1748
+        },
+        {
+          "file": "src/nvidia/generated/g_device_nvoc.c",
+          "id": "0x00800294",
+          "line": 1779
+        },
+        {
+          "file": "src/nvidia/generated/g_vaspace_api_nvoc.c",
+          "id": "0x90f10106",
+          "line": 236
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800102",
+          "line": 3999
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012b",
+          "line": 4149
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012d",
+          "line": 4179
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012f",
+          "line": 4194
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080014b",
+          "line": 4419
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800156",
+          "line": 4509
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800157",
+          "line": 4524
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x208001a4",
+          "line": 5154
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800a38",
+          "line": 6249
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800a9a",
+          "line": 7554
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af0",
+          "line": 8604
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af1",
+          "line": 8619
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800af2",
+          "line": 8634
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20800aff",
+          "line": 8739
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080110b",
+          "line": 8934
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801208",
+          "line": 9294
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801211",
+          "line": 9384
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080121f",
+          "line": 9519
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801303",
+          "line": 9879
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801322",
+          "line": 9984
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801344",
+          "line": 10194
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801347",
+          "line": 10224
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801357",
+          "line": 10359
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801813",
+          "line": 10644
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801819",
+          "line": 10734
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801823",
+          "line": 10764
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801829",
+          "line": 10854
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801830",
+          "line": 10959
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20802a08",
+          "line": 11769
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803083",
+          "line": 12474
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803400",
+          "line": 12939
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803401",
+          "line": 12954
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20803404",
+          "line": 12999
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801829",
+          "line": 14037
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801830",
+          "line": 14057
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x20801322",
+          "line": 14207
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.c",
+          "id": "0x2080012f",
+          "line": 14388
+        },
+        {
+          "file": "src/nvidia/generated/g_generic_engine_nvoc.c",
+          "id": "0x90e70113",
+          "line": 215
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c0101",
+          "line": 317
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c0103",
+          "line": 347
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_group_api_nvoc.c",
+          "id": "0xa06c010a",
+          "line": 437
+        },
+        {
+          "file": "src/nvidia/generated/g_deferred_api_nvoc.c",
+          "id": "0x50800101",
+          "line": 209
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0xc3700104",
+          "line": 1170
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0xc3720101",
+          "line": 1872
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730102",
+          "line": 3458
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730108",
+          "line": 3533
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073010a",
+          "line": 3563
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073010c",
+          "line": 3593
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073012c",
+          "line": 3758
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730250",
+          "line": 4088
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730280",
+          "line": 4163
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00730282",
+          "line": 4193
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073028b",
+          "line": 4298
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x007302a4",
+          "line": 4478
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731140",
+          "line": 4688
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731142",
+          "line": 4703
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731144",
+          "line": 4718
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x0073114e",
+          "line": 4748
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731150",
+          "line": 4763
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731152",
+          "line": 4778
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731341",
+          "line": 5048
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731343",
+          "line": 5063
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731359",
+          "line": 5183
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731360",
+          "line": 5243
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731362",
+          "line": 5273
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731378",
+          "line": 5483
+        },
+        {
+          "file": "src/nvidia/generated/g_disp_objs_nvoc.c",
+          "id": "0x00731381",
+          "line": 5603
+        },
+        {
+          "file": "src/nvidia/generated/g_kernel_channel_nvoc.c",
+          "id": "0xa06f0103",
+          "line": 510
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801829",
+          "line": 144
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801830",
+          "line": 146
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x20801322",
+          "line": 161
+        },
+        {
+          "file": "src/nvidia/generated/g_subdevice_nvoc.h",
+          "id": "0x2080012f",
+          "line": 179
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06f/ctrla06fgpfifo.h",
+          "id": "0xa06f0103",
+          "line": 66
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801823",
+          "line": 588
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801813",
+          "line": 851
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801819",
+          "line": 1020
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801829",
+          "line": 1155
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080bus.h",
+          "id": "0x20801830",
+          "line": 1521
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080dma.h",
+          "id": "0x00801812",
+          "line": 742
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080gpu.h",
+          "id": "0x00800294",
+          "line": 546
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc370/ctrlc370chnc.h",
+          "id": "0xc3700104",
+          "line": 269
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170e",
+          "line": 207
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0080/ctrl0080fifo.h",
+          "id": "0x0080170f",
+          "line": 274
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803400",
+          "line": 37
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803401",
+          "line": 100
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ecc.h",
+          "id": "0x20803404",
+          "line": 213
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl5080.h",
+          "id": "0x50800101",
+          "line": 87
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080nvlink.h",
+          "id": "0x20803083",
+          "line": 2672
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90e7/ctrl90e7bbx.h",
+          "id": "0x90e70113",
+          "line": 55
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731140",
+          "line": 120
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731142",
+          "line": 262
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731144",
+          "line": 350
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x0073114e",
+          "line": 424
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731150",
+          "line": 471
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dfp.h",
+          "id": "0x00731152",
+          "line": 596
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800102",
+          "line": 298
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012b",
+          "line": 955
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012d",
+          "line": 1047
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080012f",
+          "line": 1119
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x2080014b",
+          "line": 1803
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800156",
+          "line": 1942
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x20800157",
+          "line": 1961
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gpu.h",
+          "id": "0x208001a4",
+          "line": 4273
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731341",
+          "line": 151
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731343",
+          "line": 441
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731359",
+          "line": 1092
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731360",
+          "line": 1319
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731362",
+          "line": 1473
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731378",
+          "line": 2252
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073dp.h",
+          "id": "0x00731381",
+          "line": 2710
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a38",
+          "line": 612
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800a9a",
+          "line": 1704
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af0",
+          "line": 3531
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af1",
+          "line": 3534
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800af2",
+          "line": 3537
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+          "id": "0x20800aff",
+          "line": 4034
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730102",
+          "line": 132
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x00730108",
+          "line": 393
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010a",
+          "line": 517
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073010c",
+          "line": 647
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073system.h",
+          "id": "0x0073012c",
+          "line": 1460
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fifo.h",
+          "id": "0x2080110b",
+          "line": 255
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730250",
+          "line": 392
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730280",
+          "line": 787
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x00730282",
+          "line": 1228
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x0073028b",
+          "line": 2035
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl0073/ctrl0073specific.h",
+          "id": "0x007302a4",
+          "line": 2606
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801303",
+          "line": 489
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801322",
+          "line": 1067
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801344",
+          "line": 1958
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801347",
+          "line": 2398
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080fb.h",
+          "id": "0x20801357",
+          "line": 2849
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080ce.h",
+          "id": "0x20802a08",
+          "line": 295
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801208",
+          "line": 612
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x20801211",
+          "line": 919
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080gr.h",
+          "id": "0x2080121f",
+          "line": 1292
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrlc372/ctrlc372chnc.h",
+          "id": "0xc3720101",
+          "line": 40
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrl90f1.h",
+          "id": "0x90f10106",
+          "line": 268
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0101",
+          "line": 97
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c0103",
+          "line": 146
+        },
+        {
+          "file": "src/common/sdk/nvidia/inc/ctrl/ctrla06c.h",
+          "id": "0xa06c010a",
+          "line": 354
+        }
+      ],
+      "revision": "57130a2702d565be81200ea2e114abcb0455e8bb",
+      "scope": ".",
+      "url": "https://github.com/NVIDIA/open-gpu-kernel-modules"
+    }
+  }
+}

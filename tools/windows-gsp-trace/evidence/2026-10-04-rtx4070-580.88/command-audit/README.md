@@ -5,6 +5,8 @@ the actual Windows branch (`v3-windows`, `c50fad9a`), including command IDs
 inside the documented deferred-API wrapper. This is an offline source audit;
 Windows has not completed initialization through Kayfabe.
 
+**Correction and extension, 2026-10-04:** the [full-source / Linux comparison](../command-catalogue/README.md) finds 68 of these 129 IDs in Linux traffic (at explicitly separated boundaries), broadens the public-name search, and corrects the pool-query routing inference below. No command is established as Windows-only.
+
 [Full inventory](audit.md) · [Machine-readable audit](audit.json) ·
 [Reproduction and methodology](../../../audit/README.md)
 
@@ -83,8 +85,11 @@ IDs are audited, but this inventory does not reassemble the parameter bodies.
 The original failure occurred immediately after refusal of that query. It is
 the leading blocker hypothesis, not yet proven causal by implementing it.
 Its public layout is known, but we still lack a successful native reply and a
-source-backed rule that works across dies. Linux RM compiles that control out,
-so forwarding to the Linux host is not a solution.
+source-backed rule that works across dies. **Correction:** the earlier inference
+that a disabled Linux CPU handler means Linux cannot answer was wrong. OGKM
+routes this control to the physical/GSP implementation; native Linux support
+needs a kernel-caller probe. See the [source-backed correction](../command-catalogue/README.md#correction-gr_gfx_pool_query_size-is-not-proved-linux-inaccessible).
+This does not authorize generic guest-to-host forwarding.
 
 Next evidence needed: retain earlier initialization or deliberately trigger a
 fresh initialization while the recorder is already ready, then capture the

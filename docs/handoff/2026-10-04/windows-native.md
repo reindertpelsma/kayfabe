@@ -7,6 +7,34 @@ produced 4,535 validated records, but no target query pair yet.** The owner requ
 2 handoff. It does not change the product merge requirements or claim a Windows
 guest works through Kayfabe.
 
+## Source / OS comparison update, 2026-10-04
+
+The [complete catalogue](../../../tools/windows-gsp-trace/evidence/2026-10-04-rtx4070-580.88/command-catalogue/README.md)
+has descriptions/source links for all 129 direct controls, both deferred IDs,
+20 allocation classes and five RPCs. Unresolved semantics remain explicitly
+unresolved. Whole-tree OGKM searches include 580.65.06, 580.159.04, 595.84 and
+610, then Nouveau/Nova and public Envytools/gVisor sources.
+
+- **No Windows-only command is established.** 68 IDs also occur in saved Linux
+  driver traffic: 59 native ioctl/GSP and nine additional Linux-to-Kayfabe GSP
+  IDs. Seven are confirmed at the native Linux GSP boundary. These are different
+  observation planes, not 68 native GSP matches. The closed Linux kernel module
+  has no comparable GSP census here. Driver version and die are not controlled.
+- The pool-query CPU-stub inference was wrong: flag 0x40 routes to physical/GSP;
+  it is not an OS exclusion. A native kernel-caller query probe remains needed.
+- Newer OGKM's 0x00730282 structure is 2608 bytes versus Windows 580's 2600;
+  Nouveau's historical 0x00730122 meaning uses 16 bytes versus observed 8.
+  Neither is a valid direct layout substitution.
+- All 472 allocation frames retain headers only; 179 per direction declare
+  parameter bytes that are absent. Channel privilege/ownership is not decoded.
+  GSP channel lifecycle calls are captured, GPU pushbuffers/doorbells are not.
+
+The borrowed PC timed out; the owner says it was probably handed over. Treat it
+as unavailable and do not retry/reboot it as part of this offline work. Unique
+capture/code is already saved. No rental was started, no product behavior
+changed, and no new Windows-through-Kayfabe success is claimed. The earlier
+runtime state below is historical; do not interpret it as current reachability.
+
 ## Command audit, 18:37 UTC
 
 The owner requested checking everything captured against actual command
