@@ -96,5 +96,6 @@ P1/P2 or Windows branches.
 The recovery branch merges master's two newer documentation commits and adds
 only documentation/evidence to `0ac157b2`. Its product, build scripts and test
 sources are byte-identical to that hardware-tested revision. The recovery
-commit needs its own CI result before promotion under `OWNER_RULINGS` §R's
-documentation-only rule.
+commit requires green CI before promotion under `OWNER_RULINGS` §R's
+documentation-only rule. Check the recovery branch's latest Actions run for that
+result; its head changes only when documentation or evidence is added.

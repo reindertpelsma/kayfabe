@@ -182,6 +182,17 @@ histograms).
 
 ## 6. Tests (GPU-free)
 
+**Test-instrument correction, 2026-10-04 (`0ac157b2`, GA106 box 54049598):** the churn
+test's fake host IDs (`0xA000 + generation`, `0xB000 + generation`) overlap after
+4,096 generations. A new A ID is then in the fake host's permanent freed-B set,
+so the late-ring assertion can fail even though no freed twin was rung. Candidate 1's
+first merge-bar attempt hit this; the unchanged retry passed. An isolated experiment
+recorded 16/30 failures with the original IDs and 0/30 with wider spacing, including
+runs beyond 4,096 rounds. Both attempts and that experiment are preserved in
+`traces/v3_candidates/cand1_20261004/`. A collision-free test-ID scheme remains a
+follow-up; no test or product code changed in the evidence recovery. The lower-round
+historical results below remain their original measurements.
+
 | test | what it proves |
 |---|---|
 | `kf-linux-raw` `datamatch_ioeventfd_on_a_read_only_slot_…` | the kernel mechanism on a read-only memslot: routed tokens signal and never exit; everything else exits in order with its exact value; deassign/reassign; `EEXIST`/`ENOENT`; the backing never changes |

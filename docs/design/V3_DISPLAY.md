@@ -8,7 +8,6 @@
 > superseded. Broker/max-fps work remains on its own branches.
 > The statuses below are dated history where they differ.
 
-
 > **STATUS 2026-10-03 (late) — display step 1 (the boot display): BUILT on branch `v3-gop` (both halves
 > plus the owner's §K ruling), nothing run on a GPU box.** `v3-gop` carries `v3-gop-rom` and `v3-gop-kf3`
 > squashed onto `master` with every finding of their review fixed (§4.11.12's ⊘ block): **no compiled
