@@ -122,7 +122,7 @@ jobs:
           apt-get update -q
           DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
             ca-certificates curl xz-utils git python3 python3-venv ninja-build pkg-config \
-            libglib2.0-dev libpixman-1-dev flex bison gcc libc6-dev binutils clang
+            libglib2.0-dev libpixman-1-dev flex bison bzip2 gcc libc6-dev binutils clang
           gcc --version | head -1
           clang --version | head -1
       - uses: actions/checkout@v4
