@@ -189,7 +189,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `DevDir::try_clone` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `Indirect` | pub | borrowed view |  |  | OPEN: 2026-10-04: unreviewed |
 | `Indirect::at` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `Indirect::describing` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `Indirect::describing` | pub | safe fn | zero-len; range-in-region | zero-len=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_past_the_region_is_refused_at_construction; range-in-region=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_past_the_region_is_refused_at_construction | OK |
 | `Indirect::is_empty` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `Indirect::len` | pub | safe fn |  |  | OPEN: 2026-10-04: carries a caller contract (`chardev_unsafe.rs:365-377`, S1-40); removed by P2-a2 |
 | `Indirect::nested` | pub | safe fn |  |  | OPEN: 2026-10-04: the nested size field is caller-declared like Indirect::new's (S1-40) |
@@ -270,7 +270,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `KvmVm` | pub | owning handle |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm: Send` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
-| `KvmVm::adopt` | pub | safe fn |  |  | OPEN: 2026-10-04: confirms the descriptor is a KVM VM before adopting it since a5 (test `adopting_a_descriptor_that_is_not_a_vm_is_refused`); not yet mutation-proved |
+| `KvmVm::adopt` | pub | safe fn | is-a-vm | is-a-vm=t:crates/kf-linux-raw/src/kvm_unsafe.rs::adopting_a_descriptor_that_is_not_a_vm_is_refused | OK |
 | `KvmVm::borrow_fd` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: a borrowed descriptor for ioctl_arg (a3), crate-private; not yet mutation-proved |
 | `KvmVm::check_extension` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::clear_memslot` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
@@ -282,7 +282,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `KvmVm::try_clone_descriptor` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `UserspaceMemoryRegion: Send` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `UserspaceMemoryRegion: Sync` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
-| `ioctl_arg` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `ioctl_arg` | pub(crate) | safe fn | io-only; negative-is-error | io-only=t:crates/kf-linux-raw/src/kvm_unsafe.rs::an_ior_encoded_request_is_refused_before_any_syscall; negative-is-error=t:crates/kf-linux-raw/src/kvm_unsafe.rs::an_ior_encoded_request_is_refused_before_any_syscall | OK |
 
 ## crates/kf-linux-raw/src/mapping_unsafe.rs
 

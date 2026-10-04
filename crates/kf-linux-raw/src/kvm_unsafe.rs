@@ -850,6 +850,12 @@ mod tests {
         // which refuses it on /dev/null as a syscall error, not as this refusal.
         let r = ioctl_arg(fd.as_fd(), KVM_GET_API_VERSION, 0, "probe");
         assert!(matches!(r, Err(RawError::Syscall { .. })), "{r:?}");
+        // And a request the kernel serves on any descriptor (`FIOCLEX`, no size, no direction)
+        // returns the kernel's 0: only a negative return is an error.
+        assert_eq!(
+            ioctl_arg(fd.as_fd(), libc::FIOCLEX as libc::c_ulong, 0, "probe"),
+            Ok(0)
+        );
     }
 
     /// ★ a5: adopting a descriptor that is not a KVM VM is refused by name. Needs no
