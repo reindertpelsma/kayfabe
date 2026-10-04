@@ -119,6 +119,31 @@ stops the recorder**; restart the service afterward. Run these tests before any
 valuable capture. Windows runtime results must be recorded separately; the
 existence of this executable is not a passing result.
 
+## Optional staging through the Vast Windows preparation VM
+
+`stage-qga.py` copies trusted controller-built files into
+`C:\ProgramData\KayfabeGsp` during the installer's final cold-boot SSH rehearsal
+hold. It requires the native GPU setup task to exist and remain deferred. Build
+and create the bundle on the trusted controller, then copy the bundle and stager
+to the Linux rental:
+
+```sh
+python3 tools/windows-gsp-trace/stage-qga.py bundle /tmp/gsp-stage.zip
+# Save the printed SHA256; copy this public build/source bundle to the rental.
+python3 stage-qga.py stage /root/gsp-stage.zip --sha256 PRINTED_SHA256
+```
+
+The rental-side command defaults to `/var/lib/vast-windows/qga.sock` and the
+installed `/root/vast-windows/prepare/prepare.py` guest-agent helper. It requires
+`login-test.json` and refuses a released `login-test-complete` marker. The target
+is the installer's English Windows image. It verifies the archive and every
+file in Windows, smoke-tests bundled signtool and collector execution, and sets
+test signing for **the next boot**. It writes `gsp-stage-result.json` on Linux and
+`stage-result.json` in the guest. It does not install/start the recorder, start
+NVIDIA, reboot, release the preparation hold, or arm the disk flasher. The native
+boot still needs `install.ps1 -Action Install`, API tests, recorder restart and
+capture before releasing NVIDIA's separate deferred-install hold.
+
 ## Capture
 
 ```powershell
