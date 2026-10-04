@@ -110,6 +110,18 @@ and the per-client host MMU fault above.
     files named `*_unsafe.rs`: `kf-linux-raw` (OS adapter), `kf-qemu` (the QEMU FFI) and `kf-cuda`
     (the dynamically loaded CUDA driver). Host addresses cross safe code only as the opaque
     `kf_linux_raw::HostSpan`, backend fds only as `kf_qemu::raw_unsafe::BackendFd` (`e7b7f28d`).
+    ★ **Owner, 2026-10-03; implemented 2026-10-04 by branch `v3-sec-rawaddr`, whose merge waits on
+    hardware rows H1–H4** (where it stands: the STATUS of `V3_RAWADDR_PERIMETER.md`). The rule
+    covers **device** addresses too: under unified addressing an address in kayfabe's own CUDA
+    contexts can be a QEMU address (audit S1-05). And the bound is checked
+    **inside the function that leads into `unsafe`, never at its call sites** — *"a few validation
+    sites is easy to audit, at every call its not then its basically unsafe code declared as
+    safe."* So validation code sits on the unsafe side, in the `*_unsafe.rs` perimeter
+    (`OWNER_RULINGS.md` §R), as a short list of pure checks with a test and a mutation each; safe
+    code carries only opaque handles (`HostSpan`, `StaticSpan`, `DeviceImage`, `ConsoleFrame`)
+    plus offsets and lengths. ⊘ Master before that merge breaks this item at the console frame
+    (S1-03) and at kf-cuda's public raw-address API (S1-04). The design, its validation sites and
+    the CI gates that keep it: `V3_RAWADDR_PERIMETER.md`.
 14. **Isolates can have multiple threads** executing several CUDA operations in parallel, as
     `nvkvm-pv` does.
 15. **The two vidmem worlds are disjoint** — see below.
