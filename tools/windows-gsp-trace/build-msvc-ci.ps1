@@ -82,6 +82,9 @@ try {
     }
     Invoke-BuildTool $cl ($compile + @("/Fo$OutputDirectory\load_probe.obj",'tests\load_probe.c'))
     Invoke-BuildTool $link ($linkOptions + @("/out:$OutputDirectory\load-probe.sys","$OutputDirectory\load_probe.obj",'ntoskrnl.lib','BufferOverflowK.lib'))
+    foreach ($driver in @('gsptrace','gsptrace-diag','load-probe')) {
+        Invoke-BuildTool 'python' @('tests\check_driver_pe.py',"$OutputDirectory\$driver.sys")
+    }
     foreach ($source in @('collect.c','tests\windows_api_test.c')) {
         $name = if ($source -eq 'collect.c') { 'gsptrace' } else { 'windows_api_test' }
         Invoke-BuildTool $cl @('/nologo','/std:c11','/W4','/WX','/O2','/D_CRT_SECURE_NO_WARNINGS',"/Fe$OutputDirectory\$name.exe","/Fo$OutputDirectory\$name-user.obj",$source,'advapi32.lib')

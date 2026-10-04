@@ -5,7 +5,7 @@ setlocal
 cd /d "%~dp0"
 msbuild gsptrace.vcxproj /p:Configuration=Release /p:Platform=x64 /m:1 /v:m
 if errorlevel 1 exit /b 1
-cl /nologo /W4 /WX /O2 collect.c advapi32.lib /Fe:build\gsptrace.exe /Fo:build\collect.obj
+cl /nologo /W4 /WX /O2 /D_CRT_SECURE_NO_WARNINGS collect.c advapi32.lib /Fe:build\gsptrace.exe /Fo:build\collect.obj
 if errorlevel 1 exit /b 1
 cl /nologo /W4 /WX /O2 tests\windows_api_test.c advapi32.lib /Fe:build\windows_api_test.exe /Fo:build\windows_api_test.obj
 if errorlevel 1 exit /b 1

@@ -15,7 +15,10 @@ mkdir -p "$output"
 "${LLD_LINK:-lld-link-19}" /driver /subsystem:native,10.0 /osversion:10.0 \
     /entry:GsDriverEntry /machine:x64 /nodefaultlib /dynamicbase /nxcompat \
     /integritycheck /release /Brepro \
+    /tsaware:no /section:.retplne,RP /section:.text,ERP /section:.rdata,RP \
+    /section:.data,RWP /section:.pdata,RP \
     "/out:$output/load-probe.sys" "$output/load_probe.obj" \
     "/libpath:$cache/wdk/c/Lib/$kit/km/x64" ntoskrnl.lib BufferOverflowK.lib
+python3 tests/check_driver_pe.py "$output/load-probe.sys" > "$output/driver-pe.json"
 sha256sum "$output/load-probe.sys"
 echo 'Unsigned diagnostic-only image. This is NOT the GSP recorder.'

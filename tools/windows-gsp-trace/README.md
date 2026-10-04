@@ -1,9 +1,11 @@
 # Windows GSP observer
 
-**STATUS: RESEARCH, 2026-10-04.** Kernel driver and collector cross-build; portable
-parser tests pass. Windows driver loading and attachment to a real NVIDIA queue
-have **not yet been validated**. This is a working implementation to test, not a
-claim that Windows GSP traffic has already been captured.
+**STATUS: RESEARCH, 2026-10-04.** A diagnostic observer loaded on Windows 11
+build 26100, passed the Windows API/negative-access tests, and unloaded cleanly
+in a nested VM without an NVIDIA GPU. MSVC and Linux builds pass compilation
+and static PE checks. The revised default binaries still need their own target
+smoke check. Real NVIDIA queue attachment and Windows GSP capture have **not yet
+been validated**; see [LOAD_TESTS.md](LOAD_TESTS.md) for exact tested hashes.
 
 The purpose is to collect actual request/reply bytes for controls such as
 `GR_GFX_POOL_QUERY_SIZE` (`0x2080121f`), including the successful reply, so Kayfabe
@@ -80,9 +82,24 @@ Microsoft SDK `signtool.exe`, its manifests and dependencies (about 5.6 MiB).
 This avoids installing Visual Studio, the SDK or WDK on the target. Downloaded
 Microsoft binaries remain outside version control; retain their licence terms.
 
+The Linux linker explicitly clears TSAWARE, gives the WDK metadata section read
+permission, and marks ordinary kernel code/data nonpageable. `driver-pe.json`
+records static checks for those flags, relocation/entry bounds and the GS
+cookie. These checks prevent the malformed images found during bring-up; they
+do not replace a target load/API/unload test. Prefer the MSVC artifact for the
+first capture until runtime parity of the revised Linux build is established.
+
 Transfer this directory's source/scripts and `build/` to the disposable Windows
 VM. Alternatively, `build.cmd` builds with MSVC in a VS x64 Native Tools prompt
 with the SDK and WDK installed; this native build path has not been run here.
+
+For an independent compiler/linker comparison, the scoped GitHub Actions
+workflow `windows-gsp-build.yml` runs `build-msvc-ci.ps1` on a Windows runner
+with its installed MSVC toolchain and pinned SDK/WDK NuGet packages. Its
+unsigned artifact includes the normal observer, diagnostic observer, minimal
+loader probe, user tools, source revision, hashes, commands and compiler
+versions. This does not load or sign the binaries. Current target load
+investigation results are recorded in [LOAD_TESTS.md](LOAD_TESTS.md).
 
 ## Prepare and test the Windows VM before replacing any boot disk
 
@@ -239,5 +256,6 @@ ASan/UBSan queue tests, Python decoder rejection/pairing tests, and PowerShell
 syntax parsing. A reconstructed-ring replay of all 1,076 payloads in the archived
 Linux GA106 boot capture also passes the actual observer core and decoder, including
 wrapping and continuation records. Request checksums are reconstructed because the
-Linux TX hook runs before the checksum is computed. No Windows runtime, live GPU attachment or query capture is
-claimed by those checks.
+Linux TX hook runs before the checksum is computed. Those replay checks do
+not establish live GPU attachment or Windows query capture. Separate Windows
+load/API/unload evidence is recorded in [LOAD_TESTS.md](LOAD_TESTS.md).
