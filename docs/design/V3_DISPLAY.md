@@ -3188,7 +3188,8 @@ guest's own `GP_PUT` — and would throttle the X server's and the compositor's 
 wait on D4.
 
 **Tests (GPU-free), each with the mutation it was run against on 2026-10-04 (applied in place, the
-named test went red, restored):**
+named test went red, restored; every run, count and command in
+`traces/v3_display/maxfps_20261004/local_runs.txt`):**
 
 | check | test | mutation (red) |
 |---|---|---|
