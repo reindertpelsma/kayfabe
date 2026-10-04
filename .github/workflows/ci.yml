@@ -1619,7 +1619,9 @@ jobs:
           # ★★ `kf-qemu` 55 -> 59, 2026-10-04 (`v3-broker`, V3_DISPLAY.md §8.13: the guest's cursor for
           # QEMU's own console while a cursor-capable broker hovers; KF3 ABI 12's broker surface).
           # `ffi_unsafe.rs` (+4): `kf3_display_cursor` (`unsafe extern "C" fn`: `out` writable) and
-          # its one `unsafe { *out = c }` (checked non-null first); `kf3_display_cursor_pixels`
+          # its one `unsafe { *out = c }` (checked non-null — and, since the review of 2026-10-04,
+          # aligned — first; that review's `kf3_display_cursor_done` is a SAFE `extern "C" fn` and
+          # adds no relaxation, so the bar stays 59); `kf3_display_cursor_pixels`
           # (`unsafe extern "C" fn`: `data` writable for `words` u32s) and its one
           # `slice::from_raw_parts_mut`, formed only after `data` is checked non-null and aligned
           # and `words` is checked to be 1..=256*256 — the slice lives for the call, and the safe

@@ -720,16 +720,22 @@ static pixman_format_code_t kf3_pixman_format(uint32_t f)
 /* ★ ABI 12 (docs/design/V3_DISPLAY.md §8.13): the guest's cursor for THIS console while a
  * cursor-capable broker hovers — the frames then carry none (OWNER_RULINGS §O), so the console gets
  * it through QEMU's cursor API and a VNC client draws it as a real pointer (the coordinator's
- * decision of 2026-10-04). Rust decides what and when; without a broker, under grab, or for a cursor
- * the frame composes (XOR), it says nothing or "hidden". Ownership per QEMU 10.2.4: cursor_alloc and
- * cursor_builtin_hidden return a cursor with one reference (ui/cursor.c:93-108);
- * dpy_cursor_define takes its own (ui/console.c:961-980), so ours is dropped right after. The
- * pixels are copied from kayfabe's own copy of the image (never guest memory), bounded to the
- * width x height this function allocated. Main thread, BQL held; nothing here waits. */
+ * decision of 2026-10-04). Rust decides what and when — following the frame the console SHOWS,
+ * paced; without a broker, under grab, or for a cursor the frame composes (XOR), it says nothing or
+ * "hidden". Ownership per QEMU 10.2.4: cursor_alloc and cursor_builtin_hidden return a cursor with
+ * one reference (ui/cursor.c:93-108), or NULL; dpy_cursor_define takes its own
+ * (ui/console.c:961-980), so ours is dropped right after. The pixels are copied from kayfabe's own
+ * copy of the image (never guest memory), bounded to the width x height this function allocated.
+ * ⊘ The review of 2026-10-04: dpy_mouse_set only under an ABSOLUTE pointer — GTK's gd_mouse_set
+ * warps the HOST pointer whenever the console's input is relative (ui/gtk.c:447-467), which a
+ * broker grab, or a guest that leaves the tablet idle, makes it; no frontend needs the position
+ * then. And Rust is told what was applied, so a define this function could not make is retried.
+ * Main thread, BQL held; nothing here waits. */
 static void kf3_console_cursor(Kf3State *s)
 {
     Kf3Cursor c;
-    QEMUCursor *qc;
+    QEMUCursor *qc = NULL;
+    uint32_t applied = 0;
     int32_t what = kf3_display_cursor(s->h, &c);
 
     if (what <= 0) {
@@ -738,40 +744,37 @@ static void kf3_console_cursor(Kf3State *s)
     if (what & KF3_CURSOR_DEFINE) {
         if (c.width == 0 || c.height == 0) {
             qc = cursor_builtin_hidden();
-        } else if (c.width > KF3_CURSOR_MAX_DIM || c.height > KF3_CURSOR_MAX_DIM ||
-                   c.hot_x >= c.width || c.hot_y >= c.height) {
-            return;
-        } else {
+        } else if (c.width <= KF3_CURSOR_MAX_DIM && c.height <= KF3_CURSOR_MAX_DIM &&
+                   c.hot_x < c.width && c.hot_y < c.height) {
             qc = cursor_alloc((uint16_t)c.width, (uint16_t)c.height);
-            if (!qc) {
-                return;
-            }
-            if (kf3_display_cursor_pixels(s->h, qc->data, c.width * c.height) != 0) {
+            if (qc && kf3_display_cursor_pixels(s->h, qc->data, c.width * c.height) != 0) {
                 cursor_unref(qc);
-                return;
+                qc = NULL;
             }
-            qc->hot_x = (int)c.hot_x;
-            qc->hot_y = (int)c.hot_y;
+            if (qc) {
+                qc->hot_x = (int)c.hot_x;
+                qc->hot_y = (int)c.hot_y;
+            }
         }
-        dpy_cursor_define(s->con, qc);
-        cursor_unref(qc);
+        if (qc) {
+            dpy_cursor_define(s->con, qc);
+            cursor_unref(qc);
+            applied |= KF3_CURSOR_DEFINE;
+        }
     }
-    if (what & KF3_CURSOR_MOUSE) {
+    if ((what & KF3_CURSOR_MOUSE) && qemu_input_is_absolute(s->con)) {
         dpy_mouse_set(s->con, c.x, c.y, c.on != 0);
+        applied |= KF3_CURSOR_MOUSE;
     }
+    kf3_display_cursor_done(s->h, applied);
 }
 
-static void kf3_gfx_update(void *opaque)
+/* The newest frame onto the console's surface (gfx_update). */
+static void kf3_console_frame(Kf3State *s)
 {
-    Kf3State *s = opaque;
     Kf3Frame f;
     pixman_format_code_t fmt;
 
-    if (!s->h) {
-        return;
-    }
-    /* before the frame: in hover a cursor change makes no frame */
-    kf3_console_cursor(s);
     if (kf3_display_frame(s->h, &f) != 0 || f.serial == s->shown.serial) {
         return;
     }
@@ -787,6 +790,20 @@ static void kf3_gfx_update(void *opaque)
     }
     s->shown = f;
     dpy_gfx_update_full(s->con);
+}
+
+static void kf3_gfx_update(void *opaque)
+{
+    Kf3State *s = opaque;
+
+    if (!s->h) {
+        return;
+    }
+    kf3_console_frame(s);
+    /* §8.13 (the review of 2026-10-04): AFTER the frame — the console's cursor follows the frame it
+     * now shows (an image beside a frame that still composes one is two cursors); in hover a cursor
+     * change makes no frame, so this runs even when no new frame came */
+    kf3_console_cursor(s);
 }
 
 /* ★ ABI 12 (display step 3c, docs/design/V3_DISPLAY.md §8.6): a resize hint from the UI (the
@@ -1049,7 +1066,9 @@ static void kf3_broker_pump(Kf3State *s, int fd, bool rd, bool wr)
         kf3_broker_input(s, &ev[i]);
     }
     /* §8.13: every cursor post is followed by a frame publish, which lands here — so the console's
-     * cursor follows at once, not at its next refresh (VNC's backs off to seconds when idle) */
+     * cursor follows at once, not at its next refresh (VNC's backs off to seconds when idle); a
+     * define held back by the pacing, or waiting for the console to show a cursor-free frame, goes
+     * at the next pump or refresh */
     if (s->con) {
         kf3_console_cursor(s);
     }

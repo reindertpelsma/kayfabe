@@ -24,9 +24,10 @@ use std::os::unix::ffi::OsStrExt as _;
 /// [`kf3_broker_ready`], [`kf3_broker_stop`]); [`kf3_display_ui_info`] (the console's `ui_info`
 /// hook) and the broker's `SURFACE` event (kind 8). (`v3-dispsw-exp` takes 13 when it merges.)
 /// ★ Still 12 on 2026-10-04 (§8.13): the console's cursor in hover ([`Kf3Cursor`],
-/// [`kf3_display_cursor`], [`kf3_display_cursor_pixels`]) joins the broker's surface while it is
-/// unmerged — the bump is per surface reaching master, and an archive without the two symbols
-/// fails to LINK with a kf3.c that calls them, never at run time.
+/// [`kf3_display_cursor`], [`kf3_display_cursor_pixels`], and since the review of the same day
+/// [`kf3_display_cursor_done`]) joins the broker's surface while it is unmerged — the bump is per
+/// surface reaching master, and an archive without these symbols fails to LINK with a kf3.c that
+/// calls them, never at run time.
 pub const KF3_ABI: u32 = 12;
 
 /// The PCI identity the C device presents.
@@ -598,7 +599,8 @@ impl Kf3BrokerEvent {
 /// `out` is writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -> i32 {
-    let (Some(d), false) = (dev(h), out.is_null()) else {
+    // §R: validated at the boundary — null AND alignment (the review of 2026-10-04)
+    let (Some(d), false) = (dev(h), out.is_null() || !out.is_aligned()) else {
         return -1;
     };
     let Some(f) = d.display.and_then(|dp| dp.console.take()) else {
@@ -617,23 +619,33 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
     0
 }
 
-/// ★ §8.13 (ABI 12, main thread, the console's `gfx_update`): what QEMU's console should be told
-/// about the guest's cursor now — the coordinator's decision of 2026-10-04: while a cursor-capable
-/// broker hovers the frames carry no cursor (§O), so the console gets it through QEMU's cursor API
-/// (VNC shows it as a real pointer); under grab, or with no such broker, it stays composed. Returns
-/// `out.what` (0: nothing to do, also without a display or a broker; `*out` untouched then).
+/// ★ §8.13 (ABI 12, main thread: the console's `gfx_update`, AFTER it took its frame, and each
+/// broker pump): what QEMU's console should be told about the guest's cursor now — the
+/// coordinator's decision of 2026-10-04: while a cursor-capable broker hovers the frames carry no
+/// cursor (§O), so the console gets it through QEMU's cursor API (VNC shows it as a real pointer);
+/// under grab, or with no such broker, it stays composed. The define follows the frame the console
+/// shows and is paced (`kf_broker::ConsoleCursor::poll`). Returns `out.what` (0: nothing to do,
+/// also without a display or a broker; `*out` untouched then); after a nonzero return the caller
+/// reports what it applied with [`kf3_display_cursor_done`].
 ///
 /// # Safety
-/// `out` is writable.
+/// `out` is writable (null and misalignment are refused here).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_display_cursor(h: *mut c_void, out: *mut Kf3Cursor) -> i32 {
-    let (Some(dp), false) = (dev(h).and_then(|d| d.display), out.is_null()) else {
+    let (Some(dp), false) = (
+        dev(h).and_then(|d| d.display),
+        out.is_null() || !out.is_aligned(),
+    ) else {
         return 0;
     };
     let Some(seat) = dp.broker.as_ref() else {
         return 0;
     };
-    let u = seat.console_cursor(dp.console.cursor_point());
+    let u = seat.console_cursor(
+        dp.console.cursor_point(),
+        dp.console.shown_frame(),
+        dp.console.now_ms(),
+    );
     let mut c = Kf3Cursor::default();
     if let Some(define) = u.define {
         c.what |= 1;
@@ -648,9 +660,24 @@ pub unsafe extern "C" fn kf3_display_cursor(h: *mut c_void, out: *mut Kf3Cursor)
     if c.what == 0 {
         return 0;
     }
-    // SAFETY: `out` is writable (caller contract), checked non-null above.
+    // SAFETY: `out` is writable (caller contract), checked non-null and aligned above.
     unsafe { *out = c };
     i32::try_from(c.what).unwrap_or(0)
+}
+
+/// ★ §8.13 (ABI 12, main thread, right after acting on a nonzero [`kf3_display_cursor`]): what the C
+/// device APPLIED of it — `KF3_CURSOR_DEFINE` when `dpy_cursor_define` ran, `KF3_CURSOR_MOUSE`
+/// when `dpy_mouse_set` ran (only under an absolute pointer). A part not applied is handed out
+/// again at a later poll (the review of 2026-10-04: Rust used to believe the console held a
+/// cursor the C side had refused to define, and never retried).
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_cursor_done(h: *mut c_void, applied: u32) {
+    if let Some(seat) = dev(h)
+        .and_then(|d| d.display)
+        .and_then(|dp| dp.broker.as_ref())
+    {
+        seat.console_cursor_done(applied & 1 != 0, applied & 2 != 0);
+    }
 }
 
 /// The most words [`kf3_display_cursor_pixels`] writes: a 256x256 cursor (the broker's bound,
@@ -659,7 +686,8 @@ const CURSOR_MAX_WORDS: u32 = 256 * 256;
 
 /// ★ §8.13 (ABI 12, main thread, right after a DEFINE from [`kf3_display_cursor`]): the defined
 /// image's pixels into `data` — QEMU's `QEMUCursor` data, one host-endian `0xAARRGGBB` word per
-/// pixel, straight alpha — copied from kayfabe's own copy of the image, never guest memory.
+/// pixel, PREMULTIPLIED (what VNC's alpha cursor carries; ⊘ straight until the review of
+/// 2026-10-04) — copied from kayfabe's own copy of the image, never guest memory.
 /// `words` must be exactly the defined `width * height`. 0, or -1 with nothing written.
 ///
 /// # Safety

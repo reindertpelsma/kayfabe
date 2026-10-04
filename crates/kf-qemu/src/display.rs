@@ -31,7 +31,9 @@
 //! channel number the display has; a malformed stream stops its channel by name.
 
 use crate::device::Device;
-use kf_broker::{CursorImage, CursorMode, CursorWant, HotTracker};
+use kf_broker::{
+    CursorImage, CursorMode, CursorPoint, CursorWant, FrameCursors, HotTracker, ShownFrame,
+};
 use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
 use kf_disp::inst::{CtxDma, Layout, Target};
@@ -438,6 +440,8 @@ pub struct FrameView {
     pub format: u32,
     /// Increases with every frame the worker publishes.
     pub serial: u64,
+    /// ★ §8.13: the guest's cursor is composed into this frame.
+    pub cursor: bool,
 }
 
 /// ★★ M2 — the frames the display worker hands QEMU's console (and, with `display-broker`, the
@@ -463,15 +467,15 @@ pub struct ConsoleShare {
     /// ★ The same for the broker's activity (§8.11): it keeps the refresh rate, but feeds the D2H
     /// copy only while the broker is shown through host memory (`kf_broker::gpucopy::plan`).
     broker_ms: AtomicU64,
-    /// ★ §8.13: the shown head's cursor image top-left on the console's frame, packed
-    /// `x as u32 | (y as u32) << 32`, or [`NO_CURSOR_POINT`] — the worker writes it every pass, the
-    /// console's cursor (`kf3_display_cursor`) adds the image's hot spot to it.
-    cursor_point: AtomicU64,
+    /// ★ §8.13: the shown head's cursor image top-left on the console's frame — the worker writes
+    /// it every pass, the console's cursor (`kf3_display_cursor`) adds the image's hot spot to it.
+    cursor_point: CursorPoint,
+    /// ★ §8.13 (the review, 2026-10-04): which frames have the guest's cursor composed in, and
+    /// whether the one the console took last does — the console's cursor follows the frame it
+    /// SHOWS, never the relay's mode alone.
+    cursors: FrameCursors,
     epoch: Instant,
 }
-
-/// [`ConsoleShare`]'s cursor point when the shown head has no enabled cursor (or nothing is shown).
-const NO_CURSOR_POINT: u64 = u64::MAX;
 
 impl Default for ConsoleShare {
     fn default() -> ConsoleShare {
@@ -492,7 +496,8 @@ impl ConsoleShare {
             formats: core::array::from_fn(|_| AtomicU32::new(0)),
             demand_ms: AtomicU64::new(0),
             broker_ms: AtomicU64::new(0),
-            cursor_point: AtomicU64::new(NO_CURSOR_POINT),
+            cursor_point: CursorPoint::default(),
+            cursors: FrameCursors::default(),
             epoch: Instant::now(),
         }
     }
@@ -503,23 +508,30 @@ impl ConsoleShare {
         &self.ring
     }
 
-    fn now_ms(&self) -> u64 {
+    /// Milliseconds since the plane's start (the console cursor's pacing clock, too).
+    #[must_use]
+    pub fn now_ms(&self) -> u64 {
         u64::try_from(self.epoch.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 
     /// ★ **Worker**, every pass: the shown head's cursor image top-left on the frame, or `None`.
     fn note_cursor_point(&self, p: Option<(i32, i32)>) {
-        let v = p.map_or(NO_CURSOR_POINT, |(x, y)| {
-            u64::from(x.cast_unsigned()) | u64::from(y.cast_unsigned()) << 32
-        });
-        self.cursor_point.store(v, Ordering::Relaxed);
+        self.cursor_point.set(p);
     }
 
     /// ★ **Console (QEMU's main thread)**: the point [`ConsoleShare::note_cursor_point`] last stored.
     #[must_use]
     pub fn cursor_point(&self) -> Option<(i32, i32)> {
-        let v = self.cursor_point.load(Ordering::Relaxed);
-        (v != NO_CURSOR_POINT).then(|| ((v as u32).cast_signed(), ((v >> 32) as u32).cast_signed()))
+        self.cursor_point.get()
+    }
+
+    /// ★ **Console (QEMU's main thread)**: what the frame [`ConsoleShare::take`] last handed the
+    /// console carries — whether the guest's cursor is composed into it. (`kf3_gfx_update` shows
+    /// every frame it takes; the frame it would refuse — a bad format or geometry — the worker
+    /// never makes.)
+    #[must_use]
+    pub fn shown_frame(&self) -> ShownFrame {
+        self.cursors.shown()
     }
 
     /// Record the console's request for frames now.
@@ -541,6 +553,7 @@ impl ConsoleShare {
         self.note_demand();
         let slot = self.ring.take_console()?;
         let g = self.ring.geometry(slot);
+        let cursor = self.cursors.took(slot);
         Some(FrameView {
             addr: self.addrs[slot].load(Ordering::Acquire),
             width: g.width,
@@ -548,6 +561,7 @@ impl ConsoleShare {
             stride: g.stride,
             format: self.formats[slot].load(Ordering::Acquire),
             serial: g.serial,
+            cursor,
         })
     }
 
@@ -566,6 +580,7 @@ impl ConsoleShare {
         if host {
             self.addrs[i].store(f.addr, Ordering::Release);
             self.formats[i].store(f.format, Ordering::Release);
+            self.cursors.publish(i, f.cursor);
         }
         self.ring.describe(
             i,
@@ -2319,9 +2334,9 @@ struct ScanState {
     cursor_posted: Option<(u8, u64)>,
     /// … host-cursor refusals logged so far (bounded) …
     cursor_refusals: u64,
-    /// … the cursor composition word last logged (logged once per change, §8.12's open alpha
-    /// question) …
-    cursor_comp: Option<u32>,
+    /// … the cursor composition word's line (once per change, §8.12's open alpha question;
+    /// bounded, `kf_disp::scanout::CompositionLog`) …
+    cursor_comp: kf_disp::scanout::CompositionLog,
     /// … and the hot spot NVKMS does not program, derived from the injected pointer.
     hot: HotTracker,
     /// The worker's clock for [`HotTracker`] (its first use).
@@ -2339,6 +2354,8 @@ struct Inflight {
     t0: Instant,
     vram: Option<kf_broker::VramGeom>,
     d2h: bool,
+    /// ★ §8.13: it composes the guest's cursor (the console's cursor follows the frame it shows).
+    cursor: bool,
 }
 
 /// ★ Run the compose kernel on SYNTHETIC surfaces — a block-linear window composed opaque, a
@@ -2533,6 +2550,7 @@ impl ScanState {
             t0,
             vram,
             d2h,
+            cursor,
         }) = self.inflight.take()
         else {
             return;
@@ -2566,6 +2584,7 @@ impl ScanState {
                 stride: w * 4,
                 format: kf_disp::scanout::PixelFormat::Xrgb8888 as u32,
                 serial: self.serial,
+                cursor,
             },
             host.is_some(),
             vram,
@@ -2656,7 +2675,7 @@ impl ScanState {
         )
         .unwrap_or(u64::MAX);
         let hot = &mut self.hot;
-        let comp_logged = &mut self.cursor_comp;
+        let comp_log = &mut self.cursor_comp;
         let got = io
             .resolve(cs.client, cs.handle, 0)
             .and_then(|dma| kf_disp::scanout::plan_host_cursor(cs, &dma).map_err(|r| r.0))
@@ -2673,13 +2692,13 @@ impl ScanState {
                 // composition word the guest programmed, once per change, beside what the pixels
                 // say about their own alpha — the next box run reads the answer off this line
                 let (word, mode) = kf_disp::scanout::cursor_composition(cs);
-                if *comp_logged != Some(word) {
-                    *comp_logged = Some(word);
+                if let Some(n) = comp_log.changed(word) {
                     let c = h.alpha_census(&raw).unwrap_or_default();
                     eprintln!(
                         "kf3: display: guest cursor composition {word:#07x} = {mode} (K1 {}, cursor \
                          factor {}, viewport factor {}, mode {}); its {}x{} pixels: {} partially \
-                         transparent, {} with a colour channel above alpha ({})",
+                         transparent, {} with a colour channel above alpha ({}) — change {n} (the \
+                         first {} are logged, then every {}th)",
                         cs.k1,
                         cs.cursor_factor,
                         cs.viewport_factor,
@@ -2694,7 +2713,9 @@ impl ScanState {
                             "consistent with premultiplied pixels"
                         } else {
                             "no partial alpha to tell"
-                        }
+                        },
+                        kf_disp::scanout::CompositionLog::LINES,
+                        kf_disp::scanout::CompositionLog::EVERY
                     );
                 }
                 match h.image(&raw).map_err(|r| r.0)? {
@@ -2997,6 +3018,7 @@ impl ScanState {
                     t0: Instant::now(),
                     vram: pack.map(|(_, _, g)| g),
                     d2h: frame.is_some(),
+                    cursor: self.cursor_in_frame,
                 });
             }
             Err(e) => {
@@ -3117,6 +3139,7 @@ mod tests {
             stride: 7680,
             format: 1,
             serial,
+            cursor: false,
         }
     }
 
@@ -3437,6 +3460,48 @@ mod tests {
             c.publish(t, frame(0x2000, 2 + i), true, None);
         }
         assert!(ring.release_held(a));
+    }
+
+    /// ★ §8.13 (the review, 2026-10-04): the console's cursor follows the frame the console SHOWS —
+    /// the bit the worker publishes with a frame is what taking it reports, and a frame the console
+    /// does not take (VRAM only) changes nothing. Known-positive: before any take, `Nothing`.
+    #[test]
+    fn the_console_share_carries_each_frames_cursor_bit_to_what_the_console_shows() {
+        let c = ConsoleShare::default();
+        assert_eq!(c.shown_frame(), ShownFrame::Nothing);
+        let a = c.free_slot().unwrap();
+        c.publish(
+            a,
+            FrameView {
+                cursor: true,
+                ..frame(0x1000, 1)
+            },
+            true,
+            None,
+        );
+        assert!(c.take().unwrap().cursor);
+        assert_eq!(c.shown_frame(), ShownFrame::CursorComposed);
+        let b = c.free_slot().unwrap();
+        c.publish(b, frame(0x2000, 2), true, None);
+        assert!(!c.take().unwrap().cursor);
+        assert_eq!(c.shown_frame(), ShownFrame::CursorFree);
+        let v = c.free_slot().unwrap();
+        c.publish(
+            v,
+            FrameView {
+                cursor: true,
+                ..frame(0, 3)
+            },
+            false,
+            None,
+        );
+        assert_eq!(c.take().unwrap().serial, 2, "the console keeps b");
+        assert_eq!(c.shown_frame(), ShownFrame::CursorFree);
+        // and the cursor point the console reads is the one the worker noted, (-1, -1) included
+        c.note_cursor_point(Some((-1, -1)));
+        assert_eq!(c.cursor_point(), Some((-1, -1)));
+        c.note_cursor_point(None);
+        assert_eq!(c.cursor_point(), None);
     }
 
     /// ★ §8.11: a frame only in VRAM (the pack ran, the D2H did not) is offered to the broker and

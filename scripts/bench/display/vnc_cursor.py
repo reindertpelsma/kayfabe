@@ -5,19 +5,28 @@
 API, and a VNC client draws it as a real pointer). Python 3 stdlib only.
 
   vnc_cursor.py HOST:PORT [out.pam]   one line: VNC_CURSOR w= h= hot= visible_px= bbox_rel_hot=
-                                      fnv_rel_hot= (the format of xcursor.py's CURSOR line, the same
-                                      FNV over the visible pixels' positions relative to the hot spot
-                                      and their PREMULTIPLIED ARGB — what XFixes reports — so the two
-                                      lines compare directly); with out.pam, the image as a PAM that
-                                      `xcursor.py compare` reads. `VNC_CURSOR none` when the server sent
-                                      no cursor within the deadline (no cursor defined on the console).
+                                      fnv_rel_hot= wire_above_alpha= (the format of xcursor.py's
+                                      CURSOR line, the same FNV over the visible pixels' positions
+                                      relative to the hot spot and their PREMULTIPLIED ARGB — what
+                                      XFixes reports — so the two lines compare directly); with
+                                      out.pam, the image as a PAM that `xcursor.py compare` reads.
+                                      `VNC_CURSOR none` when the server sent no cursor within the
+                                      deadline (no cursor defined on the console).
   vnc_cursor.py --selftest            a fake server speaking QEMU 10.2.4's bytes (ui/vnc.c:992-1027)
 
-The client asks for the VMware alpha-cursor pseudo-encoding (-314, QEMU's VNC_ENCODING_ALPHA_CURSOR)
+The client asks for the Cursor With Alpha pseudo-encoding (-314, QEMU's VNC_ENCODING_ALPHA_CURSOR)
 and the rich cursor (-239) as a fallback; QEMU sends the console's cursor right after SetEncodings
 (ui/vnc.c:2237) and again on every define. Alpha cursor: rect x,y = the hot spot, w,h, encoding -314,
-then s32 0 (raw) and w*h QEMUCursor words written as they are — host-endian 0xAARRGGBB with
-straight alpha (what kf3 defines) — so each colour is premultiplied here before the FNV.
+then s32 0 (raw) and w*h QEMUCursor words written as they are (host-endian 0xAARRGGBB).
+
+The wire is PREMULTIPLIED by the protocol (rfbproto.rst, "Cursor With Alpha Pseudo-encoding": "Alpha
+is pre-multiplied for each colour channel"; TigerVNC's CMsgReader::readSetCursorWithAlpha divides each
+channel by alpha on receipt), so the words are hashed AS RECEIVED, the way a viewer that follows the
+spec reads them. ⊘ CORRECTED 2026-10-04 (the review): this grader used to premultiply what it got,
+assuming kf3's then-straight words — so its digest matched the host pointer under kayfabe's own
+convention while a real viewer brightened every partly transparent pixel. wire_above_alpha counts
+pixels with a colour channel above their alpha: impossible in a premultiplied image, so any is a
+server that sent straight alpha (a spec violation a viewer renders too bright or wraps).
 """
 import socket
 import struct
@@ -47,13 +56,9 @@ def fnv(data):
     return h
 
 
-def premultiply(px):
-    """0xAARRGGBB straight -> premultiplied, rounded."""
-    a = (px >> 24) & 0xFF
-    out = a << 24
-    for sh in (16, 8, 0):
-        out |= ((((px >> sh) & 0xFF) * a + 127) // 255) << sh
-    return out
+def above_alpha(px):
+    """Pixels with a colour channel above their alpha: none in a premultiplied image."""
+    return sum(1 for p in px if any(((p >> sh) & 0xFF) > ((p >> 24) & 0xFF) for sh in (16, 8, 0)))
 
 
 def summarize(w, h, hot, px):
@@ -119,7 +124,8 @@ def grab(host, port, deadline=8.0):
                     if inner != 0:
                         raise ValueError("alpha cursor data in encoding %d, not raw" % inner)
                     raw = recv_exact(s, w * h * 4)
-                    px = [premultiply(struct.unpack("<I", raw[i:i + 4])[0]) for i in range(0, len(raw), 4)]
+                    # premultiplied on the wire (rfbproto): taken as received
+                    px = [struct.unpack("<I", raw[i:i + 4])[0] for i in range(0, len(raw), 4)]
                     s.close()
                     return w, h, (x, y), px
                 if enc == RICH_CURSOR:
@@ -153,10 +159,10 @@ def grab(host, port, deadline=8.0):
     return None
 
 
-def selftest():
+def fake_server(words):
     """A fake QEMU: ServerInit, then (after SetEncodings) one 2x1 alpha cursor, hot 1,0, written as
-    vnc_cursor_define does — QEMUCursor words, little-endian, straight alpha."""
-    words = [0x80FF0000, 0x00000000]  # half-covered red, transparent
+    vnc_cursor_define does — QEMUCursor words, little-endian, sent as they are. Returns what grab()
+    got."""
     srv = socket.socket()
     srv.bind(("127.0.0.1", 0))
     srv.listen(1)
@@ -185,10 +191,22 @@ def selftest():
     th.join(2)
     srv.close()
     assert got is not None, "no cursor"
-    w, h, hot, px = got
+    return got
+
+
+def selftest():
+    """Premultiplied words (what kf3 defines since 2026-10-04) are taken as received: a half-covered
+    red pixel stays 0x80800000 and nothing is above its alpha. Known-positive: the straight word for
+    the same pixel (0x80FF0000, kf3's pre-review convention) is counted as a violation."""
+    w, h, hot, px = fake_server([0x80800000, 0x00000000])  # half-covered red, transparent
     assert (w, h, hot) == (2, 1, (1, 0)), (w, h, hot)
-    assert px == [0x80800000, 0], ["%#x" % p for p in px]  # 0xff * 0x80 / 255 -> 0x80
-    print("VNC_CURSOR_SELFTEST ok %dx%d hot=%d,%d %s" % (w, h, hot[0], hot[1], summarize(w, h, hot, px)))
+    assert px == [0x80800000, 0], ["%#x" % p for p in px]
+    assert above_alpha(px) == 0
+    line = summarize(w, h, hot, px)
+    _, _, _, bad = fake_server([0x80FF0000, 0x00000000])
+    assert bad == [0x80FF0000, 0] and above_alpha(bad) == 1, ["%#x" % p for p in bad]
+    print("VNC_CURSOR_SELFTEST ok %dx%d hot=%d,%d %s wire_above_alpha=%d (straight known-positive: %d)"
+          % (w, h, hot[0], hot[1], line, above_alpha(px), above_alpha(bad)))
 
 
 def main():
@@ -204,7 +222,8 @@ def main():
         print("VNC_CURSOR none")
         return
     w, h, hot, px = got
-    print("VNC_CURSOR w=%d h=%d hot=%d,%d %s" % (w, h, hot[0], hot[1], summarize(w, h, hot, px)))
+    print("VNC_CURSOR w=%d h=%d hot=%d,%d %s wire_above_alpha=%d"
+          % (w, h, hot[0], hot[1], summarize(w, h, hot, px), above_alpha(px)))
     if len(sys.argv) > 2:
         write_pam(sys.argv[2], w, h, hot, px)
 

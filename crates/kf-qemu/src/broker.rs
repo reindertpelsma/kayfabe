@@ -27,7 +27,7 @@
 use crate::raw_unsafe::BrokerHooks;
 use kf_broker::{
     ConsoleCursor, ConsoleCursorUpdate, CursorShare, FrameRing, Input, InstallRefusal, Relay,
-    RelayConfig, SlotFds, UnixLink,
+    RelayConfig, ShownFrame, SlotFds, UnixLink,
 };
 use kf_cuda::display::{DisplayGpu, Frame};
 use kf_linux_raw::{
@@ -92,18 +92,33 @@ impl BrokerSeat {
         })
     }
 
-    /// ★ §8.13, **main loop** (the console's `gfx_update`): what QEMU's console should be told about
-    /// the guest's cursor now ([`kf_broker::ConsoleCursor::poll`]), given `point`, the cursor
-    /// image's top-left on the console's frame. Nothing when the lock is busy (never, on one thread).
-    pub fn console_cursor(&self, point: Option<(i32, i32)>) -> ConsoleCursorUpdate {
+    /// ★ §8.13, **main loop** (the console's `gfx_update`, and each broker pump): what QEMU's
+    /// console should be told about the guest's cursor now ([`kf_broker::ConsoleCursor::poll`]),
+    /// given `point` (the cursor image's top-left on the console's frame), `frame` (what the frame
+    /// the console shows carries) and `now_ms` (the pacing clock). Nothing when the lock is busy
+    /// (never, on one thread).
+    pub fn console_cursor(
+        &self,
+        point: Option<(i32, i32)>,
+        frame: ShownFrame,
+        now_ms: u64,
+    ) -> ConsoleCursorUpdate {
         self.console
             .try_lock()
-            .map(|mut c| c.poll(&self.cursor, point))
+            .map(|mut c| c.poll(&self.cursor, point, frame, now_ms))
             .unwrap_or_default()
     }
 
+    /// ★ §8.13, **main loop**: what the C device applied of the last [`BrokerSeat::console_cursor`]
+    /// ([`kf_broker::ConsoleCursor::done`]) — a part it did not apply is handed out again.
+    pub fn console_cursor_done(&self, define: bool, mouse: bool) {
+        if let Ok(mut c) = self.console.try_lock() {
+            c.done(define, mouse);
+        }
+    }
+
     /// ★ §8.13, **main loop**: the image the last define described, into `out` — exactly its
-    /// `width * height` words of straight `0xAARRGGBB` ([`kf_broker::ConsoleCursor::pixels`]).
+    /// `width * height` words of premultiplied `0xAARRGGBB` ([`kf_broker::ConsoleCursor::pixels`]).
     ///
     /// # Errors
     /// Nothing latched, a size mismatch, or the lock busy — nothing written.

@@ -819,6 +819,42 @@ pub fn cursor_composition(c: &CursorScan) -> (u32, &'static str) {
     (word, name)
 }
 
+/// ★ §8.14's composition line, BOUNDED: [`CompositionLog::changed`] counts every change of the word
+/// and says when its line is due — the first [`CompositionLog::LINES`] changes, then every
+/// [`CompositionLog::EVERY`]th. ⊘ The review of 2026-10-04: the line was "once per change" of a word
+/// the GUEST programs, so a guest alternating two words wrote a line per frame (60-144 a second,
+/// gigabytes a day of the VMM's stderr) where every neighbouring line is rate-limited.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CompositionLog {
+    last: Option<u32>,
+    changes: u64,
+}
+
+impl CompositionLog {
+    /// The first this many changes are logged …
+    pub const LINES: u64 = 8;
+    /// … then every this-many-th.
+    pub const EVERY: u64 = 256;
+
+    /// The cursor read saw `word`: `Some(n)` — the change's number — when the line is due; an
+    /// unchanged word is silent and uncounted.
+    pub fn changed(&mut self, word: u32) -> Option<u64> {
+        if self.last == Some(word) {
+            return None;
+        }
+        self.last = Some(word);
+        self.changes += 1;
+        let n = self.changes;
+        (n <= Self::LINES || n.is_multiple_of(Self::EVERY)).then_some(n)
+    }
+
+    /// Changes seen so far.
+    #[must_use]
+    pub fn changes(&self) -> u64 {
+        self.changes
+    }
+}
+
 /// ★ What a cursor image's pixels say about their own alpha convention: how many are partially
 /// transparent, and how many carry a colour channel ABOVE their alpha — impossible in a
 /// premultiplied image, so 0 of those with some partial pixels is consistent with premultiplied
@@ -1023,6 +1059,30 @@ pub fn boot_layer(s: &BootSurface) -> Result<LayerPlan, Refused> {
 
 #[cfg(test)]
 mod tests {
+    /// ★ The composition line is bounded: a guest alternating two words 1000 times gets the first
+    /// eight changes and every 256th logged, an unchanged word nothing. Known-positive: each of the
+    /// first eight changes IS logged, numbered.
+    #[test]
+    fn the_composition_line_is_bounded_however_the_guest_alternates() {
+        let mut l = CompositionLog::default();
+        assert_eq!(l.changed(0x072ff), Some(1));
+        assert_eq!(l.changed(0x072ff), None, "unchanged: silent");
+        let mut lines = 1;
+        for k in 0..1000u32 {
+            if l.changed(if k % 2 == 0 { 0x075ff } else { 0x072ff })
+                .is_some()
+            {
+                lines += 1;
+            }
+        }
+        assert_eq!(l.changes(), 1001);
+        assert_eq!(lines, 8 + 1001 / 256, "{lines} lines for 1001 changes");
+        let mut l = CompositionLog::default();
+        for n in 1..=8u64 {
+            assert_eq!(l.changed(n as u32), Some(n));
+        }
+    }
+
     use super::*;
 
     /// 1920x1080 as kf3 packs it (`kf_oprom::Geometry::for_mode`): pitch 7680, G = 0x7F0000.

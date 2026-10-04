@@ -4,13 +4,14 @@
 //! composes by. Each test has a known-positive half (the same script with the one thing that
 //! decides it changed), so a detector that never fires cannot pass.
 
+use kf_broker::console::DEFINE_MIN_MS;
 use kf_broker::wire::{
     CAP_CURSOR, CAP_DMABUF, CMD_CURSOR, CMD_SIZE, CURSOR_HIDE, CURSOR_SET, CURSOR_SHOW, EV_ABS,
     EV_FOCUS, EV_GRAB, EV_HELLO, EV_KEY, F_GRABBED, FOURCC_AR24, Pkt,
 };
 use kf_broker::{
-    CursorImage, CursorMode, CursorShare, CursorWant, FrameRing, Host, Link, PointerAbs, Recv,
-    Relay, RelayConfig, Sent, SlotFds,
+    ConsoleCursor, CursorImage, CursorMode, CursorShare, CursorWant, FrameRing, Host, Link,
+    PointerAbs, Recv, Relay, RelayConfig, Sent, ShownFrame, SlotFds,
 };
 use kf_linux_raw::{SharedRam, fd_inode};
 use std::cell::RefCell;
@@ -584,4 +585,68 @@ fn the_relay_leaves_the_cursor_pacing_to_the_broker() {
     }
     t.tick();
     assert_eq!(t.ops(), vec![CURSOR_SET], "between two entries: one");
+}
+
+/// ★ The review of 2026-10-04: the broker sets the grab on EVERY packet (`F_GRABBED`), so a broker
+/// that flips it per packet flips the relay's mode per packet — and each return to hover used to
+/// make QEMU's main loop define the console's cursor again (allocate up to 256x256, copy, and send
+/// it to every VNC client) with nothing pacing it. Here the worst case for the console: a worker
+/// that recomposes at once for each mode and a console that shows that frame at once, 1000 flips
+/// 1 ms apart — at most one DEFINE per `DEFINE_MIN_MS`, and the newest state once the flips stop.
+/// Known-positive: flips spaced by the bound are each defined.
+#[test]
+fn a_broker_flipping_its_grab_cannot_flood_the_console_with_cursor_defines() {
+    let shown = |m: CursorMode| {
+        if m == CursorMode::Hover {
+            ShownFrame::CursorFree
+        } else {
+            ShownFrame::CursorComposed
+        }
+    };
+    for spaced in [false, true] {
+        let mut t = T::new(true);
+        t.up(CAP_CURSOR, 0);
+        assert!(t.share.post(image(32, 32, (1, 1), 3)));
+        t.tick();
+        let mut c = ConsoleCursor::default();
+        let flips = if spaced { 20 } else { 1000 };
+        let step = if spaced { DEFINE_MIN_MS } else { 1 };
+        for i in 0..flips {
+            t.pkt(EV_KEY, if i % 2 == 0 { F_GRABBED } else { 0 }, 30);
+            t.now += step;
+            t.read();
+            let u = c.poll(&t.share, Some((40, 40)), shown(t.share.mode()), t.now);
+            c.done(u.define.is_some(), u.mouse.is_some());
+        }
+        if spaced {
+            // the first flip is a grab before the console was ever given a cursor: nothing to hide
+            assert_eq!(c.defines(), 19, "each later flip, spaced by the bound");
+            continue;
+        }
+        assert!(
+            c.defines() <= 1000 / DEFINE_MIN_MS + 2,
+            "{} defines for 1000 flips in 1 s",
+            c.defines()
+        );
+        // the flips stop in hover (the last packet had no F_GRABBED): the image, once
+        assert_eq!(t.share.mode(), CursorMode::Hover);
+        t.now += DEFINE_MIN_MS;
+        let u = c.poll(&t.share, Some((40, 40)), ShownFrame::CursorFree, t.now);
+        let u2 = c.poll(
+            &t.share,
+            Some((40, 40)),
+            ShownFrame::CursorFree,
+            t.now + DEFINE_MIN_MS,
+        );
+        assert!(
+            u.define
+                == Some(Some(kf_broker::CursorShape {
+                    width: 32,
+                    height: 32,
+                    hot: (1, 1)
+                }))
+                || (u.define.is_none() && u2.is_empty()),
+            "the newest state, defined once: {u:?} {u2:?}"
+        );
+    }
 }
