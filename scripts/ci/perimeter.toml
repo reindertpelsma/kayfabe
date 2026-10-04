@@ -184,3 +184,17 @@ args = "--workspace --all-targets --all-features --target x86_64-unknown-linux-g
 name = "aarch64"
 args = "--workspace --all-targets --target aarch64-unknown-linux-gnu"
 env = { KAYFABE_ISOLATE_IMAGE_STUB = "1" }
+
+# G5, the export table (docs/design/PERIMETER_EXPORTS.md; V3_SEC_PERIMETER.md §3).
+[exports]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+# E9 (S1-08): safe `extern "C"` fns taking a raw pointer. Exact, and it only goes down. 12 at
+# 789dee9f: the design's 11 in kf-qemu/src/ffi_unsafe.rs, plus kf-cuda's `completion_hostfn`.
+e9_baseline = 12
+# Files a lane edits: their new rows start `LANE:<branch>: …` (V3_SEC_PERIMETER.md §4.3, §4.4, §6).
+[exports.lanes]
+"crates/kf-cuda/src/driver_unsafe.rs" = "v3-sec-rawaddr"
+"crates/kf-qemu/src/ffi_unsafe.rs" = "v3-sec-rawaddr"
+"crates/kf-qemu/src/raw_unsafe.rs" = "v3-p1p2"
+"crates/kf-linux-raw/src/mapping_unsafe.rs" = "v3-broker"
+"crates/kf-linux-raw/src/host_fd_unsafe.rs" = "v3-broker"

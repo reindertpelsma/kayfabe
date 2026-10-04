@@ -9,7 +9,8 @@
 #
 # Jobs:
 # - perimeter: the tokenizer (G3: L0-L6, L10), manifests and the resolved graph (G4: M1-M9),
-#   the size ratchet (G6) with L8 and L9, each with its known-positive fixtures run first.
+#   the size ratchet (G6) with L8 and L9, the export table (G5) and kf3.h's prototypes (K4),
+#   each with its known-positive fixtures run first.
 # - compiler-location (G1): every repository unit compiled with `unsafe_code` forced on, and
 #   every diagnostic located inside the unit's own class U crate's perimeter.
 #
@@ -38,6 +39,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0   # pinned with rust-toolchain.toml and scripts/ci/perimeter.toml
+          # the export generator documents kf-qemu for both targets of its matrix; kf-qemu's
+          # kf-gop-image build script builds the GOP driver for the matching UEFI target
+          targets: aarch64-unknown-linux-gnu, x86_64-unknown-uefi, aarch64-unknown-uefi
+      - uses: Swatinem/rust-cache@v2
       # ★ Known positives FIRST: a gate below that reports zero is evidence only because each of
       # its rules fired on a fixture built to violate it, in this same job (audit S1-12).
       - name: Gate self-tests (every rule fires on its fixture)
@@ -51,6 +56,22 @@ jobs:
         run: python3 scripts/ci/perimeter.py metadata
       - name: "G4 kf3's closure: members, features, build scripts (M6)"
         run: python3 scripts/ci/dependencies.py
+      - name: "G5 known positives EF1-EF17 (rustdoc over a fixture crate; each violation fails by its own rule)"
+        run: python3 scripts/ci/selftest_perimeter_cargo.py
+      - name: "G5 export table: every perimeter export is a reviewed row (E1-E14)"
+        run: python3 scripts/ci/perimeter.py exports
+      - name: "K4 kf3.h's prototypes against kf-qemu's no_mangle signatures (known positive included)"
+        run: python3 scripts/ci/perimeter.py k4
+      # On a failed table, publish the merged table the generator would write, so the rows to add
+      # can be copied rather than re-derived.
+      - name: "G5 on failure: the regenerated table, as an artifact"
+        if: failure()
+        run: python3 scripts/ci/perimeter.py exports --write --json-dir "$RUNNER_TEMP/kf-rustdoc" || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: perimeter-exports-regenerated
+          path: docs/design/PERIMETER_EXPORTS.md
       # ★ The base a RISE is judged against (V3_SEC_PERIMETER.md §2): the PR base; on master the
       # first parent; on any other push the merge-base with origin/master. fetch-depth 0 above.
       - name: "G6 size ratchet, exact (rule c); L8 caller obligations; L9 mint sites"

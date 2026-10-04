@@ -527,6 +527,17 @@ That closes `#[doc(hidden)]`, generator `cfg` gaps and unreached files.
 
 E3 to E9 and E12 to E14 bind `OK` rows. An `OPEN` or `LANE` row records the violation in its reason.
 
+⊘ **As built at C5 (2026-10-04)**, where the text above left a choice or a measurement moved it:
+- **`unsafe impl` kinds come from the tokenizer**, not the G1 log: the perimeter job has no G1 log, and the tokenizer's `unsafe impl`/`unsafe trait` sites are exact by file and line and cross-checked against the compiler by SF4 (§2).
+- **E9's baseline is 12, not 11**: the 11 in `kf-qemu/src/ffi_unsafe.rs`, plus kf-cuda's `completion_hostfn` (`driver_unsafe.rs`), a safe `extern "C"` fn taking `*mut c_void`.
+- **E10 is stricter than diff-aware**: every `OPEN`/`LANE` status carries `YYYY-MM-DD: ` by grammar (`LANE:<branch>: YYYY-MM-DD: …`), so no row can lose its date later; an OK row that goes back to OPEN at the base comparison is printed.
+- **E11 is derived by the tokenizer**: every same-crate `src/` file that defines, at module level and outside `#[cfg(test)]`, an item a perimeter file's code tokens name. It finds root re-exports by definition, which is what R14 asked of rustdoc. The derived set is the design's expected six VALIDATES files (`bounds.rs`, `cache.rs`, `geometry.rs`, `ioctl.rs`, `page_size.rs`, `view.rs`) plus five USES (`census.rs`, `error.rs`, `ioctltrace.rs`; kf-qemu `chan.rs`, `device.rs`).
+- **A trait impl is a row when its Self type is exported, foreign or generic.** An impl for a type private to the file cannot be reached from outside it.
+- **E1b leaves out non-exported `macro_rules!`**: rustdoc documents only exported macros.
+- **E13 and E14, mechanically**: an OK safe-trait row carries the check `sealed` or `no-reliance`; an OK static whose type carries an address fails.
+- **The first table: 441 rows, OK 0, OPEN 133, LANE 308** (the x86_64 inventory at `789dee9f`; the CI union over both targets is the authority). No row is OK yet: none has had its mutation run (§3.4 step 2). LANE rows are the files a lane edits (`perimeter.toml` `[exports.lanes]`).
+- **The cargo self-test has 27 cases**: EF1-EF17 as above, plus EF2b (a test that never names the item), a `pub(super)` item visible outside its file, a derived `Clone` as a row, a wrong mechanical kind (E2), an undated OPEN row (E10), a safe trait OK without `sealed` (E13), and an OK static of an address-carrying type (E14).
+
 ### 3.4 Initial content
 
 1. `perimeter.py exports --skeleton` prints every row with its mechanical columns filled and status `OPEN: <date>: unreviewed`.
@@ -725,7 +736,7 @@ This adds a fourth class U crate. `perimeter.toml` is the list (§9 supersedes t
 
 Confirmed at `789dee9f`: `crates/kf-linux-raw/tests/unsafe_naming.rs:41` lists the v2 crates; `walk()` returns silently on a missing directory (`:175-177`); the v2 tree satisfies the floor (`:274-288`). No lane edits the file.
 
-C5 deletes it and replaces it:
+C5 deletes it and replaces it (⊘ done at C5, 2026-10-04: the v2 ledger's `sandbox_unsafe.rs` and `spawn_unsafe.rs` rows have no v3 counterpart, since kf-linux-raw has neither file):
 
 | ledger part | replaced by |
 |---|---|

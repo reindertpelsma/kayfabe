@@ -1303,6 +1303,14 @@ def kf3_member_dirs(root: Path, cfg: Config) -> list[str]:
     return sorted(rel_dir(root, pk[i]["manifest_path"]) for i in closure if pk[i]["source"] is None)
 
 
+def sizes_validates(root: Path) -> list[str]:
+    table = root / "docs/design/PERIMETER_EXPORTS.md"
+    if not table.exists():
+        return []
+    import perimeter_exports as px  # noqa: PLC0415
+    return px.table_counts(table.read_text())[1]
+
+
 def tsv_at(root: Path, ref: str) -> dict[str, dict] | None:
     r = subprocess.run(["git", "show", f"{ref}:{SIZES_TSV}"], cwd=root, capture_output=True, text=True)
     if r.returncode != 0:
@@ -1317,7 +1325,12 @@ def run_sizes(root: Path, cfg: Config, base: str | None, update: bool,
               exports: dict[str, int] | None = None) -> tuple[list[Finding], dict]:
     tree = Tree(root, git_ls(root, "*.rs"))
     c_files = cfg.raw.get("c", {}).get("files", [])
-    actual = size_rows(tree, cfg, c_files, exports)
+    validates: list[str] = []
+    table = root / "docs/design/PERIMETER_EXPORTS.md"
+    if exports is None and table.exists():
+        import perimeter_exports as px  # noqa: PLC0415
+        exports, validates = px.table_counts(table.read_text())
+    actual = size_rows(tree, cfg, c_files, exports, validates)
     path = root / SIZES_TSV
     stored = read_tsv(path.read_text()) if path.exists() else {}
     base_rows = tsv_at(root, base) if base else None
@@ -1349,6 +1362,151 @@ def run_sizes(root: Path, cfg: Config, base: str | None, update: bool,
     return sorted(findings), totals
 
 
+def covered_crates(cfg: Config) -> list[str]:
+    """G5's crates: the class U crates in kf3's graph, and every class P crate."""
+    return sorted(set(cfg.kf3_crates()) | set(cfg.class_p))
+
+
+def crate_package_name(root: Path, crate: str) -> str:
+    return tomllib.loads((root / crate / "Cargo.toml").read_text())["package"]["name"]
+
+
+def run_exports(root: Path, cfg: Config, json_dir: Path | None, write: bool, date: str,
+                out_dir: Path | None = None) -> tuple[list, int]:
+    import perimeter_exports as px  # noqa: PLC0415 (sibling; only this subcommand needs it)
+    ex = cfg.raw.get("exports", {})
+    targets = ex.get("targets", ["x86_64-unknown-linux-gnu"])
+    crates = covered_crates(cfg)
+    files = git_ls(root, "*.rs")
+    perim = {f for f in files if is_perimeter_file(f, cfg) and crate_of(f, crates) is not None}
+    unsafe_lines = px.unsafe_impl_lines(root, perim)
+    parts = []
+    fmt = cfg.raw.get("rustdoc_format", 61)
+    for cr in crates:
+        pkg = crate_package_name(root, cr)
+        for tgt in targets:
+            if json_dir is not None:
+                path = json_dir / tgt / "doc" / f"{pkg.replace('-', '_')}.json"
+                if not path.exists():
+                    path = json_dir / f"{pkg.replace('-', '_')}.json"
+            else:
+                path = px.run_rustdoc(root, pkg, tgt, out_dir or rustdoc_dir())
+            doc = px.Doc(json.loads(path.read_text()), fmt)
+            parts.append(px.inventory(doc, perim, unsafe_lines))
+    inv, types, names, conflicts = px.union_inventories(parts)
+    findings: list = [px.Finding("E2", px.TABLE, 0, c) for c in conflicts]
+    tpath = root / px.TABLE
+    table, vdeps, errs = px.parse_table(tpath.read_text()) if tpath.exists() else ({}, {}, [])
+    findings += errs
+    table_kinds = {k: r.kind for k, r in table.items()}
+    carrying = px.address_carrying(types)
+    fds = px.fd_carrying(types)
+    inv.update(px.auto_rows(types, table_kinds, carrying, fds))
+    # E11, derived by the tokenizer over each covered crate's src/
+    crate_files = {cr: [f for f in files if crate_of(f, [cr]) == cr and in_src(f, cr)] for cr in crates}
+    derived = px.validation_deps(root, crate_files, lambda f: f in perim)
+    if write:
+        lanes = ex.get("lanes", {})
+        merged = {}
+        for k, g in inv.items():
+            old = table.get(k)
+            if old is not None:
+                g.checks, g.tests, g.status = old.checks, old.tests, old.status
+                if g.kind == "type":
+                    g.kind = old.kind
+            else:
+                g.status = (f"LANE:{lanes[k[0]]}: {date}: unreviewed; this file is edited by that lane"
+                            if k[0] in lanes else f"OPEN: {date}: unreviewed")
+                if g.kind == "type":
+                    g.kind = suggest_type_kind(types.get((k[0], k[1])), carrying, fds)
+            merged[k] = g
+        vd = {f: (vdeps[f][0], vdeps[f][1]) if f in vdeps else ("?", "unclassified: " + ", ".join(
+            sorted(derived[f])[:6])) for f in derived}
+        notes = ("**Crates covered:** " + ", ".join(f"`{c}`" for c in crates) + ". The grader crates and the guest "
+                 "firmware are not linked into kf3 (scripts/ci/dependencies.py); their perimeter files are counted "
+                 "in `scripts/ci/perimeter/sizes.tsv` and have no rows here.")
+        tpath.write_text(px.render_table(merged, vd, date, notes))
+        table, vdeps, errs = px.parse_table(tpath.read_text())
+        findings += errs
+    findings += px.check_rows(root, inv, table, types, carrying, fds, set(cfg.raw.get("skip_guards", {}).get("macros", [])),
+                              None, int(ex.get("e9_baseline", 0)))
+    findings += px.reach_findings(root, sorted(perim), names)
+    feats = {cr: set(tomllib.loads((root / cr / "Cargo.toml").read_text()).get("features", {})) for cr in crates}
+    findings += px.cfg_findings(root, sorted(perim), set(cfg.raw.get("cfg", {}).get("allowed", [])), feats,
+                                lambda f: crate_of(f, crates))
+    for f in sorted(set(derived) - set(vdeps)):
+        findings.append(px.Finding("E11", px.TABLE, 0, f"add `{f}` to Validation dependencies (named: "
+                                                       f"{', '.join(sorted(derived[f])[:8])})"))
+    for f in sorted(set(vdeps) - set(derived)):
+        findings.append(px.Finding("E11", px.TABLE, vdeps[f][2], f"remove `{f}` from Validation dependencies"))
+    for f, (role, _, line) in sorted(vdeps.items()):
+        if role not in ("VALIDATES", "USES"):
+            findings.append(px.Finding("E11", px.TABLE, line, f"`{f}`: role must be VALIDATES or USES, got {role!r}"))
+    open_rows = sum(1 for r in table.values() if r.status.startswith("OPEN"))
+    lane_rows = sum(1 for r in table.values() if r.status.startswith("LANE"))
+    ok_rows = sum(1 for r in table.values() if r.status == "OK")
+    print(f"  rows={len(table)} OK={ok_rows} OPEN={open_rows} LANE={lane_rows} validation_deps={len(vdeps)}")
+    return sorted(findings), len(table)
+
+
+def rustdoc_dir() -> Path:
+    return Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "kf-rustdoc"
+
+
+def run_k4(root: Path, cfg: Config, json_dir: Path) -> list[Finding]:
+    """K4 (§8.1): kf3.h's prototypes must agree with the Rust `no_mangle` signatures. The names-only
+    link closure cannot see a parameter whose type changed; a C compiler can. Its known positive
+    runs every time: one parameter flipped in memory must fail to compile."""
+    import perimeter_exports as px  # noqa: PLC0415
+    tgt = cfg.raw.get("exports", {}).get("targets", ["x86_64-unknown-linux-gnu"])[0]
+    path = json_dir / tgt / "doc" / "kf_qemu.json"
+    if not path.exists():
+        path = json_dir / "kf_qemu.json"
+    doc = px.Doc(json.loads(path.read_text()), cfg.raw.get("rustdoc_format", 61))
+    protos = px.k4_prototypes(doc)
+    header = (root / "qemu/hw/misc/kf3/kf3.h").read_text()
+    declared = set(re.findall(r"\b(kf3_\w+)\s*\(", rslex_strip_c(header)))
+    out = []
+    names = {n for n, _ in protos}
+    for n in sorted(names - declared):
+        out.append(Finding("K4", "qemu/hw/misc/kf3/kf3.h", 0, f"`{n}` is exported by kf-qemu and not declared"))
+    for n in sorted(declared - names):
+        out.append(Finding("K4", "qemu/hw/misc/kf3/kf3.h", 0, f"`{n}` is declared and kf-qemu exports no such fn"))
+    rc, err = px.k4_compile(root, [p for _, p in protos])
+    if rc != 0:
+        out.append(Finding("K4", "qemu/hw/misc/kf3/kf3.h", 0, f"prototypes conflict with kf3.h:\n{err[:3000]}"))
+    flipped, done = [], False
+    for _, p in protos:
+        if not done and "uint64_t" in p.split("(", 1)[1]:
+            head, args_ = p.split("(", 1)
+            p, done = head + "(" + args_.replace("uint64_t", "uint32_t", 1), True
+        flipped.append(p)
+    rc2, err2 = px.k4_compile(root, flipped)
+    if not done or rc2 == 0 or "conflicting types" not in err2:
+        out.append(Finding("K4", "qemu/hw/misc/kf3/kf3.h", 0, "KNOWN POSITIVE FAILED: a flipped parameter type "
+                                                              "compiled; this check cannot see a mismatch"))
+    print(f"  K4 prototypes={len(protos)} declared={len(declared)} known_positive={'fired' if rc2 else 'SILENT'}")
+    return out
+
+
+def rslex_strip_c(text: str) -> str:
+    return strip_c(text)
+
+
+def suggest_type_kind(t, carrying: set[str], fds: set[str]) -> str:
+    if t is None:
+        return "plain data"
+    if t.repr_c:
+        return "FFI struct"
+    if "Drop" in t.traits or t.name in fds:
+        return "owning handle"
+    if t.has_lifetime:
+        return "borrowed view"
+    if t.name in carrying:
+        return "owning handle"
+    return "plain data"
+
+
 def report(name: str, findings: list[Finding], extra: str = "") -> int:
     for f in findings:
         print(f)
@@ -1359,7 +1517,10 @@ def report(name: str, findings: list[Finding], extra: str = "") -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=("lex", "manifest", "metadata", "sizes", "location", "reached", "depinfo",
-                                    "passes", "toolchain"))
+                                    "passes", "toolchain", "exports", "k4"))
+    ap.add_argument("--json-dir", type=Path, help="exports: pre-generated rustdoc JSON (default: run rustdoc)")
+    ap.add_argument("--write", action="store_true", help="exports: merge the inventory into the table")
+    ap.add_argument("--date", default=None, help="exports --write: the date new rows carry (default: today)")
     ap.add_argument("--root", type=Path, default=ROOT, help="the checkout to judge (default: this script's)")
     ap.add_argument("--config", type=Path, help="perimeter.toml to use (default: <root>/scripts/ci/perimeter.toml)")
     ap.add_argument("--log", type=Path, help="location/reached/depinfo/sizes: the G1 wrapper log directory")
@@ -1388,11 +1549,18 @@ def main(argv: list[str] | None = None) -> int:
         findings, totals = run_sizes(root, cfg, args.base, args.update)
         if args.log is not None:
             tree = Tree(root, git_ls(root, "*.rs"))
-            actual = size_rows(tree, cfg, cfg.raw.get("c", {}).get("files", []))
+            actual = size_rows(tree, cfg, cfg.raw.get("c", {}).get("files", []), {}, sizes_validates(root))
             findings = sorted(findings + cross_check(actual, compiler_counts(read_log(args.log))))
         for cr, t in sorted(totals.items()):
             print(f"  {cr}: {fmt_row(t)}")
         return report("sizes", findings, f" base={args.base or '-'} cross_check={'yes' if args.log else 'no'}")
+    if args.cmd == "exports":
+        import datetime  # noqa: PLC0415
+        date = args.date or datetime.date.today().isoformat()
+        findings, n = run_exports(root, cfg, args.json_dir, args.write, date)
+        return report("exports", findings, f" rows={n}")
+    if args.cmd == "k4":
+        return report("k4", run_k4(root, cfg, args.json_dir or rustdoc_dir()))
     if args.log is None:
         ap.error(f"{args.cmd} requires --log")
     recs = read_log(args.log)

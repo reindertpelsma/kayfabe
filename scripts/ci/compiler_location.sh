@@ -67,13 +67,13 @@ rm -rf "$gate"
 mkdir -p "$gate" "$target"
 log="$gate/wraplog"
 mkdir -p "$log"
-for f in rustc_location_wrapper.py perimeter.py rslex.py dependencies.py; do
+for f in rustc_location_wrapper.py perimeter.py rslex.py dependencies.py perimeter_exports.py; do
   cp "$here/$f" "$gate/$f"
 done
 cp "$toml" "$gate/perimeter.toml"
 chmod 0555 "$gate"/*.py "$gate/perimeter.toml"
-sums=$(cd "$gate" && sha256sum rustc_location_wrapper.py perimeter.py rslex.py dependencies.py perimeter.toml)
-want=$( (cd "$here" && sha256sum rustc_location_wrapper.py perimeter.py rslex.py dependencies.py;
+sums=$(cd "$gate" && sha256sum rustc_location_wrapper.py perimeter.py rslex.py dependencies.py perimeter_exports.py perimeter.toml)
+want=$( (cd "$here" && sha256sum rustc_location_wrapper.py perimeter.py rslex.py dependencies.py perimeter_exports.py;
          cd "$root/scripts/ci" && sha256sum perimeter.toml) )
 [ "$sums" = "$want" ] || { echo "★ the gate copy differs from the checkout"; exit 2; }
 before=$(git -C "$root" status --porcelain)
@@ -121,7 +121,7 @@ unset RUSTC_WRAPPER RUSTC KF_PINNED_RUSTC CARGO_TARGET_DIR
 
 # The gate copy is judged with BEFORE anything else reads it: a build script cannot have
 # rewritten the verdict.
-after_sums=$(cd "$gate" && sha256sum rustc_location_wrapper.py perimeter.py rslex.py dependencies.py perimeter.toml)
+after_sums=$(cd "$gate" && sha256sum rustc_location_wrapper.py perimeter.py rslex.py dependencies.py perimeter_exports.py perimeter.toml)
 if [ "$after_sums" != "$sums" ]; then
   echo "★ the protected gate copy changed during the build:"; diff <(echo "$sums") <(echo "$after_sums")
   exit 1
