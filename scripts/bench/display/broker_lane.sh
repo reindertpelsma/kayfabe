@@ -198,6 +198,19 @@ Q=$OUT/run_${TAG}_qemu.log
 echo "BRK_RELAY $(grep -ac 'kf3: broker:' "$Q" 2>/dev/null) lines; rungs: $(grep -ao 'frames go as [^(;]*' "$Q" 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
 grep -aE 'kf3: broker: (GPU-copy rung|connected|the compositor|the display (CAN|CANNOT|imported)|guest cursor|grab|frames go)' "$Q" 2>/dev/null | cut -c1-230 | head -40 | sed 's/^/BRK_RELAY_LINE /'
 grep -ao 'broker\[[^]]*\]' "$Q" 2>/dev/null | tail -1 | sed 's/^/BRK_STATUS /'
+# §8.15 (the review of 2026-10-04): a GPU-copy run must refuse no descriptor and trip no dma-buf
+# back-off. A status line WITHOUT the counters (a binary before them) is UNMEASURED, never a zero.
+brk_st=$(grep -ao 'broker\[[^]]*\]' "$Q" 2>/dev/null | tail -1)
+brk_n() { printf '%s\n' "$brk_st" | grep -o " $1=[0-9]*" | head -1 | cut -d= -f2; }
+brk_gc=$(brk_n gpucopy); brk_cr=$(brk_n carrier_refused); brk_dt=$(brk_n dmabuf_trips)
+if [ -z "$brk_st" ] || [ -z "$brk_cr" ] || [ -z "$brk_dt" ]; then
+    echo "BRK_COUNTER_GRADE UNMEASURED (no relay status line, or one without carrier_refused/dmabuf_trips)"
+elif [ "${brk_gc:-0}" -gt 0 ]; then
+    if [ "$brk_cr" = 0 ] && [ "$brk_dt" = 0 ]; then brk_v=PASS; else brk_v=FAIL; fi
+    echo "BRK_COUNTER_GRADE $brk_v gpucopy=$brk_gc carrier_refused=$brk_cr dmabuf_trips=$brk_dt carrier_unchecked=$(brk_n carrier_unchecked) formats_unasked=$(brk_n formats_unasked)"
+else
+    echo "BRK_COUNTER_GRADE NOT_GRADED (no GPU-copy frame: gpucopy=${brk_gc:-?}) carrier_refused=$brk_cr dmabuf_trips=$brk_dt"
+fi
 grep -ao 'host_cursor_reads=[0-9]* host_cursor_refused=[0-9]*\|scanout_d2h=[0-9]* scanout_pack=[0-9]* pack_skipped=[0-9]* display_vram_mib=[0-9]*' "$Q" 2>/dev/null | tail -2 | sed 's/^/BRK_DISP /'
 grep -aE 'REFUSED|refused' "$Q" 2>/dev/null | grep -a broker | cut -c1-200 | head -8 | sed 's/^/BRK_REFUSED_LINE /'
 # §8.14: the bring-up self-tests on the GPU (the compose kernel's includes the XOR pixel)

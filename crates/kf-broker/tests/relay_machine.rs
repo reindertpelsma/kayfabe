@@ -158,6 +158,11 @@ impl T {
             let mem = SharedRam::create_named(c"kfb-test-frame", 64 * 1024).unwrap();
             ring.install(j, SlotFds::new(mem, dma()).unwrap()).unwrap();
         }
+        T::over(ring)
+    }
+
+    /// A relay over `ring` as it is (slots installed or not).
+    fn over(ring: Arc<FrameRing>) -> T {
         let wire = Rc::new(RefCell::new(Wire {
             peer_uid: ME,
             euid: ME,
@@ -2067,8 +2072,13 @@ fn unacknowledged_dma_buf_frames_back_off_to_shared_memory_and_retry() {
 
 /// ★ `badf2d7` (5): the broker accepts only a descriptor it can PROVE to be shmem or a dma-buf and
 /// closes any other on a helper thread (a FUSE file's `close` can hang) — so the relay sends
-/// nothing else: a slot whose "dma-buf" is a pipe is REFUSED by name before the wire,
-/// counted, and the connection stays up. Known-positive: the same slot with a memfd stand-in sends.
+/// nothing else: a slot whose "dma-buf" is a pipe never reaches the broker; the check counts it and
+/// says why. ⊘ CORRECTED 2026-10-04 (the review): the frame used to be refused on the rung `choose`
+/// picked — every frame, for good, a black display with nothing tripping. Now the refused rung
+/// backs off for the connection and the SAME frame goes on the next one: the dma-buf rung's to
+/// shared memory, the GPU copy's to the host rungs. Nothing is spent before the check: the first
+/// ATTACH that goes carries seq 0, and no line claims a rung that carried nothing.
+/// Known-positive: the same slots with a memfd stand-in go LINEAR (and the GPU copy goes native).
 #[test]
 fn a_descriptor_that_is_neither_memfd_nor_dma_buf_never_reaches_the_broker() {
     for bad in [false, true] {
@@ -2089,25 +2099,270 @@ fn a_descriptor_that_is_neither_memfd_nor_dma_buf_never_reaches_the_broker() {
         let j = t.publish(64, 32);
         t.frame();
         let c = t.relay.counters();
+        let att = t.attach_sent();
+        assert_eq!(
+            att.0.seq, 0,
+            "bad={bad}: nothing was spent before the check"
+        );
         if bad {
-            assert!(
-                !t.types().contains(&CMD_ATTACH),
-                "nothing went: {:?}",
-                t.types()
+            assert_eq!(
+                (att.0.flags, att.1),
+                (CMD_F_SHM, Some(t.memfd_id(j))),
+                "the same frame, as shared memory"
             );
+            assert!(
+                t.sent().iter().all(|(_, id)| *id != Some(t.dmabuf_id(j))),
+                "the pipe never went"
+            );
+            assert_eq!((c.carrier_refused, c.refused), (1, 0));
+            assert!(
+                log.lines()
+                    .iter()
+                    .any(|l| l.contains("neither a memfd nor a dma-buf") && l.contains("5 s")),
+                "{:?}",
+                log.lines()
+            );
+            assert!(
+                !log.lines().iter().any(|l| l.contains("LINEAR dma-buf")),
+                "no rung announced that carried nothing: {:?}",
+                log.lines()
+            );
+            assert!(t.relay.status().contains("carrier_refused=1"));
+            assert!(t.relay.active(), "the connection stays up");
+            // backing off: the next frame goes as shared memory without a second refusal
+            t.release_shm(j);
+            t.read();
+            let (k, c2, id) = t.next_attach();
+            assert_eq!((c2.flags, id), (CMD_F_SHM, Some(t.memfd_id(k))));
+            assert_eq!(t.relay.counters().carrier_refused, 1);
+        } else {
+            assert_eq!(att.1, Some(t.dmabuf_id(j)));
+            assert_eq!(c.carrier_refused, 0);
+            assert!(t.relay.status().contains("carrier_refused=0"));
+        }
+    }
+    // the GPU copy: a VRAM "dma-buf" that is a pipe backs the rung off; the frame takes a host rung
+    for bad in [false, true] {
+        let t0 = T::new(false);
+        for j in 0..t0.ring.slots() {
+            let fd = if bad {
+                OwnedFd::from(std::io::pipe().expect("pipe").0)
+            } else {
+                SharedRam::create_named(c"kfb-test-vram", 64 * 1024)
+                    .unwrap()
+                    .dup_for_export()
+                    .unwrap()
+            };
+            t0.ring
+                .install_vram(j, VramFds::new(fd, 64 * 1024).unwrap())
+                .unwrap();
+        }
+        t0.ring.set_vram_modifier(BL);
+        t0.ring.set_gpu_nodes(NODES.to_vec());
+        let mut t = t0;
+        t.up(NATIVE_CAPS);
+        t.bl_verdict(true);
+        t.pkt(EV_FRAME, 0, 0, 0, 0);
+        t.read();
+        t.clear();
+        let log = kf_broker::capture_log();
+        // a frame only in VRAM (no console demand, no D2H): no other rung holds it
+        let v = t.publish_kinds(64, 32, false, true);
+        t.frame();
+        if bad {
+            assert!(!t.types().contains(&CMD_ATTACH), "{:?}", t.types());
+            let c = t.relay.counters();
             assert_eq!((c.carrier_refused, c.refused), (1, 1));
             assert!(
                 log.lines()
                     .iter()
-                    .any(|l| l.contains("neither a memfd nor a dma-buf")),
+                    .any(|l| l.contains("REFUSED frame slot") && l.contains("no other rung")),
                 "{:?}",
                 log.lines()
             );
-            assert!(t.relay.active(), "the connection stays up");
-            assert_eq!(t.ring.held_mask() & (1 << j), 0, "its slot came back");
+            assert_eq!(t.ring.held_mask() & (1 << v), 0, "its slot came back");
+            assert!(
+                !t.ring.want_vram(),
+                "the worker stops packing for the back-off"
+            );
         } else {
-            assert_eq!(t.attach_sent().1, Some(t.dmabuf_id(j)));
-            assert_eq!(c.carrier_refused, 0);
+            assert_eq!(t.attach_sent().1, Some(t.vram_id(v)), "native");
+            t.release_vram(v);
+            t.pkt(EV_FRAME, 0, 0, 0, 0);
+            t.read();
         }
+        t.clear();
+        let j = t.publish_kinds(64, 32, true, true);
+        t.frame();
+        let att = t.attach_sent();
+        if bad {
+            assert_eq!(att.1, Some(t.memfd_id(j)), "the host rung carried it");
+            assert_eq!(
+                t.relay.counters().carrier_refused,
+                1,
+                "backed off: no re-check"
+            );
+            assert!(!t.ring.want_vram());
+        } else {
+            assert_eq!(att.1, Some(t.vram_id(j)), "native");
+            assert!(t.ring.want_vram());
+        }
+    }
+}
+
+/// ★ The descriptor check reads `/proc/self/fdinfo` once per BACKING, not once per frame (the
+/// review, 2026-10-04: a per-frame filesystem open on QEMU's main thread, under the relay's lock).
+/// Known-positive: each backing is checked — the first frame of each slot runs the check.
+#[test]
+fn a_proven_descriptor_is_checked_once_per_backing() {
+    let mut t = T::new(true);
+    t.up(CAP_MODIFIERS | CAP_RELEASE);
+    let mut used = std::collections::BTreeSet::new();
+    for _ in 0..30 {
+        let j = t.publish(64, 32);
+        t.frame();
+        assert_eq!(t.attach_sent().1, Some(t.dmabuf_id(j)), "LINEAR");
+        used.insert(j);
+        t.release_dmabuf(j);
+        t.pkt(EV_FRAME, 0, 0, 0, 0);
+        t.read();
+        t.clear();
+    }
+    let checks = t.relay.counters().carrier_checks;
+    assert!(
+        checks >= 1 && checks <= used.len() as u64,
+        "{checks} checks for {} backings over 30 frames",
+        used.len()
+    );
+}
+
+/// ★ The review of 2026-10-04: a dma-buf commit the broker REFUSED BY NAME (`EV_FORMAT x=0` for its
+/// pair — the first frames of a connection race the relay's own question and are dropped at the
+/// broker's format gate) is an answer, not a silent drop, and must not count toward the dma-buf
+/// detector — whose trip blames `/proc/self/fdinfo`. Here two LINEAR XR24 frames are refused by
+/// name, then AR24 frames go LINEAR, acknowledged: no trip. Known-positive: the same two frames
+/// dropped WITHOUT a word trip the detector as soon as a third dma-buf commit goes.
+#[test]
+fn a_dma_buf_frame_refused_by_name_never_trips_the_detector() {
+    for told in [false, true] {
+        let mut t = T::new(true);
+        t.up(CAP_MODIFIERS | CAP_RELEASE);
+        let log = kf_broker::capture_log();
+        let t0 = t.now;
+        let a = t.publish(64, 32);
+        t.frame();
+        assert_eq!(t.attach_sent().1, Some(t.dmabuf_id(a)), "LINEAR, asked");
+        t.pkt(EV_FRAME, 0, 0, 0, 0);
+        t.read();
+        t.clear();
+        let b = t.publish(64, 32);
+        t.frame();
+        assert_eq!(t.attach_sent().1, Some(t.dmabuf_id(b)), "LINEAR again");
+        if told {
+            t.pkt(EV_FORMAT, 0, FOURCC_XR24 as i32, 0, 0);
+            t.read();
+            assert_eq!(t.ring.held_mask(), 0, "both refused frames came back");
+        }
+        // a second pair the relay sends, after the detector's window
+        t.now = t0 + 1100;
+        t.clear();
+        let c = t.publish_fourcc(64, 32, FOURCC_AR24);
+        t.frame();
+        for _ in 0..5 {
+            if t.types().contains(&CMD_ATTACH) {
+                break;
+            }
+            t.tick(100);
+        }
+        let att = t.attach_sent();
+        assert_eq!(
+            (att.0.fourcc, att.1),
+            (FOURCC_AR24, Some(t.dmabuf_id(c))),
+            "told={told}"
+        );
+        t.tick(10);
+        let trips = t.relay.counters().dmabuf_trips;
+        if told {
+            t.release_dmabuf(c);
+            t.read();
+            t.tick(3000);
+            assert_eq!(t.relay.counters().dmabuf_trips, 0, "{:?}", log.lines());
+            assert!(
+                !log.lines().iter().any(|l| l.contains("/proc/self/fdinfo")),
+                "{:?}",
+                log.lines()
+            );
+            assert!(t.relay.status().contains("dmabuf_trips=0"));
+        } else {
+            assert_eq!(trips, 1, "three silent drops trip it");
+            assert!(t.relay.status().contains("dmabuf_trips=1"));
+        }
+    }
+}
+
+/// ★ The review of 2026-10-04: sixteen volunteered "no"s used to evict the relay's own recorded
+/// YES for the GPU-copy pair (the table dropped its oldest non-"no" first) — and with it the
+/// rung, the worker's pack, and a fresh question per frame. The broker's volunteered rows go
+/// first now. Known-positive: the GPU copy is in use before the "no"s arrive, and still after.
+#[test]
+fn volunteered_noes_never_push_out_the_relays_own_yes() {
+    let mut t = T::with_vram();
+    t.up(NATIVE_CAPS);
+    t.bl_verdict(true);
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read();
+    assert!(t.ring.want_vram());
+    t.clear();
+    let j = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    assert_eq!(t.attach_sent().1, Some(t.vram_id(j)), "native before");
+    t.release_vram(j);
+    for m in 0..32u32 {
+        t.pkt(EV_FORMAT, 0, FOURCC_AR24 as i32, 0x100 + m, 0x0300_0000);
+    }
+    t.pkt(EV_FRAME, 0, 0, 0, 0);
+    t.read();
+    assert_eq!(t.relay.counters().formats_unasked, 32);
+    assert!(t.relay.status().contains("formats_unasked=32"));
+    assert!(t.ring.want_vram(), "the yes is still known");
+    t.clear();
+    let k = t.publish_kinds(64, 32, true, true);
+    t.frame();
+    assert!(
+        !t.types().contains(&CMD_QUERY_FORMAT),
+        "not asked again: {:?}",
+        t.types()
+    );
+    assert_eq!(t.attach_sent().1, Some(t.vram_id(k)), "native after");
+}
+
+/// ★ The HELLO line says "shared memory" only when installed slots ALL lack a dma-buf (⊘ box run
+/// `brkF1`, 2026-10-04: it said "no /dev/udmabuf here" at the first connection, before the guest's
+/// first frame, when no slot holds anything — and the next frames went LINEAR). Known-positive: a
+/// ring whose slots have no dma-buf says it.
+#[test]
+fn the_hello_line_claims_shared_memory_only_for_slots_without_a_dma_buf() {
+    for (what, says) in [("empty", false), ("memfd only", true), ("dma-buf", false)] {
+        let mut t = match what {
+            "empty" => T::over(Arc::new(FrameRing::new(
+                kf_broker::slots::BROKER_SLOTS,
+                true,
+            ))),
+            "memfd only" => T::new(false),
+            _ => T::new(true),
+        };
+        let log = kf_broker::capture_log();
+        t.up(CAP_MODIFIERS);
+        let hello: Vec<_> = log
+            .lines()
+            .into_iter()
+            .filter(|l| l.starts_with("connected to"))
+            .collect();
+        assert_eq!(hello.len(), 1, "{what}");
+        assert_eq!(
+            hello[0].contains("shared memory"),
+            says,
+            "{what}: {hello:?}"
+        );
     }
 }
