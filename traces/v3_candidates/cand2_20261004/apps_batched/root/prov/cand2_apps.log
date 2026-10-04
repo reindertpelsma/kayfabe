@@ -1,0 +1,6 @@
+START 2026-10-04T11:33:29+00:00
+SOURCE 9d82f2598d267732c87476da27f501aaabe2c4af
+40a850b793cac425bd946a3d09bce61ed5de1567b2b77a4fd79f52c8e82b525f  /workspace/bench/kf3-bins/9d82f259/qemu-system-x86_64
+fb64de820389b448712ef325f7553d55d24dee8e736d2052cb7d0804b7ffdca1  /opt/apps/bundle.tgz
+HOST_RC=0 2026-10-04T11:51:41+00:00
+[apps_matrix 2026-10-04T11:51:41+00:00] HOST_DONE 71 pass / 74 rows

@@ -1,0 +1,4 @@
+=== fft_cufft side=guest start=2026-10-04T11:58:29+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/fft_cufft
+METRIC fft_cufft_GFLOPs 1238.0
+CHECK ok
+=== end rc=0 secs=3 2026-10-04T11:58:32+00:00

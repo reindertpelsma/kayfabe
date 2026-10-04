@@ -3600,7 +3600,11 @@ also hold about 30 FPS. X11 MAILBOX is unsupported on this stack; Wayland MAILBO
 works. Three Xorg-start flip-event warnings match candidate 1's existing handoff
 limitation; the KMS flip workload has none. §M's correction is now folded in.
 
-R4 remains pending. R6 passes at 30/50/60 Hz with constant 1920x1080 through
+R4 passes the pacing checks: 240/240 async flips at 60.01 Hz, `tear=59.9`,
+held=240 and zero overruns/timeouts/DRM warnings. The 50 ms-after-completion
+control gives 60/60 at 18.36 Hz; held rises once to 241 at its initial flip,
+then stays flat. The original literal "unchanged" prediction below is corrected
+for that initial boundary; the steady slow path is not held. R6 passes at 30/50/60 Hz with constant 1920x1080 through
 broker `9f2fd00` (refresh-only/reconnect fix), the real relay and actual guest.
 Three duplicate hints are suppressed. A userspace connector reprobe (`modetest -c`)
 refreshes the cached EDID; sysfs alone returned old bytes. The recorded udev monitor

@@ -1,0 +1,1838 @@
+[
+  {
+    "source": "/root/prov/cand2_apps.log",
+    "source_size": 391,
+    "source_sha256": "6b85cdd57e33c9eb098c99baf86a85ef0a61cc307417074d65097eefa577ab30",
+    "saved": "root/prov/cand2_apps.log"
+  },
+  {
+    "source": "/root/prov/cand2_apps_guest.log",
+    "source_size": 1418,
+    "source_sha256": "fab1c7c91c765eb38b7c4d72e36362a4d4b9b3e90a9dab52f1d082f65cd37c0c",
+    "saved": "root/prov/cand2_apps_guest.log"
+  },
+  {
+    "source": "/root/prov/cand2_apps_host.log",
+    "source_size": 6108,
+    "source_sha256": "1dd3b56a78342e539b4e18c82870c81b0a13be031fabe7aec83aa9b92846f4d0",
+    "saved": "root/prov/cand2_apps_host.log"
+  },
+  {
+    "source": "/root/prov/cand2_apps_wait.log",
+    "source_size": 32,
+    "source_sha256": "52a8404ff005cecb7d4cab93cfce267ce92b2550c4a77caca6e6016c1c2bb88f",
+    "saved": "root/prov/cand2_apps_wait.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/BlackScholes.guest.log",
+    "source_size": 1202,
+    "source_sha256": "045064cc403dac0f83b9db671ab9fab162eb5abc4034964852b194ce5fa00af3",
+    "saved": "workspace/apps/results/cand2/BlackScholes.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/BlackScholes.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "0bed5e827b167045f3f68c73aa544f8cbab2ab5ecc625f340f478a9359c8cfc1",
+    "saved": "workspace/apps/results/cand2/BlackScholes.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/BlackScholes.host.log",
+    "source_size": 1201,
+    "source_sha256": "e8fd111055b4f74efd5a53bea349e9c141188e09c41d8949898347f5d46d7763",
+    "saved": "workspace/apps/results/cand2/BlackScholes.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/BlackScholes.kf3.log",
+    "source_size": 85662,
+    "source_sha256": "429e0c0131101c271b218e1fbade28ea141fd756aaf23b4a224c896486b40ff6",
+    "saved": "workspace/apps/results/cand2/BlackScholes.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/MersenneTwisterGP11213.guest.log",
+    "source_size": 664,
+    "source_sha256": "6094ed25e7e0a80fc69efab2f04dc6adcadee93d9bf90b0761bf535cf5585d93",
+    "saved": "workspace/apps/results/cand2/MersenneTwisterGP11213.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/MersenneTwisterGP11213.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "1a3a327136a9dbef79cbf2acefceefd16aea68ded26735f6664ed3c242c5ce6f",
+    "saved": "workspace/apps/results/cand2/MersenneTwisterGP11213.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/MersenneTwisterGP11213.host.log",
+    "source_size": 664,
+    "source_sha256": "745f4d4ba4cca0f35a954677a39dbe04f63964180e8d2f557a2ea3eb4cbe07db",
+    "saved": "workspace/apps/results/cand2/MersenneTwisterGP11213.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/MersenneTwisterGP11213.kf3.log",
+    "source_size": 85674,
+    "source_sha256": "a16ca15cfed73b9a0048f204945b5c2ecb83f875891dd8bfc5523f64b245036c",
+    "saved": "workspace/apps/results/cand2/MersenneTwisterGP11213.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/UnifiedMemoryPerf.guest.log",
+    "source_size": 347,
+    "source_sha256": "948e0173d065a3334ec85386c00b08273944d2237a1317d7a9d803accf4b1968",
+    "saved": "workspace/apps/results/cand2/UnifiedMemoryPerf.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/UnifiedMemoryPerf.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "b687e44e6cbd028090e205461da3678f201fbd486e82cd14dfac212f44442d72",
+    "saved": "workspace/apps/results/cand2/UnifiedMemoryPerf.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/UnifiedMemoryPerf.host.log",
+    "source_size": 1031,
+    "source_sha256": "388daa5ebebf7f071348101aa7652d4d2a9e92a3d38762f029af04777a04c286",
+    "saved": "workspace/apps/results/cand2/UnifiedMemoryPerf.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/UnifiedMemoryPerf.kf3.log",
+    "source_size": 89975,
+    "source_sha256": "39dbc7bcad906347a21251187be901360f7489946bdcce1f9af71edd9c31a4fb",
+    "saved": "workspace/apps/results/cand2/UnifiedMemoryPerf.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/UnifiedMemoryStreams.guest.log",
+    "source_size": 1656,
+    "source_sha256": "06705521c0437cbb9fc01831feb50b9036efb4b47a7802d0622c5b7a00b74dfe",
+    "saved": "workspace/apps/results/cand2/UnifiedMemoryStreams.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/UnifiedMemoryStreams.guest_dmesg.log",
+    "source_size": 4741,
+    "source_sha256": "f4245ea7aae5d824eea3602cbd318695a5743b608e43f92618efa2dc9c6e58ba",
+    "saved": "workspace/apps/results/cand2/UnifiedMemoryStreams.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/UnifiedMemoryStreams.host.log",
+    "source_size": 2169,
+    "source_sha256": "6525e97f7b13fd026e7bb4f04603aa942691c35939f72c05b2d36883f2f386e1",
+    "saved": "workspace/apps/results/cand2/UnifiedMemoryStreams.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/UnifiedMemoryStreams.kf3.log",
+    "source_size": 96793,
+    "source_sha256": "c247f5d78bff0b24d744817efe5cfdb13c69889671dc86264e1e1f135ee6b3f5",
+    "saved": "workspace/apps/results/cand2/UnifiedMemoryStreams.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/asyncAPI.guest.log",
+    "source_size": 432,
+    "source_sha256": "c3a67abec3776708fe5f8249668e852f5c1001facfd04cb7eeb4b75005dcc654",
+    "saved": "workspace/apps/results/cand2/asyncAPI.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/asyncAPI.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "16325161a6966cb0307abb7abffa977621fd2c6f64b7b3ed442da66c069a11bb",
+    "saved": "workspace/apps/results/cand2/asyncAPI.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/asyncAPI.host.log",
+    "source_size": 431,
+    "source_sha256": "0e3de061c53d2fb4ee7588e42e56a774cef5a4b81bf100e753c714fa545b6677",
+    "saved": "workspace/apps/results/cand2/asyncAPI.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/asyncAPI.kf3.log",
+    "source_size": 86577,
+    "source_sha256": "6fe370d6da6132f279408e5e90c3609d74e964438b30324c6fb195a552dc6ed3",
+    "saved": "workspace/apps/results/cand2/asyncAPI.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/attach_verify.guest.log",
+    "source_size": 282,
+    "source_sha256": "a47f3ff0bf72e55b05a61ef862af17d9e08d0f37e21bb6dd556ae1b8a66cef7c",
+    "saved": "workspace/apps/results/cand2/attach_verify.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/attach_verify.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "652bf6084291d6e2a176e6c81e3175eea5e2532f3238047f9518c2eccb3feccd",
+    "saved": "workspace/apps/results/cand2/attach_verify.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/attach_verify.host.log",
+    "source_size": 268,
+    "source_sha256": "e7efd714eb2a7bea65d3864813cc7d230cb707f404695e441a0677574fd2cc15",
+    "saved": "workspace/apps/results/cand2/attach_verify.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/attach_verify.kf3.log",
+    "source_size": 87044,
+    "source_sha256": "6a3ef888dc3b75d89ba332af03d456172850dccd744403dfb68bae408ad60385",
+    "saved": "workspace/apps/results/cand2/attach_verify.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/bandwidthTest.guest.log",
+    "source_size": 765,
+    "source_sha256": "d78d30f2d5d0c8755ddfdf3124f52d4aa3c4f2898902d94f5019cfb8a0229cc6",
+    "saved": "workspace/apps/results/cand2/bandwidthTest.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/bandwidthTest.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "04f83f9fc38c6cc762d58e3ba30d7554d0b8390f98c7e14fb68660ebbf32aa30",
+    "saved": "workspace/apps/results/cand2/bandwidthTest.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/bandwidthTest.host.log",
+    "source_size": 763,
+    "source_sha256": "27185fd02ab4f21f5f92ba277b13a5fec72dda3cdfe39b3ab8e648a0315675ab",
+    "saved": "workspace/apps/results/cand2/bandwidthTest.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/bandwidthTest.kf3.log",
+    "source_size": 92742,
+    "source_sha256": "bc5b5017f92464a3cda1d855d4fcfa6c1881a53b09f4bcb60f4306b18a96e193",
+    "saved": "workspace/apps/results/cand2/bandwidthTest.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/bf16TensorCoreGemm.guest.log",
+    "source_size": 467,
+    "source_sha256": "23a3a3fc56991c2b14b454d2b9239374f7893f0ccea64ad4bbda0c8de91b6d85",
+    "saved": "workspace/apps/results/cand2/bf16TensorCoreGemm.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/bf16TensorCoreGemm.guest_dmesg.log",
+    "source_size": 4388,
+    "source_sha256": "b2694bf7bf9cdd335afe3edfc7bd5d4a3b0dc32910446fcef85d4b16e7e7619f",
+    "saved": "workspace/apps/results/cand2/bf16TensorCoreGemm.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/bf16TensorCoreGemm.host.log",
+    "source_size": 466,
+    "source_sha256": "333105425a7460a599539012dd6455d4d1372fc493ec25a324aa2dbfa1e7974e",
+    "saved": "workspace/apps/results/cand2/bf16TensorCoreGemm.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/bf16TensorCoreGemm.kf3.log",
+    "source_size": 109029,
+    "source_sha256": "16145c1dfab6b066ba8b5de70a1f20c56fc138728fe61acd1fe277c0f1631fd0",
+    "saved": "workspace/apps/results/cand2/bf16TensorCoreGemm.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/blackscholes.guest.log",
+    "source_size": 200,
+    "source_sha256": "f1500732507b2605d481ac4e821bb5b4379967d51063dc72836c96c7a5191154",
+    "saved": "workspace/apps/results/cand2/blackscholes.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/blackscholes.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "8b947dc3066d1e6ec7054fa9da2ee5879aeb4dd489a644fb27de0eafcdf95af1",
+    "saved": "workspace/apps/results/cand2/blackscholes.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/blackscholes.host.log",
+    "source_size": 199,
+    "source_sha256": "daff19c7ebb51d37515d3dc96baca0de255b68f23cd74c70eada47700c2e5604",
+    "saved": "workspace/apps/results/cand2/blackscholes.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/blackscholes.kf3.log",
+    "source_size": 85005,
+    "source_sha256": "44cfded1e8b4c3db62bee062fefc1e153ac20c3133aaefb423e6b5903dd72c8f",
+    "saved": "workspace/apps/results/cand2/blackscholes.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/blender_cycles.guest.log",
+    "source_size": 693,
+    "source_sha256": "1557e9b22303a32bc0430c98c7c7d0bf7eb2378aab18a1d0a55727039ec3c516",
+    "saved": "workspace/apps/results/cand2/blender_cycles.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/blender_cycles.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/blender_cycles.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/blender_cycles.host.log",
+    "source_size": 691,
+    "source_sha256": "43685030cc0e1458cb609e9e310396c2b6b22c709040773ed8106208f3ecf279",
+    "saved": "workspace/apps/results/cand2/blender_cycles.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/blender_cycles.kf3.log",
+    "source_size": 192390,
+    "source_sha256": "9ae45195e350bed65335b58d50e111c82352646a530156e667f57cc78faede53",
+    "saved": "workspace/apps/results/cand2/blender_cycles.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/boot_ap_cand2_b1.dmesg.log",
+    "source_size": 4724,
+    "source_sha256": "3b2c75be6d46923dda2bd2c7e2840bfadd933fdc614186468e645bd4e4324fef",
+    "saved": "workspace/apps/results/cand2/boot_ap_cand2_b1.dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/boot_ap_cand2_b1.dmesg_after.log",
+    "source_size": 264230,
+    "source_sha256": "6995c4b8c788697a39ab76bd5e1bcbc7558df16719515e8a408ddb205e6a6379",
+    "saved": "workspace/apps/results/cand2/boot_ap_cand2_b1.dmesg_after.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/boot_ap_cand2_b1.driver.log",
+    "source_size": 197397,
+    "source_sha256": "edf553460cf07f61d8bb29a97128dbb9e6eac21c759dcf491dbc6080490bfbea",
+    "saved": "workspace/apps/results/cand2/boot_ap_cand2_b1.driver.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/boot_ap_cand2_b1.hostdmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/boot_ap_cand2_b1.hostdmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/boot_ap_cand2_b1.probe.log",
+    "source_size": 15101,
+    "source_sha256": "6cdb83c59f4e9a351b5ddd819b5e2da722aa44a46f509bf4aff8600b08fe06eb",
+    "saved": "workspace/apps/results/cand2/boot_ap_cand2_b1.probe.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/boot_ap_cand2_b1.qemu.log.zst",
+    "source_size": 337861,
+    "source_sha256": "06e066b800f9dc3df8844d0293d35a33ac757ddffe446b4c8a099e3970f4f3c9",
+    "saved": "workspace/apps/results/cand2/boot_ap_cand2_b1.qemu.log.zst"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/boot_ap_cand2_b1.serial.log",
+    "source_size": 71147,
+    "source_sha256": "4e9c48127e6952ec4d4a4f6fc94fd7d61833726fc6da8427c255a8787ad75915",
+    "saved": "workspace/apps/results/cand2/boot_ap_cand2_b1.serial.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cdpSimpleQuicksort.guest.log",
+    "source_size": 329,
+    "source_sha256": "4e1ac86c23772663cd71cdae0fdd5afbcc88073b849105ac3d428e5e5bc4046d",
+    "saved": "workspace/apps/results/cand2/cdpSimpleQuicksort.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cdpSimpleQuicksort.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "946a6b8362fa9a9e3c5492d3458cf6f9435a969a482b6a2f998fa50adbaab54d",
+    "saved": "workspace/apps/results/cand2/cdpSimpleQuicksort.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cdpSimpleQuicksort.host.log",
+    "source_size": 328,
+    "source_sha256": "42ec0d4cde2f73802f27d1b1a521f70fd3ce71cd2e5e415212236f78d5867b66",
+    "saved": "workspace/apps/results/cand2/cdpSimpleQuicksort.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cdpSimpleQuicksort.kf3.log",
+    "source_size": 86668,
+    "source_sha256": "bd9fcd3ff0c33495299a9a88a769b0b32ec6efaf297e9d60c68aa217f950b258",
+    "saved": "workspace/apps/results/cand2/cdpSimpleQuicksort.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/clinfo.guest.log",
+    "source_size": 555,
+    "source_sha256": "006f9ae5de8e838d35e2382465b5be97ae956b70f1675e26dafad1c3a0cd51dd",
+    "saved": "workspace/apps/results/cand2/clinfo.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/clinfo.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/clinfo.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/clinfo.host.log",
+    "source_size": 550,
+    "source_sha256": "ae4f47c76a9554394c6e59adfa0efb6f073953eca079e4b8f4c4cc99a7eb60c7",
+    "saved": "workspace/apps/results/cand2/clinfo.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/clinfo.kf3.log",
+    "source_size": 110865,
+    "source_sha256": "a6f187a1128b9ce3f09aef2b0ab73c72dd8963fb006ff411ca1e9115d984ea52",
+    "saved": "workspace/apps/results/cand2/clinfo.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/clpeak.guest.log",
+    "source_size": 2929,
+    "source_sha256": "1bc5ecca5a921cc032f04e301c3c4341ab5bc3887a871c099ca18e2d8ea54db0",
+    "saved": "workspace/apps/results/cand2/clpeak.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/clpeak.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/clpeak.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/clpeak.host.log",
+    "source_size": 2929,
+    "source_sha256": "eebb17bb18ba427d8fd73d05b9be0116d19f26390bebd9f809007eb8c61af1f6",
+    "saved": "workspace/apps/results/cand2/clpeak.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/clpeak.kf3.log",
+    "source_size": 349618,
+    "source_sha256": "59fde6cb9626b7b03ed3aa44fe407d44a13633bd2c83375c4ee30b24afe4b574",
+    "saved": "workspace/apps/results/cand2/clpeak.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/concurrentKernels.guest.log",
+    "source_size": 506,
+    "source_sha256": "104f2ee26d7704ba263a85f7d4c49eb9fedf99880b6b280d0b8e747859d86676",
+    "saved": "workspace/apps/results/cand2/concurrentKernels.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/concurrentKernels.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "e956581fb3e649f35ac66e013564133eab670a788f85785c8a4782eb3ace944f",
+    "saved": "workspace/apps/results/cand2/concurrentKernels.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/concurrentKernels.host.log",
+    "source_size": 505,
+    "source_sha256": "71c6f9d78168381766ced31f2e26865a2fd2d883a0f74cbc841ad33d63b46e82",
+    "saved": "workspace/apps/results/cand2/concurrentKernels.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/concurrentKernels.kf3.log",
+    "source_size": 86357,
+    "source_sha256": "8e8ae17221037bad138522961c0c8a871d084a8e810c2fb3a3ba8dc0d142dba3",
+    "saved": "workspace/apps/results/cand2/concurrentKernels.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conjugateGradient.guest.log",
+    "source_size": 657,
+    "source_sha256": "21c96c750ff6a1401986fc6411f75b1b994d5fe2d4f05d8fb37f4eb054e2377c",
+    "saved": "workspace/apps/results/cand2/conjugateGradient.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conjugateGradient.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "195ad4cac2b53432afcf07c08f2069e7f78a702df9ec5b4a237c08c6992a3163",
+    "saved": "workspace/apps/results/cand2/conjugateGradient.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conjugateGradient.host.log",
+    "source_size": 656,
+    "source_sha256": "4fbdc530ec3e4882704b0d0cc93d5692e295e61fb86e2f04b928c2a15137917c",
+    "saved": "workspace/apps/results/cand2/conjugateGradient.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conjugateGradient.kf3.log",
+    "source_size": 88160,
+    "source_sha256": "78cf47ddc6d738bb0b29096f4b2b2fdc8dbc34701fdb7ce14a9328dadee163c7",
+    "saved": "workspace/apps/results/cand2/conjugateGradient.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conjugateGradientUM.guest.log",
+    "source_size": 446,
+    "source_sha256": "7847a7df4ced9d257837bec9247a4612b1523a6714aee2d9fd2613313d30badc",
+    "saved": "workspace/apps/results/cand2/conjugateGradientUM.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conjugateGradientUM.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "1e32a50584aa4d50fd1ca7926733ad5ca4ad1c436e7fa1cf77e6caa0359fe3e3",
+    "saved": "workspace/apps/results/cand2/conjugateGradientUM.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conjugateGradientUM.host.log",
+    "source_size": 773,
+    "source_sha256": "9ebfe33ce0e54f7e29550887d9e7097800e953b0bc8f2aac158844c3ddc02aed",
+    "saved": "workspace/apps/results/cand2/conjugateGradientUM.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conjugateGradientUM.kf3.log",
+    "source_size": 92532,
+    "source_sha256": "80f95a769576704014919ff5f610bd7203879c80ac4a8f0fc17cdf3197a9867a",
+    "saved": "workspace/apps/results/cand2/conjugateGradientUM.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conv2d.guest.log",
+    "source_size": 182,
+    "source_sha256": "4b8bcd527343f31d637d16b1a34f4f14fdb16db1bbfe65b844d5b8fe78cdd009",
+    "saved": "workspace/apps/results/cand2/conv2d.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conv2d.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "d367022189f35b26ccb7dec5aedfae6ab1b8284af4a1471a5821c917818c9ea3",
+    "saved": "workspace/apps/results/cand2/conv2d.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conv2d.host.log",
+    "source_size": 181,
+    "source_sha256": "868fca4040dcccb615fc1656f6e3149c7c1ae96ee36f97f381f6eb446c483fd4",
+    "saved": "workspace/apps/results/cand2/conv2d.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/conv2d.kf3.log",
+    "source_size": 85243,
+    "source_sha256": "aaec6d5efaac005a963cf66362982b9881177cb8cbdad10a620162b8e859650a",
+    "saved": "workspace/apps/results/cand2/conv2d.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cudaTensorCoreGemm.guest.log",
+    "source_size": 448,
+    "source_sha256": "01d654ee5d41d39cba0a294f6f31b444d2b7489ade03fff500740935b69f074c",
+    "saved": "workspace/apps/results/cand2/cudaTensorCoreGemm.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cudaTensorCoreGemm.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "01e1aa776673c068f01f25ef2f4725e4460963cce516c650e76d43851b900503",
+    "saved": "workspace/apps/results/cand2/cudaTensorCoreGemm.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cudaTensorCoreGemm.host.log",
+    "source_size": 447,
+    "source_sha256": "c31696fd837ea547da65bd445e13ea4fead913410231c4ca567aead818ae8951",
+    "saved": "workspace/apps/results/cand2/cudaTensorCoreGemm.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cudaTensorCoreGemm.kf3.log",
+    "source_size": 89750,
+    "source_sha256": "fa7a6d06c005dbd7573a9eff785359d9cecdb422c6f6b9c9465a1dd4df848953",
+    "saved": "workspace/apps/results/cand2/cudaTensorCoreGemm.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cupy.guest.log",
+    "source_size": 328,
+    "source_sha256": "74448c0794907ca34f2366bb072df98d5e603a1be1b9880a0dc2846b805265f7",
+    "saved": "workspace/apps/results/cand2/cupy.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cupy.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/cupy.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cupy.host.log",
+    "source_size": 327,
+    "source_sha256": "dfc2499201e975e23088a9a21919d61c610b76bbaaff13c34bf3ebbdc34cfb64",
+    "saved": "workspace/apps/results/cand2/cupy.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/cupy.kf3.log",
+    "source_size": 92878,
+    "source_sha256": "a6bb1a2081ef82dbf753d3a118fbd386d6f52f45e373f54c9f2b9d1e164b6600",
+    "saved": "workspace/apps/results/cand2/cupy.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/deviceQuery.guest.log",
+    "source_size": 2672,
+    "source_sha256": "6fd303b8bb739564234afcd514166ccaf4498acefd6ed0f5bc8ccbe18ff57e76",
+    "saved": "workspace/apps/results/cand2/deviceQuery.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/deviceQuery.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "46b9d380940471180c017d15730ab23ea2e00d5f2ab88595221f0e593399f8db",
+    "saved": "workspace/apps/results/cand2/deviceQuery.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/deviceQuery.host.log",
+    "source_size": 2673,
+    "source_sha256": "6c7235140d779f23a1c5a6791a1da137a2714d758f08b64e4a6dcc528b821291",
+    "saved": "workspace/apps/results/cand2/deviceQuery.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/deviceQuery.kf3.log",
+    "source_size": 93457,
+    "source_sha256": "d12191a849e3d140b002c4de84bea2b4bd29cbd27a0cd69a0b39c52dcde0c007",
+    "saved": "workspace/apps/results/cand2/deviceQuery.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/egl_offscreen.guest.log",
+    "source_size": 258,
+    "source_sha256": "a8dec3d64d1ed1bad5d07a83b895f3bb9b1fea5f40a8de4748a147659d1cc5c8",
+    "saved": "workspace/apps/results/cand2/egl_offscreen.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/egl_offscreen.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/egl_offscreen.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/egl_offscreen.host.log",
+    "source_size": 257,
+    "source_sha256": "c09ba8d67c3cde5b87f75c590dc3dc41a0cb8ce2f8dc9ceddab3423617f7ec94",
+    "saved": "workspace/apps/results/cand2/egl_offscreen.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/egl_offscreen.kf3.log",
+    "source_size": 67673,
+    "source_sha256": "0041c7d8ee6227414dd27e1b0e1ef87a9486a1b3bc5337a7373dc9cb0b7ce20d",
+    "saved": "workspace/apps/results/cand2/egl_offscreen.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/fastWalshTransform.guest.log",
+    "source_size": 668,
+    "source_sha256": "ce12b50347d6c9aec67b40ede9f28e74c52f20f0652aea7d7bae76ceb26db69e",
+    "saved": "workspace/apps/results/cand2/fastWalshTransform.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/fastWalshTransform.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "6c6a4f5172cca26d512044905977296984fd5e32df389c8a13141793b2b4ce3c",
+    "saved": "workspace/apps/results/cand2/fastWalshTransform.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/fastWalshTransform.host.log",
+    "source_size": 667,
+    "source_sha256": "40e2af994ababab511bc9bd47fd47331527817067a0768d413fb56f18e53db52",
+    "saved": "workspace/apps/results/cand2/fastWalshTransform.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/fastWalshTransform.kf3.log",
+    "source_size": 92143,
+    "source_sha256": "bfcc4a34e850a075ed78f3381972a32117b4c2512aef3522548e049082cdc4c3",
+    "saved": "workspace/apps/results/cand2/fastWalshTransform.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/fft_cufft.guest.log",
+    "source_size": 191,
+    "source_sha256": "c163845d7701de361e0e226434736efc7b040c0f01492ab34ca93877d816b819",
+    "saved": "workspace/apps/results/cand2/fft_cufft.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/fft_cufft.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "e10481c2eb4eac812138e3c3cb4585f0f9288355728b484c8a05a9cf42f51d06",
+    "saved": "workspace/apps/results/cand2/fft_cufft.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/fft_cufft.host.log",
+    "source_size": 190,
+    "source_sha256": "663cedc89f634b9810cc12aed5d63b8f1082addec0d9eb4e051afc5a9f5c8a0a",
+    "saved": "workspace/apps/results/cand2/fft_cufft.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/fft_cufft.kf3.log",
+    "source_size": 85255,
+    "source_sha256": "35532879b0880c9fdf5ed582303edc6f8c5f6dfb34cd8f2e3dbd43060c44a153",
+    "saved": "workspace/apps/results/cand2/fft_cufft.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/geekbench_gpu.guest.log",
+    "source_size": 2222,
+    "source_sha256": "2c51cbac1ab4aa793bbab2aa3d3f839c7d532d12d47757c0c72510eb7681d47b",
+    "saved": "workspace/apps/results/cand2/geekbench_gpu.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/geekbench_gpu.guest_dmesg.log",
+    "source_size": 301,
+    "source_sha256": "6f3841dc2fe6c0401a5d46b59a29015f67787e60354f24f6b327ebf645b85299",
+    "saved": "workspace/apps/results/cand2/geekbench_gpu.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/geekbench_gpu.host.log",
+    "source_size": 2197,
+    "source_sha256": "c51c245c3d98941e2b86e52e52ec3cf42e32a656a832f93f79674c710e24743f",
+    "saved": "workspace/apps/results/cand2/geekbench_gpu.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/geekbench_gpu.kf3.log",
+    "source_size": 306177,
+    "source_sha256": "4773866b28478d146971cb2b24de656ad9c9447e20b72061f8b44a132cb2817f",
+    "saved": "workspace/apps/results/cand2/geekbench_gpu.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/globalToShmemAsyncCopy.guest.log",
+    "source_size": 675,
+    "source_sha256": "1c7861fce0383518dfe232d213a735ade9b6da686c2b9d30333018f92abd3744",
+    "saved": "workspace/apps/results/cand2/globalToShmemAsyncCopy.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/globalToShmemAsyncCopy.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "0589e214d026112558d072f33a1560550e3e19ee4449ddaa6480cdb6a45370b7",
+    "saved": "workspace/apps/results/cand2/globalToShmemAsyncCopy.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/globalToShmemAsyncCopy.host.log",
+    "source_size": 674,
+    "source_sha256": "a2d025255bac148b071a4ea82c0297b0ae254aa3d4d9587221157dd17ec57a62",
+    "saved": "workspace/apps/results/cand2/globalToShmemAsyncCopy.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/globalToShmemAsyncCopy.kf3.log",
+    "source_size": 85458,
+    "source_sha256": "1ea5a6b5253af41fb37b5dea730339061e37e632cbb04b7aeb04e2ef3368a370",
+    "saved": "workspace/apps/results/cand2/globalToShmemAsyncCopy.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/gpu_burn.guest.log",
+    "source_size": 14416,
+    "source_sha256": "d3923c704099c3449931119200e6a083df19296dc15626c5105393f44ccec9bf",
+    "saved": "workspace/apps/results/cand2/gpu_burn.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/gpu_burn.guest_dmesg.log",
+    "source_size": 8296,
+    "source_sha256": "f0824fbc59866ad3a36e018679fafc3c7266f883a14d912d70d5c763d11c311b",
+    "saved": "workspace/apps/results/cand2/gpu_burn.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/gpu_burn.host.log",
+    "source_size": 14531,
+    "source_sha256": "b0d2dd5b81eca00b9cb05b965ea80c3a2bd2a316025d858ce42290fa138b409f",
+    "saved": "workspace/apps/results/cand2/gpu_burn.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/gpu_burn.kf3.log",
+    "source_size": 261099,
+    "source_sha256": "22a4dacc790fd68847c412d4f2759b8ca1608d8e3a992d9cc847bc990c70bbb5",
+    "saved": "workspace/apps/results/cand2/gpu_burn.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/graphMemoryNodes.guest.log",
+    "source_size": 1301,
+    "source_sha256": "31803ce12ea33ec930285516ac8f952a8d8797dd9fb3924ed119485d85ffdb4f",
+    "saved": "workspace/apps/results/cand2/graphMemoryNodes.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/graphMemoryNodes.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "5d8faf1f8e9e62f7e604ff738cd835c676a49d0bbdc4bdf0b4f664445d81c388",
+    "saved": "workspace/apps/results/cand2/graphMemoryNodes.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/graphMemoryNodes.host.log",
+    "source_size": 1300,
+    "source_sha256": "743413b5eb56e2c023d10a0aa3fb606ad9d84e00a5f6125e3b9a895f3a3378d9",
+    "saved": "workspace/apps/results/cand2/graphMemoryNodes.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/graphMemoryNodes.kf3.log",
+    "source_size": 92162,
+    "source_sha256": "8b56632d27c2a42f03ffabc5625b737d93131ce57864850054e3692ec55e63b4",
+    "saved": "workspace/apps/results/cand2/graphMemoryNodes.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/guest.dig",
+    "source_size": 215,
+    "source_sha256": "70bb1c60bab036af558da27757fb9df364be83d1ba47cc66c0433284dfffc6d0",
+    "saved": "workspace/apps/results/cand2/guest.dig"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/guest.res",
+    "source_size": 10403,
+    "source_sha256": "746b539028134982e6594e124a7710fee72f636c93e98fa614d4b41ba2443c59",
+    "saved": "workspace/apps/results/cand2/guest.res"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/hashcat.guest.log",
+    "source_size": 1988,
+    "source_sha256": "ff2c76fcfdd6d6aba34e9a7f444a2119afdca894095e58a6bf67804500f8cbf4",
+    "saved": "workspace/apps/results/cand2/hashcat.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/hashcat.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/hashcat.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/hashcat.host.log",
+    "source_size": 2102,
+    "source_sha256": "6e52898b4b42664199f923a970d6d1ad5756369a9166d265dd97f2a9202e0c78",
+    "saved": "workspace/apps/results/cand2/hashcat.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/hashcat.kf3.log",
+    "source_size": 174749,
+    "source_sha256": "88347f858f36d154d87d8773cd0e22209ad0147256c84528bfa03bd8de51cb7e",
+    "saved": "workspace/apps/results/cand2/hashcat.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/hf_generate.guest.log",
+    "source_size": 1509,
+    "source_sha256": "ab79e92a247b9b123e7af6683b677f8c80bf097c4ed623c7b6d7d47bfda5b2f1",
+    "saved": "workspace/apps/results/cand2/hf_generate.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/hf_generate.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/hf_generate.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/hf_generate.host.log",
+    "source_size": 1508,
+    "source_sha256": "7da12a55b3ea9a91a0a3ef42d5a07794437827b5bf924a98f507e47adc606bf1",
+    "saved": "workspace/apps/results/cand2/hf_generate.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/hf_generate.kf3.log",
+    "source_size": 126933,
+    "source_sha256": "52a01a29ddefa54ed4b3399507263202ff77a58ae9ace68d62368e068eff104e",
+    "saved": "workspace/apps/results/cand2/hf_generate.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/histogram.guest.log",
+    "source_size": 1499,
+    "source_sha256": "7cc28316f8ba6491d29e973f453661d2afa6fe0afc77739bcf51bca80b88b5f8",
+    "saved": "workspace/apps/results/cand2/histogram.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/histogram.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "e79b96aca788128a262f920e087b5aff293f6c36ae3dbc8e6771ef93d5119898",
+    "saved": "workspace/apps/results/cand2/histogram.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/histogram.host.log",
+    "source_size": 1498,
+    "source_sha256": "17772d37a575904500ead9dceb776511aba9574815a3a12c2f822a1b327e24b0",
+    "saved": "workspace/apps/results/cand2/histogram.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/histogram.kf3.log",
+    "source_size": 92720,
+    "source_sha256": "d622010ef59c141c507df88f76204bb11b0e8cfb0a2fc251512e6e4170ffb230",
+    "saved": "workspace/apps/results/cand2/histogram.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/host.res",
+    "source_size": 5953,
+    "source_sha256": "cf1b8cc1e038ab200200dd8bbd9e06567108060fbea2c1eb833388c5aa48624e",
+    "saved": "workspace/apps/results/cand2/host.res"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/host_dmesg_tail.log",
+    "source_size": 13195,
+    "source_sha256": "ce009c2abcd27a1797e4fe7f925119f0fc8d75b699e7dc1a51d572f80469604e",
+    "saved": "workspace/apps/results/cand2/host_dmesg_tail.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/llama_bench.guest.log",
+    "source_size": 894,
+    "source_sha256": "c162bd381a07df50de605240ec3c6bcd8315a74ee5787bca49fc4d23d1a5b83a",
+    "saved": "workspace/apps/results/cand2/llama_bench.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/llama_bench.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/llama_bench.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/llama_bench.host.log",
+    "source_size": 895,
+    "source_sha256": "bf070674c9ef08e872c048186b91b9afca372b354960263f6c78a4d6b454c6a2",
+    "saved": "workspace/apps/results/cand2/llama_bench.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/llama_bench.kf3.log",
+    "source_size": 120888,
+    "source_sha256": "18b00b032eafeabe31ac1a2a2d184a2d00aa6a58fe4b863f4a362f40e6f9f115",
+    "saved": "workspace/apps/results/cand2/llama_bench.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/llama_cpp_gen.guest.log",
+    "source_size": 218226,
+    "source_sha256": "93b2e4b492249ca7ca32af27a310988791bcd5723d551c04a25db6971031b6f8",
+    "saved": "workspace/apps/results/cand2/llama_cpp_gen.guest.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/llama_cpp_gen.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/llama_cpp_gen.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/llama_cpp_gen.host.log",
+    "source_size": 218225,
+    "source_sha256": "5a4a1e4dec73f0e9b16dd6c49ea29836f1c2d025abad1eacfae4e3cdec41ef9a",
+    "saved": "workspace/apps/results/cand2/llama_cpp_gen.host.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/llama_cpp_gen.kf3.log",
+    "source_size": 117748,
+    "source_sha256": "30b9d125484281db6a029dc9a66afe31521f30ece4b732742a67acc8ed78c133",
+    "saved": "workspace/apps/results/cand2/llama_cpp_gen.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/mandelbrot.guest.log",
+    "source_size": 202,
+    "source_sha256": "b55f537adf830442e92f45418e78044b97ca31c29173d3189f85906f7dd716e3",
+    "saved": "workspace/apps/results/cand2/mandelbrot.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/mandelbrot.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "b1949474fe513d4122c8fc7d02ca151da50785663d217ada71715e67c5ee2a8f",
+    "saved": "workspace/apps/results/cand2/mandelbrot.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/mandelbrot.host.log",
+    "source_size": 201,
+    "source_sha256": "bd31b0ed512bdbcb781904db62f4d4d3f448b1724d7845d8b423272b1e330a7f",
+    "saved": "workspace/apps/results/cand2/mandelbrot.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/mandelbrot.kf3.log",
+    "source_size": 85237,
+    "source_sha256": "8f4aae9c5ff170c53a9cdce06c5ba2e7c85be6758d2f71c18a685e0b9e8f015a",
+    "saved": "workspace/apps/results/cand2/mandelbrot.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/matrixMul.guest.log",
+    "source_size": 598,
+    "source_sha256": "be07386d62b8cad3b31f4e45a963733e896211ec644be65d8b74512a54ab0dd3",
+    "saved": "workspace/apps/results/cand2/matrixMul.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/matrixMul.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "2097a08a551b51e408bda1eac86be412345dc7fbe52f1b3cc2e139499855d7ea",
+    "saved": "workspace/apps/results/cand2/matrixMul.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/matrixMul.host.log",
+    "source_size": 597,
+    "source_sha256": "b3bc664ec6a14be7ee1e79d286d986861221af262d2ee231874aaa191f4d76fe",
+    "saved": "workspace/apps/results/cand2/matrixMul.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/matrixMul.kf3.log",
+    "source_size": 86660,
+    "source_sha256": "33be4168a3f7c87801a9ee04198b4cb2ba87c6a5276af671019eeaf34de0d7b6",
+    "saved": "workspace/apps/results/cand2/matrixMul.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/matrixMulDrv.guest.log",
+    "source_size": 687,
+    "source_sha256": "2f0b6633701189aaa245bd7e30b43cbb93e8e29fddbd5cdf720b7bfb2ee91720",
+    "saved": "workspace/apps/results/cand2/matrixMulDrv.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/matrixMulDrv.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "8f463620838c00859f9a610deec1d5d33bfa12e37b81c3cd13f6833352607f89",
+    "saved": "workspace/apps/results/cand2/matrixMulDrv.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/matrixMulDrv.host.log",
+    "source_size": 687,
+    "source_sha256": "134fd7f9ba40eec36464d320cc1ce502a7f317e45576557432b1589bdd6a718f",
+    "saved": "workspace/apps/results/cand2/matrixMulDrv.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/matrixMulDrv.kf3.log",
+    "source_size": 83256,
+    "source_sha256": "a6f93a2f80eaaf07704025b288cde2e4e0c1f5270ac84453dfde46b5d4fdc1f1",
+    "saved": "workspace/apps/results/cand2/matrixMulDrv.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/memcpy2d.guest.log",
+    "source_size": 292,
+    "source_sha256": "55ef2a5e825f3ac4f35c6d76af01062c531c97bc17b43dc08b8cfed9d8154cf7",
+    "saved": "workspace/apps/results/cand2/memcpy2d.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/memcpy2d.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "6dd2357d6ae5e3069f8c6a78bbf55e04e279f613853bc8013a711c047d56c8c9",
+    "saved": "workspace/apps/results/cand2/memcpy2d.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/memcpy2d.host.log",
+    "source_size": 291,
+    "source_sha256": "db61be6f94d52944cb2d401daef304f3848acd510531ec9743bbf8a78df21a91",
+    "saved": "workspace/apps/results/cand2/memcpy2d.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/memcpy2d.kf3.log",
+    "source_size": 88020,
+    "source_sha256": "b2eeede598c0ca4678fae6ca7a453d950344abeeeadcaa0a8230865fb3c8a307",
+    "saved": "workspace/apps/results/cand2/memcpy2d.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nbody.guest.log",
+    "source_size": 179,
+    "source_sha256": "3853abb731b718b9da58e22effdd2fbe02040e27825c67a244c6a275177f9958",
+    "saved": "workspace/apps/results/cand2/nbody.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nbody.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "0e065bd32c4c3a3c7e8be5903a9d15f597156b1cedb883d19378da9c83a814f6",
+    "saved": "workspace/apps/results/cand2/nbody.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nbody.host.log",
+    "source_size": 178,
+    "source_sha256": "00974dc420db93eb57f91418f3355690e8633e2f7c55b1715a34bda4a3368a29",
+    "saved": "workspace/apps/results/cand2/nbody.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nbody.kf3.log",
+    "source_size": 85236,
+    "source_sha256": "040403bd29ca03810e0de11591632421558c0d0f43f034cbebfbd64edd782917",
+    "saved": "workspace/apps/results/cand2/nbody.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvdec_h264.guest.log",
+    "source_size": 996,
+    "source_sha256": "6c3ca27069b925fa09488910d6f24d0697e99f22dc51f78018387274b4a67db7",
+    "saved": "workspace/apps/results/cand2/nvdec_h264.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvdec_h264.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/nvdec_h264.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvdec_h264.host.log",
+    "source_size": 822,
+    "source_sha256": "543ed04e026e42fdc5b01dac6419b547181e071abbd12e6dc3c0ea78e2c40de8",
+    "saved": "workspace/apps/results/cand2/nvdec_h264.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvdec_h264.kf3.log",
+    "source_size": 100980,
+    "source_sha256": "0d8082c56af991af56b0531eb8e9b933f11a53b1a643010e49c8e2c1c28d5648",
+    "saved": "workspace/apps/results/cand2/nvdec_h264.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvenc_h264.guest.log",
+    "source_size": 877,
+    "source_sha256": "2ed0c286af8e1d00452e1485ee21bb70ca23661b708a052b51253276bc33e01d",
+    "saved": "workspace/apps/results/cand2/nvenc_h264.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvenc_h264.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/nvenc_h264.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvenc_h264.host.log",
+    "source_size": 842,
+    "source_sha256": "e8202049a55e83b70ff7794cc1361ad1efba31310ee3e67b117e7d178844fad1",
+    "saved": "workspace/apps/results/cand2/nvenc_h264.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvenc_h264.kf3.log",
+    "source_size": 106082,
+    "source_sha256": "d31f468991519e3216b163f3c635fd5ccb7a8de90c33fb67ddc3427636c97f0f",
+    "saved": "workspace/apps/results/cand2/nvenc_h264.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvenc_hevc.guest.log",
+    "source_size": 877,
+    "source_sha256": "8af81bc64279fc10991f08f2f8b13607083c20c0fe72522039de8d1ba34af2ce",
+    "saved": "workspace/apps/results/cand2/nvenc_hevc.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvenc_hevc.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/nvenc_hevc.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvenc_hevc.host.log",
+    "source_size": 842,
+    "source_sha256": "8b336941e9126dc80d0f2d0e8a88a4d5c6f65b0cf037aef9b3f5413dc57cfe5e",
+    "saved": "workspace/apps/results/cand2/nvenc_hevc.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvenc_hevc.kf3.log",
+    "source_size": 106073,
+    "source_sha256": "501b09bdd5432057dca9061ab35e6a59e21114043adbcf3e1334aa86d6e4ce67",
+    "saved": "workspace/apps/results/cand2/nvenc_hevc.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvidia_smi.guest.log",
+    "source_size": 1821,
+    "source_sha256": "a4aad47644076cfdab537d9029be1a487fb824301a2fc420fef72361a1ec36fc",
+    "saved": "workspace/apps/results/cand2/nvidia_smi.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvidia_smi.guest_dmesg.log",
+    "source_size": 4369,
+    "source_sha256": "5978cc8bb90330c854e47e94a692ff52fecbccc200622ce4d6e3a48412021765",
+    "saved": "workspace/apps/results/cand2/nvidia_smi.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvidia_smi.host.log",
+    "source_size": 1820,
+    "source_sha256": "a302deb8d9df80e3dd798b10627c977ed1e3a974d77aea281363f7ff380566df",
+    "saved": "workspace/apps/results/cand2/nvidia_smi.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/nvidia_smi.kf3.log",
+    "source_size": 21228,
+    "source_sha256": "4a2dbf0d973b3448ceceb2be5f66fbf9c49ea9562300f177d4cdb7bbddf538de",
+    "saved": "workspace/apps/results/cand2/nvidia_smi.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/reduce.guest.log",
+    "source_size": 178,
+    "source_sha256": "37a80eef3ddfff424e072cd81a51b89e50134909eaa7e51eb138844b286e504e",
+    "saved": "workspace/apps/results/cand2/reduce.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/reduce.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "db54e3fab0280326541e99f4d60c2eb4cb2cf8d03f5c25cb076f034238359927",
+    "saved": "workspace/apps/results/cand2/reduce.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/reduce.host.log",
+    "source_size": 177,
+    "source_sha256": "5686ae53a19cc558f6cb1439c28be90cf772c32a13c90619b2d974adbc3e1317",
+    "saved": "workspace/apps/results/cand2/reduce.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/reduce.kf3.log",
+    "source_size": 88133,
+    "source_sha256": "ee63bbf1bf19a796c446476bb87dfb0e72ccb14ce3b48f800e01e52bd1f61e44",
+    "saved": "workspace/apps/results/cand2/reduce.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/reduction.guest.log",
+    "source_size": 547,
+    "source_sha256": "a2dd988e43851fb243d63318149bbcf240ed4ef8968579f86d3fdd6b3c0204ba",
+    "saved": "workspace/apps/results/cand2/reduction.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/reduction.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "f55a861149b6cdca66f09ef35c722b8732b5d937f9c6d1916c16be47b8dc90cd",
+    "saved": "workspace/apps/results/cand2/reduction.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/reduction.host.log",
+    "source_size": 547,
+    "source_sha256": "70365142c60ee9246f2206ee1f9965ab41ebccb83761b1330b98a4a974de05e4",
+    "saved": "workspace/apps/results/cand2/reduction.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/reduction.kf3.log",
+    "source_size": 173515,
+    "source_sha256": "c5d03d14d25d860de12fb081b0c01e6278b4831e1e9b72c175db6d19fbd53959",
+    "saved": "workspace/apps/results/cand2/reduction.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/scan.guest.log",
+    "source_size": 3638,
+    "source_sha256": "441994af27859dd1f206d92c2e9be7dbad8b109ad36df0d4acb590adaf46b14c",
+    "saved": "workspace/apps/results/cand2/scan.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/scan.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "59d3997b3014832d823c7b8e0cfaadb4e74704f5a0d9a65e8cdc9a4fa09879c1",
+    "saved": "workspace/apps/results/cand2/scan.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/scan.host.log",
+    "source_size": 3637,
+    "source_sha256": "13ab3e263ab55da03dabad59f40ff323efb543eecbf92b6c79520d8ad104762b",
+    "saved": "workspace/apps/results/cand2/scan.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/scan.kf3.log",
+    "source_size": 85732,
+    "source_sha256": "954aaf79b0949330dbad0fa5cca2915f752f62980d307575f59b0379b2aec8a1",
+    "saved": "workspace/apps/results/cand2/scan.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sgemm_cublas.guest.log",
+    "source_size": 198,
+    "source_sha256": "416466a94f8260a82a7d6ec1b62d956e0d061fbd98ae77d8f2f32016b629d4bc",
+    "saved": "workspace/apps/results/cand2/sgemm_cublas.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sgemm_cublas.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "4756135825ca202510a110b7a0b576c6ed2433458e9368e0c1d3cde92f0d9506",
+    "saved": "workspace/apps/results/cand2/sgemm_cublas.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sgemm_cublas.host.log",
+    "source_size": 197,
+    "source_sha256": "9e55452310e68a4f6fcdb17cc8c6d8b2b147bfedafe9106a6b9f34ce560c8c8f",
+    "saved": "workspace/apps/results/cand2/sgemm_cublas.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sgemm_cublas.kf3.log",
+    "source_size": 87808,
+    "source_sha256": "edf3f309b261b89ab3fb05e32c16dd22d2326ee810260b95e0c526fc8cbbd094",
+    "saved": "workspace/apps/results/cand2/sgemm_cublas.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sha256.guest.log",
+    "source_size": 178,
+    "source_sha256": "257e9864beea2627121742e6dbba603a28fcd715d76a21413a930f479574e444",
+    "saved": "workspace/apps/results/cand2/sha256.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sha256.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "a1ef43151651e773c58ff24fef084ddb7c1341b133337a4fdd4aa50f91a21d1d",
+    "saved": "workspace/apps/results/cand2/sha256.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sha256.host.log",
+    "source_size": 177,
+    "source_sha256": "1ab402cb9fdda30f200cd9d8256e5645240e5bf6acddb150770778de6dbe5cd6",
+    "saved": "workspace/apps/results/cand2/sha256.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sha256.kf3.log",
+    "source_size": 85255,
+    "source_sha256": "c4ef2aeeed1f41b17ca7df84b4de70155ea0d728e6bdc42724ab170bfe3e477c",
+    "saved": "workspace/apps/results/cand2/sha256.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleAtomicIntrinsics.guest.log",
+    "source_size": 346,
+    "source_sha256": "02e7678d03e40b80884b0a5b4339f85a90e0cd59b391e52461aef3ac8d559294",
+    "saved": "workspace/apps/results/cand2/simpleAtomicIntrinsics.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleAtomicIntrinsics.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "f382742818430d8f0c6981046628d6a6e71696c136b4dafc20746d5bba1e19af",
+    "saved": "workspace/apps/results/cand2/simpleAtomicIntrinsics.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleAtomicIntrinsics.host.log",
+    "source_size": 344,
+    "source_sha256": "649968fde814c7345396ab98acad93405bb9534d0454845a34fe18b34c1e7ca9",
+    "saved": "workspace/apps/results/cand2/simpleAtomicIntrinsics.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleAtomicIntrinsics.kf3.log",
+    "source_size": 85347,
+    "source_sha256": "c6ab1f7a9d278647d55019a3ca8d80cf1046fd678a3eba46d2a80fa980bd7fe9",
+    "saved": "workspace/apps/results/cand2/simpleAtomicIntrinsics.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCUBLAS.guest.log",
+    "source_size": 267,
+    "source_sha256": "b4f10afc45388f35404cd6f52251710e823cb3b2fc6b3362d68af5ff53d1f088",
+    "saved": "workspace/apps/results/cand2/simpleCUBLAS.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCUBLAS.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "4cc7d0d879af624418a50d5983bc40ca6a0afb3fd9debb0e6d93974a00f09b61",
+    "saved": "workspace/apps/results/cand2/simpleCUBLAS.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCUBLAS.host.log",
+    "source_size": 266,
+    "source_sha256": "02c268ece144742085996447842bbfaf5e76812a8a0c2202176bba65fc69fe1c",
+    "saved": "workspace/apps/results/cand2/simpleCUBLAS.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCUBLAS.kf3.log",
+    "source_size": 88148,
+    "source_sha256": "75cef404af94ac69a85fb52c632c6fff284c2045acee7f2747f0baaade7d1dd7",
+    "saved": "workspace/apps/results/cand2/simpleCUBLAS.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCUFFT.guest.log",
+    "source_size": 386,
+    "source_sha256": "132d9e436c6ade73a19e528a5be6f5d6a2dc4c8bdb8649fd75127813e7c84827",
+    "saved": "workspace/apps/results/cand2/simpleCUFFT.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCUFFT.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "79cb4d85739cd9dbb1dd95252837b3e4c0f65a438ea6bc2307ea1939a714f631",
+    "saved": "workspace/apps/results/cand2/simpleCUFFT.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCUFFT.host.log",
+    "source_size": 385,
+    "source_sha256": "aab0968070a95d2817f3548870d93e24c7461a649b9f397ebc42871a4b968f43",
+    "saved": "workspace/apps/results/cand2/simpleCUFFT.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCUFFT.kf3.log",
+    "source_size": 85586,
+    "source_sha256": "f2e845e893d4487f126eeba2493f91aaebd76acde1f97f3a962b1d96207fcf49",
+    "saved": "workspace/apps/results/cand2/simpleCUFFT.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCallback.guest.log",
+    "source_size": 421,
+    "source_sha256": "a48d008c47e46ba1adba9b0db504bcacb943f73478ef55ccf44aa382be1e6c1c",
+    "saved": "workspace/apps/results/cand2/simpleCallback.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCallback.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "1a4d4dac62604bc88e3eb467d7c01ef0fcb72f40e3d4f2f8a838afaf1c922257",
+    "saved": "workspace/apps/results/cand2/simpleCallback.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCallback.host.log",
+    "source_size": 420,
+    "source_sha256": "bae4be17db2b21e1452ccba19d5ff1cd1f199f7135c762e4d8edd27e58461210",
+    "saved": "workspace/apps/results/cand2/simpleCallback.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCallback.kf3.log",
+    "source_size": 82627,
+    "source_sha256": "4c42cb2d8abda911c805676e0c0a65b052ee3c69b16d836e3a212a828b05dc20",
+    "saved": "workspace/apps/results/cand2/simpleCallback.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCooperativeGroups.guest.log",
+    "source_size": 675,
+    "source_sha256": "aa296acf140781c4d8c8caae18fde342bbc539971e6b3ca03722e7f4ec90d822",
+    "saved": "workspace/apps/results/cand2/simpleCooperativeGroups.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCooperativeGroups.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "5cd8aadbdfa287146ca4ea77d74600c920428e5d3d1e4f19f8adf6e2893c052b",
+    "saved": "workspace/apps/results/cand2/simpleCooperativeGroups.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCooperativeGroups.host.log",
+    "source_size": 674,
+    "source_sha256": "50cce2a572c870e6f8caae192fc8fbf046eb84418394873c95080174fedf90cb",
+    "saved": "workspace/apps/results/cand2/simpleCooperativeGroups.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCooperativeGroups.kf3.log",
+    "source_size": 84988,
+    "source_sha256": "3194be7a6994b2e9a2d96fce6cc804e5c08ab113a406441c19aa1ac95ace9273",
+    "saved": "workspace/apps/results/cand2/simpleCooperativeGroups.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCudaGraphs.guest.log",
+    "source_size": 1266,
+    "source_sha256": "18eb5ab4cbe0c48c18417dc386f632c83aab24841626d222d4d87fb99ca2cc92",
+    "saved": "workspace/apps/results/cand2/simpleCudaGraphs.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCudaGraphs.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "67bcb04cf7d1435d81b6a9c400df6ec7b4a564ae0d41b88b1702527b5830cee6",
+    "saved": "workspace/apps/results/cand2/simpleCudaGraphs.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCudaGraphs.host.log",
+    "source_size": 1265,
+    "source_sha256": "b8bb26a820ef86af4bf3803264d437dc5f7704d0e18384483df72c25e40de171",
+    "saved": "workspace/apps/results/cand2/simpleCudaGraphs.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleCudaGraphs.kf3.log",
+    "source_size": 85463,
+    "source_sha256": "bf5d8c16af0cc51c7010bfbb93e56b704aaabc07627bbf274c3ac0dff9d84e18",
+    "saved": "workspace/apps/results/cand2/simpleCudaGraphs.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleIPC.guest.log",
+    "source_size": 246,
+    "source_sha256": "7b9d0ea8a11ec7df850be592f5756e05be713aad9421b0021ceb1397ea124a61",
+    "saved": "workspace/apps/results/cand2/simpleIPC.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleIPC.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "67036f67f42d65f429ada6de3d0a1e580f6b8728c91ad6ed571947eb600a34fe",
+    "saved": "workspace/apps/results/cand2/simpleIPC.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleIPC.host.log",
+    "source_size": 245,
+    "source_sha256": "3b025fc594adf793533a4467ea1ad2b6ef7127948a145e9723388278a8a89a06",
+    "saved": "workspace/apps/results/cand2/simpleIPC.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleIPC.kf3.log",
+    "source_size": 145440,
+    "source_sha256": "94a19eed2b8c68d63b620930451540ba5968feec0cb33ccfdd1cbe0bd4f27d02",
+    "saved": "workspace/apps/results/cand2/simpleIPC.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleOccupancy.guest.log",
+    "source_size": 481,
+    "source_sha256": "6ac48a350c16f56a4944e97e8acffafcb9fa22c19399a84b589bbe853efb360c",
+    "saved": "workspace/apps/results/cand2/simpleOccupancy.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleOccupancy.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "4952d6a2c6d07247f56a566f31aa0eb409ae5754e437a0e61657d09dfbf49be5",
+    "saved": "workspace/apps/results/cand2/simpleOccupancy.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleOccupancy.host.log",
+    "source_size": 480,
+    "source_sha256": "3f1f9fca4aa29e2ff9cc23f45efcfaf56607e76de8b15a14be9d483b7ad33b3c",
+    "saved": "workspace/apps/results/cand2/simpleOccupancy.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleOccupancy.kf3.log",
+    "source_size": 86407,
+    "source_sha256": "f24137fc602e18b103c27f75ce75b67526ccbac90537a1389fcb76821a6b35b8",
+    "saved": "workspace/apps/results/cand2/simpleOccupancy.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleStreams.guest.log",
+    "source_size": 885,
+    "source_sha256": "2074d974049104580f6f81177c73c53f0af0490e188ea2708442c6e6e5b69f82",
+    "saved": "workspace/apps/results/cand2/simpleStreams.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleStreams.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "e7731acd01908ce5f76ed5a2478ecffc56e8889506e2d9cf6050b454d8480ed3",
+    "saved": "workspace/apps/results/cand2/simpleStreams.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleStreams.host.log",
+    "source_size": 884,
+    "source_sha256": "9a8a1eb23db7668602aba35a652b6594e1c7cd84f48f3d42456df83cfcfda519",
+    "saved": "workspace/apps/results/cand2/simpleStreams.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleStreams.kf3.log",
+    "source_size": 87527,
+    "source_sha256": "2df3a0a84436b42a664cde89f66c0223e431d6c676a74fc67704b69af1b90da6",
+    "saved": "workspace/apps/results/cand2/simpleStreams.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleZeroCopy.guest.log",
+    "source_size": 405,
+    "source_sha256": "a67d20c7d4622e21e2789410ed8b4573bb8f9baa2804a6befee755caf4dab749",
+    "saved": "workspace/apps/results/cand2/simpleZeroCopy.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleZeroCopy.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "f5cc658f3364a202d7d7cd5f457353af61adb35996c5164d5a0dad648f579062",
+    "saved": "workspace/apps/results/cand2/simpleZeroCopy.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleZeroCopy.host.log",
+    "source_size": 404,
+    "source_sha256": "140e39cae537d596c8e8fea6dbc14ecc81e5fc60f91409954ab7246ce27938ee",
+    "saved": "workspace/apps/results/cand2/simpleZeroCopy.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/simpleZeroCopy.kf3.log",
+    "source_size": 85928,
+    "source_sha256": "d3b2c2dc7fee83659b3e9d6a0b0aa254439aef1a596095744747c19b25d4ac8c",
+    "saved": "workspace/apps/results/cand2/simpleZeroCopy.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sortingNetworks.guest.log",
+    "source_size": 4169,
+    "source_sha256": "66195324f824930bd04adf59a53f1f91963671d4fec19d02425f81f40128228d",
+    "saved": "workspace/apps/results/cand2/sortingNetworks.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sortingNetworks.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "f28de3649735006cc942eacf67e6d2476f3904da730fbbe981f5cc51afa3b4c0",
+    "saved": "workspace/apps/results/cand2/sortingNetworks.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sortingNetworks.host.log",
+    "source_size": 4168,
+    "source_sha256": "05dd120fdef94ddd5fe22167862599393fe95071a563ed78a939a5943f8f9581",
+    "saved": "workspace/apps/results/cand2/sortingNetworks.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/sortingNetworks.kf3.log",
+    "source_size": 101626,
+    "source_sha256": "eb5acb5adfe64a192fb9a6f97ca1fe30488135d2887f5bab4c9e6373bbf09ba6",
+    "saved": "workspace/apps/results/cand2/sortingNetworks.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_created.guest.log",
+    "source_size": 215,
+    "source_sha256": "c2d40b0cdb3d357105ab93c8689aae22d300a3738b0cf8306b214a152a46d5ee",
+    "saved": "workspace/apps/results/cand2/stream_created.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_created.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "12a54ef5440bf840bda77e0d40ca1dc0433d722b6367b06360e20b28f70d3cf0",
+    "saved": "workspace/apps/results/cand2/stream_created.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_created.host.log",
+    "source_size": 214,
+    "source_sha256": "2281f5a138b6f1037b826b9d4c5ee15c88510847deced2f98ec49d1db3fced5b",
+    "saved": "workspace/apps/results/cand2/stream_created.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_created.kf3.log",
+    "source_size": 84869,
+    "source_sha256": "e04bbc9e06d5945dcb6143b65735da7f25af5c95848646bffcb00f41d46b0202",
+    "saved": "workspace/apps/results/cand2/stream_created.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_created2nd.guest.log",
+    "source_size": 247,
+    "source_sha256": "3c5cdd78148ea4b27af7a8a534f4ca38747b2e9386fefc6402833a529ab5095b",
+    "saved": "workspace/apps/results/cand2/stream_created2nd.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_created2nd.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "0f48c215a161ad75d1c405b93edd8ee7a50e5c33fd1ac0f6fc0a6adce157e139",
+    "saved": "workspace/apps/results/cand2/stream_created2nd.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_created2nd.host.log",
+    "source_size": 246,
+    "source_sha256": "ade4ed8c9727bc68e47fb501bdb6bcbe51371d954cd3a3583c2c8f1525524041",
+    "saved": "workspace/apps/results/cand2/stream_created2nd.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_created2nd.kf3.log",
+    "source_size": 85280,
+    "source_sha256": "47e797fc61dfa6e5dea014c49560bf493f21cb5b139729832c960cb853981ea6",
+    "saved": "workspace/apps/results/cand2/stream_created2nd.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_default.guest.log",
+    "source_size": 215,
+    "source_sha256": "7d67cae862bdf6d2c21b2c9bd2c6dcbf042f22f3b8aa136c93b00134dec4e368",
+    "saved": "workspace/apps/results/cand2/stream_default.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_default.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "b350802cbc341bcc7bc934fe88507d8d301ac9eb2944058d0381d530c2b934cd",
+    "saved": "workspace/apps/results/cand2/stream_default.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_default.host.log",
+    "source_size": 214,
+    "source_sha256": "b3384e5c301da7a150fb0f3852e472b393a70f36b6c5c346780e2775a46ec5e2",
+    "saved": "workspace/apps/results/cand2/stream_default.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_default.kf3.log",
+    "source_size": 85226,
+    "source_sha256": "00dc85bfd7bcfc99ac7a4e28176783451c5e88bf3ef8b9f7274de05080ac7586",
+    "saved": "workspace/apps/results/cand2/stream_default.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_nonblocking.guest.log",
+    "source_size": 231,
+    "source_sha256": "de1584f5c8f21439fb257ff1d74d1997f44d14bd3a0c032c62d0fe7058e701e7",
+    "saved": "workspace/apps/results/cand2/stream_nonblocking.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_nonblocking.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "a8a013b635507d6940a3cdde793acdbfdfb09c5b1a9b9431c5528cee0843537e",
+    "saved": "workspace/apps/results/cand2/stream_nonblocking.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_nonblocking.host.log",
+    "source_size": 230,
+    "source_sha256": "2b4348604ffda732ae2a1dc51bd6a443f39abf9daf4fdcb40da7a36060e2a8a7",
+    "saved": "workspace/apps/results/cand2/stream_nonblocking.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_nonblocking.kf3.log",
+    "source_size": 85053,
+    "source_sha256": "2ea7670bc60d7a2643b50608cc1ad447e71c6da7c2b2602142bc7116471022d3",
+    "saved": "workspace/apps/results/cand2/stream_nonblocking.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_perthread.guest.log",
+    "source_size": 223,
+    "source_sha256": "0927166b575db93b92a27ea48823b9bd555793be03369b28c7c0517946c11063",
+    "saved": "workspace/apps/results/cand2/stream_perthread.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_perthread.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "c0d96cbd224bf8b32b6857664c5975da2ced252453fecafa3371aa12a07afdf8",
+    "saved": "workspace/apps/results/cand2/stream_perthread.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_perthread.host.log",
+    "source_size": 222,
+    "source_sha256": "01c543931a0dcc269894bfa98e96f842fe4f1233ecf9961ba051f528e55115e2",
+    "saved": "workspace/apps/results/cand2/stream_perthread.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_perthread.kf3.log",
+    "source_size": 85006,
+    "source_sha256": "e831c0fe0a80d0333462cd004e6d958c51fdbff98b485416bc557f645ee1a983",
+    "saved": "workspace/apps/results/cand2/stream_perthread.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_triad.guest.log",
+    "source_size": 196,
+    "source_sha256": "bfe2f84979a1cf01f15056f6fe2a24a1f5531f1e2ab2095d6c5507906004d787",
+    "saved": "workspace/apps/results/cand2/stream_triad.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_triad.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "e3899ed949ce798e9eb3be2a69354610da37cc34df1c0507122aff06652d509a",
+    "saved": "workspace/apps/results/cand2/stream_triad.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_triad.host.log",
+    "source_size": 195,
+    "source_sha256": "3bdea3bae182fe3e669faa056d97c2b55b7e0f76e97eb7f145f13a9494d6e9e3",
+    "saved": "workspace/apps/results/cand2/stream_triad.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_triad.kf3.log",
+    "source_size": 85298,
+    "source_sha256": "567ce0591af9262b73d8a7eaeabed58400fe5b094d54d0a16a85154f4074bfaf",
+    "saved": "workspace/apps/results/cand2/stream_triad.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_two.guest.log",
+    "source_size": 216,
+    "source_sha256": "4bac63218de7fe67cf01c33d0dc93d7a776345807d4fe16f94d81626e18284b3",
+    "saved": "workspace/apps/results/cand2/stream_two.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_two.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "cd7e8c231495aa402f4c44e54e8e6e5effc0b077dcc19f9d78ac7524c6320646",
+    "saved": "workspace/apps/results/cand2/stream_two.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_two.host.log",
+    "source_size": 215,
+    "source_sha256": "9cd5e3d0cef8371d479856611afeb4d000531c66431a507c21e277abe8f8472a",
+    "saved": "workspace/apps/results/cand2/stream_two.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/stream_two.kf3.log",
+    "source_size": 85272,
+    "source_sha256": "0547d946d2f6075fdb85587a7963e56b62481fea48a36d52ca7efcee3f94d9c8",
+    "saved": "workspace/apps/results/cand2/stream_two.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/torch_ai_bench.guest.log",
+    "source_size": 708,
+    "source_sha256": "f6f6d4455ed8ea914e90043c1da907e01de9cbea58d713de085cc34eefef50b3",
+    "saved": "workspace/apps/results/cand2/torch_ai_bench.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/torch_ai_bench.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/torch_ai_bench.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/torch_ai_bench.host.log",
+    "source_size": 707,
+    "source_sha256": "299003e59fd9ddfab05b6ac79a7ab1b511baed7f517cb9e5da1201455155ac1b",
+    "saved": "workspace/apps/results/cand2/torch_ai_bench.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/torch_ai_bench.kf3.log",
+    "source_size": 171209,
+    "source_sha256": "9fd6df969841ba40e3a3e0271e122a3a334b8a446ece05c8801ef9393d15e7ef",
+    "saved": "workspace/apps/results/cand2/torch_ai_bench.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/torch_correct.guest.log",
+    "source_size": 525,
+    "source_sha256": "6e2abeeb081fd2a5b3e2dcdaab15d178139c4930875588b3613a671720fe4163",
+    "saved": "workspace/apps/results/cand2/torch_correct.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/torch_correct.guest_dmesg.log",
+    "source_size": 2153,
+    "source_sha256": "822882f389aa3d486a3d28c42a076ab0b40d488318e5954a8f4674070a600ba0",
+    "saved": "workspace/apps/results/cand2/torch_correct.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/torch_correct.host.log",
+    "source_size": 524,
+    "source_sha256": "d793d5c4c4e456e3ac8d830967304cf794de84f07b3401a598d0a6310205c0d8",
+    "saved": "workspace/apps/results/cand2/torch_correct.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/torch_correct.kf3.log",
+    "source_size": 157129,
+    "source_sha256": "f62bcc32d2607070b9e5f2c807b7fdd611335da6c17d6e95752a1df79a0310f8",
+    "saved": "workspace/apps/results/cand2/torch_correct.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/transpose.guest.log",
+    "source_size": 1615,
+    "source_sha256": "a4df6124f475a4034e91808f253bd5178c996f1b2b82ca8311c7cb96c7f5b703",
+    "saved": "workspace/apps/results/cand2/transpose.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/transpose.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "4c52e2ae6652c9f672bb303ee10a3a55ce309069c95802215bfd90d6699933f5",
+    "saved": "workspace/apps/results/cand2/transpose.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/transpose.host.log",
+    "source_size": 1622,
+    "source_sha256": "935f953f8155de25d8d4bbc27d0620ebf8699ff957fe9cd8cc2e7c4beaf14ad5",
+    "saved": "workspace/apps/results/cand2/transpose.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/transpose.kf3.log",
+    "source_size": 86521,
+    "source_sha256": "52c9e9394100ba39977f6b948bd4e31973f5d1f526565f3a914943b30d8381da",
+    "saved": "workspace/apps/results/cand2/transpose.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vectorAdd.guest.log",
+    "source_size": 371,
+    "source_sha256": "3872a4c6b815224461bda6281fa17d570170b43aa5dfddd6d4a7737f0f04def0",
+    "saved": "workspace/apps/results/cand2/vectorAdd.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vectorAdd.guest_dmesg.log",
+    "source_size": 4282,
+    "source_sha256": "48dba9140caf3c533e62e21db6e2d137cbe328019a06d879c0c44e34906f7531",
+    "saved": "workspace/apps/results/cand2/vectorAdd.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vectorAdd.host.log",
+    "source_size": 370,
+    "source_sha256": "fd4fe249aefa62cc22019e8150130ff3b064cf74208aa65ab32e8ad1ecef8a7d",
+    "saved": "workspace/apps/results/cand2/vectorAdd.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vectorAdd.kf3.log",
+    "source_size": 84919,
+    "source_sha256": "7f5e738eb3c8776afaed46860cf13437315718a4b09c7e8e2670597a7e3e930b",
+    "saved": "workspace/apps/results/cand2/vectorAdd.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vectorAddDrv.guest.log",
+    "source_size": 379,
+    "source_sha256": "76f8099067de4757ea3baef208f31bdf9fe4f4d99ea1fa436e313bf9d8763a97",
+    "saved": "workspace/apps/results/cand2/vectorAddDrv.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vectorAddDrv.guest_dmesg.log",
+    "source_size": 4332,
+    "source_sha256": "1df2354933c70fd6eb89d7b18adb8a132c98581029e3cf3ec6a150fb93c9c39b",
+    "saved": "workspace/apps/results/cand2/vectorAddDrv.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vectorAddDrv.host.log",
+    "source_size": 378,
+    "source_sha256": "89d8a5d7c4176af8087ee13457d67f5e60c1e40f2539708e4c72821a3a1bd294",
+    "saved": "workspace/apps/results/cand2/vectorAddDrv.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vectorAddDrv.kf3.log",
+    "source_size": 89690,
+    "source_sha256": "899ed3b6c9a3118c5650dc86675b592c6392af64a651cb8245703bbbf252efe2",
+    "saved": "workspace/apps/results/cand2/vectorAddDrv.kf3.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vkpeak.guest.log",
+    "source_size": 639,
+    "source_sha256": "593fa634ae42ef6cd0a7ec08045c8745601d43c3ba0b548edba61e723d78aa00",
+    "saved": "workspace/apps/results/cand2/vkpeak.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vkpeak.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/vkpeak.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vkpeak.host.log",
+    "source_size": 638,
+    "source_sha256": "f57e962c8ee234645b612986aeabb715238c3430df262d35b5139c6793eab0a1",
+    "saved": "workspace/apps/results/cand2/vkpeak.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vkpeak.kf3.log",
+    "source_size": 546823,
+    "source_sha256": "81505bbb6b1a235ce56405f833d1107bb14d24a6af819473e759732fdb9dc712",
+    "saved": "workspace/apps/results/cand2/vkpeak.kf3.log.gz"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vulkaninfo.guest.log",
+    "source_size": 2518,
+    "source_sha256": "7d4477096754946fa1fd42dfeddd979dedd89a1c5945bf430912d5183ccbe030",
+    "saved": "workspace/apps/results/cand2/vulkaninfo.guest.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vulkaninfo.guest_dmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/apps/results/cand2/vulkaninfo.guest_dmesg.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vulkaninfo.host.log",
+    "source_size": 2288,
+    "source_sha256": "ffd5f513a209967ee0fd4da01d9deefc24c8b4edb3e4fcfdfe712dfa8749b4b6",
+    "saved": "workspace/apps/results/cand2/vulkaninfo.host.log"
+  },
+  {
+    "source": "/workspace/apps/results/cand2/vulkaninfo.kf3.log",
+    "source_size": 98415,
+    "source_sha256": "c2e8b37aa3d9f0835ae7b4364f01a87dfe859b6bd92004e73f7b4405cfff0ab8",
+    "saved": "workspace/apps/results/cand2/vulkaninfo.kf3.log"
+  },
+  {
+    "source": "/workspace/bench/run_ap_cand2_b1_dmesg.log",
+    "source_size": 4724,
+    "source_sha256": "3b2c75be6d46923dda2bd2c7e2840bfadd933fdc614186468e645bd4e4324fef",
+    "saved": "workspace/bench/run_ap_cand2_b1_dmesg.log"
+  },
+  {
+    "source": "/workspace/bench/run_ap_cand2_b1_dmesg_after.log",
+    "source_size": 264230,
+    "source_sha256": "6995c4b8c788697a39ab76bd5e1bcbc7558df16719515e8a408ddb205e6a6379",
+    "saved": "workspace/bench/run_ap_cand2_b1_dmesg_after.log.gz"
+  },
+  {
+    "source": "/workspace/bench/run_ap_cand2_b1_hostdmesg.log",
+    "source_size": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved": "workspace/bench/run_ap_cand2_b1_hostdmesg.log"
+  },
+  {
+    "source": "/workspace/bench/run_ap_cand2_b1_probe.log",
+    "source_size": 15101,
+    "source_sha256": "6cdb83c59f4e9a351b5ddd819b5e2da722aa44a46f509bf4aff8600b08fe06eb",
+    "saved": "workspace/bench/run_ap_cand2_b1_probe.log"
+  },
+  {
+    "source": "/workspace/bench/run_ap_cand2_b1_qemu.log",
+    "source_size": 9347183,
+    "source_sha256": "e3442da6a6672f520a933472ab41461a82c5d316a1192deb6586dc0403c08fe4",
+    "saved": "workspace/bench/run_ap_cand2_b1_qemu.log.gz"
+  },
+  {
+    "source": "/workspace/bench/run_ap_cand2_b1_rev.txt",
+    "source_size": 21,
+    "source_sha256": "c7c927a0763dd4206adb4622c12a7a72fed4e21568a7974a34ddf0b0fba4ca73",
+    "saved": "workspace/bench/run_ap_cand2_b1_rev.txt"
+  },
+  {
+    "source": "/workspace/bench/run_ap_cand2_b1_serial.log",
+    "source_size": 71147,
+    "source_sha256": "4e9c48127e6952ec4d4a4f6fc94fd7d61833726fc6da8427c255a8787ad75915",
+    "saved": "workspace/bench/run_ap_cand2_b1_serial.log"
+  }
+]

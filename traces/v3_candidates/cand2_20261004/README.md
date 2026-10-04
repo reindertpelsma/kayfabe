@@ -212,3 +212,19 @@ This closes the earlier empty six-second sample. The preceding repeated D2 idle
 check again gives 59.9 checks/s, zero copies/s, unchanged-count delta 840.
 R4 async-60 now runs on vdisp2; only the same-box refresh positive remains queued
 after the app matrix on vmb.
+
+`async60/`: R4 completed 12:16:40 UTC. Pixel-exact 1920x1080; 120/120 normal
+flips at 60.03 Hz, 240/240 async flips at 60.01 Hz, `tear=59.9`, held grows to
+240, `over=0`. The 50 ms-after-completion control gives 60/60 at 18.36 Hz:
+one initial hold takes the counter to 241, then it stays flat through the
+remaining slow flips. Thus the original prediction of literally no added hold
+includes an initial modeset/first-flip boundary it did not account for; steady
+slow flips are not held. Its interval includes the sleep plus ioctl/event work,
+not a 20 Hz periodic scheduler. Zero flip-event timeouts, DRM warnings, GPU
+progress errors or host Xids. This completes the owned box's required tests.
+
+`apps_batched/`: complete main guest batch ended 12:17:20 UTC, product `9d82f259`.
+All 71 application/probe identities are present: 67 pass, four managed-memory
+failures, with **zero verdict differences** from candidate 1 `0ac157b2`.
+This is 61/65 ordinary apps + 6/6 probes. Individual failing-app boots are still
+running; the completed batch and all its per-app logs are saved immediately.

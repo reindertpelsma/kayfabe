@@ -1,0 +1,25 @@
+=== vkpeak side=host start=2026-10-04T11:40:16+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/vkpeak 0
+device       = NVIDIA GeForce RTX 3060
+
+fp32-scalar  = 9030.94 GFLOPS
+fp32-vec4    = 8948.39 GFLOPS
+
+fp16-scalar  = 13290.10 GFLOPS
+fp16-vec4    = 9850.92 GFLOPS
+fp16-matrix  = 53399.04 GFLOPS
+
+fp64-scalar  = 210.70 GFLOPS
+fp64-vec4    = 210.31 GFLOPS
+
+int32-scalar = 6749.61 GIOPS
+int32-vec4   = 6697.42 GIOPS
+
+int16-scalar = 5574.27 GIOPS
+int16-vec4   = 5147.63 GIOPS
+
+int8-dotprod = 6426.60 GIOPS
+int8-matrix  = 106426.78 GIOPS
+
+bf16-dotprod = 0.00 GFLOPS
+bf16-matrix  = 26705.33 GFLOPS
+=== end rc=0 secs=411 2026-10-04T11:47:07+00:00

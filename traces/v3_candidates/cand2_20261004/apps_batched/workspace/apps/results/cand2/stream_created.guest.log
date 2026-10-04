@@ -1,0 +1,4 @@
+=== stream_created side=guest start=2026-10-04T11:59:05+00:00 host=ubuntu cmd: /opt/apps/bundle/bin/stream_probe created
+CHECK created ok
+STREAM_PROBE_DONE created rc=0
+=== end rc=0 secs=3 2026-10-04T11:59:08+00:00

@@ -18,9 +18,11 @@ Broker/maxfps are integrated with ABI **18**; product revision `9d82f259` includ
 the HMP AioContext fix (`8775a93e`) and asynchronous console cursor update.
 Its CI including the slow suite passes. Exact-source `cand2b` passed the full
 bar: 2131/0 tests, gates 9/9, bare and guest 30/30, USER birth census. Host apps
-71/71 passed; guest apps are running on existing box **54049598** (vmb).
+71/71 passed; the main guest batch matches candidate 1 exactly (61/65 apps +
+6/6 probes, four known managed-memory failures). Individual failure reruns are
+running on existing box **54049598** (vmb).
 HMP/QMP refresh passes on the replacement display box; same-box positive is
-queued after apps on vmb. Async-60 is running on vdisp2. The 30 FPS cap is measured in
+queued after apps on vmb. Async-60 passes on vdisp2 (240/240 at 60.01 Hz; slow control is not continually held). The 30 FPS cap is measured in
 X11 GLX and actual Vulkan FIFO present calls (29.976857 FPS); Wayland/KMS,
 cursor parity, reconnect and idle-copy checks pass. Known Xorg-start flip
 warnings match candidate 1. Broker-stop rendering passes (27 seconds stopped,
