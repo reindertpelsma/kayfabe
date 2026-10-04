@@ -60,6 +60,11 @@ Each area lists its method and what already exists. **Stage** says when it runs.
 - **Audit:** confirm the gates cannot be bypassed (macros, `include!`, build scripts, C code in
   `kf3.c`), and that no safe API returns or accepts a host address in disguise, such as a `u64`
   that is really a pointer.
+- ★ **2026-10-04, `v3-sec-perimeter`** (`docs/design/V3_SEC_PERIMETER.md`): the gates of
+  `.github/workflows/perimeter.yml` replace the lexical ones above (`ci.yml`'s retire at C11).
+  They are G1 the compiler location gate, G3 the tokenizer, G4 the manifests and the resolved
+  graph, G5 the export table, G6 the size ratchet and G7 `kf3.c` in CI. G2, the deny layout, is
+  P2 hygiene. Each runs its known positives first.
 
 ### 2.2 Unsafe code bounds-checks every input (stage 2)
 
@@ -67,8 +72,11 @@ Each area lists its method and what already exists. **Stage** says when it runs.
   `offset + length`) against the real object, and tracks references and lifetimes. Unsafe functions
   reachable only from other unsafe code may skip this, but must then not be exposed to safe code.
 - **Method:**
-  - an inventory of every `*_unsafe.rs` public item with its precondition;
-  - a test per precondition that a violating call is refused, so the test can fail;
+  - an inventory of every `*_unsafe.rs` public item with its precondition — ★ 2026-10-04:
+    `docs/design/PERIMETER_EXPORTS.md`, generated from rustdoc and gated (E1-E14);
+  - a test per precondition that a violating call is refused, so the test can fail — ★ E3 (each
+    check of an `OK` row names a test that runs in CI and names the item) plus E3c (nightly
+    cargo-mutants: an `OK` row has no missed mutant);
   - Miri on the unit tests that exercise unsafe code;
   - bounded model checking (Kani) of the bounds arithmetic in the hottest wrappers (window
     placement, store slices, the PRAMIN pool).
@@ -186,12 +194,12 @@ P1 and P2 are the rows above.
 | finding | where | status |
 |---|---|---|
 | **S1-20 (blocker):** USER host channels refusing physical-mode and privileged work is the host boundary, and it is untested in v3 | `crates/kf-host/src/channel.rs:603-611`; closed GSP firmware | open: client-audit box test T-PHYS-CE, both privilege arms, every family |
-| S1-01: the four lexical unsafe gates can all be passed at once by rustfmt-clean code | `.github/workflows/ci.yml:1462-1473`, `:676-682` | open |
+| S1-01: the four lexical unsafe gates can all be passed at once by rustfmt-clean code | `.github/workflows/ci.yml:1462-1473`, `:676-682` | closed by replacement on `v3-sec-perimeter` (2026-10-04): the compiler location gate, the tokenizer, M1-M9 |
 | S1-02: the host-pointer gate sees only pointer type names | `.github/workflows/ci.yml:734-751` | open |
 | S1-03: the console frame's host address crosses safe code as a `usize`; `Kf3Frame` has no length | `crates/kf-cuda/src/display.rs:44-53`, `crates/kf-qemu/src/ffi_unsafe.rs:513` | open |
 | S1-04: kf-cuda's public safe API takes raw device addresses | `crates/kf-cuda/src/driver_unsafe.rs:672-842` | open |
 | S1-05: under unified addressing or HMM the in-process CUDA contexts can address the VMM; the compose kernel has no in-kernel bound | `crates/kf-cuda/src/display.rs:122-154`; `cuda/display/kf_scanout.ptx` | open |
-| S1-06: the v3 unsafe-soundness ledger walks the v2 crates | `crates/kf-linux-raw/tests/unsafe_naming.rs:41` | open |
+| S1-06: the v3 unsafe-soundness ledger walks the v2 crates | `crates/kf-linux-raw/tests/unsafe_naming.rs:41` | closed on `v3-sec-perimeter` (2026-10-04): the export table is the ledger |
 | S1-22: under a root VMM only births are de-privileged; other RM calls and both libcuda contexts run as admin | `crates/kf-qemu/src/device.rs:303`; `crates/kf-cuda/src/driver_unsafe.rs:364-429` | open |
 | S1-24: kayfabe's RPC and control decoders are reachable from unprivileged guest userspace | `crates/kf-rm/src/rmrpc/` | open (stage 2 fuzz/property tests) |
 | S1-25: shared host-GPU resources are not bounded per VM | `V3_SECURITY_MODEL.md` §7 | open (§2.4 table) |
@@ -206,7 +214,7 @@ P1 and P2 are the rows above.
 | S1-80: kf3 is hot-unpluggable and its exit neither joins threads nor deletes its bottom half | `qemu/hw/misc/kf3/kf3.c:858-912` | open |
 | S1-81: the late-invalidate tripwire is never called | `crates/kf-trap/src/shadow.rs:186-195` | open |
 | S1-82: twins' RM-owned context buffers take host VRAM outside `fb-mb`, uncapped | `crates/kf-host/src/channel.rs:57-97`; `crates/kf-qemu/src/cardbudget.rs:1-19` | open |
-| S1-83: the hostile-input instruments (fuzz, tsan, mutants, the adversarial guest kernel) were retired at the v3 cutover | `.github/workflows/ci.yml:17-19` | open |
+| S1-83: the hostile-input instruments (fuzz, tsan, mutants, the adversarial guest kernel) were retired at the v3 cutover | `.github/workflows/ci.yml:17-19` | open; first instrument on `v3-sec-perimeter` (2026-10-04): nightly mutants over the perimeter (E3c) |
 
 ## 5. Not in scope
 

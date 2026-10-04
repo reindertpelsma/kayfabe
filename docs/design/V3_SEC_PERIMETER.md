@@ -1,6 +1,8 @@
 # V3 security perimeter: gates, size ratchet and export table (design, rev 2)
 
-**STATUS: DESIGN, 2026-10-04, rev 2.** This is the read-only design pass for branch `v3-sec-perimeter`, revised after an adversarial review. Rev 1 is superseded in place: this text replaces it, and §R of this doc lists what changed and why. It turns `docs/OWNER_RULINGS.md` §R (origin/master `789dee9f`, from line 493) into commits that can be implemented one at a time.
+**STATUS: LIVE, 2026-10-04 (C8), rev 2.** C0-C8 have landed on `v3-sec-perimeter`: gates G1 and G3-G7 in `.github/workflows/perimeter.yml` with their known positives, the nightly `kf3-link.yml` and `perimeter-mutants.yml`, rule (a) on the free files (a1, a3-a11), and these docs. P2 and C11 wait on the lanes named in §10. Each section records, in a ⊘ **As built** block above or below what it corrects, where the implementation measured something else. The hardware merge bar at C7a-C7c is the coordinator's to schedule. The paragraph below is the design pass this replaced, kept as written.
+
+**STATUS was: DESIGN, 2026-10-04, rev 2.** This is the read-only design pass for branch `v3-sec-perimeter`, revised after an adversarial review. Rev 1 is superseded in place: this text replaces it, and §R of this doc lists what changed and why. It turns `docs/OWNER_RULINGS.md` §R (origin/master `789dee9f`, from line 493) into commits that can be implemented one at a time.
 
 - **Closes:** S1-01, S1-06, S1-11, S1-12, S1-13 (tier 1) and S1-14.
 - **Narrows:** S1-40, the size-field *value*. The size-field *location* stays open until P2.
@@ -910,6 +912,24 @@ C4 of rev 1 is gone: its content is P2-G2.
 ---
 
 ## Appendix A: per-lane follow-ups (record; do not edit here)
+
+⊘ **Added at C8 (2026-10-04), from what the implementation changed or found; these supersede the matching items below where they differ:**
+- **Every lane that adds `unsafe` to kf-linux-raw before C11:** `ci.yml`'s `AUDITED` is now `kf-linux-raw:86`, after a7-a10. Add your blocks to 86, and give each new or risen `sizes.tsv` row its dated reason.
+- **v3-sec-rawaddr:**
+  - **R17.** Your hand-written `Debug` impls for `GuestWindow` and `RunMapping` become export-table rows at merge (E1 names them).
+  - **R18.** Your perimeter ratchet (`b2021f43`) and `sizes.tsv` count the same files. Keep one, exact per kind, so the counts do not disagree.
+  - **R19.** `THE_CONSTRAINTS.md` §13: this branch rewrote only its first line, and your appended paragraph should merge cleanly. Read the merged item once.
+  - **R20.** S1-12: this branch's status bullet sits between Found and Check; your Status-line edit stands. The host-pointer gate's known positive is yours.
+  - **R21.** kf-cuda's `completion_hostfn` is the twelfth E9 entry.
+- **v3-broker:**
+  - **B12.** `RawError` gains `SizelessIoctl` and `WindowPoisoned` mid-enum, away from your `BadSocketPath` at its end.
+  - **B13.** Your three new safe `h` entries raise E9 from 12 to 15 unless they become `unsafe extern "C"` (B5).
+  - **B14.** `drm.rs`'s `Indirect` site is a new `[mint.baseline]` row (B11).
+  - **B15.** `CharDevice::ioctl` now refuses a sizeless request outside `LEGACY_SIZES` (a1). Your DRM requests are sized, so none is affected.
+- **v3-p1p2:**
+  - **P9.** `GuestWindow` can now return `WindowPoisoned` from every accessor (a8). `mem.rs`'s `place_view`, `place_ram` and `sink` should treat it as device-fatal (P7).
+  - **P10.** `place_device_view(writable = false)` is refused (a9), and `place(SharedFile)` past end-of-file is refused (a10).
+- **v3-sec-nonpriv:** **N5.** The `AUDITED` line conflicts by number only: add your `capability_unsafe.rs` blocks to `kf-linux-raw:86`.
 
 **v3-sec-rawaddr:**
 - R1 to R14 as in rev 1:

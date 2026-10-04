@@ -104,7 +104,28 @@ and the per-client host MMU fault above.
     of: derived from ogkm source · obtained by an **unprivileged** host userspace ioctl ·
     computed · a stub that satisfies ogkm because guest userspace does not care · or defined per
     ARCHITECTURE FAMILY so it stays maintainable.
-13. **No raw VMM pointers in safe code.** They belong in `unsafe` only, and safe code is always
+13. **Memory safety is a perimeter, not a keyword** (owner, 2026-10-03, `OWNER_RULINGS.md` §R).
+    - **The perimeter.** A file named `*_unsafe.rs` is the audit perimeter: it may hold raw
+      pointers, unvalidated offsets and lengths, and validation code.
+    - **Exports check their own inputs.** Every item a perimeter file exports to safe code checks
+      overflow, range in the real allocation, alignment and lifetime. A precondition left to
+      callers is an `unsafe fn` (rule a). `unsafe {}` appears only where Rust requires it.
+    - **Address producers are perimeter.** Code that produces an address hardware dereferences is
+      perimeter material even as safe Rust (rule b).
+    - **Size and kf3.c.** The perimeter's size is ratcheted (rule c), and `kf3.c` is inside it
+      (rule d).
+    - **Where unsafe may appear.** Crates that may hold `unsafe` are listed in
+      `scripts/ci/perimeter.toml` (class U). CI compiles every unit in the repository with the
+      `unsafe_code` lint forced on, and fails unless every reported use lies in a `*_unsafe.rs`
+      file of its own class U crate. Shapes the compiler cannot see (exported macros, `include!`,
+      code no build compiles, doctests) are checked by the tokenizer.
+    - **Where it is checked.** `.github/workflows/perimeter.yml`; the export table
+      `docs/design/PERIMETER_EXPORTS.md`; sizes `scripts/ci/perimeter/sizes.tsv`
+      (`docs/design/V3_SEC_PERIMETER.md`).
+    - ⊘ **Superseded 2026-10-03 (§R): the v3 wording below.** The crate list moved to
+      `perimeter.toml`, and both tokens it names (`HostSpan`, `BackendFd`) are `Copy` with no
+      lifetime; their rows in the export table are OPEN. As written: *No raw VMM pointers in safe
+      code.* They belong in `unsafe` only, and safe code is always
     bounds-checked rather than trusted to have been written correctly. ★ v3 (owner, 2026-09-25):
     exactly THREE crates may opt out of the workspace's `unsafe_code = "forbid"`, and only in
     files named `*_unsafe.rs`: `kf-linux-raw` (OS adapter), `kf-qemu` (the QEMU FFI) and `kf-cuda`
