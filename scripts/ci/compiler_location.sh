@@ -99,8 +99,13 @@ fi
 
 # --- 5-7. The passes, every unit through the wrapper.
 export RUSTC_WRAPPER="$gate/rustc_location_wrapper.py" RUSTC="$pinned_rustc" KF_PINNED_RUSTC="$pinned_rustc"
-export KF_REPO_ROOT="$root" KF_PERIMETER_TOML="$gate/perimeter.toml" KF_WRAPLOG="$log" CARGO_TARGET_DIR="$target"
+export KF_REPO_ROOT="$root" KF_PERIMETER_TOML="$gate/perimeter.toml" KF_WRAPLOG="$log"
 while IFS=$'\t' read -r name manifest envs args; do
+  # ★ One target directory PER PASS. Shared, a later pass compiles nothing a former one built
+  # (build scripts are host units), and two standalone packages with the same name and version
+  # hash identically because cargo hashes a root package by its workspace-relative path:
+  # measured on CI 2026-10-04, kayfabe-abi/gen compiled ZERO units after kf-abi/gen.
+  export CARGO_TARGET_DIR="$target/${name//[^A-Za-z0-9_-]/_}"
   step "5-7. pass $name: cargo check --manifest-path $manifest $args"
   envv=()
   if [ "$envs" != "-" ]; then IFS=, read -r -a envv <<<"$envs"; fi
