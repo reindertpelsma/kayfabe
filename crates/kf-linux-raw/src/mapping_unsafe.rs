@@ -998,6 +998,7 @@ impl HostSpan {
 pub struct VolatileRegion {
     map: Mapping,
     cache: CachePolicy,
+    prot: HostProt,
 }
 
 // SAFETY: a `VolatileRegion` owns a process-wide mapping, not a thread-affine resource.
@@ -1026,8 +1027,8 @@ unsafe impl Sync for VolatileRegion {}
 
 impl VolatileRegion {
     /// Map `len` bytes of `backing` as a hardware-shared region, requiring cache policy
-    /// `cache`. Always read-write: a page whose *other* writer is a GPU is not usefully
-    /// read-only to us.
+    /// `cache`. Read-write; use [`Self::map_read_only`] for a hardware register page whose
+    /// contents the CPU must never change.
     ///
     /// ★ **This type is exactly why cacheability is a parameter and not a property of the
     /// region type.** The pages a `VolatileRegion` wraps split across all three attributes:
@@ -1059,16 +1060,30 @@ impl VolatileRegion {
         cache: CachePolicy,
         page: HostPageSize,
     ) -> Result<Self, RawError> {
+        Self::map_with_prot(backing, len, cache, page, HostProt::ReadWrite)
+    }
+
+    /// Map hardware-updated registers with `PROT_READ` only. Stores through this type are
+    /// refused before dereferencing, as well as prohibited by the OS mapping.
+    pub fn map_read_only(
+        backing: Backing<'_>,
+        len: u64,
+        cache: CachePolicy,
+        page: HostPageSize,
+    ) -> Result<Self, RawError> {
+        Self::map_with_prot(backing, len, cache, page, HostProt::ReadOnly)
+    }
+
+    fn map_with_prot(
+        backing: Backing<'_>,
+        len: u64,
+        cache: CachePolicy,
+        page: HostPageSize,
+        prot: HostProt,
+    ) -> Result<Self, RawError> {
         cache::require_attainable(cache, backing.attainable_cache_policy(), backing.describe())?;
-        let map = Mapping::anywhere(
-            len,
-            HostProt::ReadWrite.bits(),
-            0,
-            backing,
-            page,
-            "mapping length",
-        )?;
-        Ok(VolatileRegion { map, cache })
+        let map = Mapping::anywhere(len, prot.bits(), 0, backing, page, "mapping length")?;
+        Ok(VolatileRegion { map, cache, prot })
     }
 
     /// The cache policy this region was mapped under. As [`MappedRegion::cache_policy`].
@@ -1179,6 +1194,9 @@ impl VolatileRegion {
     /// # Errors
     /// As [`VolatileRegion::load_u32`].
     pub fn store_u32(&self, offset: HostOffset, value: u32) -> Result<(), RawError> {
+        if self.prot == HostProt::ReadOnly {
+            return Err(RawError::NotWritable);
+        }
         self.word_at::<AtomicU32>(offset)?
             .store(value, Ordering::Relaxed);
         Ok(())
@@ -1198,6 +1216,9 @@ impl VolatileRegion {
     /// # Errors
     /// As [`VolatileRegion::load_u64`].
     pub fn store_u64(&self, offset: HostOffset, value: u64) -> Result<(), RawError> {
+        if self.prot == HostProt::ReadOnly {
+            return Err(RawError::NotWritable);
+        }
         self.word_at::<AtomicU64>(offset)?
             .store(value, Ordering::Relaxed);
         Ok(())
@@ -1456,6 +1477,28 @@ impl Reservation {
 /// doctrine forbids, so it is not written.
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn readonly_hardware_region_refuses_all_stores_before_access() {
+        let region = super::VolatileRegion::map_read_only(
+            super::Backing::PrivateAnonymous,
+            page().bytes(),
+            super::CachePolicy::WriteBack,
+            page(),
+        )
+        .unwrap();
+        assert_eq!(region.load_u32(super::HostOffset::ZERO).unwrap(), 0);
+        for off in [0, 1, page().bytes(), u64::MAX] {
+            assert_eq!(
+                region.store_u32(super::HostOffset::new(off), 1),
+                Err(super::RawError::NotWritable)
+            );
+            assert_eq!(
+                region.store_u64(super::HostOffset::new(off), 1),
+                Err(super::RawError::NotWritable)
+            );
+        }
+        assert_eq!(region.load_u64(super::HostOffset::ZERO).unwrap(), 0);
+    }
     use super::*;
     use std::fs::File;
     use std::io::Write as _;

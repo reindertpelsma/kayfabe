@@ -304,6 +304,21 @@ fn row(bases: &'static [RegBaseRow]) -> ChipInfoRow {
         chip_sub_rev: 0,
         is_cmp_sku: false,
         reg_bases: bases,
+        timer_reg_base: None,
+    }
+}
+
+#[test]
+fn optional_timer_base_is_exact_and_default_stays_unsupported() {
+    let mut source = row(&[]);
+    let field = chipinfo::REG_BASES_OFF + reg_base::TIMER * 4;
+    for base in [None, Some(0x9000), Some(0x5000)] {
+        source.timer_reg_base = base;
+        let bytes = chipinfo::encode_chip_info(&source, &identity(), 16 << 20).unwrap();
+        assert_eq!(
+            u32::from_le_bytes(bytes[field..field + 4].try_into().unwrap()),
+            base.unwrap_or(chipinfo::REG_BASE_UNSUPPORTED)
+        );
     }
 }
 

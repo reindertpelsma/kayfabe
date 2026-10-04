@@ -150,6 +150,8 @@ pub const MSIX_VECTORS: usize = 32;
 pub struct Device {
     /// The host RM session (process-lifetime: the memory plane's views borrow it).
     pub rm: &'static kf_host::HostRm,
+    /// Opt-in native timer backing; present only after host/guest layout and map validation.
+    pub timer: Option<kf_host::timer::TimerWindow<'static>>,
     /// The host's family.
     pub family: Family,
     /// What the C device presents.
@@ -277,7 +279,7 @@ impl Device {
         // host refuses, or a family an authored rule has no number for, refuses REALIZE, listing
         // every such field: never a default, never a GA106 row. (Hopper's PBDMA fault ids were such
         // a field until 2026-09-26; UVM's hwref states HOST0 = 64 — `V3_HW_BOUNDARY_INVENTORY.md`.)
-        let host = std::sync::Arc::new(
+        let mut host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
         // ★ ONE identity for the host GPU: the PCI address the frontend's `CARD_INFO` states
@@ -500,6 +502,34 @@ impl Device {
             pci.bar0_bytes
         } else {
             16 << 20
+        };
+        let timer = if std::env::var("KF3_TIMER_MAP").is_ok_and(|v| v == "1") {
+            let timer = rm
+                .open_timer()
+                .map_err(|e| format!("native timer view: {e:?}"))?;
+            if kf_abi::timer::layout(version) != Some(timer.layout()) {
+                return Err("native timer: host and guest register layouts differ".into());
+            }
+            kf_trap::memmap::memory_map(
+                family,
+                kf_trap::trappolicy::doorbell_for(family),
+                bar0_bytes,
+                cfg.bar1_bytes,
+                cfg.bar2_bytes,
+            )
+            .with_timer(u64::from(timer.bar0_base()))?;
+            std::sync::Arc::get_mut(&mut host)
+                .ok_or("timer facts already shared")?
+                .chip_info
+                .timer_reg_base = Some(timer.bar0_base());
+            eprintln!(
+                "kf3: native timer BAR0={:#x}, read-only 4096-byte mapping, host/guest layout {:?}",
+                timer.bar0_base(),
+                timer.layout()
+            );
+            Some(timer)
+        } else {
+            None
         };
         let plane: &'static Plane<'static> = Box::leak(Box::new(Plane::for_device(
             vmm,
@@ -832,6 +862,7 @@ impl Device {
 
         Ok(Device {
             rm,
+            timer,
             family,
             identity: Identity { pci, bar0_bytes },
             store,
@@ -897,13 +928,19 @@ impl Device {
     /// passthrough / hole).
     #[must_use]
     pub fn memory_map(&self, bar1_bytes: u64, bar2_bytes: u64) -> kf_trap::memmap::MemoryMap {
-        kf_trap::memmap::memory_map(
+        let map = kf_trap::memmap::memory_map(
             self.family,
             self.plane.doorbell,
             self.identity.bar0_bytes,
             bar1_bytes,
             bar2_bytes,
-        )
+        );
+        match &self.timer {
+            Some(timer) => map
+                .with_timer(u64::from(timer.bar0_base()))
+                .expect("timer validated at realize"),
+            None => map,
+        }
     }
 
     /// Register a BAR0 shadow piece QEMU allocated (a ROM device's RAM) at BAR0 offset `base`, and
@@ -1136,6 +1173,14 @@ impl Device {
     }
 
     fn bar0_write_inner(&self, off: u64, val: u64, width: u8) {
+        // Guest userspace can map the whole timer page. No write to it may reach either the
+        // host mapping or the privileged queue. Drop even an access overlapping its edge.
+        if let Some(timer) = &self.timer {
+            let base = u64::from(timer.bar0_base());
+            if kf_trap::memmap::timer_write_is_ignored(base, off, width) {
+                return;
+            }
+        }
         self.counters.trapped.fetch_add(1, Ordering::Relaxed);
         self.counters.last_off.store(off, Ordering::Relaxed);
         // ★ v3-display: the display aperture is the plane's — PUT posted to its worker, W1C applied

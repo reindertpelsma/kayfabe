@@ -8616,6 +8616,22 @@ pub const NV2080_CTRL_RC_GET_WATCHDOG_INFO_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS_L0: Layout = Layout {
+    size: 4,
+    fields: &[f("tmr_offset", 0, 4, 0)],
+};
+/// `NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV83DE_ALLOC_PARAMETERS_L0: Layout = Layout {
     size: 12,
     fields: &[
@@ -10225,6 +10241,23 @@ pub const NV_VASPACE_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
             v(615, 71, 9),
             Some(&NV_VASPACE_ALLOCATION_PARAMETERS_L1),
         ), // 580.65.06 … 615.71.09
+    ],
+};
+
+const NV01TIMERMAP_L0: Layout = Layout {
+    size: 1044,
+    fields: &[
+        f("PTimerTime0", 1024, 4, 0),
+        f("PTimerTime1", 1040, 4, 0),
+        f("Reserved00", 0, 1024, 4),
+        f("Reserved01", 1028, 12, 4),
+    ],
+};
+/// `Nv01TimerMap` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV01TIMERMAP: StructRuns = StructRuns {
+    name: "Nv01TimerMap",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV01TIMERMAP_L0)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -13945,6 +13978,14 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO: ValueRuns = ValueRuns 
     name: "ctrl_cmds:NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(0x20802209)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `ctrl_cmds:NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET`
+pub const CTRL_CMDS_NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET: ValueRuns = ValueRuns {
+    name: "ctrl_cmds:NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x20800404)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -32818,6 +32859,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS,
     &NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS,
     &NV2080_CTRL_RC_GET_WATCHDOG_INFO_PARAMS,
+    &NV2080_CTRL_TIMER_GET_REGISTER_OFFSET_PARAMS,
     &NV83DE_ALLOC_PARAMETERS,
     &NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS,
     &NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS,
@@ -32860,6 +32902,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV_OS_DESC_MEMORY_ALLOCATION_PARAMS,
     &NV_SEMAPHORE_SURFACE_ALLOC_PARAMETERS,
     &NV_VASPACE_ALLOCATION_PARAMETERS,
+    &NV01TIMERMAP,
     &UVM_MAP_EXTERNAL_ALLOCATION_PARAMS,
     &UVM_REGISTER_GPU_PARAMS,
     &MSGQRXHEADER,
@@ -33236,6 +33279,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &CTRL_CMDS_NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
     &CTRL_CMDS_NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2,
     &CTRL_CMDS_NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO,
+    &CTRL_CMDS_NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET,
     &CTRL_CMDS_NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK,
     &CTRL_CMDS_NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES,
     &CTRL_CMDS_NVA06C_CTRL_CMD_BIND,

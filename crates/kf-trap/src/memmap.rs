@@ -31,6 +31,12 @@ use kf_chip::Family;
 
 pub const PAGE: u64 = 0x1000;
 
+/// A timer-page store is always ignored, including unaligned/wide stores crossing an edge.
+/// The base was validated by [`MemoryMap::with_timer`] before any guest execution.
+pub fn timer_write_is_ignored(base: u64, off: u64, width: u8) -> bool {
+    width != 0 && off < base.saturating_add(PAGE) && off.saturating_add(u64::from(width)) > base
+}
+
 /// How one region is served. ⊘ The five of `THE_CONSTRAINTS.md` §53.1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Disposition {
@@ -46,10 +52,12 @@ pub enum Disposition {
 
     /// **C** — read-only memslot over a **live host mapping**, for values we do not author.
     ///
-    /// ⊘ Exactly one exists: the usermode/VF page carrying the microsecond counter and the
-    /// doorbell. It is the only BAR0 region RM maps to an unprivileged host process, which is why
-    /// it is the only one we can alias.
+    /// The usermode/VF page carrying the microsecond counter and doorbell.
     HostPassthrough,
+
+    /// Optional, independently backed NV01_TIMER page. Reads hit the live host mapping;
+    /// every write is discarded. This must never resolve to the usermode backing.
+    HostTimer,
 
     /// **D** — **no memslot.** Both reads and writes exit.
     ///
@@ -267,6 +275,47 @@ pub fn memory_map(
 }
 
 impl MemoryMap {
+    /// Carve a verified live timer page out of a shadow region. Refuse unaligned, overflowing,
+    /// outside-BAR or overlapping special ranges, before the VMM can install any mapping.
+    pub fn with_timer(mut self, base: u64) -> Result<Self, &'static str> {
+        let end = base.checked_add(PAGE).ok_or("timer page overflow")?;
+        if base == 0 || !base.is_multiple_of(PAGE) || end > self.bar0_bytes {
+            return Err("timer page outside/alignment of BAR0");
+        }
+        let i = self
+            .regions
+            .iter()
+            .position(|r| {
+                r.bar == Bar(0)
+                    && r.how == Disposition::ShadowWriteTrapped
+                    && base >= r.base
+                    && end <= r.base + r.len
+            })
+            .ok_or("timer overlaps a non-shadow BAR0 range")?;
+        let old = self.regions.remove(i);
+        let mut replacement = Vec::new();
+        if old.base < base {
+            replacement.push(Region {
+                len: base - old.base,
+                ..old
+            });
+        }
+        replacement.push(Region {
+            bar: Bar(0),
+            base,
+            len: PAGE,
+            how: Disposition::HostTimer,
+        });
+        if end < old.base + old.len {
+            replacement.push(Region {
+                base: end,
+                len: old.base + old.len - end,
+                ..old
+            });
+        }
+        self.regions.splice(i..i, replacement);
+        Ok(self)
+    }
     /// ★ Does the map **tile** each BAR — cover it exactly, no gaps, no overlaps?
     ///
     /// ⊘ This is the property that lets a VMM install the map blindly. A gap is not a harmless
@@ -362,7 +411,9 @@ pub fn install(
             // A — plain RAM: no exit in either direction.
             Disposition::PlainRam => false,
             // B and C — reads from memory, writes exit. THE default.
-            Disposition::ShadowWriteTrapped | Disposition::HostPassthrough => true,
+            Disposition::ShadowWriteTrapped
+            | Disposition::HostPassthrough
+            | Disposition::HostTimer => true,
             // ★ D — install NOTHING. This `continue` is the entire read-trap implementation.
             Disposition::Hole { .. } => continue,
         };

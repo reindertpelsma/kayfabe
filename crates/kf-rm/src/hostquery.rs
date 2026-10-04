@@ -645,6 +645,7 @@ pub fn query_chip_info(
         chip_sub_rev: sub_revision,
         is_cmp_sku: cmp,
         reg_bases: REG_BASES,
+        timer_reg_base: None,
     })
 }
 
