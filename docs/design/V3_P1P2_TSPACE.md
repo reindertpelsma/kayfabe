@@ -932,8 +932,11 @@ GPU at the exact commit, plus its own box test (§R). Box runs are **specified h
   the pattern. LOW — the release-twin result ignored and the free's statement order; the sysmem
   USERD seam; `HostRing::release` short-circuiting; the store window's page rounding; Gate A
   exempting `kf-chan`; opcode 4 accepted below Hopper; the property test on one tier; the docs
-  stating more than holds (§28, §58, R2.3). The slow suite is dispatched on `v3-p1p2` by hand
-  (it runs nightly otherwise).
+  stating more than holds (§28, §58, R2.3). The slow suite (`KAYFABE_SLOW=1`, nightly or on
+  dispatch only) was dispatched on `v3-p1p2` at `96be1212`: GitHub Actions run `37171087282`, every
+  job green, `slow` included. Push runs of the fix commits: `37168857856` (`0b59f6da`),
+  `37169033136` (`b802fd2e`), `37169607054` (`d53befca`), `37170100865` (`49786008`), `37170515751`
+  (`5d840021`), `37170855345` (`6e6694a2`), `37171075343` (`96be1212`) — all green.
 - **2026-10-04 feasibility review (this revision):** the 40-bit host-semaphore limit applies to
   **every** family through CeUtils' legacy `SEMAPHOREA`; S1-21 decoupled from the census;
   shadow-first staging; `LAUNCH_DMA` field completeness; output chunking against the half-pushbuffer
