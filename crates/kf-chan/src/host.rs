@@ -12,9 +12,7 @@
 
 use crate::ring::{GuestMemory, Next, RingRefusal, TranslatedRing};
 use crate::translated::{IsCeClass, Window};
-use kf_abi::submit::{
-    ENGINE_TYPE_COPY0, USERD_GP_GET, USERD_GP_PUT, fifo, gp_entry, method_header_inc,
-};
+use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_GP_GET, USERD_GP_PUT};
 use kf_linux_raw::HostOffset as At;
 use std::collections::VecDeque;
 
@@ -36,21 +34,9 @@ const TAIL_BYTES: u64 = 64;
 /// GP entries we allow in flight — below the ring size, so a put never laps an unfinished get.
 const MAX_IN_FLIGHT: usize = (GPFIFO_ENTRIES as usize) - 16;
 
-/// NVIDIA's completion tail: a host release of `payload` at `fence_va` **with `RELEASE_WFI`**
-/// (ordered behind the engine going idle), then the host `NON_STALL_INTERRUPT`.
-#[must_use]
-pub fn fence_words(fence_va: u64, payload: u32) -> Option<Vec<u32>> {
-    Some(vec![
-        method_header_inc(0, fifo::SEM_ADDR_LO, 5)?,
-        (fence_va & 0xFFFF_FFFC) as u32,
-        ((fence_va >> 32) & 0xFF) as u32,
-        payload,
-        0,
-        fifo::SEM_EXECUTE_RELEASE_32BIT | fifo::SEM_EXECUTE_RELEASE_WFI_EN,
-        method_header_inc(0, fifo::NON_STALL_INTERRUPT, 1)?,
-        0,
-    ])
-}
+/// NVIDIA's completion tail — ★ P1+P2 inc C: authored in the address perimeter
+/// ([`crate::tspace_unsafe::fence_words`], `V3_P1P2_TSPACE.md` §3.8), re-exported here.
+pub use crate::tspace_unsafe::fence_words;
 
 /// `a` has reached `b` in wrapping sequence order.
 #[must_use]
@@ -366,7 +352,10 @@ impl HostRing {
                 .store_u32(At::new(start + 4 * i as u64), *w)
                 .map_err(|e| format!("{e:?}"))?;
         }
-        let entry = gp_entry(self.va + start, n).ok_or("gp entry (ring VA above 2^40?)")?;
+        // ★ P1+P2 inc C: the GP entry is authored in the address perimeter, bounded to the
+        // pushbuffer and below 2^40 (`crate::tspace_unsafe::ring_gp_entry`).
+        let entry = crate::tspace_unsafe::ring_gp_entry(self.va, PB_BYTES, start, n)
+            .ok_or("gp entry (outside the pushbuffer, or the ring VA above 2^40)")?;
         let gp = GPFIFO_OFF + u64::from(self.put % GPFIFO_ENTRIES) * 8;
         self.cpu()?
             .store_u32(At::new(gp), entry as u32)
@@ -614,6 +603,17 @@ impl TranslatedChannel {
     /// channel fetches ([`crate::census`]). Off by default.
     pub fn set_census(&mut self, on: bool) {
         self.ring.set_census(on);
+    }
+
+    /// ★ P1+P2 inc C: run the T-mode shadow against `windows` ([`TranslatedRing::set_shadow`]).
+    pub fn set_shadow(&mut self, windows: Option<crate::tspace_unsafe::TWindows>) {
+        self.ring.set_shadow(windows);
+    }
+
+    /// The shadow's counters, when on — the device dumps them at free.
+    #[must_use]
+    pub fn shadow(&self) -> Option<&crate::tmode::Shadow> {
+        self.ring.shadow()
     }
 
     /// The channel's census, when on — the device dumps it at free.

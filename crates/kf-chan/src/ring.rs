@@ -27,6 +27,12 @@ pub trait GuestMemory {
     /// # Errors
     /// A range that is not mapped, or a failed read — refused by name by the caller.
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String>;
+
+    /// ★ P1+P2 inc C: the placement rows behind this memory, for the T-mode resolver and its shadow
+    /// ([`crate::tmode::Rows`]). `None` (the default) when the reader has none.
+    fn rows(&self) -> Option<&dyn crate::tmode::Rows> {
+        None
+    }
 }
 
 /// What the runner must do next.
@@ -118,6 +124,8 @@ pub struct TranslatedRing {
     pb_ext_base: u64,
     /// ★ P1+P2 inc A (§3.6): the count-only census, when on.
     census: Option<Box<Census>>,
+    /// ★ P1+P2 inc C (§3.6): the T-mode shadow and the windows it binds against, when on.
+    shadow: Option<Box<(crate::tmode::Shadow, crate::tspace_unsafe::TWindows)>>,
 }
 
 impl TranslatedRing {
@@ -141,7 +149,21 @@ impl TranslatedRing {
             entries_fetched: 0,
             pb_ext_base: 0,
             census: None,
+            shadow: None,
         }
+    }
+
+    /// ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): run the T-mode rewriter in SHADOW on every segment
+    /// this ring fetches — decode and bind against the memory's placement rows and `windows`, the
+    /// output discarded, the verdicts counted ([`crate::tmode::Shadow`]). `None` turns it off.
+    pub fn set_shadow(&mut self, windows: Option<crate::tspace_unsafe::TWindows>) {
+        self.shadow = windows.map(|w| Box::new((crate::tmode::Shadow::default(), w)));
+    }
+
+    /// The shadow's counters, when on.
+    #[must_use]
+    pub fn shadow(&self) -> Option<&crate::tmode::Shadow> {
+        self.shadow.as_deref().map(|s| &s.0)
     }
 
     /// ★ P1+P2 inc A: count every header, method and GP entry this ring fetches
@@ -271,6 +293,10 @@ impl TranslatedRing {
                 .chunks_exact(4)
                 .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
                 .collect();
+            if let (Some(sh), Some(rows)) = (self.shadow.as_deref_mut(), mem.rows()) {
+                // ★ Before today's rewrite, on the same words: what T-mode would do here.
+                sh.0.observe(&words, is_ce, rows, &sh.1);
+            }
             let pieces =
                 rewrite_counted(&words, is_ce, &mut self.st, w, self.census.as_deref_mut())
                     .map_err(|why| RingRefusal::Rewrite { gp, why })?;

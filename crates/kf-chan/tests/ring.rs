@@ -370,3 +370,88 @@ fn control_entries_other_than_nop_and_extended_base_are_refused() {
         Some(1)
     );
 }
+
+/// Guest memory that also exposes placement rows (one vidmem row over the pushbuffer).
+struct RowsMem(Mem);
+impl kf_chan::tmode::Rows for RowsMem {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<kf_chan::tmode::Span>, u64> {
+        kf_chan::tmode::resolve_spans(va, len, |at| {
+            (PB..PB + 0x10_0000).contains(&at).then(|| {
+                (
+                    false,
+                    0x40_0000 + (at - PB),
+                    PB + 0x10_0000 - at,
+                    kf_host::MapPerm::READ_WRITE,
+                )
+            })
+        })
+    }
+    fn dma_to_file_range(&self, _: u64, _: u64) -> Option<u64> {
+        None
+    }
+}
+impl GuestMemory for RowsMem {
+    fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
+        self.0.read(va, out)
+    }
+    fn rows(&self) -> Option<&dyn kf_chan::tmode::Rows> {
+        Some(self)
+    }
+}
+
+/// ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): with the shadow on, every fetched segment is ALSO
+/// decoded and bound by T-mode against the memory's rows — counted, never emitted: the words the
+/// ring submits are today's, unchanged. Off (the default), nothing is counted.
+#[test]
+fn the_shadow_observes_every_segment_and_changes_nothing() {
+    let mut a = m(4, 0, &[CE_CLASS]);
+    a.extend(m(
+        4,
+        ce::OFFSET_IN_UPPER,
+        &[0, PB as u32 + 0x800, 0, PB as u32 + 0x900],
+    ));
+    a.extend(m(4, ce::LINE_LENGTH_IN, &[0x40]));
+    a.extend(m(4, ce::LAUNCH_DMA, &[0x182]));
+    let w = kf_chan::tspace_unsafe::TWindows::new(
+        (0x1_2000_0000, 0x2_0000_0000),
+        (0x4_0000_0000, 0x1000_0000),
+        (1 << 40) - (4 << 30),
+    )
+    .unwrap();
+    let mut words = Vec::new();
+    for shadow in [false, true] {
+        let mut mem = RowsMem(Mem::default());
+        seg(&mut mem.0, 0, PB, &a);
+        let mut r = TranslatedRing::new(GPFIFO, 8, 0);
+        r.set_shadow(shadow.then_some(w));
+        let got = submitted_rows(&mut r, 1, &mut mem);
+        match r.shadow() {
+            Some(sh) => {
+                assert!(shadow);
+                assert_eq!(
+                    (sh.segments, sh.launches, sh.max_pieces),
+                    (1, 1, 1),
+                    "{}",
+                    sh.line()
+                );
+                assert!(sh.would_refuse.is_empty(), "{}", sh.line());
+                assert_eq!(got, words, "the shadow changes nothing the ring submits");
+            }
+            None => {
+                assert!(!shadow);
+                words = got;
+            }
+        }
+    }
+}
+
+fn submitted_rows(r: &mut TranslatedRing, put: u32, mem: &mut RowsMem) -> Vec<u32> {
+    let mut out = Vec::new();
+    loop {
+        match r.next(put, mem, is_ce, &W).unwrap() {
+            Next::Idle => return out,
+            Next::Submit { words, .. } => out.extend(words),
+            other => panic!("{other:?}"),
+        }
+    }
+}

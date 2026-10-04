@@ -19,5 +19,8 @@ pub mod dbfast;
 pub mod host;
 pub mod passthrough;
 pub mod ring;
+pub mod tmode;
 pub mod translated;
+pub mod tspace_unsafe;
+pub mod ttables;
 pub mod worker;

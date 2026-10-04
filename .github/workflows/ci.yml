@@ -1519,7 +1519,17 @@ jobs:
           # `Ctx::planes` keeps its one block, which now forms only the RAM shadow's slice — the BAR is
           # never a slice again, so `blt` cannot reach it with `copy_from_slice`/`fill`. ⊘ No new power:
           # the same bytes of the same BAR the old slice covered, now one aligned word at a time.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:46 firmware/kf-gop:78"
+          # ★ kf-chan:0 (2026-10-04, P1+P2 inc C, `docs/design/V3_P1P2_TSPACE.md` §3.8). OWNER_RULINGS
+          # §R(b): code that produces an address hardware will dereference is PERIMETER material
+          # even when it compiles as safe Rust, so the Translated plane's address authoring lives in
+          # ONE file named `*_unsafe.rs` — `crates/kf-chan/src/tspace_unsafe.rs`: the T-space
+          # windows' bounds, the `WindowAddr` only that file constructs, the only functions that put
+          # an address word or a LAUNCH_DMA word into a pushbuffer, and the ring's own fence/GP-entry
+          # authoring. It contains ZERO `unsafe` blocks (none is needed), so the relaxation count is
+          # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
+          # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
+          # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:75 kf-cuda:75 kf-qemu:46 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.

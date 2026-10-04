@@ -758,7 +758,8 @@ impl Device {
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
             fb_length,
-            Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
+            // ★ P1+P2 §2.6: through the vIOMMU seam.
+            Box::new(move |gpa, len| ram.dma_to_file_range(gpa, len)),
         )
         .with_page_grain(family.mmu_format().small_page_bytes())
         // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM

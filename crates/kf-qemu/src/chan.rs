@@ -417,7 +417,35 @@ struct Mem<'a> {
     store: u32,
     views: &'a mut StoreViews,
 }
+/// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.4) — the T-mode resolver's view of a
+/// mirror: OUR placement rows (never a copy of the guest's tables), each operand resolved under ONE
+/// read guard, and guest RAM through the vIOMMU seam ([`RamMap::dma_to_file_range`]).
+pub(crate) fn resolve_rows(
+    rows: &crate::mem::PlacedRows,
+    va: u64,
+    len: u64,
+) -> Result<Vec<kf_chan::tmode::Span>, u64> {
+    let r = rows.read().map_err(|_| va)?;
+    kf_chan::tmode::resolve_spans(va, len, |at| {
+        let (&start, &(rlen, off, ram, perm)) = r.range(..=at).next_back()?;
+        let end = start.checked_add(rlen)?;
+        (at < end).then(|| (ram, off + (at - start), end - at, perm))
+    })
+}
+
+impl kf_chan::tmode::Rows for Mem<'_> {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<kf_chan::tmode::Span>, u64> {
+        resolve_rows(&self.mirror.rows, va, len)
+    }
+    fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
+        self.ram.dma_to_file_range(dma, len)
+    }
+}
+
 impl GuestMemory for Mem<'_> {
+    fn rows(&self) -> Option<&dyn kf_chan::tmode::Rows> {
+        Some(self)
+    }
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
         let len = out.len() as u64;
         // ★ P5b: piece by piece across OUR rows — a segment may span two adjacent placements.
@@ -515,7 +543,7 @@ impl Window for SlotWindow<'_> {
         match t {
             Target::CoherentSysmem | Target::NonCoherentSysmem => {
                 let (base, rlen) = self.mirror.ram?;
-                let (_, off) = self.ram.file_range(phys, len)?;
+                let off = self.ram.dma_to_file_range(phys, len)?;
                 (off.checked_add(len)? <= rlen).then(|| base + off)
             }
             other => Windows(self.mirror).translate(other, phys, len),
@@ -554,6 +582,28 @@ struct Slot {
     disabled: bool,
     /// ★ v3-initrace: the completion probe's record (empty unless `KF3_COMPLETION_PROBE`).
     probe: ProbeRec,
+}
+
+/// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TSHADOW=1`**: every
+/// Translated channel runs the T-mode rewriter in shadow on today's path (its output discarded, its
+/// verdicts counted) and dumps one `TSHADOW` line at free. Default OFF; read once.
+fn tshadow_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_TSHADOW").is_some_and(|v| v != "0"))
+}
+
+/// The shadow's windows: the store window over `[0, carve)` at the base RM chose on GA106/580, the
+/// guest-RAM window after it (`THE_TRANSLATED_PLANE.md` §17.1). Nominal bases — the shadow counts
+/// coverage and refusals, and never emits. `None` without a guest-RAM object.
+fn shadow_windows(carve: u64, ram_len: Option<u64>) -> Option<kf_chan::tspace_unsafe::TWindows> {
+    const FB_BASE: u64 = 0x1_2000_0000;
+    let ram_base = (FB_BASE + carve).next_multiple_of(2 << 20);
+    kf_chan::tspace_unsafe::TWindows::new(
+        (FB_BASE, carve),
+        (ram_base, ram_len?),
+        crate::mem::RING_REGION_BASE,
+    )
+    .ok()
 }
 
 /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TCENSUS=1`** (or
@@ -811,8 +861,8 @@ fn probe_operand(
         }
         Target::CoherentSysmem | Target::NonCoherentSysmem => {
             let host = ram
-                .file_range(phys, n as u64)
-                .and_then(|(_, off)| ram.at_file_offset(off, n as u64))
+                .dma_to_file_range(phys, n as u64)
+                .and_then(|off| ram.at_file_offset(off, n as u64))
                 .and_then(|(m, at)| {
                     let mut b = vec![0u8; n];
                     m.read_into(at, &mut b).then_some(b)
@@ -2804,9 +2854,10 @@ impl ChanPlane {
                     }
                 }
                 Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
-                    let (Some(ram), Some((_, off))) =
-                        (mirror.ram_obj, self.ram.file_range(base, 0x200))
-                    else {
+                    let (Some(ram), Some((_, off))) = (
+                        mirror.ram_obj,
+                        self.ram.dma_to_file_range(base, 0x200).map(|o| ((), o)),
+                    ) else {
                         return refuse(
                             NV_ERR_NOT_SUPPORTED,
                             format!(
@@ -2827,7 +2878,10 @@ impl ChanPlane {
             // can name — so the twin's RC record is written there by the HOST (its GSP), natively.
             let err_at: Option<(u32, u64, kf_arch::UserdMem)> = match a.error_notifier {
                 Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => {
-                    match (mirror.ram_obj, self.ram.file_range(gpa, 16)) {
+                    match (
+                        mirror.ram_obj,
+                        self.ram.dma_to_file_range(gpa, 16).map(|o| ((), o)),
+                    ) {
                         (Some(ram), Some((_, off))) => Some((
                             ram,
                             off,
@@ -3008,6 +3062,11 @@ impl ChanPlane {
                 let mut chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
                 chan.set_probe(completion_probe_ms().is_some());
                 chan.set_census(tcensus_on());
+                if tshadow_on() {
+                    // ★ P1+P2 inc C: the T-mode shadow binds against windows shaped like the
+                    // T-space's (the store window ends at the carve-out); their bases are nominal.
+                    chan.set_shadow(shadow_windows(me.layout.carve(), mirror.ram.map(|(_, l)| l)));
+                }
                 let alloc = me
                     .caps
                     .lock()
@@ -3371,6 +3430,15 @@ impl ChanPlane {
                     f.releases
                 );
             }
+        }
+        if let Some(sh) = g.chan.shadow() {
+            // ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): what T-mode would have done on this channel.
+            eprintln!(
+                "kf3: TSHADOW tok={:#x} host={ht:#x} key={:?} {}",
+                g.guest_idx,
+                g.key,
+                sh.line()
+            );
         }
         if let Some(c) = g.chan.census() {
             // ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.6): one census line per Translated channel.
@@ -3862,5 +3930,44 @@ mod heap_tests {
             ),
             Ok(())
         );
+    }
+}
+
+#[cfg(test)]
+mod rows_tests {
+    use super::resolve_rows;
+    use kf_host::MapPerm;
+
+    /// ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.4): an operand resolves through OUR placement rows —
+    /// adjacent rows contiguous in VA and backing with one permission merge into one span; a
+    /// change of backing or permission starts a new one; the first uncovered byte is named.
+    #[test]
+    fn an_operand_resolves_through_our_rows_and_names_its_first_hole() {
+        let ro = MapPerm {
+            read_only: true,
+            ..MapPerm::READ_WRITE
+        };
+        let rows = crate::mem::PlacedRows::default();
+        if let Ok(mut r) = rows.write() {
+            r.insert(0x1000, (0x1000, 0x10_0000, false, MapPerm::READ_WRITE));
+            r.insert(0x2000, (0x1000, 0x10_1000, false, MapPerm::READ_WRITE)); // contiguous
+            r.insert(0x3000, (0x1000, 0x10_2000, false, ro)); // same backing run, read-only
+            r.insert(0x4000, (0x1000, 0x50_0000, true, MapPerm::READ_WRITE)); // guest RAM
+        }
+        let spans = resolve_rows(&rows, 0x1800, 0x3000).unwrap();
+        let shape: Vec<(bool, u64, u64, bool)> = spans
+            .iter()
+            .map(|s| (s.ram, s.off, s.len, s.perm.read_only))
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                (false, 0x10_0800, 0x1800, false),
+                (false, 0x10_2000, 0x1000, true),
+                (true, 0x50_0000, 0x800, false)
+            ]
+        );
+        assert_eq!(resolve_rows(&rows, 0x4800, 0x1000), Err(0x5000));
+        assert_eq!(resolve_rows(&rows, 0x800, 0x10), Err(0x800));
     }
 }

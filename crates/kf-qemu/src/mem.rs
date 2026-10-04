@@ -141,6 +141,20 @@ impl RamMap {
         let first = self.blocks.read().ok()?.iter().find_map(|x| x.fd)?;
         (b.fd == Some(first)).then(|| (first, b.fd_off + (gpa - b.gpa)))
     }
+
+    /// ★★ P1+P2 (`docs/design/V3_P1P2_TSPACE.md` §2.6) — **THE vIOMMU SEAM: the one path from a
+    /// device DMA address to a guest-memfd range.** The walker's sysmem leaves, the Translated
+    /// rewriter's sysmem operands (both the window arithmetic and the T-mode resolver), and sysmem
+    /// USERD and notifiers all go through here. Today a device DMA address IS a guest-physical
+    /// address, so this is [`RamMap::file_range`]'s offset; under a guest vIOMMU it does IOVA→GPA
+    /// per run FIRST, splitting a run where the mapping is discontiguous and refusing — never
+    /// reading through — an unmapped one (`V3_VIOMMU.md` §3). Until that lands kf3 refuses at
+    /// realize behind a vIOMMU. ⚠ The PRAMIN plan's closure (`MemPlane::build`) is routed here when
+    /// `v3-scratch-bound` (which rewrites that construction) has merged.
+    #[must_use]
+    pub fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
+        self.file_range(dma, len).map(|(_, off)| off)
+    }
 }
 
 /// ★ An armed CPU view of a store slice: the node whose `mmap` context RM registered, and the
@@ -482,7 +496,7 @@ pub type PlacedRows = std::sync::Arc<RwLock<std::collections::BTreeMap<u64, Plac
 #[must_use]
 pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64)> {
     let r = rows.read().ok()?;
-    let (&start, &(rlen, off, ram)) = r.range(..=va).next_back()?;
+    let (&start, &(rlen, off, ram, _)) = r.range(..=va).next_back()?;
     let end = va.checked_add(len)?;
     (end <= start.checked_add(rlen)?).then(|| (ram, off + (va - start)))
 }
@@ -494,13 +508,15 @@ pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64
 #[must_use]
 pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u64)> {
     let r = rows.read().ok()?;
-    let (&start, &(rlen, off, ram)) = r.range(..=va).next_back()?;
+    let (&start, &(rlen, off, ram, _)) = r.range(..=va).next_back()?;
     let end = start.checked_add(rlen)?;
     (va < end).then(|| (ram, off + (va - start), end - va))
 }
 
-/// One placement row: `(len, backing offset, in guest RAM)` — see [`PlacedRows`].
-pub type PlacedRow = (u64, u64, bool);
+/// One placement row: `(len, backing offset, in guest RAM, the guest leaf's permission)` — see
+/// [`PlacedRows`]. ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.4): the permission is what the T-mode
+/// resolver refuses a write, release or reduction through.
+pub type PlacedRow = (u64, u64, bool, kf_host::MapPerm);
 
 /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.4): what [`cut_rows`] changed, so the record
 /// can be put back exactly when the host refuses the range unmap.
@@ -535,23 +551,23 @@ pub fn cut_rows(
     let mut keys: Vec<u64> = rows
         .range(..va)
         .next_back()
-        .filter(|&(&k, &(len, _, _))| k.saturating_add(len) > va)
+        .filter(|&(&k, &(len, _, _, _))| k.saturating_add(len) > va)
         .map(|(&k, _)| k)
         .into_iter()
         .collect();
     keys.extend(rows.range(va..end).map(|(&k, _)| k));
     for k in keys {
-        let Some(row @ (len, off, ram)) = rows.remove(&k) else {
+        let Some(row @ (len, off, ram, perm)) = rows.remove(&k) else {
             continue;
         };
         cut.original.push((k, row));
         let row_end = k.saturating_add(len);
         if k < va {
-            rows.insert(k, (va - k, off, ram));
+            rows.insert(k, (va - k, off, ram, perm));
             cut.remnants.push(k);
         }
         if row_end > end {
-            rows.insert(end, (row_end - end, off + (end - k), ram));
+            rows.insert(end, (row_end - end, off + (end - k), ram, perm));
             cut.remnants.push(end);
         }
     }
@@ -739,7 +755,7 @@ impl GpuMirror {
         let rows: Vec<(u64, u64)> = self
             .rows
             .read()
-            .map(|r| r.iter().map(|(&va, &(len, _, _))| (va, len)).collect())
+            .map(|r| r.iter().map(|(&va, &(len, _, _, _))| (va, len)).collect())
             .unwrap_or_default();
         let before = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
         let mut refused = 0usize;
@@ -807,7 +823,7 @@ impl MapTarget for GpuMirror {
         if m == Mapped::Placed
             && let Ok(mut r) = self.rows.write()
         {
-            r.insert(d.va, (d.len, d.off, d.ram));
+            r.insert(d.va, (d.len, d.off, d.ram, d.perm));
         }
         Ok(m)
     }
@@ -831,7 +847,7 @@ impl MapTarget for GpuMirror {
             .fetch_add(rows.len() as u64, Ordering::Relaxed);
         if let Ok(mut r) = self.rows.write() {
             for d in rows {
-                r.insert(d.va, (d.len, d.off, d.ram));
+                r.insert(d.va, (d.len, d.off, d.ram, d.perm));
             }
         }
         Ok(())
@@ -2380,10 +2396,15 @@ mod tests {
     #[test]
     fn placed_rows_track_host_unmap_at_both_edges() {
         use std::collections::BTreeMap;
+        const RW: kf_host::MapPerm = kf_host::MapPerm::READ_WRITE;
+        const RO: kf_host::MapPerm = kf_host::MapPerm {
+            read_only: true,
+            ..kf_host::MapPerm::READ_WRITE
+        };
         let base: BTreeMap<u64, PlacedRow> = [
-            (0x1000, (0x3000, 0x10_0000, false)), // [0x1000, 0x4000)
-            (0x4000, (0x1000, 0x20_0000, true)),  // [0x4000, 0x5000)
-            (0x8000, (0x4000, 0x30_0000, false)), // [0x8000, 0xC000)
+            (0x1000, (0x3000, 0x10_0000, false, RO)), // [0x1000, 0x4000)
+            (0x4000, (0x1000, 0x20_0000, true, RW)),  // [0x4000, 0x5000)
+            (0x8000, (0x4000, 0x30_0000, false, RW)), // [0x8000, 0xC000)
         ]
         .into_iter()
         .collect();
@@ -2391,8 +2412,8 @@ mod tests {
         let mut rows = base.clone();
         let cut = cut_rows(&mut rows, 0x2000, 0x9000);
         let want: BTreeMap<u64, PlacedRow> = [
-            (0x1000, (0x1000, 0x10_0000, false)), // the part before the range, same backing
-            (0x9000, (0x3000, 0x30_1000, false)), // the part after, its backing advanced
+            (0x1000, (0x1000, 0x10_0000, false, RO)), // the part before, same backing and perm
+            (0x9000, (0x3000, 0x30_1000, false, RW)), // the part after, its backing advanced
         ]
         .into_iter()
         .collect();
@@ -2416,8 +2437,8 @@ mod tests {
         // A range inside one row splits it in two.
         let mut rows = base.clone();
         cut_rows(&mut rows, 0x9000, 0xA000);
-        assert_eq!(rows.get(&0x8000), Some(&(0x1000, 0x30_0000, false)));
-        assert_eq!(rows.get(&0xA000), Some(&(0x2000, 0x30_2000, false)));
+        assert_eq!(rows.get(&0x8000), Some(&(0x1000, 0x30_0000, false, RW)));
+        assert_eq!(rows.get(&0xA000), Some(&(0x2000, 0x30_2000, false, RW)));
         // An empty range changes nothing.
         let mut rows = base.clone();
         cut_rows(&mut rows, 0x2000, 0x2000);
@@ -2429,7 +2450,7 @@ mod tests {
         rows: &std::collections::BTreeMap<u64, PlacedRow>,
         va: u64,
     ) -> Option<(bool, u64)> {
-        let (&start, &(len, off, ram)) = rows.range(..=va).next_back()?;
+        let (&start, &(len, off, ram, _)) = rows.range(..=va).next_back()?;
         (va < start + len).then(|| (ram, off + (va - start)))
     }
 

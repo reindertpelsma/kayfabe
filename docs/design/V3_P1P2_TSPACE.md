@@ -15,6 +15,7 @@ supersession is recorded in §12's own text).
 | A | landed, CI | §3.2 refusals by name (`kf_chan::translated::REFUSED_METHODS`); `SubDeviceMask` refused; GP control entries: `SET_PB_SEGMENT_EXTENDED_BASE` decoded into the ring, `NOP` kept, every other opcode refused (`RingRefusal::ControlEntry`); the count-only census (`kf_chan::census`, `KF3_TCENSUS=1`, one `TCENSUS` line per Translated channel at free); USERD/notifier bounded to the usable heap before any host call (`heap_refused=` on the status line, S1-43); `PlacedRows` cut exactly at both edges (`kf_qemu::mem::cut_rows`); count-only carve-out counters (`carve_gpu=` / `carve_cpu=` on the status line) | CENSUS (§8) |
 | A2 | built, OFF | the GPU-target refusal exists (`ApplyCfg::carve_refuse`, tested) and is wired OFF (`VaManager::with_carve(carve, false)`) | flip after A's box run shows `carve_gpu=0` on each measured family |
 | B | landed, CI | `kf_host::HostRm::alloc_vaspace_bare` and `map_window_perm`; `kf_qemu::tspace::TSpace` built on the VA thread as the first prewarm step with `KF3_TSPACE=1` (ring region reserved first, store window `[0, carve)`, RAM window GPU-uncached, both bottom-up, both ends refused past the ring region), logged as `tspace space=… fb=…+… ram=…+… rings=… build_us=…`; unused. ⚠ Built only with the flag: the default path stays byte-for-byte today's (the task's rollout rule), so T-TSPACE-BUILD runs with `KF3_TSPACE=1`. `TSpace` lives in its own module (`tspace.rs`) to keep out of `mem.rs` ahead of `v3-scratch-bound` | T-TSPACE-BUILD (§8) |
+| C | landed, CI | `kf_chan::ttables` (the hand-written per-tier tables: CE methods per tier with inheritance, host methods, the `LAUNCH_DMA` / `SEMAPHORED` / `SEM_EXECUTE` field tables — each row held to the class header that states it, `hwref_check`); `kf_chan::tmode` (decode → unbound IR, `bind` against the placement rows at the call, launch splitting at row boundaries with the piece rules, chunking, the `Shadow`); `kf_chan::tspace_unsafe` (the perimeter, gate-3 table in §3.8; `kf-chan:0` added to the CI unsafe-containment list — zero `unsafe` blocks); `PlacedRow` carries the guest leaf's `MapPerm`; `RamMap::dma_to_file_range` (the §2.6 seam) routed through the walker's closure, `SlotWindow`, the T-mode resolver and sysmem USERD/notifiers (the PRAMIN closure waits for `v3-scratch-bound`); the shadow on today's path behind `KF3_TSHADOW=1` (one `TSHADOW` line per Translated channel at free). Deviation: host `NOP` payloads are consumed, not re-emitted — the engine reads UVM's inline data from the guest's own pushbuffer through the window, never from our ring | CENSUS (§8), with `KF3_TSHADOW=1` |
 
 ⚠ Deviation from §8's inc A row, recorded here: the PRAMIN-plan carve-out counter is **not** in
 inc A. §10 keeps inc A out of the PRAMIN plan until `v3-scratch-bound` merges (it rewrites that
@@ -370,6 +371,22 @@ authoring (`fence_words`; the GP entry in `push_inner`).
 
 Each export gets a row in the §R gate-3 table, with the test that shows each check. The perimeter
 ratchet (§R(c)) is bumped once, deliberately, in the increment that adds the file.
+
+★ **The gate-3 table (inc C, 2026-10-04).** `crates/kf-chan/src/tspace_unsafe.rs` exports, each
+validating its own inputs (§R: no precondition is left to a caller):
+
+| export | checks it performs | the test that shows each check (all `kf-chan`) |
+|---|---|---|
+| `TWindows::new(fb, ram, limit)` | each window non-empty, no overflow, ends at or below `limit`; `limit` ≤ 2^40 | `tspace_unsafe::tests::windows_are_bounded_at_construction` |
+| `TWindows::fb(off, len)` / `ram(off, len)` | `len > 0`, no overflow, `off+len` ≤ the window's length (the store window's length IS `carve`) | `a_window_address_is_only_ever_inside_its_window`; `tests/tmode.rs::carve_out_is_excluded` |
+| `TWindows::contains` | a predicate (the property tests' oracle) | `a_window_address_is_only_ever_inside_its_window` |
+| `WindowAddr` | constructible only inside this file, only by `fb`/`ram` | (by type: the field is private) |
+| `put_ce_offset` / `put_ce_semaphore` | take a `WindowAddr`, never a `u64`; upper bits masked to the tier's field | `tests/tmode.rs::every_emitted_pair_is_allowlisted_or_an_authored_address` |
+| `put_host_semaphore` | below 2^40 and 4-byte aligned, else refused with nothing emitted | `the_forty_bit_forms_refuse_what_they_would_truncate` |
+| `put_host_sem_addr` | below 2^40 (2^57 on a wide tier), aligned | `the_forty_bit_forms_refuse_what_they_would_truncate` |
+| `put_launch` | the word built from a validated `Launch`: both types VIRTUAL, every unnamed bit zero | `tests/tmode.rs::no_guest_word_is_copied`; `ttables::hwref_check::the_launch_field_table_is_the_class_headers` |
+| `fence_words` | the fence VA below 2^40 and aligned | `the_forty_bit_forms_refuse_what_they_would_truncate` |
+| `ring_gp_entry` | the range inside the pushbuffer; the VA below 2^40 | `the_ring_gp_entry_stays_in_the_pushbuffer` |
 
 ## 4. Guest spaces after the change
 

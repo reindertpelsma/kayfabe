@@ -447,6 +447,132 @@ pub enum Refusal {
         /// The word index of the header.
         at: usize,
     },
+    /// ★ P1+P2 inc C (T-mode, §3.6): a method no row of the tier's table classifies.
+    Unclassified {
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+    },
+    /// ★ T-mode: a copy-engine method before any `SET_OBJECT` bound a CE class.
+    NoCeObject {
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+    },
+    /// ★ T-mode (§3.2): a `LAUNCH_DMA` bit the tier's field table does not name, or a named field
+    /// with a value the table refuses — never silently cleared.
+    LaunchField {
+        /// The word.
+        word: u32,
+        /// What was refused.
+        what: &'static str,
+    },
+    /// ★ T-mode: a host `SEMAPHORED`/`SEM_EXECUTE` word with an unnamed bit or an undefined
+    /// operation.
+    HostSemOp {
+        /// The method.
+        method: u32,
+        /// The word.
+        word: u32,
+    },
+    /// ★ T-mode: an address-free method or register whose word carries bits beyond its fields.
+    FieldValue {
+        /// The method.
+        method: u32,
+        /// The word.
+        word: u32,
+        /// What was refused.
+        what: &'static str,
+    },
+    /// ★ T-mode (§3.4): a BLOCK-LINEAR virtual operand — its footprint is a function of the block
+    /// geometry, which `extents` does not model.
+    BlockLinearVirtual,
+    /// ★ T-mode (§3.4): a virtual operand or semaphore no placement row covers — at `at`.
+    VirtualUnresolved {
+        /// The operand's VA.
+        va: u64,
+        /// The first uncovered byte.
+        at: u64,
+    },
+    /// ★ T-mode (§3.4): a row that resolves outside its window — into the firmware carve-out, or
+    /// past the guest-RAM window.
+    OutsideWindow {
+        /// The VA.
+        va: u64,
+        /// Guest RAM (else the store).
+        ram: bool,
+        /// The backing offset.
+        off: u64,
+    },
+    /// ★ T-mode: a semaphore that does not lie inside one row.
+    SemaphoreSpansRows {
+        /// Its VA.
+        va: u64,
+        /// Its bytes.
+        bytes: u64,
+    },
+    /// ★ T-mode: a write, release or reduction through a row the guest mapped read-only.
+    ReadOnlyRow {
+        /// The VA.
+        va: u64,
+    },
+    /// ★ T-mode: a reduction through a row the guest mapped with atomics disabled.
+    AtomicDisabledRow {
+        /// The VA.
+        va: u64,
+    },
+    /// ★ T-mode (§2.2): a semaphore address a 40-bit form would truncate.
+    Sem40 {
+        /// The address.
+        va: u64,
+    },
+    /// ★ T-mode (§3.4): a multi-line operand not contiguous over its whole pitch footprint.
+    MultiLineDiscontiguous,
+    /// ★ T-mode (§3.4): a row boundary inside one remap element.
+    SplitInsideElement,
+    /// ★ T-mode (§3.4): a launch that would need more than [`crate::tmode::MAX_PIECES`] pieces.
+    TooManyPieces {
+        /// The pieces it would need.
+        pieces: usize,
+    },
+}
+
+impl Refusal {
+    /// The refusal's name, for counters (`TSHADOW would_refuse=[name:n …]`).
+    #[must_use]
+    pub const fn reason(&self) -> &'static str {
+        match self {
+            Refusal::BadHeader { .. } => "bad_header",
+            Refusal::Truncated { .. } => "truncated",
+            Refusal::PeerOperand => "peer_operand",
+            Refusal::Untranslatable { .. } => "untranslatable",
+            Refusal::BlockLinearPhysical => "block_linear_physical",
+            Refusal::ExtentOverflow => "extent_overflow",
+            Refusal::ForeignClass { .. } => "foreign_class",
+            Refusal::MemOp { .. } => "mem_op",
+            Refusal::UnboundSubchannel { .. } => "unbound_subchannel",
+            Refusal::SwMethod { .. } => "sw_method",
+            Refusal::RefusedMethod { .. } => "refused_method",
+            Refusal::SubDeviceMask { .. } => "subdevice_mask",
+            Refusal::Unclassified { .. } => "unclassified",
+            Refusal::NoCeObject { .. } => "no_ce_object",
+            Refusal::LaunchField { .. } => "launch_field",
+            Refusal::HostSemOp { .. } => "host_sem_op",
+            Refusal::FieldValue { .. } => "field_value",
+            Refusal::BlockLinearVirtual => "block_linear_virtual",
+            Refusal::VirtualUnresolved { .. } => "virtual_unresolved",
+            Refusal::OutsideWindow { .. } => "outside_window",
+            Refusal::SemaphoreSpansRows { .. } => "semaphore_spans_rows",
+            Refusal::ReadOnlyRow { .. } => "read_only_row",
+            Refusal::AtomicDisabledRow { .. } => "atomic_disabled_row",
+            Refusal::Sem40 { .. } => "sem40",
+            Refusal::MultiLineDiscontiguous => "multi_line_discontiguous",
+            Refusal::SplitInsideElement => "split_inside_element",
+            Refusal::TooManyPieces { .. } => "too_many_pieces",
+        }
+    }
 }
 
 /// ★ P1+P2 inc A (`V3_P1P2_TSPACE.md` §3.2) — **the methods refused by name on every tier**:
