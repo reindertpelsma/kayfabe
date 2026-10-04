@@ -138,9 +138,18 @@ fn finish_fits(frame_ctx: u64, ctx: u64, w: u32, h: u32, frame_len: usize) -> Re
 /// surface's GOB columns. `kf_scanout.ptx` has no store bound of its own (it relies on this, S1-05;
 /// T12 drives the address function over accepted layers).
 ///
+/// ⊘ **Every product is checked** (review of `v3-sec-rawaddr`, 2026-10-04): the workspace builds
+/// release without overflow checks, and an unchecked `blocks · pitch · 512·2^bh` wrapped to `0` for
+/// `y0 = u32::MAX, pitch = 2^26`, so a 4-byte extent was accepted for a layer whose first read lies
+/// 32 GiB below the store. An overflow is now a refusal, and so is a block-linear row or byte
+/// column the kernel's 32-bit `y0 + row` / `x0_bytes + 4x` cannot represent (the kernel would wrap
+/// it; the bound below would not have counted the row it wrapped to).
+///
 /// # Errors
 /// The failed bound, by name.
 pub fn compose_layer_fits(l: &ComposeLayer, fw: u32, fh: u32) -> Result<(), String> {
+    /// The kernel's surface coordinates are 32-bit: rows `y0..y0+rows`, bytes `x0..x0+4·width`.
+    const COORD_SPAN: u64 = 1 << 32;
     let fits = |a: u32, n: u32, room: u32| u64::from(a) + u64::from(n) <= u64::from(room);
     if l.rows == 0 || l.width == 0 || l.rows > MAX_SIDE || l.width > MAX_SIDE {
         return Err(format!("{l:?} is not a composable rectangle"));
@@ -156,9 +165,17 @@ pub fn compose_layer_fits(l: &ComposeLayer, fw: u32, fh: u32) -> Result<(), Stri
         {
             return Err(format!("{l:?}: the rows leave the surface's GOB columns"));
         }
-        (u64::from(l.y0) + u64::from(l.rows)).div_ceil(8u64 << l.block_height_log2)
-            * u64::from(l.pitch)
-            * (512u64 << l.block_height_log2)
+        let rows_end = u64::from(l.y0) + u64::from(l.rows);
+        if rows_end > COORD_SPAN || u64::from(l.x0_bytes) + row > COORD_SPAN {
+            return Err(format!(
+                "{l:?}: a row or byte column past the kernel's 32-bit surface coordinates"
+            ));
+        }
+        rows_end
+            .div_ceil(8u64 << l.block_height_log2)
+            .checked_mul(u64::from(l.pitch))
+            .and_then(|b| b.checked_mul(512u64 << l.block_height_log2))
+            .ok_or_else(|| format!("{l:?}: the blocks' bytes overflow 64 bits"))?
     } else {
         if u64::from(l.pitch) < row {
             return Err(format!("{l:?}: a row is wider than the pitch"));
@@ -605,6 +622,87 @@ mod tests {
             compose_layer_fits(&t, 1920, 1080).is_err(),
             "an empty rectangle"
         );
+        // ★ One row per remaining arm, each with room everywhere else, so only that arm can
+        // refuse it (review of v3-sec-rawaddr: deleting any of these four arms left T11 green).
+        let roomy = ComposeLayer {
+            extent: u64::MAX,
+            ..bl
+        };
+        assert_eq!(compose_layer_fits(&roomy, 1920, 1080), Ok(()));
+        let mut t = roomy;
+        t.rows = 1081;
+        assert!(
+            compose_layer_fits(&t, 1920, 1080).is_err(),
+            "a 1920x1081 layer in 1920x1080 (the oy arm)"
+        );
+        let mut t = roomy;
+        t.block_height_log2 = 6;
+        assert!(
+            compose_layer_fits(&t, 1920, 1080).is_err(),
+            "64-GOB blocks (the block-height arm)"
+        );
+        let mut t = roomy;
+        (t.x0_bytes, t.width) = (2, 1919);
+        assert!(
+            compose_layer_fits(&t, 1920, 1080).is_err(),
+            "a row starting mid-word (the 4-byte arm)"
+        );
+        let mut t = roomy;
+        (t.rows, t.pitch) = (MAX_SIDE + 1, 120);
+        assert!(
+            compose_layer_fits(&t, 1920, 20_000).is_err(),
+            "16385 rows (the MAX_SIDE arm, rows)"
+        );
+        let mut t = roomy;
+        (t.width, t.pitch) = (MAX_SIDE + 1, 1100);
+        assert!(
+            compose_layer_fits(&t, 20_000, 1080).is_err(),
+            "16385 pixels per row (the MAX_SIDE arm, width)"
+        );
+        // ★★★ The overflow the review found: blocks · pitch · 512 = 2^29 · 2^26 · 2^9 = 2^64, which
+        // an unchecked product wraps to 0 ≤ 4 in a release build.
+        let wrap = ComposeLayer {
+            src: 0,
+            extent: 4,
+            block_linear: true,
+            pitch: 1 << 26,
+            block_height_log2: 0,
+            x0_bytes: 0,
+            y0: u32::MAX,
+            width: 1,
+            rows: 1,
+            ..bl
+        };
+        assert!(
+            compose_layer_fits(&wrap, 1, 1).is_err(),
+            "2^64 bytes of blocks, wrapped to zero"
+        );
+        // The 32-bit coordinate arms: one row, or one byte column, past what `u32` holds.
+        let mut t = roomy;
+        (t.y0, t.rows) = (u32::MAX, 2);
+        assert!(
+            compose_layer_fits(&t, 1920, 1080).is_err(),
+            "rows u32::MAX..u32::MAX+2 wrap in the kernel's add.u32"
+        );
+        let mut t = roomy;
+        (t.y0, t.rows, t.pitch, t.width) = (u32::MAX, 1, 1, 16);
+        assert_eq!(
+            compose_layer_fits(&t, 1920, 1080),
+            Ok(()),
+            "row u32::MAX, the last representable one, is accepted"
+        );
+        let mut t = roomy;
+        (t.pitch, t.width, t.x0_bytes) = (u32::MAX, 1, u32::MAX - 3);
+        assert_eq!(
+            compose_layer_fits(&t, 1920, 1080),
+            Ok(()),
+            "bytes 2^32-4..2^32, the last representable word, are accepted"
+        );
+        t.width = 2;
+        assert!(
+            compose_layer_fits(&t, 1920, 1080).is_err(),
+            "bytes 2^32-4..2^32+4: the second word wraps in the kernel's add.u32"
+        );
     }
 
     /// ★ T10 — V9: the composition's geometry.
@@ -659,6 +757,30 @@ mod tests {
         assert_eq!(worst, 1 << 30, "the worst-case leak is 1 GiB, stated");
     }
 
+    /// ★ `kf_compose`'s block-linear source offset, instruction for instruction (`kf_scanout.ptx`
+    /// `$C_bl`): `y = y0 + row` and `xb = x0b + 4x` in **32** bits (`add.u32`), the block row times
+    /// the pitch widened (`mul.wide.u32`), then `add.u64`/`shl.b64` — all wrapping, as the GPU
+    /// computes them. ⊘ Not `kf_disp::scanout::bl_offset`, whose plain `u64` arithmetic panics (debug)
+    /// or wraps differently (no 32-bit `y`/`xb`) on exactly the inputs this model exists to judge;
+    /// the sweep asserts the two agree wherever nothing wraps.
+    fn ptx_bl_offset(l: &ComposeLayer, row: u32, x: u32) -> u64 {
+        let bh = l.block_height_log2;
+        let y = l.y0.wrapping_add(row);
+        let gob_y = y >> 3;
+        let block_y = gob_y.wrapping_shr(bh);
+        let in_block = gob_y & (1u32.wrapping_shl(bh).wrapping_sub(1));
+        let ybits = ((y & 3) << 4) | ((y & 4) << 5);
+        let xb = (x << 2).wrapping_add(l.x0_bytes);
+        let gob_x = xb >> 6;
+        let mut a = u64::from(block_y) * u64::from(l.pitch);
+        a = a.wrapping_add(u64::from(gob_x));
+        a = a.wrapping_shl(bh);
+        a = a.wrapping_add(u64::from(in_block));
+        a = a.wrapping_shl(9);
+        let in_gob = ((xb & 32) << 3) | ((xb & 16) << 2) | (xb & 15) | ybits;
+        a.wrapping_add(u64::from(in_gob))
+    }
+
     /// The model of `kf_scanout.ptx`'s address function, as the PTX computes it (`u32` where the
     /// PTX is `u32`): for row `row` and pixel `x`, the byte offset from `src` the kernel reads and
     /// the destination offset it writes — `None` where the kernel stops (`oy + row ≥ fh`,
@@ -670,16 +792,9 @@ mod tests {
             return None;
         }
         let src = if l.block_linear {
-            let xb = l.x0_bytes.wrapping_add(x << 2);
-            let y = l.y0.wrapping_add(row);
-            kf_disp::scanout::bl_offset(
-                u64::from(xb),
-                u64::from(y),
-                u64::from(l.pitch),
-                l.block_height_log2,
-            )
+            ptx_bl_offset(l, row, x)
         } else {
-            u64::from(row) * u64::from(l.pitch) + u64::from(x << 2)
+            (u64::from(row) * u64::from(l.pitch)).wrapping_add(u64::from(x << 2))
         };
         let dst = u64::from(dy) * u64::from(fw * 4) + u64::from(dx) * 4;
         Some((src, dst))
@@ -693,7 +808,7 @@ mod tests {
         for &r in &rows {
             for &x in &xs {
                 if let Some((s, d)) = pixel(l, fw, fh, r, x) {
-                    if s + 4 > l.extent {
+                    if s.checked_add(4).is_none_or(|end| end > l.extent) {
                         return Err(format!("{l:?} reads [{s:#x}, +4) past {:#x}", l.extent));
                     }
                     if d + 4 > u64::from(fw) * u64::from(fh) * 4 {
@@ -708,11 +823,16 @@ mod tests {
     /// The smallest extent V10 accepts for `l` (binary search over `compose_layer_fits` itself,
     /// so the sweep drives exactly V10's boundary, not a second statement of its formula).
     fn least_extent(l: &ComposeLayer, fw: u32, fh: u32) -> Option<u64> {
+        least_extent_below(l, fw, fh, 1 << 44)
+    }
+
+    /// [`least_extent`] over `[0, top]`.
+    fn least_extent_below(l: &ComposeLayer, fw: u32, fh: u32, top: u64) -> Option<u64> {
         let fits = |e: u64| compose_layer_fits(&ComposeLayer { extent: e, ..*l }, fw, fh).is_ok();
-        if !fits(1 << 44) {
+        if !fits(top) {
             return None;
         }
-        let (mut lo, mut hi) = (0u64, 1u64 << 44);
+        let (mut lo, mut hi) = (0u64, top);
         while lo < hi {
             let mid = lo + (hi - lo) / 2;
             if fits(mid) { hi = mid } else { lo = mid + 1 }
@@ -769,11 +889,106 @@ mod tests {
             };
             l.extent = least + if i % 3 == 0 { 0 } else { next(4096) };
             reads_inside(&l, fw, fh).unwrap();
+            if l.block_linear {
+                // Nothing wraps at these sizes: the PTX model IS the display plane's function.
+                let (r, x) = (l.rows - 1, l.width - 1);
+                assert_eq!(
+                    ptx_bl_offset(&l, r, x),
+                    kf_disp::scanout::bl_offset(
+                        u64::from(l.x0_bytes + 4 * x),
+                        u64::from(l.y0 + r),
+                        u64::from(l.pitch),
+                        l.block_height_log2,
+                    ),
+                    "{l:?}"
+                );
+            }
             checked += 1;
         }
         assert!(
             checked > 150_000,
             "the sweep exercised {checked} accepted layers"
+        );
+        // ★★★ THE TAIL (review of v3-sec-rawaddr): the head draws `y0 < 64` and small pitches, so
+        // it could never reach a product that overflows 64 bits. Here every coordinate sits near
+        // the top of its type — `y0` and `x0_bytes` near 2^32, pitches near 2^32 and near the
+        // largest that does not overflow, every block height — and the extent is V10's own least
+        // accepted value over the WHOLE u64 range. Every accepted layer must still read inside it.
+        let mut tail = 0u64;
+        for i in 0..100_000u32 {
+            let bh = next(6) as u32;
+            let width = 1 + next(64) as u32;
+            let rows = 1 + next(64) as u32;
+            let (fw, fh) = (width + next(8) as u32, rows + next(8) as u32);
+            let y0 = match i % 3 {
+                0 => u32::MAX - next(1 << 20) as u32,
+                1 => next(1 << 32) as u32,
+                _ => u32::MAX - rows - next(64) as u32,
+            };
+            let blocks = (u64::from(y0) + u64::from(rows)).div_ceil(8u64 << bh);
+            let largest = u64::MAX / blocks / (512u64 << bh);
+            let pitch = match next(4) {
+                0 => u32::MAX - next(1 << 12) as u32,
+                1 => u32::try_from(largest.saturating_sub(next(4)) + next(8)).unwrap_or(u32::MAX),
+                2 => (1 << 26) - 4 + next(8) as u32,
+                _ => 1 + next(1 << 32) as u32,
+            };
+            let room = (u64::from(pitch) * 64).min(1 << 32) / 4;
+            let x0_bytes = 4
+                * (room
+                    .saturating_sub(u64::from(width))
+                    .saturating_sub(next(4))) as u32;
+            let mut l = ComposeLayer {
+                src: 0,
+                extent: 0,
+                block_linear: i % 8 != 0,
+                pitch,
+                block_height_log2: bh,
+                x0_bytes,
+                y0,
+                width,
+                rows,
+                ox: next(u64::from(fw - width + 1)) as u32,
+                oy: next(u64::from(fh - rows + 1)) as u32,
+                flags: 0,
+                a_s: 255,
+                b_s: 0,
+                a_d: 0,
+                b_d: 0,
+            };
+            let Some(least) = least_extent_below(&l, fw, fh, u64::MAX) else {
+                continue;
+            };
+            l.extent = least;
+            reads_inside(&l, fw, fh).unwrap();
+            tail += 1;
+        }
+        assert!(
+            tail > 30_000,
+            "the tail exercised {tail} accepted layers near the top of every type"
+        );
+        // ★ The review's layer, read by the PTX model: with an extent of 4 its first pixel reads
+        // 2^64 - 2^35 + 0xb0 bytes past `src` (32 GiB BELOW the store once the u64 add wraps).
+        // V10 must refuse it, and the checker must see the read — so the tail is not vacuous.
+        let wrap = ComposeLayer {
+            src: 0,
+            extent: 4,
+            block_linear: true,
+            pitch: 1 << 26,
+            block_height_log2: 0,
+            x0_bytes: 0,
+            y0: u32::MAX,
+            width: 1,
+            rows: 1,
+            ox: 0,
+            oy: 0,
+            ..bl()
+        };
+        assert_eq!(ptx_bl_offset(&wrap, 0, 0), 0xffff_fff8_0000_00b0);
+        assert!(compose_layer_fits(&wrap, 1, 1).is_err());
+        assert!(
+            reads_inside(&wrap, 1, 1).is_err(),
+            "the checker sees the read the unchecked product accepted"
         );
         // The known positive, by construction: a pitch layer one byte short of its least accepted
         // extent reads past it, so the checker is not vacuous.

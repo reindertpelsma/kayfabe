@@ -1956,7 +1956,13 @@ jobs:
           #     `report_counts`, `finish_fits`) with their tests T2/T9/T13.
           #   kf-qemu 571 -> 658 (+87): V13 `check_frame`/`check_frame_geometry`, `Kf3Frame.len`,
           #     hand-written `Debug` for RawRegion/OverlayHook/IoeventfdHook, the G1d opt-out.
-          PERIMETER="kf-linux-raw:4810 kf-cuda:4493 kf-qemu:658"
+          # Review fixes (v3-sec-rawaddr, 2026-10-04), each line one finding:
+          #   kf-cuda 4493 -> 4677 (+184): V10 computes the block-linear bound with checked products
+          #     and refuses a row or byte column the kernel's 32-bit coordinates cannot hold (+9);
+          #     T11 gains one refusal row per arm (+76); T12 models the PTX's own wrapping address
+          #     arithmetic, cross-checks it against kf-disp's `bl_offset`, and adds a 100 000-layer
+          #     tail at the top of every type plus the review's overflowing layer (+99).
+          PERIMETER="kf-linux-raw:4810 kf-cuda:4677 kf-qemu:658"
           fail=0
           for entry in $PERIMETER; do
             c="crates/${entry%%:*}"; want="${entry##*:}"

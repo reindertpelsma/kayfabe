@@ -235,7 +235,20 @@ pub fn plan(s: &Scanout, dma: &CtxDma, formats: &ScanFormats) -> Result<CopyPlan
             "a {row_bytes}-byte row is wider than the {src_pitch}-byte pitch"
         ));
     }
-    let first = s.offset + u64::from(s.y) * src_pitch + u64::from(s.x) * bpp;
+    // ⊘ Checked (review of v3-sec-rawaddr, 2026-10-04): `y · pitch` reaches 2^70 for a row near
+    // u32::MAX, and the workspace builds release without overflow checks — a wrapped `first` would
+    // pass `dma.span` as a small, wrong offset. The perimeter's V10 bounds the read regardless;
+    // this names the refusal here, where the guest's value is.
+    let Some(first) = u64::from(s.y)
+        .checked_mul(src_pitch)
+        .and_then(|r| r.checked_add(u64::from(s.x) * bpp))
+        .and_then(|r| r.checked_add(s.offset))
+    else {
+        return no(format!(
+            "row {} of a {src_pitch}-byte pitch from offset {:#x} overflows 64 bits",
+            s.y, s.offset
+        ));
+    };
     let span = u64::from(s.height - 1) * src_pitch + row_bytes;
     let Some(src) = dma.span(first, span) else {
         return no(format!(
@@ -282,7 +295,16 @@ fn plan_block_linear(
     }
     let rows_per_block = 8u64 << bh;
     let block_rows = (u64::from(s.y) + u64::from(s.height)).div_ceil(rows_per_block);
-    let extent = block_rows * gobs_per_row * (GOB_BYTES << bh);
+    // ⊘ Checked (review of v3-sec-rawaddr, 2026-10-04): `2^30 blocks · 2^32 GOBs · 2^14 bytes`
+    // overflows, and an unchecked product wraps to a small extent in release.
+    let Some(extent) = block_rows
+        .checked_mul(gobs_per_row)
+        .and_then(|b| b.checked_mul(GOB_BYTES << bh))
+    else {
+        return Err(format!(
+            "{block_rows} blocks of {gobs_per_row} GOBs (block height {bh}) overflow 64 bits"
+        ));
+    };
     let Some(src) = dma.span(s.offset, extent) else {
         return Err(format!(
             "[{:#x}, +{extent:#x}) (block-linear) leaves context DMA {:#x}..={:#x}",
@@ -712,6 +734,28 @@ mod tests {
         let mut d = dma;
         d.target = Target::Sysmem;
         assert!(why(fb1080(), d).contains("system-memory"));
+    }
+
+    /// ★ Products that overflow 64 bits are refused by name, never wrapped into a small offset or
+    /// extent that a context DMA would then accept (review of `v3-sec-rawaddr`, 2026-10-04).
+    #[test]
+    fn an_overflowing_surface_is_refused_not_wrapped() {
+        let f = formats();
+        let huge = CtxDma {
+            limit: u64::MAX,
+            ..vid(0, 1 << 20)
+        };
+        // pitch: row u32::MAX - 1 of a 2^38-byte pitch is 2^70 bytes in
+        let mut s = fb1080();
+        (s.y, s.height, s.surface_height) = (u32::MAX - 1, 1, u32::MAX);
+        s.pitch = u32::MAX;
+        let e = plan(&s, &huge, &f).unwrap_err().0;
+        assert!(e.contains("overflows 64 bits"), "{e}");
+        // block-linear: 2^29 block rows · 2^32 GOBs · 512 bytes
+        let mut d = huge;
+        d.block_linear = true;
+        let e = plan(&s, &d, &f).unwrap_err().0;
+        assert!(e.contains("overflow 64 bits"), "{e}");
     }
 
     /// The formats come from the derived table: both 8888 orders, 565 and the 10-bit pair map; an
