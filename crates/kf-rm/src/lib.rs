@@ -283,10 +283,25 @@ impl ReselectAtFn1 {
 
     /// Decide at fn 1. Returns what happened, for the log and for tests.
     pub fn on_fn1(&mut self, payload: &[u8]) -> Reselection {
-        let Ok(said) = kf_abi::guestsysinfo::decode_guest_driver_version(payload) else {
+        // ★ 2026-10-04 (v3-windows, C2): a Windows build is keyed as the driver-matrix tag whose
+        // Windows twin it is (kf_abi::windows_twin); a tag is keyed as itself.
+        let Ok(r) = kf_abi::guestsysinfo::ReportedDriver::decode(payload) else {
             return Reselection::Kept;
         };
-        let Some(reported) = kf_abi::DriverVersion::parse(said) else {
+        if let Some(t) = r.twin {
+            eprintln!(
+                "kf-rm: the guest is Windows {} ({}), the Windows build of Linux {} (one changelist, \
+                 {}): keyed as {}",
+                r.said, t.win_branch, t.linux_tag, t.linux_cl, t.linux_tag
+            );
+        }
+        if let Some(why) = &r.twin_refusal {
+            eprintln!(
+                "kf-rm: the guest says it is {:?}, not a Windows twin: {why}",
+                r.said
+            );
+        }
+        let Some(reported) = r.version else {
             return Reselection::Kept;
         };
         if reported == self.current {

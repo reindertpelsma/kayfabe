@@ -176,6 +176,65 @@ impl core::fmt::Display for GuestIdentity {
     }
 }
 
+/// ★ What fn 1 says the guest IS, keyed the way this port keys tables (2026-10-04, branch
+/// `v3-windows`, runbook C2; `docs/design/V3_WINDOWS_DISCOVERY.md`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportedDriver {
+    /// `guestDriverVersion`, verbatim (strictly decoded: NUL-terminated UTF-8).
+    pub said: String,
+    /// The version the port keys on: the guest's own when it is a driver-matrix tag; else the Linux
+    /// tag whose Windows build the guest's identity names ([`crate::windows_twin::linux_twin`]); else
+    /// the guest's own as parsed (and refused later by the caller, by name).
+    pub version: Option<crate::DriverVersion>,
+    /// Set when [`ReportedDriver::version`] came from a Windows twin.
+    pub twin: Option<&'static crate::generated::windows_twins::WindowsTwin>,
+    /// Why a guest string that is not a tag was not accepted as a Windows twin (`None` when the
+    /// string is a tag, or names no Windows build at all).
+    pub twin_refusal: Option<crate::windows_twin::TwinRefusal>,
+}
+
+impl ReportedDriver {
+    /// Decode fn 1's driver identity.
+    ///
+    /// # Errors
+    /// [`decode_guest_driver_version`]'s.
+    pub fn decode(payload: &[u8]) -> Result<ReportedDriver, GuestSystemInfoError> {
+        let said = decode_guest_driver_version(payload)?.to_owned();
+        let id = GuestIdentity::decode(payload)?;
+        let parsed = crate::DriverVersion::parse(&said);
+        if let Some(v) = parsed
+            && crate::versions::table_for(v).is_ok()
+        {
+            return Ok(ReportedDriver {
+                said,
+                version: Some(v),
+                twin: None,
+                twin_refusal: None,
+            });
+        }
+        match crate::windows_twin::linux_twin(&said, &id.version, id.cl_num) {
+            Ok((v, t)) => Ok(ReportedDriver {
+                said,
+                version: Some(v),
+                twin: Some(t),
+                twin_refusal: None,
+            }),
+            Err(crate::windows_twin::TwinRefusal::NoTwin) => Ok(ReportedDriver {
+                said,
+                version: parsed,
+                twin: None,
+                twin_refusal: None,
+            }),
+            Err(r) => Ok(ReportedDriver {
+                said,
+                version: parsed,
+                twin: None,
+                twin_refusal: Some(r),
+            }),
+        }
+    }
+}
+
 /// The vGPU RPC version a driver speaks.
 ///
 /// Two `NvU32` on the wire even though both values fit in a byte, because
@@ -328,6 +387,37 @@ mod identity_tests {
         assert!(matches!(
             GuestIdentity::decode(&p[..100]),
             Err(GuestSystemInfoError::Truncated { .. })
+        ));
+    }
+
+    fn fn1(version: &str, branch: &str, cl: u32) -> Vec<u8> {
+        let mut p = vec![0u8; SET_GUEST_SYSTEM_INFO_SIZE];
+        p[VGX_MAJOR_OFF..VGX_MAJOR_OFF + 4].copy_from_slice(&0x2Bu32.to_le_bytes());
+        p[VGX_MINOR_OFF..VGX_MINOR_OFF + 4].copy_from_slice(&0x13u32.to_le_bytes());
+        p[GUEST_CL_NUM_OFF..GUEST_CL_NUM_OFF + 4].copy_from_slice(&cl.to_le_bytes());
+        p[GUEST_DRIVER_VERSION_OFF..GUEST_DRIVER_VERSION_OFF + version.len()]
+            .copy_from_slice(version.as_bytes());
+        p[GUEST_VERSION_OFF..GUEST_VERSION_OFF + branch.len()].copy_from_slice(branch.as_bytes());
+        p
+    }
+
+    /// ★ The Windows 580.88 guest's fn 1 on `vwin` (2026-10-04, kf3 `b98bdbec`) is keyed as Linux
+    /// 580.65.06; a Linux tag is keyed as itself; an unknown Windows branch is refused by name.
+    #[test]
+    fn a_windows_twin_is_keyed_as_its_linux_tag_and_a_tag_as_itself() {
+        let w = ReportedDriver::decode(&fn1("580.88", "r580_78-7", 0)).unwrap();
+        assert_eq!(w.said, "580.88");
+        assert_eq!(w.version, crate::DriverVersion::parse("580.65.06"));
+        assert_eq!(w.twin.map(|t| t.linux_tag), Some("580.65.06"));
+        let l =
+            ReportedDriver::decode(&fn1("580.65.06", "rel/gpu_drv/r580/r580_78-179", 0)).unwrap();
+        assert_eq!(l.version, crate::DriverVersion::parse("580.65.06"));
+        assert!(l.twin.is_none() && l.twin_refusal.is_none());
+        let bad = ReportedDriver::decode(&fn1("580.88", "r580_78-9", 0)).unwrap();
+        assert_eq!(bad.version, crate::DriverVersion::parse("580.88"));
+        assert!(matches!(
+            bad.twin_refusal,
+            Some(crate::windows_twin::TwinRefusal::GuestBranch { .. })
         ));
     }
 }

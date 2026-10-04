@@ -110,13 +110,17 @@ impl GuestSystemInfoPolicy {
     /// # Errors
     /// [`VersionCheck::Undecodable`] / [`VersionCheck::Mismatch`].
     pub fn check_driver_version(&self, payload: &[u8]) -> Result<(), VersionCheck> {
-        let said = guestsysinfo::decode_guest_driver_version(payload)
-            .map_err(VersionCheck::Undecodable)?;
+        // ★ 2026-10-04 (v3-windows, C2): a Windows twin is keyed as its Linux tag
+        // (`kf_abi::guestsysinfo::ReportedDriver`); a refused twin's reason rides the mismatch.
+        let r = guestsysinfo::ReportedDriver::decode(payload).map_err(VersionCheck::Undecodable)?;
         let declared = self.driver.driver_version();
-        match kf_abi::DriverVersion::parse(said) {
+        match r.version {
             Some(v) if v == declared => Ok(()),
             _ => Err(VersionCheck::Mismatch {
-                guest: said.to_string(),
+                guest: match &r.twin_refusal {
+                    Some(why) => format!("{} (not a Windows twin: {why})", r.said),
+                    None => r.said,
+                },
                 declared,
             }),
         }
