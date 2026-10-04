@@ -89,6 +89,9 @@ try {
         $name = if ($source -eq 'collect.c') { 'gsptrace' } else { 'windows_api_test' }
         Invoke-BuildTool $cl @('/nologo','/std:c11','/W4','/WX','/O2','/D_CRT_SECURE_NO_WARNINGS',"/Fe$OutputDirectory\$name.exe","/Fo$OutputDirectory\$name-user.obj",$source,'advapi32.lib')
     }
+    Invoke-BuildTool $cl @('/nologo','/std:c11','/W4','/WX','/O2','/D_CRT_SECURE_NO_WARNINGS',
+        '/D_WIN32_WINNT=0x0A00',"/Fe$OutputDirectory\d3d11_probe.exe", "/Fo$OutputDirectory\d3d11-probe.obj",
+        'tests\d3d11_probe.c','d3d11.lib','dxgi.lib')
     $metadata.completed = $true
 } finally {
     $metadata['artifacts'] = @(Get-ChildItem -LiteralPath $OutputDirectory -File | Where-Object Extension -in @('.sys','.exe') | ForEach-Object {

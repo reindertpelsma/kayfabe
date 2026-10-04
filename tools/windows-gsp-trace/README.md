@@ -5,13 +5,45 @@ build 26100, passed the Windows API/negative-access tests, and unloaded cleanly
 in a nested VM without an NVIDIA GPU. MSVC and Linux builds pass compilation
 and static PE checks. The MSVC normal observer and user tools also passed
 installation, API tests, restart/status and stop on that VM. Runtime parity of
-the revised Linux default binary remains untested. Real NVIDIA queue
-attachment and Windows GSP capture have **not yet
-been validated**; see [LOAD_TESTS.md](LOAD_TESTS.md) for exact tested hashes.
+the revised Linux default binary remains untested. The tested MSVC observer
+also captured 4,535 valid Windows GSP records on an RTX 4070 with driver 580.88
+and firmware 580.65.05. The early prefix was missed and no pool-size query was
+observed; [preserved evidence](evidence/2026-10-04-rtx4070-580.88/README.md) and
+[LOAD_TESTS.md](LOAD_TESTS.md) document the exact hashes and limits.
 
 The purpose is to collect actual request/reply bytes for controls such as
 `GR_GFX_POOL_QUERY_SIZE` (`0x2080121f`), including the successful reply, so Kayfabe
 can investigate a rule based on capabilities rather than a per-GPU constant.
+
+## Optional headless graphics trigger
+
+`tests/d3d11_probe.c` enumerates DXGI adapters and refuses unless exactly one
+NVIDIA hardware adapter exists. It creates a D3D11 device and immediate context
+on that explicit adapter, clears/copies a small texture, waits for a GPU event,
+and verifies a pixel readback four times. It uses no window or swap chain and
+has no software-renderer fallback. `--list` only enumerates adapters. Output is
+JSONL with adapter identity, HRESULTs and pixel results; exit zero requires all
+four readbacks and the final device-health check to succeed.
+
+Build with the scoped MSVC workflow, or on a trusted Linux controller:
+
+```sh
+KFGT_PROBE_OUTPUT=/tmp/kayfabe-d3d11-probe bash tools/windows-gsp-trace/tests/build-d3d11-probe.sh
+```
+
+Start the observer and collector before invoking `d3d11_probe.exe` without
+arguments. Use an **external 60-second process timeout**: each event wait is
+bounded to ten seconds, but calls into the graphics driver can themselves block.
+Preserve stdout, stderr and the numeric process exit before stopping/draining
+the collector. Compilation is not a hardware runtime test, and successful
+rendering does not imply the target control was called. A query executed only
+during early driver initialization can still require a separate initialization
+capture. This probe neither restarts PnP devices nor changes firmware policy.
+
+The explicit-adapter call follows Microsoft's
+[D3D11CreateDevice contract](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-d3d11createdevice)
+with `D3D_DRIVER_TYPE_UNKNOWN`; event completion is checked through
+[GetData](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-getdata).
 
 ## What the driver does
 
