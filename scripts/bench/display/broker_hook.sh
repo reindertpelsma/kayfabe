@@ -207,7 +207,7 @@ HX python3 "$XC" image "$OUT/cur_host_grab.pam" | sed 's/^/BRK_HOST_GRAB /'
 shot grab
 hshot host_grab
 # §8.13: under grab the frame carries the cursor, and the console's defined cursor is the hidden one
-[ -n "${BRK_VNC:-}" ] && timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" | sed 's/^/BRK_VNC_GRAB /' 
+[ -n "${BRK_VNC:-}" ] && timeout 20 python3 "$HERE/vnc_cursor.py" "$BRK_VNC" | sed 's/^/BRK_VNC_GRAB /'
 say "GRAB_FRAME_DIFF host_hover_vs_host_grab_px=$(boxdiff host_hover host_grab "$hx" "$hy") console_hover_vs_grab_px=$(boxdiff hover grab "$gx" "$gy") (the composed cursor near the guest pointer; the host shot is what the broker shows — the console's frames are fresh only on the host-memory rungs)"
 HX xdotool mousemove_relative -- 60 40 >/dev/null 2>&1; sleep 2
 gpos2=$(gq "$GX python3 ~/display/xcursor.py pointer" | sed -n 's/^POINTER //p')

@@ -156,11 +156,14 @@ fn churning_births_and_frees_never_lose_a_store_or_ring_the_wrong_twin() {
 
     // Generation 0 of both tokens. (Plain fns, so the churn thread can own them.)
     fn host_of(ia: u32, idx: u32, generation: u32) -> u32 {
-        if idx == ia {
-            0xA000 + generation
-        } else {
-            0xB000 + generation
-        }
+        // The freed set retains every old twin. The former ranges (0xA000 + g and
+        // 0xB000 + g) overlapped after 4096 generations, so a live A twin could look
+        // like a freed B twin. Give the two tokens disjoint even/odd identities,
+        // and refuse overflow rather than reusing an identity.
+        generation
+            .checked_mul(2)
+            .and_then(|g| g.checked_add(0xA000 + u32::from(idx != ia)))
+            .expect("test host-twin identity exhausted")
     }
     fn born(plane: &Plane<'_>, c: &Mutex<VmCaps>, ia: u32, idx: u32, generation: u32) {
         let route = if idx == ia {
