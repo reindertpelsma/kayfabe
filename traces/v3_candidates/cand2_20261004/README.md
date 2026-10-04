@@ -200,7 +200,7 @@ rendering progress merely because guest SSH responded.
 30/50/60 Hz hints through broker `9f2fd00` and actual guest reads 29.938/49.990/60
 Hz preferred EDIDs with three distinct hashes. Three duplicate hints cause no
 additional relay event. `modetest -c` refreshes the connector cache before sysfs
-is read. **Scope (`9d82f259`, run `c2surface2`):** authored EDID on userspace reprobe is verified; the collected
+is read. **Scope (at `9d82f259`, run `c2surface2`, 2026-10-04):** authored EDID on userspace reprobe is verified; the collected
 udev monitor contains no DRM event, so automatic desktop mode switching is not
 claimed by this test. Input hints are synthetic, not a physical host rate change.
 
