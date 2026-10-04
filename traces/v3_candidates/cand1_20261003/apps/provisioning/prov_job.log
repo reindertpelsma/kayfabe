@@ -1,0 +1,44 @@
+START 2026-10-03T22:40:41+00:00
+MB_DONE EXIT rc=0 2026-10-03T23:01:02+00:00
+REV 8a682f1b415844801e855ca6b28388f91c244251 dirty=0
+BUNDLE_RC=0 2026-10-03T23:20:52+00:00
+LLAMA_REV=4b1a27fa0 common,rpc : simplify fs_create_directory_with_parents() (#29432)
+BUNDLE 2.1G 1349706447B  sha=fb64de820389b448
+BUILD_BUNDLE_DONE
+SETUP_HOST_RC=0 2026-10-03T23:25:25+00:00
+SETUP_apt=ok
+SETUP_torch=ok
+SETUP_pylibs=ok
+IMPORT_OK 2.6.0+cu124 0.21.0+cu124 4.46.3 13.3.0
+HF_MODEL_CACHED
+SETUP_gguf=ok
+SETUP_blender=ok
+SETUP_geekbench=ok
+SETUP_SIDE_DONE
+COPY_RC=0
+GUEST_APPS_RC=0 2026-10-03T23:38:42+00:00
+BUNDLE_IN=2.1G
+  guest: SETUP_apt=ok
+  guest: SETUP_torch=ok
+  guest: SETUP_pylibs=ok
+  guest: IMPORT_OK 2.6.0+cu124 0.21.0+cu124 4.46.3 13.3.0
+  guest: HF_MODEL_CACHED
+  guest: SETUP_gguf=ok
+  guest: SETUP_blender=ok
+  guest: SETUP_geekbench=ok
+  guest: /dev/vda1        71G   18G   53G  25% /
+  guest: SETUP_SIDE_DONE
+[2026-10-03T23:38:42+00:00] GUEST_APPS_DONE
+GFX_PROV_RC=0 2026-10-03T23:45:17+00:00
+kernel_after=6.8.0-142-generic
+provisioner_rev=8a682f1b
+[2026-10-03T23:45:17+00:00] GUEST_GFX_DONE rc=0
+DISP_PROV_RC=0 2026-10-03T23:52:18+00:00
+control=/usr/bin/modetest /usr/bin/kmscube /usr/bin/weston /usr/bin/Xorg /usr/sbin/lightdm /usr/bin/cinnamon-session /usr/bin/xdotool /usr/bin/import /usr/bin/mpv /usr/bin/glxinfo /usr/bin/vkcube PROBE=yes
+/usr/lib/xorg/modules/drivers/nvidia_drv.so /usr/share/X11/xorg.conf.d/nvidia-drm-outputclass.conf 
+kernel_before=6.8.0-142-generic
+kernel_after=6.8.0-142-generic
+provisioner_rev=8a682f1b
+[2026-10-03T23:52:18+00:00] GUEST_DISPLAY_DONE rc=0
+PROV_DONE
+EXIT rc=0 2026-10-03T23:52:29+00:00

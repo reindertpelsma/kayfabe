@@ -1,0 +1,11 @@
+START 2026-10-03T22:41:35+00:00
+PROV_DONE_SEEN EXIT rc=0 2026-10-03T23:52:29+00:00
+REV 8a682f1b415844801e855ca6b28388f91c244251 dirty=0
+KF3_BIN /workspace/bench/kf3-bins/8a682f1b/qemu-system-x86_64 89509312 2026-10-03 22:40:59.785292853 +0000 sha256=01da8ddccfbd6737
+HOST_RC=0 2026-10-04T00:11:17+00:00
+[apps_matrix 2026-10-04T00:11:17+00:00] HOST_DONE 71 pass / 74 rows
+GUEST_RC=0 2026-10-04T00:46:04+00:00
+[apps_matrix 2026-10-04T00:11:17+00:00] kf3 binary: /workspace/bench/kf3-bins/8a682f1b/qemu-system-x86_64
+[apps_matrix 2026-10-04T00:46:04+00:00] GUEST_DONE batched: 67 pass / 71;  isolated re-runs: 0
+APPS_DONE
+EXIT rc=0 2026-10-04T00:46:05+00:00
