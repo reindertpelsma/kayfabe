@@ -149,7 +149,7 @@ capture before releasing NVIDIA's separate deferred-install hold.
 
 ```powershell
 .\metadata.ps1 -OutputPath C:\traces\host.json
-.\build\gsptrace.exe C:\traces\gsp.kgwt 180
+.\build\gsptrace.exe C:\traces\gsp.kgwt 1800 --stop-file C:\traces\gsp.stop
 # While the collector runs, install/enable NVIDIA with GSP enabled in another shell.
 ```
 
@@ -159,7 +159,20 @@ read batch and checks trace/statistics write, flush and close failures. A sudden
 process termination or reboot can still leave a partial record; drain and close
 the collector before a research reboot. Ctrl+C follows the same drain path. Exit 4
 means no validated messages were recorded. Restart the service before another
-run. Save the metadata, NVIDIA firmware/driver version (`nvidia-smi -q`), GPU PCI
+run. For a detached SSH capture, create the stop marker from a second session:
+
+```powershell
+New-Item -ItemType File C:\traces\gsp.stop
+```
+
+The collector checks for it every 250 ms while retaining the duration bound,
+stops the kernel worker and drains/closes the output normally. The marker must
+be absent at startup, name a file rather than a directory, and differ from the
+trace output. Existing markers are refused rather than silently removed. Keep
+it in a directory writable only by the authorized collector user/Administrators;
+remove it explicitly before the next capture. A marker inspection error also
+stops/drains but exits with failure. This is preferable to killing the detached
+collector process. Save the metadata, NVIDIA firmware/driver version (`nvidia-smi -q`), GPU PCI
 ID/revision, driver binary hash, code revision and application/device-start result
 alongside every recording. Registry settings alone do not prove that GSP ran.
 
