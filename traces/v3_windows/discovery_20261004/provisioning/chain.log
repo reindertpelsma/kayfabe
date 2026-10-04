@@ -1,0 +1,20 @@
+CHAIN_START 2026-10-03T23:04:23+00:00
+== box
+BOX_RC=0
+x86_64-unknown-uefi ADDED for 1.99.0
+CARGO_RC=0
+PROVISION_DONE rc=0 2026-10-03T23:07:33+00:00
+== host driver
+DRIVER_RC=0
+OPEN_MODULE=yes
+VERSION_MATCH=yes (580.159.04)
+DRIVER_SWAP_DONE rc=0 2026-10-03T23:12:22+00:00
+== windows packages
+WINPKGS_RC=0
+== bench tree
+TREE_RC=0
+[2026-10-03T23:15:41+00:00] A: KF3_BUILT /workspace/bench/kf3-bins/494bfeaa/qemu-system-x86_64 rev=494bfeaa mtime=2026-10-03 23:15:41.416524137 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+KF3_BUILT /workspace/bench/kf3-bins/494bfeaa/qemu-system-x86_64 rev=494bfeaa mtime=2026-10-03 23:15:41.416524137 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+[2026-10-03T23:17:46+00:00] B2: guest driver VERIFIED on content
+[2026-10-03T23:18:30+00:00] BENCH_TREE_DONE
+CHAIN_EXIT rc=0 2026-10-03T23:18:30+00:00

@@ -115,6 +115,7 @@ pub mod fifochannels;
 pub mod fmbpromote;
 pub mod fmbsize;
 pub mod generated;
+pub mod gfxpool;
 pub mod gmmustatic;
 pub mod gpuatomics;
 pub mod gpuinfo;
@@ -152,6 +153,7 @@ pub mod transcribed;
 pub mod vbios;
 pub mod versions;
 pub mod view;
+pub mod windows_twin;
 pub mod wire;
 pub mod zbc;
 

@@ -1,0 +1,28 @@
+[2026-10-04T01:25:04Z] START gsp-on
+GSP_ON device PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28 name='Microsoft Basic Display Adapter' status=OK problem=CM_PROB_NONE inf=display.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001
+GSP_ON nvlddmkm.sys signature status=Valid signer='CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US'
+GSP_ON disable: Microsoft PnP Utility
+GSP_ON disable: 
+GSP_ON disable: Disabling device:          PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+GSP_ON disable: Device disabled successfully.
+GSP_ON disable: 
+GSP_ON add-driver: Microsoft PnP Utility
+GSP_ON add-driver: 
+GSP_ON add-driver: Adding driver package:  nv_dispi.inf
+GSP_ON add-driver: Driver package added successfully.
+GSP_ON add-driver: Published Name:         oem7.inf
+GSP_ON add-driver: Driver package installed on device: PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+GSP_ON add-driver: 
+GSP_ON add-driver: Total driver packages:  1
+GSP_ON add-driver: Added driver packages:  1
+GSP_ON add-driver rc=0
+GSP_ON after install: inf=oem7.inf driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 version=32.0.15.8088
+GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+GSP_ON readback HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm EnableGpuFirmware=1
+GSP_ON enable: Microsoft PnP Utility
+GSP_ON enable: 
+GSP_ON enable: Enabling device:          PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+GSP_ON enable: Device enabled successfully.
+GSP_ON enable: 
+GSP_ON after enable: name='NVIDIA GeForce RTX 3060' status=Error problem=CM_PROB_FAILED_POST_START problemstatus=0
+[2026-10-04T01:37:22Z] EXIT gsp-on rc=0

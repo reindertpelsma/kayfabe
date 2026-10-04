@@ -17,6 +17,11 @@ accepts grep's no-match result as zero while preserving real read/find failures;
 four tests exercise zero, empty, nested, and broken-input cases. This correction
 does not grant `kf-chan` permission to contain unsafe Rust.
 
+The same integration also takes Windows source `c1d4e415`, with the signed-GOP
+realize argument combined with the broker/max-fps surface as **KF3 ABI 19**.
+Windows-specific experiments remain opt-in. Neither this merge nor the earlier
+Windows boot comparisons establish T-space correctness on hardware.
+
 Historical branch implementation status follows; its hardware limits remain.
 
 **STATUS (2026-10-04): LIVE — DESIGN, being implemented on `v3-p1p2` behind `KF3_TSPACE` (default

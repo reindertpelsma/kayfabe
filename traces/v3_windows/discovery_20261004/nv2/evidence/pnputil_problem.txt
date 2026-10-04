@@ -1,0 +1,12 @@
+Microsoft PnP Utility
+
+Instance ID:                PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+Device Description:         NVIDIA GeForce RTX 3060
+Class Name:                 Display
+Class GUID:                 {4d36e968-e325-11ce-bfc1-08002be10318}
+Manufacturer Name:          NVIDIA
+Status:                     Problem
+Problem Code:               43 (0x2B) [CM_PROB_FAILED_POST_START]
+Driver Name:                oem7.inf
+
+

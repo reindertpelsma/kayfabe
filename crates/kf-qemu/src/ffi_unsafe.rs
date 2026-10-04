@@ -41,7 +41,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// cursor and capped-refresh surface. The realize tail is gop, x11_dispsw, display_broker,
 /// display_max_fps. ABI 17 was already built by the earlier display scratch integration
 /// (with another argument order); neither 14, 16 nor 17 can name this interface.
-pub const KF3_ABI: u32 = 18;
+/// 19 (2026-10-05, Windows/P1/P2 integration): append the signed-GOP path
+/// after display_max_fps, retaining every ABI-18 display/broker entry point.
+pub const KF3_ABI: u32 = 19;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -108,8 +110,8 @@ pub extern "C" fn kf3_abi_version() -> u32 {
 /// Realize the device and start its register drainer. Returns 0 and a handle, or -1 with a message.
 ///
 /// # Safety
-/// `guest_driver` is null or a NUL-terminated string; `out` is writable; `err` is null or writable
-/// for `err_len` bytes.
+/// `guest_driver` and `gop_efi` are each null or a NUL-terminated string; `out` is writable; `err`
+/// is null or writable for `err_len` bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_realize(
     gpu_minor: u32,
@@ -122,20 +124,20 @@ pub unsafe extern "C" fn kf3_realize(
     x11_dispsw: u32,
     display_broker: u32,
     display_max_fps: u32,
+    gop_efi: *const c_char,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
 ) -> i32 {
-    let guest = if guest_driver.is_null() {
-        None
-    } else {
-        // SAFETY: the caller promises a NUL-terminated string.
-        Some(
-            unsafe { CStr::from_ptr(guest_driver) }
-                .to_string_lossy()
-                .into_owned(),
-        )
-        .filter(|s| !s.is_empty())
+    // ★ ABI 12: both string arguments through ONE conversion (and one audited block): null or empty
+    // is unset.
+    let text = |p: *const c_char| -> Option<String> {
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: `p` is `guest_driver` or `gop_efi`, each of which the caller promises is null
+        // (returned above) or a NUL-terminated string.
+        Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()).filter(|s| !s.is_empty())
     };
     let vram = match kf_broker::gpucopy::VramMode::from_abi(display_broker) {
         Ok(v) => v,
@@ -144,6 +146,8 @@ pub unsafe extern "C" fn kf3_realize(
             return -1;
         }
     };
+    let guest = text(guest_driver);
+    let gop_efi = text(gop_efi);
     let cfg = Config {
         gpu_minor,
         fb_mb,
@@ -156,6 +160,7 @@ pub unsafe extern "C" fn kf3_realize(
         display_broker: vram.is_some(),
         display_broker_vram: vram.unwrap_or_default(),
         display_max_fps,
+        gop_efi,
     };
     match Device::realize(&cfg) {
         Ok(d) => {

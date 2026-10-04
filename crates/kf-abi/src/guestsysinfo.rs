@@ -105,6 +105,136 @@ pub fn decode_guest_driver_version(payload: &[u8]) -> Result<&str, GuestSystemIn
     core::str::from_utf8(&arr[..end]).map_err(|_| GuestSystemInfoError::DriverVersionNotUtf8)
 }
 
+/// Byte offset of `guestClNum` — the sixth `NvU32` (`ogkm-580: g_rpc-structures.h:36-47`; the
+/// guest fills it with `NV_BUILD_CHANGELIST_NUM`, `src/nvidia/src/kernel/vgpu/rpc.c:8732` at 580.65.06).
+pub const GUEST_CL_NUM_OFF: usize = 5 * 4;
+
+/// Byte offset of `guestVersion` (`NV_BUILD_BRANCH_VERSION`, e.g. `rel/gpu_drv/r580/r580_78-179`
+/// on Linux and `r580_78-7` in nvBldVer.h's Windows block at 580.65.06).
+pub const GUEST_VERSION_OFF: usize = GUEST_DRIVER_VERSION_OFF + GUEST_STRING_LEN;
+
+/// Byte offset of `guestTitle` (`NV_DISPLAY_DRIVER_TITLE`).
+pub const GUEST_TITLE_OFF: usize = GUEST_VERSION_OFF + GUEST_STRING_LEN;
+
+/// ★ What a guest says about itself at fn 1, decoded for the LOG only (2026-10-04, branch
+/// `v3-windows`, runbook C3): the three `[IN]` strings, the changelist and the vGPU pair.
+///
+/// ⊘ Nothing decides on this. The strings are the guest's, so each is taken up to its NUL (or the
+/// whole array), decoded lossily and escaped by [`GuestIdentity`]'s `Display`; the only decision
+/// fn 1 makes stays [`decode_guest_driver_version`]'s strict parse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuestIdentity {
+    /// `vgxVersionMajorNum` / `vgxVersionMinorNum`.
+    pub vgx: VgxVersion,
+    /// `guestClNum`.
+    pub cl_num: u32,
+    /// `guestDriverVersion` (`NV_VERSION_STRING`).
+    pub driver_version: String,
+    /// `guestVersion` (`NV_BUILD_BRANCH_VERSION`).
+    pub version: String,
+    /// `guestTitle` (`NV_DISPLAY_DRIVER_TITLE`).
+    pub title: String,
+}
+
+impl GuestIdentity {
+    /// Decode fn 1's identity fields.
+    ///
+    /// # Errors
+    /// [`GuestSystemInfoError::Truncated`].
+    pub fn decode(payload: &[u8]) -> Result<GuestIdentity, GuestSystemInfoError> {
+        let vgx = decode_declared_vgx(payload)?;
+        let text = |at: usize| {
+            let arr = &payload[at..at + GUEST_STRING_LEN];
+            let end = arr.iter().position(|&b| b == 0).unwrap_or(arr.len());
+            String::from_utf8_lossy(&arr[..end]).into_owned()
+        };
+        let cl = &payload[GUEST_CL_NUM_OFF..GUEST_CL_NUM_OFF + 4];
+        Ok(GuestIdentity {
+            vgx,
+            cl_num: u32::from_le_bytes([cl[0], cl[1], cl[2], cl[3]]),
+            driver_version: text(GUEST_DRIVER_VERSION_OFF),
+            version: text(GUEST_VERSION_OFF),
+            title: text(GUEST_TITLE_OFF),
+        })
+    }
+}
+
+impl core::fmt::Display for GuestIdentity {
+    /// One log line's worth; every string escaped (`escape_debug`), so a guest cannot write a line
+    /// break or a terminal escape into the host log.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "guestDriverVersion=\"{}\" guestVersion=\"{}\" guestTitle=\"{}\" guestClNum={} vgx={:#x}.{:#x}",
+            self.driver_version.escape_debug(),
+            self.version.escape_debug(),
+            self.title.escape_debug(),
+            self.cl_num,
+            self.vgx.major,
+            self.vgx.minor
+        )
+    }
+}
+
+/// ★ What fn 1 says the guest IS, keyed the way this port keys tables (2026-10-04, branch
+/// `v3-windows`, runbook C2; `docs/design/V3_WINDOWS_DISCOVERY.md`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportedDriver {
+    /// `guestDriverVersion`, verbatim (strictly decoded: NUL-terminated UTF-8).
+    pub said: String,
+    /// The version the port keys on: the guest's own when it is a driver-matrix tag; else the Linux
+    /// tag whose Windows build the guest's identity names ([`crate::windows_twin::linux_twin`]); else
+    /// the guest's own as parsed (and refused later by the caller, by name).
+    pub version: Option<crate::DriverVersion>,
+    /// Set when [`ReportedDriver::version`] came from a Windows twin.
+    pub twin: Option<&'static crate::generated::windows_twins::WindowsTwin>,
+    /// Why a guest string that is not a tag was not accepted as a Windows twin (`None` when the
+    /// string is a tag, or names no Windows build at all).
+    pub twin_refusal: Option<crate::windows_twin::TwinRefusal>,
+}
+
+impl ReportedDriver {
+    /// Decode fn 1's driver identity.
+    ///
+    /// # Errors
+    /// [`decode_guest_driver_version`]'s.
+    pub fn decode(payload: &[u8]) -> Result<ReportedDriver, GuestSystemInfoError> {
+        let said = decode_guest_driver_version(payload)?.to_owned();
+        let id = GuestIdentity::decode(payload)?;
+        let parsed = crate::DriverVersion::parse(&said);
+        if let Some(v) = parsed
+            && crate::versions::table_for(v).is_ok()
+        {
+            return Ok(ReportedDriver {
+                said,
+                version: Some(v),
+                twin: None,
+                twin_refusal: None,
+            });
+        }
+        match crate::windows_twin::linux_twin(&said, &id.version, id.cl_num) {
+            Ok((v, t)) => Ok(ReportedDriver {
+                said,
+                version: Some(v),
+                twin: Some(t),
+                twin_refusal: None,
+            }),
+            Err(crate::windows_twin::TwinRefusal::NoTwin) => Ok(ReportedDriver {
+                said,
+                version: parsed,
+                twin: None,
+                twin_refusal: None,
+            }),
+            Err(r) => Ok(ReportedDriver {
+                said,
+                version: parsed,
+                twin: None,
+                twin_refusal: Some(r),
+            }),
+        }
+    }
+}
+
 /// The vGPU RPC version a driver speaks.
 ///
 /// Two `NvU32` on the wire even though both values fit in a byte, because
@@ -219,4 +349,75 @@ pub fn encode_set_guest_system_info_reply(ours: VgxVersion) -> Vec<u8> {
     body[VGX_MAJOR_OFF..VGX_MAJOR_OFF + 4].copy_from_slice(&ours.major.to_le_bytes());
     body[VGX_MINOR_OFF..VGX_MINOR_OFF + 4].copy_from_slice(&ours.minor.to_le_bytes());
     body
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+
+    /// ★ 2026-10-04 (v3-windows, runbook C3): fn 1's identity, decoded for the log. The values are
+    /// nvBldVer.h's Windows block at ogkm 580.65.06 (`NV_BUILD_NAME "580.88"`, `r580_78-7`, CL
+    /// 36308443); a guest string cannot break the log line.
+    #[test]
+    fn the_identity_decodes_every_field_and_escapes_the_strings() {
+        let mut p = vec![0u8; SET_GUEST_SYSTEM_INFO_SIZE];
+        p[VGX_MAJOR_OFF..VGX_MAJOR_OFF + 4].copy_from_slice(&0x2Bu32.to_le_bytes());
+        p[VGX_MINOR_OFF..VGX_MINOR_OFF + 4].copy_from_slice(&0x13u32.to_le_bytes());
+        p[GUEST_CL_NUM_OFF..GUEST_CL_NUM_OFF + 4].copy_from_slice(&36_308_443u32.to_le_bytes());
+        p[GUEST_DRIVER_VERSION_OFF..GUEST_DRIVER_VERSION_OFF + 6].copy_from_slice(b"580.88");
+        p[GUEST_VERSION_OFF..GUEST_VERSION_OFF + 9].copy_from_slice(b"r580_78-7");
+        p[GUEST_TITLE_OFF..GUEST_TITLE_OFF + 5].copy_from_slice(b"a\nb\x1b[");
+        let id = GuestIdentity::decode(&p).unwrap();
+        assert_eq!(id.cl_num, 36_308_443);
+        assert_eq!(id.driver_version, "580.88");
+        assert_eq!(id.version, "r580_78-7");
+        assert_eq!(
+            id.vgx,
+            VgxVersion {
+                major: 0x2B,
+                minor: 0x13
+            }
+        );
+        let line = id.to_string();
+        assert!(
+            line.contains("guestDriverVersion=\"580.88\"") && line.contains("guestClNum=36308443"),
+            "{line}"
+        );
+        assert!(!line.contains('\n') && !line.contains('\x1b'), "{line}");
+        assert!(matches!(
+            GuestIdentity::decode(&p[..100]),
+            Err(GuestSystemInfoError::Truncated { .. })
+        ));
+    }
+
+    fn fn1(version: &str, branch: &str, cl: u32) -> Vec<u8> {
+        let mut p = vec![0u8; SET_GUEST_SYSTEM_INFO_SIZE];
+        p[VGX_MAJOR_OFF..VGX_MAJOR_OFF + 4].copy_from_slice(&0x2Bu32.to_le_bytes());
+        p[VGX_MINOR_OFF..VGX_MINOR_OFF + 4].copy_from_slice(&0x13u32.to_le_bytes());
+        p[GUEST_CL_NUM_OFF..GUEST_CL_NUM_OFF + 4].copy_from_slice(&cl.to_le_bytes());
+        p[GUEST_DRIVER_VERSION_OFF..GUEST_DRIVER_VERSION_OFF + version.len()]
+            .copy_from_slice(version.as_bytes());
+        p[GUEST_VERSION_OFF..GUEST_VERSION_OFF + branch.len()].copy_from_slice(branch.as_bytes());
+        p
+    }
+
+    /// ★ The Windows 580.88 guest's fn 1 on `vwin` (2026-10-04, kf3 `b98bdbec`) is keyed as Linux
+    /// 580.65.06; a Linux tag is keyed as itself; an unknown Windows branch is refused by name.
+    #[test]
+    fn a_windows_twin_is_keyed_as_its_linux_tag_and_a_tag_as_itself() {
+        let w = ReportedDriver::decode(&fn1("580.88", "r580_78-7", 0)).unwrap();
+        assert_eq!(w.said, "580.88");
+        assert_eq!(w.version, crate::DriverVersion::parse("580.65.06"));
+        assert_eq!(w.twin.map(|t| t.linux_tag), Some("580.65.06"));
+        let l =
+            ReportedDriver::decode(&fn1("580.65.06", "rel/gpu_drv/r580/r580_78-179", 0)).unwrap();
+        assert_eq!(l.version, crate::DriverVersion::parse("580.65.06"));
+        assert!(l.twin.is_none() && l.twin_refusal.is_none());
+        let bad = ReportedDriver::decode(&fn1("580.88", "r580_78-9", 0)).unwrap();
+        assert_eq!(bad.version, crate::DriverVersion::parse("580.88"));
+        assert!(matches!(
+            bad.twin_refusal,
+            Some(crate::windows_twin::TwinRefusal::GuestBranch { .. })
+        ));
+    }
 }

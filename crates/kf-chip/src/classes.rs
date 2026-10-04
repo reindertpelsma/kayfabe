@@ -131,6 +131,7 @@ impl ClassSet {
             nv::KEPLER_CHANNEL_GROUP_A => return ObjectKind::Tsg,
             nv::FERMI_CONTEXT_SHARE_A => return ObjectKind::CtxShare,
             nv::NV2081_BINAPI => return ObjectKind::Other,
+            kf_abi::submit::NV01_TIMER => return ObjectKind::Other,
             _ => {}
         }
         match self.kind_of(class.0) {

@@ -4,6 +4,7 @@
 # every field. Source: the two inventories in docs/design/V3_DRIVER_MATRIX.md §2 (2026-09-26).
 #
 # ── guest axis: GSP boot, queues, RPC ──
+NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS.*
 GSP_MSG_QUEUE_ELEMENT.*
 msgqTxHeader.*
 msgqRxHeader.*

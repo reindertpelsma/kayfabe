@@ -1,0 +1,6 @@
+[2026-10-04T01:54:19Z] waiting for the GPU lock /tmp/kayfabe-fastguest.lock (GPU work is strictly serial)
+[2026-10-04T01:54:21Z] WINVM_RUN_START tag=nv2 repo_rev=f429b2be kf3=on qemu=/workspace/bench/kf3-bins/f429b2be/qemu-system-x86_64 host_driver=580.159.04 overlay=nv1 arm=A guest_driver=580.65.06 gop_efi=/workspace/winvm/secureboot/kf-gop.f429b2be.signed.efi sha256(gop_efi)=737ffffab97dab61
+[2026-10-04T01:54:21Z] kf3 device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,gop-efi=/workspace/winvm/secureboot/kf-gop.f429b2be.signed.efi,id=kf0,guest-driver=580.65.06
+[2026-10-04T01:54:23Z] QEMU_START tag=nv2 boot=1 pid=155080 log=logs/nv2_b1_qemu.log
+[2026-10-04T02:26:49Z] WINVM_BOOT_END boot=1 rc=0 reason=host-qmp-quit kf3_lines=1937 host_xid=0
+[2026-10-04T02:26:49Z] WINVM_RUN_END tag=nv2 boots=1 reason=host-qmp-quit

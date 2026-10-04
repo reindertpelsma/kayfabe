@@ -110,13 +110,17 @@ impl GuestSystemInfoPolicy {
     /// # Errors
     /// [`VersionCheck::Undecodable`] / [`VersionCheck::Mismatch`].
     pub fn check_driver_version(&self, payload: &[u8]) -> Result<(), VersionCheck> {
-        let said = guestsysinfo::decode_guest_driver_version(payload)
-            .map_err(VersionCheck::Undecodable)?;
+        // ★ 2026-10-04 (v3-windows, C2): a Windows twin is keyed as its Linux tag
+        // (`kf_abi::guestsysinfo::ReportedDriver`); a refused twin's reason rides the mismatch.
+        let r = guestsysinfo::ReportedDriver::decode(payload).map_err(VersionCheck::Undecodable)?;
         let declared = self.driver.driver_version();
-        match kf_abi::DriverVersion::parse(said) {
+        match r.version {
             Some(v) if v == declared => Ok(()),
             _ => Err(VersionCheck::Mismatch {
-                guest: said.to_string(),
+                guest: match &r.twin_refusal {
+                    Some(why) => format!("{} (not a Windows twin: {why})", r.said),
+                    None => r.said,
+                },
                 declared,
             }),
         }
@@ -164,6 +168,16 @@ impl CommandPolicy for GuestSystemInfoPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         match cmd.function {
             RpcFunction::SetGuestSystemInfo => {
+                // ★ 2026-10-04 (v3-windows, runbook C3): what the guest says it is, every field, for
+                // the log only — a Windows guest's strings and changelist are unmeasured.
+                match guestsysinfo::GuestIdentity::decode(&cmd.payload) {
+                    Ok(id) => eprintln!(
+                        "kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: the guest says {id}; this device answers \
+                         as driver {}",
+                        self.driver.driver_version()
+                    ),
+                    Err(e) => eprintln!("kf-rm: fn 1 SET_GUEST_SYSTEM_INFO: undecodable: {e}"),
+                }
                 if let Err(why) = self.check_driver_version(&cmd.payload) {
                     eprintln!("kf-rm: SET_GUEST_SYSTEM_INFO refused: {why}");
                     return refuse();

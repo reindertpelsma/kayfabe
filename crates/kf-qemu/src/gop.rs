@@ -97,19 +97,32 @@ impl BootPlan {
         self.fb.geometry.fb_size
     }
 
-    /// ★ The device's option ROM: the embedded driver, unmodified, behind a ROM header and PCIR
-    /// carrying `vendor`/`device`/`class` (the identity kf3 presents) and this plan's `KFGP`
-    /// descriptor.
+    /// ★ The device's option ROM: the embedded driver, unmodified — or its signed copy from
+    /// `gop-efi=` ([`SignedGop`]) — behind a ROM header and PCIR carrying `vendor`/`device`/`class`
+    /// (the identity kf3 presents) and this plan's `KFGP` descriptor.
     ///
     /// # Errors
-    /// `kf_oprom::PackError` by name (a class that is not a display controller, above all).
-    pub fn rom(&self, vendor: u16, device: u16, class: u32) -> Result<Vec<u8>, String> {
+    /// `kf_oprom::PackError` by name (a class that is not a display controller, above all), or the
+    /// signed copy's refusal.
+    pub fn rom(
+        &self,
+        vendor: u16,
+        device: u16,
+        class: u32,
+        signed: Option<&SignedGop>,
+    ) -> Result<Vec<u8>, String> {
         let id = Identity {
             vendor,
             device,
             class: ClassCode::from_u24(class),
         };
-        kf_gop_image::pack_kf_gop(&id, &self.fb, &self.edid).map_err(|e| {
+        let packed = match signed {
+            None => kf_gop_image::pack_kf_gop(&id, &self.fb, &self.edid).map_err(|e| e.to_string()),
+            Some(s) => kf_gop_image::pack_kf_gop_signed(&s.bytes, &id, &self.fb, &self.edid)
+                .map(|(rom, _)| rom)
+                .map_err(|e| format!("gop-efi={}: {e}", s.path)),
+        };
+        packed.map_err(|e| {
             format!("gop=on: packing the option ROM for {vendor:04x}:{device:04x}: {e}")
         })
     }
@@ -125,6 +138,76 @@ impl BootPlan {
             bytes: g.fb_size,
         }
     }
+}
+
+/// The largest file `gop-efi=` may name: far above a kf-gop build plus its certificate table, and
+/// the bound on what a path can make realize read.
+pub const GOP_EFI_MAX: u64 = 1 << 20;
+
+/// ★ **A signed copy of the embedded driver** (`gop-efi=<path>`, 2026-10-04, branch `v3-windows`,
+/// `docs/OWNER_RULINGS.md` §K: the ROM's EFI driver signed with a per-install key enrolled in the VM's
+/// `db`). Read once at realize and accepted only as `kf_gop_image::KF_GOP_EFI` plus an Authenticode
+/// certificate table (`kf_oprom::pe::signed_twin_of`): kf3 still serves exactly the driver it
+/// embeds, and the key never enters the build. The signature itself is verified by the guest's
+/// firmware against its `db`, never here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignedGop {
+    /// The path it was read from (for the log and refusals).
+    pub path: String,
+    /// The signed file.
+    pub bytes: Vec<u8>,
+    /// Where its certificate table is.
+    pub info: kf_oprom::pe::SignedInfo,
+}
+
+impl SignedGop {
+    /// `None` without `gop-efi=` (or with an empty one).
+    ///
+    /// # Errors
+    /// By name, before anything is reserved: `gop-efi=` with `gop=off`; a file that cannot be read
+    /// or is larger than [`GOP_EFI_MAX`]; a file that is not the embedded driver plus a signature.
+    pub fn for_config(gop: bool, path: Option<&str>) -> Result<Option<SignedGop>, String> {
+        let Some(path) = path.filter(|p| !p.is_empty()) else {
+            return Ok(None);
+        };
+        if !gop {
+            return Err(format!(
+                "gop-efi={path} needs gop=on: it is the boot display's signed driver \
+                 (docs/design/V3_DISPLAY.md §4.11)"
+            ));
+        }
+        let bytes = read_bounded(path)?;
+        SignedGop::from_bytes(path, bytes).map(Some)
+    }
+
+    /// Validate `bytes` as the signed twin of the embedded driver.
+    ///
+    /// # Errors
+    /// `kf_oprom::pe::SigError`, by name, prefixed with the path.
+    pub fn from_bytes(path: &str, bytes: Vec<u8>) -> Result<SignedGop, String> {
+        let info = kf_oprom::pe::signed_twin_of(&bytes, kf_gop_image::KF_GOP_EFI)
+            .map_err(|e| format!("gop-efi={path}: {e}"))?;
+        Ok(SignedGop {
+            path: path.to_owned(),
+            bytes,
+            info,
+        })
+    }
+}
+
+fn read_bounded(path: &str) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).map_err(|e| format!("gop-efi={path}: {e}"))?;
+    let mut bytes = Vec::new();
+    file.take(GOP_EFI_MAX + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("gop-efi={path}: {e}"))?;
+    if bytes.len() as u64 > GOP_EFI_MAX {
+        return Err(format!(
+            "gop-efi={path}: larger than {GOP_EFI_MAX} bytes, refused unread"
+        ));
+    }
+    Ok(bytes)
 }
 
 /// ★ How the boot display reaches the GSP state machine (fn 72) and fn 65's encoder — ONE decision,
@@ -238,7 +321,7 @@ mod tests {
         let p = BootPlan::for_config(true, true, 256 << 20, &monitor())
             .unwrap()
             .unwrap();
-        let rom = p.rom(0x10de, 0x2504, 0x03_00_00).unwrap();
+        let rom = p.rom(0x10de, 0x2504, 0x03_00_00, None).unwrap();
         assert_eq!(rom.len() % 512, 0);
         let d = Descriptor::find(&rom).expect("a KFGP descriptor");
         assert_eq!((d.vendor, d.device, d.fb), (0x10de, 0x2504, p.fb));
@@ -259,9 +342,45 @@ mod tests {
             "EfiMachineType is the built driver's own (§K)"
         );
         // a 3D controller (0x0302) is still a display controller; a USB controller is not
-        assert!(p.rom(0x10de, 0x2204, 0x03_02_00).is_ok());
-        let e = p.rom(0x10de, 0x2504, 0x0C_03_30).unwrap_err();
+        assert!(p.rom(0x10de, 0x2204, 0x03_02_00, None).is_ok());
+        let e = p.rom(0x10de, 0x2504, 0x0C_03_30, None).unwrap_err();
         assert!(e.contains("not a display controller"), "{e}");
+    }
+
+    /// ★ 2026-10-04 (v3-windows): `gop-efi=` — a signed copy of the embedded driver is served as the
+    /// ROM's image; everything else is refused by name before anything is reserved.
+    #[test]
+    fn a_signed_copy_is_served_and_gop_efi_without_gop_is_refused() {
+        assert_eq!(SignedGop::for_config(true, None), Ok(None));
+        assert_eq!(SignedGop::for_config(false, Some("")), Ok(None));
+        let e = SignedGop::for_config(false, Some("/x.efi")).unwrap_err();
+        assert!(e.contains("needs gop=on"), "{e}");
+        let e = SignedGop::for_config(true, Some("/nonexistent/kf-gop.signed.efi")).unwrap_err();
+        assert!(e.contains("/nonexistent/kf-gop.signed.efi"), "{e}");
+
+        let signed = kf_oprom::pe::synthetic_signed(kf_gop_image::KF_GOP_EFI, 1500);
+        let s = SignedGop::from_bytes("mem", signed.clone()).unwrap();
+        let p = BootPlan::for_config(true, true, 256 << 20, &monitor())
+            .unwrap()
+            .unwrap();
+        let rom = p.rom(0x10de, 0x2504, 0x03_00_00, Some(&s)).unwrap();
+        let images = kf_oprom::rom::parse(&rom).unwrap();
+        assert_eq!(images[0].efi_payload(), Some(&signed[..]));
+
+        let e = SignedGop::from_bytes("mem", kf_gop_image::KF_GOP_EFI.to_vec()).unwrap_err();
+        assert!(e.contains("no certificate table"), "{e}");
+    }
+
+    /// A file larger than the bound is refused unread.
+    #[test]
+    fn an_oversized_gop_efi_is_refused() {
+        let dir = std::env::temp_dir().join(format!("kf3-gop-efi-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let big = dir.join("big.efi");
+        std::fs::write(&big, vec![0u8; (GOP_EFI_MAX + 1) as usize]).unwrap();
+        let e = SignedGop::for_config(true, big.to_str()).unwrap_err();
+        assert!(e.contains("larger than"), "{e}");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     fn abi() -> kf_gsp::GspAbi {

@@ -71,6 +71,9 @@ pub struct Config {
     /// emulated vblank tick, in whole Hz, 24..=75; 0 (unset) caps at 75 with today's EDID.
     /// Validated by [`Config::check`]; needs `display=on`.
     pub display_max_fps: u32,
+    /// ★ 2026-10-04 (`v3-windows`): `gop-efi=<path>`, a signed copy of the embedded GOP driver to
+    /// serve instead of the unsigned one ([`crate::gop::SignedGop`]). Needs `gop=on`.
+    pub gop_efi: Option<String>,
 }
 
 impl Config {
@@ -309,6 +312,7 @@ impl Device {
             .next()
             .ok_or("no virtual monitor behind the display")?;
         let gop = crate::gop::BootPlan::for_config(cfg.gop, cfg.display, cfg.bar1_bytes, &monitor)?;
+        let gop_signed = crate::gop::SignedGop::for_config(cfg.gop, cfg.gop_efi.as_deref())?;
         let dev = kf_linux_raw::DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
         let rm: &'static kf_host::HostRm = Box::leak(Box::new(
             kf_host::HostRm::open(
@@ -349,7 +353,7 @@ impl Device {
         // device presents (`kf3_identity`) and the boot framebuffer's descriptor.
         let gop_rom = gop
             .as_ref()
-            .map(|b| b.rom(pci.vendor, pci.device, pci.class))
+            .map(|b| b.rom(pci.vendor, pci.device, pci.class, gop_signed.as_ref()))
             .transpose()?;
         // ★ The per-host-card budget, summed over this process's kf3 devices on the same card —
         // before anything is reserved, so the refusal costs nothing (`crate::cardbudget`).
@@ -929,7 +933,7 @@ impl Device {
                 .seed(crate::gop::FB_OFFSET, 0, b.bytes())
                 .map_err(|e| format!("gop=on: the BAR1 seed: {e}"))?;
             eprintln!(
-                "kf3: boot display ON — option ROM {} bytes ({:04x}:{:04x}, KFGP BAR{} +{:#x}, {}x{} pitch {}, G = {:#x}); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU",
+                "kf3: boot display ON — option ROM {} bytes ({:04x}:{:04x}, KFGP BAR{} +{:#x}, {}x{} pitch {}, G = {:#x}); BAR1 [0, G) seeded with store [0, G), zeroed on the GPU; {}",
                 gop_rom.as_ref().map_or(0, Vec::len),
                 pci.vendor,
                 pci.device,
@@ -938,7 +942,14 @@ impl Device {
                 b.fb.geometry.width,
                 b.fb.geometry.height,
                 b.fb.geometry.pitch,
-                b.bytes()
+                b.bytes(),
+                gop_signed.as_ref().map_or_else(
+                    || "kf-gop UNSIGNED (embedded)".to_owned(),
+                    |s| format!(
+                        "kf-gop SIGNED (cert table {} bytes at +{:#x}, WIN_CERTIFICATE {} bytes; {})",
+                        s.info.cert_size, s.info.cert_offset, s.info.win_cert_len, s.path
+                    )
+                )
             );
         }
         va.table.insert(
@@ -3237,6 +3248,7 @@ mod config_tests {
             display_broker_vram: Default::default(),
             display_max_fps: 0,
             gop: false,
+            gop_efi: None,
         }
     }
 

@@ -1,0 +1,16 @@
+Starting vTPM manufacturing as root:root @ Sat 03 Oct 2026 11:37:05 PM UTC
+Successfully created RSA 2048 EK with handle 0x81010001.
+  Invoking /usr/lib/x86_64-linux-gnu/swtpm/swtpm-localca --type ek --ek e2c18e294cec27e991701792f7af44352ffc1ee5006234e59b358cd15611ab5916fa39278984cda75ba2ccea51bcbbc9a060d17660248d5b4bfea1e2733799b0efff1b893c6d63d0b8f6bca1f60618dd00d6a68a79f8b9da722d9aaf790c41510a37638c5542fab5e5d4f63f30b2d62de26f86d308a6dec59e5b84a7a19791f6a1557290b6a0a1417589277e69d149e279f3c129ea9e8592f66b0cb60a1b3a4a2c157f691d252fc4abd2caefa6f439e54f7e1e7f9b416cd3b691aa3e76e925ba28816f0c5e3f6b9e85fb055bbc4c6cc937d87ebc3cf6ca34fc805c83641803f8adde3790a4bf05a64c9a2bfd8e7566758e67034e57cb82c76eb778014da3cf13 --dir /workspace/winvm/kfwin/tpm --logfile /workspace/winvm/kfwin/logs/swtpm_setup.log --tpm-spec-family 2.0 --tpm-spec-level 0 --tpm-spec-revision 164 --tpm-manufacturer id:00001014 --tpm-model swtpm --tpm-version id:20191023 --tpm2 --configfile /etc/swtpm-localca.conf --optsfile /etc/swtpm-localca.options
+Creating root CA and a local CA's signing key and issuer cert.
+Successfully created EK certificate locally.
+  Invoking /usr/lib/x86_64-linux-gnu/swtpm/swtpm-localca --type platform --ek e2c18e294cec27e991701792f7af44352ffc1ee5006234e59b358cd15611ab5916fa39278984cda75ba2ccea51bcbbc9a060d17660248d5b4bfea1e2733799b0efff1b893c6d63d0b8f6bca1f60618dd00d6a68a79f8b9da722d9aaf790c41510a37638c5542fab5e5d4f63f30b2d62de26f86d308a6dec59e5b84a7a19791f6a1557290b6a0a1417589277e69d149e279f3c129ea9e8592f66b0cb60a1b3a4a2c157f691d252fc4abd2caefa6f439e54f7e1e7f9b416cd3b691aa3e76e925ba28816f0c5e3f6b9e85fb055bbc4c6cc937d87ebc3cf6ca34fc805c83641803f8adde3790a4bf05a64c9a2bfd8e7566758e67034e57cb82c76eb778014da3cf13 --dir /workspace/winvm/kfwin/tpm --logfile /workspace/winvm/kfwin/logs/swtpm_setup.log --tpm-spec-family 2.0 --tpm-spec-level 0 --tpm-spec-revision 164 --tpm-manufacturer id:00001014 --tpm-model swtpm --tpm-version id:20191023 --tpm2 --configfile /etc/swtpm-localca.conf --optsfile /etc/swtpm-localca.options
+Successfully created platform certificate locally.
+Successfully created NVRAM area 0x1c00002 for RSA 2048 EK certificate.
+Successfully created NVRAM area 0x1c08000 for platform certificate.
+Successfully created ECC EK with handle 0x81010016.
+  Invoking /usr/lib/x86_64-linux-gnu/swtpm/swtpm-localca --type ek --ek x=aa0efcad9553a8219bafa5a1ce91c9e8e076eaa2a5b054febf738e3e528ec278cc0d0f8b4dc49da5f4f0e9568c471633,y=293ebb045cab0a4444d03e90e5c445e671c79ce4b013d0b1a474a86926da65b1bf0abeb177e39d74450ec5f2647efb41,id=secp384r1 --dir /workspace/winvm/kfwin/tpm --logfile /workspace/winvm/kfwin/logs/swtpm_setup.log --tpm-spec-family 2.0 --tpm-spec-level 0 --tpm-spec-revision 164 --tpm-manufacturer id:00001014 --tpm-model swtpm --tpm-version id:20191023 --tpm2 --configfile /etc/swtpm-localca.conf --optsfile /etc/swtpm-localca.options
+Successfully created EK certificate locally.
+Successfully created NVRAM area 0x1c00016 for ECC EK certificate.
+Successfully activated PCR banks sha256 among sha1,sha256,sha384,sha512.
+Successfully authored TPM state.
+Ending vTPM manufacturing @ Sat 03 Oct 2026 11:37:08 PM UTC

@@ -1,0 +1,425 @@
+[Device Install Log]
+     OS Version = 10.0.26100
+     Service Pack = 0.0
+     Suite = 0x0100
+     ProductType = 1
+     Architecture = amd64
+
+[BeginLog]
+
+[Boot Session: 2026/10/04 00:09:19.494]
+
+>>>  [Setup Import Driver Package - C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf]
+>>>  Section start 2026/10/04 00:12:08.411
+      cmd: C:\WINDOWS\System32\spoolsv.exe
+     inf: Provider: Microsoft
+     inf: Class GUID: {4D36E979-E325-11CE-BFC1-08002BE10318}
+     inf: Driver Version: 06/21/2006,10.0.26100.1
+     inf: Catalog File: prnms009.cat
+     ump: Import flags: 0x0000000D
+     pol: {Driver package policy check} 00:12:08.511
+     pol: {Driver package policy check - exit(0x00000000)} 00:12:08.514
+     sto: {Stage Driver Package: C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf} 00:12:08.521
+     inf:      Provider       = Microsoft
+     inf:      Class GUID     = {4d36e979-e325-11ce-bfc1-08002be10318}
+     inf:      Class Version  = 4.0
+     inf:      Driver Version = 06/21/2006,10.0.26100.1
+     inf:      Catalog File   = prnms009.cat
+     inf:      Version Flags  = 0x00000003
+     inf:      {Query Configurability: C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf} 00:12:08.565
+     inf:           Driver package is fully isolated.
+     inf:           Driver package 'prnms009.Inf' is configurable.
+     inf:      {Query Configurability: exit(0x00000000)} 00:12:08.580
+     flq:      {FILE_QUEUE_COMMIT} 00:12:08.591
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW_devmode_map.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{dc744511-04f9-5640-ae55-3f13f60a4644}\MPDW_devmode_map.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.cat' to 'C:\WINDOWS\System32\DriverStore\Temp\{dc744511-04f9-5640-ae55-3f13f60a4644}\prnms009.cat'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf' to 'C:\WINDOWS\System32\DriverStore\Temp\{dc744511-04f9-5640-ae55-3f13f60a4644}\prnms009.Inf'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-PDC.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{dc744511-04f9-5640-ae55-3f13f60a4644}\MPDW-PDC.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-manifest.ini' to 'C:\WINDOWS\System32\DriverStore\Temp\{dc744511-04f9-5640-ae55-3f13f60a4644}\MPDW-manifest.ini'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-pipelineconfig.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{dc744511-04f9-5640-ae55-3f13f60a4644}\MPDW-pipelineconfig.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-constraints.js' to 'C:\WINDOWS\System32\DriverStore\Temp\{dc744511-04f9-5640-ae55-3f13f60a4644}\MPDW-constraints.js'.
+     flq:      {FILE_QUEUE_COMMIT - exit(0x00000000)} 00:12:08.807
+     sto:      {DRIVERSTORE IMPORT VALIDATE} 00:12:08.814
+     sig:           Driver package catalog is valid.
+!!!  sig:           Driver package INF file hash is not present in catalog file. Filename = prnms009.Inf, Error = 0xE000024B
+!!!  sig:           Driver package appears to be tampered, and Code Integrity is enforced.
+!!!  sig:           Driver package failed signature validation. Error = 0xE000024B
+     sto:      {DRIVERSTORE IMPORT VALIDATE: exit(0xe000024b)} 00:12:08.892
+!!!  sig:      Driver package failed signature verification. Error = 0xE000024B
+!!!  sto:      Failed to import driver package into Driver Store. Error = 0xE000024B
+     sto: {Stage Driver Package: exit(0xe000024b)} 00:12:08.918
+<<<  Section end 2026/10/04 00:12:08.949
+<<<  [Exit status: FAILURE(0xe000024b)]
+
+
+>>>  [Driver Install (DrvSetupInstallDriver) - E:\NetKVM\w11\amd64\netkvm.inf]
+>>>  Section start 2026/10/04 00:12:54.134
+      cmd: "C:\WINDOWS\system32\pnputil.exe" /add-driver E:\NetKVM\w11\amd64\*.inf /install
+     dvs: Flags: 0x00000000
+     dvs: {Driver Setup Import Driver Package: E:\NetKVM\w11\amd64\netkvm.inf} 00:12:54.193
+     dvs:      Driver Package:
+     dvs:           Outcome        - Already Imported
+     dvs:           Driver INF     - netkvm.inf (oem1.inf)
+     dvs:           Class GUID     - {4d36e972-e325-11ce-bfc1-08002be10318}
+     dvs:           Driver Version - 07/22/2026,100.103.104.30200
+     dvs: {Driver Setup Import Driver Package - exit (0x00000000)} 00:12:54.384
+     dvs: {Driver Setup Update Device: PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&10} 00:12:54.404
+     utl:      {Select Drivers - PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&10} 00:12:54.424
+     utl:           Driver Node:
+     utl:                Status         - Selected | Installed
+     utl:                Driver INF     - oem1.inf (C:\WINDOWS\System32\DriverStore\FileRepository\netkvm.inf_amd64_27809b5556f0001c\netkvm.inf)
+     utl:                Class GUID     - {4d36e972-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 07/22/2026,100.103.104.30200
+     utl:                Configuration  - PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00 [kvmnet6.ndi]
+     utl:                Driver Rank    - 00FF0000
+     utl:                Signer Score   - WHQL (0D000005)
+     utl:                Submission ID  - 30097770_13729019920194050_1152921505701469923
+     utl:           Driver Node:
+     utl:                Status         - Outranked | Installed
+     utl:                Driver INF     - oem1.inf (C:\WINDOWS\System32\DriverStore\FileRepository\netkvm.inf_amd64_27809b5556f0001c\netkvm.inf)
+     utl:                Class GUID     - {4d36e972-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 07/22/2026,100.103.104.30200
+     utl:                Configuration  - PCI\VEN_1AF4&DEV_1000 [kvmnet6.ndi]
+     utl:                Driver Rank    - 00FF3001
+     utl:                Signer Score   - WHQL (0D000005)
+     utl:                Submission ID  - 30097770_13729019920194050_1152921505701469923
+     utl:      {Select Drivers - exit(0x00000000} 00:12:54.529
+     dvs:      Device does not need an update.
+!    dvs:      No better matching drivers found for device 'PCI\VEN_1AF4&DEV_1000&SUBSYS_00011AF4&REV_00\3&11583659&0&10'.
+     dvs: {Driver Setup Update Device - exit(0x00000000)} 00:12:54.546
+!    dvs: No devices were updated.
+<<<  Section end 2026/10/04 00:12:54.557
+<<<  [Exit status: FAILURE(0x00000103)]
+
+
+>>>  [Driver Install (DrvSetupInstallDriver) - E:\vioserial\w11\amd64\vioser.inf]
+>>>  Section start 2026/10/04 00:12:54.694
+      cmd: "C:\WINDOWS\system32\pnputil.exe" /add-driver E:\vioserial\w11\amd64\*.inf /install
+     dvs: Flags: 0x00000000
+     dvs: {Driver Setup Import Driver Package: E:\vioserial\w11\amd64\vioser.inf} 00:12:54.743
+     dvs:      Driver Package:
+     dvs:           Outcome        - Already Imported
+     dvs:           Driver INF     - vioser.inf (oem5.inf)
+     dvs:           Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     dvs:           Driver Version - 07/22/2026,100.103.104.30200
+     dvs: {Driver Setup Import Driver Package - exit (0x00000000)} 00:12:54.825
+     dvs: {Driver Setup Update Device: PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&18} 00:12:54.833
+     utl:      {Select Drivers - PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&18} 00:12:54.851
+     utl:           Driver Node:
+     utl:                Status         - Selected | Installed
+     utl:                Driver INF     - oem5.inf (C:\WINDOWS\System32\DriverStore\FileRepository\vioser.inf_amd64_08573a4e4a751b1e\vioser.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 07/22/2026,100.103.104.30200
+     utl:                Configuration  - PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00 [VirtioSerial_Device.NT]
+     utl:                Driver Rank    - 00FF0000
+     utl:                Signer Score   - WHQL (0D000005)
+     utl:                Submission ID  - 30097770_13729019920194050_1152921505701469923
+     utl:           Driver Node:
+     utl:                Status         - Outranked | Installed
+     utl:                Driver INF     - oem5.inf (C:\WINDOWS\System32\DriverStore\FileRepository\vioser.inf_amd64_08573a4e4a751b1e\vioser.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 07/22/2026,100.103.104.30200
+     utl:                Configuration  - PCI\VEN_1AF4&DEV_1003 [VirtioSerial_Device.NT]
+     utl:                Driver Rank    - 00FF3001
+     utl:                Signer Score   - WHQL (0D000005)
+     utl:                Submission ID  - 30097770_13729019920194050_1152921505701469923
+     utl:      {Select Drivers - exit(0x00000000} 00:12:54.953
+     dvs:      Device does not need an update.
+!    dvs:      No better matching drivers found for device 'PCI\VEN_1AF4&DEV_1003&SUBSYS_00031AF4&REV_00\3&11583659&0&18'.
+     dvs: {Driver Setup Update Device - exit(0x00000000)} 00:12:54.971
+!    dvs: No devices were updated.
+<<<  Section end 2026/10/04 00:12:54.986
+<<<  [Exit status: FAILURE(0x00000103)]
+
+
+>>>  [Driver Install (DrvSetupInstallDriver) - E:\viorng\w11\amd64\viorng.inf]
+>>>  Section start 2026/10/04 00:12:55.086
+      cmd: "C:\WINDOWS\system32\pnputil.exe" /add-driver E:\viorng\w11\amd64\*.inf /install
+     dvs: Flags: 0x00000000
+     dvs: {Driver Setup Import Driver Package: E:\viorng\w11\amd64\viorng.inf} 00:12:55.129
+     dvs:      Driver Package:
+     dvs:           Outcome        - Already Imported
+     dvs:           Driver INF     - viorng.inf (oem0.inf)
+     dvs:           Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     dvs:           Driver Version - 07/22/2026,100.103.104.30200
+     dvs: {Driver Setup Import Driver Package - exit (0x00000000)} 00:12:55.218
+     dvs: {Driver Setup Update Device: PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&20} 00:12:55.228
+     utl:      {Select Drivers - PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&20} 00:12:55.246
+     utl:           Driver Node:
+     utl:                Status         - Selected | Installed
+     utl:                Driver INF     - oem0.inf (C:\WINDOWS\System32\DriverStore\FileRepository\viorng.inf_amd64_7d9d44898d90e8bd\viorng.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 07/22/2026,100.103.104.30200
+     utl:                Configuration  - PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00 [VirtRng_Device.NT]
+     utl:                Driver Rank    - 00FF0000
+     utl:                Signer Score   - WHQL (0D000005)
+     utl:                Submission ID  - 30097770_13729019920194050_1152921505701469923
+     utl:           Driver Node:
+     utl:                Status         - Outranked | Installed
+     utl:                Driver INF     - oem0.inf (C:\WINDOWS\System32\DriverStore\FileRepository\viorng.inf_amd64_7d9d44898d90e8bd\viorng.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 07/22/2026,100.103.104.30200
+     utl:                Configuration  - PCI\VEN_1AF4&DEV_1005 [VirtRng_Device.NT]
+     utl:                Driver Rank    - 00FF3001
+     utl:                Signer Score   - WHQL (0D000005)
+     utl:                Submission ID  - 30097770_13729019920194050_1152921505701469923
+     utl:      {Select Drivers - exit(0x00000000} 00:12:55.336
+     dvs:      Device does not need an update.
+!    dvs:      No better matching drivers found for device 'PCI\VEN_1AF4&DEV_1005&SUBSYS_00041AF4&REV_00\3&11583659&0&20'.
+     dvs: {Driver Setup Update Device - exit(0x00000000)} 00:12:55.352
+!    dvs: No devices were updated.
+<<<  Section end 2026/10/04 00:12:55.364
+<<<  [Exit status: FAILURE(0x00000103)]
+
+
+>>>  [Driver Install (DrvSetupInstallDriver) - E:\pvpanic\w11\amd64\pvpanic.inf]
+>>>  Section start 2026/10/04 00:12:55.477
+      cmd: "C:\WINDOWS\system32\pnputil.exe" /add-driver E:\pvpanic\w11\amd64\*.inf /install
+     dvs: Flags: 0x00000000
+     dvs: {Driver Setup Import Driver Package: E:\pvpanic\w11\amd64\pvpanic.inf} 00:12:55.529
+     dvs:      Driver Package:
+     dvs:           Outcome        - Already Imported
+     dvs:           Driver INF     - pvpanic.inf (oem2.inf)
+     dvs:           Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     dvs:           Driver Version - 07/22/2026,100.103.104.30200
+     dvs: {Driver Setup Import Driver Package - exit (0x00000000)} 00:12:55.632
+     dvs: {Driver Setup Update Device: ACPI\QEMU0001\4&22f5829e&0} 00:12:55.648
+     utl:      {Select Drivers - ACPI\QEMU0001\4&22f5829e&0} 00:12:55.667
+     utl:           Driver Node:
+     utl:                Status         - Selected | Installed
+     utl:                Driver INF     - oem2.inf (C:\WINDOWS\System32\DriverStore\FileRepository\pvpanic.inf_amd64_cc83d17a40c8c9bc\pvpanic.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 07/22/2026,100.103.104.30200
+     utl:                Configuration  - ACPI\QEMU0001 [PVPanic_Device.NT]
+     utl:                Driver Rank    - 00FF0001
+     utl:                Signer Score   - WHQL (0D000005)
+     utl:                Submission ID  - 30097770_13729019920194050_1152921505701469923
+     utl:      {Select Drivers - exit(0x00000000} 00:12:55.714
+     dvs:      Device does not need an update.
+!    dvs:      No better matching drivers found for device 'ACPI\QEMU0001\4&22f5829e&0'.
+     dvs: {Driver Setup Update Device - exit(0x00000000)} 00:12:55.729
+!    dvs: No devices were updated.
+<<<  Section end 2026/10/04 00:12:55.742
+<<<  [Exit status: FAILURE(0x00000103)]
+
+
+>>>  [Driver Install (DrvSetupInstallDriver) - E:\fwcfg\w11\amd64\fwcfg.inf]
+>>>  Section start 2026/10/04 00:12:55.862
+      cmd: "C:\WINDOWS\system32\pnputil.exe" /add-driver E:\fwcfg\w11\amd64\*.inf /install
+     dvs: Flags: 0x00000000
+     dvs: {Driver Setup Import Driver Package: E:\fwcfg\w11\amd64\fwcfg.inf} 00:12:55.917
+     dvs:      Driver Package:
+     dvs:           Outcome        - Already Imported
+     dvs:           Driver INF     - fwcfg.inf (oem3.inf)
+     dvs:           Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     dvs:           Driver Version - 07/22/2026,100.103.104.30200
+     dvs: {Driver Setup Import Driver Package - exit (0x00000000)} 00:12:56.051
+     dvs: {Driver Setup Update Device: ACPI\QEMU0002\3&11583659&0} 00:12:56.057
+     utl:      {Select Drivers - ACPI\QEMU0002\3&11583659&0} 00:12:56.076
+     utl:           Driver Node:
+     utl:                Status         - Selected | Installed
+     utl:                Driver INF     - oem3.inf (C:\WINDOWS\System32\DriverStore\FileRepository\fwcfg.inf_amd64_eae304e484876166\fwcfg.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 07/22/2026,100.103.104.30200
+     utl:                Configuration  - ACPI\QEMU0002 [FwCfg_Device.NT]
+     utl:                Driver Rank    - 00FF0001
+     utl:                Signer Score   - WHQL (0D000005)
+     utl:                Submission ID  - 30097770_13729019920194050_1152921505701469923
+     utl:      {Select Drivers - exit(0x00000000} 00:12:56.121
+     dvs:      Device does not need an update.
+!    dvs:      No better matching drivers found for device 'ACPI\QEMU0002\3&11583659&0'.
+     dvs: {Driver Setup Update Device - exit(0x00000000)} 00:12:56.137
+!    dvs: No devices were updated.
+<<<  Section end 2026/10/04 00:12:56.152
+<<<  [Exit status: FAILURE(0x00000103)]
+
+
+>>>  [Driver Install (DrvSetupInstallDriver) - E:\smbus\w11\amd64\smbus.inf]
+>>>  Section start 2026/10/04 00:12:56.272
+      cmd: "C:\WINDOWS\system32\pnputil.exe" /add-driver E:\smbus\w11\amd64\*.inf /install
+     dvs: Flags: 0x00000000
+     dvs: {Driver Setup Import Driver Package: E:\smbus\w11\amd64\smbus.inf} 00:12:56.318
+     dvs:      Driver Package:
+     dvs:           Outcome        - Already Imported
+     dvs:           Driver INF     - smbus.inf (oem4.inf)
+     dvs:           Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     dvs:           Driver Version - 04/27/2017,100.0.0.0
+     dvs: {Driver Setup Import Driver Package - exit (0x00000000)} 00:12:56.412
+     dvs: {Driver Setup Update Device: PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4&REV_02\3&11583659&0&FB} 00:12:56.420
+     utl:      {Select Drivers - PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4&REV_02\3&11583659&0&FB} 00:12:56.445
+     utl:           Driver Node:
+     utl:                Status         - Selected | Installed
+     utl:                Driver INF     - machine.inf (C:\WINDOWS\System32\DriverStore\FileRepository\machine.inf_amd64_d807fc8146278f4c\machine.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 06/21/2006,10.0.26100.1150
+     utl:                Configuration  - PCI\VEN_8086&DEV_2930 [NO_DRV]
+     utl:                Driver Rank    - 00FF2001
+     utl:                Signer Score   - Inbox (0D000003)
+     utl:           Driver Node:
+     utl:                Status         - Outranked
+     utl:                Driver INF     - oem4.inf (C:\WINDOWS\System32\DriverStore\FileRepository\smbus.inf_amd64_5f03787cbdf7a56d\smbus.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 04/27/2017,100.0.0.0
+     utl:                Configuration  - PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4 [NullInstallSection]
+     utl:                Driver Rank    - 80FF0001
+     utl:                Signer Score   - Unsigned (80000000)
+     utl:           Driver Node:
+     utl:                Status         - Outranked
+     utl:                Driver INF     - oem4.inf (C:\WINDOWS\System32\DriverStore\FileRepository\smbus.inf_amd64_5f03787cbdf7a56d\smbus.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 04/27/2017,100.0.0.0
+     utl:                Configuration  - PCI\VEN_8086&CC_0C0500 [NullInstallSection]
+     utl:                Driver Rank    - 80FF2002
+     utl:                Signer Score   - Unsigned (80000000)
+     utl:           Driver Node:
+     utl:                Status         - Outranked
+     utl:                Driver INF     - oem4.inf (C:\WINDOWS\System32\DriverStore\FileRepository\smbus.inf_amd64_5f03787cbdf7a56d\smbus.inf)
+     utl:                Class GUID     - {4d36e97d-e325-11ce-bfc1-08002be10318}
+     utl:                Driver Version - 04/27/2017,100.0.0.0
+     utl:                Configuration  - PCI\VEN_8086&CC_0C05 [NullInstallSection]
+     utl:                Driver Rank    - 80FF2003
+     utl:                Signer Score   - Unsigned (80000000)
+     utl:      {Select Drivers - exit(0x00000000} 00:12:56.594
+     dvs:      Device does not need an update.
+!    dvs:      No better matching drivers found for device 'PCI\VEN_8086&DEV_2930&SUBSYS_11001AF4&REV_02\3&11583659&0&FB'.
+     dvs: {Driver Setup Update Device - exit(0x00000000)} 00:12:56.613
+!    dvs: No devices were updated.
+<<<  Section end 2026/10/04 00:12:56.626
+<<<  [Exit status: FAILURE(0x00000103)]
+
+
+[Boot Session: 2026/10/04 00:15:02.500]
+
+>>>  [Setup Import Driver Package - C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf]
+>>>  Section start 2026/10/04 00:16:59.348
+      cmd: C:\WINDOWS\System32\spoolsv.exe
+     inf: Provider: Microsoft
+     inf: Class GUID: {4D36E979-E325-11CE-BFC1-08002BE10318}
+     inf: Driver Version: 06/21/2006,10.0.26100.1
+     inf: Catalog File: prnms009.cat
+     ump: Import flags: 0x0000000D
+     pol: {Driver package policy check} 00:16:59.655
+     pol: {Driver package policy check - exit(0x00000000)} 00:16:59.660
+     sto: {Stage Driver Package: C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf} 00:16:59.669
+     inf:      Provider       = Microsoft
+     inf:      Class GUID     = {4d36e979-e325-11ce-bfc1-08002be10318}
+     inf:      Class Version  = 4.0
+     inf:      Driver Version = 06/21/2006,10.0.26100.1
+     inf:      Catalog File   = prnms009.cat
+     inf:      Version Flags  = 0x00000003
+     inf:      {Query Configurability: C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf} 00:16:59.711
+     inf:           Driver package is fully isolated.
+     inf:           Driver package 'prnms009.Inf' is configurable.
+     inf:      {Query Configurability: exit(0x00000000)} 00:16:59.730
+     flq:      {FILE_QUEUE_COMMIT} 00:16:59.742
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW_devmode_map.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{77da3b16-7b50-ad41-ae9f-6a52d19c3867}\MPDW_devmode_map.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.cat' to 'C:\WINDOWS\System32\DriverStore\Temp\{77da3b16-7b50-ad41-ae9f-6a52d19c3867}\prnms009.cat'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf' to 'C:\WINDOWS\System32\DriverStore\Temp\{77da3b16-7b50-ad41-ae9f-6a52d19c3867}\prnms009.Inf'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-PDC.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{77da3b16-7b50-ad41-ae9f-6a52d19c3867}\MPDW-PDC.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-manifest.ini' to 'C:\WINDOWS\System32\DriverStore\Temp\{77da3b16-7b50-ad41-ae9f-6a52d19c3867}\MPDW-manifest.ini'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-pipelineconfig.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{77da3b16-7b50-ad41-ae9f-6a52d19c3867}\MPDW-pipelineconfig.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-constraints.js' to 'C:\WINDOWS\System32\DriverStore\Temp\{77da3b16-7b50-ad41-ae9f-6a52d19c3867}\MPDW-constraints.js'.
+     flq:      {FILE_QUEUE_COMMIT - exit(0x00000000)} 00:17:00.193
+     sto:      {DRIVERSTORE IMPORT VALIDATE} 00:17:00.210
+     sig:           Driver package catalog is valid.
+!!!  sig:           Driver package INF file hash is not present in catalog file. Filename = prnms009.Inf, Error = 0xE000024B
+!!!  sig:           Driver package appears to be tampered, and Code Integrity is enforced.
+!!!  sig:           Driver package failed signature validation. Error = 0xE000024B
+     sto:      {DRIVERSTORE IMPORT VALIDATE: exit(0xe000024b)} 00:17:00.304
+!!!  sig:      Driver package failed signature verification. Error = 0xE000024B
+!!!  sto:      Failed to import driver package into Driver Store. Error = 0xE000024B
+     sto: {Stage Driver Package: exit(0xe000024b)} 00:17:00.329
+<<<  Section end 2026/10/04 00:17:00.341
+<<<  [Exit status: FAILURE(0xe000024b)]
+
+
+[Boot Session: 2026/10/04 00:26:42.500]
+
+>>>  [Setup Import Driver Package - C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf]
+>>>  Section start 2026/10/04 00:31:51.847
+      cmd: C:\WINDOWS\System32\spoolsv.exe
+     inf: Provider: Microsoft
+     inf: Class GUID: {4D36E979-E325-11CE-BFC1-08002BE10318}
+     inf: Driver Version: 06/21/2006,10.0.26100.1
+     inf: Catalog File: prnms009.cat
+     ump: Import flags: 0x0000000D
+     pol: {Driver package policy check} 00:31:52.517
+     pol: {Driver package policy check - exit(0x00000000)} 00:31:52.544
+     sto: {Stage Driver Package: C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf} 00:31:52.544
+     inf:      Provider       = Microsoft
+     inf:      Class GUID     = {4d36e979-e325-11ce-bfc1-08002be10318}
+     inf:      Class Version  = 4.0
+     inf:      Driver Version = 06/21/2006,10.0.26100.1
+     inf:      Catalog File   = prnms009.cat
+     inf:      Version Flags  = 0x00000003
+     inf:      {Query Configurability: C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf} 00:31:52.654
+     inf:           Driver package is fully isolated.
+     inf:           Driver package 'prnms009.Inf' is configurable.
+     inf:      {Query Configurability: exit(0x00000000)} 00:31:52.681
+     flq:      {FILE_QUEUE_COMMIT} 00:31:52.694
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW_devmode_map.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{29ff9a9b-022a-a040-bed7-4a45152c1fda}\MPDW_devmode_map.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.cat' to 'C:\WINDOWS\System32\DriverStore\Temp\{29ff9a9b-022a-a040-bed7-4a45152c1fda}\prnms009.cat'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf' to 'C:\WINDOWS\System32\DriverStore\Temp\{29ff9a9b-022a-a040-bed7-4a45152c1fda}\prnms009.Inf'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-PDC.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{29ff9a9b-022a-a040-bed7-4a45152c1fda}\MPDW-PDC.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-manifest.ini' to 'C:\WINDOWS\System32\DriverStore\Temp\{29ff9a9b-022a-a040-bed7-4a45152c1fda}\MPDW-manifest.ini'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-pipelineconfig.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{29ff9a9b-022a-a040-bed7-4a45152c1fda}\MPDW-pipelineconfig.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-constraints.js' to 'C:\WINDOWS\System32\DriverStore\Temp\{29ff9a9b-022a-a040-bed7-4a45152c1fda}\MPDW-constraints.js'.
+     flq:      {FILE_QUEUE_COMMIT - exit(0x00000000)} 00:31:53.430
+     sto:      {DRIVERSTORE IMPORT VALIDATE} 00:31:53.463
+     sig:           Driver package catalog is valid.
+!!!  sig:           Driver package INF file hash is not present in catalog file. Filename = prnms009.Inf, Error = 0xE000024B
+!!!  sig:           Driver package appears to be tampered, and Code Integrity is enforced.
+!!!  sig:           Driver package failed signature validation. Error = 0xE000024B
+     sto:      {DRIVERSTORE IMPORT VALIDATE: exit(0xe000024b)} 00:31:53.547
+!!!  sig:      Driver package failed signature verification. Error = 0xE000024B
+!!!  sto:      Failed to import driver package into Driver Store. Error = 0xE000024B
+     sto: {Stage Driver Package: exit(0xe000024b)} 00:31:53.601
+<<<  Section end 2026/10/04 00:31:53.622
+<<<  [Exit status: FAILURE(0xe000024b)]
+
+
+[Boot Session: 2026/10/04 00:36:55.500]
+
+>>>  [Setup Import Driver Package - C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf]
+>>>  Section start 2026/10/04 00:41:03.690
+      cmd: C:\WINDOWS\System32\spoolsv.exe
+     inf: Provider: Microsoft
+     inf: Class GUID: {4D36E979-E325-11CE-BFC1-08002BE10318}
+     inf: Driver Version: 06/21/2006,10.0.26100.1
+     inf: Catalog File: prnms009.cat
+     ump: Import flags: 0x0000000D
+     pol: {Driver package policy check} 00:41:04.127
+     pol: {Driver package policy check - exit(0x00000000)} 00:41:04.132
+     sto: {Stage Driver Package: C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf} 00:41:04.132
+     inf:      Provider       = Microsoft
+     inf:      Class GUID     = {4d36e979-e325-11ce-bfc1-08002be10318}
+     inf:      Class Version  = 4.0
+     inf:      Driver Version = 06/21/2006,10.0.26100.1
+     inf:      Catalog File   = prnms009.cat
+     inf:      Version Flags  = 0x00000003
+     inf:      {Query Configurability: C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf} 00:41:04.268
+     inf:           Driver package is fully isolated.
+     inf:           Driver package 'prnms009.Inf' is configurable.
+     inf:      {Query Configurability: exit(0x00000000)} 00:41:04.305
+     flq:      {FILE_QUEUE_COMMIT} 00:41:04.343
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW_devmode_map.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{21b94b87-09f0-ca46-8cc0-7f9c39c9a34b}\MPDW_devmode_map.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.cat' to 'C:\WINDOWS\System32\DriverStore\Temp\{21b94b87-09f0-ca46-8cc0-7f9c39c9a34b}\prnms009.cat'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\prnms009.Inf' to 'C:\WINDOWS\System32\DriverStore\Temp\{21b94b87-09f0-ca46-8cc0-7f9c39c9a34b}\prnms009.Inf'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-PDC.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{21b94b87-09f0-ca46-8cc0-7f9c39c9a34b}\MPDW-PDC.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-manifest.ini' to 'C:\WINDOWS\System32\DriverStore\Temp\{21b94b87-09f0-ca46-8cc0-7f9c39c9a34b}\MPDW-manifest.ini'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-pipelineconfig.xml' to 'C:\WINDOWS\System32\DriverStore\Temp\{21b94b87-09f0-ca46-8cc0-7f9c39c9a34b}\MPDW-pipelineconfig.xml'.
+     flq:           Copying 'C:\WINDOWS\system32\spool\tools\Microsoft Print To PDF\MPDW-constraints.js' to 'C:\WINDOWS\System32\DriverStore\Temp\{21b94b87-09f0-ca46-8cc0-7f9c39c9a34b}\MPDW-constraints.js'.
+     flq:      {FILE_QUEUE_COMMIT - exit(0x00000000)} 00:41:04.997
+     sto:      {DRIVERSTORE IMPORT VALIDATE} 00:41:05.017
+     sig:           Driver package catalog is valid.
+!!!  sig:           Driver package INF file hash is not present in catalog file. Filename = prnms009.Inf, Error = 0xE000024B
+!!!  sig:           Driver package appears to be tampered, and Code Integrity is enforced.
+!!!  sig:           Driver package failed signature validation. Error = 0xE000024B
+     sto:      {DRIVERSTORE IMPORT VALIDATE: exit(0xe000024b)} 00:41:05.111
+!!!  sig:      Driver package failed signature verification. Error = 0xE000024B
+!!!  sto:      Failed to import driver package into Driver Store. Error = 0xE000024B
+     sto: {Stage Driver Package: exit(0xe000024b)} 00:41:05.155
+<<<  Section end 2026/10/04 00:41:05.204
+<<<  [Exit status: FAILURE(0xe000024b)]
+
+

@@ -19,6 +19,7 @@ pub mod census;
 pub mod chanlink;
 pub mod display;
 pub mod faultbuffer;
+mod gfxpool_probe;
 pub mod guestsysinfo;
 pub mod hostfacts;
 pub mod hostquery;
@@ -295,10 +296,25 @@ impl ReselectAtFn1 {
 
     /// Decide at fn 1. Returns what happened, for the log and for tests.
     pub fn on_fn1(&mut self, payload: &[u8]) -> Reselection {
-        let Ok(said) = kf_abi::guestsysinfo::decode_guest_driver_version(payload) else {
+        // ★ 2026-10-04 (v3-windows, C2): a Windows build is keyed as the driver-matrix tag whose
+        // Windows twin it is (kf_abi::windows_twin); a tag is keyed as itself.
+        let Ok(r) = kf_abi::guestsysinfo::ReportedDriver::decode(payload) else {
             return Reselection::Kept;
         };
-        let Some(reported) = kf_abi::DriverVersion::parse(said) else {
+        if let Some(t) = r.twin {
+            eprintln!(
+                "kf-rm: the guest is Windows {} ({}), the Windows build of Linux {} (one changelist, \
+                 {}): keyed as {}",
+                r.said, t.win_branch, t.linux_tag, t.linux_cl, t.linux_tag
+            );
+        }
+        if let Some(why) = &r.twin_refusal {
+            eprintln!(
+                "kf-rm: the guest says it is {:?}, not a Windows twin: {why}",
+                r.said
+            );
+        }
+        let Some(reported) = r.version else {
             return Reselection::Kept;
         };
         if reported == self.current {
@@ -454,6 +470,12 @@ pub fn served_chain(
     // ⊘ Without a channel plane there is nothing to twin with, so the object is not offered at all
     // (an offered object with no host twin is run m3c: 186 host Xid 32).
     let x11_dispsw = channels.is_some() && display.as_ref().is_some_and(|s| s.x11_dispsw);
+    if std::env::var("KF3_GFX_POOL_PROBE").as_deref() == Ok("1") {
+        eprintln!(
+            "kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented"
+        );
+        chain.push(Box::new(gfxpool_probe::GfxPoolProbe { driver }));
+    }
     // ★ v3-display: the display link claims only its own controls, so its place is a matter of
     // which link answers first; it goes first so no other link's refusal can shadow it.
     // Lifecycle observation belongs to the object seat AFTER acceptance, not to this front link:

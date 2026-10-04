@@ -1,0 +1,14 @@
+
+
+Name                        : Microsoft Basic Display Adapter
+PNPDeviceID                 : PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+DriverVersion               : 10.0.26100.1
+Status                      : OK
+ConfigManagerErrorCode      : 0
+CurrentHorizontalResolution : 1920
+CurrentVerticalResolution   : 1080
+AdapterRAM                  : 0
+
+
+
+

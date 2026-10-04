@@ -299,3 +299,35 @@ fn the_encoder_writes_only_the_two_words() {
     assert_eq!(&body[0..8], &[0x2B, 0, 0, 0, 0x13, 0, 0, 0]);
     assert!(body[8..].iter().all(|b| *b == 0));
 }
+
+/// ★ 2026-10-04 (branch `v3-windows`, C2): the identity the Windows 580.88 guest sent at fn 1 on
+/// `vwin` (RTX 3060, kf3 `b98bdbec`): `guestDriverVersion="580.88" guestVersion="r580_78-7"
+/// guestClNum=0`. A device declared for 580.65.06 (its Linux twin, one changelist) accepts it; the
+/// same name with another branch version is refused, and the refusal says why it is not a twin.
+#[test]
+fn a_windows_twin_passes_the_declared_version_check_and_a_wrong_branch_does_not() {
+    let windows = |branch: &str| {
+        let mut c = request_as(V580_MAJOR, V580_MINOR, "580.88");
+        let at = kf_abi::guestsysinfo::GUEST_VERSION_OFF;
+        c.payload[at..at + 0x100].fill(0);
+        c.payload[at..at + branch.len()].copy_from_slice(branch.as_bytes());
+        let cl = kf_abi::guestsysinfo::GUEST_CL_NUM_OFF;
+        c.payload[cl..cl + 4].copy_from_slice(&0u32.to_le_bytes());
+        c
+    };
+    let p = policy_for(DriverVersion::parse("580.65.06").unwrap());
+    assert!(
+        p.check_driver_version(&windows("r580_78-7").payload)
+            .is_ok()
+    );
+    let why = p
+        .check_driver_version(&windows("r580_78-9").payload)
+        .expect_err("another branch version is not the twin");
+    assert!(why.to_string().contains("not a Windows twin"), "{why}");
+    let p159 = policy_for(DriverVersion::parse("580.159.04").unwrap());
+    assert!(
+        p159.check_driver_version(&windows("r580_78-7").payload)
+            .is_err(),
+        "the twin is 580.65.06, never another 580 tag"
+    );
+}

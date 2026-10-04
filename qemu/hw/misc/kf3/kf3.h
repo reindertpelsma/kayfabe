@@ -36,7 +36,9 @@
 /* 17 was used by the earlier display scratch integration (different argument order).
  * 18 (2026-10-04, candidate 2): ABI 13's x11_dispsw plus ABI 16's broker/cursor/refresh.
  * The realize tail is gop, x11_dispsw, display_broker, display_max_fps. */
-#define KF3_ABI 18
+/* 19 (2026-10-05, Windows/P1/P2 integration): append gop_efi after
+ * display_max_fps, retaining every ABI-18 display/broker entry point. */
+#define KF3_ABI 19
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -102,11 +104,12 @@ uint32_t kf3_abi_version(void);
  * display-broker-vram (§8.11).
  * ★ ABI 16: `display_max_fps` — the cap on every head's emulated vblank tick, whole Hz, 24..75;
  * 0 = unset (cap 75, today's EDID). Rust refuses any other value, and a non-zero one without
- * display=1, by name (§8.16). */
+ * display=1, by name (§8.16).
+ * ABI 19: gop_efi is a signed copy of the embedded GOP driver or NULL; needs gop=1. */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
-                    uint32_t display_max_fps, void **out,
+                    uint32_t display_max_fps, const char *gop_efi, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

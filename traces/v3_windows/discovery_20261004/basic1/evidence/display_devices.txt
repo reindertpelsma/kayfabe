@@ -1,0 +1,77 @@
+
+
+Class                       : Display
+FriendlyName                : Microsoft Basic Display Adapter
+InstanceId                  : PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+Problem                     : CM_PROB_NONE
+ConfigManagerErrorCode      : CM_PROB_NONE
+ProblemDescription          : 
+Caption                     : Microsoft Basic Display Adapter
+Description                 : Microsoft Basic Display Adapter
+InstallDate                 : 
+Name                        : Microsoft Basic Display Adapter
+Status                      : OK
+Availability                : 
+ConfigManagerUserConfig     : False
+CreationClassName           : Win32_PnPEntity
+DeviceID                    : PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+ErrorCleared                : 
+ErrorDescription            : 
+LastErrorCode               : 
+PNPDeviceID                 : PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+PowerManagementCapabilities : 
+PowerManagementSupported    : 
+StatusInfo                  : 
+SystemCreationClassName     : Win32_ComputerSystem
+SystemName                  : KFWIN
+ClassGuid                   : {4d36e968-e325-11ce-bfc1-08002be10318}
+CompatibleID                : {PCI\VEN_10DE&DEV_2504&REV_A1, PCI\VEN_10DE&DEV_2504, PCI\VEN_10DE&CC_030000, PCI\VEN_10DE&CC_0300...}
+HardwareID                  : {PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1, PCI\VEN_10DE&DEV_2504&SUBSYS_36563842, PCI\VEN_10DE&DEV_2504&CC_030000, PCI\VEN_10DE&DEV_2504&CC_0300}
+Manufacturer                : (Standard display types)
+PNPClass                    : Display
+Present                     : True
+Service                     : BasicDisplay
+PSComputerName              : 
+CimClass                    : ROOT/cimv2:Win32_PnPEntity
+CimInstanceProperties       : {Caption, Description, InstallDate, Name...}
+CimSystemProperties         : Microsoft.Management.Infrastructure.CimSystemProperties
+
+Class                       : Display
+FriendlyName                : Microsoft Basic Display Adapter
+InstanceId                  : PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08
+Problem                     : CM_PROB_PHANTOM
+ConfigManagerErrorCode      : CM_PROB_PHANTOM
+ProblemDescription          : 
+Caption                     : Microsoft Basic Display Adapter
+Description                 : Microsoft Basic Display Adapter
+InstallDate                 : 
+Name                        : Microsoft Basic Display Adapter
+Status                      : Unknown
+Availability                : 
+ConfigManagerUserConfig     : False
+CreationClassName           : Win32_PnPEntity
+DeviceID                    : PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08
+ErrorCleared                : 
+ErrorDescription            : 
+LastErrorCode               : 
+PNPDeviceID                 : PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08
+PowerManagementCapabilities : 
+PowerManagementSupported    : 
+StatusInfo                  : 
+SystemCreationClassName     : Win32_ComputerSystem
+SystemName                  : KFWIN
+ClassGuid                   : {4d36e968-e325-11ce-bfc1-08002be10318}
+CompatibleID                : {PCI\VEN_1234&DEV_1111&REV_02, PCI\VEN_1234&DEV_1111, PCI\VEN_1234&CC_030000, PCI\VEN_1234&CC_0300...}
+HardwareID                  : {PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02, PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4, PCI\VEN_1234&DEV_1111&CC_030000, PCI\VEN_1234&DEV_1111&CC_0300}
+Manufacturer                : (Standard display types)
+PNPClass                    : Display
+Present                     : False
+Service                     : BasicDisplay
+PSComputerName              : 
+CimClass                    : ROOT/cimv2:Win32_PnPEntity
+CimInstanceProperties       : {Caption, Description, InstallDate, Name...}
+CimSystemProperties         : Microsoft.Management.Infrastructure.CimSystemProperties
+
+
+
+

@@ -1,0 +1,21 @@
+{"event": "KF_LOGGER_ATTACHED", "timestamp": {"seconds": 1791070629}}
+{"timestamp": {"seconds": 1791070631, "microseconds": 376974}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791070640, "microseconds": 108706}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791070914, "microseconds": 144259}, "event": "SHUTDOWN", "data": {"guest": false, "reason": "host-qmp-quit"}}
+{"event": "KF_LOGGER_ATTACHED", "timestamp": {"seconds": 1791071066}}
+{"timestamp": {"seconds": 1791071068, "microseconds": 86120}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791071068, "microseconds": 811827}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072238, "microseconds": 572787}, "event": "RESET", "data": {"guest": true, "reason": "guest-reset"}}
+{"timestamp": {"seconds": 1791072240, "microseconds": 226025}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072240, "microseconds": 901216}, "event": "RTC_CHANGE", "data": {"offset": 0, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072397, "microseconds": 743347}, "event": "NIC_RX_FILTER_CHANGED", "data": {"path": "/machine/peripheral-anon/device[1]/virtio-backend"}}
+{"timestamp": {"seconds": 1791072531, "microseconds": 516168}, "event": "RTC_CHANGE", "data": {"offset": -2, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072531, "microseconds": 524675}, "event": "RTC_CHANGE", "data": {"offset": -2, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072547, "microseconds": 710193}, "event": "RESET", "data": {"guest": true, "reason": "guest-reset"}}
+{"timestamp": {"seconds": 1791072549, "microseconds": 370165}, "event": "RTC_CHANGE", "data": {"offset": -2, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072550, "microseconds": 107658}, "event": "RTC_CHANGE", "data": {"offset": -3, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072604, "microseconds": 119413}, "event": "RTC_CHANGE", "data": {"offset": -4, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072604, "microseconds": 124544}, "event": "RTC_CHANGE", "data": {"offset": -4, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072615, "microseconds": 107448}, "event": "RTC_CHANGE", "data": {"offset": -4, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072615, "microseconds": 108423}, "event": "RTC_CHANGE", "data": {"offset": -4, "qom-path": "/machine/unattached/device[10]/rtc"}}
+{"timestamp": {"seconds": 1791072888, "microseconds": 445289}, "event": "SHUTDOWN", "data": {"guest": true, "reason": "guest-shutdown"}}

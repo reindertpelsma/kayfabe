@@ -2298,11 +2298,8 @@ pub const NV01_TIMER_MAP_SIZE: u64 = 0x414;
 
 /// `NV01_TIMER` — `ogkm-580: src/common/sdk/nvidia/inc/class/cl0004.h:32`.
 ///
-/// ⚠ **Hand-written, not generated.** `kayfabe-abi-gen` emits alloc-parameter structs and
-/// the class ids that select them; `NV01_TIMER` takes **no** alloc parameters (
-/// `tmrapiConstruct_IMPL` ignores them, `ogkm-580: .../timer/timer.c:1692-1701`), so the
-/// generator has nothing to hang it off. The citation above is the whole of its sourcing.
-pub const NV01_TIMER: u32 = 0x0000_0004;
+/// Measured at every driver tag, including classes with no allocation parameters.
+pub const NV01_TIMER: u32 = crate::generated::matrix::CLASS_IDS_NV01_TIMER.everywhere_u32();
 
 /// `NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080tmr.h:119`. Answers

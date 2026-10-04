@@ -2,13 +2,33 @@
 mod capability_snapshot;
 
 #[test]
-fn pre_535_extension_550_and_newer_policies_are_identical() {
+fn pre_535_extension_policies_change_only_by_the_audited_timer_allocation() {
     // Full IDs, names, provenance, denials and decision outputs; equal counts are insufficient.
     // See traces/capability_535_545_audit_20260928/README.md for baseline provenance.
+    // Preserve the historical fixture. The only later delta is NV01_TIMER,
+    // audited from OGKM in traces/windows_pool_20261005/timer-source-audit.tsv.
+    // Pin its complete row and compare every other decision byte-for-byte.
+    const TIMER: &str =
+        "CLASS 00000004 NV01_TIMER Mode2Rpc => Listed { name: \"NV01_TIMER\", origin: Mode2Rpc }\n";
+    let current = capability_snapshot::existing_policy_snapshot();
+    assert_eq!(current.matches(TIMER).count(), 8);
     assert_eq!(
-        capability_snapshot::existing_policy_snapshot(),
+        current.replace(TIMER, ""),
         include_str!("fixtures/capability_550_610_before_535.txt")
     );
+}
+
+#[test]
+fn timer_allocation_does_not_authorize_timer_controls() {
+    use kf_abi::capability::ALL_BOUNDARIES;
+    use kf_arch::ids::{ClassId, ControlCmd};
+    for table in ALL_BOUNDARIES {
+        assert!(table.alloc_class(ClassId(4)).is_permitted());
+        // Complete ctrl0004.h command list: NULL and SET_ALARM_NOTIFY.
+        for command in [0x0004_0000, 0x0004_0110] {
+            assert!(!table.control(ControlCmd(command)).is_permitted());
+        }
+    }
 }
 
 #[test]

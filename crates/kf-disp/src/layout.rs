@@ -77,10 +77,18 @@ impl Layouts {
 #[must_use]
 pub fn for_version(version: &str) -> Option<&'static Layouts> {
     static V580_159_04: OnceLock<Layouts> = OnceLock::new();
+    static V580_65_06: OnceLock<Layouts> = OnceLock::new();
     match version {
         "580.159.04" => Some(
             V580_159_04
                 .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.159.04.tsv"))),
+        ),
+        // ★ 2026-10-04 (v3-windows): 580.65.06, the Linux twin of Windows 580.88 (same changelist
+        // 36308443). Derived by tools/derive_display_layouts.sh from ogkm 580.65.06; the rows are
+        // identical to 580.159.04's apart from VERSION.
+        "580.65.06" => Some(
+            V580_65_06
+                .get_or_init(|| Layouts::parse(include_str!("../data/layouts-580.65.06.tsv"))),
         ),
         _ => None,
     }
@@ -194,5 +202,45 @@ mod tests {
         assert!(p.set("numHeads", 4));
         assert_eq!(p.get("numHeads"), Some(4));
         assert!(Params::new(l, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", &[0; 8]).is_none());
+    }
+
+    /// ★ 2026-10-04 (v3-windows): guest 580.65.06 — the Linux twin of Windows 580.88 by changelist —
+    /// has all three display tables, and they are the bench's rows apart from VERSION (re-derived
+    /// from ogkm 580.65.06 by the three `tools/derive_display_*.sh`). A future re-derivation that
+    /// differs fails here, by table, instead of answering a 580.65.06 guest with 580.159.04's rows.
+    #[test]
+    fn the_580_65_06_tables_are_derived_and_are_the_bench_rows() {
+        let rows = |s: &str| -> Vec<String> {
+            s.lines()
+                .filter(|l| !l.starts_with('#') && !l.starts_with("VERSION\t"))
+                .map(str::to_owned)
+                .collect()
+        };
+        for (name, twin, bench) in [
+            (
+                "layouts",
+                include_str!("../data/layouts-580.65.06.tsv"),
+                include_str!("../data/layouts-580.159.04.tsv"),
+            ),
+            (
+                "classes",
+                include_str!("../data/classes-580.65.06.tsv"),
+                include_str!("../data/classes-580.159.04.tsv"),
+            ),
+            (
+                "regs",
+                include_str!("../data/regs-580.65.06.tsv"),
+                include_str!("../data/regs-580.159.04.tsv"),
+            ),
+        ] {
+            assert!(twin.contains("VERSION\t580.65.06"), "{name}");
+            assert_eq!(rows(twin), rows(bench), "{name}");
+        }
+        assert_eq!(
+            for_version("580.65.06").expect("derived").version,
+            "580.65.06"
+        );
+        assert!(crate::class::for_version("580.65.06").is_some());
+        assert!(crate::regs::table_for("580.65.06").is_some());
     }
 }

@@ -1,0 +1,39 @@
+Microsoft PnP Utility
+
+Instance ID:                PCI\VEN_10DE&DEV_2504&SUBSYS_36563842&REV_A1\3&11583659&0&28
+Device Description:         Microsoft Basic Display Adapter
+Class Name:                 Display
+Class GUID:                 {4d36e968-e325-11ce-bfc1-08002be10318}
+Manufacturer Name:          (Standard display types)
+Status:                     Started
+Driver Name:                display.inf
+Matching Drivers:
+    Driver Name:            display.inf
+    Provider Name:          Microsoft
+    Class Name:             Display
+    Class GUID:             {4d36e968-e325-11ce-bfc1-08002be10318}
+    Driver Version:         06/21/2006 10.0.26100.1
+    Signer Name:            Microsoft Windows
+    Matching Device ID:     PCI\CC_0300
+    Driver Rank:            00FB2006
+    Driver Status:          Best Ranked / Installed
+
+Instance ID:                PCI\VEN_1234&DEV_1111&SUBSYS_11001AF4&REV_02\3&11583659&0&08
+Device Description:         Microsoft Basic Display Adapter
+Class Name:                 Display
+Class GUID:                 {4d36e968-e325-11ce-bfc1-08002be10318}
+Manufacturer Name:          (Standard display types)
+Status:                     Disconnected
+Driver Name:                display.inf
+Matching Drivers:
+    Driver Name:            display.inf
+    Provider Name:          Microsoft
+    Class Name:             Display
+    Class GUID:             {4d36e968-e325-11ce-bfc1-08002be10318}
+    Driver Version:         06/21/2006 10.0.26100.1
+    Signer Name:            Microsoft Windows
+    Matching Device ID:     PCI\CC_0300
+    Driver Rank:            00FB2006
+    Driver Status:          Best Ranked / Installed
+
+

@@ -899,6 +899,15 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         name: "NV01_CONTEXT_DMA",
         origin: Origin::Nvproxy,
     },
+    // OGKM resource_list.h: TimerApi, Subdevice parent, RS_NONE parameters,
+    // RS_FLAGS_ALLOC_NON_PRIVILEGED and no required access rights. Its constructor
+    // only returns NV_OK (timer.c); the guest-side object has no host counterpart.
+    // This permits allocation bookkeeping, not timer controls or host forwarding.
+    ClassEntry {
+        class: crate::submit::NV01_TIMER,
+        name: "NV01_TIMER",
+        origin: Origin::Mode2Rpc,
+    },
     ClassEntry {
         class: 0x00000005,
         name: "NV01_EVENT",
@@ -2522,7 +2531,8 @@ mod tests {
             assert_eq!(t.all_controls().count(), *n_ctl, "{label} controls");
             // ★ +18 on 2026-09-27 (v3-display): the display classes joined the SHARED floor, so
             // every boundary's class count moves by the same 18.
-            assert_eq!(t.all_classes().count(), *n_cls + 18, "{label} classes");
+            // +1 on 2026-10-05: source-audited NV01_TIMER allocation bookkeeping.
+            assert_eq!(t.all_classes().count(), *n_cls + 18 + 1, "{label} classes");
             let mut got: Vec<&str> = t
                 .own_controls
                 .iter()
@@ -3097,20 +3107,20 @@ mod tests {
         // core/window/window-immediate/cursor channels). SHARED, so every boundary moves by 18.
         assert_eq!(
             at(550, 54, 4).all_classes().count(),
-            78 + 18,
+            78 + 18 + 1,
             "classes at 550"
         );
         assert_eq!(
             at(560, 28, 3).all_classes().count(),
-            86 + 18,
+            86 + 18 + 1,
             "classes at 560"
         );
         assert_eq!(
             at(570, 86, 15).all_classes().count(),
-            92 + 18,
+            92 + 18 + 1,
             "classes at 570"
         );
-        assert_eq!(bench().all_classes().count(), 94 + 18, "classes at 580");
+        assert_eq!(bench().all_classes().count(), 94 + 18 + 1, "classes at 580");
         assert_eq!(bench().all_denied_controls().count(), 10, "denied controls");
         assert_eq!(bench().all_denied_classes().count(), 3, "denied classes");
     }
@@ -3243,7 +3253,8 @@ mod tests {
         // ⊘ The engine classes of the other families (Turing/Hopper/Blackwell channels, copy
         // and compute objects) are mapped one layer up, from `kf_chip`'s generated sets
         // (`kf_rm::chanlink::alloc_shape`), and are not counted by this sweep.
-        assert_eq!(seen, 17, "the port decodes seventeen classes today");
+        // 17 → 18 on 2026-10-05: NV01_TIMER (no allocation parameters or GPU work).
+        assert_eq!(seen, 18, "the port decodes eighteen classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(

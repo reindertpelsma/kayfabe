@@ -1,0 +1,39 @@
+
+
+FriendlyName : Generic Monitor (kayfabe)
+InstanceId   : DISPLAY\KFB0001\1&8713BCA&0&UID0
+Status       : OK
+
+FriendlyName : Generic Monitor
+InstanceId   : DISPLAY\DEFAULT_MONITOR\1&8713BCA&0&UID0
+Status       : Unknown
+
+FriendlyName : Generic Monitor (kayfabe)
+InstanceId   : DISPLAY\KFB0001\4&264AB731&0&UID0
+Status       : Unknown
+
+FriendlyName : Generic Monitor
+InstanceId   : DISPLAY\DEFAULT_MONITOR\4&27B1E55B&0&UID0
+Status       : Unknown
+
+
+
+
+
+Active                 : True
+InstanceName           : DISPLAY\KFB0001\1&8713bca&0&UID0_0
+ManufacturerName       : {75, 70, 66, 0...}
+ProductCodeID          : {48, 48, 48, 49...}
+SerialNumberID         : {49, 0, 0, 0...}
+UserFriendlyName       : {107, 97, 121, 102...}
+UserFriendlyNameLength : 13
+WeekOfManufacture      : 39
+YearOfManufacture      : 2026
+PSComputerName         : 
+CimClass               : root/wmi:WmiMonitorID
+CimInstanceProperties  : {Active, InstanceName, ManufacturerName, ProductCodeID...}
+CimSystemProperties    : Microsoft.Management.Infrastructure.CimSystemProperties
+
+
+
+

@@ -3,7 +3,7 @@
 //! is one kf3 serves, for the arch kayfabe is built for, and packs into a ROM whose `EfiMachineType`
 //! is its own (`docs/OWNER_RULINGS.md` §K).
 
-use kf_gop_image::{KF_GOP_EFI, TARGET, pack_kf_gop};
+use kf_gop_image::{KF_GOP_EFI, SignedPackError, TARGET, pack_kf_gop, pack_kf_gop_signed};
 use kf_oprom::desc::{BootFramebuffer, Descriptor, Geometry};
 use kf_oprom::rom::{self, ClassCode, Compression, SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER};
 use kf_oprom::{Identity, pe};
@@ -67,4 +67,41 @@ fn it_packs_for_a_1080p_display_device_with_its_own_machine_type() {
     assert_eq!((d.vendor, d.device, d.fb), (0x10de, 0x2504, fb));
     assert_eq!(d.fb.geometry.fb_size, 0x7F_0000);
     assert_eq!(d.edid, &edid[..]);
+}
+
+/// ★ 2026-10-04 (v3-windows): a signed copy of the embedded driver, in the shape `sbsign` writes, is
+/// packed with the signed PE ending on the ROM's last block, and anything else is refused by name.
+#[test]
+fn a_signed_copy_of_the_embedded_driver_packs_and_a_tampered_one_does_not() {
+    let id = Identity {
+        vendor: 0x10de,
+        device: 0x2504,
+        class: ClassCode::from_u24(0x03_00_00),
+    };
+    let fb = BootFramebuffer {
+        bar: 1,
+        offset: 0,
+        geometry: Geometry::for_mode(1920, 1080).unwrap(),
+    };
+    let edid = [0x5Au8; 128];
+    let signed = pe::synthetic_signed(KF_GOP_EFI, 1800);
+    let (romb, info) = pack_kf_gop_signed(&signed, &id, &fb, &edid).unwrap();
+    assert_eq!(info.cert_offset as usize, KF_GOP_EFI.len());
+    assert_eq!(romb.len() % 512, 0);
+    assert!(
+        romb.ends_with(&signed),
+        "the signed PE ends on the ROM's last block, so the firmware loads exactly the signed file"
+    );
+    let imgs = rom::parse(&romb).unwrap();
+    assert_eq!(imgs[0].efi_payload(), Some(&signed[..]));
+    let mut tampered = signed.clone();
+    tampered[KF_GOP_EFI.len() / 2] ^= 0x40;
+    assert!(matches!(
+        pack_kf_gop_signed(&tampered, &id, &fb, &edid),
+        Err(SignedPackError::Signature(pe::SigError::DifferentPe { .. }))
+    ));
+    assert!(matches!(
+        pack_kf_gop_signed(KF_GOP_EFI, &id, &fb, &edid),
+        Err(SignedPackError::Signature(pe::SigError::NotSigned))
+    ));
 }

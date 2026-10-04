@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-10-04 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
+**STATUS: LIVE, 2026-10-05 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
 evidence and documentation. The single entry point for resuming work without any chat history. Decisions
 live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per-topic detail in the design
@@ -9,7 +9,38 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-### 0.0 ★ RESUME HERE — 2026-10-04 (supersedes every older entry in §0 where they differ)
+### 0.0 ★ RESUME HERE — 2026-10-05 (supersedes every older entry in §0 where they differ)
+
+**Experimental integration, not promoted:** `codex/p1p2-integration-2026-10-05`,
+worktree `/tmp/kayfabe-p1p2-integration-20261005`, combines master `906a76a4`,
+the complete P1/P2 branch `31b64802` (merge `a5a350a8`), and Windows branch
+`c1d4e415`. **KF3 ABI 19** retains all ABI-18 display/broker fields and appends
+the signed-GOP path to `kf3_realize`. P0's USER-channel birth guard is included.
+`KF3_TSPACE` and `KF3_GFX_POOL_PROBE` both stay off by default. No hardware or
+Windows success is claimed for this integration; master remains the verified
+candidate-2 source described below.
+
+Before Windows was added, the integrated P1/P2 source passed 919 GPU-free tests
+(ABI/chip/host/mem/chan/qemu/harness), 18 Python instrument tests, and the full
+unsafe-containment gate. The combined driver matrix was compared with the full
+30-tag compiler sweep: 129,240 cells, zero differences, including 595.91.07 and
+the display-SW allocation structure. These are source/logic checks, not a GPU
+bar. Final combined validation is recorded in
+`traces/windows_p1p2_integration_20261005/README.md`.
+
+Next: incorporate the separately audited real timer mapping, rebuild the C and
+Rust device together against QEMU 10.2.4, then run exact-revision GPU gates and
+Linux regression lanes serially. P1/P2 additionally needs the window-reach
+positive/negative control and Translated-ring/physical-CE probes (still unwritten
+at `31b64802`), family coverage, unload/re-init, and A/B application checks before
+changing its default. `V3_P1P2_TSPACE.md` has the exact requirements. No claim of
+hostile-guest isolation may omit the remaining audit findings.
+
+The narrow Windows A/B/C evidence remains on its original branch/source:
+QUERY_SIZE success moved startup beyond the old barrier; timer allocation alone
+did not clear Code 43. Those results do not validate this newer integration.
+The borrowed PC and Vast rentals remain controlled by the root agent; this
+integration task runs no hardware jobs and creates no rentals.
 
 **Current verified integration (2026-10-04, candidate 2):**
 `codex/candidate-2-2026-10-04`, local worktree `/data/kayfabe-candidate2-20261004`,

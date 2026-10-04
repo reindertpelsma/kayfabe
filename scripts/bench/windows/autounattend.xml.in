@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later -->
+<!--
+  autounattend.xml.in — the Windows 11 Enterprise LTSC 2024 (evaluation) unattended install for
+  win_vm.sh. win_vm.sh fills the placeholder fields and writes the result ONLY into the VM's secrets/
+  directory (mode 0600), onto the install-time unattend.iso, which it deletes after the install
+  check passes. Nothing secret is in this template.
+
+  Owner rulings it carries (OWNER_RULINGS §K, 2026-10-04): Secure Boot and the TPM stay ON (Setup's
+  own TPM/Secure Boot checks are NOT bypassed; only the CPU check is, because the bench box is a
+  Broadwell); BitLocker and automatic device encryption are prevented from the first boot; the Red
+  Hat virtio drivers are loaded (viostor in WinPE, the rest staged offline and installed at first
+  logon); an OpenSSH server is set up with the harness key.
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+ <settings pass="windowsPE">
+  <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <SetupUILanguage><UILanguage>en-US</UILanguage></SetupUILanguage>
+   <InputLocale>en-US</InputLocale><SystemLocale>en-US</SystemLocale><UILanguage>en-US</UILanguage><UserLocale>en-US</UserLocale>
+  </component>
+  <!-- viostor for the virtio system disk. CD letters vary in WinPE; missing paths are ignored. -->
+  <component name="Microsoft-Windows-PnpCustomizationsWinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <DriverPaths>
+@@WINPE_DRIVER_PATHS@@
+   </DriverPaths>
+  </component>
+  <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <RunSynchronous>
+    <!-- ONLY the CPU check (Broadwell on the bench box). TPM, Secure Boot and RAM checks stay ON. -->
+    <RunSynchronousCommand wcm:action="add"><Order>1</Order><Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>
+   </RunSynchronous>
+   <DiskConfiguration><Disk wcm:action="add"><DiskID>0</DiskID><WillWipeDisk>true</WillWipeDisk>
+    <CreatePartitions>
+     <CreatePartition wcm:action="add"><Order>1</Order><Type>EFI</Type><Size>300</Size></CreatePartition>
+     <CreatePartition wcm:action="add"><Order>2</Order><Type>MSR</Type><Size>16</Size></CreatePartition>
+     <CreatePartition wcm:action="add"><Order>3</Order><Type>Primary</Type><Extend>true</Extend></CreatePartition>
+    </CreatePartitions>
+    <ModifyPartitions>
+     <ModifyPartition wcm:action="add"><Order>1</Order><PartitionID>1</PartitionID><Format>FAT32</Format><Label>System</Label></ModifyPartition>
+     <ModifyPartition wcm:action="add"><Order>2</Order><PartitionID>2</PartitionID></ModifyPartition>
+     <ModifyPartition wcm:action="add"><Order>3</Order><PartitionID>3</PartitionID><Format>NTFS</Format><Label>Windows</Label><Letter>C</Letter></ModifyPartition>
+    </ModifyPartitions></Disk></DiskConfiguration>
+   <ImageInstall><OSImage>
+    <InstallFrom><MetaData wcm:action="add"><Key>/IMAGE/INDEX</Key><Value>1</Value></MetaData></InstallFrom>
+    <InstallTo><DiskID>0</DiskID><PartitionID>3</PartitionID></InstallTo>
+   </OSImage></ImageInstall>
+   <UserData><AcceptEula>true</AcceptEula></UserData>
+   <DynamicUpdate><Enable>false</Enable><WillShowUI>Never</WillShowUI></DynamicUpdate>
+  </component>
+ </settings>
+ <settings pass="offlineServicing">
+  <!-- staged into the installed image before first boot: NetKVM, vioserial, viorng, pvpanic, fwcfg,
+       smbus. Never Balloon or viomem: kf3's memory rules forbid guest-steered RAM resizing. -->
+  <component name="Microsoft-Windows-PnpCustomizationsNonWinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <DriverPaths>
+@@OFFLINE_DRIVER_PATHS@@
+   </DriverPaths>
+  </component>
+ </settings>
+ <settings pass="specialize">
+  <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <ComputerName>@@COMPUTERNAME@@</ComputerName><TimeZone>UTC</TimeZone>
+  </component>
+  <!-- ★ BitLocker / automatic device encryption OFF from the first boot (owner, 2026-10-04:
+       "disable bitlocker in the windows guest, its useless for our vm"). Both forms Microsoft documents. -->
+  <component name="Microsoft-Windows-SecureStartup-FilterDriver" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <PreventDeviceEncryption>true</PreventDeviceEncryption>
+  </component>
+  <component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <RunSynchronous>
+    <RunSynchronousCommand wcm:action="add"><Order>1</Order><Path>reg add HKLM\SYSTEM\CurrentControlSet\Control\BitLocker /v PreventDeviceEncryption /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>
+    <!-- Windows Update off, and never a driver from WU (it would pick one for the kf3 device) -->
+    <RunSynchronousCommand wcm:action="add"><Order>2</Order><Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU /v NoAutoUpdate /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>
+    <RunSynchronousCommand wcm:action="add"><Order>3</Order><Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /v ExcludeWUDriversInQualityUpdate /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>
+    <RunSynchronousCommand wcm:action="add"><Order>4</Order><Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DriverSearching /v SearchOrderConfig /t REG_DWORD /d 0 /f</Path></RunSynchronousCommand>
+    <!-- no VBS / HVCI (and -cpu host,-vmx makes them impossible anyway) -->
+    <RunSynchronousCommand wcm:action="add"><Order>5</Order><Path>reg add HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard /v EnableVirtualizationBasedSecurity /t REG_DWORD /d 0 /f</Path></RunSynchronousCommand>
+    <RunSynchronousCommand wcm:action="add"><Order>6</Order><Path>reg add HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity /v Enabled /t REG_DWORD /d 0 /f</Path></RunSynchronousCommand>
+    <!-- no Fast Startup: a resumed kernel would meet a FRESH kf3 after the QEMU restart -->
+    <RunSynchronousCommand wcm:action="add"><Order>7</Order><Path>reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d 0 /f</Path></RunSynchronousCommand>
+    <!-- kernel dumps, and bugcheck parameters on screen (so a screendump shows them) -->
+    <RunSynchronousCommand wcm:action="add"><Order>8</Order><Path>reg add HKLM\SYSTEM\CurrentControlSet\Control\CrashControl /v CrashDumpEnabled /t REG_DWORD /d 2 /f</Path></RunSynchronousCommand>
+    <RunSynchronousCommand wcm:action="add"><Order>9</Order><Path>reg add HKLM\SYSTEM\CurrentControlSet\Control\CrashControl /v DisplayParameters /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>
+    <!-- Smart App Control off: it would block the unsigned CUDA probes -->
+    <RunSynchronousCommand wcm:action="add"><Order>10</Order><Path>reg add HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy /v VerifiedAndReputablePolicyState /t REG_DWORD /d 0 /f</Path></RunSynchronousCommand>
+   </RunSynchronous>
+  </component>
+ </settings>
+ <settings pass="oobeSystem">
+  <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <InputLocale>en-US</InputLocale><SystemLocale>en-US</SystemLocale><UILanguage>en-US</UILanguage><UserLocale>en-US</UserLocale>
+  </component>
+  <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+   <OOBE><HideEULAPage>true</HideEULAPage><HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+    <HideOnlineAccountScreens>true</HideOnlineAccountScreens><HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+    <HideLocalAccountScreen>true</HideLocalAccountScreen><ProtectYourPC>3</ProtectYourPC></OOBE>
+   <UserAccounts><LocalAccounts><LocalAccount wcm:action="add">
+    <Name>@@USER@@</Name><Group>Administrators</Group>
+    <Password><Value>@@PASSWORD@@</Value><PlainText>true</PlainText></Password>
+   </LocalAccount></LocalAccounts></UserAccounts>
+   <AutoLogon><Enabled>true</Enabled><Username>@@USER@@</Username><LogonCount>1</LogonCount>
+    <Password><Value>@@PASSWORD@@</Value><PlainText>true</PlainText></Password></AutoLogon>
+   <FirstLogonCommands>
+    <SynchronousCommand wcm:action="add"><Order>1</Order>
+     <CommandLine>cmd /c for %d in (D E F G H I J) do @if exist %d:\kf-firstlogon.ps1 powershell -NoProfile -ExecutionPolicy Bypass -File %d:\kf-firstlogon.ps1 -Src %d:</CommandLine>
+    </SynchronousCommand>
+   </FirstLogonCommands>
+   <TimeZone>UTC</TimeZone>
+  </component>
+ </settings>
+</unattend>

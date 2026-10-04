@@ -7151,3 +7151,100 @@ fn promote_ctx_is_refused_by_name_now_that_the_join_is_cut() {
     );
     assert_eq!(r.rpc_result(), 0x56, "answered, and not NV_OK");
 }
+
+// NV01_TIMER allocation is bookkeeping (OGKM timer.c constructor/destructor),
+// not permission to execute alarm controls. Exercise the RPC bridge and graph,
+// including namespace attribution, free/reuse and hostile transport lengths.
+#[test]
+fn timer_object_lifetime_is_recorded_without_a_channel_or_host_action() {
+    const TIMER: u32 = 0x4; // independent oracle: class/cl0004.h
+    const CLIENT: u32 = 0xc1d0_4321;
+    const DEV: u32 = 0x8001;
+    const SUB: u32 = 0x8002;
+    const HANDLE: u32 = 0x8003;
+    let mut script = RpcScript::new();
+    script
+        .client_root(w::NV01_ROOT, CLIENT, 1234)
+        .device(CLIENT, CLIENT, DEV, 0)
+        .alloc(CLIENT, DEV, SUB, 0x2080, &[])
+        .alloc(CLIENT, SUB, HANDLE, TIMER, &[]);
+    let mut o = objects_from_script(&script);
+    let key = NodeKey::new(HClient(CLIENT), HObject(HANDLE));
+    let node = o.graph.origin_of(key).expect("allocated timer");
+    assert_eq!(node.kind, kf_arch::ObjectKind::Other);
+    assert_eq!(node.parent, HObject(SUB));
+    assert_eq!(node.facts, AllocFacts::default());
+    assert_eq!(o.graph.nodes().count(), 4);
+    assert!(o.page_dirs.is_empty());
+
+    drive(&mut o, &free_msg(CLIENT, HANDLE)).unwrap();
+    assert!(o.graph.origin_of(key).is_none());
+    let alloc = w::message(
+        fn_id::GSP_RM_ALLOC,
+        3,
+        &w::alloc_body(CLIENT, SUB, HANDLE, TIMER, 0, 0, &[]),
+    );
+    drive(&mut o, &alloc).unwrap();
+    assert_eq!(o.graph.origin_of(key).unwrap().parent, HObject(SUB));
+    assert_eq!(o.graph.nodes().count(), 4);
+}
+
+#[test]
+fn timer_allocation_keeps_transport_guards_and_does_not_admit_unknown_classes() {
+    let alloc = |class, size, flags| {
+        w::message(
+            fn_id::GSP_RM_ALLOC,
+            1,
+            &w::alloc_body(HEX_CLIENT, 0x8002, 0x8003, class, size, flags, &[]),
+        )
+    };
+    assert_eq!(
+        xlate(&alloc(4, 0, w::RMAPI_RPC_FLAGS_SERIALIZED)),
+        Err(BridgeRefusal::SerializedParams { class: 4 })
+    );
+    assert_eq!(
+        xlate(&alloc(4, u32::MAX, 0)),
+        Err(BridgeRefusal::ParamsSizeExceedsPayload {
+            declared: u32::MAX,
+            available: 0,
+        })
+    );
+    assert_eq!(
+        xlate(&w::message(
+            fn_id::GSP_RM_ALLOC,
+            1,
+            &w::alloc_body(0, 0x8002, 0x8003, 4, 0, 0, &[])
+        )),
+        Err(BridgeRefusal::ReservedClient)
+    );
+    assert!(matches!(
+        xlate(&alloc(0xb297, 0, 0)),
+        Err(BridgeRefusal::AllocClassNotPermitted { class: 0xb297, .. })
+    ));
+
+    // The source audit covers each measured tag. It grants a graph object, never
+    // an engine object; hardware families cannot change this resource class.
+    for version in kf_abi::generated::matrix::MEASURED {
+        // Measured is broader than supported: 615 uses an encrypted queue layout
+        // this branch deliberately refuses. Do not weaken that guard for the test.
+        if (version.major, version.minor, version.patch) == (615, 71, 9) {
+            assert!(matches!(
+                kf_abi::versions::table_for(*version),
+                Err(AbiError::NoEncoding {
+                    what: "GSP_MSG_QUEUE_ELEMENT",
+                    ..
+                })
+            ));
+            continue;
+        }
+        let table = kf_abi::versions::table_for(*version).unwrap();
+        assert_eq!(
+            table.alloc_params(ClassId(4)),
+            Some(kf_abi::versions::AllocParams::NoDeclaredFacts)
+        );
+        assert!(!matches!(
+            table.capabilities().alloc_class(ClassId(4)),
+            kf_abi::capability::AllocPermit::Denied(_)
+        ));
+    }
+}

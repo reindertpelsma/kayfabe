@@ -153,6 +153,7 @@ struct Kf3State {
     /* ★ EXPERIMENT x11-dispsw (2026-10-03, default off; option A, OWNER_RULINGS.md §N; V3_DISPLAY.md): twin
      * the guest's GF100_DISP_SW objects on the host with authored params, or refuse them by name. Rust's. */
     bool x11_dispsw;
+    char *gop_efi;  /* ★ ABI 19: a signed copy of the embedded GOP driver (OWNER_RULINGS §K) */
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -1328,7 +1329,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     s->discard_required = true;
 
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, &s->h, err, sizeof(err)) != 0) {
+                    s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, s->gop_efi, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         goto fail;
     }
@@ -1558,6 +1559,9 @@ static const Property kf3_properties[] = {
     /* ★ 2026-10-03: EXPERIMENT (V3_DISPLAY.md, the x11-dispsw note). OFF until OWNER_RULINGS §N's default-on
      * conditions hold; needs display=on. */
     DEFINE_PROP_BOOL("x11-dispsw", Kf3State, x11_dispsw, false),
+    /* ★ ABI 19 (2026-10-05, Windows integration): the boot display's driver, signed — validated by Rust as the
+     * embedded kf-gop plus an Authenticode signature; refused with gop=off. */
+    DEFINE_PROP_STRING("gop-efi", Kf3State, gop_efi),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),
     DEFINE_PROP_UINT32("doorbell-ioeventfd-max", Kf3State, db_ioeventfd_max, 256),
