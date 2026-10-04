@@ -3,6 +3,16 @@
 **STATUS: RESEARCH, 2026-10-05.** Branch `codex/windows-pool-2026-10-05`.
 No successful Windows-through-Kayfabe GPU workload is claimed here yet.
 
+**2026-10-05 ABI review follow-up:** the query now checks the compiler-measured
+40-byte layout and all six field offsets/widths for the exact configured tag,
+instead of accepting only 580.65.06. Both 24-byte and 40-byte control envelopes
+are tested across the 29 admitted guest ABIs; the measured encrypted 615 queue
+remains unsupported. The timer class ID also uses the compiled matrix. Validation:
+1,187 ABI/RM/chip tests passed, zero failed (`matrix-query-tests.log`). This does
+not expand the hardware claim beyond the Windows/host/GPU tuple below.
+The timer source audit script is only a textual spot-check, not a C semantic
+proof; see the correction in the design document.
+
 Host: native Linux 7.0.0-31-generic, NVIDIA open 595.91.07, RTX 4070 (AD104).
 Windows fixture: existing 580.88 installation with GSP forced, copied from the successful
 native reference. The original image is preserved; experiment runs use fresh overlays.

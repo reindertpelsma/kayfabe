@@ -7257,6 +7257,29 @@ pub const NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS_L0: Layout = Layout {
+    size: 40,
+    fields: &[
+        f("ctrlStructAlign", 16, 8, 0),
+        f("ctrlStructSize", 8, 8, 0),
+        f("maxSlots", 0, 4, 0),
+        f("poolAlign", 32, 8, 0),
+        f("poolSize", 24, 8, 0),
+        f("slotStride", 4, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS",
+    runs: &[
+        r(
+            v(535, 309, 1),
+            v(615, 71, 9),
+            Some(&NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS_L0),
+        ), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS_L0: Layout = Layout {
     size: 32,
     fields: &[
@@ -32757,6 +32780,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_GR_GET_TPC_MASK_PARAMS,
     &NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS,
     &NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS,
+    &NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS,
     &NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS,
     &NV2080_CTRL_GSP_GET_FEATURES_PARAMS,
     &NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS,

@@ -7,9 +7,17 @@ The previous Windows 580.88 run on Kayfabe refused `GR_GFX_POOL_QUERY_SIZE` imme
 before driver teardown. Ordering alone does not establish causality. The experiment supplies
 bounded virtual dimensions and compares startup with the same binary's default refusal.
 
-`KF3_GFX_POOL_PROBE=1` enables the experiment on the host. It is off by default and restricted
-to the audited Windows 580.88 / Linux 580.65.06 wire pair. The public `ctrl2080gr.h` query
-is 40 bytes: maximum slots, slot stride, control size/alignment, pool size/alignment.
+`KF3_GFX_POOL_PROBE=1` enables the experiment on the host. It is off by default.
+**Correction, 2026-10-05:** the original 580.65.06-only gate was an experiment limit,
+not a v3-compatible driver policy. The query now requires the exact driver tag's
+compiled layout to match all six fields and the 40-byte size. All 30 measured tags
+(535.309.01 through 615.71.09) have that layout; unmeasured tags fail closed, and
+the existing unsupported encrypted 615 queue is still refused separately. Both
+24-byte and 40-byte control envelopes are tested. This establishes ABI coverage,
+not runtime compatibility across GPUs or Windows releases. Hardware evidence is
+still only Windows 580.88 / guest wire 580.65.06 on AD104, host 595.91.07.
+The public `ctrl2080gr.h` query has maximum slots, slot stride, control
+size/alignment, and pool size/alignment.
 The experiment uses one 4-KiB page per virtual slot and one page for the control structure,
 with at most 4096 slots. **These are invented virtual dimensions, not NVIDIA's physical
 layout or a source-derived sizing formula.** The 64 entries in ADD/REMOVE are a batch limit,
@@ -49,7 +57,14 @@ this is not a complete implementation of TimerApi's parent/single-instance
 rules or its controls. Unsupported timer controls still fail. A later timer
 operation must validate its target and implement its actual behavior separately.
 
-This allocation behavior is source-derived across all 30 measured OGKM tags:
+**Audit qualification, 2026-10-05:** the repeatable source spot-check below uses
+regex/string matching, which departs from v3 §0.3's requirement for a real C parser.
+It is research evidence, not a compiler-verified semantic proof or a product-code
+generator. Manual source inspection explains the behavior; replacing this research
+helper with an AST audit would strengthen its repeatability. Product class IDs and
+query layouts use the compiled driver matrix, not this helper's output.
+
+The source spot-check reports the following across all 30 measured OGKM tags:
 `tmrapiConstruct_IMPL` only returns `NV_OK` and the destructor is empty.
 `resource_list.h` permits unprivileged allocation, has no parameters (`RS_NONE`),
 requires a Subdevice parent, and allows one instance per parent. The explicit
@@ -64,3 +79,17 @@ declared lengths and the reserved client namespace. Parameter bytes themselves
 are unused, as in the other `NoDeclaredFacts` classes; they cannot become host
 pointers. Admitting this class changes no control allowlist. Unknown `0xb297`
 remains refused. This branch has not met the integration/merge validation bar.
+
+At `60d36db5`, a fresh Windows run (`probe-c`) accepts timer allocation but still
+tears down immediately and reports Code 43; no GPU channel is created. Timer
+allocation alone does not fix startup. Source shows that a subsequent CPU mapping
+can fail locally because CHIP_INFO advertises TIMER as unavailable. That is the
+next hypothesis, not an established explanation of this Windows failure. Publishing
+a timer base requires genuine read-only host backing first; returning a zero page
+or fabricating a timer is not an acceptable substitute.
+
+**Existing-base security blocker:** this experiment inherits S1-21: identity/sysmem
+windows are mapped into mirrored passthrough spaces (`kf-qemu/src/mem.rs`). The new
+query/allocation delta adds no host forwarding, pointer access, or GPU completion,
+but the whole branch cannot be described as secure. Integration requires the private
+Translated-space fix and its validation, plus the exact-revision hardware merge bar.

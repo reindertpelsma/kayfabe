@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Check NV01_TIMER allocation semantics in every locally cloned measured tag."""
+"""Research-only NV01_TIMER textual spot-check across local measured tags.
+
+This uses regex/string matching, not a C parser. It cannot prove C semantics,
+preprocessor conditions, or callable behavior. It is not the v3 ABI generator
+and MUST NOT produce product policy. See V3_WINDOWS_POOL_EXPERIMENT.md.
+"""
 import argparse
 import re
 import subprocess

@@ -1,17 +1,45 @@
-//! GfxP pool query wire contract (OGKM 580.65.06, `ctrl2080gr.h:1298-1333`).
+//! GfxP pool query wire contract, checked against each measured OGKM driver tag.
 //!
 //! The experimental encoder describes a VIRTUAL pool used only by guest-kernel
 //! bookkeeping. These are not NVIDIA's physical pool dimensions. No captured
 //! per-die sizes are used. Host preemption storage must remain owned by host RM.
 
 /// `NV2080_CTRL_CMD_GR_GFX_POOL_QUERY_SIZE`.
-pub const QUERY_SIZE: u32 = 0x2080_121f;
+pub const QUERY_SIZE: u32 =
+    crate::generated::matrix::CTRL_LIMITS_NV2080_CTRL_CMD_GR_GFX_POOL_QUERY_SIZE.everywhere_u32();
 /// `sizeof(NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS)`.
 pub const QUERY_PARAMS_SIZE: usize = 40;
 /// Experiment resource limit, not the SDK's 64-entry add/remove batch limit.
 pub const EXPERIMENT_MAX_SLOTS: u32 = 4096;
 /// A virtual slot/control block occupies one 4-KiB guest page.
 const VIRTUAL_PAGE: u64 = 4096;
+
+/// Whether the exact measured driver layout is the wire contract this codec speaks.
+/// Unmeasured drivers or future incompatible layouts fail closed. This check covers
+/// all fields, rather than treating an unchanged total size as ABI compatibility.
+#[must_use]
+pub fn query_wire_is_measured(version: crate::DriverVersion) -> bool {
+    let Ok(Some(layout)) =
+        crate::generated::matrix::NV2080_CTRL_GR_GFX_POOL_QUERY_SIZE_PARAMS.at(version)
+    else {
+        return false;
+    };
+    let fields = [
+        ("maxSlots", 0, 4),
+        ("slotStride", 4, 4),
+        ("ctrlStructSize", 8, 8),
+        ("ctrlStructAlign", 16, 8),
+        ("poolSize", 24, 8),
+        ("poolAlign", 32, 8),
+    ];
+    layout.size() == QUERY_PARAMS_SIZE
+        && layout.fields.len() == fields.len()
+        && fields.iter().all(|(name, off, size)| {
+            layout
+                .field(name)
+                .is_some_and(|f| f.off == *off && f.size == *size && f.elem == 0)
+        })
+}
 
 /// Encode the bounded virtual sizing experiment. Does not initialize or use a pool.
 ///
@@ -38,6 +66,18 @@ pub fn experimental_query(params: &[u8]) -> Result<Vec<u8>, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn query_codec_matches_every_measured_driver_but_never_an_unmeasured_neighbor() {
+        for version in crate::generated::matrix::MEASURED {
+            assert!(query_wire_is_measured(*version), "{version:?}");
+        }
+        assert!(!query_wire_is_measured(crate::DriverVersion {
+            major: 580,
+            minor: 65,
+            patch: 7,
+        }));
+    }
 
     #[test]
     fn hostile_lengths_and_counts_are_refused() {
