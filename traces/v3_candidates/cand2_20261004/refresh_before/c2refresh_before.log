@@ -20,3 +20,13 @@ START 2026-10-04T11:07:25+00:00
 [boot_capture:c2refresh_before] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
 [boot_capture:c2refresh_before] guest did not power down in 30s (a wedged vcpu cannot); asking QEMU to quit on /workspace/bench/run_c2refresh_before.mon
 [boot_capture:c2refresh_before] ★ QEMU still alive after poweroff AND monitor quit — SIGKILL. ⊘ NO CENSUS in this run.
+[boot_capture:c2refresh_before] census present (kf3):
+    kf3: family=Ampere phase=Running trapped=9575 applied=2364 refused=4 serviced=510 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=271 walks=277/277 cleared=271 superseded=0 named_missed=6 unreconciled=0 mapped=367 unmapped=243 clipped=0x0 held=0 vmm_overlaps=0 priv_withhel
+    DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029 fast=0
+    DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=0 host=0x10028 fast=0
+[boot_capture:c2refresh_before] ★ refusing to carry an EMPTY /workspace/bench/run_c2refresh_before_dmesg_after.log into the repo
+[boot_capture:c2refresh_before] evidence carried into the repo: /workspace/bench/cand2-display-checks/traces/guest_boots/run_c2refresh_before_{qemu,dmesg,probe,hostdmesg}.log
+[boot_capture:c2refresh_before] ★ NOW COMMIT THEM. `git commit -- <path>` does NOT add untracked files;
+[boot_capture:c2refresh_before]   run scripts/bench/assert_boot_evidence.sh before claiming BOOTED.
+[boot_capture:c2refresh_before] done. serial=/workspace/bench/run_c2refresh_before_serial.log qemu=/workspace/bench/run_c2refresh_before_qemu.log dmesg=/workspace/bench/run_c2refresh_before_dmesg.log dmesg_after=/workspace/bench/run_c2refresh_before_dmesg_after.log probe=/workspace/bench/run_c2refresh_before_probe.log hostdmesg=/workspace/bench/run_c2refresh_before_hostdmesg.log
+EXIT rc=0 2026-10-04T11:09:55+00:00

@@ -87,3 +87,9 @@ its recorded PID after the bounded probe; no host Xid occurred. The first
 launcher (`c2refresh_old.log`) never booted: it used the wrong override variable,
 `KF3_BIN`; `boot_capture.sh` requires `QEMU_BIN`. It is not a hardware result.
 The final `cand2b` bar at `9d82f259` has now started on vmb.
+
+Replacement display box preparation finished `EXIT rc=0` at 11:22:07 UTC.
+`vdisp2_provision/` retains the successful tree/fast-guest retry, exact-source
+build and graphics/desktop/broker preparation. Host NVIDIA Xorg 580.159.04, DRI3
+and Present are active; nvidia-drm modeset was reloaded to Y before any guest
+test started. Broker is `9f2fd00`, host session user 1000.
