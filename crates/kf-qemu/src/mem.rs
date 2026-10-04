@@ -518,6 +518,79 @@ pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u
 /// resolver refuses a write, release or reduction through.
 pub type PlacedRow = (u64, u64, bool, kf_host::MapPerm);
 
+/// ★ P1+P2 review fix (2026-10-04, `V3_P1P2_TSPACE.md` §7.13) — **every change the walk commits
+/// to a mirror's placement rows, numbered.** The stale-bind counter asks which change landed while
+/// a bound piece's fence was still incomplete ([`kf_chan::tmode::Rows::changed_since`]). ⊘ Bumped
+/// while the rows' WRITE lock is held and read under their READ guard ([`resolve_rows_epoch`]), so
+/// a resolution and the epoch recorded with it always agree. Bounded: the oldest entries go, and
+/// a question reaching past them is answered `Unknown`.
+#[derive(Debug, Default)]
+pub struct RowsLog {
+    epoch: AtomicU64,
+    log: Mutex<std::collections::VecDeque<(u64, u64, u64, std::time::Instant)>>,
+}
+
+/// Entries a [`RowsLog`] keeps.
+const ROWS_LOG_MAX: usize = 4096;
+
+impl RowsLog {
+    /// A change to the rows over `[lo, hi)` — call with the rows' write lock HELD.
+    pub fn commit(&self, lo: u64, hi: u64) {
+        let e = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        if let Ok(mut l) = self.log.lock() {
+            if l.len() >= ROWS_LOG_MAX {
+                l.pop_front();
+            }
+            l.push_back((e, lo, hi, std::time::Instant::now()));
+        }
+    }
+
+    /// The current epoch (the number of commits).
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch.load(Ordering::Acquire)
+    }
+
+    /// The earliest commit after `epoch` touching `[va, va+len)`, and when it landed.
+    #[must_use]
+    pub fn changed_since(&self, epoch: u64, va: u64, len: u64) -> kf_chan::tmode::Changed {
+        use kf_chan::tmode::Changed;
+        let Ok(l) = self.log.lock() else {
+            return Changed::Unknown;
+        };
+        let reaches = l
+            .front()
+            .map_or(self.epoch() <= epoch, |c| c.0 <= epoch + 1);
+        if !reaches {
+            return Changed::Unknown;
+        }
+        let end = va.saturating_add(len);
+        l.iter()
+            .find(|c| c.0 > epoch && c.1 < end && va < c.2)
+            .map_or(Changed::No, |c| Changed::At(c.3))
+    }
+}
+
+/// ★ [`kf_chan::tmode::Rows::resolve_epoch`] over a mirror: the spans of `[va, va+len)` and the
+/// rows' epoch, both read under ONE read guard (a commit bumps the epoch under the write lock).
+pub fn resolve_rows_epoch(
+    rows: &PlacedRows,
+    log: &RowsLog,
+    va: u64,
+    len: u64,
+) -> (Result<Vec<kf_chan::tmode::Span>, u64>, u64) {
+    let Ok(r) = rows.read() else {
+        return (Err(va), 0);
+    };
+    let epoch = log.epoch();
+    let spans = kf_chan::tmode::resolve_spans(va, len, |at| {
+        let (&start, &(rlen, off, ram, perm)) = r.range(..=at).next_back()?;
+        let end = start.checked_add(rlen)?;
+        (at < end).then(|| (ram, off + (at - start), end - at, perm))
+    });
+    (spans, epoch)
+}
+
 /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.4): what [`cut_rows`] changed, so the record
 /// can be put back exactly when the host refuses the range unmap.
 #[derive(Debug, Default)]
@@ -707,6 +780,9 @@ pub struct GpuMirror {
     pub vas: HostVas<'static>,
     /// Our placements (see [`PlacedRows`]).
     pub rows: PlacedRows,
+    /// ★ Review fix 2026-10-04: every change committed to `rows`, numbered ([`RowsLog`]) — shared
+    /// with the channel plane's [`Mirror::log`].
+    pub log: std::sync::Arc<RowsLog>,
     /// ★ P6b: OUR VMM placements in this space — the two windows and the ring region.
     pub reserved: Vec<(u64, u64)>,
     /// ★ `V3_BATCHED_MAP.md`: guest RAM as QEMU registered it — the memfd a batch is stitched from
@@ -784,7 +860,7 @@ impl GpuMirror {
     #[must_use]
     pub fn new(
         vas: HostVas<'static>,
-        rows: PlacedRows,
+        (rows, log): (PlacedRows, std::sync::Arc<RowsLog>),
         reserved: Vec<(u64, u64)>,
         ram: Option<&'static RamMap>,
         kernel_vas: std::sync::Arc<crate::twin::TwinState>,
@@ -792,6 +868,7 @@ impl GpuMirror {
         GpuMirror {
             vas,
             rows,
+            log,
             reserved,
             ram,
             bv: kf_mem::batch::BatchedVas::new(vas),
@@ -887,6 +964,7 @@ impl MapTarget for GpuMirror {
             && let Ok(mut r) = self.rows.write()
         {
             r.insert(d.va, (d.len, d.off, d.ram, d.perm));
+            self.log.commit(d.va, d.va.saturating_add(d.len));
         }
         Ok(m)
     }
@@ -911,6 +989,7 @@ impl MapTarget for GpuMirror {
         if let Ok(mut r) = self.rows.write() {
             for d in rows {
                 r.insert(d.va, (d.len, d.off, d.ram, d.perm));
+                self.log.commit(d.va, d.va.saturating_add(d.len));
             }
         }
         Ok(())
@@ -956,7 +1035,10 @@ impl MapTarget for GpuMirror {
         // vvid vid11]` refused `Other(87)`, leaving the space unsettled): answered with no host call.
         let row = match self.rows.write() {
             Ok(mut r) => match r.remove(&va) {
-                Some(row) => row,
+                Some(row) => {
+                    self.log.commit(va, va.saturating_add(row.0));
+                    row
+                }
                 None => {
                     eprintln!(
                         "kf3: mem unmap {va:#x}: no placement of ours there (host-held or handed to host RM) — no host call"
@@ -993,7 +1075,13 @@ impl MapTarget for GpuMirror {
         let cut = self
             .rows
             .write()
-            .map(|mut r| cut_for(crate::tspace::inca_strict(), &mut r, va, end))
+            .map(|mut r| {
+                let cut = cut_for(crate::tspace::inca_strict(), &mut r, va, end);
+                if !cut.original.is_empty() {
+                    self.log.commit(va, end);
+                }
+                cut
+            })
             .unwrap_or_default();
         // ★★★ v3-cdp: the range takes any SKED-reflected placement of ours inside it down too.
         let sked_removed: Vec<(u64, u64)> = self
@@ -1012,6 +1100,9 @@ impl MapTarget for GpuMirror {
         self.calls.ranges.fetch_add(1, Ordering::Relaxed);
         if r.is_err() {
             if let Ok(mut rows) = self.rows.write() {
+                if !cut.original.is_empty() {
+                    self.log.commit(va, end);
+                }
                 uncut_rows(&mut rows, cut);
             }
             if let Ok(mut k) = self.sked.lock() {
@@ -1058,6 +1149,9 @@ pub struct Mirror {
     /// Translated channel here; the memory plane's [`GpuMirror`] reads it to decide whether a
     /// privileged guest leaf may be mirrored.
     pub kernel_vas: std::sync::Arc<crate::twin::TwinState>,
+    /// ★ Review fix 2026-10-04: the commit log of `rows` ([`RowsLog`]), shared with the walker's
+    /// [`GpuMirror::log`].
+    pub log: std::sync::Arc<RowsLog>,
 }
 
 /// ★★★ v3-roperm: a mirror's starting classification — KERNEL for one of the guest RM's own
@@ -1511,6 +1605,11 @@ pub struct Inbox {
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): how many times the guest's RM gave BAR1 up
     /// (the drainer bumps it; the VA thread re-seeds the boot framebuffer when it moved).
     bar1_physical: AtomicU64,
+    /// ★ P1+P2 review fix (2026-10-04, §3.5): the VA thread has a walk in flight or pending, or an
+    /// armed invalidate — published by it at the end of every loop ([`Inbox::set_walk_busy`]).
+    walk_busy: std::sync::atomic::AtomicBool,
+    /// Guest tokens of Translated channels waiting for a pending walk to land.
+    walk_waiters: Mutex<Vec<u32>>,
 }
 
 impl Inbox {
@@ -1531,7 +1630,44 @@ impl Inbox {
             split_results: Mutex::new(std::collections::HashMap::new()),
             next_ticket: AtomicU64::new(1),
             bar1_physical: AtomicU64::new(0),
+            walk_busy: std::sync::atomic::AtomicBool::new(false),
+            walk_waiters: Mutex::new(Vec::new()),
         })
+    }
+
+    /// ★ Review fix 2026-10-04 (§3.5) — **a walk the guest asked for has not landed yet**: the VA
+    /// thread says so ([`Inbox::set_walk_busy`]), a statement is unsettled, or a split is queued
+    /// or running. A T-mode operand with no row then waits for it instead of being refused.
+    #[must_use]
+    pub fn walk_busy(&self) -> bool {
+        self.walk_busy.load(Ordering::Acquire)
+            || !self.all_settled()
+            || self.splits.lock().is_ok_and(|q| !q.is_empty())
+            || self.split_tokens.lock().is_ok_and(|m| !m.is_empty())
+    }
+
+    /// The VA thread, at the end of every loop: whether it has a walk in flight or pending.
+    pub fn set_walk_busy(&self, busy: bool) {
+        self.walk_busy.store(busy, Ordering::Release);
+    }
+
+    /// A worker: channel `token` waits for the pending walk to land (rung by the VA thread when it
+    /// is idle — at most one loop later, so a registration racing the take is never lost).
+    pub fn wait_walk(&self, token: u32) {
+        if let Ok(mut w) = self.walk_waiters.lock()
+            && !w.contains(&token)
+        {
+            w.push(token);
+        }
+        let _ = self.wake.signal();
+    }
+
+    /// The VA thread, idle: the tokens to ring.
+    pub fn take_walk_waiters(&self) -> Vec<u32> {
+        self.walk_waiters
+            .lock()
+            .map(|mut w| std::mem::take(&mut *w))
+            .unwrap_or_default()
     }
 
     /// ★ 2026-10-03 (B5), the drainer: the guest's RM gave BAR1 up — ask the VA thread to show the
@@ -2027,6 +2163,7 @@ fn twin_record(
             live: Default::default(),
             rings,
             kernel_vas: kernel_vas_for(key),
+            log: std::sync::Arc::default(),
         },
         // ⊘ Not [`vmm_ranges`]: that one always names the ring region, and a T-mode twin has
         // none — only a window, when the positive control mapped one, is a VMM range here.
@@ -2070,10 +2207,11 @@ fn record_twin(
     store: u32,
 ) {
     let TwinRecord { mirror, reserved } = rec;
-    let (space, ram_obj, rows, kernel_vas) = (
+    let (space, ram_obj, rows, log, kernel_vas) = (
         mirror.space,
         mirror.ram_obj,
         mirror.rows.clone(),
+        mirror.log.clone(),
         mirror.kernel_vas.clone(),
     );
     if let Ok(mut mm) = plane.mirrors.lock() {
@@ -2088,7 +2226,7 @@ fn record_twin(
                 store,
                 ram_obj,
             },
-            rows,
+            (rows, log),
             reserved,
             Some(plane.ram),
             kernel_vas,
@@ -2169,6 +2307,7 @@ fn create_mirror(
     let rows = PlacedRows::default();
     let rings = RingSlots::default();
     let kernel_vas = kernel_vas_for(key);
+    let log = std::sync::Arc::<RowsLog>::default();
     let line = match (&fb_base, &ram_base) {
         (Ok(fb), Some(Ok((rb, rl)))) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
@@ -2184,6 +2323,7 @@ fn create_mirror(
                         live: Default::default(),
                         rings: rings.clone(),
                         kernel_vas: kernel_vas.clone(),
+                        log: log.clone(),
                     },
                 );
             }
@@ -2206,6 +2346,7 @@ fn create_mirror(
                         live: Default::default(),
                         rings: rings.clone(),
                         kernel_vas: kernel_vas.clone(),
+                        log: log.clone(),
                     },
                 );
             }
@@ -2240,7 +2381,7 @@ fn create_mirror(
                 store,
                 ram_obj: ram_obj.map(|(o, _)| o),
             },
-            rows,
+            (rows, log),
             reserved,
             Some(plane.ram),
             kernel_vas,
@@ -2567,6 +2708,7 @@ pub fn apply_statement(
                     let reserved = vmm_ranges(Some((sp.fb_base, plane.fb_len)), sp.ram);
                     // ★ v3-roperm: a recycled host space is classified afresh for its new object.
                     let kernel_vas = kernel_vas_for(key);
+                    let log = std::sync::Arc::<RowsLog>::default();
                     if let Ok(mut mm) = plane.mirrors.lock() {
                         mm.insert(
                             key,
@@ -2580,6 +2722,7 @@ pub fn apply_statement(
                                 live: Default::default(),
                                 rings: sp.rings.clone(),
                                 kernel_vas: kernel_vas.clone(),
+                                log: log.clone(),
                             },
                         );
                     }
@@ -2596,7 +2739,7 @@ pub fn apply_statement(
                                 store,
                                 ram_obj: sp.ram_obj,
                             },
-                            rows,
+                            (rows, log),
                             reserved,
                             Some(plane.ram),
                             kernel_vas,
@@ -2801,6 +2944,68 @@ mod tests {
     ) -> Option<(bool, u64)> {
         let (&start, &(len, off, ram, _)) = rows.range(..=va).next_back()?;
         (va < start + len).then(|| (ram, off + (va - start)))
+    }
+
+    /// ★ Review fix 2026-10-04 (§7.13) — **the rows' commit log**: every commit bumps the epoch
+    /// and names the range it changed; `changed_since` finds the FIRST commit after an epoch that
+    /// overlaps a range and when it landed, says `No` when none did, and `Unknown` once the log no
+    /// longer reaches back to the epoch. A resolution reads the epoch under the same guard.
+    #[test]
+    fn the_rows_commit_log_answers_what_changed_since_a_bind() {
+        use kf_chan::tmode::Changed;
+        let log = RowsLog::default();
+        let rows = PlacedRows::default();
+        if let Ok(mut r) = rows.write() {
+            r.insert(
+                0x1000,
+                (0x1000, 0x10_0000, false, kf_host::MapPerm::READ_WRITE),
+            );
+            log.commit(0x1000, 0x2000);
+        }
+        let (spans, epoch) = resolve_rows_epoch(&rows, &log, 0x1800, 0x100);
+        assert_eq!((spans.map(|s| s.len()), epoch), (Ok(1), 1));
+        assert_eq!(log.changed_since(1, 0x1800, 0x100), Changed::No);
+        log.commit(0x9000, 0xA000); // elsewhere
+        assert_eq!(log.changed_since(1, 0x1800, 0x100), Changed::No);
+        log.commit(0x1000, 0x2000); // this row, epoch 3
+        let Changed::At(t) = log.changed_since(1, 0x1800, 0x100) else {
+            panic!("a change after the bind")
+        };
+        assert!(t <= std::time::Instant::now());
+        assert_eq!(log.changed_since(3, 0x1800, 0x100), Changed::No);
+        // Past the bounded log's reach: Unknown, never a guess.
+        let full = RowsLog::default();
+        for k in 0..(ROWS_LOG_MAX as u64 + 10) {
+            full.commit(k << 12, (k + 1) << 12);
+        }
+        assert_eq!(full.changed_since(2, 0, 0x1000), Changed::Unknown);
+        assert_eq!(
+            full.changed_since(full.epoch(), 0, 0x1000),
+            Changed::No,
+            "nothing after the newest epoch"
+        );
+    }
+
+    /// ★ Review fix 2026-10-04 (§3.5): a walk is pending while the VA thread says so or a split is
+    /// queued; a channel waiting for one is rung once, when the VA thread takes the waiters.
+    #[test]
+    fn a_walk_waiter_is_registered_once_and_taken() {
+        let inbox = Inbox::new().expect("inbox");
+        assert!(!inbox.walk_busy());
+        inbox.set_walk_busy(true);
+        assert!(inbox.walk_busy());
+        inbox.set_walk_busy(false);
+        let t = inbox.request_split(7, None);
+        assert!(inbox.walk_busy(), "a queued split is a pending walk");
+        let _ = inbox.take_split_requests();
+        assert!(inbox.walk_busy(), "a running split too");
+        let _ = inbox.finish_split(t, Ok(()));
+        assert!(!inbox.walk_busy());
+        inbox.wait_walk(5);
+        inbox.wait_walk(5);
+        inbox.wait_walk(9);
+        assert_eq!(inbox.take_walk_waiters(), vec![5, 9]);
+        assert!(inbox.take_walk_waiters().is_empty());
     }
 
     /// A host that counts every window map and places it where RM placed `GROWS_DOWN` windows.

@@ -428,6 +428,9 @@ struct Mem<'a> {
     /// The bound of the CPU store views ([`store_read_bound`]).
     store_len: u64,
     views: &'a mut StoreViews,
+    /// ★ Review fix 2026-10-04: the VA thread's inbox — whether a walk is pending
+    /// ([`crate::mem::Inbox::walk_busy`]).
+    inbox: &'a crate::mem::Inbox,
 }
 
 /// ★ P1+P2 review fix (HIGH, 2026-10-04) — **the bound on the CPU store views a Translated
@@ -463,6 +466,16 @@ impl kf_chan::tmode::Rows for Mem<'_> {
     }
     fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
         self.ram.dma_to_file_range(dma, len)
+    }
+    // ★ Review fix 2026-10-04 (§3.5, §7.13): the rows' commit log and the walk-pending signal.
+    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<kf_chan::tmode::Span>, u64>, u64) {
+        crate::mem::resolve_rows_epoch(&self.mirror.rows, &self.mirror.log, va, len)
+    }
+    fn changed_since(&self, epoch: u64, va: u64, len: u64) -> kf_chan::tmode::Changed {
+        self.mirror.log.changed_since(epoch, va, len)
+    }
+    fn walk_pending(&self) -> bool {
+        self.inbox.walk_busy()
     }
 }
 
@@ -3595,10 +3608,11 @@ impl ChanPlane {
             if let Some(Ok(t)) = self.tspace.get() {
                 t.give_ring(ring_va, released);
             }
-            let (checked, stale) = g.chan.stale_binds();
             eprintln!(
-                "kf3: TSPACE-RETIRE tok={:#x} host={ht:#x} key={:?} ring_va={ring_va:#x} released={released} stale_binds={stale}/{checked}",
-                g.guest_idx, g.key
+                "kf3: TSPACE-RETIRE tok={:#x} host={ht:#x} key={:?} ring_va={ring_va:#x} released={released} {}",
+                g.guest_idx,
+                g.key,
+                g.chan.stale_line()
             );
         } else if released {
             crate::mem::give_ring_slot(&g.mirror.rings, ring_va);
@@ -3760,6 +3774,7 @@ impl ChanPlane {
             store: self.store,
             store_len,
             views: &mut g.views,
+            inbox: &self.inbox,
         };
         let win = SlotWindow {
             mirror: &mirror,
@@ -3780,6 +3795,11 @@ impl ChanPlane {
             is_any_ce_class,
             &win,
         );
+        // ★ Review fix 2026-10-04 (§3.5): a stash waiting for a pending walk is rung by the VA
+        // thread once it is idle again.
+        if g.chan.waiting_on_walk() {
+            self.inbox.wait_walk(g.guest_idx);
+        }
         // ★ P1+P2 inc A: what this pump counted (count-only), summed for the status line.
         let inca = g.chan.inca().total();
         if inca > g.inca_seen {

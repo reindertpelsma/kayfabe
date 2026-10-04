@@ -1792,6 +1792,22 @@ impl Device {
                 }
                 bar1_phys_lines = bar1_phys_lines.saturating_add(1);
             }
+            // ★ P1+P2 review fix (2026-10-04, §3.5): publish whether a walk is in flight or
+            // pending; when none is, ring the Translated channels waiting for one to land (a
+            // T-mode operand that had no row yet). Every idle loop, so a late registration is
+            // rung at most one loop later.
+            let walk_busy = m.in_flight()
+                || m.pending() > 0
+                || !self.mem.inbox.all_settled()
+                || self.mem.port.armed_request().is_some();
+            self.mem.inbox.set_walk_busy(walk_busy);
+            if !walk_busy {
+                for tok in self.mem.inbox.take_walk_waiters() {
+                    if self.plane.ring_internal(tok) {
+                        let _ = self.worker_efd.signal();
+                    }
+                }
+            }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
                 eprintln!(
                     "kf3: mem t={:.3}s REFUSED {why}",

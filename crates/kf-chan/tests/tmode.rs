@@ -3,7 +3,8 @@
 //! emitted word authored, every emitted address inside a window, every emitted method allowlisted.
 use kf_abi::submit::{ce, method_header_decode, method_header_inc};
 use kf_chan::tmode::{
-    CHUNK_BYTES, Ir, MAX_PIECES, Operand, Rows, Shadow, Span, bind, chunk, decode, resolve_spans,
+    CHUNK_BYTES, Changed, Ir, MAX_PIECES, Operand, Rows, Shadow, Span, bind, chunk, decode,
+    resolve_spans,
 };
 use kf_chan::translated::{CeState, Refusal, Target, Window, rewrite};
 use kf_chan::tspace_unsafe::TWindows;
@@ -21,9 +22,16 @@ fn windows() -> TWindows {
     TWindows::new(FB, RAM, LIMIT).unwrap()
 }
 
-/// The guest VA space's placement rows: `va -> (len, ram, off, perm)`.
+/// One commit of a rows log: `(epoch, lo, hi, when)`.
+type Commit = (u64, u64, u64, std::time::Instant);
+
+/// The guest VA space's placement rows: `va -> (len, ram, off, perm)`, and — for the stale-bind
+/// tests — a commit log with the current epoch (`None`: no log kept).
 #[derive(Default, Clone)]
-struct MockRows(BTreeMap<u64, (u64, bool, u64, MapPerm)>);
+struct MockRows(
+    BTreeMap<u64, (u64, bool, u64, MapPerm)>,
+    Option<(u64, Vec<Commit>)>,
+);
 impl MockRows {
     fn row(mut self, va: u64, len: u64, ram: bool, off: u64) -> Self {
         self.0.insert(va, (len, ram, off, MapPerm::READ_WRITE));
@@ -43,6 +51,20 @@ impl Rows for MockRows {
     }
     fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
         (dma.checked_add(len)? <= RAM.1).then_some(dma)
+    }
+    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<Span>, u64>, u64) {
+        (self.resolve(va, len), self.1.as_ref().map_or(0, |l| l.0))
+    }
+    fn changed_since(&self, epoch: u64, va: u64, len: u64) -> Changed {
+        let Some((_, log)) = &self.1 else {
+            return Changed::Unknown;
+        };
+        if log.first().is_some_and(|c| c.0 > epoch + 1) {
+            return Changed::Unknown; // the log no longer reaches back to `epoch`
+        }
+        log.iter()
+            .find(|c| c.0 > epoch && c.1 < va + len && va < c.2)
+            .map_or(Changed::No, |c| Changed::At(c.3))
     }
 }
 
@@ -1527,12 +1549,16 @@ fn busy_stash(chunks: usize) {
     assert_eq!(launches, n);
 }
 
-/// ★ §7 test 13 — **the stale-bind counter**: a resolution re-checked at retire against unchanged
-/// rows is not stale; against rows a walk changed it is; and its positive control
-/// (`KF3_NEGCTL_STALE_BIND`) makes it move with nothing changed.
+/// ★ §7 test 13 — **the stale-bind counter** (review fix 2026-10-04): a bound resolution is
+/// checked at its fence's retire against the rows' COMMIT LOG — a change committed while the
+/// runner last saw the fence INCOMPLETE is `stale` (the gated count); one committed after that (the
+/// guest saw its release, then unmapped and remapped — what UVM does routinely) is `late`, never
+/// gated; no change, or a change elsewhere, is neither; a log that no longer reaches the bind is
+/// `indeterminate`. ⊘ The positive control (`KF3_NEGCTL_STALE_BIND`) makes `stale` move.
 #[test]
 fn the_stale_bind_counter_and_its_positive_control() {
     use kf_chan::tmode::{StaleBind, bind_rec};
+    use std::time::{Duration, Instant};
     let mut pb = m(SUB, 0, &[0xc7b5]);
     pb.extend(m(
         SUB,
@@ -1547,24 +1573,129 @@ fn the_stale_bind_counter_and_its_positive_control() {
     pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x100]));
     pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182]));
     let ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
-    let rows_a = MockRows::default().row(VA_FB, 0x1000, false, 0x40_0000);
-    let rows_b = MockRows::default().row(VA_FB, 0x1000, false, 0x50_0000);
+    let t0 = Instant::now();
+    let at = |ms: u64| t0 + Duration::from_millis(ms);
+    // Rows at epoch 7 when bound; a commit log with what happened after.
+    let rows_with = |log: Vec<Commit>, first: u64| {
+        let mut r = MockRows::default().row(VA_FB, 0x1000, false, 0x40_0000);
+        let mut l = vec![(first, 0, 0, t0)];
+        l.extend(log);
+        r.1 = Some((7, l));
+        r
+    };
     let bound = |rows: &MockRows| {
         let mut rec = Vec::new();
         for it in &ir {
             bind_rec(it, rows, &windows(), &mut Vec::new(), &mut rec).unwrap();
         }
+        assert!(
+            rec.iter().all(|b| b.epoch == 7),
+            "the epoch is recorded at bind"
+        );
         rec
     };
-    for (negctl, retire_rows, want_stale) in
-        [(false, &rows_a, 0), (false, &rows_b, 2), (true, &rows_a, 2)]
-    {
+    // (log after the bind, negctl) -> (stale, late, indeterminate), with the fence pushed at 0 ms,
+    // seen incomplete at 10 ms and complete at 20 ms.
+    let over = |lo: u64| (lo, lo + 0x1000); // the row both operands resolve through
+    type Case = (Vec<Commit>, u64, bool, (u64, u64, u64));
+    let cases: [Case; 6] = [
+        (vec![], 7, false, (0, 0, 0)),
+        // A walk changed the operand's rows at 5 ms: the fence was still incomplete at 10 ms.
+        (
+            vec![(8, over(VA_FB).0, over(VA_FB).1, at(5))],
+            7,
+            false,
+            (2, 0, 0),
+        ),
+        // The same change at 15 ms — after the last incomplete reading: late, not gated.
+        (
+            vec![(8, over(VA_FB).0, over(VA_FB).1, at(15))],
+            7,
+            false,
+            (0, 2, 0),
+        ),
+        // A change somewhere else: nothing.
+        (
+            vec![(8, 0x9_0000_0000, 0x9_0000_1000, at(5))],
+            7,
+            false,
+            (0, 0, 0),
+        ),
+        // The log no longer reaches back to the bind's epoch.
+        (vec![], 9, false, (0, 0, 2)),
+        // The positive control: stale with nothing changed.
+        (vec![], 7, true, (2, 0, 0)),
+    ];
+    for (log, first, negctl, want) in cases {
+        let rows = rows_with(log, first);
         let mut s = StaleBind::default();
         s.negctl = negctl;
-        s.record(7, bound(&rows_a));
-        s.retire(6, retire_rows);
-        assert_eq!(s.checked, 0, "fence 7 has not completed at 6");
-        s.retire(7, retire_rows);
-        assert_eq!((s.checked, s.stale), (2, want_stale), "negctl={negctl}");
+        s.record(3, bound(&rows), t0);
+        s.observe(2, &rows, at(10));
+        assert_eq!(s.checked, 0, "fence 3 has not completed at 2");
+        s.observe(3, &rows, at(20));
+        assert_eq!(s.checked, 2);
+        assert_eq!(
+            (s.stale, s.late, s.indeterminate),
+            want,
+            "negctl={negctl} first={first}"
+        );
     }
+}
+
+/// ★ Review fix 2026-10-04 (§3.5) — **an operand with no row yet is handed back, not refused,
+/// by the pusher**: everything bound before it is pushed, the rest comes back UNBOUND with the
+/// refusal the runner makes only when nothing can bring the row ([`kf_chan::host::wait_on`]: a
+/// walk pending on the space, else an unfinished host acquire ahead of it).
+#[test]
+fn an_unresolved_operand_is_handed_back_unbound() {
+    use kf_chan::host::{WaitOn, wait_on};
+    use kf_chan::tmode::{Pushed, is_acquire, push_bound};
+    let late_va = 0x6_0000_0000u64;
+    let copy = |va: u64| {
+        let mut pb = m(
+            SUB,
+            ce::OFFSET_IN_UPPER,
+            &[(va >> 32) as u32, va as u32, 0, 0x20_0000],
+        );
+        pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x100]));
+        pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182 | (1 << 13)]));
+        pb
+    };
+    let mut pb = m(SUB, 0, &[0xc7b5]);
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(copy(VA_FB));
+    // A host acquire (SEM_EXECUTE ACQ_CIRC_GEQ) on a semaphore another channel releases.
+    pb.extend(m(
+        0,
+        0x5C,
+        &[VA_FB as u32 + 0x80, (VA_FB >> 32) as u32, 1, 0, 3],
+    ));
+    pb.extend(copy(late_va)); // its row arrives only with the other channel's walk
+    let ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+    assert_eq!(ir.iter().filter(|i| is_acquire(i)).count(), 1);
+    let mut pushes = Vec::new();
+    let r = push_bound(&ir, &rows(), &windows(), &mut Vec::new(), |w| {
+        pushes.push(w.to_vec());
+        Ok(true)
+    })
+    .unwrap();
+    let Pushed::Unresolved { rest, pieces, why } = r else {
+        panic!("{r:?}")
+    };
+    assert_eq!(pieces, 1, "everything before it was pushed");
+    assert!(matches!(why, Refusal::VirtualUnresolved { va, .. } if va == late_va));
+    assert!(
+        matches!(rest[0], Ir::Launch(_)),
+        "the unresolved item heads the rest, unbound"
+    );
+    // Re-pushed after the walk landed its row: bound to it.
+    let after = rows().row(late_va, 0x1000, false, 0x70_0000);
+    let r = push_bound(&rest, &after, &windows(), &mut Vec::new(), |_| Ok(true)).unwrap();
+    assert!(matches!(r, Pushed::All { .. }));
+    // The runner's decision.
+    assert_eq!(wait_on(true, false), Some(WaitOn::Walk));
+    assert_eq!(wait_on(true, true), Some(WaitOn::Walk));
+    assert_eq!(wait_on(false, true), Some(WaitOn::Acquire));
+    assert_eq!(wait_on(false, false), None, "unmapped: refused by name");
 }

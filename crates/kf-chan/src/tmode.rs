@@ -68,6 +68,42 @@ pub trait Rows {
     /// ★ The vIOMMU seam (§2.6): the memfd offset of guest DMA range `[dma, dma+len)` when it is one
     /// contiguous run — today `RamMap::file_range`; under a vIOMMU, IOVA→GPA first.
     fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64>;
+
+    /// ★ Review fix 2026-10-04 (§3.5, §7.13): [`Rows::resolve`] together with the rows' change
+    /// EPOCH, read under the same guard — the epoch the walk bumps with every commit it makes to
+    /// these rows. The default (no epoch kept) answers 0.
+    ///
+    /// # Errors
+    /// As [`Rows::resolve`].
+    fn resolve_epoch(&self, va: u64, len: u64) -> (Result<Vec<Span>, u64>, u64) {
+        (self.resolve(va, len), 0)
+    }
+
+    /// ★ The earliest commit after `epoch` that changed rows overlapping `[va, va+len)` — when it
+    /// landed — so the stale-bind counter can tell a change the engine may have run behind from
+    /// one made after the guest saw the work complete. The default keeps no log: `Unknown`.
+    fn changed_since(&self, epoch: u64, va: u64, len: u64) -> Changed {
+        let _ = (epoch, va, len);
+        Changed::Unknown
+    }
+
+    /// ★ A walk the guest asked for has not landed yet in this space's rows (an invalidate, a
+    /// split or a statement the VA thread has not applied). A virtual operand no row covers is
+    /// then WAITED on — re-bound after the walk — rather than refused (§3.5). Default: none.
+    fn walk_pending(&self) -> bool {
+        false
+    }
+}
+
+/// What [`Rows::changed_since`] found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Changed {
+    /// No commit since the epoch touched the range.
+    No,
+    /// The first commit since the epoch that touched it landed at this instant.
+    At(std::time::Instant),
+    /// The log no longer reaches back to the epoch (or none is kept).
+    Unknown,
 }
 
 /// ★ The pure core of [`Rows::resolve`]: walk `prefix(va) = (ram, off, bytes left in the row, perm)`
@@ -1330,6 +1366,8 @@ pub struct Bound {
     pub len: u64,
     /// The spans it resolved to.
     pub spans: Vec<Span>,
+    /// ★ The rows' epoch it was resolved at ([`Rows::resolve_epoch`]).
+    pub epoch: u64,
 }
 
 /// A [`Rows`] that records every resolution it answers.
@@ -1340,11 +1378,13 @@ struct Recording<'a> {
 
 impl Rows for Recording<'_> {
     fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, u64> {
-        let r = self.inner.resolve(va, len)?;
+        let (r, epoch) = self.inner.resolve_epoch(va, len);
+        let r = r?;
         self.rec.borrow_mut().push(Bound {
             va,
             len,
             spans: r.clone(),
+            epoch,
         });
         Ok(r)
     }
@@ -1389,6 +1429,37 @@ pub enum Pushed {
         /// Pushes made before the ring filled.
         pieces: usize,
     },
+    /// ★ Review fix 2026-10-04 (§3.5): an item's virtual operand had NO placement row at bind —
+    /// `rest` (that item on) was NOT pushed and stays UNBOUND; everything before it was. The
+    /// runner WAITS (a walk pending on the space, or a host acquire ahead of it whose release
+    /// another channel's walk may precede) and binds `rest` again, or refuses `why` by name
+    /// (unmapped).
+    Unresolved {
+        /// The unpushed items, unbound.
+        rest: Vec<Ir>,
+        /// Pushes made before it.
+        pieces: usize,
+        /// The refusal, should the runner not wait.
+        why: Refusal,
+    },
+}
+
+/// ★ A host semaphore ACQUIRE (`SEMAPHORED` ACQUIRE/ACQ_GEQ/ACQ_AND, `SEM_EXECUTE` ACQUIRE/
+/// ACQ_STRICT_GEQ/ACQ_CIRC_GEQ/ACQ_AND/ACQ_NOR): the work behind it waits on another channel's
+/// release — possibly made after that channel's own invalidate and walk.
+#[must_use]
+pub const fn is_acquire(ir: &Ir) -> bool {
+    match ir {
+        Ir::HostSem(HostSem {
+            form: HostSemForm::Legacy { op, .. },
+            ..
+        }) => matches!(op.op, 1 | 4 | 8),
+        Ir::HostSem(HostSem {
+            form: HostSemForm::Execute { op, .. },
+            ..
+        }) => matches!(op.op, 0 | 2 | 3 | 4 | 5),
+        _ => false,
+    }
 }
 
 /// Why a [`push_bound`] stopped the channel.
@@ -1423,7 +1494,28 @@ pub fn push_bound(
     while i < items.len() {
         let mut words = Vec::new();
         let mut r = Vec::new();
-        bind_rec(&items[i], rows, w, &mut words, &mut r).map_err(PushError::Refused)?;
+        match bind_rec(&items[i], rows, w, &mut words, &mut r) {
+            Ok(_) => {}
+            Err(why @ Refusal::VirtualUnresolved { .. }) => {
+                // ★ Push what is bound before it; hand the rest back UNBOUND (§3.5).
+                if !cur.is_empty() {
+                    if !push(&cur).map_err(PushError::Host)? {
+                        return Ok(Pushed::Busy {
+                            rest: items[cur_first..].to_vec(),
+                            pieces,
+                        });
+                    }
+                    pieces += 1;
+                    rec.append(&mut cur_rec);
+                }
+                return Ok(Pushed::Unresolved {
+                    rest: items[i..].to_vec(),
+                    pieces,
+                    why,
+                });
+            }
+            Err(why) => return Err(PushError::Refused(why)),
+        }
         if !cur.is_empty() && 4 * (cur.len() + words.len()) > CHUNK_BYTES {
             if !push(&cur).map_err(PushError::Host)? {
                 return Ok(Pushed::Busy {
@@ -1453,55 +1545,87 @@ pub fn push_bound(
     Ok(Pushed::All { pieces })
 }
 
-/// ★ P1+P2 inc D (§3.5, §7.13) — **the stale-bind counter.** Bind-at-submit is translation at PUSH
-/// time, not at execution time across channels: a piece pushed behind a host acquire was bound
-/// before another channel's walk could complete. Stock producers appear not to depend on it
-/// (UNVERIFIED), so every bound piece's virtual resolutions are re-resolved when its fence retires;
-/// a mismatch is counted. Non-zero ⇒ a host acquire must become a bind barrier (§11 decision 6).
+/// ★ P1+P2 inc D (§3.5, §7.13) — **the stale-bind counter**, review fix 2026-10-04.
+/// Bind-at-submit is translation at PUSH time, not at execution time across channels: a piece
+/// pushed behind a host acquire was bound before another channel's walk could complete. Stock
+/// producers appear not to depend on it (UNVERIFIED), so every bound piece's resolutions are
+/// checked when its fence retires against the rows' COMMIT LOG ([`Rows::changed_since`]): a commit
+/// to an operand's rows after the bind's epoch is classified by WHEN it landed —
+///
+/// - `stale`: before the last time the runner read the piece's fence and found it INCOMPLETE —
+///   the walk committed while the engine had not finished the piece, so (within the few
+///   microseconds a `RELEASE_WFI` fence trails the guest's own release) BEFORE the guest saw the
+///   piece's work complete: the piece may have run on a translation the guest had already
+///   replaced. This is the gated count (§11 decision 6: non-zero ⇒ a host acquire becomes a bind
+///   barrier).
+/// - `late`: after it — the benign shape (the guest saw the release, then unmapped and remapped;
+///   UVM does this routinely) as well as an indeterminate tail; never gated.
+/// - `indeterminate`: the log no longer reaches back to the bind's epoch.
+///
+/// ⊘ Before this fix the counter re-resolved at retire and counted ANY difference: correct runs
+/// that remap after the guest-visible release counted as stale, and the gate required 0.
 #[derive(Debug, Default)]
 pub struct StaleBind {
-    pending: std::collections::VecDeque<(u32, Vec<Bound>)>,
-    /// Resolutions re-checked.
+    pending: std::collections::VecDeque<(u32, Vec<Bound>, std::time::Instant)>,
+    /// Resolutions checked.
     pub checked: u64,
-    /// Of those, ones whose rows changed between the bind and the retire.
+    /// Of those, changed while the piece's fence was still incomplete (gated).
     pub stale: u64,
-    /// `KF3_NEGCTL_STALE_BIND` — the positive control: every recorded resolution is perturbed, so
-    /// the counter MUST move on the first retire that re-checks one.
+    /// Of those, changed after the last incomplete reading (benign or indeterminate; not gated).
+    pub late: u64,
+    /// Of those, beyond the commit log's reach.
+    pub indeterminate: u64,
+    /// `KF3_NEGCTL_STALE_BIND` — the positive control: every check reads as a change made while the
+    /// fence was incomplete, so `stale` MUST move on the first retire that checks a resolution.
     pub negctl: bool,
 }
 
 impl StaleBind {
-    /// The resolutions `recs` were bound under, covered by fence `seq`.
-    pub fn record(&mut self, seq: u32, mut recs: Vec<Bound>) {
+    /// The resolutions `recs` were bound under, covered by fence `seq`, pushed at `now`.
+    pub fn record(&mut self, seq: u32, recs: Vec<Bound>, now: std::time::Instant) {
         if recs.is_empty() {
             return;
         }
-        if self.negctl {
-            for b in &mut recs {
-                if let Some(s) = b.spans.first_mut() {
-                    s.off ^= 0x1000;
-                }
-            }
-        }
-        self.pending.push_back((seq, recs));
+        self.pending.push_back((seq, recs, now));
     }
 
-    /// Re-resolve every record whose fence `done` has reached.
-    pub fn retire(&mut self, done: u32, rows: &dyn Rows) {
+    /// The fence read `done` at `now`: every record not yet reached was INCOMPLETE now; every one
+    /// reached is checked against the rows' commit log.
+    pub fn observe(&mut self, done: u32, rows: &dyn Rows, now: std::time::Instant) {
         while self
             .pending
             .front()
-            .is_some_and(|&(s, _)| crate::host::reached(done, s))
+            .is_some_and(|&(s, _, _)| crate::host::reached(done, s))
         {
-            let Some((_, recs)) = self.pending.pop_front() else {
+            let Some((_, recs, incomplete_at)) = self.pending.pop_front() else {
                 break;
             };
             for b in recs {
                 self.checked += 1;
-                if rows.resolve(b.va, b.len).ok().as_ref() != Some(&b.spans) {
-                    self.stale += 1;
+                let c = if self.negctl {
+                    Changed::At(incomplete_at)
+                } else {
+                    rows.changed_since(b.epoch, b.va, b.len)
+                };
+                match c {
+                    Changed::No => {}
+                    Changed::At(t) if t <= incomplete_at => self.stale += 1,
+                    Changed::At(_) => self.late += 1,
+                    Changed::Unknown => self.indeterminate += 1,
                 }
             }
         }
+        for p in &mut self.pending {
+            p.2 = now;
+        }
+    }
+
+    /// `stale_binds=stale/checked late=… indeterminate=…`.
+    #[must_use]
+    pub fn line(&self) -> String {
+        format!(
+            "stale_binds={}/{} late={} indeterminate={}",
+            self.stale, self.checked, self.late, self.indeterminate
+        )
     }
 }

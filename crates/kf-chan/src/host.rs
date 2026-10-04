@@ -681,6 +681,68 @@ pub struct TranslatedChannel {
     stale: crate::tmode::StaleBind,
     /// The resolutions bound since the last fence (moved into `stale` at the fence).
     bound: Vec<crate::tmode::Bound>,
+    /// ★ Review fix 2026-10-04 (§3.5): a host acquire was pushed since the last fence.
+    acquire_unfenced: bool,
+    /// The fence that covers the latest pushed host acquire.
+    acquire_seq: Option<u32>,
+    /// ★ The stashed items wait on a walk pending on the space (`Rows::walk_pending`), or on an
+    /// acquire's fence; `Some` until they bind (or are refused).
+    unresolved: Option<WaitOn>,
+    /// Unresolved-operand waits, and refusals, counted.
+    pub waits: UnresolvedCounts,
+}
+
+/// ★ Review fix 2026-10-04 (§3.5): what a stash with an unresolved operand waits on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitOn {
+    /// A walk pending on the space (`tmode::Rows::walk_pending`) — the device rings the channel
+    /// when the VA thread is idle again.
+    Walk,
+    /// A host acquire ahead of it, until its fence completes (our own completion wakes us).
+    Acquire,
+}
+
+/// ★ Review fix 2026-10-04 (§3.5): what an operand with no placement row at bind waits on — a
+/// walk pending on its space first, else an unfinished host acquire ahead of it — or `None`:
+/// nothing can bring the row, so it is unmapped and refused by name.
+#[must_use]
+pub const fn wait_on(walk_pending: bool, acquire_outstanding: bool) -> Option<WaitOn> {
+    if walk_pending {
+        Some(WaitOn::Walk)
+    } else if acquire_outstanding {
+        Some(WaitOn::Acquire)
+    } else {
+        None
+    }
+}
+
+/// ★ Unresolved-operand waits and refusals, per channel (the `TSPACE-RETIRE` line).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct UnresolvedCounts {
+    /// Waits on a pending walk.
+    pub walk: u64,
+    /// Waits on an unfinished acquire.
+    pub acquire: u64,
+    /// Operands refused unmapped (nothing to wait on).
+    pub refused: u64,
+}
+
+impl UnresolvedCounts {
+    fn count(&mut self, on: WaitOn) {
+        match on {
+            WaitOn::Walk => self.walk += 1,
+            WaitOn::Acquire => self.acquire += 1,
+        }
+    }
+
+    /// `unresolved[walk=… acquire=… refused=…]`.
+    #[must_use]
+    pub fn line(&self) -> String {
+        format!(
+            "unresolved[walk={} acquire={} refused={}]",
+            self.walk, self.acquire, self.refused
+        )
+    }
 }
 
 /// The probe's per-channel record: fences in flight, and completed ones not yet taken.
@@ -739,6 +801,10 @@ impl TranslatedChannel {
             tspace: None,
             stale: crate::tmode::StaleBind::default(),
             bound: Vec::new(),
+            acquire_unfenced: false,
+            acquire_seq: None,
+            unresolved: None,
+            waits: UnresolvedCounts::default(),
         }
     }
 
@@ -750,10 +816,25 @@ impl TranslatedChannel {
         self.stale.negctl = negctl_stale;
     }
 
-    /// ★ P1+P2 inc D: `(resolutions re-checked at retire, of which stale)` — §7.13.
+    /// ★ P1+P2 inc D (§7.13), review fix 2026-10-04: the stale-bind counter and the
+    /// unresolved-operand waits, for the `TSPACE-RETIRE` line —
+    /// `stale_binds=stale/checked late=… indeterminate=… unresolved[walk= acquire= refused=]`.
     #[must_use]
-    pub fn stale_binds(&self) -> (u64, u64) {
-        (self.stale.checked, self.stale.stale)
+    pub fn stale_line(&self) -> String {
+        format!("{} {}", self.stale.line(), self.waits.line())
+    }
+
+    /// The stale-bind counter.
+    #[must_use]
+    pub fn stale_binds(&self) -> &crate::tmode::StaleBind {
+        &self.stale
+    }
+
+    /// ★ The channel waits for a walk pending on its space to land before it binds its stash —
+    /// the device rings it when the VA thread is idle again.
+    #[must_use]
+    pub fn waiting_on_walk(&self) -> bool {
+        self.unresolved == Some(WaitOn::Walk)
     }
 
     /// ★ v3-initrace: record every fence's guest releases for the completion probe (diagnostic;
@@ -850,6 +931,19 @@ impl TranslatedChannel {
         self.last_gp_get
     }
 
+    /// Fence `seq` now covers everything pushed since the last one: its resolutions go to the
+    /// stale-bind counter, and an acquire among them is covered by it.
+    fn fenced(&mut self, seq: u32) {
+        self.stale.record(
+            seq,
+            std::mem::take(&mut self.bound),
+            std::time::Instant::now(),
+        );
+        if std::mem::take(&mut self.acquire_unfenced) {
+            self.acquire_seq = Some(seq);
+        }
+    }
+
     fn author(&mut self, userd: &mut dyn GuestUserd, g: u32) -> Result<(), ChanError> {
         userd.set_gp_get(g).map_err(ChanError::Userd)?;
         self.last_gp_get = Some(g);
@@ -876,8 +970,12 @@ impl TranslatedChannel {
             p.reached(done);
         }
         if let Some(rows) = mem.rows() {
-            // ★ P1+P2 inc D (§7.13): re-resolve what the retired pieces were bound under.
-            self.stale.retire(done, rows);
+            // ★ P1+P2 inc D (§7.13): what the retired pieces were bound under, checked against
+            // the rows' commit log; the rest were seen incomplete NOW.
+            self.stale.observe(done, rows, std::time::Instant::now());
+        }
+        if self.acquire_seq.is_some_and(|s| reached(done, s)) {
+            self.acquire_seq = None;
         }
         let mut newest = None;
         while self.retire.front().is_some_and(|&(s, _)| reached(done, s)) {
@@ -930,21 +1028,53 @@ impl TranslatedChannel {
                     let r = crate::tmode::push_bound(&ir, rows, &win, &mut self.bound, |w| {
                         host.push(w).map(|r| r.is_ok())
                     });
-                    let (pieces, rest) = match r {
-                        Ok(crate::tmode::Pushed::All { pieces }) => (pieces, None),
-                        Ok(crate::tmode::Pushed::Busy { rest, pieces }) => (pieces, Some(rest)),
+                    let (pieces, rest, unresolved) = match r {
+                        Ok(crate::tmode::Pushed::All { pieces }) => (pieces, None, None),
+                        Ok(crate::tmode::Pushed::Busy { rest, pieces }) => {
+                            (pieces, Some(rest), None)
+                        }
+                        Ok(crate::tmode::Pushed::Unresolved { rest, pieces, why }) => {
+                            (pieces, Some(rest), Some(why))
+                        }
                         Err(crate::tmode::PushError::Refused(why)) => {
                             return Err(ChanError::Bind(why));
                         }
                         Err(crate::tmode::PushError::Host(e)) => return Err(ChanError::Host(e)),
                     };
+                    let unpushed = rest.as_ref().map_or(0, Vec::len);
+                    if ir[..ir.len() - unpushed]
+                        .iter()
+                        .any(crate::tmode::is_acquire)
+                    {
+                        self.acquire_unfenced = true;
+                    }
                     if pieces > 0 {
                         pushed = true;
                         self.submissions += pieces as u64;
                     }
-                    if let Some(rest) = rest {
-                        self.stash = Some(Next::Bind { ir: rest, retires });
-                        break Pumped::Waiting;
+                    match (rest, unresolved) {
+                        (Some(rest), Some(why)) => {
+                            // ★ Review fix 2026-10-04 (§3.5): an operand with no row yet. WAIT
+                            // while a walk is pending on the space, or while a host acquire ahead
+                            // of it is unfinished (another channel's walk may precede the release
+                            // it waits for); otherwise the operand is unmapped — refused by name.
+                            let acquire = self.acquire_unfenced || self.acquire_seq.is_some();
+                            let Some(on) = wait_on(rows.walk_pending(), acquire) else {
+                                self.waits.refused += 1;
+                                self.unresolved = None;
+                                return Err(ChanError::Bind(why));
+                            };
+                            self.waits.count(on);
+                            self.unresolved = Some(on);
+                            self.stash = Some(Next::Bind { ir: rest, retires });
+                            break Pumped::Waiting;
+                        }
+                        (Some(rest), None) => {
+                            self.unresolved = None;
+                            self.stash = Some(Next::Bind { ir: rest, retires });
+                            break Pumped::Waiting;
+                        }
+                        _ => self.unresolved = None,
                     }
                     if retires.is_some() {
                         last_retire = retires;
@@ -969,7 +1099,7 @@ impl TranslatedChannel {
                     done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
                     match self.host.fence(rm).map_err(ChanError::Host)? {
                         Ok(seq) => {
-                            self.stale.record(seq, std::mem::take(&mut self.bound));
+                            self.fenced(seq);
                             let g0 = last_retire.take();
                             if let Some(g) = g0 {
                                 self.retire.push_back((seq, g));
@@ -997,7 +1127,7 @@ impl TranslatedChannel {
             done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
             match self.host.fence(rm).map_err(ChanError::Host)? {
                 Ok(seq) => {
-                    self.stale.record(seq, std::mem::take(&mut self.bound));
+                    self.fenced(seq);
                     if let Some(g) = last_retire {
                         self.retire.push_back((seq, g));
                     }
