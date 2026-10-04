@@ -1,7 +1,22 @@
 <!-- SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later -->
 # Raw-address perimeter for `v3-sec-rawaddr`: no host or device address in safe code (S1-03, S1-04, with S1-02 and S1-05)
 
-**STATUS: IMPLEMENTED ON BRANCH `v3-sec-rawaddr`, 2026-10-04 — NOT ON MASTER.** The design below
+**STATUS: IMPLEMENTED ON BRANCH `v3-sec-rawaddr`, 2026-10-04 — NOT ON MASTER.**
+
+⊘ **Updated later on 2026-10-04, after a second review (two reviewers, 14 findings; every one fixed
+on the branch, §11.7).** Read this first; it corrects the paragraph below it:
+- **H1 is no longer a merge blocker.** A store import's length is now the `kf_host::RmExport`
+  token's, read from the session's own record of the reservation (§2.6 note), so no caller
+  supplies it. H1 (does `cuMemMap` itself refuse an over-long map?) stays as a defence-in-depth
+  reading.
+- **H3 and H4's kf-cuda self-test now RUN** inside `kf-gate9`, which the bench's gate runner
+  already runs (§8 note). The hardware rows have still not run: no box was used.
+- **§9 is re-derived at v3-broker `82f98f42`.** The earlier "applies line for line" claim was
+  wrong: three v3-broker commits after `f8d74ac3` touched the console seam.
+- Fixes in commits `721bc69c`..`cd93271d` (§11.7). CI was green at each except `951a84a4`, whose
+  one red row (a trybuild `.stderr` written from a direct `cargo check`) `1b4ffca6` corrected.
+
+The design below
 (revised 2026-10-04 after an adversarial review; it superseded a first draft of the same day) is
 implemented in commits `985ccd5d`..`cb4627f6` plus the commit that adds this file. CI is green at
 `cb4627f6` (run `37165301197`: build, tests, clippy, every gate including G1–G1d and both
@@ -500,6 +515,21 @@ All openers are inside `raw` in `driver_unsafe.rs`, except the last two groups.
 ### 2.6 What the code relies on: not caller preconditions, each with a test row
 
 - **Res-1: the import length.**
+  - ⊘ **Implemented 2026-10-04 (second review, finding 2): the "fallback" below is now the design,
+    and H1 is not a merge blocker.** `kf_host::RmExport { fd: OwnedFd, bytes: u64 }`
+    (`crates/kf-host/src/lib.rs:398`), private fields, is minted only by
+    `HostRm::export_store(&Reservation)` (`:1987`). `reserve_gpga` records the length it asked RM
+    for in the session's object record (`Objects::stores`, `:352`, dropped with the subtree on
+    free, `:369`), and `export_store` reads it from there: a handle this session did not reserve
+    as a store is refused, and no caller can pair a handle with a length. `DevMem::import`
+    (`crates/kf-cuda/src/driver_unsafe.rs:932`), both `import_store`s and
+    `WalkKernel::import_store` take only `&RmExport`. **It lives in kf-host, not kf-linux-raw** as
+    written below: only kf-host knows the length, and a kf-linux-raw type would need a public
+    constructor any crate could call with any length. kf-cuda therefore depends on kf-host (it is
+    not PURE). Tests: kf-host `an_export_length_comes_only_from_the_sessions_record`; trybuild
+    `import_takes_an_rm_export` and `rm_export_is_minted_only_by_kf_host`. The import handle is
+    now held until after the unmap (finding 14; `AllocKind::Import`, `driver_unsafe.rs:817`), as
+    the pre-perimeter code held it for the process.
   - CUDA cannot report the size of an imported RM object. That `len` is no larger than the object is enforced by `cuMemMap`, which refuses an `offset + size` past the allocation. This is UNVERIFIED on the target drivers; hardware row **H1 is a merge blocker**.
   - The caller's `len` is RM's own `fb_length` (kf-qemu `device.rs:346-358`).
   - **Fallback if H1 fails:** `import` takes a typed `RmExport { fd: OwnedFd, bytes: u64 }` token. kf-host's export path mints it, carrying the size RM allocated, and it is defined in kf-linux-raw next to the export type (`chardev_unsafe.rs:525-540`). A caller-supplied `u64` is then no longer accepted.
@@ -959,6 +989,27 @@ it. One row is implemented differently: **T18** is a source scan of the perimete
 type that holds an address, plus kf-linux-raw's `no_debug_output_carries_the_address`, because
 most kf-cuda handles cannot be built without a GPU.
 
+⊘ **Updated 2026-10-04 (second review; §11.7 has each test and mutation):**
+- **New GPU-free rows:** T11 gains one refusal row per V10 arm and the overflowing layer; T12
+  gains a 100 000-layer tail at the top of every type, read through a model of the PTX's own
+  wrapping arithmetic; **T21b** a proof of an earlier flight is refused; **T25** a stale graph
+  launch re-sets only the nodes that change; **T26** a console-frame read is bounded before it
+  allocates; kf-host's store record; kf-linux-raw's memslot `Debug`; kf-harness's
+  `merge_bar_rows` (kf-gate9 runs H3 and H4's self-test).
+- **H1** is defence in depth now, not a blocker (§2.6 note).
+- **H3 runs in `kf-gate9`** (`dropped_image`, `crates/kf-harness/src/bin/kf-gate9.rs:581`): the
+  image is dropped right after `submit_image`, the report must be the tables' one run, the next
+  walk over a fresh image must be right, and the dropped image must be freed by exactly ONE
+  context drain across that next submit (taken before the walk is queued, finding 11).
+- **H4's kf-cuda self-test runs in `kf-gate9`** (`selftest`, `:653`): `bring_up_and_prove` and
+  `probe_after_sandbox`, one check per outcome. H4 must also read: (a) a store `write_store` /
+  `read_store`, a walk and a display `read_store` with the import handle now held until the unmap
+  (finding 14); (b) gate 8's submit and collect lines with the per-collect `cuEventQuery` that
+  mints the flight's proof, and with a stale walk re-setting only the block-reading and regridded
+  nodes (finding 12); (c) gate 8's `trigger_trap` ceiling with the O(1) census keys (finding 13);
+  (d) gate 8's `ctx_sync_calls` falsifier: a walk over the store frees nothing, so it must stay
+  unchanged.
+
 | ID | Check | Violating input that must be refused | Mutation that turns it red |
 |---|---|---|---|
 | T1 | V1 `sub_range` | `off = u64::MAX, n = 2` with `len = 4096`; `off + n == len + 1`. An exact fit (`== len`) must be **accepted** | `checked_add` → `wrapping_add`; `>` → `>=`; delete the check |
@@ -993,18 +1044,53 @@ most kf-cuda handles cannot be built without a GPU.
 
 ---
 
-## 9. What v3-broker must convert when the two meet (at `28b5b6fe`; whichever merges second converts)
+## 9. What v3-broker must convert when the two meet (re-derived at `82f98f42`; whichever merges second converts)
 
-⊘ **Re-checked 2026-10-04 at v3-broker `f8d74ac3`:** the list below still applies line for line. The
-cited sites were unchanged (kf-qemu `display.rs` `FrameView.addr` `:430`, `ConsoleShare.addrs`
-`:457`, `completed` `:2563`, test `frame(addr)` `:3112`; `raw_unsafe.rs:256` `BrokerHooks`
-`derive(Debug)`; kf-cuda `display.rs` `Frame::addr` `:142`, `frame_over` `:343`, `release_frame`
-`:373`, `compose_to_slot` `:484`, `import_slot(fd: i32)` `:533`, `slots` `:124`), and its counts
-were kf-cuda 78, kf-linux-raw 94, kf-qemu 59, `KF3_ABI` 12. **The post-merge kf-cuda ratchet is
-therefore 65** (this branch's 64 + `host_unregister`), not 67; kf-qemu 59 and kf-linux-raw 94 stand.
-One name differs on this branch: `register_console_pages` is `raw::console_pages`, which maps the
-private-anonymous pages itself (§5 note); generalising it to `Pages::{Static, Owned}` for the broker
-frames is part of the conversion.
+⊘ **Re-derived 2026-10-04 at v3-broker `82f98f42` (second review, findings 7 and 9).** The note
+that stood here said the list "still applies line for line" at `f8d74ac3`. It did not hold: three
+later v3-broker commits (`2b7751bc`, `17239ad8`, `82f98f42`) changed the console seam. Every
+v3-broker citation in this section is now at `82f98f42`, and the rows directly below are new. Its
+counts are unchanged: kf-cuda 78, kf-linux-raw 94, kf-qemu 59, `KF3_ABI` 12 (CI regex over its
+`*_unsafe.rs`, recounted). **The post-merge kf-cuda ratchet is 65** (this branch's 64 +
+`host_unregister`), not 67; kf-qemu 59 and kf-linux-raw 94 stand. One name differs on this branch:
+`register_console_pages` is `raw::console_pages`, which maps the private-anonymous pages itself (§5
+note); generalising it to `Pages::{Static, Owned}` for the broker frames is part of the conversion.
+
+**New since `f8d74ac3`, each a conversion row:**
+- **The frame's cursor bit.** `FrameView` gained `cursor: bool` (kf-qemu `display.rs:444`) and still
+  derives `PartialEq` over `addr` (`:429-432`). This branch's `Published` (the worker's publish
+  record, `display.rs` on this branch) carries `cursor` too; `FrameView` carries it beside `span`
+  and `id`, still with no `PartialEq`.
+- **`ConsoleShare.cursors: FrameCursors` and `shown_frame()`.** `take` (`:552`) calls
+  `self.cursors.took(slot)` (`:556`) before the C side has checked the frame, and `shown_frame`'s
+  doc (`:527-530`) says *"the frame it would refuse — a bad format or geometry — the worker never
+  makes"*. With this branch's checks that is false: V13/V14 can refuse a frame, and `kf3.c` then
+  shows the placeholder. Convert: `kf3_display_frame` runs `check_frame` first and calls
+  `cursors.took(slot)` only for a frame it hands the console; a `-1` keeps what was shown and a
+  `-2` records `ShownFrame::Nothing` (the placeholder carries no cursor); correct the doc.
+  `FrameCursors`/`ShownFrame` (kf-broker `console.rs:67`, `:83`) key on the ring SLOT, never on an
+  address — keep it so (G1 would flag an address-keyed table).
+- **`kf3_gfx_update` is now a wrapper** (`kf3.c:795`): `kf3_console_frame` (`:773`, its
+  `kf3_display_frame` call at `:778`) and then `kf3_console_cursor` (`:806`), the cursor AFTER the
+  frame. The merge target for `kf3_frame_ok`, `len`, the `-1`/`-2` split and the placeholder is
+  `kf3_console_frame`, not `kf3_gfx_update`. Keep the cursor-after-frame order.
+- **`kf3_display_frame` refuses a misaligned `out`** (`ffi_unsafe.rs:603`, `out.is_null() ||
+  !out.is_aligned()`). Keep it: this branch's version checks only null (`ffi_unsafe.rs:583`). The
+  same refusal is on `kf3_display_cursor` (`:637`) and `kf3_display_cursor_pixels` (`:702`).
+- **`kf3_display_cursor_done`** (`ffi_unsafe.rs:674`; `kf3.h`): an applied-parts mask, no address.
+  It gets a census presence row like the other cursor FFI.
+- **`SLOTS` is `kf_broker::slots::MAX_SLOTS`** (`display.rs:426`; `= 5`, kf-broker `slots.rs:141`):
+  the span table is `2 × MAX_SLOTS` = 10 entries, inside F3's cap of 16 frames.
+- **Display slots export like the store.** v3-broker's kf-host already records each display slot's
+  length (`Objects::display_slots`, kf-host `lib.rs:383`, written by `alloc_display_slot` `:1937`)
+  and checks it in `export_display_slot` (`:1988`), which returns a `CharDevice`. Convert:
+  `export_display_slot` returns this branch's `RmExport` (the fd and the recorded length; NVKMS's
+  import borrows `as_fd()`), one record serving stores and slots, and
+  `DisplayGpu::import_slot(&RmExport)` keeps its 2 MiB / 64 MiB check inside the perimeter. This
+  replaces the `import_slot(BorrowedFd<'_>, bytes)` row below.
+- **kf-disp `plan_block_linear`** (`scanout.rs:288`) still forms the extent with unchecked
+  products on v3-broker; take this branch's checked form (finding 1, `scanout.rs:300` here). V10
+  (finding 1) is the bound that matters either way.
 
 **kf-cuda `driver_unsafe.rs`:**
 - `host_register` (`:1006-1031`) returns `PinnedBuf { ptr: p as usize }`. Replace it with this branch's `register_console_pages`, generalised to a private input `Pages::{Static(StaticSpan), Owned(&MappedRegion)}`. It stays **one** block, so v3-broker's two blocks fold into it.
@@ -1035,27 +1121,27 @@ frames is part of the conversion.
 **kf-cuda tests.** T12's sweep drives v3-broker's PTX interpreter (`kf-disp/tests/compose_kernel.rs`) once both are present. Its `fn addr(&self, o: &Op) -> u64` (`:184`) passes G1, which flags only `usize` returns.
 
 **kf-qemu `display.rs`:**
-- `FrameView.addr` (`:428-430`) becomes `span: Option<StaticSpan>, id`. Drop `PartialEq`/`Eq`.
-- `ConsoleShare.addrs: [AtomicUsize; SLOTS]` (`:457`) becomes `frames: [AtomicU32; SLOTS]` plus `spans: [OnceLock<StaticSpan>; 2*SLOTS]`, i.e. 10 entries with the broker on, below F3's 16.
-- `publish` (`:562-585`) stores the span id when `host` is set and `NONE` otherwise. A VRAM-only publish therefore yields `-1` in C (keep the surface), not `-2`.
-- `take` (`:540-555`) resolves the id.
-- `completed` (`:2563`, `addr: host.map_or(0, Frame::addr)`) becomes `span: host.map(ConsoleFrame::span)`.
-- The test helper `frame(addr: usize, ..)` (`:3112`) gets leaked one-page spans.
+- `FrameView.addr` (`:430-432`) becomes `span: Option<StaticSpan>, id`. Drop `PartialEq`/`Eq`.
+- `ConsoleShare.addrs: [AtomicUsize; SLOTS]` (`:461`) becomes `frames: [AtomicU32; SLOTS]` plus `spans: [OnceLock<StaticSpan>; 2*SLOTS]`, i.e. 10 entries with the broker on, below F3's 16.
+- `publish` (`:576-600`) stores the span id when `host` is set and `NONE` otherwise. A VRAM-only publish therefore yields `-1` in C (keep the surface), not `-2`.
+- `take` (`:552-565`) resolves the id.
+- `completed` (`:2581`, `addr: host.map_or(0, Frame::addr)`) becomes `span: host.map(ConsoleFrame::span)`.
+- The test helper `frame(addr: usize, ..)` (`:3134`) gets leaked one-page spans.
 - With this change, every console read is bounded by the length of the span its own id names, so the inventory's PLAUSIBLE out-of-bounds read becomes a refusal **by structure**, whatever was published before.
 
 **kf-qemu `broker.rs`:**
-- `BrokerSeat::frame` (`:141-189`) makes `BrokerFrame`s through `broker_frame_over(&ram)`, and publishes one into a `ConsoleFrame` only after `ring.install` succeeds (`:174`).
-- The collision and refusal paths (`:181`, `:184`) stay on `BrokerFrame::release`.
+- `BrokerSeat::frame` (`:156-205`) makes `BrokerFrame`s through `broker_frame_over(&ram)`, and publishes one into a `ConsoleFrame` only after `ring.install` succeeds (`:189`).
+- The collision and refusal paths (`:196`, `:199`) stay on `BrokerFrame::release`.
 
 **kf-qemu `raw_unsafe.rs`.** `BrokerHooks` (`:257`, `derive(Debug)` over `opaque: *mut c_void` and two function pointers) gets a **manual Debug** with no fields. Otherwise G1b fails.
 
 **kf-qemu `ffi_unsafe.rs`:**
-- In `kf3_display_frame` (`:600-616`) and `Kf3Frame` (`:509`), apply this branch's `check_frame`, `len`, and the `-1`/`-2` split.
-- The new cursor FFI (`Kf3Cursor` `:550`, `kf3_display_cursor` `:629`, `kf3_display_cursor_pixels` `:669`) carries no Rust-side address.
+- In `kf3_display_frame` (`:601-620`) and `Kf3Frame` (`:510`), apply this branch's `check_frame`, `len`, and the `-1`/`-2` split.
+- The new cursor FFI (`Kf3Cursor` `:551`, `kf3_display_cursor` `:634`, `kf3_display_cursor_pixels` `:697`, `kf3_display_cursor_done` `:674`) carries no Rust-side address.
   - `kf3_display_cursor_pixels` takes a C pointer and word count, checked for null, alignment and `≤ 256×256`.
   - `kf3.c:749` must pass exactly `width × height` for a buffer from `cursor_alloc(width, height)`, with both clamped to `KF3_CURSOR_MAX_DIM` first. That is a C-perimeter obligation and a G3 presence row.
 
-**`kf3.c` `kf3_gfx_update` (`:764`).** **Merge**, do not replace: keep v3-broker's cursor calls and add `kf3_frame_ok`, `len`, the `-1`/`-2` handling and the placeholder.
+**`kf3.c` `kf3_console_frame` (`:773`; `kf3_gfx_update` `:795` is now its wrapper).** **Merge**, do not replace: keep v3-broker's cursor calls and their order (`kf3_console_cursor` after the frame, `:806`), and add `kf3_frame_ok`, `len`, the `-1`/`-2` handling and the placeholder inside `kf3_console_frame`.
 
 **kf-linux-raw `MappedRegion::host_span` (`mapping_unsafe.rs:637`):**
 - Keep it; this branch adds the same function.
@@ -1064,12 +1150,12 @@ frames is part of the conversion.
 
 **fd class (S1-08/S1-10).** Not required by this design:
 - `kf_broker::Host::watch(fd: i32)`;
-- `kf3_broker_frame_fd` (`ffi_unsafe.rs:797`), `kf3_broker_stop` (`:846`), `kf3_display_ui_info` (`:860`);
-- `gpucopy.rs:77` `export_fd() -> i32` must still produce a `BorrowedFd` for `import_slot`.
+- `kf3_broker_frame_fd` (`ffi_unsafe.rs:825`), `kf3_broker_stop` (`:874`), `kf3_display_ui_info` (`:888`);
+- `gpucopy.rs:77` `export_fd() -> i32` is replaced by the slot's `RmExport` (row above), whose `as_fd()` NVKMS borrows.
 
-**`KF3_ABI`.** 12 is v3-broker's (still 12 at `28b5b6fe`, `ffi_unsafe.rs:30`, `kf3.h:23`), 13 is v3-dispsw-exp's, and 14 is this branch's. The second merger takes the maximum plus one **at merge time** and records every claim in both files.
+**`KF3_ABI`.** 12 is v3-broker's (still 12 at `82f98f42`, `ffi_unsafe.rs:31`, `kf3.h:23`), 13 is v3-dispsw-exp's, and 14 is this branch's. The second merger takes the maximum plus one **at merge time** and records every claim in both files.
 
-**Ratchet after both merge.** Measured at `28b5b6fe`: kf-cuda 78, kf-linux-raw 94, kf-qemu 59. Re-measure at the merge commit.
+**Ratchet after both merge.** Counted at `28b5b6fe` and again at `82f98f42`: kf-cuda 78, kf-linux-raw 94, kf-qemu 59. Re-count at the merge commit.
 - **kf-cuda 67** = 66 + 1 (`host_unregister`). ⊘ *2026-10-04: 65 = 64 + 1.* v3-broker's `host_register` blocks fold into `register_console_pages`.
 - **kf-qemu 59** = 46 + 13.
 - **kf-linux-raw 94** = 75 + 19.
@@ -1185,7 +1271,7 @@ without it; each mutation was applied by hand, run with `cargo test` on 2026-10-
 |---|---|---|
 | T1 (V1) | `a_range_is_inside_its_allocation_or_refused` (`tests_unsafe.rs`) | `checked_add` → `wrapping_add`; `<=` → `<` |
 | T1b (V1b) | `an_async_operation_stays_in_one_context` (`tests_unsafe.rs`) | `ctx_matches` always true |
-| T2 (V2) | `an_import_maps_at_least_one_byte` (`tests_unsafe.rs`); a negative fd is not expressible (trybuild `import_takes_a_borrowed_fd`) | the `len == 0` arm deleted |
+| T2 (V2) | `an_import_maps_at_least_one_byte` (`tests_unsafe.rs`); a negative fd is not expressible (trybuild `import_takes_a_borrowed_fd`, renamed `import_takes_an_rm_export` in §11.7) | the `len == 0` arm deleted |
 | T3 (V3) | `a_launch_is_refused_unless_every_argument_matches_the_pinned_signature` (`tests_unsafe.rs`) | count `!=` → `>`; the kind loop deleted; the capacity pairing dropped |
 | T4 | `the_kernel_table_is_the_ptx` (`tests_unsafe.rs`) | one `KERNEL_SIGS` entry edited (`kf_compose`'s last `I32` → `U32`) |
 | V4 | `the_stage_belongs_to_the_gpu_until_a_proof_returns_it` (T21), `the_stage_layout_is_aligned_disjoint_and_bounded` (`tests_unsafe.rs`) | an error clears the flight; the 64-byte alignment dropped; the empty-region refusal dropped; the report header made host-writable |
@@ -1218,6 +1304,10 @@ Compile-time rows (G2), all in CI's test step: kf-cuda `tests/ui/` (10 rows, §6
 the failed-enqueue recovery).
 
 ### 11.4 Counts
+
+⊘ **After the second review (§11.7):** `unsafe` unchanged (75 / 64 / 46); `PERIMETER` kf-linux-raw
+4810 → **4836**, kf-cuda 4493 → **4864**, kf-qemu **658**, each step itemised in `ci.yml`
+(`PERIMETER` at `:1980`). The table below is the first implementation's.
 
 | Crate | `unsafe` (CI regex) before → after | Perimeter lines (`PERIMETER`) before → after |
 |---|---|---|
@@ -1265,10 +1355,37 @@ Both are compared exactly in CI and itemised in `ci.yml` (`AUDITED` at `:1569`, 
 
 ### 11.6 Not done
 
-- **Hardware rows H1–H4 (§8) have not run.** H1 (the import length, Res-1) is a merge blocker,
+- **Hardware rows H1–H4 (§8) have not run.** ⊘ *Updated after the second review:* H1 is no longer
+  a merge blocker (the `RmExport` token is implemented, §2.6 note), and H3 and H4's self-test are
+  now steps of `kf-gate9`, so they run wherever the gates do; none of it has run on a GPU yet.
+  (Original text:) H1 (the import length, Res-1) is a merge blocker,
   with the `RmExport` fallback specified in §2.6. H2 (registering private-anonymous console pages),
   H3 (`DeviceImage` lifetime in kf-gate9) and H4 (gates 2–9, the self-test, the display and gop
   rows) must run on a real NVIDIA GPU at the exact merge commit (§R testing rule).
 - **OPEN rows (§10), listed in the census so they are not read as covered:** `CharDevice::ioctl`
   (S1-40/S1-41), `MappedRegion::addr_at` and `GuestWindow::userspace_addr_at`.
 - **The v3-broker conversion (§9)** belongs to whichever branch merges second.
+
+### 11.7 The second review (2026-10-04): findings, fixes, tests, mutations
+
+Two reviewers, 14 findings (one high, four medium, nine low); all fixed on the branch, none shown
+wrong. "Red" as in §11: the named test failed with the mutation and passed without it; each
+mutation was applied, run with `cargo test` (or the gate's self-test), and reverted.
+
+| # | Finding | Fix (commit) | Test | Mutation, each red |
+|---|---|---|---|---|
+| 1 (high) | V10's block-linear bound `blocks · pitch · 512·2^bh` was unchecked; release builds wrap it (`y0 = u32::MAX, pitch = 2^26` → 0), so a 4-byte extent was accepted for a read 2^64 − 2^35 bytes past `src` | checked products, and a refusal of rows/columns past the kernel's 32-bit coordinates (`display_gpu_unsafe.rs:170`); kf-disp's two products checked too (`scanout.rs:242`, `:300`) (`721bc69c`) | T11 overflow and coordinate rows; T12's tail (100 000 layers near the top of every type, PTX wrapping model, extents over all of `u64`); kf-disp `an_overflowing_surface_is_refused_not_wrapped` | checked → wrapping (T11, and T12's tail by a read, not a panic); each half of the coordinate arm; each kf-disp product wrapping |
+| 2 (med) | the import length was a caller's `u64` | the `kf_host::RmExport` token (§2.6 note) (`951a84a4`, stderr `1b4ffca6`) | kf-host `an_export_length_comes_only_from_the_sessions_record`; trybuild `import_takes_an_rm_export`, `rm_export_is_minted_only_by_kf_host` | the record not dropped on free; `store_bytes` answering any handle; the token's fields `pub`, and the old `(BorrowedFd, u64)` signature (each trybuild case then compiles) |
+| 3 (med) | `{:p}` split over lines by `concat!`, `<&u8 as Pointer>::fmt` after `use core::fmt::*`, and `use core::ptr::{hash}` passed G1 (and the first two G1d) | G1 reads statements: joined literals (`stringify!` as a literal), P7c for `env!`/`include_str!` in a format `concat!`, `use` statements whole (`address_gate.py:222`); P6 is the `Pointer` token; G1d refuses `core::fmt::Pointer::fmt` (`8bf5dd94`) | `positive_statements.rs.txt` (one marked line per shape); `test_address_gate.py`; the G1d fixture's 28th entry | each new rule off (the fixture line MISSED); the G1d entry removed (27 of 28) |
+| 4 (low) | G1b missed `{graph, exec: usize}`, `handle: u64`, `addr: DevAddr`; T18 likewise | G1b: `DevAddr`, handle names, and in kf-cuda any `…addr`/`…base` integer (`address_gate.py:281`, `:291`); T18's list widened. It found a real one: kf-linux-raw `UserspaceMemoryRegion` derived `Debug` over `userspace_addr`, a host address — now hand-written (`kvm_unsafe.rs:129`) (`8bf5dd94`) | `perimeter_debug{,_cuda}.rs.txt`; `the_memslot_record_never_prints_its_host_address`; T18 | the name widening, the `DevAddr` arm and the kf-cuda rule each off; the memslot `Debug` printing the field; T18 against derives over `{graph, exec}` and `{handle}` |
+| 5 (low) | four V10 arms had no row (oy, bh, `x0 % 4`, MAX_SIDE) | one row per arm, each with room everywhere else (`721bc69c`) | T11 | each arm deleted |
+| 6 (low) | `ConsoleFrame::read` allocated before its bound, and left completion to its caller | `frame_read_fits` first (`display_gpu_unsafe.rs:127`); the doc states the read is bounds-only with racy content (Res-3) (`6a419c29`) | T26 `a_frame_read_is_bounded_before_it_allocates` | the `end <= len` arm dropped |
+| 7, 9 (low, med) | §9 stale against v3-broker | §9 re-derived at `82f98f42` (this commit) | — | — |
+| 8 (low) | `Drained` was not tied to the flight it ended | a flight generation: `begin` advances it, `Event::record_flight` stamps the event (a graph re-stamps per launch), `end_flight` refuses an older proof (`driver_unsafe.rs:497`, `:1382`, `:2366`) (`6a419c29`) | T21b `a_completion_proof_of_an_earlier_flight_is_refused` | `proof_covers` always true; `end` without the cover check; `begin` not advancing; `end` without the context check |
+| 10 (med) | H3 and H4's self-test had nothing that ran them | both are steps of `kf-gate9` (`:581`, `:653`) (`cd93271d`) | kf-harness `merge_bar_rows` (no GPU); the steps themselves on hardware | `main` without `selftest`; H3 without the drop before its wait |
+| 11 (low) | an image its caller dropped was freed inside the next submit, after `cuGraphLaunch`, so its drain waited for that walk | the retained window is swapped before anything is queued (`walk_gpu_unsafe.rs:1153`) (`6a419c29`) | `the_previous_window_is_released_before_the_walk_is_queued`; H3's one-drain check | the release moved after the enqueue; the old assignment restored |
+| 12 (low) | a stale graph launch re-set every node; `poll` queries an event per collect | only block-reading or regridded nodes are re-set, the grid recorded after the driver took it (`node_needs_rewrite`, `driver_unsafe.rs:2060`); the query stays — it mints the flight's proof — and its cost is an H4 reading (`6a419c29`) | T25 `a_stale_graph_rewrites_only_the_nodes_that_change` | always re-set; blind to a grid change |
+| 13 (low) | the census keys hashed bytes on the trap path | both keys read a fixed number of words (`textkey.rs:49`, `:65`); a standalone `rustc -O` loop on the workstation timed site_key 13.8 → 2.5 ns and str_key 41 → 2.8 ns (loop floor 1.2 ns); gate 8's `trigger_trap` is an H4 reading (`be8ab402`) | `the_reason_key_reads_a_bounded_number_of_bytes`; T24 | `str_key` back to a full-text loop; the site key's tail digest zeroed |
+| 14 (low) | the import handle was released right after `cuMemMap`, never run on an RM export | held in `AllocKind::Import` until after the unmap, as before the perimeter (`951a84a4`) | H4 reading (a) | — (hardware) |
+
+Counts after the review are in §11.4. kf-cuda's `unsafe` count did not move (64).

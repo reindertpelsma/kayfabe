@@ -111,7 +111,11 @@ and the per-client host MMU fault above.
     (the dynamically loaded CUDA driver). Host addresses cross safe code only as the opaque
     `kf_linux_raw::HostSpan`, backend fds only as `kf_qemu::raw_unsafe::BackendFd` (`e7b7f28d`).
     ★ **Owner, 2026-10-03; implemented 2026-10-04 by branch `v3-sec-rawaddr`, whose merge waits on
-    hardware rows H1–H4** (where it stands: the STATUS of `V3_RAWADDR_PERIMETER.md`). The rule
+    hardware rows H1–H4** (where it stands: the STATUS of `V3_RAWADDR_PERIMETER.md`). ⊘ *Later on
+    2026-10-04, after a second review:* even a LENGTH a call site passes is now a token minted
+    where the length is known (`kf_host::RmExport` for a store import), so H1 is defence in depth
+    rather than the import's bound; V10 checks its products for overflow (a release build wraps
+    them). The rule
     covers **device** addresses too: under unified addressing an address in kayfabe's own CUDA
     contexts can be a QEMU address (audit S1-05). And the bound is checked
     **inside the function that leads into `unsafe`, never at its call sites** — *"a few validation
