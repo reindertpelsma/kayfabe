@@ -569,6 +569,7 @@ impl Device {
                 plane,
                 store.handle,
                 layout.clone(),
+                tspace.clone(),
                 ram,
                 mirrors.clone(),
                 inbox.clone(),
@@ -2211,7 +2212,25 @@ impl Device {
             self.chans.rc_seen.load(o),
             self.counters.rc_posted.load(o),
             self.chans.heap_refused.load(o)
-        );
+        ) + &if crate::tspace::enabled() {
+            // ★ P1+P2 inc D: the T-mode counters the REGRESSION A/B gates on (0 on stock drivers).
+            format!(
+                " tspace[built={} twin_refused={} tspace_refused={} slots_leaked={}]",
+                match self.tspace.get() {
+                    Some(Ok(_)) => "yes",
+                    Some(Err(_)) => "REFUSED",
+                    None => "not-yet",
+                },
+                self.chans.twin_refused.load(o),
+                self.chans.tspace_refused.load(o),
+                self.tspace
+                    .get()
+                    .and_then(|t| t.as_ref().ok())
+                    .map_or(0, |t| t.slots_leaked.load(o))
+            )
+        } else {
+            String::new()
+        };
         let chan = format!(
             " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
             self.chans.births.load(o),

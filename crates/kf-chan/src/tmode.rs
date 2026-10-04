@@ -1172,3 +1172,189 @@ impl Shadow {
         )
     }
 }
+
+/// ★ P1+P2 inc D (§3.5, §7.13): one virtual resolution a bound piece used — what the stale-bind
+/// counter re-resolves when the piece's fence retires.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Bound {
+    /// The operand's VA.
+    pub va: u64,
+    /// Its bytes.
+    pub len: u64,
+    /// The spans it resolved to.
+    pub spans: Vec<Span>,
+}
+
+/// A [`Rows`] that records every resolution it answers.
+struct Recording<'a> {
+    inner: &'a dyn Rows,
+    rec: std::cell::RefCell<Vec<Bound>>,
+}
+
+impl Rows for Recording<'_> {
+    fn resolve(&self, va: u64, len: u64) -> Result<Vec<Span>, u64> {
+        let r = self.inner.resolve(va, len)?;
+        self.rec.borrow_mut().push(Bound {
+            va,
+            len,
+            spans: r.clone(),
+        });
+        Ok(r)
+    }
+    fn dma_to_file_range(&self, dma: u64, len: u64) -> Option<u64> {
+        self.inner.dma_to_file_range(dma, len)
+    }
+}
+
+/// [`bind`], recording the virtual resolutions the item used into `rec`.
+///
+/// # Errors
+/// As [`bind`]; nothing is recorded for a refused item.
+pub fn bind_rec(
+    ir: &Ir,
+    rows: &dyn Rows,
+    w: &TWindows,
+    out: &mut Vec<u32>,
+    rec: &mut Vec<Bound>,
+) -> Result<usize, Refusal> {
+    let r = Recording {
+        inner: rows,
+        rec: std::cell::RefCell::new(Vec::new()),
+    };
+    let n = bind(ir, &r, w, out)?;
+    rec.extend(r.rec.into_inner());
+    Ok(n)
+}
+
+/// What [`push_bound`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pushed {
+    /// Every item was bound and pushed, in `pieces` pushes.
+    All {
+        /// Pushes made.
+        pieces: usize,
+    },
+    /// The host ring was full: the items from `rest` on were NOT pushed and stay UNBOUND — they
+    /// are bound again, against the rows as they are then, when the push is retried (§3.5).
+    Busy {
+        /// The unpushed items, unbound.
+        rest: Vec<Ir>,
+        /// Pushes made before the ring filled.
+        pieces: usize,
+    },
+}
+
+/// Why a [`push_bound`] stopped the channel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PushError {
+    /// An item was refused at bind, by name.
+    Refused(Refusal),
+    /// The host push failed.
+    Host(String),
+}
+
+/// ★★ **Bind at submit** (§3.5): bind `items` one at a time against `rows` AS THEY ARE NOW, cut the
+/// output into pieces of at most [`CHUNK_BYTES`], and hand each piece to `push` (`Ok(true)` = taken,
+/// `Ok(false)` = the ring is full). A piece the ring refuses is NOT kept bound: its items are
+/// returned unbound in [`Pushed::Busy`]. `rec` gathers the resolutions of the pieces that WERE
+/// pushed (for the stale-bind counter).
+///
+/// # Errors
+/// [`PushError`]: a bind refusal (the channel is dead) or a host failure.
+pub fn push_bound(
+    items: &[Ir],
+    rows: &dyn Rows,
+    w: &TWindows,
+    rec: &mut Vec<Bound>,
+    mut push: impl FnMut(&[u32]) -> Result<bool, String>,
+) -> Result<Pushed, PushError> {
+    let mut pieces = 0usize;
+    let mut cur: Vec<u32> = Vec::new();
+    let mut cur_rec: Vec<Bound> = Vec::new();
+    let mut cur_first = 0usize;
+    let mut i = 0usize;
+    while i < items.len() {
+        let mut words = Vec::new();
+        let mut r = Vec::new();
+        bind_rec(&items[i], rows, w, &mut words, &mut r).map_err(PushError::Refused)?;
+        if !cur.is_empty() && 4 * (cur.len() + words.len()) > CHUNK_BYTES {
+            if !push(&cur).map_err(PushError::Host)? {
+                return Ok(Pushed::Busy {
+                    rest: items[cur_first..].to_vec(),
+                    pieces,
+                });
+            }
+            pieces += 1;
+            rec.append(&mut cur_rec);
+            cur.clear();
+            cur_first = i;
+        }
+        cur.extend(words);
+        cur_rec.extend(r);
+        i += 1;
+    }
+    if !cur.is_empty() {
+        if !push(&cur).map_err(PushError::Host)? {
+            return Ok(Pushed::Busy {
+                rest: items[cur_first..].to_vec(),
+                pieces,
+            });
+        }
+        pieces += 1;
+        rec.append(&mut cur_rec);
+    }
+    Ok(Pushed::All { pieces })
+}
+
+/// ★ P1+P2 inc D (§3.5, §7.13) — **the stale-bind counter.** Bind-at-submit is translation at PUSH
+/// time, not at execution time across channels: a piece pushed behind a host acquire was bound
+/// before another channel's walk could complete. Stock producers appear not to depend on it
+/// (UNVERIFIED), so every bound piece's virtual resolutions are re-resolved when its fence retires;
+/// a mismatch is counted. Non-zero ⇒ a host acquire must become a bind barrier (§11 decision 6).
+#[derive(Debug, Default)]
+pub struct StaleBind {
+    pending: std::collections::VecDeque<(u32, Vec<Bound>)>,
+    /// Resolutions re-checked.
+    pub checked: u64,
+    /// Of those, ones whose rows changed between the bind and the retire.
+    pub stale: u64,
+    /// `KF3_NEGCTL_STALE_BIND` — the positive control: every recorded resolution is perturbed, so
+    /// the counter MUST move on the first retire that re-checks one.
+    pub negctl: bool,
+}
+
+impl StaleBind {
+    /// The resolutions `recs` were bound under, covered by fence `seq`.
+    pub fn record(&mut self, seq: u32, mut recs: Vec<Bound>) {
+        if recs.is_empty() {
+            return;
+        }
+        if self.negctl {
+            for b in &mut recs {
+                if let Some(s) = b.spans.first_mut() {
+                    s.off ^= 0x1000;
+                }
+            }
+        }
+        self.pending.push_back((seq, recs));
+    }
+
+    /// Re-resolve every record whose fence `done` has reached.
+    pub fn retire(&mut self, done: u32, rows: &dyn Rows) {
+        while self
+            .pending
+            .front()
+            .is_some_and(|&(s, _)| crate::host::reached(done, s))
+        {
+            let Some((_, recs)) = self.pending.pop_front() else {
+                break;
+            };
+            for b in recs {
+                self.checked += 1;
+                if rows.resolve(b.va, b.len).ok().as_ref() != Some(&b.spans) {
+                    self.stale += 1;
+                }
+            }
+        }
+    }
+}

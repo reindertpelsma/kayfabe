@@ -88,6 +88,9 @@ struct PtChan {
     ctx: CtxBind,
     /// ★ P5c: the mirror's live-channel count (released at free).
     live: Arc<AtomicU64>,
+    /// ★ P1+P2 inc D: the twin's state word, when this channel was counted as a user of it
+    /// (T-mode) — released at free.
+    twin: Option<Arc<crate::twin::TwinState>>,
     /// ★ P5c: the guest's error notifier, as the twin's host error context — `None` when the
     /// guest declared none (or it could not be armed, named at birth).
     notifier: Option<PtNotifier>,
@@ -582,6 +585,16 @@ struct Slot {
     disabled: bool,
     /// ★ v3-initrace: the completion probe's record (empty unless `KF3_COMPLETION_PROBE`).
     probe: ProbeRec,
+    /// ★ P1+P2 inc D: the ring lives in the T-space (its slot goes back to the T-space's pool).
+    tspace_ring: bool,
+}
+
+/// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
+/// CONTROL: every recorded resolution is perturbed, so `stale_binds=` must move on a box run that
+/// retires any T-mode work. Default OFF; read once. Never set in production.
+fn negctl_stale_bind() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_STALE_BIND").is_some_and(|v| v != "0"))
 }
 
 /// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TSHADOW=1`**: every
@@ -957,6 +970,8 @@ pub struct ChanPlane {
     /// ★ P1+P2 / S1-43: the framebuffer layout this device declared — a guest-named FB USERD or
     /// notifier must lie inside one of its usable heap regions ([`ChanPlane::heap_bounds`]).
     layout: kf_chip::bar0::FbLayout,
+    /// ★ P1+P2 inc D: the T-space (`KF3_TSPACE=1`), built by the VA thread at prewarm.
+    tspace: crate::tspace::TSpaceCell,
     mirrors: Mirrors,
     /// ★ P6: the VA thread's inbox — a Translated channel's `MEM_OP` split goes through it.
     inbox: std::sync::Arc<crate::mem::Inbox>,
@@ -1047,6 +1062,12 @@ pub struct ChanPlane {
     /// ★ P1+P2 inc A / S1-43: births refused because a guest-named FB USERD or notifier lay
     /// outside the usable heap ([`ChanPlane::heap_bounds`]).
     pub heap_refused: AtomicU64,
+    /// ★ P1+P2 inc D (§4.2): births the per-twin state refused — a passthrough channel in a
+    /// guest-KERNEL space, or a Translated one in a space with live user channels. 0 on stock
+    /// drivers (UVM's channels live in UVM's own VA space).
+    pub twin_refused: AtomicU64,
+    /// ★ P1+P2 inc D: Translated births refused because the T-space was not built.
+    pub tspace_refused: AtomicU64,
     /// ★ 2026-09-30: the doorbell fast path (`kf_chan::dbfast`, `V3_DOORBELL_IOEVENTFD.md`): every
     /// born channel — Passthrough AND Translated — registers its guest token; every free removes it
     /// before the twin goes.
@@ -1071,6 +1092,7 @@ impl ChanPlane {
         plane: &'static Plane<'static>,
         store: u32,
         layout: kf_chip::bar0::FbLayout,
+        tspace: crate::tspace::TSpaceCell,
         ram: &'static RamMap,
         mirrors: Mirrors,
         inbox: std::sync::Arc<crate::mem::Inbox>,
@@ -1186,6 +1208,7 @@ impl ChanPlane {
             plane,
             store,
             layout,
+            tspace,
             ram,
             mirrors,
             inbox,
@@ -1225,6 +1248,8 @@ impl ChanPlane {
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
             heap_refused: AtomicU64::new(0),
+            twin_refused: AtomicU64::new(0),
+            tspace_refused: AtomicU64::new(0),
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
             dbfast,
@@ -2612,6 +2637,9 @@ impl ChanPlane {
                     let fast = me.dbfast.deregister(t.idx);
                     let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
                     t.live.fetch_sub(1, Ordering::AcqRel);
+                    if let Some(tw) = &t.twin {
+                        tw.user_done(); // ★ P1+P2 inc D: User(n) -> User(n-1)
+                    }
                     // The error context goes AFTER its channel (host RM refuses freeing a context
                     // DMA a live channel names as its error context).
                     if let Some(n) = t.notifier {
@@ -2930,6 +2958,22 @@ impl ChanPlane {
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
             let live = mirror.live.clone();
+            // ★★ P1+P2 inc D (§4.2): in T-mode a passthrough birth moves the twin to User(n+1), in
+            // statement order, and is REFUSED by name in a guest-KERNEL space — never waited on.
+            let twin = if crate::tspace::enabled() {
+                if mirror.kernel_vas.try_user().is_err() {
+                    self.twin_refused.fetch_add(1, Ordering::Relaxed);
+                    return refuse(
+                        NV_ERR_INVALID_STATE,
+                        format!(
+                            "twin state: VA space {key:?} is a guest-KERNEL space — a channel the guest created non-kernel never runs in it (V3_P1P2_TSPACE.md §4.2)"
+                        ),
+                    );
+                }
+                Some(mirror.kernel_vas.clone())
+            } else {
+                None
+            };
             live.fetch_add(1, Ordering::AcqRel);
             return self.defer(
                 "birth passthrough",
@@ -2948,6 +2992,9 @@ impl ChanPlane {
                         }
                         Err(e) => {
                             live.fetch_sub(1, Ordering::AcqRel);
+                            if let Some(t) = &twin {
+                                t.user_done();
+                            }
                             if let Some(n) = notifier {
                                 me.release_notifier(n);
                             }
@@ -2963,6 +3010,9 @@ impl ChanPlane {
                     if let Err(e) = alloc {
                         let _ = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
                         live.fetch_sub(1, Ordering::AcqRel);
+                        if let Some(t) = &twin {
+                            t.user_done();
+                        }
                         if let Some(n) = notifier {
                             me.release_notifier(n);
                         }
@@ -2981,6 +3031,7 @@ impl ChanPlane {
                             objects: HashMap::new(),
                             ctx: CtxBind::default(),
                             live,
+                            twin,
                             notifier,
                             stopped: false,
                             disabled: false,
@@ -3009,6 +3060,40 @@ impl ChanPlane {
             );
         }
         let entries = a.entries.max(1);
+        // ★★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §2.3, §4.2): in T-mode the channel runs in the T-space
+        // — refused by name if it is not built (never a fallback to mirror windows: that would
+        // reopen S1-21) — and its space moves Unclassified -> Kernel, refused while user channels
+        // live there. Statement order, before the channel can run.
+        let tmode = crate::tspace::enabled();
+        if tmode {
+            match self.tspace.get() {
+                Some(Ok(_)) => {}
+                built => {
+                    self.tspace_refused.fetch_add(1, Ordering::Relaxed);
+                    let why = match built {
+                        Some(Err(e)) => e.clone(),
+                        _ => "prewarm has not run: guest RAM is not registered yet".to_string(),
+                    };
+                    return refuse(NV_ERR_INVALID_STATE, format!("tspace: not built ({why})"));
+                }
+            }
+            match mirror.kernel_vas.try_kernel() {
+                Ok(true) => eprintln!(
+                    "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
+                    a.client, a.handle
+                ),
+                Ok(false) => {}
+                Err(e) => {
+                    self.twin_refused.fetch_add(1, Ordering::Relaxed);
+                    return refuse(
+                        NV_ERR_INVALID_STATE,
+                        format!(
+                            "twin state: VA space {key:?} ({e:?}) — a Translated channel never runs in a space a user channel runs in (V3_P1P2_TSPACE.md §4.2)"
+                        ),
+                    );
+                }
+            }
+        }
         mirror.live.fetch_add(1, Ordering::AcqRel);
         // ★★★ v3-roperm: a guest-KERNEL channel lives here (`kernel_channel`: facts guest
         // userspace cannot produce), so this space is the kernel's and mirrors privileged leaves
@@ -3017,7 +3102,7 @@ impl ChanPlane {
         // at the space's next walk (its next invalidate or split), not here. `[measured 5fead67d]`
         // no privileged leaf was ever walked in a space that turned kernel this way (UVM's): they
         // live in RM-internal clients' spaces, which are kernel from creation (`kernel_vas_for`).
-        if !mirror.kernel_vas.swap(true, Ordering::AcqRel) {
+        if !tmode && !mirror.kernel_vas.force_kernel() {
             eprintln!(
                 "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
                 a.client, a.handle
@@ -3051,18 +3136,40 @@ impl ChanPlane {
                 let mut userd = userd;
                 let zeroed = kf_chan::host::zero_userd(&mut userd, declared)
                     .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("USERD initialisation: {e}"))))?;
-                // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
-                // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
-                let at = crate::mem::take_ring_slot(&mirror.rings)
-                    .ok_or_else(|| fail((NV_ERR_INSUFFICIENT_RESOURCES, "host ring: the space's ring region is exhausted".to_string())))?;
-                let host = HostRing::on_engine_at(me.rm, mirror.space, me.host_ce, Some(at))
-                    .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
+                // ★★★ P1+P2 inc D: in T-mode the ring is born in the T-space at a T-space ring slot,
+                // in the T-space layout — the guest's mirror gets nothing of ours.
+                let ts = if tmode {
+                    match me.tspace.get() {
+                        Some(Ok(t)) => Some(t),
+                        _ => return Err(fail((NV_ERR_INVALID_STATE, "tspace: not built".to_string()))),
+                    }
+                } else {
+                    None
+                };
+                let host = match ts {
+                    Some(t) => t.ring(me.rm, me.host_ce).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
+                    None => {
+                        // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
+                        // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
+                        let at = crate::mem::take_ring_slot(&mirror.rings)
+                            .ok_or_else(|| fail((NV_ERR_INSUFFICIENT_RESOURCES, "host ring: the space's ring region is exhausted".to_string())))?;
+                        HostRing::on_engine_at(me.rm, mirror.space, me.host_ce, Some(at))
+                            .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?
+                    }
+                };
                 let ht = host.channel().token;
                 let ring_va = host.va();
-                let mut chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
+                let mut chan = match ts {
+                    Some(t) => {
+                        let mut c = TranslatedChannel::new(TranslatedRing::new_tmode(a.gpfifo_va, entries, 0), host, idx);
+                        c.set_tspace(t.windows(), negctl_stale_bind());
+                        c
+                    }
+                    None => TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx),
+                };
                 chan.set_probe(completion_probe_ms().is_some());
                 chan.set_census(tcensus_on());
-                if tshadow_on() {
+                if tshadow_on() && ts.is_none() {
                     // ★ P1+P2 inc C: the T-mode shadow binds against windows shaped like the
                     // T-space's (the store window ends at the carve-out); their bases are nominal.
                     chan.set_shadow(shadow_windows(me.layout.carve(), mirror.ram.map(|(_, l)| l)));
@@ -3076,8 +3183,11 @@ impl ChanPlane {
                     let mut chan = chan;
                     let _ = me.rm.free_channel(chan.host().channel());
                     // ★ v3-appfix J: and the ring's own object, mapping and CPU view.
-                    if chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED")) {
-                        crate::mem::give_ring_slot(&mirror.rings, ring_va);
+                    let released = chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED"));
+                    match ts {
+                        Some(t) => t.give_ring(ring_va, released),
+                        None if released => crate::mem::give_ring_slot(&mirror.rings, ring_va),
+                        None => {}
                     }
                     return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"))));
                 }
@@ -3099,6 +3209,7 @@ impl ChanPlane {
                     stopped: false,
                     disabled: false,
                     probe: ProbeRec::default(),
+                    tspace_ring: ts.is_some(),
                 };
                 if let Ok(mut s) = me.slots.write() {
                     s.insert(ht, Arc::new(Mutex::new(slot)));
@@ -3370,7 +3481,18 @@ impl ChanPlane {
         } else {
             None
         };
-        if ring_line.as_deref().is_some_and(|l| !l.contains("REFUSED")) {
+        let released = ring_line.as_deref().is_some_and(|l| !l.contains("REFUSED"));
+        if g.tspace_ring {
+            // ★ P1+P2 inc D: a T-space ring slot; one whose release did not fully succeed leaks.
+            if let Some(Ok(t)) = self.tspace.get() {
+                t.give_ring(ring_va, released);
+            }
+            let (checked, stale) = g.chan.stale_binds();
+            eprintln!(
+                "kf3: TSPACE-RETIRE tok={:#x} host={ht:#x} key={:?} ring_va={ring_va:#x} released={released} stale_binds={stale}/{checked}",
+                g.guest_idx, g.key
+            );
+        } else if released {
             crate::mem::give_ring_slot(&g.mirror.rings, ring_va);
         }
         if let Some(l) = ring_line.as_deref().filter(|l| l.contains("REFUSED")) {
@@ -3632,6 +3754,8 @@ impl ChanPlane {
                 ChanError::Host(h) => format!("host: {h}"),
                 ChanError::Userd(u) => format!("userd: {u}"),
                 ChanError::Publish(p) => format!("split: {p}"),
+                // ★ P1+P2 inc D: T-mode refused an item at bind, by name.
+                ChanError::Bind(r) => format!("tspace bind: {} {r:x?}", r.reason()),
             };
             eprintln!(
                 "kf3: chan token {:#x} ({:?}) DEAD: {why}",

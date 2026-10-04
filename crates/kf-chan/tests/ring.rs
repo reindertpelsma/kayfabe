@@ -81,6 +81,7 @@ fn a_split_holds_the_rest_of_its_segment_and_retirement_follows_the_last_piece()
             Next::Submit { retires, .. } => format!("S{retires:?}"),
             Next::Walk { pdb, retires } => format!("W{pdb:x?}{retires:?}"),
             Next::Idle => "I".into(),
+            Next::Bind { .. } => "B".into(),
         })
         .collect();
     assert_eq!(
@@ -454,4 +455,81 @@ fn submitted_rows(r: &mut TranslatedRing, put: u32, mem: &mut RowsMem) -> Vec<u3
             other => panic!("{other:?}"),
         }
     }
+}
+
+/// ★ P1+P2 inc D (§2.4, §7 test 10) — **the T-space ring layout**: every region whole 64 KiB,
+/// non-overlapping, inside the 1 MiB object; USERD in NO GPU map; pushbuffer and GPFIFO read-only,
+/// the fence read-write; all three maps big-page at a 1 MiB ring slot — and the legacy fence offset
+/// would have forced 4 KiB pages.
+#[test]
+fn the_tspace_ring_layout() {
+    use kf_abi::bringup::nvos46_page_size_flag;
+    use kf_chan::host::{RING_BYTES, RING_VA_LIMIT, TSPACE_LAYOUT};
+    let l = TSPACE_LAYOUT;
+    let maps = l.maps();
+    assert_eq!(maps.len(), 3);
+    let slot = RING_VA_LIMIT - (4 << 30) + 7 * RING_BYTES; // a ring slot of the ring region
+    let mut end = 0;
+    for &(off, len, perm) in &maps {
+        assert!(
+            off.is_multiple_of(0x1_0000) && len.is_multiple_of(0x1_0000),
+            "{off:#x}+{len:#x}"
+        );
+        assert_eq!(off, end, "contiguous and non-overlapping");
+        end = off + len;
+        assert!(slot + end <= RING_VA_LIMIT);
+        assert_eq!(
+            nvos46_page_size_flag(slot + off, off, len),
+            0,
+            "big pages for +{off:#x}"
+        );
+        let writable = off == l.fence_off;
+        assert_eq!(perm.read_only, !writable, "+{off:#x}");
+    }
+    assert_eq!(end, l.userd_off, "USERD is in no GPU map");
+    assert!(l.userd_off + kf_abi::submit::USERD_SIZE <= RING_BYTES);
+    assert!(
+        512 * 8 <= l.fence_off - l.gpfifo_off,
+        "the GPFIFO holds its 512 entries"
+    );
+    assert!(
+        l.pb_bytes / 2 >= kf_chan::tmode::CHUNK_BYTES as u64,
+        "a chunk fits half the pushbuffer"
+    );
+    // ⊘ The legacy fence offset is not 64 KiB-congruent: its map would fall back to 4 KiB pages.
+    assert_ne!(nvos46_page_size_flag(slot + 0xF_8000, 0xF_8000, 0x8000), 0);
+    // Today's layout: one read-write map of the whole object.
+    assert_eq!(
+        kf_chan::host::LEGACY_LAYOUT.maps(),
+        vec![(0, RING_BYTES, kf_host::MapPerm::READ_WRITE)]
+    );
+}
+
+/// ★ P1+P2 inc D: a T-mode ring hands out UNBOUND IR — a run of items as [`Next::Bind`], a split
+/// as [`Next::Walk`] — and retires the entry with the last of them; nothing is rewritten in place.
+#[test]
+fn a_tmode_ring_hands_out_unbound_work_and_splits() {
+    let mut mem = Mem::default();
+    let mut a = m(4, 0, &[CE_CLASS]);
+    a.extend(m(4, ce::LAUNCH_DMA, &[0]));
+    a.extend(m(0, 0x28, &[0, 0, 0x0020_1000, (9 << 27) | 0x2]));
+    a.extend(m(4, ce::LAUNCH_DMA, &[0]));
+    seg(&mut mem, 0, PB, &a);
+    let mut r = TranslatedRing::new_tmode(GPFIFO, 8, 0);
+    let mut shape = Vec::new();
+    loop {
+        match r.next(1, &mut mem, is_ce, &W).unwrap() {
+            Next::Idle => break,
+            Next::Bind { ir, retires } => shape.push(format!("bind{}:{retires:?}", ir.len())),
+            Next::Walk { pdb, retires } => shape.push(format!("walk{pdb:x?}:{retires:?}")),
+            Next::Submit { words, retires } => {
+                shape.push(format!("submit{}:{retires:?}", words.len()))
+            }
+        }
+    }
+    assert_eq!(
+        shape,
+        vec!["bind2:None", "walkSome(200201000):None", "bind1:Some(1)"],
+        "SET_OBJECT + launch, the split, the second launch retiring entry 0"
+    );
 }

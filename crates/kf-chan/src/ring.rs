@@ -57,6 +57,14 @@ pub enum Next {
     },
     /// Nothing to do: the cursor has reached the guest's `GP_PUT`.
     Idle,
+    /// ★ P1+P2 inc D (T-mode, `V3_P1P2_TSPACE.md` §3.5): UNBOUND work — the runner binds each item
+    /// against the placement rows when it pushes it ([`crate::tmode::push_bound`]).
+    Bind {
+        /// The items, in order (no split among them).
+        ir: Vec<crate::tmode::Ir>,
+        /// The guest `GP_GET` they complete, if they end an entry.
+        retires: Option<u32>,
+    },
 }
 
 /// Why the ring stopped. The channel is dead after any of these — refused by name.
@@ -126,6 +134,8 @@ pub struct TranslatedRing {
     census: Option<Box<Census>>,
     /// ★ P1+P2 inc C (§3.6): the T-mode shadow and the windows it binds against, when on.
     shadow: Option<Box<(crate::tmode::Shadow, crate::tspace_unsafe::TWindows)>>,
+    /// ★ P1+P2 inc D: `Some` in T-mode — the state the T-mode decoder carries, and its unbound IR.
+    tmode: Option<Box<(crate::tmode::TState, VecDeque<crate::tmode::Ir>)>>,
 }
 
 impl TranslatedRing {
@@ -150,7 +160,50 @@ impl TranslatedRing {
             pb_ext_base: 0,
             census: None,
             shadow: None,
+            tmode: None,
         }
+    }
+
+    /// ★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §3): the same ring in T-MODE — every segment is decoded
+    /// into unbound IR ([`crate::tmode::decode`]) and handed out as [`Next::Bind`], never rewritten
+    /// in place; nothing the guest wrote is forwarded.
+    ///
+    /// # Panics
+    /// As [`TranslatedRing::new`].
+    #[must_use]
+    pub fn new_tmode(gpfifo_va: u64, entries: u32, start: u32) -> TranslatedRing {
+        let mut r = Self::new(gpfifo_va, entries, start);
+        r.tmode = Some(Box::default());
+        r
+    }
+
+    /// The next T-mode step from the unbound IR, if any: a split, or the run of items before one.
+    fn next_t(&mut self) -> Option<Next> {
+        let (_, q) = self.tmode.as_deref_mut()?;
+        let first = q.pop_front()?;
+        if let crate::tmode::Ir::Invalidate { pdb } = first {
+            let retires = if q.is_empty() {
+                self.pending_retires.take()
+            } else {
+                None
+            };
+            return Some(Next::Walk { pdb, retires });
+        }
+        let mut ir = vec![first];
+        while q
+            .front()
+            .is_some_and(|x| !matches!(x, crate::tmode::Ir::Invalidate { .. }))
+        {
+            if let Some(x) = q.pop_front() {
+                ir.push(x);
+            }
+        }
+        let retires = if q.is_empty() {
+            self.pending_retires.take()
+        } else {
+            None
+        };
+        Some(Next::Bind { ir, retires })
     }
 
     /// ★ P1+P2 inc C (`V3_P1P2_TSPACE.md` §3.6): run the T-mode rewriter in SHADOW on every segment
@@ -219,6 +272,9 @@ impl TranslatedRing {
             });
         }
         loop {
+            if let Some(n) = self.next_t() {
+                return Ok(n);
+            }
             if let Some(p) = self.pending.pop_front() {
                 let retires = if self.pending.is_empty() {
                     self.pending_retires.take()
@@ -293,6 +349,13 @@ impl TranslatedRing {
                 .chunks_exact(4)
                 .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
                 .collect();
+            if let Some((st, q)) = self.tmode.as_deref_mut() {
+                // ★ T-mode: decoded to unbound IR, bound by the runner at push (§3.5).
+                let ir = crate::tmode::decode(&words, is_ce, st, self.census.as_deref_mut())
+                    .map_err(|why| RingRefusal::Rewrite { gp, why })?;
+                q.extend(ir);
+                continue;
+            }
             if let (Some(sh), Some(rows)) = (self.shadow.as_deref_mut(), mem.rows()) {
                 // ★ Before today's rewrite, on the same words: what T-mode would do here.
                 sh.0.observe(&words, is_ce, rows, &sh.1);

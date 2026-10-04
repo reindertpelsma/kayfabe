@@ -658,7 +658,7 @@ pub struct GpuMirror {
     /// its client is one of the guest RM's internal clients) — it mirrors privileged leaves. Until
     /// then it is a USER twin and WITHHOLDS them (`MapTarget::withholds_privileged`). Shared with
     /// the channel plane's [`Mirror::kernel_vas`].
-    pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub kernel_vas: std::sync::Arc<crate::twin::TwinState>,
     /// ★★★ v3-cdp: OUR SKED-reflected placements, `va → len` (`MapTarget::map_sked`,
     /// `V3_CDP.md`). ⊘ Kept OUT of [`GpuMirror::rows`]: a SKED page is not memory, so no reader may
     /// resolve a guest VA through it; it is here so an unmap and the retire take it down.
@@ -725,7 +725,7 @@ impl GpuMirror {
         rows: PlacedRows,
         reserved: Vec<(u64, u64)>,
         ram: Option<&'static RamMap>,
-        kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        kernel_vas: std::sync::Arc<crate::twin::TwinState>,
     ) -> Self {
         GpuMirror {
             vas,
@@ -808,7 +808,8 @@ pub fn vmm_ranges(fb: Option<(u64, u64)>, ram: Option<(u64, u64)>) -> Vec<(u64, 
 
 impl MapTarget for GpuMirror {
     fn withholds_privileged(&self) -> bool {
-        !self.kernel_vas.load(Ordering::Acquire)
+        // ★ P1+P2 inc D: ONE atomic load of the per-twin state word (`crate::twin`).
+        !self.kernel_vas.is_kernel()
     }
     fn gpu_space(&self) -> bool {
         true
@@ -993,16 +994,16 @@ pub struct Mirror {
     /// ★★★ v3-roperm: the space is the guest KERNEL's — set by the channel plane when it births a
     /// Translated channel here; the memory plane's [`GpuMirror`] reads it to decide whether a
     /// privileged guest leaf may be mirrored.
-    pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub kernel_vas: std::sync::Arc<crate::twin::TwinState>,
 }
 
 /// ★★★ v3-roperm: a mirror's starting classification — KERNEL for one of the guest RM's own
 /// internal clients (a handle range no guest process can hold, `kf_rm::chanlink::is_rm_internal_client`),
 /// USER (withholding privileged leaves) for everything else until a Translated channel is born in it.
 #[must_use]
-pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<crate::twin::TwinState> {
     let client = u32::try_from(key.0 >> 32).unwrap_or(0);
-    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(
+    std::sync::Arc::new(crate::twin::TwinState::for_kernel(
         kf_rm::chanlink::is_rm_internal_client(client),
     ))
 }
@@ -1842,6 +1843,64 @@ impl MemPlane {
     }
 }
 
+/// ★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1): whether a new mirror is RECORDED — so births may name
+/// it — given its store window's outcome. In T-mode always: a twin carries no window, so its record
+/// can never hang on one. On the default path only when the store window mapped (today's
+/// behaviour, kept: a refused window there refuses every birth in the space, passthrough included).
+#[must_use]
+pub const fn mirror_recorded(tmode: bool, fb_window_mapped: bool) -> bool {
+    tmode || fb_window_mapped
+}
+
+/// ★ P1+P2 inc D: record a T-mode twin — the host space, its rows and nothing of ours: no window,
+/// no ring region, no VMM range a guest leaf must avoid (`reserved` is empty, so guest leaves at
+/// `[RING_REGION_BASE, 2^40)` are accepted).
+fn record_twin(
+    plane: &MemPlane,
+    key: VasKey,
+    space: kf_host::VaSpace,
+    ram_obj: Option<u32>,
+    m: &mut Manager,
+    rm: &'static HostRm,
+    store: u32,
+) {
+    let rows = PlacedRows::default();
+    let kernel_vas = kernel_vas_for(key);
+    if mirror_recorded(true, false)
+        && let Ok(mut mm) = plane.mirrors.lock()
+    {
+        mm.insert(
+            key,
+            Mirror {
+                space,
+                fb_base: 0,
+                fb_len: 0,
+                ram: None,
+                rows: rows.clone(),
+                ram_obj,
+                live: Default::default(),
+                rings: RingSlots::default(),
+                kernel_vas: kernel_vas.clone(),
+            },
+        );
+    }
+    m.table.insert(
+        key,
+        Target::Gpu(GpuMirror::new(
+            HostVas {
+                rm,
+                space,
+                store,
+                ram_obj,
+            },
+            rows,
+            Vec::new(),
+            Some(plane.ram),
+            kernel_vas,
+        )),
+    );
+}
+
 /// ★ Build a fresh mirror for `key`: a host space and its two windows (P5, §12). Returns the log
 /// line on refusal.
 fn create_mirror(
@@ -1873,6 +1932,24 @@ fn create_mirror(
         }
     };
     let ram_obj_us = us(t_step);
+    if crate::tspace::enabled() {
+        // ★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §4.1): a twin carries NO window and NO ring — only
+        // rows derived from the guest's own page tables — and its record never hangs on a window.
+        record_twin(plane, key, space, ram_obj.map(|(o, _)| o), m, rm, store);
+        let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
+        plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
+        plane
+            .counters
+            .mirror_ns_max
+            .fetch_max(ns, Ordering::Relaxed);
+        eprintln!(
+            "kf3: {key:?} mirror space={:#x}: windows=none rings=none ({} us: vaspace {vas_us} ram_obj {ram_obj_us})",
+            space.space,
+            ns / 1000
+        );
+        return Ok(());
+    }
     // ★ P5: the two windows, in EVERY mirrored space (§12) — GROWS_DOWN, away from the guest's
     // bottom-up VAs (§24.2). A space whose windows refuse is still a mirror (its virtual rows
     // work); a Translated channel naming it refuses by name at birth.
@@ -2001,6 +2078,25 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
         }
     };
     let vas_us = t1.elapsed().as_micros();
+    if crate::tspace::enabled() {
+        // ★ P1+P2 inc D (§4.1): spares are plain spaces — still prewarmed (the space and its
+        // reservations cost RM calls), with no window to pay for.
+        if let Ok(mut v) = plane.spares.lock() {
+            v.push(Spare {
+                space,
+                fb_base: 0,
+                ram: None,
+                ram_obj: ram_obj.ok().map(|(o, _)| o),
+                rings: RingSlots::default(),
+            });
+        }
+        plane.counters.prewarmed.fetch_add(1, Ordering::Relaxed);
+        return Some(format!(
+            "prewarm: spare host space {:#x} ready before the guest runs — windows=none (vaspace {vas_us} us, ram_obj {ram_obj_us} us, total {} us)",
+            space.space,
+            t0.elapsed().as_micros()
+        ));
+    }
     let t2 = std::time::Instant::now();
     let fb = rm.map_window(space, store, plane.fb_len, true);
     let fb_us = t2.elapsed().as_micros();
@@ -2238,7 +2334,14 @@ pub fn apply_statement(
             };
             if m.table.target(key).is_none() {
                 let reused = plane.spares.lock().ok().and_then(|mut v| v.pop());
-                if let Some(sp) = reused {
+                if let Some(sp) = reused.as_ref().filter(|_| crate::tspace::enabled()) {
+                    // ★ P1+P2 inc D: a recycled T-mode spare is a plain space; classified afresh.
+                    record_twin(plane, key, sp.space, sp.ram_obj, m, rm, store);
+                    plane
+                        .counters
+                        .mirrors_reused
+                        .fetch_add(1, Ordering::Relaxed);
+                } else if let Some(sp) = reused {
                     // ★ P5c: a retired space — its rows are gone, its windows are where they were.
                     let rows = PlacedRows::default();
                     let reserved = vmm_ranges(Some((sp.fb_base, plane.fb_len)), sp.ram);
@@ -2452,6 +2555,20 @@ mod tests {
     ) -> Option<(bool, u64)> {
         let (&start, &(len, off, ram, _)) = rows.range(..=va).next_back()?;
         (va < start + len).then(|| (ram, off + (va - start)))
+    }
+
+    /// ★ P1+P2 inc D (§7 test 12): in T-mode a mirror is recorded whatever a window would have
+    /// done — it has none — so a passthrough birth in it is never refused for "no mirror"; on the
+    /// default path a refused store window still leaves the space unrecorded (today, named).
+    #[test]
+    fn a_tmode_mirror_is_recorded_without_any_window() {
+        assert!(mirror_recorded(true, false));
+        assert!(mirror_recorded(true, true));
+        assert!(mirror_recorded(false, true));
+        assert!(
+            !mirror_recorded(false, false),
+            "the default path, unchanged"
+        );
     }
 
     #[test]

@@ -837,3 +837,130 @@ fn the_shadow_counts_would_refuse_and_pieces() {
         "{l}"
     );
 }
+
+/// ★★ §7 test 6, the runner half — **a `Busy` stash re-binds at the next push.** The ring takes
+/// the first piece and refuses the second: the refused items come back UNBOUND, and pushing them
+/// later binds them against the rows as they are THEN. Only the pushed piece's resolutions are
+/// recorded for the stale-bind counter.
+#[test]
+fn a_busy_stash_is_unbound_and_rebinds_at_the_next_push() {
+    // Two shapes: the ring fills at the LAST piece (2 chunks), and in the middle (5 chunks).
+    for chunks in [2usize, 5] {
+        busy_stash(chunks);
+    }
+}
+
+fn busy_stash(chunks: usize) {
+    use kf_chan::tmode::{Pushed, push_bound};
+    let copy = |va: u64| {
+        let mut pb = m(
+            SUB,
+            ce::OFFSET_IN_UPPER,
+            &[(va >> 32) as u32, va as u32, 0, 0x20_0000],
+        );
+        pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x100]));
+        pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182 | (1 << 13)]));
+        pb
+    };
+    let mut pb = m(SUB, 0, &[0xc7b5]);
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    // Enough launches that the bound output needs `chunks` CHUNK_BYTES pieces (48 bytes each).
+    let n = (chunks - 1) * CHUNK_BYTES / 48 + 16;
+    for _ in 0..n {
+        pb.extend(copy(VA_FB));
+    }
+    let ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+    let old = MockRows::default().row(VA_FB, 0x1000, false, 0x40_0000);
+    let new = MockRows::default().row(VA_FB, 0x1000, false, 0x90_0000);
+    let mut pushes: Vec<Vec<u32>> = Vec::new();
+    let mut rec = Vec::new();
+    let r = push_bound(&ir, &old, &windows(), &mut rec, |w| {
+        if pushes.is_empty() {
+            pushes.push(w.to_vec());
+            Ok(true)
+        } else {
+            Ok(false) // the ring is full
+        }
+    })
+    .unwrap();
+    let Pushed::Busy { rest, pieces } = r else {
+        panic!("{r:?}")
+    };
+    assert_eq!(pieces, 1);
+    assert!(4 * pushes[0].len() <= CHUNK_BYTES);
+    assert!(!rest.is_empty() && rest.len() < ir.len());
+    let recorded = rec.len();
+    assert!(recorded > 0, "the pushed piece's resolutions are recorded");
+    // Later — after a walk moved the row — the stash is bound against the NEW rows.
+    let mut later = Vec::new();
+    let r = push_bound(&rest, &new, &windows(), &mut rec, |w| {
+        later.push(w.to_vec());
+        Ok(true)
+    })
+    .unwrap();
+    assert!(matches!(r, Pushed::All { .. }));
+    let srcs: Vec<u64> = later
+        .iter()
+        .flat_map(|w| writes(w))
+        .collect::<Vec<_>>()
+        .windows(2)
+        .filter(|p| p[0].1 == 0x400)
+        .map(|p| (u64::from(p[0].2) << 32) | u64::from(p[1].2))
+        .collect();
+    assert!(!srcs.is_empty());
+    assert!(
+        srcs.iter().all(|&a| a == FB.0 + 0x90_0000),
+        "re-bound to the new backing"
+    );
+    assert!(rec.len() > recorded);
+    // Nothing lost, nothing doubled: every launch reached the ring exactly once.
+    let launches = pushes
+        .iter()
+        .chain(later.iter())
+        .flat_map(|w| writes(w))
+        .filter(|w| w.1 == ce::LAUNCH_DMA)
+        .count();
+    assert_eq!(launches, n);
+}
+
+/// ★ §7 test 13 — **the stale-bind counter**: a resolution re-checked at retire against unchanged
+/// rows is not stale; against rows a walk changed it is; and its positive control
+/// (`KF3_NEGCTL_STALE_BIND`) makes it move with nothing changed.
+#[test]
+fn the_stale_bind_counter_and_its_positive_control() {
+    use kf_chan::tmode::{StaleBind, bind_rec};
+    let mut pb = m(SUB, 0, &[0xc7b5]);
+    pb.extend(m(
+        SUB,
+        ce::OFFSET_IN_UPPER,
+        &[
+            (VA_FB >> 32) as u32,
+            VA_FB as u32,
+            (VA_FB >> 32) as u32,
+            VA_FB as u32 + 0x800,
+        ],
+    ));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x100]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182]));
+    let ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+    let rows_a = MockRows::default().row(VA_FB, 0x1000, false, 0x40_0000);
+    let rows_b = MockRows::default().row(VA_FB, 0x1000, false, 0x50_0000);
+    let bound = |rows: &MockRows| {
+        let mut rec = Vec::new();
+        for it in &ir {
+            bind_rec(it, rows, &windows(), &mut Vec::new(), &mut rec).unwrap();
+        }
+        rec
+    };
+    for (negctl, retire_rows, want_stale) in
+        [(false, &rows_a, 0), (false, &rows_b, 2), (true, &rows_a, 2)]
+    {
+        let mut s = StaleBind::default();
+        s.negctl = negctl;
+        s.record(7, bound(&rows_a));
+        s.retire(6, retire_rows);
+        assert_eq!(s.checked, 0, "fence 7 has not completed at 6");
+        s.retire(7, retire_rows);
+        assert_eq!((s.checked, s.stale), (2, want_stale), "negctl={negctl}");
+    }
+}

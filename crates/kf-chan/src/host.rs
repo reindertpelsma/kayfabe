@@ -24,11 +24,72 @@ pub const RING_BYTES: u64 = 1 << 20;
 /// `clc56f.h:270-272` Ampere/Ada, `clc86f.h:173-176` Hopper, `clc96f.h:95-98` / `clca6f.h:56-59`
 /// Blackwell), and the fence's `SEM_ADDR_HI` is 8 bits.
 pub const RING_VA_LIMIT: u64 = 1 << 40;
-const PB_BYTES: u64 = 0xE_0000;
-const GPFIFO_OFF: u64 = 0xF_0000;
 const GPFIFO_ENTRIES: u32 = 512;
-const FENCE_OFF: u64 = 0xF_8000;
-const USERD_OFF: u64 = 0xF_C000;
+
+/// ★ P1+P2 inc D (`docs/design/V3_P1P2_TSPACE.md` §2.4) — **where a ring's regions sit in its one
+/// 1 MiB device-local object, and how each is mapped on the GPU.** One object and one CPU view in
+/// both layouts (a separate object per region would add host BAR1 views per ring — the v3-appfix J
+/// exhaustion).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RingLayout {
+    /// The pushbuffer: `[0, pb_bytes)`.
+    pub pb_bytes: u64,
+    /// The GPFIFO's offset.
+    pub gpfifo_off: u64,
+    /// The fence word's offset.
+    pub fence_off: u64,
+    /// USERD's offset.
+    pub userd_off: u64,
+    /// The T-space layout: three GPU maps, pushbuffer and GPFIFO READ-ONLY, the fence read-write,
+    /// USERD in NO GPU map (PBDMA reaches it through the instance block; we write `GP_PUT` through
+    /// our CPU view). Else today's one read-write map of the whole object.
+    pub tspace: bool,
+}
+
+/// Today's layout (one read-write GPU map of the whole object).
+pub const LEGACY_LAYOUT: RingLayout = RingLayout {
+    pb_bytes: 0xE_0000,
+    gpfifo_off: 0xF_0000,
+    fence_off: 0xF_8000,
+    userd_off: 0xF_C000,
+    tspace: false,
+};
+
+/// ★ The T-space layout: every region whole 64 KiB granules, so each of the three maps is
+/// big-page-congruent (`kf_abi::bringup::nvos46_page_size_flag`): pushbuffer `[0, 0xD_0000)`,
+/// GPFIFO `[0xD_0000, 0xE_0000)` (512 entries use 4 KiB of it), fence `[0xE_0000, 0xF_0000)`, USERD
+/// `[0xF_0000, 1 MiB)`.
+pub const TSPACE_LAYOUT: RingLayout = RingLayout {
+    pb_bytes: 0xD_0000,
+    gpfifo_off: 0xD_0000,
+    fence_off: 0xE_0000,
+    userd_off: 0xF_0000,
+    tspace: true,
+};
+
+impl RingLayout {
+    /// The GPU maps of the object: `(offset, length, permission)`.
+    #[must_use]
+    pub fn maps(&self) -> Vec<(u64, u64, kf_host::MapPerm)> {
+        let ro = kf_host::MapPerm {
+            read_only: true,
+            ..kf_host::MapPerm::READ_WRITE
+        };
+        if self.tspace {
+            vec![
+                (0, self.pb_bytes, ro),
+                (self.gpfifo_off, self.fence_off - self.gpfifo_off, ro),
+                (
+                    self.fence_off,
+                    self.userd_off - self.fence_off,
+                    kf_host::MapPerm::READ_WRITE,
+                ),
+            ]
+        } else {
+            vec![(0, RING_BYTES, kf_host::MapPerm::READ_WRITE)]
+        }
+    }
+}
 /// Room every ordinary push leaves for one completion tail ([`fence_words`] is 8 words).
 const TAIL_BYTES: u64 = 64;
 /// GP entries we allow in flight — below the ring size, so a put never laps an unfinished get.
@@ -57,11 +118,13 @@ struct Region {
 }
 
 /// The host resources one [`HostRing`] holds besides its channel.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct RingOwned {
     mem: u32,
     cookie: u64,
     space: kf_host::VaSpace,
+    /// ★ P1+P2 inc D: every GPU map of the object (one, or the T-space layout's three).
+    maps: Vec<u64>,
 }
 
 /// ★ A copy-engine host channel we own. Its completions reach the worker through the SESSION's one
@@ -78,6 +141,8 @@ pub struct HostRing {
     /// exhausted at ~55 processes: `NV_ESC_RM_MAP_MEMORY … NoMemory`, V3_APP_MATRIX §3 J).
     owned: Option<RingOwned>,
     va: u64,
+    /// ★ P1+P2 inc D: where the regions sit and how they are mapped.
+    layout: RingLayout,
     chan: kf_host::Channel,
     head: u64,
     put: u32,
@@ -121,6 +186,22 @@ impl HostRing {
         engine: u32,
         at: Option<u64>,
     ) -> Result<HostRing, String> {
+        Self::on_engine_layout(rm, space, engine, at, LEGACY_LAYOUT)
+    }
+
+    /// ★ P1+P2 inc D: [`HostRing::on_engine_at`] with an explicit [`RingLayout`]. The T-space layout
+    /// needs a FIXED `at` (its three maps are placed region by region) and reads every placement
+    /// back: a map RM placed elsewhere is refused by name.
+    ///
+    /// # Errors
+    /// Any step's refusal, by name.
+    pub fn on_engine_layout(
+        rm: &kf_host::HostRm,
+        space: kf_host::VaSpace,
+        engine: u32,
+        at: Option<u64>,
+        layout: RingLayout,
+    ) -> Result<HostRing, String> {
         if let Some(a) = at
             && a.checked_add(RING_BYTES).is_none_or(|e| e > RING_VA_LIMIT)
         {
@@ -128,27 +209,65 @@ impl HostRing {
                 "ring VA {a:#x}+{RING_BYTES:#x} is not below 2^40 (GP entry GET_HI 7:0)"
             ));
         }
+        if layout.tspace && at.is_none() {
+            return Err("a T-space ring needs a FIXED VA (its ring slot)".into());
+        }
         let mem = rm
             .alloc_device_local(RING_BYTES)
             .map_err(|e| format!("ring obj: {e:?}"))?;
-        let va = match rm.map(
-            space,
-            mem,
-            kf_host::MapBacking::Dedicated,
-            0,
-            RING_BYTES,
-            at,
-            false,
-        ) {
-            Ok(va) => va,
-            Err(e) => {
-                let _ = rm.free(mem);
-                return Err(format!(
-                    "map ring{}: {e:?}",
-                    at.map(|a| format!(" at {a:#x}")).unwrap_or_default()
-                ));
+        let mut maps: Vec<u64> = Vec::new();
+        let unmap_all = |maps: &[u64]| {
+            for &m in maps {
+                let _ = rm.unmap(space, m, false);
             }
         };
+        let mut va = 0u64;
+        for (off, len, perm) in layout.maps() {
+            let want = at.map(|a| a + off);
+            let got = if layout.tspace {
+                rm.map_kind(
+                    space,
+                    mem,
+                    kf_host::MapBacking::Dedicated,
+                    off,
+                    len,
+                    want,
+                    false,
+                    0,
+                    perm,
+                )
+            } else {
+                rm.map(
+                    space,
+                    mem,
+                    kf_host::MapBacking::Dedicated,
+                    0,
+                    len,
+                    at,
+                    false,
+                )
+            };
+            match got {
+                Ok(v) if want.is_none_or(|w| w == v) => {
+                    maps.push(v);
+                    if off == 0 {
+                        va = v;
+                    }
+                }
+                other => {
+                    if let Ok(v) = other {
+                        maps.push(v);
+                    }
+                    unmap_all(&maps);
+                    let _ = rm.free(mem);
+                    let at = at.map(|a| format!(" at {a:#x}")).unwrap_or_default();
+                    return Err(match other {
+                        Err(e) if !layout.tspace => format!("map ring{at}: {e:?}"),
+                        other => format!("map ring{at} region +{off:#x}+{len:#x}: {other:x?}"),
+                    });
+                }
+            }
+        }
         // ★ Every failure below gives back what was built (object, mapping, view) — a refused
         // birth must not leak the host aperture any more than a retired one may.
         let undo = |cookie: Option<u64>| {
@@ -158,7 +277,7 @@ impl HostRing {
                     p_linear_address: c,
                 });
             }
-            let _ = rm.unmap(space, va, false);
+            unmap_all(&maps);
             let _ = rm.free(mem);
         };
         // The CPU view is armed with its release COOKIE kept (`HostRm::map_cpu` drops it, which
@@ -188,15 +307,20 @@ impl HostRing {
                 return Err(format!("cpu ring mmap: {e:?}"));
             }
         };
-        let owned = RingOwned { mem, cookie, space };
+        let owned = RingOwned {
+            mem,
+            cookie,
+            space,
+            maps: maps.clone(),
+        };
         let chan = match rm.birth_channel(
             space,
             engine,
             kf_host::RingSpec {
-                gp_fifo_va: va + GPFIFO_OFF,
+                gp_fifo_va: va + layout.gpfifo_off,
                 gp_fifo_entries: GPFIFO_ENTRIES,
                 userd_memory: mem,
-                userd_offset: USERD_OFF,
+                userd_offset: layout.userd_off,
                 err_notifier: 0,
             },
         ) {
@@ -212,6 +336,7 @@ impl HostRing {
             _node: node,
             owned: Some(owned),
             va,
+            layout,
             chan,
             head: 0,
             put: 0,
@@ -224,7 +349,7 @@ impl HostRing {
             .and_then(|_| rm.schedule(chan).map_err(|e| format!("schedule: {e:?}")))
             .and_then(|()| {
                 ring.cpu()?
-                    .store_u32(At::new(FENCE_OFF), 0)
+                    .store_u32(At::new(layout.fence_off), 0)
                     .map_err(|e| format!("{e:?}"))
             });
         if let Err(e) = tail {
@@ -256,7 +381,12 @@ impl HostRing {
             h_memory: o.mem,
             p_linear_address: o.cookie,
         });
-        let unmap = rm.unmap(o.space, self.va, false);
+        let unmap = o
+            .maps
+            .iter()
+            .map(|&m| rm.unmap(o.space, m, false))
+            .find(Result::is_err)
+            .unwrap_or(Ok(()));
         let free = rm.free(o.mem);
         Some(format!(
             "ring {:#x} released: cpu unmapped, view {} unmap {} free {}",
@@ -271,9 +401,13 @@ impl HostRing {
     /// `GP_PUT` (what we published) and the fence word — `None` once released.
     pub fn cursors(&self) -> Option<(u32, u32, u32)> {
         let c = self.cpu.as_ref()?;
-        let get = c.load_u32(At::new(USERD_OFF + USERD_GP_GET)).ok()?;
-        let put = c.load_u32(At::new(USERD_OFF + USERD_GP_PUT)).ok()?;
-        let fence = c.load_u32(At::new(FENCE_OFF)).ok()?;
+        let get = c
+            .load_u32(At::new(self.layout.userd_off + USERD_GP_GET))
+            .ok()?;
+        let put = c
+            .load_u32(At::new(self.layout.userd_off + USERD_GP_PUT))
+            .ok()?;
+        let fence = c.load_u32(At::new(self.layout.fence_off)).ok()?;
         Some((get, put, fence))
     }
 
@@ -302,7 +436,7 @@ impl HostRing {
     pub fn completed(&mut self) -> Result<u32, String> {
         let done = self
             .cpu()?
-            .load_u32(At::new(FENCE_OFF))
+            .load_u32(At::new(self.layout.fence_off))
             .map_err(|e| format!("{e:?}"))?;
         while self.live.front().is_some_and(|r| reached(done, r.seq)) {
             self.live.pop_front();
@@ -326,7 +460,7 @@ impl HostRing {
         if n == 0 {
             return Ok(Ok(()));
         }
-        if n > PB_BYTES / 2 {
+        if n > self.layout.pb_bytes / 2 {
             return Err(format!(
                 "segment of {n} bytes exceeds half the host pushbuffer"
             ));
@@ -335,7 +469,7 @@ impl HostRing {
             return Ok(Err(Busy));
         }
         let need = n + reserve;
-        let start = if self.head + need <= PB_BYTES {
+        let start = if self.head + need <= self.layout.pb_bytes {
             self.head
         } else {
             0
@@ -354,9 +488,9 @@ impl HostRing {
         }
         // ★ P1+P2 inc C: the GP entry is authored in the address perimeter, bounded to the
         // pushbuffer and below 2^40 (`crate::tspace_unsafe::ring_gp_entry`).
-        let entry = crate::tspace_unsafe::ring_gp_entry(self.va, PB_BYTES, start, n)
+        let entry = crate::tspace_unsafe::ring_gp_entry(self.va, self.layout.pb_bytes, start, n)
             .ok_or("gp entry (outside the pushbuffer, or the ring VA above 2^40)")?;
-        let gp = GPFIFO_OFF + u64::from(self.put % GPFIFO_ENTRIES) * 8;
+        let gp = self.layout.gpfifo_off + u64::from(self.put % GPFIFO_ENTRIES) * 8;
         self.cpu()?
             .store_u32(At::new(gp), entry as u32)
             .map_err(|e| format!("{e:?}"))?;
@@ -381,14 +515,17 @@ impl HostRing {
     /// `Ok(Err(Busy))` when the tail itself has no room; `Err` for a store/doorbell failure.
     pub fn fence(&mut self, rm: &kf_host::HostRm) -> Result<Result<u32, Busy>, String> {
         let seq = self.seq.wrapping_add(1);
-        let words = fence_words(self.va + FENCE_OFF, seq).ok_or("fence encode")?;
+        let words = fence_words(self.va + self.layout.fence_off, seq).ok_or("fence encode")?;
         if let Err(b) = self.push_inner(&words, 0)? {
             return Ok(Err(b));
         }
         self.seq = seq;
         kf_linux_raw::release_fence();
         self.cpu()?
-            .store_u32(At::new(USERD_OFF + USERD_GP_PUT), self.put % GPFIFO_ENTRIES)
+            .store_u32(
+                At::new(self.layout.userd_off + USERD_GP_PUT),
+                self.put % GPFIFO_ENTRIES,
+            )
             .map_err(|e| format!("{e:?}"))?;
         kf_linux_raw::release_fence();
         rm.doorbell(self.chan.token)
@@ -490,6 +627,8 @@ pub enum ChanError {
     Userd(String),
     /// The walk/publish at a split failed.
     Publish(String),
+    /// ★ P1+P2 inc D: T-mode refused an item at bind, by name.
+    Bind(crate::translated::Refusal),
 }
 
 /// What a pump did.
@@ -535,6 +674,13 @@ pub struct TranslatedChannel {
     last_gp_get: Option<u32>,
     /// ★ v3-initrace: `Some` only while the completion probe is on.
     probe: Option<Probe>,
+    /// ★ P1+P2 inc D: the T-space windows, `Some` in T-mode (the ring is then
+    /// [`TranslatedRing::new_tmode`]).
+    tspace: Option<crate::tspace_unsafe::TWindows>,
+    /// ★ P1+P2 inc D (§7.13): the stale-bind counter.
+    stale: crate::tmode::StaleBind,
+    /// The resolutions bound since the last fence (moved into `stale` at the fence).
+    bound: Vec<crate::tmode::Bound>,
 }
 
 /// The probe's per-channel record: fences in flight, and completed ones not yet taken.
@@ -590,7 +736,24 @@ impl TranslatedChannel {
             submissions: 0,
             last_gp_get: None,
             probe: None,
+            tspace: None,
+            stale: crate::tmode::StaleBind::default(),
+            bound: Vec::new(),
         }
+    }
+
+    /// ★ P1+P2 inc D: run in T-mode against the T-space's windows — every item the ring hands out
+    /// is bound at push ([`crate::tmode::push_bound`]); `negctl_stale` is the stale-bind counter's
+    /// positive control (`KF3_NEGCTL_STALE_BIND`).
+    pub fn set_tspace(&mut self, windows: crate::tspace_unsafe::TWindows, negctl_stale: bool) {
+        self.tspace = Some(windows);
+        self.stale.negctl = negctl_stale;
+    }
+
+    /// ★ P1+P2 inc D: `(resolutions re-checked at retire, of which stale)` — §7.13.
+    #[must_use]
+    pub fn stale_binds(&self) -> (u64, u64) {
+        (self.stale.checked, self.stale.stale)
     }
 
     /// ★ v3-initrace: record every fence's guest releases for the completion probe (diagnostic;
@@ -695,6 +858,10 @@ impl TranslatedChannel {
         if let Some(p) = self.probe.as_mut() {
             p.reached(done);
         }
+        if let Some(rows) = mem.rows() {
+            // ★ P1+P2 inc D (§7.13): re-resolve what the retired pieces were bound under.
+            self.stale.retire(done, rows);
+        }
         let mut newest = None;
         while self.retire.front().is_some_and(|&(s, _)| reached(done, s)) {
             newest = self.retire.pop_front().map(|(_, g)| g);
@@ -734,6 +901,38 @@ impl TranslatedChannel {
             };
             match next {
                 Next::Idle => break Pumped::Caught,
+                Next::Bind { ir, retires } => {
+                    // ★ P1+P2 inc D (§3.5): bound NOW — after any earlier split's walk — and a
+                    // piece the ring cannot take yet is stashed UNBOUND, bound again at retry.
+                    let (Some(win), Some(rows)) = (self.tspace, mem.rows()) else {
+                        return Err(ChanError::Host(
+                            "T-mode work without T-space windows or placement rows".into(),
+                        ));
+                    };
+                    let host = &mut self.host;
+                    let r = crate::tmode::push_bound(&ir, rows, &win, &mut self.bound, |w| {
+                        host.push(w).map(|r| r.is_ok())
+                    });
+                    let (pieces, rest) = match r {
+                        Ok(crate::tmode::Pushed::All { pieces }) => (pieces, None),
+                        Ok(crate::tmode::Pushed::Busy { rest, pieces }) => (pieces, Some(rest)),
+                        Err(crate::tmode::PushError::Refused(why)) => {
+                            return Err(ChanError::Bind(why));
+                        }
+                        Err(crate::tmode::PushError::Host(e)) => return Err(ChanError::Host(e)),
+                    };
+                    if pieces > 0 {
+                        pushed = true;
+                        self.submissions += pieces as u64;
+                    }
+                    if let Some(rest) = rest {
+                        self.stash = Some(Next::Bind { ir: rest, retires });
+                        break Pumped::Waiting;
+                    }
+                    if retires.is_some() {
+                        last_retire = retires;
+                    }
+                }
                 Next::Submit { ref words, retires } => {
                     if self.host.push(words).map_err(ChanError::Host)?.is_err() {
                         self.stash = Some(next);
@@ -753,6 +952,7 @@ impl TranslatedChannel {
                     done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
                     match self.host.fence(rm).map_err(ChanError::Host)? {
                         Ok(seq) => {
+                            self.stale.record(seq, std::mem::take(&mut self.bound));
                             let g0 = last_retire.take();
                             if let Some(g) = g0 {
                                 self.retire.push_back((seq, g));
@@ -780,6 +980,7 @@ impl TranslatedChannel {
             done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
             match self.host.fence(rm).map_err(ChanError::Host)? {
                 Ok(seq) => {
+                    self.stale.record(seq, std::mem::take(&mut self.bound));
                     if let Some(g) = last_retire {
                         self.retire.push_back((seq, g));
                     }

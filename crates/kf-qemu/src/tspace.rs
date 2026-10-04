@@ -98,6 +98,13 @@ pub struct TSpace {
     ram_len: u64,
     ram_obj: u32,
     build_us: u128,
+    /// ★ inc D: the windows, bounded once (`kf_chan::tspace_unsafe::TWindows`).
+    windows: kf_chan::tspace_unsafe::TWindows,
+    /// ★ inc D (§2.4): the per-VM ring slots — 4096 one-MiB slots for every Translated channel of
+    /// the VM's life.
+    rings: crate::mem::RingSlots,
+    /// Ring slots given up because a birth or a release did not fully succeed (§8 gates it).
+    pub slots_leaked: std::sync::atomic::AtomicU64,
 }
 
 /// The device's T-space, built once ([`prewarm`]); `Err` is the remembered refusal.
@@ -184,7 +191,18 @@ impl TSpace {
         if let Err(e) = windows_below_ring_region((fb_base, carve), (ram_base, ram_len)) {
             return Err(fail(space, e));
         }
+        let windows = match kf_chan::tspace_unsafe::TWindows::new(
+            (fb_base, carve),
+            (ram_base, ram_len),
+            RING_REGION_BASE,
+        ) {
+            Ok(w) => w,
+            Err(e) => return Err(fail(space, e)),
+        };
         Ok(TSpace {
+            windows,
+            rings: crate::mem::RingSlots::default(),
+            slots_leaked: std::sync::atomic::AtomicU64::new(0),
             space,
             fb_base,
             fb_len: carve,
@@ -205,6 +223,46 @@ impl TSpace {
     #[must_use]
     pub fn ram(&self) -> (u64, u64) {
         (self.ram_base, self.ram_len)
+    }
+
+    /// The windows, as the T-mode rewriter binds against them.
+    #[must_use]
+    pub fn windows(&self) -> kf_chan::tspace_unsafe::TWindows {
+        self.windows
+    }
+
+    /// ★ inc D (§2.4, §2.5) — **the ONLY place a map is placed in the T-space after its build:** a
+    /// Translated ring at a T-space ring slot, in the T-space layout (pushbuffer and GPFIFO
+    /// read-only, the fence read-write, USERD in no GPU map). A refused birth leaks its slot
+    /// (counted): a slot is reused only after a release that fully succeeded.
+    ///
+    /// # Errors
+    /// The ring region is exhausted, or the host refused the ring (by name).
+    pub fn ring(&self, rm: &HostRm, engine: u32) -> Result<kf_chan::host::HostRing, String> {
+        let at = crate::mem::take_ring_slot(&self.rings)
+            .ok_or("tspace: the ring region is exhausted (4096 slots for the VM's life)")?;
+        kf_chan::host::HostRing::on_engine_layout(
+            rm,
+            self.space,
+            engine,
+            Some(at),
+            kf_chan::host::TSPACE_LAYOUT,
+        )
+        .map_err(|e| {
+            self.slots_leaked
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            format!("tspace ring at {at:#x}: {e}")
+        })
+    }
+
+    /// A ring whose release fully succeeded gives its slot back; else the slot is leaked, counted.
+    pub fn give_ring(&self, va: u64, released: bool) {
+        if released {
+            crate::mem::give_ring_slot(&self.rings, va);
+        } else {
+            self.slots_leaked
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
     }
 
     /// The boot-log line (the T-TSPACE-BUILD gate reads it).

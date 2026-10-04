@@ -63,6 +63,11 @@ stage-2 scope and is not covered here.
   process on bare metal could.
 
 **Status today.**
+- ★ **2026-10-04 (P1+P2, `V3_P1P2_TSPACE.md`):** the fix is built on `v3-p1p2` behind `KF3_TSPACE`
+  (default OFF): with the flag no mirror (twin) carries a window or a ring, and Translated work runs
+  in the per-VM T-space. R1.1 holds for window reach only once the flag is default-on (inc E) after
+  the REGRESSION A/B and T-WINDOW-USER box steps; the channel-privilege half rests on P0 (S1-20).
+  Guest leaves into the firmware carve-out are counted on twins (`carve_gpu=`) and refused at inc A2.
 - R1.1 does **not hold**: the identity windows are mapped in every twin (S1-21, client audit P1).
   On VER3 page-table formats (Hopper, Blackwell) the walker also publishes stale 4 KiB translations
   under an unmapped big PTE (S1-60). Once P1 is fixed, a late invalidate with no teardown (S1-81)
@@ -105,6 +110,13 @@ stage-2 scope and is not covered here.
 - R2.2 holds by construction: `apply_entry` refuses every row outside the store, outside guest RAM
   or over a VMM placement, and the walker contains every vidmem leaf before coalescing, with a
   known-positive build (`KF_BREAK_BOUNDS`, `cuda/walk/Makefile:67-84`).
+- ★ **2026-10-04 (P1+P2, `V3_P1P2_TSPACE.md`):** on `v3-p1p2`, USERD and error-notifier offsets
+  outside the usable heap are refused before any host call (S1-43, inc A, every default); the
+  methods that carry an unauthored address are refused by name and `SubDeviceMask` headers refused
+  (inc A); with `KF3_TSPACE=1` every word a Translated channel emits is authored and every address
+  it dereferences is a window address computed by kayfabe (inc C/D), the rings live in the T-space
+  outside every emitted address, and the store window ends at the carve-out. R2.3 holds for the
+  ring and carve-out reach once the flag is default-on (inc E) after the T-RING-TRANSLATED box step.
 - R2.3 does **not hold**: Translated rings are reachable through forwarded virtual operands
   (S1-23, client audit P2). USERD and error-notifier offsets can also name the firmware carve-out
   (S1-43).
