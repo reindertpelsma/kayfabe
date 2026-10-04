@@ -14,6 +14,12 @@
 //! the space (the old emission was one GPU thread, ~0.53 µs per row, per walk).
 //!
 //! No RM, no QEMU: the tables live in an uploaded image; only the walk kernel runs.
+//!
+//! ★ `v3-sec-rawaddr` (2026-10-04) adds two merge-bar rows of `docs/design/V3_RAWADDR_PERIMETER.md`
+//! §8, both walker-only, so they run wherever this gate does: **H3**, an image dropped by its caller
+//! while the walk over it is in flight, and **H4**'s kf-cuda self-test (`kf_cuda::selftest`: the
+//! ABI refusal, the warm-up walk's answer, and the three probes — a second thread, a relaunch, and a
+//! launch the driver must refuse followed by one that must work).
 
 use kf_cuda::abi::{AP_SYS, AP_VID, RF_AP};
 use kf_cuda::abi::{
@@ -68,6 +74,13 @@ fn main() {
     if let Err(e) = throughput(&mut l) {
         l.check("throughput_run", false, e);
     }
+    // ★ H3 (docs/design/V3_RAWADDR_PERIMETER.md §8): a caller drops its image while the walk over
+    // it is in flight.
+    if let Err(e) = dropped_image(&mut l) {
+        l.check("dropped_image_run", false, e);
+    }
+    // ★ H4's kf-cuda self-test: nothing else in the tree runs it (the v2 isolate runs ITS own).
+    selftest(&mut l);
     let v = l.verdict();
     println!("GATE9_VERDICT={}", if v { "PASS" } else { "FAIL" });
     std::process::exit(if v { 0 } else { 1 });
@@ -557,4 +570,115 @@ fn throughput(l: &mut Checks) -> Result<(), String> {
     );
     drop(img);
     Ok(())
+}
+
+/// ★★ **H3 — the image a walk reads may be dropped by its caller while the walk is in flight**
+/// (`v3-sec-rawaddr`: a `DeviceImage` frees itself on drop; the walker keeps a share of the window
+/// it walked until the next walk). The image is dropped right after `submit_image`, before the
+/// collect: the walk must still read it (its report is the tables' one run), the next walk over a
+/// FRESH image must be right too, and the dropped image is freed by exactly ONE context drain —
+/// taken before that next walk is queued, so the submit never waits on the walk it queues.
+fn dropped_image(l: &mut Checks) -> Result<(), String> {
+    let mut k = WalkKernel::bring_up_on(
+        WalkCfg::default(),
+        kf_format_ver2(),
+        kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?),
+    )
+    .map_err(|e| e.to_string())?;
+    let mut tree = Tree::new(PT_A, PT_BYTES);
+    let va = 0x1_4000_0000;
+    tree.map4k_sys(va, DATA);
+    let walk_over = |k: &mut WalkKernel, tree: &Tree| -> Result<DeviceImage, String> {
+        let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
+        k.write_image(&img, tree.img.origin, &tree.img.mem[..tree.img.used()])
+            .map_err(|e| e.to_string())?;
+        k.submit_image(
+            &img,
+            &[WalkEntry {
+                pdb: tree.root,
+                slot: 0,
+            }],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(img)
+    };
+    let one_run = |runs: &[KfMapRun], va: u64| {
+        runs.len() == 1 && runs[0].va == va && runs[0].op == KFWR_OP_MAP
+    };
+    // the image is dropped while its walk is in flight
+    let img = walk_over(&mut k, &tree)?;
+    drop(img);
+    let c = k.wait(10_000).map_err(|e| e.to_string())?;
+    l.check(
+        "h3_a_walk_reads_an_image_its_caller_dropped",
+        one_run(&c.report.runs, va),
+        format!("{} runs", c.report.runs.len()),
+    );
+    k.ack(
+        c.report.header.generation,
+        vec![KFWR_ACK_APPLIED; c.report.runs.len()],
+    )
+    .map_err(|e| e.to_string())?;
+    // the next walk, over a fresh image: the dropped one's last share goes before it is queued
+    let va2 = va + PAGE;
+    tree.map4k_sys(va2, DATA + PAGE);
+    let sync0 = k.ctx_sync_calls();
+    let t0 = std::time::Instant::now();
+    let img2 = walk_over(&mut k, &tree)?;
+    let submit_us = t0.elapsed().as_micros();
+    let freed_by = k.ctx_sync_calls() - sync0;
+    let c2 = k.wait(10_000).map_err(|e| e.to_string())?;
+    l.measure(
+        "h3_free_of_the_dropped_image",
+        format!("ctx_sync_calls +{freed_by} across the next submit, which took {submit_us} us"),
+    );
+    l.check(
+        "h3_the_dropped_image_is_freed_by_one_drain_before_the_next_walk",
+        freed_by == 1,
+        format!("{freed_by} drains"),
+    );
+    l.check(
+        "h3_the_next_walk_is_right",
+        one_run(&c2.report.runs, va2),
+        format!("{} runs", c2.report.runs.len()),
+    );
+    drop(img2);
+    Ok(())
+}
+
+/// ★ H4 — `kf_cuda::selftest`, the walker's bring-up proof and its three probes, on THIS gate's
+/// hardware. The probes are named for the isolate's sandbox; here they run unsandboxed, which still
+/// exercises every path they take through the perimeter (the oversized-block launch the driver must
+/// refuse, the drain after it, a relaunch, and a second thread's allocation).
+fn selftest(l: &mut Checks) {
+    let (mut out, k) = kf_cuda::selftest::bring_up_and_prove();
+    l.measure(
+        "selftest",
+        format!(
+            "device={} bring_up_us={} jit_us={} ptx_bytes={} report={}",
+            out.device_name, out.bring_up_us, out.jit_us, out.ptx_bytes, out.report
+        ),
+    );
+    l.check(
+        "selftest_abi_skew_is_refused",
+        out.abi_refusal_fired,
+        "a KF_ABI_VERSION skew must be refused before the library is opened",
+    );
+    l.check(
+        "selftest_the_warm_up_walk_finds_the_fixture",
+        out.token() == "OK",
+        format!("{} {}", out.token(), out.why),
+    );
+    let Some(mut k) = k else {
+        l.check("selftest_probes_ran", false, "no walker came up");
+        return;
+    };
+    kf_cuda::selftest::probe_after_sandbox(&mut k, &mut out);
+    for (name, said) in [
+        ("selftest_probe_other_thread", &out.probe_other_thread),
+        ("selftest_probe_relaunch", &out.probe_relaunch),
+        ("selftest_probe_failed_launch", &out.probe_failed_launch),
+    ] {
+        l.check(name, said.starts_with("PASS"), said.clone());
+    }
 }
