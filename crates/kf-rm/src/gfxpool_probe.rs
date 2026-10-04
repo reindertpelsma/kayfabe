@@ -27,14 +27,9 @@ impl CommandPolicy for GfxPoolProbe {
                 body: Vec::new(),
             })
         };
-        // This experiment audits the Windows 580.88 / Linux 580.65.06 pair only.
-        if self.driver.driver_version()
-            != (kf_abi::DriverVersion {
-                major: 580,
-                minor: 65,
-                patch: 6,
-            })
-        {
+        // Guest-driver axis: every field must match the exact tag's compiled
+        // layout. No Windows-version or GPU-die special case.
+        if !gfxpool::query_wire_is_measured(self.driver.driver_version()) {
             return fail(0x56);
         }
         if kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
@@ -59,7 +54,8 @@ impl CommandPolicy for GfxPoolProbe {
             return fail(0x1f);
         };
         let mut body = cmd.payload.clone();
-        body[12..16].copy_from_slice(&0u32.to_le_bytes());
+        let status = self.driver.rm_control_wire().status_off;
+        body[status..status + 4].copy_from_slice(&0u32.to_le_bytes());
         body[req.params_at..end].copy_from_slice(&output);
         Some(Reply {
             rpc_result: 0,
@@ -73,18 +69,25 @@ mod tests {
     use super::*;
 
     fn fixture() -> (GfxPoolProbe, RpcCommand) {
-        let driver = *kf_abi::versions::table_for(kf_abi::DriverVersion {
-            major: 580,
-            minor: 65,
-            patch: 6,
-        })
-        .expect("measured guest");
-        let mut payload = vec![0; 80];
+        fixture_for(
+            *kf_abi::versions::table_for(kf_abi::DriverVersion {
+                major: 580,
+                minor: 65,
+                patch: 6,
+            })
+            .expect("measured guest"),
+        )
+    }
+
+    fn fixture_for(driver: DriverAbiTable) -> (GfxPoolProbe, RpcCommand) {
+        let wire = driver.rm_control_wire();
+        let mut payload = vec![0; wire.params_off + gfxpool::QUERY_PARAMS_SIZE];
         payload[8..12].copy_from_slice(&gfxpool::QUERY_SIZE.to_le_bytes());
-        payload[12..16].fill(0xff);
-        payload[16..20].copy_from_slice(&40u32.to_le_bytes());
-        payload[40..44].copy_from_slice(&128u32.to_le_bytes());
-        payload[44..].fill(0xff);
+        payload[wire.status_off..wire.status_off + 4].fill(0xff);
+        payload[wire.params_size_off..wire.params_size_off + 4]
+            .copy_from_slice(&(gfxpool::QUERY_PARAMS_SIZE as u32).to_le_bytes());
+        payload[wire.params_off..wire.params_off + 4].copy_from_slice(&128u32.to_le_bytes());
+        payload[wire.params_off + 4..].fill(0xff);
         (
             GfxPoolProbe { driver },
             RpcCommand {
@@ -96,6 +99,40 @@ mod tests {
                 delivered: Vec::new(),
             },
         )
+    }
+
+    #[test]
+    fn measured_envelopes_preserve_headers_and_reject_truncated_params() {
+        let mut header_sizes = std::collections::BTreeSet::new();
+        let mut checked = 0;
+        for version in kf_abi::generated::matrix::MEASURED {
+            let driver = match kf_abi::versions::table_for(*version) {
+                Ok(driver) => *driver,
+                Err(kf_abi::wire::AbiError::NoEncoding { .. }) => continue,
+                Err(error) => panic!("unexpected table refusal {version:?}: {error:?}"),
+            };
+            let wire = driver.rm_control_wire();
+            header_sizes.insert(wire.params_off);
+            let (mut policy, mut cmd) = fixture_for(driver);
+            let input = cmd.payload.clone();
+            let reply = policy.respond(&cmd).unwrap();
+            assert_eq!(reply.rpc_result, 0, "{version:?}");
+            let mut expected = input.clone();
+            expected[wire.status_off..wire.status_off + 4].fill(0);
+            expected[wire.params_off..]
+                .copy_from_slice(&gfxpool::experimental_query(&input[wire.params_off..]).unwrap());
+            assert_eq!(reply.body, expected, "{version:?}");
+            assert_eq!(cmd.payload, input);
+            cmd.payload.pop();
+            assert_eq!(
+                policy.respond(&cmd).unwrap().rpc_result,
+                0x1f,
+                "{version:?}"
+            );
+            checked += 1;
+        }
+        assert_eq!(header_sizes, [24, 40].into_iter().collect());
+        assert_eq!(checked, 29, "the encrypted 615 queue remains unsupported");
     }
 
     #[test]
