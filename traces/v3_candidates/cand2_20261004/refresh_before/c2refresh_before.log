@@ -1,0 +1,22 @@
+START 2026-10-04T11:07:25+00:00
+[boot_capture:c2refresh_before] BINARY kf3-bin-rev:3588789e  (/workspace/bench/kf3-bins/3588789e/qemu-system-x86_64)  ⇒ every claim from this boot cites THIS revision
+[boot_capture:c2refresh_before] host dmesg watermark: 1535 lines
+[boot_capture:c2refresh_before] booting (extra args: -vga none -qmp unix:/workspace/bench/run_c2refresh_before.qmp,server=on,wait=off)
+== kf3 binary: /workspace/bench/kf3-bins/3588789e/qemu-system-x86_64 (rev 9d82f259)  device: kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0,display=on,gop=on
+== firmware: OVMF /usr/share/OVMF/OVMF_CODE_4M.fd (vars copy /workspace/bench/run_c2refresh_before_ovmf_vars.fd)
+[boot_capture:c2refresh_before] guest is up after 54s
+[boot_capture:c2refresh_before] module unloaded and ring buffer cleared; loading cold
+[boot_capture:c2refresh_before] opening the device (this is what runs RmInitAdapter)
+[boot_capture:c2refresh_before] captured 28 dmesg lines, 25 NVRM, 0 adapter → /workspace/bench/run_c2refresh_before_dmesg.log
+[boot_capture:c2refresh_before] --- the verdict lines ---
+[boot_capture:c2refresh_before] running POST_CAPTURE_HOOK: /workspace/bench/cand2-display-checks/scripts/bench/display/refresh_hook.sh
+[boot_capture:c2refresh_before] hook finished: rc!=0 — see the probe log
+[boot_capture:c2refresh_before] ⊘ the GUEST's dmesg was UNREADABLE after the workload (QEMU gone? sudo? guest down?) —
+[boot_capture:c2refresh_before]   this boot has NO post-workload guest evidence, and that is a fact about the CAPTURE.
+[boot_capture:c2refresh_before]   ⚠ If QEMU died, the reason is in /workspace/bench/run_c2refresh_before_qemu.log — the rest of this capture still runs.
+[boot_capture:c2refresh_before] host dmesg delta: 0 lines, 0
+0 NVRM, 0
+0 Xid → /workspace/bench/run_c2refresh_before_hostdmesg.log
+[boot_capture:c2refresh_before] powering down (the emulated GSP's WPR2 only resets on a full QEMU restart)
+[boot_capture:c2refresh_before] guest did not power down in 30s (a wedged vcpu cannot); asking QEMU to quit on /workspace/bench/run_c2refresh_before.mon
+[boot_capture:c2refresh_before] ★ QEMU still alive after poweroff AND monitor quit — SIGKILL. ⊘ NO CENSUS in this run.

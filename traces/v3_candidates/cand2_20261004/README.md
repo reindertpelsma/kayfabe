@@ -79,3 +79,11 @@ Later integration work:
   37196822932 passes. Use this
   broker in the display lane; it is not promoted to nvkvm-pv's default branch
   and does not claim that project's separate VMM hardware bar.
+
+Refresh negative control: `refresh_before/`, tag `c2refresh_before`, binary
+`3588789e`, latest probe from `9d82f259`. HMP timed out at 8012 ms after fbcon
+was changed to red. QEMU remained stuck in its monitor wait and was killed by
+its recorded PID after the bounded probe; no host Xid occurred. The first
+launcher (`c2refresh_old.log`) never booted: it used the wrong override variable,
+`KF3_BIN`; `boot_capture.sh` requires `QEMU_BIN`. It is not a hardware result.
+The final `cand2b` bar at `9d82f259` has now started on vmb.
