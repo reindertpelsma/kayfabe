@@ -28,8 +28,9 @@ class StageTest(unittest.TestCase):
         self.calls, self.blocks = [], []
 
     def helper(self, short=False, denied=False):
-        def rpc(sock, name, args):
+        def rpc(sock, name, args, timeout):
             del sock
+            self.assertEqual(timeout, 60)
             self.calls.append(name)
             if name == 'guest-file-open':
                 return 17
@@ -90,6 +91,24 @@ class StageTest(unittest.TestCase):
             self.run_mocked(self.helper(short=True))
         self.assertEqual(self.calls[-1], 'guest-file-close')
         self.assertEqual(self.calls.count('guest-exec'), 1)
+        self.assertFalse((self.args.work / 'gsp-stage-result.json').exists())
+
+    def test_lost_write_acknowledgement_is_not_retried(self):
+        (self.args.work / 'login-test.json').write_text('{}')
+        helper = self.helper()
+        original = helper.rpc
+
+        def timeout_write(sock, name, args, timeout):
+            result = original(sock, name, args, timeout)
+            if name == 'guest-file-write':
+                raise TimeoutError('lost acknowledgement')
+            return result
+
+        helper.rpc = timeout_write
+        with self.assertRaisesRegex(RuntimeError, 'guest-file-write.*not retried'):
+            self.run_mocked(helper)
+        self.assertEqual(self.calls.count('guest-file-write'), 1)
+        self.assertEqual(self.calls[-1], 'guest-file-close')
         self.assertFalse((self.args.work / 'gsp-stage-result.json').exists())
 
 
