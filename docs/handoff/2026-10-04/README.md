@@ -15,6 +15,8 @@ branch first.
 | `broker_r2.json` | broker round 2: relay vs nvkvm-pv `badf2d7`, XOR blend, console cursor, box results, 16 review fixes | `v3-broker` |
 | `gpucopy_design.json` | the GPU-copy rung design (§L) and its adversarial corrections | `v3-broker` |
 | `viommu_result.json` | guest-IOVA readiness: site table, seam, detection, OD-1..OD-6 | `v3-viommu` |
+| `p1p2_result.json` | the S1-21 fix: revised design, two reviews, implementation, fix round, box plan, owner decisions 8-12 | `v3-p1p2` |
+| `rawaddr_result.json` | S1-03/S1-04: design, reviews, implementation and fixes | `v3-sec-rawaddr` |
 | `dispsw_default_on_prep.json` | prep for x11-dispsw default-on: forced-release probe design, client-split inventory, checked plan | (not started; owner question §N cond. 3) |
 
 No secrets, keys, addresses of machines or binaries are in these files (checked before commit).
