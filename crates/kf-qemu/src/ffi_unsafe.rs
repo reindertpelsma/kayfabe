@@ -21,8 +21,13 @@ use std::ffi::CStr;
 /// ⊘ 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` and not `v3-broker`): `v3-broker` may
 /// keep 12 only while it merges into a master still at 11. Merged into a master at 13, its
 /// [`kf3_realize`] has BOTH `x11_dispsw` and `display_broker`, a signature neither 12 nor 13
-/// names, so it must take **14**: `display_broker` after `x11_dispsw`, in this file, `kf3.h`,
-/// `kf3.c`'s call and `tests/wire_mirror.rs`, so that archives at 12 and at 13 are both refused.
+/// names, so it must take **14**: `display_broker` after `x11_dispsw`, in this file, `kf3.h` and
+/// `kf3.c`'s call, so that archives at 12 and at 13 are both refused.
+/// ⊘ CORRECTED 2026-10-04 (the `v3-cand-1` review): this note also named `tests/wire_mirror.rs`.
+/// That test holds no ABI number and no `kf3_realize` signature — it reads [`KF3_ABI`] from here
+/// and compares `kf3.h`'s prototypes with these signatures on its own — so it needs no edit. And no
+/// CI test checks `kf3.c`'s call (`kf3.c:835-836`): only the C build does (`build_kf3.sh` on a box,
+/// or `-fsyntax-only` against QEMU 10.2.4), so a `v3-broker` re-merge must rebuild kf3.
 pub const KF3_ABI: u32 = 13;
 
 /// The PCI identity the C device presents.

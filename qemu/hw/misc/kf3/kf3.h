@@ -19,7 +19,12 @@
  * ⊘ 2026-10-04 (v3-cand-1, which merges v3-dispsw-exp and not v3-broker): v3-broker may keep 12 only
  * while it merges into a master still at 11. Merged into a master at 13, its kf3_realize has BOTH
  * x11_dispsw and display_broker, a signature neither 12 nor 13 names, so it must take 14 (display_broker
- * after x11_dispsw, here, in ffi_unsafe.rs, kf3.c's call and wire_mirror.rs). */
+ * after x11_dispsw: here, in ffi_unsafe.rs and in kf3.c's call).
+ * ⊘ CORRECTED 2026-10-04 (the v3-cand-1 review): this note also named wire_mirror.rs. That test holds
+ * no ABI number and no kf3_realize signature: it reads KF3_ABI from ffi_unsafe.rs and compares this
+ * header's prototypes with the Rust signatures on its own, so it needs no edit. Nor does any CI test
+ * check kf3.c's call: only the C build does (build_kf3.sh on a box, or -fsyntax-only against QEMU
+ * 10.2.4), so a broker re-merge must rebuild kf3. */
 #define KF3_ABI 13
 
 typedef struct Kf3Identity {

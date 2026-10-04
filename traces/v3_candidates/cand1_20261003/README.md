@@ -1,5 +1,8 @@
 # Candidate v3-cand-1 on real hardware — merge bar, apps, display (2026-10-03/04)
 
+⊘ **2026-10-04 (later): the B5 failure below is root-caused and fixed at `c1ca7945` (see *Candidate or
+master?*); this directory still records `8a682f1b` only, and the fix needs its own hardware run.**
+
 **STATUS: ANSWERED, 2026-10-04 01:30 UTC.** Stage 1 (merge bar) PASS, stage 2 (apps) PASS,
 stage 3 (display) B0/B1/x11-dispsw PASS and **B5 FAIL** — the B5 failure reproduces with master's
 code on the same box (see *Verdict*).
@@ -141,6 +144,19 @@ crates/kf-qemu/src/display.rs crates/kf-disp/src/inst.rs crates/kf-disp/src/scan
 `B5A2_AFTER_SESSION` passed in the four repeats only because the session shot was the fallback
 dialog there (`b5a2_x_1280.png`) and any black frame then counts as "changed"; the after-session
 screen is black in all five runs.
+
+⊘ **ROOT CAUSE CONFIRMED and FIXED, 2026-10-04 — `c1ca7945` on `v3-cand-1`, not yet re-run on a box.**
+The inference below holds, read from these logs and the source rather than assumed: b5c1's and
+run_h/b5h's QEMU logs carry the same display events from the restore to the core free (window 6
+latches `0x10088`; *"chn 7 PUT 0xfa4: 0 effects"*, NVKMS's flip to NULL with no UPDATE; the window and
+core frees with `preserve: true`), b5c1 adding five GSP `Free` RPCs and the refusal. The order is
+NVKMS's `nvFreeDevEvo` (`ogkm-580: src/nvidia-modeset/src/nvkms-evo.c:9101-9112`): restore the console,
+free the console surface (RM clears the context DMA from display instance memory with the window still
+armed on it), then free the channels with `PRESERVE_HW`. The refused copy cleared
+`ScanState::last_plan` (*"copied whole"*), so the preserving free kept nothing. The fix keeps each
+window's context DMA as its ARMED state latched it until the window latches again (`LatchedDmas`,
+`crates/kf-qemu/src/display.rs`; `docs/design/V3_DISPLAY.md` §4.11.13's ⊘⊘ block), with a GPU-free test
+of the ordering that fails with per-copy resolution. B5 must be re-run at the candidate's new head.
 
 Why B5 passed for `06b307c4` on vast 54032077 (`traces/v3_display/gop_final_20261003/`) and fails
 here — an inference from the code and both logs, not a run: each scanout copy re-resolves every

@@ -266,15 +266,15 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 | RM graph handles | guest kernel | `MAX_LIVE_HANDLES` 2^18 (`crates/kf-rm/src/rmgraph.rs:805`) | bounded |
 | privileged register ring | guest kernel | 4096, poisons when full | bounded |
 | workers | realize | at most 255, asserted at startup | bounded |
-| scratch memfds, mapping growth | guest kernel | `v3-scratch-bound` | fixed on branch (unmerged) |
+| scratch memfds, mapping growth | guest kernel | `v3-scratch-bound` | fixed on branch (unmerged). ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-scratch-bound` at `1461bfd7`): merged there — one scratch tile per BAR window, and kf3 refuses RAM-pinning co-residents; bounded |
 | host channel IDs / twin count | guest userspace via guest RM | the host's per-runlist count only | **open** |
 | twin-private host VRAM (RM-owned context buffers) | guest userspace via guest RM | uncounted (`crates/kf-qemu/src/cardbudget.rs:1-19` covers BAR1 and the store only) | **open, S1-82** |
-| host NVENC sessions | guest userspace | none per VM (`crates/kf-qemu/src/chan.rs:2551-2598`) | **open, S1-42** |
+| host NVENC sessions | guest userspace | none per VM (`crates/kf-qemu/src/chan.rs` `ChanPlane::encoder_session`; `:2551-2598` at `12a526df`) | **open, S1-42** |
 | host BAR1 across VMs | guest kernel | this process only (`cardbudget.rs:10-13`) | **open** |
-| PRAMIN view retire queue (fds and BAR1 aperture) | guest kernel | unbounded channel (`crates/kf-qemu/src/mem.rs:301`) | **open, S1-45** |
+| PRAMIN view retire queue (fds and BAR1 aperture) | guest kernel | unbounded channel (`crates/kf-qemu/src/mem.rs` `TrapNodes::start`, its `retire` `mpsc::channel::<StoreView>()`; `:301` at `12a526df`) | **open, S1-45** |
 | runlist time (TSG timeslice) | guest kernel | host minimum only | **open, S1-44** |
 | walk budget, frontier, report capacity | guest userspace (its VA layout) | per refresh, shared by every space in the batch | **open, S1-61** |
-| display-SW objects, kernel-mapped bytes | guest kernel | caps in progress (`OWNER_RULINGS.md` §N) | **open** |
+| display-SW objects, kernel-mapped bytes | guest kernel | caps in progress (`OWNER_RULINGS.md` §N) | **open**. ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` at `86b4fa10`): bounded — at most 16 live display-SW twins per channel and 1024 per VM, refused by name past either (`kf_qemu::dispsw::PER_CHANNEL_CAP`, `PER_VM_CAP`); no host map kayfabe makes carries `NVOS46_FLAGS_KERNEL_MAPPING_ENABLE` (`kf_host` `nvos46_map_flags` masks it), so no kernel-mapped bytes; the `x11-dispsw` experiment stays default off |
 | host RM/GSP call rate | guest userspace via guest RM | none | **open** |
 | host log volume | guest userspace and guest kernel | none on several paths | **open, S1-86** |
 | GPU time | guest userspace | none; v2 recorded about a 2x slowdown under a spinning kernel (`docs/archive/guest_blast_radius.md` §5) | fairness, inside P |
@@ -285,7 +285,7 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 |---|---|---|
 | Each guest process has its own host process and RM client | nvkvm-pv `docs/internal/isolate-model.md` | Gone. One guest-facing client per device holds every twin. Separation is per-twin VA space plus kayfabe's handle tables; client-scoped RM lookups must be shown to be VA-space-scoped (client audit verify pass). |
 | A compromised stub is confined by seccomp, namespaces and a uid drop | nvkvm-pv isolate model | Gone. A kf3 bug runs as the VMM. Confinement is the deployment's. |
-| P holds because the RM-calling process holds no capability | `docs/archive/guest_blast_radius.md` §3.1-§3.4 | Holds only for channel births (bracket plus tripwire, unmerged). Elsewhere P depends on the authored verb set and the GPU-side bounds while the VMM is root (S1-22). |
+| P holds because the RM-calling process holds no capability | `docs/archive/guest_blast_radius.md` §3.1-§3.4 | Holds only for channel births (bracket plus tripwire, unmerged). Elsewhere P depends on the authored verb set and the GPU-side bounds while the VMM is root (S1-22). ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-sec-nonpriv` at `76dba5bd`; R3.4's note): merged there, and it also holds for libcuda — every CUDA thread clears `CAP_SYS_ADMIN` for its life (`kf_cuda::posture`). Still open: the other kf-host RM calls on QEMU's own threads. |
 | The walker runs in an unprivileged isolate and cannot escalate | `THE_CONSTRAINTS.md` §20 | Stale. It runs in the VMM; its invariants are the only barrier (S1-26). |
 | Layer 1 (trap and lock) secures guest-shared memory | `docs/archive/core_security_threat_model.md` §2.1 | Gone by design. Replaced by §39 copy-then-check (S1-27). |
 | Guest pointers are overwritten at the boundary | nvkvm-pv `docs/internal/forwarding-model.md` | Superseded and stronger: nothing guest-authored is forwarded to RM. Guest GPU VAs still execute verbatim, bounded by the twin VA space. |
@@ -299,7 +299,7 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 |---|---|---|---|
 | guest userspace | **no** | identity windows in every twin; stale VER3 translations; host reach rests on an untested channel property | S1-21, S1-60, S1-81, S1-20 |
 | guest kernel / guest root | **no** | Translated rings reachable; several shared resources unbounded; device lifetime on hotplug topologies | S1-23, S1-25, S1-80 |
-| the VMM process | **partly** | births de-privileged on an unmerged branch; libcuda and the other RM calls are not; pointer gates bypassable | S1-22, S1-01, S1-02 |
+| the VMM process | **partly** | births de-privileged on an unmerged branch; libcuda and the other RM calls are not; pointer gates bypassable. ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, merging `v3-sec-nonpriv` at `76dba5bd`): births and libcuda's channels are de-privileged there (`kf_host::birth`, `kf_cuda::posture`); the other kf-host RM calls are not | S1-22, S1-01, S1-02 |
 | the display broker | by design, unmerged | stage 2 audits `v3-broker` | S1-33 |
 | other tenants | **no** | NVENC, twin VRAM, runlist time and BAR1 are not bounded per VM | S1-25, S1-42, S1-82 |
 | host RM and driver | trusted | GSP and libcuda behaviour is UNVERIFIED where cited | §12 |
@@ -331,7 +331,7 @@ A summary of the stage-1 inventory of area §2.6 (`docs/audits/2026-10-03-v3-sta
 | USER host channels refuse physical-mode and privileged work | client-audit box test T-PHYS-CE, both privilege arms (S1-20) |
 | Which VA space GSP names in the display-SW callback | T-DISPSW-SCOPE (client audit verify pass) |
 | RM bounds USERD inside its object | a kayfabe-side bound (S1-43) |
-| libcuda channel privilege, and which threads create them | the capability bracket around context creation, plus a privilege probe for every client in the process (S1-22) |
+| libcuda channel privilege, and which threads create them | the capability bracket around context creation, plus a privilege probe for every client in the process (S1-22). ⊘ 2026-10-04 (`v3-cand-1`): built as a per-thread posture (`kf_cuda::posture`) and probed on a box (`traces/v3_security/libcuda_20261003/`); the in-process `GET_PRIVILEGED_STATUS` gate test is not built |
 | Whether HMM or ATS is active for kf3's own CUDA contexts on target hosts | query `CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS` at bring-up and log it (S1-05) |
 | Contents of the host usermode page beyond the timer | dump it per family (S1-30) |
 | Scrub-on-free through kayfabe | the two-VM canary test (S1-31) |

@@ -175,8 +175,8 @@ Each area lists its method and what already exists. **Stage** says when it runs.
 | finding | where | status |
 |---|---|---|
 | P0: host twins were privileged when QEMU runs as root | client audit 2026-10-03 | fix on `v3-sec-nonpriv`. ⊘ CORRECTED 2026-10-03 (`v3-sec-nonpriv` box probe, `privprobe_root.log`; S1-29): this cell said *"`NV01_ROOT_NON_PRIV` + a per-birth tripwire"*; `NV01_ROOT_NON_PRIV` is rewritten by `escape.c:394-403` and changes nothing. The fix is a per-call `CAP_SYS_ADMIN` clear around every channel-alloc call plus a check of RM's reply (the `PRIVILEGED_CHANNEL` (bit 5) tripwire), with every other alloc entry refusing channel classes (`kf_host::birth`), and `CAP_SYS_ADMIN` cleared for the life of each thread that calls libcuda (`kf_cuda::posture`). The merge bar gates on it (`scripts/bench/box/birth_census.sh`). |
-| P1: identity windows in every twin address space = **S1-21 (blocker)**: in-guest isolation A.9 does not hold | same; `crates/kf-qemu/src/mem.rs:1755-1762` | design in progress: windows only where Translated work runs |
-| P2: kayfabe's Translated rings writable from the guest kernel's space = **S1-23 (major)** | same; `crates/kf-chan/src/translated.rs:26`, `crates/kf-qemu/src/mem.rs:487-503` | design in progress: Translated in its own address space |
+| P1: identity windows in every twin address space = **S1-21 (blocker)**: in-guest isolation A.9 does not hold | same; `crates/kf-qemu/src/mem.rs` `create_mirror` (its two `map_window` calls; `:1755-1762` at `12a526df`, cited by symbol since `v3-cand-1` moved the lines, 2026-10-04) | design in progress: windows only where Translated work runs |
+| P2: kayfabe's Translated rings writable from the guest kernel's space = **S1-23 (major)** | same; `crates/kf-chan/src/translated.rs:26`, `crates/kf-qemu/src/mem.rs` `RING_REGION_BASE` / `RING_REGION_BYTES` (the ring region in every mirrored space; `:487-503` at `12a526df`) | design in progress: Translated in its own address space |
 | Scratch memfd host-RAM amplification; mapping growth | owner question | fixed on `v3-scratch-bound`, merge bar passed |
 | Display-SW twins uncapped | `v3-dispsw-exp` review | caps in progress. ⊘ CORRECTED 2026-10-04 (`v3-cand-1`, which merges `v3-dispsw-exp` at `86b4fa10`): built, 16 live twins per channel and 1024 per VM, refused by name past either (`kf_qemu::dispsw::PER_CHANNEL_CAP`, `PER_VM_CAP`, and their unit test); the experiment stays default off |
 
@@ -201,7 +201,7 @@ P1 and P2 are the rows above.
 | S1-28: this plan omits packaging, install and supply chain | §2 | open: a proposed stage-2 area for the owner |
 | S1-40: RM companion size fields (`paramsSize`, NVOS02 `limit`) are a safe-caller contract | `crates/kf-linux-raw/src/chardev_unsafe.rs:365-377`, `:565-776` | open |
 | S1-41: no host-side allowlist of RM controls and classes | `crates/kf-host/src/lib.rs:793`, `:1029`; `crates/kf-abi/src/hostabi.rs:849` | open |
-| S1-42: NVENC session slots are GPU-wide with no per-VM cap | `crates/kf-qemu/src/chan.rs:2551-2598` | open |
+| S1-42: NVENC session slots are GPU-wide with no per-VM cap | `crates/kf-qemu/src/chan.rs` `ChanPlane::encoder_session` (`:2551-2598` at `12a526df`) | open |
 | S1-60: VER3 (Hopper, Blackwell): an unmapped big PTE does not veto stale 4 KiB PTEs | `cuda/walk/kf_walk.cu:363-368` | open; a blocker for any Hopper or Blackwell release |
 | S1-61: walk resources are shared per refresh, so one space can fail every batched space's walk | `cuda/walk/kf_walk.cu:1849-1852`; `crates/kf-mem/src/vasmgr.rs:396-434` | open |
 | S1-80: kf3 is hot-unpluggable and its exit neither joins threads nor deletes its bottom half | `qemu/hw/misc/kf3/kf3.c:858-912` | open |
