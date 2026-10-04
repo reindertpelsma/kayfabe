@@ -4,6 +4,12 @@
 claim. This adds a real host timer page after the allocation-only experiment still produced
 Code 43. The timer-map failure is a source-grounded hypothesis, not proven Windows causality.
 
+**Windows result, 2026-10-05:** fresh probe D at `0e92e959` realizes the genuine
+mapping but still reports Code 43. Its 208 traced RPC lines exactly match probe C
+and no GPU channel is created. Thus this mapping alone does not resolve the
+initialization failure. See `traces/windows_pool_20261005/probe-d/`; native
+mappability is established separately from Windows boot progress.
+
 The timer SDK object is not Windows-only: OGKM's `tmrapiGetRegBaseOffsetAndSize_IMPL` reads
 `NV_REG_BASE_TIMER`, returns errors from that lookup, and reports `sizeof(Nv01TimerMap)`.
 Previously the guest chip-info reply marked TIMER unsupported. The optional mapping advertises

@@ -1,0 +1,57 @@
+2026-10-04T23:39:46.3185124+00:00
+{
+    "Status":  "Error",
+    "FriendlyName":  "Microsoft Basic Display Adapter",
+    "InstanceId":  "PCI\\VEN_1234\u0026DEV_1111\u0026SUBSYS_11001AF4\u0026REV_02\\3\u0026267A616A\u00260\u002648",
+    "Problem":  10
+}
+[
+    {
+        "KeyName":  "DEVPKEY_Device_ProblemCode",
+        "Type":  7,
+        "Data":  10
+    },
+    {
+        "KeyName":  "DEVPKEY_Device_ProblemStatus",
+        "Type":  24,
+        "Data":  3223192632
+    },
+    {
+        "KeyName":  "DEVPKEY_Device_DevNodeStatus",
+        "Type":  7,
+        "Data":  25175040
+    },
+    {
+        "KeyName":  "DEVPKEY_Device_Service",
+        "Type":  18,
+        "Data":  "BasicDisplay"
+    }
+]
+{
+    "Status":  "Error",
+    "FriendlyName":  "NVIDIA GeForce RTX 4070",
+    "InstanceId":  "PCI\\VEN_10DE\u0026DEV_2786\u0026SUBSYS_40EE1458\u0026REV_A1\\3\u0026267A616A\u00260\u002630",
+    "Problem":  43
+}
+[
+    {
+        "KeyName":  "DEVPKEY_Device_ProblemCode",
+        "Type":  7,
+        "Data":  43
+    },
+    {
+        "KeyName":  "DEVPKEY_Device_ProblemStatus",
+        "Type":  24,
+        "Data":  0
+    },
+    {
+        "KeyName":  "DEVPKEY_Device_DevNodeStatus",
+        "Type":  7,
+        "Data":  25191424
+    },
+    {
+        "KeyName":  "DEVPKEY_Device_Service",
+        "Type":  18,
+        "Data":  "nvlddmkm"
+    }
+]

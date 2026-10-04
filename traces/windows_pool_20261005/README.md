@@ -111,3 +111,28 @@ advertises `regBases[NV_REG_BASE_TIMER]=0xffffffff`. OGKM's
 allocation without another GSP RPC. No Windows stack trace yet confirms that
 this is where probe C fails. Do not advertise the timer range until its reads
 are actually served through an audited mapping.
+
+## Probe D: genuine read-only timer mapping
+
+**The hypothesis above did not resolve the observed failure.** Product revision
+`0e92e959952873d8084f9313353ea38a9d1c4109`, built with QEMU 10.2.4, ran a fresh
+overlay with both `--pool-probe` and `--timer-map`. Realize reports the host-derived
+timer base and genuine read-only 4096-byte backing, with matching compiled host
+and guest layouts. The prior native probe passed three map/read/drop cycles as
+UID/GID 65534, no groups/capabilities, no-new-privileges; its evidence and source
+audit are in `traces/windows_timer_20261005/`.
+
+Windows still reports Code 43, NVIDIA's `DEVPKEY_Device_ProblemStatus` is zero,
+and nvidia-smi exits 9. **All 208 traced RPC lines exactly match probe C**, with
+210 total serviced messages and no GPU channel births. A real timer page fixes
+an unsupported feature but has not advanced this Windows initialization. This
+does not establish whether Windows reached or used that mapping before failing.
+The separate Basic Display adapter reports Code 10 / `0xc01e0438`
+(`STATUS_GRAPHICS_NOT_POST_DEVICE_DRIVER` in the Windows headers); do not confuse
+that with the NVIDIA device's error.
+
+The guest shut down cleanly and QEMU exited zero. Files in `probe-d/` include the
+full command, QEMU/serial logs, normal status and additional device properties.
+The latter script exits 1 when no matching event-log entries are found; device
+property queries themselves succeeded. No missing-event output establishes an
+absence of an internal NVIDIA error.

@@ -5,17 +5,18 @@
 master. The older master status below is historical for this checkout.
 
 - Windows 580.88 on the borrowed RTX 4070 PC (Linux host 595.91.07) still reports
-  Code 43 through Kayfabe. Fresh A/B/C runs are saved in
+  Code 43 through Kayfabe. Fresh A/B/C/D runs are saved in
   `traces/windows_pool_20261005/`: answering the pool query advances initialization;
   accepting timer allocation alone does not. No Windows GPU workload has passed.
 - `535e7df9` removes the one-driver query gate in favor of exact compiled layout
   checks. All 29 admitted control envelopes are tested (30 measured tags; the
   encrypted 615 queue remains refused). 1,187 ABI/RM/chip tests pass. Invented
   virtual pool dimensions remain an opt-in experiment, not pooled preemption.
-- Next hypothesis: the guest fails its timer CPU mapping because CHIP_INFO names
-  no TIMER range. `codex/windows-timer-map-2026-10-05` is preparing genuine
-  read-only host backing and an unprivileged native probe. Never publish a timer
-  range over a stopped shadow page. The runner now has independent `--timer-map`
+- The timer mapping hypothesis did not resolve this failure: `0e92e959` adds
+  genuine read-only host backing, validated by an unprivileged native probe, but
+  fresh Windows probe D has exactly the same RPC trace as C. Both remain Code 43
+  with no GPU channel births. Next work is precise kernel-side failure diagnostics,
+  not declaring the mapping a Windows fix. The runner has independent `--timer-map`
   and `--pool-probe` flags; use a fresh overlay and an exact immutable binary.
 - Read `docs/design/V3_WINDOWS_POOL_AUDIT_20261005.md` before integration. The
   old Windows base inherits S1-21 and lacks master's USER-channel correction.
