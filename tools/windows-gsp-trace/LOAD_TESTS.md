@@ -173,3 +173,36 @@ The added nonpageable attributes mean these are not byte-identical to the
 successful combined diagnostic probe. Their runtime parity remains untested.
 Use the separately smoke-tested Microsoft-linker artifact for the next
 capture rehearsal.
+
+## First RTX 4070 rehearsal and text export
+
+The same trusted MSVC normal observer and user tools also passed install,
+API tests, restart/status and stop in a Windows guest with an RTX 4070 passed
+through directly by VFIO. NVIDIA's display driver had not yet been installed.
+
+The first installation rehearsal stopped before NVIDIA ran: the native setup
+helper successfully extracted its package, but its `Start-Process` wrapper
+lost the child's exit code and refused to continue. The collector wrapper
+likewise recorded a null exit code. That value remains **unknown**, rather
+than being reclassified as success. The observer's final stats independently
+showed 1,065,811,304,448 scanned bytes over 124 passes, zero attached tables,
+zero read failures, zero records/drops, and an empty FIFO after drain.
+
+`export-trace.ps1` successfully produced text JSONL on the Windows guest.
+Offline `decode.py --require-query-pair` verified its complete source hash and
+header, then returned 4 because there was no query pair. The original capture
+was exactly 64 bytes, SHA256
+`9695e840707d9f34fee30eba28c15a9fd4be0d37bc2efd5680dc4cc84b44261c`.
+This is a valid empty observation file, consistent with NVIDIA never starting;
+it does not test GSP queue discovery. Only text logs returned to the controller.
+Evidence is under
+`/data/vast-windows-runtime/claude-20261004/first-capture-text/`, with the
+separate failed-wrapper state in `drain-first4070-recovered.stdout`.
+
+The replacement native process wrapper owns a `Diagnostics.Process` from
+`Start()` through `ExitCode`, with a timeout and explicit null-code rejection.
+Its actual Windows PowerShell 5.1.26100.1591 smoke observed exit codes 0/1/7,
+20 fast successful children, rejection of an unexpected nonzero code, and
+bounded tree termination after a one-second timeout. This helper belongs to
+the separate installer repository; the recorder driver and collector binaries
+were unchanged by that wrapper fix.
