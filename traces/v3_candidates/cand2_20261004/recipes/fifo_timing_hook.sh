@@ -7,7 +7,7 @@ G=/root/kayfabe/scripts/bench/gssh_nv
 out=/workspace/bench/display/$tag
 mkdir -p "$out"
 gq() { timeout 90 "$G" "$@"; }
-gq 'sudo systemctl stop lightdm 2>/dev/null; sudo modprobe nvidia-drm modeset=1; sudo pkill -x Xorg || true'
+gq 'sudo systemctl stop lightdm 2>/dev/null; sudo modprobe nvidia-drm modeset=1; sudo pkill -x Xorg || true; sleep 3'
 gq "sudo sh -c 'nohup Xorg :0 -nolisten tcp -noreset -ac -logfile /var/log/Xorg.8.log >/tmp/xfifo.log 2>&1 &'"
 ready=0
 for _ in $(seq 30); do
@@ -18,6 +18,14 @@ test "$ready" = 1
 gq 'sudo -u ubuntu env DISPLAY=:0 xrandr' > "$out/xrandr.log"
 gq 'sudo -u ubuntu env DISPLAY=:0 python3 -' <<'PY' | tee "$out/fifo_timing.log"
 import json,subprocess,time
+# The first attempt measured a 4.8s cold one-frame launch against a 2.75s
+# warm startup estimate. Warm the driver and shaders before all timed samples.
+start=time.monotonic()
+warm=subprocess.run(['vkcube','--c','120','--present_mode','2'],
+                    capture_output=True,text=True,timeout=60)
+print('FIFO_WARMUP '+json.dumps(dict(frames=120,seconds=time.monotonic()-start,
+      rc=warm.returncode,output=warm.stdout+warm.stderr)),flush=True)
+assert warm.returncode==0, warm
 rows=[]
 for count in [1,480,960]:
     start=time.monotonic()

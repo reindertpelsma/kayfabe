@@ -114,3 +114,15 @@ Vulkan FIFO 480 completes in 18.395s (forced-60: 18.334s), outside the planned
 Mailbox presentation is unsupported. Host Xid/GPU-progress errors are zero,
 but the guest records three flip-event timeouts: diagnosis pending, not an
 unqualified display PASS.
+
+X11 timeout diagnosis: the three `x1130` events are at guest uptime 79.62,
+235.78 and 329.67s, one at each DRM-console-to-Xorg handoff. Candidate 1's
+`display/dsw_b_on_c1b` already records the same event after each Xorg start
+(84.60 and 213.82s). The KMS pattern/flip workload itself has zero timeouts.
+This is an existing limitation, not a new clean-runtime claim.
+
+`fifo_cold/`: the first slope probe completed 1/480/960 frames in
+4.808/18.521/34.293s, respectively, giving 30.434 FPS and a 2.749s warm-start
+intercept. Its extra startup-consistency assertion failed because the first
+one-frame sample was cold. Retain that failure; rerun after an explicit
+120-frame warm-up before every timed sample set.
