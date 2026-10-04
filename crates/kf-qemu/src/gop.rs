@@ -184,7 +184,7 @@ mod tests {
     use kf_oprom::Descriptor;
 
     fn monitor() -> kf_disp::edid::Monitor {
-        kf_rm::display::monitors().remove(0)
+        kf_rm::display::monitors(0).remove(0)
     }
 
     /// ⊘ The default: no plan, whatever else is configured — every `gop` path is skipped.

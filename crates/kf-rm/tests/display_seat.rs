@@ -297,7 +297,7 @@ fn rejected_free_does_not_release_display_and_accepted_client_free_allows_recycl
 /// Every control the display model claims, with a request of the derived size (4 bytes for the
 /// IP version, the guest's own size for the two [IN] blobs).
 fn claimed() -> Vec<(u32, Vec<u8>)> {
-    let m = kf_rm::display::model_for(&driver(), &kf_chip::display::AMPERE).expect("derived");
+    let m = kf_rm::display::model_for(&driver(), &kf_chip::display::AMPERE, 0).expect("derived");
     let l = m.layouts();
     let size_of = |cmd: u32| -> usize {
         match cmd {

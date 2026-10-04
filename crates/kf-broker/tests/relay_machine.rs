@@ -964,7 +964,10 @@ fn input_is_bounded_before_the_vmm_sees_it() {
     t.pkt(EV_CLOSE, 0, 0, 0, 0);
     t.pkt(EV_CLOSE, 1, 0, 0, 0);
     t.pkt(EV_SURFACE, 1600, 900, 59_940, 0);
-    t.pkt(EV_SURFACE, 1600, 900, 59_940, 0); // the same size again: no second hint
+    t.pkt(EV_SURFACE, 1600, 900, 59_940, 0); // the same size and rate again: no second hint
+    // ★ §8.16 (`display-max-fps`): the same size at another refresh IS a change (the guest's
+    // preferred rate follows the host's monitor) — before, the size alone was compared
+    t.pkt(EV_SURFACE, 1600, 900, 30_000, 0);
     t.pkt(EV_SURFACE, 20_000, 10, 0, 0); // clamped
     assert_eq!(
         t.read(),
@@ -996,6 +999,11 @@ fn input_is_bounded_before_the_vmm_sees_it() {
                 w: 1600,
                 h: 900,
                 mhz: 59_940
+            },
+            Input::Surface {
+                w: 1600,
+                h: 900,
+                mhz: 30_000
             },
             Input::Surface {
                 w: 8192,

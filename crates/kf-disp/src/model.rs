@@ -1675,7 +1675,7 @@ mod tests {
         let ask = |m: &mut DisplayModel| m.control(id, &vec![0; size(m, s)]).unwrap().unwrap();
         let r = ask(&mut m);
         assert_eq!(get(&m, s, &r, "hotPlugMask"), 0, "nothing pending at boot");
-        let mon = Monitor::for_window(1600, 900, 60_000, 165_000);
+        let mon = Monitor::for_window(1600, 900, 60_000, 165_000, 0);
         assert_eq!(m.set_monitor(0, mon.clone()), Some(0x100));
         assert_eq!(m.set_monitor(0, mon), None, "the same monitor is no change");
         assert_eq!(

@@ -166,6 +166,14 @@ struct Kf3State {
     int broker_sock;                 /* the socket Rust asked us to watch, or -1 */
     int broker_frame_fd;             /* the display worker's frame eventfd, or -1 */
     bool broker_pointer_checked;     /* the absolute-pointer check ran (once, at the first connect) */
+    /* ★ ABI 16 (docs/design/V3_DISPLAY.md sec. 8.16, OWNER_RULINGS sec. M): the cap on every head's
+     * emulated vblank tick (whole Hz; 0 = unset: 75, today's EDID). Rust validates it by name. */
+    uint32_t display_max_fps;
+    /* ★ ABI 16: the console's on-demand refresh (gfx_update is asynchronous) — the descriptor the
+     * display worker signals when a request was served, and a 1 s backstop so a screendump never
+     * waits on a worker that cannot answer. Main loop only. */
+    int refresh_fd;
+    QEMUTimer *refresh_timer;
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -792,11 +800,48 @@ static void kf3_console_frame(Kf3State *s)
     dpy_gfx_update_full(s->con);
 }
 
+/* ★ ABI 16 (sec. 8.16): a refresh request was answered (or its backstop expired) — show the newest
+ * frame, then end every screendump waiting on this console (graphic_hw_update_done wakes the
+ * coroutines queued in qemu_console_co_wait_update; with nobody waiting it does nothing). */
+static void kf3_refresh_done(Kf3State *s)
+{
+    if (s->refresh_timer) {
+        timer_del(s->refresh_timer);
+    }
+    if (!s->con) {
+        return;
+    }
+    if (s->h) {
+        kf3_console_frame(s);
+    }
+    graphic_hw_update_done(s->con);
+}
+
+static void kf3_refresh_ready(void *opaque)
+{
+    Kf3State *s = opaque;
+
+    if (s->h) {
+        kf3_display_refresh_drain(s->h);
+    }
+    kf3_refresh_done(s);
+}
+
+static void kf3_refresh_backstop(void *opaque)
+{
+    kf3_refresh_done(opaque);
+}
+
+#define KF3_REFRESH_BACKSTOP_MS 1000
+
 static void kf3_gfx_update(void *opaque)
 {
     Kf3State *s = opaque;
 
     if (!s->h) {
+        if (s->con) {
+            graphic_hw_update_done(s->con);
+        }
         return;
     }
     kf3_console_frame(s);
@@ -804,6 +849,18 @@ static void kf3_gfx_update(void *opaque)
      * now shows (an image beside a frame that still composes one is two cursors); in hover a cursor
      * change makes no frame, so this runs even when no new frame came */
     kf3_console_cursor(s);
+    /* ★ ABI 16 (sec. 8.16, owner decision D2): no copy is made without a flip while nobody watches,
+     * so a screendump asks for a frame no older than its request. The worker answers at the console
+     * head's next tick (or at once when nothing can be copied); kf3_refresh_ready then shows it and
+     * ends the wait. Without an answer to come, the wait ends now. Nothing here waits. */
+    if (s->refresh_fd >= 0 && kf3_display_refresh(s->h) == 1) {
+        if (s->refresh_timer && !timer_pending(s->refresh_timer)) {
+            timer_mod(s->refresh_timer,
+                      qemu_clock_get_ms(QEMU_CLOCK_REALTIME) + KF3_REFRESH_BACKSTOP_MS);
+        }
+    } else if (s->con) {
+        graphic_hw_update_done(s->con);
+    }
 }
 
 /* ★ ABI 12 (display step 3c, docs/design/V3_DISPLAY.md §8.6): a resize hint from the UI (the
@@ -824,12 +881,16 @@ static void kf3_ui_info(void *opaque, uint32_t head, QemuUIInfo *info)
  * gd_configure -> gd_set_ui_size -> dpy_set_ui_info re-authored the guest's monitor to the widget's
  * size (its startup size included), and a VNC SetDesktopSize re-moded the guest. Without a broker
  * the console is exactly the M2 one (no ui_info: dpy_ui_info_supported() is false). */
+/* ★ ABI 16: gfx_update_async — QEMU then waits for graphic_hw_update_done (kf3_refresh_done) before
+ * a screendump reads the surface (ui/console.c graphic_hw_update, ui/ui-qmp-cmds.c qmp_screendump). */
 static const GraphicHwOps kf3_gfx_ops = {
     .gfx_update = kf3_gfx_update,
+    .gfx_update_async = true,
 };
 
 static const GraphicHwOps kf3_gfx_ops_broker = {
     .gfx_update = kf3_gfx_update,
+    .gfx_update_async = true,
     .ui_info = kf3_ui_info,
 };
 
@@ -1217,8 +1278,9 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         }
         broker_word = KF3_BROKER_ON | (vram << KF3_BROKER_VRAM_SHIFT);
     }
+    s->refresh_fd = -1;
     if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
-                    s->gop ? 1 : 0, broker_word, &s->h, err, sizeof(err)) != 0) {
+                    s->gop ? 1 : 0, broker_word, s->display_max_fps, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }
@@ -1348,6 +1410,12 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
                                       s->display_broker ? &kf3_gfx_ops_broker : &kf3_gfx_ops, s);
         info_report("kf3: display console registered (head 0 of %s)",
                     DEVICE(pci)->id ? DEVICE(pci)->id : "kf3-gpu");
+        /* ★ ABI 16: the on-demand refresh's answer and its backstop */
+        s->refresh_fd = kf3_display_refresh_fd(s->h);
+        if (s->refresh_fd >= 0) {
+            s->refresh_timer = timer_new_ms(QEMU_CLOCK_REALTIME, kf3_refresh_backstop, s);
+            qemu_set_fd_handler(s->refresh_fd, kf3_refresh_ready, NULL, s);
+        }
     }
     if (!kf3_broker_realize(s, errp)) {
         return;
@@ -1377,6 +1445,18 @@ static void kf3_dev_exit(PCIDevice *pci)
         memory_listener_unregister(&s->listener);
         /* ★ ABI 12: the broker relay stops BEFORE the console closes (its input targets it) */
         kf3_broker_exit(s);
+        /* ★ ABI 16: no refresh answer arrives after this; a screendump still waiting ends now */
+        if (s->refresh_fd >= 0) {
+            qemu_set_fd_handler(s->refresh_fd, NULL, NULL, NULL);
+            s->refresh_fd = -1;
+        }
+        if (s->refresh_timer) {
+            timer_free(s->refresh_timer);
+            s->refresh_timer = NULL;
+        }
+        if (s->con) {
+            graphic_hw_update_done(s->con);
+        }
         if (s->con) {
             /* the console stops reading the display's frames before the device goes */
             graphic_console_close(s->con);
@@ -1418,6 +1498,11 @@ static const Property kf3_properties[] = {
      * first yes for the block-linear pair), on (allocate at realize; a refusal fails realize),
      * off (host-memory rungs only). Never guest memory: the slots are kayfabe's. */
     DEFINE_PROP_STRING("display-broker-vram", Kf3State, display_broker_vram),
+    /* ★ 2026-10-04, ABI 16 (docs/design/V3_DISPLAY.md sec. 8.16, OWNER_RULINGS sec. M): the cap on
+     * every head's emulated vblank tick, whole Hz. 0 (default) = unset: a cap of 75 Hz and today's
+     * EDID, byte for byte. 24..75 sets the cap and the monitor's preferred rate; below 24, above 75
+     * (owner decision D3) or without display=on, realize is refused by name. */
+    DEFINE_PROP_UINT32("display-max-fps", Kf3State, display_max_fps, 0),
 };
 
 static void kf3_class_init(ObjectClass *klass, const void *data)

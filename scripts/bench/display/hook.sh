@@ -22,6 +22,13 @@ gq(){ timeout "${2:-60}" "$G" "$1" 2>&1 | tr -d '\r'; }
 # while the trace proved every copy of A and B pixel-exact. A line-buffered twin for the one step
 # whose output is read while it runs.
 gql(){ timeout "${2:-60}" "$G" "$1" 2>&1 | stdbuf -oL tr -d '\r'; }
+# ★ `display-max-fps` (V3_DISPLAY.md §8.16): FPS_BOUND is the run's display-max-fps (default 60, the
+# rate these deadlines were written for). A client that draws a FIXED number of frames takes
+# 60/FPS_BOUND times longer under a lower cap, so its deadline scales — a cap of 30 must not turn a
+# correctly paced vkcube into a timeout (RC=124). `fs N` = N seconds scaled, rounded up.
+FPS_BOUND=${FPS_BOUND:-60}
+fs(){ echo $(( ($1 * 60 + FPS_BOUND - 1) / FPS_BOUND )); }
+say "FPS_BOUND=$FPS_BOUND"
 
 # the probe ships at run time (a harness fix never needs a re-provisioned image)
 tar -C "$HERE" -cf - kfdisp_probe.c | $G 'mkdir -p ~/display && tar -xf - -C ~/display' \
@@ -135,10 +142,10 @@ if [ "${DISPLAY_DESKTOP:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ];
     # Vulkan presentation in each present mode (0 IMMEDIATE, 1 MAILBOX, 2 FIFO): which ones the
     # guest's WSI can create and run on the virtual monitor
     for pm in 0 1 2; do
-        gq "$XENV timeout 10 vkcube --c 240 --present_mode $pm 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/vkcube_pm$pm.log"
+        gq "t0=\$(date +%s%N); $XENV timeout $(fs 10) vkcube --c 240 --present_mode $pm 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]} WALL_MS=\$(( (\$(date +%s%N) - t0) / 1000000 ))" $(fs 30) > "$OUT/vkcube_pm$pm.log"
         say "VKCUBE_PM$pm $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/vkcube_pm$pm.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/vkcube_pm$pm.log")"
     done
-    ( gq "$XENV timeout 25 vkcube --c 1200 2>&1 | tail -20; echo VKCUBE_RC=\${PIPESTATUS[0]}" 45 > "$OUT/vkcube.log" ) &
+    ( gq "t0=\$(date +%s%N); $XENV timeout $(fs 25) vkcube --c 1200 2>&1 | tail -20; echo VKCUBE_RC=\${PIPESTATUS[0]} WALL_MS=\$(( (\$(date +%s%N) - t0) / 1000000 ))" $(fs 45) > "$OUT/vkcube.log" ) &
     VP=$!
     sleep 8
     shot "$OUT/desk_vkcube.ppm"
@@ -187,7 +194,7 @@ if [ "${DISPLAY_CINNAMON_WAYLAND:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S 
         say "CINNAMON_WAYLAND up=$up socket=[${wd}] $(tr '\n' ' ' < "$OUT/cw_start.log")"
         shot "$OUT/cw_1.ppm"
         CWENV="sudo -u ubuntu env XDG_RUNTIME_DIR=/run/user/1000 WAYLAND_DISPLAY=${wd:-wayland-0}"
-        ( gq "$CWENV timeout 12 vkcube-wayland --c 400 2>&1 | tail -6; echo RC=\${PIPESTATUS[0]}" 40 > "$OUT/cw_vkcube.log" ) &
+        ( gq "t0=\$(date +%s%N); $CWENV timeout $(fs 12) vkcube-wayland --c 400 2>&1 | tail -6; echo RC=\${PIPESTATUS[0]} WALL_MS=\$(( (\$(date +%s%N) - t0) / 1000000 ))" $(fs 40) > "$OUT/cw_vkcube.log" ) &
         VP=$!; sleep 6; shot "$OUT/cw_vkcube.ppm"; wait $VP
         say "CINNAMON_WAYLAND_VKCUBE $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/cw_vkcube.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/cw_vkcube.log")"
         gq 'sudo dmesg | grep -i "segfault\|traps:" | tail -10; tail -60 /home/ubuntu/.xsession-errors 2>/dev/null; sudo journalctl -b -u lightdm --no-pager | tail -30' 60 > "$OUT/cw_errors.log"
@@ -210,7 +217,7 @@ if [ "${DISPLAY_WESTON:-0}" = 1 ] && [ "$HAS_CONSOLE" = yes ] && [ -S "$MON" ]; 
     WENV='sudo env XDG_RUNTIME_DIR=/run/kfw WAYLAND_DISPLAY=kfw'
     say "WESTON $(tr '\n' ' ' < "$OUT/weston_start.log") alive=$(gq 'pgrep -x weston >/dev/null && echo yes || echo no')"
     shot "$OUT/weston_1.ppm"
-    ( gq "$WENV timeout 12 vkcube-wayland --c 400 2>&1 | tail -6; echo RC=\${PIPESTATUS[0]}" 40 > "$OUT/vkcube_wayland.log" ) &
+    ( gq "t0=\$(date +%s%N); $WENV timeout $(fs 12) vkcube-wayland --c 400 2>&1 | tail -6; echo RC=\${PIPESTATUS[0]} WALL_MS=\$(( (\$(date +%s%N) - t0) / 1000000 ))" $(fs 40) > "$OUT/vkcube_wayland.log" ) &
     VP=$!; sleep 6; shot "$OUT/weston_vkcube.ppm"; wait $VP
     say "VKCUBE_WAYLAND $(grep -m1 -o 'Assertion.*\|Selected GPU[^,]*' "$OUT/vkcube_wayland.log" | tail -1 | head -c 120) $(grep -m1 '^RC=' "$OUT/vkcube_wayland.log")"
     ( gq "$WENV timeout 10 weston-simple-egl 2>&1 | tail -4; echo RC=\${PIPESTATUS[0]}" 30 > "$OUT/simple_egl.log" ) &

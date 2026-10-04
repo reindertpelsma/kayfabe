@@ -50,6 +50,8 @@ pub struct BrokerSeat {
     /// ★ §8.13: the same cursor for QEMU's own console while the broker hovers — the main loop
     /// only (the console's `gfx_update`), so the lock is never contended; it is `try_lock`ed.
     console: Mutex<ConsoleCursor>,
+    /// ★ §8.16: whether the relay was ACTIVE at the previous [`BrokerSeat::ready`] (main loop).
+    was_active: std::sync::atomic::AtomicBool,
 }
 
 impl std::fmt::Debug for BrokerSeat {
@@ -89,6 +91,7 @@ impl BrokerSeat {
             relay: Mutex::new(None),
             cursor: Arc::new(CursorShare::new()),
             console: Mutex::new(ConsoleCursor::default()),
+            was_active: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -202,6 +205,16 @@ impl BrokerSeat {
             }
         }
         Err(format!("slot {slot}: three backings in a row collided"))
+    }
+
+    /// ★ §8.16 (**main loop**, after each [`BrokerSeat::ready`]): whether the relay just became
+    /// ACTIVE (`active` now, not at the previous call) — a new session, whose window holds no frame
+    /// yet even when the guest's picture did not change.
+    pub fn became_active(&self, active: bool) -> bool {
+        !self
+            .was_active
+            .swap(active, std::sync::atomic::Ordering::AcqRel)
+            && active
     }
 
     /// ★ **Worker**: a frame was published — one non-blocking eventfd write.

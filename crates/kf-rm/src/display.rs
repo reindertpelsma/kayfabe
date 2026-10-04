@@ -115,26 +115,30 @@ pub const MAX_DISPLAY_OBJECTS: usize = 256;
 /// is held; this link drops it before it logs.
 pub type SharedDisplayModel = Arc<Mutex<DisplayModel>>;
 
-/// The monitors behind the virtual connectors: one DVI-D monitor with a 1920×1080@60 EDID we author
-/// (`V3_DISPLAY.md` §4.7; a configurable size is later work).
+/// The monitors behind the virtual connectors: one DVI-D monitor with an EDID we author
+/// (`V3_DISPLAY.md` §4.7) — 1920×1080@60 unless `display-max-fps` is set (`max_fps`, 0 unset: the
+/// EDID is then byte-identical to the one before the property, D5), when the preferred mode and
+/// the range limit follow the cap ([`kf_disp::edid::Monitor::configured`], §8.16).
 ///
 /// ★ Public because the boot display reads the SAME first monitor (`V3_DISPLAY.md` §4.11): kf3's
 /// option ROM carries its preferred mode and EDID, so the firmware's mode is the native one and the
-/// two statements of "what the monitor is" cannot disagree.
+/// two statements of "what the monitor is" cannot disagree — both callers pass the same property.
 #[must_use]
-pub fn monitors() -> Vec<kf_disp::edid::Monitor> {
-    vec![kf_disp::edid::Monitor::default_1080p()]
+pub fn monitors(max_fps: u32) -> Vec<kf_disp::edid::Monitor> {
+    vec![kf_disp::edid::Monitor::configured(max_fps)]
 }
 
 /// ★ The model for a chip's display row and a guest driver, or `None` when this tree has not
-/// derived that driver's display layouts (never a guessed layout: `kf_disp::layout`).
+/// derived that driver's display layouts (never a guessed layout: `kf_disp::layout`). `max_fps` is
+/// the `display-max-fps` property ([`monitors`]).
 #[must_use]
 pub fn model_for(
     driver: &kf_abi::versions::DriverAbiTable,
     row: &kf_chip::display::DisplayRow,
+    max_fps: u32,
 ) -> Option<DisplayModel> {
     let layouts = kf_disp::layout::for_version(&driver.driver_version().to_string())?;
-    Some(DisplayModel::new(row, monitors(), layouts))
+    Some(DisplayModel::new(row, monitors(max_fps), layouts))
 }
 
 fn lock(m: &SharedDisplayModel) -> MutexGuard<'_, DisplayModel> {
@@ -226,7 +230,8 @@ impl DisplayPolicy {
         driver: kf_abi::versions::DriverAbiTable,
         row: &'static kf_chip::display::DisplayRow,
     ) -> DisplayPolicy {
-        let model = model_for(&driver, row).map(|m| Arc::new(Mutex::new(m)));
+        // no display plane here (the GPU-free configuration): the property needs one, so unset
+        let model = model_for(&driver, row, 0).map(|m| Arc::new(Mutex::new(m)));
         if model.is_none() {
             eprintln!(
                 "kf-rm: display: no derived display layouts for guest driver {} — answering the M0 set only \
@@ -715,6 +720,22 @@ mod tests {
         *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench")
     }
 
+    /// ★ `display-max-fps` (§8.16): the model the guest's controls are answered from carries the
+    /// CONFIGURED monitor — the same one `monitors` hands the boot display's option ROM — and unset
+    /// is exactly today's 1080p60 monitor. (Mutation: a `model_for` that ignores the property serves
+    /// the 75 Hz range to a guest capped at 30.)
+    #[test]
+    fn the_model_serves_the_configured_monitor() {
+        assert_eq!(monitors(0), vec![kf_disp::edid::Monitor::default_1080p()]);
+        for fps in [0, 30, 60] {
+            let m = model_for(&abi(), &kf_chip::display::AMPERE, fps).expect("derived");
+            let mon = &m.connectors.first().expect("a connector").monitor;
+            assert_eq!(mon, &monitors(fps)[0], "{fps}");
+            let want = if fps == 0 { 75 } else { fps };
+            assert_eq!(u32::from(mon.edid().unwrap()[78]), want, "{fps}");
+        }
+    }
+
     fn policy() -> DisplayPolicy {
         DisplayPolicy::new(abi(), &kf_chip::display::AMPERE)
     }
@@ -978,7 +999,7 @@ mod tests {
     #[test]
     fn display_allocs_are_tracked_and_frees_release_them() {
         let shared: SharedDisplayModel = Arc::new(Mutex::new(
-            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+            model_for(&abi(), &kf_chip::display::AMPERE, 0).expect("derived"),
         ));
         let mut p = DisplayPolicy::over(abi(), &kf_chip::display::AMPERE, shared.clone());
         let mut registry = p.registry().unwrap();
@@ -1071,7 +1092,7 @@ mod tests {
     #[test]
     fn the_hotplug_event_registers_and_retires() {
         let shared: SharedDisplayModel = Arc::new(Mutex::new(
-            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+            model_for(&abi(), &kf_chip::display::AMPERE, 0).expect("derived"),
         ));
         let mut p = DisplayPolicy::over_shared(abi(), &kf_chip::display::AMPERE, &shared);
         let mut registry = p.registry().unwrap();
@@ -1118,7 +1139,7 @@ mod tests {
     #[test]
     fn an_attached_plane_gets_the_statements_and_a_wake() {
         let shared: SharedDisplayModel = Arc::new(Mutex::new(
-            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+            model_for(&abi(), &kf_chip::display::AMPERE, 0).expect("derived"),
         ));
         let woke = Arc::new(std::sync::atomic::AtomicU32::new(0));
         {
@@ -1165,7 +1186,7 @@ mod tests {
     #[test]
     fn rmfree_flags_mark_the_display_object_the_control_names() {
         let shared: SharedDisplayModel = Arc::new(Mutex::new(
-            model_for(&abi(), &kf_chip::display::AMPERE).expect("derived"),
+            model_for(&abi(), &kf_chip::display::AMPERE, 0).expect("derived"),
         ));
         shared
             .lock()

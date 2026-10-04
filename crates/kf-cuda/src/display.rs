@@ -34,6 +34,16 @@ pub const PACK_ENTRY: &str = "kf_bl_pack";
 /// Threads per pack CTA (eight GOBs; `KF_PACK_THREADS` in the source).
 pub const PACK_THREADS: u32 = 256;
 
+/// ★ `display-max-fps`'s change detector (`cuda/display/kf_sum.ptx`, hand-written, its own module so
+/// a JIT refusal costs only the detection): per row of the staging frame, the sum of a mixed term
+/// per pixel (`kf_disp::pace::row_sums` is the CPU reference, and kf-disp's
+/// `tests/compose_kernel.rs` runs this PTX against it). `docs/design/V3_DISPLAY.md` §8.16.
+pub static SUM_PTX: &[u8] = include_bytes!("../../../cuda/display/kf_sum.ptx");
+/// The checksum kernel's entry point.
+pub const SUM_ENTRY: &str = "kf_sum";
+/// Threads per checksum CTA (one CTA per row).
+pub const SUM_THREADS: u32 = 256;
+
 /// ★ An imported display slot — a VRAM frame object kayfabe allocated itself (never guest
 /// memory), named by its index here; its device pointer and length never leave [`DisplayGpu`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,6 +132,12 @@ pub struct DisplayGpu {
     /// ★ The imported display slots: device pointer and bytes, indexed by [`SlotId`]. Never
     /// unmapped while the device lives (a compositor may hold an import of any of them).
     slots: Vec<(CUdeviceptr, u64)>,
+    /// ★ `display-max-fps`: the checksum kernel, or why it did not load (every non-flip check is
+    /// then sent — the detection is lost, never the picture).
+    sum: Result<Func, String>,
+    /// Its row sums: the device buffer (zeroed before each launch), the page-locked copy the worker
+    /// reads after the completion, and the rows both hold. Grown, never shrunk.
+    sums: Option<(CUdeviceptr, PinnedBuf, usize)>,
 }
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
@@ -305,6 +321,12 @@ impl DisplayGpu {
             .module_load(&pack_ptx)
             .and_then(|m| cu.module_function(m, PACK_ENTRY))
             .map_err(|e| format!("the pack kernel did not load: {e}"));
+        let mut sum_ptx = SUM_PTX.to_vec();
+        sum_ptx.push(0);
+        let sum = cu
+            .module_load(&sum_ptx)
+            .and_then(|m| cu.module_function(m, SUM_ENTRY))
+            .map_err(|e| format!("the checksum kernel did not load: {e}"));
         Ok(DisplayGpu {
             cu,
             ctx,
@@ -316,7 +338,116 @@ impl DisplayGpu {
             staging: None,
             pack,
             slots: Vec::new(),
+            sum,
+            sums: None,
         })
+    }
+
+    /// Why the checksum kernel is unavailable, if it is (the worker logs it once and sends every
+    /// check).
+    #[must_use]
+    pub fn checksum_refused(&self) -> Option<&str> {
+        self.sum.as_ref().err().map(String::as_str)
+    }
+
+    /// ★ `display-max-fps` (D2): queue the checksum of the `w` x `h` composition begun by
+    /// [`Self::compose_begin`] — the row slots zeroed, `kf_sum` over the staging frame (one CTA per
+    /// row), the row sums copied back to page-locked memory — on the display stream, without the
+    /// signal. [`Self::checksum_rows`] reads them once the frame's completion was observed.
+    ///
+    /// ⊘ Bounds, here and not in the kernel: the frame lies inside the staging allocation
+    /// (`rows x 4w` bytes are read), and the row buffers hold `h` sums (`h x 8` bytes written).
+    ///
+    /// # Errors
+    /// Refused by name: no kernel, no composition, a frame larger than the staging one; the CUDA
+    /// error.
+    pub fn compose_checksum(&mut self, w: u32, h: u32) -> Result<(), CudaError> {
+        let what = "DisplayGpu::compose_checksum";
+        let f = *self.sum.as_ref().map_err(|e| refused(what, e.clone()))?;
+        let Some((src, len)) = self.staging else {
+            return Err(refused(what, "no composition was begun".into()));
+        };
+        let n = usize::try_from(u64::from(w) * u64::from(h) * 4)
+            .map_err(|_| refused(what, format!("{w}x{h}")))?;
+        if w == 0 || h == 0 || n > len {
+            return Err(refused(
+                what,
+                format!("a {w}x{h} frame in a {len:#x}-byte staging frame"),
+            ));
+        }
+        let rows = h as usize;
+        if self.sums.as_ref().is_none_or(|s| s.2 < rows) {
+            if let Some((p, host, _)) = self.sums.take() {
+                // the stream drains first: a queued checksum may still write either buffer
+                self.cu.ctx_synchronize()?;
+                self.cu.mem_free(p);
+                self.cu
+                    .pinned_free(host, "cuMemFreeHost(display checksum)")?;
+            }
+            let dev = self
+                .cu
+                .mem_alloc_zeroed(rows * 8, "cuMemAlloc(display checksum)")?;
+            let host = match self
+                .cu
+                .pinned_alloc(rows * 8, "cuMemAllocHost(display checksum)")
+            {
+                Ok(h) => h,
+                Err(e) => {
+                    self.cu.mem_free(dev);
+                    return Err(e);
+                }
+            };
+            self.sums = Some((dev, host, rows));
+        }
+        let Some((dev, host, _)) = self.sums.as_ref() else {
+            return Err(refused(what, "no row buffer".into()));
+        };
+        self.cu.memset_d8_async(
+            self.stream,
+            *dev,
+            0,
+            rows * 8,
+            "cuMemsetD8Async(display checksum)",
+        )?;
+        let u = |x: u32| x.to_le_bytes().to_vec();
+        let mut params = vec![
+            src.to_le_bytes().to_vec(),
+            dev.to_le_bytes().to_vec(),
+            u(w),
+            u(w * 4),
+        ];
+        self.cu
+            .launch_args(self.stream, f, h, SUM_THREADS, 0, &mut params, what)?;
+        self.cu.memcpy_d2h_async(
+            self.stream,
+            host,
+            0,
+            *dev,
+            rows * 8,
+            "cuMemcpyDtoHAsync(display checksum)",
+        )
+    }
+
+    /// ★ The row sums the last [`Self::compose_checksum`] of an `h`-row frame copied back (fold
+    /// them with `kf_disp::pace::digest`). ⊘ Only after the completion signal queued behind it was
+    /// observed: before, the bytes are still being written by DMA.
+    ///
+    /// # Errors
+    /// Refused when no checksum of that many rows was queued.
+    pub fn checksum_rows(&self, h: u32) -> Result<Vec<u64>, CudaError> {
+        let what = "DisplayGpu::checksum_rows";
+        let rows = h as usize;
+        let Some((_, host, cap)) = self.sums.as_ref().filter(|s| s.2 >= rows && rows > 0) else {
+            return Err(refused(what, format!("no checksum of {h} rows was queued")));
+        };
+        debug_assert!(*cap >= rows);
+        Ok(host
+            .read(0, rows * 8)
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|c| u64::from_le_bytes(*c))
+            .collect())
     }
 
     /// Allocate a page-locked frame of `len` bytes in this context.
@@ -800,6 +931,10 @@ impl Drop for DisplayGpu {
         if let Some((p, _)) = self.staging.take() {
             self.cu.mem_free(p);
         }
+        // the checksum's page-locked half is the context's, reclaimed with it
+        if let Some((p, _, _)) = self.sums.take() {
+            self.cu.mem_free(p);
+        }
         self.cu.ctx_destroy(self.ctx);
     }
 }
@@ -855,6 +990,43 @@ mod tests {
         assert!(
             ptx.contains(".target sm_75"),
             "Turing+ JIT target (sec. 21)"
+        );
+    }
+
+    /// ⊘ The checksum launch passes FOUR by-value parameters (two u64 pointers, two u32) in this
+    /// order; the PTX entry must declare exactly those, in a module of its own.
+    #[test]
+    fn the_sum_kernel_declares_the_parameters_the_launch_passes() {
+        let ptx = std::str::from_utf8(SUM_PTX).unwrap();
+        assert!(ptx.is_ascii(), "the PTX parser refuses other bytes");
+        assert!(ptx.contains(".target sm_75") && ptx.contains(".version 6.4"));
+        let head = ptx
+            .split(&format!(".visible .entry {SUM_ENTRY}("))
+            .nth(1)
+            .expect("the entry");
+        let params: Vec<(&str, &str)> = head
+            .split(')')
+            .next()
+            .unwrap()
+            .split(',')
+            .map(|p| {
+                let w: Vec<&str> = p.split_whitespace().collect();
+                (w[1], w[2].rsplit('_').next().unwrap())
+            })
+            .collect();
+        assert_eq!(
+            params,
+            [
+                (".u64", "src"),
+                (".u64", "out"),
+                (".u32", "width"),
+                (".u32", "pitch")
+            ]
+        );
+        let scan = std::str::from_utf8(SCANOUT_PTX).unwrap();
+        assert!(
+            !scan.contains(SUM_ENTRY),
+            "kf_sum is not in the compose module"
         );
     }
 

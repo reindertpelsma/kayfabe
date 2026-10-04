@@ -450,6 +450,20 @@ pub struct Step {
     pub gets: Vec<(u32, u32, u32)>,
 }
 
+/// ★ `display-max-fps` (`crate::pace`): one head's presents, by path — cumulative.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PaceCounts {
+    /// Latches that completed a window of this (active) head — counted once per latch, on every
+    /// path: at a tick, at once, and with the core.
+    pub presents: u64,
+    /// Of those, latches holding a TEARING (immediate) flip.
+    pub tearing: u64,
+    /// Tearing flips the gate parked for the head's next tick (D1).
+    pub tear_held: u64,
+    /// Latches of groups holding the CORE: they latch at once, so the tick does not bound them.
+    pub core_imm: u64,
+}
+
 /// ★ The engine.
 #[derive(Debug)]
 pub struct Engine {
@@ -465,6 +479,15 @@ pub struct Engine {
     pub exceptions: u64,
     /// Emit [`Effect::Trace`] lines (update arrivals, groups, latches).
     pub trace: bool,
+    /// ★ D1 (`OWNER_RULINGS.md` §M, 2026-10-04): a TEARING (immediate) flip on an active head that
+    /// already presented since the head's last tick waits for the next one, so async flips count
+    /// against the cap too. In kayfabe a flip copies a finished buffer, so it never tears; the gate
+    /// is about rate only. On by default.
+    pub tear_gate: bool,
+    /// Per head: a window of it latched since its last tick (the gate's state).
+    presented: [bool; 8],
+    /// Per head: presents by path.
+    pub pace: [PaceCounts; 8],
 }
 
 impl Engine {
@@ -480,6 +503,9 @@ impl Engine {
             methods: 0,
             exceptions: 0,
             trace: false,
+            tear_gate: true,
+            presented: [false; 8],
+            pace: [PaceCounts::default(); 8],
         }
     }
 
@@ -585,9 +611,13 @@ impl Engine {
         st
     }
 
-    /// ★ Head `head`'s vblank: latch every update waiting for it (whose acquires hold).
+    /// ★ Head `head`'s vblank: latch every update waiting for it (whose acquires hold). The head
+    /// may present again: the tearing gate's state clears first.
     pub fn vblank(&mut self, head: u32, acquired: &mut dyn FnMut(&Acquire) -> bool) -> Step {
         let mut st = Step::default();
+        if let Some(p) = self.presented.get_mut(head as usize) {
+            *p = false;
+        }
         for group in self.latching(|h| h == Some(head)) {
             self.latch_group(&group, &mut st, acquired);
         }
@@ -690,6 +720,8 @@ impl Engine {
                 self.group_ready(&group, st, acquired);
                 progressed = true;
             }
+            // a group parked for a head that went idle (F7: its tick will never come)
+            progressed |= self.unpark_idle(st, acquired);
             if !progressed {
                 break;
             }
@@ -820,27 +852,41 @@ impl Engine {
         st: &mut Step,
         acquired: &mut dyn FnMut(&Acquire) -> bool,
     ) {
-        // a non-tearing window on an active head latches at that head's vblank (with the group)
+        // a non-tearing window on an active head latches at that head's vblank (with the group);
+        // ★ D1: so does a tearing one whose head already presented since its last tick
         let heads = self.heads_armed();
         let mut vblank_head = None;
+        let mut tear_head = None;
         for &n in group {
             let Some(c) = self.chans[n as usize].as_ref() else {
                 continue;
             };
-            if c.kind == ChannelKind::Window
-                && fld(c.a(self.vocab.w_present), self.vocab.w_present_begin)
-                    == self.vocab.w_present_non_tearing
-            {
-                let owner = self.owner_head(c.instance);
-                if let Some(h) =
-                    owner.filter(|h| heads.iter().any(|m| m.head == *h && m.period_ns > 0))
-                {
-                    vblank_head = Some(vblank_head.unwrap_or(h));
-                }
+            if c.kind != ChannelKind::Window {
+                continue;
+            }
+            let Some(h) = self
+                .owner_head(c.instance)
+                .filter(|h| heads.iter().any(|m| m.head == *h && m.period_ns > 0))
+            else {
+                continue;
+            };
+            if self.tearing(c) {
+                tear_head = Some(tear_head.unwrap_or(h));
+            } else {
+                vblank_head = Some(vblank_head.unwrap_or(h));
             }
         }
         let has_core = group.contains(&0);
-        let park = if has_core { None } else { vblank_head };
+        let gated = tear_head
+            .filter(|h| self.tear_gate && vblank_head.is_none() && self.presented[*h as usize]);
+        let park = if has_core {
+            None
+        } else {
+            vblank_head.or(gated)
+        };
+        if let Some(h) = gated.filter(|_| !has_core) {
+            self.pace[h as usize].tear_held += 1;
+        }
         let set = group.iter().fold(0, |m, n| m | bit(*n));
         for &n in group {
             if let Some(c) = self.chans[n as usize].as_mut()
@@ -862,6 +908,44 @@ impl Engine {
         if park.is_none() {
             self.latch_group(group, st, acquired);
         }
+    }
+
+    /// Is window channel `c`'s pending flip a TEARING one (`SET_PRESENT_CONTROL.BEGIN_MODE` other
+    /// than `NON_TEARING`: nvidia-drm's async flips program `IMMEDIATE`)?
+    fn tearing(&self, c: &Chan) -> bool {
+        fld(c.a(self.vocab.w_present), self.vocab.w_present_begin)
+            != self.vocab.w_present_non_tearing
+    }
+
+    /// ★ F7: groups parked for a head that is no longer active would wait for a tick that never
+    /// comes — they become acquire-only waits and are latched now when their acquires hold (the
+    /// acquire poll re-evaluates the rest). Returns whether any was unparked.
+    fn unpark_idle(&mut self, st: &mut Step, acquired: &mut dyn FnMut(&Acquire) -> bool) -> bool {
+        let heads = self.heads_armed();
+        let active = |h: u32| heads.iter().any(|m| m.head == h && m.period_ns > 0);
+        let mut any = false;
+        for c in self.chans.iter_mut().flatten() {
+            if let Stage::Latch {
+                update,
+                head: Some(h),
+                group,
+            } = c.stage
+                && !active(h)
+            {
+                c.stage = Stage::Latch {
+                    update,
+                    head: None,
+                    group,
+                };
+                any = true;
+            }
+        }
+        if any {
+            for group in self.latching(|h| h.is_none()) {
+                self.latch_group(&group, st, acquired);
+            }
+        }
+        any
     }
 
     /// Latch the members of `group` that are in the Latch stage, if every acquire among them holds.
@@ -915,6 +999,30 @@ impl Engine {
             .iter()
             .map(|n| (*n, self.window_was_active(*n, &heads_before)))
             .collect();
+        // ★ `display-max-fps`: one present per head with a window in this latch (an active head
+        // before it), by path — taken before any member (the core among them) is armed
+        let mut presented = [None::<bool>; 8];
+        for &n in &members {
+            if let Some(c) = self.chans[n as usize].as_ref()
+                && c.kind == ChannelKind::Window
+                && let Some(h) = self
+                    .owner_head(c.instance)
+                    .filter(|h| heads_before.iter().any(|m| m.head == *h && m.period_ns > 0))
+                && let Some(p) = presented.get_mut(h as usize)
+            {
+                *p = Some(p.unwrap_or(false) | self.tearing(c));
+            }
+        }
+        let has_core = members.contains(&0);
+        for (h, p) in presented.iter().enumerate() {
+            if let Some(tearing) = *p {
+                self.presented[h] = true;
+                let pc = &mut self.pace[h];
+                pc.presents += 1;
+                pc.tearing += u64::from(tearing);
+                pc.core_imm += u64::from(has_core);
+            }
+        }
         if self.trace {
             st.effects.push(Effect::Trace(format!(
                 "latch {members:?} (previously active: {was_active:?})"

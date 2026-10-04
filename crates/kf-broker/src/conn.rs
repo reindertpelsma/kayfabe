@@ -426,9 +426,11 @@ struct Conn<S> {
     /// What the VMM currently watches the socket for.
     watched: (bool, bool),
     rung_logged: Option<Rung>,
-    /// The broker window's last reported size (SURFACE is logged on a change only: some backends
-    /// send it with every frame).
-    surface: Option<(i32, i32)>,
+    /// The broker window's last reported size and refresh (SURFACE is logged and handed on for a
+    /// change only: some backends send it with every frame). ★ §8.16 (`display-max-fps`): the
+    /// refresh is part of the key — a host monitor that changes only its rate re-authors the
+    /// guest's monitor too (before, the size alone was compared and such a change was dropped).
+    surface: Option<(i32, i32, u32)>,
     seq: u32,
     /// ★ The compositor's device (`EV_DEVICE`).
     device: Device,
@@ -1913,10 +1915,10 @@ impl<L: Link> Relay<L> {
                 if p.x > 0
                     && p.y > 0
                     && let Some(c) = self.conn.as_mut()
-                    && c.surface != Some((w, h))
+                    && c.surface != Some((w, h, p.w0))
                 {
-                    c.surface = Some((w, h));
-                    say!("broker window is now {w}x{h}");
+                    c.surface = Some((w, h, p.w0));
+                    say!("broker window is now {w}x{h} at {} mHz", p.w0);
                     emit(out, Input::Surface { w, h, mhz: p.w0 });
                 }
             }

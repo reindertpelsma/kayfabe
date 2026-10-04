@@ -1,5 +1,16 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+> **STATUS ADDENDUM 5, 2026-10-04 (branch `v3-maxfps`, cut from `v3-broker` `82f98f42`) —
+> `display-max-fps` (`OWNER_RULINGS.md` §M and its decisions D1–D5) is BUILT IN CODE and GPU-free
+> tested locally; NOTHING of it has run on a box.** Every head's emulated vblank tick is capped
+> (unset: 75 Hz with the EDID byte-identical); tearing flips count against the cap (D1); copies
+> made without a flip happen at the console head's tick, only while someone watches, and are sent
+> only when a GPU checksum of the composed frame changed — a `screendump` asks for an on-demand
+> copy (D2); values above 75 are refused by name (D3). The status line and a line of its own carry
+> `fps[...]` with per-path rates and `over`. **KF3 ABI 16** (the registry is in `kf3.h`). The X11
+> half of §M (D4: the cap paces X11 vsync through the guest's own vblank consumer) needs
+> `x11-dispsw`, which this branch does not carry, and a box run — §8.16.
+
 > **STATUS ADDENDUM 4, 2026-10-04 (later) — the two reviews of the console cursor and the
 > `badf2d7` relay, fixed in code on `v3-broker`, GPU-free-tested locally and in CI; NOT run on a
 > box.** (1) The console cursor (§8.13) now follows the frame the console SHOWS (no image beside a
@@ -30,6 +41,11 @@
 > keeps the composed cursor. (4) The cursor's composition word is logged once per change beside an
 > alpha census of its pixels, so the next box run settles §8.12's premultiplied/straight question
 > (§8.14). KF3 ABI stays 12. Evidence of the local runs: `traces/v3_display/broker_20261004/`.
+
+> ⊘ **CORRECTED 2026-10-04 (§8.16): "`v3-dispsw-exp` takes 13 when it merges", below, is wrong** —
+> 13 is that branch's own number, already in box binaries; a merge takes a NEW number. The registry
+> (`qemu/hw/misc/kf3/kf3.h`): 11 master, 12 `v3-broker` (and `v3-windows`), 13 `v3-dispsw-exp`, 14
+> reserved (broker-on-13, `v3-cand-1`), 15 `v3-viommu`, 16 `v3-maxfps`.
 
 > ⊘ **MERGED 2026-10-03 — `v3-broker` took `master` (the boot display, KF3 ABI 11).** The broker
 > branch had numbered its own steps KF3 ABI 11 (3a), 12 (3c) and 13 (the GPU-copy rung); after the
@@ -668,6 +684,11 @@ must report IDLE when GET == PUT; the cursor `Free` register must read non-zero.
   made **after** the thing it reports has happened (§4.5).
 
 ### 4.5 Timing: vblank, flip latch and completion — all host events
+
+> ⊘ **CORRECTED 2026-10-04 (§8.16): there is no `timerfd`** — here, in §0's table and in §4.8's
+> audit row. Vblank is the display worker's own epoll DEADLINE (`kf_linux_raw` deliberately has no
+> timerfd), and since `display-max-fps` each head ticks at the SLOWER of its raster's period and the
+> cap's (`kf_disp::pace::Pacer`; unset, the cap is 75 Hz). Everything else in this bullet holds.
 
 - Each active head has a **host `timerfd`** at the mode's refresh (from the programmed raster timings). On
   a tick the worker: latches pending window flips whose acquire semaphore reads READY (read at the tick —
@@ -2628,7 +2649,8 @@ are posted between two entries the broker gets ONE SET, of the newest
    failed is taken at the relay's next entry.
 
 **What has not run (2026-10-03):** `display-max-fps` (`OWNER_RULINGS.md` §M) is not built on any
-branch, so it could not be graded; a Wayland broker (E1b); the console's screendump on rung 0 with
+branch, so it could not be graded (⊘ built since, on `v3-maxfps`, 2026-10-04 — §8.16; still not run
+on a box); a Wayland broker (E1b); the console's screendump on rung 0 with
 the console idle (stale by design, §8.11); the X11 DDX's handling of an XOR cursor (no guest here
 programs one); E5's write-through test and a slot's RM export fd identified among QEMU's
 descriptors; a second GPU (E2's other-GPU control, E6).
@@ -2694,7 +2716,8 @@ Evidence: `traces/v3_display/broker_20261003/<run>/`; harness `scripts/bench/dis
     cannot tell a slot's RM export fd from QEMU's other `nvidiactl` descriptors, so "the export fd is
     closed after the imports" is NOT graded by it.
   - **display-max-fps:** NOT built anywhere (`OWNER_RULINGS.md` §M is a ruling, no branch carries the
-    property), so it could not be graded.
+    property), so it could not be graded. (⊘ Built since on `v3-maxfps`, 2026-10-04, §8.16; not run
+    on a box.)
 - **Runs `brkA4` … `brkE1s2` — kf3 `18562ba4`, harness `18562ba4`, broker `9cb736f`, 2026-10-03, one
   chain (`chain_A4_B_C_D_E1.log`: every run rc 0), and `brkA5` — kf3 `c38032f3` (the hot-spot
   fixes), 2026-10-03.** Evidence per run under `traces/v3_display/broker_20261003/<run>/`.
@@ -3065,3 +3088,168 @@ one `fcntl(F_GET_SEALS)`). Local runs, all against `badf2d7`:
 stage tried (2026-10-04, above); a Wayland broker. (As first written, the same day: "any of it on the
 box; X11's DRI3 refusal itself (it needs the NVIDIA DDX; `brkA`'s LINEAR refusal predates `badf2d7`); a
 Wayland broker.")
+
+### 8.16 `display-max-fps` — the configurable frame-rate bound (`OWNER_RULINGS.md` §M; 2026-10-04)
+
+**STATUS: BUILT IN CODE on `v3-maxfps` (cut from `v3-broker` `82f98f42`), GPU-free tested locally and
+in CI; NOT RUN ON A BOX.** The design was reviewed adversarially before it was built (kept outside
+the repo, as §M says); the owner's decisions of 2026-10-04 are binding over it: D1 tearing flips are
+gated, D2 (Claude's proposal, adopted unless the owner objects) replaces the fixed refresh clock, D3
+refuses values above 75, D4 is pending the box run below, D5 keeps the unset EDID byte-identical.
+
+**The property.** `-device kf3-gpu,display=on,display-max-fps=N`, whole Hz. 0 (the default) is
+unset. `kf_disp::pace::check` refuses by name a value without `display=on`, below 24 (the slowest
+refresh an authored CVT mode carries) or above 75 (D3: the EDID range ends there; single-link DVI
+fits 1080p only up to 71 Hz). It runs first in `Device::realize` (`Config::check`), before anything
+is opened. KF3 ABI 16: `kf3_realize` gains `display_max_fps` after `display_broker`.
+
+**Two numbers** (`kf_disp::pace`): the **cap** is the property, or 75 unset, and never changes for the
+device's life (it does not follow the host's monitor, so a valid 61–75 Hz mode is never ticked below
+its raster); the EDID's **preferred rate** is `preferred_hz(cfg, host)` — 60 with neither, the host
+window's rate under the cap when the broker reports one.
+
+| cfg | host | preferred |
+|---|---|---|
+| 0 | 0 | 60 |
+| 0 | S | S (clamped 24..75) |
+| B | 0 | B |
+| B | S | min(B, S) |
+
+**The mechanism: a capped tick.** Each head ticks at `max(raster period, floor(1e9 / cap) ns)` —
+the worker's epoll deadline, never a sleep, never on a vCPU, under no lock (`THE_CONSTRAINTS.md`).
+`kf_disp::pace::Pacer` owns every period: it keeps a head in phase when its CLAMPED period did not
+change, re-arms it from now when it did, stops an idle head, and reschedules a late tick from its
+scheduled time (from now when more than a period late — no catch-up burst). The log line is
+`head N ACTIVE raster WxH period P ns (raster R ns, cap C Hz[, CLAMPED])`, in nanoseconds (a 30 Hz
+1080p CVT mode is `33401904 ns`; the old `period / 1000 us` truncated it). Everything the guest paces
+by vblank follows the tick: non-tearing flips (parked for it), NVKMS's vblank callbacks, the
+`RG_DPCA` frame counter and the head-timing interrupt.
+
+**D1, tearing flips.** `Engine::tear_gate` (on by default): a group without the core holding a
+tearing (immediate) window on an active head PARKS for the head's next tick when that head already
+presented since its last one; the first after a tick still latches at once. A flip in kayfabe copies
+a finished buffer, so it never tears; the gate is about rate only. Groups holding the core latch at
+once (a modeset) — the tick does not bound them, so they are counted (`core_imm`) and included in
+`over`. ★ F7: a group parked for a head that goes idle is unparked at once (an acquire-only wait if
+its acquire does not hold) — its tick will never come.
+
+**D2, copies without a flip.** They exist for front-buffer rendering — the boot console, X11 without
+a compositor, front-buffer applications — and for cursor moves: kayfabe has no physical scanout, so
+without a copy the host never sees those writes. The fixed 30 Hz / 4 Hz refresh clock is gone:
+1. a CHECK runs only at the console head's (capped) tick — for a picture with no armed head (the boot
+   layer, a preserved scanout) at the preferred rate under the cap — real scanout's cadence;
+2. the check composes the frame into the staging frame and runs `kf_sum` (`cuda/display/kf_sum.ptx`,
+   hand-written, a module of its own so a JIT refusal costs only the detection) over it: per row, the
+   sum of `mix(p ^ x·0x9e3779b9)` — a bijection of each pixel per column, so one changed pixel always
+   changes its row's sum; the host folds the rows into an FNV-1a digest. The frame is SENT (pack and/or
+   D2H from the same staging frame, then published) only when it differs from the last published one
+   — digest, size, cursor flag, or a backing the copy would fill now that the last frame lacked (a
+   console that starts watching after VRAM-only frames). A new watcher (the console's or broker's
+   first request after 2 s, a broker session that became active) and a cursor-mode switch force the
+   next send;
+3. nothing is checked while nobody watches (no console request and no active broker within 2 s).
+   QEMU's console update is now asynchronous (`gfx_update_async`): each `gfx_update` — a `screendump`
+   among them — asks for a frame no older than itself (`kf3_display_refresh`); the worker answers at
+   the console head's next tick with a check that STARTED after the request (at once when nothing
+   can be copied), signals a descriptor, and kf3.c shows the newest frame and ends the wait
+   (`graphic_hw_update_done`); a 1 s backstop ends it anyway.
+Flip copies are never gated and always sent (the flip is tick-paced already); they record their
+digest, so the next check compares against them. A cursor move makes no copy of its own any more
+(`move_recomposes` is gone): in grab the next tick's check sees the cursor moved; in hover the frame
+composes no cursor, so nothing changes and nothing is sent — §O's "coalesced to the display rate".
+
+**The EDID (D5).** Unset, `Monitor::configured(0)` is `default_1080p()` and its EDID is the
+`82f98f42` one byte for byte (a golden array; nine 3c windows at 60 Hz and below are pinned by their
+FNV too). Set: a 1920x1080 monitor at the cap (CEA at 60, CVT-RB otherwise), the range limit's
+maximum (byte 78) = the cap, and below 60 NO 60 Hz mode is listed — no established or standard
+timing, no second CEA DTD — because NVKMS keeps an EDID-listed mode even against the EDID's own range
+(`ogkm-580: nvkms-modepool.c:1472-1490`). Above 60 the RATE yields, not the size: 1920x1080 asked at
+75 Hz is 71 Hz at 164 750 kHz (⊘ before, a 72–75 Hz broker window became a 1800x1012 monitor). The
+boot display's option ROM is built from the same monitor. The relay now de-duplicates `SURFACE` on
+(w, h, refresh), so a host monitor that changes only its rate re-authors the guest's monitor.
+
+**Status.** The worker meters each window of at least 1 s and prints, at most every 2 s and only on a
+change, `kf3: display fps[cap=30(cfg) h0[armed=29.938 tick=29.94 clamped=0 late_max_us=812 kms=29.9
+tear=0.0 held=0 core_imm=0 vblirq=29.9] copies=29.9 checks=30.0 same=12 ondemand=0 over=0]`; the
+same fragment follows `disp[...]` in the status line (`try_lock`, never a wait). `armed` is the head's
+tick rate, `tick` the achieved one, `kms` presents (latches, every path), `tear` the tearing ones,
+`vblirq` ticks while the guest had the head's vblank interrupt enabled (a vblank consumer exists — a
+precondition, not a grade), `copies` published frames, `checks`/`same`/`ondemand` D2's counters, and
+`over` the windows in which some head's presents exceeded `floor(elapsed / period) + 2` (the late-tick
+rule's worst case). ⚠ X11 vsync makes no flips and no display methods, so the status line cannot see
+an X11 breach — X11 is graded in the guest.
+
+**What §M named and this does NOT build.** `NV9072_CTRL_CMD_NOTIFY_ON_VBLANK` stays refused by name:
+host CPU-RM writes the notifier only through a kernel mapping kayfabe never sets, so forwarding it
+would turn a refusal into a dropped release; no client in the dispsw runs of 2026-10-03 called it
+(`traces/v3_display/dispsw_20261003/README.md`, on `v3-dispsw-exp`). Doorbell pacing of
+display-SW channels is not built (it would be per submission, leaky — the host twin reads the
+guest's own `GP_PUT` — and would throttle the X server's and the compositor's channels too). Both
+wait on D4.
+
+**Tests (GPU-free), each with the mutation it was run against on 2026-10-04 (applied in place, the
+named test went red, restored):**
+
+| check | test | mutation (red) |
+|---|---|---|
+| the property's bounds, by name | `pace::config_check_refuses_by_name`; `kf-qemu tests/max_fps_property.rs` drives `Device::realize` | `>=` at 75; `realize` without `Config::check` |
+| tick = slower of raster and cap, floor | `pace::paced_period_is_the_slower_of_raster_and_bound` | `min` for `max` |
+| the cap never follows the host | `pace::preferred_and_cap_tables` | `max` for `min` |
+| phase kept under the clamp | `pace::on_heads_keeps_phase_under_the_clamp` | comparing the raster period |
+| 30 ticks/s at cap 30; no burst after a stall | `pace::pacer_synthetic_time` | rescheduling every late tick from now |
+| `over` = floor(L/period) + 2 | `pace::meter_over` | `>=` |
+| D2 rules (tick, watched, coverage, force) | `pace::non_flip_copies_follow_d2` | a check while unwatched; off the tick; the host-coverage term dropped |
+| a screendump is served only by a later copy | `pace::a_screendump_is_served_by_a_copy_that_started_after_it` | serving at the request |
+| the checksum's arithmetic | `pace::the_checksum_sees_a_pixel_a_move_and_a_row_swap` | no column term; a digest over unordered rows |
+| `kf_sum` PTX = the reference, in bounds | `kf-disp tests/compose_kernel.rs` `the_sum_kernel_is_the_reference_checksum`, `the_sum_kernel_reads_only_its_frame` | the PTX's column multiplier set to 0 |
+| the launch matches the PTX's parameters | `kf-cuda display::the_sum_kernel_declares_the_parameters_the_launch_passes` | — |
+| unset EDID byte-identical | `edid::the_unset_edid_is_byte_identical` | (golden array from `82f98f42`) |
+| below 60: no 60 Hz mode, byte 78 = cap | `edid::a_cap_below_60_lists_no_60hz_mode`, `edid::every_authored_edid_honours_its_cap` | range max fixed at 75; extras kept |
+| above 60 the rate yields | `edid::above_60hz_the_rate_yields_not_the_size` | the old shrink loop |
+| the model serves the configured monitor | `kf-rm display::the_model_serves_the_configured_monitor` | `model_for` ignoring the property |
+| D1 gate | `engine::a_second_tearing_flip_waits_for_the_vblank` | gate off by default; `presented` ignored; not cleared at the tick |
+| presents per latch, core counted | `engine::presents_count_one_per_latch_including_core_groups` | per window; `core_imm` not counted |
+| F7 unpark | `engine::a_group_parked_on_a_head_that_goes_idle_latches` | no unpark |
+| boot check clock | `kf-qemu display::the_boot_check_clock_ticks_only_while_it_runs` | a clock that runs unwatched |
+| refresh + new watchers | `kf-qemu display::the_console_refresh_and_new_watchers` | an epoch bump on every request |
+| the worker ticks only through the pacer | `kf-qemu display::the_worker_arms_vblanks_only_through_the_pacer` (a source scan with a known-positive) | a planted `next_vblank` |
+| SURFACE on (w, h, rate) | `relay_machine.rs` `input_is_bounded_before_the_vmm_sees_it` | de-dup on size only |
+| the seam | `wire_mirror.rs` (ABI 16, three new entries) | — |
+
+⊘ **Not bitten, stated so nobody reads more into the table:** the worker's own wiring of D2 — which
+copies start in which pass, `ScanState::completed`'s check-then-send decision, the on-demand serving
+and the C device's async console — needs a display GPU context and a guest; the source scan sees
+only that the calls exist. kf3.c compiles with `-fsyntax-only -Werror` against QEMU 10.2.4's headers
+with the `system_ss` flags (the configured build there has no pixman: the two `PIXMAN_x2*10` formats
+were predefined for the check; `82f98f42` gives the same two errors without them). The
+`no /dev/udmabuf here` HELLO line the box run found was already fixed at `2b7751bc`
+(`the_hello_line_claims_shared_memory_only_for_slots_without_a_dma_buf`; reverting the condition
+turns it red).
+
+**Bench pieces built for the runs below.** The realize log names the monitor the guest is told
+about — `kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID fnv1a64=c9dcbb394c28b1c7
+(display-max-fps 0)` unset — and every 3c re-author logs the new EDID's FNV too. `hook.sh` takes
+`FPS_BOUND` (the run's cap, default 60): the deadlines of the fixed-frame vkcube runs scale by
+`60 / FPS_BOUND` (a correctly paced vkcube under cap 30 must not read as `RC=124`), and each prints
+`WALL_MS`. `kfdisp_probe` has no async-flip or `max_vrefresh` mode yet (R4 needs one).
+
+**What has not run (all of it needs box `vdisp`, serially, each run with its revision):**
+- R0 default: run 10's recipe unchanged; the realize line's `EDID fnv1a64=c9dcbb394c28b1c7`;
+  `fps[cap=75(unset) … clamped=0 … over=0]`.
+- R1 cap 30, KMS: `preferred=1920x1080@30`, the log's `period 33401904 ns`, `kfdisp_probe` flips at
+  29–30.05 Hz, Wayland vkcube `--c 400` taking ≥ 13 s, `over=0` (the hook's timeouts at `hook.sh`
+  scale by the cap first).
+- R1b the clamp's falsifier: bare X with `AllowNonEdidModes, NoVertRefreshCheck` and a CEA 1080p60
+  mode under cap 30 — `clamped=1`, glxgears ≤ 30.5.
+- R4 async flips at cap 60: ≤ 61 Hz with `tear≈60` and `held>0`.
+- D2 on hardware: an idle KDE desktop with a VNC client shows `same` growing and `copies` near 0;
+  nothing checked with the console and broker both idle; `screendump` pixel-exact (`hook.sh`'s
+  pattern A) with nobody watching.
+- **D4 (§M's X11 premise):** `display-max-fps=30` with `x11-dispsw=on` — windowed vsync glxgears
+  28.5–30.5 and vkcube FIFO 480 frames in 15.5–17.5 s would show the cap bounds X11 through the
+  guest's vblank consumer; ≥ 55 FPS refutes it. **This branch does not carry `x11-dispsw`
+  (`v3-dispsw-exp`, ABI 13)**, so the run needs a merge (a new ABI number) first; §M's text changes
+  only after it.
+- R6 a refresh-only host change: needs the broker to re-send `SURFACE` when only the rate changes —
+  nvkvm-pv's `nb_sink_surface` (`broker-cursor-gpucopy` at `badf2d7`) compares the size alone and
+  drops it, so the relay's new de-dup is not exercised by that broker yet.

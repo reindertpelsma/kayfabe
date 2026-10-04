@@ -59,6 +59,27 @@ pub struct Config {
     /// ROM with a UEFI GOP driver whose framebuffer is BAR1 `[0, G)`, the BAR1 seed, the boot layer
     /// and the console region in fn 65. Needs `display=on`. Off (the default) is today's device.
     pub gop: bool,
+    /// ★ `display-max-fps` (`OWNER_RULINGS.md` §M, `V3_DISPLAY.md` §8.16): the cap on every head's
+    /// emulated vblank tick, in whole Hz, 24..=75; 0 (unset) caps at 75 with today's EDID.
+    /// Validated by [`Config::check`]; needs `display=on`.
+    pub display_max_fps: u32,
+}
+
+impl Config {
+    /// ★ The properties that refuse each other or a value, by name — before anything is opened,
+    /// so a refusal costs nothing: `display-broker` needs `display`, and `display-max-fps` is
+    /// [`kf_disp::pace::check`]'s.
+    ///
+    /// # Errors
+    /// The refusal.
+    pub fn check(&self) -> Result<(), String> {
+        if self.display_broker && !self.display {
+            return Err(
+                "display-broker needs display=on (the broker shows the virtual display)".into(),
+            );
+        }
+        kf_disp::pace::check(self.display, self.display_max_fps)
+    }
 }
 
 /// What the C device needs to present the PCI function.
@@ -257,10 +278,12 @@ impl Device {
     /// # Errors
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
+        cfg.check()?;
         // ★ The boot display (`gop=on`, `crate::gop`): decided from the configuration and the virtual
         // monitor alone, so a refusal costs nothing. `None` with `gop=off`: every step below that
-        // reads it is then skipped, and the device is today's.
-        let monitor = kf_rm::display::monitors()
+        // reads it is then skipped, and the device is today's. ★ The same monitor the display
+        // model serves (`display-max-fps` included): the firmware's mode is the guest's native one.
+        let monitor = kf_rm::display::monitors(cfg.display_max_fps)
             .into_iter()
             .next()
             .ok_or("no virtual monitor behind the display")?;
@@ -604,11 +627,6 @@ impl Device {
         // ⊘ A chip whose bare metal has no display engine (GA100, GH100, GB10x datacenter) is
         // REFUSED by name: the guest driver hard-wires those as displayless, so a display here
         // would be a lie about the chip — their VM display is a separate adapter (§2.2).
-        if cfg.display_broker && !cfg.display {
-            return Err(
-                "display-broker needs display=on (the broker shows the virtual display)".into(),
-            );
-        }
         let display_row = if cfg.display {
             let row = kf_chip::display::display_for(architecture, implementation).ok_or(format!(
                 "display=on: chip arch {architecture:#x} impl {implementation:#x} has no display engine on \
@@ -673,6 +691,7 @@ impl Device {
                     export.fd_number(),
                     fb_length,
                     broker,
+                    cfg.display_max_fps,
                 )?
                 .with_boot(gop.as_ref().map(crate::display::BootScan::of).transpose()?);
                 // the export node stays open for the process (CUDA holds the import)
@@ -2273,7 +2292,16 @@ impl Device {
                 d.scanout_refused.load(o),
                 d.scanout_us_total.load(o) / d.scanouts.load(o).max(1),
                 d.scanout_us_max.load(o)
-            ) + &format!(
+            ) + &{
+                // ★ §8.16 (`display-max-fps`): the achieved rates per path and `over`, early in
+                // the line (the worker also prints it on a line of its own)
+                let f = dp.fps_fragment();
+                if f.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {f}")
+                }
+            } + &format!(
                 " scanout_no_slot={} scanout_d2h={} scanout_pack={} pack_skipped={} display_vram_mib={} host_cursor_reads={} host_cursor_refused={}",
                 d.scanout_no_slot.load(o),
                 d.scanout_d2h.load(o),

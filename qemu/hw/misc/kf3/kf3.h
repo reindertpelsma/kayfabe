@@ -19,8 +19,21 @@
  * display_broker (after gop), whose word carries the broker in bit 0 and display-broker-vram in bits
  * 1-2 (KF3_BROKER_VRAM_*, the GPU-copy rung, sec. 8.11); the broker relay's surface (Kf3BrokerEvent,
  * the two verbs, kf3_broker_*); kf3_display_ui_info (3c, the console's ui_info hook) and the
- * broker's SURFACE event (KF3_BROKER_SURFACE). v3-dispsw-exp takes 13 when it merges. */
-#define KF3_ABI 12
+ * broker's SURFACE event (KF3_BROKER_SURFACE). (Its closing "v3-dispsw-exp takes 13 when it merges"
+ * is CORRECTED below: 13 is v3-dispsw-exp's own number, already in box binaries.) */
+/* ★ 16 (2026-10-04, v3-maxfps — docs/design/V3_DISPLAY.md sec. 8.16, OWNER_RULINGS sec. M): the
+ * configurable frame-rate bound. kf3_realize gains display_max_fps (after display_broker; whole Hz,
+ * 0 = unset), and the console's on-demand refresh joins the surface: kf3_display_refresh,
+ * kf3_display_refresh_fd, kf3_display_refresh_drain (gfx_update is asynchronous: a screendump waits
+ * for a frame no older than its request).
+ * THE REGISTRY (one number per realize/surface shape that ever reached a binary; never reused):
+ *   11 master (the boot display, GOP);
+ *   12 v3-broker (v3-windows also took 12; it is renumbered at its merge);
+ *   13 v3-dispsw-exp (x11_dispsw);
+ *   14 reserved: broker-on-13 (v3-cand-1);
+ *   15 v3-viommu;
+ *   16 v3-maxfps (this), cut from v3-broker 82f98f42 — a merge with 13, 14 or 15 takes a new one. */
+#define KF3_ABI 16
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -82,10 +95,13 @@ uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
  * ★ ABI 11: `gop` (0/1) — the boot display (§4.11); needs display=1.
  * ★ ABI 12: `display_broker` — bit 0 backs the display's frames for the broker, bits 1-2 are
- * display-broker-vram (§8.11). */
+ * display-broker-vram (§8.11).
+ * ★ ABI 16: `display_max_fps` — the cap on every head's emulated vblank tick, whole Hz, 24..75;
+ * 0 = unset (cap 75, today's EDID). Rust refuses any other value, and a non-zero one without
+ * display=1, by name (§8.16). */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t display_broker,
-                    void **out,
+                    uint32_t display_max_fps, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
@@ -143,6 +159,13 @@ void kf3_broker_stop(void *h);
 int32_t kf3_display_cursor(void *h, Kf3Cursor *out);
 int32_t kf3_display_cursor_pixels(void *h, uint32_t *data, uint32_t words);
 void kf3_display_cursor_done(void *h, uint32_t applied);
+/* ★ ABI 16 (§8.16, main loop): the console's on-demand refresh. kf3_display_refresh asks for a
+ * frame no older than now: 1 = the worker will make kf3_display_refresh_fd readable when the newest
+ * frame is (call kf3_display_refresh_drain, show the frame, end the wait); 0 = no answer will come
+ * (answer the waiter at once). kf3_display_refresh_fd is -1 without a display. */
+int32_t kf3_display_refresh(void *h);
+int32_t kf3_display_refresh_fd(void *h);
+void kf3_display_refresh_drain(void *h);
 /* ★ ABI 12 (display step 3c): the console's ui_info — a resize hint for `head` (main loop). */
 int32_t kf3_display_ui_info(void *h, uint32_t head, uint32_t width, uint32_t height, uint32_t refresh_mhz);
 /* ★ ABI 11 (docs/design/V3_DISPLAY.md §4.11.6): the boot display's option ROM (gop=1) — the

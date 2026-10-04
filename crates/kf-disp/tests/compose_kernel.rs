@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
-//! ★ The display plane's compose kernel (`cuda/display/kf_scanout.ptx`, `kf_compose`) RUN ON THE
-//! HOST: the committed, hand-written PTX is parsed and EXECUTED here, instruction by instruction,
+//! ★ The display plane's kernels (`cuda/display/kf_scanout.ptx`: `kf_compose`, and since
+//! 2026-10-04 `kf_sum`, `display-max-fps`'s change detector) RUN ON THE HOST. The compose kernel: the committed, hand-written PTX is parsed and EXECUTED here, instruction by instruction,
 //! for every (CTA, thread) of the launch kf-cuda makes (one CTA per rectangle row, 256 threads),
 //! and the frame it leaves is compared byte for byte with `kf_disp::scanout::compose_reference`
 //! — the CPU reference the display worker's bring-up self-test also uses on the GPU.
@@ -13,12 +13,15 @@
 //! claim ("every address this kernel forms lies in [src, src + extent)") is checked too. It is the
 //! kernel's logic, not the GPU: the PTX JIT and the hardware are graded by the box self-test.
 
+use kf_disp::pace::{digest, row_sums};
 use kf_disp::scanout::{
     COMPOSE_ALPHA, COMPOSE_OPAQUE, COMPOSE_SWAP_RB, COMPOSE_XOR, LayerPlan, compose_reference,
 };
 use std::collections::HashMap;
 
 const PTX: &str = include_str!("../../../cuda/display/kf_scanout.ptx");
+/// `kf_sum`'s own module (a JIT refusal there must not cost the compose kernel).
+const SUM_PTX: &str = include_str!("../../../cuda/display/kf_sum.ptx");
 /// Threads per CTA, as `kf_cuda::display::DisplayGpu::launch_compose` launches.
 const NTID: u32 = 256;
 const SRC_BASE: u64 = 0x1_0000_0000;
@@ -67,11 +70,12 @@ fn operand(t: &str) -> Op {
 
 /// The entry `name`: its parameter names in order, its instructions, its labels.
 fn kernel(name: &str) -> Kernel {
-    assert!(PTX.is_ascii(), "the PTX parser refuses other bytes");
-    let start = PTX
+    let text = if name == "kf_sum" { SUM_PTX } else { PTX };
+    assert!(text.is_ascii(), "the PTX parser refuses other bytes");
+    let start = text
         .find(&format!(".visible .entry {name}("))
         .expect("the entry");
-    let rest = &PTX[start..];
+    let rest = &text[start..];
     let (head, body) = rest.split_once('{').expect("a body");
     let params = head
         .split_once('(')
@@ -131,6 +135,10 @@ struct Mem {
 
 impl Mem {
     fn at(&mut self, addr: u64) -> &mut [u8] {
+        self.span(addr, 4)
+    }
+
+    fn span(&mut self, addr: u64, n: usize) -> &mut [u8] {
         let (base, buf, what) = if addr >= DST_BASE {
             (DST_BASE, &mut self.dst, "frame")
         } else {
@@ -141,8 +149,8 @@ impl Mem {
             .unwrap_or_else(|| panic!("the kernel formed {addr:#x}, below every buffer"));
         let off = usize::try_from(off).unwrap();
         let len = buf.len();
-        buf.get_mut(off..off + 4).unwrap_or_else(|| {
-            panic!("the kernel touched {what} offset {off:#x} (+4), outside its {len:#x} bytes")
+        buf.get_mut(off..off + n).unwrap_or_else(|| {
+            panic!("the kernel touched {what} offset {off:#x} (+{n}), outside its {len:#x} bytes")
         })
     }
 }
@@ -218,6 +226,7 @@ impl Thread<'_> {
                     })
                 }
                 "mov.u32" => Some(u64::from(b32(self, 1))),
+                "mov.u64" => Some(self.get(&a[1])),
                 "add.u32" | "add.s32" => Some(u64::from(b32(self, 1).wrapping_add(b32(self, 2)))),
                 "add.u64" => Some(self.get(&a[1]).wrapping_add(self.get(&a[2]))),
                 "sub.u32" => Some(u64::from(b32(self, 1).wrapping_sub(b32(self, 2)))),
@@ -268,6 +277,14 @@ impl Thread<'_> {
                 "ld.global.nc.u32" | "ld.global.u32" => {
                     let w = mem.at(self.addr(&a[1]));
                     Some(u64::from(u32::from_le_bytes([w[0], w[1], w[2], w[3]])))
+                }
+                // the threads run one after another here, so the atomic is a plain add
+                "atom.global.add.u64" => {
+                    let v = self.get(&a[2]);
+                    let w = mem.span(self.addr(&a[1]), 8);
+                    let old = u64::from_le_bytes(w[..8].try_into().unwrap());
+                    w.copy_from_slice(&old.wrapping_add(v).to_le_bytes());
+                    Some(old)
                 }
                 "st.global.u32" => {
                     let v = b32(self, 1);
@@ -578,4 +595,105 @@ fn the_interpreter_refuses_what_it_does_not_model() {
         launch(&l, &src, &mut f, 8, 2);
     });
     assert!(short.is_err(), "a read past the extent must be caught");
+}
+
+/// Launch `kf_sum` over a tight `w` x `h` frame the way `DisplayGpu::compose_checksum` does: `h`
+/// CTAs of [`NTID`] threads, the row slots zeroed first; returns the row sums.
+fn launch_sum(frame: &[u8], w: u32, h: u32) -> Vec<u64> {
+    let k = kernel("kf_sum");
+    let args: HashMap<&str, u64> = [
+        ("src", SRC_BASE),
+        ("out", DST_BASE),
+        ("width", u64::from(w)),
+        ("pitch", u64::from(w * 4)),
+    ]
+    .into_iter()
+    .collect();
+    for p in &k.params {
+        assert!(
+            args.contains_key(p.rsplit('_').next().unwrap()),
+            "the kernel takes {p}, which the launch does not pass"
+        );
+    }
+    let mut mem = Mem {
+        src: frame[..(w * h * 4) as usize].to_vec(),
+        dst: vec![0; h as usize * 8],
+    };
+    for ctaid in 0..h {
+        for tid in 0..NTID {
+            Thread {
+                k: &k,
+                args: &args,
+                regs: HashMap::new(),
+                ctaid,
+                tid,
+            }
+            .run(&mut mem);
+        }
+    }
+    mem.dst
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .map(|c| u64::from_le_bytes(*c))
+        .collect()
+}
+
+/// ★ `display-max-fps` (D2): the checksum kernel, run from its PTX text, gives EXACTLY the row sums
+/// of `kf_disp::pace::row_sums` — rows narrower than a CTA, one pixel, a row past 256 pixels (the
+/// stride loop), and a frame that differs in one pixel gives a different digest. Every read stays in
+/// the frame and every write in the row slots (the interpreter's bounds).
+#[test]
+fn the_sum_kernel_is_the_reference_checksum() {
+    for (w, h) in [(1u32, 1u32), (37, 3), (256, 2), (300, 4), (1000, 2)] {
+        let f = pattern((w * h * 4) as usize, u64::from(w));
+        let got = launch_sum(&f, w, h);
+        let want = row_sums(&f, w, h).unwrap();
+        assert_eq!(got, want, "{w}x{h}");
+        assert_eq!(digest(&got, w, h), digest(&want, w, h));
+    }
+    let (w, h) = (300, 4);
+    let mut f = pattern((w * h * 4) as usize, 9);
+    let before = digest(&launch_sum(&f, w, h), w, h);
+    f[(2 * w as usize + 299) * 4 + 2] ^= 0x10;
+    assert_ne!(
+        digest(&launch_sum(&f, w, h), w, h),
+        before,
+        "one pixel changed"
+    );
+}
+
+/// ⊘ Not vacuous: a launch given one byte less frame than its rows cover is caught as an
+/// out-of-bounds read (the kernel reads exactly `rows x pitch`).
+#[test]
+fn the_sum_kernel_reads_only_its_frame() {
+    let k = kernel("kf_sum");
+    assert!(k.labels.contains_key("$S_px") && k.labels.contains_key("$S_add"));
+    let short = std::panic::catch_unwind(|| {
+        let f = pattern(8 * 2 * 4, 1);
+        let k = kernel("kf_sum");
+        let args: HashMap<&str, u64> = [
+            ("src", SRC_BASE),
+            ("out", DST_BASE),
+            ("width", 8),
+            ("pitch", 32),
+        ]
+        .into_iter()
+        .collect();
+        let mut mem = Mem {
+            src: f[..f.len() - 1].to_vec(),
+            dst: vec![0; 16],
+        };
+        for ctaid in 0..2 {
+            Thread {
+                k: &k,
+                args: &args,
+                regs: HashMap::new(),
+                ctaid,
+                tid: 7,
+            }
+            .run(&mut mem);
+        }
+    });
+    assert!(short.is_err(), "a read past the frame must be caught");
 }

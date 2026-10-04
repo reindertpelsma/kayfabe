@@ -22,13 +22,22 @@ use std::os::unix::ffi::OsStrExt as _;
 /// `display-broker-vram` in bits 1-2 (0 auto, 1 on, 2 off; [`kf_broker::gpucopy::VramMode::from_abi`]);
 /// the broker relay's surface ([`Kf3BrokerEvent`], [`kf3_broker_start`], [`kf3_broker_frame_fd`],
 /// [`kf3_broker_ready`], [`kf3_broker_stop`]); [`kf3_display_ui_info`] (the console's `ui_info`
-/// hook) and the broker's `SURFACE` event (kind 8). (`v3-dispsw-exp` takes 13 when it merges.)
+/// hook) and the broker's `SURFACE` event (kind 8). (⊘ "`v3-dispsw-exp` takes 13 when it merges"
+/// is corrected by the registry under 16: 13 is that branch's own number.)
 /// ★ Still 12 on 2026-10-04 (§8.13): the console's cursor in hover ([`Kf3Cursor`],
 /// [`kf3_display_cursor`], [`kf3_display_cursor_pixels`], and since the review of the same day
 /// [`kf3_display_cursor_done`]) joins the broker's surface while it is unmerged — the bump is per
 /// surface reaching master, and an archive without these symbols fails to LINK with a kf3.c that
 /// calls them, never at run time.
-pub const KF3_ABI: u32 = 12;
+/// ★ 16 (2026-10-04, `v3-maxfps`, `docs/design/V3_DISPLAY.md` §8.16, `OWNER_RULINGS.md` §M): the
+/// configurable frame-rate bound — [`kf3_realize`] gains `display_max_fps` after `display_broker`
+/// (whole Hz, 0 unset), and the console's on-demand refresh joins the surface
+/// ([`kf3_display_refresh`], [`kf3_display_refresh_fd`], [`kf3_display_refresh_drain`]). The
+/// registry (one number per shape that reached a binary, never reused): 11 master (GOP), 12
+/// `v3-broker` (and `v3-windows`, renumbered at its merge), 13 `v3-dispsw-exp`, 14 reserved
+/// (broker-on-13, `v3-cand-1`), 15 `v3-viommu`, 16 this branch — cut from `v3-broker` `82f98f42`,
+/// so a merge with 13, 14 or 15 takes a new number.
+pub const KF3_ABI: u32 = 16;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -107,6 +116,7 @@ pub unsafe extern "C" fn kf3_realize(
     display: u32,
     gop: u32,
     display_broker: u32,
+    display_max_fps: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -139,6 +149,7 @@ pub unsafe extern "C" fn kf3_realize(
         gop: gop != 0,
         display_broker: vram.is_some(),
         display_broker_vram: vram.unwrap_or_default(),
+        display_max_fps,
     };
     match Device::realize(&cfg) {
         Ok(d) => {
@@ -619,6 +630,37 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
     0
 }
 
+/// ★ ABI 16 (`display-max-fps` D2.3, `docs/design/V3_DISPLAY.md` §8.16; main thread, the console's
+/// `gfx_update` — a `screendump` among its callers): ask for a frame no older than now. `1`: the
+/// worker will signal [`kf3_display_refresh_fd`] when the newest frame is (it checks the frame at the
+/// console head's next tick and sends it if it changed; at once when nothing can be copied); `0`:
+/// no answer will come (no display, or no descriptor) — the caller answers its waiter itself.
+/// Lock-free: one atomic and one eventfd write.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_refresh(h: *mut c_void) -> i32 {
+    match dev(h).and_then(|d| d.display) {
+        Some(dp) if dp.request_refresh() => 1,
+        _ => 0,
+    }
+}
+
+/// ★ ABI 16: the descriptor that becomes readable when refresh requests were served (the C device
+/// watches it on its main loop), or -1 (no display, none could be made).
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_refresh_fd(h: *mut c_void) -> i32 {
+    dev(h)
+        .and_then(|d| d.display)
+        .map_or(-1, |dp| dp.console.refresh_fd())
+}
+
+/// ★ ABI 16 (main loop, the refresh descriptor's handler): consume its readiness.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_display_refresh_drain(h: *mut c_void) {
+    if let Some(dp) = dev(h).and_then(|d| d.display) {
+        dp.console.refresh_drain();
+    }
+}
+
 /// ★ §8.13 (ABI 12, main thread: the console's `gfx_update`, AFTER it took its frame, and each
 /// broker pump): what QEMU's console should be told about the guest's cursor now — the
 /// coordinator's decision of 2026-10-04: while a cursor-capable broker hovers the frames carry no
@@ -859,6 +901,10 @@ pub unsafe extern "C" fn kf3_broker_ready(
         // broker activity keeps the refresh clock at the watched rate; it asks for a host copy
         // only while the broker is fed through host memory (§8.11, two demand signals)
         dp.console.note_broker_demand();
+    }
+    // ★ §8.16: a session that just became active is a new viewer — the next check sends
+    if seat.became_active(active) {
+        dp.console.note_new_watcher();
     }
     let n = evs.len().min(cap);
     for (i, e) in evs.iter().take(n).enumerate() {
