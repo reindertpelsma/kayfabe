@@ -381,7 +381,7 @@ swtpm_start() {
   # the SAME state. Never --flags startup-clear (the firmware sends TPM2_Startup).
   swtpm socket --tpm2 --tpmstate "dir=$VM/tpm,mode=0600" \
     --ctrl "type=unixio,path=$VM/run/swtpm.sock,mode=0600" \
-    --log "file=$VM/logs/swtpm.log,level=20" --pid "file=$VM/run/swtpm.pid" --terminate --daemon
+    --log "file=$VM/logs/swtpm.log,level=20" --pid "file=$VM/run/swtpm.pid" --terminate --daemon 7>&- 8>&-
   for _ in $(seq 1 50); do [ -S "$VM/run/swtpm.sock" ] && return 0; sleep 0.2; done
   die "swtpm never opened $VM/run/swtpm.sock (logs/swtpm.log)"
 }
@@ -407,10 +407,12 @@ vm_start() {
   QPID=$!
   echo "$QPID" > "$VM/run/qemu.pid"
   for _ in $(seq 1 100); do [ -S "$VM/run/qmp-ev.sock" ] && break; kill -0 "$QPID" 2>/dev/null || break; sleep 0.2; done
-  $QMP "$VM/run/qmp-ev.sock" events "$BOOT_EV" >/dev/null 2>&1 &
+  $QMP "$VM/run/qmp-ev.sock" events "$BOOT_EV" >/dev/null 2>&1 7>&- 8>&- &
   EVPID=$!
   log "QEMU_START tag=$tag boot=$n pid=$QPID log=logs/${tag}_b${n}_qemu.log"
-  # one screendump every SHOT_EVERY seconds while this QEMU lives
+  # one screendump every SHOT_EVERY seconds while this QEMU lives. ⊘ Helpers never inherit the VM
+  # lock (fd 7) or the GPU lock (fd 8): a `sleep` of this loop outliving its run held both, and the
+  # next `run` 24 s later was refused "in use" (measured on vwin, 2026-10-04).
   # (named by this boot's start time too, so a re-run of a tag never overwrites an earlier boot's)
   local started
   started=$(date -u +%Y%m%dT%H%M%SZ)
@@ -418,7 +420,7 @@ vm_start() {
     while kill -0 "$QPID" 2>/dev/null; do
       sleep "${SHOT_EVERY:-30}"; s=$((s + 1))
       shot_to "$VM/logs/shots/${tag}_b${n}_${started}_$(printf %04d "$s").png" >/dev/null 2>&1 || true
-    done ) &
+    done ) 7>&- 8>&- &
   SHOTPID=$!
 }
 
