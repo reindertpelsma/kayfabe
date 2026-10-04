@@ -14,7 +14,11 @@ use std::ffi::CStr;
 /// number above both. `tests/wire_mirror.rs` compiles every entry point here against `kf3.h`.
 /// ★ 11 (2026-10-03, `v3-gop-kf3`, `docs/design/V3_DISPLAY.md` §4.11): the boot display —
 /// [`kf3_realize`] takes `gop`, and [`kf3_option_rom`] hands the C device the ROM to register.
-pub const KF3_ABI: u32 = 11;
+/// ★ 14 (2026-10-04, `v3-sec-rawaddr`, audit S1-03): [`Kf3Frame`] carries the frame's `len`, and
+/// [`kf3_display_frame`] answers `-2` for a frame it refused ([`check_frame`]). ⊘ 12 is
+/// `v3-broker`'s and 13 `v3-dispsw-exp`'s: whichever branch merges second takes the maximum plus one
+/// AT MERGE TIME and records every claim here and in `kf3.h`.
+pub const KF3_ABI: u32 = 14;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -480,12 +484,15 @@ pub extern "C" fn kf3_bar1_usermode_write(h: *mut c_void, vf_rel: u64, val: u64,
 }
 
 /// ★ ABI 10 (`v3-display2`'s 9): one frame of the virtual display for QEMU's console
-/// (`display=on`).
+/// (`display=on`). ★ ABI 14: `len`. ⊘ No `Debug`: `data` is an address.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Kf3Frame {
-    /// First pixel: page-locked host memory the display worker owns for the process.
+    /// First pixel: page-locked host memory the display plane leaked for the process.
     pub data: *mut u8,
+    /// ★ ABI 14: bytes readable at `data` — the frame's own length. `[data, data+len)` stays valid
+    /// for the life of the process.
+    pub len: u64,
     /// Width in pixels.
     pub width: u32,
     /// Height in pixels.
@@ -498,10 +505,71 @@ pub struct Kf3Frame {
     pub serial: u64,
 }
 
+/// Bytes per pixel of a console format code, or `None` for a code the console has no format for.
+#[must_use]
+pub fn frame_bpp(format: u32) -> Option<u32> {
+    match format {
+        1 | 2 | 4 | 5 => Some(4),
+        3 => Some(2),
+        _ => None,
+    }
+}
+
+/// ★★★ **V13, pure — a frame of `len` bytes may be read as `width × height` at `stride`** in
+/// `format`: a known format; `width, height ≥ 1`; `width`, `height` and `stride` each fit a C `int`
+/// (QEMU's surface takes them as `int`); `stride` a multiple of 4; a row (`width × bpp` bytes, in
+/// `u64`) no wider than `stride`; and the WHOLE `stride × height` inside `len` — QEMU's D-Bus
+/// listener sends exactly `stride × height` bytes (`ui/dbus-listener.c:720-722`). `kf3.h`'s
+/// `kf3_frame_ok` is the same predicate (`tests/wire_mirror.rs` runs both over one grid).
+///
+/// # Errors
+/// The failed bound, by name.
+pub fn check_frame_geometry(
+    len: u64,
+    width: u32,
+    height: u32,
+    stride: u32,
+    format: u32,
+) -> Result<u32, &'static str> {
+    let bpp = frame_bpp(format).ok_or("an unknown pixel format")?;
+    if width == 0 || height == 0 {
+        return Err("an empty frame");
+    }
+    let int = i32::MAX as u32;
+    if width > int || height > int || stride > int {
+        return Err("a dimension that does not fit a C int");
+    }
+    if !stride.is_multiple_of(4) {
+        return Err("a stride that is not a multiple of 4");
+    }
+    if u64::from(width) * u64::from(bpp) > u64::from(stride) {
+        return Err("a row wider than the stride");
+    }
+    if u64::from(stride) * u64::from(height) > len {
+        return Err("stride x height leaves the frame");
+    }
+    Ok(bpp)
+}
+
+/// ★★ **V13 — what the console may be handed**: `Err(-1)` when the slot names no frame (nothing
+/// new to show), `Err(-2)` when the geometry does not fit THAT frame's own length (a torn read of
+/// the id and the geometry, or a worker bug — refused, never read past the frame), else the span.
+///
+/// # Errors
+/// `-1` or `-2`, as above.
+pub fn check_frame(v: &crate::display::FrameView) -> Result<kf_linux_raw::StaticSpan, i32> {
+    let span = v.span.ok_or(-1)?;
+    check_frame_geometry(span.len() as u64, v.width, v.height, v.stride, v.format)
+        .map_err(|_| -2)?;
+    Ok(span)
+}
+
 /// ★ ABI 10 (`v3-display2`'s 9; QEMU's main thread, the console's `gfx_update`): the newest frame
-/// of the virtual display. `0` and `*out` filled — the memory stays valid, and is not written, until
-/// the next call (the worker never fills the frame the console shows); `-1` before the first frame,
-/// or without a display.
+/// of the virtual display. `0` and `*out` filled — `[data, data+len)` is valid for the process and
+/// not written until the next call (the worker never fills the frame the console shows); `-1` when
+/// there is no new frame (before the first, without a display, or a slot naming no frame: keep the
+/// current surface); ★ ABI 14: `-2` when the frame was refused by [`check_frame`] (`*out` untouched;
+/// the device shows QEMU's placeholder).
 ///
 /// # Safety
 /// `out` is writable.
@@ -510,18 +578,42 @@ pub unsafe extern "C" fn kf3_display_frame(h: *mut c_void, out: *mut Kf3Frame) -
     let (Some(d), false) = (dev(h), out.is_null()) else {
         return -1;
     };
-    let Some(f) = d.display.and_then(|dp| dp.console.take()) else {
+    let Some(dp) = d.display else {
         return -1;
     };
-    let Some(span) = f.span else {
+    let Some(f) = dp.console.take() else {
         return -1;
     };
-    // SAFETY: `out` is writable (caller contract). The span is a `StaticSpan` — memory the display
-    // plane mapped, page-locked and leaked, so it is never unmapped — and `HostSpan::as_ptr`'s
-    // contract allows a VMM console surface to read `[ptr, ptr+len)` of it.
+    let span = match check_frame(&f) {
+        Ok(span) => span,
+        Err(rc) => {
+            if rc == -2
+                && dp
+                    .counters
+                    .console_refused
+                    .fetch_add(1, core::sync::atomic::Ordering::Relaxed)
+                    == 0
+            {
+                eprintln!(
+                    "kf3: display: a console frame was REFUSED ({}x{} stride {} format {} does not fit its {}-byte frame); the console shows a placeholder",
+                    f.width,
+                    f.height,
+                    f.stride,
+                    f.format,
+                    f.span.map_or(0, |s| s.len())
+                );
+            }
+            return rc;
+        }
+    };
+    // SAFETY: `out` is writable (caller contract). The span is a `StaticSpan`: an owned,
+    // private-anonymous mapping the display plane leaked, so it is never unmapped; `check_frame`
+    // refused any frame without `stride × height ≤ len`, and C reads only `[data, data+len)`
+    // (`kf3.h`), as `HostSpan::as_ptr`'s contract allows a VMM console surface.
     unsafe {
         *out = Kf3Frame {
             data: span.host_span().as_ptr(),
+            len: span.len() as u64,
             width: f.width,
             height: f.height,
             stride: f.stride,

@@ -132,6 +132,9 @@ struct Kf3State {
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
     Kf3Frame shown;
+    /* ★ ABI 14 (v3-sec-rawaddr): the console shows QEMU's placeholder because the last frame was
+     * refused (by Rust's check_frame, or by kf3_frame_ok here); replaced once, not every refresh. */
+    bool placeholder;
     /* ★ ABI 10 (v3-ioeventfd's 9, docs/design/V3_DOORBELL_IOEVENTFD.md): the doorbell fast path —
      * one KVM ioeventfd per live guest token, serviced by the register drainer. Default OFF until
      * measured. Main loop only (realize, the memory listener, exit), BQL held. */
@@ -697,20 +700,38 @@ static void kf3_gfx_update(void *opaque)
 {
     Kf3State *s = opaque;
     Kf3Frame f;
-    pixman_format_code_t fmt;
+    pixman_format_code_t fmt = 0;
+    int32_t rc;
 
-    if (!s->h || kf3_display_frame(s->h, &f) != 0 || f.serial == s->shown.serial) {
+    if (!s->h) {
         return;
     }
-    fmt = kf3_pixman_format(f.format);
-    if (!fmt || !f.data || f.width == 0 || f.height == 0 || f.stride < f.width ||
-        (f.stride & 3) != 0) {
+    rc = kf3_display_frame(s->h, &f);
+    /* -1, or the frame already shown: keep the current surface (its pages are never unmapped, so
+     * the worst a stale surface shows is stale pixels). */
+    if (rc == -1 || (rc == 0 && f.serial == s->shown.serial)) {
         return;
     }
-    if (f.data != s->shown.data || f.width != s->shown.width || f.height != s->shown.height ||
-        f.stride != s->shown.stride || f.format != s->shown.format) {
+    if (rc == 0) {
+        fmt = kf3_pixman_format(f.format);
+    }
+    /* ★ ABI 14 (v3-sec-rawaddr): -2 (Rust refused the frame), or a frame this side refuses —
+     * geometry in BYTES against the frame's own `len` (the old check compared a byte stride with a
+     * pixel width). QEMU makes a placeholder for a NULL surface (ui/console.c:822-832); once. */
+    if (rc != 0 || !fmt || !kf3_frame_ok(&f, kf3_format_bpp(f.format))) {
+        if (!s->placeholder) {
+            dpy_gfx_replace_surface(s->con, NULL);
+            s->placeholder = true;
+        }
+        memset(&s->shown, 0, sizeof(s->shown));
+        return;
+    }
+    if (s->placeholder || f.data != s->shown.data || f.width != s->shown.width ||
+        f.height != s->shown.height || f.stride != s->shown.stride || f.format != s->shown.format) {
+        /* the (int) casts are bounded by kf3_frame_ok's INT32_MAX checks */
         dpy_gfx_replace_surface(s->con, qemu_create_displaysurface_from((int)f.width, (int)f.height,
                                                                          fmt, (int)f.stride, f.data));
+        s->placeholder = false;
     }
     s->shown = f;
     dpy_gfx_update_full(s->con);

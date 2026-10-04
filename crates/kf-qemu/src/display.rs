@@ -399,6 +399,9 @@ pub struct DispCounters {
     /// ★ Milliseconds from the worker's start to the first armed head, when the boot layer retired
     /// (at least 1; 0 while it is still shown, or without one).
     pub boot_done_ms: AtomicU64,
+    /// ★ `v3-sec-rawaddr` (V13): frames the console was refused because their geometry does not
+    /// fit the frame's own length (`ffi_unsafe::check_frame`).
+    pub console_refused: AtomicU64,
 }
 
 /// Console frame slots: one the console shows, one ready, one the GPU fills.
@@ -2368,11 +2371,16 @@ mod tests {
 
     /// A span over a leaked one-page private anonymous region (a test's console frame).
     pub(crate) fn test_span() -> StaticSpan {
+        test_span_of(1)
+    }
+
+    /// A span over `pages` leaked host pages of private anonymous memory.
+    fn test_span_of(pages: u64) -> StaticSpan {
         let page = kf_linux_raw::HostPageSize::query();
         let r: &'static kf_linux_raw::MappedRegion = Box::leak(Box::new(
             kf_linux_raw::MappedRegion::map(
                 kf_linux_raw::Backing::PrivateAnonymous,
-                page.bytes(),
+                pages * page.bytes(),
                 kf_linux_raw::HostProt::ReadWrite,
                 kf_linux_raw::CachePolicy::WriteBack,
                 page,
@@ -2652,5 +2660,73 @@ mod tests {
                 c.take();
             }
         }
+    }
+
+    /// ★★ T16 (`v3-sec-rawaddr`, audit S1-03, V13): what the console is handed is checked against
+    /// THAT frame's own length. A fitting geometry over a one-page frame is accepted; 64×64 at
+    /// stride 256 over the same page is refused (`-2`) — the read QEMU would have made past the
+    /// frame, which nothing refused before ABI 14; a slot naming no frame is `-1`; and an id from
+    /// one publish read with another publish's geometry (a torn read) is refused, never read past.
+    #[test]
+    fn the_console_is_handed_only_a_geometry_its_frame_holds() {
+        use crate::ffi_unsafe::check_frame;
+        let page = kf_linux_raw::HostPageSize::query().bytes();
+        let c = ConsoleShare::default();
+        let one = c.register(test_span_of(1)).unwrap();
+        let four = c.register(test_span_of(4)).unwrap();
+        let w = u32::try_from(page / 4 / 16).unwrap(); // 16 rows of `w` xrgb8888 pixels fill a page
+        let geo = |id, width: u32, height: u32, stride: u32, serial| Published {
+            id,
+            width,
+            height,
+            stride,
+            format: 1,
+            serial,
+        };
+        let slot = c.free_slot();
+        c.publish(slot, geo(one, w, 16, w * 4, 1));
+        let v = c.take().unwrap();
+        let span = check_frame(&v).expect("stride × height == len is the exact fit");
+        assert_eq!(span.len() as u64, page);
+        let slot = c.free_slot();
+        c.publish(slot, geo(one, 64, 64, 256, 2));
+        let v = c.take().unwrap();
+        if page < 64 * 256 {
+            assert_eq!(
+                check_frame(&v).err(),
+                Some(-2),
+                "64×64 at stride 256 past a one-page frame"
+            );
+        }
+        // torn: the small frame's id with the large frame's geometry
+        let big_w = u32::try_from(4 * page / 4 / 64).unwrap();
+        let slot = c.free_slot();
+        c.publish(slot, geo(four, big_w, 64, big_w * 4, 3));
+        assert!(
+            check_frame(&c.take().unwrap()).is_ok(),
+            "the large frame's own geometry fits it"
+        );
+        let slot = c.free_slot();
+        c.publish(slot, geo(one, big_w, 64, big_w * 4, 4));
+        assert_eq!(
+            check_frame(&c.take().unwrap()).err(),
+            Some(-2),
+            "a torn id/geometry pair"
+        );
+        // a slot naming no frame (a VRAM-only publish on v3-broker): nothing new to show
+        let slot = c.free_slot();
+        c.publish(slot, geo(NO_SPAN, w, 16, w * 4, 5));
+        let v = c.take().unwrap();
+        assert!(v.span.is_none());
+        assert_eq!(check_frame(&v).err(), Some(-1));
+        // the table is append-only and bounded
+        for _ in 2..SPAN_TABLE {
+            assert!(c.register(test_span_of(1)).is_some());
+        }
+        assert_eq!(
+            c.register(test_span_of(1)),
+            None,
+            "a full table refuses, by name upstream"
+        );
     }
 }

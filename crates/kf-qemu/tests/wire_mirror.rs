@@ -110,8 +110,8 @@ fn the_c_header_and_rust_seam_have_identical_layouts() {
         subsystem_vendor => "subsystem_vendor", subsystem => "subsystem",
         class => "class_code", revision => "revision", pad => "pad", bar0_bytes => "bar0_bytes"]);
     layout!(Kf3Region, [bar => "bar", how => "how", pad => "pad", base => "base", len => "len"]);
-    layout!(Kf3Frame, [data => "data", width => "width", height => "height", stride => "stride",
-        format => "format", serial => "serial"]);
+    layout!(Kf3Frame, [data => "data", len => "len", width => "width", height => "height",
+        stride => "stride", format => "format", serial => "serial"]);
     value!("abi", "KF3_ABI", KF3_ABI);
     program.push_str("return 0; }\n");
     let nonce = std::time::SystemTime::now()
@@ -292,6 +292,12 @@ fn seam() -> Seam {
         })
         .map(|(at, _)| (at, ident(at)))
         .filter(|(at, name)| clean[at + name.len()..].trim_start().starts_with('('))
+        // ★ ABI 14: a `static inline` helper defined IN the header (`kf3_frame_ok`) is C's own
+        // code, not an archive export; it is mirrored by `the_frame_check_is_one_predicate_on_both_sides`.
+        .filter(|(at, _)| {
+            let line = clean[..*at].rsplit('\n').next().unwrap_or("");
+            !line.trim_start().starts_with("static inline")
+        })
         .map(|(_, name)| name)
         .collect();
     // `(*Kf3XFn)(`: a function-pointer typedef.
@@ -430,6 +436,100 @@ fn a_signature_that_drifted_from_kf3_h_is_refused() {
         assert!(
             c_accepts(&good.replace(was, now)).is_err(),
             "C accepted the drifted `{now}`"
+        );
+    }
+}
+
+/// ★★ T14/T15 (`v3-sec-rawaddr`, 2026-10-04, audit S1-03): the console frame check is ONE
+/// predicate on both sides of the seam. `kf3.h`'s `kf3_frame_ok` (compiled here with `-Wall -Wextra
+/// -Werror`) and Rust's `check_frame_geometry` answer every row of one grid identically — and the
+/// grid's own rows say which answer is right, including the old C check's bug (`stride < width`
+/// compared BYTES with PIXELS, so an xrgb8888 frame with `stride == width` passed it).
+#[test]
+fn the_frame_check_is_one_predicate_on_both_sides() {
+    use kf_qemu::ffi_unsafe::{check_frame_geometry, frame_bpp};
+    // (len, width, height, stride, format, accepted)
+    let grid: &[(u64, u32, u32, u32, u32, bool)] = &[
+        (1920 * 1080 * 4, 1920, 1080, 7680, 1, true),
+        (1920 * 1080 * 4, 1920, 1080, 1920, 1, false), // stride == width: the kf3.c:706 bug
+        (64 * 256, 64, 64, 256, 1, true),              // stride·h == len: the exact fit
+        (64 * 256 - 1, 64, 64, 256, 1, false),         // one byte short
+        (4096, 64, 64, 256, 1, false),                 // a one-page frame, a 16 KiB claim (T16)
+        (u64::MAX, 1, 1, 0x8000_0000, 1, false),       // stride does not fit an int
+        (u64::MAX, 1 << 30, 1, 0xFFFF_FFFC, 1, false), // width·4 overflows u32, and int
+        (u64::MAX, 1 << 29, 1, 1 << 31, 1, false),
+        (4096, 16, 16, 64, 0, false), // format 0
+        (4096, 16, 16, 64, 6, false), // format 6
+        (4096, 0, 16, 64, 1, false),  // w = 0
+        (4096, 16, 0, 64, 1, false),  // h = 0
+        (4096, 16, 16, 66, 1, false), // stride % 4 != 0
+        (4096, 16, 16, 64, 3, true),  // rgb565: 2 bytes per pixel
+        (4096, 32, 16, 64, 3, true),
+        (4096, 33, 16, 64, 3, false),
+        (4096, 16, 16, 64, 5, true),
+    ];
+    for &(len, w, h, stride, fmt, want) in grid {
+        assert_eq!(
+            check_frame_geometry(len, w, h, stride, fmt).is_ok(),
+            want,
+            "Rust: len {len} {w}x{h} stride {stride} format {fmt}"
+        );
+    }
+    // The OLD C predicate accepted what the new one refuses (the mutant row).
+    let old = |w: u32, stride: u32| !(stride < w || stride & 3 != 0);
+    assert!(old(1920, 1920) && check_frame_geometry(1920 * 1080 * 4, 1920, 1080, 1920, 1).is_err());
+
+    let rows: String = grid
+        .iter()
+        .map(|(len, w, h, stride, fmt, _)| {
+            format!("{{{len}ULL, {w}u, {h}u, {stride}u, {fmt}u}},\n")
+        })
+        .collect();
+    let program = format!(
+        "#include <stdio.h>\n#include \"kf3.h\"\n\
+         static const struct {{ uint64_t len; uint32_t w, h, stride, fmt; }} g[] = {{\n{rows}}};\n\
+         int main(void) {{ static uint8_t px; for (size_t i = 0; i < sizeof g / sizeof g[0]; i++) {{\n\
+         Kf3Frame f = {{ &px, g[i].len, g[i].w, g[i].h, g[i].stride, g[i].fmt, 1 }};\n\
+         printf(\"%d %u\\n\", kf3_frame_ok(&f, kf3_format_bpp(f.format)), kf3_format_bpp(f.format)); }}\n\
+         return 0; }}\n"
+    );
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let dir = std::env::temp_dir().join(format!("kf3-frame-ok-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (src, bin) = (dir.join("ok.c"), dir.join("ok"));
+    std::fs::write(&src, &program).unwrap();
+    let build = Command::new("cc")
+        .args(["-std=c11", "-Wall", "-Wextra", "-Werror", "-I"])
+        .arg(root.join("qemu/hw/misc/kf3"))
+        .arg(&src)
+        .arg("-o")
+        .arg(&bin)
+        .output()
+        .unwrap();
+    assert!(
+        build.status.success(),
+        "{}\n{program}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    let out = String::from_utf8(Command::new(&bin).output().unwrap().stdout).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    let c: Vec<(bool, u32)> = out
+        .lines()
+        .map(|l| {
+            let (ok, bpp) = l.split_once(' ').unwrap();
+            (ok == "1", bpp.parse().unwrap())
+        })
+        .collect();
+    assert_eq!(c.len(), grid.len());
+    for ((len, w, h, stride, fmt, want), (ok, bpp)) in grid.iter().zip(c) {
+        assert_eq!(
+            ok, *want,
+            "C kf3_frame_ok: len {len} {w}x{h} stride {stride} format {fmt}"
+        );
+        assert_eq!(
+            Some(bpp).filter(|b| *b != 0),
+            frame_bpp(*fmt),
+            "format {fmt}"
         );
     }
 }

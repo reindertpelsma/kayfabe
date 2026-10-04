@@ -12,8 +12,12 @@
  * kf3_doorbell_page_offset, kf3_set_ioeventfd, kf3_doorbell_site). The two 9s name DIFFERENT
  * surfaces, so an archive from either branch must be refused here: one new number above both.
  * ★ 11 (2026-10-03, v3-gop-kf3, docs/design/V3_DISPLAY.md §4.11): the boot display — kf3_realize
- * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device. */
-#define KF3_ABI 11
+ * takes `gop`, and kf3_option_rom hands over the option ROM Rust packed for this device.
+ * ★ 14 (2026-10-04, v3-sec-rawaddr, audit S1-03): Kf3Frame carries `len`, kf3_display_frame
+ * answers -2 for a refused frame, and kf3_frame_ok below is the device's own check. 12 is
+ * v3-broker's and 13 v3-dispsw-exp's: whichever merges second takes the maximum plus one AT MERGE
+ * TIME and records every claim here and in ffi_unsafe.rs. */
+#define KF3_ABI 14
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -27,13 +31,37 @@ typedef struct Kf3Region {
     uint64_t base, len;
 } Kf3Region;
 
-/* ★ ABI 10 (v3-display2's 9): one frame of the virtual display (display=on). `data` stays valid and unwritten until
- * the next kf3_display_frame call. format: 1 xrgb8888, 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10. */
+/* ★ ABI 10 (v3-display2's 9): one frame of the virtual display (display=on). format: 1 xrgb8888,
+ * 2 xbgr8888, 3 rgb565, 4 x2rgb10, 5 x2bgr10.
+ * ★ ABI 14 (v3-sec-rawaddr): `len` is the frame's own length. [data, data+len) is valid for the
+ * life of the process (the pages are never unmapped); its contents are stable until the next
+ * kf3_display_frame call. A reader uses only [data, data+len) — kf3_frame_ok below. */
 typedef struct Kf3Frame {
     uint8_t* data;   /* (spelled for the wire-mirror census) */
+    uint64_t len;
     uint32_t width, height, stride, format;
     uint64_t serial;
 } Kf3Frame;
+
+/* ★ ABI 14 (v3-sec-rawaddr, V14): bytes per pixel of a Kf3Frame format code; 0 = unknown. */
+static inline uint32_t kf3_format_bpp(uint32_t f)
+{
+    return (f == 1 || f == 2 || f == 4 || f == 5) ? 4u : (f == 3 ? 2u : 0u);
+}
+
+/* ★ ABI 14 (v3-sec-rawaddr, V14): the frame may be read as width x height rows of `stride` bytes —
+ * a known format, both sides >= 1, every dimension fits an int (QEMU's surface takes ints), the
+ * stride a multiple of 4 and at least a row (width x bpp, in BYTES), and the whole stride x height
+ * inside `len` (the D-Bus listener sends exactly that many bytes). Computed in uint64_t. The same
+ * predicate as Rust's ffi_unsafe::check_frame_geometry (crates/kf-qemu/tests/wire_mirror.rs runs both
+ * over one grid). */
+static inline int kf3_frame_ok(const Kf3Frame *f, uint32_t bpp)
+{
+    return f->data && bpp && f->width && f->height &&
+           f->width <= INT32_MAX && f->height <= INT32_MAX && f->stride <= INT32_MAX &&
+           (f->stride & 3u) == 0 && (uint64_t)f->width * bpp <= f->stride &&
+           (uint64_t)f->stride * f->height <= f->len;
+}
 
 uint32_t kf3_abi_version(void);
 /* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md).
@@ -63,8 +91,9 @@ int32_t kf3_bar1_follows_guest(void *h);
 int32_t kf3_set_bar1_overlay(void *h, Kf3OverlayFn f, void *opaque, uint32_t slots);
 void kf3_bar1_overlay_done(void *h, uint64_t seq, int32_t rc);
 void kf3_bar1_usermode_write(void *h, uint64_t vf_rel, uint64_t val, uint32_t width);
-/* ★ ABI 10 (v3-display2's 9): the newest display frame, for the console's gfx_update (main thread);
- * -1 = none yet. */
+/* ★ ABI 10 (v3-display2's 9): the newest display frame, for the console's gfx_update (main thread):
+ * 0 = *out filled; -1 = no new frame (keep the current surface); ★ ABI 14: -2 = a frame was
+ * refused (*out untouched: show a placeholder). */
 int32_t kf3_display_frame(void *h, Kf3Frame *out);
 /* ★ ABI 10 (v3-ioeventfd's 9; docs/design/V3_DOORBELL_IOEVENTFD.md): the doorbell fast path. The
  * device's KVM_IOEVENTFD verb (0 or -errno; any non-vCPU thread), the doorbell register's offset
