@@ -1,0 +1,15 @@
+{
+  "schema": "kayfabe-gsp-observer/1",
+  "complete": false,
+  "scanned_bytes": 22582890496,
+  "scan_passes": 2,
+  "candidates": 13,
+  "attached_tables": 1,
+  "read_failures": 0,
+  "unstable_snapshots": 130,
+  "invalid_elements": 48457,
+  "recorded": 1601,
+  "dropped": 0,
+  "sequence_gaps": 1,
+  "buffered_bytes": 2914280
+}

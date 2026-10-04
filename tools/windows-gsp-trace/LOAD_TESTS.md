@@ -243,3 +243,10 @@ there is no evidence yet that a different key name or queue layout is needed.
 The current collector exposes the preexisting ABI's `candidates` counter to
 distinguish no physical self-reference candidates from later validation
 failure. This collector-only change does not alter the kernel binary.
+
+The controlled reboot subsequently activated GSP firmware 580.65.05 and the
+observer attached successfully. The [preserved full text export and analysis](evidence/2026-10-04-rtx4070-580.88/README.md)
+validate 4,535 request/reply records. No target query was observed; the first
+retained queue sequences are already 2707/2710, so the early initialization
+prefix is unknown. This proves passive Windows GSP capture on that target,
+not recovery of the pool-sizing algorithm or cross-GPU compatibility.

@@ -1,0 +1,32 @@
+{
+  "schema": "kayfabe-gsp-observer/1",
+  "complete": false,
+  "records": 4535,
+  "observed_missing": 1,
+  "text_export": {
+    "selection": "all",
+    "omitted_records": 0,
+    "source_bytes": 26509784,
+    "source_sha256": "94745becce0c30227e3e7bb6134003a22a4963c05ecb6a8c04e561977a550f40",
+    "source_hash_verifiable_from_export": true,
+    "note": "In a selected export, sequence gaps can include intentionally omitted records; full-source hash is provenance only."
+  },
+  "driver_stats": {
+    "schema": "kayfabe-gsp-observer/1",
+    "complete": false,
+    "scanned_bytes": 654787796992,
+    "scan_passes": 76,
+    "candidates": 306,
+    "attached_tables": 1,
+    "read_failures": 0,
+    "unstable_snapshots": 343,
+    "invalid_elements": 44928547,
+    "recorded": 4535,
+    "dropped": 0,
+    "sequence_gaps": 1,
+    "buffered_bytes": 0
+  },
+  "gfx_pool_observations": [],
+  "unambiguous_query_pairs": [],
+  "warning": "Passive samples cannot prove completeness or cross-GPU behavior. Retained history may predate collector start."
+}

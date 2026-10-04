@@ -1,0 +1,16 @@
+{
+  "capture_format": "kayfabe-gsp-text/1",
+  "capture_complete": false,
+  "date": "2026-10-04",
+  "windows_build": 26100,
+  "capture_setup": "single-layer Windows KVM guest with physical RTX 4070 directly assigned by VFIO",
+  "decoder_source_revision": "8dbaa280",
+  "driver_build_source_revision": "351d5b7f425c7515404f058b0fa1f33602905e17",
+  "driver_unsigned_sha256": "c32adf94bde55c19caa493b9ccc460bd39926900acfc4ca93297a6787bb1c3ca",
+  "collector_build_source_revision": "0797f6ae20b760b283116514a993d19273d2fd9d",
+  "collector_sha256": "9f1a69942dc52e9e8fded62069b1078a59db06fd2c522e1b1e90596d6fc97bb9",
+  "exporter_sha256": "280038c4025f57c90557035d9eac7a3cbf7e404f1b321e020e8945baac8ab4c3",
+  "text_bytes": 53749282,
+  "text_sha256": "9d75e47b8ec5dd837dc64e14847779d62a16f14d92169ede8f9b62681b93de29",
+  "gzip_sha256": "1643c0389ab766fbb1cfe9b148fc8b1ebe16a35070b718207a938996c7f73683"
+}

@@ -1,0 +1,31 @@
+{
+  "time": "2026-10-04T17:41:13.5894946Z",
+  "smi_path": "C:\\Windows\\System32\\nvidia-smi.exe",
+  "smi_exit_code": 0,
+  "gsp_firmware_lines": [
+    "Driver Version                            : 580.88",
+    "    Product Name                          : NVIDIA GeForce RTX 4070",
+    "    Driver Model",
+    "    GSP Firmware Version                  : 580.65.05",
+    "            Used GPU Memory               : Not available in WDDM driver model",
+    "            Used GPU Memory               : Not available in WDDM driver model"
+  ],
+  "kernel_state": "Running",
+  "kernel_driver": "C:\\Windows\\system32\\DriverStore\\FileRepository\\nv_dispi.inf_amd64_fe5f369669db2f36\\nvlddmkm.sys",
+  "kernel_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+  "service_enable_gpu_firmware": 1,
+  "devices": [
+    {
+      "instance_id": "PCI\\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\\3&267A616A&0&30",
+      "name": "NVIDIA GeForce RTX 4070",
+      "status": "OK",
+      "problem": 0,
+      "driver_version": "32.0.15.8088",
+      "class_key": "{4d36e968-e325-11ce-bfc1-08002be10318}\\0001",
+      "class_enable_gpu_firmware": 1
+    }
+  ],
+  "smi_text_sha256": "71a9b5e03452ec71b15b8c3c5fd75c8464ac65bf47268eb6c284544f8392c628",
+  "deferred": true,
+  "reboots_held": true
+}
