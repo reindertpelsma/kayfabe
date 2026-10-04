@@ -10,3 +10,5 @@ for compiler in cc clang; do
     "$build/queue_test"
 done
 python3 -m unittest discover -s tests -p 'test_*.py' -v
+cc -std=c11 -Wall -Wextra -Werror -O2 -fPIC -shared queue.c -o "$build/libqueue.so"
+python3 tests/oracle_replay.py "$build/libqueue.so"

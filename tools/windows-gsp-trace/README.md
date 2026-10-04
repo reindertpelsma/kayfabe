@@ -140,7 +140,10 @@ On Linux or Windows with Python:
 python3 tools/windows-gsp-trace/decode.py gsp.kgwt --require-query-pair > query.json
 ```
 
-The decoder rejects malformed/truncated data. It prints independent query
+The decoder rejects malformed/truncated data. Large RM_CONTROL messages can use
+continuation records: those raw records are retained, and declared versus observed
+parameter sizes are reported. An incomplete control is never decoded as a complete
+40-byte query reply. It prints independent query
 observations and pairs only an unambiguous matching RPC sequence, allocation,
 client/object and `maxSlots`. Exit 4 means no successful query pair was found.
 The fields are `maxSlots`, `slotStride`, `ctrlStructSize`, `ctrlStructAlign`,
@@ -171,5 +174,8 @@ followed by a reboot. The script leaves those host settings for explicit cleanup
 Verified locally: clang-cl 21 + lld 19 against official Microsoft
 `10.0.28000.2526` SDK/WDK, MinGW collector/API-test builds, GCC and Clang
 ASan/UBSan queue tests, Python decoder rejection/pairing tests, and PowerShell
-syntax parsing. No Windows runtime, live GPU attachment or query capture is
+syntax parsing. A reconstructed-ring replay of all 1,076 payloads in the archived
+Linux GA106 boot capture also passes the actual observer core and decoder, including
+wrapping and continuation records. Request checksums are reconstructed because the
+Linux TX hook runs before the checksum is computed. No Windows runtime, live GPU attachment or query capture is
 claimed by those checks.
